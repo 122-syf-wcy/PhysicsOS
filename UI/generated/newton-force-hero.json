@@ -1,0 +1,13 @@
+{
+  "asset": "newton-force-hero",
+  "title": "Newton second law hero illustration",
+  "provider": "primary",
+  "model": "gpt-image-2",
+  "requested": "4096x4096",
+  "pixels": "2880x2880",
+  "bytes": 3507399,
+  "prompt": "PhysicsOS Newton's second law scientific visualization asset, premium desktop physics software aesthetic, a single precision block on a level surface, one clean horizontal applied force arrow, a resultant force arrow, a distinct acceleration arrow rendered in warm amber, downward gravity and upward normal force arrows in balance, warm white background with a faint pale blue grid, thin precise engineering linework, physics blue as the primary hue, restrained and analytical composition, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "revisedPrompt": "PhysicsOS Newton's second law scientific visualization asset, premium desktop physics software aesthetic, a single precision block on a level surface, one clean horizontal applied force arrow, a resultant force arrow, a distinct acceleration arrow rendered in warm amber, downward gravity and upward normal force arrows in balance, warm white background with a faint pale blue grid, thin precise engineering linework, physics blue as the primary hue, restrained and analytical composition, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "createdAt": "2026-08-19T03:13:43.010Z",
+  "elapsedMs": 106400
+}

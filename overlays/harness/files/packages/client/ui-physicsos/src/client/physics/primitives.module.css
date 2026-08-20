@@ -1,0 +1,290 @@
+/* Canvas primitives. Semantic role classes set BOTH stroke and fill so one class
+   colours a line and its arrowhead marker identically. */
+
+/* ---------- semantic roles ---------- */
+
+.roleVelocity {
+  stroke: var(--physics-vector-velocity);
+  fill: var(--physics-vector-velocity);
+}
+
+.roleVelocityComponent {
+  stroke: var(--physics-vector-velocity-soft);
+  fill: var(--physics-vector-velocity-soft);
+}
+
+.roleForce {
+  stroke: var(--physics-vector-force);
+  fill: var(--physics-vector-force);
+}
+
+.roleGravity {
+  stroke: var(--physics-vector-gravity);
+  fill: var(--physics-vector-gravity);
+}
+
+.roleNormal {
+  stroke: var(--physics-vector-normal);
+  fill: var(--physics-vector-normal);
+}
+
+.roleFriction {
+  stroke: var(--physics-vector-friction);
+  fill: var(--physics-vector-friction);
+}
+
+.roleNetForce {
+  stroke: var(--physics-vector-net-force);
+  fill: var(--physics-vector-net-force);
+}
+
+.roleAcceleration {
+  stroke: var(--physics-vector-acceleration);
+  fill: var(--physics-vector-acceleration);
+}
+
+.roleTrajectory {
+  stroke: var(--physics-trajectory);
+  fill: var(--physics-trajectory);
+}
+
+.roleField {
+  stroke: var(--physics-field);
+  fill: var(--physics-field);
+}
+
+.roleMeasurement {
+  stroke: var(--physics-measurement);
+  fill: var(--physics-measurement);
+}
+
+.roleNeutral {
+  stroke: var(--physics-axis);
+  fill: var(--physics-axis);
+}
+
+/* ---------- vectors ---------- */
+
+.vectorLine {
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  transition: stroke-width var(--physics-motion-fast) var(--physics-ease);
+}
+
+/* Components are one visual step weaker than the resultant they belong to. */
+.vectorSubordinate {
+  stroke-width: 1.4;
+  stroke-dasharray: 5 3;
+  opacity: 0.85;
+}
+
+.vectorLabel {
+  font-size: 11.5px;
+  font-style: italic;
+  font-weight: 600;
+  stroke: none;
+  paint-order: stroke fill;
+  stroke-width: 3.2px;
+  /* A white halo keeps a label legible where it crosses grid or trajectory. */
+  stroke: #fbfdff;
+}
+
+.vectorLabelSubordinate {
+  font-size: 10.5px;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+.labelLeader {
+  stroke: var(--physics-measurement-soft);
+  stroke-width: 0.9;
+  stroke-dasharray: 2 2;
+  fill: none;
+}
+
+.subscript,
+.superscript {
+  font-size: 0.72em;
+  font-style: italic;
+}
+
+/* ---------- surfaces ---------- */
+
+.groundLine {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+  fill: none;
+}
+
+.hatch {
+  stroke: var(--physics-surface-hatch);
+  stroke-width: 1.1;
+  fill: none;
+}
+
+.surfaceLabel {
+  fill: var(--dsw-alias-label-caption);
+  font-size: 10px;
+}
+
+.inclineBody {
+  fill: var(--physics-incline-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.platformBody {
+  fill: var(--physics-incline-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.platformEdge {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.8;
+  fill: none;
+}
+
+/* ---------- bodies ---------- */
+
+.bodyFill {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.5;
+}
+
+.bodyLive {
+  stroke: var(--physics-body-live);
+  stroke-width: 1.8;
+}
+
+.bodyGloss {
+  fill: rgba(255, 255, 255, 0.62);
+  stroke: none;
+}
+
+.bodyLabel {
+  fill: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+/* ---------- geometry ---------- */
+
+.angleArc {
+  stroke: var(--physics-angle);
+  stroke-width: 1.4;
+  fill: none;
+}
+
+.angleRay {
+  stroke: var(--physics-angle);
+  stroke-width: 0.9;
+  stroke-dasharray: 4 3;
+  opacity: 0.7;
+  fill: none;
+}
+
+.angleLabel {
+  fill: var(--physics-angle);
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+.dimensionLine {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.1;
+  fill: none;
+  transition: stroke var(--physics-motion-fast) var(--physics-ease);
+}
+
+.dimensionTick {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.3;
+  fill: none;
+}
+
+.dimensionHighlighted {
+  stroke: var(--physics-highlight);
+  stroke-width: 1.8;
+}
+
+.dimensionLabel {
+  fill: var(--physics-measurement);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3.2px;
+}
+
+.dimensionLabelHighlighted {
+  fill: var(--physics-highlight);
+  font-weight: 600;
+}
+
+/* ---------- key points ---------- */
+
+.keyLaunch {
+  fill: #fff;
+  stroke: var(--physics-keypoint-launch);
+  stroke-width: 1.8;
+}
+
+.keyApex {
+  fill: var(--physics-keypoint-apex);
+  stroke: #fff;
+  stroke-width: 1.1;
+}
+
+.keyImpact {
+  fill: var(--physics-keypoint-impact);
+  stroke: #fff;
+  stroke-width: 1.1;
+}
+
+.keySample {
+  fill: #fff;
+  stroke: var(--physics-trajectory);
+  stroke-width: 1.5;
+}
+
+.keyLabel {
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 9.5px;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+/* ---------- basis ---------- */
+
+.basisLine {
+  stroke-width: 1.2;
+  fill: none;
+}
+
+.basisLabel {
+  fill: var(--physics-measurement);
+  font-size: 10px;
+  font-style: italic;
+}
+
+/* ---------- highlight ---------- */
+
+/* Clicking a Known in Question Space lights the matching primitive. The glow is
+   a drop-shadow rather than a stroke change so geometry never shifts. */
+.highlightGroup {
+  filter: drop-shadow(0 0 5px var(--physics-highlight-glow));
+}

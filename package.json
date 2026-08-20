@@ -1,0 +1,47 @@
+{
+  "name": "physicsos",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "PhysicsOS - verified physics visualization and Agent platform on DeepSeek Harness",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=20.19.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -C vendor/deepseek-harness dsh web",
+    "build": "pnpm run build:core && pnpm run build:web",
+    "build:core": "pnpm -r --filter \"./packages/**\" run build",
+    "build:web": "pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-client-ui-physicsos run bundle && pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-web-frontend run build",
+    "typecheck": "pnpm run typecheck:core && pnpm run typecheck:web",
+    "typecheck:core": "pnpm -r --filter \"./packages/**\" run typecheck",
+    "typecheck:web": "pnpm -C vendor/deepseek-harness exec tsc -p packages/client/ui-physicsos/tsconfig.json --noEmit",
+    "lint": "pnpm run lint:core && pnpm run lint:web",
+    "lint:core": "pnpm -r --filter \"./packages/**\" run lint",
+    "lint:web": "pnpm -C vendor/deepseek-harness exec oxlint packages/client/ui-physicsos/src packages/client/ui-physicsos/tests",
+    "test": "pnpm run test:core && pnpm run test:web",
+    "test:core": "pnpm -r --filter \"./packages/**\" run test",
+    "test:web": "pnpm -C vendor/deepseek-harness exec vitest run packages/client/ui-physicsos/tests",
+    "format": "prettier --check .",
+    "format:write": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.11.0",
+    "jsdom": "^27.0.1",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,1176 @@
+/* Physics Lab workspace shell.
+
+   Geometry: the cover fills the conversation column (100% of the Harness
+   surface, no page scroll of its own). Inside, Scene / Canvas / Inspector are
+   fixed-flex tracks and every panel scrolls internally. */
+
+.cover {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+  container-type: inline-size;
+  container-name: physics-lab;
+}
+
+/* ---------- Toolbar ---------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  height: 44px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+}
+
+.sceneIdentity {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saveState {
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.toolGroup::-webkit-scrollbar {
+  display: none;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.tool,
+.primary,
+.secondary,
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tool {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tool:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: not-allowed;
+}
+
+.toolIcon {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+
+.inspectorToggle,
+.inspectorClose,
+.inspectorBackdrop {
+  display: none;
+}
+
+.primary {
+  border: 1px solid transparent;
+  background: var(--dsw-static-blue-500);
+  color: #fff;
+}
+
+.primary:hover {
+  background: var(--dsw-static-blue-600);
+}
+
+.secondary {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+}
+
+.secondary:hover {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+.ghost {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.ghost:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.toolActive {
+  background: var(--dsw-static-blue-50);
+  color: var(--dsw-static-blue-600);
+}
+
+.tool:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible,
+.ghost:focus-visible,
+.treeRow:focus-visible,
+.eye:focus-visible,
+.tab:focus-visible,
+.transport:focus-visible,
+.rate:focus-visible,
+.track:focus-visible {
+  outline: 2px solid var(--physicsos-focus, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* ---------- Body ---------- */
+
+.body {
+  display: grid;
+  /* Scene 230 / Canvas flex / Inspector 268 — the canvas keeps well over 55%
+     of the inner workspace at the 1600px baseline. */
+  grid-template-columns: 230px minmax(0, 1fr) 268px;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.scenePanel,
+.inspectorPanel {
+  min-width: 0;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  overflow: hidden;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  padding: 9px 10px 7px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.panelTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.panelBody {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: #fbfdff;
+  overflow: hidden;
+}
+
+/* ---------- Scene tree ---------- */
+
+.tree,
+.treeChildren,
+.fields {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.treeChildren {
+  padding-left: 12px;
+}
+
+.treeRowWrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.treeRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.treeSelected,
+.treeSelected:hover {
+  /* Very light blue selection, not a filled chip. */
+  background: var(--dsw-static-blue-50);
+  color: var(--dsw-static-blue-600);
+}
+
+.treeGroup {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 600;
+}
+
+.treeIcon {
+  flex: none;
+  display: inline-flex;
+  color: var(--dsw-alias-label-caption);
+}
+
+.treeSelected .treeIcon {
+  color: var(--dsw-static-blue-500);
+}
+
+.treeLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.treeValue {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.eye {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.eye:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.eyeOn {
+  color: var(--dsw-static-blue-500);
+}
+
+.checkbox {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-base);
+  color: transparent;
+}
+
+.checkboxOn {
+  border-color: var(--dsw-static-blue-500);
+  background: var(--dsw-static-blue-500);
+  color: #fff;
+}
+
+/* ---------- Inspector ---------- */
+
+.sectionLabel {
+  margin: 10px 4px 6px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sectionLabel:first-child {
+  margin-top: 2px;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 4px;
+}
+
+.fieldLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.fieldSymbol {
+  color: var(--dsw-alias-label-caption);
+  font-style: italic;
+}
+
+.quantity {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 28px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  overflow: hidden;
+}
+
+.quantity:focus-within {
+  border-color: var(--dsw-static-blue-500);
+}
+
+.quantityInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quantityInput:focus {
+  outline: none;
+}
+
+.quantityUnit {
+  flex: none;
+  padding: 0 8px;
+  border-left: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 26px;
+}
+
+.select {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Derived rows are read-only by construction: no input chrome, muted ink. */
+.derived {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px dashed var(--dsw-alias-border-l1);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.derivedName {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.derivedValue {
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.derivedUnit {
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+}
+
+.readonlyNote {
+  margin: 6px 4px 0;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* ---------- Timeline ---------- */
+
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  height: 58px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+}
+
+.transport {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.transport:hover {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+.transportPrimary {
+  border-color: transparent;
+  background: var(--dsw-static-blue-500);
+  color: #fff;
+}
+
+.transportPrimary:hover {
+  background: var(--dsw-static-blue-600);
+}
+
+.clock {
+  flex: none;
+  min-width: 46px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clockEnd {
+  text-align: right;
+}
+
+.track {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.track::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--dsw-static-blue-500) 0 var(--timeline-progress),
+    var(--dsw-static-blue-100) var(--timeline-progress) 100%
+  );
+}
+
+.track::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--dsw-static-blue-600);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-static-blue-600) 36%, transparent);
+}
+
+.track::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--dsw-static-blue-100);
+}
+
+.track::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--dsw-static-blue-500);
+}
+
+.track::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--dsw-static-blue-600);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-static-blue-600) 36%, transparent);
+}
+
+.track:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.rate {
+  flex: none;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ---------- Bottom data panel ---------- */
+
+.dataPanel {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  overflow: hidden;
+}
+
+.dataPanelOpen {
+  height: 196px;
+}
+
+.dataHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 34px;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid transparent;
+}
+
+.dataPanelOpen .dataHead {
+  border-bottom-color: var(--dsw-alias-border-l2);
+}
+
+.tab {
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tabActive {
+  background: var(--dsw-static-blue-50);
+  color: var(--dsw-static-blue-600);
+  font-weight: 500;
+}
+
+.dataSpacer {
+  flex: 1;
+}
+
+.dataBody {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px 10px;
+  overflow: auto;
+}
+
+.dataStub {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.chartRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chartCard {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+
+.chartTitle {
+  margin: 0 0 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 88px;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.dataTable th {
+  padding: 3px 6px 3px 0;
+  color: var(--dsw-alias-label-caption);
+  font-weight: 500;
+}
+
+.dataTable td {
+  padding: 3px 6px 3px 0;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.verifiedState {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #16824b;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.readOnlyField {
+  display: grid;
+  gap: 4px;
+  padding: 5px 4px;
+}
+
+.readOnlyValue {
+  min-height: 28px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.verificationLine {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 10px 4px 0;
+  color: #16824b;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.formulaList,
+.eventList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.formulaList li,
+.eventList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.formulaList code {
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+}
+
+.formulaList output,
+.eventList span {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.emptyRuntime {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  height: 100%;
+  color: var(--dsw-alias-label-primary);
+  text-align: center;
+}
+
+.emptyRuntime span {
+  max-width: 42em;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+/* ---------- Agent drawer ---------- */
+
+.agentDock {
+  position: absolute;
+  right: 14px;
+  bottom: 84px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-button-elevated-fill);
+  box-shadow: 0 4px 14px rgba(20, 33, 61, 0.08);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agentDock:hover {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+.agentDrawer {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  width: 356px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  box-shadow: 0 12px 34px rgba(20, 33, 61, 0.1);
+  overflow: hidden;
+}
+
+.agentBody {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+/* ---------- Question stub ---------- */
+
+.stub {
+  margin: auto;
+  max-width: 28em;
+  text-align: center;
+}
+
+.stubTitle {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.stubBody {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1560px) {
+  /* Both tracks fall to the low end of their allowed ranges (Scene 220-240,
+     Inspector 250-290) so the canvas keeps at least 55% of the workspace at
+     the 1440px baseline. */
+  .body {
+    grid-template-columns: 220px minmax(0, 1fr) 250px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .body {
+    position: relative;
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .inspectorPanel {
+    display: none;
+  }
+
+  .inspectorToggle {
+    display: inline-flex;
+  }
+
+  .inspectorPanelOpen {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 9;
+    display: flex;
+    width: min(320px, calc(100% - 44px));
+    box-shadow: 0 12px 34px rgba(20, 33, 61, 0.14);
+    animation: inspector-enter 160ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .inspectorBackdropOpen {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--dsw-alias-bg-base) 54%, transparent);
+    cursor: default;
+  }
+
+  .inspectorClose {
+    display: inline-flex;
+  }
+}
+
+@container physics-lab (max-width: 1080px) {
+  .body {
+    position: relative;
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .inspectorPanel {
+    display: none;
+  }
+
+  .inspectorToggle {
+    display: inline-flex;
+  }
+
+  .inspectorPanelOpen {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 9;
+    display: flex;
+    width: min(320px, calc(100% - 44px));
+    box-shadow: 0 12px 34px rgba(20, 33, 61, 0.14);
+    animation: inspector-enter 160ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .inspectorBackdropOpen {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--dsw-alias-bg-base) 54%, transparent);
+    cursor: default;
+  }
+
+  .inspectorClose {
+    display: inline-flex;
+  }
+}
+
+@container physics-lab (max-width: 760px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scenePanel {
+    display: none;
+  }
+
+  .toolbar .primary,
+  .toolbar .secondary,
+  .toolbar .ghost {
+    justify-content: center;
+    width: 28px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .verifiedState,
+  .saveState {
+    display: none;
+  }
+}
+
+@container physics-lab (max-width: 520px) {
+  .cover {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .toolbar {
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .sceneIdentity {
+    display: none;
+  }
+
+  .toolGroup {
+    flex: 1 1 0;
+    width: 100%;
+  }
+
+  .timeline {
+    gap: 5px;
+    padding: 0 8px;
+  }
+
+  .canvas {
+    flex: none;
+    width: 100%;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
+  .clock {
+    display: none;
+  }
+
+  .chartRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+}
+
+@media (max-width: 520px) {
+  .body {
+    position: fixed;
+    inset: 60px 14px 8px 64px;
+  }
+
+  .inspectorPanelOpen {
+    position: fixed;
+    inset: 60px 8px 8px 64px;
+    width: auto;
+    animation: none;
+  }
+
+  .inspectorBackdropOpen {
+    position: fixed;
+    inset: 60px 0 0 56px;
+  }
+}
+
+@keyframes inspector-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspectorPanelOpen {
+    animation: none;
+  }
+}
+
+/* Light liquid-glass workspace language: panels float over a calm paper-blue
+   field while the physics canvas stays opaque and legible. */
+.cover {
+  background: var(--physics-workspace-bg);
+}
+
+.toolbar,
+.panel,
+.timeline,
+.dataPanel {
+  border-color: var(--physics-glass-border);
+  border-radius: 16px;
+  background: var(--physics-glass-fill);
+  box-shadow: var(--physics-glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+
+.toolbar {
+  height: 48px;
+  padding-inline: 14px;
+}
+
+.panelHead,
+.dataPanelOpen .dataHead {
+  border-bottom-color: rgba(148, 173, 199, 0.22);
+}
+
+.canvas {
+  border-color: rgba(170, 191, 213, 0.44);
+  border-radius: 18px;
+  background: #fcfeff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 10px 26px rgba(65, 93, 122, 0.06);
+}
+
+.quantity,
+.select,
+.readOnlyValue,
+.rate,
+.transport {
+  border-color: var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.treeRow:hover,
+.eye:hover,
+.tab:hover,
+.tool:hover:not(:disabled),
+.ghost:hover,
+.secondary:hover,
+.transport:hover,
+.rate:hover {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.treeSelected,
+.treeSelected:hover,
+.toolActive,
+.tabActive {
+  background: rgba(225, 239, 255, 0.78);
+  color: #2d5f9b;
+}
+
+.primary,
+.transportPrimary {
+  background: #4279c8;
+  box-shadow: 0 6px 16px rgba(66, 121, 200, 0.2);
+}
+
+.primary:hover,
+.transportPrimary:hover {
+  background: #3569b4;
+}
+
+.inspectorPanelOpen {
+  border-color: var(--physics-glass-border);
+  border-radius: 18px 0 0 18px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: -16px 12px 36px rgba(65, 93, 122, 0.16), inset 1px 0 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(24px) saturate(130%);
+}
+
+@container physics-lab (max-width: 520px) {
+  .toolbar,
+  .panel,
+  .timeline,
+  .dataPanel {
+    box-shadow: 0 8px 20px rgba(65, 93, 122, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px) saturate(118%);
+  }
+}

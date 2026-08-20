@@ -1,0 +1,28 @@
+{
+  "name": "@physicsos/question-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Question domain types, deterministic parser, semantic IR, and validator",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-math": "file:../physics-math",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene",
+    "@physicsos/engine-electric": "file:../engine-electric",
+    "@physicsos/engine-magnetic": "file:../engine-magnetic",
+    "@physicsos/engine-mechanics": "file:../engine-mechanics",
+    "@physicsos/physics-observation": "file:../physics-observation",
+    "@physicsos/physics-verifier": "file:../physics-verifier"
+  }
+}

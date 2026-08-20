@@ -1,0 +1,11 @@
+{
+  "asset": "magnetic-question-hero-4k",
+  "title": "PhysicsOS Magnetic Question Space Feature",
+  "provider": "secondary",
+  "model": "gpt-image-2",
+  "requested": "3840x2160",
+  "pixels": "3840x2160",
+  "bytes": 9693307,
+  "prompt": "Create a premium scientifically accurate 4K landscape editorial visualization connecting a physics problem to a simulation. On a bright white precision desk, show a restrained paper problem sheet with clean blank rule lines and small geometric quantity marks but absolutely no readable text, beside a compact transparent magnetic-field chamber viewed slightly from above. In the chamber, one blue charged particle follows a single circular path through a uniform into-the-page magnetic field with subtle cross markers; one green tangent velocity arrow and one cobalt inward Lorentz-force arrow. Include a slim mechanical pencil and a small metal caliper as quiet scientific tools, arranged sparsely. Style: high-end educational product photography blended with precise engineering-diagram overlays, white, graphite, low-saturation blue, a tiny amber accent, soft daylight, sharp and trustworthy. Composition: 16:9, subject concentrated on the right two-thirds, clean negative space on the left for interface copy, all important content inside a safe 12 percent crop margin. Avoid generated words, formulas, numbers, logos, watermark, neon sci-fi, dark theme, purple, decorative gradients, clutter, people, hands, multiple particles, spiral or elliptical trajectory, incorrect force direction, fantasy equipment, excessive reflections.",
+  "createdAt": "2026-08-19T04:50:51.000Z"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@physicsos/physics-math",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Physics math primitives: Vector3 algebra, dot, cross, magnitude, normalize",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared"
+  }
+}

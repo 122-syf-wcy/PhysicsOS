@@ -1,0 +1,11 @@
+{
+  "asset": "magnetic-lab-hero-4k",
+  "title": "PhysicsOS Magnetic Laboratory Feature",
+  "provider": "secondary",
+  "model": "gpt-image-2",
+  "requested": "3840x2160",
+  "pixels": "3840x2160",
+  "bytes": 8524677,
+  "prompt": "Create a scientifically accurate premium 4K landscape visualization for the PhysicsOS magnetic-field laboratory. A compact transparent charged-particle chamber sits between two restrained electromagnet pole pieces on a bright white precision instrument bench. Inside the chamber, one small blue charged particle follows a single clean circular trajectory in a uniform magnetic field; show a subtle repeated into-the-page cross field pattern, one green tangent velocity arrow, and one cobalt inward Lorentz-force arrow at the particle. No labels or formulas. The apparatus should look physically plausible, modular, inspectable, and appropriate for secondary-school physics, with anodized aluminum, clear acrylic, matte polymer, soft diffuse daylight, shallow but readable depth, calm engineering software visual language. Composition: 16:9, apparatus centered slightly right, clean negative space at upper left for product UI overlay, all important geometry inside a safe 12 percent crop margin. Avoid neon sci-fi, dark backgrounds, purple, decorative gradients, clutter, random cables, people, text, logos, watermark, multiple particles, spiral trajectories, elliptical trajectory, incorrect force direction, fantasy equipment, strong bloom.",
+  "createdAt": "2026-08-19T04:48:56.000Z"
+}

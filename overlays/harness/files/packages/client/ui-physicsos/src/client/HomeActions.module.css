@@ -1,0 +1,310 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: var(--dsh-composer-card-max-width);
+  margin: 8px auto 0;
+  padding: 0 var(--dsh-composer-side-clearance);
+  box-sizing: border-box;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.example {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(154, 177, 201, 0.38);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.example:hover {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--dsw-alias-label-primary);
+}
+
+.example:focus-visible,
+.portal:focus-visible,
+.action:focus-visible,
+.emptyCta:focus-visible,
+.recentItem:focus-visible {
+  outline: 2px solid var(--physicsos-focus, #3b82f6);
+  outline-offset: 2px;
+}
+
+.portals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.portal {
+  display: grid;
+  grid-template-rows: 132px auto;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: 0 14px 34px rgba(65, 93, 122, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px) saturate(125%);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.portal:hover {
+  border-color: rgba(63, 126, 201, 0.48);
+  box-shadow: 0 18px 42px rgba(65, 93, 122, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  transform: translateY(-2px);
+}
+
+.portalImage {
+  display: block;
+  width: 100%;
+  height: 132px;
+  object-fit: cover;
+  object-position: center 56%;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  background: #f7f9fc;
+}
+
+.portalBody {
+  display: grid;
+  gap: 5px;
+  padding: 14px 15px 13px;
+}
+
+.portalTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.portalIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  background: rgba(232, 242, 255, 0.78);
+  color: var(--dsw-static-blue-600);
+}
+
+.portalDescription {
+  min-height: 36px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.portalMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.portalMeta svg {
+  flex: none;
+  color: var(--dsw-static-blue-600);
+}
+
+.utilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.56);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px) saturate(120%);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.action:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: not-allowed;
+}
+
+.recentTitle {
+  margin: 0 0 8px;
+  color: #4e6680;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 2px 0;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.emptyBody {
+  margin: 0;
+  max-width: 36em;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.emptyCta {
+  margin-top: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--dsw-static-blue-500) 16%, var(--dsw-alias-border-l2));
+  border-radius: 8px;
+  background: var(--dsw-static-blue-50);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.emptyCta:hover {
+  background: var(--dsw-static-blue-75);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recentItem {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recentItem:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+@media (max-width: 720px) {
+  .portal {
+    grid-template-rows: 112px auto;
+    border-radius: 18px;
+  }
+
+  .portalImage {
+    height: 112px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal {
+    transition: none;
+  }
+
+  .portal:hover {
+    transform: none;
+  }
+}
+
+.recentItem > svg {
+  grid-row: 1 / span 2;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.recentName {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.recentMeta {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.recentTime {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .portals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

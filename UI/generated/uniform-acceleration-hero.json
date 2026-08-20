@@ -1,0 +1,13 @@
+{
+  "asset": "uniform-acceleration-hero",
+  "title": "Uniform acceleration hero illustration",
+  "provider": "primary",
+  "model": "gpt-image-2",
+  "requested": "4096x4096",
+  "pixels": "2880x2880",
+  "bytes": 3288550,
+  "prompt": "PhysicsOS uniformly accelerated linear motion scientific visualization asset, premium desktop physics software aesthetic, a small precision block travelling along a straight horizontal reference line, a sequence of ghosted stroboscopic positions with progressively increasing spacing to convey acceleration, a velocity arrow growing longer at each sample, a constant acceleration arrow in warm amber, fine dimension ticks along the path, warm white background with faint pale blue grid, thin exact engineering linework, calm analytical composition, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "revisedPrompt": "PhysicsOS uniformly accelerated linear motion scientific visualization asset, premium desktop physics software aesthetic, a small precision block travelling along a straight horizontal reference line, a sequence of ghosted stroboscopic positions with progressively increasing spacing to convey acceleration, a velocity arrow growing longer at each sample, a constant acceleration arrow in warm amber, fine dimension ticks along the path, warm white background with faint pale blue grid, thin exact engineering linework, calm analytical composition, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "createdAt": "2026-08-19T03:15:21.241Z",
+  "elapsedMs": 98230
+}

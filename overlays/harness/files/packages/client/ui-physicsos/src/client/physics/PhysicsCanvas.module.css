@@ -1,0 +1,126 @@
+/* Shared physics canvas chrome. Colours come from --physics-* tokens only. */
+
+.host {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.root {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.interactive {
+  cursor: crosshair;
+}
+
+.plot {
+  fill: var(--physics-canvas-bg);
+}
+
+.gridMinor {
+  stroke: var(--physics-grid-minor);
+  stroke-width: 1;
+}
+
+.gridMajor {
+  stroke: var(--physics-grid-major);
+  stroke-width: 1;
+}
+
+.axis {
+  stroke: var(--physics-axis);
+  stroke-width: 1.1;
+}
+
+.tick {
+  stroke: var(--physics-axis);
+  stroke-width: 1;
+}
+
+.tickLabel {
+  fill: var(--dsw-alias-label-caption);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.axisLabel {
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ---------- readout gutter ---------- */
+
+.readoutPanel {
+  fill: rgba(255, 255, 255, 0.86);
+  stroke: var(--physics-grid-major);
+  stroke-width: 1;
+}
+
+.readoutTitle {
+  fill: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.readoutLine {
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- scale bar ---------- */
+
+.scaleBar {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.1;
+}
+
+.scaleLabel {
+  fill: var(--physics-measurement);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- trajectory tooltip ---------- */
+
+.tooltip {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 4px 14px rgba(20, 33, 61, 0.12);
+  pointer-events: none;
+  transform: translate(10px, -50%);
+  white-space: nowrap;
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.tooltipLabel {
+  color: var(--dsw-alias-label-caption);
+  font-style: italic;
+}
+
+.tooltipValue {
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}

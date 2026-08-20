@@ -1,0 +1,41 @@
+{
+  "name": "@physicsos/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@physicsos/agent-dsh-adapter": "workspace:*",
+    "@physicsos/agent-runtime": "workspace:*",
+    "@physicsos/platform-bridge": "workspace:*",
+    "@physicsos/shared": "workspace:*",
+    "@physicsos/ui": "workspace:*",
+    "@tanstack/react-query": "^5.101.4",
+    "katex": "^0.18.4",
+    "lucide-react": "^0.544.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "^27.0.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.1"
+  }
+}

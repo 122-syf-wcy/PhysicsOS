@@ -1,0 +1,28 @@
+@import './tokens/tokens.css';
+@import 'katex/dist/katex.min.css';
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 35% 0%, rgba(214, 229, 255, 0.22), transparent 34%),
+    linear-gradient(180deg, #fbfcfe 0%, #f7f9fc 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}

@@ -1,0 +1,13 @@
+{
+  "asset": "projectile-hero",
+  "title": "Projectile motion hero illustration",
+  "provider": "primary",
+  "model": "gpt-image-2",
+  "requested": "4096x4096",
+  "pixels": "1254x1254",
+  "bytes": 1011736,
+  "prompt": "PhysicsOS projectile motion scientific interface illustration, clean premium scientific software aesthetic, warm white background, subtle pale blue coordinate grid, small physical ball launched horizontally from a minimalist platform, precise parabolic trajectory, velocity vector tangent to trajectory, separated horizontal and vertical velocity component vectors, downward gravity vector, small launch and impact markers, technical measurement annotations drawn as plain tick marks only, thin high-precision linework, soft restrained depth, desktop scientific workstation visual language, isolated visualization asset, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "revisedPrompt": "PhysicsOS projectile motion scientific interface illustration, clean premium scientific software aesthetic, warm white background, subtle pale blue coordinate grid, small physical ball launched horizontally from a minimalist platform, precise parabolic trajectory, velocity vector tangent to trajectory, separated horizontal and vertical velocity component vectors, downward gravity vector, small launch and impact markers, technical measurement annotations drawn as plain tick marks only, thin high-precision linework, soft restrained depth, desktop scientific workstation visual language, isolated visualization asset, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "createdAt": "2026-08-19T02:58:43.011Z",
+  "elapsedMs": 51840
+}

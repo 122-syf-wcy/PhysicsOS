@@ -1,0 +1,13 @@
+{
+  "asset": "lab-empty-state",
+  "title": "Physics Lab empty-state background",
+  "provider": "primary",
+  "model": "gpt-image-2",
+  "requested": "4096x4096",
+  "pixels": "1254x1254",
+  "bytes": 1258878,
+  "prompt": "An extremely subtle, very low contrast decorative background texture for the empty state of a scientific physics workstation. Warm white field with a barely visible pale ice-blue technical lattice, a few faint construction arcs and thin ghosted parabolic curves drawn at very low opacity, as if physics diagrams were pressed lightly into paper. Calm, quiet, almost blank, nothing dominant, wide open empty centre so interface text can sit on top and stay perfectly readable. Flat, orthographic, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "revisedPrompt": "An extremely subtle, very low contrast decorative background texture for the empty state of a scientific physics workstation. Warm white field with a barely visible pale ice-blue technical lattice, a few faint construction arcs and thin ghosted parabolic curves drawn at very low opacity, as if physics diagrams were pressed lightly into paper. Calm, quiet, almost blank, nothing dominant, wide open empty centre so interface text can sit on top and stay perfectly readable. Flat, orthographic, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "createdAt": "2026-08-19T03:16:35.351Z",
+  "elapsedMs": 74109
+}

@@ -1,0 +1,13 @@
+{
+  "asset": "inclined-plane-hero",
+  "title": "Inclined plane hero illustration",
+  "provider": "primary",
+  "model": "gpt-image-2",
+  "requested": "4096x4096",
+  "pixels": "2880x2880",
+  "bytes": 9085905,
+  "prompt": "PhysicsOS inclined plane scientific visualization asset, premium desktop physics software aesthetic, minimal inclined plane and precision block, force arrows for gravity, normal force and friction, gravity decomposition geometry drawn with fine construction lines, clean angle arc at the base of the incline, subtle coordinate basis, warm white and ice-blue background, physics blue technical linework, restrained coral used only for force emphasis, precise engineering-diagram composition, light realistic material depth but primarily scientific visualization, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "revisedPrompt": "PhysicsOS inclined plane scientific visualization asset, premium desktop physics software aesthetic, minimal inclined plane and precision block, force arrows for gravity, normal force and friction, gravity decomposition geometry drawn with fine construction lines, clean angle arc at the base of the incline, subtle coordinate basis, warm white and ice-blue background, physics blue technical linework, restrained coral used only for force emphasis, precise engineering-diagram composition, light realistic material depth but primarily scientific visualization, no cartoon, no childrens book illustration, no classroom clipart, no textbook clipart, no neon, no dark theme, no purple, no decorative gradients, no drop shadows, no 3D bevel, no perspective distortion, no UI chrome, no browser window, no words, no letters, no numbers, no emoji.",
+  "createdAt": "2026-08-19T03:00:54.522Z",
+  "elapsedMs": 131510
+}

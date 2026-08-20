@@ -1,0 +1,9 @@
+@import 'tailwindcss';
+@import '@physicsos/ui/styles.css';
+
+@source '../../../packages/ui/src';
+@source './**/*.{ts,tsx}';
+
+#root {
+  min-height: 100vh;
+}

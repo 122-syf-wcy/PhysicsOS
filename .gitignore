@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test / coverage
+coverage/
+playwright-report/
+blob-report/
+test-results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local scratch
+_tmp_*
+.tmp_*
+.cache/
+.skills-cache/
+tmp/
+*.pid
+DRELOCA*
+
+# Local verification output
+*-typecheck.txt
+golden-test.txt
+
+# Local harness baseline snapshot (not part of the project source)
+_baseline-harness/
+
+# Harness local artifacts (never commit secrets)
+vendor/deepseek-harness/.env
+vendor/deepseek-harness/node_modules/
+vendor/deepseek-harness/.turbo/
+vendor/deepseek-harness/dist/

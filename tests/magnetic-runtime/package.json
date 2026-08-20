@@ -1,0 +1,18 @@
+{
+  "name": "@physicsos/magnetic-runtime-integration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@physicsos/engine-magnetic": "file:../../packages/engine-magnetic",
+    "@physicsos/physics-core": "file:../../packages/physics-core",
+    "@physicsos/physics-observation": "file:../../packages/physics-observation",
+    "@physicsos/physics-scene": "file:../../packages/physics-scene",
+    "@physicsos/physics-verifier": "file:../../packages/physics-verifier"
+  }
+}

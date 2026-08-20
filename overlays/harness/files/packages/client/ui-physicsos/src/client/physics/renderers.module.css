@@ -1,0 +1,91 @@
+/* Domain renderer styles. */
+
+/* ---------- field lattice ---------- */
+
+.fieldGlyph {
+  fill: var(--physics-field);
+  font-size: 13px;
+  opacity: 0.62;
+  user-select: none;
+}
+
+.electricFieldLattice {
+  stroke: var(--physics-field);
+  stroke-width: 1.1;
+  opacity: 0.42;
+  fill: none;
+}
+
+/* ---------- trajectory ---------- */
+
+/* Travelled path is solid; the future is a faint dash — the distinction is
+   physical, so it is carried by dash pattern and opacity, not hue. */
+.trajectoryHistory {
+  stroke: var(--physics-trajectory);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.trajectoryPredicted {
+  stroke: var(--physics-trajectory-predicted);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  stroke-linecap: round;
+  opacity: 0.75;
+  fill: none;
+}
+
+.trajectoryDirection {
+  fill: var(--physics-trajectory);
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+/* ---------- magnetic guides ---------- */
+
+.guideLine {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.1;
+  stroke-dasharray: 5 3;
+  fill: none;
+}
+
+.guideLabel {
+  fill: var(--physics-measurement);
+  font-size: 11px;
+  font-style: italic;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+.orbitCenter {
+  fill: var(--physics-measurement);
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.particleLabel {
+  fill: #c8453a;
+  font-size: 11.5px;
+  font-style: italic;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+.particleLabelNegative {
+  fill: #1d4ed8;
+}
+
+/* ---------- annotations ---------- */
+
+.annotation {
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 10.5px;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
