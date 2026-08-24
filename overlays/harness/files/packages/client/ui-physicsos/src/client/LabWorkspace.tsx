@@ -136,8 +136,9 @@ export function PhysicsSurface({
           : {
             resume: {
               title: resumable.scene.metadata.title ?? resumable.sceneId,
-              /* Subject colour for the continue card. */
+              /* Subject colour + template artwork for the continue card. */
               domain: domainOfScene(resumable.scene),
+              sceneId: resumable.sceneId,
               onResume: () => { openSurface?.('lab') },
             },
           })}

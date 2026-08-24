@@ -5,13 +5,14 @@
  * action and the Lab empty state — so there is ONE template list, not three.
  * Reads as a learning-centre front page: a large title, a 继续上次实验 card
  * restoring the newest persisted scene, a 为你推荐 rail driven by the
- * student's own learning record, then the full searchable grid. Each of the
- * four domains carries one subject colour (--physics-subject-*) across cards,
- * tags and tabs. Picking one builds a real PhysicsScene via the
- * {@link ExperimentTemplateRegistry} and hands it to the Lab.
+ * student's own learning record, then the full searchable grid. Every card
+ * carries hand-drawn scene artwork ({@link ExperimentArt}) painted in its
+ * domain's subject colour, and the sections rise in with a staggered entrance
+ * (disabled under prefers-reduced-motion). Picking one builds a real
+ * PhysicsScene via the {@link ExperimentTemplateRegistry} and hands it to the Lab.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { knowledgeNodeOf } from '@physicsos/question-core'
@@ -26,12 +27,13 @@ import {
   type ExperimentDomain,
   type ExperimentTemplate,
 } from './physics/experiment-templates.ts'
+import { ExperimentArt, artTemplateIdOfSceneId } from './physics/experiment-artwork.tsx'
 import { recommendExperiments } from './physics/experiment-recommendations.ts'
 import type { LearningRecordState } from './learning-record-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import type { PhysicsSurfaceId, RecentExperimentsState } from './surface-store.ts'
 import { formatUpdatedAt } from './workspaceMeta.ts'
-import { IconPhysicsLab, IconPhysicsPlay, IconQuestionSheet } from './icons/physics-icons.tsx'
+import { IconPhysicsPlay } from './icons/physics-icons.tsx'
 import css from './ExperimentPicker.module.css'
 
 /** Locale keys for the domain tabs. 'all' is the union tab, not a group id. */
@@ -53,6 +55,14 @@ const DOMAIN_IDS: readonly ExperimentDomain[] = ['mechanics', 'electric', 'magne
 /** Narrow a stored domain string to a subject-coloured domain, if it is one. */
 const asDomain = (value: string): ExperimentDomain | undefined =>
   DOMAIN_IDS.find(domain => domain === value)
+
+/** Entrance order of a section; each step adds one beat of stagger. */
+const revealAt = (step: number): CSSProperties =>
+  ({ '--physics-reveal-delay': `${step * 55}ms` }) as CSSProperties
+
+/** Per-card stagger inside a rail or grid. */
+const cardAt = (index: number): CSSProperties =>
+  ({ '--physics-card-index': String(Math.min(index, 14)) }) as CSSProperties
 
 /** Read the recent template ids, newest first. The try guards non-browser tests. */
 function readRecent(): string[] {
@@ -95,6 +105,8 @@ export interface ExperimentPickerProps {
     readonly title: string
     /** Lab domain of the running scene, for the subject colour. */
     readonly domain?: string
+    /** Scene id of the running scene, so the card shows its template's artwork. */
+    readonly sceneId?: string
     readonly onResume: () => void
   }
 }
@@ -151,6 +163,7 @@ export function ExperimentPicker({
       title: resume.title,
       meta: t('lab.picker.continue.running'),
       domain: resume.domain === undefined ? undefined : asDomain(resume.domain),
+      templateId: resume.sceneId === undefined ? undefined : artTemplateIdOfSceneId(resume.sceneId),
       kind: 'experiment' as const,
       state: 'running',
       onOpen: resume.onResume,
@@ -165,6 +178,7 @@ export function ExperimentPicker({
           formatUpdatedAt(lastScene.updatedAt),
         ].filter((part): part is string => part !== undefined && part !== '').join(' · '),
         domain: lastDomain,
+        templateId: artTemplateIdOfSceneId(lastScene.sceneId),
         kind: lastScene.kind,
         state: 'stored',
         onOpen: () => { openSurface('lab', { sceneId: lastScene.sceneId, scene: lastScene.scene }) },
@@ -174,7 +188,26 @@ export function ExperimentPicker({
   return (
     <div className={css.root} data-physicsos-surface="lab" data-physicsos-state="picker">
       <div className={css.panel}>
-        <header className={css.header}>
+        <header className={clsx(css.header, css.reveal)} style={revealAt(0)}>
+          <svg
+            className={css.heroMotif}
+            viewBox="0 0 260 120"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M12 108 H248 M20 116 V8" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+            <path
+              d="M20 108 C60 20 150 12 244 96"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeDasharray="1 7"
+              strokeLinecap="round"
+            />
+            <circle cx="58" cy="52" r="2.4" fill="currentColor" opacity="0.55" />
+            <circle cx="118" cy="26" r="2.4" fill="currentColor" opacity="0.75" />
+            <circle cx="188" cy="42" r="2.4" fill="currentColor" opacity="0.9" />
+          </svg>
           <h2 className={css.title}>{t('lab.template.empty.title')}</h2>
           <p className={css.body}>{t('lab.template.empty.body')}</p>
         </header>
@@ -184,15 +217,15 @@ export function ExperimentPicker({
             type="button"
             className={clsx(
               css.continueCard,
+              css.reveal,
               continueCard.domain !== undefined && css[`subject-${continueCard.domain}`],
             )}
+            style={revealAt(1)}
             data-physicsos-continue={continueCard.state}
             onClick={continueCard.onOpen}
           >
-            <span className={css.continueIcon}>
-              {continueCard.kind === 'question'
-                ? <IconQuestionSheet size={20} />
-                : <IconPhysicsLab size={20} />}
+            <span className={clsx(css.art, css.artHero)}>
+              <ExperimentArt templateId={continueCard.templateId} kind={continueCard.kind} />
             </span>
             <span className={css.continueBody}>
               <span className={css.continueEyebrow}>{continueCard.eyebrow}</span>
@@ -209,31 +242,33 @@ export function ExperimentPicker({
         {recommendations.length > 0 ? (
           <section
             className={css.recommendSection}
+            style={revealAt(2)}
             aria-label={t('lab.picker.recommend.title')}
             data-physicsos-recommend=""
           >
-            <h3 className={css.sectionLabel}>{t('lab.picker.recommend.title')}</h3>
+            <h3 className={clsx(css.sectionLabel, css.reveal)}>{t('lab.picker.recommend.title')}</h3>
             <div className={css.recommendGrid}>
-              {recommendations.map(({ template, reason, nodeId }) => {
+              {recommendations.map(({ template, reason, nodeId }, index) => {
                 const node = nodeId === undefined ? undefined : knowledgeNodeOf(nodeId)
                 return (
                   <button
                     key={`recommend-${template.id}`}
                     type="button"
-                    className={clsx(css.recommendCard, css[`subject-${template.domain}`])}
+                    className={clsx(css.recommendCard, css.card, css[`subject-${template.domain}`])}
+                    style={cardAt(index)}
                     data-template-id={template.id}
                     data-reason={reason}
                     onClick={() => { pick(template) }}
                   >
+                    <span className={clsx(css.art, css.artBanner)}>
+                      <ExperimentArt templateId={template.id} fit="cover" />
+                    </span>
                     <span className={css.recommendReason}>
                       {reason === 'weakness'
                         ? `${t('lab.picker.recommend.weakness')}${node === undefined ? '' : ` · ${node.label}`}`
                         : t('lab.picker.recommend.classic')}
                     </span>
-                    <span className={css.recommendName}>
-                      <span className={css.recommendIcon}><template.icon size={17} /></span>
-                      {t(template.label)}
-                    </span>
+                    <span className={css.recommendName}>{t(template.label)}</span>
                     <span className={css.recommendHint}>{t(template.hint)}</span>
                   </button>
                 )
@@ -242,7 +277,7 @@ export function ExperimentPicker({
           </section>
         ) : null}
 
-        <div className={css.searchRow}>
+        <div className={clsx(css.searchRow, css.reveal)} style={revealAt(3)}>
           <input
             type="search"
             className={css.search}
@@ -254,7 +289,11 @@ export function ExperimentPicker({
         </div>
 
         {recentTemplates.length > 0 && query.trim() === '' ? (
-          <section className={css.recentSection} aria-label={t('lab.template.picker.recent')}>
+          <section
+            className={clsx(css.recentSection, css.reveal)}
+            style={revealAt(4)}
+            aria-label={t('lab.template.picker.recent')}
+          >
             <h3 className={css.sectionLabel}>{t('lab.template.picker.recent')}</h3>
             <div className={css.recentRow}>
               {recentTemplates.map(template => (
@@ -272,7 +311,12 @@ export function ExperimentPicker({
           </section>
         ) : null}
 
-        <div className={css.tabs} role="tablist" aria-label={t('lab.template.picker.allTemplates')}>
+        <div
+          className={clsx(css.tabs, css.reveal)}
+          style={revealAt(5)}
+          role="tablist"
+          aria-label={t('lab.template.picker.allTemplates')}
+        >
           {TABS.map(entry => (
             <button
               key={entry.id}
@@ -295,20 +339,25 @@ export function ExperimentPicker({
         {filtered.length === 0 ? (
           <p className={css.empty}>{t('lab.template.picker.empty')}</p>
         ) : (
-          <div className={css.grid}>
-            {filtered.map(template => (
+          /* Keyed by tab + query so switching re-runs the card entrance stagger. */
+          <div className={css.grid} style={revealAt(6)} key={`${tab}:${query.trim()}`}>
+            {filtered.map((template, index) => (
               <button
                 key={template.id}
                 type="button"
                 className={clsx(
                   css.entry,
+                  css.card,
                   css[`subject-${template.domain}`],
                   template.comingSoon === true && css.entrySoon,
                 )}
+                style={cardAt(index)}
                 disabled={template.comingSoon === true}
                 onClick={() => { pick(template) }}
               >
-                <span className={css.entryIcon}><template.icon size={18} /></span>
+                <span className={clsx(css.art, css.artThumb)}>
+                  <ExperimentArt templateId={template.id} />
+                </span>
                 <span className={css.entryText}>
                   <span className={css.entryName}>
                     {t(template.label)}
@@ -326,7 +375,7 @@ export function ExperimentPicker({
           </div>
         )}
 
-        <footer className={css.footer}>
+        <footer className={clsx(css.footer, css.reveal)} style={revealAt(7)}>
           <span className={css.count}>
             <IconPhysicsPlay size={14} />
             {t('lab.template.picker.allTemplates')} · {SELECTABLE_TEMPLATE_COUNT}

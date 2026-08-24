@@ -1,7 +1,13 @@
 /* Experiment library home. Geometry mirrors LabEmptyState's .root/.panel so the
    chooser reads as the same glass surface; the body is a learning-centre front
    page — hero title, continue card, recommendation rail — above a dense
-   selector grid. */
+   selector grid.
+
+   Motion: the panel rises once, sections follow in document order (one
+   --physics-reveal-delay beat each), and cards inside a rail add their own
+   --physics-card-index stagger on top of the section's beat. Hovering lifts a
+   card, blooms a subject-tinted shadow and eases the artwork up 5%; pressing
+   settles it back. All of it collapses under prefers-reduced-motion. */
 
 .root {
   position: absolute;
@@ -30,6 +36,60 @@
   background: var(--physics-glass-fill-strong);
   box-shadow: var(--physics-glass-shadow);
   backdrop-filter: blur(18px) saturate(120%);
+  animation: physics-panel-in 500ms var(--physics-ease-emphasized) both;
+}
+
+/* ------------------------------------------------------------------ motion -- */
+
+@keyframes physics-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.988);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes physics-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes physics-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A section that rises in at its own beat. */
+.reveal {
+  animation: physics-rise-in var(--physics-motion-entrance) var(--physics-ease-emphasized) both;
+  animation-delay: var(--physics-reveal-delay, 0ms);
+}
+
+/* A card inside a rail/grid: inherits the section beat, adds its own index. */
+.card {
+  animation: physics-card-in 420ms var(--physics-ease-emphasized) both;
+  animation-delay: calc(
+    var(--physics-reveal-delay, 0ms) +
+    min(calc(var(--physics-card-index, 0) * 26ms), 320ms)
+  );
 }
 
 /* ------------------------------------------------------------------ subjects --
@@ -57,10 +117,74 @@
   --subject-tint: var(--physics-subject-composite-tint);
 }
 
+/* ----------------------------------------------------------------- artwork --
+   Shared canvas for the hand-drawn scene art: subject-tinted wash, a soft
+   diagonal light, a hairline inset ring. The SVG strokes paint in the subject
+   colour via currentColor and ease up a touch on card hover. */
+
+.art {
+  position: relative;
+  display: block;
+  flex: none;
+  overflow: hidden;
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      142deg,
+      color-mix(in srgb, var(--subject, #4c6a84) 15%, transparent),
+      transparent 58%
+    ),
+    var(--subject-tint, var(--physics-incline-fill));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--subject, #4c6a84) 12%, transparent);
+  color: var(--subject, var(--physics-vector-force));
+}
+
+.art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 52% 58%;
+  transition: transform 480ms var(--physics-ease-emphasized);
+}
+
+.card:hover .art svg,
+.continueCard:hover .art svg {
+  transform: scale(1.05);
+}
+
+.artThumb {
+  width: 86px;
+  aspect-ratio: 30 / 17;
+}
+
+.artHero {
+  width: 128px;
+  aspect-ratio: 30 / 17;
+  border-radius: 12px;
+}
+
+.artBanner {
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  border-radius: 10px;
+}
+
 /* -------------------------------------------------------------------- hero -- */
 
 .header {
+  position: relative;
   flex: none;
+}
+
+.heroMotif {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  width: 300px;
+  height: auto;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.32;
+  pointer-events: none;
 }
 
 .title {
@@ -74,7 +198,7 @@
 
 .body {
   margin: 6px 0 0;
-  max-width: 46em;
+  max-width: 40em;
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
   line-height: 21px;
@@ -85,33 +209,34 @@
 .continueCard {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
   margin-top: 18px;
-  padding: 12px 14px;
+  padding: 10px 14px 10px 10px;
   box-sizing: border-box;
   border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--dsw-alias-bg-base);
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--physics-motion-base) var(--physics-ease);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    box-shadow 260ms var(--physics-ease-emphasized),
+    transform 260ms var(--physics-ease-emphasized);
 }
 
 .continueCard:hover {
-  border-color: var(--subject, var(--physics-field));
+  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 45%, transparent);
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 30px -14px color-mix(in srgb, var(--subject, #26425a) 38%, transparent),
+    0 2px 6px rgba(16, 24, 40, 0.05);
 }
 
-.continueIcon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--subject-tint, var(--physics-incline-fill));
-  color: var(--subject, var(--physics-vector-force));
+.continueCard:active {
+  transform: translateY(0) scale(0.995);
+  box-shadow: 0 4px 12px -8px color-mix(in srgb, var(--subject, #26425a) 30%, transparent);
 }
 
 .continueBody {
@@ -157,6 +282,19 @@
   font-size: 12px;
   line-height: 18px;
   font-weight: 600;
+  transition: filter var(--physics-motion-base) var(--physics-ease);
+}
+
+.continueCta svg {
+  transition: transform 240ms var(--physics-ease-emphasized);
+}
+
+.continueCard:hover .continueCta {
+  filter: brightness(0.94);
+}
+
+.continueCard:hover .continueCta svg {
+  transform: translateX(2px);
 }
 
 /* --------------------------------------------------------------- recommend -- */
@@ -183,22 +321,37 @@
 .recommendCard {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  padding: 12px 14px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  background: var(--subject-tint, var(--dsw-alias-bg-base));
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 8px 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-base);
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--physics-motion-base) var(--physics-ease);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    box-shadow 260ms var(--physics-ease-emphasized),
+    transform 260ms var(--physics-ease-emphasized);
 }
 
 .recommendCard:hover {
-  border-color: var(--subject, var(--physics-field));
+  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 45%, transparent);
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 30px -14px color-mix(in srgb, var(--subject, #26425a) 38%, transparent),
+    0 2px 6px rgba(16, 24, 40, 0.05);
+}
+
+.recommendCard:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow: 0 4px 12px -8px color-mix(in srgb, var(--subject, #26425a) 30%, transparent);
 }
 
 .recommendReason {
+  margin-top: 4px;
+  padding: 0 4px;
   color: var(--subject, var(--dsw-alias-label-tertiary));
   font-size: 11px;
   line-height: 15px;
@@ -206,30 +359,18 @@
 }
 
 .recommendName {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 0 4px;
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   line-height: 20px;
   font-weight: 600;
 }
 
-.recommendIcon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.75);
-  color: var(--subject, var(--physics-vector-force));
-}
-
 .recommendHint {
   overflow: hidden;
   max-width: 100%;
+  padding: 0 4px;
+  box-sizing: border-box;
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 16px;
@@ -257,11 +398,14 @@
   font-size: 13px;
   line-height: 20px;
   outline: none;
-  transition: border-color var(--physics-motion-base) var(--physics-ease);
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    box-shadow var(--physics-motion-base) var(--physics-ease);
 }
 
 .search:focus {
   border-color: var(--physics-field);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--physics-field) 14%, transparent);
 }
 
 .search::placeholder {
@@ -293,11 +437,19 @@
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
-  transition: border-color var(--physics-motion-base) var(--physics-ease);
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    background-color var(--physics-motion-base) var(--physics-ease),
+    transform 200ms var(--physics-ease-emphasized);
 }
 
 .recentChip:hover {
-  border-color: var(--subject, var(--physics-field));
+  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 50%, transparent);
+  background: color-mix(in srgb, var(--subject-tint, var(--dsw-alias-bg-base)) 55%, var(--dsw-alias-bg-base));
+}
+
+.recentChip:active {
+  transform: scale(0.97);
 }
 
 .recentIcon {
@@ -335,11 +487,14 @@
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
-  transition: background-color var(--physics-motion-base) var(--physics-ease);
+  transition:
+    background-color var(--physics-motion-base) var(--physics-ease),
+    color var(--physics-motion-base) var(--physics-ease);
 }
 
 .tab:hover {
   color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 55%, transparent);
 }
 
 .tabDot {
@@ -349,12 +504,22 @@
   height: 8px;
   border-radius: 50%;
   background: var(--subject, currentColor);
+  opacity: 0.55;
+  transform: scale(0.6);
+  transition:
+    transform 280ms var(--physics-ease-emphasized),
+    opacity var(--physics-motion-base) var(--physics-ease);
 }
 
 .tabActive {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
   font-weight: 600;
+}
+
+.tabActive .tabDot {
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* -------------------------------------------------------------------- grid -- */
@@ -369,7 +534,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -377,22 +542,32 @@
 .entry {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
   border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   text-align: left;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
   transition:
     border-color var(--physics-motion-base) var(--physics-ease),
-    background-color var(--physics-motion-base) var(--physics-ease);
+    box-shadow 260ms var(--physics-ease-emphasized),
+    transform 260ms var(--physics-ease-emphasized);
 }
 
 .entry:hover {
-  border-color: var(--subject, var(--physics-field));
-  background: var(--dsw-alias-interactive-bg-hover);
+  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 45%, transparent);
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 26px -14px color-mix(in srgb, var(--subject, #26425a) 36%, transparent),
+    0 2px 5px rgba(16, 24, 40, 0.05);
+}
+
+.entry:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow: 0 3px 10px -8px color-mix(in srgb, var(--subject, #26425a) 30%, transparent);
 }
 
 .entrySoon {
@@ -403,18 +578,12 @@
 .entrySoon:hover {
   border-color: var(--physics-glass-border-soft);
   background: var(--dsw-alias-bg-base);
+  transform: none;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
 }
 
-.entryIcon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--subject-tint, var(--physics-incline-fill));
-  color: var(--subject, var(--physics-vector-force));
+.entrySoon:hover .art svg {
+  transform: none;
 }
 
 .entryText {
@@ -431,6 +600,7 @@
   gap: 6px;
   font-size: 13px;
   line-height: 20px;
+  font-weight: 600;
 }
 
 .soonBadge {
@@ -485,6 +655,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+@media (max-width: 920px) {
+  .heroMotif {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .grid {
     grid-template-columns: 1fr;
@@ -496,5 +672,43 @@
 
   .continueCta {
     display: none;
+  }
+
+  .artThumb {
+    width: 72px;
+  }
+
+  .artHero {
+    width: 100px;
+  }
+}
+
+/* Motion is an accent, never a requirement. */
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .reveal,
+  .card {
+    animation: none;
+  }
+
+  .art svg,
+  .continueCta svg,
+  .tabDot,
+  .recentChip,
+  .entry,
+  .recommendCard,
+  .continueCard {
+    transition: none;
+  }
+
+  .card:hover .art svg,
+  .continueCard:hover .art svg {
+    transform: none;
+  }
+
+  .entry:hover,
+  .recommendCard:hover,
+  .continueCard:hover {
+    transform: none;
   }
 }

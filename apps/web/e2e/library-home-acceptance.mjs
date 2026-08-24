@@ -130,22 +130,49 @@ await picker().waitFor({ state: 'visible', timeout: 20_000 })
     state.dotColors.length === 4 && new Set(state.dotColors).size === 4, state.dotColors.join(' | '))
   check('no page scroll on the library home', state.scrolls === false)
 
-  /* Grid icon tiles pick up the subject colour: mechanics vs electric differ. */
-  const tileColors = await page.evaluate(() => {
+  /* Hand-drawn scene artwork: every card carries its template's dedicated SVG
+     (data-physicsos-art = template id, never the generic lab fallback), and the
+     art tile paints in the subject colour so mechanics ≠ electric. */
+  const art = await page.evaluate(() => {
     const root = document.querySelector('[data-physicsos-state="picker"]')
-    const tileOf = (text) => {
+    const artOf = (text) => {
       const entry = [...root.querySelectorAll('button')]
-        .find((node) => node.textContent.includes(text) && node.querySelector('[class*="entryIcon"]'))
-      return entry === undefined
+        .find((node) => node.textContent.includes(text) && node.querySelector('svg[data-physicsos-art]'))
+      const svg = entry?.querySelector('svg[data-physicsos-art]')
+      return svg === undefined || svg === null
         ? undefined
-        : getComputedStyle(entry.querySelector('[class*="entryIcon"]')).backgroundColor
+        : {
+          key: svg.getAttribute('data-physicsos-art'),
+          tint: getComputedStyle(svg.parentElement).backgroundColor,
+          ink: getComputedStyle(svg).color,
+        }
     }
-    return { mechanics: tileOf('匀速直线运动'), electric: tileOf('单点电荷电场') }
+    const recommendArt = [...root.querySelectorAll('[data-physicsos-recommend] svg[data-physicsos-art]')]
+      .map((svg) => svg.getAttribute('data-physicsos-art'))
+    /* Every grid entry (buttons carrying entryText) must have its artwork. */
+    const missingArt = [...root.querySelectorAll('button')]
+      .filter((node) => node.querySelector('[class*="entryText"]') !== null
+        && node.querySelector('svg[data-physicsos-art]') === null)
+      .map((node) => node.textContent.slice(0, 24))
+    return {
+      mechanics: artOf('匀速直线运动'),
+      electric: artOf('单点电荷电场'),
+      recommendArt,
+      missingArt,
+    }
   })
-  check('grid icon tiles are subject-tinted (mechanics ≠ electric)',
-    tileColors.mechanics !== undefined && tileColors.electric !== undefined
-    && tileColors.mechanics !== tileColors.electric,
-    JSON.stringify(tileColors))
+  check('grid cards show their dedicated scene artwork',
+    art.mechanics?.key === 'uniform-linear' && art.electric?.key === 'point-charge',
+    JSON.stringify({ mechanics: art.mechanics?.key, electric: art.electric?.key }))
+  check('art tiles are subject-tinted (mechanics ≠ electric)',
+    art.mechanics !== undefined && art.electric !== undefined
+    && art.mechanics.tint !== art.electric.tint && art.mechanics.ink !== art.electric.ink,
+    JSON.stringify({ mechanics: art.mechanics, electric: art.electric }))
+  check('recommendation cards use dedicated artwork, not the generic fallback',
+    art.recommendArt.length === 3 && art.recommendArt.every((key) => key !== 'lab' && key !== 'question'),
+    art.recommendArt.join(','))
+  check('no experiment card is missing artwork', art.missingArt.length === 0,
+    art.missingArt.join(' | '))
   await shot('experiment-library-home-1600x900')
 }
 
@@ -167,6 +194,9 @@ stdout.write('\nCASE B · 推荐卡创建实验 → 切换实验 → 「返回�
   check('running card offers 返回当前实验 with the live title',
     runningText.includes('返回当前实验') && runningText.includes('平抛运动')
     && runningText.includes('正在运行'), runningText.replace(/\n/g, ' '))
+  check('running card shows the live experiment own artwork',
+    (await running.locator('svg[data-physicsos-art]').getAttribute('data-physicsos-art'))
+      === 'projectile-horizontal')
   await running.click()
   await page.locator('[data-physicsos-domain="mechanics"]').waitFor({ state: 'visible', timeout: 15_000 })
   check('resuming returns to the same experiment, not a new instance',
@@ -190,6 +220,9 @@ await dismissOnboarding()
   check('stored card meta carries the subject and the clock',
     storedText.includes('力学') && /刚刚|分钟前|小时前/.test(storedText),
     storedText.replace(/\n/g, ' '))
+  check('stored card recovers its template artwork from the scene id',
+    (await stored.locator('svg[data-physicsos-art]').getAttribute('data-physicsos-art'))
+      === 'projectile-horizontal')
   await shot('experiment-library-continue-1600x900')
 
   await stored.click()

@@ -53,6 +53,8 @@ describe('mountPhysicsOSChrome', () => {
       '--physics-subject-composite-tint',
       '--physics-highlight',
       '--physics-motion-fast',
+      '--physics-motion-entrance',
+      '--physics-ease-emphasized',
     ]) {
       expect(css, `chrome CSS must define ${token}`).toContain(`${token}:`)
     }

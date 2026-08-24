@@ -96,6 +96,12 @@ const PHYSICS_TOKENS = `
   --physics-motion-base: 150ms;
   --physics-motion-slow: 180ms;
   --physics-ease: cubic-bezier(0.2, 0, 0.13, 1);
+
+  /* Entrance choreography (library home, cards easing in) runs longer than the
+     response tokens above because it narrates layout, not physics: a decisive
+     ease-out that lands still. Interactions keep using the fast tokens. */
+  --physics-motion-entrance: 460ms;
+  --physics-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Physics time is never faked by a CSS tween; only presentation properties
@@ -105,6 +111,7 @@ const PHYSICS_TOKENS = `
     --physics-motion-fast: 0ms;
     --physics-motion-base: 0ms;
     --physics-motion-slow: 0ms;
+    --physics-motion-entrance: 0ms;
   }
 }
 `
