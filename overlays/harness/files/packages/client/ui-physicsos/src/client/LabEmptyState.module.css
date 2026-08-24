@@ -1,0 +1,143 @@
+/* Lab chooser. Geometry mirrors LabWorkspace's .cover: the overlay fills the
+   conversation column and never scrolls the page. */
+
+.root {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* One opacity on the whole drawing keeps the lattice and the arc in the same
+     key, so no single element can creep forward and become decoration. */
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.node {
+  fill: var(--physics-grid-major);
+}
+
+.parabola {
+  fill: none;
+  stroke: var(--physics-trajectory-predicted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.ground {
+  fill: none;
+  stroke: var(--physics-grid-major);
+  stroke-width: 1.5;
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 28px 28px 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 16px;
+  background: var(--physics-glass-fill-strong);
+  box-shadow: var(--physics-glass-shadow);
+  backdrop-filter: blur(18px) saturate(120%);
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.body {
+  margin: 6px 0 0;
+  max-width: 46em;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 21px;
+}
+
+.quickLabel {
+  margin: 22px 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.quick {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+  /* Presentation only, and inside the product's 120-180ms band: nothing here
+     pretends to be physical time. */
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    background-color var(--physics-motion-base) var(--physics-ease);
+}
+
+.entry:hover {
+  border-color: var(--physics-field);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.entryIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--physics-glass-border-soft);
+  background: var(--physics-incline-fill);
+  color: var(--physics-vector-force);
+}
+
+.entryText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.entryName {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.entryHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}

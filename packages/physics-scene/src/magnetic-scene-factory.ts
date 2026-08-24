@@ -33,6 +33,9 @@ export interface MagneticSceneInput {
   readonly magneticFieldDirection?: 'into_page' | 'out_of_page'
   readonly observableVisibility?: Partial<Record<MagneticObservableKey, boolean>>
   readonly now?: IsoDateTime
+  /** Student-facing scene name; reaches the Lab toolbar and the canvas label. */
+  readonly title?: string
+  readonly description?: string
 }
 
 const DEFAULTS = {
@@ -143,8 +146,8 @@ export const createMagneticScene = (input: MagneticSceneInput = {}): PhysicsScen
     metadata: {
       createdAt: now,
       updatedAt: now,
-      title: 'Magnetic Runtime Scene',
-      description: 'Frozen uniform magnetic field circular-motion model.',
+      title: input.title ?? 'Magnetic Runtime Scene',
+      description: input.description ?? 'Frozen uniform magnetic field circular-motion model.',
     },
   }
 }

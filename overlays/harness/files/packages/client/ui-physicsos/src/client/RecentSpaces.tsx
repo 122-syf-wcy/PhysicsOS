@@ -1,28 +1,37 @@
-import { IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import { IconPhysicsLab, IconQuestionSheet } from './icons/physics-icons.tsx'
+import type {
+  PhysicsSceneRef,
+  PhysicsSurfaceId,
+  RecentExperimentsState,
+} from './surface-store.ts'
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import css from './RecentSpaces.module.css'
 
 /** Registration-side face for {@link RecentSpaces}. */
 export interface RecentSpacesInjected {
-  startSession: (workspaceId?: WorkspaceId) => void
+  hooks: {
+    recentExperiments: SnapshotStore<RecentExperimentsState>
+  }
+  openSurface: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
 }
 
 /** Slot props for the sidebar recent-space list. */
 export type RecentSpacesProps =
   PropsRuntime<'sidebar.workspaces'>
-  & RecentSpacesInjected
+  & InjectFace<RecentSpacesInjected>
   & PropsLocale<'physicsos'>
 
 /**
- * Compact recent Scene / Question Workspace list. Replaces the Harness
- * session browser so students never see workspace/session management chrome.
- * @param props - column width, workspace list, and product copy.
+ * Compact recent-space list: REAL scenes the student opened, newest first.
+ * Each row restores its PhysicsScene in the Lab — these are experiments and
+ * question worlds, never Harness workspace/session chrome.
+ * @param props - column width, recent-scene store, and product copy.
  */
-export function RecentSpaces({ wide, startSession, useWorkspaces, t }: RecentSpacesProps) {
-  const items = useWorkspaces(s => s.items)
+export function RecentSpaces({ wide, useRecentExperiments, openSurface, t }: RecentSpacesProps) {
+  const items = useRecentExperiments(s => s.items)
   if (!wide) return <div className={css.rail} aria-hidden="true" />
   return (
     <section className={css.root} aria-label={t('recent.title')}>
@@ -31,16 +40,23 @@ export function RecentSpaces({ wide, startSession, useWorkspaces, t }: RecentSpa
         <p className={css.empty}>{t('recent.sidebarEmpty')}</p>
       ) : (
         <ul className={css.list}>
-          {items.slice(0, 8).map(workspace => (
-            <li key={workspace.workspaceId as string}>
+          {items.map(entry => (
+            <li key={entry.sceneId}>
               <button
                 type="button"
                 className={css.item}
-                onClick={() => { startSession(workspace.workspaceId) }}
+                onClick={() => {
+                  openSurface('lab', { sceneId: entry.sceneId, scene: entry.scene })
+                }}
               >
-                <IconFolderOpen16 size={16} />
-                <span className={css.name}>{workspace.title}</span>
-                <span className={css.time}>{formatUpdatedAt(workspace.updatedAt)}</span>
+                {entry.kind === 'question'
+                  ? <IconQuestionSheet size={16} />
+                  : <IconPhysicsLab size={16} />}
+                <span className={css.name}>{entry.title}</span>
+                <span className={css.kind}>
+                  {t(entry.kind === 'question' ? 'recent.kind.question' : 'recent.kind.experiment')}
+                </span>
+                <span className={css.time}>{formatUpdatedAt(entry.updatedAt)}</span>
               </button>
             </li>
           ))}

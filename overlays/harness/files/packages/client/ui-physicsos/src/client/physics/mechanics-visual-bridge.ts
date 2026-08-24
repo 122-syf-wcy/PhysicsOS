@@ -182,10 +182,64 @@ const derivedVectorOf = (
   }
 }
 
+/**
+ * How each observed force is drawn. The Observation layer names the force; this
+ * table only assigns the semantic colour role, the label and whether it reads as
+ * subordinate — a decomposition component is a study aid, so it never competes
+ * with the resultant it came from.
+ */
+const FORCE_STYLES: Record<
+  string,
+  {
+    role: PhysicsSemanticRole
+    observable: VectorVisual['observable']
+    symbol: string
+    subordinate?: boolean
+  }
+> = {
+  gravity: { role: 'gravity', observable: 'forces', symbol: 'mg' },
+  normal: { role: 'normal', observable: 'forces', symbol: 'N' },
+  friction: { role: 'friction', observable: 'forces', symbol: 'f' },
+  applied: { role: 'force', observable: 'forces', symbol: 'F' },
+  gravity_parallel: {
+    role: 'gravity',
+    observable: 'decomposition',
+    symbol: 'mg\\sin\\theta',
+    subordinate: true,
+  },
+  gravity_normal: {
+    role: 'gravity',
+    observable: 'decomposition',
+    symbol: 'mg\\cos\\theta',
+    subordinate: true,
+  },
+}
+
+/** Component arrow from a plain scene-space delta, already display-scaled. */
+const componentVector = (
+  id: string,
+  from: ScenePoint,
+  delta: { x: number; y: number },
+  length: number,
+  symbol: string,
+): VectorVisual | undefined => {
+  const magnitude = Math.hypot(delta.x, delta.y)
+  if (!Number.isFinite(magnitude) || magnitude === 0 || length <= 0) return undefined
+  return {
+    id,
+    role: 'velocity-component',
+    observable: 'components',
+    from,
+    to: { x: from.x + (delta.x / magnitude) * length, y: from.y + (delta.y / magnitude) * length },
+    symbol,
+    subordinate: true,
+  }
+}
+
 const sceneVisibility = (
   scene: PhysicsScene,
   hasKeyPoints: boolean,
-  hasNetForce: boolean,
+  hasForces: boolean,
 ): ObservableVisibility => ({
   velocity: scene.observableDefinitions.some(
     definition => definition.type === 'velocity' && definition.visible,
@@ -197,10 +251,14 @@ const sceneVisibility = (
     definition => definition.type === 'trajectory' && definition.visible,
   ),
   keyPoints: hasKeyPoints,
-  forces: hasNetForce,
-  netForce: hasNetForce,
-  components: false,
-  decomposition: false,
+  forces: hasForces,
+  netForce: hasForces,
+  components: scene.observableDefinitions.some(
+    definition => definition.visible && definition.parameters?.['kind'] === 'velocity_components',
+  ),
+  decomposition: scene.observableDefinitions.some(
+    definition => definition.visible && definition.parameters?.['kind'] === 'force_decomposition',
+  ),
 })
 
 export const mechanicsSceneVisualAt = ({
@@ -250,23 +308,41 @@ export const mechanicsSceneVisualAt = ({
     simulation.states[0]?.objects.find(object => object.id === body.id)?.position,
   ) ?? position
 
-  const geometryPoints: ScenePoint[] = [position, initialPosition, ...trajectoryPoints]
-  for (const point of [launchPoint, apexPoint, impactPoint]) {
-    if (point !== undefined) geometryPoints.push(point)
+  /* An inclined body slides for as long as the simulation window allows, so
+     framing on its whole path would draw a hundred-metre wedge with a speck on it.
+     The physically interesting object here is the SURFACE and the free-body
+     diagram at the current instant, so the incline frames on those and lets the
+     motion run through the frame instead. */
+  const framesOnTrajectory = model !== 'inclined_plane'
+  const geometryPoints: ScenePoint[] = framesOnTrajectory
+    ? [position, initialPosition, ...trajectoryPoints]
+    : [position, initialPosition]
+  if (framesOnTrajectory) {
+    for (const point of [launchPoint, apexPoint, impactPoint]) {
+      if (point !== undefined) geometryPoints.push(point)
+    }
   }
 
   const preliminary = boundsOf(geometryPoints)
-  const inclineBase = Math.max(preliminary.extent.width, 6)
+  /* A fixed wedge in scene metres: big enough to read the angle, small enough that
+     the block stays a recognisable object. */
+  const inclineBase = model === 'inclined_plane' ? 6 : Math.max(preliminary.extent.width, 6)
   const inclineAngle = inclineObservation?.angle ?? 30
   const inclineRise = inclineBase * Math.tan((inclineAngle * Math.PI) / 180)
+  /* Place the WEDGE so the body lands part-way down the slope rather than exactly
+     on the apex corner. The body keeps its scene position — only the drawn surface
+     moves — so the free-body arrows still start at the real object. */
+  const bodySlopeFraction = 0.42
   const inclineOrigin = {
-    x: initialPosition.x,
-    y: initialPosition.y - inclineRise,
+    x: initialPosition.x - inclineBase * bodySlopeFraction,
+    y: initialPosition.y - inclineRise * (1 - bodySlopeFraction),
   }
   if (model === 'inclined_plane') {
+    /* The apex must be in bounds too, or the top of the wedge is cropped. */
     geometryPoints.push(
       inclineOrigin,
       { x: inclineOrigin.x + inclineBase, y: inclineOrigin.y },
+      { x: inclineOrigin.x, y: inclineOrigin.y + inclineRise },
       initialPosition,
     )
   }
@@ -284,6 +360,64 @@ export const mechanicsSceneVisualAt = ({
   const majorGrid = niceStep(Math.max(bounds.extent.width, bounds.extent.height))
   const arrowLength = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.16, 0.5)
   const netForce = derivedVectorOf(state, 'net_force')
+
+  /* Individual forces come from the Observation layer, which owns each arrow's
+     direction; the bridge only chooses the on-screen length. Scaling every force
+     by the largest one keeps their relative sizes physically readable instead of
+     normalising each to the same length. */
+  const forceObservations = mechanicsObservations.filter(
+    (observation): observation is Extract<MechanicsObservation, { type: 'mechanics_force' }> =>
+      observation.type === 'mechanics_force',
+  )
+  const largestForce = forceObservations.reduce(
+    (largest, observation) => Math.max(largest, observation.magnitude.value),
+    0,
+  )
+  const forceVectors = forceObservations.flatMap((observation) => {
+    const style = FORCE_STYLES[observation.label]
+    if (style === undefined) return []
+    const share = largestForce === 0 ? 1 : observation.magnitude.value / largestForce
+    const vector = displayVector(
+      `force-${observation.label}`,
+      style.role,
+      style.observable,
+      position,
+      observation.vector,
+      arrowLength * (0.45 + 0.55 * share),
+      style.symbol,
+    )
+    if (vector === undefined) return []
+    return [style.subordinate === true ? { ...vector, subordinate: true } : vector]
+  })
+
+  /* Velocity components, drawn only when the scene asks for them. Each is scaled
+     by its own share of the speed so vₓ and v_y visibly compose into v. */
+  const componentsVisible = scene.observableDefinitions.some(
+    definition => definition.visible && definition.parameters?.['kind'] === 'velocity_components',
+  )
+  const velocityValue = canonicalVector(bodyState.velocity)
+  const speed = velocityValue === undefined ? 0 : vectorMagnitude(velocityValue)
+  const componentVectors =
+    !componentsVisible || velocityValue === undefined || speed === 0
+      ? []
+      : [
+        componentVector('velocity-x', position, { x: velocityValue.x, y: 0 }, arrowLength * (Math.abs(velocityValue.x) / speed), 'v_x'),
+        componentVector('velocity-y', position, { x: 0, y: velocityValue.y }, arrowLength * (Math.abs(velocityValue.y) / speed), 'v_y'),
+      ].filter((vector): vector is VectorVisual => vector !== undefined)
+
+  /* ΣF earns its own arrow only when it says something the individual forces do
+     not. On a projectile the single force IS the resultant, so drawing both would
+     stack two identical arrows and imply two separate physical facts. */
+  const netForceValue = canonicalVector(netForce)
+  const soleForce = forceObservations.length === 1
+    ? canonicalVector(forceObservations[0]?.vector)
+    : undefined
+  const netForceIsRedundant =
+    netForceValue !== undefined &&
+    soleForce !== undefined &&
+    Math.hypot(netForceValue.x - soleForce.x, netForceValue.y - soleForce.y) <
+      Math.max(vectorMagnitude(netForceValue), 1e-9) * 0.02
+
   const vectors = [
     displayVector('velocity', 'velocity', 'velocity', position, bodyState.velocity, arrowLength, 'v'),
     displayVector(
@@ -295,37 +429,89 @@ export const mechanicsSceneVisualAt = ({
       arrowLength * 0.9,
       'a',
     ),
-    displayVector('net-force', 'net-force', 'netForce', position, netForce, arrowLength, 'F_net'),
-  ].filter((vector): vector is VectorVisual => vector !== undefined)
+    ...(netForceIsRedundant
+      ? []
+      : [displayVector('net-force', 'net-force', 'netForce', position, netForce, arrowLength, 'F_net')]),
+  ]
+    .filter((vector): vector is VectorVisual => vector !== undefined)
+    .concat(forceVectors, componentVectors)
+
+  /* An apex that coincides with the launch point is the horizontal-throw case:
+     the highest point IS the start, so a second marker would only add clutter. */
+  const apexDistinct =
+    apexPoint !== undefined &&
+    launchPoint !== undefined &&
+    Math.hypot(apexPoint.x - launchPoint.x, apexPoint.y - launchPoint.y) >
+      Math.max(bounds.extent.width, bounds.extent.height) * 0.02
+
+  const keyPointReadout = (at: ScenePoint, time: number | undefined) => {
+    const rows: { label: string; value: string }[] = []
+    if (time !== undefined) rows.push({ label: 't', value: `${formatNumber(time)} s` })
+    rows.push({ label: 'x', value: `${formatNumber(at.x)} m` })
+    rows.push({ label: 'y', value: `${formatNumber(at.y)} m` })
+    return rows
+  }
 
   const keyPoints = [
     launchPoint === undefined
       ? undefined
-      : { id: 'launch', kind: 'launch' as const, at: launchPoint, label: 'A' },
-    apexPoint === undefined
+      : {
+        id: 'launch',
+        kind: 'launch' as const,
+        at: launchPoint,
+        label: '起点',
+        readout: keyPointReadout(launchPoint, 0),
+      },
+    /* `apexDistinct` already proves apexPoint defined; TS narrows through it. */
+    !apexDistinct
       ? undefined
-      : { id: 'apex', kind: 'apex' as const, at: apexPoint, label: 'H' },
+      : {
+        id: 'apex',
+        kind: 'apex' as const,
+        at: apexPoint,
+        label: '最高点',
+        readout: [
+          ...keyPointReadout(apexPoint, undefined),
+          ...(keyPointObservation === undefined
+            ? []
+            : [{ label: 'H', value: `${formatNumber(keyPointObservation.maxHeight.value)} m` }]),
+        ],
+      },
     impactPoint === undefined
       ? undefined
-      : { id: 'impact', kind: 'impact' as const, at: impactPoint, label: 'B' },
+      : {
+        id: 'impact',
+        kind: 'impact' as const,
+        at: impactPoint,
+        label: '落地点',
+        readout: [
+          ...keyPointReadout(impactPoint, keyPointObservation?.flightTime.value),
+          ...(keyPointObservation === undefined
+            ? []
+            : [{ label: 'R', value: `${formatNumber(keyPointObservation.range.value)} m` }]),
+        ],
+      },
   ].filter((point): point is NonNullable<typeof point> => point !== undefined)
 
   const dimensions = []
   if (launchPoint !== undefined && groundObservation !== undefined) {
+    /* Offset the height rule into the left gutter so it never overlaps the launch
+       platform or the first stretch of the trajectory. */
+    const gutterX = bounds.origin.x + bounds.extent.width * 0.06
     dimensions.push({
       id: 'launch-height',
-      from: { x: launchPoint.x, y: groundObservation.groundY },
-      to: launchPoint,
-      label: 'h',
+      from: { x: gutterX, y: groundObservation.groundY },
+      to: { x: gutterX, y: launchPoint.y },
+      label: `h = ${formatNumber(launchPoint.y - groundObservation.groundY)} m`,
       side: 'right' as const,
     })
   }
   if (launchPoint !== undefined && impactPoint !== undefined && groundObservation !== undefined) {
     dimensions.push({
       id: 'range',
-      from: { x: launchPoint.x, y: groundObservation.groundY },
-      to: { x: impactPoint.x, y: groundObservation.groundY },
-      label: 'R',
+      from: { x: launchPoint.x, y: groundObservation.groundY - bounds.extent.height * 0.06 },
+      to: { x: impactPoint.x, y: groundObservation.groundY - bounds.extent.height * 0.06 },
+      label: `R = ${formatNumber(impactPoint.x - launchPoint.x)} m`,
       side: 'left' as const,
     })
   }
@@ -399,28 +585,43 @@ export const mechanicsSceneVisualAt = ({
           y: groundObservation.groundY,
           from: bounds.origin.x,
           to: bounds.origin.x + bounds.extent.width,
-          label: 'ground',
+          label: '地面',
         },
       }),
     ...(model === 'inclined_plane'
       ? { incline: { origin: inclineOrigin, base: inclineBase, angle: inclineAngle } }
       : {}),
-    ...(model === 'projectile_motion' && launchPoint !== undefined && groundObservation !== undefined
+    /* A launch platform is a short slab at launch height, not a column down to the
+       ground: the drop is already stated by the `h` dimension, and a full-height
+       block would cut the scene in half. */
+    ...(model === 'projectile_motion' &&
+      launchPoint !== undefined &&
+      groundObservation !== undefined &&
+      launchPoint.y - groundObservation.groundY > bounds.extent.height * 0.04
       ? {
         platform: {
           at: launchPoint,
-          width: Math.max(bounds.extent.width * 0.1, 0.8),
-          height: Math.max(launchPoint.y - groundObservation.groundY, 0.1),
+          width: Math.max(bounds.extent.width * 0.08, 0.6),
+          height: Math.max(bounds.extent.height * 0.035, 0.25),
         },
       }
       : {}),
-    coordinate: {
-      at: initialPosition,
-      length: Math.max(arrowLength * 0.7, 0.45),
-      xLabel: 'x',
-      yLabel: 'y',
-      ...(model === 'inclined_plane' ? { rotation: -inclineAngle } : {}),
-    },
+    /* The rotated basis explains which way "along the slope" points, so it earns
+       its space on an incline; on a projectile the global axes already say it. */
+    ...(model === 'inclined_plane'
+      ? {
+        coordinate: {
+          at: {
+            x: position.x + Math.max(arrowLength, 0.6) * 1.6,
+            y: position.y + Math.max(arrowLength, 0.6) * 1.6,
+          },
+          length: Math.max(arrowLength * 0.7, 0.45),
+          xLabel: 'x',
+          yLabel: 'y',
+          rotation: -inclineAngle,
+        },
+      }
+      : {}),
     overlay: {
       readout: [
         MODEL_LABELS[model],
@@ -430,7 +631,11 @@ export const mechanicsSceneVisualAt = ({
       ],
       scale: { label: `${formatNumber(majorGrid)} m`, length: majorGrid },
     },
-    visible: sceneVisibility(scene, keyPoints.length > 0, netForce !== undefined),
+    visible: sceneVisibility(
+      scene,
+      keyPoints.length > 0,
+      forceVectors.length > 0 || netForce !== undefined,
+    ),
   }
 }
 

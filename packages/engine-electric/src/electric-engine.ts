@@ -32,6 +32,13 @@ import {
 import { verifyElectricSimulation } from '@physicsos/physics-verifier'
 
 import { electricForce } from './electrostatics.ts'
+import {
+  canHandlePointCharge,
+  isPointChargeScene,
+  pointChargeDerived,
+  resolvePointChargeModel,
+  type PointChargeModel,
+} from './point-charge-model.ts'
 
 export const ELECTRIC_ENGINE_ID = 'engine-electric'
 export const ELECTRIC_ENGINE_VERSION = '1.0.0'
@@ -263,6 +270,25 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
   readonly domain = 'electric' as const
 
   canHandle(scene: PhysicsScene): ModelSupport {
+    /* Two models share this engine. Detection comes first so a point-charge scene
+       is never rejected by the uniform-field preconditions (and vice versa). */
+    if (isPointChargeScene(scene)) {
+      try {
+        const structural = validateScene(scene)
+        if (structural.status === 'failed') {
+          return invalidModelCondition(
+            ELECTRIC_ENGINE_ID,
+            structural.errors.map((issue) => failure(issue.code, issue.message)),
+          )
+        }
+      } catch (error: unknown) {
+        return invalidModelCondition(ELECTRIC_ENGINE_ID, [
+          failure('scene_valid', error instanceof Error ? error.message : 'Scene validation failed.'),
+        ])
+      }
+      return canHandlePointCharge(scene)
+    }
+
     let sceneVerification: VerificationResult
     try {
       sceneVerification = validateScene(scene)
@@ -344,6 +370,12 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
 
   stateAt(scene: PhysicsScene, time: Quantity<'time'>): SimulationState {
     const seconds = canonicalValue(time)
+    if (isPointChargeScene(scene)) {
+      /* The point-charge slice is static: the field does not change with time, and
+         the probe's motion in a 1/r² field has no closed form. Every requested time
+         therefore returns the same honest instantaneous state. */
+      return pointChargeState(resolvePointChargeModel(scene), seconds)
+    }
     return evaluateUniformElectricState(resolveUniformElectricModel(scene), seconds)
   }
 
@@ -366,6 +398,8 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
         },
       )
     }
+
+    if (isPointChargeScene(scene)) return this.simulatePointCharge(scene, request)
 
     const model = resolveUniformElectricModel(scene)
     const startTime = request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
@@ -406,6 +440,98 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     }
     return { ...pending, verification: verifyElectricSimulation(scene, pending) }
   }
+
+  /**
+   * Static point-charge simulation.
+   *
+   * One state, because nothing evolves: the sources are held in place and the
+   * probe's instantaneous force is the physical answer. Emitting a fabricated
+   * trajectory would claim motion the model never solved.
+   */
+  private simulatePointCharge(
+    scene: PhysicsScene,
+    request: SimulationRequest,
+  ): SimulationResult<PhysicsEventLike> {
+    const support = this.canHandle(scene)
+    if (!support.supported) throw new EngineUnsupportedError(ELECTRIC_ENGINE_ID, support)
+    const model = resolvePointChargeModel(scene)
+    const startedAt = new Date().toISOString()
+    const pending: SimulationResult<PhysicsEventLike> = {
+      schemaVersion: 'simulation-result/1.0',
+      simulationId: request.simulationId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      states: [pointChargeState(model, 0)],
+      events: [],
+      measurements: [],
+      derivedQuantities: pointChargeDerived(model),
+      verification: { status: 'passed', checks: [], warnings: [], errors: [] },
+      metadata: {
+        engineId: this.engineId,
+        engineVersion: this.engineVersion,
+        solver: 'analytical-point-charge',
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        durationMs: 0,
+        deterministic: true,
+      },
+      trace: request.trace,
+    }
+    return { ...pending, verification: verifyElectricSimulation(scene, pending) }
+  }
 }
+
+/** One simulation state for a static point-charge world. */
+const pointChargeState = (model: PointChargeModel, seconds: number): SimulationState => ({
+  time: quantity(seconds, 's', 'time'),
+  objects: [
+    ...model.charges.map((charge) => ({
+      id: charge.id,
+      position: quantityVector(charge.position, 'm', 'length'),
+      velocity: quantityVector({ x: 0, y: 0, z: 0 }, 'm/s', 'velocity'),
+    })),
+    ...(model.probe === undefined
+      ? []
+      : [{
+        id: model.probe.id,
+        position: quantityVector(model.probe.position, 'm', 'length'),
+        velocity: quantityVector(model.probe.velocity, 'm/s', 'velocity'),
+        ...(model.acceleration === undefined
+          ? {}
+          : { acceleration: quantityVector(model.acceleration, 'm/s^2', 'acceleration') }),
+        values: {
+          electric_field: quantityVector(model.field, 'V/m', 'electric_field'),
+          ...(model.force === undefined
+            ? {}
+            : { electric_force: quantityVector(model.force, 'N', 'force') }),
+        },
+      }]),
+  ],
+  derived: [
+    {
+      key: 'electric_field_vector',
+      value: quantityVector(model.field, 'V/m', 'electric_field'),
+    },
+    {
+      key: 'electric_field_magnitude',
+      value: quantity(model.fieldMagnitude, 'V/m', 'electric_field'),
+    },
+    {
+      key: 'potential',
+      value: quantity(model.potential, 'V', 'electric_potential'),
+    },
+    ...(model.force === undefined
+      ? []
+      : [
+        { key: 'electric_force_vector', value: quantityVector(model.force, 'N', 'force') },
+        ...(model.forceMagnitude === undefined
+          ? []
+          : [{ key: 'electric_force_magnitude', value: quantity(model.forceMagnitude, 'N', 'force') }]),
+        ...(model.acceleration === undefined
+          ? []
+          : [{ key: 'acceleration_vector', value: quantityVector(model.acceleration, 'm/s^2', 'acceleration') }]),
+      ]),
+  ],
+})
 
 export const electricEngine = new ElectricEngine()

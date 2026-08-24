@@ -18,6 +18,16 @@
   fill: var(--physics-vector-force);
 }
 
+.roleElectricForce {
+  stroke: var(--physics-vector-electric-force);
+  fill: var(--physics-vector-electric-force);
+}
+
+.roleMagneticForce {
+  stroke: var(--physics-vector-magnetic-force);
+  fill: var(--physics-vector-magnetic-force);
+}
+
 .roleGravity {
   stroke: var(--physics-vector-gravity);
   fill: var(--physics-vector-gravity);

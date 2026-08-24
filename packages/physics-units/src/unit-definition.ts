@@ -20,6 +20,9 @@ export type UnitKey =
   | 'ampere'
   | 'kelvin'
   | 'coulomb'
+  | 'millicoulomb'
+  | 'microcoulomb'
+  | 'nanocoulomb'
   | 'meter_per_second'
   | 'kilometer_per_hour'
   | 'kilometer_per_second'
@@ -95,6 +98,9 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('ampere', 'electric_current', 'A', 1, true, ['amp']),
   define('kelvin', 'temperature', 'K', 1, true),
   define('coulomb', 'electric_charge', 'C', 1, true),
+  define('millicoulomb', 'electric_charge', 'mC', 1e-3, false),
+  define('microcoulomb', 'electric_charge', 'µC', 1e-6, false, ['μC', 'uC']),
+  define('nanocoulomb', 'electric_charge', 'nC', 1e-9, false),
 
   define('meter_per_second', 'velocity', 'm/s', 1, true, ['m*s^-1', 'm s^-1', 'mps']),
   define('kilometer_per_hour', 'velocity', 'km/h', 1000 / 3600, false, ['kph', 'kmph']),

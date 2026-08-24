@@ -195,6 +195,75 @@ export const IconNormalForce = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* ------------------------------------------------------------- field domains -- */
+
+/** Point charge: a single source with radial field lines. */
+export const IconPointCharge = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none" />
+    <path d="M12 4.2v3.4M12 16.4v3.4M4.2 12h3.4M16.4 12h3.4" />
+    <path d="M6.6 6.6l2.2 2.2M15.2 15.2l2.2 2.2M17.4 6.6l-2.2 2.2M8.8 15.2l-2.2 2.2" strokeOpacity="0.62" />
+  </Glyph>
+)
+
+/** Uniform electric field: two plates with parallel down-strokes. */
+export const IconUniformElectric = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 6.5h16M4 17.5h16" />
+    <path d="M8 9v6M12 9v6M16 9v6" strokeOpacity="0.6" />
+  </Glyph>
+)
+
+/** Parallel plates: a capacitor gap with a deflected particle path. */
+export const IconParallelPlate = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 7h7M14 7h7" />
+    <path d="M3 17h7M14 17h7" strokeOpacity="0.55" />
+    <path d="M5 10.5c5 0 6.4 3 8 5.5" />
+    <circle cx="5" cy="10.5" r="1.3" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
+/** Magnetic circular motion: a circle with a × glyph at center. */
+export const IconMagneticCircle = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <circle cx="12" cy="12" r="6.4" />
+    <path d="M10.2 10.2h3.6v3.6h-3.6z" strokeWidth="1.4" />
+    <path d="M12 3.4v2.2" />
+  </Glyph>
+)
+
+/** Velocity selector: crossed E (down) and B (into page) with a straight beam. */
+export const IconVelocitySelector = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 6.5h16M4 17.5h16" strokeOpacity="0.55" />
+    <path d="M12 8.4v7.2" strokeOpacity="0.6" />
+    <path d="M10.4 10.4h3.2v3.2h-3.2z" strokeWidth="1.3" />
+    <path d="M4 12h4" />
+    <path d="M16 12h4" strokeOpacity="0.5" />
+  </Glyph>
+)
+
+/** Mass spectrometer: a straight beam turning into an arc. */
+export const IconMassSpectrometer = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 12h7" />
+    <path d="M10 12a4.6 4.6 0 0 1 8.6 2.2" />
+    <path d="M18 16.5h3" strokeOpacity="0.55" />
+    <circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
+/** Composite field: crossed E and B glyphs over a deflection arc. */
+export const IconCompositeField = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 5.5h5M15 5.5h5" />
+    <path d="M4 9.5h5M15 9.5h5" strokeOpacity="0.45" />
+    <path d="M9.4 12.2h5.2v5.2H9.4z" strokeWidth="1.3" />
+    <path d="M3 17c3.4-1 6.4-1 9.2 0.6" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

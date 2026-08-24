@@ -1,14 +1,24 @@
 import {
   derivedScalar,
   derivedVector,
+  toCanonicalVector,
   quantityVector,
   type QuantityVector,
   type SimulationResult,
   type SimulationState,
 } from '@physicsos/physics-core'
 import { PhysicsOSError } from '@physicsos/shared'
-import type { ObservableDefinition, PhysicsScene } from '@physicsos/physics-scene'
+import {
+  fieldSamplePointOf,
+  sourceChargesOf,
+  type ObservableDefinition,
+  type PhysicsScene,
+} from '@physicsos/physics-scene'
 import { validateQuantity, type PhysicalDimension, type Quantity } from '@physicsos/physics-units'
+
+/** Charge sign from a signed scalar — inlined to avoid adding a physics-electric-core dep. */
+const signOf = (charge: number): 'positive' | 'negative' | 'neutral' =>
+  charge > 0 ? 'positive' : charge < 0 ? 'negative' : 'neutral'
 
 export interface ElectricObservationBase {
   readonly observableId: ObservableDefinition['id']
@@ -64,6 +74,16 @@ export interface ElectricEnergyObservation extends ElectricObservationBase {
   readonly work: Quantity<'energy'>
 }
 
+/**
+ * The sign of a source charge, as a physics fact the scene carries — never a value
+ * the renderer decides for itself. Emitted once per source charge so a
+ * superposition scene reports each sign independently.
+ */
+export interface ChargeSignObservation extends ElectricObservationBase {
+  readonly type: 'charge_sign'
+  readonly sign: 'positive' | 'negative' | 'neutral'
+}
+
 export type ElectricObservation =
   | ElectricFieldObservation
   | ElectricForceObservation
@@ -72,6 +92,7 @@ export type ElectricObservation =
   | ElectricTrajectoryObservation
   | ElectricPotentialObservation
   | ElectricEnergyObservation
+  | ChargeSignObservation
 
 export interface ElectricObservationRuntimeState {
   readonly sceneRevision: number
@@ -158,6 +179,10 @@ export const observeElectricScene = (
       'OBSERVATION_UNVERIFIED_SIMULATION',
       'Electric observations require a simulation that passed verification.',
     )
+  }
+
+  if (isPointChargeScene(scene)) {
+    return observePointChargeScene(input)
   }
 
   const particle = scene.particles[0]
@@ -251,6 +276,129 @@ export const observeElectricScene = (
       potentialChange: scalarOf(state.derived, 'electric_potential_energy_change', 'energy'),
       work: scalarOf(state.derived, 'work_by_electric_field', 'energy'),
     })
+  }
+
+  return { sceneRevision: scene.revision, observations }
+}
+
+/* --------------------------------------------------------- point charge -- */
+
+const isPointChargeScene = (scene: PhysicsScene): boolean =>
+  scene.fields.some((field) => field.type === 'point_charge')
+
+/**
+ * Static point-charge observations.
+ *
+ * Reuses the same seven observation types as the uniform-field path — the domain
+ * did not grow a second observation system (docs/15 §5). The values come only
+ * from the verified SimulationState's derived array; nothing here recomputes a
+ * field or force. The point-charge model is instantaneous (one state), so there
+ * is no trajectory.
+ */
+const observePointChargeScene = (input: ElectricObservationInput): ElectricObservationRuntimeState => {
+  const { scene, simulation } = input
+  const state = input.state ?? selectState(scene, simulation)
+
+  /* The probe is the non-source particle that is not fixed, matching
+     physics-scene's `probeParticleOf` (point-charge.ts:94). Without one, E is
+     reported at the scene's declared sample point. */
+  const sourceIds = new Set(
+    sourceChargesOf(scene.particles, scene.fields).map((particle) => particle.id),
+  )
+  const probe = scene.particles.find(
+    (particle) => !sourceIds.has(particle.id) && particle.fixed !== true,
+  )
+  const originProbe = probe ?? scene.particles[0]
+  const samplePoint = probe !== undefined
+    ? toCanonicalVector(probe.position).vectorSI
+    : fieldSamplePointOf(scene)
+  const origin = quantityVector(
+    samplePoint ?? (originProbe ? toCanonicalVector(originProbe.position).vectorSI : { x: 0, y: 0, z: 0 }),
+    'm',
+    'length',
+  )
+
+  const observations: ElectricObservation[] = []
+
+  for (const definition of visible(scene, 'electric_field')) {
+    observations.push({
+      type: 'electric_field',
+      observableId: definition.id,
+      targetId: definition.targetId ?? 'field-sample',
+      time: state.time,
+      origin,
+      vector: vectorOf(state.derived, 'electric_field_vector', 'electric_field'),
+      magnitude: scalarOf(state.derived, 'electric_field_magnitude', 'electric_field'),
+    })
+  }
+  for (const definition of visible(scene, 'force')) {
+    observations.push({
+      type: 'electric_force',
+      observableId: definition.id,
+      targetId: definition.targetId ?? probe?.id ?? 'probe',
+      time: state.time,
+      origin,
+      vector: vectorOf(state.derived, 'electric_force_vector', 'force'),
+      magnitude: scalarOf(state.derived, 'electric_force_magnitude', 'force'),
+    })
+  }
+  for (const definition of visible(scene, 'velocity')) {
+    const velocityVector = probe === undefined
+      ? quantityVector({ x: 0, y: 0, z: 0 }, 'm/s', 'velocity')
+      : probe.velocity
+    const velocitySI = toCanonicalVector(velocityVector).vectorSI
+    observations.push({
+      type: 'electric_velocity',
+      observableId: definition.id,
+      targetId: definition.targetId ?? probe?.id ?? 'probe',
+      time: state.time,
+      origin,
+      vector: velocityVector,
+      magnitude: {
+        value: Math.hypot(velocitySI.x, velocitySI.y, velocitySI.z),
+        unit: 'm/s',
+        dimension: 'velocity',
+      },
+    })
+  }
+  for (const definition of visible(scene, 'acceleration')) {
+    const accelerationVector = vectorOf(state.derived, 'acceleration_vector', 'acceleration')
+    const accelerationSI = toCanonicalVector(accelerationVector).vectorSI
+    observations.push({
+      type: 'electric_acceleration',
+      observableId: definition.id,
+      targetId: definition.targetId ?? probe?.id ?? 'probe',
+      time: state.time,
+      origin,
+      vector: accelerationVector,
+      magnitude: {
+        value: Math.hypot(accelerationSI.x, accelerationSI.y, accelerationSI.z),
+        unit: 'm/s^2',
+        dimension: 'acceleration',
+      },
+    })
+  }
+
+  /* Charge sign is a scene fact, not an engine result: it comes straight from the
+     source particles' signed charge, so it is available even in a no-probe scene.
+     The scene declares it as an `annotation` observable with parameters.kind
+     'charge_sign'; emit one observation per source so a superposition scene reports
+     each sign independently (mirroring mechanics-observation.ts pushing several
+     observations that share one definition id). */
+  const sourceParticles = sourceChargesOf(scene.particles, scene.fields)
+  for (const definition of scene.observableDefinitions.filter(
+    (entry) => entry.visible && entry.type === 'annotation' && entry.parameters?.['kind'] === 'charge_sign',
+  )) {
+    for (const source of sourceParticles) {
+      const chargeValue = source.charge === undefined ? 0 : source.charge.value
+      observations.push({
+        type: 'charge_sign',
+        observableId: definition.id,
+        targetId: source.id,
+        time: state.time,
+        sign: signOf(chargeValue),
+      })
+    }
   }
 
   return { sceneRevision: scene.revision, observations }

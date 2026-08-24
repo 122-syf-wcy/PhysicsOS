@@ -1,0 +1,23 @@
+/* Inline math typography. Variables are italic, units and digits upright, so a
+   symbol reads as a physical quantity rather than as prose. */
+
+.math {
+  font-style: italic;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.math sub,
+.math sup {
+  font-size: 0.74em;
+  font-style: italic;
+  line-height: 0;
+}
+
+.math sub {
+  vertical-align: -0.24em;
+}
+
+.math sup {
+  vertical-align: 0.42em;
+}

@@ -67,6 +67,13 @@ const openLab = async (page) => {
   const labButton = page.getByRole('button', { name: '物理实验室' })
   await labButton.waitFor({ state: 'visible' })
   await labButton.click()
+  /* 物理实验室 lands on the experiment library — the magnetic scene is a real
+     creation through the picker now, never an auto-loaded demo. */
+  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible' })
+  await page
+    .locator('[class*="grid"] button', { hasText: /^磁场中的带电粒子运动/ })
+    .first()
+    .click()
   await page
     .locator('[data-physicsos-surface="lab"][data-verification-status="verified"]')
     .waitFor({ state: 'visible' })
@@ -86,7 +93,10 @@ for (const viewport of viewports) {
     const cover = document.querySelector('[data-physicsos-surface="lab"]')
     const canvas = cover?.querySelector('svg[role="img"]')
     const grids = [...(cover?.querySelectorAll('pattern path') ?? [])]
-    const inspector = [...(cover?.querySelectorAll('section') ?? [])].find(
+    /* Match on the accessible name, not the tag: the inspector is an <aside> in
+       the unified workspace and was a <section> before, and the property under
+       test — no horizontal overflow — is independent of that choice. */
+    const inspector = [...(cover?.querySelectorAll('[aria-label]') ?? [])].find(
       (node) => node.getAttribute('aria-label') === '属性',
     )
     const canvasBox = canvas?.getBoundingClientRect()

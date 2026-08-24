@@ -47,3 +47,29 @@
   overflow: hidden;
   white-space: nowrap;
 }
+
+/* Template row. The Menu primitive already owns the card, the hairline, the
+   hover fill and the 16px leading icon, so only the two-line cell is new:
+   experiment name over the parameters that make it a specific experiment. */
+.template {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.templateName {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.templateHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  /* Parameter hints are set in physics notation; a font stack that swaps digits
+     mid-row reads as noise next to the name above it. */
+  font-variant-numeric: tabular-nums;
+}
+

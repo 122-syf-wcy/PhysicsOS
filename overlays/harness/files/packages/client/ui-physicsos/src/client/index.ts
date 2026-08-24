@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { HomeActions } from './HomeActions.tsx'
 import { HomeBrand } from './HomeBrand.tsx'
+import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface } from './LabWorkspace.tsx'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
@@ -74,7 +75,11 @@ export function apply(ctx: ClientContext): void {
   const startSession = (workspaceId?: WorkspaceId) => {
     ctx.workspaces.startSession(workspaceId)
   }
-  const surface = createPhysicsSurfaceController()
+  /* localStorage-backed so 最近空间 survives a reload with restorable scenes. */
+  const surface = createPhysicsSurfaceController(globalThis.localStorage)
+  /* The student's attempt history: written by Question Space self-checks, read
+     by the 学习记录 surface. Persisted so the record survives a reload. */
+  const learningRecord = createLearningRecordController(globalThis.localStorage)
 
   ctx.slots.inject('sidebar.brand', () => ctx.slots.register({
     name: 'sidebar.brand',
@@ -87,7 +92,16 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       startSession: () => { startSession() },
-      openSurface: (id: 'lab' | 'questions' | 'home') => { surface.open(id) },
+      openSurface: (
+        id: 'lab' | 'questions' | 'home',
+        sceneRef?: { sceneId: string; scene: PhysicsScene },
+      ) => {
+        /* “新建物理实验” asks for a NEW experiment, so it lands on the picker
+           (the active scene stays resumable from inside it); a handover with a
+           scene continues that scene directly. */
+        if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+        else surface.open(id, sceneRef)
+      },
     }),
   }, SidebarNew))
 
@@ -110,14 +124,25 @@ export function apply(ctx: ClientContext): void {
     name: 'sidebar.workspaces',
     priority: -1,
     locale: NS,
-    inject: () => ({ startSession }),
+    /* 最近空间 lists real scenes; a click restores the PhysicsScene in the Lab. */
+    inject: () => ({
+      hooks: { recentExperiments: surface.recent },
+      openSurface: (
+        id: Parameters<typeof surface.open>[0],
+        sceneRef?: Parameters<typeof surface.open>[1],
+      ) => { surface.open(id, sceneRef) },
+    }),
   }, RecentSpaces))
 
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
     name: 'sidebar.footer.action',
     id: 'physicsos-footer',
     locale: NS,
-    inject: () => ({ startSession: () => { startSession() } }),
+    inject: () => ({
+      startSession: () => { startSession() },
+      /* 学习记录 is a real surface now: attempts, mistakes, mastery. */
+      openRecord: () => { surface.open('record') },
+    }),
   }, SidebarFooter))
 
   ctx.slots.inject('conversation.hero.brand', () => ctx.slots.register({
@@ -130,7 +155,17 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       startSession,
-      openSurface: (id: 'home' | 'lab' | 'questions') => { surface.open(id) },
+      hooks: { recentExperiments: surface.recent },
+      /* "新建物理实验" is a creation intent, so it lands on the picker rather
+         than on the magnetic demo — the same chooser the sidebar uses. A recent
+         entry hands its stored scene over and restores it directly. */
+      openSurface: (
+        id: 'home' | 'lab' | 'questions',
+        sceneRef?: Parameters<typeof surface.open>[1],
+      ) => {
+        if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+        else surface.open(id, sceneRef)
+      },
     }),
   }, HomeActions))
 
@@ -140,14 +175,25 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.surface',
     locale: NS,
     inject: () => ({
-      hooks: { physicsSurface: surface.store },
-      openSurface: (id: 'home' | 'lab' | 'questions', sceneRef?: { sceneId: string; scene: unknown }) => {
+      hooks: { physicsSurface: surface.store, learningRecord: learningRecord.store },
+      openSurface: (
+        id: 'home' | 'lab' | 'questions' | 'record',
+        sceneRef?: { sceneId: string; scene: unknown },
+      ) => {
         if (sceneRef && typeof sceneRef.scene === 'object' && sceneRef.scene !== null) {
           surface.open('lab', { sceneId: sceneRef.sceneId, scene: sceneRef.scene as PhysicsScene })
         } else {
           surface.open(id)
         }
       },
+      /* Toolbar 切换实验: chooser over the running scene, resumable. */
+      openExperimentPicker: () => { surface.openExperimentPicker() },
+      /* Question Space 自测 → 学习记录; 学习记录 → 重新练习 → Question Space. */
+      recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
+        learningRecord.record(attempt)
+      },
+      openQuestion: (questionId: string) => { surface.openQuestion(questionId) },
+      consumeQuestion: () => { surface.consumeQuestion() },
     }),
   }, PhysicsSurface))
 

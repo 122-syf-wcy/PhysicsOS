@@ -29,4 +29,14 @@ export {
   ELECTRIC_VERIFIER_ASSUMPTIONS,
   verifyElectricScene,
   verifyElectricSimulation,
+  verifyPointChargeScene,
+  verifyPointChargeSimulation,
 } from './electric-verifier.ts'
+export {
+  COMPOSITE_BALANCE_TOLERANCE,
+  COMPOSITE_VERIFIER_ASSUMPTIONS,
+  isCompositeVerifiableScene,
+  reportCompositeSelection,
+  verifyCompositeApparatus,
+  type CompositeSelectionReport,
+} from './composite-verifier.ts'

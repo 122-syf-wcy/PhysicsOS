@@ -18,6 +18,8 @@
     "@physicsos/physics-units": "file:../physics-units",
     "@physicsos/physics-math": "file:../physics-math",
     "@physicsos/physics-core": "file:../physics-core",
-    "@physicsos/physics-scene": "file:../physics-scene"
+    "@physicsos/physics-scene": "file:../physics-scene",
+    "@physicsos/physics-electric-core": "file:../physics-electric-core",
+    "@physicsos/physics-composite-core": "file:../physics-composite-core"
   }
 }

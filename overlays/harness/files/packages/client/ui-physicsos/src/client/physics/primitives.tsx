@@ -20,6 +20,7 @@ import type {
   VectorVisual,
 } from './scene-visual-model.ts'
 import type { RendererProjection } from './renderer-registry.tsx'
+import { parseMathSymbol } from './math-symbol.ts'
 import { estimateLabelWidth, layoutVectorLabels, type LabelBox } from './vector-label-layout.ts'
 import css from './primitives.module.css'
 
@@ -34,6 +35,10 @@ export const roleClass = (role: VectorVisual['role']): string | undefined => {
       return css.roleVelocityComponent
     case 'force':
       return css.roleForce
+    case 'electric-force':
+      return css.roleElectricForce
+    case 'magnetic-force':
+      return css.roleMagneticForce
     case 'gravity':
       return css.roleGravity
     case 'normal':
@@ -63,6 +68,8 @@ const MARKER_ROLES: readonly VectorVisual['role'][] = [
   'velocity',
   'velocity-component',
   'force',
+  'electric-force',
+  'magnetic-force',
   'gravity',
   'normal',
   'friction',
@@ -369,79 +376,34 @@ export const MathLabel = ({
   className?: string | undefined
 }) => {
   const parts = parseMathSymbol(symbol)
+  /* `dy` on a tspan SHIFTS the running baseline, it does not set it, so a script
+     run must be undone before the next normal run or the rest of the label keeps
+     drifting (`v_x0` would stair-step downwards). */
+  let pendingShift = 0
   return (
     <text x={x} y={y} textAnchor={anchor} className={className}>
-      {parts.map((part, index) =>
-        part.script === undefined ? (
-          <tspan key={index}>{part.text}</tspan>
-        ) : (
+      {parts.map((part, index) => {
+        const shift = part.script === 'sub' ? 0.28 : part.script === 'super' ? -0.38 : 0
+        const dy = shift - pendingShift
+        pendingShift = shift
+        return (
           <tspan
             key={index}
-            className={part.script === 'sub' ? css.subscript : css.superscript}
-            dy={part.script === 'sub' ? '0.28em' : '-0.38em'}
+            className={
+              part.script === 'sub'
+                ? css.subscript
+                : part.script === 'super'
+                  ? css.superscript
+                  : undefined
+            }
+            dy={dy === 0 ? undefined : `${dy.toFixed(2)}em`}
           >
             {part.text}
           </tspan>
-        ),
-      )}
-      {/* Reset the baseline so a following label is unaffected. */}
+        )
+      })}
     </text>
   )
-}
-
-interface MathPart {
-  text: string
-  script?: 'sub' | 'super'
-}
-
-const GREEK: Record<string, string> = {
-  theta: 'θ',
-  mu: 'μ',
-  alpha: 'α',
-  omega: 'ω',
-  Delta: 'Δ',
-  Sigma: 'Σ',
-  pi: 'π',
-}
-
-/** Split a light TeX subset into runs with optional script level. */
-export const parseMathSymbol = (input: string): readonly MathPart[] => {
-  const expanded = input
-    .replace(/\\(theta|mu|alpha|omega|Delta|Sigma|pi)/g, (_, name: string) => GREEK[name] ?? name)
-    .replace(/\\sin/g, 'sin')
-    .replace(/\\cos/g, 'cos')
-    .replace(/\\Sigma/g, 'Σ')
-  const parts: MathPart[] = []
-  let buffer = ''
-  let index = 0
-  while (index < expanded.length) {
-    const char = expanded.charAt(index)
-    if (char === '_' || char === '^') {
-      if (buffer.length > 0) {
-        parts.push({ text: buffer })
-        buffer = ''
-      }
-      index += 1
-      let script = ''
-      if (expanded[index] === '{') {
-        index += 1
-        while (index < expanded.length && expanded[index] !== '}') {
-          script += expanded.charAt(index)
-          index += 1
-        }
-        index += 1
-      } else if (index < expanded.length) {
-        script += expanded.charAt(index)
-        index += 1
-      }
-      parts.push({ text: script, script: char === '_' ? 'sub' : 'super' })
-      continue
-    }
-    buffer += char
-    index += 1
-  }
-  if (buffer.length > 0) parts.push({ text: buffer })
-  return parts
 }
 
 /* ---------------------------------------------------------------- geometry -- */

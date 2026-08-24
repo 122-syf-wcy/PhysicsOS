@@ -16,6 +16,47 @@
   fill: none;
 }
 
+/* ---------- point-charge streamlines ---------- */
+
+.electricFieldStreamline {
+  fill: none;
+}
+
+.streamlinePath {
+  stroke: var(--physics-field);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.5;
+  fill: none;
+}
+
+.streamlineArrow {
+  stroke: var(--physics-field);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.7;
+  fill: none;
+}
+
+.equipotentials {
+  fill: none;
+}
+
+.equipotentialPath {
+  stroke: var(--physics-measurement);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  stroke-dasharray: 3 3;
+  opacity: 0.45;
+  fill: none;
+}
+
+.probeDot {
+  fill: var(--physics-measurement);
+  stroke: #fff;
+  stroke-width: 1.2;
+}
+
 /* ---------- trajectory ---------- */
 
 /* Travelled path is solid; the future is a faint dash — the distinction is
@@ -88,4 +129,68 @@
   paint-order: stroke fill;
   stroke: #fbfdff;
   stroke-width: 3px;
+}
+
+/* Agent-driven highlight glow for point-charge primitives (spheres, streamlines,
+   probe). Mirrors primitives.module.css's .highlightGroup: a drop-shadow so the
+   geometry never shifts, only lights up. */
+.highlightGroup {
+  filter: drop-shadow(0 0 5px var(--physics-highlight-glow));
+}
+
+/* ---------- parallel-plate region ---------- */
+
+/* Metal-finish bars for the capacitor plates. Low-saturation steel tones so the
+   plates read as a physical object, not a coloured highlight — the field
+   direction is the physical statement, the plate colour is presentation only. */
+.plateBar {
+  stroke: #8b909a;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.plateTop {
+  fill: #c5cad2;
+}
+
+.plateBottom {
+  fill: #b0b5bd;
+}
+
+.plateSignLabel {
+  fill: #c8453a;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+/* Faint outline of the bounded field region — the "field exists here" boundary.
+   Drawn as a thin dashed rect so it does not compete with the plates or the
+   field lattice inside. */
+.boundedFieldRegion {
+  stroke: var(--physics-measurement);
+  stroke-width: 0.6;
+  stroke-dasharray: 3 3;
+  opacity: 0.3;
+  fill: none;
+}
+
+/* Composite-region atmosphere: a whisper of the field's own colour so the
+   apparatus zones read at a glance. Opacity stays far below every vector. */
+.regionTintCrossed {
+  fill: rgba(56, 189, 248, 0.07);
+  opacity: 0.65;
+}
+
+.regionTintElectric {
+  fill: rgba(56, 189, 248, 0.055);
+  opacity: 0.65;
+}
+
+.regionTintMagnetic {
+  fill: rgba(99, 102, 241, 0.055);
+  opacity: 0.65;
 }

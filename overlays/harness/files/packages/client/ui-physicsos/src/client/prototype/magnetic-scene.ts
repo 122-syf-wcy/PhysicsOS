@@ -31,6 +31,10 @@ export const MAGNETIC_SCENE_INPUT = {
   velocity: { x: 2e6, y: 0, z: 0 },
   magneticFieldStrength: 0.5,
   magneticFieldDirection: 'into_page' as const,
+  /* The product name travels with the scene so the Lab toolbar and the canvas
+     accessible name read the same as the experiment the student picked. */
+  title: MAGNETIC_SCENE_TITLE,
+  description: MAGNETIC_SCENE_SUBTITLE,
 } as const
 
 export const MAGNETIC_FIELD_DIRECTION_OPTIONS = ['垂直纸面向里', '垂直纸面向外'] as const

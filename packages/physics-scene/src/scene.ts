@@ -38,6 +38,23 @@ export interface Timeline {
   simulationTimeStep?: Quantity<'time'>
 }
 
+/** docs/03 §25 — provenance of a scene that was forked from another one. */
+export interface SceneLineage {
+  /** Where the parent scene came from. */
+  origin: 'question' | 'template' | 'blank'
+  /** Only an `experimental` branch may diverge from a question's stated facts. */
+  branchType: 'experimental'
+  /** Question the ORIGINAL scene was built from, carried through the fork. */
+  originQuestionId?: QuestionId
+  /** Scene id of the untouched original, so the UI can offer a way back. */
+  originSceneId: SceneId
+  /** Immediate parent; equal to `originSceneId` for a first-level branch. */
+  parentSceneId: SceneId
+  /** Parent revision at the moment of the fork. */
+  parentRevision: number
+  forkedAt: IsoDateTime
+}
+
 /** docs/03 §25 */
 export interface SceneMetadata {
   createdAt: IsoDateTime
@@ -49,6 +66,14 @@ export interface SceneMetadata {
   knowledgeTags?: string[]
   sourceQuestionId?: QuestionId
   engineVersion?: string
+  /**
+   * Present only on a forked scene.
+   *
+   * A question's conditions are stated FACTS, so exploring "what if h were 30 m"
+   * must not mutate the scene the solution was verified against. The fork carries
+   * its provenance here instead of introducing a second scene contract.
+   */
+  lineage?: SceneLineage
 }
 
 /** docs/03 §28 */
@@ -97,6 +122,14 @@ export interface Particle extends PhysicsObjectBase {
   velocity: QuantityVector<'velocity'>
   acceleration?: QuantityVector<'acceleration'>
   species?: string
+  /**
+   * Held in place by the model.
+   *
+   * A source point charge produces a field but does not itself accelerate in the
+   * V1 electric slice, so the engine needs to know which particles are sources
+   * rather than inferring it from "has a field pointing at me".
+   */
+  fixed?: boolean
 }
 
 /** docs/03 §34 */

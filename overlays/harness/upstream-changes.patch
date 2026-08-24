@@ -1760,7 +1760,7 @@ index fbe42fc279..344e146033 100644
        fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
        expect(expandSidebar).toHaveBeenCalledTimes(1)
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..309ce1044b 100644
+index 1490a0f9f7..3f5fc53ad6 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -42,6 +42,9 @@ importers:
@@ -1783,36 +1783,48 @@ index 1490a0f9f7..309ce1044b 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:^
          version: link:../../client/ui-plan
-@@ -2283,6 +2289,73 @@ importers:
+@@ -2283,6 +2289,85 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
 +  packages/client/ui-physicsos:
 +    dependencies:
++      '@physicsos/engine-composite':
++        specifier: link:../../../../../packages/engine-composite
++        version: link:../../../../../packages/engine-composite
 +      '@physicsos/engine-electric':
-+        specifier: file:../../../../../packages/engine-electric
-+        version: file:../../packages/engine-electric
++        specifier: link:../../../../../packages/engine-electric
++        version: link:../../../../../packages/engine-electric
++      '@physicsos/engine-electric-region':
++        specifier: link:../../../../../packages/engine-electric-region
++        version: link:../../../../../packages/engine-electric-region
 +      '@physicsos/engine-magnetic':
-+        specifier: file:../../../../../packages/engine-magnetic
-+        version: file:../../packages/engine-magnetic
++        specifier: link:../../../../../packages/engine-magnetic
++        version: link:../../../../../packages/engine-magnetic
 +      '@physicsos/engine-mechanics':
-+        specifier: file:../../../../../packages/engine-mechanics
-+        version: file:../../packages/engine-mechanics
++        specifier: link:../../../../../packages/engine-mechanics
++        version: link:../../../../../packages/engine-mechanics
++      '@physicsos/physics-composite-core':
++        specifier: link:../../../../../packages/physics-composite-core
++        version: link:../../../../../packages/physics-composite-core
 +      '@physicsos/physics-core':
-+        specifier: file:../../../../../packages/physics-core
-+        version: file:../../packages/physics-core
++        specifier: link:../../../../../packages/physics-core
++        version: link:../../../../../packages/physics-core
++      '@physicsos/physics-electric-core':
++        specifier: link:../../../../../packages/physics-electric-core
++        version: link:../../../../../packages/physics-electric-core
 +      '@physicsos/physics-observation':
-+        specifier: file:../../../../../packages/physics-observation
-+        version: file:../../packages/physics-observation
++        specifier: link:../../../../../packages/physics-observation
++        version: link:../../../../../packages/physics-observation
 +      '@physicsos/physics-scene':
-+        specifier: file:../../../../../packages/physics-scene
-+        version: file:../../packages/physics-scene
++        specifier: link:../../../../../packages/physics-scene
++        version: link:../../../../../packages/physics-scene
 +      '@physicsos/physics-verifier':
-+        specifier: file:../../../../../packages/physics-verifier
-+        version: file:../../packages/physics-verifier
++        specifier: link:../../../../../packages/physics-verifier
++        version: link:../../../../../packages/physics-verifier
 +      '@physicsos/question-core':
-+        specifier: file:../../../../../packages/question-core
-+        version: file:../../packages/question-core
++        specifier: link:../../../../../packages/question-core
++        version: link:../../../../../packages/question-core
 +      clsx:
 +        specifier: ^2.0.0
 +        version: 2.1.1
@@ -1857,131 +1869,6 @@ index 1490a0f9f7..309ce1044b 100644
    packages/client/ui-plan:
      devDependencies:
        '@deepseek-ai/cordis':
-@@ -10628,6 +10701,39 @@ packages:
-     cpu: [x64]
-     os: [win32]
- 
-+  '@physicsos/engine-electric@file:../../packages/engine-electric':
-+    resolution: {directory: ../../packages/engine-electric, type: directory}
-+
-+  '@physicsos/engine-magnetic@file:../../packages/engine-magnetic':
-+    resolution: {directory: ../../packages/engine-magnetic, type: directory}
-+
-+  '@physicsos/engine-mechanics@file:../../packages/engine-mechanics':
-+    resolution: {directory: ../../packages/engine-mechanics, type: directory}
-+
-+  '@physicsos/physics-core@file:../../packages/physics-core':
-+    resolution: {directory: ../../packages/physics-core, type: directory}
-+
-+  '@physicsos/physics-math@file:../../packages/physics-math':
-+    resolution: {directory: ../../packages/physics-math, type: directory}
-+
-+  '@physicsos/physics-observation@file:../../packages/physics-observation':
-+    resolution: {directory: ../../packages/physics-observation, type: directory}
-+
-+  '@physicsos/physics-scene@file:../../packages/physics-scene':
-+    resolution: {directory: ../../packages/physics-scene, type: directory}
-+
-+  '@physicsos/physics-units@file:../../packages/physics-units':
-+    resolution: {directory: ../../packages/physics-units, type: directory}
-+
-+  '@physicsos/physics-verifier@file:../../packages/physics-verifier':
-+    resolution: {directory: ../../packages/physics-verifier, type: directory}
-+
-+  '@physicsos/question-core@file:../../packages/question-core':
-+    resolution: {directory: ../../packages/question-core, type: directory}
-+
-+  '@physicsos/shared@file:../../packages/shared':
-+    resolution: {directory: ../../packages/shared, type: directory}
-+
-   '@pkgjs/parseargs@0.11.0':
-     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
-     engines: {node: '>=14'}
-@@ -15830,6 +15936,84 @@ snapshots:
-   '@oxlint/binding-win32-x64-msvc@1.76.0':
-     optional: true
- 
-+  '@physicsos/engine-electric@file:../../packages/engine-electric':
-+    dependencies:
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-scene': file:../../packages/physics-scene
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/physics-verifier': file:../../packages/physics-verifier
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/engine-magnetic@file:../../packages/engine-magnetic':
-+    dependencies:
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-scene': file:../../packages/physics-scene
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/engine-mechanics@file:../../packages/engine-mechanics':
-+    dependencies:
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-scene': file:../../packages/physics-scene
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/physics-verifier': file:../../packages/physics-verifier
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/physics-core@file:../../packages/physics-core':
-+    dependencies:
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/physics-math@file:../../packages/physics-math':
-+    dependencies:
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/physics-observation@file:../../packages/physics-observation':
-+    dependencies:
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-scene': file:../../packages/physics-scene
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/physics-scene@file:../../packages/physics-scene':
-+    dependencies:
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/physics-units@file:../../packages/physics-units':
-+    dependencies:
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/physics-verifier@file:../../packages/physics-verifier':
-+    dependencies:
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-scene': file:../../packages/physics-scene
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/question-core@file:../../packages/question-core':
-+    dependencies:
-+      '@physicsos/engine-electric': file:../../packages/engine-electric
-+      '@physicsos/engine-magnetic': file:../../packages/engine-magnetic
-+      '@physicsos/engine-mechanics': file:../../packages/engine-mechanics
-+      '@physicsos/physics-core': file:../../packages/physics-core
-+      '@physicsos/physics-math': file:../../packages/physics-math
-+      '@physicsos/physics-observation': file:../../packages/physics-observation
-+      '@physicsos/physics-scene': file:../../packages/physics-scene
-+      '@physicsos/physics-units': file:../../packages/physics-units
-+      '@physicsos/physics-verifier': file:../../packages/physics-verifier
-+      '@physicsos/shared': file:../../packages/shared
-+
-+  '@physicsos/shared@file:../../packages/shared': {}
-+
-   '@pkgjs/parseargs@0.11.0':
-     optional: true
- 
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
 index d38b4743c5..4f2e3e61e9 100644
 --- a/scripts/verify-package-readme-model-experience.ts

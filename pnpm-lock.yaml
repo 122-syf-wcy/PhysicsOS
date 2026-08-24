@@ -142,11 +142,62 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
+  packages/engine-composite:
+    dependencies:
+      '@physicsos/physics-composite-core':
+        specifier: file:../physics-composite-core
+        version: link:../physics-composite-core
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/physics-verifier':
+        specifier: file:../physics-verifier
+        version: link:../physics-verifier
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
   packages/engine-electric:
     dependencies:
       '@physicsos/physics-core':
         specifier: file:../physics-core
         version: link:../physics-core
+      '@physicsos/physics-electric-core':
+        specifier: file:../physics-electric-core
+        version: link:../physics-electric-core
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/physics-verifier':
+        specifier: file:../physics-verifier
+        version: link:../physics-verifier
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
+  packages/engine-electric-region:
+    dependencies:
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
+      '@physicsos/physics-electric-core':
+        specifier: file:../physics-electric-core
+        version: link:../physics-electric-core
       '@physicsos/physics-math':
         specifier: file:../physics-math
         version: link:../physics-math
@@ -202,8 +253,41 @@ importers:
         specifier: file:../shared
         version: link:../shared
 
+  packages/physics-composite-core:
+    dependencies:
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
   packages/physics-core:
     dependencies:
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
+  packages/physics-electric-core:
+    dependencies:
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
       '@physicsos/physics-math':
         specifier: file:../physics-math
         version: link:../physics-math
@@ -265,9 +349,15 @@ importers:
 
   packages/physics-verifier:
     dependencies:
+      '@physicsos/physics-composite-core':
+        specifier: file:../physics-composite-core
+        version: link:../physics-composite-core
       '@physicsos/physics-core':
         specifier: file:../physics-core
         version: link:../physics-core
+      '@physicsos/physics-electric-core':
+        specifier: file:../physics-electric-core
+        version: link:../physics-electric-core
       '@physicsos/physics-math':
         specifier: file:../physics-math
         version: link:../physics-math
@@ -289,9 +379,15 @@ importers:
 
   packages/question-core:
     dependencies:
+      '@physicsos/engine-composite':
+        specifier: file:../engine-composite
+        version: link:../engine-composite
       '@physicsos/engine-electric':
         specifier: file:../engine-electric
         version: link:../engine-electric
+      '@physicsos/engine-electric-region':
+        specifier: file:../engine-electric-region
+        version: link:../engine-electric-region
       '@physicsos/engine-magnetic':
         specifier: file:../engine-magnetic
         version: link:../engine-magnetic

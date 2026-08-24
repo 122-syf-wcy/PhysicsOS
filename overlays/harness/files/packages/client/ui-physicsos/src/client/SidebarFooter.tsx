@@ -8,6 +8,8 @@ import css from './SidebarFooter.module.css'
 
 export type SidebarFooterInjected = {
   startSession: () => void
+  /** Open the 学习记录 surface. */
+  openRecord?: () => void
 }
 
 export type SidebarFooterProps =
@@ -17,15 +19,15 @@ export type SidebarFooterProps =
   & PropsLocale<'physicsos'>
 
 /** Learning history and library seats above Settings. */
-export function SidebarFooter({ wide, t }: SidebarFooterProps) {
+export function SidebarFooter({ wide, openRecord, t }: SidebarFooterProps) {
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
       <button
         type="button"
         className={css.item}
         aria-label={t('nav.history')}
-        disabled
-        title={t('feature.unavailable')}
+        title={wide ? undefined : t('nav.history')}
+        onClick={() => { openRecord?.() }}
       >
         <IconListPenOutline16 size={wide ? 16 : 18} />
         {wide && <span>{t('nav.history')}</span>}

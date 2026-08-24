@@ -16,6 +16,12 @@ if (await later.isVisible().catch(() => false)) await later.click()
 const labButton = page.getByRole('button', { name: '物理实验室' })
 await labButton.waitFor({ state: 'visible' })
 await labButton.click()
+/* 物理实验室 lands on the experiment library; create the magnetic scene there. */
+await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible' })
+await page
+  .locator('[class*="grid"] button', { hasText: /^磁场中的带电粒子运动/ })
+  .first()
+  .click()
 await page
   .locator('[data-physicsos-surface="lab"][data-verification-status="verified"]')
   .waitFor({ state: 'visible' })
@@ -26,15 +32,15 @@ await canvas.screenshot({ path: file })
 stdout.write(`${file}\n`)
 
 const scene = path.join(outDir, 'harness-lab-scene-1600x900.png')
-await page.locator('section[aria-label="场景与对象"]').screenshot({ path: scene })
+await page.locator('[aria-label="场景与对象"]').screenshot({ path: scene })
 stdout.write(`${scene}\n`)
 
 const inspector = path.join(outDir, 'harness-lab-inspector-1600x900.png')
-await page.locator('section[aria-label="属性"]').screenshot({ path: inspector })
+await page.locator('[aria-label="属性"]').last().screenshot({ path: inspector })
 stdout.write(`${inspector}\n`)
 
 const timeline = path.join(outDir, 'harness-lab-timeline-1600x900.png')
-await page.locator('footer[aria-label="时间轴"]').screenshot({ path: timeline })
+await page.locator('[aria-label="时间轴"]').first().screenshot({ path: timeline })
 stdout.write(`${timeline}\n`)
 
 await browser.close()

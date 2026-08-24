@@ -13,6 +13,20 @@ function getKnown(ir: PhysicsSemanticIR, key: string): number | undefined {
   return k?.value
 }
 
+/**
+ * Student-facing scene titles.
+ *
+ * The title reaches the Lab toolbar and the canvas accessible name, so it has to
+ * be the name of the physical situation rather than an internal model id.
+ */
+const MODEL_TITLES: Record<MechanicsModelId, string> = {
+  uniform_linear_motion: '匀速直线运动',
+  uniformly_accelerated_motion: '匀加速直线运动',
+  projectile_motion: '抛体运动',
+  newton_second_law: '牛顿第二定律',
+  inclined_plane: '斜面运动',
+}
+
 export function buildMechanicsSceneFromIR(
   ir: PhysicsSemanticIR,
   options: { sceneId?: string; questionId?: string; now?: IsoDateTime } = {},
@@ -20,6 +34,7 @@ export function buildMechanicsSceneFromIR(
   const now = options.now ?? new Date().toISOString()
   const model = ir.model as MechanicsModelId
   const sceneId = options.sceneId ?? `question-mechanics-${model}`
+  const questionId = options.questionId
 
   const mass = getKnown(ir, 'mass') ?? 1
   const velocity = getKnown(ir, 'initial_velocity') ?? getKnown(ir, 'velocity') ?? 0
@@ -36,11 +51,12 @@ export function buildMechanicsSceneFromIR(
     model,
     mass,
     now,
-    title: `Mechanics Question: ${model}`,
+    title: MODEL_TITLES[model] ?? model,
+    ...(questionId === undefined ? {} : { sourceQuestionId: questionId }),
     description:
       options.questionId === undefined
-        ? `Generated from Question IR for model ${model}`
-        : `Generated from question ${options.questionId} for model ${model}`,
+        ? '来自试题空间的力学场景'
+        : `来自试题 ${options.questionId} 的力学场景`,
   }
 
   if (model === 'uniform_linear_motion') {

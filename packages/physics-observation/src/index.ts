@@ -75,6 +75,7 @@ export interface MagneticObservationInput {
 
 export {
   observeElectricScene,
+  type ChargeSignObservation,
   type ElectricAccelerationObservation,
   type ElectricEnergyObservation,
   type ElectricFieldObservation,
@@ -266,6 +267,20 @@ export const observeMagneticScene = (input: MagneticObservationInput): Observati
 }
 
 export { findParticleState, selectState, trajectoryPoints }
+export {
+  observeCompositeScene,
+  type CompositeElectricFieldObservation,
+  type CompositeElectricForceObservation,
+  type CompositeGravityForceObservation,
+  type CompositeMagneticFieldObservation,
+  type CompositeMagneticForceObservation,
+  type CompositeNetForceObservation,
+  type CompositeObservation,
+  type CompositeObservationInput,
+  type CompositeObservationRuntimeState,
+  type CompositeTrajectoryObservation,
+  type CompositeVelocityObservation,
+} from './composite-observation.ts'
 export {
   observeMechanicsScene,
   type MechanicsObservation,

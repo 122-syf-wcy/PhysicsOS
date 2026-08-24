@@ -16,6 +16,10 @@ import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import { SidebarNav } from '../src/client/SidebarNav.tsx'
 import { fillComposerDraft } from '../src/client/fill-draft.ts'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
+import {
+  createExperimentSceneRef,
+  findExperimentTemplate,
+} from '../src/client/physics/experiment-templates.ts'
 import { formatUpdatedAt, workspaceKnowledge } from '../src/client/workspaceMeta.ts'
 import { en, zh } from '../src/client/locales.ts'
 
@@ -24,6 +28,23 @@ const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
+
+/**
+ * Open the Lab on a template's real scene.
+ *
+ * The Lab no longer auto-loads a demo when it has no scene — it shows the
+ * experiment picker — so a test that wants a workspace has to pick an experiment,
+ * exactly as a student does. Built through the registry so the test exercises the
+ * production scene, not a fixture that can drift from it.
+ */
+const openLabOnTemplate = (
+  surface: ReturnType<typeof createPhysicsSurfaceController>,
+  templateId: string,
+): void => {
+  const template = findExperimentTemplate(templateId)
+  if (template === undefined) throw new Error(`unknown experiment template: ${templateId}`)
+  surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+}
 
 afterEach(() => {
   cleanup()
@@ -120,9 +141,11 @@ describe('PhysicsOS overlay presentation', () => {
         useWorkspaces={neverHook}
       />,
     )
+    /* 学习记录 is a live destination now (the learning-record surface);
+       资源库 stays a disabled placeholder. */
     fireEvent.click(screen.getByRole('button', { name: '学习记录' }))
     fireEvent.click(screen.getByRole('button', { name: '资源库' }))
-    expect(screen.getByRole('button', { name: '学习记录' }).getAttribute('disabled')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '学习记录' }).getAttribute('disabled')).toBeNull()
     expect(screen.getByRole('button', { name: '资源库' }).getAttribute('disabled')).not.toBeNull()
     expect(startSession).not.toHaveBeenCalled()
   })
@@ -134,52 +157,72 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByText('描述一个物理现象、创建实验，或直接输入一道试题。')).toBeTruthy()
   })
 
-  it('lists recent workspaces as a compact row', () => {
+  it('lists recent real scenes as a compact row and restores one on click', () => {
     const startSession = vi.fn()
-    const useWorkspaces = ((
+    const template = findExperimentTemplate('magnetic-circular')
+    if (template === undefined) throw new Error('magnetic-circular template missing')
+    const ref = createExperimentSceneRef(template, '磁场实验')
+    const useRecentExperiments = ((
       selector: (s: {
-        items: { workspaceId: string; title: string; updatedAt: string }[]
+        items: {
+          sceneId: string
+          title: string
+          domain: string
+          kind: string
+          updatedAt: string
+          scene: unknown
+        }[]
       }) => unknown,
     ) =>
       selector({
-        items: [{ workspaceId: 'w1', title: '磁场实验', updatedAt: '2026-08-01T00:00:00.000Z' }],
+        items: [{
+          sceneId: ref.sceneId,
+          title: '磁场实验',
+          domain: 'magnetic',
+          kind: 'experiment',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+          scene: ref.scene,
+        }],
       })) as never
     const openSurface = vi.fn()
     render(
       <HomeActions
         startSession={startSession}
         openSurface={openSurface}
+        useRecentExperiments={useRecentExperiments}
         t={t}
         useSessions={neverHook}
-        useWorkspaces={useWorkspaces}
+        useWorkspaces={neverHook}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
     fireEvent.click(screen.getByRole('button', { name: '输入试题' }))
     fireEvent.click(screen.getByRole('button', { name: '打开场景' }))
     fireEvent.click(screen.getByRole('button', { name: '浏览实验模板' }))
-    expect(screen.getByText('电磁学 / 磁场与洛伦兹力')).toBeTruthy()
+    expect(screen.getByText('电磁学 / 磁场与洛伦兹力 · 实验')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /磁场实验/ }))
     expect(openSurface).toHaveBeenNthCalledWith(1, 'lab')
     expect(openSurface).toHaveBeenNthCalledWith(2, 'questions')
+    /* The recent row restores the REAL stored scene, not a session. */
+    expect(openSurface).toHaveBeenLastCalledWith('lab', { sceneId: ref.sceneId, scene: ref.scene })
     expect(screen.getByRole('button', { name: '打开场景' }).getAttribute('disabled')).not.toBeNull()
     expect(screen.getByRole('button', { name: '浏览实验模板' }).getAttribute('disabled')).not.toBeNull()
-    expect(startSession).toHaveBeenCalledTimes(1)
-    expect(startSession).toHaveBeenLastCalledWith('w1')
+    expect(startSession).not.toHaveBeenCalled()
   })
 
   it('shows the empty physics-world state', () => {
     const startSession = vi.fn()
     const openSurface = vi.fn()
-    const useWorkspaces = ((selector: (s: { items: never[] }) => unknown) =>
+    const useRecentExperiments = ((selector: (s: { items: never[] }) => unknown) =>
       selector({ items: [] })) as never
     render(
       <HomeActions
         startSession={startSession}
         openSurface={openSurface}
+        useRecentExperiments={useRecentExperiments}
         t={t}
         useSessions={neverHook}
-        useWorkspaces={useWorkspaces}
+        useWorkspaces={neverHook}
       />,
     )
     expect(screen.getByText('正电粒子垂直进入匀强磁场')).toBeTruthy()
@@ -296,16 +339,17 @@ describe('PhysicsOS overlay presentation', () => {
   })
 
   it('keeps the sidebar recent list compact when empty', () => {
-    const useWorkspaces = ((selector: (s: { items: never[] }) => unknown) =>
+    const useRecentExperiments = ((selector: (s: { items: never[] }) => unknown) =>
       selector({ items: [] })) as never
     render(
       <RecentSpaces
         wide
-        startSession={vi.fn()}
+        openSurface={vi.fn()}
+        useRecentExperiments={useRecentExperiments}
         expandSidebar={vi.fn()}
         t={t}
         useSessions={neverHook}
-        useWorkspaces={useWorkspaces}
+        useWorkspaces={neverHook}
       />,
     )
     expect(screen.getByText('最近空间')).toBeTruthy()
@@ -314,11 +358,86 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.queryByText('工作区')).toBeNull()
   })
 
+  it('lists real scenes in 最近空间 and restores one on click', () => {
+    const surface = createPhysicsSurfaceController()
+    openLabOnTemplate(surface, 'velocity-selector')
+    surface.open('home')
+    const items = surface.recent.getSnapshot().items
+    expect(items).toHaveLength(1)
+    expect(items[0]!.title).toBe('速度选择器')
+    expect(items[0]!.kind).toBe('experiment')
+
+    const openSurface = vi.fn()
+    const useRecentExperiments = ((
+      selector: (s: ReturnType<typeof surface.recent.getSnapshot>) => unknown,
+    ) => selector(surface.recent.getSnapshot())) as never
+    render(
+      <RecentSpaces
+        wide
+        openSurface={openSurface}
+        useRecentExperiments={useRecentExperiments}
+        expandSidebar={vi.fn()}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(screen.getByText('速度选择器')).toBeTruthy()
+    expect(screen.getByText('实验')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /速度选择器/ }))
+    expect(openSurface).toHaveBeenCalledWith('lab', {
+      sceneId: items[0]!.sceneId,
+      scene: items[0]!.scene,
+    })
+  })
+
+  it('persists recent scenes through storage so a reload can restore them', () => {
+    const backing = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => backing.get(key) ?? null,
+      setItem: (key: string, value: string) => { backing.set(key, value) },
+    }
+    const first = createPhysicsSurfaceController(storage)
+    openLabOnTemplate(first, 'mass-spectrometer')
+
+    const reloaded = createPhysicsSurfaceController(storage)
+    const items = reloaded.recent.getSnapshot().items
+    expect(items).toHaveLength(1)
+    expect(items[0]!.title).toBe('质谱仪基础模型')
+    expect(items[0]!.scene.schemaVersion).toBe('physics-scene/1.0')
+  })
+
+  it('keeps the active scene across navigation and resumable behind the picker', () => {
+    const surface = createPhysicsSurfaceController()
+    openLabOnTemplate(surface, 'projectile-horizontal')
+    const opened = surface.store.getSnapshot().sceneRef
+    expect(opened).toBeDefined()
+
+    /* Leaving for Home and coming back resumes the same experiment. */
+    surface.open('home')
+    surface.open('lab')
+    expect(surface.store.getSnapshot().sceneRef?.sceneId).toBe(opened!.sceneId)
+    expect(surface.store.getSnapshot().experimentPicker).toBeUndefined()
+
+    /* 切换实验 opens the chooser OVER the scene: flag set, scene kept. */
+    surface.openExperimentPicker()
+    const choosing = surface.store.getSnapshot()
+    expect(choosing.experimentPicker).toBe(true)
+    expect(choosing.sceneRef?.sceneId).toBe(opened!.sceneId)
+
+    /* Resuming (plain lab open) clears the flag without losing the scene. */
+    surface.open('lab')
+    const resumed = surface.store.getSnapshot()
+    expect(resumed.experimentPicker).toBeUndefined()
+    expect(resumed.sceneRef?.sceneId).toBe(opened!.sceneId)
+  })
+
   it('covers the conversation column with the Physics Lab workspace', () => {
     const surface = createPhysicsSurfaceController()
-    surface.open('lab')
+    openLabOnTemplate(surface, 'magnetic-circular')
     const { container } = render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -338,7 +457,8 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.queryByText('F = qv × B')).toBeNull()
 
     // Inspector separates editable parameters from read-only derived values.
-    expect(screen.getByText('基础参数')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    expect(screen.getByText('粒子属性')).toBeTruthy()
     expect(screen.getByText('派生量')).toBeTruthy()
     expect(screen.getByText('派生量由引擎计算，只读。')).toBeTruthy()
     expect(screen.getByText(/轨道半径/)).toBeTruthy()
@@ -361,9 +481,10 @@ describe('PhysicsOS overlay presentation', () => {
 
   it('toggles observables from the scene tree', () => {
     const surface = createPhysicsSurfaceController()
-    surface.open('lab')
+    openLabOnTemplate(surface, 'magnetic-circular')
     const { container } = render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -379,9 +500,10 @@ describe('PhysicsOS overlay presentation', () => {
 
   it('routes Inspector edits through a revisioned SceneCommand', () => {
     const surface = createPhysicsSurfaceController()
-    surface.open('lab')
+    openLabOnTemplate(surface, 'magnetic-circular')
     const { container } = render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -407,6 +529,7 @@ describe('PhysicsOS overlay presentation', () => {
     surface.open('questions')
     render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={vi.fn()}
         t={t}
@@ -428,6 +551,7 @@ describe('PhysicsOS overlay presentation', () => {
     surface.open('questions')
     render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={vi.fn()}
         t={t}
@@ -469,6 +593,7 @@ describe('PhysicsOS overlay presentation', () => {
     surface.open('questions')
     render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={vi.fn()}
         t={t}
@@ -492,6 +617,7 @@ describe('PhysicsOS overlay presentation', () => {
     const openSurface = vi.fn()
     const questionView = render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={openSurface}
         t={t}
@@ -515,6 +641,7 @@ describe('PhysicsOS overlay presentation', () => {
 
     const { container } = render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -522,11 +649,22 @@ describe('PhysicsOS overlay presentation', () => {
       />,
     )
     expect(container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()
-    expect(screen.getAllByText('匀加速直线运动').length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByText('Mechanics Engine · Verified')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '匀加速直线运动' })).toBeTruthy()
+    expect(screen.getByText('引擎已验证')).toBeTruthy()
     expect(screen.getByRole('img', { name: '匀加速直线运动的可验证物理画布' })).toBeTruthy()
-    expect(screen.getByText(/参数保持只读/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
+
+    /* A question scene is editable in the Lab: continuing the same revisioned
+       Scene is what keeps solve and experiment in one physical world, and an edit
+       is a new revision rather than a second source of truth. */
+    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    const massInput = screen.getByRole('textbox', { name: '质量' })
+    if (!(massInput instanceof HTMLInputElement)) throw new Error('mass editor is not an input.')
+    fireEvent.change(massInput, { target: { value: '3' } })
+    fireEvent.blur(massInput)
+    expect(
+      container.querySelector('[data-physicsos-surface="lab"]')?.getAttribute('data-scene-revision'),
+    ).toBe('1')
   })
 
   it('passes the exact Question Scene to Physics World', () => {
@@ -535,6 +673,7 @@ describe('PhysicsOS overlay presentation', () => {
     const openSurface = vi.fn()
     render(
       <PhysicsSurface
+        useLearningRecord={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={openSurface}
         t={t}
@@ -568,5 +707,115 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByRole('button', { name: '在物理世界中打开' }).getAttribute('disabled')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '重置' }))
     expect(screen.getByText('已完成求解')).toBeTruthy()
+  })
+
+  it('builds a real mechanics Scene from a template in the experiment picker', () => {
+    const surface = createPhysicsSurfaceController()
+    surface.openExperimentPicker()
+    const { container } = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    /* The picker lists every domain; mechanics is reachable from 全部. The
+       quick-start rail repeats a few names, so match all and click the first. */
+    expect(container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
+    expect(screen.getByText('探索一个物理实验')).toBeTruthy()
+    const projectiles = screen.getAllByRole('button', { name: /平抛运动/ })
+    expect(projectiles.length).toBeGreaterThan(0)
+    fireEvent.click(projectiles[0]!)
+
+    const state = surface.store.getSnapshot()
+    expect(state.surface).toBe('lab')
+    expect(state.sceneRef).toBeDefined()
+    expect(state.sceneRef?.sceneId).toBeTruthy()
+    /* A freshly created scene gets a unique id (base + timestamp), never the
+       stale fixture id the old popover pinned. */
+    expect(state.sceneRef?.sceneId).not.toBe('mechanics-projectile-horizontal')
+    const mechanics = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(mechanics.container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()
+  })
+
+  it('exposes every experiment domain in the picker, not just mechanics', () => {
+    const surface = createPhysicsSurfaceController()
+    surface.openExperimentPicker()
+    const { container } = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
+    /* The four domains the runtime dispatch supports, all as pickable entries.
+       Some names repeat in the quick-start rail, so presence means ≥ 1 button. */
+    for (const name of [/匀速直线运动/, /单点电荷电场/, /磁场中的带电粒子运动/, /速度选择器/, /质谱仪基础模型/]) {
+      expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0)
+    }
+    /* Cyclotron is surfaced as coming-soon, never as a creatable experiment. */
+    const cyclotron = screen.getByRole('button', { name: /回旋加速器/ })
+    expect(cyclotron.getAttribute('disabled')).not.toBeNull()
+  })
+
+  it('shows the Lab chooser whenever the Lab has no scene, by navigation or new experiment', () => {
+    const surface = createPhysicsSurfaceController()
+    /* Plain navigation to the Lab (no picker flag) still lands on the chooser
+       rather than auto-loading the magnetic demo. */
+    surface.open('lab')
+    const view = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          surface.open(id, sceneRef as { sceneId: string; scene: never } | undefined)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(view.container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
+    expect(screen.getByText('探索一个物理实验')).toBeTruthy()
+    expect(screen.queryByText('暂无内容')).toBeNull()
+
+    /* Picking a template from the chooser builds a real scene and mounts the
+       matching runtime — the demo is reached through the chooser, not silently. */
+    fireEvent.click(screen.getAllByRole('button', { name: /磁场中的带电粒子运动/ })[0]!)
+    expect(surface.store.getSnapshot().sceneRef).toBeDefined()
+    view.unmount()
+
+    const navigated = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(navigated.container.querySelector('[data-physicsos-state="picker"]')).toBeNull()
+    expect(navigated.container.querySelector('[data-physicsos-domain="magnetic"]')).toBeTruthy()
   })
 })

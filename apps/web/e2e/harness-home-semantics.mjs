@@ -52,10 +52,13 @@ const required = {
   solveDesc: profileText.includes('理解题目、建立模型、求解、验证和可视化。'),
   tutorDesc: profileText.includes('提示和观察优先，引导学生自行推理。'),
   createLab: createText.includes('新建物理实验'),
-  upload: createText.includes('上传试题'),
+  /* Copy is 输入试题, not 上传试题: the surface accepts typed or pasted text, and
+     image / PDF ingestion is explicitly not wired yet. */
+  upload: createText.includes('输入试题'),
   blank: createText.includes('新建空白场景'),
   importScene: createText.includes('导入场景'),
-  world: homeText.includes('新建物理世界'),
+  /* The home quick action is the experiment entry: 新建物理实验 → picker. */
+  world: homeText.includes('新建物理实验'),
   recent: homeText.includes('最近空间'),
   sidebarEmpty: homeText.includes('暂无最近空间'),
   example: homeText.includes('比较不同角度的平抛轨迹'),

@@ -52,6 +52,34 @@
   text-overflow: ellipsis;
 }
 
+/* Scene name doubles as the experiment-switch affordance. */
+.titleClickable {
+  cursor: pointer;
+}
+
+.titleClickable:hover {
+  color: var(--dsw-static-blue-600);
+}
+
+/* Keyboard/AT path for the switch: a real button beside the heading. */
+.titleSwitch {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.titleSwitch:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-static-blue-600);
+}
+
 .saveState {
   color: var(--dsw-alias-label-caption);
   font-size: 11px;
@@ -679,7 +707,9 @@
 
 .chartRow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Auto-fit rather than a fixed 3: a projectile publishes four series, and a
+     fixed column count wrapped the fourth chart out of the panel's height. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
 }
 
@@ -1174,3 +1204,825 @@
     backdrop-filter: blur(12px) saturate(118%);
   }
 }
+
+/* ==========================================================================
+   Unified PhysicsWorkspace parts
+   ========================================================================== */
+
+/* ---------- editable quantity ---------- */
+
+/* An invalid draft is shown, never dispatched: a half-typed number must not
+   become a scene command. */
+.quantityInvalid {
+  border-color: var(--physics-verification-error);
+  background: rgba(194, 65, 58, 0.06);
+}
+
+/* ---------- verification ---------- */
+
+.verificationList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.verificationItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 4px;
+  border-bottom: 1px dashed rgba(148, 173, 199, 0.26);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.verificationMark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.verification_passed {
+  background: var(--physics-verification-ok);
+}
+
+.verification_warning {
+  background: var(--physics-verification-warning);
+}
+
+.verification_failed {
+  background: var(--physics-verification-error);
+}
+
+.verificationLabel {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.verificationStatus {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.verifiedStateFailed {
+  color: var(--physics-verification-error);
+}
+
+.recognizedList {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+
+.recognizedList div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 3px;
+  border-bottom: 1px dashed rgba(148, 173, 199, 0.26);
+}
+
+.recognizedList dt {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.recognizedList dd {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- charts ---------- */
+
+/* A chart is a measurement, not decoration: named axes, a zero line when the
+   data crosses it, and a cursor locked to the scene clock. */
+.chartAxis {
+  stroke: var(--physics-axis);
+  stroke-width: 1;
+}
+
+.chartZero {
+  stroke: var(--physics-measurement-soft);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.chartTick,
+.chartAxisLabel {
+  fill: var(--dsw-alias-label-caption);
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chartAxisLabel {
+  font-style: italic;
+}
+
+.chartLine {
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chartRole_velocity {
+  stroke: var(--physics-vector-velocity);
+}
+
+.chartRole_velocity-component {
+  stroke: var(--physics-vector-velocity-soft);
+}
+
+.chartRole_force,
+.chartRole_normal,
+.chartRole_net-force {
+  stroke: var(--physics-vector-force);
+}
+
+.chartRole_acceleration {
+  stroke: var(--physics-vector-acceleration);
+}
+
+.chartRole_gravity {
+  stroke: var(--physics-vector-gravity);
+}
+
+.chartRole_friction {
+  stroke: var(--physics-vector-friction);
+}
+
+.chartRole_trajectory {
+  stroke: var(--physics-trajectory);
+}
+
+.chartRole_field {
+  stroke: var(--physics-field);
+}
+
+.chartRole_measurement,
+.chartRole_neutral {
+  stroke: var(--physics-measurement);
+}
+
+.chartCursor {
+  stroke: var(--physics-highlight);
+  stroke-width: 1.2;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 96px;
+}
+
+/* ---------- derivation ---------- */
+
+.derivationList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.derivationStep {
+  display: flex;
+  gap: 9px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(148, 173, 199, 0.24);
+}
+
+.derivationStep:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.derivationIndex {
+  flex: none;
+  width: 22px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+.derivationBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.derivationTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.derivationFormula {
+  color: var(--physics-vector-force);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.derivationDetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11.5px;
+  line-height: 17px;
+}
+
+.derivationResult {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+/* ---------- events ---------- */
+
+.eventRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eventRow:hover {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.eventMark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--physics-measurement);
+}
+
+.eventMark_launch {
+  background: var(--physics-keypoint-launch);
+}
+
+.eventMark_apex {
+  background: var(--physics-keypoint-apex);
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
+.eventMark_impact {
+  background: var(--physics-keypoint-impact);
+  border-radius: 1px;
+}
+
+.eventMark_enter {
+  background: var(--physics-field);
+}
+
+.eventMark_exit {
+  background: var(--physics-trajectory);
+}
+
+.eventMark_plate-impact {
+  background: var(--physics-keypoint-impact);
+  border-radius: 1px;
+}
+
+.eventMark_generic {
+  background: var(--physics-measurement);
+}
+
+.eventLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+.eventTime {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- timeline markers ---------- */
+
+/* The scrubber keeps its own hit area; markers sit above it and are the only
+   pointer targets inside the layer, so dragging the range still works. */
+.trackWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.markerLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.marker {
+  position: absolute;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(20, 33, 61, 0.22);
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translateX(-50%);
+  transition: transform var(--physics-motion-fast) var(--physics-ease);
+}
+
+.marker:hover {
+  transform: translateX(-50%) scale(1.22);
+}
+
+.marker:focus-visible {
+  outline: 2px solid var(--physicsos-focus);
+  outline-offset: 1px;
+}
+
+/* ---------- experimental branch ---------- */
+
+/* Provenance, not a git UI: the student needs to know they left the question's
+   conditions and how to get back, nothing more. */
+.branchBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  border-radius: 999px;
+  background: rgba(217, 119, 6, 0.08);
+  color: var(--physics-vector-acceleration);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.branchOrigin {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.branchRestore {
+  height: 18px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(217, 119, 6, 0.16);
+  color: var(--physics-vector-acceleration);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--physics-motion-fast) var(--physics-ease);
+}
+
+.branchRestore:hover {
+  background: rgba(217, 119, 6, 0.26);
+}
+
+/* ---------- agent drawer: structured analysis card ---------- */
+
+.agentEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 10px;
+  text-align: center;
+}
+
+.agentEmptyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(225, 239, 255, 0.72);
+  color: #2d5f9b;
+}
+
+.agentIntro {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.agentUnknown {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+/* Each turn is a structured analysis card: 问题 → 分析 → 依据 → 操作. */
+.agentCard {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.agentCardLabel {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agentCardQuestion {
+  margin-bottom: 10px;
+}
+
+.agentCardQuestion p {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.agentCardAnalysis {
+  margin-bottom: 10px;
+}
+
+.agentCardAnalysis p + p {
+  margin-top: 4px;
+}
+
+.agentParagraph {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+/* Citation chips: kind-specific colours make the provenance visible. */
+.agentCardSources {
+  margin-bottom: 10px;
+}
+
+.agentChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.agentChip {
+  padding: 1px 7px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agentChip[data-kind='scene'] {
+  border-color: rgba(148, 173, 199, 0.36);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.agentChip[data-kind='simulation'] {
+  border-color: rgba(66, 121, 200, 0.28);
+  color: #2d5f9b;
+}
+
+.agentChip[data-kind='verification'] {
+  border-color: rgba(47, 158, 90, 0.32);
+  color: var(--physics-verification-ok);
+}
+
+.agentChip[data-kind='question'] {
+  border-color: rgba(217, 119, 6, 0.28);
+  color: var(--physics-vector-acceleration);
+}
+
+/* Action buttons: re-triggerable tool calls. */
+.agentCardActions {
+  margin-bottom: 4px;
+}
+
+.agentActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agentAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--physics-motion-fast) var(--physics-ease),
+    border-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.agentAction:hover {
+  border-color: rgba(66, 121, 200, 0.36);
+  background: rgba(225, 239, 255, 0.72);
+}
+
+.agentAction:focus-visible {
+  outline: 2px solid var(--physicsos-focus);
+  outline-offset: 2px;
+}
+
+.agentAction_physics_ui_highlight {
+  border-color: rgba(217, 119, 6, 0.22);
+  color: var(--physics-vector-acceleration);
+}
+
+.agentAction_physics_ui_highlight:hover {
+  border-color: rgba(217, 119, 6, 0.4);
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.agentAction_physics_scene_setParameter {
+  border-color: rgba(66, 121, 200, 0.22);
+  color: #2d5f9b;
+}
+
+.agentAction_physics_scene_setParameter:hover {
+  border-color: rgba(66, 121, 200, 0.4);
+  background: rgba(225, 239, 255, 0.78);
+}
+
+.agentEffects {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.agentEffects li[data-ok='false'] {
+  color: var(--physics-verification-warning);
+}
+
+.agentSuggestions {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.agentSuggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--physics-motion-fast) var(--physics-ease);
+}
+
+.agentSuggestion:hover {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+/* ----------------------------------------------------------- tutor mode -- */
+
+.agentModeTabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 2px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.agentModeTab {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.agentModeTabActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.tutorTopic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-static-blue-600);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.tutorObserveList {
+  margin: 0;
+  padding: 0 0 0 2px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tutorHint {
+  padding: 8px 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.tutorAnswer {
+  padding: 8px 10px;
+  border: 1px solid rgba(5, 150, 105, 0.3);
+  border-radius: 9px;
+  background: rgba(5, 150, 105, 0.06);
+}
+
+.tutorAnswer .agentChip[data-status='failed'] {
+  border-color: rgba(217, 119, 6, 0.4);
+  color: #b45309;
+}
+
+.tutorControls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------- experiment report -- */
+
+.reportOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.reportPanel {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  max-height: 100%;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--physics-glass-shadow);
+  overflow: hidden;
+}
+
+.reportPanel .panelHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--physics-glass-border-soft);
+}
+
+.reportHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reportBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+}
+
+.reportName {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.reportGoal {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.reportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.reportRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--physics-glass-border-soft);
+}
+
+.reportRow dt {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.reportRow dd {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.reportChecks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reportChecks li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.reportCheckStatus {
+  font-variant-numeric: tabular-nums;
+  color: #047857;
+}
+
+.reportChecks li[data-status='FAIL'] .reportCheckStatus {
+  color: #b45309;
+}
+
+.reportConclusion {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 19px;
+}
+

@@ -40,8 +40,22 @@ export {
 } from './deterministic-electric-parser.ts'
 export { validateSemanticIR } from './semantic-validator.ts'
 export { buildSceneFromIR } from './scene-builder.ts'
-export { buildElectricSceneFromIR } from './electric-scene-builder.ts'
+export { buildElectricSceneFromIR, buildParallelPlateSceneFromIR } from './electric-scene-builder.ts'
 export { selectEngine } from './engine-selector.ts'
 export { processQuestion } from './question-runtime.ts'
 export { GOLDEN_QUESTIONS, createGoldenQuestionDocument } from './golden-questions.ts'
 export type { GoldenQuestionDefinition } from './golden-questions.ts'
+export {
+  KNOWLEDGE_NODES,
+  QUESTION_KNOWLEDGE,
+  knowledgeNodeOf,
+  knowledgeNodesOfQuestion,
+} from './knowledge-graph.ts'
+export type { KnowledgeDomain, KnowledgeNode } from './knowledge-graph.ts'
+export { QUESTION_SELF_CHECKS, selfChecksOfQuestion } from './self-checks.ts'
+export type {
+  MistakeType,
+  SelfCheckItem,
+  SelfCheckMistake,
+  SelfCheckOption,
+} from './self-checks.ts'

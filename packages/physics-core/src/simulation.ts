@@ -15,6 +15,16 @@ export interface PhysicsEventLike {
   sceneId: SceneId
   revision: number
   type: string
+  /**
+   * Scene time in seconds at which the event occurs, when the engine knows it.
+   *
+   * Optional because the minimal constraint existed before any engine produced
+   * timed events: a single-field model whose event order is implicit (e.g. the
+   * magnetic orbit) has no meaningful time to attach. Composite phase-boundary
+   * events DO carry their phase end time, so the timeline can place them without
+   * the runtime reconstructing it from the state stream.
+   */
+  time?: number
 }
 
 /** docs/03 §77 */

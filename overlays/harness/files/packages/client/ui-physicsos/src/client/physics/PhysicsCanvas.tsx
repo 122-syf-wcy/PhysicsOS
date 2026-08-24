@@ -12,7 +12,7 @@
  * file or growing a second canvas.
  */
 
-import { useCallback, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import clsx from 'clsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
@@ -21,8 +21,15 @@ import css from './PhysicsCanvas.module.css'
 
 /** Room for axes and gutters, in px. */
 const PAD = { left: 46, bottom: 36, top: 18, right: 24 } as const
-/** Nominal plot box the scene is fitted into, in px. */
-const PLOT = { width: 720, height: 405 } as const
+/**
+ * Plot box used until the container has been measured.
+ *
+ * The emitted viewBox tracks the container's PIXEL size, so one viewBox unit is one
+ * CSS pixel and `preserveAspectRatio` never rescales the drawing: a smaller viewBox
+ * would magnify every stroke and label, a larger one would shrink them. This nominal
+ * size only covers the first paint and non-DOM environments.
+ */
+const NOMINAL_PLOT = { width: 720, height: 405 } as const
 
 export interface TrajectoryHover {
   /** Scene time in seconds at the hovered trajectory position. */
@@ -60,24 +67,61 @@ export function PhysicsCanvas({
 }: PhysicsCanvasProps) {
   const uid = useId().replace(/:/g, '')
   const svgRef = useRef<SVGSVGElement>(null)
+  const hostRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<TrajectoryHover | null>(null)
+  const [box, setBox] = useState<{ width: number; height: number }>({
+    width: NOMINAL_PLOT.width + PAD.left + PAD.right,
+    height: NOMINAL_PLOT.height + PAD.top + PAD.bottom,
+  })
 
-  /* Fit the scene extent into the nominal plot box, preserving aspect so a metre
-     on x is a metre on y — a squashed axis would make the physics read wrong. */
+  /* Measure the host so the viewBox can match its pixel size. Without this the SVG
+     is letterboxed and scaled by whatever ratio the container happens to have. */
+  useEffect(() => {
+    const host = hostRef.current
+    if (host === null || typeof ResizeObserver === 'undefined') return
+    const apply = () => {
+      const rect = host.getBoundingClientRect()
+      if (rect.width < 1 || rect.height < 1) return
+      setBox(current =>
+        Math.abs(current.width - rect.width) < 0.5 && Math.abs(current.height - rect.height) < 0.5
+          ? current
+          : { width: rect.width, height: rect.height },
+      )
+    }
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(host)
+    return () => { observer.disconnect() }
+  }, [])
+
+  const plot = {
+    width: Math.max(120, box.width - PAD.left - PAD.right),
+    height: Math.max(90, box.height - PAD.top - PAD.bottom),
+  }
+
+  /* Fit the scene extent into the FIXED plot box, preserving aspect so a metre on
+     x is a metre on y — a squashed axis would make the physics read wrong. The box
+     is fixed (rather than shrunk to the content) so the emitted viewBox is always
+     the same size: a content-sized viewBox gets magnified by `preserveAspectRatio`
+     whenever the scene is portrait, which blows up every stroke and label by the
+     same factor and makes the canvas look coarse. */
   const scale = useMemo(() => {
-    const sx = PLOT.width / Math.max(view.extent.width, 1e-6)
-    const sy = PLOT.height / Math.max(view.extent.height, 1e-6)
+    const sx = plot.width / Math.max(view.extent.width, 1e-6)
+    const sy = plot.height / Math.max(view.extent.height, 1e-6)
     return Math.min(sx, sy)
-  }, [view.extent.width, view.extent.height])
+  }, [plot.width, plot.height, view.extent.width, view.extent.height])
 
-  const plotWidth = view.extent.width * scale
-  const plotHeight = view.extent.height * scale
+  const plotWidth = plot.width
+  const plotHeight = plot.height
+  /* Centre the scene in the plot box; the leftover margin is honest empty space. */
+  const insetX = (plotWidth - view.extent.width * scale) / 2
+  const insetY = (plotHeight - view.extent.height * scale) / 2
   const width = plotWidth + PAD.left + PAD.right
   const height = plotHeight + PAD.top + PAD.bottom
-  const originY = PAD.top + plotHeight
+  const originY = PAD.top + plotHeight - insetY
 
   const projection = useMemo<RendererProjection>(() => {
-    const px = (point: ScenePoint) => PAD.left + (point.x - view.origin.x) * scale
+    const px = (point: ScenePoint) => PAD.left + insetX + (point.x - view.origin.x) * scale
     const py = (point: ScenePoint) => originY - (point.y - view.origin.y) * scale
     return {
       px,
@@ -90,12 +134,13 @@ export function PhysicsCanvas({
           .join(' '),
       highlighted: (id: string) => view.highlighted?.includes(id) === true,
     }
-  }, [scale, originY, uid, view.origin.x, view.origin.y, view.highlighted])
+  }, [scale, insetX, originY, uid, view.origin.x, view.origin.y, view.highlighted])
 
   const minor = view.grid.minor * scale
   const major = view.grid.major * scale
   const minorId = `pc-minor-${uid}`
   const majorId = `pc-major-${uid}`
+  const clipId = `pc-clip-${uid}`
 
   /* Axis ticks are only labelled when the caller states a step, so the canvas
      never invents a scale it cannot justify. */
@@ -187,7 +232,7 @@ export function PhysicsCanvas({
   const Renderer = RENDERERS[view.domain]
 
   return (
-    <div className={css.host}>
+    <div className={css.host} ref={hostRef}>
       <svg
         ref={svgRef}
         className={clsx(css.root, interactive && css.interactive)}
@@ -209,6 +254,12 @@ export function PhysicsCanvas({
           <pattern id={majorId} width={major} height={major} patternUnits="userSpaceOnUse">
             <path d={`M${major} 0H0V${major}`} fill="none" className={css.gridMajor} />
           </pattern>
+          {/* Physics does not stop at the frame edge — a projectile keeps flying and
+              a block keeps sliding — so domain drawing is clipped to the plot rather
+              than allowed to bleed over the axes, ticks and gutters. */}
+          <clipPath id={clipId}>
+            <rect x={PAD.left} y={PAD.top} width={plotWidth} height={plotHeight} />
+          </clipPath>
         </defs>
 
         <rect x={PAD.left} y={PAD.top} width={plotWidth} height={plotHeight} className={css.plot} />
@@ -256,7 +307,9 @@ export function PhysicsCanvas({
         </text>
 
         {/* ---------- domain drawing ---------- */}
-        <Renderer view={view} projection={projection} />
+        <g clipPath={`url(#${clipId})`}>
+          <Renderer view={view} projection={projection} />
+        </g>
 
         {/* ---------- readout gutter ---------- */}
         {view.overlay.readout.length === 0 ? null : (

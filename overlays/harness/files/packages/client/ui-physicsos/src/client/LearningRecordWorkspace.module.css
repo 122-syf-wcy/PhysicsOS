@@ -1,0 +1,311 @@
+/* 学习记录 surface. Same cover geometry as the Lab/Question covers: fills the
+   conversation column, never scrolls the page, panels scroll internally. */
+
+.cover {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.title {
+  margin: 2px 0 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.summaryRow {
+  display: flex;
+  gap: 8px;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 92px;
+  padding: 10px 14px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background: var(--physics-glass-fill-strong);
+}
+
+.summaryValue {
+  color: var(--dsw-alias-label-primary);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.emptyBody {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+}
+
+.body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.panel {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 14px;
+  background: var(--physics-glass-fill-strong);
+}
+
+.panelTitle {
+  margin: 0 0 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.panelTitle + .panelTitle,
+.mistakeRow + .panelTitle {
+  margin-top: 16px;
+}
+
+.mistakeRow {
+  display: flex;
+  gap: 8px;
+}
+
+.mistakeCard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--physics-glass-border-soft);
+}
+
+.mistakeCount {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.mistakeLabel {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.mistakeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mistakeItem {
+  padding: 10px 12px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.mistakeHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mistakeBadge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 15px;
+  font-weight: 600;
+  background: rgba(217, 119, 6, 0.14);
+  color: #b45309;
+}
+
+.mistakeBadge[data-mistake='concept'] {
+  background: rgba(219, 39, 119, 0.12);
+  color: #be185d;
+}
+
+.mistakeBadge[data-mistake='direction'] {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.mistakeBadge[data-mistake='modeling'] {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+.mistakeQuestion {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mistakeTime {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.mistakePrompt {
+  margin: 6px 0 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.mistakeAnswer {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.practiseButton {
+  padding: 4px 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 7px;
+  background: var(--physics-glass-fill-strong);
+  color: var(--dsw-static-blue-600);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.practiseButton:hover {
+  border-color: var(--physics-field);
+}
+
+.muted {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.knowledgeList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledgeItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.knowledgeHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.knowledgeDomain {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+}
+
+.knowledgeName {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.knowledgeRate {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.knowledgeBar {
+  height: 6px;
+  border-radius: 4px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  overflow: hidden;
+}
+
+.knowledgeFill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--dsw-static-blue-500, #3b82f6);
+  transition: width 200ms ease;
+}
+
+@media (max-width: 900px) {
+  .body {
+    grid-template-columns: 1fr;
+  }
+}

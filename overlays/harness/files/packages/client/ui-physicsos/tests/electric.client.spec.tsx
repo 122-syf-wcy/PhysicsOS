@@ -8,10 +8,10 @@ import {
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
-import { ElectricLabWorkspace } from '../src/client/ElectricLabWorkspace.tsx'
 import { QuestionWorkspace, type QuestionWorkspaceProps } from '../src/client/QuestionWorkspace.tsx'
-import type { PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
+import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { TimelineScrubber } from '../src/client/TimelineScrubber.tsx'
+import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -59,19 +59,38 @@ describe('Electric product slice', () => {
   it('selects scene domains from explicit scene facts', () => {
     expect(domainOfScene(createElectricScene())).toBe('electric')
     expect(domainOfScene(createMagneticScene())).toBe('magnetic')
-    expect(domainOfScene(createMechanicsScene({ modelId: 'uniform_linear_motion' }))).toBe('mechanics')
+    expect(domainOfScene(createMechanicsScene({ model: 'uniform_linear_motion' }))).toBe('mechanics')
 
+    /* Crossed fields are their own domain as of the composite-field slice. They
+       used to fall through to 'unsupported' because each single-field branch
+       requires the other field kinds to be absent — and an unsupported domain
+       mounts no workspace at all, so a real question would render a blank
+       surface rather than say what was wrong. */
     const composite = createElectricScene()
     composite.fields.push(createMagneticScene().fields[0]!)
-    expect(domainOfScene(composite)).toBe('unsupported')
+    expect(domainOfScene(composite)).toBe('composite')
   })
 
   it('renders a verified editable Electric Lab and commits field changes through Scene Runtime', () => {
-    const { container } = render(<ElectricLabWorkspace scene={createElectricScene()} t={t} />)
+    /* Driven through the real dispatcher, not a domain-specific component: there
+       is one workspace shell, so the electric surface must be reachable purely by
+       handing an electric scene to PhysicsSurface. */
+    const surface = createPhysicsSurfaceController()
+    const scene = createElectricScene()
+    surface.open('lab', { sceneId: String(scene.id), scene })
+    const { container } = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
 
     expect(container.querySelector('[data-physicsos-domain="electric"]')).toBeTruthy()
     expect(container.querySelector('svg[role="img"]')).toBeTruthy()
-    expect(screen.getByText('Electric Engine · Verified')).toBeTruthy()
+    expect(screen.getByText('引擎已验证')).toBeTruthy()
     const inspectorToggle = screen.getByRole('button', { name: '属性' })
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(inspectorToggle)
@@ -80,12 +99,13 @@ describe('Electric product slice', () => {
     expect(screen.getByRole('combobox', { name: '电场方向' })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(inspectorToggle.getAttribute('aria-expanded')).toBe('false')
-    const fieldInput = screen.getByText('场强').closest('label')?.querySelector('input')
+    const fieldInput = screen.getByRole('textbox', { name: '场强' })
     if (!(fieldInput instanceof HTMLInputElement)) throw new Error('Expected electric field input.')
     fireEvent.change(fieldInput, { target: { value: '1.2' } })
     fireEvent.blur(fieldInput)
+    /* A committed edit is a scene command, so the revision must advance. */
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
-    expect(screen.getByText('1.20 V/m')).toBeTruthy()
+    expect(fieldInput.value).toBe('1.2')
   })
 
   it('previews an Electric golden question and passes its exact scene to Lab', () => {

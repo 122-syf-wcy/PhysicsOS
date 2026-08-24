@@ -1,27 +1,31 @@
 import {
   IconBrowseOutline16, IconChevronRightOutline14, IconFolderOpen16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore, WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { fillComposerDraft } from './fill-draft.ts'
 import { IconPhysicsLab, IconQuestionSheet } from './icons/physics-icons.tsx'
+import type { PhysicsSceneRef, RecentExperimentsState } from './surface-store.ts'
 import { formatUpdatedAt, workspaceKnowledge } from './workspaceMeta.ts'
 import css from './HomeActions.module.css'
 
 export type HomeActionsInjected = {
   startSession: (workspaceId?: WorkspaceId) => void
-  openSurface: (surface: 'home' | 'lab' | 'questions') => void
+  openSurface: (surface: 'home' | 'lab' | 'questions', sceneRef?: PhysicsSceneRef) => void
+  hooks: {
+    recentExperiments: SnapshotStore<RecentExperimentsState>
+  }
 }
 
 export type HomeActionsProps =
   & PropsRuntime<'conversation.hero.actions'>
-  & HomeActionsInjected
+  & InjectFace<HomeActionsInjected>
   & PropsLocale<'physicsos'>
 
-/** Quick actions and recent workspaces under the hero composer. */
-export function HomeActions({ useWorkspaces, startSession, openSurface, t }: HomeActionsProps) {
-  const items = useWorkspaces(s => s.items)
+/** Quick actions and the recent real-scene list under the hero composer. */
+export function HomeActions({ useRecentExperiments, openSurface, t }: HomeActionsProps) {
+  const items = useRecentExperiments(s => s.items)
   return (
     <div className={css.root}>
       <ul className={css.examples} aria-label={t('examples.label')}>
@@ -123,23 +127,27 @@ export function HomeActions({ useWorkspaces, startSession, openSurface, t }: Hom
           </div>
         ) : (
           <ul className={css.list}>
-            {items.slice(0, 5).map((workspace) => {
-              const knowledge = workspaceKnowledge(workspace.title)
+            {items.slice(0, 5).map((entry) => {
+              const knowledge = workspaceKnowledge(entry.title)
               return (
-                <li key={workspace.workspaceId}>
+                <li key={entry.sceneId}>
                   <button
                     type="button"
                     className={css.recentItem}
-                    onClick={() => { startSession(workspace.workspaceId) }}
+                    onClick={() => {
+                      openSurface('lab', { sceneId: entry.sceneId, scene: entry.scene })
+                    }}
                   >
                     <IconFolderOpen16 size={16} />
-                    <span className={css.recentName}>{workspace.title}</span>
+                    <span className={css.recentName}>{entry.title}</span>
                     <span className={css.recentMeta}>
                       {knowledge.subject}
                       {' / '}
                       {knowledge.topic}
+                      {' · '}
+                      {t(entry.kind === 'question' ? 'recent.kind.question' : 'recent.kind.experiment')}
                     </span>
-                    <span className={css.recentTime}>{formatUpdatedAt(workspace.updatedAt)}</span>
+                    <span className={css.recentTime}>{formatUpdatedAt(entry.updatedAt)}</span>
                   </button>
                 </li>
               )

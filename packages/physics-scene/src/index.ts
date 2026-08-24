@@ -36,6 +36,7 @@ export {
   type Resistor,
   type SceneAnnotation,
   type SceneDimension,
+  type SceneLineage,
   type SceneMetadata,
   type ShapeDefinition,
   type Timeline,
@@ -88,3 +89,60 @@ export {
   type MechanicsModelId,
   type MechanicsSceneInput,
 } from './mechanics-scene-factory.ts'
+export {
+  forkExperimentalScene,
+  isExperimentalBranch,
+  type ForkExperimentalSceneInput,
+} from './scene-branch.ts'
+export {
+  pointChargeField,
+  pointChargeParticle,
+  probeParticle,
+  probeParticleOf,
+  sourceChargesOf,
+  type PointChargeInput,
+  type ProbeParticleInput,
+} from './electric/point-charge.ts'
+export {
+  uniformElectricField,
+  uniformFieldAxisOf,
+  type UniformFieldAxis,
+} from './electric/electric-field.ts'
+export {
+  createPointChargeScene,
+  fieldSamplePointOf,
+  type PointChargeSceneInput,
+} from './electric/electric-scene-builder.ts'
+export {
+  createParallelPlateScene,
+  isParallelPlateScene,
+  plateLengthOf,
+  plateSeparationOf,
+  type ParallelPlateObservableKey,
+  type ParallelPlateSceneInput,
+} from './electric/parallel-plate.ts'
+export {
+  SAMPLEABLE_REGION_SHAPES,
+  gravityFieldsOf,
+  hasUnsampleableRegion,
+  isCompositeFieldScene,
+  pointInRegion,
+  sameFieldEnvironment,
+  sampleFieldsAt,
+  uniformElectricFieldsOf,
+  uniformMagneticFieldsOf,
+  type FieldSample,
+} from './composite/composite-field.ts'
+export {
+  createCompositeFieldScene,
+  createMassSpectrometerScene,
+  createMultiRegionFieldScene,
+  createVelocitySelectorScene,
+  type CompositeElectricDirection,
+  type CompositeObservableKey,
+  type CompositeSceneInput,
+  type MagneticOrientation,
+  type MassSpectrometerSceneInput,
+  type MultiRegionFieldSceneInput,
+  type VelocitySelectorSceneInput,
+} from './composite/composite-scene-factory.ts'

@@ -111,9 +111,9 @@
 .resultWarning strong { font-size: 11px; }
 .resultWarning p { margin: 3px 0 0; color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 17px; }
 .solutionSection { margin-top: 16px; }
-.steps { display: grid; gap: 10px; margin: 8px 0 0; padding: 0; list-style: none; }
-.step { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 7px; }
-.stepIndex { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--dsw-static-blue-50); color: var(--dsw-static-blue-600); font-size: 10px; font-weight: 600; }
+.steps { display: grid; gap: 12px; margin: 8px 0 0; padding: 0; list-style: none; }
+.step { display: grid; gap: 3px; }
+.stepIndex { justify-self: start; padding: 0 5px; border-radius: 5px; background: var(--dsw-static-blue-50); color: var(--dsw-static-blue-600); font-size: 9px; font-weight: 600; line-height: 15px; letter-spacing: .05em; text-transform: uppercase; }
 .step strong { display: block; font-size: 11px; line-height: 17px; }
 .step p { margin: 2px 0 0; color: var(--dsw-alias-label-secondary); font-size: 10px; line-height: 16px; }
 .step output { display: inline-block; margin-top: 3px; color: var(--dsw-static-blue-600); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -125,7 +125,8 @@
 }
 
 @media (max-width: 720px) {
-  .cover { overflow: auto; }
+  /* The page itself never scrolls; the stacked columns scroll inside the shell. */
+  .layout { overflow-y: auto; }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .toolbarActions { width: 100%; flex-wrap: wrap; }
   .layout { grid-template-columns: minmax(0, 1fr); }
@@ -159,8 +160,9 @@
 }
 
 @container question-space (max-width: 620px) {
-  .cover {
-    overflow: auto;
+  /* Stacked rails scroll inside the shell rather than pushing the page. */
+  .layout {
+    overflow-y: auto;
   }
 
   .toolbar {
@@ -251,4 +253,544 @@
 
 .canvasWrap {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 10px 26px rgba(65, 93, 122, 0.06);
+}
+
+/* ==========================================================================
+   Clickable knowns, structured solution, named verification, workflow state.
+   Colour comes from --physics-* / --dsw-* only; --physics-highlight is the same
+   amber the canvas glows with, so a lit control and a lit arrow read as one act.
+   ========================================================================== */
+
+/* ---------- question document: its own scroll, so the column stays put ---- */
+
+.stemDocument {
+  max-height: 26vh;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---------- knowns as controls ---------- */
+
+.knownList {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knownStatic,
+.knownButton {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  width: 100%;
+  min-height: 22px;
+  padding: 2px 5px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+}
+
+.knownButton {
+  cursor: pointer;
+  transition: background var(--physics-motion-fast) var(--physics-ease),
+    border-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.knownButton:hover {
+  border-color: var(--physics-glass-border-soft);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.knownButtonActive,
+.knownButtonActive:hover {
+  border-color: var(--physics-highlight);
+  background: var(--physics-highlight-glow);
+  color: var(--dsw-alias-label-primary);
+}
+
+.knownValue {
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.factHint {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-caption);
+  font-size: 9px;
+  line-height: 14px;
+}
+
+/* ---------- solution steps ---------- */
+
+.stepBody {
+  min-width: 0;
+}
+
+.stepFormula {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.stepResult {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  margin-top: 3px;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-static-blue-600);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepResultButton {
+  cursor: pointer;
+  transition: background var(--physics-motion-fast) var(--physics-ease),
+    border-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.stepResultButton:hover {
+  border-color: var(--physics-glass-border-soft);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+/* ---------- verification disclosure ---------- */
+
+.verifyBlock {
+  margin-top: 7px;
+  padding: 8px 9px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.verifySummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+}
+
+.verifySummary::-webkit-details-marker {
+  display: none;
+}
+
+.verifyMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.verifyMarkOk {
+  background: rgba(47, 158, 90, 0.16);
+  color: var(--physics-verification-ok);
+}
+
+.verifyMarkFail {
+  background: rgba(194, 65, 58, 0.14);
+  color: var(--physics-verification-error);
+}
+
+.verifyCount {
+  margin-left: auto;
+  color: var(--dsw-alias-label-caption);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.verifyBlock[open] .verifySummary {
+  margin-bottom: 7px;
+}
+
+/* ---------- recognized conditions (unsupported model) ---------- */
+
+.recognized {
+  margin-top: 7px;
+  font-size: 10px;
+}
+
+.recognized > summary {
+  cursor: pointer;
+  color: var(--dsw-static-blue-600);
+  list-style: none;
+}
+
+.recognized > summary::-webkit-details-marker {
+  display: none;
+}
+
+.recognizedList {
+  display: grid;
+  gap: 3px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recognizedList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.recognizedList li > span:last-child {
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- workflow progress ---------- */
+
+.workflow {
+  padding: 12px 13px 13px;
+  border: 1px dashed var(--physics-glass-border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.workflowList {
+  display: grid;
+  gap: 2px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.workflowStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0 4px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.workflowMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--physics-grid-major);
+  color: var(--dsw-alias-label-caption);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workflowStep[data-status='done'] .workflowMark {
+  background: rgba(47, 158, 90, 0.16);
+  color: var(--physics-verification-ok);
+}
+
+.workflowStep[data-status='failed'] .workflowMark {
+  background: rgba(194, 65, 58, 0.14);
+  color: var(--physics-verification-error);
+}
+
+.workflowLabel {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflowStep[data-status='pending'] .workflowLabel {
+  color: var(--dsw-alias-label-caption);
+}
+
+.workflowStatus {
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 10px;
+}
+
+.workflowStep[data-status='failed'] .workflowStatus {
+  color: var(--physics-verification-error);
+}
+
+/* ---------- scene generation transition ---------- */
+
+/* A restrained entrance: the canvas materialises with a brief opacity + scale-in
+   rather than popping in. No bounce, no shimmer — Apple Physics Lab is calm. */
+@keyframes scene-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.canvasWrap {
+  animation: scene-enter 320ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ---------- workflow status polish ---------- */
+
+/* The active step gets a gentle pulse so the student sees where the pipeline
+   is, without a spinner claiming work that has not started. */
+@keyframes workflow-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.workflowStep[data-status='pending'] .workflowMark {
+  animation: workflow-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvasWrap,
+  .workflowStep[data-status='pending'] .workflowMark {
+    animation: none;
+  }
+}
+
+/* ---------- parsing status visual feedback ---------- */
+
+/* A subtle status bar on the workflow that makes the current state legible at
+   a glance: green for ready, amber for warnings, red for failures. */
+.status {
+  transition: color var(--physics-motion-fast, 200ms) ease;
+}
+
+.statusReady .statusDot {
+  background: #16824b;
+}
+
+[data-workflow='PARSE_FAILED'] .status,
+[data-workflow='AMBIGUOUS'] .status,
+[data-workflow='INVALID_SEMANTICS'] .status,
+[data-workflow='SCENE_INVALID'] .status,
+[data-workflow='UNSUPPORTED_MODEL'] .status,
+[data-workflow='SOLVER_FAILED'] .status,
+[data-workflow='VERIFICATION_FAILED'] .status {
+  color: var(--physics-verification-error, #c24138);
+}
+
+[data-workflow='PARSE_FAILED'] .statusDot,
+[data-workflow='AMBIGUOUS'] .statusDot,
+[data-workflow='INVALID_SEMANTICS'] .statusDot,
+[data-workflow='SCENE_INVALID'] .statusDot,
+[data-workflow='UNSUPPORTED_MODEL'] .statusDot,
+[data-workflow='SOLVER_FAILED'] .statusDot,
+[data-workflow='VERIFICATION_FAILED'] .statusDot {
+  background: var(--physics-verification-error, #c24138);
+}
+
+/* ---------- focus rings ---------- */
+
+.knownButton:focus-visible,
+.stepResultButton:focus-visible,
+.verifySummary:focus-visible,
+.recognized > summary:focus-visible {
+  outline: 2px solid var(--physicsos-focus);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------ self-check / diagnosis -- */
+
+.selfCheckItem {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.selfCheckPrompt {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.selfCheckOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selfCheckOption {
+  padding: 6px 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 8px;
+  background: var(--physics-glass-fill-strong);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selfCheckOption:hover:enabled {
+  border-color: var(--physics-field);
+  color: var(--dsw-alias-label-primary);
+}
+
+.selfCheckOption:disabled {
+  cursor: default;
+  opacity: 0.86;
+}
+
+.selfCheckCorrect {
+  border-color: rgba(5, 150, 105, 0.5);
+  background: rgba(5, 150, 105, 0.08);
+  color: #047857;
+}
+
+.selfCheckWrong {
+  border-color: rgba(217, 119, 6, 0.5);
+  background: rgba(217, 119, 6, 0.08);
+  color: #b45309;
+}
+
+.selfCheckReveal {
+  border-color: rgba(5, 150, 105, 0.35);
+  color: #047857;
+}
+
+.selfCheckTakeaway {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-top: 8px;
+  color: #047857;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.diagnosisCard {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(217, 119, 6, 0.32);
+  border-radius: 8px;
+  background: rgba(217, 119, 6, 0.06);
+}
+
+.diagnosisBadge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 15px;
+  font-weight: 600;
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+}
+
+.diagnosisBadge[data-mistake='concept'] {
+  background: rgba(219, 39, 119, 0.12);
+  color: #be185d;
+}
+
+.diagnosisBadge[data-mistake='direction'] {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.diagnosisBadge[data-mistake='modeling'] {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+.diagnosisExplanation {
+  margin: 6px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.diagnosisEvidence {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.diagnosisEvidence[data-passed='true'] {
+  color: #047857;
+}
+
+.diagnosisReview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.diagnosisReviewChip {
+  padding: 1px 7px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 999px;
+  background: var(--physics-glass-fill-strong);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---------------------------------------------------------- knowledge summary -- */
+
+.knowledgeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.knowledgeChip {
+  padding: 3px 9px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 999px;
+  background: var(--physics-glass-fill-strong);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.knowledgeChip[data-domain='mechanics'] {
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.knowledgeChip[data-domain='electromagnetism'] {
+  border-color: rgba(79, 70, 229, 0.28);
+}
+
+.knowledgeNote {
+  margin: 8px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
 }
