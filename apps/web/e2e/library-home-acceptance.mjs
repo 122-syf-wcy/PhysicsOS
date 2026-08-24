@@ -67,6 +67,9 @@ await page.addInitScript(() => {
 })
 
 const shot = async (name) => {
+  /* Entrance choreography staggers up to ~1.2s; let it land so the captured
+     page is the settled design, not a half-revealed frame. */
+  await page.waitForTimeout(1500)
   await page.screenshot({ path: path.join(SHOTS, `${name}.png`) })
   stdout.write(`  📷 ${name}\n`)
 }
@@ -105,8 +108,9 @@ await picker().waitFor({ state: 'visible', timeout: 20_000 })
       cards: cards.map((card) => ({
         id: card.getAttribute('data-template-id'),
         reason: card.getAttribute('data-reason'),
-        bg: getComputedStyle(card).backgroundColor,
-        reasonText: card.querySelector('span')?.textContent ?? '',
+        /* The subject tint paints the artwork banner, not the card body. */
+        bg: getComputedStyle(card.querySelector('svg[data-physicsos-art]').parentElement).backgroundColor,
+        reasonText: card.querySelector('[class*="recommendReason"]')?.textContent ?? '',
       })),
       dotColors: dots.map((dot) => getComputedStyle(dot).backgroundColor),
       scrolls: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
