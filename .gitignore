@@ -40,6 +40,12 @@ tmp/
 *.pid
 DRELOCA*
 
+# Local agent / editor tooling (user-specific, never project source)
+.claude/
+.cursor/
+.playwright-mcp/
+.pos_manifest.tmp.json
+
 # Local verification output
 *-typecheck.txt
 golden-test.txt
