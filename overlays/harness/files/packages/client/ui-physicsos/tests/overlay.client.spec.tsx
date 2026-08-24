@@ -29,6 +29,14 @@ const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
 
+/* Live hooks for tests that render the experiment picker: the library home
+   reads both stores (继续上次实验 / 为你推荐). Workspace-only renders keep
+   neverHook so an unexpected read still fails loudly. */
+const emptyRecent: PhysicsSurfaceProps['useRecentExperiments'] =
+  selector => selector({ items: [] })
+const emptyRecord: PhysicsSurfaceProps['useLearningRecord'] =
+  selector => selector({ attempts: [] })
+
 /**
  * Open the Lab on a template's real scene.
  *
@@ -438,6 +446,7 @@ describe('PhysicsOS overlay presentation', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -485,6 +494,7 @@ describe('PhysicsOS overlay presentation', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -504,6 +514,7 @@ describe('PhysicsOS overlay presentation', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -530,6 +541,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={vi.fn()}
         t={t}
@@ -552,6 +564,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={vi.fn()}
         t={t}
@@ -594,6 +607,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={vi.fn()}
         t={t}
@@ -618,6 +632,7 @@ describe('PhysicsOS overlay presentation', () => {
     const questionView = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={openSurface}
         t={t}
@@ -642,6 +657,7 @@ describe('PhysicsOS overlay presentation', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -674,6 +690,7 @@ describe('PhysicsOS overlay presentation', () => {
     render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={openSurface}
         t={t}
@@ -714,7 +731,8 @@ describe('PhysicsOS overlay presentation', () => {
     surface.openExperimentPicker()
     const { container } = render(
       <PhysicsSurface
-        useLearningRecord={neverHook}
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={emptyRecent}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={(id, sceneRef) => {
           if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
@@ -726,9 +744,9 @@ describe('PhysicsOS overlay presentation', () => {
       />,
     )
     /* The picker lists every domain; mechanics is reachable from 全部. The
-       quick-start rail repeats a few names, so match all and click the first. */
+       recommendation rail repeats a few names, so match all and click the first. */
     expect(container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
-    expect(screen.getByText('探索一个物理实验')).toBeTruthy()
+    expect(screen.getByText('实验中心')).toBeTruthy()
     const projectiles = screen.getAllByRole('button', { name: /平抛运动/ })
     expect(projectiles.length).toBeGreaterThan(0)
     fireEvent.click(projectiles[0]!)
@@ -743,6 +761,7 @@ describe('PhysicsOS overlay presentation', () => {
     const mechanics = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -757,7 +776,8 @@ describe('PhysicsOS overlay presentation', () => {
     surface.openExperimentPicker()
     const { container } = render(
       <PhysicsSurface
-        useLearningRecord={neverHook}
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={emptyRecent}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={(id, sceneRef) => {
           if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
@@ -770,13 +790,101 @@ describe('PhysicsOS overlay presentation', () => {
     )
     expect(container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
     /* The four domains the runtime dispatch supports, all as pickable entries.
-       Some names repeat in the quick-start rail, so presence means ≥ 1 button. */
+       Some names repeat on the recommendation rail, so presence means ≥ 1 button. */
     for (const name of [/匀速直线运动/, /单点电荷电场/, /磁场中的带电粒子运动/, /速度选择器/, /质谱仪基础模型/]) {
       expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0)
     }
     /* Cyclotron is surfaced as coming-soon, never as a creatable experiment. */
     const cyclotron = screen.getByRole('button', { name: /回旋加速器/ })
     expect(cyclotron.getAttribute('disabled')).not.toBeNull()
+  })
+
+  it('offers 继续上次实验 from the persisted recent scene and restores it', () => {
+    /* Two controllers over one storage simulate a reload: the first session
+       creates the scene, the second finds it persisted. */
+    const data = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => { data.set(key, value) },
+    }
+    const first = createPhysicsSurfaceController(storage)
+    openLabOnTemplate(first, 'velocity-selector')
+    const created = first.store.getSnapshot().sceneRef
+    expect(created).toBeDefined()
+
+    const reloaded = createPhysicsSurfaceController(storage)
+    reloaded.open('lab')
+    render(
+      <PhysicsSurface
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={selector => selector(reloaded.recent.getSnapshot())}
+        usePhysicsSurface={selector => selector(reloaded.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          reloaded.open(id, sceneRef as Parameters<typeof reloaded.open>[1])
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    const card = screen.getByRole('button', { name: /继续上次实验/ })
+    expect(card.getAttribute('data-physicsos-continue')).toBe('stored')
+    expect(card.textContent).toContain('速度选择器')
+    expect(card.textContent).toContain('复合场')
+
+    /* Restoring hands the STORED scene back to the Lab — same scene id, not a
+       fresh template instantiation. */
+    fireEvent.click(card)
+    const state = reloaded.store.getSnapshot()
+    expect(state.surface).toBe('lab')
+    expect(state.sceneRef?.sceneId).toBe(created!.sceneId)
+  })
+
+  it('recommends weakness-targeted experiments from the learning record', () => {
+    globalThis.localStorage?.removeItem('physicsos.recent-experiments')
+    const surface = createPhysicsSurfaceController()
+    surface.openExperimentPicker()
+    /* One wrong self-check on 洛伦兹力 + 圆周运动: both nodes map to the same
+       experiment, so the rail shows ONE weakness card plus classic fill. */
+    const attempts = [{
+      id: 'attempt-1',
+      questionId: '01-proton-basic',
+      questionTitle: '质子垂直进入匀强磁场',
+      selfCheckId: 'sc-1',
+      prompt: '洛伦兹力做功吗？',
+      answerId: 'wrong',
+      answerLabel: '做正功',
+      correct: false,
+      mistakeType: 'concept' as const,
+      knowledge: ['em-lorentz', 'em-circular'],
+      at: new Date().toISOString(),
+    }]
+    render(
+      <PhysicsSurface
+        useLearningRecord={selector => selector({ attempts })}
+        useRecentExperiments={emptyRecent}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(screen.getByText('为你推荐')).toBeTruthy()
+    const reason = screen.getByText(/针对薄弱点 · 洛伦兹力/)
+    const card = reason.closest('button')
+    expect(card?.getAttribute('data-template-id')).toBe('magnetic-circular')
+    expect(card?.getAttribute('data-reason')).toBe('weakness')
+    expect(screen.getAllByText('经典实验')).toHaveLength(2)
+
+    /* Picking the weakness card creates the real targeted experiment. */
+    fireEvent.click(card!)
+    const state = surface.store.getSnapshot()
+    expect(state.surface).toBe('lab')
+    expect(state.sceneRef?.sceneId).toContain('magnetic-circular')
   })
 
   it('shows the Lab chooser whenever the Lab has no scene, by navigation or new experiment', () => {
@@ -786,7 +894,8 @@ describe('PhysicsOS overlay presentation', () => {
     surface.open('lab')
     const view = render(
       <PhysicsSurface
-        useLearningRecord={neverHook}
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={emptyRecent}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={(id, sceneRef) => {
           surface.open(id, sceneRef as { sceneId: string; scene: never } | undefined)
@@ -797,7 +906,7 @@ describe('PhysicsOS overlay presentation', () => {
       />,
     )
     expect(view.container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
-    expect(screen.getByText('探索一个物理实验')).toBeTruthy()
+    expect(screen.getByText('实验中心')).toBeTruthy()
     expect(screen.queryByText('暂无内容')).toBeNull()
 
     /* Picking a template from the chooser builds a real scene and mounts the
@@ -809,6 +918,7 @@ describe('PhysicsOS overlay presentation', () => {
     const navigated = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}

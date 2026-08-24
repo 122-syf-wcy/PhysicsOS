@@ -1,6 +1,7 @@
-/* Experiment picker. Geometry mirrors LabEmptyState's .root/.panel so the chooser
-   reads as the same glass surface, but the body is a dense selector grid, not a
-   handful of quick-start entries. */
+/* Experiment library home. Geometry mirrors LabEmptyState's .root/.panel so the
+   chooser reads as the same glass surface; the body is a learning-centre front
+   page — hero title, continue card, recommendation rail — above a dense
+   selector grid. */
 
 .root {
   position: absolute;
@@ -19,10 +20,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(960px, 100%);
+  width: min(1000px, 100%);
   max-height: 100%;
   overflow-y: auto;
-  padding: 26px 26px 18px;
+  padding: 30px 30px 18px;
   box-sizing: border-box;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 16px;
@@ -31,6 +32,33 @@
   backdrop-filter: blur(18px) saturate(120%);
 }
 
+/* ------------------------------------------------------------------ subjects --
+   One modifier class per domain, setting the two custom properties every
+   subject-coloured element consumes. Undecorated elements fall back to the
+   neutral system colours. */
+
+.subject-mechanics {
+  --subject: var(--physics-subject-mechanics);
+  --subject-tint: var(--physics-subject-mechanics-tint);
+}
+
+.subject-electric {
+  --subject: var(--physics-subject-electric);
+  --subject-tint: var(--physics-subject-electric-tint);
+}
+
+.subject-magnetic {
+  --subject: var(--physics-subject-magnetic);
+  --subject-tint: var(--physics-subject-magnetic-tint);
+}
+
+.subject-composite {
+  --subject: var(--physics-subject-composite);
+  --subject-tint: var(--physics-subject-composite-tint);
+}
+
+/* -------------------------------------------------------------------- hero -- */
+
 .header {
   flex: none;
 }
@@ -38,9 +66,10 @@
 .title {
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 28px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 38px;
 }
 
 .body {
@@ -51,36 +80,165 @@
   line-height: 21px;
 }
 
-/* Way back to the experiment the chooser was opened over. */
-.resume {
-  display: inline-flex;
+/* ---------------------------------------------------------------- continue -- */
+
+.continueCard {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 5px 10px;
+  gap: 12px;
+  width: 100%;
+  margin-top: 18px;
+  padding: 12px 14px;
+  box-sizing: border-box;
   border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 999px;
+  border-radius: 14px;
   background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  text-align: left;
   cursor: pointer;
   transition: border-color var(--physics-motion-base) var(--physics-ease);
 }
 
-.resume:hover {
-  border-color: var(--physics-field);
-  color: var(--dsw-alias-label-primary);
+.continueCard:hover {
+  border-color: var(--subject, var(--physics-field));
 }
 
-.resumeTitle {
-  max-width: 22em;
+.continueIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--subject-tint, var(--physics-incline-fill));
+  color: var(--subject, var(--physics-vector-force));
+}
+
+.continueBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.continueEyebrow {
+  color: var(--subject, var(--dsw-alias-label-tertiary));
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 600;
+}
+
+.continueTitle {
   overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary);
 }
+
+.continueMeta {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.continueCta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--subject, var(--physics-vector-force));
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------- recommend -- */
+
+.recommendSection {
+  flex: none;
+  margin-top: 18px;
+}
+
+.sectionLabel {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+.recommendGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.recommendCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--subject-tint, var(--dsw-alias-bg-base));
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--physics-motion-base) var(--physics-ease);
+}
+
+.recommendCard:hover {
+  border-color: var(--subject, var(--physics-field));
+}
+
+.recommendReason {
+  color: var(--subject, var(--dsw-alias-label-tertiary));
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 600;
+}
+
+.recommendName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.recommendIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--subject, var(--physics-vector-force));
+}
+
+.recommendHint {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ search -- */
 
 .searchRow {
   flex: none;
@@ -110,17 +268,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* ------------------------------------------------------------ recent chips -- */
+
 .recentSection {
   flex: none;
   margin-top: 16px;
-}
-
-.recentLabel {
-  margin: 0 0 8px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
 }
 
 .recentRow {
@@ -145,17 +297,19 @@
 }
 
 .recentChip:hover {
-  border-color: var(--physics-field);
+  border-color: var(--subject, var(--physics-field));
 }
 
 .recentIcon {
   display: inline-flex;
-  color: var(--physics-vector-velocity);
+  color: var(--subject, var(--physics-vector-velocity));
 }
 
 .recentName {
   white-space: nowrap;
 }
+
+/* -------------------------------------------------------------------- tabs -- */
 
 .tabs {
   flex: none;
@@ -170,6 +324,9 @@
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border: none;
   border-radius: 7px;
@@ -185,11 +342,22 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.tabDot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--subject, currentColor);
+}
+
 .tabActive {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
   font-weight: 600;
 }
+
+/* -------------------------------------------------------------------- grid -- */
 
 .empty {
   margin: 24px 0;
@@ -223,7 +391,7 @@
 }
 
 .entry:hover {
-  border-color: var(--physics-field);
+  border-color: var(--subject, var(--physics-field));
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -245,9 +413,8 @@
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  border: 1px solid var(--physics-glass-border-soft);
-  background: var(--physics-incline-fill);
-  color: var(--physics-vector-force);
+  background: var(--subject-tint, var(--physics-incline-fill));
+  color: var(--subject, var(--physics-vector-force));
 }
 
 .entryText {
@@ -286,6 +453,7 @@
   white-space: nowrap;
 }
 
+/* Subject tag on each grid row: tinted chip, one colour per domain. */
 .domainTag {
   flex: none;
   padding: 2px 8px;
@@ -293,26 +461,8 @@
   font-size: 10px;
   line-height: 14px;
   font-weight: 600;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-/* Domain tag accents follow the global field colour semantics, kept low-sat
-   so the grid reads as one system, not a colour-coded dashboard. */
-.domain-mechanics {
-  color: var(--physics-vector-force);
-}
-
-.domain-electric {
-  color: var(--physics-vector-electric-force);
-}
-
-.domain-magnetic {
-  color: var(--physics-vector-magnetic-force);
-}
-
-.domain-composite {
-  color: var(--physics-vector-net-force);
+  color: var(--subject, var(--dsw-alias-label-tertiary));
+  background: var(--subject-tint, var(--dsw-alias-interactive-bg-hover));
 }
 
 .footer {
@@ -338,5 +488,13 @@
 @media (max-width: 720px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .recommendGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .continueCta {
+    display: none;
   }
 }

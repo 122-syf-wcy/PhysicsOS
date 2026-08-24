@@ -72,6 +72,20 @@ const PHYSICS_TOKENS = `
   --physics-verification-warning: #d97706;
   --physics-verification-error: #c2413a;
 
+  /* ---------- subjects ----------
+     Library / navigation identity for the four experiment domains (力学 / 电场 /
+     磁场 / 复合场), one hue + one tinted surface each. These colour UI chrome —
+     picker cards, tags, tabs — NEVER canvas physics: a vector keeps its vector
+     token even inside a subject-tinted card. */
+  --physics-subject-mechanics: #2f9e5a;
+  --physics-subject-mechanics-tint: #e7f4ec;
+  --physics-subject-electric: #2563eb;
+  --physics-subject-electric-tint: #e8effc;
+  --physics-subject-magnetic: #7c3aed;
+  --physics-subject-magnetic-tint: #f1ebfd;
+  --physics-subject-composite: #ea580c;
+  --physics-subject-composite-tint: #fdeee3;
+
   /* ---------- interaction ---------- */
   --physics-highlight: #f5a524;
   --physics-highlight-glow: rgba(245, 165, 36, 0.22);

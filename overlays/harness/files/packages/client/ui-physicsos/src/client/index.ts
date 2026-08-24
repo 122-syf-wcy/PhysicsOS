@@ -175,7 +175,12 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.surface',
     locale: NS,
     inject: () => ({
-      hooks: { physicsSurface: surface.store, learningRecord: learningRecord.store },
+      hooks: {
+        physicsSurface: surface.store,
+        learningRecord: learningRecord.store,
+        /* 继续上次实验 on the library home restores the newest persisted scene. */
+        recentExperiments: surface.recent,
+      },
       openSurface: (
         id: 'home' | 'lab' | 'questions' | 'record',
         sceneRef?: { sceneId: string; scene: unknown },

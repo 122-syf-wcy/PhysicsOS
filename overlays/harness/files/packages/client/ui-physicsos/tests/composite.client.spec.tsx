@@ -48,6 +48,7 @@ const mountLab = (templateId: string) => {
   const view = render(
     <PhysicsSurface
       useLearningRecord={neverHook}
+      useRecentExperiments={neverHook}
       usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
       t={t}
       useSessions={neverHook}
@@ -307,6 +308,7 @@ describe('composite Lab surface', () => {
     render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         openExperimentPicker={openExperimentPicker}
@@ -322,7 +324,7 @@ describe('composite Lab surface', () => {
     expect(state.sceneRef).toBeDefined()
   })
 
-  it('offers a way back to the running experiment and a first-use quick start', () => {
+  it('offers a way back to the running experiment and a recommendation rail', () => {
     globalThis.localStorage?.removeItem('physicsos.recent-experiments')
     const surface = createPhysicsSurfaceController()
     surface.open('lab', sceneOf('velocity-selector'))
@@ -330,7 +332,8 @@ describe('composite Lab surface', () => {
     const openSurface = vi.fn()
     render(
       <PhysicsSurface
-        useLearningRecord={neverHook}
+        useLearningRecord={selector => selector({ attempts: [] })}
+        useRecentExperiments={selector => selector(surface.recent.getSnapshot())}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         openSurface={openSurface}
@@ -338,9 +341,14 @@ describe('composite Lab surface', () => {
         useWorkspaces={neverHook}
       />,
     )
-    expect(screen.getByText('探索一个物理实验')).toBeTruthy()
-    expect(screen.getByText('快速开始')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /返回当前实验/ }))
+    expect(screen.getByText('实验中心')).toBeTruthy()
+    expect(screen.getByText('为你推荐')).toBeTruthy()
+    /* The chooser covers a RUNNING experiment, so the continue card resumes it
+       (rather than restoring the persisted copy). */
+    const card = screen.getByRole('button', { name: /返回当前实验/ })
+    expect(card.getAttribute('data-physicsos-continue')).toBe('running')
+    expect(card.textContent).toContain('正在运行')
+    fireEvent.click(card)
     expect(openSurface).toHaveBeenCalledWith('lab')
   })
 })

@@ -23,6 +23,10 @@ export interface LabEmptyStateProps {
     id: PhysicsSurfaceId,
     sceneRef?: { sceneId: string; scene: PhysicsScene },
   ) => void
+  /** Persisted recent scenes, for the picker's 继续上次实验 card. */
+  readonly useRecentExperiments: ExperimentPickerProps['useRecentExperiments']
+  /** The student's self-check history, for the picker's 为你推荐 rail. */
+  readonly useLearningRecord: ExperimentPickerProps['useLearningRecord']
   /** Present when a scene is still active behind the chooser. */
   readonly resume?: ExperimentPickerProps['resume']
 }
@@ -31,6 +35,16 @@ export interface LabEmptyStateProps {
  * Render the Lab chooser. Delegates to the shared {@link ExperimentPicker} so the
  * sidebar "新建", the Home quick action and the Lab empty state are one chooser.
  */
-export function LabEmptyState({ t, openSurface, resume }: LabEmptyStateProps) {
-  return <ExperimentPicker t={t} openSurface={openSurface} {...(resume === undefined ? {} : { resume })} />
+export function LabEmptyState({
+  t, openSurface, useRecentExperiments, useLearningRecord, resume,
+}: LabEmptyStateProps) {
+  return (
+    <ExperimentPicker
+      t={t}
+      openSurface={openSurface}
+      useRecentExperiments={useRecentExperiments}
+      useLearningRecord={useLearningRecord}
+      {...(resume === undefined ? {} : { resume })}
+    />
+  )
 }

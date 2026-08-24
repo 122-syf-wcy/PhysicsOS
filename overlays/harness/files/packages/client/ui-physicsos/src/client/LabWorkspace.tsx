@@ -24,7 +24,9 @@ import { createElectricWorkspaceRuntime } from './physics/electric-workspace-run
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
-import type { PhysicsSurfaceState, PhysicsSurfaceId } from './surface-store.ts'
+import type {
+  PhysicsSurfaceState, PhysicsSurfaceId, RecentExperimentsState,
+} from './surface-store.ts'
 import css from './LabWorkspace.module.css'
 
 /** Registration-side face for {@link PhysicsSurface}. */
@@ -32,6 +34,8 @@ export interface PhysicsSurfaceInjected {
   hooks: {
     physicsSurface: SnapshotStore<PhysicsSurfaceState>
     learningRecord: SnapshotStore<LearningRecordState>
+    /** Persisted recent scenes; the picker's 继续上次实验 card reads them. */
+    recentExperiments: SnapshotStore<RecentExperimentsState>
   }
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: { sceneId: string; scene: unknown }) => void
   /** Open the experiment chooser while keeping the active scene resumable. */
@@ -52,6 +56,7 @@ export type PhysicsSurfaceProps = PropsRuntime<'conversation.surface'> &
 export function PhysicsSurface({
   usePhysicsSurface,
   useLearningRecord,
+  useRecentExperiments,
   t,
   openSurface,
   openExperimentPicker,
@@ -124,11 +129,15 @@ export function PhysicsSurface({
       <LabEmptyState
         t={t}
         openSurface={openSurface ?? (() => {})}
+        useRecentExperiments={useRecentExperiments}
+        useLearningRecord={useLearningRecord}
         {...(resumable === undefined
           ? {}
           : {
             resume: {
               title: resumable.scene.metadata.title ?? resumable.sceneId,
+              /* Subject colour for the continue card. */
+              domain: domainOfScene(resumable.scene),
               onResume: () => { openSurface?.('lab') },
             },
           })}

@@ -310,6 +310,53 @@ PASS；overlay 已回写；截图 QA 五张人工读图确认。
 localStorage，账号与服务端存储属 Data Storage 阶段）；主观题语义批改；
 3D Renderer。
 
+### EXPERIMENT_LIBRARY_HOME_V1_COMPLETE
+
+实验库首页精修（Apple 学习中心风格），规划中「UI/UX 打磨」的第一项。
+同一个 `ExperimentPicker`（Sidebar 新建 / 首页快捷入口 / 实验室空态共用）
+升格为学习中心式首页，数据全部来自既有真实 store，不新增任何伪状态：
+
+**A. 大标题**：hero 区「实验中心」30px/700 紧字距 + 一句话副标题；
+面板加宽至 1000px。
+
+**B. 继续上次实验**：单张全宽 continue 卡，两种来源一个优先级——
+chooser 盖在运行中实验上（切换实验）时显示「返回当前实验 · 正在运行」，
+点击原地恢复（revision 不变）；否则读取持久化 `recent-scenes` 的最新一条
+显示「继续上次实验」，元数据为 学科 · 实验/题目 · 相对时间，点击把存储的
+PhysicsScene 原样交还实验室（同 sceneId，整页刷新后依然可还原）。
+
+**C. 为你推荐**：新纯函数模块 `experiment-recommendations.ts`——
+`recommendExperiments({attempts, excludeClassicIds, limit=3})`：
+先按学习记录聚合薄弱知识点（错次多 → 正确率低排序），经手工审核的
+`KNOWLEDGE_EXPERIMENT` 表（知识节点 → 训练该节点的实验，无诚实映射的
+节点如「单位与数量级」刻意缺席）产出「针对薄弱点 · 节点名」卡；
+经典池（力/电/磁/复合各一）补足，经典补位排除最近使用，薄弱点复练
+不排除。卡片理由即选中它的规则，无模型调用。取代原「快速开始」。
+
+**D. 学科颜色**：`chrome.ts` 新增 subjects 语义组
+`--physics-subject-{mechanics,electric,magnetic,composite}`（绿/蓝/紫/橙）
++ 同名 `-tint` 浅底色，注释明确「只着色 UI chrome，不着色画布物理」；
+CSS Modules 用 `subject-*` 修饰类注入 `--subject/--subject-tint` 两个
+自定义属性，推荐卡底色、continue 卡图标块与 CTA、分类 Tab 彩点、
+网格图标块、领域标签 chip 全部消费同一组变量。
+
+依据：`apps/web/e2e/library-home-acceptance.mjs`（CASE A–D + 5 门禁）、
+截图 `experiment-library-home / -continue / -weakness -1600x900.png`
+
+验收数据：`typecheck` 与 `lint`（core+web）零错误；`test:web` 214/17 文件
+全绿（新增 `experiment-recommendations.spec.ts` 7 项 + picker 继续/推荐
+组件用例 2 项）；`test:core` 全绿；bundle 重建；浏览器验收
+`library-home-acceptance.mjs` 26 项全 PASS、5 门禁为 0（含大标题 ≥28px、
+三学科浅底色两两不同、四 Tab 彩点两两不同、刷新后精确还原、错题 →
+薄弱点推荐深链）；回归 mechanics / electric / electric-v2 /
+electric-region / composite / learning 六份 acceptance 全 PASS
+（composite CASE A 的「快速开始」检查更新为推荐栏检查）；overlay 已回写；
+截图 QA 三张人工读图确认。
+
+**不做**（明确边界）：首页 Hero（`conversation.hero`）与 Canvas 氛围精修
+（规划中的独立条目）；推荐算法不引入模型/遥测（规则即理由）；
+不新增实验模板。
+
 ---
 
 ## 进行中

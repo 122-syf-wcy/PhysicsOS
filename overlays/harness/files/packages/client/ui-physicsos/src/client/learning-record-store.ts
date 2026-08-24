@@ -96,7 +96,7 @@ export interface KnowledgeMastery {
 
 /** Attempts per knowledge node, insertion-ordered by first appearance. */
 export const knowledgeMasteryOf = (
-  attempts: readonly StudentAttempt[],
+  attempts: readonly Pick<StudentAttempt, 'correct' | 'knowledge'>[],
 ): readonly KnowledgeMastery[] => {
   const byNode = new Map<string, { total: number; correct: number }>()
   for (const attempt of attempts) {

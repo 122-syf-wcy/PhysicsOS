@@ -169,14 +169,14 @@ await page.getByRole('button', { name: '物理实验室' }).click()
     templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button').length,
     tabs: [...document.querySelectorAll('[data-physicsos-state="picker"] [role="tab"]')]
       .map((node) => node.textContent?.trim()),
-    quickStart: document.body.textContent?.includes('快速开始') ?? false,
+    recommendRail: document.querySelector('[data-physicsos-recommend]') !== null,
     scrolls: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
   }))
   check('experiment picker replaces the auto demo', state.pickerUp && !state.magneticMounted)
   check('at least 16 creatable templates listed', state.templates >= 16, `${state.templates} entries`)
   check('domain tabs 全部/力学/电场/磁场/复合场', ['全部', '力学', '电场', '磁场', '复合场']
     .every((tab) => state.tabs.includes(tab)), state.tabs.join(','))
-  check('quick-start rail on first use', state.quickStart)
+  check('recommendation rail on first use', state.recommendRail)
   check('no page scroll on the library', state.scrolls === false)
 
   const cyclotron = page.locator('[class*="grid"] button', { hasText: '回旋加速器' })
