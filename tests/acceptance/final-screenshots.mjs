@@ -11,7 +11,7 @@ import { mkdirSync } from 'node:fs'
 import { stdout } from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const SHOTS = path.join(ROOT, 'docs', 'reports', 'screenshots')
 mkdirSync(SHOTS, { recursive: true })
 

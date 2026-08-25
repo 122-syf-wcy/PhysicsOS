@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdirSync } from 'node:fs'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const outDir = path.join(root, 'docs', 'reports', 'screenshots')
 mkdirSync(outDir, { recursive: true })
 
