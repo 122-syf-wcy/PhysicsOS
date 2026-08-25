@@ -13,6 +13,7 @@ import { IconCheckOutline14, IconChevronDownOutline14 } from '@deepseek-ai/dsh-c
 
 import { SCENE_TREE_ICONS } from './icons/physics-icons.tsx'
 import { MathText } from './physics/MathText.tsx'
+import { formatTimeAt, timeAriaText } from './physics/time-format.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -406,17 +407,6 @@ const formatValue = (value: number): string => {
 
 export type DataTab = 'data' | 'charts' | 'derivation' | 'events'
 
-/**
- * Event time for a marker label.
- *
- * `toFixed(2)` is right for the metre/second-scale domains (a projectile lands at
- * 2.02 s) but reads every electric event as "0.00 秒": a particle crosses a
- * capacitor in nanoseconds. Below 10 ms the label switches to exponent form so a
- * screen reader announces the real instant instead of a rounded zero.
- */
-const eventTimeText = (time: number): string =>
-  Math.abs(time) >= 0.01 || time === 0 ? time.toFixed(2) : time.toExponential(2)
-
 /** Bottom panel: sampled table, charts, derivation steps, timeline events. */
 export function DataPanelBody({
   tab,
@@ -519,7 +509,7 @@ export function DataPanelBody({
           >
             <span className={clsx(css.eventMark, css[`eventMark_${event.kind}`])} aria-hidden="true" />
             <span className={css.eventLabel}>{event.label}</span>
-            <span className={css.eventTime}>{eventTimeText(event.time)} s</span>
+            <span className={css.eventTime}>{formatTimeAt(event.time, clock.total)}</span>
           </button>
         </li>
       ))}
@@ -554,8 +544,8 @@ export function TimelineMarkers({
           type="button"
           className={clsx(css.marker, css[`eventMark_${event.kind}`])}
           style={{ left: `${Math.min(100, Math.max(0, (event.time / total) * 100))}%` }}
-          title={`${event.label} · ${eventTimeText(event.time)} s`}
-          aria-label={`${event.label} ${eventTimeText(event.time)} 秒`}
+          title={`${event.label} · ${formatTimeAt(event.time, total)}`}
+          aria-label={`${event.label} ${timeAriaText(event.time, total)}`}
           onClick={() => { onSeek(event.time) }}
         />
       ))}

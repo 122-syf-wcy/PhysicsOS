@@ -30,6 +30,7 @@ import {
   type SceneVisualModel,
   type VectorVisual,
 } from './scene-visual-model.ts'
+import { formatTimeAt } from './time-format.ts'
 
 export interface CompositeVisualInput {
   readonly scene: PhysicsScene
@@ -118,6 +119,46 @@ const magneticFieldVisualOf = (
   return {
     direction: bz < 0 ? 'into-page' : 'out-of-page',
     spacing: Math.min(regionWidthOf(region), regionHeightOf(region)) / 3,
+  }
+}
+
+/* Global (regionless) uniform fields: the plain E+B and E+B+g templates state
+   their fields for all space rather than binding them to an apparatus region,
+   so there is no rectangle to clip a lattice to. They surface on the model's
+   top-level `electricField` / `field` slots and paint the whole canvas — the
+   same textures the single-domain electric and magnetic views draw — so the
+   fields are a visible fact rather than a bare checkbox label. */
+const globalElectricVisualOf = (
+  scene: PhysicsScene,
+  frameWidth: number,
+): ElectricFieldVisual | undefined => {
+  const field = scene.fields.find(
+    candidate => candidate.type === 'uniform_electric' && candidate.regionId === undefined,
+  )
+  if (field?.type !== 'uniform_electric') return undefined
+  const vector = toCanonicalVector(field.fieldStrength).vectorSI
+  const magnitude = Math.hypot(vector.x, vector.y)
+  if (magnitude === 0) return undefined
+  return {
+    direction: { x: vector.x / magnitude, y: vector.y / magnitude },
+    /* Same lattice density the uniform electric view uses for its canvas. */
+    spacing: frameWidth / 8,
+  }
+}
+
+const globalMagneticVisualOf = (
+  scene: PhysicsScene,
+  extent: { readonly width: number; readonly height: number },
+): FieldVisual | undefined => {
+  const field = scene.fields.find(
+    candidate => candidate.type === 'uniform_magnetic' && candidate.regionId === undefined,
+  )
+  if (field?.type !== 'uniform_magnetic') return undefined
+  const bz = toCanonicalVector(field.magneticFluxDensity).vectorSI.z
+  if (bz === 0) return undefined
+  return {
+    direction: bz < 0 ? 'into-page' : 'out-of-page',
+    spacing: Math.min(extent.width, extent.height) / 6,
   }
 }
 
@@ -304,8 +345,9 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
   }
 
   const charge = particle.charge?.value ?? 0
+  const runWindow = simulation.states.at(-1)?.time.value ?? 0
   const readout = [
-    `t = ${formatNumber(state.time.value)} s`,
+    `t = ${formatTimeAt(state.time.value, runWindow)}`,
     ...(velocity === undefined ? [] : [`|v| = ${formatNumber(velocity.magnitude.value)} ${velocity.magnitude.unit}`]),
     ...(electricField === undefined ? [] : [`|E| = ${formatNumber(electricField.magnitude.value)} ${electricField.magnitude.unit}`]),
     ...(magneticField === undefined ? [] : [`|B| = ${formatNumber(magneticField.magnitude.value)} ${magneticField.magnitude.unit}`]),
@@ -321,6 +363,9 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
     : scaleLength >= 0.01
       ? `${formatNumber(scaleLength * 100)} cm`
       : `${formatNumber(scaleLength * 1000)} mm`
+
+  const globalElectric = globalElectricVisualOf(scene, frame.extent.width)
+  const globalMagnetic = globalMagneticVisualOf(scene, frame.extent)
 
   return emptyVisualModel('composite', {
     origin: frame.origin,
@@ -340,6 +385,8 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
       ? []
       : [{ id: 'composite-trajectory', kind: 'history' as const, points: trajectoryPoints }],
     compositeRegions: regions,
+    ...(globalElectric === undefined ? {} : { electricField: globalElectric }),
+    ...(globalMagnetic === undefined ? {} : { field: globalMagnetic }),
     overlay: {
       readout,
       scale: { label: scaleLabel, length: scaleLength },
@@ -384,7 +431,7 @@ export const compositeSampleReadout = (
     object.velocity.vector.z,
   )
   return [
-    { label: 't', value: `${formatNumber(state.time.value)} s` },
+    { label: 't', value: formatTimeAt(state.time.value, simulation.states.at(-1)?.time.value ?? 0) },
     { label: 'r', value: `(${formatNumber(position.x)}, ${formatNumber(position.y)}) m` },
     { label: '|v|', value: `${formatNumber(speed)} m/s` },
   ]

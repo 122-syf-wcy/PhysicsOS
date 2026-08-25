@@ -187,8 +187,8 @@ await page.waitForTimeout(600)
 
   await page.getByRole('button', { name: '播放 / 暂停' }).click()
   await page.waitForTimeout(700)
-  const clock = await page.locator('[data-physicsos-surface="lab"]').getByText(/^\d+\.\d\ds$/).first().innerText()
-  check('timeline advances while playing', clock !== '0.00s', clock)
+  const clock = await page.locator('[data-physicsos-surface="lab"]').getByText(/^\d+\.\d\d s$/).first().innerText()
+  check('timeline advances while playing', clock !== '0.00 s', clock)
   await page.getByRole('button', { name: '播放 / 暂停' }).click()
 
   await page.getByRole('button', { name: '图像' }).click()

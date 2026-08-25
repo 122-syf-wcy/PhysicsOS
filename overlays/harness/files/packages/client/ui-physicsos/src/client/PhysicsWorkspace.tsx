@@ -26,6 +26,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { STEP_FRACTION, useAnimationClock } from './animation-clock.ts'
+import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import {
   ResponsiveInspector,
   ResponsiveInspectorToggle,
@@ -80,6 +81,9 @@ export function PhysicsWorkspace({ runtime, t, toolbarExtra, onSwitchExperiment 
 
   const clock = snapshot.clock
   const running = clock.running
+  /* One unit for the whole timeline, chosen from the run window, so the moving
+     clock and its total stay comparable — `3.75 µs / 10.00 µs`, never `1e-5s`. */
+  const clockScale = timeScaleOf(clock.total)
 
   useAnimationClock(running, useCallback((elapsed: number) => {
     setSnapshot(runtime.advance(elapsed))
@@ -307,19 +311,19 @@ export function PhysicsWorkspace({ runtime, t, toolbarExtra, onSwitchExperiment 
               >
                 <IconChevronRightOutline14 size={13} />
               </button>
-              <span className={css.clock}>{formatClock(clock.time)}</span>
+              <span className={css.clock}>{formatTimeIn(clock.time, clockScale)}</span>
               <div className={css.trackWrap}>
                 <TimelineScrubber
                   label={t('lab.timeline')}
                   min={0}
                   max={clock.total}
                   value={clock.time}
-                  valueText={`${formatClock(clock.time)} / ${formatClock(clock.total)}`}
+                  valueText={`${formatTimeIn(clock.time, clockScale)} / ${formatTimeIn(clock.total, clockScale)}`}
                   onChange={seek}
                 />
                 <TimelineMarkers events={snapshot.events} total={clock.total} onSeek={seek} />
               </div>
-              <span className={clsx(css.clock, css.clockEnd)}>{formatClock(clock.total)}</span>
+              <span className={clsx(css.clock, css.clockEnd)}>{formatTimeIn(clock.total, clockScale)}</span>
               <select
                 className={css.rate}
                 aria-label={t('lab.rate')}
@@ -419,10 +423,3 @@ export function PhysicsWorkspace({ runtime, t, toolbarExtra, onSwitchExperiment 
 const collectObservables = (
   snapshot: WorkspaceSnapshot,
 ): Readonly<Partial<Record<ObservableKey, boolean>>> => snapshot.view.visible
-
-const formatClock = (input: number): string => {
-  if (!Number.isFinite(input)) return '0.00s'
-  if (input === 0) return '0.00s'
-  if (Math.abs(input) < 0.01) return `${input.toExponential(2)}s`
-  return `${input.toFixed(2)}s`
-}

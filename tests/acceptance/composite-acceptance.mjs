@@ -9,7 +9,7 @@
  *   C  修改 v₀ → revision +1，轨迹改变，选择条件 FAIL
  *   D  恢复 v₀ = E/B → 选择条件 PASS
  *   E  创建质谱仪 → 3 个场区、进入磁场区后圆弧、回旋半径来自引擎
- *   F  Timeline Enter/Exit markers → 点击 seek，纳秒级时间用指数格式
+ *   F  Timeline Enter/Exit markers → 点击 seek，纳秒级时间用工程单位（µs/ns）
  *   F2 播放节奏 → 微观运行按 8 秒展示窗推进，2 秒后仍在窗内（不会一帧掠过）
  *   G  速度选择器 Golden Question → 结构化 Solution → 在物理世界中打开 → 实验分支
  *   H  质谱仪 Golden Question → Lab（同一场景，3 场区）
@@ -212,7 +212,7 @@ await page.waitForTimeout(600)
 }
 
 /* ---------------------------------------------------------------- CASE F -- */
-stdout.write('\nCASE F · Timeline Enter/Exit markers → seek，指数时间格式\n')
+stdout.write('\nCASE F · Timeline Enter/Exit markers → seek，工程单位时间格式\n')
 {
   const markers = page.locator('[data-physicsos-surface="lab"] button[class*="marker"]')
   const count = await markers.count()
@@ -220,8 +220,9 @@ stdout.write('\nCASE F · Timeline Enter/Exit markers → seek，指数时间格
   const labels = await markers.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''))
   check('markers include 进入 and 离开', labels.some((l) => l.includes('进入')) && labels.some((l) => l.includes('离开')),
     labels.join(' | '))
-  check('microsecond times use exponent form, never 0.00',
-    labels.every((l) => !/ 0\.00 秒$/.test(l)) && labels.some((l) => /e-\d+/.test(l)),
+  check('microsecond times read in engineering units, never a rounded 0.00',
+    labels.every((l) => / \d+\.\d+ (秒|毫秒|微秒|纳秒|皮秒)$/.test(l))
+      && labels.every((l) => !/ 0\.00 (秒|毫秒|微秒|纳秒|皮秒)$/.test(l)),
     labels.join(' | '))
 
   const clockBefore = await page.locator('[class*="clock"]').first().innerText()

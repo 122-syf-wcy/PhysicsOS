@@ -154,12 +154,14 @@ const eventMarkCount = () => page.evaluate(() => {
   return document.querySelectorAll(selector).length
 })
 
-/** Scene time the canvas overlay is showing, parsed from the `t = … s` readout. */
+/** Scene time the canvas overlay is showing, read from the `t = … <unit>` readout.
+    The HUD prints engineering units (ns/µs/ms/s), so the value-plus-unit text is
+    returned verbatim — the callers only compare readings for equality. */
 const canvasTime = () => page.evaluate(() => {
   const cover = document.querySelector('[data-physicsos-surface="lab"]')
   const text = cover?.textContent ?? ''
-  const match = text.match(/t\s*=\s*(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)\s*s/)
-  return match === null ? null : Number.parseFloat(match[1])
+  const match = text.match(/t\s*=\s*(-?\d+(?:\.\d+)?\s*(?:ps|ns|µs|ms|s))/)
+  return match === null ? null : match[1]
 })
 
 const highlightCount = () => page.evaluate(() =>
@@ -329,7 +331,7 @@ if (plateLabReached) {
   /* The drawer starts collapsed behind an 「AI 助教」 dock button, so it has to be
      opened before any suggestion chip exists. Scoping the chip search to the
      opened panel also matters: a page-wide regex for 进入电场 would otherwise match
-     the timeline marker's aria-label ("进入电场 0.00 秒") instead of a chip. */
+     the timeline marker's aria-label ("进入电场 2.40 纳秒") instead of a chip. */
   const dock = lab().locator('[class*="agentDock"]')
   if (await dock.count() > 0) await dock.first().click()
   await page.waitForTimeout(500)

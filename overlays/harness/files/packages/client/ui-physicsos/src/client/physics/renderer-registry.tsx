@@ -597,13 +597,66 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
  *
  * Each region is a labelled rectangle; the electric-field lattice is clipped to
  * its region (the field is zero outside it) and the magnetic field shows as ×/·
- * glyphs inside the region it is bound to. Forces come from the verified
- * composite observation, scaled by the visual bridge — never recomputed here.
+ * glyphs inside the region it is bound to. A GLOBAL (regionless) field paints the
+ * whole canvas instead — arrow lattice for E, ×/· glyphs for B — gated by the
+ * matching observable toggle so the checkboxes control something visible. Forces
+ * come from the verified composite observation, scaled by the visual bridge —
+ * never recomputed here.
  */
 function CompositeRenderer({ view, projection }: RendererProps) {
   const regions = view.compositeRegions ?? []
   const particle = view.particles[0]
   const glowId = `pc-composite-glow-${projection.uid}`
+
+  /* Global field textures. Hooks run unconditionally (a regionless frame and a
+     multi-region frame must execute the same hook count); the memos fall back to
+     empty when the frame carries no global field. */
+  const globalElectric = view.electricField
+  const globalArrows = useMemo(() => {
+    if (globalElectric === undefined) return []
+    const spacing = globalElectric.spacing
+    const columns = Math.max(1, Math.floor(view.extent.width / spacing))
+    const rows = Math.max(1, Math.floor(view.extent.height / spacing))
+    const arrowLength = spacing * 0.58
+    const arrows: { from: ScenePoint; to: ScenePoint }[] = []
+    for (let column = 0; column < columns; column += 1) {
+      for (let row = 0; row < rows; row += 1) {
+        const center = {
+          x: view.origin.x + spacing * (column + 0.5),
+          y: view.origin.y + spacing * (row + 0.5),
+        }
+        arrows.push({
+          from: {
+            x: center.x - globalElectric.direction.x * arrowLength * 0.5,
+            y: center.y - globalElectric.direction.y * arrowLength * 0.5,
+          },
+          to: {
+            x: center.x + globalElectric.direction.x * arrowLength * 0.5,
+            y: center.y + globalElectric.direction.y * arrowLength * 0.5,
+          },
+        })
+      }
+    }
+    return arrows
+  }, [globalElectric, view.extent.height, view.extent.width, view.origin.x, view.origin.y])
+
+  const globalField = view.field
+  const globalGlyphs = useMemo(() => {
+    if (globalField === undefined) return []
+    const spacing = globalField.spacing
+    const columns = Math.max(1, Math.floor(view.extent.width / spacing))
+    const rows = Math.max(1, Math.floor(view.extent.height / spacing))
+    const glyphs: ScenePoint[] = []
+    for (let column = 0; column < columns; column += 1) {
+      for (let row = 0; row < rows; row += 1) {
+        glyphs.push({
+          x: view.origin.x + spacing * (column + 0.5),
+          y: view.origin.y + spacing * (row + 0.5),
+        })
+      }
+    }
+    return glyphs
+  }, [globalField, view.extent.height, view.extent.width, view.origin.x, view.origin.y])
 
   /* Precompute, per region, the lattice of E-arrows (clipped) and the B-glyph
      grid — both laid out inside that region's rectangle only. */
@@ -676,6 +729,35 @@ function CompositeRenderer({ view, projection }: RendererProps) {
           <stop offset="100%" stopColor={particle?.sign === 'negative' ? '#1d4ed8' : '#c8453a'} />
         </radialGradient>
       </defs>
+
+      {/* Global magnetic field: ×/· glyph grid over the whole canvas, shown
+          only while its observable toggle is on. */}
+      {view.visible.magneticField === true && globalField !== undefined && globalGlyphs.length > 0 ? (
+        <g className={css.fieldGlyph} textAnchor="middle" aria-hidden="true">
+          {globalGlyphs.map((at, index) => (
+            <text key={index} x={projection.px(at)} y={projection.py(at)}>
+              {globalField.direction === 'into-page' ? '×' : '·'}
+            </text>
+          ))}
+        </g>
+      ) : null}
+
+      {/* Global electric field: arrow lattice over the whole canvas, same
+          gating. */}
+      {view.visible.electricField === true && globalArrows.length > 0 ? (
+        <g className={css.electricFieldLattice} aria-hidden="true">
+          {globalArrows.map((arrow, index) => (
+            <line
+              key={index}
+              x1={projection.px(arrow.from)}
+              y1={projection.py(arrow.from)}
+              x2={projection.px(arrow.to)}
+              y2={projection.py(arrow.to)}
+              markerEnd={`url(#${markerId('field', projection.uid)})`}
+            />
+          ))}
+        </g>
+      ) : null}
 
       {/* Regions: outline + clipped E-lattice + B-glyphs + label. The faint
           per-kind tint keeps the apparatus zones tellable apart at a glance

@@ -32,6 +32,7 @@ import {
   type SceneVisualModel,
   type VectorVisual,
 } from './scene-visual-model.ts'
+import { formatTimeAt } from './time-format.ts'
 
 export interface ElectricVisualInput {
   readonly scene: PhysicsScene
@@ -392,7 +393,7 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
 
   const charge = particle.charge?.value ?? 0
   const readout = [
-    `t = ${formatNumber(state.time.value)} s`,
+    `t = ${formatTimeAt(state.time.value, simulation.states.at(-1)?.time.value ?? 0)}`,
     ...(field === undefined ? [] : [`|E| = ${formatNumber(field.magnitude.value)} ${field.magnitude.unit}`]),
     ...(force === undefined ? [] : [`|F| = ${formatNumber(force.magnitude.value)} ${force.magnitude.unit}`]),
     ...(velocity === undefined ? [] : [`|v| = ${formatNumber(velocity.magnitude.value)} ${velocity.magnitude.unit}`]),
@@ -516,7 +517,7 @@ const electricUniformVisualAt = (input: ElectricVisualInput): SceneVisualModel =
 
   const charge = particle.charge?.value ?? 0
   const readout = [
-    `t = ${formatNumber(state.time.value)} s`,
+    `t = ${formatTimeAt(state.time.value, simulation.states.at(-1)?.time.value ?? 0)}`,
     ...(field === undefined ? [] : [`|E| = ${formatNumber(field.magnitude.value)} ${field.magnitude.unit}`]),
     ...(force === undefined ? [] : [`|F| = ${formatNumber(force.magnitude.value)} ${force.magnitude.unit}`]),
     ...(velocity === undefined ? [] : [`|v| = ${formatNumber(velocity.magnitude.value)} ${velocity.magnitude.unit}`]),
@@ -831,7 +832,7 @@ const equipotentialsOf = (
 }
 
 const electricPointChargeVisualAt = (input: ElectricVisualInput): SceneVisualModel => {
-  const { scene, observations, state } = input
+  const { scene, simulation, observations, state } = input
   const sourceParticles = sourceChargesOf(scene.particles, scene.fields)
   const probeParticle = probeParticleOf(scene.particles, scene.fields)
   if (sourceParticles.length === 0) return emptyVisualModel('electric')
@@ -994,7 +995,7 @@ const electricPointChargeVisualAt = (input: ElectricVisualInput): SceneVisualMod
   }
 
   const readout = [
-    `t = ${formatNumber(state.time.value)} s`,
+    `t = ${formatTimeAt(state.time.value, simulation.states.at(-1)?.time.value ?? 0)}`,
     ...(field === undefined ? [] : [`|E| = ${formatNumber(field.magnitude.value)} ${field.magnitude.unit}`]),
     ...(probePoint === undefined
       ? []

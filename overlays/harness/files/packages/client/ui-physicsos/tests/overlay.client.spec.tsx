@@ -472,10 +472,12 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByText('派生量由引擎计算，只读。')).toBeTruthy()
     expect(screen.getByText(/轨道半径/)).toBeTruthy()
 
-    // Timeline transport and rate.
+    // Timeline transport and rate. The clock reads in the run window's own
+    // engineering unit — a cyclotron period is ~1e-7 s, so it opens at 0.00 ns
+    // rather than a rounded "0.00s".
     expect(screen.getByRole('button', { name: '后退一步' })).toBeTruthy()
     expect(screen.getByRole('combobox', { name: '播放倍速' })).toBeTruthy()
-    expect(screen.getByText('0.00s')).toBeTruthy()
+    expect(screen.getByText(/^0\.00 (s|ms|µs|ns)$/)).toBeTruthy()
 
     // Toolbar run button is the only 运行 control; the timeline one is labelled.
     fireEvent.click(screen.getByRole('button', { name: '运行' }))
@@ -621,7 +623,7 @@ describe('PhysicsOS overlay presentation', () => {
     act(() => { frames.get(1)?.(100) })
     act(() => { frames.get(2)?.(116.67) })
 
-    expect(screen.getByText('0.02 / 10.00 s')).toBeTruthy()
+    expect(screen.getByText('0.02 s / 10.00 s')).toBeTruthy()
     expect(screen.getByText('v = 10.03 m/s')).toBeTruthy()
   })
 

@@ -53,6 +53,7 @@ import {
 } from '@physicsos/question-core'
 import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
 import { MathText } from './physics/MathText.tsx'
+import { formatTimeAt, formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import type { SceneVisualModel, VerificationCheckView } from './physics/scene-visual-model.ts'
 import {
   mechanicsSampleReadout,
@@ -649,7 +650,7 @@ function useQuestionFrames(
         view: snapshot.visual,
         engineLabel: snapshot.status === 'verified' ? 'Physics Engine · Verified' : '需要检查场景',
         ariaLabel: '磁场中的带电粒子运动',
-        timeLabel: `${snapshot.clock.time.toExponential(2)} s`,
+        timeLabel: formatTimeAt(snapshot.clock.time, snapshot.clock.total),
         trajectoryTimes: [],
       }
     }
@@ -658,7 +659,10 @@ function useQuestionFrames(
     const end = simulation.states.at(-1)?.time.value ?? start
     const at = Math.min(end, Math.max(start, time))
     const trajectoryTimes = simulation.states.map(state => state.time.value)
-    const timeLabel = `${at.toFixed(2)} / ${end.toFixed(2)} s`
+    /* One unit for both readings, chosen from the run window, so a microsecond
+       run reads `3.75 µs / 10.00 µs` rather than a rounded-to-zero `0.00 s`. */
+    const windowScale = timeScaleOf(end)
+    const timeLabel = `${formatTimeIn(at, windowScale)} / ${formatTimeIn(end, windowScale)}`
     if (region) {
       /* Bounded field: the region engine solves each phase analytically (straight
          outside, parabolic inside, stopped at a plate), so any scene time maps to
