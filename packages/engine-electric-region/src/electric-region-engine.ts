@@ -168,30 +168,54 @@ const computePhases = (model: ParallelPlateModel): {
   const { position: p0, velocity: v0, acceleration: a, xLeft, xRight, yTop, yBottom } = model
   const vx = v0.x
 
-  // Time to enter the field region (x reaches xLeft).
-  // If particle starts inside or past, enter time is 0 or negative.
+  // Time to enter the field region. Entry can be from the left (vx > 0) or from
+  // the right (vx < 0); a particle that starts inside is already in at t=0. A
+  // particle that starts outside and moves away (or is stationary) never enters:
+  // enterTime = Infinity keeps it in the "before" phase for the whole run, so
+  // the field force is never applied to it.
   let enterTime: number
-  if (vx > 0 && p0.x < xLeft) {
-    enterTime = (xLeft - p0.x) / vx
-  } else if (p0.x >= xLeft && p0.x <= xRight) {
+  let entrySide: 'left' | 'right' | 'inside'
+  if (p0.x >= xLeft && p0.x <= xRight) {
     // Already inside the field region at t=0.
     enterTime = 0
+    entrySide = 'inside'
+  } else if (vx > 0 && p0.x < xLeft) {
+    enterTime = (xLeft - p0.x) / vx
+    entrySide = 'left'
+  } else if (vx < 0 && p0.x > xRight) {
+    enterTime = (p0.x - xRight) / -vx
+    entrySide = 'right'
   } else {
-    // Particle starts past the field or moving away — no entry.
-    enterTime = p0.x >= xRight ? Number.NaN : Number.NaN
+    enterTime = Number.POSITIVE_INFINITY
+    entrySide = 'inside'
   }
 
-  // If no valid entry, the particle never enters the field.
-  if (!Number.isFinite(enterTime) || enterTime < 0) {
-    enterTime = 0 // treat as: the "before" phase is the entire simulation
-  }
+  const neverEnters = !Number.isFinite(enterTime)
 
   // Position and velocity at field entry.
-  const posAtEntry = add(p0, scale(v0, enterTime))
+  const posAtEntry = neverEnters ? p0 : add(p0, scale(v0, enterTime))
   const velAtEntry = v0 // acceleration is zero before entry
 
-  // Time inside the field (from entry to exit at x = xRight).
-  const tInside = vx !== 0 ? (xRight - xLeft) / vx : Infinity
+  // Edge the particle crosses when it leaves the region, and the x-coordinate
+  // at entry: both depend on the entry side, not on vx alone.
+  const entryX = entrySide === 'right' ? xRight : entrySide === 'left' ? xLeft : p0.x
+  const exitX = vx >= 0 ? xRight : xLeft
+
+  // Time inside the field (from entry to the far edge at the current vx). For a
+  // particle already inside, that is the remaining distance, not the full width.
+  const tInside = vx !== 0 ? (exitX - entryX) / vx : Infinity
+
+  if (neverEnters) {
+    return {
+      before: { phase: 'before', tStart: 0, position: p0, velocity: v0 },
+      inside: { phase: 'inside', tStart: Number.POSITIVE_INFINITY, position: p0, velocity: v0 },
+      after: null,
+      hit: null,
+      enterTime: Number.POSITIVE_INFINITY,
+      exitTime: null,
+      hitTime: null,
+    }
+  }
 
   // Check for plate hit during field traversal.
   // y(t_in) = y_entry + vy_entry * t_in + 0.5 * a_y * t_in²
@@ -249,7 +273,7 @@ const computePhases = (model: ParallelPlateModel): {
   if (hitPlate !== null && hitTime !== null) {
     const tIn = hitTimeInside
     const posHit = {
-      x: xLeft + vx * tIn,
+      x: entryX + vx * tIn,
       y: hitPlate === 'top' ? yTop : yBottom,
       z: 0,
     }
@@ -262,7 +286,7 @@ const computePhases = (model: ParallelPlateModel): {
   } else if (exitTime !== null) {
     const tIn = tInside
     const posExit = {
-      x: xRight,
+      x: exitX,
       y: yEntry + vyEntry * tIn + 0.5 * aY * tIn * tIn,
       z: 0,
     }
@@ -613,6 +637,7 @@ const buildVerification = (
 
   // Energy consistency: W = ΔK.
   // Check at the final state: work done by field = change in kinetic energy.
+  const phases = computePhases(model)
   if (states.length >= 2) {
     const firstState = states[0]
     const lastState = states[states.length - 1]
@@ -623,8 +648,10 @@ const buildVerification = (
       const k1 = 0.5 * model.mass * magnitude(v1) ** 2
       const dK = k1 - k0
       // Work by field: only computed over the inside-field portion.
-      const phases = computePhases(model)
       let wField = 0
+      // Kinetic energy the plate absorbs on impact (velocity zeroes after a hit),
+      // so ΔK reflects that loss on top of the field's work.
+      let plateAbsorbed = 0
       const endTime = canonicalValue(lastState.time)
       if (phases.exitTime !== null && endTime >= phases.exitTime) {
         const tInside = phases.exitTime - phases.enterTime
@@ -642,6 +669,9 @@ const buildVerification = (
           z: 0,
         }
         wField = dot(model.force, dispInside)
+        if (phases.hit !== null) {
+          plateAbsorbed = 0.5 * model.mass * magnitude(phases.hit.velocity) ** 2
+        }
       } else if (endTime > phases.enterTime) {
         // Still inside field.
         const tIn = endTime - phases.enterTime
@@ -653,18 +683,25 @@ const buildVerification = (
         wField = dot(model.force, dispInside)
       }
       checks.push(
-        check('energy_consistency', 'conservation', Math.abs(dK - wField) < 1e-15, {
+        check('energy_consistency', 'conservation', Math.abs(dK + plateAbsorbed - wField) < 1e-15, {
           message: 'W = ΔK verified.',
-          details: { dK, wField, diff: Math.abs(dK - wField) },
+          details: { dK, wField, plateAbsorbed, diff: Math.abs(dK + plateAbsorbed - wField) },
         }),
       )
     }
   }
 
-  // Event consistency: at least one event should be produced for a typical trajectory.
+  // Event consistency: a trajectory that crosses the region boundary within the
+  // simulated window must produce a transition event. A trajectory that never
+  // enters the region (or whose crossing lies outside the window, including an
+  // empty window with no sampled states) produces none legitimately.
+  const finalState = states.at(-1)
+  const crossedInWindow = finalState !== undefined
+    && Number.isFinite(phases.enterTime)
+    && phases.enterTime <= canonicalValue(finalState.time)
   checks.push(
-    check('events_present', 'trajectory', events.length > 0, {
-      message: 'A bounded-field trajectory should produce region-transition events.',
+    check('events_present', 'trajectory', !crossedInWindow || events.length > 0, {
+      message: 'A bounded-field trajectory that crosses the region produces region-transition events.',
     }),
   )
 

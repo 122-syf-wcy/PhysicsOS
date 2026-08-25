@@ -94,8 +94,8 @@ function computeDerivedAtTime(model: MechanicsModel, t: number): DerivedQuantity
   derived.push({
     key: 'velocity_magnitude',
     targetId: model.bodyId,
-    value: quantity(magnitude(model.velocity), 'm/s', 'velocity'),
-    formula: { expression: '|v|' },
+    value: quantity(magnitude(add(model.velocity, scale(model.acceleration, t))), 'm/s', 'velocity'),
+    formula: { expression: '|v(t)| = |v0 + at|' },
     assumptions,
   })
 

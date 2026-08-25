@@ -210,3 +210,96 @@ describe('ElectricRegionEngine', () => {
     expect(types).not.toContain('ExitField')
   })
 })
+
+/* ------------------------------------------------ boundary conditions -- */
+
+/* A particle that never crosses the region must stay in the "before" phase for
+   the whole run: no field force, no transition events, and a passing
+   verification. Regression for the bug where such particles were modelled as
+   inside the field from t=0. */
+describe('ElectricRegionEngine boundary conditions', () => {
+  it('never applies the field to a particle starting right of the region moving away', () => {
+    const scene = createParallelPlateScene({
+      charge: 1.6e-19,
+      mass: 9.11e-31,
+      position: vec3(0.1, 0, 0), // right of xRight = 0.06
+      velocity: vec3(3e7, 0, 0), // moving further right
+      electricFieldStrength: 10000,
+      electricFieldDirection: 'up',
+      plateSeparation: 0.04,
+      plateLength: 0.12,
+      duration: 8e-9,
+    })
+    const result = electricRegionEngine.simulate(scene, simRequest(scene))
+    expect(result.events).toHaveLength(0)
+    expect(result.verification.status).toBe('passed')
+    for (const state of result.states) {
+      const accel = toCanonicalVector(state.objects[0]!.acceleration!).vectorSI
+      expect(accel.x).toBe(0)
+      expect(accel.y).toBe(0)
+    }
+  })
+
+  it('never applies the field to a particle starting left of the region moving away', () => {
+    const scene = createParallelPlateScene({
+      charge: 1.6e-19,
+      mass: 9.11e-31,
+      position: vec3(-0.1, 0, 0), // left of xLeft = -0.06
+      velocity: vec3(-3e7, 0, 0), // moving further left
+      electricFieldStrength: 10000,
+      electricFieldDirection: 'up',
+      plateSeparation: 0.04,
+      plateLength: 0.12,
+      duration: 8e-9,
+    })
+    const result = electricRegionEngine.simulate(scene, simRequest(scene))
+    expect(result.events).toHaveLength(0)
+    expect(result.verification.status).toBe('passed')
+    for (const state of result.states) {
+      const accel = toCanonicalVector(state.objects[0]!.acceleration!).vectorSI
+      expect(accel.x).toBe(0)
+      expect(accel.y).toBe(0)
+    }
+  })
+
+  it('applies the field to a particle entering from the right', () => {
+    const scene = createParallelPlateScene({
+      charge: 1.6e-19,
+      mass: 9.11e-31,
+      position: vec3(0.1, 0, 0), // right of xRight = 0.06
+      velocity: vec3(-3e7, 0, 0), // moving left, so it crosses xRight into the region
+      electricFieldStrength: 10000,
+      electricFieldDirection: 'up',
+      plateSeparation: 0.04,
+      plateLength: 0.12,
+      duration: 8e-9,
+    })
+    const result = electricRegionEngine.simulate(scene, simRequest(scene))
+    expect(result.events.map((e) => e.type)).toContain('EnterField')
+    expect(result.verification.status).toBe('passed')
+    const accelStates = result.states
+      .map((state) => toCanonicalVector(state.objects[0]!.acceleration!).vectorSI)
+      .filter((a) => Math.abs(a.y) > 0)
+    expect(accelStates.length).toBeGreaterThan(0)
+  })
+
+  it('counts only the remaining distance when the particle starts inside the region', () => {
+    const scene = createParallelPlateScene({
+      charge: 1.6e-19,
+      mass: 9.11e-31,
+      position: vec3(0, 0, 0), // inside [xLeft, xRight]
+      velocity: vec3(3e7, 0, 0),
+      electricFieldStrength: 0, // no deflection, pure x motion
+      electricFieldDirection: 'up',
+      plateSeparation: 0.04,
+      plateLength: 0.12, // xLeft = -0.06, xRight = 0.06
+      duration: 8e-9,
+    })
+    // x(t) = 3e7 * t; the region ends at 0.06, so the particle exits at t = 2e-9.
+    const justAfterExit = electricRegionEngine.stateAtSeconds(scene, 2.5e-9)
+    const pos = toCanonicalVector(justAfterExit.objects[0]!.position!).vectorSI
+    expect(pos.x).toBeCloseTo(3e7 * 2.5e-9, 6)
+    const accel = toCanonicalVector(justAfterExit.objects[0]!.acceleration!).vectorSI
+    expect(accel.y).toBe(0)
+  })
+})

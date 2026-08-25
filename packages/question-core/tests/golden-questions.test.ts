@@ -4,6 +4,7 @@ import {
   processQuestion,
   DeterministicMagneticQuestionParser,
   GOLDEN_QUESTIONS,
+  type QuestionDocument,
 } from '../src/index.ts'
 
 describe('Golden Questions', () => {
@@ -223,5 +224,32 @@ describe('Deterministic parser', () => {
     const doc = createGoldenQuestionDocument(def)
     const candidate = DeterministicMagneticQuestionParser.parse(doc)
     expect(candidate.ir.chargeSign).toBe('negative')
+  })
+})
+
+describe('Unmatched question text', () => {
+  const runtimeDoc = (text: string): QuestionDocument => ({
+    id: 'q-unmatched' as QuestionDocument['id'],
+    content: { source: 'text', rawText: text, status: 'EXTRACTED' },
+    metadata: {},
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  })
+
+  it('returns PARSE_FAILED instead of a magnetic IR for optics text', () => {
+    const result = processQuestion(runtimeDoc('凸透镜的焦距是 20 cm，物距 30 cm，求像距。'))
+    expect(result.workflowState).toBe('PARSE_FAILED')
+    expect(result.ir).toBeNull()
+  })
+
+  it('returns PARSE_FAILED instead of a magnetic IR for thermodynamics text', () => {
+    const result = processQuestion(runtimeDoc('一定质量理想气体从状态 A 到状态 B，温度从 300 K 升到 400 K，求内能变化。'))
+    expect(result.workflowState).toBe('PARSE_FAILED')
+    expect(result.ir).toBeNull()
+  })
+
+  it('returns PARSE_FAILED for unrecognised text', () => {
+    const result = processQuestion(runtimeDoc('今天天气不错，讲一个关于光的故事。'))
+    expect(result.workflowState).toBe('PARSE_FAILED')
   })
 })

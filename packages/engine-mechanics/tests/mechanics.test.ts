@@ -294,3 +294,38 @@ describe('Edge Cases', () => {
     }
   })
 })
+
+describe('Derived-quantity regressions', () => {
+  const engine = new MechanicsEngine()
+
+  it('velocity_magnitude tracks the state velocity, not the initial speed', () => {
+    // v0 = 10, a = 2 → |v(t)| = 20 at t = 5.
+    const scene = createScene({
+      model: 'uniformly_accelerated_motion',
+      mass: 1,
+      position: vec3(0, 0, 0),
+      velocity: vec3(10, 0, 0),
+      acceleration: vec3(2, 0, 0),
+    })
+    const state = engine.stateAt(scene, { value: 5, unit: 's', dimension: 'time' as const })
+    const speed = state.derived.find((d) => d.key === 'velocity_magnitude')
+    expect(speed).toBeDefined()
+    expect((speed!.value as { value: number }).value).toBeCloseTo(20, 6)
+  })
+
+  it('projectile max_height is the launch height when launched downward', () => {
+    // y0 = 20, vy0 = -5 < 0 → the trajectory descends immediately, apex = y0.
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(10, -5, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
+    const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+    const maxH = result.derivedQuantities.find((d) => d.key === 'max_height')
+    expect(maxH).toBeDefined()
+    expect((maxH!.value as { value: number }).value).toBeCloseTo(20, 6)
+  })
+})

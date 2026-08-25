@@ -630,22 +630,45 @@ const buildVerification = (
   )
 
   /* Cyclotron period depends only on q/m and B, never on speed — the fact that
-     makes a cyclotron work at a fixed driving frequency. */
+     makes a cyclotron work at a fixed driving frequency. The analytic period
+     function has no velocity parameter, so "comparing two periods" would be a
+     value compared with itself; instead the property is exercised on the real
+     trajectory: after exactly one period the gyration phase closes (v(T) = v0),
+     at two very different launch speeds. */
   const firstMagnetic = phases.find((phase) => magnitude(phase.sample.magneticFluxDensity) > 0)
   if (firstMagnetic !== undefined) {
     const period = cyclotronPeriod(model.charge, model.mass, firstMagnetic.sample)
-    const doubled = cyclotronPeriod(model.charge, model.mass, firstMagnetic.sample)
-    checks.push(
-      check(
-        'cyclotron_period_independent_of_speed',
-        'constraint',
-        period !== undefined && doubled !== undefined && Math.abs(period - doubled) < tol.absolute,
-        {
-          message: 'The cyclotron period is set by q/m and B alone, independent of speed.',
-          details: { period },
-        },
-      ),
-    )
+    if (period !== undefined) {
+      const speedBase = Math.max(1e-6, magnitude(model.velocity))
+      const launchSpeeds = [speedBase, speedBase * 3]
+      const direction = magnitude(model.velocity) > 0
+        ? scale(model.velocity, 1 / magnitude(model.velocity))
+        : vec3(1, 0, 0)
+      const phaseClosesAtBothSpeeds = launchSpeeds.every((speed) => {
+        const v0 = scale(direction, speed)
+        const after = compositeMotionAt(
+          model.charge,
+          model.mass,
+          model.position,
+          v0,
+          firstMagnetic.sample,
+          period,
+        )
+        const residual = magnitude(subtract(after.velocity, v0))
+        return residual < tol.absolute + 1e-9 * speed
+      })
+      checks.push(
+        check(
+          'cyclotron_period_independent_of_speed',
+          'constraint',
+          phaseClosesAtBothSpeeds,
+          {
+            message: 'The cyclotron period is set by q/m and B alone, independent of speed.',
+            details: { period },
+          },
+        ),
+      )
+    }
   }
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)

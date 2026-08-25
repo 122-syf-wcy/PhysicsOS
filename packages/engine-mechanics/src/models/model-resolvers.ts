@@ -124,7 +124,7 @@ export function resolveProjectileModel(scene: PhysicsScene): MechanicsModel {
   if (!Number.isFinite(flightTime)) flightTime = 0
 
   const maxHeight = g > 0
-    ? (y0 > 0 ? y0 + (vy0 * vy0) / (2 * g) : (vy0 > 0 ? (vy0 * vy0) / (2 * g) : 0))
+    ? (y0 > 0 ? (vy0 > 0 ? y0 + (vy0 * vy0) / (2 * g) : y0) : (vy0 > 0 ? (vy0 * vy0) / (2 * g) : 0))
     : 0
   const range = vx * flightTime
 

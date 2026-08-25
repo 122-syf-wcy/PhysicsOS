@@ -720,7 +720,9 @@ describe('PhysicsOS overlay presentation', () => {
     const input = screen.getByRole('textbox', { name: '题目文本' })
     fireEvent.change(input, { target: { value: '这是一个没有物理条件的题目' } })
     fireEvent.click(screen.getByRole('button', { name: '解析这道题' }))
-    expect(screen.getAllByText('需要补充条件').length).toBeGreaterThanOrEqual(2)
+    /* Text naming no physics subject must surface an honest parse failure —
+       not a magnetic IR fabricated by a fallback parser. */
+    expect(screen.getAllByText('无法识别题目').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByRole('button', { name: '在物理世界中打开' }).getAttribute('disabled')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '重置' }))
     expect(screen.getByText('已完成求解')).toBeTruthy()

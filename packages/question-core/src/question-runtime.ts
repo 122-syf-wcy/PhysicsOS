@@ -112,7 +112,7 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
         ? DeterministicMagneticQuestionParser.parse(document)
         : isMechanics
           ? DeterministicMechanicsQuestionParser.parse(document)
-          : DeterministicMagneticQuestionParser.parse(document)
+          : null
 
   if (!parseResult || !parseResult.ir) {
     return {
