@@ -46,6 +46,7 @@
   "license": "MIT",
   "dependencies": {
     "@physicsos/engine-magnetic": "link:../../../../../packages/engine-magnetic",
+    "@physicsos/engine-circuit": "link:../../../../../packages/engine-circuit",
     "@physicsos/engine-electric": "link:../../../../../packages/engine-electric",
     "@physicsos/engine-electric-region": "link:../../../../../packages/engine-electric-region",
     "@physicsos/engine-composite": "link:../../../../../packages/engine-composite",
@@ -53,6 +54,7 @@
     "@physicsos/physics-composite-core": "link:../../../../../packages/physics-composite-core",
     "@physicsos/physics-observation": "link:../../../../../packages/physics-observation",
     "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",
+    "@physicsos/physics-units": "link:../../../../../packages/physics-units",
     "@physicsos/physics-verifier": "link:../../../../../packages/physics-verifier",
     "@physicsos/physics-core": "link:../../../../../packages/physics-core",
     "@physicsos/physics-electric-core": "link:../../../../../packages/physics-electric-core",

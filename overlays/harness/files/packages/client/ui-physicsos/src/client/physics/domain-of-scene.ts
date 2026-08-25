@@ -1,9 +1,13 @@
-import { isCompositeFieldScene, type PhysicsScene } from '@physicsos/physics-scene'
+import { isCircuitScene, isCompositeFieldScene, type PhysicsScene } from '@physicsos/physics-scene'
 
-export type SupportedSceneDomain = 'magnetic' | 'mechanics' | 'electric' | 'composite'
+export type SupportedSceneDomain = 'magnetic' | 'mechanics' | 'electric' | 'circuit' | 'composite'
 export type SceneDomain = SupportedSceneDomain | 'unsupported'
 
 export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
+  /* A circuit scene carries no motion objects at all, so it must be classified
+     before the body/particle branches (which would all fall through to
+     'unsupported' — a blank surface rather than an error). */
+  if (isCircuitScene(scene)) return 'circuit'
   const pointChargeFields = scene.fields.filter(field => field.type === 'point_charge')
   const electricFields = scene.fields.filter(field => field.type === 'uniform_electric')
   const magneticFields = scene.fields.filter(field => field.type === 'uniform_magnetic')

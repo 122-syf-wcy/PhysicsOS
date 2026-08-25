@@ -44,13 +44,20 @@ const TABS: readonly { id: TabId; label: PhysicsosKey }[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics' },
   { id: 'electric', label: 'lab.template.group.electric' },
   { id: 'magnetic', label: 'lab.template.group.magnetic' },
+  { id: 'circuit', label: 'lab.template.group.circuit' },
   { id: 'composite', label: 'lab.template.group.composite' },
 ]
 
 const RECENT_STORAGE_KEY = 'physicsos.recent-experiments'
 const RECENT_LIMIT = 3
 
-const DOMAIN_IDS: readonly ExperimentDomain[] = ['mechanics', 'electric', 'magnetic', 'composite']
+const DOMAIN_IDS: readonly ExperimentDomain[] = [
+  'mechanics',
+  'electric',
+  'magnetic',
+  'circuit',
+  'composite',
+]
 
 /** Narrow a stored domain string to a subject-coloured domain, if it is one. */
 const asDomain = (value: string): ExperimentDomain | undefined =>

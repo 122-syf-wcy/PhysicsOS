@@ -21,7 +21,7 @@ export interface ScenePoint {
 }
 
 /** Physics domain, selecting a renderer from the registry. */
-export type PhysicsDomainId = 'magnetic' | 'mechanics' | 'electric' | 'composite'
+export type PhysicsDomainId = 'magnetic' | 'mechanics' | 'electric' | 'circuit' | 'composite'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -73,6 +73,10 @@ export type ObservableKey =
   | 'gravityForce'
   | 'magneticField'
   | 'regions'
+  // circuit
+  | 'current'
+  | 'voltage'
+  | 'power'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -336,6 +340,63 @@ export interface CompositeRegionVisual {
   magneticField?: FieldVisual
 }
 
+/* ------------------------------------------------------------------ circuit -- */
+
+/** Kind of schematic symbol to draw; mirrors the scene's DC component types. */
+export type CircuitSymbolKind =
+  | 'resistor'
+  | 'voltage_source'
+  | 'switch'
+  | 'ammeter'
+  | 'voltmeter'
+  | 'variable_resistor'
+
+/**
+ * One schematic symbol on the abstract circuit grid.
+ *
+ * `at` is the symbol centre; `rotation` orients the local a→b (negative→positive
+ * for a source) axis counter-clockwise from +x, in multiples of 90°. Every text
+ * is formatted UPSTREAM by the runtime bridge — the renderer places strings and
+ * never computes or formats a physical value.
+ */
+export interface CircuitComponentVisual {
+  id: string
+  kind: CircuitSymbolKind
+  at: ScenePoint
+  /** Rotation in degrees counter-clockwise; multiples of 90. */
+  rotation: number
+  /** Component name, e.g. `R₁`, `E`, `S`. */
+  label: string
+  /** Nameplate rating, e.g. `10 Ω` or `E=6 V · r=0.5 Ω`. */
+  value?: string
+  /** Live meter face, e.g. `0.20 A`. Ammeter gated by `current`, voltmeter by `voltage`. */
+  reading?: string
+  /** Voltage across the component, gated by the `voltage` observable. */
+  voltageText?: string
+  /** Power on the component, gated by the `power` observable. */
+  powerText?: string
+  /** Formatted current through the component, gated by the `current` observable. */
+  currentText?: string
+  /** Current direction along the local axis: `forward` = a→b. */
+  currentDirection?: 'forward' | 'reverse'
+  /** Switch only: whether the lever is closed. */
+  closed?: boolean
+  /** Variable resistor only: slider position 0..1 at the current frame. */
+  sliderPosition?: number
+}
+
+/** One wire polyline between two terminals, waypoints included. */
+export interface CircuitWireVisual {
+  id: string
+  points: readonly ScenePoint[]
+}
+
+/** Junction dot where three or more conductors meet. */
+export interface CircuitJunctionVisual {
+  id: string
+  at: ScenePoint
+}
+
 /** Straight construction line (orbit radius, guides). */
 export interface GuideVisual {
   id: string
@@ -400,6 +461,12 @@ export interface SceneVisualModel {
   boundedField?: BoundedFieldVisual
   /** Composite-field apparatus regions (selector / drift / deflection). */
   compositeRegions?: readonly CompositeRegionVisual[]
+  /** Circuit schematic symbols (circuit domain). */
+  circuitComponents?: readonly CircuitComponentVisual[]
+  /** Circuit wires connecting the symbols. */
+  circuitWires?: readonly CircuitWireVisual[]
+  /** Circuit junction dots. */
+  circuitJunctions?: readonly CircuitJunctionVisual[]
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

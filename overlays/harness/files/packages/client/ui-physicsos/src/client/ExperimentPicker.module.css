@@ -112,6 +112,11 @@
   --subject-tint: var(--physics-subject-magnetic-tint);
 }
 
+.subject-circuit {
+  --subject: var(--physics-subject-circuit);
+  --subject-tint: var(--physics-subject-circuit-tint);
+}
+
 .subject-composite {
   --subject: var(--physics-subject-composite);
   --subject-tint: var(--physics-subject-composite-tint);

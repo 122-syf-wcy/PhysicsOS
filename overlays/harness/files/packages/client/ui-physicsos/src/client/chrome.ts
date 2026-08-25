@@ -83,6 +83,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-electric-tint: #e8effc;
   --physics-subject-magnetic: #7c3aed;
   --physics-subject-magnetic-tint: #f1ebfd;
+  --physics-subject-circuit: #0d9488;
+  --physics-subject-circuit-tint: #e2f4f1;
   --physics-subject-composite: #ea580c;
   --physics-subject-composite-tint: #fdeee3;
 

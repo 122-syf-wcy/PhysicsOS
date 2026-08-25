@@ -264,6 +264,50 @@ export const IconCompositeField = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* ---------------------------------------------------------------- circuits -- */
+
+/** Series circuit: one loop with a battery (long/short plates) and a resistor. */
+export const IconCircuitSeries = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M9 5H4v14h6.4M15 5h5v14h-5.6" />
+    <rect x="9" y="3.4" width="6" height="3.2" rx="0.5" />
+    <path d="M10.4 16.6v4.8" />
+    <path d="M13.4 17.8v2.4" strokeWidth="2.6" strokeLinecap="butt" />
+  </Glyph>
+)
+
+/** Parallel circuit: two resistor branches between shared rails. */
+export const IconCircuitParallel = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3.5 6h17M3.5 18h17" />
+    <path d="M8 6v2.4M8 15.6V18M16 6v2.4M16 15.6V18" />
+    <rect x="6.5" y="8.4" width="3" height="7.2" rx="0.5" />
+    <rect x="14.5" y="8.4" width="3" height="7.2" rx="0.5" />
+  </Glyph>
+)
+
+/** Rheostat: a resistor crossed by the sliding-contact arrow. */
+export const IconRheostat = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M2.5 14.5h4M17.5 14.5h4" />
+    <rect x="6.5" y="12.3" width="11" height="4.4" rx="0.5" />
+    <path d="M6 18.5 17.2 7.2" />
+    <path d="M13.6 6.6h4.2v4.2" />
+  </Glyph>
+)
+
+/** EMF measurement: battery plates above a needle meter. */
+export const IconEmfMeasure = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 6.5h5.4M14.6 6.5h5.4" />
+    <path d="M9.4 4.2v4.6" />
+    <path d="M14.6 5.2v2.6" strokeWidth="2.6" strokeLinecap="butt" />
+    <path d="M4 6.5v8h3.6M20 6.5v8h-3.6" strokeOpacity="0.55" />
+    <circle cx="12" cy="15.4" r="4.4" />
+    <path d="M12 17.2l2.2-3.4" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

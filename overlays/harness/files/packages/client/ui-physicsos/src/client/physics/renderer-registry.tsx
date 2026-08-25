@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react'
 import type { ReactElement } from 'react'
+import { CircuitRenderer } from './circuit-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
 import {
   Angle,
@@ -945,6 +946,7 @@ export const RENDERERS = {
   magnetic: MagneticRenderer,
   mechanics: MechanicsRenderer,
   electric: ElectricRenderer,
+  circuit: CircuitRenderer,
   composite: CompositeRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 

@@ -39,6 +39,13 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetFrictionCoefficient',
   'SetAppliedForce',
   'SetGroundLevel',
+  /* Circuit facts: netlist values and apparatus states alike change what is
+     physically true of the circuit a question stated. */
+  'SetComponentResistance',
+  'SetSourceVoltage',
+  'SetSourceInternalResistance',
+  'SetSwitchState',
+  'SetSliderPosition',
 ])
 
 export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.has(type)

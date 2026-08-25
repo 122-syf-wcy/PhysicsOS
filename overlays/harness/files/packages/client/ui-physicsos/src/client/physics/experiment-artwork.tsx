@@ -360,6 +360,123 @@ const CyclotronArt = () => (
   </>
 )
 
+/* ------------------------------------------------------------------- circuit -- */
+
+interface BatteryProps {
+  /** Centre of the plate pair on a horizontal bottom wire. */
+  readonly x: number
+  readonly y: number
+}
+
+/** Battery on a horizontal wire: long thin positive plate right, short thick −. */
+const BatteryPlates = ({ x, y }: BatteryProps) => (
+  <g stroke="currentColor" strokeLinecap="round">
+    <line x1={x + 3} y1={y - 8} x2={x + 3} y2={y + 8} strokeWidth={2} />
+    <line x1={x - 3} y1={y - 4.4} x2={x - 3} y2={y + 4.4} strokeWidth={3.6} strokeLinecap="butt" />
+  </g>
+)
+
+interface MeterProps {
+  readonly x: number
+  readonly y: number
+}
+
+/** Round meter face with a needle; the letter stays off artwork (no text rule). */
+const MeterFace = ({ x, y }: MeterProps) => (
+  <>
+    <circle cx={x} cy={y} r={7} fill="none" stroke="currentColor" strokeWidth={2} />
+    <Stroke d={`M${x} ${y + 3} L${x + 3.4} ${y - 3.4}`} width={1.5} opacity={0.75} />
+  </>
+)
+
+interface BoxProps {
+  readonly x: number
+  readonly y: number
+  readonly w?: number
+  readonly h?: number
+}
+
+/** Resistor body centred at (x, y). */
+const ResistorBox = ({ x, y, w = 20, h = 9 }: BoxProps) => (
+  <rect
+    x={x - w / 2}
+    y={y - h / 2}
+    width={w}
+    height={h}
+    rx={1}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+  />
+)
+
+const SeriesCircuitArt = () => (
+  <>
+    <Stroke d="M22 14 H34 M54 14 H66 M86 14 H98 V54 H64" width={2} opacity={0.85} />
+    <ResistorBox x={44} y={14} />
+    <ResistorBox x={76} y={14} />
+    <BatteryPlates x={61} y={54} />
+    <Stroke d="M58 54 H22 V41 M22 27 V14" width={2} opacity={0.85} />
+    <MeterFace x={22} y={34} />
+  </>
+)
+
+const ParallelCircuitArt = () => (
+  <>
+    <Stroke d="M26 18 H94 V50 H26 M26 18 V29 M26 39 V50" width={2} opacity={0.85} />
+    <Stroke d="M18 31 H34" width={2} />
+    <line x1={22} y1={37} x2={30} y2={37} stroke="currentColor" strokeWidth={3.6} />
+    <Stroke d="M46 18 V25 M46 43 V50 M74 18 V25 M74 43 V50" width={2} opacity={0.85} />
+    <ResistorBox x={46} y={34} w={9} h={18} />
+    <ResistorBox x={74} y={34} w={9} h={18} />
+    <Dot x={46} y={18} r={2} />
+    <Dot x={74} y={18} r={2} />
+    <Dot x={46} y={50} r={2} />
+    <Dot x={74} y={50} r={2} />
+  </>
+)
+
+const MixedCircuitArt = () => (
+  <>
+    <Stroke d="M14 22 H26 M44 22 H56" width={2} opacity={0.85} />
+    <ResistorBox x={35} y={22} w={18} />
+    <Stroke d="M56 22 V12 H64 M82 12 H94 V22 M56 22 V32 H64 M82 32 H94 V22" width={2} opacity={0.85} />
+    <ResistorBox x={73} y={12} w={18} />
+    <ResistorBox x={73} y={32} w={18} />
+    <Dot x={56} y={22} r={2} />
+    <Dot x={94} y={22} r={2} />
+    <Stroke d="M94 22 V54 H64" width={2} opacity={0.85} />
+    <BatteryPlates x={61} y={54} />
+    <Stroke d="M58 54 H14 V22" width={2} opacity={0.85} />
+  </>
+)
+
+const RheostatCircuitArt = () => (
+  <>
+    <Stroke d="M22 14 H38 M64 14 H98 V54 H64" width={2} opacity={0.85} />
+    <ResistorBox x={51} y={14} w={26} />
+    <Arrow x1={42} y1={24} x2={59} y2={5.5} width={1.7} head={4.2} />
+    <BatteryPlates x={61} y={54} />
+    <Stroke d="M58 54 H22 V41 M22 27 V14" width={2} opacity={0.85} />
+    <MeterFace x={22} y={34} />
+  </>
+)
+
+const EmfMeasurementArt = () => (
+  <>
+    <Stroke d="M98 54 H64" width={2} opacity={0.85} />
+    <BatteryPlates x={61} y={54} />
+    <Stroke d="M58 54 H22 V14 H36 M60 14 H98 V27 M98 41 V54" width={2} opacity={0.85} />
+    <ResistorBox x={48} y={14} w={24} />
+    <Arrow x1={40} y1={24} x2={55} y2={5.5} width={1.7} head={4.2} />
+    <MeterFace x={98} y={34} />
+    <MeterFace x={61} y={36} />
+    <Stroke d="M54 36 H47 V54 M68 36 H75 V54" width={1.5} opacity={0.6} />
+    <Dot x={47} y={54} r={2} />
+    <Dot x={75} y={54} r={2} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -403,6 +520,11 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'composite-ebg': CompositeEBGArt,
   'multi-region-field': MultiRegionArt,
   cyclotron: CyclotronArt,
+  'series-circuit': SeriesCircuitArt,
+  'parallel-circuit': ParallelCircuitArt,
+  'mixed-circuit': MixedCircuitArt,
+  'rheostat-circuit': RheostatCircuitArt,
+  'emf-measurement': EmfMeasurementArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -424,6 +546,11 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['composite-eb', 'composite-eb'],
   ['composite-ebg', 'composite-ebg'],
   ['multi-region-field', 'composite-multi-region'],
+  ['series-circuit', 'circuit-series'],
+  ['parallel-circuit', 'circuit-parallel'],
+  ['mixed-circuit', 'circuit-mixed'],
+  ['rheostat-circuit', 'circuit-rheostat'],
+  ['emf-measurement', 'circuit-emf'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

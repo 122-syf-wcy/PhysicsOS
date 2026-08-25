@@ -19,6 +19,7 @@ import { PhysicsWorkspace } from './PhysicsWorkspace.tsx'
 import { QuestionWorkspace, type SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
 import type { LearningRecordState } from './learning-record-store.ts'
 import { domainOfScene, type SupportedSceneDomain } from './physics/domain-of-scene.ts'
+import { createCircuitWorkspaceRuntime } from './physics/circuit-workspace-runtime.ts'
 import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-runtime.ts'
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
@@ -184,6 +185,8 @@ const buildRuntime = (
       return scene === undefined ? null : createMechanicsWorkspaceRuntime(scene)
     case 'electric':
       return scene === undefined ? null : createElectricWorkspaceRuntime(scene)
+    case 'circuit':
+      return scene === undefined ? null : createCircuitWorkspaceRuntime(scene)
     case 'composite':
       return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
     case 'magnetic':

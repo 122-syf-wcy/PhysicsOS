@@ -18,12 +18,17 @@
 
 import {
   createCompositeFieldScene,
+  createEmfMeasurementScene,
   createMassSpectrometerScene,
   createMechanicsScene,
+  createMixedCircuitScene,
   createMultiRegionFieldScene,
   createMagneticScene,
+  createParallelCircuitScene,
   createParallelPlateScene,
   createPointChargeScene,
+  createRheostatCircuitScene,
+  createSeriesCircuitScene,
   createVelocitySelectorScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
@@ -32,7 +37,10 @@ import type { ReactElement } from 'react'
 import type { PhysicsosKey } from '../locales.ts'
 import type { PhysicsIconProps } from '../icons/physics-icons.tsx'
 import {
+  IconCircuitParallel,
+  IconCircuitSeries,
   IconCompositeField,
+  IconEmfMeasure,
   IconInclinedPlane,
   IconKinematics,
   IconMagneticCircle,
@@ -42,13 +50,14 @@ import {
   IconPointCharge,
   IconProjectileHorizontal,
   IconProjectileOblique,
+  IconRheostat,
   IconUniformElectric,
   IconVelocity,
   IconVelocitySelector,
 } from '../icons/physics-icons.tsx'
 
 /** Domains a template belongs to, mirrored from the Lab runtime dispatch. */
-export type ExperimentDomain = 'mechanics' | 'electric' | 'magnetic' | 'composite'
+export type ExperimentDomain = 'mechanics' | 'electric' | 'magnetic' | 'circuit' | 'composite'
 
 /** A pickable experiment. */
 export interface ExperimentTemplate {
@@ -314,6 +323,86 @@ const magneticTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* ------------------------------------------------------------------- circuit -- */
+
+const circuitTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'series-circuit',
+    domain: 'circuit',
+    label: 'lab.template.seriesCircuit',
+    hint: 'lab.template.seriesCircuit.hint',
+    icon: IconCircuitSeries,
+    tags: ['电路', '串联'],
+    createScene: (title) => {
+      const scene = createSeriesCircuitScene({
+        sceneId: stampId('circuit-series'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'parallel-circuit',
+    domain: 'circuit',
+    label: 'lab.template.parallelCircuit',
+    hint: 'lab.template.parallelCircuit.hint',
+    icon: IconCircuitParallel,
+    tags: ['电路', '并联'],
+    createScene: (title) => {
+      const scene = createParallelCircuitScene({
+        sceneId: stampId('circuit-parallel'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'mixed-circuit',
+    domain: 'circuit',
+    label: 'lab.template.mixedCircuit',
+    hint: 'lab.template.mixedCircuit.hint',
+    icon: IconCircuitParallel,
+    tags: ['电路', '混联'],
+    createScene: (title) => {
+      const scene = createMixedCircuitScene({
+        sceneId: stampId('circuit-mixed'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'rheostat-circuit',
+    domain: 'circuit',
+    label: 'lab.template.rheostat',
+    hint: 'lab.template.rheostat.hint',
+    icon: IconRheostat,
+    tags: ['电路', '动态电路'],
+    createScene: (title) => {
+      const scene = createRheostatCircuitScene({
+        sceneId: stampId('circuit-rheostat'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'emf-measurement',
+    domain: 'circuit',
+    label: 'lab.template.emfMeasurement',
+    hint: 'lab.template.emfMeasurement.hint',
+    icon: IconEmfMeasure,
+    tags: ['电路', '电动势', '内阻'],
+    createScene: (title) => {
+      const scene = createEmfMeasurementScene({
+        sceneId: stampId('circuit-emf'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+]
+
 /* ----------------------------------------------------------------- composite -- */
 
 const compositeTemplates: readonly ExperimentTemplate[] = [
@@ -469,6 +558,7 @@ export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics', templates: mechanicsTemplates },
   { id: 'electric', label: 'lab.template.group.electric', templates: electricTemplates },
   { id: 'magnetic', label: 'lab.template.group.magnetic', templates: magneticTemplates },
+  { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },
   { id: 'composite', label: 'lab.template.group.composite', templates: compositeTemplates },
 ]
 

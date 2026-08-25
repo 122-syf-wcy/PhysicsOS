@@ -194,3 +194,104 @@
   fill: rgba(99, 102, 241, 0.055);
   opacity: 0.65;
 }
+
+/* ---------- circuit schematic ---------- */
+
+/* Conductors and symbol outlines share one ink so the schematic reads like a
+   printed diagram; state (readings, current arrows) carries the colour. */
+.circuitWire {
+  stroke: #3f4652;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.circuitJunction {
+  fill: #3f4652;
+}
+
+.circuitSymbol {
+  stroke: #3f4652;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* Battery negative plate: shorter AND thicker, per the GB symbol. */
+.circuitSymbolThick {
+  stroke: #3f4652;
+  stroke-width: 3.4;
+  stroke-linecap: butt;
+  fill: none;
+}
+
+.circuitSymbolFill {
+  fill: #3f4652;
+  stroke: none;
+}
+
+.circuitMeterFace {
+  fill: #fbfdff;
+}
+
+.circuitMeterLetter {
+  fill: #3f4652;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 600;
+  user-select: none;
+}
+
+.circuitName {
+  fill: var(--dsw-alias-label-primary, #2c313a);
+  font-size: 11.5px;
+  font-style: italic;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+.circuitAnnotation {
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 10.5px;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+/* Live meter reading: measurement colour, so a changing number is findable. */
+.circuitReading {
+  fill: var(--physics-measurement);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+/* Current direction arrow and its I = … annotation share the velocity token:
+   current is the circuit's "motion". */
+.circuitCurrent {
+  stroke: var(--physics-velocity);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.circuitCurrentHead {
+  fill: var(--physics-velocity);
+  stroke: none;
+}
+
+.circuitCurrentText {
+  fill: var(--physics-velocity);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
