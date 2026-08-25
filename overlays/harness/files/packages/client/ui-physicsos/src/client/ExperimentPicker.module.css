@@ -36,7 +36,7 @@
   background: var(--physics-glass-fill-strong);
   box-shadow: var(--physics-glass-shadow);
   backdrop-filter: blur(18px) saturate(120%);
-  animation: physics-panel-in 500ms var(--physics-ease-emphasized) both;
+  animation: physics-panel-in var(--physics-motion-entrance) var(--physics-ease-emphasized) both;
 }
 
 /* ------------------------------------------------------------------ motion -- */
@@ -85,7 +85,7 @@
 
 /* A card inside a rail/grid: inherits the section beat, adds its own index. */
 .card {
-  animation: physics-card-in 420ms var(--physics-ease-emphasized) both;
+  animation: physics-card-in var(--physics-motion-entrance) var(--physics-ease-emphasized) both;
   animation-delay: calc(
     var(--physics-reveal-delay, 0ms) +
     min(calc(var(--physics-card-index, 0) * 26ms), 320ms)

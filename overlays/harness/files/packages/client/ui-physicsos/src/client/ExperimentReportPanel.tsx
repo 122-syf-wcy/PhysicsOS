@@ -7,7 +7,8 @@
  * facts; it never recomputes them.
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import clsx from 'clsx'
 import { IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { buildExperimentReport } from './physics/experiment-report.ts'
@@ -29,15 +30,44 @@ const downloadMarkdown = (title: string, markdown: string): void => {
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = `${title}-实验报告.md`
+  document.body.appendChild(anchor)
   anchor.click()
-  URL.revokeObjectURL(url)
+  anchor.remove()
+  /* Revoking immediately can cancel the download before the browser has read the
+     blob; deferring keeps the anchor's URL alive until the fetch has started. */
+  window.setTimeout(() => { URL.revokeObjectURL(url) }, 1000)
 }
 
 export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReportPanelProps) {
   const report = useMemo(() => buildExperimentReport(snapshot), [snapshot])
+  const panelRef = useRef<HTMLDivElement>(null)
+  /* Modal semantics: move focus into the dialog on open, return it on close, and
+     let Esc dismiss the report like any other overlay. */
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    panelRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [onClose])
+
   return (
     <div className={css.reportOverlay} data-physicsos-report={snapshot.domain}>
-      <div className={css.reportPanel} role="dialog" aria-label={t('lab.report.title')}>
+      <div
+        className={css.reportPanel}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('lab.report.title')}
+        ref={panelRef}
+        tabIndex={-1}
+      >
         <div className={css.panelHead}>
           <h2 className={css.panelTitle}>{t('lab.report.title')}</h2>
           <div className={css.reportHeadActions}>
@@ -50,7 +80,7 @@ export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReport
             </button>
             <button
               type="button"
-              className={css.toolIcon}
+              className={clsx(css.tool, css.toolIcon)}
               aria-label={t('lab.collapse')}
               onClick={onClose}
             >

@@ -299,13 +299,21 @@
 
 .knowledgeFill {
   height: 100%;
+  width: 100%;
   border-radius: 4px;
   background: var(--dsw-static-blue-500, #3b82f6);
-  transition: width 200ms ease;
+  transform-origin: left;
+  transition: transform 200ms var(--physics-ease);
 }
 
 @media (max-width: 900px) {
   .body {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knowledgeFill {
+    transition: none;
   }
 }

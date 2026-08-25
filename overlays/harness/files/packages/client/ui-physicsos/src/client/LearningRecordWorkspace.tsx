@@ -152,7 +152,7 @@ export function LearningRecordWorkspace({
                       </span>
                     </div>
                     <div className={css.knowledgeBar} role="img" aria-label={`${node.label} ${rate}%`}>
-                      <div className={css.knowledgeFill} style={{ width: `${rate}%` }} />
+                      <div className={css.knowledgeFill} style={{ transform: `scaleX(${rate / 100})` }} />
                     </div>
                   </li>
                 )

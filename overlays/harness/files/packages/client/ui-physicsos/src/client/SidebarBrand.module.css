@@ -10,7 +10,8 @@
   background: transparent;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition: opacity var(--physics-motion-fast) var(--physics-ease),
+    transform var(--physics-motion-fast) var(--physics-ease);
 }
 
 .wordmark:hover {

@@ -58,10 +58,12 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t }: Agent
   const tutorScript = useMemo(() => tutorScriptOf(context), [context])
 
   /* A highlight is transient chrome: it must not outlive the drawer, or the canvas
-     keeps a glow nobody asked for. */
+     keeps a glow nobody asked for. Clearing the timer alone is not enough — the
+     highlight itself has to be released, too. */
   useEffect(() => () => {
     if (clearTimer.current !== undefined) window.clearTimeout(clearTimer.current)
-  }, [])
+    onSnapshot(runtime.setHighlight([]))
+  }, [runtime, onSnapshot])
 
   const runTools = useCallback(
     (tools: readonly PhysicsAgentToolCall[]): readonly { ok: boolean; detail: string }[] => {

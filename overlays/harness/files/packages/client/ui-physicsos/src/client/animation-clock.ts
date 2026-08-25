@@ -5,6 +5,11 @@ const MAX_FRAME_DELTA_SECONDS = 0.1
 /** One magnetic orbit at 1x is presented over this many wall-clock seconds. */
 export const MAGNETIC_CYCLE_WALL_SECONDS = 5
 
+/** Fraction of the visible window each 单步 / step-forward advances. Shared by
+    the Lab timeline and Question Space step so the two playback systems cannot
+    drift apart. */
+export const STEP_FRACTION = 0.1
+
 /** Convert display time into the microscopic physical time consumed by the engine. */
 export const magneticPhysicalDelta = (wallSeconds: number, periodSeconds: number): number =>
   periodSeconds > 0 && Number.isFinite(wallSeconds)

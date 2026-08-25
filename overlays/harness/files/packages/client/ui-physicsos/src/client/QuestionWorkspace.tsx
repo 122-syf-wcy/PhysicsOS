@@ -68,6 +68,7 @@ import {
   MAGNETIC_CYCLE_WALL_SECONDS,
   magneticPhysicalDelta,
   nearestTimedStateIndex,
+  STEP_FRACTION,
   useAnimationClock,
 } from './animation-clock.ts'
 import { TimelineScrubber } from './TimelineScrubber.tsx'
@@ -492,9 +493,6 @@ const namedChecks = (
 
 /* ------------------------------------------------------ playback + frames --- */
 
-/** Step size when a domain has no sampled states to land on. */
-const STEP_FRACTION = 0.1
-
 interface QuestionTimeline {
   readonly start: number
   readonly end: number
@@ -770,6 +768,9 @@ function QuestionVisualization({
         <button
           type="button"
           aria-label={playback.running ? '暂停动画' : '播放动画'}
+          /* A single-state question has nothing to play (end === start): the clock
+             would never tick, so the button must not flip into a stuck "playing". */
+          disabled={playback.end <= playback.start}
           onClick={playback.toggle}
         >
           {playback.running ? <IconPhysicsPause size={13} /> : <IconPhysicsPlay size={13} />}
@@ -892,7 +893,13 @@ export function QuestionWorkspace({
           <button
             type="button"
             className={css.secondaryButton}
-            onClick={() => { setDraft(''); setDocument(INITIAL_DOCUMENT); setHighlight(null) }}
+            onClick={() => {
+              /* Restore the textarea to the initial document's own text, so the
+                 input and the document being analyzed never drift apart. */
+              setDraft(INITIAL_DOCUMENT.content.rawText ?? '')
+              setDocument(INITIAL_DOCUMENT)
+              setHighlight(null)
+            }}
           >
             <IconRefreshOutline16 size={13} />
             重置

@@ -25,7 +25,7 @@ import {
   IconSparkle16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
-import { useAnimationClock } from './animation-clock.ts'
+import { STEP_FRACTION, useAnimationClock } from './animation-clock.ts'
 import {
   ResponsiveInspector,
   ResponsiveInspectorToggle,
@@ -52,8 +52,6 @@ import css from './LabWorkspace.module.css'
 type Translate = (key: PhysicsosKey) => string
 
 const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
-/** One transport click advances a tenth of the scene, like a film step. */
-const STEP_FRACTION = 0.1
 
 export interface PhysicsWorkspaceProps {
   readonly runtime: WorkspaceRuntime

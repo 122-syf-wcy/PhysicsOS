@@ -43,7 +43,7 @@ vendor/deepseek-harness/apps/web
 
 ## 已知问题
 
-- `pnpm typecheck:web` 当前不通过：`overlays/harness/files/packages/client/ui-physicsos/tests/electric.client.spec.tsx` 里 `MechanicsSceneInput` 使用了不存在的 `modelId` 字段（TS2561）。`tsc -b` 仍会产出 `lib/`，但类型门禁是红灯，属开发中状态。
+- 暂无阻塞性已知问题。`pnpm typecheck:web` 仅覆盖 `src/`（不含 `tests/`），若需检查测试代码请运行 `vitest`（测试经 esbuild 转译，不做完整类型检查）。
 
 ## 启动
 
