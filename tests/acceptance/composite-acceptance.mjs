@@ -10,6 +10,7 @@
  *   D  恢复 v₀ = E/B → 选择条件 PASS
  *   E  创建质谱仪 → 3 个场区、进入磁场区后圆弧、回旋半径来自引擎
  *   F  Timeline Enter/Exit markers → 点击 seek，纳秒级时间用指数格式
+ *   F2 播放节奏 → 微观运行按 8 秒展示窗推进，2 秒后仍在窗内（不会一帧掠过）
  *   G  速度选择器 Golden Question → 结构化 Solution → 在物理世界中打开 → 实验分支
  *   H  质谱仪 Golden Question → Lab（同一场景，3 场区）
  *   I  Agent「为什么这个粒子没有偏转」→ 引用 Composite Verifier + 高亮两个力
@@ -234,6 +235,34 @@ stdout.write('\nCASE F · Timeline Enter/Exit markers → seek，指数时间格
   const eventRows = await page.locator('[data-physicsos-surface="lab"] [class*="eventRow"]').count()
   check('event list mirrors the markers', eventRows >= 4, `${eventRows} rows`)
   await shot('composite-timeline-1600x900')
+}
+
+/* --------------------------------------------------------------- CASE F2 -- */
+stdout.write('\nCASE F2 · 播放节奏：微观运行按 8 秒展示窗推进，不会一帧掠过\n')
+{
+  /* The spectrometer run spans microseconds of physical time. Presentation pacing
+     maps that window onto MICRO_WINDOW_WALL_SECONDS (8 s) of wall time at 1×, so
+     after ~2 s of playback the clock must sit near 25% of the window — the old
+     bug consumed the whole run within the first frame. */
+  const scrubber = page.getByRole('slider', { name: '时间轴' })
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  await page.waitForTimeout(300)
+  const total = Number(await scrubber.getAttribute('max'))
+  check('timeline publishes the physical window', Number.isFinite(total) && total > 0, `max ${total}`)
+
+  await page.getByRole('button', { name: '运行', exact: true }).click()
+  await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: '暂停', exact: true }).click()
+  const paused = Number(await scrubber.inputValue())
+  const share = paused / total
+  check('2s of playback covers a proportional slice of the window, not the whole run',
+    share > 0.1 && share < 0.75, `${(share * 100).toFixed(1)}% of the window`)
+
+  await page.waitForTimeout(400)
+  const held = Number(await scrubber.inputValue())
+  check('pause freezes the clock', held === paused, `${paused} → ${held}`)
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  await page.waitForTimeout(200)
 }
 
 /* ---------------------------------------------------------------- CASE G -- */

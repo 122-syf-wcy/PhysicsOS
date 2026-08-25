@@ -13,6 +13,7 @@
  *   C  平行板全链路 — 试题 → IR → Scene → RegionEngine → Verifier → 画布（极板 + 有界场 + 轨迹）
  *   D  事件时间轴 — 进入场区 / 离开场区 / 打到极板 的标记真的画出来了
  *      （关闭 ELECTRIC_TIMELINE_EVENT_MARKERS_BACKLOG 的验收点）
+ *   D2 播放节奏 — 纳秒级穿越按 8 秒展示窗推进，2 秒后仍在窗内（不会一帧掠过）
  *   E  Agent 解释偏转方向 — 引用已验证的 check、给出依据、且不改场景 revision
  *   F  Scene Branch — 实验室里改参数不污染题目场景
  *
@@ -282,6 +283,36 @@ if (plateLabReached) {
   await shot('lab-parallel-plate-events-1600x900')
 } else {
   check('D: parallel-plate lab reached', false, 'CASE C 未进入实验室，跳过事件验收')
+}
+
+/* ---------------------------------------------------------------- CASE D2 -- */
+stdout.write('\nCASE D2 · 播放节奏：纳秒级穿越按 8 秒展示窗推进，不会一帧掠过\n')
+if (plateLabReached) {
+  /* The electron crosses the plates in nanoseconds of physical time. Presentation
+     pacing maps that window onto MICRO_WINDOW_WALL_SECONDS (8 s) of wall time at
+     1×, so after ~2 s of playback the clock must sit near 25% of the window — the
+     old bug consumed the whole transit within the first frame. */
+  const scrubber = page.getByRole('slider', { name: '时间轴' })
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  await page.waitForTimeout(300)
+  const total = Number(await scrubber.getAttribute('max'))
+  check('D2: timeline publishes the physical window', Number.isFinite(total) && total > 0, `max ${total}`)
+
+  await page.getByRole('button', { name: '运行', exact: true }).click()
+  await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: '暂停', exact: true }).click()
+  const paused = Number(await scrubber.inputValue())
+  const share = paused / total
+  check('D2: 2s of playback covers a proportional slice of the window, not the whole run',
+    share > 0.1 && share < 0.75, `${(share * 100).toFixed(1)}% of the window`)
+
+  await page.waitForTimeout(400)
+  const held = Number(await scrubber.inputValue())
+  check('D2: pause freezes the clock', held === paused, `${paused} → ${held}`)
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  await page.waitForTimeout(200)
+} else {
+  check('D2: parallel-plate lab reached', false, 'CASE C 未进入实验室，跳过节奏验收')
 }
 
 /* ----------------------------------------------------------------- CASE E -- */
