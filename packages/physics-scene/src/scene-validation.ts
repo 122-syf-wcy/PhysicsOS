@@ -59,6 +59,8 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ...scene.bodies.map((entry) => entry.id),
     ...scene.fields.map((entry) => entry.id),
     ...scene.regions.map((entry) => entry.id),
+    ...scene.circuits.map((entry) => entry.id),
+    ...scene.circuits.flatMap((entry) => entry.components.map((component) => String(component.id))),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -259,6 +261,124 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         check(`field_region_exists:${field.id}`, 'semantic', regionExists, {
           message: `Field "${field.id}" references unknown region "${field.regionId}".`,
           targetId: field.id,
+        }),
+      )
+    }
+  }
+
+  for (const circuit of scene.circuits) {
+    const nodeIds = circuit.nodes.map((node) => node.id)
+    const duplicateNodes = nodeIds.filter((id, index) => nodeIds.indexOf(id) !== index)
+    checks.push(
+      check(`circuit_node_ids_unique:${circuit.id}`, 'schema', duplicateNodes.length === 0, {
+        message: `Circuit "${circuit.id}" has duplicate node ids: ${duplicateNodes.join(', ')}.`,
+        targetId: circuit.id,
+      }),
+    )
+
+    const connectionIds = circuit.connections.map((connection) => connection.id)
+    const duplicateConnections = connectionIds.filter(
+      (id, index) => connectionIds.indexOf(id) !== index,
+    )
+    checks.push(
+      check(
+        `circuit_connection_ids_unique:${circuit.id}`,
+        'schema',
+        duplicateConnections.length === 0,
+        {
+          message: `Circuit "${circuit.id}" has duplicate connection ids: ${duplicateConnections.join(', ')}.`,
+          targetId: circuit.id,
+        },
+      ),
+    )
+
+    const componentIds = new Set(circuit.components.map((component) => String(component.id)))
+    for (const connection of circuit.connections) {
+      const endpointsValid =
+        componentIds.has(String(connection.from.componentId)) &&
+        componentIds.has(String(connection.to.componentId)) &&
+        connection.from.terminalKey.length > 0 &&
+        connection.to.terminalKey.length > 0
+      checks.push(
+        check(`circuit_connection_endpoints:${connection.id}`, 'semantic', endpointsValid, {
+          message: `Connection "${connection.id}" references a component missing from circuit "${circuit.id}".`,
+          targetId: circuit.id,
+        }),
+      )
+    }
+
+    for (const component of circuit.components) {
+      const componentId = String(component.id)
+      let dimensionsValid = true
+      let valuesValid = true
+      switch (component.type) {
+        case 'resistor': {
+          dimensionsValid = hasExpectedDimension(component.resistance, 'resistance')
+          valuesValid =
+            dimensionsValid &&
+            Number.isFinite(canonicalValue(component.resistance)) &&
+            canonicalValue(component.resistance) > 0
+          break
+        }
+        case 'voltage_source': {
+          dimensionsValid =
+            hasExpectedDimension(component.voltage, 'electric_potential') &&
+            (component.internalResistance === undefined ||
+              hasExpectedDimension(component.internalResistance, 'resistance'))
+          valuesValid =
+            dimensionsValid &&
+            Number.isFinite(canonicalValue(component.voltage)) &&
+            (component.internalResistance === undefined ||
+              canonicalValue(component.internalResistance) >= 0)
+          break
+        }
+        case 'switch': {
+          valuesValid = component.state === 'open' || component.state === 'closed'
+          break
+        }
+        case 'ammeter':
+        case 'voltmeter': {
+          dimensionsValid =
+            component.internalResistance === undefined ||
+            hasExpectedDimension(component.internalResistance, 'resistance')
+          valuesValid =
+            dimensionsValid &&
+            (component.internalResistance === undefined ||
+              canonicalValue(component.internalResistance) >= 0)
+          break
+        }
+        case 'variable_resistor': {
+          dimensionsValid = hasExpectedDimension(component.totalResistance, 'resistance')
+          valuesValid =
+            dimensionsValid &&
+            Number.isFinite(canonicalValue(component.totalResistance)) &&
+            canonicalValue(component.totalResistance) > 0 &&
+            Number.isFinite(component.sliderPosition) &&
+            component.sliderPosition >= 0 &&
+            component.sliderPosition <= 1
+          break
+        }
+        case 'capacitor': {
+          dimensionsValid = hasExpectedDimension(component.capacitance, 'capacitance')
+          valuesValid = dimensionsValid && canonicalValue(component.capacitance) > 0
+          break
+        }
+        case 'inductor': {
+          dimensionsValid = hasExpectedDimension(component.inductance, 'inductance')
+          valuesValid = dimensionsValid && canonicalValue(component.inductance) > 0
+          break
+        }
+      }
+      checks.push(
+        check(`circuit_component_dimensions:${componentId}`, 'dimension', dimensionsValid, {
+          message: `Component "${componentId}" quantities must use their contract dimensions.`,
+          targetId: componentId,
+        }),
+      )
+      checks.push(
+        check(`circuit_component_values:${componentId}`, 'constraint', valuesValid, {
+          message: `Component "${componentId}" carries an out-of-range value.`,
+          targetId: componentId,
         }),
       )
     }

@@ -24,7 +24,13 @@ import {
 } from '@physicsos/shared'
 
 import { validateScene } from './scene-validation.ts'
-import type { PhysicsScene, UniformElectricField, UniformMagneticField } from './scene.ts'
+import type {
+  Circuit,
+  CircuitComponent,
+  PhysicsScene,
+  UniformElectricField,
+  UniformMagneticField,
+} from './scene.ts'
 
 export const SCENE_COMMAND_SCHEMA = 'scene-command/1.0' as const
 export const PHYSICS_EVENT_SCHEMA = 'physics-event/1.0' as const
@@ -32,7 +38,7 @@ export const SCENE_REVISION_CONFLICT = 'SCENE_REVISION_CONFLICT' as const
 
 export type ElectricFieldDirection = 'right' | 'left' | 'up' | 'down'
 
-/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric Runtime slices. */
+/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric + Circuit Runtime slices. */
 export type SceneCommandType =
   | 'SetParticleCharge'
   | 'SetParticleMass'
@@ -50,6 +56,11 @@ export type SceneCommandType =
   | 'SetFrictionCoefficient'
   | 'SetAppliedForce'
   | 'SetGroundLevel'
+  | 'SetComponentResistance'
+  | 'SetSourceVoltage'
+  | 'SetSourceInternalResistance'
+  | 'SetSwitchState'
+  | 'SetSliderPosition'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -121,6 +132,33 @@ export interface SceneCommandPayloadMap {
     /** Ground height in scene length units (SI metres). */
     groundY: number
   }
+  SetComponentResistance: {
+    circuitId: string
+    componentId: string
+    /** Fixed resistor: its resistance. Variable resistor: its full-scale resistance. */
+    resistance: Quantity<'resistance'>
+  }
+  SetSourceVoltage: {
+    circuitId: string
+    componentId: string
+    voltage: Quantity<'electric_potential'>
+  }
+  SetSourceInternalResistance: {
+    circuitId: string
+    componentId: string
+    internalResistance: Quantity<'resistance'>
+  }
+  SetSwitchState: {
+    circuitId: string
+    componentId: string
+    state: 'open' | 'closed'
+  }
+  SetSliderPosition: {
+    circuitId: string
+    componentId: string
+    /** Rheostat slider position, 0..1 inclusive. */
+    position: number
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -168,6 +206,11 @@ export type PhysicsEventType =
   | 'FrictionCoefficientChanged'
   | 'AppliedForceChanged'
   | 'GroundLevelChanged'
+  | 'ComponentResistanceChanged'
+  | 'SourceVoltageChanged'
+  | 'SourceInternalResistanceChanged'
+  | 'SwitchStateChanged'
+  | 'SliderPositionChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -193,6 +236,11 @@ export interface PhysicsEventPayloadMap {
   FrictionCoefficientChanged: SceneCommandPayloadMap['SetFrictionCoefficient']
   AppliedForceChanged: SceneCommandPayloadMap['SetAppliedForce']
   GroundLevelChanged: SceneCommandPayloadMap['SetGroundLevel']
+  ComponentResistanceChanged: SceneCommandPayloadMap['SetComponentResistance']
+  SourceVoltageChanged: SceneCommandPayloadMap['SetSourceVoltage']
+  SourceInternalResistanceChanged: SceneCommandPayloadMap['SetSourceInternalResistance']
+  SwitchStateChanged: SceneCommandPayloadMap['SetSwitchState']
+  SliderPositionChanged: SceneCommandPayloadMap['SetSliderPosition']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -272,7 +320,9 @@ const notFound = (
     | 'observable'
     | 'body'
     | 'gravity_field'
-    | 'force',
+    | 'force'
+    | 'circuit'
+    | 'circuit_component',
   id: string,
 ) =>
   domainError(
@@ -288,7 +338,11 @@ const notFound = (
             ? 'GRAVITY_FIELD_NOT_FOUND'
             : targetType === 'force'
               ? 'FORCE_NOT_FOUND'
-              : 'OBSERVABLE_NOT_FOUND',
+              : targetType === 'circuit'
+                ? 'CIRCUIT_NOT_FOUND'
+                : targetType === 'circuit_component'
+                  ? 'CIRCUIT_COMPONENT_NOT_FOUND'
+                  : 'OBSERVABLE_NOT_FOUND',
     `${targetType} target "${id}" does not exist in the current scene.`,
     'not_found',
     { details: { targetType, targetId: id } },
@@ -325,6 +379,39 @@ const findElectricField = (
     (field): field is UniformElectricField =>
       field.id === fieldId && field.type === 'uniform_electric',
   )
+
+type CircuitComponentLookup =
+  | { ok: true; circuit: Circuit; component: CircuitComponent }
+  | { ok: false; error: DomainError }
+
+const findCircuitComponent = (
+  scene: PhysicsScene,
+  circuitId: string,
+  componentId: string,
+): CircuitComponentLookup => {
+  if (typeof circuitId !== 'string' || circuitId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_CIRCUIT_ID', 'circuitId must be a non-empty string.'),
+    }
+  }
+  if (typeof componentId !== 'string' || componentId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand(
+        'INVALID_CIRCUIT_COMPONENT_ID',
+        'componentId must be a non-empty string.',
+      ),
+    }
+  }
+  const circuit = scene.circuits.find((entry) => entry.id === circuitId)
+  if (circuit === undefined) return { ok: false, error: notFound('circuit', circuitId) }
+  const component = circuit.components.find((entry) => String(entry.id) === componentId)
+  if (component === undefined) {
+    return { ok: false, error: notFound('circuit_component', componentId) }
+  }
+  return { ok: true, circuit, component }
+}
 
 const electricDirectionVector = (direction: ElectricFieldDirection) => {
   switch (direction) {
@@ -918,6 +1005,222 @@ const applyCommand = (
           ...eventMetadata,
           type: 'GroundLevelChanged',
           payload: { observableId: command.payload.observableId, groundY },
+        },
+      }
+    }
+
+    /* ------------------------------------------------------------ circuit -- */
+
+    case 'SetComponentResistance': {
+      const lookup = findCircuitComponent(
+        scene,
+        command.payload.circuitId,
+        command.payload.componentId,
+      )
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const resistance = validateQuantity(command.payload.resistance, 'resistance')
+      if (!Number.isFinite(canonicalValue(resistance)) || canonicalValue(resistance) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_COMPONENT_RESISTANCE',
+            'Resistance must be a positive finite quantity.',
+            { componentId: command.payload.componentId, resistance: command.payload.resistance },
+          ),
+        }
+      }
+      const component = lookup.component
+      if (component.type === 'resistor') {
+        component.resistance = clone(resistance)
+      } else if (component.type === 'variable_resistor') {
+        component.totalResistance = clone(resistance)
+      } else {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'COMPONENT_NOT_RESISTIVE',
+            'SetComponentResistance targets a resistor or a variable resistor.',
+            { componentId: command.payload.componentId, componentType: component.type },
+          ),
+        }
+      }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ComponentResistanceChanged',
+          payload: {
+            circuitId: command.payload.circuitId,
+            componentId: command.payload.componentId,
+            resistance: clone(resistance),
+          },
+        },
+      }
+    }
+
+    case 'SetSourceVoltage': {
+      const lookup = findCircuitComponent(
+        scene,
+        command.payload.circuitId,
+        command.payload.componentId,
+      )
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.component.type !== 'voltage_source') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'COMPONENT_NOT_VOLTAGE_SOURCE',
+            'SetSourceVoltage targets a voltage source.',
+            { componentId: command.payload.componentId, componentType: lookup.component.type },
+          ),
+        }
+      }
+      const voltage = validateQuantity(command.payload.voltage, 'electric_potential')
+      if (!Number.isFinite(canonicalValue(voltage)) || canonicalValue(voltage) < 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_SOURCE_VOLTAGE',
+            'Source voltage must be a non-negative finite quantity.',
+            { componentId: command.payload.componentId, voltage: command.payload.voltage },
+          ),
+        }
+      }
+      lookup.component.voltage = clone(voltage)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SourceVoltageChanged',
+          payload: {
+            circuitId: command.payload.circuitId,
+            componentId: command.payload.componentId,
+            voltage: clone(voltage),
+          },
+        },
+      }
+    }
+
+    case 'SetSourceInternalResistance': {
+      const lookup = findCircuitComponent(
+        scene,
+        command.payload.circuitId,
+        command.payload.componentId,
+      )
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.component.type !== 'voltage_source') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'COMPONENT_NOT_VOLTAGE_SOURCE',
+            'SetSourceInternalResistance targets a voltage source.',
+            { componentId: command.payload.componentId, componentType: lookup.component.type },
+          ),
+        }
+      }
+      const internalResistance = validateQuantity(
+        command.payload.internalResistance,
+        'resistance',
+      )
+      if (
+        !Number.isFinite(canonicalValue(internalResistance)) ||
+        canonicalValue(internalResistance) < 0
+      ) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_SOURCE_INTERNAL_RESISTANCE',
+            'Source internal resistance must be a non-negative finite quantity.',
+            {
+              componentId: command.payload.componentId,
+              internalResistance: command.payload.internalResistance,
+            },
+          ),
+        }
+      }
+      lookup.component.internalResistance = clone(internalResistance)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SourceInternalResistanceChanged',
+          payload: {
+            circuitId: command.payload.circuitId,
+            componentId: command.payload.componentId,
+            internalResistance: clone(internalResistance),
+          },
+        },
+      }
+    }
+
+    case 'SetSwitchState': {
+      const lookup = findCircuitComponent(
+        scene,
+        command.payload.circuitId,
+        command.payload.componentId,
+      )
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.component.type !== 'switch') {
+        return {
+          ok: false,
+          error: invalidCommand('COMPONENT_NOT_SWITCH', 'SetSwitchState targets a switch.', {
+            componentId: command.payload.componentId,
+            componentType: lookup.component.type,
+          }),
+        }
+      }
+      if (command.payload.state !== 'open' && command.payload.state !== 'closed') {
+        return {
+          ok: false,
+          error: invalidCommand('INVALID_SWITCH_STATE', 'state must be "open" or "closed".'),
+        }
+      }
+      lookup.component.state = command.payload.state
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SwitchStateChanged',
+          payload: clone(command.payload),
+        },
+      }
+    }
+
+    case 'SetSliderPosition': {
+      const lookup = findCircuitComponent(
+        scene,
+        command.payload.circuitId,
+        command.payload.componentId,
+      )
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.component.type !== 'variable_resistor') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'COMPONENT_NOT_VARIABLE_RESISTOR',
+            'SetSliderPosition targets a variable resistor.',
+            { componentId: command.payload.componentId, componentType: lookup.component.type },
+          ),
+        }
+      }
+      const position = command.payload.position
+      if (!Number.isFinite(position) || position < 0 || position > 1) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_SLIDER_POSITION',
+            'Slider position must be a finite number between 0 and 1.',
+            { position },
+          ),
+        }
+      }
+      lookup.component.sliderPosition = position
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SliderPositionChanged',
+          payload: clone(command.payload),
         },
       }
     }
