@@ -55,9 +55,13 @@ loadDotEnv()
 const BASE = (process.env.PHYSICSOS_IMAGE_PRIMARY_BASE_URL ?? '').replace(/\/+$/, '')
 const KEY = process.env.PHYSICSOS_IMAGE_PRIMARY_API_KEY ?? ''
 const MODEL = process.env.PHYSICSOS_IMAGE_PRIMARY_MODEL ?? 'gpt-image-2'
-if (BASE === '' || KEY === '') {
-  process.stderr.write('Set PHYSICSOS_IMAGE_PRIMARY_BASE_URL / _API_KEY in .env first.\n')
-  process.exit(1)
+
+/** Credentials are only needed to generate, not to list templates. */
+const assertCredentials = () => {
+  if (BASE === '' || KEY === '') {
+    process.stderr.write('Set PHYSICSOS_IMAGE_PRIMARY_BASE_URL / _API_KEY in .env first.\n')
+    process.exit(1)
+  }
 }
 
 /* -------------------------------------------------------------- prompts ---- */
@@ -219,6 +223,8 @@ if (unknown.length > 0) {
   process.stderr.write(`Unknown template ids: ${unknown.join(', ')}\n`)
   process.exit(1)
 }
+
+assertCredentials()
 
 let failed = 0
 for (const id of ids) {

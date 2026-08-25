@@ -45,6 +45,7 @@ DRELOCA*
 .cursor/
 .playwright-mcp/
 .pos_manifest.tmp.json
+.anna-manifest.json
 
 # Local verification output
 *-typecheck.txt
