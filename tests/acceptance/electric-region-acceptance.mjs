@@ -309,8 +309,14 @@ if (plateLabReached) {
   await page.waitForTimeout(400)
   const held = Number(await scrubber.inputValue())
   check('D2: pause freezes the clock', held === paused, `${paused} → ${held}`)
-  await page.getByRole('button', { name: '重置', exact: true }).click()
-  await page.waitForTimeout(200)
+
+  /* CASE E asserts the agent highlight lands on a drawn visual, which needs the
+     electron inside the field — the state CASE D established by parking the clock
+     on the first region marker. Hand that state back instead of resetting to t=0,
+     where the electron is still outside the plates and no force arrow exists. */
+  const restoreMarker = page.locator('[class*="eventMark_enter"], [class*="eventMark_exit"], [class*="eventMark_plate-impact"]').first()
+  await restoreMarker.click({ force: true }).catch(() => {})
+  await page.waitForTimeout(300)
 } else {
   check('D2: parallel-plate lab reached', false, 'CASE C 未进入实验室，跳过节奏验收')
 }
