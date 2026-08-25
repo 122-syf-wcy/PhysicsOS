@@ -171,7 +171,7 @@ const componentVisualOf = (
     ...(showsCurrent
       ? {
         currentText: `I=${fmtQuantityValue(Math.abs(current))} A`,
-        currentDirection: (current >= 0 ? 'forward' : 'reverse') as 'forward' | 'reverse',
+        currentDirection: current >= 0 ? 'forward' as const : 'reverse' as const,
       }
       : {}),
     ...(component.type === 'switch' ? { closed: component.state === 'closed' } : {}),

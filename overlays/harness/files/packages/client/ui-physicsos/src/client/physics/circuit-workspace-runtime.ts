@@ -351,7 +351,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     const source = circuit.components.find(component => component.type === 'voltage_source')
     const sections: InspectorSection[] = []
 
-    if (source !== undefined && source.type === 'voltage_source') {
+    if (source !== undefined) {
       sections.push({
         id: 'source',
         title: '电源',
@@ -432,7 +432,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
         choices: switches.map(component => ({
           id: `switch:${String(component.id)}`,
           label: component.name ?? String(component.id),
-          value: component.type === 'switch' ? component.state : 'open',
+          value: component.state,
           options: [
             { value: 'closed', label: '闭合' },
             { value: 'open', label: '断开' },
@@ -449,7 +449,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
         symbol: '',
         value: isScalarQuantity(entry.value) ? fmtQuantityValue(entry.value.value) : '—',
         unit: entry.value.unit,
-        ...(entry.targetId === undefined ? {} : { highlights: String(entry.targetId) }),
+        ...(entry.targetId === undefined ? {} : { highlights: entry.targetId }),
       }))
     if (derived.length > 0) {
       sections.push({ id: 'derived', title: '派生量', derived })

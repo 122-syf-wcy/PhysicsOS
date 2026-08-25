@@ -18,15 +18,16 @@ export interface TimeScale {
   readonly factor: number
 }
 
+const SECONDS: TimeScale = { unit: 's', factor: 1 }
+const PICOSECONDS: TimeScale = { unit: 'ps', factor: 1e12 }
+
 const SCALES: readonly TimeScale[] = [
-  { unit: 's', factor: 1 },
+  SECONDS,
   { unit: 'ms', factor: 1e3 },
   { unit: 'µs', factor: 1e6 },
   { unit: 'ns', factor: 1e9 },
-  { unit: 'ps', factor: 1e12 },
+  PICOSECONDS,
 ]
-
-const SECONDS: TimeScale = SCALES[0]!
 
 /** Chinese unit names, for screen-reader announcements. */
 const UNIT_ARIA: Readonly<Record<TimeScale['unit'], string>> = {
@@ -47,7 +48,7 @@ const UNIT_ARIA: Readonly<Record<TimeScale['unit'], string>> = {
 export const timeScaleOf = (windowSeconds: number): TimeScale => {
   const magnitude = Math.abs(windowSeconds)
   if (!Number.isFinite(magnitude) || magnitude === 0 || magnitude >= 0.1) return SECONDS
-  return SCALES.find(scale => magnitude * scale.factor >= 1) ?? SCALES.at(-1)!
+  return SCALES.find(scale => magnitude * scale.factor >= 1) ?? PICOSECONDS
 }
 
 /** `3.75 µs` — an instant expressed on an already-chosen scale. */

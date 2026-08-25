@@ -13,6 +13,7 @@ import {
   isCircuitScene,
   validateScene,
   type PhysicsScene,
+  type SceneCommand,
   type SceneCommandPayloadMap,
   type SceneCommandType,
 } from '../src/index.ts'
@@ -23,6 +24,7 @@ const execute = <T extends SceneCommandType>(
   payload: SceneCommandPayloadMap[T],
 ) => {
   const scene = runtime.getScene()
+  /* The generic envelope does not narrow back to the distributive union. */
   return runtime.execute(
     createSceneCommand({
       commandId: `cmd-${type}-${scene.revision}`,
@@ -31,7 +33,7 @@ const execute = <T extends SceneCommandType>(
       type,
       payload,
       traceId: `trace-${type}`,
-    }),
+    }) as SceneCommand,
   )
 }
 
