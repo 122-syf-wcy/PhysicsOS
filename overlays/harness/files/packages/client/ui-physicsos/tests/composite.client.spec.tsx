@@ -9,6 +9,7 @@ import {
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
+import { MICRO_WINDOW_WALL_SECONDS } from '../src/client/animation-clock.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { createCompositeWorkspaceRuntime } from '../src/client/physics/composite-workspace-runtime.ts'
 import {
@@ -222,6 +223,26 @@ describe('composite Lab surface', () => {
     expect(times.every(time => Number.isFinite(time) && time >= 0)).toBe(true)
     expect(new Set(times).size).toBeGreaterThan(1)
     expect(Math.max(...times)).toBeLessThanOrEqual(runtime.getSnapshot().clock.total + 1e-12)
+  })
+
+  it('paces playback so the microscopic run stays watchable instead of ending in one frame', () => {
+    const runtime = createCompositeWorkspaceRuntime(createMassSpectrometerScene())
+    const total = runtime.getSnapshot().clock.total
+    expect(total).toBeGreaterThan(0)
+    /* The composite Lab opens mid-window (inside the selector region), so the
+       pacing contract is about the advance delta, not the absolute clock. */
+    const startTime = runtime.setRunning(true).clock.time
+
+    /* One 60fps frame at 1x advances a frame's share of the window — under the
+       old raw wall-second mapping this single call already consumed the run. */
+    const afterFrame = runtime.advance(1 / 60)
+    expect(afterFrame.clock.time - startTime).toBeCloseTo(total * (1 / 60) / MICRO_WINDOW_WALL_SECONDS, 15)
+    expect(afterFrame.clock.running).toBe(true)
+
+    /* Feeding the whole presentation window of wall time completes the run. */
+    const afterWindow = runtime.advance(MICRO_WINDOW_WALL_SECONDS)
+    expect(afterWindow.clock.time).toBeCloseTo(total, 15)
+    expect(afterWindow.clock.running).toBe(false)
   })
 
   it('opens the composite Lab from the picker for every composite template', () => {

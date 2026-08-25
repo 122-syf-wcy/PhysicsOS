@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { createParallelPlateScene, createElectricScene, createPointChargeScene } from '@physicsos/physics-scene'
 
+import { MICRO_WINDOW_WALL_SECONDS } from '../src/client/animation-clock.ts'
 import { createElectricWorkspaceRuntime } from '../src/client/physics/electric-workspace-runtime.ts'
 import { TimelineMarkers } from '../src/client/workspace-parts.tsx'
 
@@ -101,6 +102,24 @@ describe('ElectricWorkspaceRuntime — parallel-plate region branch', () => {
     for (let i = 1; i < snapshot.events.length; i++) {
       expect(snapshot.events[i]!.time).toBeGreaterThanOrEqual(snapshot.events[i - 1]!.time)
     }
+  })
+
+  it('paces playback so the nanosecond transit stays watchable instead of ending in one frame', () => {
+    const runtime = createElectricWorkspaceRuntime(parallelPlateScene())
+    const total = runtime.getSnapshot().clock.total
+    expect(total).toBeGreaterThan(0)
+    runtime.setRunning(true)
+
+    /* One 60fps frame at 1x advances a frame's share of the window — under the
+       old raw wall-second mapping this single call already consumed the run. */
+    const afterFrame = runtime.advance(1 / 60)
+    expect(afterFrame.clock.time).toBeCloseTo(total * (1 / 60) / MICRO_WINDOW_WALL_SECONDS, 15)
+    expect(afterFrame.clock.running).toBe(true)
+
+    /* Feeding the whole presentation window of wall time completes the run. */
+    const afterWindow = runtime.advance(MICRO_WINDOW_WALL_SECONDS)
+    expect(afterWindow.clock.time).toBeCloseTo(total, 15)
+    expect(afterWindow.clock.running).toBe(false)
   })
 
   it('event ids are deterministic', () => {

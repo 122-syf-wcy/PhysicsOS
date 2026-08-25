@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MAGNETIC_CYCLE_WALL_SECONDS,
   magneticPhysicalDelta,
+  MICRO_WINDOW_WALL_SECONDS,
+  microWindowPhysicalDelta,
   nearestTimedStateIndex,
   useAnimationClock,
 } from '../src/client/animation-clock.ts'
@@ -20,10 +22,22 @@ describe('animation clock', () => {
     expect(magneticPhysicalDelta(1 / 60, period)).toBeGreaterThan(0)
   })
 
+  it('presents a full microscopic window over the micro presentation window', () => {
+    const window = 4.1e-6
+
+    expect(microWindowPhysicalDelta(MICRO_WINDOW_WALL_SECONDS, window)).toBeCloseTo(window, 15)
+    const frame = microWindowPhysicalDelta(1 / 60, window)
+    expect(frame).toBeGreaterThan(0)
+    expect(frame).toBeLessThan(window)
+  })
+
   it('ignores invalid or unavailable timing inputs', () => {
     expect(magneticPhysicalDelta(-1, 1)).toBe(0)
     expect(magneticPhysicalDelta(1, 0)).toBe(0)
     expect(magneticPhysicalDelta(Number.NaN, 1)).toBe(0)
+    expect(microWindowPhysicalDelta(-1, 1)).toBe(0)
+    expect(microWindowPhysicalDelta(1, 0)).toBe(0)
+    expect(microWindowPhysicalDelta(Number.NaN, 1)).toBe(0)
   })
 
   it('finds the nearest sampled state with stable boundary behavior', () => {

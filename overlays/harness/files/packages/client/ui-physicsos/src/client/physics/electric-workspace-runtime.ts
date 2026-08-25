@@ -51,6 +51,7 @@ import {
   type SceneCommandType,
 } from '@physicsos/physics-scene'
 
+import { microWindowPhysicalDelta } from '../animation-clock.ts'
 import { electricSampleReadout, electricSceneVisualAt } from './electric-visual-bridge.ts'
 import {
   branchBadgeOf,
@@ -780,7 +781,11 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     const end = this.computed?.endTime ?? 0
     if (this.running && Number.isFinite(wallClockSeconds) && end > 0) {
-      const next = this.currentTime + wallClockSeconds * this.rate
+      /* An electron transits the plates in ~1e-8 s, so raw wall seconds would end
+         the run inside the first frame. The wall→scene mapping paces the full
+         window over MICRO_WINDOW_WALL_SECONDS — the same presentation-only scaling
+         the magnetic runtime applies per period. */
+      const next = this.currentTime + microWindowPhysicalDelta(wallClockSeconds, end) * this.rate
       this.currentTime = next >= end ? end : next
       if (this.currentTime >= end) this.running = false
       this.recompute()

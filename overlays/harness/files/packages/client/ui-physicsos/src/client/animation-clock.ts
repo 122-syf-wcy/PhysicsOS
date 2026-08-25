@@ -16,6 +16,19 @@ export const magneticPhysicalDelta = (wallSeconds: number, periodSeconds: number
     ? Math.max(0, wallSeconds) * periodSeconds / MAGNETIC_CYCLE_WALL_SECONDS
     : 0
 
+/** A charged-particle run lasts nanoseconds–microseconds of physical time; at 1x
+    the whole visible window is presented over this many wall-clock seconds. */
+export const MICRO_WINDOW_WALL_SECONDS = 8
+
+/** Convert a wall-clock frame delta into the microscopic physical time consumed
+    by the engine, pacing the full window over MICRO_WINDOW_WALL_SECONDS. This
+    scales presentation only — the scene clock still advances real physical time,
+    so raw wall seconds can never swallow the whole run in a single frame. */
+export const microWindowPhysicalDelta = (wallSeconds: number, windowSeconds: number): number =>
+  windowSeconds > 0 && Number.isFinite(wallSeconds)
+    ? Math.max(0, wallSeconds) * windowSeconds / MICRO_WINDOW_WALL_SECONDS
+    : 0
+
 /** Find the closest monotonically sampled state without scanning the whole trajectory. */
 export const nearestTimedStateIndex = (
   states: readonly { readonly time: { readonly value: number } }[],

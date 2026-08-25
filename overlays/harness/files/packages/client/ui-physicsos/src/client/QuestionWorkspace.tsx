@@ -67,6 +67,7 @@ import { createMagneticRuntime, type MagneticRuntimeBridge } from './physics-run
 import {
   MAGNETIC_CYCLE_WALL_SECONDS,
   magneticPhysicalDelta,
+  MICRO_WINDOW_WALL_SECONDS,
   nearestTimedStateIndex,
   STEP_FRACTION,
   useAnimationClock,
@@ -498,19 +499,33 @@ interface QuestionTimeline {
   readonly end: number
   /** Scene times of the sampled states; empty when the domain has no samples. */
   readonly times: readonly number[]
+  /** Physical seconds the playback clock advances per wall-clock second at 1x. */
+  readonly physicalPerWallSecond: number
 }
 
 const questionTimeline = (result: QuestionRuntimeResult): QuestionTimeline => {
-  if (result.workflowState !== 'READY' || result.scene === null) return { start: 0, end: 0, times: [] }
+  if (result.workflowState !== 'READY' || result.scene === null) {
+    return { start: 0, end: 0, times: [], physicalPerWallSecond: 1 }
+  }
   /* One magnetic orbit is presented over a fixed wall-clock window; the
      microscopic physical time is derived from it, never used as the slider domain. */
-  if (result.ir?.domain === 'magnetic') return { start: 0, end: MAGNETIC_CYCLE_WALL_SECONDS, times: [] }
+  if (result.ir?.domain === 'magnetic') {
+    return { start: 0, end: MAGNETIC_CYCLE_WALL_SECONDS, times: [], physicalPerWallSecond: 1 }
+  }
   const states = result.simulation?.states ?? []
   const start = states[0]?.time.value ?? 0
+  const end = states.at(-1)?.time.value ?? start
+  /* Mechanics runs at human scale and plays 1:1. Every charged-particle domain
+     is microscopic (ns–µs windows), so its whole window is paced over the micro
+     presentation window instead of vanishing inside the first frame. */
+  const physicalPerWallSecond = result.ir?.domain !== 'mechanics' && end > start
+    ? (end - start) / MICRO_WINDOW_WALL_SECONDS
+    : 1
   return {
     start,
-    end: states.at(-1)?.time.value ?? start,
+    end,
     times: states.map(state => state.time.value),
+    physicalPerWallSecond,
   }
 }
 
@@ -530,13 +545,13 @@ interface Playback {
  * one frame of the previous scene's time on the new scene.
  */
 function usePlayback(timeline: QuestionTimeline, sceneKey: string): Playback {
-  const { start, end, times } = timeline
+  const { start, end, times, physicalPerWallSecond } = timeline
   const [clock, setClock] = useState({ key: sceneKey, time: start, running: false })
   const current = clock.key === sceneKey ? clock : { key: sceneKey, time: start, running: false }
 
   useAnimationClock(current.running && end > start, (elapsedSeconds) => {
     setClock((previous) => {
-      const next = previous.time + elapsedSeconds
+      const next = previous.time + elapsedSeconds * physicalPerWallSecond
       return next >= end
         ? { key: sceneKey, time: end, running: false }
         : { key: sceneKey, time: next, running: true }
