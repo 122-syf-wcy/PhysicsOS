@@ -15,68 +15,13 @@
  *   I  Agent「为什么这个粒子没有偏转」→ 引用 Composite Verifier + 高亮两个力
  *   +  E+B+g 实验（重力可见）、composite timeline 截图、浏览器 Gate
  *
- * node apps/web/e2e/composite-acceptance.mjs
+ * node tests/acceptance/composite-acceptance.mjs
  */
-import { chromium } from '@playwright/test'
-import path from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import process, { stdout } from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { stdout } from 'node:process'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
-const SHOTS = path.join(ROOT, 'docs', 'reports', 'screenshots')
-mkdirSync(SHOTS, { recursive: true })
-mkdirSync(path.join(ROOT, 'tmp'), { recursive: true })
+import { BASE, openAcceptance } from './support.mjs'
 
-const BASE = 'http://127.0.0.1:3080'
-const failures = []
-const gate = { consoleErrors: [], pageErrors: [], rejections: [], failedRequests: [], errorResponses: [] }
-
-const check = (label, condition, detail) => {
-  if (condition) {
-    stdout.write(`  ✓ ${label}\n`)
-    return true
-  }
-  failures.push(`${label}${detail === undefined ? '' : ` — ${detail}`}`)
-  stdout.write(`  ✗ ${label}${detail === undefined ? '' : ` — ${detail}`}\n`)
-  return false
-}
-
-const browser = await chromium.launch()
-const context = await browser.newContext({ viewport: { width: 1600, height: 900 } })
-const page = await context.newPage()
-
-page.on('console', (message) => {
-  if (message.type() === 'error') gate.consoleErrors.push(message.text().slice(0, 300))
-})
-page.on('pageerror', (error) => { gate.pageErrors.push(error.message.slice(0, 300)) })
-page.on('requestfailed', (request) => {
-  const reason = request.failure()?.errorText ?? ''
-  /* An abort is the browser cancelling its own in-flight request on navigation —
-     client-side cancellation, not a product failure the gate should trip on. */
-  if (reason.includes('ERR_ABORTED')) return
-  gate.failedRequests.push(`${request.method()} ${request.url().slice(0, 160)} ${reason}`)
-})
-page.on('response', (response) => {
-  if (response.status() >= 400) {
-    gate.errorResponses.push(`${response.status()} ${response.url().slice(0, 160)}`)
-  }
-})
-await page.addInitScript(() => {
-  window.__unhandled = []
-  window.addEventListener('unhandledrejection', (event) => {
-    window.__unhandled.push(String(event.reason).slice(0, 300))
-  })
-})
-
-const shot = async (name, viewport) => {
-  if (viewport !== undefined) {
-    await page.setViewportSize(viewport)
-    await page.waitForTimeout(320)
-  }
-  await page.screenshot({ path: path.join(SHOTS, `${name}.png`) })
-  stdout.write(`  📷 ${name}\n`)
-}
+const { page, check, shot, dismissOnboarding, finish } = await openAcceptance(import.meta.url)
 
 const lab = () => page.locator('[data-physicsos-surface="lab"]')
 const questions = () => page.locator('[data-physicsos-surface="questions"]')
@@ -150,13 +95,7 @@ const openPickerFromToolbar = async () => {
 }
 
 await page.goto(`${BASE}/`, { waitUntil: 'networkidle', timeout: 60_000 })
-
-/* Dismiss the onboarding API-key dialog and WAIT for its mask to detach. */
-const later = page.getByRole('button', { name: '稍后配置' })
-await later.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {})
-if (await later.isVisible().catch(() => false)) await later.click()
-await page.locator('[class*="mask"]').waitFor({ state: 'detached', timeout: 15_000 }).catch(() => {})
-await page.getByText('探索一个物理世界').waitFor({ state: 'visible', timeout: 20_000 })
+await dismissOnboarding()
 
 /* ---------------------------------------------------------------- CASE A -- */
 stdout.write('\nCASE A · 物理实验室 lands on the experiment library, not a magnetic demo\n')
@@ -408,21 +347,4 @@ for (const [label, size] of [
 }
 await page.setViewportSize({ width: 1600, height: 900 })
 
-/* ------------------------------------------------------------------ gate -- */
-gate.rejections = await page.evaluate(() => window.__unhandled ?? [])
-stdout.write('\nBrowser gate\n')
-check('console errors = 0', gate.consoleErrors.length === 0, gate.consoleErrors.join(' | '))
-check('page errors = 0', gate.pageErrors.length === 0, gate.pageErrors.join(' | '))
-check('unhandled rejections = 0', gate.rejections.length === 0, gate.rejections.join(' | '))
-check('failed requests = 0', gate.failedRequests.length === 0, gate.failedRequests.join(' | '))
-check('error responses = 0', gate.errorResponses.length === 0, gate.errorResponses.join(' | '))
-
-writeFileSync(
-  path.join(ROOT, 'tmp', 'composite-acceptance.json'),
-  `${JSON.stringify({ failures, gate }, null, 2)}\n`,
-)
-stdout.write(`\n${failures.length === 0 ? 'ALL CHECKS PASSED' : `${failures.length} FAILED`}\n`)
-for (const failure of failures) stdout.write(`  - ${failure}\n`)
-
-await browser.close()
-if (failures.length > 0) process.exitCode = 1
+await finish()

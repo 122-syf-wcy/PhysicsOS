@@ -216,8 +216,8 @@ pnpm dsh web
 验收：
 
 ```sh
-node apps/web/e2e/mechanics-acceptance.mjs   # 五个产品 Case + 浏览器门禁 + 截图
-node apps/web/e2e/harness-lab-shot.mjs       # 三分辨率截图 + 门禁
+node tests/acceptance/mechanics-acceptance.mjs   # 五个产品 Case + 浏览器门禁 + 截图
+node tests/acceptance/harness-lab-shot.mjs       # 三分辨率截图 + 门禁
 ```
 
 门禁：无棋盘格（`pattern path` 全部 `fill=none`）、无整页纵向滚动、

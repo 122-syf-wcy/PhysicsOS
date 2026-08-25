@@ -12,7 +12,7 @@
  *   L  Agent「电场线为什么从正电荷出来」→ 高亮 stream + 不谎称方向
  *   M  Agent「合场是怎么来的」→ 引用 electric_field_superposition 校验
  *
- * node apps/web/e2e/electric-acceptance-v2.mjs
+ * node tests/acceptance/electric-acceptance-v2.mjs
  */
 import { chromium } from '@playwright/test'
 import path from 'node:path'

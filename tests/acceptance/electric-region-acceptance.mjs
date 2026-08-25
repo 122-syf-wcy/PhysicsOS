@@ -16,7 +16,7 @@
  *   E  Agent 解释偏转方向 — 引用已验证的 check、给出依据、且不改场景 revision
  *   F  Scene Branch — 实验室里改参数不污染题目场景
  *
- * node apps/web/e2e/electric-region-acceptance.mjs
+ * node tests/acceptance/electric-region-acceptance.mjs
  */
 import { chromium } from '@playwright/test'
 import path from 'node:path'

@@ -3,7 +3,7 @@
  * states the report describes. Separate from the acceptance walk so re-shooting
  * does not require re-running every gate.
  *
- * node apps/web/e2e/final-screenshots.mjs
+ * node tests/acceptance/final-screenshots.mjs
  */
 import { chromium } from '@playwright/test'
 import path from 'node:path'

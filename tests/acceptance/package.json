@@ -1,0 +1,10 @@
+{
+  "name": "@physicsos/acceptance",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser acceptance walks against the running harness web server (pnpm dev, port 3080)",
+  "dependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

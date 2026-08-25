@@ -12,7 +12,7 @@
  *   H  Question → Lab — experimental branch renders the point-charge world
  *   I  Agent highlight — "电场强度" highlights the E vector, revision unchanged
  *
- * node apps/web/e2e/electric-acceptance.mjs
+ * node tests/acceptance/electric-acceptance.mjs
  */
 import { chromium } from '@playwright/test'
 import path from 'node:path'

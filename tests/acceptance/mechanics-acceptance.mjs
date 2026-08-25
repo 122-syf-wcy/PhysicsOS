@@ -5,7 +5,7 @@
  * console/network gate. Screenshots land in docs/reports/screenshots/ so the
  * visual QA in the report points at artefacts anyone can re-generate.
  *
- * node apps/web/e2e/mechanics-acceptance.mjs
+ * node tests/acceptance/mechanics-acceptance.mjs
  */
 import { chromium } from '@playwright/test'
 import path from 'node:path'
