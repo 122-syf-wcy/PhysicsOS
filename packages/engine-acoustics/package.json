@@ -1,0 +1,22 @@
+{
+  "name": "@physicsos/engine-acoustics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Acoustics engine: echo ranging on a single-axis range (uniform sound propagation, wall reflection, d = v·t/2 verification)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene"
+  }
+}
