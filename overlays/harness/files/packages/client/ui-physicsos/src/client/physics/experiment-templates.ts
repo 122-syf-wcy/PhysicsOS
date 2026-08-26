@@ -18,6 +18,7 @@
 
 import {
   createCompositeFieldScene,
+  createConvexLensScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
   createMechanicsScene,
@@ -26,6 +27,7 @@ import {
   createMagneticScene,
   createParallelCircuitScene,
   createParallelPlateScene,
+  createPlaneMirrorScene,
   createPointChargeScene,
   createRheostatCircuitScene,
   createSeriesCircuitScene,
@@ -42,6 +44,7 @@ import {
   IconCircuitParallel,
   IconCircuitSeries,
   IconCompositeField,
+  IconConvexLens,
   IconEmfMeasure,
   IconInclinedPlane,
   IconKinematics,
@@ -51,6 +54,7 @@ import {
   IconMeasurement,
   IconNewtonLaw,
   IconParallelPlate,
+  IconPlaneMirror,
   IconPointCharge,
   IconProjectileHorizontal,
   IconProjectileOblique,
@@ -62,7 +66,13 @@ import {
 } from '../icons/physics-icons.tsx'
 
 /** Domains a template belongs to, mirrored from the Lab runtime dispatch. */
-export type ExperimentDomain = 'mechanics' | 'electric' | 'magnetic' | 'circuit' | 'composite'
+export type ExperimentDomain =
+  | 'mechanics'
+  | 'electric'
+  | 'magnetic'
+  | 'circuit'
+  | 'composite'
+  | 'optics'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -533,6 +543,51 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* -------------------------------------------------------------------- optics -- */
+
+const opticsTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'plane-mirror',
+    domain: 'optics',
+    stage: 'junior',
+    label: 'lab.template.planeMirror',
+    hint: 'lab.template.planeMirror.hint',
+    icon: IconPlaneMirror,
+    tags: ['光学', '初中', '平面镜'],
+    createScene: (title) => {
+      /* 探究平面镜成像特点：蜡烛在玻璃板前 10 cm，光屏一开始就摆在像的位置
+         (镜后 10 cm) —— 「光屏上接不到像」从第一帧就可观察，虚像由此立住。 */
+      const scene = createPlaneMirrorScene({
+        sceneId: stampId('optics-plane-mirror'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'convex-lens',
+    domain: 'optics',
+    stage: 'junior',
+    label: 'lab.template.convexLens',
+    hint: 'lab.template.convexLens.hint',
+    icon: IconConvexLens,
+    tags: ['光学', '初中', '凸透镜', '成像规律'],
+    createScene: (title) => {
+      /* 凸透镜成像规律：f = 10 cm、u = 30 cm 起步（u > 2f，倒立缩小实像），
+         光屏默认停在清晰像平面。学生把 u 扫过 2f、f 就复现整张成像规律表。 */
+      const scene = createConvexLensScene({
+        sceneId: stampId('optics-convex-lens'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+]
+
 /* ----------------------------------------------------------------- composite -- */
 
 const compositeTemplates: readonly ExperimentTemplate[] = [
@@ -692,6 +747,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
 /** Ordered groups, one per domain. The "全部" tab is built by flattening these. */
 export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics', templates: mechanicsTemplates },
+  { id: 'optics', label: 'lab.template.group.optics', templates: opticsTemplates },
   { id: 'electric', label: 'lab.template.group.electric', templates: electricTemplates },
   { id: 'magnetic', label: 'lab.template.group.magnetic', templates: magneticTemplates },
   { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },

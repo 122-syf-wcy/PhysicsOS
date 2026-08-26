@@ -43,6 +43,7 @@ type TabId = 'all' | ExperimentDomain
 const TABS: readonly { id: TabId; label: PhysicsosKey }[] = [
   { id: 'all', label: 'lab.template.group.all' },
   { id: 'mechanics', label: 'lab.template.group.mechanics' },
+  { id: 'optics', label: 'lab.template.group.optics' },
   { id: 'electric', label: 'lab.template.group.electric' },
   { id: 'magnetic', label: 'lab.template.group.magnetic' },
   { id: 'circuit', label: 'lab.template.group.circuit' },
@@ -63,6 +64,7 @@ const RECENT_LIMIT = 3
 
 const DOMAIN_IDS: readonly ExperimentDomain[] = [
   'mechanics',
+  'optics',
   'electric',
   'magnetic',
   'circuit',

@@ -546,6 +546,43 @@ const BuoyancyArt = () => (
   </>
 )
 
+/* -------------------------------------------------------------------- optics -- */
+
+/** 平面镜成像: candle before the glass plate, mirrored dashes behind it. */
+const PlaneMirrorArt = () => (
+  <>
+    <Stroke d="M10 52 H110" width={1.6} opacity={0.35} />
+    <Stroke d="M60 12 V52" width={2.6} />
+    {[17, 27, 37, 47].map(y => (
+      <Stroke key={y} d={`M61.5 ${y + 4} L68 ${y - 3}`} width={1.3} opacity={0.4} />
+    ))}
+    <Stroke d="M34 30 V52" width={2.4} />
+    <Stroke d="M34 30 c-3.5 -4.5 3.5 -7.5 0 -12 c5 3 4.5 8 0 12" width={1.8} />
+    <Stroke d="M86 30 V52" width={2.4} opacity={0.5} dash="4 3" />
+    <Stroke d="M86 30 c-3.5 -4.5 3.5 -7.5 0 -12" width={1.6} opacity={0.5} dash="3 3" />
+    <Stroke d="M36 34 L60 26 M60 26 L42 20" width={1.4} opacity={0.55} />
+    <Stroke d="M60 26 L84 33.5" width={1.3} opacity={0.4} dash="2 3" />
+  </>
+)
+
+/** 凸透镜成像: candle, lens with F marks, inverted image caught on the screen. */
+const ConvexLensArt = () => (
+  <>
+    <Stroke d="M8 36 H112" width={1.5} opacity={0.35} dash="5 4" />
+    <Stroke d="M60 12 V60" width={2.4} />
+    <Stroke d="M56.5 16 L60 12 L63.5 16 M56.5 56 L60 60 L63.5 56" width={2} />
+    {[42, 78].map(x => (
+      <Stroke key={x} d={`M${x} 33 V39`} width={1.5} opacity={0.5} />
+    ))}
+    <Stroke d="M24 36 V18" width={2.4} />
+    <Stroke d="M20.8 22 L24 18 L27.2 22" width={2} />
+    <Stroke d="M24 18 H60 L96 47 M24 18 L96 47" width={1.4} opacity={0.55} />
+    <Stroke d="M96 47 V36" width={2.4} opacity={0.85} />
+    <Stroke d="M92.8 43 L96 47 L99.2 43" width={2} opacity={0.85} />
+    <Stroke d="M103 20 V54" width={2.6} opacity={0.6} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -599,6 +636,8 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'bulb-power': BulbPowerArt,
   'lever-balance': LeverBalanceArt,
   buoyancy: BuoyancyArt,
+  'plane-mirror': PlaneMirrorArt,
+  'convex-lens': ConvexLensArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -628,6 +667,8 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['average-speed', 'mechanics-average-speed'],
   ['va-resistance', 'circuit-va-resistance'],
   ['bulb-power', 'circuit-bulb-power'],
+  ['plane-mirror', 'optics-plane-mirror'],
+  ['convex-lens', 'optics-convex-lens'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

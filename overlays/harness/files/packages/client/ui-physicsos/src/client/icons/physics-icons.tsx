@@ -335,6 +335,29 @@ export const IconBuoyancy = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* ------------------------------------------------------------------ optics -- */
+
+/** Plane mirror: a hatched plate with an incident/reflected ray pair. */
+export const IconPlaneMirror = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M14.5 3.5v17" />
+    <path d="M14.5 6.5l3-2M14.5 10.5l3-2M14.5 14.5l3-2M14.5 18.5l3-2" strokeOpacity="0.55" />
+    <path d="M4 6l10.5 6L4 18" />
+    <path d="M14.5 12h-4" strokeOpacity="0.55" strokeDasharray="1.6 2" />
+  </Glyph>
+)
+
+/** Convex lens: the double-arrow lens symbol refracting a parallel ray. */
+export const IconConvexLens = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M12 4v16" />
+    <path d="M10.2 5.8 12 4l1.8 1.8M10.2 18.2 12 20l1.8-1.8" />
+    <path d="M3 12h18" strokeOpacity="0.4" strokeDasharray="1.6 2.4" />
+    <path d="M3 8.5h9l8 7" />
+    <circle cx="16" cy="12" r="1.1" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */
