@@ -47,6 +47,9 @@ export {
   type ThinLens,
   type PlaneMirror,
   type CurvedMirror,
+  type AcousticBench,
+  type AcousticReflector,
+  type AcousticSource,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -209,3 +212,17 @@ export {
   type ConvexLensSceneInput,
   type PlaneMirrorSceneInput,
 } from './optics/optics-templates.ts'
+export {
+  acousticBenchOf,
+  acousticBenchesOf,
+  createAcousticBenchScene,
+  isAcousticsScene,
+  type AcousticBenchSceneInput,
+  type AcousticReflectorSpec,
+  type AcousticSourceSpec,
+  type AcousticsObservableKey,
+} from './acoustics/acoustics-scene.ts'
+export {
+  createEchoRangingScene,
+  type EchoRangingSceneInput,
+} from './acoustics/acoustics-templates.ts'

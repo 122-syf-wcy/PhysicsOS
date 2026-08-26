@@ -71,6 +71,7 @@ export function buildSceneFromIR(
     constraints: [],
     circuits: [],
     opticalBenches: [],
+    acousticBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       { id: asObservableId('observable-velocity'), type: 'velocity', targetId: particleId, visible: true },

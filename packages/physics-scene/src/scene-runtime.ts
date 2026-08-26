@@ -25,6 +25,7 @@ import {
 
 import { validateScene } from './scene-validation.ts'
 import type {
+  AcousticBench,
   Circuit,
   CircuitComponent,
   OpticalBench,
@@ -39,7 +40,7 @@ export const SCENE_REVISION_CONFLICT = 'SCENE_REVISION_CONFLICT' as const
 
 export type ElectricFieldDirection = 'right' | 'left' | 'up' | 'down'
 
-/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric + Circuit + Optics Runtime slices. */
+/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric + Circuit + Optics + Acoustics Runtime slices. */
 export type SceneCommandType =
   | 'SetParticleCharge'
   | 'SetParticleMass'
@@ -67,6 +68,8 @@ export type SceneCommandType =
   | 'SetLensFocalLength'
   | 'SetMirrorFocalLength'
   | 'SetOpticalScreenPosition'
+  | 'SetAcousticReflectorPosition'
+  | 'SetAcousticSoundSpeed'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -192,6 +195,16 @@ export interface SceneCommandPayloadMap {
     /** Signed x position of the screen plane. */
     position: Quantity<'length'>
   }
+  SetAcousticReflectorPosition: {
+    benchId: string
+    /** Signed x position of the reflecting face; must stay ahead of the source. */
+    position: Quantity<'length'>
+  }
+  SetAcousticSoundSpeed: {
+    benchId: string
+    /** Speed of sound in the propagation medium; finite and > 0. */
+    soundSpeed: Quantity<'velocity'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -249,6 +262,8 @@ export type PhysicsEventType =
   | 'LensFocalLengthChanged'
   | 'MirrorFocalLengthChanged'
   | 'OpticalScreenPositionChanged'
+  | 'AcousticReflectorPositionChanged'
+  | 'AcousticSoundSpeedChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -284,6 +299,8 @@ export interface PhysicsEventPayloadMap {
   LensFocalLengthChanged: SceneCommandPayloadMap['SetLensFocalLength']
   MirrorFocalLengthChanged: SceneCommandPayloadMap['SetMirrorFocalLength']
   OpticalScreenPositionChanged: SceneCommandPayloadMap['SetOpticalScreenPosition']
+  AcousticReflectorPositionChanged: SceneCommandPayloadMap['SetAcousticReflectorPosition']
+  AcousticSoundSpeedChanged: SceneCommandPayloadMap['SetAcousticSoundSpeed']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -368,6 +385,7 @@ const NOT_FOUND_CODES = {
   optical_bench: 'OPTICAL_BENCH_NOT_FOUND',
   optical_element: 'OPTICAL_ELEMENT_NOT_FOUND',
   optical_screen: 'OPTICAL_SCREEN_NOT_FOUND',
+  acoustic_bench: 'ACOUSTIC_BENCH_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -456,6 +474,22 @@ const findOpticalBench = (scene: PhysicsScene, benchId: string): OpticalBenchLoo
   }
   const bench = scene.opticalBenches.find((entry) => entry.id === benchId)
   if (bench === undefined) return { ok: false, error: notFound('optical_bench', benchId) }
+  return { ok: true, bench }
+}
+
+type AcousticBenchLookup =
+  | { ok: true; bench: AcousticBench }
+  | { ok: false; error: DomainError }
+
+const findAcousticBench = (scene: PhysicsScene, benchId: string): AcousticBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_ACOUSTIC_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = scene.acousticBenches.find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('acoustic_bench', benchId) }
   return { ok: true, bench }
 }
 
@@ -1475,6 +1509,62 @@ const applyCommand = (
           ...eventMetadata,
           type: 'OpticalScreenPositionChanged',
           payload: { benchId: command.payload.benchId, position: clone(position) },
+        },
+      }
+    }
+
+    /* ---------------------------------------------------------- acoustics -- */
+
+    case 'SetAcousticReflectorPosition': {
+      const lookup = findAcousticBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const position = validateQuantity(command.payload.position, 'length')
+      const positionSI = canonicalValue(position)
+      /* The pulse travels towards +x: a reflector at or behind the source has
+         no echo path, so the gate rejects it here rather than letting the
+         engine report a broken scene later. */
+      if (!Number.isFinite(positionSI) || positionSI <= canonicalValue(lookup.bench.source.position)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_ACOUSTIC_REFLECTOR_POSITION',
+            'Reflector must sit a finite distance ahead of the sound source.',
+            { benchId: command.payload.benchId, position: command.payload.position },
+          ),
+        }
+      }
+      lookup.bench.reflector.position = clone(position)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'AcousticReflectorPositionChanged',
+          payload: { benchId: command.payload.benchId, position: clone(position) },
+        },
+      }
+    }
+
+    case 'SetAcousticSoundSpeed': {
+      const lookup = findAcousticBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const soundSpeed = validateQuantity(command.payload.soundSpeed, 'velocity')
+      if (!Number.isFinite(canonicalValue(soundSpeed)) || canonicalValue(soundSpeed) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_ACOUSTIC_SOUND_SPEED',
+            'Sound speed must be a positive finite velocity.',
+            { benchId: command.payload.benchId, soundSpeed: command.payload.soundSpeed },
+          ),
+        }
+      }
+      lookup.bench.soundSpeed = clone(soundSpeed)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'AcousticSoundSpeedChanged',
+          payload: { benchId: command.payload.benchId, soundSpeed: clone(soundSpeed) },
         },
       }
     }

@@ -455,6 +455,42 @@ export interface OpticalBench extends PhysicsObjectBase {
   screen?: OpticalScreen
 }
 
+/* ------------------------------------------------------- acoustic range -- */
+
+/**
+ * Sound source standing on the range axis (the clapper / horn of the lab).
+ * Positions along the range are signed x coordinates; the pulse is emitted at
+ * t = 0 and travels towards +x.
+ */
+export interface AcousticSource {
+  id: string
+  name?: string
+  /** Signed x position of the source on the range axis. */
+  position: Quantity<'length'>
+}
+
+/** Reflecting wall / cliff face standing perpendicular to the range axis. */
+export interface AcousticReflector {
+  id: string
+  name?: string
+  /** Signed x position of the reflecting face; must sit ahead of the source. */
+  position: Quantity<'length'>
+}
+
+/**
+ * Single-axis echo range (junior acoustics slice): one sound source facing a
+ * reflecting wall. A pulse emitted at t = 0 travels at the medium's sound
+ * speed, reflects off the wall and returns; the round-trip delay is the
+ * measured echo time, and d = v·t/2 recovers the distance.
+ */
+export interface AcousticBench extends PhysicsObjectBase {
+  type: 'acoustic_bench'
+  source: AcousticSource
+  reflector: AcousticReflector
+  /** Speed of sound in the propagation medium; finite and > 0. */
+  soundSpeed: Quantity<'velocity'>
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -502,6 +538,7 @@ export interface PhysicsScene {
   constraints: Constraint[]
   circuits: Circuit[]
   opticalBenches: OpticalBench[]
+  acousticBenches: AcousticBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]

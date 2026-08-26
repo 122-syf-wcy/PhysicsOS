@@ -67,6 +67,8 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       ...entry.elements.map((element) => element.id),
       ...(entry.screen === undefined ? [] : [entry.screen.id]),
     ]),
+    ...scene.acousticBenches.map((entry) => entry.id),
+    ...scene.acousticBenches.flatMap((entry) => [entry.source.id, entry.reflector.id]),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -458,6 +460,34 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         }),
       )
     }
+  }
+
+  for (const bench of scene.acousticBenches) {
+    const dimensionsValid =
+      hasExpectedDimension(bench.source.position, 'length') &&
+      hasExpectedDimension(bench.reflector.position, 'length') &&
+      hasExpectedDimension(bench.soundSpeed, 'velocity')
+    checks.push(
+      check(`acoustic_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Acoustic bench "${bench.id}" quantities must use length / velocity dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    /* The pulse travels towards +x: a reflector at or behind the source has no
+       echo path, and a non-positive sound speed is not a propagation medium. */
+    const valuesValid =
+      dimensionsValid &&
+      Number.isFinite(canonicalValue(bench.source.position)) &&
+      Number.isFinite(canonicalValue(bench.reflector.position)) &&
+      canonicalValue(bench.reflector.position) > canonicalValue(bench.source.position) &&
+      Number.isFinite(canonicalValue(bench.soundSpeed)) &&
+      canonicalValue(bench.soundSpeed) > 0
+    checks.push(
+      check(`acoustic_bench_values:${bench.id}`, 'constraint', valuesValid, {
+        message: `Acoustic bench "${bench.id}" needs the reflector ahead of the source and sound speed > 0.`,
+        targetId: bench.id,
+      }),
+    )
   }
 
   for (const observable of scene.observableDefinitions) {

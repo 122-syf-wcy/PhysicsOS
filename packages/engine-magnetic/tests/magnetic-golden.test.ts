@@ -69,6 +69,7 @@ const createScene = (options: SceneOptions = {}): PhysicsScene => ({
   constraints: [],
   circuits: [],
   opticalBenches: [],
+  acousticBenches: [],
   measurementDefinitions: [],
   observableDefinitions: [],
   annotations: [],
