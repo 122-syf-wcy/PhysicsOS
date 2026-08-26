@@ -9,7 +9,8 @@
  * 结点 / 滑动变阻器 / 电源含内阻) — never from a template id, so a student-
  * modified or question-forked circuit still gets the probes that match what is
  * actually on the canvas. The optics topics dispatch the same way, on the
- * imaging element the runtime reports (平面镜 / 凸透镜 / 凹面镜). The 初中 measurement
+ * imaging element the runtime reports (平面镜 / 凸透镜 / 凹面镜), and the
+ * acoustics topic on the echo range being present. The 初中 measurement
  * rigs (测平均速度 / 伏安法 / 测灯泡功率) are physically identical to their
  * base apparatus — their topic is the measurement intent, which lives in the
  * scene title the template stamped, the same dispatch the tutor uses for
@@ -592,6 +593,72 @@ const CURVED_MIRROR_WITHIN_F: SelfCheckItem = {
   ],
 }
 
+/* ------------------------------------------------- 回声测距 (初中声学) -- */
+
+const ECHO_DISTANCE_FORMULA: SelfCheckItem = {
+  id: 'echo-distance-formula',
+  prompt: '对着峭壁喊一声，2 s 后听到回声。声速取 340 m/s，人到峭壁的距离是？',
+  takeaway:
+    '2 s 是声音"去 + 回"走完的时间：总路程 v·t = 680 m 是双程，单程距离要减半，d = v·t/2 = 340 m —— 除以 2 正是回声测距最容易漏掉的一步。',
+  options: [
+    { id: 'half-trip', label: '340 m（d = v·t/2，声音走的是往返双程）', correct: true },
+    {
+      id: 'full-trip',
+      label: '680 m（距离 = 速度 × 时间）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          's = vt 没有错，错在 680 m 是声音的总路程：声音先到峭壁再折回来，2 s 里把"去程 + 回程"都走完了。人到峭壁的距离只是其中一半，务必再除以 2。',
+        review: ['回声测距 d = v·t/2', '往返路程与单程距离的区别'],
+        evidenceCheckId: 'echo_distance_formula',
+      },
+    },
+    {
+      id: 'quarter-trip',
+      label: '170 m（去和回各占 1 s，再对半分）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '"去和回各占 1 s"是对的，但那 1 s 里声音恰好走完整个单程：d = v·t₁ = 340 × 1 = 340 m。除以 2 只做一次 —— 要么把总时间减半，要么把总路程减半，不能两个都减。',
+        review: ['回声测距 d = v·t/2', '单程时间 t₁ = t/2'],
+        evidenceCheckId: 'reflection_symmetry',
+      },
+    },
+  ],
+}
+
+const ECHO_MEDIUM_SPEED: SelfCheckItem = {
+  id: 'echo-medium-speed',
+  prompt: '用同样的方法在水下测距（声呐），测得的回声时间比空气中短得多，主要原因是？',
+  takeaway:
+    '声速由传播介质决定：水中约 1500 m/s，比 15 ℃ 空气中的 340 m/s 快得多，同样的距离往返时间自然更短 —— 计算时必须用介质对应的声速。',
+  options: [
+    { id: 'medium-speed', label: '水中声速（约 1500 m/s）远大于空气中的声速', correct: true },
+    {
+      id: 'louder-faster',
+      label: '声呐发出的声音更响，传得更快',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '响度描述声音的强弱，由振幅决定；传播快慢由介质本身决定，与响度无关。再响的声音在同一介质里也是同一个速度匀速传播。',
+        review: ['声速由介质决定', '响度与振幅'],
+        evidenceCheckId: 'pulse_speed_constant',
+      },
+    },
+    {
+      id: 'water-shorter-path',
+      label: '声音在水里走的是更短的路线',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '声音沿直线传播，去程和回程走的都是源到反射面的同一段距离，介质不会改变路径长度。时间变短只能是速度变快：t = 2d/v，v 越大 t 越小。',
+        review: ['声音沿直线传播', '回声时间 t = 2d/v'],
+        evidenceCheckId: 'echo_distance_formula',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -719,6 +786,12 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '凹面镜成像',
     knowledge: ['opt-curved-mirror', 'opt-light-reflection', 'opt-real-virtual-image'],
     items: [CURVED_MIRROR_BEYOND_2F, CURVED_MIRROR_WITHIN_F],
+  },
+  'acoustics-echo': {
+    id: 'acoustics-echo',
+    topic: '回声测距',
+    knowledge: ['ac-echo-ranging', 'ac-sound-propagation', 'ac-echo'],
+    items: [ECHO_DISTANCE_FORMULA, ECHO_MEDIUM_SPEED],
   },
 }
 

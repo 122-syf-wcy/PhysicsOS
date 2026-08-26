@@ -1,8 +1,8 @@
 /**
  * PhysicsOS Knowledge Graph V1.
  *
- * A small, explicit curriculum graph: four subject roots (力学 / 电磁学 / 电路 /
- * 光学) with the knowledge points the current teaching content actually
+ * A small, explicit curriculum graph: five subject roots (力学 / 电磁学 / 电路 /
+ * 光学 / 声学) with the knowledge points the current teaching content actually
  * exercises, plus an explicit question → node mapping. Everything here is
  * DATA — no physics is computed, and the mapping is a hand-audited table
  * rather than a keyword heuristic, so a question can never drift onto the
@@ -12,12 +12,12 @@
  *  - Question Space shows the nodes of the current question as 知识总结.
  *  - The learning record aggregates student attempts per node (掌握度).
  *  - The Lab's experiment self-checks (see experiment-self-checks.ts) write
- *    attempts against the circuit and optics nodes, which have no golden
- *    questions yet.
+ *    attempts against the circuit, optics and acoustics nodes, which have no
+ *    golden questions yet.
  */
 
 /** Subject roots. */
-export type KnowledgeDomain = 'mechanics' | 'electromagnetism' | 'circuit' | 'optics'
+export type KnowledgeDomain = 'mechanics' | 'electromagnetism' | 'circuit' | 'optics' | 'acoustics'
 
 export interface KnowledgeNode {
   readonly id: string
@@ -74,6 +74,14 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'opt-lens-imaging', label: '凸透镜成像规律', domain: 'optics', parentId: 'optics' },
   { id: 'opt-curved-mirror', label: '球面镜成像（凹面镜/凸面镜）', domain: 'optics', parentId: 'optics' },
   { id: 'opt-real-virtual-image', label: '实像与虚像', domain: 'optics', parentId: 'optics' },
+
+  /* 声学 nodes are exercised by the Lab's echo-ranging self-checks (回声测距);
+     like optics they have no golden questions yet, so the learning record
+     reaches them through lab attempts. */
+  { id: 'acoustics', label: '声学', domain: 'acoustics' },
+  { id: 'ac-sound-propagation', label: '声音的传播与声速', domain: 'acoustics', parentId: 'acoustics' },
+  { id: 'ac-echo', label: '回声与反射', domain: 'acoustics', parentId: 'acoustics' },
+  { id: 'ac-echo-ranging', label: '回声测距 d = v·t/2', domain: 'acoustics', parentId: 'acoustics' },
 ]
 
 const NODE_BY_ID: ReadonlyMap<string, KnowledgeNode> = new Map(
