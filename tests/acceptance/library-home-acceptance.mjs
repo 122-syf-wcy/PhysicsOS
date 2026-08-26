@@ -73,8 +73,8 @@ await picker().waitFor({ state: 'visible', timeout: 20_000 })
     state.cards.every((card) => card.reasonText === '经典实验'))
   const tints = new Set(state.cards.map((card) => card.bg))
   check('subject tints differ between the three domains', tints.size === 3, [...tints].join(' | '))
-  check('four domain tabs carry four distinct colour dots',
-    state.dotColors.length === 4 && new Set(state.dotColors).size === 4, state.dotColors.join(' | '))
+  check('five domain tabs carry five distinct colour dots',
+    state.dotColors.length === 5 && new Set(state.dotColors).size === 5, state.dotColors.join(' | '))
   check('no page scroll on the library home', state.scrolls === false)
 
   /* Hand-drawn scene artwork: every card carries its template's dedicated SVG

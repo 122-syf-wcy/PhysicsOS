@@ -1760,7 +1760,7 @@ index fbe42fc279..344e146033 100644
        fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
        expect(expandSidebar).toHaveBeenCalledTimes(1)
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..3f5fc53ad6 100644
+index 1490a0f9f7..507ecc3ba0 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -42,6 +42,9 @@ importers:
@@ -1783,12 +1783,15 @@ index 1490a0f9f7..3f5fc53ad6 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:^
          version: link:../../client/ui-plan
-@@ -2283,6 +2289,85 @@ importers:
+@@ -2283,6 +2289,91 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
 +  packages/client/ui-physicsos:
 +    dependencies:
++      '@physicsos/engine-circuit':
++        specifier: link:../../../../../packages/engine-circuit
++        version: link:../../../../../packages/engine-circuit
 +      '@physicsos/engine-composite':
 +        specifier: link:../../../../../packages/engine-composite
 +        version: link:../../../../../packages/engine-composite
@@ -1819,6 +1822,9 @@ index 1490a0f9f7..3f5fc53ad6 100644
 +      '@physicsos/physics-scene':
 +        specifier: link:../../../../../packages/physics-scene
 +        version: link:../../../../../packages/physics-scene
++      '@physicsos/physics-units':
++        specifier: link:../../../../../packages/physics-units
++        version: link:../../../../../packages/physics-units
 +      '@physicsos/physics-verifier':
 +        specifier: link:../../../../../packages/physics-verifier
 +        version: link:../../../../../packages/physics-verifier

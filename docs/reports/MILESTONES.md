@@ -357,6 +357,50 @@ electric-region / composite / learning 六份 acceptance 全 PASS
 （规划中的独立条目）；推荐算法不引入模型/遥测（规则即理由）；
 不新增实验模板。
 
+### CIRCUIT_RUNTIME_PACK_V1_COMPLETE
+
+**日期**：2026-08-26
+
+**范围**：Roadmap Phase 13 — Circuit Engine，第三条系统级验收链「动态电路」
+的实验室切片。第一个非空间坐标系领域：画布是抽象原理图网格，播放是
+准静态滑片扫描，骨架仍是同一条 Scene → Engine → Verifier →
+WorkspaceRuntime → Renderer 链。
+
+**A. Domain Core**：`createCircuitScene` netlist 工厂（端子按 net 声明、
+union-find 拓扑、`metadata.layout` 仅供呈现）+ 五个模板工厂（串联/并联/
+混联/滑变/测 EMF 内阻）；冻结命令集 +5（`SetComponentResistance` /
+`SetSourceVoltage` / `SetSourceInternalResistance` / `SetSwitchState` /
+`SetSliderPosition`）；`@physicsos/engine-circuit` MNA 直流引擎——
+每连通岛独立接地（断路不悬浮）、理想表高阻/串0建模、奇异系统显式失败；
+`stateAt(t)` 沿滑片重解工作点，8 项派生量带公式，五类校验
+（scene_valid / KCL / 功率守恒 / U = E − I·r / 理想表不干扰）；
+Golden Case 24 项先行。
+
+**B. UI Runtime Pack**：实验库 16 → 21 模板、新「电路」分类与学科色
+`--physics-subject-circuit`；`CircuitWorkspaceRuntime`（编辑走真实
+SceneCommand、参数变更扫描归零、题目场景 fork 语义一致）；
+`circuit-visual-bridge` 把 verified 工作点投影为原理图（符号/走线/结点/
+电流箭头/表读数，<1e-9 A 显示 0 不冒充精度）；`CircuitRenderer` 真实
+SVG 符号（电源/电阻/滑变/开关/电表）；I-t / U-t / P-t 图表与数据表。
+
+**C. 验收与回归**：`circuit-acceptance.mjs` CASE A–F + 响应式 + 5 门禁
+全 PASS（串联 0.2 A/4 V、EMF 联动 revision +1、断路全零、8 秒滑变扫描、
+U = E − I·r 与断路直读 EMF）；七套老 acceptance 全 PASS——唯一适配是
+library-home「领域彩点」检查由四色更新为五色（产品演进）；截图回写。
+
+依据：`docs/reports/CIRCUIT-RUNTIME-PACK-V1-REPORT.md`
+
+验收数据：`typecheck` / `lint`（core+web）零错误；`test:core` 20 包 655
+全绿（engine-circuit 24、physics-scene 50）；`test:web` 235/19 文件全绿
+（circuit.client.spec 10 项）；`build:web` 通过；八套浏览器验收全 PASS、
+门禁计数器全 0；overlay 已回写（补录 vendor lockfile 的 engine-circuit /
+physics-units workspace link）。
+
+**不做**（明确边界）：交流/瞬态与电容电感（canHandle 显式拒识）；
+多电源网络（当前锁单源，Induction 需要时解锁）；Question Space 电路题
+与 Agent 电路意图（下一切片）；自由搭建电路编辑器；Phase 14 电磁感应
+导轨（依赖本轮，下一阶段）。
+
 ---
 
 ## 进行中

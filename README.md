@@ -23,20 +23,24 @@ vendor/deepseek-harness/apps/web
 ## 当前能力
 
 - PhysicsOS 首页、侧栏、学生模式与正式 Harness 工作区
+- 实验中心：21 个可创建实验模板（力学/电场/磁场/复合场/电路五个分类），继续上次实验与按学习记录的薄弱点推荐
 - 匀强磁场带电粒子实验：参数编辑、运行/暂停/单步/重置、倍速、时间轴、可观察量、数据、图像、推导和事件
 - 五类力学场景：匀速、匀加速、平抛/斜抛、牛顿第二定律、无摩擦斜面
-- 统一 `PhysicsCanvas`：磁场和力学共用坐标、网格、轨迹、矢量、标注与交互
-- Question Space：16 道内置题，真实 Question Runtime、Engine、Verifier 与 Observation 链
-- Question → Lab：力学和磁场题使用同一个 `PhysicsScene` revision 打开实验室
+- 电场与复合场：点电荷/多点电荷/匀强场/平行板偏转，速度选择器、质谱仪、E+B(+g)、多场区
+- 直流动态电路：串联/并联/混联、开关、滑动变阻器准静态扫描、电流表/电压表读数、测电动势与内阻（MNA 直流引擎）
+- 统一 `PhysicsCanvas`：粒子域共用坐标、网格、轨迹、矢量、标注与交互；电路以原理图范式接入同一画布
+- Question Space：56 道内置题，真实 Question Runtime、Engine、Verifier 与 Observation 链
+- Question → Lab：题目使用同一个 `PhysicsScene` revision 打开实验室（题面事实不可被实验污染）
 - 基于 `requestAnimationFrame` 的连续动画；磁场微观周期使用稳定展示时钟，力学逐帧读取 Engine `stateAt`
 - 桌面、窄桌面和手机布局；手机导航完成后自动收起侧栏
 
 ## 尚未完成
 
 - 图片/PDF/OCR/VLM 试题识别与整卷拆题
-- AI 助教、保存、更多菜单等按钮对应的完整业务闭环
-- 实验模板库、用户学习记录与持久化服务
-- Electric、Circuit、Induction、Optics、Wave 等后续物理领域
+- AI 助教接真实模型（当前为确定性意图匹配）、保存、更多菜单等按钮对应的完整业务闭环
+- 学习记录的服务端持久化（当前仅本地 localStorage）
+- 电路试题解析与 Agent 电路意图（实验室已接通，Question 切片待做）
+- Induction、Optics、Wave 等后续物理领域
 - 教师端、发布协作和 Desktop 壳层
 
 界面会明确标记尚未接通的能力，不用占位成功状态冒充完成。
