@@ -28,6 +28,7 @@ import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-r
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
+import { createOpticsWorkspaceRuntime } from './physics/optics-workspace-runtime.ts'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
 import type {
   PhysicsSceneRef, PhysicsSurfaceState, PhysicsSurfaceId, RecentExperimentsState,
@@ -199,6 +200,8 @@ const buildRuntime = (
       return scene === undefined ? null : createElectricWorkspaceRuntime(scene)
     case 'circuit':
       return scene === undefined ? null : createCircuitWorkspaceRuntime(scene)
+    case 'optics':
+      return scene === undefined ? null : createOpticsWorkspaceRuntime(scene)
     case 'composite':
       return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
     case 'magnetic':

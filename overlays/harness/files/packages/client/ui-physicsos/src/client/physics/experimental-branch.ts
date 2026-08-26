@@ -46,6 +46,12 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetSourceInternalResistance',
   'SetSwitchState',
   'SetSliderPosition',
+  /* Optics facts: where the pieces stand and the lens's focal length decide
+     the image a question stated. */
+  'SetOpticalObjectPosition',
+  'SetOpticalObjectHeight',
+  'SetLensFocalLength',
+  'SetOpticalScreenPosition',
 ])
 
 export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.has(type)

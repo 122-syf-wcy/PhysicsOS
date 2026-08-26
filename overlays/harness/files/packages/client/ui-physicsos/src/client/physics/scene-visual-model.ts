@@ -21,7 +21,13 @@ export interface ScenePoint {
 }
 
 /** Physics domain, selecting a renderer from the registry. */
-export type PhysicsDomainId = 'magnetic' | 'mechanics' | 'electric' | 'circuit' | 'composite'
+export type PhysicsDomainId =
+  | 'magnetic'
+  | 'mechanics'
+  | 'electric'
+  | 'circuit'
+  | 'composite'
+  | 'optics'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -77,6 +83,9 @@ export type ObservableKey =
   | 'current'
   | 'voltage'
   | 'power'
+  // optics
+  | 'rays'
+  | 'image'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -412,6 +421,74 @@ export interface GuideVisual {
   label?: string
 }
 
+/* ------------------------------------------------------------------- optics -- */
+
+/**
+ * Luminous object on the optical bench, drawn as the textbook upright arrow.
+ * `at` is the foot on the principal axis; `height` is scene units above it.
+ */
+export interface OpticalObjectVisual {
+  id: string
+  at: ScenePoint
+  /** Height above the axis in scene units, > 0. */
+  height: number
+  label?: string
+}
+
+/** Imaging element: convex thin lens (double-arrow) or plane mirror plate. */
+export interface OpticalElementVisual {
+  id: string
+  kind: 'thin_lens' | 'plane_mirror'
+  /** Centre of the element on the principal axis. */
+  at: ScenePoint
+  /** Half-aperture (lens) or half-height (mirror) in scene units. */
+  halfAperture: number
+  label?: string
+}
+
+/** F / 2F tick on the principal axis. Presentation of an upstream fact. */
+export interface OpticalAxisMarkVisual {
+  id: string
+  at: ScenePoint
+  label: string
+}
+
+/**
+ * The formed image, drawn as an arrow like the object. `height` is SIGNED:
+ * negative means inverted (drawn below the axis). A virtual image is dashed —
+ * the dash pattern is the physical statement that no light converges there.
+ */
+export interface OpticalImageVisual {
+  id: string
+  at: ScenePoint
+  /** Signed height in scene units; < 0 = inverted. */
+  height: number
+  nature: 'real' | 'virtual'
+  label?: string
+}
+
+/**
+ * One light ray. `points` are the physical light path in travel order;
+ * `extension` is the dashed backward extension towards a virtual image point.
+ * All geometry comes from the engine's principal-ray construction.
+ */
+export interface OpticalRayVisual {
+  id: string
+  kind: 'parallel' | 'central' | 'focal' | 'incident'
+  points: readonly ScenePoint[]
+  extension?: readonly ScenePoint[]
+}
+
+/** Screen plate standing on the bench. `lit` = a sharp real image lands on it. */
+export interface OpticalScreenVisual {
+  id: string
+  at: ScenePoint
+  /** Half-height in scene units. */
+  halfHeight: number
+  lit: boolean
+  label?: string
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -473,6 +550,18 @@ export interface SceneVisualModel {
   circuitWires?: readonly CircuitWireVisual[]
   /** Circuit junction dots. */
   circuitJunctions?: readonly CircuitJunctionVisual[]
+  /** Optical bench primitives (optics domain). */
+  opticalObjects?: readonly OpticalObjectVisual[]
+  /** Imaging elements: thin lenses / plane mirrors. */
+  opticalElements?: readonly OpticalElementVisual[]
+  /** Formed images; gated by the `image` observable. */
+  opticalImages?: readonly OpticalImageVisual[]
+  /** Principal rays; gated by the `rays` observable. */
+  opticalRays?: readonly OpticalRayVisual[]
+  /** Screens on the bench. */
+  opticalScreens?: readonly OpticalScreenVisual[]
+  /** F / 2F axis ticks. */
+  opticalAxisMarks?: readonly OpticalAxisMarkVisual[]
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

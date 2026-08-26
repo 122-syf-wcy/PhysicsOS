@@ -295,3 +295,148 @@
   stroke: #fbfdff;
   stroke-width: 3px;
 }
+
+/* ---------- optical bench ---------- */
+
+/* The principal axis is construction geometry, not a light path. */
+.opticalAxis {
+  stroke: var(--physics-axis);
+  stroke-width: 1.1;
+  stroke-dasharray: 8 5;
+  opacity: 0.8;
+}
+
+.focalTick {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.4;
+}
+
+.focalLabel {
+  fill: var(--physics-measurement);
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+  user-select: none;
+}
+
+/* Light rays own the optics hue; the dashed extension is the physical
+   statement that no light actually travels there. */
+.opticalRay {
+  stroke: var(--physics-optics-ray);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  opacity: 0.92;
+}
+
+.opticalRayHead {
+  fill: var(--physics-optics-ray);
+  stroke: none;
+}
+
+.opticalRayExtension {
+  stroke: var(--physics-optics-ray-soft);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0.85;
+}
+
+/* Object arrow shares the solid-body ink: it is a real thing on the bench. */
+.opticalObjectLine {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.opticalObjectHead {
+  fill: var(--physics-body-stroke);
+  stroke: none;
+}
+
+/* The image is a computed statement, so it carries its own token; a virtual
+   image switches to dashes — same grammar as predicted trajectories. */
+.opticalImageLine {
+  stroke: var(--physics-optics-image);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.opticalImageVirtual {
+  stroke-dasharray: 6 4;
+  opacity: 0.9;
+}
+
+.opticalImageHead {
+  fill: var(--physics-optics-image);
+  stroke: none;
+}
+
+.opticalImageLabel {
+  fill: var(--physics-optics-image);
+}
+
+/* Convex lens: glass body plus the double-arrow symbol in force blue. */
+.lensBody {
+  fill: var(--physics-body-fill);
+  fill-opacity: 0.5;
+  stroke: var(--physics-vector-force);
+  stroke-width: 1;
+  opacity: 0.85;
+}
+
+.lensAxisLine {
+  stroke: var(--physics-vector-force);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.lensHead {
+  fill: var(--physics-vector-force);
+  stroke: none;
+}
+
+/* Plane mirror: the plate is a solid object; hatching marks the silvered back. */
+.mirrorPlate {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.mirrorHatch {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.1;
+  opacity: 0.7;
+}
+
+/* Screen: construction grey until a sharp real image lands on it. */
+.screenPlate {
+  stroke: var(--physics-measurement);
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.screenPlateLit {
+  stroke: var(--physics-optics-ray);
+  opacity: 1;
+}
+
+.screenGlow {
+  stroke: var(--physics-optics-ray-soft);
+  stroke-width: 10;
+  stroke-linecap: round;
+  opacity: 0.4;
+}
+
+.screenFoot {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.7;
+}

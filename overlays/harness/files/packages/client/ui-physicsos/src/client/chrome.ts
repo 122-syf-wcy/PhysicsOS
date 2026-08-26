@@ -67,16 +67,23 @@ const PHYSICS_TOKENS = `
   --physics-keypoint-apex: #d97706;
   --physics-keypoint-impact: #c2413a;
 
+  /* ---------- optics ----------
+     Light itself is warm amber; the computed image carries violet so "where the
+     rays (or their extensions) meet" is findable against the amber paths. */
+  --physics-optics-ray: #d97706;
+  --physics-optics-ray-soft: #edba6f;
+  --physics-optics-image: #7c3aed;
+
   /* ---------- status ---------- */
   --physics-verification-ok: #2f9e5a;
   --physics-verification-warning: #d97706;
   --physics-verification-error: #c2413a;
 
   /* ---------- subjects ----------
-     Library / navigation identity for the four experiment domains (力学 / 电场 /
-     磁场 / 复合场), one hue + one tinted surface each. These colour UI chrome —
-     picker cards, tags, tabs — NEVER canvas physics: a vector keeps its vector
-     token even inside a subject-tinted card. */
+     Library / navigation identity for the experiment domains (力学 / 电场 / 磁场 /
+     电路 / 复合场 / 光学), one hue + one tinted surface each. These colour UI
+     chrome — picker cards, tags, tabs — NEVER canvas physics: a vector keeps its
+     vector token even inside a subject-tinted card. */
   --physics-subject-mechanics: #2f9e5a;
   --physics-subject-mechanics-tint: #e7f4ec;
   --physics-subject-electric: #2563eb;
@@ -87,6 +94,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-circuit-tint: #e2f4f1;
   --physics-subject-composite: #ea580c;
   --physics-subject-composite-tint: #fdeee3;
+  --physics-subject-optics: #ca8a04;
+  --physics-subject-optics-tint: #faf3d8;
 
   /* ---------- interaction ---------- */
   --physics-highlight: #f5a524;
