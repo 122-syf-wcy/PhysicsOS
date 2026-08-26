@@ -5,6 +5,7 @@ import {
   SceneRuntime,
   createConcaveMirrorScene,
   createConvexLensScene,
+  createConvexMirrorScene,
   createOpticalBenchScene,
   createPlaneMirrorScene,
   createSceneCommand,
@@ -80,6 +81,20 @@ describe('createOpticalBenchScene', () => {
     expect(bench.screen?.position.value).toBeCloseTo(-20, 9)
     expect(bench.elements[0]?.name).toBe('凸面镜')
     expect(validateScene(convex).status).toBe('passed')
+  })
+
+  it('starts the rearview template on a diverging mirror with f = −10 cm', () => {
+    const scene = createConvexMirrorScene()
+    expect(isOpticsScene(scene)).toBe(true)
+    expect(validateScene(scene).status).toBe('passed')
+    const bench = opticalBenchOf(scene)!
+    expect(curvedMirrorOf(bench)?.focalLength.value).toBe(-10)
+    expect(bench.object.position.value).toBe(-30)
+    /* A diverging mirror forms no real image at ANY object distance, so the
+       screen parks at the curvature-centre distance in front instead of on a
+       sharp plane — it staying dark is the lesson. */
+    expect(bench.screen?.position.value).toBeCloseTo(-20, 9)
+    expect(scene.metadata.title).toBe('凸面镜后视镜')
   })
 
   it('treats legacy scenes without the collection as having no benches', () => {

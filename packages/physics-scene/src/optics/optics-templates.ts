@@ -111,6 +111,60 @@ export const createConcaveMirrorScene = (input: ConcaveMirrorSceneInput = {}): P
   })
 }
 
+export interface ConvexMirrorSceneInput {
+  readonly sceneId?: string
+  /** Focal length in centimetres (< 0, diverging). */
+  readonly focalLength?: number
+  /** Object distance to the mirror vertex in centimetres (> 0). */
+  readonly objectDistance?: number
+  /** Object height in centimetres (> 0). */
+  readonly objectHeight?: number
+  /** Screen x position in centimetres; defaults to |2f| in front of the vertex. */
+  readonly screenPosition?: number
+  readonly now?: IsoDateTime
+}
+
+/**
+ * 凸面镜后视镜 — a car approaching a convex (diverging) mirror. Unlike the
+ * concave bench there are no zones to sweep: whatever the object distance, the
+ * reflected rays diverge and only their backward extensions meet, so the image
+ * is always upright, reduced and virtual behind the mirror. That is exactly why
+ * this is the mirror on every car and blind corner — a wider field of view, at
+ * the cost of everything looking smaller and further away than it is. The
+ * screen parks in front and stays dark, which is the lesson rather than a
+ * limitation.
+ */
+export const createConvexMirrorScene = (input: ConvexMirrorSceneInput = {}): PhysicsScene => {
+  const focalLength = input.focalLength ?? -10
+  const objectDistance = input.objectDistance ?? 30
+  const objectHeight = input.objectHeight ?? 6
+  return createOpticalBenchScene({
+    sceneId: input.sceneId ?? 'lab-convex-mirror',
+    ...(input.now === undefined ? {} : { now: input.now }),
+    object: {
+      id: 'candle-object',
+      name: '后车',
+      position: -objectDistance,
+      height: objectHeight,
+    },
+    element: {
+      id: 'mirror-1',
+      name: '凸面镜（后视镜）',
+      type: 'curved_mirror',
+      position: 0,
+      focalLength,
+      apertureRadius: 8,
+    },
+    screen: {
+      id: 'screen-1',
+      name: '光屏',
+      position: input.screenPosition ?? -2 * Math.abs(focalLength),
+    },
+    title: '凸面镜后视镜',
+    description: '探究凸面镜成像：无论物体多远，反射光的反向延长线都在镜后交出正立、缩小的虚像 —— 视野更大，正是汽车后视镜与路口反光镜的原理。',
+  })
+}
+
 /**
  * 凸透镜成像 — candle, convex lens and screen on an optical bench. The default
  * screen position is the sharp-image plane for the starting object distance

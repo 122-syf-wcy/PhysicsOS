@@ -207,9 +207,11 @@ export {
 export {
   createConcaveMirrorScene,
   createConvexLensScene,
+  createConvexMirrorScene,
   createPlaneMirrorScene,
   type ConcaveMirrorSceneInput,
   type ConvexLensSceneInput,
+  type ConvexMirrorSceneInput,
   type PlaneMirrorSceneInput,
 } from './optics/optics-templates.ts'
 export {
