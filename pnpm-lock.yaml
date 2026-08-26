@@ -265,6 +265,21 @@ importers:
         specifier: file:../shared
         version: link:../shared
 
+  packages/engine-optics:
+    dependencies:
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
   packages/physics-composite-core:
     dependencies:
       '@physicsos/physics-core':
