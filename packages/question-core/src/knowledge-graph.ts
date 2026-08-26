@@ -66,12 +66,13 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'circ-emf-internal', label: '电动势与内阻', domain: 'circuit', parentId: 'circuit' },
 
   /* 光学 nodes are exercised by the Lab's optics experiment self-checks (平面镜
-     成像 / 凸透镜成像); like the circuit nodes they have no golden questions
-     yet, so the learning record reaches them through lab attempts. */
+     成像 / 凸透镜成像 / 凹面镜成像); like the circuit nodes they have no golden
+     questions yet, so the learning record reaches them through lab attempts. */
   { id: 'optics', label: '光学', domain: 'optics' },
   { id: 'opt-light-reflection', label: '光的反射', domain: 'optics', parentId: 'optics' },
   { id: 'opt-plane-mirror', label: '平面镜成像', domain: 'optics', parentId: 'optics' },
   { id: 'opt-lens-imaging', label: '凸透镜成像规律', domain: 'optics', parentId: 'optics' },
+  { id: 'opt-curved-mirror', label: '球面镜成像（凹面镜/凸面镜）', domain: 'optics', parentId: 'optics' },
   { id: 'opt-real-virtual-image', label: '实像与虚像', domain: 'optics', parentId: 'optics' },
 ]
 

@@ -9,7 +9,7 @@
  * 结点 / 滑动变阻器 / 电源含内阻) — never from a template id, so a student-
  * modified or question-forked circuit still gets the probes that match what is
  * actually on the canvas. The optics topics dispatch the same way, on the
- * imaging element the runtime reports (平面镜 / 凸透镜). The 初中 measurement
+ * imaging element the runtime reports (平面镜 / 凸透镜 / 凹面镜). The 初中 measurement
  * rigs (测平均速度 / 伏安法 / 测灯泡功率) are physically identical to their
  * base apparatus — their topic is the measurement intent, which lives in the
  * scene title the template stamped, the same dispatch the tutor uses for
@@ -522,6 +522,76 @@ const LENS_WITHIN_F: SelfCheckItem = {
   ],
 }
 
+/* ------------------------------------------------- 凹面镜成像 (初中光学) -- */
+
+const CURVED_MIRROR_BEYOND_2F: SelfCheckItem = {
+  id: 'curved-mirror-beyond-2f',
+  prompt: '蜡烛放在凹面镜二倍焦距之外（u > 2f）时，所成的像是？',
+  takeaway:
+    '凹面镜与凸透镜共用 1/u + 1/v = 1/f：u > 2f 时成倒立、缩小的实像。但反射把光折回，实像落在镜前（蜡烛一侧），光屏也要放在这一侧承接。',
+  options: [
+    { id: 'inverted-reduced-front', label: '倒立、缩小的实像，成在镜前（蜡烛一侧）', correct: true },
+    {
+      id: 'plane-mirror-like',
+      label: '正立、等大的虚像，成在镜后（像平面镜那样）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '等大对称的虚像是平面镜的规律。凹面镜会把平行于主光轴的光会聚到焦点，u > 2f 时反射光线实际会聚成倒立缩小的实像 —— 判断先比较 u 与 f、2f，别把球面镜当平面镜。',
+        review: ['球面镜与平面镜的区别', '凹面镜成像规律'],
+        evidenceCheckId: 'curved_mirror_equation',
+      },
+    },
+    {
+      id: 'real-behind-mirror',
+      label: '倒立、缩小的实像，成在镜子后面',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '镜面不透光：反射光线全部折回蜡烛一侧，镜后没有任何实际光线，实像只能出现在镜前。"实像在元件另一侧"是透镜（光穿过）的规律，不适用于反射成像。',
+        review: ['反射成像与折射成像的区别', '实像出现在实际光线会聚处'],
+        evidenceCheckId: 'principal_rays_converge',
+      },
+    },
+  ],
+}
+
+const CURVED_MIRROR_WITHIN_F: SelfCheckItem = {
+  id: 'curved-mirror-within-f',
+  prompt: '把蜡烛移到凹面镜焦点以内（u < f），光屏上还能承接到像吗？',
+  takeaway:
+    'u < f 时反射光线发散，其反向延长线在镜后交成正立、放大的虚像 —— 化妆镜、牙医镜正是这样用的：光屏承接不到，要对着镜面观察。',
+  options: [
+    {
+      id: 'cannot-makeup-mirror',
+      label: '不能：成正立、放大的虚像，要对着镜面看（化妆镜）',
+      correct: true,
+    },
+    {
+      id: 'screen-behind',
+      label: '能，把光屏放到镜后"像"的位置就能接住',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '位置"对"不等于有光到达：镜后那个像是反射光线反向延长线的交点，没有实际光线经过，光屏放在那里一片空白。能被光屏承接的只有实际光线会聚成的实像。',
+        review: ['实像与虚像的区别', '虚像不能被光屏承接'],
+        evidenceCheckId: 'virtual_image_uncatchable',
+      },
+    },
+    {
+      id: 'always-converges',
+      label: '能，凹面镜总能把光会聚成实像',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '凹面镜的会聚本领是有限的：物在焦点以内时，发自物点的光束太"散"，反射后仍然发散，不存在会聚点。只有 u > f 时才成实像，u < f 成放大的虚像。',
+        review: ['凹面镜成像规律：u 与 f 的比较', '焦点的物理意义'],
+        evidenceCheckId: 'curved_mirror_equation',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -643,6 +713,12 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '凸透镜成像规律',
     knowledge: ['opt-lens-imaging', 'opt-real-virtual-image'],
     items: [LENS_BEYOND_2F, LENS_WITHIN_F],
+  },
+  'optics-curved-mirror': {
+    id: 'optics-curved-mirror',
+    topic: '凹面镜成像',
+    knowledge: ['opt-curved-mirror', 'opt-light-reflection', 'opt-real-virtual-image'],
+    items: [CURVED_MIRROR_BEYOND_2F, CURVED_MIRROR_WITHIN_F],
   },
 }
 
