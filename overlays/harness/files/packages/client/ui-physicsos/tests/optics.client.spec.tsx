@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createConcaveMirrorScene,
   createConvexLensScene,
+  createConvexMirrorScene,
   createPlaneMirrorScene,
 } from '@physicsos/physics-scene'
 
@@ -71,6 +72,7 @@ describe('optics domain routing', () => {
     expect(domainOfScene(createPlaneMirrorScene())).toBe('optics')
     expect(domainOfScene(createConvexLensScene())).toBe('optics')
     expect(domainOfScene(createConcaveMirrorScene())).toBe('optics')
+    expect(domainOfScene(createConvexMirrorScene())).toBe('optics')
   })
 })
 
@@ -244,6 +246,38 @@ describe('optics workspace runtime', () => {
         .some(entry => entry.label === '物距区间'),
     ).toBe(false)
   })
+
+  it('starts the rearview bench diverging and keeps it that way at every distance', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexMirrorScene())
+    const snapshot = runtime.getSnapshot()
+
+    expect(snapshot.status).toBe('verified')
+    expect(derivedValue(snapshot, '物距 u')).toBe('30')
+    expect(derivedValue(snapshot, '像的性质')).toBe('正立、缩小的虚像')
+
+    /* u = 30, f = −10 → the backward extensions meet 7.5 cm BEHIND the mirror,
+       upright and quarter-size. */
+    const image = snapshot.view.opticalImages?.[0]
+    expect(image?.nature).toBe('virtual')
+    expect(image?.at.x).toBeCloseTo(7.5, 6)
+    expect(image?.height).toBeCloseTo(1.5, 6)
+    expect(snapshot.view.opticalElements?.[0]?.curvature).toBe('convex')
+    /* The screen parks in front and stays dark — that IS the takeaway. */
+    expect(snapshot.view.opticalScreens?.[0]?.at.x).toBeCloseTo(-20, 6)
+    expect(snapshot.view.opticalScreens?.[0]?.lit).toBe(false)
+
+    /* Pull the car much closer and much further: still upright, still reduced,
+       still virtual. A diverging mirror has no zones to cross. */
+    for (const distance of [5, 60]) {
+      const moved = runtime.editParameter('object-distance', distance)
+      expect(derivedValue(moved, '像的性质')).toBe('正立、缩小的虚像')
+      expect(moved.view.opticalImages?.[0]?.nature).toBe('virtual')
+      expect(moved.view.opticalScreens?.[0]?.lit).toBe(false)
+    }
+
+    expect(snapshot.verification.some(check => check.id === 'curved_mirror_equation')).toBe(true)
+    expect(snapshot.verification.every(check => check.status === 'passed')).toBe(true)
+  })
 })
 
 describe('optics teaching layer', () => {
@@ -335,6 +369,16 @@ describe('optics teaching layer', () => {
     const convex = lessonAt(runtime.editParameter('mirror-focal-length', -10))
     expect(convex?.id).toBe('optics-mirror-convex')
     expect(convex?.answer.paragraphs.join('')).toContain('后视镜')
+  })
+
+  it('opens the rearview card straight into the convex lesson', () => {
+    const script = tutorScriptOf(physicsAgentContext(
+      createOpticsWorkspaceRuntime(createConvexMirrorScene()).getSnapshot(),
+    ))
+    expect(script?.id).toBe('optics-mirror-convex')
+    expect(script?.answer.paragraphs.join('')).toContain('后视镜')
+    expect(script!.evidence.some(entry =>
+      entry.label.includes('球面镜公式') && entry.status === 'passed')).toBe(true)
   })
 
   it('resolves the self-check topic from the element on the bench', () => {
@@ -435,5 +479,21 @@ describe('optics Lab surface', () => {
     expect(svgText).toContain('C')
     /* The lens-only 2F tick stays off the mirror bench. */
     expect(svgText).not.toContain('2F')
+  })
+
+  it('mounts the rearview card as its own diverging bench, not a concave one', () => {
+    const { container } = mountLab('convex-mirror')
+
+    expect(container.querySelector('[data-physicsos-domain="optics"]')).toBeTruthy()
+    const lab = container.querySelector('[data-physicsos-surface="lab"]')
+    expect(lab?.getAttribute('data-verification-status')).toBe('verified')
+
+    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
+    expect(svgText).toContain('凸面镜')
+    expect(svgText).not.toContain('凹面镜')
+    expect(svgText).toContain('后车')
+
+    /* The convex lesson is live from the first frame, no focal edit needed. */
+    expect(screen.getAllByText(/正立、缩小的虚像/).length).toBeGreaterThan(0)
   })
 })

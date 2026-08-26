@@ -20,6 +20,7 @@ import {
   createCompositeFieldScene,
   createConcaveMirrorScene,
   createConvexLensScene,
+  createConvexMirrorScene,
   createEchoRangingScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
@@ -48,6 +49,7 @@ import {
   IconCompositeField,
   IconConcaveMirror,
   IconConvexLens,
+  IconConvexMirror,
   IconEchoRanging,
   IconEmfMeasure,
   IconInclinedPlane,
@@ -605,6 +607,27 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
          把 f 拖成负值即变凸面镜（永远正立缩小的虚像）。 */
       const scene = createConcaveMirrorScene({
         sceneId: stampId('optics-concave-mirror'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'convex-mirror',
+    domain: 'optics',
+    stage: 'junior',
+    label: 'lab.template.convexMirror',
+    hint: 'lab.template.convexMirror.hint',
+    icon: IconConvexMirror,
+    tags: ['光学', '初中', '凸面镜', '后视镜', '球面镜'],
+    createScene: (title) => {
+      /* 凸面镜后视镜：f = −10 cm、后车在 30 cm 外。发散镜没有分区可扫 ——
+         无论物距多远都是正立、缩小的虚像，光屏永远接不到。学生拖物距验证
+         「像变小但视野变大」，正是后视镜「物体比看起来更近」的由来。 */
+      const scene = createConvexMirrorScene({
+        sceneId: stampId('optics-convex-mirror'),
       })
       return {
         sceneId: String(scene.id),

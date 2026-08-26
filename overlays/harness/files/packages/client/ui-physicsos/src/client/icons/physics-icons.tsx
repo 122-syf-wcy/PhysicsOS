@@ -369,6 +369,18 @@ export const IconConcaveMirror = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Convex mirror: the diverging reflector spreading a parallel ray off a virtual F. */
+export const IconConvexMirror = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M12 3.5q-4.6 8.5 0 17" />
+    <path d="M11.2 6.5l2.7-1.5M10.1 10.4l2.9-0.9M10.1 13.6l2.9 0.9M11.2 17.5l2.7 1.5" strokeOpacity="0.55" />
+    <path d="M3 12h18" strokeOpacity="0.4" strokeDasharray="1.6 2.4" />
+    <path d="M3 7.4h7.8L3.4 3.6" />
+    <path d="M10.8 7.4l5.9 4.6" strokeOpacity="0.5" strokeDasharray="1.6 2" />
+    <circle cx="16.7" cy="12" r="1.1" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
 /* --------------------------------------------------------------- acoustics -- */
 
 /** Echo ranging: a loudspeaker facing a hatched wall, wave arcs between. */

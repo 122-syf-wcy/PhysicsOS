@@ -602,6 +602,24 @@ const ConcaveMirrorArt = () => (
   </>
 )
 
+/** 凸面镜后视镜: object, diverging mirror, small upright virtual image behind. */
+const ConvexMirrorArt = () => (
+  <>
+    <Stroke d="M8 36 H112" width={1.5} opacity={0.35} dash="5 4" />
+    <Stroke d="M92 14 q-9 22 0 44" width={2.4} />
+    {([[20, 89.9], [29, 87.9], [43, 87.9], [52, 89.9]] as const).map(([y, x]) => (
+      <Stroke key={y} d={`M${x + 1.5} ${y + 3} L${x + 6.5} ${y - 3}`} width={1.2} opacity={0.4} />
+    ))}
+    <Stroke d="M30 36 V24" width={2.4} />
+    <Stroke d="M26.8 28 L30 24 L33.2 28" width={2} />
+    <Stroke d="M30 24 H90.7 L70 10" width={1.4} opacity={0.55} />
+    <Stroke d="M30 24 L92 36 L34 47.2" width={1.4} opacity={0.55} />
+    <Stroke d="M90.7 24 L104 33 M92 36 L104 33" width={1.2} opacity={0.4} dash="4 3" />
+    <Stroke d="M104 36 V33" width={2.4} opacity={0.85} />
+    <Stroke d="M102.4 35 L104 33 L105.6 35" width={2} opacity={0.85} />
+  </>
+)
+
 /* ----------------------------------------------------------------- acoustics -- */
 
 /** 回声测距: speaker on open ground, wave arcs out to the hatched cliff. */
@@ -678,6 +696,7 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'plane-mirror': PlaneMirrorArt,
   'convex-lens': ConvexLensArt,
   'concave-mirror': ConcaveMirrorArt,
+  'convex-mirror': ConvexMirrorArt,
   'echo-ranging': EchoRangingArt,
 }
 
@@ -711,6 +730,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['plane-mirror', 'optics-plane-mirror'],
   ['convex-lens', 'optics-convex-lens'],
   ['concave-mirror', 'optics-concave-mirror'],
+  ['convex-mirror', 'optics-convex-mirror'],
   ['echo-ranging', 'acoustics-echo-ranging'],
 ]
 
