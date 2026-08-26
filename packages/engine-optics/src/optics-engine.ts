@@ -26,6 +26,7 @@ export const OPTICS_ENGINE_ID = 'engine-optics'
 export const OPTICS_ENGINE_VERSION = '1.0.0'
 export const THIN_LENS_MODEL = 'thin_lens_imaging'
 export const PLANE_MIRROR_MODEL = 'plane_mirror_imaging'
+export const CURVED_MIRROR_MODEL = 'curved_mirror_imaging'
 
 /** Metres of disagreement tolerated between formula and ray construction. */
 const RAY_CONSTRUCTION_TOLERANCE_METERS = 1e-9
@@ -42,6 +43,12 @@ const MIRROR_ASSUMPTIONS = [
   'geometric optics (diffraction ignored)',
 ] as const
 
+const CURVED_MIRROR_ASSUMPTIONS = [
+  'ideal spherical mirror in the paraxial approximation (f = R/2)',
+  'single principal axis; the object stands upright on the axis',
+  'geometric optics (diffraction ignored)',
+] as const
+
 const failure = (condition: string, message: string) => ({ condition, message })
 
 /** Solve the scene's optical bench; the single entry point UI layers reuse. */
@@ -54,7 +61,11 @@ const centimetres = (metres: number): Quantity<'length'> =>
   quantity(metres * 100, 'cm', 'length')
 
 const assumptionsOf = (result: OpticalImagingResult): string[] =>
-  result.model.elementType === 'thin_lens' ? [...LENS_ASSUMPTIONS] : [...MIRROR_ASSUMPTIONS]
+  result.model.elementType === 'thin_lens'
+    ? [...LENS_ASSUMPTIONS]
+    : result.model.elementType === 'curved_mirror'
+      ? [...CURVED_MIRROR_ASSUMPTIONS]
+      : [...MIRROR_ASSUMPTIONS]
 
 const derivedOf = (result: OpticalImagingResult): DerivedQuantity[] => {
   const { model, outcome } = result
@@ -75,7 +86,7 @@ const derivedOf = (result: OpticalImagingResult): DerivedQuantity[] => {
       assumptions,
     },
   ]
-  if (model.elementType === 'thin_lens' && model.focalLength !== undefined) {
+  if (model.focalLength !== undefined) {
     derived.push({
       key: 'focal_length',
       targetId: model.elementId,
@@ -86,7 +97,11 @@ const derivedOf = (result: OpticalImagingResult): DerivedQuantity[] => {
   }
   if (outcome.kind === 'image') {
     const imageFormula =
-      model.elementType === 'thin_lens' ? '1/u + 1/v = 1/f' : 'v = u（平面镜对称）'
+      model.elementType === 'thin_lens'
+        ? '1/u + 1/v = 1/f'
+        : model.elementType === 'curved_mirror'
+          ? '1/u + 1/v = 1/f（球面镜，f = R/2）'
+          : 'v = u（平面镜对称）'
     derived.push(
       {
         key: 'image_distance',
@@ -107,7 +122,7 @@ const derivedOf = (result: OpticalImagingResult): DerivedQuantity[] => {
         targetId: model.elementId,
         value: quantity(outcome.image.magnification, '', 'dimensionless'),
         formula: {
-          expression: model.elementType === 'thin_lens' ? 'm = v/u' : 'm = 1',
+          expression: model.elementType === 'plane_mirror' ? 'm = 1' : 'm = v/u',
         },
         assumptions,
       },
@@ -181,7 +196,12 @@ const buildVerification = (
   const constructedTop = constructedImageTopOf(model)
 
   if (outcome.kind === 'image') {
-    if (model.elementType === 'thin_lens' && model.focalLength !== undefined) {
+    if (
+      (model.elementType === 'thin_lens' || model.elementType === 'curved_mirror') &&
+      model.focalLength !== undefined
+    ) {
+      /* Both laws share 1/u + 1/v = 1/f with v > 0 for a real image; only the
+         side the real image lands on differs (mirror folds it back). */
       const signedImageDistance =
         outcome.image.nature === 'real' ? outcome.image.distance : -outcome.image.distance
       const residual = Math.abs(
@@ -194,9 +214,12 @@ const buildVerification = (
           Math.abs(1 / signedImageDistance),
           Math.abs(1 / model.focalLength),
         )
+      const lens = model.elementType === 'thin_lens'
       checks.push(
-        check('thin_lens_equation', 'constraint', residual <= tolerance, {
-          message: '成像满足薄透镜公式 1/u + 1/v = 1/f。',
+        check(lens ? 'thin_lens_equation' : 'curved_mirror_equation', 'constraint', residual <= tolerance, {
+          message: lens
+            ? '成像满足薄透镜公式 1/u + 1/v = 1/f。'
+            : '成像满足球面镜公式 1/u + 1/v = 1/f（f = R/2）。',
           targetId: model.elementId,
           details: { residual, objectDistance: model.objectDistance, signedImageDistance },
         }),
@@ -241,7 +264,10 @@ const buildVerification = (
   } else {
     checks.push(
       check('rays_parallel_at_focus', 'constraint', constructedTop === undefined, {
-        message: '物距等于焦距时折射光线平行，不成像。',
+        message:
+          model.elementType === 'curved_mirror'
+            ? '物距等于焦距时反射光线平行，不成像。'
+            : '物距等于焦距时折射光线平行，不成像。',
         targetId: model.elementId,
       }),
     )
@@ -340,7 +366,11 @@ export class OpticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
     try {
       const result = resolveOpticalImaging(scene)
       return supported(
-        result.model.elementType === 'thin_lens' ? THIN_LENS_MODEL : PLANE_MIRROR_MODEL,
+        result.model.elementType === 'thin_lens'
+          ? THIN_LENS_MODEL
+          : result.model.elementType === 'curved_mirror'
+            ? CURVED_MIRROR_MODEL
+            : PLANE_MIRROR_MODEL,
         this.domain,
       )
     } catch (error: unknown) {

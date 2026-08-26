@@ -38,8 +38,10 @@ export const lineIntersection = (
  * never from the imaging formula — the verifier compares the two.
  *
  * Thin lens: the parallel ray refracts through the far focus; the central ray
- * is undeviated. Plane mirror: reflected rays extend behind the mirror.
- * Returns undefined when the construction rays are parallel (u = f).
+ * is undeviated. Curved mirror: the parallel ray reflects along the line of
+ * the front focus and the vertex ray reflects symmetrically about the axis.
+ * Plane mirror: reflected rays extend behind the mirror. Returns undefined
+ * when the construction rays are parallel (u = f).
  */
 export const constructedImageTopOf = (model: ResolvedOpticalModel): RayPoint | undefined => {
   const top = point(model.objectX, model.objectHeight)
@@ -50,6 +52,23 @@ export const constructedImageTopOf = (model: ResolvedOpticalModel): RayPoint | u
     const refractedDirection = point(farFocus.x - hitParallel.x, farFocus.y - hitParallel.y)
     const centralDirection = point(model.elementX - model.objectX, -model.objectHeight)
     return lineIntersection(hitParallel, refractedDirection, top, centralDirection)
+  }
+  if (model.elementType === 'curved_mirror') {
+    /* Front focus sits at (elementX − f, 0) — in front for a concave mirror,
+       behind (virtual) for a convex one; the signed direction covers both.
+       The vertex ray reflects with its axial component flipped. As lines the
+       backward extensions are included, so virtual intersections behind the
+       mirror fall out of the same construction. */
+    const focalLength = model.focalLength ?? Number.NaN
+    const hitParallel = point(model.elementX, model.objectHeight)
+    const reflectedDirection = point(-focalLength, -model.objectHeight)
+    const vertexDirection = point(-model.objectDistance, -model.objectHeight)
+    return lineIntersection(
+      hitParallel,
+      reflectedDirection,
+      point(model.elementX, 0),
+      vertexDirection,
+    )
   }
   /* Plane mirror: extension of the normal ray is horizontal through the object
      top; extension of the axis-hit ray leaves (elementX, 0) with the mirrored
@@ -154,6 +173,72 @@ const thinLensRays = (
   ]
 }
 
+const curvedMirrorRays = (
+  model: ResolvedOpticalModel,
+  outcome: ImagingOutcome,
+  forwardExtent: number,
+): OpticalRay[] => {
+  const focalLength = model.focalLength ?? Number.NaN
+  const top = point(model.objectX, model.objectHeight)
+  const hitParallel = point(model.elementX, model.objectHeight)
+  const vertex = point(model.elementX, 0)
+  const imageTop = imageTopOf(outcome)
+  /* Reflection folds the light back towards −x. */
+  const backX = model.elementX - forwardExtent
+  /* The focal ray hits the mirror plane at the signed image height and leaves
+     parallel to the axis (same algebra as the thin lens, folded back). */
+  const mirrorHitHeight =
+    (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
+
+  if (outcome.kind === 'image' && outcome.image.nature === 'real' && imageTop !== undefined) {
+    return [
+      { kind: 'parallel', points: [top, hitParallel, imageTop] },
+      { kind: 'central', points: [top, vertex, imageTop] },
+      {
+        kind: 'focal',
+        points: [top, point(model.elementX, mirrorHitHeight), point(imageTop.x, mirrorHitHeight)],
+      },
+    ]
+  }
+
+  if (outcome.kind === 'image' && imageTop !== undefined) {
+    /* Virtual image: reflected rays diverge back over the object side; dashed
+       extensions meet at the image top behind the mirror. */
+    const reflectedFrom = (origin: RayPoint): RayPoint => {
+      const directionX = origin.x - imageTop.x
+      const directionY = origin.y - imageTop.y
+      const scale = (backX - origin.x) / directionX
+      return point(backX, origin.y + scale * directionY)
+    }
+    return [
+      {
+        kind: 'parallel',
+        points: [top, hitParallel, reflectedFrom(hitParallel)],
+        extension: [hitParallel, imageTop],
+      },
+      {
+        kind: 'central',
+        points: [top, vertex, reflectedFrom(vertex)],
+        extension: [vertex, imageTop],
+      },
+      {
+        kind: 'focal',
+        points: [top, point(model.elementX, mirrorHitHeight), point(backX, mirrorHitHeight)],
+        extension: [point(model.elementX, mirrorHitHeight), imageTop],
+      },
+    ]
+  }
+
+  /* u = f (concave): reflected rays leave parallel with slope h/f, never meeting. */
+  const slope = model.objectHeight / focalLength
+  const emergent = (origin: RayPoint): RayPoint =>
+    point(backX, origin.y + slope * (backX - origin.x))
+  return [
+    { kind: 'parallel', points: [top, hitParallel, emergent(hitParallel)] },
+    { kind: 'central', points: [top, vertex, emergent(vertex)] },
+  ]
+}
+
 const planeMirrorRays = (model: ResolvedOpticalModel, outcome: ImagingOutcome): OpticalRay[] => {
   const top = point(model.objectX, model.objectHeight)
   const imageTop = imageTopOf(outcome)
@@ -185,5 +270,7 @@ export const principalRaysOf = (
     options.forwardExtent ?? defaultForwardExtent(result.model, result.outcome)
   return result.model.elementType === 'thin_lens'
     ? thinLensRays(result.model, result.outcome, forwardExtent)
-    : planeMirrorRays(result.model, result.outcome)
+    : result.model.elementType === 'curved_mirror'
+      ? curvedMirrorRays(result.model, result.outcome, forwardExtent)
+      : planeMirrorRays(result.model, result.outcome)
 }

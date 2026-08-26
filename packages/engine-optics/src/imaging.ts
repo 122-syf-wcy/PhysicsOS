@@ -4,13 +4,19 @@ import type { ResolvedOpticalModel } from './optics-model.ts'
  * Geometric imaging in the junior-textbook convention: distances u (object)
  * and v (image) are positive magnitudes measured from the element; the thin
  * lens equation is 1/u + 1/v = 1/f with v > 0 for a real image on the far
- * side and v < 0 for a virtual image on the object side.
+ * side and v < 0 for a virtual image on the object side. A curved mirror
+ * obeys the same equation with the sides folded back: a real image forms in
+ * FRONT of the mirror (object side), a virtual one behind it.
  */
 
 export type ImageNature = 'real' | 'virtual'
 export type ImageOrientation = 'upright' | 'inverted'
 
-/** Object-distance zone of a converging lens, the axis of the imaging law. */
+/**
+ * Object-distance zone of a converging element (u against f and 2f), the axis
+ * of the imaging law. A concave mirror shares the classification with the
+ * convex lens — same equation, same boundaries.
+ */
 export type LensZone = 'beyond_2f' | 'at_2f' | 'between_f_2f' | 'at_f' | 'within_f'
 
 /** Relative tolerance for the u = f and u = 2f boundary classifications. */
@@ -42,6 +48,8 @@ export interface OpticalImagingResult {
   readonly outcome: ImagingOutcome
   /** Present for thin lenses with f > 0 (the junior convex-lens law). */
   readonly lensZone?: LensZone
+  /** Present for concave mirrors (f > 0): the same u-vs-f/2f classification. */
+  readonly mirrorZone?: LensZone
   /** screenX − imageX (m); present when a screen and a real image exist. */
   readonly screenOffset?: number
   /** Present when the bench has a screen: sharp real image on the screen? */
@@ -104,6 +112,37 @@ export const planeMirrorOutcome = (
   },
 })
 
+/**
+ * Curved (spherical) mirror imaging of an upright object at distance u > 0,
+ * paraxial: 1/u + 1/v = 1/f with f > 0 concave, f < 0 convex. Reflection
+ * folds the image back — a real image (v > 0) forms in front of the mirror at
+ * x = elementX − v, a virtual one (v < 0) behind it at x = elementX + |v|.
+ */
+export const curvedMirrorOutcome = (
+  objectDistance: number,
+  focalLength: number,
+  objectHeight: number,
+  elementX: number,
+): ImagingOutcome => {
+  if (focalLength > 0 && nearlyEqual(objectDistance, focalLength)) return { kind: 'no_image' }
+  const signedImageDistance =
+    (objectDistance * focalLength) / (objectDistance - focalLength)
+  const real = signedImageDistance > 0
+  const distance = Math.abs(signedImageDistance)
+  const magnification = distance / objectDistance
+  return {
+    kind: 'image',
+    image: {
+      nature: real ? 'real' : 'virtual',
+      orientation: real ? 'inverted' : 'upright',
+      distance,
+      x: real ? elementX - distance : elementX + distance,
+      height: magnification * objectHeight,
+      magnification,
+    },
+  }
+}
+
 /** Full imaging result for a resolved model, including screen bookkeeping. */
 export const imagingResultOf = (model: ResolvedOpticalModel): OpticalImagingResult => {
   const outcome =
@@ -114,10 +153,24 @@ export const imagingResultOf = (model: ResolvedOpticalModel): OpticalImagingResu
           model.objectHeight,
           model.elementX,
         )
-      : planeMirrorOutcome(model.objectDistance, model.objectHeight, model.elementX)
+      : model.elementType === 'curved_mirror'
+        ? curvedMirrorOutcome(
+            model.objectDistance,
+            model.focalLength ?? Number.NaN,
+            model.objectHeight,
+            model.elementX,
+          )
+        : planeMirrorOutcome(model.objectDistance, model.objectHeight, model.elementX)
 
   const lensZone =
     model.elementType === 'thin_lens' && model.focalLength !== undefined && model.focalLength > 0
+      ? lensZoneOf(model.objectDistance, model.focalLength)
+      : undefined
+
+  const mirrorZone =
+    model.elementType === 'curved_mirror' &&
+    model.focalLength !== undefined &&
+    model.focalLength > 0
       ? lensZoneOf(model.objectDistance, model.focalLength)
       : undefined
 
@@ -138,6 +191,7 @@ export const imagingResultOf = (model: ResolvedOpticalModel): OpticalImagingResu
     model,
     outcome,
     ...(lensZone === undefined ? {} : { lensZone }),
+    ...(mirrorZone === undefined ? {} : { mirrorZone }),
     ...(screenOffset === undefined ? {} : { screenOffset }),
     ...(imageOnScreen === undefined ? {} : { imageOnScreen }),
   }

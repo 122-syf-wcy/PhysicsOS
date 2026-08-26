@@ -4,9 +4,10 @@
  * The engine resolves the scene's optical bench (one luminous object, one
  * imaging element, an optional screen) into canonical SI numbers, then images
  * with closed-form geometry: the thin lens equation 1/u + 1/v = 1/f for
- * lenses and mirror symmetry (v = u, m = 1, virtual) for plane mirrors.
- * Imaging is static, so the timeline is zero-length and every state is the
- * configuration itself.
+ * lenses, the same equation folded back (real image in front, f = R/2) for
+ * curved mirrors, and mirror symmetry (v = u, m = 1, virtual) for plane
+ * mirrors. Imaging is static, so the timeline is zero-length and every state
+ * is the configuration itself.
  *
  * Verification never trusts the formula alone: two principal-ray lines built
  * only from the lens rule / law of reflection are intersected and compared
@@ -16,6 +17,7 @@
  * (pure single-bench scenes only).
  */
 export {
+  CURVED_MIRROR_MODEL,
   OPTICS_ENGINE_ID,
   OPTICS_ENGINE_VERSION,
   PLANE_MIRROR_MODEL,
@@ -33,6 +35,7 @@ export {
 export {
   LENS_ZONE_RELATIVE_TOLERANCE,
   SCREEN_SHARP_TOLERANCE_METERS,
+  curvedMirrorOutcome,
   imagingResultOf,
   lensZoneOf,
   planeMirrorOutcome,

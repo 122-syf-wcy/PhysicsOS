@@ -23,7 +23,10 @@ export interface ResolvedOpticalModel {
   readonly elementX: number
   /** Object distance u = elementX − objectX (m), > 0. */
   readonly objectDistance: number
-  /** Focal length (m); thin lens only, non-zero, > 0 converging. */
+  /**
+   * Focal length (m); elements that have one (thin lens / curved mirror),
+   * non-zero. > 0 converging (convex lens / concave mirror), < 0 diverging.
+   */
   readonly focalLength?: number
   /** Half-aperture for ray drawing (m). */
   readonly apertureRadius: number
@@ -71,10 +74,10 @@ export const resolveOpticalModel = (scene: PhysicsScene): ResolvedOpticalModel =
   }
 
   let focalLength: number | undefined
-  if (element.type === 'thin_lens') {
+  if (element.type === 'thin_lens' || element.type === 'curved_mirror') {
     focalLength = canonicalValue(element.focalLength)
     if (!Number.isFinite(focalLength) || focalLength === 0) {
-      throw modelError('OPTICS_FOCAL_LENGTH', 'Thin lens focal length must be non-zero.')
+      throw modelError('OPTICS_FOCAL_LENGTH', 'Imaging focal length must be non-zero.')
     }
   }
 

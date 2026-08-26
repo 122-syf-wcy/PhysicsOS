@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { quantity } from '@physicsos/physics-units'
 import { derivedScalar } from '@physicsos/physics-core'
 import {
+  createConcaveMirrorScene,
   createConvexLensScene,
   createOpticalBenchScene,
   createPlaneMirrorScene,
@@ -10,6 +11,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import {
+  CURVED_MIRROR_MODEL,
   OpticsEngine,
   PLANE_MIRROR_MODEL,
   THIN_LENS_MODEL,
@@ -21,6 +23,9 @@ import {
 
 const lensScene = (objectDistance: number, focalLength = 10): PhysicsScene =>
   createConvexLensScene({ focalLength, objectDistance })
+
+const mirrorScene = (objectDistance: number, focalLength = 10): PhysicsScene =>
+  createConcaveMirrorScene({ focalLength, objectDistance })
 
 const expectImage = (scene: PhysicsScene) => {
   const result = resolveOpticalImaging(scene)
@@ -155,8 +160,114 @@ describe('convex lens imaging across the five zones', () => {
   })
 })
 
+describe('curved mirror imaging', () => {
+  it('u > 2f: real, inverted, reduced image in FRONT of the mirror', () => {
+    const { result, image } = expectImage(mirrorScene(30))
+    expect(result.mirrorZone).toBe('beyond_2f')
+    expect(image.nature).toBe('real')
+    expect(image.orientation).toBe('inverted')
+    expect(image.distance).toBeCloseTo(0.15, 12)
+    expect(image.magnification).toBeCloseTo(0.5, 12)
+    expect(image.height).toBeCloseTo(0.03, 12)
+    /* Reflection folds the image back to the object side (−x). */
+    expect(image.x).toBeCloseTo(-0.15, 12)
+    /* Template parks the screen on the sharp-image plane in front. */
+    expect(result.imageOnScreen).toBe(true)
+    expect(result.screenOffset).toBeCloseTo(0, 9)
+  })
+
+  it('u = 2f: real, inverted, same size at the centre of curvature', () => {
+    const { result, image } = expectImage(mirrorScene(20))
+    expect(result.mirrorZone).toBe('at_2f')
+    expect(image.distance).toBeCloseTo(0.2, 12)
+    expect(image.magnification).toBeCloseTo(1, 12)
+    expect(image.orientation).toBe('inverted')
+  })
+
+  it('f < u < 2f: real, inverted, magnified', () => {
+    const { result, image } = expectImage(mirrorScene(15))
+    expect(result.mirrorZone).toBe('between_f_2f')
+    expect(image.nature).toBe('real')
+    expect(image.distance).toBeCloseTo(0.3, 12)
+    expect(image.magnification).toBeCloseTo(2, 12)
+  })
+
+  it('u = f: no image, reflected rays parallel', () => {
+    const scene = mirrorScene(10)
+    const result = resolveOpticalImaging(scene)
+    expect(result.outcome.kind).toBe('no_image')
+    expect(result.mirrorZone).toBe('at_f')
+    expect(result.imageOnScreen).toBe(false)
+    const request = createOpticsSimulationRequest(scene, 'sim-cm-f', 'trace-cm-f')
+    const outcome = opticsEngine.simulate(scene, request)
+    expect(outcome.verification.status).toBe('passed')
+    expect(outcome.verification.checks.map((entry) => entry.id)).toContain(
+      'rays_parallel_at_focus',
+    )
+    const rays = principalRaysOf(result)
+    expect(rays).toHaveLength(2)
+    expect(rays.every((ray) => ray.extension === undefined)).toBe(true)
+  })
+
+  it('u < f: virtual, upright, magnified behind the mirror (the makeup mirror)', () => {
+    const { result, image } = expectImage(mirrorScene(5))
+    expect(result.mirrorZone).toBe('within_f')
+    expect(image.nature).toBe('virtual')
+    expect(image.orientation).toBe('upright')
+    expect(image.distance).toBeCloseTo(0.1, 12)
+    expect(image.magnification).toBeCloseTo(2, 12)
+    expect(image.x).toBeCloseTo(0.1, 12)
+    expect(result.imageOnScreen).toBe(false)
+    const rays = principalRaysOf(result)
+    expect(rays).toHaveLength(3)
+    for (const ray of rays) {
+      const last = ray.extension?.[ray.extension.length - 1]
+      expect(last?.x).toBeCloseTo(0.1, 12)
+      expect(last?.y).toBeCloseTo(0.12, 12)
+    }
+  })
+
+  it('convex mirror (f < 0): always virtual, upright, reduced', () => {
+    const { result, image } = expectImage(mirrorScene(30, -10))
+    expect(result.mirrorZone).toBeUndefined()
+    expect(image.nature).toBe('virtual')
+    expect(image.orientation).toBe('upright')
+    expect(image.distance).toBeCloseTo(0.075, 12)
+    expect(image.magnification).toBeCloseTo(0.25, 12)
+    expect(image.x).toBeCloseTo(0.075, 12)
+    expect(result.imageOnScreen).toBe(false)
+  })
+
+  it('verifies the mirror equation and independent ray construction', () => {
+    const scene = mirrorScene(30)
+    const request = createOpticsSimulationRequest(scene, 'sim-cm', 'trace-cm')
+    const outcome = opticsEngine.simulate(scene, request)
+    expect(outcome.verification.status).toBe('passed')
+    const ids = outcome.verification.checks.map((entry) => entry.id)
+    expect(ids).toContain('curved_mirror_equation')
+    expect(ids).toContain('principal_rays_converge')
+    expect(ids).not.toContain('thin_lens_equation')
+    expect(derivedScalar(outcome.derivedQuantities, 'object_distance').value).toBeCloseTo(30, 9)
+    expect(derivedScalar(outcome.derivedQuantities, 'image_distance').value).toBeCloseTo(15, 9)
+    expect(derivedScalar(outcome.derivedQuantities, 'focal_length').value).toBeCloseTo(10, 9)
+    expect(derivedScalar(outcome.derivedQuantities, 'magnification').value).toBeCloseTo(0.5, 9)
+    expect(derivedScalar(outcome.derivedQuantities, 'screen_offset').value).toBeCloseTo(0, 9)
+  })
+
+  it('real-image rays run through the mirror hit points back to the image top', () => {
+    const result = resolveOpticalImaging(mirrorScene(30))
+    const rays = principalRaysOf(result)
+    expect(rays.map((ray) => ray.kind)).toEqual(['parallel', 'central', 'focal'])
+    for (const ray of rays) {
+      const last = ray.points[ray.points.length - 1]
+      expect(last?.x).toBeCloseTo(-0.15, 12)
+      expect(last?.y).toBeCloseTo(-0.03, 12)
+    }
+  })
+})
+
 describe('engine gate', () => {
-  it('accepts the two templates with their model ids', () => {
+  it('accepts the three templates with their model ids', () => {
     const engine = new OpticsEngine()
     const lens = engine.canHandle(lensScene(30))
     expect(lens.supported).toBe(true)
@@ -164,6 +275,9 @@ describe('engine gate', () => {
     const mirror = engine.canHandle(createPlaneMirrorScene())
     expect(mirror.supported).toBe(true)
     if (mirror.supported) expect(mirror.modelId).toBe(PLANE_MIRROR_MODEL)
+    const curved = engine.canHandle(createConcaveMirrorScene())
+    expect(curved.supported).toBe(true)
+    if (curved.supported) expect(curved.modelId).toBe(CURVED_MIRROR_MODEL)
   })
 
   it('rejects scenes without exactly one bench or with foreign objects', () => {
