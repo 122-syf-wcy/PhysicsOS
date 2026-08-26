@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  EXPERIMENT_SELF_CHECKS,
   GOLDEN_QUESTIONS,
   KNOWLEDGE_NODES,
   QUESTION_KNOWLEDGE,
   QUESTION_SELF_CHECKS,
+  experimentSelfChecksOfTopic,
   knowledgeNodesOfQuestion,
   selfChecksOfQuestion,
 } from '../src/index.ts'
@@ -91,6 +93,61 @@ describe('self-check bank', () => {
   it('keeps option ids unique inside each item', () => {
     for (const question of GOLDEN_QUESTIONS) {
       for (const item of selfChecksOfQuestion(question.id)) {
+        const ids = item.options.map((option) => option.id)
+        expect(new Set(ids).size, item.id).toBe(ids.length)
+      }
+    }
+  })
+})
+
+describe('experiment self-check bank', () => {
+  const sets = Object.values(EXPERIMENT_SELF_CHECKS)
+
+  it('keys every set by its own id and resolves through the lookup', () => {
+    for (const [key, set] of Object.entries(EXPERIMENT_SELF_CHECKS)) {
+      expect(set.id, key).toBe(key)
+      expect(experimentSelfChecksOfTopic(key)).toBe(set)
+    }
+    expect(experimentSelfChecksOfTopic('no-such-topic')).toBeUndefined()
+  })
+
+  it('references only declared knowledge nodes and carries content', () => {
+    const nodeIds = new Set(KNOWLEDGE_NODES.map((node) => node.id))
+    for (const set of sets) {
+      expect(set.topic.length, set.id).toBeGreaterThan(1)
+      expect(set.knowledge.length, set.id).toBeGreaterThan(0)
+      for (const nodeId of set.knowledge) {
+        expect(nodeIds.has(nodeId), `${set.id} → ${nodeId}`).toBe(true)
+      }
+      expect(set.items.length, set.id).toBeGreaterThan(0)
+    }
+  })
+
+  it('covers every circuit knowledge node with at least one set', () => {
+    const exercised = new Set(sets.flatMap((set) => set.knowledge))
+    for (const node of KNOWLEDGE_NODES) {
+      if (node.domain !== 'circuit' || node.parentId === undefined) continue
+      expect(exercised.has(node.id), node.id).toBe(true)
+    }
+  })
+
+  it('follows the same option rules as the question bank', () => {
+    for (const set of sets) {
+      for (const item of set.items) {
+        expect(item.options.length, item.id).toBeGreaterThanOrEqual(2)
+        const correct = item.options.filter((option) => option.correct === true)
+        expect(correct.length, `${set.id}:${item.id}`).toBe(1)
+        for (const option of item.options) {
+          if (option.correct === true) {
+            expect(option.mistake, `${item.id}:${option.id}`).toBeUndefined()
+            continue
+          }
+          expect(option.mistake, `${item.id}:${option.id}`).toBeDefined()
+          expect(['concept', 'direction', 'modeling']).toContain(option.mistake!.type)
+          expect(option.mistake!.explanation.length).toBeGreaterThan(10)
+          expect(option.mistake!.review.length).toBeGreaterThan(0)
+        }
+        expect(item.takeaway.length, item.id).toBeGreaterThan(10)
         const ids = item.options.map((option) => option.id)
         expect(new Set(ids).size, item.id).toBe(ids.length)
       }

@@ -59,3 +59,8 @@ export type {
   SelfCheckMistake,
   SelfCheckOption,
 } from './self-checks.ts'
+export {
+  EXPERIMENT_SELF_CHECKS,
+  experimentSelfChecksOfTopic,
+} from './experiment-self-checks.ts'
+export type { ExperimentSelfCheckSet } from './experiment-self-checks.ts'
