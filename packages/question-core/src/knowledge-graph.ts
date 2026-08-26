@@ -28,6 +28,9 @@ export interface KnowledgeNode {
 /** The curriculum tree, roots first. Order is the display order. */
 export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'mechanics', label: '力学', domain: 'mechanics' },
+  /* 平均速度 is a 初中 lab node: no golden question maps to it yet — the Lab's
+     测平均速度 self-checks are what write attempts against it. */
+  { id: 'kin-average-speed', label: '平均速度', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'kin-uniform-acceleration', label: '匀变速直线运动', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'kin-projectile', label: '抛体运动', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-newton-second', label: '牛顿第二定律', domain: 'mechanics', parentId: 'mechanics' },
@@ -57,6 +60,7 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'circ-series', label: '串联电路', domain: 'circuit', parentId: 'circuit' },
   { id: 'circ-parallel', label: '并联电路', domain: 'circuit', parentId: 'circuit' },
   { id: 'circ-dynamic', label: '动态电路分析', domain: 'circuit', parentId: 'circuit' },
+  { id: 'circ-power', label: '电功率', domain: 'circuit', parentId: 'circuit' },
   { id: 'circ-emf-internal', label: '电动势与内阻', domain: 'circuit', parentId: 'circuit' },
 ]
 

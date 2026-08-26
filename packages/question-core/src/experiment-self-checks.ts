@@ -1,13 +1,17 @@
 /**
  * Experiment self-check bank (实验自测) for lab topics.
  *
- * The golden-question bank keys its self-checks by question id; the circuit
- * domain has no golden questions yet, so its conceptual probes are keyed by a
- * LAB TOPIC instead. A topic names the physical setup the current frame shows
- * (纯串联 / 有并联结点 / 滑动变阻器动态 / 电源含内阻), and the web layer
- * resolves it from facts the runtime already published — never from a template
- * id, so a student-modified or question-forked circuit still gets the probes
- * that match what is actually on the canvas.
+ * The golden-question bank keys its self-checks by question id; lab-first
+ * teaching content (the circuit domain, the 初中 measurement experiments) has
+ * no golden questions, so its conceptual probes are keyed by a LAB TOPIC
+ * instead. A topic names what the current frame teaches: for circuits the web
+ * layer resolves it from facts the runtime already published (纯串联 / 并联
+ * 结点 / 滑动变阻器 / 电源含内阻) — never from a template id, so a student-
+ * modified or question-forked circuit still gets the probes that match what is
+ * actually on the canvas. The 初中 measurement rigs (测平均速度 / 伏安法 /
+ * 测灯泡功率) are physically identical to their base apparatus — their topic
+ * is the measurement intent, which lives in the scene title the template
+ * stamped, the same dispatch the tutor uses for mechanics lessons.
  *
  * This file is DATA, same rules as the question self-check bank: every wrong
  * option is a classified mistake with a readable explanation and review
@@ -205,6 +209,181 @@ const RHEOSTAT_METER: SelfCheckItem = {
   ],
 }
 
+/* ----------------------------------------------------- 伏安法测电阻 (初中) -- */
+
+const VA_PRINCIPLE: SelfCheckItem = {
+  id: 'va-principle',
+  prompt: '伏安法测电阻的原理是？',
+  takeaway: '电压表读出 Rx 两端的电压 U，电流表读出流过它的电流 I，由欧姆定律的变形 R = U/I 算出阻值。',
+  options: [
+    { id: 'r-u-over-i', label: '测出 U 和 I，由 R = U/I 求出', correct: true },
+    {
+      id: 'r-follows-u',
+      label: '电压越大电阻越大，取电压最大时的读数',
+      mistake: {
+        type: 'concept',
+        explanation: '电阻是导体自身的属性，由材料、长度、横截面积决定；改变电压时 U 与 I 按同一比例变化，U/I 不变。测多组数据是为了取平均减小误差，不是因为电阻在变。',
+        review: ['电阻是导体的属性', '欧姆定律 R = U/I'],
+      },
+    },
+    {
+      id: 'swap-meters',
+      label: '电压表串联、电流表并联接入也能测',
+      mistake: {
+        type: 'modeling',
+        explanation: '接法反了：电压表内阻很大，串进干路会几乎切断电流；电流表内阻很小，并到 Rx 两端会把它短路。必须电流表串联、电压表并联，理想表才不干扰电路。',
+        review: ['电压表并联、电流表串联', '理想电表假设'],
+        evidenceCheckId: 'ideal_meters_non_intrusive',
+      },
+    },
+  ],
+}
+
+const VA_RHEOSTAT_ROLE: SelfCheckItem = {
+  id: 'va-rheostat-role',
+  prompt: '实验中串联一个滑动变阻器，主要是为了？',
+  takeaway: '移动滑片改变回路总电阻，就改变了 Rx 的工作点：多组 (U, I) 求 R 取平均能减小偶然误差，同时变阻器还能限流保护电路。',
+  options: [
+    { id: 'multi-readings', label: '改变 Rx 的电压和电流，测多组数据取平均', correct: true },
+    {
+      id: 'change-rx',
+      label: '直接改变待测电阻 Rx 的阻值',
+      mistake: {
+        type: 'concept',
+        explanation: '滑动变阻器改变的是它自己接入电路的那段电阻；Rx 是待测对象，阻值不变，变的只是它分到的电压和流过的电流。',
+        review: ['滑动变阻器的接入电阻', '串联分压'],
+      },
+    },
+    {
+      id: 'as-switch',
+      label: '代替开关控制电路的通断',
+      mistake: {
+        type: 'modeling',
+        explanation: '开关只有通、断两个状态；变阻器的价值是连续调节接入电阻，让工作点在一段范围内滑动，从而读出多组不同的 (U, I)。',
+        review: ['滑动变阻器的作用', '伏安法多次测量取平均'],
+      },
+    },
+  ],
+}
+
+/* ------------------------------------------------- 测小灯泡电功率 (初中) -- */
+
+const BULB_POWER_READING: SelfCheckItem = {
+  id: 'bulb-power-reading',
+  prompt: '怎样得到小灯泡此刻的实际电功率？',
+  takeaway: 'P = UI：电压表读 U、电流表读 I，两个读数相乘就是灯泡此刻消耗的实际功率 —— 功率随工作点变化，靠测量而不是铭牌。',
+  options: [
+    { id: 'p-ui', label: '电压表读数乘以电流表读数：P = UI', correct: true },
+    {
+      id: 'rated-always',
+      label: '灯泡亮着就是额定功率，看铭牌即可',
+      mistake: {
+        type: 'concept',
+        explanation: '铭牌给的是额定电压下的功率。实际功率 P = UI 随灯泡两端电压变化：低于额定电压时灯更暗、功率更小，只有电压恰为额定值时实际功率才等于额定功率。',
+        review: ['额定功率与实际功率', '电功率 P = UI'],
+        evidenceCheckId: 'power_balance',
+      },
+    },
+    {
+      id: 'brightness',
+      label: '看亮度估计：越亮越接近额定功率',
+      mistake: {
+        type: 'modeling',
+        explanation: '亮度确实随实际功率增大，但那只是定性判断，而且超过额定电压时灯更亮却已过载。测量要靠 P = UI 的读数，亮度只能做辅助观察。',
+        review: ['电功率的测量方法', 'P = UI'],
+      },
+    },
+  ],
+}
+
+const BULB_RATED_POINT: SelfCheckItem = {
+  id: 'bulb-rated-point',
+  prompt: '要测出额定功率，滑动变阻器应调到什么状态？',
+  takeaway: '调节滑片直到电压表读数等于灯泡的额定电压，此刻 P = UI 才是额定功率；偏离额定电压测到的都只是那一点的实际功率。',
+  options: [
+    { id: 'until-rated', label: '调到电压表读数恰等于额定电压', correct: true },
+    {
+      id: 'max-current',
+      label: '调到电流最大、灯最亮时读数',
+      mistake: {
+        type: 'modeling',
+        explanation: '接入电阻最小时灯泡分到的电压可能超过额定值：灯是更亮了，但已过载有烧毁风险，读出的也不是额定功率。判断标准是电压表读数，不是亮度。',
+        review: ['额定电压是判断标准', '滑动变阻器的调节方向'],
+      },
+    },
+    {
+      id: 'any-point',
+      label: '任意位置都行，功率是灯泡固定的属性',
+      mistake: {
+        type: 'concept',
+        explanation: '功率不是灯泡的固有属性：P = UI 随工作点连续变化，滑片每动一格实际功率就变一次。只有额定电压下的那一个功率才叫额定功率。',
+        review: ['实际功率随电压变化', '额定功率的含义'],
+        evidenceCheckId: 'power_balance',
+      },
+    },
+  ],
+}
+
+/* ------------------------------------------------- 测平均速度 (初中力学) -- */
+
+const AVERAGE_SPEED_DEFINITION: SelfCheckItem = {
+  id: 'avg-speed-definition',
+  prompt: '测量小车沿斜面下滑的平均速度，正确的算法是？',
+  takeaway: '平均速度是总路程除以总时间：v̄ = s/t。刻度尺量出 s、停表计下 t，相除即得 —— 它描述整段运动的平均快慢。',
+  options: [
+    { id: 'total-over-total', label: '用总路程除以总时间：v̄ = s/t', correct: true },
+    {
+      id: 'average-of-speeds',
+      label: '把开头和结尾的速度加起来除以 2',
+      mistake: {
+        type: 'concept',
+        explanation: '平均速度的定义永远是 v̄ = s/t；"首末速度的平均值"只在匀变速时才恰好等于它，一般运动中两者并不相等。先量路程、再计时间，相除才可靠。',
+        review: ['平均速度的定义 v̄ = s/t', '匀变速的特例 v̄ = (v₀+v)/2'],
+        evidenceCheckId: 'velocity_change',
+      },
+    },
+    {
+      id: 'instant-at-end',
+      label: '读小车到达底端那一刻的速度',
+      mistake: {
+        type: 'concept',
+        explanation: '到达底端那一刻的速度是瞬时速度，它只描述那一个时刻；小车一路加速，末速度比整段的平均速度大。平均速度必须用整段的 s 和 t 求。',
+        review: ['平均速度与瞬时速度的区别'],
+        evidenceCheckId: 'velocity_change',
+      },
+    },
+  ],
+}
+
+const AVERAGE_SPEED_SEGMENTS: SelfCheckItem = {
+  id: 'avg-speed-segments',
+  prompt: '小车从静止沿斜面加速下滑，前半程与后半程的平均速度相比？',
+  takeaway: '小车越滑越快，走完相同路程后半程用时更短：由 v̄ = s/t，后半程的平均速度更大 —— 分段测量正是为了量出这一点。',
+  options: [
+    { id: 'second-half-faster', label: '后半程更大（相同路程用时更短）', correct: true },
+    {
+      id: 'equal',
+      label: '相等（同一辆小车速度当然一样）',
+      mistake: {
+        type: 'concept',
+        explanation: '加速下滑时速度一直在增大，不存在"一辆车一个速度"：前半程慢、后半程快，两段的平均速度必然不同。分段计时就能直接量出差别。',
+        review: ['加速运动中速度随时间变化', '分段测平均速度'],
+        evidenceCheckId: 'velocity_change',
+      },
+    },
+    {
+      id: 'first-half-faster',
+      label: '前半程更大（先走的路程占便宜）',
+      mistake: {
+        type: 'concept',
+        explanation: '两段路程相同，比较的是用时：小车从静止加速，前半程速度小、用时长，平均速度反而小。v̄ = s/t 里 s 相同，t 短者胜。',
+        review: ['平均速度 v̄ = s/t', '从静止加速的运动特征'],
+        evidenceCheckId: 'velocity_change',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -290,6 +469,24 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '滑动变阻器动态电路',
     knowledge: ['circ-dynamic', 'circ-ohm-law'],
     items: [RHEOSTAT_CURRENT, RHEOSTAT_METER],
+  },
+  'circuit-va': {
+    id: 'circuit-va',
+    topic: '伏安法测电阻',
+    knowledge: ['circ-ohm-law', 'circ-dynamic'],
+    items: [VA_PRINCIPLE, VA_RHEOSTAT_ROLE],
+  },
+  'circuit-bulb': {
+    id: 'circuit-bulb',
+    topic: '测量小灯泡的电功率',
+    knowledge: ['circ-power', 'circ-ohm-law'],
+    items: [BULB_POWER_READING, BULB_RATED_POINT],
+  },
+  'mechanics-average-speed': {
+    id: 'mechanics-average-speed',
+    topic: '测量平均速度',
+    knowledge: ['kin-average-speed'],
+    items: [AVERAGE_SPEED_DEFINITION, AVERAGE_SPEED_SEGMENTS],
   },
   'circuit-emf': {
     id: 'circuit-emf',
