@@ -3,6 +3,7 @@ import { asObservableId, asSceneId, type IsoDateTime } from '@physicsos/shared'
 
 import { defaultCoordinateSystem } from '../scene-validation.ts'
 import type {
+  CurvedMirror,
   OpticalBench,
   OpticalElement,
   OpticalObject,
@@ -51,6 +52,15 @@ export type OpticalElementSpec =
       /** Half-height in centimetres. */
       readonly apertureRadius?: number
     })
+  | (OpticalElementSpecBase & {
+      readonly type: 'curved_mirror'
+      /** Signed x position of the mirror vertex, in centimetres. */
+      readonly position: number
+      /** Focal length in centimetres; > 0 concave (converging), < 0 convex. */
+      readonly focalLength: number
+      /** Half-height in centimetres. */
+      readonly apertureRadius?: number
+    })
 
 export interface OpticalScreenSpec {
   readonly id?: string
@@ -90,6 +100,17 @@ const toElement = (spec: OpticalElementSpec): OpticalElement => {
     return {
       ...base,
       type: 'thin_lens',
+      position: cm(spec.position),
+      focalLength: cm(spec.focalLength),
+      ...(spec.apertureRadius === undefined
+        ? {}
+        : { apertureRadius: cm(spec.apertureRadius) }),
+    }
+  }
+  if (spec.type === 'curved_mirror') {
+    return {
+      ...base,
+      type: 'curved_mirror',
       position: cm(spec.position),
       focalLength: cm(spec.focalLength),
       ...(spec.apertureRadius === undefined
@@ -205,4 +226,10 @@ export const opticalElementOf = (bench: OpticalBench): OpticalElement | undefine
 export const thinLensOf = (bench: OpticalBench): ThinLens | undefined => {
   const element = opticalElementOf(bench)
   return element?.type === 'thin_lens' ? element : undefined
+}
+
+/** First enabled curved mirror of a bench, if any. */
+export const curvedMirrorOf = (bench: OpticalBench): CurvedMirror | undefined => {
+  const element = opticalElementOf(bench)
+  return element?.type === 'curved_mirror' ? element : undefined
 }

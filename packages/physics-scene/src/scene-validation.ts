@@ -421,10 +421,12 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         valuesValid =
           valuesValid && dimensionsValid && canonicalValue(element.apertureRadius) > 0
       }
-      if (element.type === 'thin_lens') {
+      if (element.type === 'thin_lens' || element.type === 'curved_mirror') {
         const focalDimensionValid = hasExpectedDimension(element.focalLength, 'length')
         dimensionsValid = dimensionsValid && focalDimensionValid
-        /* f = 0 is not a lens; both signs are legal (convex/concave). */
+        /* f = 0 is not an imaging element; both signs are legal (a converging
+           convex lens / concave mirror vs a diverging concave lens / convex
+           mirror). */
         valuesValid =
           valuesValid &&
           focalDimensionValid &&

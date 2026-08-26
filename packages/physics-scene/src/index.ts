@@ -46,6 +46,7 @@ export {
   type ShapeDefinition,
   type ThinLens,
   type PlaneMirror,
+  type CurvedMirror,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -188,6 +189,7 @@ export {
 } from './circuit/circuit-templates.ts'
 export {
   createOpticalBenchScene,
+  curvedMirrorOf,
   isOpticsScene,
   opticalBenchOf,
   opticalBenchesOf,
@@ -200,8 +202,10 @@ export {
   type OpticsObservableKey,
 } from './optics/optics-scene.ts'
 export {
+  createConcaveMirrorScene,
   createConvexLensScene,
   createPlaneMirrorScene,
+  type ConcaveMirrorSceneInput,
   type ConvexLensSceneInput,
   type PlaneMirrorSceneInput,
 } from './optics/optics-templates.ts'

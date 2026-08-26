@@ -419,7 +419,21 @@ export interface PlaneMirror extends OpticalElementBase {
   apertureRadius?: Quantity<'length'>
 }
 
-export type OpticalElement = ThinLens | PlaneMirror
+/**
+ * Spherical mirror centred on the principal axis, reflecting light back
+ * towards −x (paraxial approximation, f = R/2).
+ */
+export interface CurvedMirror extends OpticalElementBase {
+  type: 'curved_mirror'
+  /** Signed x position of the mirror vertex. */
+  position: Quantity<'length'>
+  /** Focal length; > 0 concave (converging), < 0 convex (diverging). */
+  focalLength: Quantity<'length'>
+  /** Half-height above the axis, used for rendering. */
+  apertureRadius?: Quantity<'length'>
+}
+
+export type OpticalElement = ThinLens | PlaneMirror | CurvedMirror
 
 /** Movable screen that can catch a real image (and only a real image). */
 export interface OpticalScreen {

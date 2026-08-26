@@ -60,6 +60,57 @@ export interface ConvexLensSceneInput {
   readonly now?: IsoDateTime
 }
 
+export interface ConcaveMirrorSceneInput {
+  readonly sceneId?: string
+  /** Focal length in centimetres (> 0 concave; pass < 0 for a convex mirror). */
+  readonly focalLength?: number
+  /** Object distance to the mirror vertex in centimetres (> 0). */
+  readonly objectDistance?: number
+  /** Candle height in centimetres (> 0). */
+  readonly objectHeight?: number
+  /** Screen x position in centimetres; defaults to the sharp-image plane. */
+  readonly screenPosition?: number
+  readonly now?: IsoDateTime
+}
+
+/**
+ * 凹面镜成像 — candle, concave mirror and screen on an optical bench. The
+ * mirror folds the light back, so a real image forms IN FRONT of the mirror
+ * (on the object side) and the default screen parks on that sharp-image plane
+ * (at −v). When the start has no real image (u ≤ f, or a convex mirror) the
+ * screen parks at the centre-of-curvature distance in front (x = −2|f|).
+ */
+export const createConcaveMirrorScene = (input: ConcaveMirrorSceneInput = {}): PhysicsScene => {
+  const focalLength = input.focalLength ?? 10
+  const objectDistance = input.objectDistance ?? 30
+  const objectHeight = input.objectHeight ?? 6
+  const sharpImagePlane =
+    focalLength > 0 && objectDistance > focalLength
+      ? -(objectDistance * focalLength) / (objectDistance - focalLength)
+      : -2 * Math.abs(focalLength)
+  return createOpticalBenchScene({
+    sceneId: input.sceneId ?? 'lab-concave-mirror',
+    ...(input.now === undefined ? {} : { now: input.now }),
+    object: {
+      id: 'candle-object',
+      name: '蜡烛',
+      position: -objectDistance,
+      height: objectHeight,
+    },
+    element: {
+      id: 'mirror-1',
+      name: focalLength > 0 ? '凹面镜' : '凸面镜',
+      type: 'curved_mirror',
+      position: 0,
+      focalLength,
+      apertureRadius: 8,
+    },
+    screen: { id: 'screen-1', name: '光屏', position: input.screenPosition ?? sharpImagePlane },
+    title: '凹面镜成像',
+    description: '探究凹面镜（球面镜）成像规律：物距跨越 f 与 2f 时像的大小、倒正与虚实如何变化。',
+  })
+}
+
 /**
  * 凸透镜成像 — candle, convex lens and screen on an optical bench. The default
  * screen position is the sharp-image plane for the starting object distance

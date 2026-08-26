@@ -3,10 +3,12 @@ import { quantity } from '@physicsos/physics-units'
 
 import {
   SceneRuntime,
+  createConcaveMirrorScene,
   createConvexLensScene,
   createOpticalBenchScene,
   createPlaneMirrorScene,
   createSceneCommand,
+  curvedMirrorOf,
   isOpticsScene,
   opticalBenchOf,
   opticalBenchesOf,
@@ -57,6 +59,27 @@ describe('createOpticalBenchScene', () => {
     /* v = uf/(u−f) = 30·10/20 = 15 cm */
     expect(bench.screen?.position.value).toBeCloseTo(15, 9)
     expect(thinLensOf(bench)?.focalLength.value).toBe(10)
+  })
+
+  it('parks the concave mirror screen on the sharp-image plane in front', () => {
+    const scene = createConcaveMirrorScene({ focalLength: 10, objectDistance: 30 })
+    expect(isOpticsScene(scene)).toBe(true)
+    expect(validateScene(scene).status).toBe('passed')
+    const bench = opticalBenchOf(scene)!
+    expect(bench.elements[0]?.type).toBe('curved_mirror')
+    expect(curvedMirrorOf(bench)?.focalLength.value).toBe(10)
+    /* The mirror folds light back: v = uf/(u−f) = 15 cm IN FRONT (x = −15). */
+    expect(bench.screen?.position.value).toBeCloseTo(-15, 9)
+  })
+
+  it('parks the screen at −2|f| when the start has no real image', () => {
+    const within = createConcaveMirrorScene({ focalLength: 10, objectDistance: 5 })
+    expect(opticalBenchOf(within)!.screen?.position.value).toBeCloseTo(-20, 9)
+    const convex = createConcaveMirrorScene({ focalLength: -10, objectDistance: 30 })
+    const bench = opticalBenchOf(convex)!
+    expect(bench.screen?.position.value).toBeCloseTo(-20, 9)
+    expect(bench.elements[0]?.name).toBe('凸面镜')
+    expect(validateScene(convex).status).toBe('passed')
   })
 
   it('treats legacy scenes without the collection as having no benches', () => {
@@ -143,6 +166,48 @@ describe('optics scene commands', () => {
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('Expected command rejection.')
     expect(result.error.code).toBe('ELEMENT_NOT_THIN_LENS')
+  })
+
+  it('changes the mirror focal length, allowing the convex sign flip', () => {
+    const runtime = new SceneRuntime(createConcaveMirrorScene())
+    const ok = execute(runtime, 'SetMirrorFocalLength', {
+      benchId: 'optical-bench-1',
+      elementId: 'mirror-1',
+      focalLength: cm(15),
+    })
+    expect(ok.ok).toBe(true)
+    expect(curvedMirrorOf(opticalBenchOf(runtime.getScene())!)?.focalLength.value).toBe(15)
+    expect(runtime.getEvents().at(-1)?.type).toBe('MirrorFocalLengthChanged')
+
+    /* f < 0 IS the convex mirror: the sign flip is a legal, auditable edit. */
+    const convex = execute(runtime, 'SetMirrorFocalLength', {
+      benchId: 'optical-bench-1',
+      elementId: 'mirror-1',
+      focalLength: cm(-15),
+    })
+    expect(convex.ok).toBe(true)
+    expect(curvedMirrorOf(opticalBenchOf(runtime.getScene())!)?.focalLength.value).toBe(-15)
+
+    const zero = execute(runtime, 'SetMirrorFocalLength', {
+      benchId: 'optical-bench-1',
+      elementId: 'mirror-1',
+      focalLength: cm(0),
+    })
+    expect(zero.ok).toBe(false)
+    if (zero.ok) throw new Error('Expected command rejection.')
+    expect(zero.error.code).toBe('INVALID_MIRROR_FOCAL_LENGTH')
+  })
+
+  it('rejects mirror focal length edits on a thin lens', () => {
+    const runtime = new SceneRuntime(createConvexLensScene())
+    const result = execute(runtime, 'SetMirrorFocalLength', {
+      benchId: 'optical-bench-1',
+      elementId: 'lens-1',
+      focalLength: cm(10),
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('Expected command rejection.')
+    expect(result.error.code).toBe('ELEMENT_NOT_CURVED_MIRROR')
   })
 
   it('updates object height and screen position with validation', () => {

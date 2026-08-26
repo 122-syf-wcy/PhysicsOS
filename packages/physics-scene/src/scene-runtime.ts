@@ -65,6 +65,7 @@ export type SceneCommandType =
   | 'SetOpticalObjectPosition'
   | 'SetOpticalObjectHeight'
   | 'SetLensFocalLength'
+  | 'SetMirrorFocalLength'
   | 'SetOpticalScreenPosition'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
@@ -180,6 +181,12 @@ export interface SceneCommandPayloadMap {
     /** Focal length; non-zero, > 0 converging. */
     focalLength: Quantity<'length'>
   }
+  SetMirrorFocalLength: {
+    benchId: string
+    elementId: string
+    /** Focal length; non-zero, > 0 concave (converging), < 0 convex. */
+    focalLength: Quantity<'length'>
+  }
   SetOpticalScreenPosition: {
     benchId: string
     /** Signed x position of the screen plane. */
@@ -240,6 +247,7 @@ export type PhysicsEventType =
   | 'OpticalObjectPositionChanged'
   | 'OpticalObjectHeightChanged'
   | 'LensFocalLengthChanged'
+  | 'MirrorFocalLengthChanged'
   | 'OpticalScreenPositionChanged'
 
 export interface PhysicsEventPayloadMap {
@@ -274,6 +282,7 @@ export interface PhysicsEventPayloadMap {
   OpticalObjectPositionChanged: SceneCommandPayloadMap['SetOpticalObjectPosition']
   OpticalObjectHeightChanged: SceneCommandPayloadMap['SetOpticalObjectHeight']
   LensFocalLengthChanged: SceneCommandPayloadMap['SetLensFocalLength']
+  MirrorFocalLengthChanged: SceneCommandPayloadMap['SetMirrorFocalLength']
   OpticalScreenPositionChanged: SceneCommandPayloadMap['SetOpticalScreenPosition']
 }
 
@@ -1376,6 +1385,60 @@ const applyCommand = (
         event: {
           ...eventMetadata,
           type: 'LensFocalLengthChanged',
+          payload: {
+            benchId: command.payload.benchId,
+            elementId: command.payload.elementId,
+            focalLength: clone(focalLength),
+          },
+        },
+      }
+    }
+
+    case 'SetMirrorFocalLength': {
+      const lookup = findOpticalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (typeof command.payload.elementId !== 'string' || command.payload.elementId.length === 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_OPTICAL_ELEMENT_ID',
+            'elementId must be a non-empty string.',
+          ),
+        }
+      }
+      const element = lookup.bench.elements.find(
+        (entry) => entry.id === command.payload.elementId,
+      )
+      if (element === undefined) {
+        return { ok: false, error: notFound('optical_element', command.payload.elementId) }
+      }
+      if (element.type !== 'curved_mirror') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'ELEMENT_NOT_CURVED_MIRROR',
+            'SetMirrorFocalLength targets a curved mirror.',
+            { elementId: command.payload.elementId, elementType: element.type },
+          ),
+        }
+      }
+      const focalLength = validateQuantity(command.payload.focalLength, 'length')
+      if (!Number.isFinite(canonicalValue(focalLength)) || canonicalValue(focalLength) === 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_MIRROR_FOCAL_LENGTH',
+            'Focal length must be a non-zero finite length.',
+            { elementId: command.payload.elementId, focalLength: command.payload.focalLength },
+          ),
+        }
+      }
+      element.focalLength = clone(focalLength)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'MirrorFocalLengthChanged',
           payload: {
             benchId: command.payload.benchId,
             elementId: command.payload.elementId,
