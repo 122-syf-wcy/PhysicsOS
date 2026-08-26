@@ -70,6 +70,7 @@ export function buildSceneFromIR(
     boundaries: [],
     constraints: [],
     circuits: [],
+    opticalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       { id: asObservableId('observable-velocity'), type: 'velocity', targetId: particleId, visible: true },

@@ -312,6 +312,7 @@ export const createCircuitScene = (input: CircuitSceneInput): PhysicsScene => {
     boundaries: [],
     constraints: [],
     circuits: [circuit],
+    opticalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {

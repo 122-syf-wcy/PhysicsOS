@@ -234,6 +234,7 @@ const buildScene = (
     boundaries: [],
     constraints: [],
     circuits: [],
+    opticalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: observableDefinitions(particleId, fieldIds, visibility),
     annotations: [],

@@ -27,6 +27,7 @@ import { validateScene } from './scene-validation.ts'
 import type {
   Circuit,
   CircuitComponent,
+  OpticalBench,
   PhysicsScene,
   UniformElectricField,
   UniformMagneticField,
@@ -38,7 +39,7 @@ export const SCENE_REVISION_CONFLICT = 'SCENE_REVISION_CONFLICT' as const
 
 export type ElectricFieldDirection = 'right' | 'left' | 'up' | 'down'
 
-/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric + Circuit Runtime slices. */
+/** docs/03 §69 — command names frozen for the Magnetic + Mechanics + Electric + Circuit + Optics Runtime slices. */
 export type SceneCommandType =
   | 'SetParticleCharge'
   | 'SetParticleMass'
@@ -61,6 +62,10 @@ export type SceneCommandType =
   | 'SetSourceInternalResistance'
   | 'SetSwitchState'
   | 'SetSliderPosition'
+  | 'SetOpticalObjectPosition'
+  | 'SetOpticalObjectHeight'
+  | 'SetLensFocalLength'
+  | 'SetOpticalScreenPosition'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -159,6 +164,27 @@ export interface SceneCommandPayloadMap {
     /** Rheostat slider position, 0..1 inclusive. */
     position: number
   }
+  SetOpticalObjectPosition: {
+    benchId: string
+    /** Signed x position; must stay on the incoming (−x) side of every element. */
+    position: Quantity<'length'>
+  }
+  SetOpticalObjectHeight: {
+    benchId: string
+    /** Object height above the axis, > 0. */
+    height: Quantity<'length'>
+  }
+  SetLensFocalLength: {
+    benchId: string
+    elementId: string
+    /** Focal length; non-zero, > 0 converging. */
+    focalLength: Quantity<'length'>
+  }
+  SetOpticalScreenPosition: {
+    benchId: string
+    /** Signed x position of the screen plane. */
+    position: Quantity<'length'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -211,6 +237,10 @@ export type PhysicsEventType =
   | 'SourceInternalResistanceChanged'
   | 'SwitchStateChanged'
   | 'SliderPositionChanged'
+  | 'OpticalObjectPositionChanged'
+  | 'OpticalObjectHeightChanged'
+  | 'LensFocalLengthChanged'
+  | 'OpticalScreenPositionChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -241,6 +271,10 @@ export interface PhysicsEventPayloadMap {
   SourceInternalResistanceChanged: SceneCommandPayloadMap['SetSourceInternalResistance']
   SwitchStateChanged: SceneCommandPayloadMap['SetSwitchState']
   SliderPositionChanged: SceneCommandPayloadMap['SetSliderPosition']
+  OpticalObjectPositionChanged: SceneCommandPayloadMap['SetOpticalObjectPosition']
+  OpticalObjectHeightChanged: SceneCommandPayloadMap['SetOpticalObjectHeight']
+  LensFocalLengthChanged: SceneCommandPayloadMap['SetLensFocalLength']
+  OpticalScreenPositionChanged: SceneCommandPayloadMap['SetOpticalScreenPosition']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -312,37 +346,24 @@ const commandFailure = (error: DomainError, traceId: TraceId): SceneCommandFailu
   traceId,
 })
 
-const notFound = (
-  targetType:
-    | 'particle'
-    | 'magnetic_field'
-    | 'electric_field'
-    | 'observable'
-    | 'body'
-    | 'gravity_field'
-    | 'force'
-    | 'circuit'
-    | 'circuit_component',
-  id: string,
-) =>
+const NOT_FOUND_CODES = {
+  particle: 'PARTICLE_NOT_FOUND',
+  magnetic_field: 'MAGNETIC_FIELD_NOT_FOUND',
+  electric_field: 'ELECTRIC_FIELD_NOT_FOUND',
+  observable: 'OBSERVABLE_NOT_FOUND',
+  body: 'BODY_NOT_FOUND',
+  gravity_field: 'GRAVITY_FIELD_NOT_FOUND',
+  force: 'FORCE_NOT_FOUND',
+  circuit: 'CIRCUIT_NOT_FOUND',
+  circuit_component: 'CIRCUIT_COMPONENT_NOT_FOUND',
+  optical_bench: 'OPTICAL_BENCH_NOT_FOUND',
+  optical_element: 'OPTICAL_ELEMENT_NOT_FOUND',
+  optical_screen: 'OPTICAL_SCREEN_NOT_FOUND',
+} as const
+
+const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
   domainError(
-    targetType === 'particle'
-      ? 'PARTICLE_NOT_FOUND'
-      : targetType === 'magnetic_field'
-        ? 'MAGNETIC_FIELD_NOT_FOUND'
-        : targetType === 'electric_field'
-          ? 'ELECTRIC_FIELD_NOT_FOUND'
-        : targetType === 'body'
-          ? 'BODY_NOT_FOUND'
-          : targetType === 'gravity_field'
-            ? 'GRAVITY_FIELD_NOT_FOUND'
-            : targetType === 'force'
-              ? 'FORCE_NOT_FOUND'
-              : targetType === 'circuit'
-                ? 'CIRCUIT_NOT_FOUND'
-                : targetType === 'circuit_component'
-                  ? 'CIRCUIT_COMPONENT_NOT_FOUND'
-                  : 'OBSERVABLE_NOT_FOUND',
+    NOT_FOUND_CODES[targetType],
     `${targetType} target "${id}" does not exist in the current scene.`,
     'not_found',
     { details: { targetType, targetId: id } },
@@ -411,6 +432,22 @@ const findCircuitComponent = (
     return { ok: false, error: notFound('circuit_component', componentId) }
   }
   return { ok: true, circuit, component }
+}
+
+type OpticalBenchLookup =
+  | { ok: true; bench: OpticalBench }
+  | { ok: false; error: DomainError }
+
+const findOpticalBench = (scene: PhysicsScene, benchId: string): OpticalBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_OPTICAL_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = scene.opticalBenches.find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('optical_bench', benchId) }
+  return { ok: true, bench }
 }
 
 const electricDirectionVector = (direction: ElectricFieldDirection) => {
@@ -1221,6 +1258,160 @@ const applyCommand = (
           ...eventMetadata,
           type: 'SliderPositionChanged',
           payload: clone(command.payload),
+        },
+      }
+    }
+
+    /* ------------------------------------------------------------- optics -- */
+
+    case 'SetOpticalObjectPosition': {
+      const lookup = findOpticalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const position = validateQuantity(command.payload.position, 'length')
+      const positionSI = canonicalValue(position)
+      if (!Number.isFinite(positionSI)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_OPTICAL_OBJECT_POSITION',
+            'Optical object position must be a finite length.',
+            { benchId: command.payload.benchId, position: command.payload.position },
+          ),
+        }
+      }
+      /* Light travels towards +x: an object at or past the imaging element has
+         left the model, so the gate rejects it instead of letting the engine
+         report a broken scene later. */
+      const blockingElement = lookup.bench.elements.find(
+        (element) => element.enabled !== false && positionSI >= canonicalValue(element.position),
+      )
+      if (blockingElement !== undefined) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'OPTICAL_OBJECT_BEHIND_ELEMENT',
+            'The object must stay on the incoming side of the imaging element.',
+            { benchId: command.payload.benchId, elementId: blockingElement.id },
+          ),
+        }
+      }
+      lookup.bench.object.position = clone(position)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'OpticalObjectPositionChanged',
+          payload: { benchId: command.payload.benchId, position: clone(position) },
+        },
+      }
+    }
+
+    case 'SetOpticalObjectHeight': {
+      const lookup = findOpticalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const height = validateQuantity(command.payload.height, 'length')
+      if (!Number.isFinite(canonicalValue(height)) || canonicalValue(height) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_OPTICAL_OBJECT_HEIGHT',
+            'Optical object height must be a positive finite length.',
+            { benchId: command.payload.benchId, height: command.payload.height },
+          ),
+        }
+      }
+      lookup.bench.object.height = clone(height)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'OpticalObjectHeightChanged',
+          payload: { benchId: command.payload.benchId, height: clone(height) },
+        },
+      }
+    }
+
+    case 'SetLensFocalLength': {
+      const lookup = findOpticalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (typeof command.payload.elementId !== 'string' || command.payload.elementId.length === 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_OPTICAL_ELEMENT_ID',
+            'elementId must be a non-empty string.',
+          ),
+        }
+      }
+      const element = lookup.bench.elements.find(
+        (entry) => entry.id === command.payload.elementId,
+      )
+      if (element === undefined) {
+        return { ok: false, error: notFound('optical_element', command.payload.elementId) }
+      }
+      if (element.type !== 'thin_lens') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'ELEMENT_NOT_THIN_LENS',
+            'SetLensFocalLength targets a thin lens.',
+            { elementId: command.payload.elementId, elementType: element.type },
+          ),
+        }
+      }
+      const focalLength = validateQuantity(command.payload.focalLength, 'length')
+      if (!Number.isFinite(canonicalValue(focalLength)) || canonicalValue(focalLength) === 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_LENS_FOCAL_LENGTH',
+            'Focal length must be a non-zero finite length.',
+            { elementId: command.payload.elementId, focalLength: command.payload.focalLength },
+          ),
+        }
+      }
+      element.focalLength = clone(focalLength)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'LensFocalLengthChanged',
+          payload: {
+            benchId: command.payload.benchId,
+            elementId: command.payload.elementId,
+            focalLength: clone(focalLength),
+          },
+        },
+      }
+    }
+
+    case 'SetOpticalScreenPosition': {
+      const lookup = findOpticalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.screen === undefined) {
+        return {
+          ok: false,
+          error: notFound('optical_screen', command.payload.benchId),
+        }
+      }
+      const position = validateQuantity(command.payload.position, 'length')
+      if (!Number.isFinite(canonicalValue(position))) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_OPTICAL_SCREEN_POSITION',
+            'Optical screen position must be a finite length.',
+            { benchId: command.payload.benchId, position: command.payload.position },
+          ),
+        }
+      }
+      lookup.bench.screen.position = clone(position)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'OpticalScreenPositionChanged',
+          payload: { benchId: command.payload.benchId, position: clone(position) },
         },
       }
     }

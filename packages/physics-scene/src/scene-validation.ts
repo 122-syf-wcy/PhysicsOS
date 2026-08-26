@@ -61,6 +61,12 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ...scene.regions.map((entry) => entry.id),
     ...scene.circuits.map((entry) => entry.id),
     ...scene.circuits.flatMap((entry) => entry.components.map((component) => String(component.id))),
+    ...scene.opticalBenches.map((entry) => entry.id),
+    ...scene.opticalBenches.flatMap((entry) => [
+      entry.object.id,
+      ...entry.elements.map((element) => element.id),
+      ...(entry.screen === undefined ? [] : [entry.screen.id]),
+    ]),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -379,6 +385,74 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         check(`circuit_component_values:${componentId}`, 'constraint', valuesValid, {
           message: `Component "${componentId}" carries an out-of-range value.`,
           targetId: componentId,
+        }),
+      )
+    }
+  }
+
+  for (const bench of scene.opticalBenches) {
+    const objectDimensionsValid =
+      hasExpectedDimension(bench.object.position, 'length') &&
+      hasExpectedDimension(bench.object.height, 'length')
+    checks.push(
+      check(`optical_object_dimensions:${bench.id}`, 'dimension', objectDimensionsValid, {
+        message: `Optical object of bench "${bench.id}" must use length quantities.`,
+        targetId: bench.object.id,
+      }),
+    )
+    const objectValuesValid =
+      objectDimensionsValid &&
+      Number.isFinite(canonicalValue(bench.object.position)) &&
+      Number.isFinite(canonicalValue(bench.object.height)) &&
+      canonicalValue(bench.object.height) > 0
+    checks.push(
+      check(`optical_object_values:${bench.id}`, 'constraint', objectValuesValid, {
+        message: `Optical object of bench "${bench.id}" must be finite with height > 0.`,
+        targetId: bench.object.id,
+      }),
+    )
+
+    for (const element of bench.elements) {
+      let dimensionsValid = hasExpectedDimension(element.position, 'length')
+      let valuesValid = dimensionsValid && Number.isFinite(canonicalValue(element.position))
+      if (element.apertureRadius !== undefined) {
+        dimensionsValid =
+          dimensionsValid && hasExpectedDimension(element.apertureRadius, 'length')
+        valuesValid =
+          valuesValid && dimensionsValid && canonicalValue(element.apertureRadius) > 0
+      }
+      if (element.type === 'thin_lens') {
+        const focalDimensionValid = hasExpectedDimension(element.focalLength, 'length')
+        dimensionsValid = dimensionsValid && focalDimensionValid
+        /* f = 0 is not a lens; both signs are legal (convex/concave). */
+        valuesValid =
+          valuesValid &&
+          focalDimensionValid &&
+          Number.isFinite(canonicalValue(element.focalLength)) &&
+          canonicalValue(element.focalLength) !== 0
+      }
+      checks.push(
+        check(`optical_element_dimensions:${element.id}`, 'dimension', dimensionsValid, {
+          message: `Optical element "${element.id}" quantities must use length dimensions.`,
+          targetId: element.id,
+        }),
+      )
+      checks.push(
+        check(`optical_element_values:${element.id}`, 'constraint', valuesValid, {
+          message: `Optical element "${element.id}" carries an out-of-range value.`,
+          targetId: element.id,
+        }),
+      )
+    }
+
+    if (bench.screen !== undefined) {
+      const screenValid =
+        hasExpectedDimension(bench.screen.position, 'length') &&
+        Number.isFinite(canonicalValue(bench.screen.position))
+      checks.push(
+        check(`optical_screen_valid:${bench.id}`, 'constraint', screenValid, {
+          message: `Optical screen of bench "${bench.id}" must have a finite length position.`,
+          targetId: bench.screen.id,
         }),
       )
     }

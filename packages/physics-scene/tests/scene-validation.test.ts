@@ -28,6 +28,7 @@ describe('Scene Validation', () => {
     boundaries: [],
     constraints: [],
     circuits: [],
+    opticalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [],
     annotations: [],

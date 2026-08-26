@@ -56,6 +56,7 @@ const magneticScene = (): PhysicsScene => ({
   boundaries: [],
   constraints: [],
   circuits: [],
+  opticalBenches: [],
   measurementDefinitions: [],
   observableDefinitions: [
     {

@@ -27,6 +27,11 @@ export {
   type ObservableDefinition,
   type ObservationStyle,
   type ObservableType,
+  type OpticalBench,
+  type OpticalElement,
+  type OpticalElementBase,
+  type OpticalObject,
+  type OpticalScreen,
   type Particle,
   type PhysicsObjectBase,
   type PhysicsScene,
@@ -39,6 +44,8 @@ export {
   type SceneLineage,
   type SceneMetadata,
   type ShapeDefinition,
+  type ThinLens,
+  type PlaneMirror,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -179,3 +186,22 @@ export {
   type RheostatCircuitInput,
   type SeriesCircuitInput,
 } from './circuit/circuit-templates.ts'
+export {
+  createOpticalBenchScene,
+  isOpticsScene,
+  opticalBenchOf,
+  opticalBenchesOf,
+  opticalElementOf,
+  thinLensOf,
+  type OpticalBenchSceneInput,
+  type OpticalElementSpec,
+  type OpticalObjectSpec,
+  type OpticalScreenSpec,
+  type OpticsObservableKey,
+} from './optics/optics-scene.ts'
+export {
+  createConvexLensScene,
+  createPlaneMirrorScene,
+  type ConvexLensSceneInput,
+  type PlaneMirrorSceneInput,
+} from './optics/optics-templates.ts'

@@ -378,6 +378,69 @@ export interface Circuit extends PhysicsObjectBase {
   connections: CircuitConnection[]
 }
 
+/* ------------------------------------------------------- optical bench -- */
+
+/**
+ * Luminous object standing on the principal axis (the candle of the lab).
+ * Positions along the bench are signed x coordinates; light travels towards +x.
+ */
+export interface OpticalObject {
+  id: string
+  name?: string
+  /** Signed x position of the object's foot on the principal axis. */
+  position: Quantity<'length'>
+  /** Object height above the axis; must be > 0. */
+  height: Quantity<'length'>
+}
+
+export interface OpticalElementBase {
+  id: string
+  name?: string
+  enabled?: boolean
+}
+
+/** Ideal thin lens centred on the principal axis. */
+export interface ThinLens extends OpticalElementBase {
+  type: 'thin_lens'
+  /** Signed x position of the optical centre. */
+  position: Quantity<'length'>
+  /** Focal length; > 0 converging (convex), < 0 diverging (concave). */
+  focalLength: Quantity<'length'>
+  /** Half-aperture above the axis, used for ray clipping and rendering. */
+  apertureRadius?: Quantity<'length'>
+}
+
+/** Plane mirror standing perpendicular to the principal axis. */
+export interface PlaneMirror extends OpticalElementBase {
+  type: 'plane_mirror'
+  /** Signed x position of the mirror plane. */
+  position: Quantity<'length'>
+  /** Half-height above the axis, used for rendering. */
+  apertureRadius?: Quantity<'length'>
+}
+
+export type OpticalElement = ThinLens | PlaneMirror
+
+/** Movable screen that can catch a real image (and only a real image). */
+export interface OpticalScreen {
+  id: string
+  name?: string
+  /** Signed x position of the screen plane. */
+  position: Quantity<'length'>
+}
+
+/**
+ * Single-axis optical bench for geometric imaging (junior optics slice).
+ * One luminous object faces the bench elements; light travels towards +x, so
+ * the object must stay on the −x side of the imaging element.
+ */
+export interface OpticalBench extends PhysicsObjectBase {
+  type: 'optical_bench'
+  object: OpticalObject
+  elements: OpticalElement[]
+  screen?: OpticalScreen
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -424,6 +487,7 @@ export interface PhysicsScene {
   boundaries: Boundary[]
   constraints: Constraint[]
   circuits: Circuit[]
+  opticalBenches: OpticalBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]
