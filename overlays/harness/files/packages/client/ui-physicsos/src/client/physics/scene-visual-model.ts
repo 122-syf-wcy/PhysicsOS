@@ -28,6 +28,7 @@ export type PhysicsDomainId =
   | 'circuit'
   | 'composite'
   | 'optics'
+  | 'acoustics'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -86,6 +87,9 @@ export type ObservableKey =
   // optics
   | 'rays'
   | 'image'
+  // acoustics
+  | 'wavefronts'
+  | 'path'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -491,6 +495,50 @@ export interface OpticalScreenVisual {
   label?: string
 }
 
+/* ---------------------------------------------------------------- acoustics -- */
+
+/** Sound source standing on the range axis, drawn as a loudspeaker horn. */
+export interface AcousticSourceVisual {
+  id: string
+  /** Foot of the source on the range axis. */
+  at: ScenePoint
+  label?: string
+}
+
+/** Reflecting wall / cliff face, drawn as a hatched vertical barrier. */
+export interface AcousticReflectorVisual {
+  id: string
+  /** Foot of the reflecting face on the range axis. */
+  at: ScenePoint
+  /** Half-height in scene units. */
+  halfHeight: number
+  label?: string
+}
+
+/**
+ * The travelling sound pulse at the current frame. `phase` is the leg of the
+ * round trip the engine reported — outbound towards the wall, return towards
+ * the source, or received (parked back at the source).
+ */
+export interface AcousticPulseVisual {
+  id: string
+  at: ScenePoint
+  phase: 'outbound' | 'return' | 'received'
+}
+
+/**
+ * One trailing wavefront arc behind the pulse; `direction` is the travel sense
+ * the arcs open against. Presentation of the verified pulse state — the arcs
+ * carry no independent physics.
+ */
+export interface AcousticWavefrontVisual {
+  id: string
+  at: ScenePoint
+  /** Arc radius in scene units. */
+  radius: number
+  direction: 'forward' | 'backward'
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -564,6 +612,14 @@ export interface SceneVisualModel {
   opticalScreens?: readonly OpticalScreenVisual[]
   /** F / 2F axis ticks. */
   opticalAxisMarks?: readonly OpticalAxisMarkVisual[]
+  /** Sound sources on the echo range (acoustics domain). */
+  acousticSources?: readonly AcousticSourceVisual[]
+  /** Reflecting walls on the echo range. */
+  acousticReflectors?: readonly AcousticReflectorVisual[]
+  /** The travelling pulse at the current frame. */
+  acousticPulse?: AcousticPulseVisual
+  /** Trailing wavefront arcs; gated by the `wavefronts` observable. */
+  acousticWavefronts?: readonly AcousticWavefrontVisual[]
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

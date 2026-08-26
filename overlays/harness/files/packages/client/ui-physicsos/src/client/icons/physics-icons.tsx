@@ -369,6 +369,18 @@ export const IconConcaveMirror = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* --------------------------------------------------------------- acoustics -- */
+
+/** Echo ranging: a loudspeaker facing a hatched wall, wave arcs between. */
+export const IconEchoRanging = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3.5 9.5h2.8l3.2-2.4v9.8l-3.2-2.4H3.5z" />
+    <path d="M12.4 9.2a4.4 4.4 0 0 1 0 5.6M14.8 7.6a7.4 7.4 0 0 1 0 8.8" strokeOpacity="0.6" />
+    <path d="M19.5 4.5v15" />
+    <path d="M19.5 7.5l2.4-1.6M19.5 11.5l2.4-1.6M19.5 15.5l2.4-1.6M19.5 19.4l2.4-1.6" strokeOpacity="0.55" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

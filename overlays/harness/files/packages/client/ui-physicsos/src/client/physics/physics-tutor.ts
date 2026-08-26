@@ -1162,6 +1162,66 @@ const curvedMirrorLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/* ---------------------------------------------------------------- acoustics -- */
+
+const echoRangingLesson = (context: PhysicsAgentContext): TutorScript => {
+  const soundSpeed = derivedText(context, '声速 v')
+  const echoTime = derivedText(context, '回声时间 t')
+  const oneWayTime = derivedText(context, '单程时间 t₁')
+  const measured = derivedText(context, '测得距离 d = v·t/2')
+  const wallDistance = derivedText(context, '峭壁距离 d')
+  const phase = context.derived.find(row => row.label === '脉冲状态')?.value
+  return {
+    id: 'acoustics-echo-ranging',
+    topic: '回声测距',
+    observation: [
+      ...observeLine('声速 v', soundSpeed),
+      ...observeLine('回声时间 t', echoTime),
+      ...observeLine('脉冲状态', phase),
+    ],
+    question: '只用停表记下回声时间，怎样算出到峭壁的距离？',
+    hints: [
+      {
+        id: 'hint-round-trip',
+        title: '提示 1',
+        paragraphs: ['先想清楚停表记下的 t 是什么：声音从声源出发，到峭壁反射后再回来才被听见 —— t 是"去 + 回"的总时间，不是单程时间。'],
+        highlights: ['wall'],
+      },
+      {
+        id: 'hint-total-path',
+        title: '提示 2',
+        paragraphs: ['声音在介质中以声速 v 匀速直线传播：t 秒内走过的总路程是 s = v·t。按播放看脉冲走完往返 —— 这段路程是声源到峭壁距离的两倍。'],
+        highlights: ['sound-pulse'],
+      },
+      {
+        id: 'hint-halve',
+        title: '提示 3',
+        paragraphs: ['往返对称：去程和回程各走 d，各用 t/2。所以 d = v·(t/2) = v·t/2 —— 除以 2 这一步正是回声测距最容易漏掉的。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '把总路程减半：d = v·t/2。声音匀速走完 2d 用时 t，单程恰好各占一半；换介质声速变了，同样的距离回声时间随之改变，公式里的 v 必须用介质对应的声速。',
+        [
+          soundSpeed === undefined ? '' : `v = ${soundSpeed}`,
+          echoTime === undefined ? '' : `t = ${echoTime}`,
+          oneWayTime === undefined ? '' : `t₁ = ${oneWayTime}`,
+          measured === undefined ? '' : `d = v·t/2 = ${measured}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        wallDistance === undefined ? '' : `与场景中摆放的峭壁距离 ${wallDistance} 一致 —— 测距公式经引擎验证。`,
+      ].filter(entry => entry.length > 0),
+      highlights: ['wall', 'sound-pulse'],
+    },
+    evidence: evidenceOf(context, [
+      'echo_distance_formula',
+      'reflection_symmetry',
+      'pulse_speed_constant',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1174,9 +1234,10 @@ const curvedMirrorLesson = (context: PhysicsAgentContext): TutorScript => {
  * junction dots — with the 初中 伏安法/灯泡功率 measurement intents read off
  * the stamped title); optics frames by the imaging element actually on the
  * bench (plane mirror vs thin lens vs curved mirror, with the lens and mirror
- * lessons sub-dispatched on the 物距区间 the runtime published); mechanics/
- * electric frames by the scene title the template stamped. Unknown frames
- * return undefined and the drawer keeps Q&A.
+ * lessons sub-dispatched on the 物距区间 the runtime published); acoustics
+ * frames all teach echo ranging (the acoustic bench models exactly one
+ * apparatus); mechanics/electric frames by the scene title the template
+ * stamped. Unknown frames return undefined and the drawer keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
   if (context.status === 'failed') return undefined
@@ -1212,6 +1273,8 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
         ? curvedMirrorLesson(context)
         : convexLensLesson(context)
   }
-  /* Composite, magnetic, mechanics, circuit and optics returned above; electric remains. */
+  if (context.domain === 'acoustics') return echoRangingLesson(context)
+  /* Composite, magnetic, mechanics, circuit, optics and acoustics returned above;
+     electric remains. */
   return electricLesson(context)
 }

@@ -5,7 +5,9 @@
  * report: name / goal / parameters / derived results / event timeline /
  * verification. Every line is read from {@link WorkspaceSnapshot} — the report
  * is a projection of already-verified runtime facts, never a recomputation.
- * The markdown rendering exists so a student can download and hand in the file.
+ * The markdown rendering exists so a student can download and hand in the file;
+ * {@link experimentReportPrintHtml} renders the same facts as a standalone
+ * print-ready page (A4 styles inlined) for the 打印版 export.
  */
 
 import type { WorkspaceSnapshot } from './workspace-runtime.ts'
@@ -135,4 +137,103 @@ export const buildExperimentReport = (
   ].join('\n')
 
   return { title, goal, generatedAt, parameters, derived, events, verification, conclusion, markdown }
+}
+
+/* ------------------------------------------------------------- print html -- */
+
+const escapeHtml = (input: string): string =>
+  input
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+
+const tableHtml = (
+  heading: string,
+  columns: readonly [string, string],
+  rows: readonly ReportRow[],
+): string =>
+  rows.length === 0
+    ? ''
+    : [
+      `<h2>${escapeHtml(heading)}</h2>`,
+      '<table>',
+      `<thead><tr><th>${escapeHtml(columns[0])}</th><th>${escapeHtml(columns[1])}</th></tr></thead>`,
+      '<tbody>',
+      ...rows.map(
+        row =>
+          `<tr><td>${escapeHtml(row.label)}</td><td>${escapeHtml(row.value)}</td></tr>`,
+      ),
+      '</tbody>',
+      '</table>',
+    ].join('\n')
+
+/**
+ * The report as a self-contained printable HTML document (styles inlined, no
+ * external assets), so 打印版导出 works offline and survives being saved as a
+ * file. Same facts as the panel and the Markdown download — never recomputed.
+ */
+export const experimentReportPrintHtml = (report: ExperimentReport): string => {
+  const checks = report.verification
+    .map(
+      check =>
+        `<tr><td>${escapeHtml(check.label)}</td><td class="status" data-status="${escapeHtml(check.status)}">${escapeHtml(check.status)}</td></tr>`,
+    )
+    .join('\n')
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(report.title)} · 实验报告</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #1c2733; margin: 0; font-size: 12px; line-height: 1.6;
+  }
+  header { border-bottom: 2px solid #1c2733; padding-bottom: 8px; margin-bottom: 14px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: #5a6b7c; font-size: 11px; }
+  .goal { margin: 10px 0 16px; padding: 8px 12px; background: #f4f7fa; border-left: 3px solid #3b82c4; }
+  h2 { font-size: 14px; margin: 18px 0 6px; border-bottom: 1px solid #cfd8e0; padding-bottom: 3px; }
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+  th, td { border: 1px solid #cfd8e0; padding: 4px 8px; text-align: left; vertical-align: top; }
+  th { background: #eef2f6; font-weight: 600; }
+  td.status { width: 64px; text-align: center; font-weight: 600; }
+  td.status[data-status="PASS"] { color: #1a7f4b; }
+  td.status[data-status="FAIL"] { color: #c02f2f; }
+  .conclusion { margin: 8px 0 16px; padding: 8px 12px; background: #f4f7fa; border-left: 3px solid #1a7f4b; }
+  footer { margin-top: 20px; color: #8a97a5; font-size: 10px; border-top: 1px solid #cfd8e0; padding-top: 6px; }
+  .signature { margin-top: 26px; display: flex; gap: 40px; color: #5a6b7c; }
+  .signature span { flex: 1; border-top: 1px solid #8a97a5; padding-top: 4px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>实验报告：${escapeHtml(report.title)}</h1>
+  <p class="meta">生成时间：${escapeHtml(report.generatedAt)} · 由 PhysicsOS 从已验证的仿真结果生成</p>
+</header>
+<p class="goal"><strong>实验目标</strong>　${escapeHtml(report.goal)}</p>
+${tableHtml('实验参数', ['参数', '数值'], report.parameters)}
+${tableHtml('引擎派生量', ['物理量', '数值'], report.derived)}
+${tableHtml('实验过程（区域事件）', ['事件', '时刻'], report.events)}
+<h2>物理验证</h2>
+<table>
+<thead><tr><th>检查</th><th>结果</th></tr></thead>
+<tbody>
+${checks}
+</tbody>
+</table>
+<h2>实验结论</h2>
+<p class="conclusion">${escapeHtml(report.conclusion)}</p>
+<div class="signature">
+  <span>实验人</span>
+  <span>日期</span>
+  <span>教师签字</span>
+</div>
+<footer>本报告数值来自 PhysicsOS Runtime，未经人工改写。</footer>
+</body>
+</html>`
 }

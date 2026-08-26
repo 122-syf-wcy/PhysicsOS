@@ -17,7 +17,9 @@
  * the honest 动态电路 topic. 测平均速度 resolves the same way on mechanics
  * frames. Optics frames resolve on the imaging element actually drawn on the
  * bench (plane mirror → 平面镜成像, thin lens → 凸透镜成像规律, curved mirror
- * → 凹面镜成像) — a fact, not a title.
+ * → 凹面镜成像) — a fact, not a title. Acoustics frames are all echo ranging:
+ * the domain itself is the topic, since the acoustic bench models exactly one
+ * apparatus.
  *
  * Each topic also names the experiment template that trains it, so a mistake
  * recorded in the lab can deep-link back to a fresh instance of the same
@@ -78,9 +80,20 @@ export const opticsTopicOf = (context: PhysicsAgentContext): string | undefined 
       : 'optics-convex-lens'
 }
 
+/**
+ * The lab topic of an acoustics frame. The acoustic bench models exactly one
+ * apparatus (a source facing a reflector), so the domain IS the topic — a
+ * renamed scene still gets the echo-ranging probes.
+ */
+export const acousticsTopicOf = (context: PhysicsAgentContext): string | undefined =>
+  context.status !== 'failed' && context.domain === 'acoustics' ? 'acoustics-echo' : undefined
+
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
-  circuitTopicOf(context) ?? mechanicsTopicOf(context) ?? opticsTopicOf(context)
+  circuitTopicOf(context)
+  ?? mechanicsTopicOf(context)
+  ?? opticsTopicOf(context)
+  ?? acousticsTopicOf(context)
 
 /** The self-check set for the current frame; undefined keeps the tab hidden. */
 export const experimentSelfChecksOf = (
@@ -106,4 +119,5 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'optics-plane-mirror': 'plane-mirror',
   'optics-convex-lens': 'convex-lens',
   'optics-curved-mirror': 'concave-mirror',
+  'acoustics-echo': 'echo-ranging',
 }

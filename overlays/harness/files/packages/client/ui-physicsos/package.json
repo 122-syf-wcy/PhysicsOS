@@ -46,6 +46,7 @@
   "license": "MIT",
   "dependencies": {
     "@physicsos/engine-magnetic": "link:../../../../../packages/engine-magnetic",
+    "@physicsos/engine-acoustics": "link:../../../../../packages/engine-acoustics",
     "@physicsos/engine-circuit": "link:../../../../../packages/engine-circuit",
     "@physicsos/engine-optics": "link:../../../../../packages/engine-optics",
     "@physicsos/engine-electric": "link:../../../../../packages/engine-electric",

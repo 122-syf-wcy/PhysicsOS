@@ -3,15 +3,19 @@
  *
  * Renders {@link buildExperimentReport}'s projection of the current frame —
  * goal, parameters, derived results, region events, verification, conclusion —
- * and offers the same content as a downloadable Markdown file. The panel shows
- * facts; it never recomputes them.
+ * and offers the same content as a downloadable Markdown file or a 打印版
+ * (print-ready page routed through the browser's print dialog). The panel
+ * shows facts; it never recomputes them.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
 import clsx from 'clsx'
 import { IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 
-import { buildExperimentReport } from './physics/experiment-report.ts'
+import {
+  buildExperimentReport,
+  experimentReportPrintHtml,
+} from './physics/experiment-report.ts'
 import type { WorkspaceSnapshot } from './physics/workspace-runtime.ts'
 import type { PhysicsosKey } from './locales.ts'
 import css from './LabWorkspace.module.css'
@@ -36,6 +40,37 @@ const downloadMarkdown = (title: string, markdown: string): void => {
   /* Revoking immediately can cancel the download before the browser has read the
      blob; deferring keeps the anchor's URL alive until the fetch has started. */
   window.setTimeout(() => { URL.revokeObjectURL(url) }, 1000)
+}
+
+/**
+ * 打印版：load the standalone report page into a hidden iframe and hand it to
+ * the browser's print dialog. An iframe (not `window.open`) survives popup
+ * blockers and never navigates the student away from the Lab.
+ */
+const printReport = (html: string): void => {
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.setAttribute('aria-hidden', 'true')
+  /* `srcdoc` parses the page through the normal load pipeline, so `load` is an
+     honest "laid out and ready to print" signal rather than a guessed delay.
+     `print()` blocks while the dialog is open in real browsers, so removing the
+     frame on the next tick after it returns is safe. */
+  iframe.srcdoc = html
+  iframe.addEventListener(
+    'load',
+    () => {
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+      window.setTimeout(() => { iframe.remove() }, 1000)
+    },
+    { once: true },
+  )
+  document.body.appendChild(iframe)
 }
 
 export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReportPanelProps) {
@@ -71,6 +106,13 @@ export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReport
         <div className={css.panelHead}>
           <h2 className={css.panelTitle}>{t('lab.report.title')}</h2>
           <div className={css.reportHeadActions}>
+            <button
+              type="button"
+              className={css.secondary}
+              onClick={() => { printReport(experimentReportPrintHtml(report)) }}
+            >
+              {t('lab.report.print')}
+            </button>
             <button
               type="button"
               className={css.secondary}

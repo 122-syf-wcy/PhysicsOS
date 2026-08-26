@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react'
 import type { ReactElement } from 'react'
+import { AcousticsRenderer } from './acoustics-renderer.tsx'
 import { CircuitRenderer } from './circuit-renderer.tsx'
 import { OpticsRenderer } from './optics-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
@@ -950,6 +951,7 @@ export const RENDERERS = {
   circuit: CircuitRenderer,
   composite: CompositeRenderer,
   optics: OpticsRenderer,
+  acoustics: AcousticsRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 
 export { CompositeRenderer, ElectricRenderer, MagneticRenderer, MechanicsRenderer }

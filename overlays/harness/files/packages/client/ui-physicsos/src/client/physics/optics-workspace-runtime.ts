@@ -413,7 +413,27 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         highlights: bench.screen.id,
       })
     }
-    sections.push({ id: 'bench', title: '光具座', parameters })
+    /* One-tap 凹/凸面镜 switch: same vertex, same |f|, only the curvature sign
+       flips — so the student compares the two mirrors on an otherwise identical
+       bench. The numeric field stays for free-form focal edits. */
+    const mirrorTypeChoices =
+      element?.type === 'curved_mirror'
+        ? [{
+          id: 'mirror-type',
+          label: '镜面类型',
+          value: canonicalValue(element.focalLength) > 0 ? 'concave' : 'convex',
+          options: [
+            { value: 'concave', label: '凹面镜（会聚）' },
+            { value: 'convex', label: '凸面镜（发散）' },
+          ],
+        }]
+        : undefined
+    sections.push({
+      id: 'bench',
+      title: '光具座',
+      parameters,
+      ...(mirrorTypeChoices === undefined ? {} : { choices: mirrorTypeChoices }),
+    })
 
     if (result !== undefined) {
       const derived: DerivedQuantityView[] = this.computed === undefined
@@ -513,7 +533,24 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
     return this.getSnapshot()
   }
 
-  setChoice(): WorkspaceSnapshot {
+  setChoice(id: string, value: string): WorkspaceSnapshot {
+    if (id === 'mirror-type' && (value === 'concave' || value === 'convex')) {
+      const scene = this.sceneRuntime.getScene()
+      const bench = opticalBenchOf(scene)
+      const element = bench?.elements[0]
+      if (bench !== undefined && element?.type === 'curved_mirror') {
+        const focalCm = canonicalValue(element.focalLength) * CM_PER_METRE
+        const wantPositive = value === 'concave'
+        /* Flip the curvature sign, keep |f| — a no-op when already that type. */
+        if ((focalCm > 0) !== wantPositive) {
+          this.command('SetMirrorFocalLength', {
+            benchId: bench.id,
+            elementId: element.id,
+            focalLength: cmQuantity(-focalCm),
+          })
+        }
+      }
+    }
     return this.getSnapshot()
   }
 

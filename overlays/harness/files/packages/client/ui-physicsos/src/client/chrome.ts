@@ -74,6 +74,12 @@ const PHYSICS_TOKENS = `
   --physics-optics-ray-soft: #edba6f;
   --physics-optics-image: #7c3aed;
 
+  /* ---------- acoustics ----------
+     Sound is sky blue: the travelling pulse solid, its trailing wavefront arcs
+     and the out/return path guides in the soft shade. */
+  --physics-acoustics-wave: #0284c7;
+  --physics-acoustics-wave-soft: #7cc3e8;
+
   /* ---------- status ---------- */
   --physics-verification-ok: #2f9e5a;
   --physics-verification-warning: #d97706;
@@ -81,9 +87,9 @@ const PHYSICS_TOKENS = `
 
   /* ---------- subjects ----------
      Library / navigation identity for the experiment domains (力学 / 电场 / 磁场 /
-     电路 / 复合场 / 光学), one hue + one tinted surface each. These colour UI
-     chrome — picker cards, tags, tabs — NEVER canvas physics: a vector keeps its
-     vector token even inside a subject-tinted card. */
+     电路 / 复合场 / 光学 / 声学), one hue + one tinted surface each. These colour
+     UI chrome — picker cards, tags, tabs — NEVER canvas physics: a vector keeps
+     its vector token even inside a subject-tinted card. */
   --physics-subject-mechanics: #2f9e5a;
   --physics-subject-mechanics-tint: #e7f4ec;
   --physics-subject-electric: #2563eb;
@@ -96,6 +102,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-composite-tint: #fdeee3;
   --physics-subject-optics: #ca8a04;
   --physics-subject-optics-tint: #faf3d8;
+  --physics-subject-acoustics: #0284c7;
+  --physics-subject-acoustics-tint: #e3f2fb;
 
   /* ---------- interaction ---------- */
   --physics-highlight: #f5a524;

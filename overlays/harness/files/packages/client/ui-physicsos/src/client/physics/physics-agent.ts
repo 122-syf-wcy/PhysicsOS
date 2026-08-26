@@ -227,6 +227,12 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.opticalElements ?? []).map(element => element.id),
     ...(view.opticalImages ?? []).map(image => image.id),
     ...(view.opticalScreens ?? []).map(screen => screen.id),
+    /* Acoustic range primitives: the speaker, the reflecting wall and the
+       travelling pulse are highlight groups in the acoustics renderer.
+       Wavefront arcs are decoration and stay out (the rays/wires rule). */
+    ...(view.acousticSources ?? []).map(source => source.id),
+    ...(view.acousticReflectors ?? []).map(reflector => reflector.id),
+    ...(view.acousticPulse === undefined ? [] : [view.acousticPulse.id]),
   ]
 }
 
@@ -356,6 +362,16 @@ const HIGHLIGHT_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'optical-image': ['optical-image'],
   screen: ['screen-1'],
   'optical-screen': ['screen-1'],
+  /* Acoustic range primitives. The echo template stamps `sound-source` and
+     `wall-1`; the bridge emits the travelling dot as `sound-pulse`. A `wall-*`
+     prefix keeps the alias working if a scene numbers its reflectors. */
+  speaker: ['sound-source'],
+  'sound-source': ['sound-source'],
+  wall: ['wall-*'],
+  cliff: ['wall-*'],
+  reflector: ['wall-*'],
+  pulse: ['sound-pulse'],
+  'sound-pulse': ['sound-pulse'],
 }
 
 /**
@@ -470,6 +486,14 @@ const HIGHLIGHT_LABELS: Readonly<Record<string, string>> = {
   screen: '光屏',
   'screen-1': '光屏',
   'optical-screen': '光屏',
+  speaker: '声源',
+  'sound-source': '声源',
+  wall: '峭壁',
+  cliff: '峭壁',
+  reflector: '峭壁',
+  'wall-1': '峭壁',
+  pulse: '声脉冲',
+  'sound-pulse': '声脉冲',
 }
 
 /** Student-facing name for a highlight target; shared by the drawer's buttons. */

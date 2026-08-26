@@ -63,6 +63,12 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   /* 实像与虚像 trains on the lens: sweeping u across f shows BOTH natures,
      where the plane mirror only ever shows a virtual image. */
   'opt-real-virtual-image': 'convex-lens',
+  /* All three acoustics nodes train on the one echo rig: the propagation node
+     is the medium switch, the echo node is the reflection event, the ranging
+     node is the d = v·t/2 measurement itself. */
+  'ac-sound-propagation': 'echo-ranging',
+  'ac-echo': 'echo-ranging',
+  'ac-echo-ranging': 'echo-ranging',
 }
 
 /**

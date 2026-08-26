@@ -1760,7 +1760,7 @@ index fbe42fc279..344e146033 100644
        fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
        expect(expandSidebar).toHaveBeenCalledTimes(1)
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..50f923ee0c 100644
+index 1490a0f9f7..e15a18e6aa 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -42,6 +42,9 @@ importers:
@@ -1783,12 +1783,15 @@ index 1490a0f9f7..50f923ee0c 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:^
          version: link:../../client/ui-plan
-@@ -2283,6 +2289,94 @@ importers:
+@@ -2283,6 +2289,97 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
 +  packages/client/ui-physicsos:
 +    dependencies:
++      '@physicsos/engine-acoustics':
++        specifier: link:../../../../../packages/engine-acoustics
++        version: link:../../../../../packages/engine-acoustics
 +      '@physicsos/engine-circuit':
 +        specifier: link:../../../../../packages/engine-circuit
 +        version: link:../../../../../packages/engine-circuit

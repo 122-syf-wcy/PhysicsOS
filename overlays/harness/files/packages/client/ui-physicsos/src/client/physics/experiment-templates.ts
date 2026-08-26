@@ -20,6 +20,7 @@ import {
   createCompositeFieldScene,
   createConcaveMirrorScene,
   createConvexLensScene,
+  createEchoRangingScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
   createMechanicsScene,
@@ -47,6 +48,7 @@ import {
   IconCompositeField,
   IconConcaveMirror,
   IconConvexLens,
+  IconEchoRanging,
   IconEmfMeasure,
   IconInclinedPlane,
   IconKinematics,
@@ -75,6 +77,7 @@ export type ExperimentDomain =
   | 'circuit'
   | 'composite'
   | 'optics'
+  | 'acoustics'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -611,6 +614,32 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* ----------------------------------------------------------------- acoustics -- */
+
+const acousticsTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'echo-ranging',
+    domain: 'acoustics',
+    stage: 'junior',
+    label: 'lab.template.echoRanging',
+    hint: 'lab.template.echoRanging.hint',
+    icon: IconEchoRanging,
+    tags: ['声学', '初中', '回声', '声速'],
+    createScene: (title) => {
+      /* 回声测距：峭壁在 340 m 外、15 ℃ 空气声速 340 m/s —— 往返恰好 2.0 s，
+         正是教材例题的数字。学生改峭壁距离或换介质，重测回声时间验证
+         d = v·t/2。 */
+      const scene = createEchoRangingScene({
+        sceneId: stampId('acoustics-echo-ranging'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+]
+
 /* ----------------------------------------------------------------- composite -- */
 
 const compositeTemplates: readonly ExperimentTemplate[] = [
@@ -771,6 +800,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
 export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics', templates: mechanicsTemplates },
   { id: 'optics', label: 'lab.template.group.optics', templates: opticsTemplates },
+  { id: 'acoustics', label: 'lab.template.group.acoustics', templates: acousticsTemplates },
   { id: 'electric', label: 'lab.template.group.electric', templates: electricTemplates },
   { id: 'magnetic', label: 'lab.template.group.magnetic', templates: magneticTemplates },
   { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },

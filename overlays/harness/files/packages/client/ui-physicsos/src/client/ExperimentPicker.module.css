@@ -127,6 +127,11 @@
   --subject-tint: var(--physics-subject-optics-tint);
 }
 
+.subject-acoustics {
+  --subject: var(--physics-subject-acoustics);
+  --subject-tint: var(--physics-subject-acoustics-tint);
+}
+
 /* ----------------------------------------------------------------- artwork --
    Shared canvas for the hand-drawn scene art: subject-tinted wash, a soft
    diagonal light, a hairline inset ring. The SVG strokes paint in the subject

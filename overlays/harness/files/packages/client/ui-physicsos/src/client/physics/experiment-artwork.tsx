@@ -602,6 +602,26 @@ const ConcaveMirrorArt = () => (
   </>
 )
 
+/* ----------------------------------------------------------------- acoustics -- */
+
+/** 回声测距: speaker on open ground, wave arcs out to the hatched cliff. */
+const EchoRangingArt = () => (
+  <>
+    <Stroke d="M10 54 H110" width={1.6} opacity={0.35} />
+    <Stroke d="M16 44 h7 l8 -6 v16 l-8 -6 h-7 z" width={2.2} />
+    <Stroke d="M40 39 a8 8 0 0 1 0 12" width={1.7} opacity={0.5} />
+    <Stroke d="M48 35.5 a13.5 13.5 0 0 1 0 19" width={1.7} opacity={0.65} />
+    <Stroke d="M56 32 a19 19 0 0 1 0 26" width={1.7} opacity={0.8} />
+    <Stroke d="M96 14 V54" width={2.6} />
+    {[19, 28, 37, 46].map(y => (
+      <Stroke key={y} d={`M97.5 ${y + 4} L104 ${y - 3}`} width={1.3} opacity={0.4} />
+    ))}
+    <Arrow x1={64} y1={38} x2={92} y2={38} width={1.7} opacity={0.75} head={4.4} />
+    <Arrow x1={92} y1={48} x2={64} y2={48} width={1.7} opacity={0.55} head={4.4} />
+    <Dot x={78} y={38} r={2.6} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -658,6 +678,7 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'plane-mirror': PlaneMirrorArt,
   'convex-lens': ConvexLensArt,
   'concave-mirror': ConcaveMirrorArt,
+  'echo-ranging': EchoRangingArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -690,6 +711,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['plane-mirror', 'optics-plane-mirror'],
   ['convex-lens', 'optics-convex-lens'],
   ['concave-mirror', 'optics-concave-mirror'],
+  ['echo-ranging', 'acoustics-echo-ranging'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

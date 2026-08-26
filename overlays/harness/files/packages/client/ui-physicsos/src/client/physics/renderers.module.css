@@ -447,3 +447,81 @@
   stroke-linecap: round;
   opacity: 0.7;
 }
+
+/* ------------------------------------------------------------- acoustics --
+   The echo range: the ground rail, the loudspeaker source, the hatched cliff,
+   the travelling pulse in the acoustics hue with its trailing wavefront arcs,
+   and the out/return path guides. */
+
+.acousticGround {
+  stroke: var(--physics-axis);
+  stroke-width: 1.6;
+  opacity: 0.85;
+}
+
+.acousticGroundHatch {
+  stroke: var(--physics-axis);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+
+/* The speaker is a real object on the range; body ink like the candle. */
+.acousticSourceBody {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.acousticWallPlate {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+}
+
+.acousticWallHatch {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.1;
+  opacity: 0.7;
+}
+
+.acousticPulseDot {
+  fill: var(--physics-acoustics-wave);
+  stroke: #fbfdff;
+  stroke-width: 1.4;
+}
+
+.acousticPulseReceived {
+  fill: var(--physics-verification-ok);
+}
+
+.acousticWavefront {
+  fill: none;
+  stroke: var(--physics-acoustics-wave-soft);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+/* Out/return legs are construction guides in the soft acoustics shade; the
+   arrowhead carries the travel sense. */
+.acousticPathLine {
+  stroke: var(--physics-acoustics-wave-soft);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 4;
+  opacity: 0.9;
+}
+
+.acousticPathHead {
+  fill: var(--physics-acoustics-wave-soft);
+  stroke: none;
+}
+
+.acousticPathLabel {
+  fill: var(--physics-acoustics-wave);
+  font-size: 11px;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+  user-select: none;
+}
