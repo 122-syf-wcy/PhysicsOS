@@ -77,9 +77,10 @@ const DERIVED_LABELS: Record<string, string> = {
 const VERIFICATION_LABELS: Record<string, string> = {
   scene_valid: '场景结构有效',
   thin_lens_equation: '薄透镜公式 1/u + 1/v = 1/f',
+  curved_mirror_equation: '球面镜公式 1/u + 1/v = 1/f（f = R/2）',
   mirror_image_symmetry: '平面镜对称性（v = u · 等大 · 虚像）',
   principal_rays_converge: '主光线作图交汇于像点',
-  rays_parallel_at_focus: 'u = f 时折射光平行，不成像',
+  rays_parallel_at_focus: 'u = f 时出射光线平行，不成像',
   virtual_image_uncatchable: '虚像不能被光屏承接',
 }
 
@@ -282,9 +283,17 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
     if (element !== undefined) {
       benchChildren.push({
         id: element.id,
-        label: element.name ?? (element.type === 'thin_lens' ? '凸透镜' : '平面镜'),
+        label:
+          element.name ??
+          (element.type === 'thin_lens'
+            ? '凸透镜'
+            : element.type === 'curved_mirror'
+              ? canonicalValue(element.focalLength) > 0
+                ? '凹面镜'
+                : '凸面镜'
+              : '平面镜'),
         secondary:
-          element.type === 'thin_lens'
+          element.type === 'thin_lens' || element.type === 'curved_mirror'
             ? `f = ${fmtOpticsValue(canonicalValue(element.focalLength) * CM_PER_METRE)} cm`
             : '镜面反射成虚像',
         icon: 'field' as const,
@@ -365,14 +374,39 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         highlights: element.id,
       })
     }
+    if (element?.type === 'curved_mirror') {
+      /* Signed: f > 0 keeps the concave mirror, dragging below zero flips it
+         into a convex one (f = 0 is rejected by the scene command). */
+      parameters.push({
+        id: 'mirror-focal-length',
+        label: '焦距（>0 凹面镜，<0 凸面镜）',
+        symbol: 'f',
+        unit: 'cm',
+        value: Number.parseFloat((canonicalValue(element.focalLength) * CM_PER_METRE).toFixed(2)),
+        min: -100,
+        max: 100,
+        step: 1,
+        highlights: element.id,
+      })
+    }
     if (bench.screen !== undefined && model?.screenX !== undefined) {
+      /* Reflection folds the light back: the curved mirror's screen stands in
+         FRONT of the mirror, so its distance grows towards −x. */
+      const mirrorSide = element?.type === 'curved_mirror'
       parameters.push({
         id: 'screen-distance',
-        label: element?.type === 'plane_mirror' ? '光屏位置（镜后）' : '光屏到镜距离',
+        label:
+          element?.type === 'plane_mirror'
+            ? '光屏位置（镜后）'
+            : mirrorSide
+              ? '光屏到镜距离（镜前）'
+              : '光屏到镜距离',
         symbol: 'd',
         unit: 'cm',
         value: Number.parseFloat(
-          ((model.screenX - model.elementX) * CM_PER_METRE).toFixed(2),
+          ((mirrorSide
+            ? model.elementX - model.screenX
+            : model.screenX - model.elementX) * CM_PER_METRE).toFixed(2),
         ),
         min: 1,
         step: 1,
@@ -410,6 +444,16 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
           label: '物距区间',
           symbol: '',
           value: LENS_ZONE_TEXT[result.lensZone],
+          unit: '',
+          highlights: result.model.elementId,
+        })
+      }
+      if (result.mirrorZone !== undefined) {
+        derived.push({
+          id: 'mirror-zone',
+          label: '物距区间',
+          symbol: '',
+          value: LENS_ZONE_TEXT[result.mirrorZone],
           unit: '',
           highlights: result.model.elementId,
         })
@@ -452,10 +496,18 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
         elementId: model.elementId,
         focalLength: cmQuantity(value),
       })
+    } else if (id === 'mirror-focal-length') {
+      this.command('SetMirrorFocalLength', {
+        benchId: bench.id,
+        elementId: model.elementId,
+        focalLength: cmQuantity(value),
+      })
     } else if (id === 'screen-distance') {
+      /* The curved mirror's screen distance is measured in front (−x). */
+      const signed = model.elementType === 'curved_mirror' ? -value : value
       this.command('SetOpticalScreenPosition', {
         benchId: bench.id,
-        position: cmQuantity(elementXCm + value),
+        position: cmQuantity(elementXCm + signed),
       })
     }
     return this.getSnapshot()

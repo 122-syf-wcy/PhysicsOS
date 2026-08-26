@@ -16,8 +16,8 @@
  * tells mechanics lessons apart); a renamed or rebuilt circuit falls back to
  * the honest 动态电路 topic. 测平均速度 resolves the same way on mechanics
  * frames. Optics frames resolve on the imaging element actually drawn on the
- * bench (plane mirror → 平面镜成像, thin lens → 凸透镜成像规律) — a fact, not
- * a title.
+ * bench (plane mirror → 平面镜成像, thin lens → 凸透镜成像规律, curved mirror
+ * → 凹面镜成像) — a fact, not a title.
  *
  * Each topic also names the experiment template that trains it, so a mistake
  * recorded in the lab can deep-link back to a fresh instance of the same
@@ -71,7 +71,11 @@ export const opticsTopicOf = (context: PhysicsAgentContext): string | undefined 
   if (context.status === 'failed' || context.domain !== 'optics') return undefined
   const facts = context.optics
   if (facts === undefined) return undefined
-  return facts.elementKind === 'plane_mirror' ? 'optics-plane-mirror' : 'optics-convex-lens'
+  return facts.elementKind === 'plane_mirror'
+    ? 'optics-plane-mirror'
+    : facts.elementKind === 'curved_mirror'
+      ? 'optics-curved-mirror'
+      : 'optics-convex-lens'
 }
 
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
@@ -101,4 +105,5 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'mechanics-average-speed': 'average-speed',
   'optics-plane-mirror': 'plane-mirror',
   'optics-convex-lens': 'convex-lens',
+  'optics-curved-mirror': 'concave-mirror',
 }

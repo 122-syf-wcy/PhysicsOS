@@ -435,14 +435,16 @@ export interface OpticalObjectVisual {
   label?: string
 }
 
-/** Imaging element: convex thin lens (double-arrow) or plane mirror plate. */
+/** Imaging element: convex thin lens (double-arrow), plane or curved mirror. */
 export interface OpticalElementVisual {
   id: string
-  kind: 'thin_lens' | 'plane_mirror'
+  kind: 'thin_lens' | 'plane_mirror' | 'curved_mirror'
   /** Centre of the element on the principal axis. */
   at: ScenePoint
   /** Half-aperture (lens) or half-height (mirror) in scene units. */
   halfAperture: number
+  /** Curved mirror only: which face meets the light (concave ⇔ f > 0). */
+  curvature?: 'concave' | 'convex'
   label?: string
 }
 

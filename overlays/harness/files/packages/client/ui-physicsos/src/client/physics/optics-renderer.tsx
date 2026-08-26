@@ -1,10 +1,11 @@
 /**
  * Optics renderer. Registered for `domain: 'optics'` in the renderer registry.
  *
- * Draws the textbook single-axis bench: principal axis with F/2F ticks, the
- * upright object arrow, the imaging element (convex lens double-arrow or plane
- * mirror plate), the principal rays with their dashed virtual extensions, the
- * image arrow (solid = real, dashed = virtual) and the screen. It reads ONLY
+ * Draws the textbook single-axis bench: principal axis with F/2F (or F/C)
+ * ticks, the upright object arrow, the imaging element (convex lens
+ * double-arrow, plane mirror plate or curved mirror arc), the principal rays
+ * with their dashed virtual extensions, the image arrow (solid = real,
+ * dashed = virtual) and the screen. It reads ONLY
  * the shared visual model — every position, height and ray vertex was produced
  * by the engine and converted upstream by the optics visual bridge; nothing is
  * imaged here.
@@ -161,9 +162,45 @@ export function OpticsRenderer({ view, projection }: RendererProps) {
             </g>
           )
         }
+        const hatchCount = Math.max(4, Math.floor((bottomY - topY) / 12))
+        if (element.kind === 'curved_mirror') {
+          /* Spherical mirror facing the object (−x): a concave face opens
+             towards −x (edges left of the vertex), a convex face bulges
+             towards −x (vertex left of the edges). The quadratic Bezier with
+             control = −edge offset keeps the curve's midpoint on the vertex
+             position the scene declares. */
+          const bow = Math.min(20, Math.max(7, (bottomY - topY) * 0.14))
+          const edgeDx = element.curvature === 'convex' ? bow : -bow
+          const arc = `M${x + edgeDx} ${topY} Q${x - edgeDx} ${(topY + bottomY) / 2} ${x + edgeDx} ${bottomY}`
+          return (
+            <g key={element.id} className={highlighted ? css.highlightGroup : undefined}>
+              <path className={css.curvedMirrorPlate} d={arc} />
+              {Array.from({ length: hatchCount }, (_, index) => {
+                const t = (index + 0.5) / hatchCount
+                const y = topY + t * (bottomY - topY)
+                /* Quadratic Bezier x at parameter t: x + edgeDx·(1 − 2t)². */
+                const xc = x + edgeDx * (1 - 2 * t) * (1 - 2 * t)
+                return (
+                  <line
+                    key={index}
+                    className={css.mirrorHatch}
+                    x1={xc + 1.5}
+                    y1={y + 4}
+                    x2={xc + 8}
+                    y2={y - 4}
+                  />
+                )
+              })}
+              {element.label === undefined ? null : (
+                <text className={css.annotation} x={x} y={topY - 8} textAnchor="middle">
+                  {element.label}
+                </text>
+              )}
+            </g>
+          )
+        }
         /* Plane mirror: reflective face towards the object (−x); hatching marks
            the silvered back on the +x side. */
-        const hatchCount = Math.max(4, Math.floor((bottomY - topY) / 12))
         return (
           <g key={element.id} className={highlighted ? css.highlightGroup : undefined}>
             <line className={css.mirrorPlate} x1={x} y1={topY} x2={x} y2={bottomY} />

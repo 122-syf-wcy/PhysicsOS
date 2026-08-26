@@ -79,11 +79,12 @@ export interface CircuitAgentFacts {
  * What the runtime already published about an optics frame, read from the
  * drawn bench — never re-imaged. The teaching layer dispatches on the element
  * that is actually on the rail (a plane mirror teaches 平面镜成像, a thin lens
- * teaches 凸透镜成像规律) instead of trusting scene titles.
+ * teaches 凸透镜成像规律, a curved mirror teaches 凹面镜成像) instead of
+ * trusting scene titles.
  */
 export interface OpticsAgentFacts {
   /** The single imaging element drawn on the bench. */
-  readonly elementKind: 'thin_lens' | 'plane_mirror'
+  readonly elementKind: 'thin_lens' | 'plane_mirror' | 'curved_mirror'
   /** Nature of the image the engine formed; `none` when u = f forms no image. */
   readonly imageNature: 'real' | 'virtual' | 'none'
   /** Whether the drawn screen catches the image; absent when no screen. */
@@ -459,8 +460,10 @@ const HIGHLIGHT_LABELS: Readonly<Record<string, string>> = {
   'optical-object': '发光物体',
   lens: '凸透镜',
   'lens-1': '凸透镜',
-  mirror: '平面镜',
-  'mirror-1': '平面镜',
+  /* `mirror-1` is the element id shared by the plane AND curved mirror
+     benches, so the label stays element-agnostic. */
+  mirror: '镜面',
+  'mirror-1': '镜面',
   'optical-element': '成像元件',
   image: '像',
   'optical-image': '像',

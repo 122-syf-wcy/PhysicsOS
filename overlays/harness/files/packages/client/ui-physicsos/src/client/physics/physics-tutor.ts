@@ -1055,6 +1055,113 @@ const convexLensLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/**
+ * The imaging zones of a concave mirror, keyed by the 物距区间 derived value
+ * the optics runtime publishes (the mirror shares the u-vs-f/2f classification
+ * with the convex lens; 2f is the centre of curvature C). The answer sentences
+ * are the 成像规律表 rows, folded back to the mirror's front side.
+ */
+const MIRROR_ZONES: Readonly<Record<string, { slug: string; answer: string }>> = {
+  'u > 2f': {
+    slug: 'beyond-c',
+    answer: '物距大于 2f（物在曲率中心 C 之外）：成倒立、缩小的实像，像落在镜前 F 与 C 之间 —— 反射望远镜的主镜正工作在这一区间。',
+  },
+  'u = 2f': {
+    slug: 'at-c',
+    answer: '物距等于 2f（物在曲率中心 C 上）：成倒立、等大的实像，像也落在 C 处 —— 过 C 的光线沿原路返回，实验室用这一点快速定曲率中心。',
+  },
+  'f < u < 2f': {
+    slug: 'between-f-c',
+    answer: '物距在 f 与 2f 之间：成倒立、放大的实像，像距 v > 2f，像落在 C 之外。',
+  },
+  'u = f': {
+    slug: 'at-f',
+    answer: '物距等于 f：反射后的光线互相平行，永不相交 —— 不成像。探照灯正是反过来用它：把光源放在焦点，射出平行光束。',
+  },
+  'u < f': {
+    slug: 'within-f',
+    answer: '物距小于 f：反射光发散，反向延长线在镜后相交 —— 成正立、放大的虚像，这就是化妆镜、牙医镜。',
+  },
+}
+
+const curvedMirrorLesson = (context: PhysicsAgentContext): TutorScript => {
+  const objectDistance = derivedText(context, '物距 u')
+  const focalLength = derivedText(context, '焦距 f')
+  const imageDistance = derivedText(context, '像距 v')
+  const magnification = derivedText(context, '放大率 m')
+  const nature = derivedText(context, '像的性质')
+  const zoneText = context.derived.find(row => row.label === '物距区间')?.value
+  const zone = zoneText === undefined ? undefined : MIRROR_ZONES[zoneText]
+  const screenNote = derivedText(context, '光屏承接')
+  /* A convex mirror (f < 0) has no zone table — it always forms the same
+     upright reduced virtual image, so the runtime publishes no 物距区间. */
+  const convex = zoneText === undefined && focalLength !== undefined && focalLength.startsWith('-')
+  return {
+    id: convex
+      ? 'optics-mirror-convex'
+      : zone === undefined
+        ? 'optics-mirror'
+        : `optics-mirror-${zone.slug}`,
+    topic: '凹面镜成像',
+    observation: [
+      ...observeLine('物距 u', objectDistance),
+      ...observeLine('焦距 f', focalLength),
+      ...observeLine('像距 v', imageDistance),
+      ...observeLine('放大率 m', magnification),
+      ...observeLine('像的性质', nature),
+      ...observeLine('光屏承接', screenNote),
+    ],
+    question: convex
+      ? '焦距为负（凸面镜）时，为什么无论物距多大，像都是正立、缩小的虚像？'
+      : zoneText === 'u = f'
+        ? '物距恰好等于焦距，为什么此时不成像？'
+        : `当前物距落在 ${zoneText ?? '哪个'} 区间，为什么会成这样的像？与凸透镜有什么不同？`,
+    hints: [
+      {
+        id: 'hint-compare',
+        title: '提示 1',
+        paragraphs: ['先把物距与轴上的两个基准点比较：F（焦点）和 C（曲率中心，在 2f 处）是凹面镜成像规律的全部分界点。物在哪个区间？'],
+        highlights: ['mirror'],
+      },
+      {
+        id: 'hint-rays',
+        title: '提示 2',
+        paragraphs: ['打开「主光线光路」作图：平行主轴的光反射后过焦点 F，射向镜面顶点的光按反射定律对称折回 —— 两条反射光（或其反向延长线）的交点就是像。注意反射把光折回蜡烛一侧。'],
+        highlights: ['image'],
+      },
+      {
+        id: 'hint-equation',
+        title: '提示 3',
+        paragraphs: ['用球面镜公式检验作图：1/u + 1/v = 1/f（f = R/2）。v 为正时实像成在镜前，光屏要放到蜡烛这一侧承接；v 为负则像在镜后，是虚像。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        convex
+          ? '凸面镜对光发散：反射光的反向延长线永远在镜后相交，无论物距多大都成正立、缩小的虚像 —— 视野因此变大，汽车后视镜、路口反光镜都用它。'
+          : zone?.answer ??
+            '把物距与 f、C（2f 处）比较即可读出像的倒正、大小与虚实；与凸透镜共用同一张规律表，只是反射把实像折回到镜前。',
+        [
+          objectDistance === undefined ? '' : `u = ${objectDistance}`,
+          focalLength === undefined ? '' : `f = ${focalLength}`,
+          imageDistance === undefined ? '' : `v = ${imageDistance}`,
+          magnification === undefined ? '' : `m = ${magnification}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        screenNote === undefined ? '' : `光屏验证：${screenNote}。`,
+      ].filter(entry => entry.length > 0),
+      highlights: ['image', 'mirror'],
+    },
+    evidence: evidenceOf(context, [
+      'curved_mirror_equation',
+      'principal_rays_converge',
+      'rays_parallel_at_focus',
+      'virtual_image_uncatchable',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1066,9 +1173,10 @@ const convexLensLesson = (context: PhysicsAgentContext): TutorScript => {
  * resolve (circuit facts first — internal resistance, rheostat symbol,
  * junction dots — with the 初中 伏安法/灯泡功率 measurement intents read off
  * the stamped title); optics frames by the imaging element actually on the
- * bench (plane mirror vs thin lens, with the lens lesson sub-dispatched on the
- * 物距区间 the runtime published); mechanics/electric frames by the scene title
- * the template stamped. Unknown frames return undefined and the drawer keeps Q&A.
+ * bench (plane mirror vs thin lens vs curved mirror, with the lens and mirror
+ * lessons sub-dispatched on the 物距区间 the runtime published); mechanics/
+ * electric frames by the scene title the template stamped. Unknown frames
+ * return undefined and the drawer keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
   if (context.status === 'failed') return undefined
@@ -1100,7 +1208,9 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
   if (context.domain === 'optics') {
     return context.optics?.elementKind === 'plane_mirror'
       ? planeMirrorLesson(context)
-      : convexLensLesson(context)
+      : context.optics?.elementKind === 'curved_mirror'
+        ? curvedMirrorLesson(context)
+        : convexLensLesson(context)
   }
   /* Composite, magnetic, mechanics, circuit and optics returned above; electric remains. */
   return electricLesson(context)

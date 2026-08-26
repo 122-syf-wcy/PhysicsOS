@@ -59,8 +59,9 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   'opt-light-reflection': 'plane-mirror',
   'opt-plane-mirror': 'plane-mirror',
   'opt-lens-imaging': 'convex-lens',
+  'opt-curved-mirror': 'concave-mirror',
   /* 实像与虚像 trains on the lens: sweeping u across f shows BOTH natures,
-     where the mirror only ever shows a virtual image. */
+     where the plane mirror only ever shows a virtual image. */
   'opt-real-virtual-image': 'convex-lens',
 }
 

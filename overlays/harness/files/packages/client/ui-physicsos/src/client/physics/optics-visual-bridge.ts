@@ -70,7 +70,11 @@ const cmPoint = (point: { readonly x: number; readonly y: number }): ScenePoint 
 /** Student-facing one-liner for the image: 倒立/正立 · 缩小/等大/放大 · 实/虚. */
 export const imageNatureText = (result: OpticalImagingResult): string => {
   const { outcome } = result
-  if (outcome.kind !== 'image') return '不成像（u = f，折射光平行）'
+  if (outcome.kind !== 'image') {
+    return result.model.elementType === 'curved_mirror'
+      ? '不成像（u = f，反射光平行）'
+      : '不成像（u = f，折射光平行）'
+  }
   const orientation = outcome.image.orientation === 'inverted' ? '倒立' : '正立'
   const magnification = outcome.image.magnification
   const size =
@@ -110,8 +114,13 @@ export const opticsSceneVisual = ({ scene, result }: OpticsVisualInput): SceneVi
   const xs = [objectX, elementX]
   if (imageX !== undefined) xs.push(imageX)
   if (screenX !== undefined) xs.push(screenX)
-  if (focalLength !== undefined && focalLength > 0) {
+  if (focalLength !== undefined && focalLength > 0 && model.elementType === 'thin_lens') {
     xs.push(elementX - 2 * focalLength, elementX + 2 * focalLength)
+  }
+  if (focalLength !== undefined && model.elementType === 'curved_mirror') {
+    /* Mirror marks live on one side only: in front (−x) for a concave mirror,
+       behind (virtual, +x) for a convex one — elementX − 2f covers both. */
+    xs.push(elementX - 2 * focalLength)
   }
   const spanMargin = Math.max(6, (Math.max(...xs) - Math.min(...xs)) * 0.14)
   const minX = Math.min(...xs) - spanMargin
@@ -140,23 +149,46 @@ export const opticsSceneVisual = ({ scene, result }: OpticsVisualInput): SceneVi
     },
   ]
 
+  const curvature =
+    model.elementType !== 'curved_mirror' || focalLength === undefined
+      ? undefined
+      : focalLength > 0
+        ? ('concave' as const)
+        : ('convex' as const)
+
   const opticalElements: OpticalElementVisual[] = [
     {
       id: model.elementId,
       kind: model.elementType,
       at: { x: elementX, y: 0 },
       halfAperture,
-      label: model.elementType === 'thin_lens' ? '凸透镜' : '平面镜',
+      ...(curvature === undefined ? {} : { curvature }),
+      label:
+        model.elementType === 'thin_lens'
+          ? '凸透镜'
+          : model.elementType === 'curved_mirror'
+            ? curvature === 'convex'
+              ? '凸面镜'
+              : '凹面镜'
+            : '平面镜',
     },
   ]
 
   const opticalAxisMarks: OpticalAxisMarkVisual[] = []
-  if (focalLength !== undefined && focalLength > 0) {
+  if (focalLength !== undefined && focalLength > 0 && model.elementType === 'thin_lens') {
     opticalAxisMarks.push(
       { id: 'mark-f-left', at: { x: elementX - focalLength, y: 0 }, label: 'F' },
       { id: 'mark-f-right', at: { x: elementX + focalLength, y: 0 }, label: 'F' },
       { id: 'mark-2f-left', at: { x: elementX - 2 * focalLength, y: 0 }, label: '2F' },
       { id: 'mark-2f-right', at: { x: elementX + 2 * focalLength, y: 0 }, label: '2F' },
+    )
+  }
+  if (focalLength !== undefined && model.elementType === 'curved_mirror') {
+    /* Focus F at elementX − f and centre of curvature C at elementX − 2f: both
+       in front for a concave mirror, behind (virtual) for a convex one. */
+    opticalAxisMarks.push(
+      { id: 'mark-f-mirror', at: { x: elementX - focalLength, y: 0 }, label: 'F' },
+      { id: 'mark-c-mirror', at: { x: elementX - 2 * focalLength, y: 0 }, label: 'C' },
     )
   }
 

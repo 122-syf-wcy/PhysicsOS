@@ -18,6 +18,7 @@
 
 import {
   createCompositeFieldScene,
+  createConcaveMirrorScene,
   createConvexLensScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
@@ -44,6 +45,7 @@ import {
   IconCircuitParallel,
   IconCircuitSeries,
   IconCompositeField,
+  IconConcaveMirror,
   IconConvexLens,
   IconEmfMeasure,
   IconInclinedPlane,
@@ -579,6 +581,27 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
          光屏默认停在清晰像平面。学生把 u 扫过 2f、f 就复现整张成像规律表。 */
       const scene = createConvexLensScene({
         sceneId: stampId('optics-convex-lens'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'concave-mirror',
+    domain: 'optics',
+    stage: 'junior',
+    label: 'lab.template.concaveMirror',
+    hint: 'lab.template.concaveMirror.hint',
+    icon: IconConcaveMirror,
+    tags: ['光学', '初中', '凹面镜', '球面镜'],
+    createScene: (title) => {
+      /* 凹面镜成像：f = 10 cm、u = 30 cm 起步（u > 2f，倒立缩小实像成在镜
+         前），光屏默认停在镜前的清晰像平面。u 扫过 2f、f 复现成像规律表；
+         把 f 拖成负值即变凸面镜（永远正立缩小的虚像）。 */
+      const scene = createConcaveMirrorScene({
+        sceneId: stampId('optics-concave-mirror'),
       })
       return {
         sceneId: String(scene.id),

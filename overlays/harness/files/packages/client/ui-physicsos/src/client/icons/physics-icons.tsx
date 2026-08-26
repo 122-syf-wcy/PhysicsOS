@@ -358,6 +358,17 @@ export const IconConvexLens = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Concave mirror: the spherical reflector folding a parallel ray back to F. */
+export const IconConcaveMirror = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M14 3.5q4.6 8.5 0 17" />
+    <path d="M15.6 6.2l2.6-1.5M16.6 10.2l2.9-0.9M16.6 13.8l2.9 0.9M15.6 17.8l2.6 1.5" strokeOpacity="0.55" />
+    <path d="M3 12h18" strokeOpacity="0.4" strokeDasharray="1.6 2.4" />
+    <path d="M3 7.5h12.6L6.5 12" />
+    <circle cx="6.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

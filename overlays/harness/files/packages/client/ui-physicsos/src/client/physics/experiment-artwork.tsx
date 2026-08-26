@@ -583,6 +583,25 @@ const ConvexLensArt = () => (
   </>
 )
 
+/** 凹面镜成像: candle, concave mirror with F/C marks, inverted image in front. */
+const ConcaveMirrorArt = () => (
+  <>
+    <Stroke d="M8 36 H112" width={1.5} opacity={0.35} dash="5 4" />
+    <Stroke d="M92 14 q9 22 0 44" width={2.4} />
+    {([[20, 94.1], [29, 96], [43, 96], [52, 94.4]] as const).map(([y, x]) => (
+      <Stroke key={y} d={`M${x + 1.5} ${y + 3} L${x + 6.5} ${y - 3}`} width={1.2} opacity={0.4} />
+    ))}
+    {[73, 50].map(x => (
+      <Stroke key={x} d={`M${x} 33 V39`} width={1.5} opacity={0.5} />
+    ))}
+    <Stroke d="M30 36 V18" width={2.4} />
+    <Stroke d="M26.8 22 L30 18 L33.2 22" width={2} />
+    <Stroke d="M30 18 H93.5 L60 47 M30 18 L96.5 36 L60 47" width={1.4} opacity={0.55} />
+    <Stroke d="M60 36 V47" width={2.4} opacity={0.85} />
+    <Stroke d="M56.8 43 L60 47 L63.2 43" width={2} opacity={0.85} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -638,6 +657,7 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   buoyancy: BuoyancyArt,
   'plane-mirror': PlaneMirrorArt,
   'convex-lens': ConvexLensArt,
+  'concave-mirror': ConcaveMirrorArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -669,6 +689,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['bulb-power', 'circuit-bulb-power'],
   ['plane-mirror', 'optics-plane-mirror'],
   ['convex-lens', 'optics-convex-lens'],
+  ['concave-mirror', 'optics-concave-mirror'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */
