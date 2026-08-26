@@ -1,21 +1,23 @@
 /**
  * PhysicsOS Knowledge Graph V1.
  *
- * A small, explicit curriculum graph: three subject roots (力学 / 电磁学 / 电路)
- * with the knowledge points the current teaching content actually exercises,
- * plus an explicit question → node mapping. Everything here is DATA — no
- * physics is computed, and the mapping is a hand-audited table rather than a
- * keyword heuristic, so a question can never drift onto the wrong node silently.
+ * A small, explicit curriculum graph: four subject roots (力学 / 电磁学 / 电路 /
+ * 光学) with the knowledge points the current teaching content actually
+ * exercises, plus an explicit question → node mapping. Everything here is
+ * DATA — no physics is computed, and the mapping is a hand-audited table
+ * rather than a keyword heuristic, so a question can never drift onto the
+ * wrong node silently.
  *
  * Consumers:
  *  - Question Space shows the nodes of the current question as 知识总结.
  *  - The learning record aggregates student attempts per node (掌握度).
  *  - The Lab's experiment self-checks (see experiment-self-checks.ts) write
- *    attempts against the circuit nodes, which have no golden questions yet.
+ *    attempts against the circuit and optics nodes, which have no golden
+ *    questions yet.
  */
 
 /** Subject roots. */
-export type KnowledgeDomain = 'mechanics' | 'electromagnetism' | 'circuit'
+export type KnowledgeDomain = 'mechanics' | 'electromagnetism' | 'circuit' | 'optics'
 
 export interface KnowledgeNode {
   readonly id: string
@@ -62,6 +64,15 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'circ-dynamic', label: '动态电路分析', domain: 'circuit', parentId: 'circuit' },
   { id: 'circ-power', label: '电功率', domain: 'circuit', parentId: 'circuit' },
   { id: 'circ-emf-internal', label: '电动势与内阻', domain: 'circuit', parentId: 'circuit' },
+
+  /* 光学 nodes are exercised by the Lab's optics experiment self-checks (平面镜
+     成像 / 凸透镜成像); like the circuit nodes they have no golden questions
+     yet, so the learning record reaches them through lab attempts. */
+  { id: 'optics', label: '光学', domain: 'optics' },
+  { id: 'opt-light-reflection', label: '光的反射', domain: 'optics', parentId: 'optics' },
+  { id: 'opt-plane-mirror', label: '平面镜成像', domain: 'optics', parentId: 'optics' },
+  { id: 'opt-lens-imaging', label: '凸透镜成像规律', domain: 'optics', parentId: 'optics' },
+  { id: 'opt-real-virtual-image', label: '实像与虚像', domain: 'optics', parentId: 'optics' },
 ]
 
 const NODE_BY_ID: ReadonlyMap<string, KnowledgeNode> = new Map(

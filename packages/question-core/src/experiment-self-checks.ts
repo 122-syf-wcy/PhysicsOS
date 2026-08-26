@@ -8,10 +8,12 @@
  * layer resolves it from facts the runtime already published (纯串联 / 并联
  * 结点 / 滑动变阻器 / 电源含内阻) — never from a template id, so a student-
  * modified or question-forked circuit still gets the probes that match what is
- * actually on the canvas. The 初中 measurement rigs (测平均速度 / 伏安法 /
- * 测灯泡功率) are physically identical to their base apparatus — their topic
- * is the measurement intent, which lives in the scene title the template
- * stamped, the same dispatch the tutor uses for mechanics lessons.
+ * actually on the canvas. The optics topics dispatch the same way, on the
+ * imaging element the runtime reports (平面镜 / 凸透镜). The 初中 measurement
+ * rigs (测平均速度 / 伏安法 / 测灯泡功率) are physically identical to their
+ * base apparatus — their topic is the measurement intent, which lives in the
+ * scene title the template stamped, the same dispatch the tutor uses for
+ * mechanics lessons.
  *
  * This file is DATA, same rules as the question self-check bank: every wrong
  * option is a classified mistake with a readable explanation and review
@@ -384,6 +386,142 @@ const AVERAGE_SPEED_SEGMENTS: SelfCheckItem = {
   ],
 }
 
+/* ------------------------------------------------- 平面镜成像 (初中光学) -- */
+
+const MIRROR_DISTANCE_SIZE: SelfCheckItem = {
+  id: 'mirror-distance-size',
+  prompt: '把蜡烛慢慢远离玻璃板，镜中像的大小和像到镜面的距离怎样变化？',
+  takeaway:
+    '平面镜的像与物关于镜面对称：像与物始终等大，像距始终等于物距 —— 蜡烛远离时像也等距离退远，但大小不变。',
+  options: [
+    { id: 'same-size-farther', label: '像大小不变，像到镜面的距离变大（v = u）', correct: true },
+    {
+      id: 'image-shrinks',
+      label: '像越来越小（看上去确实变小了）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '"看上去变小"是因为像离眼睛远了、视角变小，属于观察效果；几何上平面镜的像与物关于镜面对称，永远等大。用大小相同的备用蜡烛去替换像的位置就能验证。',
+        review: ['平面镜成像特点：等大、对称', '视角与像的真实大小'],
+        evidenceCheckId: 'mirror_image_symmetry',
+      },
+    },
+    {
+      id: 'image-stays',
+      label: '像留在原处，只有蜡烛在动',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '像的位置由物的位置决定：像与物关于镜面对称，物距变大像距同步变大。物动像必动，两者始终隔镜相对、距离相等。',
+        review: ['像物对称：像距 = 物距', '平面镜成像作图'],
+        evidenceCheckId: 'mirror_image_symmetry',
+      },
+    },
+  ],
+}
+
+const MIRROR_VIRTUAL_SCREEN: SelfCheckItem = {
+  id: 'mirror-virtual-screen',
+  prompt: '把光屏放到玻璃板后面"像"的位置上，光屏上能承接到像吗？',
+  takeaway:
+    '平面镜的像是反射光线反向延长线的交点，镜后并没有实际光线到达 —— 是虚像，光屏承接不到，只能透过玻璃板看到。',
+  options: [
+    { id: 'cannot-virtual', label: '不能：那是反射光线反向延长线形成的虚像', correct: true },
+    {
+      id: 'can-catch',
+      label: '能：像就在那个位置，光屏放准了就能接住',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '位置"对"不等于有光到达：反射光线全部折回蜡烛一侧，镜后那个位置没有任何实际光线会聚，光屏上自然一片空白。能被光屏承接的只有实像。',
+        review: ['实像与虚像的区别', '平面镜成虚像'],
+        evidenceCheckId: 'virtual_image_uncatchable',
+      },
+    },
+    {
+      id: 'brighter-helps',
+      label: '换更亮的蜡烛、把屏贴得更近就能承接到',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '亮度和距离改变的只是观察条件，改变不了"镜后没有实际光线"这一事实：虚像的本质由光路决定，再亮的蜡烛也不会让反射光跑到镜子后面去。',
+        review: ['虚像不能被光屏承接', '光的反射定律'],
+        evidenceCheckId: 'virtual_image_uncatchable',
+      },
+    },
+  ],
+}
+
+/* ------------------------------------------------- 凸透镜成像 (初中光学) -- */
+
+const LENS_BEYOND_2F: SelfCheckItem = {
+  id: 'lens-beyond-2f',
+  prompt: '蜡烛放在凸透镜二倍焦距之外（u > 2f）时，光屏上得到的像是？',
+  takeaway:
+    'u > 2f 时成倒立、缩小的实像，像距落在 f 与 2f 之间 —— 照相机正是工作在这一区间：景物远在 2f 外，底片上是缩小的实像。',
+  options: [
+    { id: 'inverted-reduced', label: '倒立、缩小的实像（f < v < 2f，照相机）', correct: true },
+    {
+      id: 'upright-virtual',
+      label: '正立、缩小的虚像',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '凸透镜只在 u < f 时成虚像，而且那个虚像是放大的。u > 2f 时折射光线实际会聚在光屏上，是能承接的实像，且必然倒立。"正立缩小的虚像"是凹透镜的成像特点。',
+        review: ['凸透镜成像规律表', '凸透镜与凹透镜的区别'],
+        evidenceCheckId: 'thin_lens_equation',
+      },
+    },
+    {
+      id: 'inverted-magnified',
+      label: '倒立、放大的实像',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '倒立放大的实像出现在 f < u < 2f（投影仪区间）。u > 2f 时由 1/u + 1/v = 1/f 可得 v < u，放大率 m = v/u < 1，像必然缩小。判断像的大小先比较 u 与 2f。',
+        review: ['成像规律：u 与 2f 的比较', '放大率 m = v/u'],
+        evidenceCheckId: 'thin_lens_equation',
+      },
+    },
+  ],
+}
+
+const LENS_WITHIN_F: SelfCheckItem = {
+  id: 'lens-within-f',
+  prompt: '把蜡烛移到焦点以内（u < f），光屏上还能承接到像吗？',
+  takeaway:
+    'u < f 时折射光线发散，其反向延长线交成正立、放大的虚像 —— 这就是放大镜：光屏上承接不到，必须透过透镜观察。',
+  options: [
+    {
+      id: 'cannot-magnifier',
+      label: '不能：成正立、放大的虚像，要透过透镜看（放大镜）',
+      correct: true,
+    },
+    {
+      id: 'move-screen-far',
+      label: '能，只要把光屏移得足够远',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          'u < f 时折射光线是发散的，越往远处光线彼此离得越开，永远不会会聚成实像 —— 移屏解决不了"没有会聚点"的问题。像在反向延长线一侧，只能用眼睛透过透镜看。',
+        review: ['u < f 成虚像', '实像与虚像'],
+        evidenceCheckId: 'virtual_image_uncatchable',
+      },
+    },
+    {
+      id: 'screen-at-focus',
+      label: '能，把光屏放在焦点上就行',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '焦点是平行于主光轴的光会聚的位置，不是任何物体的像的位置。u < f 时根本没有实际光线会聚，焦点处的光屏同样一片空白。承接实像要把屏放到 v 处，而此时 v 不存在。',
+        review: ['焦点与焦距的含义', '虚像不能被光屏承接'],
+        evidenceCheckId: 'virtual_image_uncatchable',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -493,6 +631,18 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '电动势与内阻',
     knowledge: ['circ-emf-internal'],
     items: [EMF_TERMINAL_VOLTAGE, EMF_OPEN_CIRCUIT],
+  },
+  'optics-plane-mirror': {
+    id: 'optics-plane-mirror',
+    topic: '平面镜成像',
+    knowledge: ['opt-plane-mirror', 'opt-light-reflection', 'opt-real-virtual-image'],
+    items: [MIRROR_DISTANCE_SIZE, MIRROR_VIRTUAL_SCREEN],
+  },
+  'optics-convex-lens': {
+    id: 'optics-convex-lens',
+    topic: '凸透镜成像规律',
+    knowledge: ['opt-lens-imaging', 'opt-real-virtual-image'],
+    items: [LENS_BEYOND_2F, LENS_WITHIN_F],
   },
 }
 
