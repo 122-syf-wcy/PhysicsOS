@@ -183,13 +183,12 @@ export function apply(ctx: ClientContext): void {
       },
       openSurface: (
         id: 'home' | 'lab' | 'questions' | 'record',
-        sceneRef?: { sceneId: string; scene: unknown },
+        sceneRef?: Parameters<typeof surface.open>[1],
       ) => {
-        if (sceneRef && typeof sceneRef.scene === 'object' && sceneRef.scene !== null) {
-          surface.open('lab', { sceneId: sceneRef.sceneId, scene: sceneRef.scene as PhysicsScene })
-        } else {
-          surface.open(id)
-        }
+        /* A handover with a scene always lands in the Lab, whatever surface the
+           caller was on when it created the scene. */
+        if (sceneRef === undefined) surface.open(id)
+        else surface.open('lab', sceneRef)
       },
       /* Toolbar 切换实验: chooser over the running scene, resumable. */
       openExperimentPicker: () => { surface.openExperimentPicker() },

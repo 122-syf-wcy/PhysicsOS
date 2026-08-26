@@ -12,6 +12,7 @@
  */
 
 import type { PhysicsAgentContext } from './physics-agent.ts'
+import { circuitTopicOf, mechanicsTopicOf } from './experiment-self-checks.ts'
 
 /** One revealable rung of the ladder. */
 export interface TutorStage {
@@ -72,6 +73,19 @@ const evidenceOf = (
     const check = checkOf(context, id)
     return check === undefined ? [] : [check]
   })
+
+/**
+ * Evidence for per-target check families: the circuit engine stamps one
+ * `terminal_voltage_law:<sourceId>` check per source, so a lesson cites the
+ * family by prefix instead of hard-coding a component id.
+ */
+const evidenceOfPrefix = (
+  context: PhysicsAgentContext,
+  prefix: string,
+): TutorEvidence[] =>
+  context.verification
+    .filter(check => check.id === prefix || check.id.startsWith(`${prefix}:`))
+    .map(check => ({ label: check.label, status: check.status }))
 
 /* ------------------------------------------------------------------ lessons -- */
 
@@ -480,6 +494,56 @@ const electricLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+const averageSpeedLesson = (context: PhysicsAgentContext): TutorScript => {
+  const displacement = derivedText(context, '位移')
+  const finalSpeed = derivedText(context, '末速度')
+  const acceleration = derivedText(context, '加速度')
+  return {
+    id: 'mechanics-average-speed',
+    topic: '测量平均速度',
+    observation: [
+      ...observeLine('位移 s', displacement),
+      ...observeLine('末速度 v', finalSpeed),
+      ...observeLine('加速度 a', acceleration),
+    ],
+    question: '怎样测出小车这段运动的平均速度？',
+    hints: [
+      {
+        id: 'hint-define',
+        title: '提示 1',
+        paragraphs: ['平均速度描述整段运动的平均快慢：v̄ = s/t，只需要总路程和总时间两个量，不需要任何时刻的瞬时速度。'],
+        highlights: ['trajectory'],
+      },
+      {
+        id: 'hint-measure',
+        title: '提示 2',
+        paragraphs: ['刻度尺量出斜面上的路程 s，停表记下滑行时间 t —— 播放一遍运动，时间轴就是你的停表。'],
+      },
+      {
+        id: 'hint-segments',
+        title: '提示 3',
+        paragraphs: ['再分段测一次：前半程、后半程分别计时。小车加速下滑，相同路程哪一段用时更短？'],
+        highlights: ['velocity'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '把测得的路程除以对应的时间：v̄ = s/t。小车加速下滑，后半程用时更短，其平均速度大于前半程；全程的平均速度介于两段之间，而末速度是瞬时值，比全程平均速度更大。',
+        [
+          displacement === undefined ? '' : `s = ${displacement}`,
+          finalSpeed === undefined ? '' : `末速度 v = ${finalSpeed}`,
+          acceleration === undefined ? '' : `a = ${acceleration}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['trajectory'],
+    },
+    /* The uniformly-accelerated engine stamps exactly this physical check. */
+    evidence: evidenceOf(context, ['velocity_change']),
+  }
+}
+
 const forceMotionLesson = (context: PhysicsAgentContext): TutorScript => ({
   id: 'force-and-motion',
   topic: '力与运动',
@@ -517,6 +581,328 @@ const forceMotionLesson = (context: PhysicsAgentContext): TutorScript => ({
     .map(check => ({ label: check.label, status: check.status })),
 })
 
+/* ----------------------------------------------------------------- circuit -- */
+
+const circuitSeriesLesson = (context: PhysicsAgentContext): TutorScript => {
+  const emf = derivedText(context, '电动势 E')
+  const current = derivedText(context, '干路电流 I')
+  const terminal = derivedText(context, '路端电压 U')
+  const external = derivedText(context, '外电路等效电阻')
+  return {
+    id: 'circuit-series-loop',
+    topic: '串联电路',
+    observation: [
+      ...observeLine('电动势 E', emf),
+      ...observeLine('干路电流 I', current),
+      ...observeLine('路端电压 U', terminal),
+      ...observeLine('外电路等效电阻', external),
+    ],
+    question: '串联回路中的电流由什么决定？',
+    hints: [
+      {
+        id: 'hint-loop',
+        title: '提示 1',
+        paragraphs: ['先看电流表：串联回路只有一条通路，电流处处相等，电流表读到的就是干路电流。'],
+        highlights: ['ammeter'],
+      },
+      {
+        id: 'hint-resistance',
+        title: '提示 2',
+        paragraphs: ['再看电阻：串联总电阻等于各电阻之和，接入的电阻越多，总电阻越大。'],
+        highlights: ['resistors'],
+      },
+      {
+        id: 'hint-ohm',
+        title: '提示 3',
+        paragraphs: ['用欧姆定律把两者连起来：I = U / R串。总电压一定时，总电阻决定电流。'],
+        highlights: ['battery'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '干路电流由 I = U/R串 决定：串联电流处处相等，各电阻按 U = IR 分得电压，之和等于总电压。',
+        [
+          emf === undefined ? '' : `E = ${emf}`,
+          current === undefined ? '' : `I = ${current}`,
+          external === undefined ? '' : `R串 = ${external}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['ammeter', 'resistors'],
+    },
+    evidence: evidenceOf(context, ['kcl_current_conservation', 'power_balance']),
+  }
+}
+
+const circuitParallelLesson = (context: PhysicsAgentContext): TutorScript => {
+  const current = derivedText(context, '干路电流 I')
+  const terminal = derivedText(context, '路端电压 U')
+  const external = derivedText(context, '外电路等效电阻')
+  return {
+    id: 'circuit-parallel-junction',
+    topic: '并联与混联电路',
+    observation: [
+      ...observeLine('干路电流 I', current),
+      ...observeLine('路端电压 U', terminal),
+      ...observeLine('外电路等效电阻', external),
+    ],
+    question: '结点处的电流是怎样分配的？',
+    hints: [
+      {
+        id: 'hint-junction',
+        title: '提示 1',
+        paragraphs: ['先看结点（原理图上的圆点）：干路电流在这里分成几条支路，流入结点的电流必须等于流出的电流之和。'],
+        highlights: ['ammeter'],
+      },
+      {
+        id: 'hint-voltage',
+        title: '提示 2',
+        paragraphs: ['并联支路两端接的是同一对结点，电压相等；每条支路的电流 I = U/R，电阻小的支路分得多。'],
+        highlights: ['voltmeter'],
+      },
+      {
+        id: 'hint-equivalent',
+        title: '提示 3',
+        paragraphs: ['并联部分的等效电阻比任何一条支路都小 —— 多一条支路就多一条通路，总电导相加。'],
+        highlights: ['resistors'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '结点电流守恒（基尔霍夫电流定律）：干路电流等于各支路电流之和；并联支路电压相等，电流按电导分配。',
+        [
+          current === undefined ? '' : `干路 I = ${current}`,
+          external === undefined ? '' : `等效外阻 = ${external}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['ammeter', 'resistors'],
+    },
+    evidence: evidenceOf(context, ['kcl_current_conservation', 'power_balance']),
+  }
+}
+
+const circuitRheostatLesson = (context: PhysicsAgentContext): TutorScript => {
+  const slider = derivedText(context, '接入电阻 R滑')
+  const current = derivedText(context, '干路电流 I')
+  const terminal = derivedText(context, '路端电压 U')
+  return {
+    id: 'circuit-rheostat-dynamic',
+    topic: '滑动变阻器动态电路',
+    observation: [
+      ...observeLine('接入电阻 R滑', slider),
+      ...observeLine('干路电流 I', current),
+      ...observeLine('路端电压 U', terminal),
+    ],
+    question: '滑片移动时，各电表读数为什么会联动变化？',
+    hints: [
+      {
+        id: 'hint-slider',
+        title: '提示 1',
+        paragraphs: ['先看滑动变阻器：接入电阻 R滑 = p·R全，滑片位置 p 决定接入了多少电阻。'],
+        highlights: ['rheostat'],
+      },
+      {
+        id: 'hint-current',
+        title: '提示 2',
+        paragraphs: ['总电阻变了，干路电流跟着变：I = U/(R₀ + R滑)。接入电阻增大，电流减小。'],
+        highlights: ['ammeter'],
+      },
+      {
+        id: 'hint-meter',
+        title: '提示 3',
+        paragraphs: ['定值电阻上的电压 U₀ = I·R₀ 与电流同增同减 —— 电压表读数随电流联动，而不是随"谁被调节"。'],
+        highlights: ['voltmeter'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '一处电阻变化 → 总电阻变化 → 干路电流变化 → 各表读数联动。按播放可把滑片从当前位置扫到最大接入，I-t 与 U-t 曲线就是这条联动链。',
+        [
+          slider === undefined ? '' : `R滑 = ${slider}`,
+          current === undefined ? '' : `I = ${current}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['rheostat', 'ammeter'],
+    },
+    evidence: evidenceOf(context, ['kcl_current_conservation', 'power_balance']),
+  }
+}
+
+const circuitVaLesson = (context: PhysicsAgentContext): TutorScript => {
+  const emf = derivedText(context, '电动势 E')
+  const current = derivedText(context, '干路电流 I')
+  const slider = derivedText(context, '接入电阻 R滑')
+  return {
+    id: 'circuit-va-resistance',
+    topic: '伏安法测电阻',
+    observation: [
+      ...observeLine('电源电压 E', emf),
+      ...observeLine('干路电流 I', current),
+      ...observeLine('接入电阻 R滑', slider),
+    ],
+    question: '只用电压表和电流表，怎样测出待测电阻 Rx？',
+    hints: [
+      {
+        id: 'hint-ammeter',
+        title: '提示 1',
+        paragraphs: ['电流表串联在回路里：串联电流处处相等，它读出的就是流过 Rx 的电流 I。'],
+        highlights: ['ammeter'],
+      },
+      {
+        id: 'hint-voltmeter',
+        title: '提示 2',
+        paragraphs: ['电压表并联在 Rx 两端，读出它分到的电压 U。理想表不干扰电路：电压表不分流、电流表不分压。'],
+        highlights: ['voltmeter'],
+      },
+      {
+        id: 'hint-slider',
+        title: '提示 3',
+        paragraphs: ['一组读数就能算 R = U/I，但只测一次偶然误差大。移动滑片改变工作点，再读几组 (U, I) —— 求出的 R 取平均。'],
+        highlights: ['rheostat'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '由欧姆定律变形 Rx = U/I：电压表读 U、电流表读 I，一除即得。滑动变阻器负责改变工作点，多组读数取平均减小偶然误差 —— U 与 I 同增同减，比值不变，因为电阻是导体自身的属性。',
+        [
+          emf === undefined ? '' : `E = ${emf}`,
+          current === undefined ? '' : `I = ${current}`,
+          slider === undefined ? '' : `R滑 = ${slider}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['voltmeter', 'ammeter'],
+    },
+    evidence: evidenceOf(context, [
+      'ideal_meters_non_intrusive',
+      'kcl_current_conservation',
+      'power_balance',
+    ]),
+  }
+}
+
+const circuitBulbLesson = (context: PhysicsAgentContext): TutorScript => {
+  const current = derivedText(context, '干路电流 I')
+  const slider = derivedText(context, '接入电阻 R滑')
+  const external = derivedText(context, '输出功率')
+  return {
+    id: 'circuit-bulb-power',
+    topic: '测量小灯泡的电功率',
+    observation: [
+      ...observeLine('干路电流 I', current),
+      ...observeLine('接入电阻 R滑', slider),
+      ...observeLine('输出功率', external),
+    ],
+    question: '怎样测出小灯泡的实际电功率和额定功率？',
+    hints: [
+      {
+        id: 'hint-meters',
+        title: '提示 1',
+        paragraphs: ['不需要新仪器：电压表读灯泡两端的电压 U，电流表读流过它的电流 I，两块表就够。'],
+        highlights: ['voltmeter', 'ammeter'],
+      },
+      {
+        id: 'hint-formula',
+        title: '提示 2',
+        paragraphs: ['电功率的计算式：P = UI。把两个读数相乘，就是灯泡此刻消耗的实际功率 —— 它随工作点变化，不是固定值。'],
+      },
+      {
+        id: 'hint-rated',
+        title: '提示 3',
+        paragraphs: ['移动滑片改变灯泡的工作点：电压表读数恰好等于额定电压时，算出的才是额定功率；判断标准是电压表读数，不是亮度。'],
+        highlights: ['rheostat'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        'P = UI 逐个工作点成立：任意滑片位置的读数相乘是那一点的实际功率，只有把电压调到额定值，读出的才是额定功率。低于额定电压灯更暗、功率更小；高于额定电压则过载有烧毁风险。',
+        [
+          current === undefined ? '' : `I = ${current}`,
+          slider === undefined ? '' : `R滑 = ${slider}`,
+          external === undefined ? '' : `输出功率 = ${external}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['voltmeter', 'rheostat'],
+    },
+    evidence: evidenceOf(context, ['power_balance', 'kcl_current_conservation']),
+  }
+}
+
+const circuitEmfLesson = (context: PhysicsAgentContext): TutorScript => {
+  const emf = derivedText(context, '电动势 E')
+  const current = derivedText(context, '干路电流 I')
+  const terminal = derivedText(context, '路端电压 U')
+  const internalPower = derivedText(context, '内阻耗散功率')
+  /* fmtQuantityValue renders sub-nanoamp solves as exactly '0' — an open
+     switch, not a small current. The lesson flips between the open-circuit
+     reading (U = E) and the loaded drop (U = E − I·r) on that fact. */
+  const open = context.derived.find(row => row.label === '干路电流 I')?.value === '0'
+  return {
+    id: open ? 'circuit-emf-open' : 'circuit-emf-internal',
+    topic: '电动势与内阻',
+    observation: [
+      ...observeLine('电动势 E', emf),
+      ...observeLine('干路电流 I', current),
+      ...observeLine('路端电压 U', terminal),
+      ...observeLine('内阻耗散功率', internalPower),
+    ],
+    question: open ? '断路时电压表为什么直读电动势？' : '为什么路端电压比电动势小？',
+    hints: [
+      {
+        id: 'hint-source',
+        title: '提示 1',
+        paragraphs: ['电源不是恒压器：它有内阻 r，对外输出的电压不一定等于电动势。'],
+        highlights: ['battery'],
+      },
+      {
+        id: 'hint-loop-law',
+        title: '提示 2',
+        paragraphs: ['闭合电路欧姆定律：I = E/(R + r)，内、外电阻共同决定电流。'],
+        highlights: ['ammeter'],
+      },
+      {
+        id: 'hint-terminal',
+        title: '提示 3',
+        paragraphs: ['路端电压 U = E − I·r：电流越大，内阻分走的电压越多。电流为零时内阻一点也不分。'],
+        highlights: ['voltmeter'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: open
+        ? [
+          '断路时 I = 0，内阻不分压：U = E − 0·r = E，电压表直读电动势 —— 这正是测 E 的常用方法。',
+          [emf === undefined ? '' : `E = ${emf}`, terminal === undefined ? '' : `U = ${terminal}`]
+            .filter(entry => entry.length > 0)
+            .join('；'),
+        ].filter(entry => entry.length > 0)
+        : [
+          '内阻分走了 I·r：U = E − I·r，差额以 I²·r 的功率耗散在电源内部（见"内阻耗散功率"）。移动滑片改变 I，U 随之线性变化，这条 U-I 直线的截距是 E、斜率是 −r。',
+          [
+            emf === undefined ? '' : `E = ${emf}`,
+            terminal === undefined ? '' : `U = ${terminal}`,
+            current === undefined ? '' : `I = ${current}`,
+            internalPower === undefined ? '' : `P内 = ${internalPower}`,
+          ].filter(entry => entry.length > 0).join('；'),
+        ].filter(entry => entry.length > 0),
+      highlights: ['battery', 'voltmeter'],
+    },
+    evidence: [
+      ...evidenceOfPrefix(context, 'terminal_voltage_law'),
+      ...evidenceOf(context, ['power_balance']),
+    ],
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -524,7 +910,10 @@ const forceMotionLesson = (context: PhysicsAgentContext): TutorScript => ({
  *
  * Composite frames are told apart by the facts the runtime published (the
  * spectrometer's drift/deflection regions, the gravity contribution, the
- * selection-condition check); mechanics/electric frames by the scene title the
+ * selection-condition check); circuit frames by the lab topics the self-checks
+ * resolve (circuit facts first — internal resistance, rheostat symbol,
+ * junction dots — with the 初中 伏安法/灯泡功率 measurement intents read off
+ * the stamped title); mechanics/electric frames by the scene title the
  * template stamped. Unknown frames return undefined and the drawer keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
@@ -540,10 +929,20 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
   }
   if (context.domain === 'magnetic') return magneticLesson(context)
   if (context.domain === 'mechanics') {
+    if (mechanicsTopicOf(context) === 'mechanics-average-speed') return averageSpeedLesson(context)
     if (/平抛|斜抛|抛体/.test(context.sceneTitle)) return projectileLesson(context)
     if (/斜面/.test(context.sceneTitle)) return inclineLesson(context)
     return forceMotionLesson(context)
   }
-  /* Composite, magnetic and mechanics returned above; electric remains. */
+  if (context.domain === 'circuit') {
+    const topic = circuitTopicOf(context)
+    if (topic === 'circuit-emf') return circuitEmfLesson(context)
+    if (topic === 'circuit-va') return circuitVaLesson(context)
+    if (topic === 'circuit-bulb') return circuitBulbLesson(context)
+    if (topic === 'circuit-rheostat') return circuitRheostatLesson(context)
+    if (topic === 'circuit-parallel') return circuitParallelLesson(context)
+    return circuitSeriesLesson(context)
+  }
+  /* Composite, magnetic, mechanics and circuit returned above; electric remains. */
   return electricLesson(context)
 }

@@ -12,6 +12,7 @@ import {
   physicsAgentContext,
   resolveHighlightTarget,
   runPhysicsAgentTool,
+  type PhysicsAgentToolCall,
 } from '../src/client/physics/physics-agent.ts'
 import { agentSuggestions, matchIntent } from '../src/client/physics/physics-agent-answers.ts'
 import { zh } from '../src/client/locales.ts'
@@ -21,6 +22,10 @@ const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
+
+/** The highlight target of a tool call; narrows past the scene-command arm. */
+const highlightTargetOf = (call: PhysicsAgentToolCall | undefined): string | undefined =>
+  call?.tool === 'physics.ui.highlight' ? call.targetId : undefined
 
 afterEach(cleanup)
 
@@ -226,6 +231,7 @@ describe('agent drawer', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -253,6 +259,7 @@ describe('agent drawer', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -413,7 +420,7 @@ describe('agent answers — multi-source point-charge electric', () => {
       expect(answer?.sources.some(s => s.kind === 'verification' && s.label === superpositionCheck.label)).toBe(true)
     }
     /* It highlights a field line, not a single source (there is no single source). */
-    expect(answer?.tools[0]?.targetId).toBe('field-line')
+    expect(highlightTargetOf(answer?.tools[0])).toBe('field-line')
   })
 
   it('the field-line-origin answer names both signs and does not lie about a single direction', () => {
@@ -427,7 +434,7 @@ describe('agent answers — multi-source point-charge electric', () => {
     /* It must NOT claim a single radial direction — the honest multi-source answer
        says the line follows the combined field. */
     expect(answer?.paragraphs.some(p => p.includes('合场'))).toBe(true)
-    expect(answer?.tools[0]?.targetId).toBe('field-line')
+    expect(highlightTargetOf(answer?.tools[0])).toBe('field-line')
   })
 
   it('the direction answer does not claim a single radial direction for multi-source', () => {
@@ -441,7 +448,7 @@ describe('agent answers — multi-source point-charge electric', () => {
     const directionParagraph = answer?.paragraphs.find(p => p.includes('没有单一方向') || p.includes('合场'))
     expect(directionParagraph).toBeDefined()
     /* And it highlights a field line (the combined-field picture), not one source. */
-    expect(answer?.tools[0]?.targetId).toBe('field-line')
+    expect(highlightTargetOf(answer?.tools[0])).toBe('field-line')
   })
 
   it('a field-line highlight resolves to the source ids (renderer highlights streams by sourceId)', () => {

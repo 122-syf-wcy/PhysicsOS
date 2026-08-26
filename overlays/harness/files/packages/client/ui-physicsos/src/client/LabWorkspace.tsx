@@ -19,6 +19,10 @@ import { PhysicsWorkspace } from './PhysicsWorkspace.tsx'
 import { QuestionWorkspace, type SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
 import type { LearningRecordState } from './learning-record-store.ts'
 import { domainOfScene, type SupportedSceneDomain } from './physics/domain-of-scene.ts'
+import {
+  createExperimentSceneRef,
+  findExperimentTemplate,
+} from './physics/experiment-templates.ts'
 import { createCircuitWorkspaceRuntime } from './physics/circuit-workspace-runtime.ts'
 import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-runtime.ts'
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
@@ -26,7 +30,7 @@ import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-run
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
 import type {
-  PhysicsSurfaceState, PhysicsSurfaceId, RecentExperimentsState,
+  PhysicsSceneRef, PhysicsSurfaceState, PhysicsSurfaceId, RecentExperimentsState,
 } from './surface-store.ts'
 import css from './LabWorkspace.module.css'
 
@@ -38,7 +42,7 @@ export interface PhysicsSurfaceInjected {
     /** Persisted recent scenes; the picker's 继续上次实验 card reads them. */
     recentExperiments: SnapshotStore<RecentExperimentsState>
   }
-  openSurface?: (id: PhysicsSurfaceId, sceneRef?: { sceneId: string; scene: unknown }) => void
+  openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Open the experiment chooser while keeping the active scene resumable. */
   openExperimentPicker?: () => void
   /** Write a Question Space self-check answer into the learning record. */
@@ -104,6 +108,13 @@ export function PhysicsSurface({
         t={t}
         useLearningRecord={useLearningRecord}
         openQuestion={openQuestion ?? (() => {})}
+        /* 重做实验: a lab attempt deep-links to a FRESH instance of the template
+           that trains its topic — the same scene the picker would build. */
+        openExperiment={(experimentId: string) => {
+          const template = findExperimentTemplate(experimentId)
+          if (template === undefined || template.comingSoon === true) return
+          openSurface?.('lab', createExperimentSceneRef(template, t(template.label)))
+        }}
         useSessions={useSessions}
         useWorkspaces={useWorkspaces}
       />
@@ -166,6 +177,7 @@ export function PhysicsSurface({
       {...(openExperimentPicker === undefined
         ? {}
         : { onSwitchExperiment: openExperimentPicker })}
+      {...(recordAttempt === undefined ? {} : { recordAttempt })}
     />
   )
 }

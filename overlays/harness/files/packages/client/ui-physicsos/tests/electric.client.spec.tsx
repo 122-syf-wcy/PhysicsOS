@@ -81,6 +81,7 @@ describe('Electric product slice', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}
@@ -111,7 +112,7 @@ describe('Electric product slice', () => {
   it('previews an Electric golden question and passes its exact scene to Lab', () => {
     let openedScene: PhysicsScene | undefined
     const openSurface: NonNullable<QuestionWorkspaceProps['openSurface']> = (_id, sceneRef) => {
-      openedScene = sceneRef?.scene as PhysicsScene | undefined
+      openedScene = sceneRef?.scene
     }
     render(
       <QuestionWorkspace

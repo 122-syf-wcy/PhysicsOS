@@ -388,11 +388,15 @@
 
 .searchRow {
   flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-top: 16px;
 }
 
 .search {
-  width: 100%;
+  flex: 1 1 240px;
   height: 36px;
   padding: 0 12px;
   box-sizing: border-box;
@@ -415,6 +419,54 @@
 
 .search::placeholder {
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* ------------------------------------------------------------------- stage --
+   学段 segmented switch: the coarse 初中/高中 partition, one visual notch
+   heavier than the domain tabs so it reads as the primary cut. */
+
+.stageTabs {
+  flex: none;
+  display: flex;
+  gap: 3px;
+  height: 36px;
+  padding: 3px;
+  box-sizing: border-box;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.stageTab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  transition:
+    background-color var(--physics-motion-base) var(--physics-ease),
+    color var(--physics-motion-base) var(--physics-ease);
+}
+
+.stageTab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 55%, transparent);
+}
+
+.stageTabActive {
+  background: var(--physics-vector-gravity);
+  color: #fff;
+  font-weight: 600;
+}
+
+.stageTabActive:hover {
+  background: var(--physics-vector-gravity);
+  color: #fff;
 }
 
 /* ------------------------------------------------------------ recent chips -- */
@@ -628,6 +680,15 @@
   white-space: nowrap;
 }
 
+/* Tag stack on each grid row: subject chip above the 学段 chip. */
+.tagColumn {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
 /* Subject tag on each grid row: tinted chip, one colour per domain. */
 .domainTag {
   flex: none;
@@ -638,6 +699,19 @@
   font-weight: 600;
   color: var(--subject, var(--dsw-alias-label-tertiary));
   background: var(--subject-tint, var(--dsw-alias-interactive-bg-hover));
+}
+
+/* 学段 tag: neutral outline chip so the subject colour stays the card's only
+   hue; the stage switch, not this label, carries the partition weight. */
+.stageTag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--physics-glass-border-soft);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
 }
 
 .footer {
@@ -699,6 +773,7 @@
   .art svg,
   .continueCta svg,
   .tabDot,
+  .stageTab,
   .recentChip,
   .entry,
   .recommendCard,

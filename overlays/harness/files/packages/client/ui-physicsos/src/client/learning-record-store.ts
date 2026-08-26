@@ -2,10 +2,12 @@
  * Learning record — the student's attempt history.
  *
  * A {@link StudentAttempt} is written every time the student answers a
- * self-check in Question Space. The record is what the 学习记录 surface reads:
- * mistakes grouped by their classified type, mastery per knowledge node, and a
- * re-practice path back to the question. Persistence is localStorage so the
- * record survives a reload; a corrupt payload degrades to an empty record.
+ * self-check — in Question Space (keyed by golden question) or in the Lab's
+ * 自测 tab (keyed by lab topic, carrying `experimentId`). The record is what
+ * the 学习记录 surface reads: mistakes grouped by their classified type,
+ * mastery per knowledge node, and a re-practice path back to the question or
+ * the experiment. Persistence is localStorage so the record survives a reload;
+ * a corrupt payload degrades to an empty record.
  */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
@@ -13,6 +15,7 @@ import type { MistakeType } from '@physicsos/question-core'
 
 export interface StudentAttempt {
   readonly id: string
+  /** Golden question id, or the lab topic key for an experiment self-check. */
   readonly questionId: string
   readonly questionTitle: string
   readonly selfCheckId: string
@@ -24,6 +27,11 @@ export interface StudentAttempt {
   readonly mistakeType?: MistakeType
   /** Knowledge node ids the question exercises, for mastery aggregation. */
   readonly knowledge: readonly string[]
+  /**
+   * Present for lab self-checks: the experiment template that re-practises
+   * this topic, so 重新练习 reopens the apparatus instead of Question Space.
+   */
+  readonly experimentId?: string
   readonly at: string
 }
 

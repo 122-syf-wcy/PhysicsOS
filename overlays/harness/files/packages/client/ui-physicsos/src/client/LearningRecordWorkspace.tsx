@@ -29,6 +29,8 @@ export interface LearningRecordInjected {
   }
   /** Open Question Space on the mistake's question (重新练习). */
   openQuestion: (questionId: string) => void
+  /** Reopen the experiment template of a lab 自测 mistake (重做实验). */
+  openExperiment: (experimentId: string) => void
 }
 
 export type LearningRecordWorkspaceProps = PropsRuntime<'conversation.surface'> &
@@ -44,6 +46,7 @@ export const MISTAKE_LABELS: Readonly<Record<MistakeType, string>> = {
 export function LearningRecordWorkspace({
   useLearningRecord,
   openQuestion,
+  openExperiment,
   t,
 }: LearningRecordWorkspaceProps) {
   const attempts = useLearningRecord(state => state.attempts)
@@ -121,12 +124,20 @@ export function LearningRecordWorkspace({
                       {t('record.yourAnswer')}
                       {attempt.answerLabel}
                     </p>
+                    {/* A lab attempt re-practises on the apparatus itself; a
+                        question attempt goes back to Question Space. */}
                     <button
                       type="button"
                       className={css.practiseButton}
-                      onClick={() => { openQuestion(attempt.questionId) }}
+                      data-practise={attempt.experimentId === undefined ? 'question' : 'experiment'}
+                      onClick={() => {
+                        if (attempt.experimentId === undefined) openQuestion(attempt.questionId)
+                        else openExperiment(attempt.experimentId)
+                      }}
                     >
-                      {t('record.practiseAgain')}
+                      {t(attempt.experimentId === undefined
+                        ? 'record.practiseAgain'
+                        : 'record.practiseExperiment')}
                     </button>
                   </li>
                 ))}

@@ -211,16 +211,50 @@ const wiresOf = (
   return wires
 }
 
-/** Dots where ≥2 connections share one physical terminal (a T-joint). */
+/**
+ * Dots where ≥2 connections share one physical terminal (a T-joint).
+ *
+ * Each dot also reports whether it marks a real BRANCH POINT: connections chain
+ * terminals into electrical nets, and a net splits the current only when ≥3
+ * power-carrying terminals share it. A voltmeter tap on a series loop draws a
+ * dot (three conductors do meet there on paper) but is measurement wiring, so
+ * its net counts the meter's leads out — the teaching layer dispatches series
+ * vs. parallel on the flag, never on the drawn dots.
+ */
 const junctionsOf = (
   circuit: Circuit,
   placements: ReadonlyMap<string, CircuitComponentPlacement>,
 ): readonly CircuitJunctionVisual[] => {
   const degree = new Map<string, number>()
+  /* Union-find over terminal ids; connections merge terminals into nets. */
+  const parent = new Map<string, string>()
+  const find = (id: string): string => {
+    const next = parent.get(id)
+    if (next === undefined || next === id) return id
+    const root = find(next)
+    parent.set(id, root)
+    return root
+  }
   for (const connection of circuit.connections) {
     degree.set(connection.from.id, (degree.get(connection.from.id) ?? 0) + 1)
     degree.set(connection.to.id, (degree.get(connection.to.id) ?? 0) + 1)
+    const fromRoot = find(connection.from.id)
+    const toRoot = find(connection.to.id)
+    if (fromRoot !== toRoot) parent.set(fromRoot, toRoot)
   }
+
+  /* Power-carrying terminals per net: voltmeter leads are measurement wiring. */
+  const powerTerminals = new Map<string, number>()
+  for (const component of circuit.components) {
+    if (component.type === 'voltmeter') continue
+    for (const terminalKey of terminalKeysOf(component)) {
+      const terminalId = `${String(component.id)}.${terminalKey}`
+      if (!degree.has(terminalId)) continue
+      const net = find(terminalId)
+      powerTerminals.set(net, (powerTerminals.get(net) ?? 0) + 1)
+    }
+  }
+
   const junctions: CircuitJunctionVisual[] = []
   for (const component of circuit.components) {
     const placement = placements.get(String(component.id))
@@ -228,9 +262,11 @@ const junctionsOf = (
     for (const terminalKey of terminalKeysOf(component)) {
       const terminalId = `${String(component.id)}.${terminalKey}`
       if ((degree.get(terminalId) ?? 0) < 2) continue
+      const branch = (powerTerminals.get(find(terminalId)) ?? 0) >= 3
       junctions.push({
         id: `junction-${terminalId}`,
         at: circuitTerminalPoint(placement, terminalKey),
+        ...(branch ? { branch: true } : {}),
       })
     }
   }

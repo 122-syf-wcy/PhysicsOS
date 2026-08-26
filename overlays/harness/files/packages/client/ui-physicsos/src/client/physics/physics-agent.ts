@@ -47,14 +47,37 @@ export interface PhysicsAgentContext {
    * `chargeSign` stays as the first element for V1 answer compatibility.
    */
   readonly chargeSigns?: readonly ('positive' | 'negative' | 'neutral')[]
+  /** Circuit-frame facts, present exactly when the domain is `circuit`. */
+  readonly circuit?: CircuitAgentFacts
   /** Present when the scene came from a question and was then forked. */
   readonly branch?: WorkspaceSnapshot['branch']
+}
+
+/**
+ * What the runtime already published about a circuit frame, read from the
+ * Inspector and the drawn schematic — never recomputed. The teaching layer
+ * dispatches on these facts (electromotive source with internal resistance →
+ * EMF lesson, a rheostat symbol → dynamic-circuit lesson, junction dots →
+ * parallel topology) instead of trusting scene titles.
+ */
+export interface CircuitAgentFacts {
+  /** 电源内阻 r in Ω from the Inspector's 电源 section; 0 when absent. */
+  readonly internalResistance: number
+  /** A variable-resistor symbol is drawn on the schematic. */
+  readonly hasSlider: boolean
+  /**
+   * Branch-point dots on the schematic — nets where the current actually
+   * splits. Voltmeter-tap dots don't count, so a series loop with its meter
+   * reads 0 and only real 并联/混联 topology reads above it.
+   */
+  readonly junctionCount: number
 }
 
 /** Build the Agent's view of the world from one workspace frame. */
 export const physicsAgentContext = (snapshot: WorkspaceSnapshot): PhysicsAgentContext => {
   const chargeSigns = sourceChargeSignsOf(snapshot)
   const chargeSign = chargeSigns?.[0]
+  const circuit = circuitFactsOf(snapshot)
   return {
     domain: snapshot.domain,
     sceneTitle: snapshot.title,
@@ -75,7 +98,31 @@ export const physicsAgentContext = (snapshot: WorkspaceSnapshot): PhysicsAgentCo
     observables: snapshot.view.visible,
     ...(chargeSign === undefined ? {} : { chargeSign }),
     ...(chargeSigns === undefined ? {} : { chargeSigns }),
+    ...(circuit === undefined ? {} : { circuit }),
     ...(snapshot.branch === undefined ? {} : { branch: snapshot.branch }),
+  }
+}
+
+/**
+ * Read the circuit facts off the frame: internal resistance from the
+ * Inspector's 电源 section (the same surface the student edits), slider and
+ * junction presence from the drawn schematic. Non-circuit frames return
+ * undefined so no other domain grows a claim it cannot back.
+ */
+const circuitFactsOf = (snapshot: WorkspaceSnapshot): CircuitAgentFacts | undefined => {
+  if (snapshot.domain !== 'circuit') return undefined
+  const sourceSection = snapshot.inspector.find(section => section.id === 'source')
+  const internal = sourceSection?.parameters?.find(
+    parameter => parameter.id === 'internal-resistance',
+  )?.value
+  return {
+    internalResistance: internal !== undefined && Number.isFinite(internal) ? internal : 0,
+    hasSlider: (snapshot.view.circuitComponents ?? []).some(
+      component => component.kind === 'variable_resistor',
+    ),
+    junctionCount: (snapshot.view.circuitJunctions ?? []).filter(
+      junction => junction.branch === true,
+    ).length,
   }
 }
 
@@ -127,6 +174,11 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
        region are drawable objects with scene ids, so "highlight the selector" has
        something to resolve to. */
     ...(view.compositeRegions ?? []).map(region => region.id),
+    /* Circuit schematic symbols carry the component ids (`bat`, `am`, `r1`, …);
+       the circuit renderer applies the highlight group per component, so these
+       are exactly what a tutor highlight may target. Wires and junction dots
+       have no highlight rendering and stay out. */
+    ...(view.circuitComponents ?? []).map(component => component.id),
   ]
 }
 
@@ -233,6 +285,16 @@ const HIGHLIGHT_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'magnetic-region': ['spectrometer-deflection', 'multi-region-magnetic'],
   'drift-region': ['spectrometer-drift'],
   'field-region': ['selector-region-*', 'spectrometer-*', 'multi-region-*'],
+  /* Circuit schematic symbols. The circuit templates share one id convention
+     (`bat`, `sw`, `am`, `vm`, `rv`, `r0`…`r3`), so the tutor says "the battery"
+     and the alias resolves to whichever of those ids this frame actually draws.
+     `r*` would also catch the rheostat `rv`, so resistors are listed explicitly. */
+  battery: ['bat'],
+  ammeter: ['am'],
+  voltmeter: ['vm'],
+  'circuit-switch': ['sw'],
+  rheostat: ['rv'],
+  resistors: ['r0', 'r1', 'r2', 'r3'],
 }
 
 /**
@@ -317,6 +379,21 @@ const HIGHLIGHT_LABELS: Readonly<Record<string, string>> = {
   'magnetic-region': '磁偏转区',
   'drift-region': '无场过渡区',
   'field-region': '场区',
+  battery: '电源',
+  bat: '电源',
+  ammeter: '电流表',
+  am: '电流表',
+  voltmeter: '电压表',
+  vm: '电压表',
+  'circuit-switch': '开关',
+  sw: '开关',
+  rheostat: '滑动变阻器',
+  rv: '滑动变阻器',
+  resistors: '电阻',
+  r0: '定值电阻 R₀',
+  r1: '电阻 R₁',
+  r2: '电阻 R₂',
+  r3: '电阻 R₃',
 }
 
 /** Student-facing name for a highlight target; shared by the drawer's buttons. */

@@ -114,6 +114,7 @@ describe('experimental branch', () => {
     const { container } = render(
       <PhysicsSurface
         useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         t={t}
         useSessions={neverHook}

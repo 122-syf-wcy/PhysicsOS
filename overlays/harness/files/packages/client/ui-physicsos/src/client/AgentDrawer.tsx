@@ -20,9 +20,12 @@ import {
   type PhysicsAgentToolCall,
 } from './physics/physics-agent.ts'
 import { agentSuggestions, matchIntent, type AgentAnswer } from './physics/physics-agent-answers.ts'
+import { experimentSelfChecksOf } from './physics/experiment-self-checks.ts'
 import { tutorScriptOf } from './physics/physics-tutor.ts'
+import { LabSelfCheckCard } from './LabSelfCheckCard.tsx'
 import { TutorCard } from './TutorCard.tsx'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
+import type { SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
 import type { PhysicsosKey } from './locales.ts'
 import css from './LabWorkspace.module.css'
 
@@ -43,19 +46,33 @@ export interface AgentDrawerProps {
   readonly onSnapshot: (snapshot: WorkspaceSnapshot) => void
   readonly onClose: () => void
   readonly t: (key: PhysicsosKey) => string
+  /** Write a lab self-check answer into the learning record. */
+  readonly recordAttempt?: (attempt: SelfCheckAttemptInput) => void
 }
 
-export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t }: AgentDrawerProps) {
+export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordAttempt }: AgentDrawerProps) {
   const [turns, setTurns] = useState<readonly Turn[]>([])
-  /* 问答 answers ad-hoc questions; 引导 walks the tutor ladder. One drawer,
-     two teaching styles — both read the same runtime facts. */
-  const [mode, setMode] = useState<'ask' | 'tutor'>('ask')
+  /* 问答 answers ad-hoc questions; 引导 walks the tutor ladder; 自测 asks the
+     bank's conceptual probes. One drawer, three teaching styles — all read the
+     same runtime facts. */
+  const [mode, setMode] = useState<'ask' | 'tutor' | 'selfcheck'>('ask')
   const turnId = useRef(0)
   const clearTimer = useRef<number | undefined>(undefined)
 
   const context = useMemo(() => physicsAgentContext(snapshot), [snapshot])
   const suggestions = useMemo(() => agentSuggestions(context), [context])
   const tutorScript = useMemo(() => tutorScriptOf(context), [context])
+  const selfChecks = useMemo(() => experimentSelfChecksOf(context), [context])
+
+  /* The 自测 tab exists only where the bank has probes for this frame's topic,
+     so no domain ever shows an empty quiz. */
+  const tabs: readonly (readonly ['ask' | 'tutor' | 'selfcheck', PhysicsosKey])[] = [
+    ['ask', 'lab.agent.tab.ask'],
+    ['tutor', 'lab.agent.tab.tutor'],
+    ...(selfChecks === undefined
+      ? []
+      : [['selfcheck', 'lab.agent.tab.selfcheck'] as const]),
+  ]
 
   /* A highlight is transient chrome: it must not outlive the drawer, or the canvas
      keeps a glow nobody asked for. Clearing the timer alone is not enough — the
@@ -118,19 +135,23 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t }: Agent
     [runTools],
   )
 
+  /* Losing the topic (e.g. the scene stopped being a circuit frame after a
+     failure) removes the tab, so a stale 自测 selection falls back to 问答. */
+  const activeMode = mode === 'selfcheck' && selfChecks === undefined ? 'ask' : mode
+
   return (
     <aside className={css.agentDrawer} aria-label={t('lab.agent')}>
       <div className={css.panelHead}>
         <h2 className={css.panelTitle}>{t('lab.agent')}</h2>
         <div className={css.agentModeTabs} role="tablist" aria-label={t('lab.agent')}>
-          {([['ask', 'lab.agent.tab.ask'], ['tutor', 'lab.agent.tab.tutor']] as const).map(
+          {tabs.map(
             ([id, key]) => (
               <button
                 key={id}
                 type="button"
                 role="tab"
-                aria-selected={mode === id}
-                className={clsx(css.agentModeTab, mode === id && css.agentModeTabActive)}
+                aria-selected={activeMode === id}
+                className={clsx(css.agentModeTab, activeMode === id && css.agentModeTabActive)}
                 onClick={() => { setMode(id) }}
               >
                 {t(key)}
@@ -148,7 +169,17 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t }: Agent
         </button>
       </div>
 
-      {mode === 'tutor' ? (
+      {activeMode === 'selfcheck' && selfChecks !== undefined ? (
+        <div className={css.agentBody}>
+          <LabSelfCheckCard
+            key={selfChecks.id}
+            set={selfChecks}
+            sceneTitle={snapshot.title}
+            verification={snapshot.verification}
+            onRecord={recordAttempt}
+          />
+        </div>
+      ) : activeMode === 'tutor' ? (
         <div className={css.agentBody}>
           {tutorScript === undefined ? (
             <div className={css.agentEmpty}>

@@ -477,6 +477,75 @@ const EmfMeasurementArt = () => (
   </>
 )
 
+/* -------------------------------------------------------------- junior high -- */
+
+/** 测平均速度: a gentle ramp, the cart sampled at widening spacing, a stopwatch. */
+const AverageSpeedArt = () => (
+  <>
+    <Stroke d="M14 24 L106 54 H14 Z" width={2.2} />
+    <Stroke d="M20 18 v9 M100 46 v9" width={1.5} opacity={0.5} />
+    <Dot x={32} y={27} r={2.4} opacity={0.55} />
+    <Dot x={56} y={35} r={2.4} opacity={0.75} />
+    <Dot x={82} y={44} r={2.4} />
+    <circle cx={96} cy={17} r={9} fill="none" stroke="currentColor" strokeWidth={1.8} />
+    <Stroke d="M96 11.5 V17 l4 2.6" width={1.5} />
+    <Stroke d="M96 6.4 v2 M92.5 7.2 l1.4 1.6" width={1.4} opacity={0.6} />
+  </>
+)
+
+/** 伏安法测电阻: the Rx box in a loop with the series meter and the tapped voltmeter. */
+const VaResistanceArt = () => (
+  <>
+    <Stroke d="M16 16 H46 M74 16 H104 M16 16 V52 H51.5 M104 16 V52 H68.5" width={2} />
+    <rect x={46} y={10.5} width={28} height={11} fill="none" stroke="currentColor" strokeWidth={2.2} />
+    <circle cx={60} cy={52} r={8.5} fill="none" stroke="currentColor" strokeWidth={2} />
+    <Stroke d="M60 56 l4.4-6.6" width={1.6} />
+    <Stroke d="M50 21.5 V33.5 M70 21.5 V33.5" width={1.5} opacity={0.5} />
+    <circle cx={60} cy={37} r={7} fill="none" stroke="currentColor" strokeWidth={1.8} />
+    <Stroke d="M60 40.2 l3.4-5.2" width={1.4} />
+    <Stroke d="M50 33.5 h20" width={1.5} opacity={0.5} />
+  </>
+)
+
+/** 测小灯泡电功率: the circle-cross bulb fed through a rheostat, meter in loop. */
+const BulbPowerArt = () => (
+  <>
+    <Stroke d="M14 18 H44 M68 18 H106 M14 18 V52 H36 M106 18 V52 H86" width={2} />
+    <circle cx={56} cy={18} r={12} fill="none" stroke="currentColor" strokeWidth={2.2} />
+    <Stroke d="M47.8 9.8 64.2 26.2 M64.2 9.8 47.8 26.2" width={1.8} />
+    <rect x={36} y={47} width={28} height={10} fill="none" stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={42} y1={38} x2={54} y2={44.5} width={1.6} head={4} />
+    <circle cx={75} cy={52} r={7} fill="none" stroke="currentColor" strokeWidth={1.8} />
+    <Stroke d="M75 55.4 l3.4-5.2" width={1.4} />
+  </>
+)
+
+/** 杠杆平衡: a tilted beam on its fulcrum, unequal loads at unequal arms. */
+const LeverBalanceArt = () => (
+  <>
+    <Stroke d="M14 26 L106 38" width={2.4} />
+    <Stroke d="M60 33 L48 58 H72 Z" width={2} />
+    <Stroke d="M24 27.5 V38" width={1.5} opacity={0.6} />
+    <rect x={17} y={38} width={14} height={12} fill="none" stroke="currentColor" strokeWidth={2} />
+    <Stroke d="M96 36.8 V44" width={1.5} opacity={0.6} />
+    <rect x={91.5} y={44} width={9} height={8} fill="none" stroke="currentColor" strokeWidth={1.8} />
+    <Stroke d="M60 22 V30" width={1.4} opacity={0.4} dash="1 3" />
+  </>
+)
+
+/** 浮力: a beaker, the waterline, a submerged block with upthrust vs. weight. */
+const BuoyancyArt = () => (
+  <>
+    <Stroke d="M32 12 V56 H88 V12" width={2.2} />
+    <Stroke d="M34 24 H86" width={1.5} opacity={0.5} dash="4 3" />
+    <rect x={50} y={30} width={20} height={16} fill="none" stroke="currentColor" strokeWidth={2.2} />
+    <Arrow x1={60} y1={29} x2={60} y2={15} width={2} />
+    <Arrow x1={60} y1={47} x2={60} y2={55} width={1.6} opacity={0.6} />
+    <Dot x={42} y={34} r={1.4} opacity={0.4} />
+    <Dot x={78} y={40} r={1.4} opacity={0.4} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -525,6 +594,11 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'mixed-circuit': MixedCircuitArt,
   'rheostat-circuit': RheostatCircuitArt,
   'emf-measurement': EmfMeasurementArt,
+  'average-speed': AverageSpeedArt,
+  'va-resistance': VaResistanceArt,
+  'bulb-power': BulbPowerArt,
+  'lever-balance': LeverBalanceArt,
+  buoyancy: BuoyancyArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -551,6 +625,9 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['mixed-circuit', 'circuit-mixed'],
   ['rheostat-circuit', 'circuit-rheostat'],
   ['emf-measurement', 'circuit-emf'],
+  ['average-speed', 'mechanics-average-speed'],
+  ['va-resistance', 'circuit-va-resistance'],
+  ['bulb-power', 'circuit-bulb-power'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

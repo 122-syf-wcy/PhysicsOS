@@ -18,6 +18,7 @@ import { fillComposerDraft } from '../src/client/fill-draft.ts'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import {
   createExperimentSceneRef,
+  EXPERIMENT_TEMPLATES,
   findExperimentTemplate,
 } from '../src/client/physics/experiment-templates.ts'
 import { formatUpdatedAt, workspaceKnowledge } from '../src/client/workspaceMeta.ts'
@@ -803,6 +804,104 @@ describe('PhysicsOS overlay presentation', () => {
     expect(cyclotron.getAttribute('disabled')).not.toBeNull()
   })
 
+  it('declares a 学段 on every template and fills both partitions', () => {
+    for (const template of EXPERIMENT_TEMPLATES) {
+      expect(['junior', 'senior'], `template ${template.id} needs a 学段`)
+        .toContain(template.stage)
+    }
+    /* Both partitions hold real, creatable experiments — 初中 is a curriculum,
+       not a token entry next to the senior list. */
+    const creatable = (stage: 'junior' | 'senior') => EXPERIMENT_TEMPLATES.filter(
+      template => template.stage === stage && template.comingSoon !== true,
+    )
+    expect(creatable('junior').length).toBeGreaterThanOrEqual(7)
+    expect(creatable('senior').length).toBeGreaterThanOrEqual(10)
+    /* The named 初中 staples exist, sit in the junior partition and create. */
+    for (const id of [
+      'average-speed', 'series-circuit', 'parallel-circuit', 'rheostat-circuit',
+      'va-resistance', 'bulb-power',
+    ]) {
+      const template = findExperimentTemplate(id)
+      expect(template?.stage, id).toBe('junior')
+      expect(template?.comingSoon, id).toBeUndefined()
+    }
+  })
+
+  it('partitions the grid by 学段 and badges every card with its stage', () => {
+    const surface = createPhysicsSurfaceController()
+    surface.openExperimentPicker()
+    const { container } = render(
+      <PhysicsSurface
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={emptyRecent}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    /* Grid entries (and only they) carry data-stage; the rail stays personal. */
+    const gridStages = () => new Set(
+      [...container.querySelectorAll('button[data-stage]')]
+        .map(entry => entry.getAttribute('data-stage')),
+    )
+    expect(gridStages()).toEqual(new Set(['junior', 'senior']))
+    for (const entry of container.querySelectorAll('button[data-stage]')) {
+      expect(entry.textContent).toContain(
+        entry.getAttribute('data-stage') === 'junior' ? '初中' : '高中',
+      )
+    }
+
+    /* 初中 keeps the junior curriculum only: the staples surface, the
+       senior-only rigs leave the grid (the classics rail is not a partition). */
+    fireEvent.click(screen.getByRole('tab', { name: '初中' }))
+    expect(gridStages()).toEqual(new Set(['junior']))
+    for (const name of [/测量平均速度/, /伏安法测电阻/, /测量小灯泡的电功率/, /串联电路/]) {
+      expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0)
+    }
+    expect(
+      [...container.querySelectorAll('button[data-stage]')]
+        .some(entry => (entry.textContent ?? '').includes('测电源电动势与内阻')),
+    ).toBe(false)
+
+    /* 高中 flips the partition. */
+    fireEvent.click(screen.getByRole('tab', { name: '高中' }))
+    expect(gridStages()).toEqual(new Set(['senior']))
+
+    /* 全学段 restores the union. */
+    fireEvent.click(screen.getByRole('tab', { name: '全学段' }))
+    expect(gridStages()).toEqual(new Set(['junior', 'senior']))
+  })
+
+  it('creates a junior circuit experiment straight from the 初中 partition', () => {
+    const surface = createPhysicsSurfaceController()
+    surface.openExperimentPicker()
+    render(
+      <PhysicsSurface
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={emptyRecent}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '初中' }))
+    fireEvent.click(screen.getByRole('button', { name: /伏安法测电阻/ }))
+    const state = surface.store.getSnapshot()
+    expect(state.surface).toBe('lab')
+    /* A real stamped scene from the registry, in the circuit domain. */
+    expect(state.sceneRef?.sceneId).toMatch(/^circuit-va-resistance-/)
+  })
+
   it('offers 继续上次实验 from the persisted recent scene and restores it', () => {
     /* Two controllers over one storage simulate a reload: the first session
        creates the scene, the second finds it persisted. */
@@ -824,7 +923,7 @@ describe('PhysicsOS overlay presentation', () => {
         useRecentExperiments={selector => selector(reloaded.recent.getSnapshot())}
         usePhysicsSurface={selector => selector(reloaded.store.getSnapshot())}
         openSurface={(id, sceneRef) => {
-          reloaded.open(id, sceneRef as Parameters<typeof reloaded.open>[1])
+          reloaded.open(id, sceneRef)
         }}
         t={t}
         useSessions={neverHook}
@@ -902,7 +1001,7 @@ describe('PhysicsOS overlay presentation', () => {
         useRecentExperiments={emptyRecent}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={(id, sceneRef) => {
-          surface.open(id, sceneRef as { sceneId: string; scene: never } | undefined)
+          surface.open(id, sceneRef)
         }}
         t={t}
         useSessions={neverHook}

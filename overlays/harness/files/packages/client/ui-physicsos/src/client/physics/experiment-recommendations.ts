@@ -32,6 +32,7 @@ export interface ExperimentRecommendation {
  * roots) are deliberately absent rather than mapped to something adjacent.
  */
 export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
+  'kin-average-speed': 'average-speed',
   'kin-uniform-acceleration': 'uniform-acceleration',
   'kin-projectile': 'projectile-horizontal',
   'dyn-newton-second': 'newton-second-law',
@@ -49,6 +50,12 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   'em-velocity-selector': 'velocity-selector',
   'em-mass-spectrometer': 'mass-spectrometer',
   'em-three-field': 'composite-ebg',
+  'circ-ohm-law': 'va-resistance',
+  'circ-series': 'series-circuit',
+  'circ-parallel': 'parallel-circuit',
+  'circ-dynamic': 'rheostat-circuit',
+  'circ-power': 'bulb-power',
+  'circ-emf-internal': 'emf-measurement',
 }
 
 /**

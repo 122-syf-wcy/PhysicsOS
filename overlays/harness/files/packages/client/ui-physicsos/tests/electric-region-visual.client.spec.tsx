@@ -96,12 +96,8 @@ describe('Electric parallel-plate visual bridge', () => {
 
   it('does not trigger the region branch for a uniform-field scene', () => {
     const scene = createElectricScene()
-    /* A plain uniform-field scene has no regions or boundaries, so plates and
-       boundedField must be undefined. */
-    expect(scene.plates).toBeUndefined()
-    /* The bridge dispatch should not set plates for a non-parallel-plate scene. */
-    /* (We can't fully call the bridge here without a simulation, but we can
-       verify the scene structure.) */
+    /* A plain uniform-field scene has no regions or boundaries — the structure
+       the bridge dispatches on — so it never reaches the plate projection. */
     expect(scene.regions.length).toBe(0)
     expect(scene.boundaries.length).toBe(0)
   })

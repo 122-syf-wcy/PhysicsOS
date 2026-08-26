@@ -39,6 +39,7 @@ import { IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
 import type { ObservableKey } from './physics/scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
+import type { SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
 import {
   DataPanelBody,
   InspectorSections,
@@ -65,9 +66,16 @@ export interface PhysicsWorkspaceProps {
    * sidebar; the chooser keeps this scene resumable.
    */
   readonly onSwitchExperiment?: () => void
+  /**
+   * Write an AI 助教 自测 answer into the learning record. Optional because the
+   * shell is also mounted standalone (tests, embeds) without a record store.
+   */
+  readonly recordAttempt?: (attempt: SelfCheckAttemptInput) => void
 }
 
-export function PhysicsWorkspace({ runtime, t, toolbarExtra, onSwitchExperiment }: PhysicsWorkspaceProps) {
+export function PhysicsWorkspace({
+  runtime, t, toolbarExtra, onSwitchExperiment, recordAttempt,
+}: PhysicsWorkspaceProps) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(() => runtime.getSnapshot())
   const [selected, setSelected] = useState('scene')
   const [dataOpen, setDataOpen] = useState(false)
@@ -408,6 +416,7 @@ export function PhysicsWorkspace({ runtime, t, toolbarExtra, onSwitchExperiment 
           onSnapshot={setSnapshot}
           onClose={() => { setAgentOpen(false) }}
           t={t}
+          {...(recordAttempt === undefined ? {} : { recordAttempt })}
         />
       ) : (
         <button type="button" className={css.agentDock} onClick={() => { setAgentOpen(true) }}>

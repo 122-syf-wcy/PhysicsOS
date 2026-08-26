@@ -308,6 +308,33 @@ export const IconEmfMeasure = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Filament bulb: the GB circle-with-cross lamp symbol on its leads. */
+export const IconBulb = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M2.5 12h2.8M18.7 12h2.8" strokeOpacity="0.55" />
+    <circle cx="12" cy="12" r="6.7" />
+    <path d="M7.3 7.3l9.4 9.4M16.7 7.3l-9.4 9.4" />
+  </Glyph>
+)
+
+/** Lever: a tilted beam over its triangular fulcrum, load on the raised arm. */
+export const IconLever = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 8.6 21 13" />
+    <path d="M12 11l-2.8 6.4h5.6z" />
+    <circle cx="4.6" cy="6.6" r="1.7" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
+/** Buoyancy: a block under the waterline with the upthrust arrow. */
+export const IconBuoyancy = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M2.8 9.6c1.5-1.1 3.1-1.1 4.6 0s3.1 1.1 4.6 0 3.1-1.1 4.6 0 3.1 1.1 4.6 0" />
+    <rect x="8.7" y="13" width="6.6" height="6.6" rx="1" />
+    <path d="M12 10.6V4.4M9.9 6.5 12 4.4l2.1 2.1" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

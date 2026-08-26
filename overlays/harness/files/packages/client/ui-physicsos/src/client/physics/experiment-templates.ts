@@ -37,20 +37,25 @@ import type { ReactElement } from 'react'
 import type { PhysicsosKey } from '../locales.ts'
 import type { PhysicsIconProps } from '../icons/physics-icons.tsx'
 import {
+  IconBuoyancy,
+  IconBulb,
   IconCircuitParallel,
   IconCircuitSeries,
   IconCompositeField,
   IconEmfMeasure,
   IconInclinedPlane,
   IconKinematics,
+  IconLever,
   IconMagneticCircle,
   IconMassSpectrometer,
+  IconMeasurement,
   IconNewtonLaw,
   IconParallelPlate,
   IconPointCharge,
   IconProjectileHorizontal,
   IconProjectileOblique,
   IconRheostat,
+  IconTime,
   IconUniformElectric,
   IconVelocity,
   IconVelocitySelector,
@@ -59,10 +64,20 @@ import {
 /** Domains a template belongs to, mirrored from the Lab runtime dispatch. */
 export type ExperimentDomain = 'mechanics' | 'electric' | 'magnetic' | 'circuit' | 'composite'
 
+/**
+ * School stage a template belongs to (学段). Junior covers the 初中 curriculum
+ * (速度与平均速度、串并联、欧姆定律、电功率…), senior the 高中 one (抛体、场、
+ * 电动势内阻、复合场…). Every template declares its stage explicitly so the
+ * library can partition honestly — no heuristic on titles or tags.
+ */
+export type ExperimentStage = 'junior' | 'senior'
+
 /** A pickable experiment. */
 export interface ExperimentTemplate {
   readonly id: string
   readonly domain: ExperimentDomain
+  /** 学段 the experiment is taught in; drives the library's stage partition. */
+  readonly stage: ExperimentStage
   /** Locale key for the experiment name. */
   readonly label: PhysicsosKey
   /** Locale key for the one-line description shown under the name. */
@@ -99,6 +114,7 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'uniform-linear',
     domain: 'mechanics',
+    stage: 'junior',
     label: 'lab.template.uniformLinear',
     hint: 'lab.template.uniformLinear.hint',
     icon: IconVelocity,
@@ -116,8 +132,32 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     },
   },
   {
+    id: 'average-speed',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.averageSpeed',
+    hint: 'lab.template.averageSpeed.hint',
+    icon: IconTime,
+    tags: ['运动学', '初中', '平均速度'],
+    createScene: (title) => {
+      /* 初中「测平均速度」：小车从静止沿缓坡滑下，全程与前后半程分别计
+         v̄ = s/t。缓加速度让数字落在停表能读的量级。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-average-speed'),
+        model: 'uniformly_accelerated_motion',
+        mass: 0.5,
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        acceleration: { x: 0.4, y: 0, z: 0 },
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
     id: 'uniform-acceleration',
     domain: 'mechanics',
+    stage: 'senior',
     label: 'lab.template.uniformAcceleration',
     hint: 'lab.template.uniformAcceleration.hint',
     icon: IconKinematics,
@@ -138,6 +178,7 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'projectile-horizontal',
     domain: 'mechanics',
+    stage: 'senior',
     label: 'lab.template.projectileHorizontal',
     hint: 'lab.template.projectileHorizontal.hint',
     icon: IconProjectileHorizontal,
@@ -160,6 +201,7 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'projectile-oblique',
     domain: 'mechanics',
+    stage: 'senior',
     label: 'lab.template.projectileOblique',
     hint: 'lab.template.projectileOblique.hint',
     icon: IconProjectileOblique,
@@ -182,6 +224,7 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'newton-second-law',
     domain: 'mechanics',
+    stage: 'senior',
     label: 'lab.template.newton',
     hint: 'lab.template.newton.hint',
     icon: IconNewtonLaw,
@@ -203,6 +246,7 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'incline',
     domain: 'mechanics',
+    stage: 'senior',
     label: 'lab.template.incline',
     hint: 'lab.template.incline.hint',
     icon: IconInclinedPlane,
@@ -222,6 +266,35 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
       return { sceneId: String(scene.id), scene }
     },
   },
+  {
+    id: 'lever-balance',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.leverBalance',
+    hint: 'lab.template.leverBalance.hint',
+    icon: IconLever,
+    tags: ['力学', '杠杆', '初中'],
+    /* 杠杆是刚体的力矩平衡；现有力学引擎解的是质点运动，硬套会算错，
+       所以按回旋加速器的先例标记「即将支持」而不是造假。 */
+    comingSoon: true,
+    createScene: () => {
+      throw new Error('lever balance needs a rigid-body statics engine')
+    },
+  },
+  {
+    id: 'buoyancy',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.buoyancy',
+    hint: 'lab.template.buoyancy.hint',
+    icon: IconBuoyancy,
+    tags: ['力学', '浮力', '初中'],
+    /* 浮力需要流体静力学（排开液体、液面变化）；质点引擎无法诚实建模。 */
+    comingSoon: true,
+    createScene: () => {
+      throw new Error('buoyancy needs a fluid statics engine')
+    },
+  },
 ]
 
 /* ------------------------------------------------------------------ electric -- */
@@ -230,6 +303,7 @@ const electricTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'point-charge',
     domain: 'electric',
+    stage: 'senior',
     label: 'lab.template.pointCharge',
     hint: 'lab.template.pointCharge.hint',
     icon: IconPointCharge,
@@ -247,6 +321,7 @@ const electricTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'multi-point-charge',
     domain: 'electric',
+    stage: 'senior',
     label: 'lab.template.multiPointCharge',
     hint: 'lab.template.multiPointCharge.hint',
     icon: IconPointCharge,
@@ -267,6 +342,7 @@ const electricTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'uniform-electric',
     domain: 'electric',
+    stage: 'senior',
     label: 'lab.template.uniformElectric',
     hint: 'lab.template.uniformElectric.hint',
     icon: IconUniformElectric,
@@ -284,6 +360,7 @@ const electricTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'parallel-plate',
     domain: 'electric',
+    stage: 'senior',
     label: 'lab.template.parallelPlate',
     hint: 'lab.template.parallelPlate.hint',
     icon: IconParallelPlate,
@@ -304,6 +381,7 @@ const magneticTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'magnetic-circular',
     domain: 'magnetic',
+    stage: 'senior',
     label: 'lab.template.magnetic',
     hint: 'lab.template.magnetic.hint',
     icon: IconMagneticCircle,
@@ -329,6 +407,7 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'series-circuit',
     domain: 'circuit',
+    stage: 'junior',
     label: 'lab.template.seriesCircuit',
     hint: 'lab.template.seriesCircuit.hint',
     icon: IconCircuitSeries,
@@ -344,6 +423,7 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'parallel-circuit',
     domain: 'circuit',
+    stage: 'junior',
     label: 'lab.template.parallelCircuit',
     hint: 'lab.template.parallelCircuit.hint',
     icon: IconCircuitParallel,
@@ -359,6 +439,7 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'mixed-circuit',
     domain: 'circuit',
+    stage: 'junior',
     label: 'lab.template.mixedCircuit',
     hint: 'lab.template.mixedCircuit.hint',
     icon: IconCircuitParallel,
@@ -374,6 +455,7 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'rheostat-circuit',
     domain: 'circuit',
+    stage: 'junior',
     label: 'lab.template.rheostat',
     hint: 'lab.template.rheostat.hint',
     icon: IconRheostat,
@@ -387,8 +469,56 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     },
   },
   {
+    id: 'va-resistance',
+    domain: 'circuit',
+    stage: 'junior',
+    label: 'lab.template.vaResistance',
+    hint: 'lab.template.vaResistance.hint',
+    icon: IconMeasurement,
+    tags: ['电路', '欧姆定律', '初中', '伏安法'],
+    createScene: (title) => {
+      /* 伏安法测电阻：定值电阻扮演待测 Rx，滑动变阻器移动工作点，读出多组
+         U、I 由 R = U/I 求值 —— 与教材同一套接线。 */
+      const scene = createRheostatCircuitScene({
+        sceneId: stampId('circuit-va-resistance'),
+        voltage: 3,
+        fixedResistance: 5,
+        totalResistance: 20,
+        sliderPosition: 0.25,
+        title,
+        description: '移动滑片改变工作点，读出多组 U、I，由 R = U/I 求出待测电阻。',
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'bulb-power',
+    domain: 'circuit',
+    stage: 'junior',
+    label: 'lab.template.bulbPower',
+    hint: 'lab.template.bulbPower.hint',
+    icon: IconBulb,
+    tags: ['电路', '电功率', '初中'],
+    createScene: (title) => {
+      /* 测小灯泡电功率：灯泡按额定 2.5 V / 0.3 A 的定值电阻近似（R ≈ 8.3 Ω）。
+         引擎解线性电阻网络，灯丝温度非线性不在模型内 —— P = UI 的测法本身
+         不受影响，读数即功率。 */
+      const scene = createRheostatCircuitScene({
+        sceneId: stampId('circuit-bulb-power'),
+        voltage: 4.5,
+        fixedResistance: 8.3,
+        totalResistance: 20,
+        sliderPosition: 0.3,
+        title,
+        description: '调节滑片让灯泡电压达到额定值，P = UI 直接读出实际电功率。',
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
     id: 'emf-measurement',
     domain: 'circuit',
+    stage: 'senior',
     label: 'lab.template.emfMeasurement',
     hint: 'lab.template.emfMeasurement.hint',
     icon: IconEmfMeasure,
@@ -409,6 +539,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'velocity-selector',
     domain: 'composite',
+    stage: 'senior',
     label: 'lab.template.velocitySelector',
     hint: 'lab.template.velocitySelector.hint',
     icon: IconVelocitySelector,
@@ -437,6 +568,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'mass-spectrometer',
     domain: 'composite',
+    stage: 'senior',
     label: 'lab.template.massSpectrometer',
     hint: 'lab.template.massSpectrometer.hint',
     icon: IconMassSpectrometer,
@@ -467,6 +599,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'composite-eb',
     domain: 'composite',
+    stage: 'senior',
     label: 'lab.template.compositeEB',
     hint: 'lab.template.compositeEB.hint',
     icon: IconCompositeField,
@@ -491,6 +624,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'composite-ebg',
     domain: 'composite',
+    stage: 'senior',
     label: 'lab.template.compositeEBG',
     hint: 'lab.template.compositeEBG.hint',
     icon: IconCompositeField,
@@ -517,6 +651,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'multi-region-field',
     domain: 'composite',
+    stage: 'senior',
     label: 'lab.template.multiRegion',
     hint: 'lab.template.multiRegion.hint',
     icon: IconCompositeField,
@@ -539,6 +674,7 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   {
     id: 'cyclotron',
     domain: 'composite',
+    stage: 'senior',
     label: 'lab.template.cyclotron',
     hint: 'lab.template.cyclotron.hint',
     icon: IconMagneticCircle,

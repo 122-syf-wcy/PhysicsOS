@@ -25,6 +25,7 @@ import {
   findExperimentTemplate,
   SELECTABLE_TEMPLATE_COUNT,
   type ExperimentDomain,
+  type ExperimentStage,
   type ExperimentTemplate,
 } from './physics/experiment-templates.ts'
 import { ExperimentArt, artTemplateIdOfSceneId } from './physics/experiment-artwork.tsx'
@@ -46,6 +47,15 @@ const TABS: readonly { id: TabId; label: PhysicsosKey }[] = [
   { id: 'magnetic', label: 'lab.template.group.magnetic' },
   { id: 'circuit', label: 'lab.template.group.circuit' },
   { id: 'composite', label: 'lab.template.group.composite' },
+]
+
+/** 学段 partition switch. 'all' unions both stages, mirroring the domain tabs. */
+type StageId = 'all' | ExperimentStage
+
+const STAGES: readonly { id: StageId; label: PhysicsosKey }[] = [
+  { id: 'all', label: 'lab.template.stage.all' },
+  { id: 'junior', label: 'lab.template.stage.junior' },
+  { id: 'senior', label: 'lab.template.stage.senior' },
 ]
 
 const RECENT_STORAGE_KEY = 'physicsos.recent-experiments'
@@ -123,6 +133,7 @@ export function ExperimentPicker({
 }: ExperimentPickerProps) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<TabId>('all')
+  const [stage, setStage] = useState<StageId>('all')
   const [recent, setRecent] = useState<string[]>(() => readRecent())
   const lastScene = useRecentExperiments(state => state.items[0])
   const attempts = useLearningRecord(state => state.attempts)
@@ -138,15 +149,18 @@ export function ExperimentPicker({
     const byTab = tab === 'all'
       ? EXPERIMENT_TEMPLATES
       : EXPERIMENT_TEMPLATE_GROUPS.find(group => group.id === tab)?.templates ?? []
+    const byStage = stage === 'all'
+      ? byTab
+      : byTab.filter(template => template.stage === stage)
     const q = query.trim().toLowerCase()
-    if (q === '') return byTab
-    return byTab.filter((template) => {
+    if (q === '') return byStage
+    return byStage.filter((template) => {
       const name = t(template.label).toLowerCase()
       const hint = t(template.hint).toLowerCase()
       const tags = template.tags.join(' ').toLowerCase()
       return name.includes(q) || hint.includes(q) || tags.includes(q) || template.id.includes(q)
     })
-  }, [tab, query, t])
+  }, [tab, stage, query, t])
 
   const recentTemplates = recent
     .map(id => findExperimentTemplate(id))
@@ -293,6 +307,27 @@ export function ExperimentPicker({
             value={query}
             onChange={(event) => { setQuery(event.target.value) }}
           />
+          {/* 学段 partition: the coarse 初中/高中 cut ABOVE the domain tabs, so a
+              junior student never wades through 复合场 to find 伏安法. */}
+          <div
+            className={css.stageTabs}
+            role="tablist"
+            aria-label={t('lab.template.picker.stage')}
+            data-physicsos-stage={stage}
+          >
+            {STAGES.map(entry => (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={stage === entry.id}
+                className={clsx(css.stageTab, stage === entry.id && css.stageTabActive)}
+                onClick={() => { setStage(entry.id) }}
+              >
+                {t(entry.label)}
+              </button>
+            ))}
+          </div>
         </div>
 
         {recentTemplates.length > 0 && query.trim() === '' ? (
@@ -346,8 +381,8 @@ export function ExperimentPicker({
         {filtered.length === 0 ? (
           <p className={css.empty}>{t('lab.template.picker.empty')}</p>
         ) : (
-          /* Keyed by tab + query so switching re-runs the card entrance stagger. */
-          <div className={css.grid} style={revealAt(6)} key={`${tab}:${query.trim()}`}>
+          /* Keyed by the filters so switching re-runs the card entrance stagger. */
+          <div className={css.grid} style={revealAt(6)} key={`${tab}:${stage}:${query.trim()}`}>
             {filtered.map((template, index) => (
               <button
                 key={template.id}
@@ -360,6 +395,7 @@ export function ExperimentPicker({
                 )}
                 style={cardAt(index)}
                 disabled={template.comingSoon === true}
+                data-stage={template.stage}
                 onClick={() => { pick(template) }}
               >
                 <span className={clsx(css.art, css.artThumb)}>
@@ -374,8 +410,13 @@ export function ExperimentPicker({
                   </span>
                   <span className={css.entryHint}>{t(template.hint)}</span>
                 </span>
-                <span className={css.domainTag}>
-                  {t(`lab.template.group.${template.domain}`)}
+                <span className={css.tagColumn}>
+                  <span className={css.domainTag}>
+                    {t(`lab.template.group.${template.domain}`)}
+                  </span>
+                  <span className={css.stageTag}>
+                    {t(`lab.template.stage.${template.stage}`)}
+                  </span>
                 </span>
               </button>
             ))}

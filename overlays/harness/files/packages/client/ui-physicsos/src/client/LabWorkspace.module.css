@@ -1897,6 +1897,156 @@
   flex-wrap: wrap;
 }
 
+/* -------------------------------------------------- lab self-checks (自测) -- */
+
+.quizKnowledgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.quizItem {
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.quizPrompt {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.quizOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quizOption {
+  padding: 6px 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quizOption:hover:enabled {
+  border-color: rgba(66, 121, 200, 0.36);
+  color: var(--dsw-alias-label-primary);
+}
+
+.quizOption:disabled {
+  cursor: default;
+  opacity: 0.86;
+}
+
+.quizOptionCorrect {
+  border-color: rgba(5, 150, 105, 0.5);
+  background: rgba(5, 150, 105, 0.08);
+  color: #047857;
+}
+
+.quizOptionWrong {
+  border-color: rgba(217, 119, 6, 0.5);
+  background: rgba(217, 119, 6, 0.08);
+  color: #b45309;
+}
+
+.quizOptionReveal {
+  border-color: rgba(5, 150, 105, 0.35);
+  color: #047857;
+}
+
+.quizTakeaway {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-top: 8px;
+  color: #047857;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.quizDiagnosis {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(217, 119, 6, 0.32);
+  border-radius: 8px;
+  background: rgba(217, 119, 6, 0.06);
+}
+
+.quizBadge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 15px;
+  font-weight: 600;
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+}
+
+.quizBadge[data-mistake='concept'] {
+  background: rgba(219, 39, 119, 0.12);
+  color: #be185d;
+}
+
+.quizBadge[data-mistake='direction'] {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.quizBadge[data-mistake='modeling'] {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+.quizExplanation {
+  margin: 6px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.quizEvidence {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.quizEvidence[data-passed='true'] {
+  color: #047857;
+}
+
+.quizReview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.quizReviewChip {
+  padding: 1px 7px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--dsw-alias-label-secondary);
+}
+
 /* ------------------------------------------------------- experiment report -- */
 
 .reportOverlay {

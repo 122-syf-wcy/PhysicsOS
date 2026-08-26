@@ -391,10 +391,16 @@ export interface CircuitWireVisual {
   points: readonly ScenePoint[]
 }
 
-/** Junction dot where three or more conductors meet. */
+/** Junction dot where conductors meet on the schematic. */
 export interface CircuitJunctionVisual {
   id: string
   at: ScenePoint
+  /**
+   * Present when ≥3 power-carrying conductors share this dot's electrical net —
+   * a real branch point. A voltmeter tap joining a series loop draws a dot but
+   * carries no flag, so the teaching layer can tell topology from wiring dots.
+   */
+  branch?: true
 }
 
 /** Straight construction line (orbit radius, guides). */

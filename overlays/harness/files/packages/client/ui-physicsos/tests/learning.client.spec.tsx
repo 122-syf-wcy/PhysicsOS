@@ -4,8 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createCompositeFieldScene,
   createMassSpectrometerScene,
+  createMechanicsScene,
+  createRheostatCircuitScene,
+  createSeriesCircuitScene,
   createVelocitySelectorScene,
 } from '@physicsos/physics-scene'
+import { EXPERIMENT_SELF_CHECKS } from '@physicsos/question-core'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
 import { ExperimentReportPanel } from '../src/client/ExperimentReportPanel.tsx'
@@ -21,8 +25,15 @@ import {
 import { buildExperimentReport } from '../src/client/physics/experiment-report.ts'
 import { physicsAgentContext } from '../src/client/physics/physics-agent.ts'
 import { tutorScriptOf } from '../src/client/physics/physics-tutor.ts'
+import {
+  SELF_CHECK_EXPERIMENT,
+  experimentSelfChecksOf,
+} from '../src/client/physics/experiment-self-checks.ts'
+import { findExperimentTemplate } from '../src/client/physics/experiment-templates.ts'
+import { createCircuitWorkspaceRuntime } from '../src/client/physics/circuit-workspace-runtime.ts'
 import { createCompositeWorkspaceRuntime } from '../src/client/physics/composite-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from '../src/client/physics/magnetic-workspace-runtime.ts'
+import { createMechanicsWorkspaceRuntime } from '../src/client/physics/mechanics-workspace-runtime.ts'
 import { zh, type PhysicsosKey } from '../src/client/locales.ts'
 
 const translations: Readonly<Record<string, string>> = zh
@@ -30,6 +41,18 @@ const t = ((key: PhysicsosKey) => translations[key] ?? key) as never
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
+
+/* The 初中 测平均速度 run, mirroring the template's scene input. */
+const averageSpeedScene = (title = '测量平均速度') =>
+  createMechanicsScene({
+    sceneId: 'mechanics-average-speed-test',
+    model: 'uniformly_accelerated_motion',
+    mass: 0.5,
+    position: { x: 0, y: 0, z: 0 },
+    velocity: { x: 0, y: 0, z: 0 },
+    acceleration: { x: 0.4, y: 0, z: 0 },
+    title,
+  })
 
 afterEach(() => {
   cleanup()
@@ -86,6 +109,36 @@ describe('tutor scripts', () => {
     expect(script?.id).toBe('magnetic-circular')
     expect(script!.hints.length).toBeGreaterThanOrEqual(3)
   })
+
+  it('teaches the three junior measurement rigs their own lessons', () => {
+    /* 伏安法 and 灯泡功率 share the rheostat apparatus — the measurement intent
+       lives in the stamped title, and each gets its own ladder. */
+    const va = tutorScriptOf(physicsAgentContext(
+      createCircuitWorkspaceRuntime(createRheostatCircuitScene({ title: '伏安法测电阻' })).getSnapshot(),
+    ))
+    expect(va?.id).toBe('circuit-va-resistance')
+    expect(va?.question).toContain('Rx')
+    expect(va!.evidence.some(entry => entry.label.includes('理想电表') && entry.status === 'passed')).toBe(true)
+
+    const bulb = tutorScriptOf(physicsAgentContext(
+      createCircuitWorkspaceRuntime(createRheostatCircuitScene({ title: '测量小灯泡的电功率' })).getSnapshot(),
+    ))
+    expect(bulb?.id).toBe('circuit-bulb-power')
+    expect(bulb?.hints.some(stage => stage.paragraphs.join('').includes('P = UI'))).toBe(true)
+
+    /* An untitled slider loop keeps the base dynamic-circuit lesson. */
+    const rheostat = tutorScriptOf(physicsAgentContext(
+      createCircuitWorkspaceRuntime(createRheostatCircuitScene()).getSnapshot(),
+    ))
+    expect(rheostat?.id).toBe('circuit-rheostat-dynamic')
+
+    const average = tutorScriptOf(physicsAgentContext(
+      createMechanicsWorkspaceRuntime(averageSpeedScene()).getSnapshot(),
+    ))
+    expect(average?.id).toBe('mechanics-average-speed')
+    expect(average?.hints.some(stage => stage.paragraphs.join('').includes('v̄ = s/t'))).toBe(true)
+    expect(average!.evidence.some(entry => entry.label.includes('速度变化') && entry.status === 'passed')).toBe(true)
+  })
 })
 
 describe('tutor mode in the drawer', () => {
@@ -121,6 +174,154 @@ describe('tutor mode in the drawer', () => {
     /* The ladder resets on demand. */
     fireEvent.click(screen.getByRole('button', { name: '重新开始' }))
     expect(screen.queryByText(/合力为零/)).toBeNull()
+  })
+})
+
+/* ------------------------------------------------- lab 自测 in the drawer -- */
+
+describe('lab self-checks in the drawer', () => {
+  it('asks the topic probes on a circuit frame and records the re-practice link', () => {
+    const runtime = createCircuitWorkspaceRuntime(createSeriesCircuitScene())
+    const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
+    render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t}
+        recordAttempt={recordAttempt}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '自测' }))
+    /* Topic heading plus knowledge chips (串联电路 doubles as a node label). */
+    expect(screen.getAllByText('串联电路').length).toBeGreaterThan(0)
+    expect(screen.getByText('欧姆定律')).toBeTruthy()
+
+    /* A wrong pick opens the diagnosis: class, explanation, live Verifier
+       evidence — the same shape Question Space uses. */
+    fireEvent.click(screen.getByRole('button', { name: '离电源正极越远，电流越小' }))
+    expect(screen.getByText('概念错误')).toBeTruthy()
+    expect(screen.getByText(/电流不会被元件/)).toBeTruthy()
+    expect(screen.getByText(/kcl_current_conservation/)).toBeTruthy()
+
+    expect(recordAttempt).toHaveBeenCalledOnce()
+    const attempt = recordAttempt.mock.calls[0]![0]
+    expect(attempt.questionId).toBe('circuit-series')
+    expect(attempt.correct).toBe(false)
+    expect(attempt.mistakeType).toBe('concept')
+    expect(attempt.knowledge).toContain('circ-series')
+    /* The deep link 学习记录 turns into its 重做实验 button. */
+    expect(attempt.experimentId).toBe('series-circuit')
+  })
+
+  it('keeps the 自测 tab off frames whose topic has no bank', () => {
+    const runtime = createCompositeWorkspaceRuntime(createVelocitySelectorScene())
+    render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t}
+        recordAttempt={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('tab', { name: '自测' })).toBeNull()
+  })
+
+  it('tells the three slider rigs apart by their stamped titles', () => {
+    const topicOf = (title?: string) =>
+      experimentSelfChecksOf(physicsAgentContext(
+        createCircuitWorkspaceRuntime(
+          createRheostatCircuitScene(title === undefined ? {} : { title }),
+        ).getSnapshot(),
+      ))?.id
+    expect(topicOf('伏安法测电阻')).toBe('circuit-va')
+    expect(topicOf('测量小灯泡的电功率')).toBe('circuit-bulb')
+    /* A renamed or rebuilt slider loop falls back to the honest dynamic topic. */
+    expect(topicOf()).toBe('circuit-rheostat')
+  })
+
+  it('asks the 伏安法 probes on the va rig and deep-links its own template', () => {
+    const runtime = createCircuitWorkspaceRuntime(createRheostatCircuitScene({ title: '伏安法测电阻' }))
+    const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
+    render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t}
+        recordAttempt={recordAttempt}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '自测' }))
+    expect(screen.getAllByText('伏安法测电阻').length).toBeGreaterThan(0)
+    expect(screen.getByText('欧姆定律')).toBeTruthy()
+
+    /* The swapped-meters mistake cites the live ideal-meter check. */
+    fireEvent.click(screen.getByRole('button', { name: '电压表串联、电流表并联接入也能测' }))
+    expect(screen.getByText('建模错误')).toBeTruthy()
+    expect(screen.getByText(/ideal_meters_non_intrusive/)).toBeTruthy()
+
+    const attempt = recordAttempt.mock.calls[0]![0]
+    expect(attempt.questionId).toBe('circuit-va')
+    expect(attempt.correct).toBe(false)
+    expect(attempt.knowledge).toContain('circ-ohm-law')
+    expect(attempt.experimentId).toBe('va-resistance')
+  })
+
+  it('brings 自测 to the 初中 测平均速度 run and records against its node', () => {
+    const runtime = createMechanicsWorkspaceRuntime(averageSpeedScene())
+    const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
+    render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t}
+        recordAttempt={recordAttempt}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '自测' }))
+    expect(screen.getByText('测量平均速度')).toBeTruthy()
+    expect(screen.getByText('平均速度')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '把开头和结尾的速度加起来除以 2' }))
+    expect(screen.getByText('概念错误')).toBeTruthy()
+
+    const attempt = recordAttempt.mock.calls[0]![0]
+    expect(attempt.questionId).toBe('mechanics-average-speed')
+    expect(attempt.correct).toBe(false)
+    expect(attempt.knowledge).toContain('kin-average-speed')
+    expect(attempt.experimentId).toBe('average-speed')
+  })
+
+  it('keeps 自测 off mechanics frames that are not the average-speed run', () => {
+    const runtime = createMechanicsWorkspaceRuntime(averageSpeedScene('匀变速直线运动'))
+    render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t}
+        recordAttempt={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('tab', { name: '自测' })).toBeNull()
+  })
+
+  it('maps every bank topic to a creatable experiment template', () => {
+    for (const set of Object.values(EXPERIMENT_SELF_CHECKS)) {
+      const templateId = SELF_CHECK_EXPERIMENT[set.id]
+      expect(templateId, set.id).toBeDefined()
+      const template = findExperimentTemplate(templateId!)
+      expect(template, set.id).toBeDefined()
+      expect(template!.comingSoon, set.id).toBeUndefined()
+    }
   })
 })
 
@@ -177,6 +378,7 @@ describe('学习记录 surface', () => {
         t={t}
         useLearningRecord={useLearningRecord}
         openQuestion={vi.fn()}
+        openExperiment={vi.fn()}
         useSessions={neverHook}
         useWorkspaces={neverHook}
       />,
@@ -206,6 +408,7 @@ describe('学习记录 surface', () => {
         t={t}
         useLearningRecord={useLearningRecord}
         openQuestion={openQuestion}
+        openExperiment={vi.fn()}
         useSessions={neverHook}
         useWorkspaces={neverHook}
       />,
@@ -216,6 +419,42 @@ describe('学习记录 surface', () => {
     expect(screen.getByText('速度选择器')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '重新练习' }))
     expect(openQuestion).toHaveBeenCalledWith('comp-01-selector-balance')
+  })
+
+  it('re-practises a lab 自测 mistake on the experiment, not in Question Space', () => {
+    const controller = createLearningRecordController()
+    controller.record({
+      questionId: 'circuit-emf',
+      questionTitle: '测定电动势与内阻',
+      selfCheckId: 'emf-terminal-voltage',
+      prompt: '减小外电路电阻使干路电流增大时，路端电压怎样变化？',
+      answerId: 'constant-emf',
+      answerLabel: '不变，路端电压始终等于电动势',
+      correct: false,
+      mistakeType: 'concept',
+      knowledge: ['circ-emf-internal'],
+      experimentId: 'emf-measurement',
+    })
+    const openQuestion = vi.fn()
+    const openExperiment = vi.fn()
+    const useLearningRecord = ((
+      selector: (s: ReturnType<typeof controller.store.getSnapshot>) => unknown,
+    ) => selector(controller.store.getSnapshot())) as never
+    render(
+      <LearningRecordWorkspace
+        t={t}
+        useLearningRecord={useLearningRecord}
+        openQuestion={openQuestion}
+        openExperiment={openExperiment}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    /* The lab attempt aggregates into the same mastery view as questions. */
+    expect(screen.getByText('电动势与内阻')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '重做实验' }))
+    expect(openExperiment).toHaveBeenCalledWith('emf-measurement')
+    expect(openQuestion).not.toHaveBeenCalled()
   })
 })
 

@@ -76,12 +76,16 @@ import {
 import { TimelineScrubber } from './TimelineScrubber.tsx'
 import { VerificationList } from './workspace-parts.tsx'
 import type { PhysicsosKey } from './locales.ts'
-import type { PhysicsSurfaceState, PhysicsSurfaceId } from './surface-store.ts'
+import type { PhysicsSceneRef, PhysicsSurfaceState, PhysicsSurfaceId } from './surface-store.ts'
 import css from './QuestionWorkspace.module.css'
 
 type Translate = QuestionWorkspaceProps['t']
 
-/** One answered self-check, as Question Space reports it to the learning record. */
+/**
+ * One answered self-check, as reported to the learning record — by Question
+ * Space (golden question) or by the Lab's 自测 tab, which additionally names
+ * the experiment template for the 重新练习 deep link.
+ */
 export interface SelfCheckAttemptInput {
   readonly questionId: string
   readonly questionTitle: string
@@ -92,13 +96,14 @@ export interface SelfCheckAttemptInput {
   readonly correct: boolean
   readonly mistakeType?: 'concept' | 'direction' | 'modeling'
   readonly knowledge: readonly string[]
+  readonly experimentId?: string
 }
 
 export interface QuestionWorkspaceInjected {
   hooks: {
     physicsSurface: SnapshotStore<PhysicsSurfaceState>
   }
-  openSurface?: (id: PhysicsSurfaceId, sceneRef?: { sceneId: string; scene: unknown }) => void
+  openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Write a self-check answer into the learning record. */
   recordAttempt?: (attempt: SelfCheckAttemptInput) => void
   /** Question Space consumed the one-shot 重新练习 question ref. */
