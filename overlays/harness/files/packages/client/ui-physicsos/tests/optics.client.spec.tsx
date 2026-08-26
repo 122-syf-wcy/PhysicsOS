@@ -1,0 +1,305 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createConvexLensScene, createPlaneMirrorScene } from '@physicsos/physics-scene'
+
+import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
+import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
+import type { SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
+import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
+import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
+import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
+import {
+  createExperimentSceneRef,
+  findExperimentTemplate,
+} from '../src/client/physics/experiment-templates.ts'
+import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
+import { physicsAgentContext } from '../src/client/physics/physics-agent.ts'
+import { tutorScriptOf } from '../src/client/physics/physics-tutor.ts'
+import { zh } from '../src/client/locales.ts'
+
+const translations: Readonly<Record<string, string>> = zh
+const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
+const neverHook = (() => {
+  throw new Error('unused hook')
+}) as never
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+const sceneOf = (templateId: string) => {
+  const template = findExperimentTemplate(templateId)
+  if (template === undefined) throw new Error(`unknown template: ${templateId}`)
+  return createExperimentSceneRef(template, t(template.label))
+}
+
+const mountLab = (templateId: string) => {
+  const surface = createPhysicsSurfaceController()
+  surface.open('lab', sceneOf(templateId))
+  const view = render(
+    <PhysicsSurface
+      useLearningRecord={neverHook}
+      useRecentExperiments={neverHook}
+      usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+      t={t}
+      useSessions={neverHook}
+      useWorkspaces={neverHook}
+    />,
+  )
+  return { surface, ...view }
+}
+
+const derivedValue = (
+  snapshot: ReturnType<ReturnType<typeof createOpticsWorkspaceRuntime>['getSnapshot']>,
+  label: string,
+) => {
+  const row = snapshot.inspector
+    .flatMap(section => section.derived ?? [])
+    .find(entry => entry.label === label)
+  if (row === undefined) throw new Error(`derived row missing: ${label}`)
+  return row.value
+}
+
+describe('optics domain routing', () => {
+  it('routes both junior optics scenes to the optics domain', () => {
+    expect(domainOfScene(createPlaneMirrorScene())).toBe('optics')
+    expect(domainOfScene(createConvexLensScene())).toBe('optics')
+  })
+})
+
+describe('optics workspace runtime', () => {
+  it('solves the lens textbook point: f = 10, u = 30 → v = 15, m = 0.5, real image on screen', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+    const snapshot = runtime.getSnapshot()
+
+    expect(snapshot.domain).toBe('optics')
+    expect(snapshot.status).toBe('verified')
+    /* Geometric imaging is static: a reading, not an animation. */
+    expect(snapshot.clock.total).toBe(0)
+    expect(snapshot.charts).toEqual([])
+
+    expect(derivedValue(snapshot, '物距 u')).toBe('30')
+    expect(derivedValue(snapshot, '像距 v')).toBe('15')
+    expect(derivedValue(snapshot, '放大率 m')).toBe('0.5')
+    expect(derivedValue(snapshot, '像的性质')).toBe('倒立、缩小的实像')
+    expect(derivedValue(snapshot, '物距区间')).toBe('u > 2f')
+
+    /* The drawn frame agrees with the imaging result. */
+    const image = snapshot.view.opticalImages?.[0]
+    expect(image?.nature).toBe('real')
+    expect(image?.at.x).toBeCloseTo(15, 6)
+    /* Inverted: m × h = 0.5 × 6 cm drawn below the axis. */
+    expect(image?.height).toBeCloseTo(-3, 6)
+    /* The template parks the screen on the sharp-image plane, so it is lit. */
+    expect(snapshot.view.opticalScreens?.[0]?.lit).toBe(true)
+    expect(snapshot.view.opticalRays?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(snapshot.view.overlay?.readout).toContain('物距 u = 30 cm')
+
+    /* One reading row: u, v, m and the exam sentence. */
+    expect(snapshot.table.rows[0]?.values).toEqual(['30', '15', '0.5', '倒立、缩小的实像'])
+
+    /* Verification is the engine's, not a hardcoded pass. */
+    expect(snapshot.verification.some(check => check.id === 'thin_lens_equation')).toBe(true)
+    expect(snapshot.verification.some(check => check.id === 'principal_rays_converge')).toBe(true)
+    expect(snapshot.verification.every(check => check.status === 'passed')).toBe(true)
+  })
+
+  it('sweeps u across 2f, f and below through real scene commands', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+
+    /* f < u < 2f: the projector zone — magnified real image beyond 2f. */
+    const projector = runtime.editParameter('object-distance', 15)
+    expect(projector.sceneRevision).toBe(1)
+    expect(derivedValue(projector, '像距 v')).toBe('30')
+    expect(derivedValue(projector, '放大率 m')).toBe('2')
+    expect(derivedValue(projector, '像的性质')).toBe('倒立、放大的实像')
+    /* The screen stayed at 15 cm while the sharp plane moved to 30 cm. */
+    expect(projector.view.opticalScreens?.[0]?.lit).toBe(false)
+    expect(derivedValue(projector, '光屏承接')).toBe('光屏上无像')
+
+    /* u = f: parallel refracted rays, no image at all. */
+    const atFocus = runtime.editParameter('object-distance', 10)
+    expect(atFocus.status).toBe('verified')
+    expect(atFocus.view.opticalImages).toEqual([])
+    expect(derivedValue(atFocus, '像的性质')).toBe('不成像（u = f，折射光平行）')
+    expect(
+      atFocus.verification.find(check => check.id === 'rays_parallel_at_focus')?.status,
+    ).toBe('passed')
+
+    /* u < f: the magnifier zone — upright virtual image on the object side. */
+    const magnifier = runtime.editParameter('object-distance', 5)
+    const image = magnifier.view.opticalImages?.[0]
+    expect(image?.nature).toBe('virtual')
+    expect(image?.at.x).toBeCloseTo(-10, 6)
+    expect(derivedValue(magnifier, '像的性质')).toBe('正立、放大的虚像')
+    expect(magnifier.view.opticalScreens?.[0]?.lit).toBe(false)
+    expect(
+      magnifier.verification.find(check => check.id === 'virtual_image_uncatchable')?.status,
+    ).toBe('passed')
+  })
+
+  it('keeps the mirror image symmetric and uncatchable as the candle moves', () => {
+    const runtime = createOpticsWorkspaceRuntime(createPlaneMirrorScene())
+    const snapshot = runtime.getSnapshot()
+
+    expect(snapshot.status).toBe('verified')
+    expect(derivedValue(snapshot, '物距 u')).toBe('10')
+    expect(derivedValue(snapshot, '像距 v')).toBe('10')
+    expect(derivedValue(snapshot, '像的性质')).toBe('正立、等大的虚像')
+
+    const image = snapshot.view.opticalImages?.[0]
+    expect(image?.nature).toBe('virtual')
+    expect(image?.at.x).toBeCloseTo(10, 6)
+    /* Equal size, upright: the drawn arrow matches the candle exactly. */
+    expect(image?.height).toBeCloseTo(6, 6)
+    /* The screen SITS on the image position and still catches nothing. */
+    expect(snapshot.view.opticalScreens?.[0]?.lit).toBe(false)
+    expect(derivedValue(snapshot, '光屏承接')).toBe('光屏上无像')
+    expect(
+      snapshot.verification.find(check => check.id === 'mirror_image_symmetry')?.status,
+    ).toBe('passed')
+    expect(
+      snapshot.verification.find(check => check.id === 'virtual_image_uncatchable')?.status,
+    ).toBe('passed')
+
+    /* v tracks u through a real command: move the candle, the image follows. */
+    const moved = runtime.editParameter('object-distance', 14)
+    expect(moved.sceneRevision).toBe(1)
+    expect(derivedValue(moved, '像距 v')).toBe('14')
+    expect(moved.view.opticalImages?.[0]?.at.x).toBeCloseTo(14, 6)
+  })
+})
+
+describe('optics teaching layer', () => {
+  it('publishes optics facts the teaching layer dispatches on', () => {
+    const lens = physicsAgentContext(
+      createOpticsWorkspaceRuntime(createConvexLensScene()).getSnapshot(),
+    )
+    expect(lens.optics).toEqual({ elementKind: 'thin_lens', imageNature: 'real', screenLit: true })
+    expect(lens.drawnIds).toEqual(
+      expect.arrayContaining(['candle-object', 'lens-1', 'optical-image', 'screen-1']),
+    )
+
+    const mirror = physicsAgentContext(
+      createOpticsWorkspaceRuntime(createPlaneMirrorScene()).getSnapshot(),
+    )
+    expect(mirror.optics).toEqual({
+      elementKind: 'plane_mirror',
+      imageNature: 'virtual',
+      screenLit: false,
+    })
+  })
+
+  it('teaches the mirror lesson off the virtual-image facts', () => {
+    const script = tutorScriptOf(physicsAgentContext(
+      createOpticsWorkspaceRuntime(createPlaneMirrorScene()).getSnapshot(),
+    ))
+    expect(script?.id).toBe('optics-plane-mirror')
+    expect(script?.question).toContain('接不到像')
+    expect(script!.observation.join('\n')).toMatch(/正立、等大的虚像/)
+    expect(script!.evidence.some(entry =>
+      entry.label.includes('平面镜对称性') && entry.status === 'passed')).toBe(true)
+    expect(script!.evidence.some(entry =>
+      entry.label.includes('虚像不能被光屏承接') && entry.status === 'passed')).toBe(true)
+  })
+
+  it('sub-dispatches the lens lesson on the 物距区间 the runtime published', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+    const lessonAt = (snapshot = runtime.getSnapshot()) =>
+      tutorScriptOf(physicsAgentContext(snapshot))
+
+    expect(lessonAt()?.id).toBe('optics-lens-beyond-2f')
+    expect(lessonAt(runtime.editParameter('object-distance', 15))?.id)
+      .toBe('optics-lens-between-f-2f')
+
+    const atFocus = lessonAt(runtime.editParameter('object-distance', 10))
+    expect(atFocus?.id).toBe('optics-lens-at-f')
+    expect(atFocus?.question).toContain('不成像')
+
+    const magnifier = lessonAt(runtime.editParameter('object-distance', 5))
+    expect(magnifier?.id).toBe('optics-lens-within-f')
+    expect(magnifier?.answer.paragraphs.join('')).toContain('放大镜')
+    expect(magnifier!.evidence.some(entry =>
+      entry.label.includes('薄透镜公式') && entry.status === 'passed')).toBe(true)
+  })
+
+  it('resolves the self-check topic from the element on the bench', () => {
+    const mirrorSet = experimentSelfChecksOf(physicsAgentContext(
+      createOpticsWorkspaceRuntime(createPlaneMirrorScene()).getSnapshot(),
+    ))
+    expect(mirrorSet?.id).toBe('optics-plane-mirror')
+
+    const lensSet = experimentSelfChecksOf(physicsAgentContext(
+      createOpticsWorkspaceRuntime(createConvexLensScene()).getSnapshot(),
+    ))
+    expect(lensSet?.id).toBe('optics-convex-lens')
+  })
+})
+
+describe('optics self-checks in the drawer', () => {
+  it('asks the mirror probes and records against the optics nodes', () => {
+    const runtime = createOpticsWorkspaceRuntime(createPlaneMirrorScene())
+    const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
+    render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t as never}
+        recordAttempt={recordAttempt}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '自测' }))
+    expect(screen.getAllByText('平面镜成像').length).toBeGreaterThan(0)
+    expect(screen.getByText('光的反射')).toBeTruthy()
+
+    /* The catch-the-virtual-image mistake cites the live uncatchable check. */
+    fireEvent.click(screen.getByRole('button', { name: '能：像就在那个位置，光屏放准了就能接住' }))
+    expect(screen.getByText('概念错误')).toBeTruthy()
+    expect(screen.getByText(/virtual_image_uncatchable/)).toBeTruthy()
+
+    expect(recordAttempt).toHaveBeenCalledOnce()
+    const attempt = recordAttempt.mock.calls[0]![0]
+    expect(attempt.questionId).toBe('optics-plane-mirror')
+    expect(attempt.correct).toBe(false)
+    expect(attempt.knowledge).toContain('opt-plane-mirror')
+    /* The deep link 学习记录 turns into its 重做实验 button. */
+    expect(attempt.experimentId).toBe('plane-mirror')
+  })
+})
+
+describe('optics Lab surface', () => {
+  it('mounts a verified lens bench with the element, marks and labels drawn', () => {
+    const { container } = mountLab('convex-lens')
+
+    expect(container.querySelector('[data-physicsos-domain="optics"]')).toBeTruthy()
+    expect(container.querySelector('svg[role="img"]')).toBeTruthy()
+    const lab = container.querySelector('[data-physicsos-surface="lab"]')
+    expect(lab?.getAttribute('data-verification-status')).toBe('verified')
+    expect(lab?.getAttribute('data-scene-revision')).toBe('0')
+
+    /* The bench is VISIBLE: element and screen labels plus the F/2F ticks. */
+    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
+    expect(svgText).toContain('凸透镜')
+    expect(svgText).toContain('光屏')
+    expect(svgText).toContain('F')
+    expect(svgText).toContain('2F')
+  })
+
+  it('commits a 物距 edit from the inspector as an auditable revision', () => {
+    const { container } = mountLab('convex-lens')
+
+    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    const distanceInput = screen.getByRole('textbox', { name: '物距' })
+    if (!(distanceInput instanceof HTMLInputElement)) throw new Error('Expected 物距 input.')
+    fireEvent.change(distanceInput, { target: { value: '15' } })
+    fireEvent.blur(distanceInput)
+
+    expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
+    /* The verified outcome flips with the zone: projector, not camera. */
+    expect(screen.getAllByText(/倒立、放大的实像/).length).toBeGreaterThan(0)
+  })
+})

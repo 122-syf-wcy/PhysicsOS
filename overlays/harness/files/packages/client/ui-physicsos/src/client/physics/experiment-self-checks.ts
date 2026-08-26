@@ -15,7 +15,9 @@
  * so the slider branch sub-dispatches on the title (exactly how the tutor
  * tells mechanics lessons apart); a renamed or rebuilt circuit falls back to
  * the honest 动态电路 topic. 测平均速度 resolves the same way on mechanics
- * frames.
+ * frames. Optics frames resolve on the imaging element actually drawn on the
+ * bench (plane mirror → 平面镜成像, thin lens → 凸透镜成像规律) — a fact, not
+ * a title.
  *
  * Each topic also names the experiment template that trains it, so a mistake
  * recorded in the lab can deep-link back to a fresh instance of the same
@@ -60,9 +62,21 @@ export const mechanicsTopicOf = (context: PhysicsAgentContext): string | undefin
     : undefined
 }
 
+/**
+ * The lab topic of an optics frame, read from the bench itself: the single
+ * imaging element IS the topic, so a renamed or question-forked bench still
+ * gets the probes that match what the canvas shows.
+ */
+export const opticsTopicOf = (context: PhysicsAgentContext): string | undefined => {
+  if (context.status === 'failed' || context.domain !== 'optics') return undefined
+  const facts = context.optics
+  if (facts === undefined) return undefined
+  return facts.elementKind === 'plane_mirror' ? 'optics-plane-mirror' : 'optics-convex-lens'
+}
+
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
-  circuitTopicOf(context) ?? mechanicsTopicOf(context)
+  circuitTopicOf(context) ?? mechanicsTopicOf(context) ?? opticsTopicOf(context)
 
 /** The self-check set for the current frame; undefined keeps the tab hidden. */
 export const experimentSelfChecksOf = (
@@ -85,4 +99,6 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'circuit-bulb': 'bulb-power',
   'circuit-emf': 'emf-measurement',
   'mechanics-average-speed': 'average-speed',
+  'optics-plane-mirror': 'plane-mirror',
+  'optics-convex-lens': 'convex-lens',
 }

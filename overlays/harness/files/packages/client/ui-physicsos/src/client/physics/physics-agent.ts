@@ -49,6 +49,8 @@ export interface PhysicsAgentContext {
   readonly chargeSigns?: readonly ('positive' | 'negative' | 'neutral')[]
   /** Circuit-frame facts, present exactly when the domain is `circuit`. */
   readonly circuit?: CircuitAgentFacts
+  /** Optics-frame facts, present exactly when the domain is `optics`. */
+  readonly optics?: OpticsAgentFacts
   /** Present when the scene came from a question and was then forked. */
   readonly branch?: WorkspaceSnapshot['branch']
 }
@@ -73,11 +75,27 @@ export interface CircuitAgentFacts {
   readonly junctionCount: number
 }
 
+/**
+ * What the runtime already published about an optics frame, read from the
+ * drawn bench — never re-imaged. The teaching layer dispatches on the element
+ * that is actually on the rail (a plane mirror teaches 平面镜成像, a thin lens
+ * teaches 凸透镜成像规律) instead of trusting scene titles.
+ */
+export interface OpticsAgentFacts {
+  /** The single imaging element drawn on the bench. */
+  readonly elementKind: 'thin_lens' | 'plane_mirror'
+  /** Nature of the image the engine formed; `none` when u = f forms no image. */
+  readonly imageNature: 'real' | 'virtual' | 'none'
+  /** Whether the drawn screen catches the image; absent when no screen. */
+  readonly screenLit?: boolean
+}
+
 /** Build the Agent's view of the world from one workspace frame. */
 export const physicsAgentContext = (snapshot: WorkspaceSnapshot): PhysicsAgentContext => {
   const chargeSigns = sourceChargeSignsOf(snapshot)
   const chargeSign = chargeSigns?.[0]
   const circuit = circuitFactsOf(snapshot)
+  const optics = opticsFactsOf(snapshot)
   return {
     domain: snapshot.domain,
     sceneTitle: snapshot.title,
@@ -99,6 +117,7 @@ export const physicsAgentContext = (snapshot: WorkspaceSnapshot): PhysicsAgentCo
     ...(chargeSign === undefined ? {} : { chargeSign }),
     ...(chargeSigns === undefined ? {} : { chargeSigns }),
     ...(circuit === undefined ? {} : { circuit }),
+    ...(optics === undefined ? {} : { optics }),
     ...(snapshot.branch === undefined ? {} : { branch: snapshot.branch }),
   }
 }
@@ -123,6 +142,26 @@ const circuitFactsOf = (snapshot: WorkspaceSnapshot): CircuitAgentFacts | undefi
     junctionCount: (snapshot.view.circuitJunctions ?? []).filter(
       junction => junction.branch === true,
     ).length,
+  }
+}
+
+/**
+ * Read the optics facts off the drawn frame: the element kind from the bench
+ * rail, the image nature from the image primitive the bridge emitted (absent
+ * exactly when the engine formed no image), the screen state from the screen's
+ * lit flag. Non-optics frames return undefined so no other domain grows a
+ * claim it cannot back.
+ */
+const opticsFactsOf = (snapshot: WorkspaceSnapshot): OpticsAgentFacts | undefined => {
+  if (snapshot.domain !== 'optics') return undefined
+  const element = (snapshot.view.opticalElements ?? [])[0]
+  if (element === undefined) return undefined
+  const image = (snapshot.view.opticalImages ?? [])[0]
+  const screen = (snapshot.view.opticalScreens ?? [])[0]
+  return {
+    elementKind: element.kind,
+    imageNature: image === undefined ? 'none' : image.nature,
+    ...(screen === undefined ? {} : { screenLit: screen.lit }),
   }
 }
 
@@ -179,6 +218,14 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
        are exactly what a tutor highlight may target. Wires and junction dots
        have no highlight rendering and stay out. */
     ...(view.circuitComponents ?? []).map(component => component.id),
+    /* Optics bench primitives: the object arrow, the imaging element, the
+       formed image and the screen are highlight groups in the optics renderer.
+       Rays and F/2F ticks have no highlight rendering and stay out (the same
+       rule that keeps circuit wires out). */
+    ...(view.opticalObjects ?? []).map(object => object.id),
+    ...(view.opticalElements ?? []).map(element => element.id),
+    ...(view.opticalImages ?? []).map(image => image.id),
+    ...(view.opticalScreens ?? []).map(screen => screen.id),
   ]
 }
 
@@ -295,6 +342,19 @@ const HIGHLIGHT_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'circuit-switch': ['sw'],
   rheostat: ['rv'],
   resistors: ['r0', 'r1', 'r2', 'r3'],
+  /* Optics bench primitives. The junior templates share one id convention
+     (`candle-object`, `lens-1` / `mirror-1`, `screen-1`) and the bridge emits
+     the formed image as `optical-image`, so the tutor says "the lens" or "the
+     image" and the alias resolves to whatever this bench actually draws. */
+  candle: ['candle-object'],
+  'optical-object': ['candle-object'],
+  lens: ['lens-1'],
+  mirror: ['mirror-1'],
+  'optical-element': ['lens-1', 'mirror-1'],
+  image: ['optical-image'],
+  'optical-image': ['optical-image'],
+  screen: ['screen-1'],
+  'optical-screen': ['screen-1'],
 }
 
 /**
@@ -394,6 +454,19 @@ const HIGHLIGHT_LABELS: Readonly<Record<string, string>> = {
   r1: '电阻 R₁',
   r2: '电阻 R₂',
   r3: '电阻 R₃',
+  candle: '蜡烛',
+  'candle-object': '蜡烛',
+  'optical-object': '发光物体',
+  lens: '凸透镜',
+  'lens-1': '凸透镜',
+  mirror: '平面镜',
+  'mirror-1': '平面镜',
+  'optical-element': '成像元件',
+  image: '像',
+  'optical-image': '像',
+  screen: '光屏',
+  'screen-1': '光屏',
+  'optical-screen': '光屏',
 }
 
 /** Student-facing name for a highlight target; shared by the drawer's buttons. */

@@ -56,6 +56,12 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   'circ-dynamic': 'rheostat-circuit',
   'circ-power': 'bulb-power',
   'circ-emf-internal': 'emf-measurement',
+  'opt-light-reflection': 'plane-mirror',
+  'opt-plane-mirror': 'plane-mirror',
+  'opt-lens-imaging': 'convex-lens',
+  /* 实像与虚像 trains on the lens: sweeping u across f shows BOTH natures,
+     where the mirror only ever shows a virtual image. */
+  'opt-real-virtual-image': 'convex-lens',
 }
 
 /**

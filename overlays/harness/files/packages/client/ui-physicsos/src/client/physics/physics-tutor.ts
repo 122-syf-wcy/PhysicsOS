@@ -903,6 +903,158 @@ const circuitEmfLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/* ------------------------------------------------------------------- optics -- */
+
+const planeMirrorLesson = (context: PhysicsAgentContext): TutorScript => {
+  const objectDistance = derivedText(context, '物距 u')
+  const imageDistance = derivedText(context, '像距 v')
+  const nature = derivedText(context, '像的性质')
+  const screenNote = derivedText(context, '光屏承接')
+  return {
+    id: 'optics-plane-mirror',
+    topic: '平面镜成像',
+    observation: [
+      ...observeLine('物到镜面距离 u', objectDistance),
+      ...observeLine('像到镜面距离 v', imageDistance),
+      ...observeLine('像的性质', nature),
+      ...observeLine('光屏承接', screenNote),
+    ],
+    question: '光屏已经摆在像的位置上，为什么屏上还是接不到像？',
+    hints: [
+      {
+        id: 'hint-reflection',
+        title: '提示 1',
+        paragraphs: ['光射到镜面发生反射，反射角等于入射角。进入眼睛的是反射光线 —— 打开「主光线光路」看看反射后的光走向哪里。'],
+        highlights: ['mirror'],
+      },
+      {
+        id: 'hint-extension',
+        title: '提示 2',
+        paragraphs: ['沿每条反射光线向镜后反向延长（图中虚线）：这些延长线交于镜后一点，交点到镜面的距离恰好等于物距。'],
+        highlights: ['image'],
+      },
+      {
+        id: 'hint-virtual',
+        title: '提示 3',
+        paragraphs: ['问问自己：镜后那个交点处，有没有真实的光线通过？光屏只能承接真实会聚的光。'],
+        highlights: ['screen'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '平面镜成的是虚像：反射光线本身不会聚，只有它们的反向延长线在镜后相交。那里没有真实光线通过，所以光屏承接不到；而像与物到镜面的距离相等、大小相等、正立。',
+        [
+          objectDistance === undefined ? '' : `u = ${objectDistance}`,
+          imageDistance === undefined ? '' : `v = ${imageDistance}`,
+          nature === undefined ? '' : nature,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['image', 'screen'],
+    },
+    evidence: evidenceOf(context, [
+      'mirror_image_symmetry',
+      'principal_rays_converge',
+      'virtual_image_uncatchable',
+    ]),
+  }
+}
+
+/**
+ * The five imaging zones of a convex lens, keyed by the 物距区间 derived value
+ * the optics runtime publishes. The answer sentences are the 成像规律表 rows.
+ */
+const LENS_ZONES: Readonly<Record<string, { slug: string; answer: string }>> = {
+  'u > 2f': {
+    slug: 'beyond-2f',
+    answer: '物距大于 2f：成倒立、缩小的实像，像距落在 f 与 2f 之间 —— 照相机的工作区间。',
+  },
+  'u = 2f': {
+    slug: 'at-2f',
+    answer: '物距等于 2f：成倒立、等大的实像，v = 2f —— 实验室用这一点快速测焦距。',
+  },
+  'f < u < 2f': {
+    slug: 'between-f-2f',
+    answer: '物距在 f 与 2f 之间：成倒立、放大的实像，像距 v > 2f —— 投影仪的工作区间。',
+  },
+  'u = f': {
+    slug: 'at-f',
+    answer: '物距等于 f：折射后的光线互相平行，永不相交 —— 不成像，这是实像与虚像的分界点。',
+  },
+  'u < f': {
+    slug: 'within-f',
+    answer: '物距小于 f：折射光发散，反向延长线在物同侧相交 —— 成正立、放大的虚像，这就是放大镜。',
+  },
+}
+
+const convexLensLesson = (context: PhysicsAgentContext): TutorScript => {
+  const objectDistance = derivedText(context, '物距 u')
+  const focalLength = derivedText(context, '焦距 f')
+  const imageDistance = derivedText(context, '像距 v')
+  const magnification = derivedText(context, '放大率 m')
+  const nature = derivedText(context, '像的性质')
+  const zoneText = context.derived.find(row => row.label === '物距区间')?.value
+  const zone = zoneText === undefined ? undefined : LENS_ZONES[zoneText]
+  const screenNote = derivedText(context, '光屏承接')
+  return {
+    id: zone === undefined ? 'optics-lens' : `optics-lens-${zone.slug}`,
+    topic: '凸透镜成像规律',
+    observation: [
+      ...observeLine('物距 u', objectDistance),
+      ...observeLine('焦距 f', focalLength),
+      ...observeLine('像距 v', imageDistance),
+      ...observeLine('放大率 m', magnification),
+      ...observeLine('像的性质', nature),
+      ...observeLine('光屏承接', screenNote),
+    ],
+    question:
+      zoneText === 'u = f'
+        ? '物距恰好等于焦距，为什么此时不成像？'
+        : `当前物距落在 ${zoneText ?? '哪个'} 区间，为什么会成这样的像？`,
+    hints: [
+      {
+        id: 'hint-compare',
+        title: '提示 1',
+        paragraphs: ['先把物距与两个基准点比较：轴上的 F（焦点）和 2F 是成像规律的全部分界点。物在哪个区间？'],
+        highlights: ['lens'],
+      },
+      {
+        id: 'hint-rays',
+        title: '提示 2',
+        paragraphs: ['打开「主光线光路」作图：平行主轴的光折射后过焦点，过光心的光沿直线传播 —— 两条折射光（或其反向延长线）的交点就是像。'],
+        highlights: ['image'],
+      },
+      {
+        id: 'hint-equation',
+        title: '提示 3',
+        paragraphs: ['用薄透镜公式检验作图：1/u + 1/v = 1/f。u、f 已知即可解出 v；v 为正是屏可承接的实像，为负则像在物同侧，是虚像。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        zone?.answer ?? '把物距与 f、2f 比较即可读出像的倒正、大小与虚实；作图与薄透镜公式给出同一个像。',
+        [
+          objectDistance === undefined ? '' : `u = ${objectDistance}`,
+          focalLength === undefined ? '' : `f = ${focalLength}`,
+          imageDistance === undefined ? '' : `v = ${imageDistance}`,
+          magnification === undefined ? '' : `m = ${magnification}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        screenNote === undefined ? '' : `光屏验证：${screenNote}。`,
+      ].filter(entry => entry.length > 0),
+      highlights: ['image', 'lens'],
+    },
+    evidence: evidenceOf(context, [
+      'thin_lens_equation',
+      'principal_rays_converge',
+      'rays_parallel_at_focus',
+      'virtual_image_uncatchable',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -913,8 +1065,10 @@ const circuitEmfLesson = (context: PhysicsAgentContext): TutorScript => {
  * selection-condition check); circuit frames by the lab topics the self-checks
  * resolve (circuit facts first — internal resistance, rheostat symbol,
  * junction dots — with the 初中 伏安法/灯泡功率 measurement intents read off
- * the stamped title); mechanics/electric frames by the scene title the
- * template stamped. Unknown frames return undefined and the drawer keeps Q&A.
+ * the stamped title); optics frames by the imaging element actually on the
+ * bench (plane mirror vs thin lens, with the lens lesson sub-dispatched on the
+ * 物距区间 the runtime published); mechanics/electric frames by the scene title
+ * the template stamped. Unknown frames return undefined and the drawer keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
   if (context.status === 'failed') return undefined
@@ -943,6 +1097,11 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
     if (topic === 'circuit-parallel') return circuitParallelLesson(context)
     return circuitSeriesLesson(context)
   }
-  /* Composite, magnetic, mechanics and circuit returned above; electric remains. */
+  if (context.domain === 'optics') {
+    return context.optics?.elementKind === 'plane_mirror'
+      ? planeMirrorLesson(context)
+      : convexLensLesson(context)
+  }
+  /* Composite, magnetic, mechanics, circuit and optics returned above; electric remains. */
   return electricLesson(context)
 }
