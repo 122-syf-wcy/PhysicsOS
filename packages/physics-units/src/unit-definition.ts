@@ -51,6 +51,8 @@ export type UnitKey =
   | 'milliliter'
   | 'joule_per_kilogram_kelvin'
   | 'joule_per_kilogram'
+  | 'newton_meter'
+  | 'newton_centimeter'
 
 /**
  * `docs/03` §12 mandates that every unit string travelling through the domain
@@ -155,4 +157,9 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
     'J/(kg*C)',
   ]),
   define('joule_per_kilogram', 'specific_latent_heat', 'J/kg', 1, true, ['J*kg^-1']),
+
+  /* Torque shares SI base dimensions with energy, but a moment is not a joule:
+     the registry keeps them apart so a lever cannot silently report work. */
+  define('newton_meter', 'torque', 'N*m', 1, true, ['N\u00b7m', 'N m']),
+  define('newton_centimeter', 'torque', 'N*cm', 0.01, false, ['N\u00b7cm', 'N cm']),
 ]

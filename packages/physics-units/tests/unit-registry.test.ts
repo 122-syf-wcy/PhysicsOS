@@ -31,6 +31,10 @@ describe('unit registry', () => {
     expect(canonicalSymbolFor('velocity')).toBe('m/s')
     expect(canonicalSymbolFor('magnetic_flux_density')).toBe('T')
     expect(canonicalUnitFor('angular_velocity').key).toBe('radian_per_second')
+    expect(canonicalSymbolFor('volume')).toBe('m^3')
+    expect(canonicalSymbolFor('torque')).toBe('N*m')
+    expect(canonicalUnitFor('torque').key).toBe('newton_meter')
+    expect(dimensionOf('N*cm')).toBe('torque')
   })
 
   it('rejects unregistered units instead of guessing', () => {
