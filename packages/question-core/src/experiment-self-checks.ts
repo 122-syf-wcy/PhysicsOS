@@ -725,6 +725,72 @@ const BUOYANCY_LIQUID: SelfCheckItem = {
   ],
 }
 
+/* ----------------------------------------------------------------- melting -- */
+
+const MELTING_PLATEAU: SelfCheckItem = {
+  id: 'melting-plateau',
+  prompt: '给冰持续加热，温度计停在 0 ℃ 不动了好几分钟。这段时间里冰还在吸热吗？',
+  takeaway:
+    '晶体熔化时吸的热全部用来破坏晶体结构，不用来升温 —— 温度不变不等于不吸热。加热器一秒都没停，图像上那段水平线正是熔化热 Q = mL 被吸收的过程。',
+  options: [
+    { id: 'absorbs', label: '在吸热（吸的热用来熔化，不用来升温）', correct: true },
+    {
+      id: 'no-heat',
+      label: '不吸热了（温度不变说明没有热量进来）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '温度不变只说明内能里"分子运动剧烈程度"这一项没变，不代表没有能量进来。加热器功率恒定，这段时间照样每秒送进 P 焦耳，只是全部拿去拆晶体结构了。',
+        review: ['熔化过程吸热但温度不变', '晶体熔化热 Q = mL'],
+        evidenceCheckId: 'melting_plateau',
+      },
+    },
+    {
+      id: 'broken-thermometer',
+      label: '温度计坏了（一直加热不可能不升温）',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '这正是晶体的定义特征：有固定熔点，熔化期间温度锁在熔点上。把冰换成松香（非晶体）再做一次，温度就会一路上升不停 —— 对比一下就知道温度计没坏。',
+        review: ['晶体有固定熔点', '晶体与非晶体的熔化图像差别'],
+        evidenceCheckId: 'plateau_duration',
+      },
+    },
+  ],
+}
+
+const MELTING_HEATING_RATE: SelfCheckItem = {
+  id: 'melting-heating-rate',
+  prompt: '同一套装置、同样的加热功率，为什么熔化完之后水升温比之前冰升温慢得多？',
+  takeaway:
+    '升温快慢由比热容决定：升温速率是 P/(cm)。水的比热容 4200 J/(kg·℃) 是冰 2100 的两倍，同样的功率和质量下升温速率正好减半。',
+  options: [
+    { id: 'specific-heat', label: '水的比热容比冰大，同样功率下升温更慢', correct: true },
+    {
+      id: 'losing-heat',
+      label: '水散热更快，热量都跑掉了',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '散热确实存在，但它解释不了这个稳定的两倍关系。把冰段和水段的斜率量出来相比，正好等于两个比热容的反比 —— 这是比热容的定义在起作用，不是漏热。',
+        review: ['升温速率 = P/(cm)', '比热容的物理意义'],
+        evidenceCheckId: 'heating_rate_ratio',
+      },
+    },
+    {
+      id: 'mass-changed',
+      label: '冰化成水以后质量变小了',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '熔化只是状态改变，质量守恒 —— 100 g 冰化成的就是 100 g 水。变的是比热容，不是质量；何况质量变小反而会升温更快。',
+        review: ['熔化前后质量不变', 'Q = cmΔt 中各量的含义'],
+        evidenceCheckId: 'energy_conservation',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -864,6 +930,12 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '探究浮力的大小',
     knowledge: ['fl-buoyancy-measure', 'fl-archimedes', 'fl-float-sink'],
     items: [BUOYANCY_DEPTH, BUOYANCY_LIQUID],
+  },
+  'thermal-melting': {
+    id: 'thermal-melting',
+    topic: '探究晶体的熔化过程',
+    knowledge: ['th-melting-point', 'th-latent-heat', 'th-specific-heat'],
+    items: [MELTING_PLATEAU, MELTING_HEATING_RATE],
   },
 }
 

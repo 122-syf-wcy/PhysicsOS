@@ -1,8 +1,8 @@
 /**
  * PhysicsOS Knowledge Graph V1.
  *
- * A small, explicit curriculum graph: six subject roots (力学 / 电磁学 / 电路 /
- * 光学 / 声学 / 浮力) with the knowledge points the current teaching content actually
+ * A small, explicit curriculum graph: seven subject roots (力学 / 电磁学 / 电路 /
+ * 光学 / 声学 / 浮力 / 热学) with the knowledge points the current teaching content actually
  * exercises, plus an explicit question → node mapping. Everything here is
  * DATA — no physics is computed, and the mapping is a hand-audited table
  * rather than a keyword heuristic, so a question can never drift onto the
@@ -12,8 +12,8 @@
  *  - Question Space shows the nodes of the current question as 知识总结.
  *  - The learning record aggregates student attempts per node (掌握度).
  *  - The Lab's experiment self-checks (see experiment-self-checks.ts) write
- *    attempts against the circuit, optics, acoustics and fluid nodes, which
- *    have no golden questions yet.
+ *    attempts against the circuit, optics, acoustics, fluid and thermal nodes,
+ *    which have no golden questions yet.
  */
 
 /** Subject roots. */
@@ -24,6 +24,7 @@ export type KnowledgeDomain =
   | 'optics'
   | 'acoustics'
   | 'fluid'
+  | 'thermal'
 
 export interface KnowledgeNode {
   readonly id: string
@@ -96,6 +97,14 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'fl-buoyancy-measure', label: '称重法测浮力 F_浮 = G − F_示', domain: 'fluid', parentId: 'fluid' },
   { id: 'fl-archimedes', label: '阿基米德原理 F_浮 = ρ_液·g·V_排', domain: 'fluid', parentId: 'fluid' },
   { id: 'fl-float-sink', label: '物体的浮沉条件', domain: 'fluid', parentId: 'fluid' },
+
+  /* 热学 nodes are exercised by the Lab's crystal-melting self-checks; like the
+     other lab-only branches they have no golden questions yet, so the learning
+     record reaches them through lab attempts. */
+  { id: 'thermal', label: '热学', domain: 'thermal' },
+  { id: 'th-melting-point', label: '晶体与非晶体的熔化', domain: 'thermal', parentId: 'thermal' },
+  { id: 'th-latent-heat', label: '熔化吸热与熔化热', domain: 'thermal', parentId: 'thermal' },
+  { id: 'th-specific-heat', label: '比热容与吸热 Q = cmΔt', domain: 'thermal', parentId: 'thermal' },
 ]
 
 const NODE_BY_ID: ReadonlyMap<string, KnowledgeNode> = new Map(
