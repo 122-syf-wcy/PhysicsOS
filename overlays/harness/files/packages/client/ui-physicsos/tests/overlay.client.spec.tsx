@@ -819,7 +819,7 @@ describe('PhysicsOS overlay presentation', () => {
     /* The named 初中 staples exist, sit in the junior partition and create. */
     for (const id of [
       'average-speed', 'series-circuit', 'parallel-circuit', 'rheostat-circuit',
-      'va-resistance', 'bulb-power',
+      'va-resistance', 'bulb-power', 'lever-balance',
     ]) {
       const template = findExperimentTemplate(id)
       expect(template?.stage, id).toBe('junior')

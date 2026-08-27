@@ -15,6 +15,7 @@ import { CircuitRenderer } from './circuit-renderer.tsx'
 import { FluidRenderer } from './fluid-renderer.tsx'
 import { OpticsRenderer } from './optics-renderer.tsx'
 import { ThermalRenderer } from './thermal-renderer.tsx'
+import { LeverRenderer } from './lever-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
 import {
   Angle,
@@ -880,6 +881,9 @@ function CompositeRenderer({ view, projection }: RendererProps) {
  * live object is never buried under an arrow.
  */
 function MechanicsRenderer({ view, projection }: RendererProps) {
+  if (view.leverBeam !== undefined) {
+    return <LeverRenderer view={view} projection={projection} />
+  }
   return (
     <>
       <defs>

@@ -24,6 +24,7 @@ import {
   createConvexMirrorScene,
   createCrystalMeltingScene,
   createHeatCapacityComparisonScene,
+  createLeverBalanceScene,
   createEchoRangingScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
@@ -298,11 +299,12 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     hint: 'lab.template.leverBalance.hint',
     icon: IconLever,
     tags: ['力学', '杠杆', '初中'],
-    /* 杠杆是刚体的力矩平衡；现有力学引擎解的是质点运动，硬套会算错，
-       所以按回旋加速器的先例标记「即将支持」而不是造假。 */
-    comingSoon: true,
-    createScene: () => {
-      throw new Error('lever balance needs a rigid-body statics engine')
+    createScene: (title) => {
+      const scene = createLeverBalanceScene({
+        sceneId: stampId('mechanics-lever-balance'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
     },
   },
 ]

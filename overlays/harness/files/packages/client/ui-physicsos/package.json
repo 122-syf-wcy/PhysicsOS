@@ -49,6 +49,7 @@
     "@physicsos/engine-acoustics": "link:../../../../../packages/engine-acoustics",
     "@physicsos/engine-fluid": "link:../../../../../packages/engine-fluid",
     "@physicsos/engine-thermal": "link:../../../../../packages/engine-thermal",
+    "@physicsos/engine-lever": "link:../../../../../packages/engine-lever",
     "@physicsos/engine-circuit": "link:../../../../../packages/engine-circuit",
     "@physicsos/engine-optics": "link:../../../../../packages/engine-optics",
     "@physicsos/engine-electric": "link:../../../../../packages/engine-electric",

@@ -544,6 +544,65 @@ const averageSpeedLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+const leverBalanceLesson = (context: PhysicsAgentContext): TutorScript => {
+  const leftMoment = derivedText(context, '左端力矩 M₁')
+  const rightMoment = derivedText(context, '右端力矩 M₂')
+  const leftWeight = derivedText(context, '左端重力 G₁')
+  const rightWeight = derivedText(context, '右端重力 G₂')
+  const ratio = derivedText(context, '力矩比 M₁/M₂')
+  const judgement = derivedText(context, '平衡判断') ?? ''
+  const balanced = judgement.includes('杠杆平衡')
+  return {
+    id: 'mechanics-lever',
+    topic: '探究杠杆的平衡条件',
+    observation: [
+      ...observeLine('左端力矩 M₁', leftMoment),
+      ...observeLine('右端力矩 M₂', rightMoment),
+      ...observeLine('力矩比 M₁/M₂', ratio),
+    ],
+    question: balanced
+      ? '为什么 200 g 挂在 15 cm 处，能和 300 g 挂在 10 cm 处平衡？'
+      : '杠杆向一边倾斜。怎样改力臂或质量，才能重新平衡？',
+    hints: [
+      {
+        id: 'hint-weight',
+        title: '提示 1',
+        paragraphs: ['每个钩码的力是它的重力 G = mg，不是「质量越大力臂就越长」。质量变了，变的是力。'],
+        highlights: ['hanger-left', 'hanger-right'],
+      },
+      {
+        id: 'hint-moment',
+        title: '提示 2',
+        paragraphs: ['力矩才是让杠杆转的量：M = F·l。力臂是支点到力的作用线的垂直距离，把钩码向外滑，力不变，力矩变大。'],
+        highlights: ['arm-left', 'arm-right'],
+      },
+      {
+        id: 'hint-balance',
+        title: '提示 3',
+        paragraphs: ['第一类杠杆的平衡条件是两边力矩相等：F₁l₁ = F₂l₂。一边的力加倍，这一边的力臂就要减半，乘积才能对上。'],
+        highlights: ['lever-1'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        balanced
+          ? 'G₁ = 1.96 N、l₁ = 15 cm，M₁ = 29.4 N·cm；G₂ = 2.94 N、l₂ = 10 cm，M₂ = 29.4 N·cm。力和力臂不同，力矩相同，所以杠杆水平。'
+          : '看哪一边的 M = F·l 更大，杠杆就向哪一边沉。把较大的一边力臂缩短（或把较小的一边质量加大），直到 F₁l₁ = F₂l₂，杠杆重新水平。',
+        [
+          leftWeight === undefined ? '' : `G₁ = ${leftWeight}`,
+          rightWeight === undefined ? '' : `G₂ = ${rightWeight}`,
+          leftMoment === undefined ? '' : `M₁ = ${leftMoment}`,
+          rightMoment === undefined ? '' : `M₂ = ${rightMoment}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['hanger-left', 'hanger-right'],
+    },
+    evidence: evidenceOf(context, ['weight_from_mass', 'moment_from_force', 'moment_balance']),
+  }
+}
+
 const forceMotionLesson = (context: PhysicsAgentContext): TutorScript => ({
   id: 'force-and-motion',
   topic: '力与运动',
@@ -1437,7 +1496,8 @@ const heatCapacityLesson = (context: PhysicsAgentContext): TutorScript => {
  * frames all teach echo ranging, fluid frames the weighing method and thermal
  * frames split on whether a second sample is drawn (two-beaker heat-capacity
  * comparison vs the melting curve);
- * mechanics/electric frames by the scene title the template stamped. Unknown
+ * mechanics frames: a lever (two hangers drawn) teaches F₁l₁ = F₂l₂, otherwise
+ * the scene title the template stamped (测平均速度 / 抛体 / 斜面 / 力与运动). Unknown
  * frames return undefined and the drawer keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
@@ -1453,6 +1513,7 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
   }
   if (context.domain === 'magnetic') return magneticLesson(context)
   if (context.domain === 'mechanics') {
+    if (mechanicsTopicOf(context) === 'mechanics-lever') return leverBalanceLesson(context)
     if (mechanicsTopicOf(context) === 'mechanics-average-speed') return averageSpeedLesson(context)
     if (/平抛|斜抛|抛体/.test(context.sceneTitle)) return projectileLesson(context)
     if (/斜面/.test(context.sceneTitle)) return inclineLesson(context)

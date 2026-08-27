@@ -38,6 +38,8 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   'dyn-newton-second': 'newton-second-law',
   'dyn-force-analysis': 'newton-second-law',
   'dyn-incline': 'incline',
+  'dyn-lever-balance': 'lever-balance',
+  'dyn-moment': 'lever-balance',
   'em-field-strength': 'point-charge',
   'em-superposition': 'multi-point-charge',
   'em-electric-force': 'uniform-electric',

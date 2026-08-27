@@ -681,3 +681,29 @@
   stroke-width: 3px;
   user-select: none;
 }
+
+/* ------------------------------------------------------------------- lever -- */
+
+.leverBeam {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.leverFulcrum {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+}
+
+.leverString {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+  opacity: 0.7;
+}
+
+.leverMass {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+}

@@ -97,6 +97,9 @@ export type ObservableKey =
   // thermal
   | 'thermometer'
   | 'phase'
+  // lever statics (mechanics domain)
+  | 'moments'
+  | 'arms'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -629,6 +632,34 @@ export interface ThermalHeaterVisual {
   label?: string
 }
 
+/* -------------------------------------------------------------------- lever -- */
+
+/** The rigid beam of a class-1 lever, already rotated to the engine's tilt. */
+export interface LeverBeamVisual {
+  id: string
+  from: ScenePoint
+  to: ScenePoint
+  /** Rotation from horizontal, positive = CCW = left down (rad). */
+  tilt: number
+}
+
+/** The fulcrum under the beam. */
+export interface LeverFulcrumVisual {
+  id: string
+  at: ScenePoint
+}
+
+/** One hanging load: attach point on the beam, mass hanging vertically below. */
+export interface LeverHangerVisual {
+  id: string
+  side: 'left' | 'right'
+  attach: ScenePoint
+  massAt: ScenePoint
+  label: string
+  /** Formatted mass shown under the blob, e.g. `200 g`. */
+  massText: string
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -728,6 +759,12 @@ export interface SceneVisualModel {
   thermalComparisonThermometer?: ThermalThermometerVisual
   /** Second heater on the comparison rig. */
   thermalComparisonHeater?: ThermalHeaterVisual
+  /** Class-1 lever beam (mechanics domain, lever runtime). */
+  leverBeam?: LeverBeamVisual
+  /** Fulcrum under the beam. */
+  leverFulcrum?: LeverFulcrumVisual
+  /** Hanging loads on opposite arms. */
+  leverHangers?: readonly LeverHangerVisual[]
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

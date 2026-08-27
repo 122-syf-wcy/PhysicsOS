@@ -11,7 +11,7 @@ import { useMemo } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { PhysicsScene } from '@physicsos/physics-scene'
+import { isLeverScene, type PhysicsScene } from '@physicsos/physics-scene'
 
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { LearningRecordWorkspace } from './LearningRecordWorkspace.tsx'
@@ -31,6 +31,7 @@ import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-r
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
+import { createLeverWorkspaceRuntime } from './physics/lever-workspace-runtime.ts'
 import { createOpticsWorkspaceRuntime } from './physics/optics-workspace-runtime.ts'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
 import type {
@@ -198,6 +199,7 @@ const buildRuntime = (
     case 'unsupported':
       return null
     case 'mechanics':
+      if (scene !== undefined && isLeverScene(scene)) return createLeverWorkspaceRuntime(scene)
       return scene === undefined ? null : createMechanicsWorkspaceRuntime(scene)
     case 'electric':
       return scene === undefined ? null : createElectricWorkspaceRuntime(scene)

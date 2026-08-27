@@ -53,12 +53,14 @@ export const circuitTopicOf = (context: PhysicsAgentContext): string | undefined
 }
 
 /**
- * The lab topic of a mechanics frame — currently only the 初中 测平均速度 run,
- * recognised by the title its template stamped. Other mechanics frames return
- * undefined so the drawer keeps the 自测 tab off where the bank has nothing.
+ * The lab topic of a mechanics frame — 测平均速度 is recognised by the title
+ * its template stamped; the class-1 lever is recognised by the hangers the
+ * runtime actually drew. Other mechanics frames return undefined so the drawer
+ * keeps the 自测 tab off where the bank has nothing.
  */
 export const mechanicsTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'mechanics') return undefined
+  if (context.drawnIds.includes('hanger-left')) return 'mechanics-lever'
   return /平均速度|average speed/i.test(context.sceneTitle)
     ? 'mechanics-average-speed'
     : undefined
@@ -137,6 +139,7 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'circuit-bulb': 'bulb-power',
   'circuit-emf': 'emf-measurement',
   'mechanics-average-speed': 'average-speed',
+  'mechanics-lever': 'lever-balance',
   'optics-plane-mirror': 'plane-mirror',
   'optics-convex-lens': 'convex-lens',
   'optics-curved-mirror': 'concave-mirror',

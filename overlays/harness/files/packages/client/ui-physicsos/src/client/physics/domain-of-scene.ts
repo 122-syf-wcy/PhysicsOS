@@ -3,6 +3,7 @@ import {
   isCircuitScene,
   isCompositeFieldScene,
   isFluidScene,
+  isLeverScene,
   isOpticsScene,
   isThermalScene,
   type PhysicsScene,
@@ -21,16 +22,20 @@ export type SupportedSceneDomain =
 export type SceneDomain = SupportedSceneDomain | 'unsupported'
 
 export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
-  /* Circuit, optics, acoustics, fluid and thermal scenes carry no motion
+  /* Circuit, optics, acoustics, fluid, thermal and lever scenes carry no motion
      objects at all, so they must be classified before the body/particle
      branches (which would all fall through to 'unsupported' — a blank surface
-     rather than an error). The five are mutually exclusive: each accessor
+     rather than an error). The accessors are mutually exclusive: each one
      requires the other apparatus collections to be empty. */
   if (isCircuitScene(scene)) return 'circuit'
   if (isOpticsScene(scene)) return 'optics'
   if (isAcousticsScene(scene)) return 'acoustics'
   if (isFluidScene(scene)) return 'fluid'
   if (isThermalScene(scene)) return 'thermal'
+  /* A lever has no particles or bodies — classifying it after the body branch
+     would fall through to 'unsupported' and show a blank Lab. It stays in the
+     mechanics picker group, so the domain id is still 'mechanics'. */
+  if (isLeverScene(scene)) return 'mechanics'
   const pointChargeFields = scene.fields.filter(field => field.type === 'point_charge')
   const electricFields = scene.fields.filter(field => field.type === 'uniform_electric')
   const magneticFields = scene.fields.filter(field => field.type === 'uniform_magnetic')

@@ -51,7 +51,21 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetOpticalObjectPosition',
   'SetOpticalObjectHeight',
   'SetLensFocalLength',
+  'SetMirrorFocalLength',
   'SetOpticalScreenPosition',
+  /* Acoustics facts: the wall's position and the medium's sound speed decide
+     the echo a question stated. */
+  'SetAcousticReflectorPosition',
+  'SetAcousticSoundSpeed',
+  /* Fluid facts: the liquid and the block are the weighing-method apparatus. */
+  'SetLiquidDensity',
+  'SetBlockMass',
+  /* Thermal facts: heater power and sample mass decide the heating curve. */
+  'SetHeaterPower',
+  'SetSampleMass',
+  /* Lever facts: hanger mass and arm length decide the moments. */
+  'SetHangerMass',
+  'SetHangerArm',
 ])
 
 export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.has(type)

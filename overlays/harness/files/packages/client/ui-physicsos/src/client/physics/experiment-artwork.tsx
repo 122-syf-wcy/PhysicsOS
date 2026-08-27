@@ -748,6 +748,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['projectile-oblique', 'mechanics-projectile-oblique'],
   ['newton-second-law', 'mechanics-newton-second-law'],
   ['incline', 'mechanics-incline'],
+  ['lever-balance', 'mechanics-lever-balance'],
   ['point-charge', 'electric-point-charge'],
   ['multi-point-charge', 'electric-multi-point-charge'],
   ['uniform-electric', 'electric-uniform-particle'],

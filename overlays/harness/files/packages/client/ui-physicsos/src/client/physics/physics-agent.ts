@@ -250,6 +250,10 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.thermalComparisonThermometer === undefined
       ? []
       : [view.thermalComparisonThermometer.id]),
+    /* Class-1 lever primitives: the beam, the fulcrum and the two hangers. */
+    ...(view.leverBeam === undefined ? [] : [view.leverBeam.id]),
+    ...(view.leverFulcrum === undefined ? [] : [view.leverFulcrum.id]),
+    ...(view.leverHangers ?? []).map(hanger => hanger.id),
   ]
 }
 
