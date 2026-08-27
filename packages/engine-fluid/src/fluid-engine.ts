@@ -283,7 +283,9 @@ export class FluidEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       scene.constraints.length > 0 ||
       scene.circuits.length > 0 ||
       (scene.opticalBenches ?? []).length > 0 ||
-      (scene.acousticBenches ?? []).length > 0
+      (scene.acousticBenches ?? []).length > 0 ||
+      (scene.thermalBenches ?? []).length > 0 ||
+      (scene.leverBenches ?? []).length > 0
     ) {
       return unsupportedModel(
         [

@@ -426,7 +426,8 @@ export class ThermalEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLi
       scene.circuits.length > 0 ||
       (scene.opticalBenches ?? []).length > 0 ||
       (scene.acousticBenches ?? []).length > 0 ||
-      (scene.fluidTanks ?? []).length > 0
+      (scene.fluidTanks ?? []).length > 0 ||
+      (scene.leverBenches ?? []).length > 0
     ) {
       return unsupportedModel(
         [

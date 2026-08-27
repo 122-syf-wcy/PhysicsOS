@@ -1,0 +1,22 @@
+{
+  "name": "@physicsos/engine-lever",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lever statics engine: class-1 moment balance F₁l₁ = F₂l₂ (weights, arms, tilt from the moment difference)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene"
+  }
+}
