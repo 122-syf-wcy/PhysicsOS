@@ -45,6 +45,10 @@ export type UnitKey =
   | 'kilogram_meter_per_second'
   | 'pascal'
   | 'kilogram_per_cubic_meter'
+  | 'cubic_meter'
+  | 'cubic_centimeter'
+  | 'liter'
+  | 'milliliter'
 
 /**
  * `docs/03` §12 mandates that every unit string travelling through the domain
@@ -134,4 +138,9 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   ]),
   define('pascal', 'pressure', 'Pa', 1, true),
   define('kilogram_per_cubic_meter', 'density', 'kg/m^3', 1, true, ['kg/m\u00b3']),
+
+  define('cubic_meter', 'volume', 'm^3', 1, true, ['m\u00b3']),
+  define('cubic_centimeter', 'volume', 'cm^3', 1e-6, false, ['cm\u00b3', 'cc']),
+  define('liter', 'volume', 'L', 1e-3, false, ['litre']),
+  define('milliliter', 'volume', 'mL', 1e-6, false, ['millilitre', 'ml']),
 ]
