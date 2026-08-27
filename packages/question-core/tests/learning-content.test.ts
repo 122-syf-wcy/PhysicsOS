@@ -147,6 +147,14 @@ describe('experiment self-check bank', () => {
     }
   })
 
+  it('covers every fluid knowledge node with at least one set', () => {
+    const exercised = new Set(sets.flatMap((set) => set.knowledge))
+    for (const node of KNOWLEDGE_NODES) {
+      if (node.domain !== 'fluid' || node.parentId === undefined) continue
+      expect(exercised.has(node.id), node.id).toBe(true)
+    }
+  })
+
   it('follows the same option rules as the question bank', () => {
     for (const set of sets) {
       for (const item of set.items) {

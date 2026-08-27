@@ -659,6 +659,72 @@ const ECHO_MEDIUM_SPEED: SelfCheckItem = {
   ],
 }
 
+/* ---------------------------------------------------------------- buoyancy -- */
+
+const BUOYANCY_DEPTH: SelfCheckItem = {
+  id: 'buoyancy-depth',
+  prompt: '铝块已经完全浸没在水中，再把它往下放到更深的位置，弹簧测力计的读数怎样变化？',
+  takeaway:
+    'F_浮 = ρ_液·g·V_排 里没有深度这一项：完全浸没后 V_排 就等于物块体积，再往下放它也不会变，所以浮力不变、读数也不变。',
+  options: [
+    { id: 'unchanged', label: '不变（V_排 已经等于物块体积，不再随深度变化）', correct: true },
+    {
+      id: 'deeper-more-buoyant',
+      label: '变小（浸得越深浮力越大，把物块托得越轻）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '"越深浮力越大"只在物块还没完全浸没时成立 —— 那时是排开的体积在变大。一旦完全浸没，V_排 就锁死在物块体积上，再深也不增加，浮力随之不变。',
+        review: ['浮力只与 ρ_液 和 V_排 有关', '浸没前后 V_排 的区别'],
+        evidenceCheckId: 'buoyancy_depth_independent',
+      },
+    },
+    {
+      id: 'deeper-more-pressure',
+      label: '变大（水越深压强越大，把物块往下压得更重）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '深处压强确实更大，但上下表面的压强同时都变大，差值 ρ_液·g·h 只由物块自身的高度决定 —— 浮力来自这个差值，不是来自压强的绝对大小。',
+        review: ['浮力来自上下表面压力差', 'p = ρgh 与压力差的区别'],
+        evidenceCheckId: 'archimedes_principle',
+      },
+    },
+  ],
+}
+
+const BUOYANCY_LIQUID: SelfCheckItem = {
+  id: 'buoyancy-liquid',
+  prompt: '把同一个铝块从水（1.0×10³ kg/m³）改成完全浸没在盐水（1.1×10³ kg/m³）里，浮力和读数怎样变？',
+  takeaway:
+    '完全浸没时 V_排 不变，浮力只随液体密度走：ρ_液 变大 10%，F_浮 就变大 10%；G 没变，所以读数 F_示 = G − F_浮 相应变小。',
+  options: [
+    { id: 'more-buoyant', label: '浮力变大、读数变小', correct: true },
+    {
+      id: 'nothing-changes',
+      label: '都不变（物块的质量和体积都没有改变）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '浮力等于被排开液体的重力，取决于排开的是什么液体。物块没变，但同样 100 cm³ 的盐水比水更重，托起的力自然更大。',
+        review: ['F_浮 = ρ_液·g·V_排', '浮力由液体密度决定'],
+        evidenceCheckId: 'archimedes_principle',
+      },
+    },
+    {
+      id: 'both-up',
+      label: '浮力变大、读数也变大',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '读数和浮力是此消彼长的：物块受重力 G、拉力 F_示、浮力 F_浮 三个力平衡，G 没变，浮力多分担一点，测力计就少拉一点。两个一起变大会破坏 F_示 + F_浮 = G。',
+        review: ['称重法 F_浮 = G − F_示', '悬吊物块的三力平衡'],
+        evidenceCheckId: 'scale_reading_balance',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -792,6 +858,12 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '回声测距',
     knowledge: ['ac-echo-ranging', 'ac-sound-propagation', 'ac-echo'],
     items: [ECHO_DISTANCE_FORMULA, ECHO_MEDIUM_SPEED],
+  },
+  'fluid-buoyancy': {
+    id: 'fluid-buoyancy',
+    topic: '探究浮力的大小',
+    knowledge: ['fl-buoyancy-measure', 'fl-archimedes', 'fl-float-sink'],
+    items: [BUOYANCY_DEPTH, BUOYANCY_LIQUID],
   },
 }
 
