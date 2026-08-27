@@ -49,6 +49,8 @@ export type UnitKey =
   | 'cubic_centimeter'
   | 'liter'
   | 'milliliter'
+  | 'joule_per_kilogram_kelvin'
+  | 'joule_per_kilogram'
 
 /**
  * `docs/03` §12 mandates that every unit string travelling through the domain
@@ -143,4 +145,14 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('cubic_centimeter', 'volume', 'cm^3', 1e-6, false, ['cm\u00b3', 'cc']),
   define('liter', 'volume', 'L', 1e-3, false, ['litre']),
   define('milliliter', 'volume', 'mL', 1e-6, false, ['millilitre', 'ml']),
+
+  /* Specific heat and latent heat are per-kilogram quantities: the °C in the
+     textbook unit is a temperature DIFFERENCE, which is identical in kelvin,
+     so `J/(kg*K)` is the honest canonical symbol for both spellings. */
+  define('joule_per_kilogram_kelvin', 'specific_heat', 'J/(kg*K)', 1, true, [
+    'J/(kg\u00b7K)',
+    'J/(kg\u00b7\u2103)',
+    'J/(kg*C)',
+  ]),
+  define('joule_per_kilogram', 'specific_latent_heat', 'J/kg', 1, true, ['J*kg^-1']),
 ]

@@ -25,6 +25,8 @@ export type PhysicalDimension =
   | 'pressure'
   | 'density'
   | 'volume'
+  | 'specific_heat'
+  | 'specific_latent_heat'
 
 const ALL_DIMENSIONS: readonly PhysicalDimension[] = [
   'dimensionless',
@@ -53,6 +55,8 @@ const ALL_DIMENSIONS: readonly PhysicalDimension[] = [
   'pressure',
   'density',
   'volume',
+  'specific_heat',
+  'specific_latent_heat',
 ]
 
 const DIMENSION_SET: ReadonlySet<string> = new Set(ALL_DIMENSIONS)
