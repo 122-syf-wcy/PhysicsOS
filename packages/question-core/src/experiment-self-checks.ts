@@ -791,6 +791,70 @@ const MELTING_HEATING_RATE: SelfCheckItem = {
   ],
 }
 
+const HEAT_CAPACITY_RATIO: SelfCheckItem = {
+  id: 'heat-capacity-ratio',
+  prompt: '等质量的水和煤油用相同的加热器加热相同时间，水升温 50 ℃、煤油升温 100 ℃。这说明什么？',
+  takeaway:
+    '吸收的热量相同，升温却差一倍：水的比热容是煤油的两倍。比热容正是「吸热能力」的量度 —— c 越大，同样的热让温度升得越少。',
+  options: [
+    { id: 'water-higher-c', label: '水的比热容更大，同样热量下升温更少', correct: true },
+    {
+      id: 'water-less-heat',
+      label: '水实际吸收的热量比较少',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '控制变量就是为了排除这件事：两边功率相同、时间相同，Q = P·t 完全一样。差的不是进来的热，是同样的热能把温度抬高多少。',
+        review: ['Q = P·t 两边相同', '控制变量：等质量、等功率、等时间'],
+        evidenceCheckId: 'equal_heat_absorbed',
+      },
+    },
+    {
+      id: 'kerosene-thinner',
+      label: '煤油更稀所以热得快',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '密度不是这个实验的变量。把两边的升温比出来，正好等于两个比热容的反比 4200:2100 = 2:1 —— 这是 c 的定义在起作用，不是「稀」。',
+        review: ['ΔT / ΔT′ = c′ / c', '比热容的物理意义'],
+        evidenceCheckId: 'specific_heat_ratio',
+      },
+    },
+  ],
+}
+
+const HEAT_CAPACITY_EQUAL_Q: SelfCheckItem = {
+  id: 'heat-capacity-equal-q',
+  prompt: '这个实验为什么一定要用两个相同的加热器、加热相同的时间？',
+  takeaway:
+    '要比吸热能力，必须让两边吸收的热量相同。Q = cmΔt，Q 相同、m 相同，ΔT 的差别就只剩 c。少了任何一个控制，比热容就比不出来。',
+  options: [
+    { id: 'same-heat', label: '让两边吸收的热量相同，升温差别才只反映比热容', correct: true },
+    {
+      id: 'faster-finish',
+      label: '这样两边能同时做完，省时间',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '同时结束只是方便读数，不是原因。如果一边功率更大，它吸收的热量就更多，升温高并不能说明比热容小。',
+        review: ['控制变量：Q 必须相同', 'Q = P·t'],
+        evidenceCheckId: 'equal_heat_absorbed',
+      },
+    },
+    {
+      id: 'same-temperature',
+      label: '好让两边升到同一个温度再比较',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '这个实验比较的就是升温的差别，不是终点温度相同。如果硬把两边加热到同一温度，用的时间（也就吸收的热量）就不同了，变量又搅在一起。',
+        review: ['比较的是 ΔT 而不是终温', 'Q = cmΔt 中先固定 Q 和 m'],
+        evidenceCheckId: 'specific_heat_ratio',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -936,6 +1000,12 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '探究晶体的熔化过程',
     knowledge: ['th-melting-point', 'th-latent-heat', 'th-specific-heat'],
     items: [MELTING_PLATEAU, MELTING_HEATING_RATE],
+  },
+  'thermal-heat-capacity': {
+    id: 'thermal-heat-capacity',
+    topic: '比较不同物质的吸热能力',
+    knowledge: ['th-specific-heat'],
+    items: [HEAT_CAPACITY_RATIO, HEAT_CAPACITY_EQUAL_Q],
   },
 }
 
