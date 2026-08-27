@@ -30,6 +30,7 @@ describe('Scene Validation', () => {
     circuits: [],
     opticalBenches: [],
     acousticBenches: [],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: [],
     annotations: [],

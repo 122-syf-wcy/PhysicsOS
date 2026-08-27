@@ -314,6 +314,7 @@ export const createCircuitScene = (input: CircuitSceneInput): PhysicsScene => {
     circuits: [circuit],
     opticalBenches: [],
     acousticBenches: [],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {

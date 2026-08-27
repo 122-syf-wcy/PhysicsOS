@@ -69,6 +69,8 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ]),
     ...scene.acousticBenches.map((entry) => entry.id),
     ...scene.acousticBenches.flatMap((entry) => [entry.source.id, entry.reflector.id]),
+    ...scene.fluidTanks.map((entry) => entry.id),
+    ...scene.fluidTanks.flatMap((entry) => [entry.block.id, entry.liquid.id]),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -486,6 +488,44 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       check(`acoustic_bench_values:${bench.id}`, 'constraint', valuesValid, {
         message: `Acoustic bench "${bench.id}" needs the reflector ahead of the source and sound speed > 0.`,
         targetId: bench.id,
+      }),
+    )
+  }
+
+  for (const tank of scene.fluidTanks) {
+    const dimensionsValid =
+      hasExpectedDimension(tank.block.mass, 'mass') &&
+      hasExpectedDimension(tank.block.volume, 'volume') &&
+      hasExpectedDimension(tank.block.height, 'length') &&
+      hasExpectedDimension(tank.liquid.density, 'density') &&
+      hasExpectedDimension(tank.lowerRate, 'velocity') &&
+      hasExpectedDimension(tank.gravity, 'acceleration')
+    checks.push(
+      check(`fluid_tank_dimensions:${tank.id}`, 'dimension', dimensionsValid, {
+        message: `Fluid tank "${tank.id}" quantities must use mass / volume / length / density / velocity / acceleration dimensions.`,
+        targetId: tank.id,
+      }),
+    )
+    /* Every one of these is a divisor or a physical extent somewhere in the
+       Archimedes solution: a zero volume has no cross-section, a zero height
+       cannot convert depth into displaced volume, and a still or massless
+       liquid is not a fluid to float in. */
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    const valuesValid =
+      dimensionsValid &&
+      positive(tank.block.mass) &&
+      positive(tank.block.volume) &&
+      positive(tank.block.height) &&
+      positive(tank.liquid.density) &&
+      positive(tank.lowerRate) &&
+      positive(tank.gravity)
+    checks.push(
+      check(`fluid_tank_values:${tank.id}`, 'constraint', valuesValid, {
+        message: `Fluid tank "${tank.id}" needs a positive block mass, volume and height, liquid density, lowering rate and gravity.`,
+        targetId: tank.id,
       }),
     )
   }

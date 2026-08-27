@@ -178,6 +178,7 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
     circuits: [],
     opticalBenches: [],
     acousticBenches: [],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: observableDefs,
     annotations: [],

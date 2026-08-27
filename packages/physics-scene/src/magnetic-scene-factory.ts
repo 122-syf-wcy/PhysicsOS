@@ -109,6 +109,7 @@ export const createMagneticScene = (input: MagneticSceneInput = {}): PhysicsScen
     circuits: [],
     opticalBenches: [],
     acousticBenches: [],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {

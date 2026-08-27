@@ -50,6 +50,9 @@ export {
   type AcousticBench,
   type AcousticReflector,
   type AcousticSource,
+  type FluidTank,
+  type SubmergedBlock,
+  type TankLiquid,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -228,3 +231,17 @@ export {
   createEchoRangingScene,
   type EchoRangingSceneInput,
 } from './acoustics/acoustics-templates.ts'
+export {
+  createFluidTankScene,
+  fluidTankOf,
+  fluidTanksOf,
+  isFluidScene,
+  type FluidObservableKey,
+  type FluidTankSceneInput,
+  type SubmergedBlockSpec,
+  type TankLiquidSpec,
+} from './fluid/fluid-scene.ts'
+export {
+  createArchimedesScene,
+  type ArchimedesSceneInput,
+} from './fluid/fluid-templates.ts'

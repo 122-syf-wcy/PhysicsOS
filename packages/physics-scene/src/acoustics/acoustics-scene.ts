@@ -91,6 +91,7 @@ export const createAcousticBenchScene = (input: AcousticBenchSceneInput): Physic
     circuits: [],
     opticalBenches: [],
     acousticBenches: [bench],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {

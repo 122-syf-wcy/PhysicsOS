@@ -173,6 +173,7 @@ export const createOpticalBenchScene = (input: OpticalBenchSceneInput): PhysicsS
     circuits: [],
     opticalBenches: [bench],
     acousticBenches: [],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {

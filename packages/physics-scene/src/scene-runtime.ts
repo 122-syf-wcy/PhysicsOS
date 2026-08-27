@@ -28,6 +28,7 @@ import type {
   AcousticBench,
   Circuit,
   CircuitComponent,
+  FluidTank,
   OpticalBench,
   PhysicsScene,
   UniformElectricField,
@@ -70,6 +71,8 @@ export type SceneCommandType =
   | 'SetOpticalScreenPosition'
   | 'SetAcousticReflectorPosition'
   | 'SetAcousticSoundSpeed'
+  | 'SetLiquidDensity'
+  | 'SetBlockMass'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -205,6 +208,16 @@ export interface SceneCommandPayloadMap {
     /** Speed of sound in the propagation medium; finite and > 0. */
     soundSpeed: Quantity<'velocity'>
   }
+  SetLiquidDensity: {
+    tankId: string
+    /** Density of the liquid in the tank; finite and > 0. */
+    density: Quantity<'density'>
+  }
+  SetBlockMass: {
+    tankId: string
+    /** Mass of the hanging block; finite and > 0. */
+    mass: Quantity<'mass'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -264,6 +277,8 @@ export type PhysicsEventType =
   | 'OpticalScreenPositionChanged'
   | 'AcousticReflectorPositionChanged'
   | 'AcousticSoundSpeedChanged'
+  | 'LiquidDensityChanged'
+  | 'BlockMassChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -301,6 +316,8 @@ export interface PhysicsEventPayloadMap {
   OpticalScreenPositionChanged: SceneCommandPayloadMap['SetOpticalScreenPosition']
   AcousticReflectorPositionChanged: SceneCommandPayloadMap['SetAcousticReflectorPosition']
   AcousticSoundSpeedChanged: SceneCommandPayloadMap['SetAcousticSoundSpeed']
+  LiquidDensityChanged: SceneCommandPayloadMap['SetLiquidDensity']
+  BlockMassChanged: SceneCommandPayloadMap['SetBlockMass']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -386,6 +403,7 @@ const NOT_FOUND_CODES = {
   optical_element: 'OPTICAL_ELEMENT_NOT_FOUND',
   optical_screen: 'OPTICAL_SCREEN_NOT_FOUND',
   acoustic_bench: 'ACOUSTIC_BENCH_NOT_FOUND',
+  fluid_tank: 'FLUID_TANK_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -491,6 +509,22 @@ const findAcousticBench = (scene: PhysicsScene, benchId: string): AcousticBenchL
   const bench = scene.acousticBenches.find((entry) => entry.id === benchId)
   if (bench === undefined) return { ok: false, error: notFound('acoustic_bench', benchId) }
   return { ok: true, bench }
+}
+
+type FluidTankLookup =
+  | { ok: true; tank: FluidTank }
+  | { ok: false; error: DomainError }
+
+const findFluidTank = (scene: PhysicsScene, tankId: string): FluidTankLookup => {
+  if (typeof tankId !== 'string' || tankId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_FLUID_TANK_ID', 'tankId must be a non-empty string.'),
+    }
+  }
+  const tank = scene.fluidTanks.find((entry) => entry.id === tankId)
+  if (tank === undefined) return { ok: false, error: notFound('fluid_tank', tankId) }
+  return { ok: true, tank }
 }
 
 const electricDirectionVector = (direction: ElectricFieldDirection) => {
@@ -1565,6 +1599,58 @@ const applyCommand = (
           ...eventMetadata,
           type: 'AcousticSoundSpeedChanged',
           payload: { benchId: command.payload.benchId, soundSpeed: clone(soundSpeed) },
+        },
+      }
+    }
+
+    /* -------------------------------------------------------- fluid statics -- */
+
+    case 'SetLiquidDensity': {
+      const lookup = findFluidTank(scene, command.payload.tankId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const density = validateQuantity(command.payload.density, 'density')
+      if (!Number.isFinite(canonicalValue(density)) || canonicalValue(density) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_LIQUID_DENSITY',
+            'Liquid density must be a positive finite density.',
+            { tankId: command.payload.tankId, density: command.payload.density },
+          ),
+        }
+      }
+      lookup.tank.liquid.density = clone(density)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'LiquidDensityChanged',
+          payload: { tankId: command.payload.tankId, density: clone(density) },
+        },
+      }
+    }
+
+    case 'SetBlockMass': {
+      const lookup = findFluidTank(scene, command.payload.tankId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const mass = validateQuantity(command.payload.mass, 'mass')
+      if (!Number.isFinite(canonicalValue(mass)) || canonicalValue(mass) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_BLOCK_MASS',
+            'Block mass must be a positive finite mass.',
+            { tankId: command.payload.tankId, mass: command.payload.mass },
+          ),
+        }
+      }
+      lookup.tank.block.mass = clone(mass)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'BlockMassChanged',
+          payload: { tankId: command.payload.tankId, mass: clone(mass) },
         },
       }
     }

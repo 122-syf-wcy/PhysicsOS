@@ -236,6 +236,7 @@ const buildScene = (
     circuits: [],
     opticalBenches: [],
     acousticBenches: [],
+    fluidTanks: [],
     measurementDefinitions: [],
     observableDefinitions: observableDefinitions(particleId, fieldIds, visibility),
     annotations: [],

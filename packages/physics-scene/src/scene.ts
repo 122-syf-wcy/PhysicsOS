@@ -491,6 +491,52 @@ export interface AcousticBench extends PhysicsObjectBase {
   soundSpeed: Quantity<'velocity'>
 }
 
+/* ----------------------------------------------------------- fluid tank -- */
+
+/**
+ * The block hanging from the spring scale above the tank. Volume and height
+ * are stored separately rather than a full box geometry: the experiment only
+ * ever needs the horizontal cross-section, and V / h delivers it without
+ * committing the contract to a particular shape.
+ */
+export interface SubmergedBlock {
+  id: string
+  name?: string
+  /** Mass of the block; finite and > 0. */
+  mass: Quantity<'mass'>
+  /** Total volume of the block; finite and > 0. */
+  volume: Quantity<'volume'>
+  /** Vertical extent of the block; finite and > 0. */
+  height: Quantity<'length'>
+}
+
+/** The liquid filling the tank the block is lowered into. */
+export interface TankLiquid {
+  id: string
+  name?: string
+  /** Density of the liquid; finite and > 0. */
+  density: Quantity<'density'>
+}
+
+/**
+ * Spring-scale buoyancy rig (junior fluid-statics slice): one block hanging
+ * from a spring scale, lowered at a steady rate into a tank of liquid.
+ *
+ * The scene does NOT store how deep the block currently is. Immersion is a
+ * function of the timeline — the block descends at `lowerRate` — so depth,
+ * displaced volume and the scale reading are all derived by the engine from
+ * the current time rather than persisted and left to go stale.
+ */
+export interface FluidTank extends PhysicsObjectBase {
+  type: 'fluid_tank'
+  block: SubmergedBlock
+  liquid: TankLiquid
+  /** Descent speed of the block once lowering starts; finite and > 0. */
+  lowerRate: Quantity<'velocity'>
+  /** Gravitational field strength used for both weight and buoyancy. */
+  gravity: Quantity<'acceleration'>
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -539,6 +585,7 @@ export interface PhysicsScene {
   circuits: Circuit[]
   opticalBenches: OpticalBench[]
   acousticBenches: AcousticBench[]
+  fluidTanks: FluidTank[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]
