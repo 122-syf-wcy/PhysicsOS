@@ -45,6 +45,10 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'dyn-newton-second', label: '牛顿第二定律', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-force-analysis', label: '受力分析', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-incline', label: '斜面模型', domain: 'mechanics', parentId: 'mechanics' },
+  /* 杠杆平衡 is a 初中 lab node: no golden question maps to it yet — the Lab's
+     探究杠杆的平衡条件 self-checks are what write attempts against it. */
+  { id: 'dyn-lever-balance', label: '杠杆平衡条件 F₁l₁ = F₂l₂', domain: 'mechanics', parentId: 'mechanics' },
+  { id: 'dyn-moment', label: '力臂与力矩', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'method-units', label: '单位与数量级', domain: 'mechanics', parentId: 'mechanics' },
 
   { id: 'electromagnetism', label: '电磁学', domain: 'electromagnetism' },

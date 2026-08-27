@@ -855,6 +855,72 @@ const HEAT_CAPACITY_EQUAL_Q: SelfCheckItem = {
   ],
 }
 
+/* ---------------------------------------------------------------- lever -- */
+
+const LEVER_DOUBLE_MASS: SelfCheckItem = {
+  id: 'lever-double-mass',
+  prompt: '杠杆已经平衡。把左侧钩码的质量加倍、右侧不动，要重新平衡，左侧力臂应该怎样改？',
+  takeaway:
+    '平衡条件是 F₁l₁ = F₂l₂。左边力加倍，力臂就要减半，乘积才变回原来的力矩。力变了力臂也必须跟着变，不是「往外移一点就行」。',
+  options: [
+    { id: 'halve-arm', label: '减半（加倍的力配一半的力臂）', correct: true },
+    {
+      id: 'double-arm',
+      label: '加倍（质量大了就要挂得更远）',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '往外移会让左边力矩变得更大，杠杆更不平衡。F 变大时要保持 F·l 不变，l 必须变小，不是变大。',
+        review: ['F₁l₁ = F₂l₂', '力矩 M = F·l'],
+        evidenceCheckId: 'moment_from_force',
+      },
+    },
+    {
+      id: 'unchanged',
+      label: '不用改，支点会自己找到新的平衡位置',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '这个实验的支点是钉死的。第一类杠杆的平衡不是支点自己滑过去，而是两边力矩相等。力变了就必须改力臂（或改另一边的力）。',
+        review: ['第一类杠杆：支点固定在中间', '平衡条件 F₁l₁ = F₂l₂'],
+        evidenceCheckId: 'moment_balance',
+      },
+    },
+  ],
+}
+
+const LEVER_SLIDE_OUT: SelfCheckItem = {
+  id: 'lever-slide-out',
+  prompt: '把右侧钩码沿杠杆向外滑远一点，右边对杠杆的作用怎样变？',
+  takeaway:
+    '钩码的重力 G = mg 没变，变的是力臂。力臂变长，力矩 M = F·l 变大，所以右边把杠杆压下去。滑动改变的是力矩，不是力本身。',
+  options: [
+    { id: 'moment-up', label: '重力不变，力臂变长，力矩变大', correct: true },
+    {
+      id: 'force-up',
+      label: '钩码变重了，所以把杠杆压下去',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '钩码还是原来那一块，质量没变，重力 G = mg 也就没变。向外滑只拉长了力臂，力矩变大，不是力变大。',
+        review: ['G = mg 只由质量和 g 决定', 'M = F·l，l 变则 M 变'],
+        evidenceCheckId: 'weight_from_mass',
+      },
+    },
+    {
+      id: 'cancels',
+      label: '力和力臂互相抵消，杠杆仍然平衡',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          '力和力臂是相乘不是相消。一边力臂变长，这边力矩就单独变大，原来的 F₁l₁ = F₂l₂ 被破坏，杠杆向这一侧倾斜。',
+        review: ['M = F·l 是乘积', '平衡要两边力矩重新相等'],
+        evidenceCheckId: 'moment_balance',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -1006,6 +1072,12 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '比较不同物质的吸热能力',
     knowledge: ['th-specific-heat'],
     items: [HEAT_CAPACITY_RATIO, HEAT_CAPACITY_EQUAL_Q],
+  },
+  'mechanics-lever': {
+    id: 'mechanics-lever',
+    topic: '探究杠杆的平衡条件',
+    knowledge: ['dyn-lever-balance', 'dyn-moment'],
+    items: [LEVER_DOUBLE_MASS, LEVER_SLIDE_OUT],
   },
 }
 
