@@ -1,13 +1,17 @@
 import { canonicalValue } from '@physicsos/physics-units'
-import { thermalBenchesOf, type PhysicsScene } from '@physicsos/physics-scene'
+import {
+  thermalBenchesOf,
+  type PhysicsScene,
+  type ThermalSample,
+} from '@physicsos/physics-scene'
 import { PhysicsOSError } from '@physicsos/shared'
 
 /**
- * Canonical (SI) view of a constant-power heating bench. Temperatures are in
- * kelvin throughout; the UI converts to °C at its own boundary.
+ * Canonical (SI) view of one sample on a constant-power heating bench.
+ * Temperatures are in kelvin throughout; the UI converts to °C at its own
+ * boundary.
  */
-export interface ResolvedThermalModel {
-  readonly benchId: string
+export interface ResolvedThermalSample {
   readonly sampleId: string
   /** Sample mass (kg), > 0. */
   readonly mass: number
@@ -19,12 +23,35 @@ export interface ResolvedThermalModel {
   readonly latentHeat: number
   /** Melting point (K). */
   readonly meltingPoint: number
-  /** Temperature at t = 0 (K), below the melting point. */
+  /** Temperature at t = 0 (K). */
   readonly initialTemperature: number
-  /** Heater power (W), > 0. */
-  readonly heaterPower: number
   /** True when the sample has a fixed melting point (latent heat > 0). */
   readonly crystalline: boolean
+  /**
+   * True when the sample starts at or above its melting point — already liquid,
+   * so the run is a single warming segment. That is how a water-versus-oil
+   * comparison is stated.
+   */
+  readonly startsMolten: boolean
+}
+
+/**
+ * Canonical (SI) view of a constant-power heating bench. The primary sample's
+ * fields sit on the model itself so the existing single-sample solvers keep
+ * working; a comparison sample, when present, is heated by the same power
+ * alongside it.
+ */
+export interface ResolvedThermalModel extends ResolvedThermalSample {
+  readonly benchId: string
+  /** Heater power delivered to EACH sample (W), > 0. */
+  readonly heaterPower: number
+  /**
+   * How long the heater is left on (s). Required for an already-liquid run,
+   * which has no melting plateau to stop at; omitted for a melting run, whose
+   * length the engine derives.
+   */
+  readonly runDuration?: number
+  readonly comparisonSample?: ResolvedThermalSample
 }
 
 const modelError = (code: string, message: string): PhysicsOSError =>
@@ -35,19 +62,7 @@ const positiveOrThrow = (value: number, code: string, message: string): number =
   return value
 }
 
-/**
- * Resolve the scene's thermal bench into canonical SI numbers. Throws
- * `PhysicsOSError` on structural violations; `canHandle` converts those into
- * model-support failures instead of solving a scene the model cannot honour.
- */
-export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel => {
-  const benches = thermalBenchesOf(scene)
-  const bench = benches[0]
-  if (bench === undefined || benches.length !== 1) {
-    throw modelError('THERMAL_SINGLE_BENCH', 'Thermal Engine requires exactly one heating bench.')
-  }
-  const sample = bench.sample
-
+const resolveSample = (sample: ThermalSample): ResolvedThermalSample => {
   const mass = positiveOrThrow(
     canonicalValue(sample.mass),
     'THERMAL_SAMPLE_MASS',
@@ -63,11 +78,6 @@ export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel =
     'THERMAL_LIQUID_SPECIFIC_HEAT',
     'Liquid specific heat must be finite and > 0.',
   )
-  const heaterPower = positiveOrThrow(
-    canonicalValue(bench.heaterPower),
-    'THERMAL_HEATER_POWER',
-    'Heater power must be finite and > 0.',
-  )
 
   const latentHeat = canonicalValue(sample.latentHeat)
   if (!Number.isFinite(latentHeat) || latentHeat < 0) {
@@ -79,15 +89,8 @@ export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel =
   if (!Number.isFinite(meltingPoint) || !Number.isFinite(initialTemperature)) {
     throw modelError('THERMAL_TEMPERATURES', 'Temperatures must be finite.')
   }
-  if (initialTemperature >= meltingPoint) {
-    throw modelError(
-      'THERMAL_ALREADY_MELTED',
-      'The sample must start below its melting point so there is a solid phase to heat.',
-    )
-  }
 
   return {
-    benchId: bench.id,
     sampleId: sample.id,
     mass,
     solidSpecificHeat,
@@ -95,7 +98,55 @@ export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel =
     latentHeat,
     meltingPoint,
     initialTemperature,
-    heaterPower,
     crystalline: latentHeat > 0,
+    startsMolten: initialTemperature >= meltingPoint,
+  }
+}
+
+/**
+ * Resolve the scene's thermal bench into canonical SI numbers. Throws
+ * `PhysicsOSError` on structural violations; `canHandle` converts those into
+ * model-support failures instead of solving a scene the model cannot honour.
+ */
+export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel => {
+  const benches = thermalBenchesOf(scene)
+  const bench = benches[0]
+  if (bench === undefined || benches.length !== 1) {
+    throw modelError('THERMAL_SINGLE_BENCH', 'Thermal Engine requires exactly one heating bench.')
+  }
+
+  const heaterPower = positiveOrThrow(
+    canonicalValue(bench.heaterPower),
+    'THERMAL_HEATER_POWER',
+    'Heater power must be finite and > 0.',
+  )
+
+  const runDuration = bench.runDuration === undefined
+    ? undefined
+    : positiveOrThrow(
+      canonicalValue(bench.runDuration),
+      'THERMAL_RUN_DURATION',
+      'Run duration must be finite and > 0.',
+    )
+
+  const sample = resolveSample(bench.sample)
+  const comparisonSample = bench.comparisonSample === undefined
+    ? undefined
+    : resolveSample(bench.comparisonSample)
+
+  const needsDuration = sample.startsMolten || comparisonSample?.startsMolten === true
+  if (needsDuration && runDuration === undefined) {
+    throw modelError(
+      'THERMAL_RUN_DURATION',
+      'An already-liquid sample needs a run duration; there is no melting plateau to stop at.',
+    )
+  }
+
+  return {
+    benchId: bench.id,
+    heaterPower,
+    ...sample,
+    ...(runDuration === undefined ? {} : { runDuration }),
+    ...(comparisonSample === undefined ? {} : { comparisonSample }),
   }
 }

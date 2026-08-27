@@ -18,8 +18,17 @@ import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-unit
 import { thermalBenchesOf, validateScene, type PhysicsScene } from '@physicsos/physics-scene'
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
-import { heatFromSegments, heatingTimingOf, thermalStateAt } from './heating-curve.ts'
-import { resolveThermalModel, type ResolvedThermalModel } from './thermal-model.ts'
+import {
+  heatingTimingOf,
+  sampleHeatFromSegments,
+  sampleStateAt,
+  thermalStateAt,
+} from './heating-curve.ts'
+import {
+  resolveThermalModel,
+  type ResolvedThermalModel,
+  type ResolvedThermalSample,
+} from './thermal-model.ts'
 
 export const THERMAL_ENGINE_ID = 'engine-thermal'
 export const THERMAL_ENGINE_VERSION = '1.0.0'
@@ -47,8 +56,13 @@ const joules = (value: number): Quantity<'energy'> => quantity(value, 'J', 'ener
 const kelvin = (value: number): Quantity<'temperature'> => quantity(value, 'K', 'temperature')
 const seconds = (value: number): Quantity<'time'> => quantity(value, 's', 'time')
 const watts = (value: number): Quantity<'power'> => quantity(value, 'W', 'power')
+const specificHeat = (value: number): Quantity<'specific_heat'> =>
+  quantity(value, 'J/(kg*K)', 'specific_heat')
 const dimensionless = (value: number): Quantity<'dimensionless'> =>
   quantity(value, '', 'dimensionless')
+
+const activeSpecificHeatOf = (sample: ResolvedThermalSample): number =>
+  sample.startsMolten ? sample.liquidSpecificHeat : sample.solidSpecificHeat
 
 /** Solve the scene's heating curve; the single entry point UI layers reuse. */
 export const resolveHeatingCurve = (scene: PhysicsScene): ResolvedThermalModel =>
@@ -59,7 +73,7 @@ export const resolveHeatingCurve = (scene: PhysicsScene): ResolvedThermalModel =
 const derivedOf = (model: ResolvedThermalModel): DerivedQuantity[] => {
   const assumptions = [...THERMAL_ASSUMPTIONS]
   const { warmUpTime, meltingDuration, totalTime } = heatingTimingOf(model)
-  return [
+  const items: DerivedQuantity[] = [
     {
       key: 'heater_power',
       targetId: model.benchId,
@@ -67,6 +81,62 @@ const derivedOf = (model: ResolvedThermalModel): DerivedQuantity[] => {
       formula: { expression: 'P' },
       assumptions,
     },
+  ]
+
+  if (model.startsMolten) {
+    const end = thermalStateAt(model, totalTime)
+    items.push(
+      {
+        key: 'absorbed_heat',
+        targetId: model.benchId,
+        value: joules(model.heaterPower * totalTime),
+        formula: { expression: 'Q = P·t' },
+        assumptions,
+      },
+      {
+        key: 'temperature_rise',
+        targetId: model.sampleId,
+        value: kelvin(end.temperature - model.initialTemperature),
+        formula: { expression: 'ΔT = Q/(c·m)' },
+        assumptions,
+      },
+      {
+        key: 'specific_heat',
+        targetId: model.sampleId,
+        value: specificHeat(activeSpecificHeatOf(model)),
+        formula: { expression: 'c' },
+        assumptions,
+      },
+    )
+    const comparison = model.comparisonSample
+    if (comparison !== undefined) {
+      const comparisonEnd = sampleStateAt(
+        comparison,
+        model.heaterPower,
+        totalTime,
+        model.runDuration,
+      )
+      items.push(
+        {
+          key: 'comparison_temperature_rise',
+          targetId: comparison.sampleId,
+          value: kelvin(comparisonEnd.temperature - comparison.initialTemperature),
+          formula: { expression: 'ΔT′ = Q/(c′·m)' },
+          assumptions,
+        },
+        {
+          key: 'comparison_specific_heat',
+          targetId: comparison.sampleId,
+          value: specificHeat(activeSpecificHeatOf(comparison)),
+          formula: { expression: 'c′' },
+          assumptions,
+        },
+      )
+    }
+    return items
+  }
+
+  items.push(
     {
       key: 'melting_point',
       targetId: model.sampleId,
@@ -113,11 +183,16 @@ const derivedOf = (model: ResolvedThermalModel): DerivedQuantity[] => {
       formula: { expression: 'Q_总 = P·t' },
       assumptions,
     },
-  ]
+  )
+  return items
 }
 
 const stateOf = (model: ResolvedThermalModel, timeSeconds: number): SimulationState => {
   const state = thermalStateAt(model, timeSeconds)
+  const comparison = model.comparisonSample
+  const comparisonState = comparison === undefined
+    ? undefined
+    : sampleStateAt(comparison, model.heaterPower, timeSeconds, model.runDuration)
   return {
     time: seconds(timeSeconds),
     objects: [
@@ -130,6 +205,9 @@ const stateOf = (model: ResolvedThermalModel, timeSeconds: number): SimulationSt
         },
       },
       { id: model.sampleId, values: { temperature: kelvin(state.temperature) } },
+      ...(comparison === undefined || comparisonState === undefined
+        ? []
+        : [{ id: comparison.sampleId, values: { temperature: kelvin(comparisonState.temperature) } }]),
     ],
     derived: derivedOf(model),
   }
@@ -145,13 +223,19 @@ const buildVerification = (
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const { warmUpTime, meltingDuration, meltingEndTime, totalTime } = heatingTimingOf(model)
 
+  const energyResidualOf = (sample: ResolvedThermalSample): number =>
+    Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) => {
+      const time = (index / TRAJECTORY_SEGMENTS) * totalTime
+      return Math.abs(
+        sampleHeatFromSegments(sample, model.heaterPower, time, model.runDuration) -
+          model.heaterPower * time,
+      )
+    }).reduce((worst, value) => Math.max(worst, value), 0)
+
   /* Energy accounting from two directions: what the heater put in (P·t) against
      what the segments absorbed (c_固·m·ΔT + mL·x + c_液·m·ΔT). They only agree
      if every segment boundary is in the right place. */
-  const worstEnergyResidual = Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) => {
-    const time = (index / TRAJECTORY_SEGMENTS) * totalTime
-    return Math.abs(heatFromSegments(model, time) - model.heaterPower * time)
-  }).reduce((worst, value) => Math.max(worst, value), 0)
+  const worstEnergyResidual = energyResidualOf(model)
   const totalHeat = model.heaterPower * totalTime
   checks.push(
     check(
@@ -166,6 +250,58 @@ const buildVerification = (
     ),
   )
 
+  const comparison = model.comparisonSample
+  if (comparison !== undefined) {
+    const comparisonResidual = energyResidualOf(comparison)
+    const primaryEnd = thermalStateAt(model, totalTime)
+    const comparisonEnd = sampleStateAt(
+      comparison,
+      model.heaterPower,
+      totalTime,
+      model.runDuration,
+    )
+    const primaryRise = primaryEnd.temperature - model.initialTemperature
+    const comparisonRise = comparisonEnd.temperature - comparison.initialTemperature
+    const primaryC = activeSpecificHeatOf(model)
+    const comparisonC = activeSpecificHeatOf(comparison)
+    const expectedRiseRatio = comparisonC / primaryC
+    const measuredRiseRatio = comparisonRise === 0
+      ? Number.POSITIVE_INFINITY
+      : primaryRise / comparisonRise
+
+    checks.push(
+      check(
+        'equal_heat_absorbed',
+        'conservation',
+        comparisonResidual <= THERMAL_RELATIVE_TOLERANCE * totalHeat,
+        {
+          message: '控制变量：两边加热器功率相同、加热时间相同，吸收的热量完全相同。',
+          targetId: comparison.sampleId,
+          details: { totalHeat, comparisonResidual },
+        },
+      ),
+    )
+    checks.push(
+      check(
+        'specific_heat_ratio',
+        'constraint',
+        Math.abs(measuredRiseRatio - expectedRiseRatio) <=
+          THERMAL_RELATIVE_TOLERANCE * expectedRiseRatio,
+        {
+          message: '同样的热量下升温与比热容成反比：ΔT / ΔT′ = c′ / c。',
+          targetId: model.sampleId,
+          details: {
+            primaryRise,
+            comparisonRise,
+            expectedRiseRatio,
+            measuredRiseRatio,
+          },
+        },
+      ),
+    )
+  }
+
+  if (!model.startsMolten) {
   /* Slopes are P/(mc): the ratio of the two sloped segments is exactly the
      inverse ratio of the specific heats, which is how the graph is read. */
   const solidSlope = model.heaterPower / (model.mass * model.solidSpecificHeat)
@@ -237,6 +373,7 @@ const buildVerification = (
         },
       ),
     )
+  }
   }
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
@@ -395,22 +532,24 @@ export class ThermalEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLi
         type: 'HeatingStarted',
         time: 0,
       },
-      {
+    ]
+    if (!model.startsMolten) {
+      events.push({
         eventId: asPhysicsEventId(`event-melting-started-${model.benchId}`),
         sceneId: scene.id,
         revision: scene.revision,
         type: model.crystalline ? 'MeltingStarted' : 'SofteningStarted',
         time: warmUpTime,
-      },
-    ]
-    if (model.crystalline) {
-      events.push({
-        eventId: asPhysicsEventId(`event-melting-complete-${model.benchId}`),
-        sceneId: scene.id,
-        revision: scene.revision,
-        type: 'MeltingComplete',
-        time: meltingEndTime,
       })
+      if (model.crystalline) {
+        events.push({
+          eventId: asPhysicsEventId(`event-melting-complete-${model.benchId}`),
+          sceneId: scene.id,
+          revision: scene.revision,
+          type: 'MeltingComplete',
+          time: meltingEndTime,
+        })
+      }
     }
 
     return {

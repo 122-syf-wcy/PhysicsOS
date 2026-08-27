@@ -5,6 +5,7 @@ import {
   SceneRuntime,
   createArchimedesScene,
   createCrystalMeltingScene,
+  createHeatCapacityComparisonScene,
   createSceneCommand,
   isThermalScene,
   thermalBenchOf,
@@ -22,6 +23,7 @@ import {
   heatFromSegments,
   heatingTimingOf,
   resolveThermalModel,
+  sampleStateAt,
   thermalEngine,
   thermalStateAt,
 } from '../src/index.ts'
@@ -140,7 +142,7 @@ describe('thermal engine', () => {
     expect(thermalEngine.canHandle(createArchimedesScene()).supported).toBe(false)
   })
 
-  it('refuses a sample that already starts above its melting point', () => {
+  it('rejects an already-liquid sample that never says how long to heat', () => {
     const scene = meltingScene()
     const bench = thermalBenchOf(scene)!
     const melted: PhysicsScene = {
@@ -151,6 +153,27 @@ describe('thermal engine', () => {
       }],
     }
     expect(thermalEngine.canHandle(melted).supported).toBe(false)
+  })
+
+  it('solves an already-liquid sample as a single warming segment when the run length is stated', () => {
+    const scene = meltingScene()
+    const bench = thermalBenchOf(scene)!
+    const liquid: PhysicsScene = {
+      ...scene,
+      thermalBenches: [{
+        ...bench,
+        sample: { ...bench.sample, initialTemperature: quantity(293.15, 'K', 'temperature') },
+        runDuration: quantity(420, 's', 'time'),
+      }],
+    }
+    expect(thermalEngine.canHandle(liquid)).toMatchObject({ supported: true })
+    const model = resolveThermalModel(liquid)
+    expect(model.startsMolten).toBe(true)
+    expect(thermalStateAt(model, 0).phase).toBe('liquid')
+    expect(thermalStateAt(model, 0).meltedFraction).toBe(1)
+    /* 100 g of water, 50 W, 420 s → Q = 21000 J, ΔT = 50 K. */
+    expect(thermalStateAt(model, 420).temperature).toBeCloseTo(293.15 + 50, 9)
+    expect(heatFromSegments(model, 420)).toBeCloseTo(21000, 6)
   })
 
   it('derives the segment times and heats the student tabulates', () => {
@@ -285,5 +308,63 @@ describe('thermal scene commands', () => {
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('Expected command rejection.')
     expect(result.error.code).toBe('THERMAL_BENCH_NOT_FOUND')
+  })
+})
+
+describe('heat-capacity comparison', () => {
+  const comparisonScene = (
+    overrides: Parameters<typeof createHeatCapacityComparisonScene>[0] = {},
+  ): PhysicsScene => createHeatCapacityComparisonScene(overrides)
+
+  it('warms equal masses of water and kerosene at a clean 1:2 temperature ratio', () => {
+    const model = resolveThermalModel(comparisonScene())
+    expect(model.startsMolten).toBe(true)
+    expect(model.comparisonSample?.sampleId).toBe('sample-2')
+    expect(heatingTimingOf(model).totalTime).toBeCloseTo(420, 9)
+
+    /* 100 g each, 50 W, 420 s → Q = 21000 J. Water c = 4200 → ΔT = 50 ℃;
+       kerosene c = 2100 → ΔT = 100 ℃. Same start at 20 ℃, so 70 ℃ vs 120 ℃. */
+    const water = thermalStateAt(model, 420)
+    expect(water.phase).toBe('liquid')
+    expect(water.temperature).toBeCloseTo(KELVIN_AT_ZERO_CELSIUS + 70, 9)
+    expect(water.heatAbsorbed).toBeCloseTo(21000, 6)
+
+    const kerosene = sampleStateAt(
+      model.comparisonSample!,
+      model.heaterPower,
+      420,
+      model.runDuration,
+    )
+    expect(kerosene.temperature).toBeCloseTo(KELVIN_AT_ZERO_CELSIUS + 120, 9)
+    expect(kerosene.heatAbsorbed).toBeCloseTo(21000, 6)
+  })
+
+  it('passes the equal-heat and inverse-ratio checks', () => {
+    const outcome = simulated(comparisonScene())
+    const ids = outcome.verification.checks.map(entry => entry.id)
+    expect(ids).toContain('energy_conservation')
+    expect(ids).toContain('equal_heat_absorbed')
+    expect(ids).toContain('specific_heat_ratio')
+    expect(ids).not.toContain('melting_plateau')
+    expect(outcome.verification.status).toBe('passed')
+    expect(derivedScalar(outcome.derivedQuantities, 'temperature_rise').value).toBeCloseTo(50, 9)
+    expect(derivedScalar(outcome.derivedQuantities, 'comparison_temperature_rise').value)
+      .toBeCloseTo(100, 9)
+    expect(outcome.events.map(event => event.type)).toEqual(['HeatingStarted'])
+  })
+
+  it('keeps the two samples on the same clock after a mass edit', () => {
+    const runtime = new SceneRuntime(comparisonScene())
+    expect(execute(runtime, 'SetSampleMass', {
+      benchId: 'thermal-bench-1',
+      mass: quantity(200, 'g', 'mass'),
+    }).ok).toBe(true)
+    const bench = thermalBenchOf(runtime.getScene())
+    expect(bench?.sample.mass.value).toBe(200)
+    expect(bench?.comparisonSample?.mass.value).toBe(200)
+    const model = resolveThermalModel(runtime.getScene())
+    /* Twice the mass, same Q budget per second, half the temperature rise. */
+    expect(thermalStateAt(model, 420).temperature)
+      .toBeCloseTo(KELVIN_AT_ZERO_CELSIUS + 20 + 25, 9)
   })
 })

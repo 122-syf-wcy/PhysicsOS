@@ -13,10 +13,14 @@
 export {
   resolveThermalModel,
   type ResolvedThermalModel,
+  type ResolvedThermalSample,
 } from './thermal-model.ts'
 export {
   heatFromSegments,
   heatingTimingOf,
+  sampleHeatFromSegments,
+  sampleStateAt,
+  sampleTimingOf,
   thermalStateAt,
   type HeatingTiming,
   type ThermalPhase,
