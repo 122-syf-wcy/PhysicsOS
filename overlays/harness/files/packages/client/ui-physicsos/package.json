@@ -47,6 +47,7 @@
   "dependencies": {
     "@physicsos/engine-magnetic": "link:../../../../../packages/engine-magnetic",
     "@physicsos/engine-acoustics": "link:../../../../../packages/engine-acoustics",
+    "@physicsos/engine-fluid": "link:../../../../../packages/engine-fluid",
     "@physicsos/engine-circuit": "link:../../../../../packages/engine-circuit",
     "@physicsos/engine-optics": "link:../../../../../packages/engine-optics",
     "@physicsos/engine-electric": "link:../../../../../packages/engine-electric",

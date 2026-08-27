@@ -732,6 +732,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['concave-mirror', 'optics-concave-mirror'],
   ['convex-mirror', 'optics-convex-mirror'],
   ['echo-ranging', 'acoustics-echo-ranging'],
+  ['buoyancy', 'fluid-buoyancy'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

@@ -60,7 +60,7 @@ const mountLab = (templateId: string) => {
 }
 
 describe('experiment template registry', () => {
-  it('exposes at least twenty-three creatable experiments across seven domains', () => {
+  it('exposes at least twenty-three creatable experiments across eight domains', () => {
     expect(SELECTABLE_TEMPLATE_COUNT).toBeGreaterThanOrEqual(23)
     const domains = new Set(EXPERIMENT_TEMPLATES.map(template => template.domain))
     expect([...domains].sort()).toEqual([
@@ -68,6 +68,7 @@ describe('experiment template registry', () => {
       'circuit',
       'composite',
       'electric',
+      'fluid',
       'magnetic',
       'mechanics',
       'optics',

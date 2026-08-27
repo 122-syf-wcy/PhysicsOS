@@ -1222,6 +1222,76 @@ const echoRangingLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/* -------------------------------------------------------------------- fluid -- */
+
+const buoyancyLesson = (context: PhysicsAgentContext): TutorScript => {
+  const weight = derivedText(context, '物重 G')
+  const reading = derivedText(context, '测力计读数 F_示')
+  const buoyant = derivedText(context, '浮力 F_浮')
+  const displacedVolume = derivedText(context, '排开液体体积 V_排')
+  const displacedWeight = derivedText(context, '排开液体所受重力 G_排')
+  const liquidDensity = derivedText(context, '液体密度 ρ_液')
+  const phase = context.derived.find(row => row.label === '浸入状态')?.value
+  const floats = context.verification.some(check => check.id === 'float_equilibrium')
+  return {
+    id: 'fluid-buoyancy',
+    topic: '探究浮力的大小',
+    observation: [
+      ...observeLine('物重 G', weight),
+      ...observeLine('测力计读数 F_示', reading),
+      ...observeLine('浸入状态', phase),
+    ],
+    question: floats
+      ? '物块浮在水面不再下沉，测力计读数为零 —— 此时浮力是多大？'
+      : '物块浸入水中后测力计读数变小了，少掉的那部分力去哪了？',
+    hints: [
+      {
+        id: 'hint-missing-force',
+        title: '提示 1',
+        paragraphs: ['物块本身没有变轻：它受到的重力 G 从头到尾没变。变的是拉住它的力 —— 液体从下面托了它一把，测力计只需要拉剩下的部分。'],
+        highlights: ['block-1'],
+      },
+      {
+        id: 'hint-weighing-method',
+        title: '提示 2',
+        paragraphs: ['把这三个力写成平衡式：G 向下，F_浮 和 F_示 向上，三者平衡给出 F_示 + F_浮 = G。移项就是称重法：F_浮 = G − F_示，两次读数相减即可。'],
+      },
+      {
+        id: 'hint-displaced',
+        title: '提示 3',
+        paragraphs: ['再看这一份力从哪来：物块占掉的那块空间原本装着液体。把那部分液体的重力算出来 G_排 = ρ_液·g·V_排，和刚才相减得到的 F_浮 比一比。'],
+        highlights: ['liquid-1'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        floats
+          ? '漂浮时物块静止，竖直方向只剩重力和浮力，所以 F_浮 = G —— 测力计读数为零不是"没有浮力"，恰恰是浮力独自扛住了整个重力。'
+          : '少掉的力就是浮力：F_浮 = G − F_示。它等于物块排开的那部分液体所受的重力 G_排 = ρ_液·g·V_排 —— 这就是阿基米德原理。完全浸没后 V_排 锁定在物块体积上，再往深处放读数也不会变。',
+        [
+          weight === undefined ? '' : `G = ${weight}`,
+          reading === undefined ? '' : `F_示 = ${reading}`,
+          buoyant === undefined ? '' : `F_浮 = G − F_示 = ${buoyant}`,
+          displacedVolume === undefined ? '' : `V_排 = ${displacedVolume}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        displacedWeight === undefined
+          ? ''
+          : `排开液体所受重力 G_排 = ${displacedWeight}，与浮力一致 —— 阿基米德原理经引擎验证。`,
+        liquidDensity === undefined ? '' : `当前液体密度 ρ_液 = ${liquidDensity}；换密度更大的液体，同样的 V_排 会给出更大的浮力。`,
+      ].filter(entry => entry.length > 0),
+      highlights: ['block-1', 'liquid-1'],
+    },
+    evidence: evidenceOf(context, [
+      'archimedes_principle',
+      'scale_reading_balance',
+      'buoyancy_depth_independent',
+      'float_equilibrium',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1235,9 +1305,10 @@ const echoRangingLesson = (context: PhysicsAgentContext): TutorScript => {
  * the stamped title); optics frames by the imaging element actually on the
  * bench (plane mirror vs thin lens vs curved mirror, with the lens and mirror
  * lessons sub-dispatched on the 物距区间 the runtime published); acoustics
- * frames all teach echo ranging (the acoustic bench models exactly one
- * apparatus); mechanics/electric frames by the scene title the template
- * stamped. Unknown frames return undefined and the drawer keeps Q&A.
+ * frames all teach echo ranging and fluid frames all teach the weighing method
+ * (each models exactly one apparatus); mechanics/electric frames by the scene
+ * title the template stamped. Unknown frames return undefined and the drawer
+ * keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
   if (context.status === 'failed') return undefined
@@ -1274,7 +1345,8 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
         : convexLensLesson(context)
   }
   if (context.domain === 'acoustics') return echoRangingLesson(context)
-  /* Composite, magnetic, mechanics, circuit, optics and acoustics returned above;
-     electric remains. */
+  if (context.domain === 'fluid') return buoyancyLesson(context)
+  /* Composite, magnetic, mechanics, circuit, optics, acoustics and fluid
+     returned above; electric remains. */
   return electricLesson(context)
 }

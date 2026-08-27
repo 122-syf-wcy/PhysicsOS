@@ -233,6 +233,12 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.acousticSources ?? []).map(source => source.id),
     ...(view.acousticReflectors ?? []).map(reflector => reflector.id),
     ...(view.acousticPulse === undefined ? [] : [view.acousticPulse.id]),
+    /* Buoyancy rig primitives: the block, the liquid body and the spring scale
+       are highlight groups in the fluid renderer. The force arrows follow the
+       vector rule and stay out. */
+    ...(view.fluidBlock === undefined ? [] : [view.fluidBlock.id]),
+    ...(view.fluidLiquid === undefined ? [] : [view.fluidLiquid.id]),
+    ...(view.fluidScale === undefined ? [] : [view.fluidScale.id]),
   ]
 }
 

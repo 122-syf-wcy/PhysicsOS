@@ -17,6 +17,7 @@
  */
 
 import {
+  createArchimedesScene,
   createCompositeFieldScene,
   createConcaveMirrorScene,
   createConvexLensScene,
@@ -80,6 +81,7 @@ export type ExperimentDomain =
   | 'composite'
   | 'optics'
   | 'acoustics'
+  | 'fluid'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -296,20 +298,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     comingSoon: true,
     createScene: () => {
       throw new Error('lever balance needs a rigid-body statics engine')
-    },
-  },
-  {
-    id: 'buoyancy',
-    domain: 'mechanics',
-    stage: 'junior',
-    label: 'lab.template.buoyancy',
-    hint: 'lab.template.buoyancy.hint',
-    icon: IconBuoyancy,
-    tags: ['力学', '浮力', '初中'],
-    /* 浮力需要流体静力学（排开液体、液面变化）；质点引擎无法诚实建模。 */
-    comingSoon: true,
-    createScene: () => {
-      throw new Error('buoyancy needs a fluid statics engine')
     },
   },
 ]
@@ -663,6 +651,33 @@ const acousticsTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* --------------------------------------------------------------------- fluid -- */
+
+const fluidTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'buoyancy',
+    domain: 'fluid',
+    stage: 'junior',
+    label: 'lab.template.buoyancy',
+    hint: 'lab.template.buoyancy.hint',
+    icon: IconBuoyancy,
+    tags: ['浮力', '初中', '阿基米德原理', '称重法'],
+    createScene: (title) => {
+      /* 探究浮力的大小：100 cm³ / 270 g 的铝块（ρ = 2.7 g/cm³）在水里缓慢下放。
+         G = 2.646 N，全浸后 F_浮 = 0.98 N、读数 1.666 N —— 每个数都是整数级。
+         继续往深处放读数不变，这就是「浮力与深度无关」；把质量调到 60 g 物块
+         就浮起来，换盐水浮力随之变大。 */
+      const scene = createArchimedesScene({
+        sceneId: stampId('fluid-buoyancy'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+]
+
 /* ----------------------------------------------------------------- composite -- */
 
 const compositeTemplates: readonly ExperimentTemplate[] = [
@@ -824,6 +839,7 @@ export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics', templates: mechanicsTemplates },
   { id: 'optics', label: 'lab.template.group.optics', templates: opticsTemplates },
   { id: 'acoustics', label: 'lab.template.group.acoustics', templates: acousticsTemplates },
+  { id: 'fluid', label: 'lab.template.group.fluid', templates: fluidTemplates },
   { id: 'electric', label: 'lab.template.group.electric', templates: electricTemplates },
   { id: 'magnetic', label: 'lab.template.group.magnetic', templates: magneticTemplates },
   { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },

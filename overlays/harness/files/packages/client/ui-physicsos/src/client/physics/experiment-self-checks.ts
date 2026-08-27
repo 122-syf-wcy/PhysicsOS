@@ -88,12 +88,21 @@ export const opticsTopicOf = (context: PhysicsAgentContext): string | undefined 
 export const acousticsTopicOf = (context: PhysicsAgentContext): string | undefined =>
   context.status !== 'failed' && context.domain === 'acoustics' ? 'acoustics-echo' : undefined
 
+/**
+ * The lab topic of a fluid frame. The tank models exactly one apparatus (a
+ * block on a spring scale over one liquid), so the domain IS the topic — a
+ * renamed scene still gets the buoyancy probes.
+ */
+export const fluidTopicOf = (context: PhysicsAgentContext): string | undefined =>
+  context.status !== 'failed' && context.domain === 'fluid' ? 'fluid-buoyancy' : undefined
+
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   circuitTopicOf(context)
   ?? mechanicsTopicOf(context)
   ?? opticsTopicOf(context)
   ?? acousticsTopicOf(context)
+  ?? fluidTopicOf(context)
 
 /** The self-check set for the current frame; undefined keeps the tab hidden. */
 export const experimentSelfChecksOf = (
@@ -120,4 +129,5 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'optics-convex-lens': 'convex-lens',
   'optics-curved-mirror': 'concave-mirror',
   'acoustics-echo': 'echo-ranging',
+  'fluid-buoyancy': 'buoyancy',
 }

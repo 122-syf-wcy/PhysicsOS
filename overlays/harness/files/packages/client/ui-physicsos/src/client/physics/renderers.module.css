@@ -525,3 +525,76 @@
   stroke-width: 3px;
   user-select: none;
 }
+
+/* --------------------------------------------------------------------- fluid -- */
+
+/* The liquid body is a translucent slab so the submerged part of the block
+   still reads through it — the point of the picture is what is under. */
+.fluidLiquidBody {
+  fill: var(--physics-fluid-liquid-soft);
+  stroke: none;
+}
+
+.fluidTankWall {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fluidSurfaceLine {
+  stroke: var(--physics-fluid-liquid);
+  stroke-width: 1.6;
+  stroke-dasharray: 7 4;
+  opacity: 0.9;
+}
+
+.fluidSurfaceLabel {
+  fill: var(--physics-fluid-liquid);
+  font-size: 11px;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+  user-select: none;
+}
+
+.fluidWire {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+  opacity: 0.75;
+}
+
+.fluidScaleBody {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+}
+
+/* The dial reading is the measurement the whole rig exists to produce, so it
+   is typeset as a reading rather than a decorative label. */
+.fluidScaleReading {
+  fill: var(--physics-measurement);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  user-select: none;
+}
+
+.fluidBlockBody {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.2;
+}
+
+/* Only the part actually under the surface is shaded: that slab times the
+   cross-section IS V_排. */
+.fluidBlockSubmerged {
+  fill: var(--physics-fluid-liquid);
+  opacity: 0.42;
+  stroke: none;
+}
+
+.fluidBlockFloating {
+  stroke: var(--physics-verification-ok);
+}

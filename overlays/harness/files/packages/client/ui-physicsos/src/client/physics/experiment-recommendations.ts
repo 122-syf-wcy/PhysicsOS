@@ -69,6 +69,12 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   'ac-sound-propagation': 'echo-ranging',
   'ac-echo': 'echo-ranging',
   'ac-echo-ranging': 'echo-ranging',
+  /* All three buoyancy nodes are re-practised on the same rig: the weighing
+     method IS the measurement, Archimedes IS what it verifies, and float/sink
+     is one mass edit away on the same tank. */
+  'fl-buoyancy-measure': 'buoyancy',
+  'fl-archimedes': 'buoyancy',
+  'fl-float-sink': 'buoyancy',
 }
 
 /**

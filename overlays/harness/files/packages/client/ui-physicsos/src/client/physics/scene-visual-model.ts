@@ -29,6 +29,7 @@ export type PhysicsDomainId =
   | 'composite'
   | 'optics'
   | 'acoustics'
+  | 'fluid'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -90,6 +91,8 @@ export type ObservableKey =
   // acoustics
   | 'wavefronts'
   | 'path'
+  // fluid statics
+  | 'displaced'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -539,6 +542,48 @@ export interface AcousticWavefrontVisual {
   direction: 'forward' | 'backward'
 }
 
+/* -------------------------------------------------------------------- fluid -- */
+
+/** The liquid body in the tank, drawn as a filled rectangle with a surface line. */
+export interface FluidLiquidVisual {
+  id: string
+  /** Left edge of the tank interior. */
+  left: number
+  /** Right edge of the tank interior. */
+  right: number
+  /** Liquid surface level; the tank floor is `floor`. */
+  surface: number
+  floor: number
+  label?: string
+}
+
+/**
+ * The hanging block at the current frame. `submergedTop` is the level the
+ * liquid reaches on the block, so the renderer can shade only the part that is
+ * actually under — that shaded slab IS the displaced volume.
+ */
+export interface FluidBlockVisual {
+  id: string
+  /** Centre of the block. */
+  at: ScenePoint
+  halfWidth: number
+  halfHeight: number
+  /** Liquid level across the block face; equals the block bottom when dry. */
+  submergedTop: number
+  phase: 'dry' | 'entering' | 'submerged' | 'floating'
+  label?: string
+}
+
+/** The spring scale above the tank, drawn with its reading on the dial. */
+export interface FluidScaleVisual {
+  id: string
+  /** Hook point the block hangs from. */
+  at: ScenePoint
+  /** Formatted reading shown on the dial, e.g. `1.67 N`. */
+  reading: string
+  label?: string
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -620,6 +665,12 @@ export interface SceneVisualModel {
   acousticPulse?: AcousticPulseVisual
   /** Trailing wavefront arcs; gated by the `wavefronts` observable. */
   acousticWavefronts?: readonly AcousticWavefrontVisual[]
+  /** The liquid in the tank (fluid domain). */
+  fluidLiquid?: FluidLiquidVisual
+  /** The hanging block at the current frame. */
+  fluidBlock?: FluidBlockVisual
+  /** The spring scale the block hangs from. */
+  fluidScale?: FluidScaleVisual
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 
