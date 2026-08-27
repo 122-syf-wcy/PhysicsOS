@@ -119,6 +119,7 @@ export const createThermalBenchScene = (input: ThermalBenchSceneInput): PhysicsS
     acousticBenches: [],
     fluidTanks: [],
     thermalBenches: [bench],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {
@@ -166,4 +167,5 @@ export const isThermalScene = (scene: PhysicsScene): boolean =>
   scene.circuits.length === 0 &&
   (scene.opticalBenches ?? []).length === 0 &&
   (scene.acousticBenches ?? []).length === 0 &&
-  (scene.fluidTanks ?? []).length === 0
+  (scene.fluidTanks ?? []).length === 0 &&
+  (scene.leverBenches ?? []).length === 0

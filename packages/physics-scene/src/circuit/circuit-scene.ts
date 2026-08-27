@@ -316,6 +316,7 @@ export const createCircuitScene = (input: CircuitSceneInput): PhysicsScene => {
     acousticBenches: [],
     fluidTanks: [],
     thermalBenches: [],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {
@@ -402,7 +403,12 @@ export const isCircuitScene = (scene: PhysicsScene): boolean =>
   scene.circuits.length === 1 &&
   scene.particles.length === 0 &&
   scene.bodies.length === 0 &&
-  scene.fields.length === 0
+  scene.fields.length === 0 &&
+  (scene.opticalBenches ?? []).length === 0 &&
+  (scene.acousticBenches ?? []).length === 0 &&
+  (scene.fluidTanks ?? []).length === 0 &&
+  (scene.thermalBenches ?? []).length === 0 &&
+  (scene.leverBenches ?? []).length === 0
 
 const isPlacement = (value: unknown): value is CircuitComponentPlacement => {
   if (typeof value !== 'object' || value === null) return false

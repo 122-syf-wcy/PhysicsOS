@@ -196,6 +196,7 @@ export const createParallelPlateScene = (input: ParallelPlateSceneInput = {}): P
     acousticBenches: [],
     fluidTanks: [],
     thermalBenches: [],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       { id: observableId('electricField'), type: 'electric_field', targetId: fieldId, visible: visibility.electricField ?? true },

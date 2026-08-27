@@ -596,6 +596,46 @@ export interface ThermalBench extends PhysicsObjectBase {
   runDuration?: Quantity<'time'>
 }
 
+/* ----------------------------------------------------------- lever bench -- */
+
+/** Which side of a class-1 fulcrum a hanger sits on. */
+export type LeverHangerSide = 'left' | 'right'
+
+/**
+ * A hanging mass on one arm of the lever. Force and moment are NOT stored:
+ * mass, arm length and gravity are the editable facts, and F = mg, M = F·l
+ * are derived by the engine so they cannot go stale after an edit.
+ */
+export interface LeverHanger {
+  id: string
+  name?: string
+  side: LeverHangerSide
+  /** Mass of the hanging load; finite and > 0. */
+  mass: Quantity<'mass'>
+  /** Horizontal distance from the fulcrum to the hanger; finite and > 0. */
+  armLength: Quantity<'length'>
+}
+
+/**
+ * Class-1 lever (junior statics slice): a rigid beam with the fulcrum between
+ * two hanging loads. The scene does NOT store the current tilt — masses and
+ * arm lengths are the editable facts, so whether the beam balances and which
+ * way it tips come from the engine rather than a persisted angle that goes
+ * stale on the next edit.
+ *
+ * This is moment statics, not rigid-body dynamics: no moment of inertia, no
+ * angular acceleration. An unbalanced beam tips to a small display angle so
+ * the student can see which side went down.
+ */
+export interface LeverBench extends PhysicsObjectBase {
+  type: 'lever_bench'
+  /** Total length of the beam; each arm must stay inside half of this. */
+  beamLength: Quantity<'length'>
+  /** Gravitational field strength used for every hanging weight. */
+  gravity: Quantity<'acceleration'>
+  hangers: LeverHanger[]
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -646,6 +686,7 @@ export interface PhysicsScene {
   acousticBenches: AcousticBench[]
   fluidTanks: FluidTank[]
   thermalBenches: ThermalBench[]
+  leverBenches: LeverBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]

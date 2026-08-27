@@ -93,6 +93,7 @@ export const createAcousticBenchScene = (input: AcousticBenchSceneInput): Physic
     acousticBenches: [bench],
     fluidTanks: [],
     thermalBenches: [],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {
@@ -139,4 +140,7 @@ export const isAcousticsScene = (scene: PhysicsScene): boolean =>
   scene.bodies.length === 0 &&
   scene.fields.length === 0 &&
   scene.circuits.length === 0 &&
-  (scene.opticalBenches ?? []).length === 0
+  (scene.opticalBenches ?? []).length === 0 &&
+  (scene.fluidTanks ?? []).length === 0 &&
+  (scene.thermalBenches ?? []).length === 0 &&
+  (scene.leverBenches ?? []).length === 0

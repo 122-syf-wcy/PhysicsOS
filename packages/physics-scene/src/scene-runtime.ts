@@ -29,6 +29,7 @@ import type {
   Circuit,
   CircuitComponent,
   FluidTank,
+  LeverBench,
   OpticalBench,
   PhysicsScene,
   ThermalBench,
@@ -76,6 +77,8 @@ export type SceneCommandType =
   | 'SetBlockMass'
   | 'SetHeaterPower'
   | 'SetSampleMass'
+  | 'SetHangerMass'
+  | 'SetHangerArm'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -231,6 +234,18 @@ export interface SceneCommandPayloadMap {
     /** Mass of the heated sample; finite and > 0. */
     mass: Quantity<'mass'>
   }
+  SetHangerMass: {
+    leverId: string
+    hangerId: string
+    /** Mass of the hanging load; finite and > 0. */
+    mass: Quantity<'mass'>
+  }
+  SetHangerArm: {
+    leverId: string
+    hangerId: string
+    /** Distance from the fulcrum to the hanger; finite and > 0. */
+    armLength: Quantity<'length'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -294,6 +309,8 @@ export type PhysicsEventType =
   | 'BlockMassChanged'
   | 'HeaterPowerChanged'
   | 'SampleMassChanged'
+  | 'HangerMassChanged'
+  | 'HangerArmChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -335,6 +352,8 @@ export interface PhysicsEventPayloadMap {
   BlockMassChanged: SceneCommandPayloadMap['SetBlockMass']
   HeaterPowerChanged: SceneCommandPayloadMap['SetHeaterPower']
   SampleMassChanged: SceneCommandPayloadMap['SetSampleMass']
+  HangerMassChanged: SceneCommandPayloadMap['SetHangerMass']
+  HangerArmChanged: SceneCommandPayloadMap['SetHangerArm']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -422,6 +441,8 @@ const NOT_FOUND_CODES = {
   acoustic_bench: 'ACOUSTIC_BENCH_NOT_FOUND',
   fluid_tank: 'FLUID_TANK_NOT_FOUND',
   thermal_bench: 'THERMAL_BENCH_NOT_FOUND',
+  lever_bench: 'LEVER_NOT_FOUND',
+  lever_hanger: 'HANGER_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -558,6 +579,22 @@ const findThermalBench = (scene: PhysicsScene, benchId: string): ThermalBenchLoo
   }
   const bench = scene.thermalBenches.find((entry) => entry.id === benchId)
   if (bench === undefined) return { ok: false, error: notFound('thermal_bench', benchId) }
+  return { ok: true, bench }
+}
+
+type LeverLookup =
+  | { ok: true; bench: LeverBench }
+  | { ok: false; error: DomainError }
+
+const findLever = (scene: PhysicsScene, leverId: string): LeverLookup => {
+  if (typeof leverId !== 'string' || leverId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_LEVER_ID', 'leverId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.leverBenches ?? []).find((entry) => entry.id === leverId)
+  if (bench === undefined) return { ok: false, error: notFound('lever_bench', leverId) }
   return { ok: true, bench }
 }
 
@@ -1740,6 +1777,84 @@ const applyCommand = (
           ...eventMetadata,
           type: 'SampleMassChanged',
           payload: { benchId: command.payload.benchId, mass: clone(mass) },
+        },
+      }
+    }
+
+    /* --------------------------------------------------------------- lever -- */
+
+    case 'SetHangerMass': {
+      const lookup = findLever(scene, command.payload.leverId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const hanger = lookup.bench.hangers.find((entry) => entry.id === command.payload.hangerId)
+      if (hanger === undefined) {
+        return { ok: false, error: notFound('lever_hanger', command.payload.hangerId) }
+      }
+      const mass = validateQuantity(command.payload.mass, 'mass')
+      if (!Number.isFinite(canonicalValue(mass)) || canonicalValue(mass) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_HANGER_MASS',
+            'Hanger mass must be a positive finite mass.',
+            {
+              leverId: command.payload.leverId,
+              hangerId: command.payload.hangerId,
+              mass: command.payload.mass,
+            },
+          ),
+        }
+      }
+      hanger.mass = clone(mass)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'HangerMassChanged',
+          payload: {
+            leverId: command.payload.leverId,
+            hangerId: command.payload.hangerId,
+            mass: clone(mass),
+          },
+        },
+      }
+    }
+
+    case 'SetHangerArm': {
+      const lookup = findLever(scene, command.payload.leverId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const hanger = lookup.bench.hangers.find((entry) => entry.id === command.payload.hangerId)
+      if (hanger === undefined) {
+        return { ok: false, error: notFound('lever_hanger', command.payload.hangerId) }
+      }
+      const armLength = validateQuantity(command.payload.armLength, 'length')
+      const armSI = canonicalValue(armLength)
+      const halfBeam = canonicalValue(lookup.bench.beamLength) / 2
+      if (!Number.isFinite(armSI) || armSI <= 0 || armSI > halfBeam) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_HANGER_ARM',
+            'Hanger arm must be a positive finite length no longer than half the beam.',
+            {
+              leverId: command.payload.leverId,
+              hangerId: command.payload.hangerId,
+              armLength: command.payload.armLength,
+            },
+          ),
+        }
+      }
+      hanger.armLength = clone(armLength)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'HangerArmChanged',
+          payload: {
+            leverId: command.payload.leverId,
+            hangerId: command.payload.hangerId,
+            armLength: clone(armLength),
+          },
         },
       }
     }

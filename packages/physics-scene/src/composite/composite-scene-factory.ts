@@ -238,6 +238,7 @@ const buildScene = (
     acousticBenches: [],
     fluidTanks: [],
     thermalBenches: [],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: observableDefinitions(particleId, fieldIds, visibility),
     annotations: [],

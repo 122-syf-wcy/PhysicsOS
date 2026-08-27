@@ -76,6 +76,8 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       entry.sample.id,
       ...(entry.comparisonSample === undefined ? [] : [entry.comparisonSample.id]),
     ]),
+    ...(scene.leverBenches ?? []).map((entry) => entry.id),
+    ...(scene.leverBenches ?? []).flatMap((entry) => entry.hangers.map((hanger) => hanger.id)),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -583,6 +585,49 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     checks.push(
       check(`thermal_bench_values:${bench.id}`, 'constraint', valuesValid, {
         message: `Thermal bench "${bench.id}" needs positive mass, specific heats, temperatures and power, and a non-negative latent heat.`,
+        targetId: bench.id,
+      }),
+    )
+  }
+
+  for (const bench of scene.leverBenches ?? []) {
+    const dimensionsValid =
+      hasExpectedDimension(bench.beamLength, 'length') &&
+      hasExpectedDimension(bench.gravity, 'acceleration') &&
+      bench.hangers.every(
+        (hanger) =>
+          hasExpectedDimension(hanger.mass, 'mass') &&
+          hasExpectedDimension(hanger.armLength, 'length'),
+      )
+    checks.push(
+      check(`lever_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Lever "${bench.id}" quantities must use mass / length / acceleration dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    const halfBeam = dimensionsValid ? canonicalValue(bench.beamLength) / 2 : 0
+    const sides = bench.hangers.map((hanger) => hanger.side)
+    const classOne =
+      bench.hangers.length === 2 &&
+      sides.includes('left') &&
+      sides.includes('right')
+    const armsOnBeam =
+      dimensionsValid &&
+      bench.hangers.every((hanger) => canonicalValue(hanger.armLength) <= halfBeam)
+    const valuesValid =
+      dimensionsValid &&
+      positive(bench.beamLength) &&
+      positive(bench.gravity) &&
+      bench.hangers.every((hanger) => positive(hanger.mass) && positive(hanger.armLength)) &&
+      classOne &&
+      armsOnBeam
+    checks.push(
+      check(`lever_bench_values:${bench.id}`, 'constraint', valuesValid, {
+        message: `Lever "${bench.id}" needs two hangers on opposite sides, positive masses and arms, and each arm inside half the beam.`,
         targetId: bench.id,
       }),
     )

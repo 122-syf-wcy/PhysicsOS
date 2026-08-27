@@ -175,6 +175,7 @@ export const createOpticalBenchScene = (input: OpticalBenchSceneInput): PhysicsS
     acousticBenches: [],
     fluidTanks: [],
     thermalBenches: [],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {
@@ -219,7 +220,11 @@ export const isOpticsScene = (scene: PhysicsScene): boolean =>
   scene.particles.length === 0 &&
   scene.bodies.length === 0 &&
   scene.fields.length === 0 &&
-  scene.circuits.length === 0
+  scene.circuits.length === 0 &&
+  (scene.acousticBenches ?? []).length === 0 &&
+  (scene.fluidTanks ?? []).length === 0 &&
+  (scene.thermalBenches ?? []).length === 0 &&
+  (scene.leverBenches ?? []).length === 0
 
 /** First enabled imaging element of a bench. */
 export const opticalElementOf = (bench: OpticalBench): OpticalElement | undefined =>

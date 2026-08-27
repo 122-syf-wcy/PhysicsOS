@@ -55,6 +55,9 @@ export {
   type TankLiquid,
   type ThermalBench,
   type ThermalSample,
+  type LeverBench,
+  type LeverHanger,
+  type LeverHangerSide,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -263,3 +266,16 @@ export {
   type CrystalMeltingSceneInput,
   type HeatCapacityComparisonSceneInput,
 } from './thermal/thermal-templates.ts'
+export {
+  createLeverBenchScene,
+  isLeverScene,
+  leverBenchOf,
+  leverBenchesOf,
+  type LeverBenchSceneInput,
+  type LeverHangerSpec,
+  type LeverObservableKey,
+} from './lever/lever-scene.ts'
+export {
+  createLeverBalanceScene,
+  type LeverBalanceSceneInput,
+} from './lever/lever-templates.ts'

@@ -104,6 +104,7 @@ export const createFluidTankScene = (input: FluidTankSceneInput): PhysicsScene =
     acousticBenches: [],
     fluidTanks: [tank],
     thermalBenches: [],
+    leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {
@@ -148,4 +149,6 @@ export const isFluidScene = (scene: PhysicsScene): boolean =>
   scene.fields.length === 0 &&
   scene.circuits.length === 0 &&
   (scene.opticalBenches ?? []).length === 0 &&
-  (scene.acousticBenches ?? []).length === 0
+  (scene.acousticBenches ?? []).length === 0 &&
+  (scene.thermalBenches ?? []).length === 0 &&
+  (scene.leverBenches ?? []).length === 0
