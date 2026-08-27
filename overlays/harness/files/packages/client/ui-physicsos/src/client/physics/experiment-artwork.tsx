@@ -620,6 +620,27 @@ const ConvexMirrorArt = () => (
   </>
 )
 
+/* ------------------------------------------------------------------- thermal -- */
+
+/** 晶体熔化: beaker over a flame, thermometer beside it, T–t curve behind. */
+const CrystalMeltingArt = () => (
+  <>
+    <Stroke d="M18 16 V44 a6 6 0 0 0 6 6 H44 a6 6 0 0 0 6 -6 V16" width={2.4} />
+    <Stroke d="M18 33 H50" width={1.5} opacity={0.5} dash="4 3" />
+    <Stroke d="M34 54 q3 -4 0 -8" width={1.8} opacity={0.7} />
+    <Stroke d="M27 54 q3 -4 0 -8" width={1.6} opacity={0.5} />
+    <Stroke d="M41 54 q3 -4 0 -8" width={1.6} opacity={0.5} />
+    <Stroke d="M60 10 V52" width={1.5} opacity={0.35} />
+    <Stroke d="M60 52 H112" width={1.5} opacity={0.35} />
+    <Stroke d="M62 48 L76 28 H96 L108 14" width={2.4} />
+    <Dot x={76} y={28} r={2} />
+    <Dot x={96} y={28} r={2} />
+    <Stroke d="M8 12 V44" width={2.2} />
+    <Stroke d="M8 30 V44" width={3.4} opacity={0.85} />
+    <Dot x={8} y={47} r={3.4} />
+  </>
+)
+
 /* ----------------------------------------------------------------- acoustics -- */
 
 /** 回声测距: speaker on open ground, wave arcs out to the hatched cliff. */
@@ -698,6 +719,7 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'concave-mirror': ConcaveMirrorArt,
   'convex-mirror': ConvexMirrorArt,
   'echo-ranging': EchoRangingArt,
+  'crystal-melting': CrystalMeltingArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -733,6 +755,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['convex-mirror', 'optics-convex-mirror'],
   ['echo-ranging', 'acoustics-echo-ranging'],
   ['buoyancy', 'fluid-buoyancy'],
+  ['crystal-melting', 'thermal-crystal-melting'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

@@ -26,6 +26,7 @@ import {
 import { createAcousticsWorkspaceRuntime } from './physics/acoustics-workspace-runtime.ts'
 import { createCircuitWorkspaceRuntime } from './physics/circuit-workspace-runtime.ts'
 import { createFluidWorkspaceRuntime } from './physics/fluid-workspace-runtime.ts'
+import { createThermalWorkspaceRuntime } from './physics/thermal-workspace-runtime.ts'
 import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-runtime.ts'
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
@@ -208,6 +209,8 @@ const buildRuntime = (
       return scene === undefined ? null : createAcousticsWorkspaceRuntime(scene)
     case 'fluid':
       return scene === undefined ? null : createFluidWorkspaceRuntime(scene)
+    case 'thermal':
+      return scene === undefined ? null : createThermalWorkspaceRuntime(scene)
     case 'composite':
       return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
     case 'magnetic':

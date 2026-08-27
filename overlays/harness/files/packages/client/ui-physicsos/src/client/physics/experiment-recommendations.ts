@@ -75,6 +75,12 @@ export const KNOWLEDGE_EXPERIMENT: Readonly<Record<string, string>> = {
   'fl-buoyancy-measure': 'buoyancy',
   'fl-archimedes': 'buoyancy',
   'fl-float-sink': 'buoyancy',
+  /* The melting run carries all three thermal nodes: the plateau IS the melting
+     point, the heat it swallows IS the latent heat, and the two sloped segments
+     are what specific heat means. */
+  'th-melting-point': 'crystal-melting',
+  'th-latent-heat': 'crystal-melting',
+  'th-specific-heat': 'crystal-melting',
 }
 
 /**

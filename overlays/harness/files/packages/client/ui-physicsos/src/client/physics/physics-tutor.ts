@@ -1292,6 +1292,73 @@ const buoyancyLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/* ------------------------------------------------------------------ thermal -- */
+
+const crystalMeltingLesson = (context: PhysicsAgentContext): TutorScript => {
+  const power = derivedText(context, '加热功率 P')
+  const meltingPoint = derivedText(context, '熔点 T_熔')
+  const meltingDuration = derivedText(context, '熔化耗时 t_熔')
+  const meltingHeat = derivedText(context, '熔化吸热 Q_熔')
+  const temperature = derivedText(context, '当前温度 T')
+  const phase = context.derived.find(row => row.label === '所处阶段')?.value
+  const crystalline = context.verification.some(check => check.id === 'melting_plateau')
+  return {
+    id: crystalline ? 'thermal-crystal-melting' : 'thermal-amorphous',
+    topic: '探究晶体的熔化过程',
+    observation: [
+      ...observeLine('加热功率 P', power),
+      ...observeLine('当前温度 T', temperature),
+      ...observeLine('所处阶段', phase),
+    ],
+    question: crystalline
+      ? '加热器一秒都没停，温度计却停在熔点不动了。这段时间的热跑到哪去了？'
+      : '同样恒功率加热，为什么这个样品的温度一路上升，没有那段水平线？',
+    hints: [
+      {
+        id: 'hint-still-heating',
+        title: '提示 1',
+        paragraphs: ['先确认一件事：加热器功率恒定，每一秒都在往里送 P 焦耳。温度不变不代表能量没进来 —— 这两件事要分开看。'],
+        highlights: ['thermal-bench-1'],
+      },
+      {
+        id: 'hint-where-it-goes',
+        title: '提示 2',
+        paragraphs: ['热量进来只有两个去处：让分子运动更剧烈（温度升高），或者把固体的晶体结构拆开（状态改变）。熔化时它全部走了第二条路。'],
+        highlights: ['sample-1'],
+      },
+      {
+        id: 'hint-latent',
+        title: '提示 3',
+        paragraphs: ['把这段吸的热算出来：Q = P·t_熔，也等于 mL。反过来，知道熔化耗时和功率就能测出这种物质的熔化热 —— 这正是这个实验的用处。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        crystalline
+          ? '热全部用来熔化了：晶体有固定熔点，熔化期间吸收的能量拿去破坏晶体结构，不用来提高温度，所以图像上出现一段水平线。熔化完毕后剩下的液体继续吸热，温度才重新上升。'
+          : '这是非晶体：没有固定熔点，受热时逐渐变软，整个过程温度持续上升，图像上没有水平段。有没有那段水平线，正是区分晶体与非晶体的判据。',
+        [
+          power === undefined ? '' : `P = ${power}`,
+          meltingPoint === undefined ? '' : `T_熔 = ${meltingPoint} ℃`,
+          meltingDuration === undefined ? '' : `t_熔 = ${meltingDuration}`,
+          meltingHeat === undefined ? '' : `Q_熔 = mL = ${meltingHeat}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        '熔化前后两段斜率不同也不是偶然：升温速率是 P/(cm)，比热容越大升得越慢。',
+      ].filter(entry => entry.length > 0),
+      highlights: ['sample-1', 'thermometer'],
+    },
+    evidence: evidenceOf(context, [
+      'melting_plateau',
+      'plateau_duration',
+      'amorphous_no_plateau',
+      'energy_conservation',
+      'heating_rate_ratio',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1305,10 +1372,11 @@ const buoyancyLesson = (context: PhysicsAgentContext): TutorScript => {
  * the stamped title); optics frames by the imaging element actually on the
  * bench (plane mirror vs thin lens vs curved mirror, with the lens and mirror
  * lessons sub-dispatched on the 物距区间 the runtime published); acoustics
- * frames all teach echo ranging and fluid frames all teach the weighing method
- * (each models exactly one apparatus); mechanics/electric frames by the scene
- * title the template stamped. Unknown frames return undefined and the drawer
- * keeps Q&A.
+ * frames all teach echo ranging, fluid frames the weighing method and thermal
+ * frames the melting curve (each models exactly one apparatus, with the thermal
+ * lesson split on whether the sample has a melting plateau at all);
+ * mechanics/electric frames by the scene title the template stamped. Unknown
+ * frames return undefined and the drawer keeps Q&A.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
   if (context.status === 'failed') return undefined
@@ -1346,7 +1414,8 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
   }
   if (context.domain === 'acoustics') return echoRangingLesson(context)
   if (context.domain === 'fluid') return buoyancyLesson(context)
-  /* Composite, magnetic, mechanics, circuit, optics, acoustics and fluid
-     returned above; electric remains. */
+  if (context.domain === 'thermal') return crystalMeltingLesson(context)
+  /* Composite, magnetic, mechanics, circuit, optics, acoustics, fluid and
+     thermal returned above; electric remains. */
   return electricLesson(context)
 }

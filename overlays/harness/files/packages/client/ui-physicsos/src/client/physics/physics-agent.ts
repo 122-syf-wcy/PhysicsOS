@@ -239,6 +239,11 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.fluidBlock === undefined ? [] : [view.fluidBlock.id]),
     ...(view.fluidLiquid === undefined ? [] : [view.fluidLiquid.id]),
     ...(view.fluidScale === undefined ? [] : [view.fluidScale.id]),
+    /* Heating bench primitives: the sample, the heater and the thermometer are
+       highlight groups in the thermal renderer. */
+    ...(view.thermalSample === undefined ? [] : [view.thermalSample.id]),
+    ...(view.thermalHeater === undefined ? [] : [view.thermalHeater.id]),
+    ...(view.thermalThermometer === undefined ? [] : [view.thermalThermometer.id]),
   ]
 }
 

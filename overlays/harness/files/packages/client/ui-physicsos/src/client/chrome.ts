@@ -86,6 +86,14 @@ const PHYSICS_TOKENS = `
   --physics-fluid-liquid: #0d9488;
   --physics-fluid-liquid-soft: #cdeeea;
 
+  /* ---------- thermal ----------
+     Heat is warm red: the thermometer column, the flames and the melting-point
+     line. Solid and melted sample are two steps of the same warm neutral, so
+     the phase change reads without competing with the heat colour. */
+  --physics-thermal-heat: #dc2626;
+  --physics-thermal-solid: #dbe6f0;
+  --physics-thermal-liquid: #a8c8e4;
+
   /* ---------- status ---------- */
   --physics-verification-ok: #2f9e5a;
   --physics-verification-warning: #d97706;
@@ -93,9 +101,9 @@ const PHYSICS_TOKENS = `
 
   /* ---------- subjects ----------
      Library / navigation identity for the experiment domains (力学 / 电场 / 磁场 /
-     电路 / 复合场 / 光学 / 声学 / 浮力), one hue + one tinted surface each. These
-     colour UI chrome — picker cards, tags, tabs — NEVER canvas physics: a vector
-     keeps its vector token even inside a subject-tinted card. */
+     电路 / 复合场 / 光学 / 声学 / 浮力 / 热学), one hue + one tinted surface each.
+     These colour UI chrome — picker cards, tags, tabs — NEVER canvas physics: a
+     vector keeps its vector token even inside a subject-tinted card. */
   --physics-subject-mechanics: #2f9e5a;
   --physics-subject-mechanics-tint: #e7f4ec;
   --physics-subject-electric: #2563eb;
@@ -112,6 +120,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-acoustics-tint: #e3f2fb;
   --physics-subject-fluid: #0d9488;
   --physics-subject-fluid-tint: #dcf1ef;
+  --physics-subject-thermal: #dc2626;
+  --physics-subject-thermal-tint: #fbe3e3;
 
   /* ---------- interaction ---------- */
   --physics-highlight: #f5a524;

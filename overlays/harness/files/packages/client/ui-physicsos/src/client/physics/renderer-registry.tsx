@@ -14,6 +14,7 @@ import { AcousticsRenderer } from './acoustics-renderer.tsx'
 import { CircuitRenderer } from './circuit-renderer.tsx'
 import { FluidRenderer } from './fluid-renderer.tsx'
 import { OpticsRenderer } from './optics-renderer.tsx'
+import { ThermalRenderer } from './thermal-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
 import {
   Angle,
@@ -954,6 +955,7 @@ export const RENDERERS = {
   optics: OpticsRenderer,
   acoustics: AcousticsRenderer,
   fluid: FluidRenderer,
+  thermal: ThermalRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 
 export { CompositeRenderer, ElectricRenderer, MagneticRenderer, MechanicsRenderer }

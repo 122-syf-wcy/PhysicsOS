@@ -381,6 +381,20 @@ export const IconConvexMirror = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* ----------------------------------------------------------------- thermal -- */
+
+/** Crystal melting: a thermometer beside a beaker over a flame. */
+export const IconCrystalMelting = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4.5 4.5v13.2" />
+    <path d="M4.5 10.5v7.2" strokeWidth="2.6" />
+    <circle cx="4.5" cy="19.4" r="2.1" />
+    <path d="M10.5 5.5v11.5a2.6 2.6 0 0 0 2.6 2.6h4.3a2.6 2.6 0 0 0 2.6-2.6V5.5" />
+    <path d="M10.9 12.4h9.1" strokeOpacity="0.55" strokeDasharray="1.8 2" />
+    <path d="M15.3 21.6q1.5-1.3 0-2.6" strokeOpacity="0.6" />
+  </Glyph>
+)
+
 /* --------------------------------------------------------------- acoustics -- */
 
 /** Echo ranging: a loudspeaker facing a hatched wall, wave arcs between. */

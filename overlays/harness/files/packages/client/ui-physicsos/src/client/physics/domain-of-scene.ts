@@ -4,6 +4,7 @@ import {
   isCompositeFieldScene,
   isFluidScene,
   isOpticsScene,
+  isThermalScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
@@ -16,18 +17,20 @@ export type SupportedSceneDomain =
   | 'optics'
   | 'acoustics'
   | 'fluid'
+  | 'thermal'
 export type SceneDomain = SupportedSceneDomain | 'unsupported'
 
 export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
-  /* Circuit, optics, acoustics and fluid scenes carry no motion objects at all,
-     so they must be classified before the body/particle branches (which would
-     all fall through to 'unsupported' — a blank surface rather than an error).
-     The four are mutually exclusive: each accessor requires the other apparatus
-     collections to be empty. */
+  /* Circuit, optics, acoustics, fluid and thermal scenes carry no motion
+     objects at all, so they must be classified before the body/particle
+     branches (which would all fall through to 'unsupported' — a blank surface
+     rather than an error). The five are mutually exclusive: each accessor
+     requires the other apparatus collections to be empty. */
   if (isCircuitScene(scene)) return 'circuit'
   if (isOpticsScene(scene)) return 'optics'
   if (isAcousticsScene(scene)) return 'acoustics'
   if (isFluidScene(scene)) return 'fluid'
+  if (isThermalScene(scene)) return 'thermal'
   const pointChargeFields = scene.fields.filter(field => field.type === 'point_charge')
   const electricFields = scene.fields.filter(field => field.type === 'uniform_electric')
   const magneticFields = scene.fields.filter(field => field.type === 'uniform_magnetic')

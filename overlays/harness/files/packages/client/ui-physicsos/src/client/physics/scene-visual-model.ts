@@ -30,6 +30,7 @@ export type PhysicsDomainId =
   | 'optics'
   | 'acoustics'
   | 'fluid'
+  | 'thermal'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -93,6 +94,9 @@ export type ObservableKey =
   | 'path'
   // fluid statics
   | 'displaced'
+  // thermal
+  | 'thermometer'
+  | 'phase'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -584,6 +588,47 @@ export interface FluidScaleVisual {
   label?: string
 }
 
+/* ------------------------------------------------------------------ thermal -- */
+
+/**
+ * The heated sample in its beaker at the current frame. `meltedFraction` drives
+ * how much of the beaker is drawn as liquid rather than solid, so the phase
+ * change is visible on the apparatus and not only on the graph.
+ */
+export interface ThermalSampleVisual {
+  id: string
+  /** Centre of the beaker interior. */
+  at: ScenePoint
+  halfWidth: number
+  halfHeight: number
+  /** Fraction of the sample that has melted, 0…1. */
+  meltedFraction: number
+  phase: 'solid' | 'melting' | 'liquid'
+  label?: string
+}
+
+/** The thermometer beside the beaker, drawn with its live reading. */
+export interface ThermalThermometerVisual {
+  id: string
+  /** Foot of the thermometer bulb. */
+  at: ScenePoint
+  /** Column height in scene units, already scaled from the temperature. */
+  columnHeight: number
+  /** Formatted reading shown next to the tube, e.g. `0.0 ℃`. */
+  reading: string
+  label?: string
+}
+
+/** The heat source under the beaker, drawn with its power label. */
+export interface ThermalHeaterVisual {
+  id: string
+  at: ScenePoint
+  halfWidth: number
+  /** Formatted power, e.g. `50 W`. */
+  power: string
+  label?: string
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -671,6 +716,12 @@ export interface SceneVisualModel {
   fluidBlock?: FluidBlockVisual
   /** The spring scale the block hangs from. */
   fluidScale?: FluidScaleVisual
+  /** The heated sample in its beaker (thermal domain). */
+  thermalSample?: ThermalSampleVisual
+  /** The thermometer reading the sample; gated by the `thermometer` observable. */
+  thermalThermometer?: ThermalThermometerVisual
+  /** The heat source under the beaker. */
+  thermalHeater?: ThermalHeaterVisual
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

@@ -598,3 +598,86 @@
 .fluidBlockFloating {
   stroke: var(--physics-verification-ok);
 }
+
+/* ------------------------------------------------------------------- thermal -- */
+
+.thermalBeakerWall {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Solid sits pale and opaque; the melted part takes the warm liquid shade, so
+   the phase change is visible on the apparatus and not only on the graph. */
+.thermalSampleSolid {
+  fill: var(--physics-thermal-solid);
+  stroke: none;
+}
+
+.thermalSampleLiquid {
+  fill: var(--physics-thermal-liquid);
+  stroke: none;
+}
+
+.thermalSampleMelting {
+  opacity: 0.85;
+}
+
+.thermalHeaterBody {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+}
+
+.thermalFlame {
+  fill: var(--physics-thermal-heat);
+  stroke: none;
+  opacity: 0.85;
+}
+
+.thermalTube {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.35;
+}
+
+.thermalColumn {
+  stroke: var(--physics-thermal-heat);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.thermalBulb {
+  fill: var(--physics-thermal-heat);
+  stroke: #fbfdff;
+  stroke-width: 1.4;
+}
+
+/* The reading is the measurement the run produces, so it is typeset as one. */
+.thermalReading {
+  dominant-baseline: middle;
+  fill: var(--physics-measurement);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  user-select: none;
+}
+
+.thermalMeltingLine {
+  stroke: var(--physics-thermal-heat);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 4;
+  opacity: 0.8;
+}
+
+.thermalMeltingLabel {
+  fill: var(--physics-thermal-heat);
+  font-size: 11px;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+  user-select: none;
+}

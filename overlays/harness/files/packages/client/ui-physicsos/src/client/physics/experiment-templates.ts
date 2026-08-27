@@ -22,6 +22,7 @@ import {
   createConcaveMirrorScene,
   createConvexLensScene,
   createConvexMirrorScene,
+  createCrystalMeltingScene,
   createEchoRangingScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
@@ -51,6 +52,7 @@ import {
   IconConcaveMirror,
   IconConvexLens,
   IconConvexMirror,
+  IconCrystalMelting,
   IconEchoRanging,
   IconEmfMeasure,
   IconInclinedPlane,
@@ -82,6 +84,7 @@ export type ExperimentDomain =
   | 'optics'
   | 'acoustics'
   | 'fluid'
+  | 'thermal'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -678,6 +681,32 @@ const fluidTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* ------------------------------------------------------------------- thermal -- */
+
+const thermalTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'crystal-melting',
+    domain: 'thermal',
+    stage: 'junior',
+    label: 'lab.template.crystalMelting',
+    hint: 'lab.template.crystalMelting.hint',
+    icon: IconCrystalMelting,
+    tags: ['热学', '初中', '熔化', '晶体', '比热容'],
+    createScene: (title) => {
+      /* 探究晶体的熔化过程：100 g 冰、50 W 恒功率。升温 84 s 到 0 ℃，熔化
+         668 s 温度一动不动，再升温 84 s 到 10 ℃ —— 水平段占了图像的四分之三，
+         「熔化吸热但温度不变」不用讲就能看见。把熔化热改成 0 就是非晶体。 */
+      const scene = createCrystalMeltingScene({
+        sceneId: stampId('thermal-crystal-melting'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+]
+
 /* ----------------------------------------------------------------- composite -- */
 
 const compositeTemplates: readonly ExperimentTemplate[] = [
@@ -840,6 +869,7 @@ export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'optics', label: 'lab.template.group.optics', templates: opticsTemplates },
   { id: 'acoustics', label: 'lab.template.group.acoustics', templates: acousticsTemplates },
   { id: 'fluid', label: 'lab.template.group.fluid', templates: fluidTemplates },
+  { id: 'thermal', label: 'lab.template.group.thermal', templates: thermalTemplates },
   { id: 'electric', label: 'lab.template.group.electric', templates: electricTemplates },
   { id: 'magnetic', label: 'lab.template.group.magnetic', templates: magneticTemplates },
   { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },

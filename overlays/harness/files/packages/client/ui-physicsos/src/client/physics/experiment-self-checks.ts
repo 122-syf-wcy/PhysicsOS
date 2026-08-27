@@ -96,6 +96,14 @@ export const acousticsTopicOf = (context: PhysicsAgentContext): string | undefin
 export const fluidTopicOf = (context: PhysicsAgentContext): string | undefined =>
   context.status !== 'failed' && context.domain === 'fluid' ? 'fluid-buoyancy' : undefined
 
+/**
+ * The lab topic of a thermal frame. The bench models exactly one apparatus (a
+ * sample over a steady heater), so the domain IS the topic — a renamed scene
+ * still gets the melting probes.
+ */
+export const thermalTopicOf = (context: PhysicsAgentContext): string | undefined =>
+  context.status !== 'failed' && context.domain === 'thermal' ? 'thermal-melting' : undefined
+
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   circuitTopicOf(context)
@@ -103,6 +111,7 @@ export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   ?? opticsTopicOf(context)
   ?? acousticsTopicOf(context)
   ?? fluidTopicOf(context)
+  ?? thermalTopicOf(context)
 
 /** The self-check set for the current frame; undefined keeps the tab hidden. */
 export const experimentSelfChecksOf = (
@@ -130,4 +139,5 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'optics-curved-mirror': 'concave-mirror',
   'acoustics-echo': 'echo-ranging',
   'fluid-buoyancy': 'buoyancy',
+  'thermal-melting': 'crystal-melting',
 }
