@@ -103,6 +103,7 @@ export const createFluidTankScene = (input: FluidTankSceneInput): PhysicsScene =
     opticalBenches: [],
     acousticBenches: [],
     fluidTanks: [tank],
+    thermalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       {

@@ -73,6 +73,7 @@ export function buildSceneFromIR(
     opticalBenches: [],
     acousticBenches: [],
     fluidTanks: [],
+    thermalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       { id: asObservableId('observable-velocity'), type: 'velocity', targetId: particleId, visible: true },

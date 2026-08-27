@@ -117,6 +117,7 @@ const compositeScene = (input: CompositeInput = {}): PhysicsScene => {
     opticalBenches: [],
     acousticBenches: [],
     fluidTanks: [],
+    thermalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [],
     annotations: [],

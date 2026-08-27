@@ -31,6 +31,7 @@ import type {
   FluidTank,
   OpticalBench,
   PhysicsScene,
+  ThermalBench,
   UniformElectricField,
   UniformMagneticField,
 } from './scene.ts'
@@ -73,6 +74,8 @@ export type SceneCommandType =
   | 'SetAcousticSoundSpeed'
   | 'SetLiquidDensity'
   | 'SetBlockMass'
+  | 'SetHeaterPower'
+  | 'SetSampleMass'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -218,6 +221,16 @@ export interface SceneCommandPayloadMap {
     /** Mass of the hanging block; finite and > 0. */
     mass: Quantity<'mass'>
   }
+  SetHeaterPower: {
+    benchId: string
+    /** Heat delivered per second; finite and > 0. */
+    power: Quantity<'power'>
+  }
+  SetSampleMass: {
+    benchId: string
+    /** Mass of the heated sample; finite and > 0. */
+    mass: Quantity<'mass'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -279,6 +292,8 @@ export type PhysicsEventType =
   | 'AcousticSoundSpeedChanged'
   | 'LiquidDensityChanged'
   | 'BlockMassChanged'
+  | 'HeaterPowerChanged'
+  | 'SampleMassChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -318,6 +333,8 @@ export interface PhysicsEventPayloadMap {
   AcousticSoundSpeedChanged: SceneCommandPayloadMap['SetAcousticSoundSpeed']
   LiquidDensityChanged: SceneCommandPayloadMap['SetLiquidDensity']
   BlockMassChanged: SceneCommandPayloadMap['SetBlockMass']
+  HeaterPowerChanged: SceneCommandPayloadMap['SetHeaterPower']
+  SampleMassChanged: SceneCommandPayloadMap['SetSampleMass']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -404,6 +421,7 @@ const NOT_FOUND_CODES = {
   optical_screen: 'OPTICAL_SCREEN_NOT_FOUND',
   acoustic_bench: 'ACOUSTIC_BENCH_NOT_FOUND',
   fluid_tank: 'FLUID_TANK_NOT_FOUND',
+  thermal_bench: 'THERMAL_BENCH_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -525,6 +543,22 @@ const findFluidTank = (scene: PhysicsScene, tankId: string): FluidTankLookup => 
   const tank = scene.fluidTanks.find((entry) => entry.id === tankId)
   if (tank === undefined) return { ok: false, error: notFound('fluid_tank', tankId) }
   return { ok: true, tank }
+}
+
+type ThermalBenchLookup =
+  | { ok: true; bench: ThermalBench }
+  | { ok: false; error: DomainError }
+
+const findThermalBench = (scene: PhysicsScene, benchId: string): ThermalBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_THERMAL_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = scene.thermalBenches.find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('thermal_bench', benchId) }
+  return { ok: true, bench }
 }
 
 const electricDirectionVector = (direction: ElectricFieldDirection) => {
@@ -1651,6 +1685,58 @@ const applyCommand = (
           ...eventMetadata,
           type: 'BlockMassChanged',
           payload: { tankId: command.payload.tankId, mass: clone(mass) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------------------- thermal -- */
+
+    case 'SetHeaterPower': {
+      const lookup = findThermalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const power = validateQuantity(command.payload.power, 'power')
+      if (!Number.isFinite(canonicalValue(power)) || canonicalValue(power) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_HEATER_POWER',
+            'Heater power must be a positive finite power.',
+            { benchId: command.payload.benchId, power: command.payload.power },
+          ),
+        }
+      }
+      lookup.bench.heaterPower = clone(power)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'HeaterPowerChanged',
+          payload: { benchId: command.payload.benchId, power: clone(power) },
+        },
+      }
+    }
+
+    case 'SetSampleMass': {
+      const lookup = findThermalBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const mass = validateQuantity(command.payload.mass, 'mass')
+      if (!Number.isFinite(canonicalValue(mass)) || canonicalValue(mass) <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_SAMPLE_MASS',
+            'Sample mass must be a positive finite mass.',
+            { benchId: command.payload.benchId, mass: command.payload.mass },
+          ),
+        }
+      }
+      lookup.bench.sample.mass = clone(mass)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SampleMassChanged',
+          payload: { benchId: command.payload.benchId, mass: clone(mass) },
         },
       }
     }

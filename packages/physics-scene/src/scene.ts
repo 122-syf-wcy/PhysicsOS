@@ -537,6 +537,49 @@ export interface FluidTank extends PhysicsObjectBase {
   gravity: Quantity<'acceleration'>
 }
 
+/* --------------------------------------------------------- thermal bench -- */
+
+/**
+ * The substance being heated. Solid and liquid specific heats are separate
+ * because the two segments of the heating curve have different slopes — that
+ * difference is one of the things the graph is read for.
+ */
+export interface ThermalSample {
+  id: string
+  name?: string
+  /** Mass of the sample; finite and > 0. */
+  mass: Quantity<'mass'>
+  /** Specific heat below the melting point; finite and > 0. */
+  solidSpecificHeat: Quantity<'specific_heat'>
+  /** Specific heat above the melting point; finite and > 0. */
+  liquidSpecificHeat: Quantity<'specific_heat'>
+  /**
+   * Latent heat of fusion. Zero marks an amorphous substance (松香 / 玻璃):
+   * no fixed melting point and therefore no plateau on the curve.
+   */
+  latentHeat: Quantity<'specific_latent_heat'>
+  /** Melting point; only meaningful when `latentHeat` is > 0. */
+  meltingPoint: Quantity<'temperature'>
+  /** Temperature at t = 0; must sit below the melting point. */
+  initialTemperature: Quantity<'temperature'>
+}
+
+/**
+ * Constant-power heating bench (junior thermal slice): one sample in a beaker
+ * over a steady heat source, with a thermometer in it.
+ *
+ * The scene does NOT store the current temperature. Mass, power and the
+ * material constants are all editable facts, so the temperature at any instant
+ * is derived by the engine from the timeline rather than persisted and left to
+ * go stale.
+ */
+export interface ThermalBench extends PhysicsObjectBase {
+  type: 'thermal_bench'
+  sample: ThermalSample
+  /** Heat delivered per second; assumed fully absorbed. Finite and > 0. */
+  heaterPower: Quantity<'power'>
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -586,6 +629,7 @@ export interface PhysicsScene {
   opticalBenches: OpticalBench[]
   acousticBenches: AcousticBench[]
   fluidTanks: FluidTank[]
+  thermalBenches: ThermalBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]

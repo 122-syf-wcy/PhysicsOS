@@ -56,6 +56,7 @@ const createScene = (): PhysicsScene => ({
   opticalBenches: [],
   acousticBenches: [],
   fluidTanks: [],
+  thermalBenches: [],
   measurementDefinitions: [],
   observableDefinitions: [],
   annotations: [],

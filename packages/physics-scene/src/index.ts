@@ -53,6 +53,8 @@ export {
   type FluidTank,
   type SubmergedBlock,
   type TankLiquid,
+  type ThermalBench,
+  type ThermalSample,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -245,3 +247,17 @@ export {
   createArchimedesScene,
   type ArchimedesSceneInput,
 } from './fluid/fluid-templates.ts'
+export {
+  CELSIUS_ZERO_IN_KELVIN,
+  createThermalBenchScene,
+  isThermalScene,
+  thermalBenchOf,
+  thermalBenchesOf,
+  type ThermalBenchSceneInput,
+  type ThermalObservableKey,
+  type ThermalSampleSpec,
+} from './thermal/thermal-scene.ts'
+export {
+  createCrystalMeltingScene,
+  type CrystalMeltingSceneInput,
+} from './thermal/thermal-templates.ts'

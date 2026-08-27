@@ -110,6 +110,7 @@ export const createPointChargeScene = (input: PointChargeSceneInput): PhysicsSce
     opticalBenches: [],
     acousticBenches: [],
     fluidTanks: [],
+    thermalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
       ...observables(probe !== undefined),

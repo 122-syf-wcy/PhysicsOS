@@ -31,6 +31,7 @@ describe('Scene Validation', () => {
     opticalBenches: [],
     acousticBenches: [],
     fluidTanks: [],
+    thermalBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [],
     annotations: [],
