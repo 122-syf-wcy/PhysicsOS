@@ -1731,6 +1731,9 @@ const applyCommand = (
         }
       }
       lookup.bench.sample.mass = clone(mass)
+      if (lookup.bench.comparisonSample !== undefined) {
+        lookup.bench.comparisonSample.mass = clone(mass)
+      }
       return {
         ok: true,
         event: {

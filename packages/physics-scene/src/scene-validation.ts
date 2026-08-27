@@ -72,7 +72,10 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ...scene.fluidTanks.map((entry) => entry.id),
     ...scene.fluidTanks.flatMap((entry) => [entry.block.id, entry.liquid.id]),
     ...scene.thermalBenches.map((entry) => entry.id),
-    ...scene.thermalBenches.map((entry) => entry.sample.id),
+    ...scene.thermalBenches.flatMap((entry) => [
+      entry.sample.id,
+      ...(entry.comparisonSample === undefined ? [] : [entry.comparisonSample.id]),
+    ]),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -533,43 +536,53 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
   }
 
   for (const bench of scene.thermalBenches) {
-    const sample = bench.sample
-    const dimensionsValid =
+    const samples = [
+      bench.sample,
+      ...(bench.comparisonSample === undefined ? [] : [bench.comparisonSample]),
+    ]
+    const sampleDimensionsValid = samples.every((sample) =>
       hasExpectedDimension(sample.mass, 'mass') &&
       hasExpectedDimension(sample.solidSpecificHeat, 'specific_heat') &&
       hasExpectedDimension(sample.liquidSpecificHeat, 'specific_heat') &&
       hasExpectedDimension(sample.latentHeat, 'specific_latent_heat') &&
       hasExpectedDimension(sample.meltingPoint, 'temperature') &&
-      hasExpectedDimension(sample.initialTemperature, 'temperature') &&
-      hasExpectedDimension(bench.heaterPower, 'power')
+      hasExpectedDimension(sample.initialTemperature, 'temperature'))
+    const dimensionsValid =
+      sampleDimensionsValid &&
+      hasExpectedDimension(bench.heaterPower, 'power') &&
+      (bench.runDuration === undefined || hasExpectedDimension(bench.runDuration, 'time'))
     checks.push(
       check(`thermal_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
-        message: `Thermal bench "${bench.id}" quantities must use mass / specific heat / latent heat / temperature / power dimensions.`,
+        message: `Thermal bench "${bench.id}" quantities must use mass / specific heat / latent heat / temperature / power / time dimensions.`,
         targetId: bench.id,
       }),
     )
-    /* Latent heat may be zero — that IS how an amorphous sample is stated —
-       but everything else divides into the heating rate, and the sample has to
-       start below its melting point or there is no solid phase to heat. */
-    const meltingPoint = canonicalValue(sample.meltingPoint)
-    const initialTemperature = canonicalValue(sample.initialTemperature)
-    const latentHeat = canonicalValue(sample.latentHeat)
+    /* Latent heat may be zero — that IS how an amorphous sample is stated — and
+       a sample may start above its melting point, which is how an
+       already-liquid sample is stated. Everything else divides into the heating
+       rate, so it has to be strictly positive. */
+    const sampleValuesValid = samples.every((sample) => {
+      const latentHeat = canonicalValue(sample.latentHeat)
+      return (
+        canonicalValue(sample.mass) > 0 &&
+        canonicalValue(sample.solidSpecificHeat) > 0 &&
+        canonicalValue(sample.liquidSpecificHeat) > 0 &&
+        Number.isFinite(latentHeat) &&
+        latentHeat >= 0 &&
+        Number.isFinite(canonicalValue(sample.meltingPoint)) &&
+        canonicalValue(sample.meltingPoint) > 0 &&
+        Number.isFinite(canonicalValue(sample.initialTemperature)) &&
+        canonicalValue(sample.initialTemperature) > 0
+      )
+    })
     const valuesValid =
       dimensionsValid &&
-      canonicalValue(sample.mass) > 0 &&
-      canonicalValue(sample.solidSpecificHeat) > 0 &&
-      canonicalValue(sample.liquidSpecificHeat) > 0 &&
-      Number.isFinite(latentHeat) &&
-      latentHeat >= 0 &&
-      Number.isFinite(meltingPoint) &&
-      meltingPoint > 0 &&
-      Number.isFinite(initialTemperature) &&
-      initialTemperature > 0 &&
-      initialTemperature < meltingPoint &&
-      canonicalValue(bench.heaterPower) > 0
+      sampleValuesValid &&
+      canonicalValue(bench.heaterPower) > 0 &&
+      (bench.runDuration === undefined || canonicalValue(bench.runDuration) > 0)
     checks.push(
       check(`thermal_bench_values:${bench.id}`, 'constraint', valuesValid, {
-        message: `Thermal bench "${bench.id}" needs positive mass, specific heats and power, a non-negative latent heat, and a starting temperature below the melting point.`,
+        message: `Thermal bench "${bench.id}" needs positive mass, specific heats, temperatures and power, and a non-negative latent heat.`,
         targetId: bench.id,
       }),
     )

@@ -560,7 +560,11 @@ export interface ThermalSample {
   latentHeat: Quantity<'specific_latent_heat'>
   /** Melting point; only meaningful when `latentHeat` is > 0. */
   meltingPoint: Quantity<'temperature'>
-  /** Temperature at t = 0; must sit below the melting point. */
+  /**
+   * Temperature at t = 0. A sample starting at or above its melting point is
+   * already molten — the run is then a single warming segment, which is what a
+   * liquid-versus-liquid comparison needs.
+   */
   initialTemperature: Quantity<'temperature'>
 }
 
@@ -576,8 +580,20 @@ export interface ThermalSample {
 export interface ThermalBench extends PhysicsObjectBase {
   type: 'thermal_bench'
   sample: ThermalSample
-  /** Heat delivered per second; assumed fully absorbed. Finite and > 0. */
+  /**
+   * A second sample heated alongside the first by an identical heater. Present
+   * only for the comparison rig (同时加热水和油), where the point is that the
+   * same heat produces different temperature rises.
+   */
+  comparisonSample?: ThermalSample
+  /** Heat delivered per second to EACH sample; assumed fully absorbed. > 0. */
   heaterPower: Quantity<'power'>
+  /**
+   * How long the heater is left on. Omitted for a melting run, whose natural
+   * length the engine derives from the plateau; required when nothing changes
+   * phase and there is no such landmark to stop at.
+   */
+  runDuration?: Quantity<'time'>
 }
 
 /** docs/03 §64 */

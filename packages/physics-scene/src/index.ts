@@ -259,5 +259,7 @@ export {
 } from './thermal/thermal-scene.ts'
 export {
   createCrystalMeltingScene,
+  createHeatCapacityComparisonScene,
   type CrystalMeltingSceneInput,
+  type HeatCapacityComparisonSceneInput,
 } from './thermal/thermal-templates.ts'

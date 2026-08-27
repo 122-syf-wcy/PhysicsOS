@@ -56,3 +56,63 @@ export const createCrystalMeltingScene = (
       '恒功率加热冰块并记录温度：晶体有固定熔点，熔化时持续吸热但温度停在 0 ℃ 不变，图像上是一段水平线；熔化完毕后温度继续上升。',
   })
 }
+
+export interface HeatCapacityComparisonSceneInput {
+  readonly sceneId?: string
+  /** Mass of EACH sample in grams (> 0); the comparison only works if equal. */
+  readonly sampleMass?: number
+  /** Heater power in watts delivered to each sample (> 0). */
+  readonly heaterPower?: number
+  /** How long both heaters are left on, in seconds (> 0). */
+  readonly runDuration?: number
+  readonly now?: IsoDateTime
+}
+
+/**
+ * 比较不同物质的吸热能力 — equal masses of water and kerosene in two identical
+ * beakers, each over its own identical heater, both started at room
+ * temperature.
+ *
+ * The controls are the whole point: same mass, same heater, same time, so the
+ * two samples absorb exactly the same heat. Water's specific heat is twice
+ * kerosene's, so it warms half as fast. With 100 g each at 50 W for 420 s that
+ * is 21000 J apiece — water climbs 50 ℃ and the kerosene 100 ℃, a ratio of
+ * exactly 2 that the student can read straight off the two thermometers.
+ *
+ * Neither liquid changes phase during the run, so both start above their
+ * melting points and the curve is a single straight climb each.
+ */
+export const createHeatCapacityComparisonScene = (
+  input: HeatCapacityComparisonSceneInput = {},
+): PhysicsScene => {
+  const mass = input.sampleMass ?? 100
+  return createThermalBenchScene({
+    sceneId: input.sceneId ?? 'lab-heat-capacity',
+    ...(input.now === undefined ? {} : { now: input.now }),
+    sample: {
+      id: 'sample-1',
+      name: '水',
+      mass,
+      solidSpecificHeat: 2100,
+      liquidSpecificHeat: 4200,
+      latentHeat: 3.34e5,
+      meltingPoint: 0,
+      initialTemperature: 20,
+    },
+    comparisonSample: {
+      id: 'sample-2',
+      name: '煤油',
+      mass,
+      solidSpecificHeat: 2100,
+      liquidSpecificHeat: 2100,
+      latentHeat: 0,
+      meltingPoint: -30,
+      initialTemperature: 20,
+    },
+    heaterPower: input.heaterPower ?? 50,
+    runDuration: input.runDuration ?? 420,
+    title: '比较不同物质的吸热能力',
+    description:
+      '控制变量：等质量的水和煤油、相同的加热器、相同的加热时间，吸收的热量完全相同。水的比热容是煤油的两倍，升温就只有煤油的一半 —— 比热容正是「吸热能力」的量度。',
+  })
+}

@@ -36,7 +36,10 @@ export interface ThermalSampleSpec {
   readonly latentHeat: number
   /** Melting point in °C. */
   readonly meltingPoint: number
-  /** Starting temperature in °C; must be below the melting point. */
+  /**
+   * Starting temperature in °C. At or above the melting point the sample is
+   * already liquid and the run is a single warming segment.
+   */
   readonly initialTemperature: number
 }
 
@@ -45,8 +48,12 @@ export interface ThermalBenchSceneInput {
   readonly revision?: number
   readonly benchId?: string
   readonly sample: ThermalSampleSpec
-  /** Heater power in watts (> 0). */
+  /** A second sample heated by an identical heater alongside the first. */
+  readonly comparisonSample?: ThermalSampleSpec
+  /** Heater power in watts delivered to EACH sample (> 0). */
   readonly heaterPower?: number
+  /** How long the heater is left on, in seconds (> 0); derived when omitted. */
+  readonly runDuration?: number
   readonly observableVisibility?: Partial<Record<ThermalObservableKey, boolean>>
   readonly now?: IsoDateTime
   readonly title?: string
@@ -64,20 +71,28 @@ export const createThermalBenchScene = (input: ThermalBenchSceneInput): PhysicsS
   const benchId = input.benchId ?? 'thermal-bench-1'
   const visibility = input.observableVisibility ?? {}
 
+  const sampleOf = (spec: ThermalSampleSpec, fallbackId: string) => ({
+    id: spec.id ?? fallbackId,
+    ...(spec.name === undefined ? {} : { name: spec.name }),
+    mass: quantity(spec.mass, 'g', 'mass'),
+    solidSpecificHeat: quantity(spec.solidSpecificHeat, 'J/(kg*K)', 'specific_heat'),
+    liquidSpecificHeat: quantity(spec.liquidSpecificHeat, 'J/(kg*K)', 'specific_heat'),
+    latentHeat: quantity(spec.latentHeat, 'J/kg', 'specific_latent_heat'),
+    meltingPoint: kelvin(spec.meltingPoint),
+    initialTemperature: kelvin(spec.initialTemperature),
+  })
+
   const bench: ThermalBench = {
     id: benchId,
     type: 'thermal_bench',
-    sample: {
-      id: input.sample.id ?? 'sample-1',
-      ...(input.sample.name === undefined ? {} : { name: input.sample.name }),
-      mass: quantity(input.sample.mass, 'g', 'mass'),
-      solidSpecificHeat: quantity(input.sample.solidSpecificHeat, 'J/(kg*K)', 'specific_heat'),
-      liquidSpecificHeat: quantity(input.sample.liquidSpecificHeat, 'J/(kg*K)', 'specific_heat'),
-      latentHeat: quantity(input.sample.latentHeat, 'J/kg', 'specific_latent_heat'),
-      meltingPoint: kelvin(input.sample.meltingPoint),
-      initialTemperature: kelvin(input.sample.initialTemperature),
-    },
+    sample: sampleOf(input.sample, 'sample-1'),
+    ...(input.comparisonSample === undefined
+      ? {}
+      : { comparisonSample: sampleOf(input.comparisonSample, 'sample-2') }),
     heaterPower: quantity(input.heaterPower ?? 50, 'W', 'power'),
+    ...(input.runDuration === undefined
+      ? {}
+      : { runDuration: quantity(input.runDuration, 's', 'time') }),
   }
 
   return {
