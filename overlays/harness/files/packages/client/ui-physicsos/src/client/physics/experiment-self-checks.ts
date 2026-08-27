@@ -97,12 +97,15 @@ export const fluidTopicOf = (context: PhysicsAgentContext): string | undefined =
   context.status !== 'failed' && context.domain === 'fluid' ? 'fluid-buoyancy' : undefined
 
 /**
- * The lab topic of a thermal frame. The bench models exactly one apparatus (a
- * sample over a steady heater), so the domain IS the topic — a renamed scene
- * still gets the melting probes.
+ * The lab topic of a thermal frame. Two apparatuses share the domain: a
+ * melting bench vs a two-beaker comparison. The second sample being drawn is
+ * the fact that tells them apart — a renamed scene still gets the probes that
+ * match the canvas.
  */
-export const thermalTopicOf = (context: PhysicsAgentContext): string | undefined =>
-  context.status !== 'failed' && context.domain === 'thermal' ? 'thermal-melting' : undefined
+export const thermalTopicOf = (context: PhysicsAgentContext): string | undefined => {
+  if (context.status === 'failed' || context.domain !== 'thermal') return undefined
+  return context.drawnIds.includes('sample-2') ? 'thermal-heat-capacity' : 'thermal-melting'
+}
 
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
@@ -140,4 +143,5 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'acoustics-echo': 'echo-ranging',
   'fluid-buoyancy': 'buoyancy',
   'thermal-melting': 'crystal-melting',
+  'thermal-heat-capacity': 'heat-capacity-comparison',
 }

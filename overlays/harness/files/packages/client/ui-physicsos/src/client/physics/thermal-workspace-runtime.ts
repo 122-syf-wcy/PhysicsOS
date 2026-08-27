@@ -19,6 +19,7 @@ import {
   createThermalSimulationRequest,
   heatingTimingOf,
   resolveHeatingCurve,
+  sampleStateAt,
   thermalStateAt,
   type ResolvedThermalModel,
 } from '@physicsos/engine-thermal'
@@ -73,6 +74,11 @@ const DERIVED_LABELS: Record<string, string> = {
   melting_heat: '熔化吸热 Q_熔',
   warm_up_heat: '升温吸热 Q₁',
   total_heat: '总吸热 Q_总',
+  absorbed_heat: '吸收热量 Q',
+  temperature_rise: '升温 ΔT',
+  comparison_temperature_rise: '对比升温 ΔT′',
+  specific_heat: '比热容 c',
+  comparison_specific_heat: '对比比热容 c′',
 }
 
 /**
@@ -85,6 +91,8 @@ const VERIFICATION_LABELS: Record<string, string> = {
   melting_plateau: '熔化时吸热但温度不变',
   plateau_duration: '熔化耗时 t = mL/P',
   amorphous_no_plateau: '非晶体无固定熔点（温度持续上升）',
+  equal_heat_absorbed: '两边吸收的热量相同',
+  specific_heat_ratio: '升温与比热容成反比',
   scene_schema_version: '场景结构有效',
   scene_revision_valid: '场景修订有效',
   scene_object_ids_unique: '对象标识唯一',
@@ -94,7 +102,7 @@ const VERIFICATION_LABELS: Record<string, string> = {
   timeline_playback_rate_valid: '时间线播放率有效',
   timeline_dimensions_valid: '时间线量纲正确',
   thermal_bench_dimensions: '实验台量纲正确',
-  thermal_bench_values: '质量 · 比热容 · 功率均为正且起始温度低于熔点',
+  thermal_bench_values: '质量 · 比热容 · 功率均为正',
 }
 
 const verificationLabelOf = (id: string): string =>
@@ -237,12 +245,25 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
     const { simulation, model } = this.computed
     const { totalTime } = heatingTimingOf(model)
     const state = thermalStateAt(model, this.currentTime)
+    const comparison = model.comparisonSample
+    const comparisonState = comparison === undefined
+      ? undefined
+      : sampleStateAt(comparison, model.heaterPower, this.currentTime, model.runDuration)
+    const primaryPeak = thermalStateAt(model, totalTime).temperature
+    const comparisonPeak = comparison === undefined
+      ? primaryPeak
+      : sampleStateAt(comparison, model.heaterPower, totalTime, model.runDuration).temperature
+    const floorTemperature = comparison === undefined
+      ? model.initialTemperature
+      : Math.min(model.initialTemperature, comparison.initialTemperature)
     const view = thermalSceneVisual({
       scene,
       model,
       state,
+      ...(comparisonState === undefined ? {} : { comparisonState }),
       time: this.currentTime,
-      peakTemperature: thermalStateAt(model, totalTime).temperature,
+      floorTemperature,
+      peakTemperature: Math.max(primaryPeak, comparisonPeak),
     })
 
     const status =
@@ -316,26 +337,47 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
         label: bench.sample.name ?? '样品',
         secondary: model === undefined
           ? ''
-          : `m = ${fmtThermalValue(model.mass * 1000, 4)} g · c_固 = ${fmtThermalValue(model.solidSpecificHeat, 4)} J/(kg·℃)`,
+          : `m = ${fmtThermalValue(model.mass * 1000, 4)} g · c = ${fmtThermalValue(
+            model.startsMolten ? model.liquidSpecificHeat : model.solidSpecificHeat,
+            4,
+          )} J/(kg·℃)`,
         icon: 'body' as const,
         kind: 'object' as const,
       },
+      ...(bench.comparisonSample === undefined || model?.comparisonSample === undefined
+        ? []
+        : [{
+          id: bench.comparisonSample.id,
+          label: bench.comparisonSample.name ?? '对比样品',
+          secondary: `m = ${fmtThermalValue(model.comparisonSample.mass * 1000, 4)} g · c′ = ${fmtThermalValue(model.comparisonSample.liquidSpecificHeat, 4)} J/(kg·℃)`,
+          icon: 'body' as const,
+          kind: 'object' as const,
+        }]),
       {
         id: bench.id,
-        label: '加热器',
+        label: bench.comparisonSample === undefined ? '加热器' : '加热器（两侧相同）',
         secondary: model === undefined ? '' : `P = ${fmtThermalValue(model.heaterPower, 3)} W`,
         icon: 'field' as const,
         kind: 'object' as const,
       },
       {
         id: 'thermometer',
-        label: '温度计',
+        label: bench.sample.name === undefined ? '温度计' : `${bench.sample.name}温度计`,
         secondary: model === undefined
           ? ''
           : `${celsiusOf(thermalStateAt(model, this.currentTime).temperature).toFixed(1)} ℃`,
         icon: 'observable' as const,
         kind: 'object' as const,
       },
+      ...(bench.comparisonSample === undefined || model?.comparisonSample === undefined
+        ? []
+        : [{
+          id: 'thermometer-2',
+          label: `${bench.comparisonSample.name ?? '对比'}温度计`,
+          secondary: `${celsiusOf(sampleStateAt(model.comparisonSample, model.heaterPower, this.currentTime, model.runDuration).temperature).toFixed(1)} ℃`,
+          icon: 'observable' as const,
+          kind: 'object' as const,
+        }]),
     ]
     const observableChildren: SceneTreeNode[] = scene.observableDefinitions.flatMap(
       (definition) => {
@@ -368,7 +410,7 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
       parameters: [
         {
           id: 'sample-mass',
-          label: '样品质量',
+          label: bench.comparisonSample === undefined ? '样品质量' : '每种样品质量',
           symbol: 'm',
           unit: 'g',
           value: model === undefined
@@ -403,7 +445,7 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
           value: isScalarQuantity(entry.value)
             ? formatDerived(entry.key, entry.value.value)
             : '—',
-          unit: entry.key === 'melting_point' ? '℃' : entry.value.unit,
+          unit: derivedUnitOf(entry.key, entry.value.unit),
           ...(entry.targetId === undefined ? {} : { highlights: entry.targetId }),
         }))
       /* The frame's own readings: what the thermometer says right now and which
@@ -411,28 +453,48 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
       const state = thermalStateAt(model, this.currentTime)
       derived.push({
         id: 'current-temperature',
-        label: '当前温度 T',
+        label: bench.comparisonSample === undefined
+          ? '当前温度 T'
+          : `${bench.sample.name ?? '样品'}温度 T`,
         symbol: '',
         value: celsiusOf(state.temperature).toFixed(1),
         unit: '℃',
         highlights: model.sampleId,
       })
-      derived.push({
-        id: 'thermal-phase',
-        label: '所处阶段',
-        symbol: '',
-        value: thermalPhaseText(state.phase, model.crystalline),
-        unit: '',
-        highlights: model.sampleId,
-      })
-      derived.push({
-        id: 'crystalline',
-        label: '晶体判断',
-        symbol: '',
-        value: model.crystalline ? '晶体 · 有固定熔点' : '非晶体 · 无固定熔点',
-        unit: '',
-        highlights: model.sampleId,
-      })
+      if (model.comparisonSample !== undefined && bench.comparisonSample !== undefined) {
+        const comparisonState = sampleStateAt(
+          model.comparisonSample,
+          model.heaterPower,
+          this.currentTime,
+          model.runDuration,
+        )
+        derived.push({
+          id: 'comparison-temperature',
+          label: `${bench.comparisonSample.name ?? '对比'}温度 T′`,
+          symbol: '',
+          value: celsiusOf(comparisonState.temperature).toFixed(1),
+          unit: '℃',
+          highlights: model.comparisonSample.sampleId,
+        })
+      }
+      if (!model.startsMolten) {
+        derived.push({
+          id: 'thermal-phase',
+          label: '所处阶段',
+          symbol: '',
+          value: thermalPhaseText(state.phase, model.crystalline),
+          unit: '',
+          highlights: model.sampleId,
+        })
+        derived.push({
+          id: 'crystalline',
+          label: '晶体判断',
+          symbol: '',
+          value: model.crystalline ? '晶体 · 有固定熔点' : '非晶体 · 无固定熔点',
+          unit: '',
+          highlights: model.sampleId,
+        })
+      }
       sections.push({ id: 'derived', title: '派生量', derived })
     }
     return sections
@@ -524,15 +586,59 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
 
 /* -------------------------------------------------------------- projections -- */
 
-/** Temperatures are stated in kelvin but taught in °C; everything else is SI. */
-const formatDerived = (key: string, value: number): string =>
-  key === 'melting_point' ? celsiusOf(value).toFixed(1) : fmtThermalValue(value)
+/** Absolute temperatures are kelvin in the engine and °C on the bench; a rise
+ *  is already a difference, so K and ℃ are the same number. */
+const formatDerived = (key: string, value: number): string => {
+  if (key === 'melting_point') return celsiusOf(value).toFixed(1)
+  if (key.endsWith('temperature_rise')) return value.toFixed(1)
+  return fmtThermalValue(value)
+}
+
+const derivedUnitOf = (key: string, fallback: string): string => {
+  if (key === 'melting_point' || key.endsWith('temperature_rise')) return '℃'
+  if (key === 'specific_heat' || key === 'comparison_specific_heat') return 'J/(kg·℃)'
+  return fallback
+}
 
 /** The heating curve itself — the graph this experiment exists to produce. */
 const chartsOf = (
   simulation: SimulationResult,
   model: ResolvedThermalModel,
 ): readonly ChartSeries[] => {
+  const comparison = model.comparisonSample
+  if (comparison !== undefined) {
+    const waterPoints = simulation.states.flatMap((state) => {
+      const values = state.objects.find(object => object.id === model.sampleId)?.values
+      const temperature = values?.['temperature']
+      if (temperature === undefined || !isScalarQuantity(temperature)) return []
+      return [{ t: canonicalValue(state.time), value: celsiusOf(temperature.value) }]
+    })
+    const oilPoints = simulation.states.flatMap((state) => {
+      const values = state.objects.find(object => object.id === comparison.sampleId)?.values
+      const temperature = values?.['temperature']
+      if (temperature === undefined || !isScalarQuantity(temperature)) return []
+      return [{ t: canonicalValue(state.time), value: celsiusOf(temperature.value) }]
+    })
+    if (waterPoints.length === 0) return []
+    return [
+      {
+        id: 'heating-curve-water',
+        title: '水 T–t',
+        xLabel: 't / s',
+        yLabel: 'T / ℃',
+        role: 'trajectory',
+        points: waterPoints,
+      },
+      {
+        id: 'heating-curve-kerosene',
+        title: '煤油 T–t',
+        xLabel: 't / s',
+        yLabel: 'T / ℃',
+        role: 'trajectory',
+        points: oilPoints,
+      },
+    ]
+  }
   const points = simulation.states.flatMap((state) => {
     const benchValues = state.objects.find(object => object.id === model.benchId)?.values
     const temperature = benchValues?.['temperature']
@@ -558,23 +664,38 @@ const tableOf = (
   model: ResolvedThermalModel,
 ): DataTableView => {
   const stride = 12
+  const comparison = model.comparisonSample
   const rows = simulation.states.flatMap((state, index) => {
     if (index % stride !== 0 && index !== simulation.states.length - 1) return []
     const timeSeconds = canonicalValue(state.time)
     const thermal = thermalStateAt(model, timeSeconds)
+    if (comparison === undefined) {
+      return [{
+        step: index,
+        values: [
+          timeSeconds.toFixed(0),
+          celsiusOf(thermal.temperature).toFixed(1),
+          fmtThermalValue(thermal.heatAbsorbed, 5),
+          `${(thermal.meltedFraction * 100).toFixed(0)}%`,
+          thermalPhaseText(thermal.phase, model.crystalline),
+        ],
+      }]
+    }
+    const other = sampleStateAt(comparison, model.heaterPower, timeSeconds, model.runDuration)
     return [{
       step: index,
       values: [
         timeSeconds.toFixed(0),
         celsiusOf(thermal.temperature).toFixed(1),
+        celsiusOf(other.temperature).toFixed(1),
         fmtThermalValue(thermal.heatAbsorbed, 5),
-        `${(thermal.meltedFraction * 100).toFixed(0)}%`,
-        thermalPhaseText(thermal.phase, model.crystalline),
       ],
     }]
   })
   return {
-    columns: ['t / s', 'T / ℃', '已吸热 / J', '已熔化', '阶段'],
+    columns: comparison === undefined
+      ? ['t / s', 'T / ℃', '已吸热 / J', '已熔化', '阶段']
+      : ['t / s', 'T_水 / ℃', 'T_油 / ℃', 'Q / J'],
     rows,
   }
 }

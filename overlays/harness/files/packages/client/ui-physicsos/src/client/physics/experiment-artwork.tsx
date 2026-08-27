@@ -641,6 +641,22 @@ const CrystalMeltingArt = () => (
   </>
 )
 
+/** 比热容对比: two beakers over flames, two T–t slopes of different steepness. */
+const HeatCapacityArt = () => (
+  <>
+    <Stroke d="M10 18 V42 a4 4 0 0 0 4 4 H28 a4 4 0 0 0 4 -4 V18" width={2.2} />
+    <Stroke d="M36 18 V42 a4 4 0 0 0 4 4 H50 a4 4 0 0 0 4 -4 V18" width={2.2} />
+    <Stroke d="M20 50 q2.4 -3.2 0 -6.4" width={1.6} opacity={0.7} />
+    <Stroke d="M46 50 q2.4 -3.2 0 -6.4" width={1.6} opacity={0.7} />
+    <Stroke d="M62 12 V50" width={1.4} opacity={0.35} />
+    <Stroke d="M62 50 H112" width={1.4} opacity={0.35} />
+    <Stroke d="M64 44 L108 32" width={2.2} />
+    <Stroke d="M64 44 L108 16" width={2.2} opacity={0.7} />
+    <Dot x={108} y={32} r={2} />
+    <Dot x={108} y={16} r={2} />
+  </>
+)
+
 /* ----------------------------------------------------------------- acoustics -- */
 
 /** 回声测距: speaker on open ground, wave arcs out to the hatched cliff. */
@@ -720,6 +736,7 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'convex-mirror': ConvexMirrorArt,
   'echo-ranging': EchoRangingArt,
   'crystal-melting': CrystalMeltingArt,
+  'heat-capacity-comparison': HeatCapacityArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -756,6 +773,7 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['echo-ranging', 'acoustics-echo-ranging'],
   ['buoyancy', 'fluid-buoyancy'],
   ['crystal-melting', 'thermal-crystal-melting'],
+  ['heat-capacity-comparison', 'thermal-heat-capacity'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

@@ -722,6 +722,12 @@ export interface SceneVisualModel {
   thermalThermometer?: ThermalThermometerVisual
   /** The heat source under the beaker. */
   thermalHeater?: ThermalHeaterVisual
+  /** Second sample on the comparison rig (水和油). */
+  thermalComparisonSample?: ThermalSampleVisual
+  /** Second thermometer on the comparison rig. */
+  thermalComparisonThermometer?: ThermalThermometerVisual
+  /** Second heater on the comparison rig. */
+  thermalComparisonHeater?: ThermalHeaterVisual
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

@@ -395,6 +395,20 @@ export const IconCrystalMelting = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Heat-capacity comparison: two beakers, two columns of different height. */
+export const IconHeatCapacity = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3.2 6.2v10.2a1.8 1.8 0 0 0 1.8 1.8h3.2a1.8 1.8 0 0 0 1.8-1.8V6.2" />
+    <path d="M13.8 6.2v10.2a1.8 1.8 0 0 0 1.8 1.8h3.2a1.8 1.8 0 0 0 1.8-1.8V6.2" />
+    <path d="M2.2 4.2v12.6" />
+    <path d="M2.2 10.8v6" strokeWidth="2.4" />
+    <circle cx="2.2" cy="18.4" r="1.5" />
+    <path d="M21.8 4.2v12.6" />
+    <path d="M21.8 7.4v9.4" strokeWidth="2.4" />
+    <circle cx="21.8" cy="18.4" r="1.5" />
+  </Glyph>
+)
+
 /* --------------------------------------------------------------- acoustics -- */
 
 /** Echo ranging: a loudspeaker facing a hatched wall, wave arcs between. */

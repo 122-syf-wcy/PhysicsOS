@@ -23,6 +23,7 @@ import {
   createConvexLensScene,
   createConvexMirrorScene,
   createCrystalMeltingScene,
+  createHeatCapacityComparisonScene,
   createEchoRangingScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
@@ -53,6 +54,7 @@ import {
   IconConvexLens,
   IconConvexMirror,
   IconCrystalMelting,
+  IconHeatCapacity,
   IconEchoRanging,
   IconEmfMeasure,
   IconInclinedPlane,
@@ -698,6 +700,27 @@ const thermalTemplates: readonly ExperimentTemplate[] = [
          「熔化吸热但温度不变」不用讲就能看见。把熔化热改成 0 就是非晶体。 */
       const scene = createCrystalMeltingScene({
         sceneId: stampId('thermal-crystal-melting'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'heat-capacity-comparison',
+    domain: 'thermal',
+    stage: 'junior',
+    label: 'lab.template.heatCapacityComparison',
+    hint: 'lab.template.heatCapacityComparison.hint',
+    icon: IconHeatCapacity,
+    tags: ['热学', '初中', '比热容', '吸热'],
+    createScene: (title) => {
+      /* 比较不同物质的吸热能力：等质量的水和煤油、相同的 50 W 加热器、加热
+         420 s。两边各吸 21000 J，水升 50 ℃、煤油升 100 ℃，比热容的反比直接
+         写在两支温度计上。 */
+      const scene = createHeatCapacityComparisonScene({
+        sceneId: stampId('thermal-heat-capacity'),
       })
       return {
         sceneId: String(scene.id),

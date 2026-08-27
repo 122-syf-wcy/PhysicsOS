@@ -240,10 +240,16 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.fluidLiquid === undefined ? [] : [view.fluidLiquid.id]),
     ...(view.fluidScale === undefined ? [] : [view.fluidScale.id]),
     /* Heating bench primitives: the sample, the heater and the thermometer are
-       highlight groups in the thermal renderer. */
+       highlight groups in the thermal renderer. A comparison rig adds the
+       second beaker, heater and thermometer. */
     ...(view.thermalSample === undefined ? [] : [view.thermalSample.id]),
     ...(view.thermalHeater === undefined ? [] : [view.thermalHeater.id]),
     ...(view.thermalThermometer === undefined ? [] : [view.thermalThermometer.id]),
+    ...(view.thermalComparisonSample === undefined ? [] : [view.thermalComparisonSample.id]),
+    ...(view.thermalComparisonHeater === undefined ? [] : [view.thermalComparisonHeater.id]),
+    ...(view.thermalComparisonThermometer === undefined
+      ? []
+      : [view.thermalComparisonThermometer.id]),
   ]
 }
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCrystalMeltingScene } from '@physicsos/physics-scene'
+import { createCrystalMeltingScene, createHeatCapacityComparisonScene } from '@physicsos/physics-scene'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
@@ -246,5 +246,114 @@ describe('thermal Lab surface', () => {
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
     /* Same heat needed, delivered twice as fast: the plateau halves. */
     expect(screen.getAllByText('熔化耗时 t_熔')[0]?.parentElement?.textContent).toContain('334')
+  })
+})
+
+describe('heat-capacity comparison', () => {
+  it('routes the two-beaker bench to the thermal domain', () => {
+    expect(domainOfScene(createHeatCapacityComparisonScene())).toBe('thermal')
+  })
+
+  it('heats equal masses of water and kerosene to a clean 1:2 temperature rise', () => {
+    const runtime = createThermalWorkspaceRuntime(createHeatCapacityComparisonScene())
+    const snapshot = runtime.getSnapshot()
+
+    expect(snapshot.status).toBe('verified')
+    expect(derivedValue(snapshot, '加热功率 P')).toBe('50')
+    expect(derivedValue(snapshot, '吸收热量 Q')).toBe('21000')
+    expect(derivedValue(snapshot, '升温 ΔT')).toBe('50.0')
+    expect(derivedValue(snapshot, '对比升温 ΔT′')).toBe('100.0')
+    expect(snapshot.clock.total).toBeCloseTo(420, 9)
+    expect(snapshot.events.map(event => event.label)).toEqual(['开始加热'])
+    expect(snapshot.charts.map(chart => chart.id)).toEqual([
+      'heating-curve-water',
+      'heating-curve-kerosene',
+    ])
+    expect(snapshot.table.columns).toEqual(['t / s', 'T_水 / ℃', 'T_油 / ℃', 'Q / J'])
+    expect(snapshot.verification.some(check => check.id === 'equal_heat_absorbed')).toBe(true)
+    expect(snapshot.verification.some(check => check.id === 'specific_heat_ratio')).toBe(true)
+    expect(snapshot.verification.every(check => check.status === 'passed')).toBe(true)
+
+    const start = snapshot
+    expect(start.view.thermalSample?.label).toBe('水')
+    expect(start.view.thermalComparisonSample?.label).toBe('煤油')
+    expect(start.view.thermalThermometer?.reading).toBe('20.0 ℃')
+    expect(start.view.thermalComparisonThermometer?.reading).toBe('20.0 ℃')
+
+    const end = runtime.seek(420)
+    expect(end.view.thermalThermometer?.reading).toBe('70.0 ℃')
+    expect(end.view.thermalComparisonThermometer?.reading).toBe('120.0 ℃')
+    /* Shared column scale: water climbed half as far as kerosene. */
+    expect(end.view.thermalComparisonThermometer!.columnHeight)
+      .toBeCloseTo(2 * end.view.thermalThermometer!.columnHeight, 5)
+    expect(derivedValue(end, '水温度 T')).toBe('70.0')
+    expect(derivedValue(end, '煤油温度 T′')).toBe('120.0')
+  })
+
+  it('teaches the inverse-ratio off the live comparison checks', () => {
+    const runtime = createThermalWorkspaceRuntime(createHeatCapacityComparisonScene())
+    const script = tutorScriptOf(physicsAgentContext(runtime.seek(420)))
+    expect(script?.id).toBe('thermal-heat-capacity')
+    expect(script?.topic).toBe('比较不同物质的吸热能力')
+    expect(script?.question).toContain('水升得慢')
+    expect(script!.evidence.some(entry =>
+      entry.label.includes('两边吸收的热量相同') && entry.status === 'passed')).toBe(true)
+    expect(script!.evidence.some(entry =>
+      entry.label.includes('升温与比热容成反比') && entry.status === 'passed')).toBe(true)
+  })
+
+  it('resolves the self-check topic from the second sample being drawn', () => {
+    const set = experimentSelfChecksOf(physicsAgentContext(
+      createThermalWorkspaceRuntime(createHeatCapacityComparisonScene()).getSnapshot(),
+    ))
+    expect(set?.id).toBe('thermal-heat-capacity')
+    expect(set?.knowledge).toEqual(['th-specific-heat'])
+  })
+})
+
+describe('heat-capacity self-checks in the drawer', () => {
+  it('asks the comparison probes and records against the specific-heat node', () => {
+    const runtime = createThermalWorkspaceRuntime(createHeatCapacityComparisonScene())
+    const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
+    render(
+      <AgentDrawer
+        snapshot={runtime.seek(420)}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t as never}
+        recordAttempt={recordAttempt}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '自测' }))
+    expect(screen.getAllByText('比较不同物质的吸热能力').length).toBeGreaterThan(0)
+    expect(screen.getByText('比热容与吸热 Q = cmΔt')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '水实际吸收的热量比较少' }))
+    expect(screen.getByText('概念错误')).toBeTruthy()
+    expect(screen.getByText(/equal_heat_absorbed/)).toBeTruthy()
+
+    expect(recordAttempt).toHaveBeenCalledOnce()
+    const attempt = recordAttempt.mock.calls[0]![0]
+    expect(attempt.questionId).toBe('thermal-heat-capacity')
+    expect(attempt.correct).toBe(false)
+    expect(attempt.knowledge).toContain('th-specific-heat')
+    expect(attempt.experimentId).toBe('heat-capacity-comparison')
+  })
+})
+
+describe('heat-capacity Lab surface', () => {
+  it('mounts both beakers with the two thermometer readings drawn', () => {
+    const { container } = mountLab('heat-capacity-comparison')
+
+    expect(container.querySelector('[data-physicsos-domain="thermal"]')).toBeTruthy()
+    const lab = container.querySelector('[data-physicsos-surface="lab"]')
+    expect(lab?.getAttribute('data-verification-status')).toBe('verified')
+
+    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
+    expect(svgText).toContain('水')
+    expect(svgText).toContain('煤油')
+    expect(svgText.filter(text => text === '20.0 ℃')).toHaveLength(2)
+    expect(svgText.filter(text => text.includes('加热器 50 W')).length).toBeGreaterThanOrEqual(2)
   })
 })

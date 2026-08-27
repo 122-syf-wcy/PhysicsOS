@@ -1359,6 +1359,68 @@ const crystalMeltingLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+const heatCapacityLesson = (context: PhysicsAgentContext): TutorScript => {
+  const power = derivedText(context, '加热功率 P')
+  const heat = derivedText(context, '吸收热量 Q')
+  const waterRise = derivedText(context, '升温 ΔT')
+  const oilRise = derivedText(context, '对比升温 ΔT′')
+  const waterC = derivedText(context, '比热容 c')
+  const oilC = derivedText(context, '对比比热容 c′')
+  const waterT = derivedText(context, '水温度 T')
+  const oilT = derivedText(context, '煤油温度 T′')
+  return {
+    id: 'thermal-heat-capacity',
+    topic: '比较不同物质的吸热能力',
+    observation: [
+      ...observeLine('加热功率 P', power),
+      ...observeLine('水温度 T', waterT),
+      ...observeLine('煤油温度 T′', oilT),
+    ],
+    question: '同样的加热器、同样加热这么久，为什么水升得慢、煤油升得快？',
+    hints: [
+      {
+        id: 'hint-same-heat',
+        title: '提示 1',
+        paragraphs: ['先确认控制变量：两边质量相同、功率相同、时间相同，所以吸收的热量 Q = P·t 完全一样。差的不是进来的热。'],
+        highlights: ['thermal-bench-1', 'thermal-bench-1-comparison'],
+      },
+      {
+        id: 'hint-q-cm-dt',
+        title: '提示 2',
+        paragraphs: ['Q = cmΔt。Q 和 m 都相同，Δt 大的那边 c 就小。煤油升了水的两倍，它的比热容就是水的一半。'],
+        highlights: ['sample-1', 'sample-2'],
+      },
+      {
+        id: 'hint-read-thermometers',
+        title: '提示 3',
+        paragraphs: ['两支温度计用的是同一把尺子：水的液柱大约只有煤油的一半高，这就是 1:2 的升温比，也是 2:1 的比热容比。'],
+        highlights: ['thermometer', 'thermometer-2'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '比热容就是吸热能力：同样吸收 Q 焦耳，c 大的物质温度升得少。水的比热容是煤油的两倍，所以升温只有煤油的一半。',
+        [
+          power === undefined ? '' : `P = ${power}`,
+          heat === undefined ? '' : `Q = ${heat}`,
+          waterRise === undefined ? '' : `ΔT_水 = ${waterRise} ℃`,
+          oilRise === undefined ? '' : `ΔT_油 = ${oilRise} ℃`,
+          waterC === undefined ? '' : `c_水 = ${waterC}`,
+          oilC === undefined ? '' : `c_油 = ${oilC}`,
+        ].filter(entry => entry.length > 0).join('；'),
+      ].filter(entry => entry.length > 0),
+      highlights: ['sample-1', 'sample-2', 'thermometer', 'thermometer-2'],
+    },
+    evidence: evidenceOf(context, [
+      'equal_heat_absorbed',
+      'specific_heat_ratio',
+      'energy_conservation',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1373,8 +1435,8 @@ const crystalMeltingLesson = (context: PhysicsAgentContext): TutorScript => {
  * bench (plane mirror vs thin lens vs curved mirror, with the lens and mirror
  * lessons sub-dispatched on the 物距区间 the runtime published); acoustics
  * frames all teach echo ranging, fluid frames the weighing method and thermal
- * frames the melting curve (each models exactly one apparatus, with the thermal
- * lesson split on whether the sample has a melting plateau at all);
+ * frames split on whether a second sample is drawn (two-beaker heat-capacity
+ * comparison vs the melting curve);
  * mechanics/electric frames by the scene title the template stamped. Unknown
  * frames return undefined and the drawer keeps Q&A.
  */
@@ -1414,7 +1476,11 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
   }
   if (context.domain === 'acoustics') return echoRangingLesson(context)
   if (context.domain === 'fluid') return buoyancyLesson(context)
-  if (context.domain === 'thermal') return crystalMeltingLesson(context)
+  if (context.domain === 'thermal') {
+    return context.drawnIds.includes('sample-2')
+      ? heatCapacityLesson(context)
+      : crystalMeltingLesson(context)
+  }
   /* Composite, magnetic, mechanics, circuit, optics, acoustics, fluid and
      thermal returned above; electric remains. */
   return electricLesson(context)
