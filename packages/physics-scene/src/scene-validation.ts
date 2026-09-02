@@ -78,6 +78,7 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ]),
     ...(scene.leverBenches ?? []).map((entry) => entry.id),
     ...(scene.leverBenches ?? []).flatMap((entry) => entry.hangers.map((hanger) => hanger.id)),
+    ...(scene.inductionBenches ?? []).map((entry) => entry.id),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -628,6 +629,59 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     checks.push(
       check(`lever_bench_values:${bench.id}`, 'constraint', valuesValid, {
         message: `Lever "${bench.id}" needs two hangers on opposite sides, positive masses and arms, and each arm inside half the beam.`,
+        targetId: bench.id,
+      }),
+    )
+  }
+
+  for (const bench of scene.inductionBenches ?? []) {
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    const finite = (quantity: Parameters<typeof canonicalValue>[0]): boolean =>
+      Number.isFinite(canonicalValue(quantity))
+
+    const commonDimensions =
+      hasExpectedDimension(bench.magneticFluxDensity, 'magnetic_flux_density') &&
+      hasExpectedDimension(bench.resistance, 'resistance')
+
+    let subDimensions: boolean
+    let subValues: boolean
+    if (bench.type === 'bar_motion') {
+      subDimensions =
+        (bench.barLength === undefined || hasExpectedDimension(bench.barLength, 'length')) &&
+        (bench.barVelocity === undefined || hasExpectedDimension(bench.barVelocity, 'velocity'))
+      subValues =
+        (bench.barLength === undefined || positive(bench.barLength)) &&
+        (bench.barVelocity === undefined || finite(bench.barVelocity))
+    } else {
+      /* flux_change */
+      subDimensions =
+        (bench.coilArea === undefined || hasExpectedDimension(bench.coilArea, 'area')) &&
+        (bench.coilAngle === undefined || hasExpectedDimension(bench.coilAngle, 'angle')) &&
+        (bench.fluxRate === undefined || hasExpectedDimension(bench.fluxRate, 'magnetic_flux_rate'))
+      subValues =
+        (bench.coilArea === undefined || positive(bench.coilArea)) &&
+        (bench.coilAngle === undefined || finite(bench.coilAngle)) &&
+        (bench.fluxRate === undefined || finite(bench.fluxRate))
+    }
+
+    const dimensionsValid = commonDimensions && subDimensions
+    checks.push(
+      check(`induction_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Induction bench "${bench.id}" quantities must use magnetic_flux_density / resistance and the sub-model's dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+
+    /* B > 0 and R > 0 are always required: a zero field produces no EMF and a
+       zero resistance is not a loop. The bar length / coil area must be > 0
+       when present; velocity and flux rate may carry a sign (direction). */
+    const valuesValid = dimensionsValid && positive(bench.magneticFluxDensity) && positive(bench.resistance) && subValues
+    checks.push(
+      check(`induction_bench_values:${bench.id}`, 'constraint', valuesValid, {
+        message: `Induction bench "${bench.id}" needs a positive magnetic flux density and resistance, and positive lengths/areas where applicable.`,
         targetId: bench.id,
       }),
     )

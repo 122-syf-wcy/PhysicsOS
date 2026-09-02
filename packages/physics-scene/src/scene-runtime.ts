@@ -29,6 +29,7 @@ import type {
   Circuit,
   CircuitComponent,
   FluidTank,
+  InductionBench,
   LeverBench,
   OpticalBench,
   PhysicsScene,
@@ -79,6 +80,11 @@ export type SceneCommandType =
   | 'SetSampleMass'
   | 'SetHangerMass'
   | 'SetHangerArm'
+  | 'SetInductionFieldStrength'
+  | 'SetInductionLoopResistance'
+  | 'SetInductionBarVelocity'
+  | 'SetInductionBarLength'
+  | 'SetInductionFluxRate'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -246,6 +252,31 @@ export interface SceneCommandPayloadMap {
     /** Distance from the fulcrum to the hanger; finite and > 0. */
     armLength: Quantity<'length'>
   }
+  SetInductionFieldStrength: {
+    benchId: string
+    /** Magnetic flux density of the uniform field; finite and > 0. */
+    strength: Quantity<'magnetic_flux_density'>
+  }
+  SetInductionLoopResistance: {
+    benchId: string
+    /** Loop resistance of the closed conducting loop; finite and > 0. */
+    resistance: Quantity<'resistance'>
+  }
+  SetInductionBarVelocity: {
+    benchId: string
+    /** Rod velocity; finite (sign encodes cutting direction). */
+    velocity: Quantity<'velocity'>
+  }
+  SetInductionBarLength: {
+    benchId: string
+    /** Rod length; finite and > 0. */
+    length: Quantity<'length'>
+  }
+  SetInductionFluxRate: {
+    benchId: string
+    /** Rate of change of flux dΦ/dt; finite (sign sets the Lenz direction). */
+    fluxRate: Quantity<'magnetic_flux_rate'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -311,6 +342,11 @@ export type PhysicsEventType =
   | 'SampleMassChanged'
   | 'HangerMassChanged'
   | 'HangerArmChanged'
+  | 'InductionFieldStrengthChanged'
+  | 'InductionLoopResistanceChanged'
+  | 'InductionBarVelocityChanged'
+  | 'InductionBarLengthChanged'
+  | 'InductionFluxRateChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -354,6 +390,11 @@ export interface PhysicsEventPayloadMap {
   SampleMassChanged: SceneCommandPayloadMap['SetSampleMass']
   HangerMassChanged: SceneCommandPayloadMap['SetHangerMass']
   HangerArmChanged: SceneCommandPayloadMap['SetHangerArm']
+  InductionFieldStrengthChanged: SceneCommandPayloadMap['SetInductionFieldStrength']
+  InductionLoopResistanceChanged: SceneCommandPayloadMap['SetInductionLoopResistance']
+  InductionBarVelocityChanged: SceneCommandPayloadMap['SetInductionBarVelocity']
+  InductionBarLengthChanged: SceneCommandPayloadMap['SetInductionBarLength']
+  InductionFluxRateChanged: SceneCommandPayloadMap['SetInductionFluxRate']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -443,6 +484,7 @@ const NOT_FOUND_CODES = {
   thermal_bench: 'THERMAL_BENCH_NOT_FOUND',
   lever_bench: 'LEVER_NOT_FOUND',
   lever_hanger: 'HANGER_NOT_FOUND',
+  induction_bench: 'INDUCTION_BENCH_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -595,6 +637,30 @@ const findLever = (scene: PhysicsScene, leverId: string): LeverLookup => {
   }
   const bench = (scene.leverBenches ?? []).find((entry) => entry.id === leverId)
   if (bench === undefined) return { ok: false, error: notFound('lever_bench', leverId) }
+  return { ok: true, bench }
+}
+
+interface InductionLookup {
+  ok: true
+  bench: InductionBench
+}
+interface InductionLookupFailure {
+  ok: false
+  error: DomainError
+}
+
+const findInductionBench = (
+  scene: PhysicsScene,
+  benchId: string,
+): InductionLookup | InductionLookupFailure => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_INDUCTION_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.inductionBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('induction_bench', benchId) }
   return { ok: true, bench }
 }
 
@@ -1855,6 +1921,172 @@ const applyCommand = (
             hangerId: command.payload.hangerId,
             armLength: clone(armLength),
           },
+        },
+      }
+    }
+
+    case 'SetInductionFieldStrength': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const strength = validateQuantity(command.payload.strength, 'magnetic_flux_density')
+      const strengthSI = canonicalValue(strength)
+      if (!Number.isFinite(strengthSI) || strengthSI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_FIELD',
+            'Magnetic flux density must be a positive finite value.',
+            { benchId: command.payload.benchId, strength: command.payload.strength },
+          ),
+        }
+      }
+      lookup.bench.magneticFluxDensity = clone(strength)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionFieldStrengthChanged',
+          payload: { benchId: command.payload.benchId, strength: clone(strength) },
+        },
+      }
+    }
+
+    case 'SetInductionLoopResistance': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const resistance = validateQuantity(command.payload.resistance, 'resistance')
+      const resistanceSI = canonicalValue(resistance)
+      if (!Number.isFinite(resistanceSI) || resistanceSI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_RESISTANCE',
+            'Loop resistance must be a positive finite value.',
+            { benchId: command.payload.benchId, resistance: command.payload.resistance },
+          ),
+        }
+      }
+      lookup.bench.resistance = clone(resistance)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionLoopResistanceChanged',
+          payload: { benchId: command.payload.benchId, resistance: clone(resistance) },
+        },
+      }
+    }
+
+    case 'SetInductionBarVelocity': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'bar_motion') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INDUCTION_WRONG_SUBMODEL',
+            'Bar velocity can only be set on a bar_motion bench.',
+            { benchId: command.payload.benchId, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const velocity = validateQuantity(command.payload.velocity, 'velocity')
+      const velocitySI = canonicalValue(velocity)
+      if (!Number.isFinite(velocitySI)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_BAR_VELOCITY',
+            'Rod velocity must be finite.',
+            { benchId: command.payload.benchId, velocity: command.payload.velocity },
+          ),
+        }
+      }
+      if (lookup.bench.barVelocity !== undefined) {
+        lookup.bench.barVelocity = clone(velocity)
+      }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionBarVelocityChanged',
+          payload: { benchId: command.payload.benchId, velocity: clone(velocity) },
+        },
+      }
+    }
+
+    case 'SetInductionBarLength': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'bar_motion') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INDUCTION_WRONG_SUBMODEL',
+            'Bar length can only be set on a bar_motion bench.',
+            { benchId: command.payload.benchId, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const length = validateQuantity(command.payload.length, 'length')
+      const lengthSI = canonicalValue(length)
+      if (!Number.isFinite(lengthSI) || lengthSI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_BAR_LENGTH',
+            'Rod length must be a positive finite length.',
+            { benchId: command.payload.benchId, length: command.payload.length },
+          ),
+        }
+      }
+      if (lookup.bench.barLength !== undefined) {
+        lookup.bench.barLength = clone(length)
+      }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionBarLengthChanged',
+          payload: { benchId: command.payload.benchId, length: clone(length) },
+        },
+      }
+    }
+
+    case 'SetInductionFluxRate': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'flux_change') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INDUCTION_WRONG_SUBMODEL',
+            'Flux rate can only be set on a flux_change bench.',
+            { benchId: command.payload.benchId, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const fluxRate = validateQuantity(command.payload.fluxRate, 'magnetic_flux_rate')
+      const fluxRateSI = canonicalValue(fluxRate)
+      if (!Number.isFinite(fluxRateSI)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_FLUX_RATE',
+            'Flux rate dΦ/dt must be finite.',
+            { benchId: command.payload.benchId, fluxRate: command.payload.fluxRate },
+          ),
+        }
+      }
+      if (lookup.bench.fluxRate !== undefined) {
+        lookup.bench.fluxRate = clone(fluxRate)
+      }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionFluxRateChanged',
+          payload: { benchId: command.payload.benchId, fluxRate: clone(fluxRate) },
         },
       }
     }

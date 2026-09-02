@@ -22,6 +22,8 @@ export {
   type ForceType,
   type GravityField,
   type Inductor,
+  type InductionBench,
+  type InductionBenchType,
   type MaterialDefinition,
   type MeasurementDefinition,
   type ObservableDefinition,
@@ -279,3 +281,21 @@ export {
   createLeverBalanceScene,
   type LeverBalanceSceneInput,
 } from './lever/lever-templates.ts'
+export {
+  createInductionScene,
+  inductionBenchOf,
+  inductionBenchesOf,
+  inductionTypeOf,
+  isInductionScene,
+  type BarMotionSpec,
+  type FluxChangeSpec,
+  type InductionBenchSceneInput,
+  type InductionBenchSpec,
+  type InductionObservableKey,
+} from './induction/induction-scene.ts'
+export {
+  createBarMotionScene,
+  createFluxChangeScene,
+  type BarMotionSceneInput,
+  type FluxChangeSceneInput,
+} from './induction/induction-templates.ts'

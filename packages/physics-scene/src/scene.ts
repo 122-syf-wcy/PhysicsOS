@@ -636,6 +636,49 @@ export interface LeverBench extends PhysicsObjectBase {
   hangers: LeverHanger[]
 }
 
+/* ------------------------------------------------------- induction bench -- */
+
+/**
+ * Which closed-form induction sub-model the bench describes.
+ *
+ * - `bar_motion`: a conducting rod of length L sweeps at velocity v through a
+ *   uniform field B; the motional EMF is E = BLv.
+ * - `flux_change`: a coil of area S sits in a field B whose flux changes at a
+ *   constant rate dΦ/dt; Faraday's law gives E = -dΦ/dt.
+ */
+export type InductionBenchType = 'bar_motion' | 'flux_change'
+
+/**
+ * Electromagnetic induction bench (junior induction slice). One bench carries
+ * either a motional-EMF rod or a flux-change coil, plus the closed loop
+ * resistance R. The scene does NOT store the induced EMF or current — B, L, v,
+ * R (or dΦ/dt) are the editable facts, so E and I = E/R are derived by the
+ * engine at the current time rather than a persisted value that goes stale on
+ * the next edit.
+ *
+ * Authoring units follow the junior lab: tesla for B, centimetres for L, m/s
+ * for v, ohms for R.
+ */
+export interface InductionBench extends PhysicsObjectBase {
+  type: InductionBenchType
+  /** Magnetic flux density of the uniform field; finite and > 0. */
+  magneticFluxDensity: Quantity<'magnetic_flux_density'>
+  /** Loop resistance of the closed conducting loop; finite and > 0. */
+  resistance: Quantity<'resistance'>
+  /* ------------------------------------------------------ bar_motion fields -- */
+  /** Length of the conducting rod; finite and > 0 (bar_motion only). */
+  barLength?: Quantity<'length'>
+  /** Velocity of the rod; finite (bar_motion only). Sign encodes direction. */
+  barVelocity?: Quantity<'velocity'>
+  /* ---------------------------------------------------- flux_change fields -- */
+  /** Area of the coil; finite and > 0 (flux_change only). */
+  coilArea?: Quantity<'area'>
+  /** Angle between B and the coil normal (rad); Φ = B·S·cosθ (flux_change only). */
+  coilAngle?: Quantity<'angle'>
+  /** Constant rate of change of flux dΦ/dt; finite (flux_change only). */
+  fluxRate?: Quantity<'magnetic_flux_rate'>
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -687,6 +730,12 @@ export interface PhysicsScene {
   fluidTanks: FluidTank[]
   thermalBenches: ThermalBench[]
   leverBenches: LeverBench[]
+  /**
+   * Induction benches. Optional so scenes persisted before the induction slice
+   * (and scenes authored by domains that never use induction) do not need to
+   * populate an empty array — accessors fall back to `[]`.
+   */
+  inductionBenches?: InductionBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]
