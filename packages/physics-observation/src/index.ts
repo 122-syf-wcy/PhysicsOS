@@ -298,6 +298,16 @@ export {
   type InclineObservation,
 } from './mechanics-observation.ts'
 export {
+  observeOpticsScene,
+  isOpticsImageObservation,
+  isOpticsObjectObservation,
+  type OpticsImageObservation,
+  type OpticsObjectObservation,
+  type OpticsObservation,
+  type OpticsObservationRuntimeState,
+  type OpticsObservationInput,
+} from './optics-observation.ts'
+export {
   observeCircuitScene,
   type CircuitCurrentObservation,
   type CircuitVoltageObservation,
