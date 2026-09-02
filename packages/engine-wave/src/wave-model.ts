@@ -236,8 +236,13 @@ export const pathDifferenceOf = (model: ResolvedWaveModel): number =>
  * coherent sources: A_P = |2A·cos(πΔ/λ)|. The 1/r fall-off is deliberately
  * ignored — the textbook rule is stated for equal amplitudes at P.
  */
-export const resultantAmplitudeOf = (model: ResolvedWaveModel): number =>
-  Math.abs(2 * model.amplitude * Math.cos((Math.PI * pathDifferenceOf(model)) / model.wavelength))
+export const resultantAmplitudeOf = (model: ResolvedWaveModel): number => {
+  const phaseFactor = Math.cos((Math.PI * pathDifferenceOf(model)) / model.wavelength)
+  /* cos(π·(n + ½)) lands at ~1e-16, not 0; a destructive point reports an exact
+     zero rather than a floating-point remnant dressed up as an amplitude. */
+  const snapped = Math.abs(phaseFactor) < 1e-12 ? 0 : phaseFactor
+  return Math.abs(2 * model.amplitude * snapped)
+}
 
 export type InterferenceVerdict = 'constructive' | 'destructive' | 'partial'
 
