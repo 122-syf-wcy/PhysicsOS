@@ -1,8 +1,8 @@
 /**
  * PhysicsOS Knowledge Graph V1.
  *
- * A small, explicit curriculum graph: seven subject roots (力学 / 电磁学 / 电路 /
- * 光学 / 声学 / 浮力 / 热学) with the knowledge points the current teaching content actually
+ * A small, explicit curriculum graph: eight subject roots (力学 / 电磁学 / 电路 /
+ * 光学 / 声学 / 浮力 / 热学 / 机械波) with the knowledge points the current teaching content actually
  * exercises, plus an explicit question → node mapping. Everything here is
  * DATA — no physics is computed, and the mapping is a hand-audited table
  * rather than a keyword heuristic, so a question can never drift onto the
@@ -25,6 +25,7 @@ export type KnowledgeDomain =
   | 'acoustics'
   | 'fluid'
   | 'thermal'
+  | 'wave'
 
 export interface KnowledgeNode {
   readonly id: string
@@ -117,6 +118,15 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'th-melting-point', label: '晶体与非晶体的熔化', domain: 'thermal', parentId: 'thermal' },
   { id: 'th-latent-heat', label: '熔化吸热与熔化热', domain: 'thermal', parentId: 'thermal' },
   { id: 'th-specific-heat', label: '比热容与吸热 Q = cmΔt', domain: 'thermal', parentId: 'thermal' },
+
+  /* 机械波 nodes are exercised by the Lab's wave-bench self-checks (绳波 / 双源干涉 /
+     弦驻波); like the other lab-only branches they have no golden questions yet, so
+     the learning record reaches them through lab attempts. */
+  { id: 'wave', label: '机械波', domain: 'wave' },
+  { id: 'wv-wave-speed', label: '波速、波长与频率 v = λf', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-particle-motion', label: '质点振动与波的传播', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-interference', label: '波的干涉与路程差', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-standing-wave', label: '驻波、波节与波腹', domain: 'wave', parentId: 'wave' },
 ]
 
 const NODE_BY_ID: ReadonlyMap<string, KnowledgeNode> = new Map(
