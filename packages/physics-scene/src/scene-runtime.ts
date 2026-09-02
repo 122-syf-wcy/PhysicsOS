@@ -753,6 +753,19 @@ const rederiveStandingFrequency = (bench: WaveBench): void => {
   bench.frequency = quantity((bench.harmonic * speedSI) / (2 * lengthSI), 'Hz', 'frequency')
 }
 
+/**
+ * On a rope or in a ripple tank the medium fixes the wave speed and the source
+ * fixes the frequency; the wavelength is what follows (λ = v/f). The bench
+ * stores λ and f, so an edit to either f or v re-derives λ from the speed the
+ * medium had — raising the driving frequency shortens the wave, it never speeds
+ * it up.
+ */
+const travellingSpeedOf = (bench: WaveBench): number | undefined => {
+  if (bench.wavelength === undefined) return undefined
+  const speed = canonicalValue(bench.wavelength) * canonicalValue(bench.frequency)
+  return Number.isFinite(speed) && speed > 0 ? speed : undefined
+}
+
 const electricDirectionVector = (direction: ElectricFieldDirection) => {
   switch (direction) {
     case 'right':
@@ -2230,6 +2243,10 @@ const applyCommand = (
           ),
         }
       }
+      const mediumSpeed = travellingSpeedOf(lookup.bench)
+      if (mediumSpeed !== undefined) {
+        lookup.bench.wavelength = quantity(mediumSpeed / frequencySI, 'm', 'length')
+      }
       lookup.bench.frequency = clone(frequency)
       return {
         ok: true,
@@ -2244,15 +2261,6 @@ const applyCommand = (
     case 'SetWaveSpeed': {
       const lookup = findWaveBench(scene, command.payload.benchId)
       if (!lookup.ok) return { ok: false, error: lookup.error }
-      if (lookup.bench.type !== 'standing') {
-        return {
-          ok: false,
-          error: waveWrongSubmodel(
-            lookup.bench,
-            'Wave speed is derived as v = λf on travelling and interference benches; it can only be set on a standing bench.',
-          ),
-        }
-      }
       const speed = validateQuantity(command.payload.speed, 'velocity')
       const speedSI = canonicalValue(speed)
       if (!Number.isFinite(speedSI) || speedSI <= 0) {
@@ -2265,8 +2273,25 @@ const applyCommand = (
           ),
         }
       }
-      lookup.bench.waveSpeed = clone(speed)
-      rederiveStandingFrequency(lookup.bench)
+      if (lookup.bench.type === 'standing') {
+        /* The string keeps its geometry; a stiffer medium raises every harmonic. */
+        lookup.bench.waveSpeed = clone(speed)
+        rederiveStandingFrequency(lookup.bench)
+      } else {
+        /* A new medium at the same driving frequency: λ = v/f. */
+        const frequencySI = canonicalValue(lookup.bench.frequency)
+        if (!Number.isFinite(frequencySI) || frequencySI <= 0) {
+          return {
+            ok: false,
+            error: invalidCommand(
+              'INVALID_WAVE_FREQUENCY',
+              'The bench frequency must be positive before the wave speed can set λ = v/f.',
+              { benchId: command.payload.benchId, frequency: lookup.bench.frequency },
+            ),
+          }
+        }
+        lookup.bench.wavelength = quantity(speedSI / frequencySI, 'm', 'length')
+      }
       return {
         ok: true,
         event: {

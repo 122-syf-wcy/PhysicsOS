@@ -147,11 +147,14 @@ describe('wave scene commands', () => {
     expect(runtime.getScene()).toEqual(before)
   })
 
-  it('changes the frequency on a travelling rig but refuses it on a standing rig', () => {
+  it('changes the frequency on a travelling rig — the medium keeps v, so λ = v/f follows', () => {
     const rope = new SceneRuntime(createTravellingWaveScene())
     const ok = execute(rope, 'SetWaveFrequency', { benchId: 'wave-bench-1', frequency: hz(8) })
     expect(ok.ok).toBe(true)
-    expect(waveBenchOf(rope.getScene())!.frequency.value).toBe(8)
+    const bench = waveBenchOf(rope.getScene())!
+    expect(bench.frequency.value).toBe(8)
+    /* v = λf = 0.4 × 5 = 2 m/s stays; λ = 2 / 8 = 0.25 m */
+    expect(bench.wavelength?.value).toBeCloseTo(0.25, 9)
     expect(rope.getEvents().at(-1)?.type).toBe('WaveFrequencyChanged')
 
     const zero = rejected(
@@ -184,13 +187,24 @@ describe('wave scene commands', () => {
       execute(runtime, 'SetWaveSpeed', { benchId: 'wave-bench-1', speed: mps(0) }),
     )
     expect(stopped.error.code).toBe('INVALID_WAVE_SPEED')
+  })
 
-    /* On a rope v = λf is derived; there is no medium speed to set. */
+  it('re-derives λ = v/f when the medium speed changes on a rope or in a ripple tank', () => {
+    /* A new medium at the same 5 Hz source: v = 4 m/s → λ = 0.8 m. */
     const rope = new SceneRuntime(createTravellingWaveScene())
-    const wrong = rejected(
-      execute(rope, 'SetWaveSpeed', { benchId: 'wave-bench-1', speed: mps(2) }),
-    )
-    expect(wrong.error.code).toBe('WAVE_WRONG_SUBMODEL')
+    const ok = execute(rope, 'SetWaveSpeed', { benchId: 'wave-bench-1', speed: mps(4) })
+    expect(ok.ok).toBe(true)
+    const bench = waveBenchOf(rope.getScene())!
+    expect(bench.frequency.value).toBe(5)
+    expect(bench.wavelength?.value).toBeCloseTo(0.8, 9)
+    expect(bench.waveSpeed).toBeUndefined()
+    expect(rope.getEvents().at(-1)?.type).toBe('WaveSpeedChanged')
+    expect(validateScene(rope.getScene()).status).toBe('passed')
+
+    const pair = new SceneRuntime(createWaveInterferenceScene())
+    execute(pair, 'SetWaveSpeed', { benchId: 'wave-bench-1', speed: mps(1) })
+    /* 10 Hz sources in a slower tank: λ = 1 / 10 = 0.1 m */
+    expect(waveBenchOf(pair.getScene())!.wavelength?.value).toBeCloseTo(0.1, 9)
   })
 
   it('re-derives the standing-wave frequency when the string length changes', () => {

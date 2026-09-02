@@ -367,7 +367,7 @@ describe('Wave Engine · contract', () => {
     expect(() => waveEngine.simulate(edited, request)).toThrow(/exact PhysicsScene revision/)
   })
 
-  it('24. follows SceneCommand edits: a doubled frequency doubles v and halves T', () => {
+  it('24. follows SceneCommand edits: a doubled frequency keeps v, halves λ and T', () => {
     const runtime = new SceneRuntime(createTravellingWaveScene())
     const before = simulated(runtime.getScene())
     const edit = execute(runtime, 'SetWaveFrequency', {
@@ -377,8 +377,17 @@ describe('Wave Engine · contract', () => {
     expect(edit.ok).toBe(true)
     const after = simulated(runtime.getScene())
     expect(after.sceneRevision).toBe(1)
-    expect(scalar(after, 'wave_speed')).toBeCloseTo(scalar(before, 'wave_speed') * 2, 12)
+    /* The rope is the same medium: v stays 2 m/s, λ drops to 0.2 m. */
+    expect(scalar(after, 'wave_speed')).toBeCloseTo(scalar(before, 'wave_speed'), 12)
+    expect(scalar(after, 'wavelength')).toBeCloseTo(scalar(before, 'wavelength') / 2, 12)
     expect(scalar(after, 'period')).toBeCloseTo(scalar(before, 'period') / 2, 12)
+
+    /* A new medium at the same source frequency: v = 4 m/s → λ = 0.4 m. */
+    execute(runtime, 'SetWaveSpeed', { benchId: 'wave-bench-1', speed: quantity(4, 'm/s', 'velocity') })
+    const faster = simulated(runtime.getScene())
+    expect(scalar(faster, 'wave_speed')).toBeCloseTo(4, 12)
+    expect(scalar(faster, 'wavelength')).toBeCloseTo(0.4, 12)
+    expect(scalar(faster, 'frequency')).toBeCloseTo(10, 12)
   })
 
   it('25. re-derives the standing-wave frequency after a harmonic edit through the runtime', () => {
