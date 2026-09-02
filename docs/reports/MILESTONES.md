@@ -405,7 +405,32 @@ physics-units workspace link）。
 
 ## 进行中
 
-（暂无）
+### WAVE_RUNTIME_PACK_V1（实验室切片已就位，题库与脚本化验收未做）
+
+**日期**：2026-09-02
+
+**范围**：Roadmap Phase 33 的第一个新领域 —— 机械波。三个闭式实验台走同一条
+Scene → Engine → Observation → WorkspaceRuntime → Renderer → Lab → 教学层 链。
+
+**已完成**：
+- `physics-scene` 波动台契约：WaveBench（travelling / interference / standing）、六条冻结
+  命令与校验；命令语义按「介质定波速、波源定频率」实现（改 f 或 v 都重推 λ = v/f，驻波改
+  v / L / n 重推 f_n），Δ > d 的不可达几何在命令层拒绝。13 项 runtime 测试。
+- `@physicsos/engine-wave`：y(x,t) 采样、标记质点、双源三角定位与 Δ/λ 判定、驻波波节波腹，
+  11 项引擎内置校验，26 个黄金测试。
+- `physics-observation` 波动观察量（waveform / wave_speed / wave_superposition / wave_nodes），
+  10 项测试。
+- 实验中心「机械波」分类与三个模板（共 38 个可创建）；分类 Tab 改由模板注册表派生，浮力 /
+  热学 / 电磁感应三个此前缺 Tab 的分类随之出现。
+- Lab：WaveWorkspaceRuntime + wave-visual-bridge（纵向放大倍数一次声明、写入坐标轴与读数）
+  + WaveRenderer；Tutor 三课、自测三套（question-core 四个知识节点、六个探针）、Agent 高亮。
+  `wave.client.spec` 17 项。
+- 浏览器手工核验：三个实验台画面、时间轴 seek、Tutor 抽屉与自测 tab，控制台零错误。
+
+**未完成（不视为已交付）**：
+- Question Space 波动题（解析器、场景构建器、黄金题）—— README「尚未完成」已登记。
+- 脚本化浏览器验收（`tests/acceptance/wave-acceptance.mjs`）与 5 项门禁计数、截图回写。
+- `library-home-acceptance.mjs` 的「五色彩点」断言随 Tab 数变化需要更新（此前已过时）。
 
 ---
 
