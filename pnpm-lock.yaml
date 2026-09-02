@@ -448,6 +448,9 @@ importers:
       '@physicsos/engine-electric':
         specifier: file:../engine-electric
         version: link:../engine-electric
+      '@physicsos/engine-wave':
+        specifier: file:../engine-wave
+        version: link:../engine-wave
 
   packages/physics-scene:
     dependencies:

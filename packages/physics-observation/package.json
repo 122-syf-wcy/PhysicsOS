@@ -21,6 +21,7 @@
     "@physicsos/physics-scene": "file:../physics-scene"
   },
   "devDependencies": {
-    "@physicsos/engine-electric": "file:../engine-electric"
+    "@physicsos/engine-electric": "file:../engine-electric",
+    "@physicsos/engine-wave": "file:../engine-wave"
   }
 }

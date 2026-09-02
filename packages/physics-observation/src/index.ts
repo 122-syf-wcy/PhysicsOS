@@ -329,3 +329,19 @@ export {
   type InductionObservationRuntimeState,
   type InductionObservationInput,
 } from './induction-observation.ts'
+export {
+  observeWaveScene,
+  isWaveformObservation,
+  isWaveSpeedObservation,
+  isWaveSuperpositionObservation,
+  isWaveNodesObservation,
+  type WaveformObservation,
+  type WaveInterferenceVerdict,
+  type WaveNodesObservation,
+  type WaveObservation,
+  type WaveObservationInput,
+  type WaveObservationRuntimeState,
+  type WaveProfilePoint,
+  type WaveSpeedObservation,
+  type WaveSuperpositionObservation,
+} from './wave-observation.ts'
