@@ -120,6 +120,8 @@ const DERIVED_LABELS: Record<string, string> = {
      have entries above. Kept clear of 速率 / 出射速度 / 位移 so the Agent's
      findDerived lookups keep resolving to the rows they were written against. */
   hit_velocity: '打板速度',
+  hit_time: '打板时刻',
+  hit_time_in_field: '打板时间（进场起计）',
 }
 
 const OBSERVABLE_LABELS: Record<string, string> = {

@@ -577,15 +577,34 @@ const derivedAt = (model: ParallelPlateModel, t: number): DerivedQuantity[] => {
     )
   }
 
-  // Hit-derived quantities.
+  // Hit-derived quantities. The impact time is published twice on purpose: on
+  // the scene clock (comparable with every other event time) and counted from
+  // field entry (the quantity a textbook question means by 打板时间), so the
+  // solution layer quotes the engine instead of redoing the kinematics.
   if (phases.hit !== null && t >= phases.hit.time) {
-    derived.push({
-      key: 'hit_velocity',
-      targetId: model.particleId,
-      value: quantityVector(phases.hit.velocity, 'm/s', 'velocity'),
-      formula: { expression: 'v at plate impact' },
-      assumptions: [...ASSUMPTIONS],
-    })
+    derived.push(
+      {
+        key: 'hit_time',
+        targetId: model.particleId,
+        value: quantity(phases.hit.time, 's', 'time'),
+        formula: { expression: 't_hit（场景时钟）: y(t) = ±d/2' },
+        assumptions: [...ASSUMPTIONS],
+      },
+      {
+        key: 'hit_time_in_field',
+        targetId: model.particleId,
+        value: quantity(phases.hit.time - phases.enterTime, 's', 'time'),
+        formula: { expression: 't = t_hit − t_enter, 其中 y_entry + vy0·t + ½·a·t² = ±d/2' },
+        assumptions: [...ASSUMPTIONS],
+      },
+      {
+        key: 'hit_velocity',
+        targetId: model.particleId,
+        value: quantityVector(phases.hit.velocity, 'm/s', 'velocity'),
+        formula: { expression: 'v at plate impact' },
+        assumptions: [...ASSUMPTIONS],
+      },
+    )
   }
 
   return derived
