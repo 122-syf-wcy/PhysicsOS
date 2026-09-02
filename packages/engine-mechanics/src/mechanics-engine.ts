@@ -13,6 +13,8 @@ import {
   unsupportedModel,
   invalidModelCondition,
   toCanonicalVector,
+  withinTolerance,
+  DEFAULT_TOLERANCE,
   type DerivedQuantity,
   type ModelSupport,
   type PhysicsEngine,
@@ -239,8 +241,34 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
     checks.push(check('zero_acceleration', 'constraint', magnitude(model.acceleration) < 1e-10, {
       message: 'Uniform linear motion requires zero acceleration.',
     }))
-    checks.push(check('velocity_conservation', 'conservation', true, {
-      message: 'Velocity is constant.',
+    // Velocity is conserved: every sampled state's velocity must equal the
+    // first frame's velocity within tolerance. Analytical solver keeps v
+    // exactly constant, so DEFAULT_TOLERANCE (rel 1e-9) is appropriate.
+    let velocityConserved = states.length > 0
+    if (states.length > 0) {
+      const first = states[0]
+      const firstVel = first?.objects[0]?.velocity
+      if (firstVel) {
+        const v0 = toCanonicalVector(firstVel).vectorSI
+        for (let i = 1; i < states.length && velocityConserved; i++) {
+          const v = states[i]?.objects[0]?.velocity
+          if (!v) {
+            velocityConserved = false
+            break
+          }
+          const vi = toCanonicalVector(v).vectorSI
+          const conserved =
+            withinTolerance(vi.x, v0.x, DEFAULT_TOLERANCE) &&
+            withinTolerance(vi.y, v0.y, DEFAULT_TOLERANCE) &&
+            withinTolerance(vi.z, v0.z, DEFAULT_TOLERANCE)
+          if (!conserved) velocityConserved = false
+        }
+      } else {
+        velocityConserved = false
+      }
+    }
+    checks.push(check('velocity_conservation', 'conservation', velocityConserved, {
+      message: 'Velocity is constant across all sampled states.',
     }))
   }
 
@@ -261,7 +289,30 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
   }
 
   if (model.modelId === 'projectile_motion') {
-    checks.push(check('horizontal_velocity_constant', 'conservation', true, {
+    // Horizontal velocity is conserved when there is no air resistance: every
+    // sampled state's vx must equal the first frame's vx within tolerance.
+    // The analytical solver keeps vx exactly constant (acceleration is
+    // purely vertical), so DEFAULT_TOLERANCE (rel 1e-9) is appropriate.
+    let vxConstant = states.length > 0
+    if (states.length > 0) {
+      const first = states[0]
+      const firstVel = first?.objects[0]?.velocity
+      if (firstVel) {
+        const v0x = toCanonicalVector(firstVel).vectorSI.x
+        for (let i = 1; i < states.length && vxConstant; i++) {
+          const v = states[i]?.objects[0]?.velocity
+          if (!v) {
+            vxConstant = false
+            break
+          }
+          const vx = toCanonicalVector(v).vectorSI.x
+          if (!withinTolerance(vx, v0x, DEFAULT_TOLERANCE)) vxConstant = false
+        }
+      } else {
+        vxConstant = false
+      }
+    }
+    checks.push(check('horizontal_velocity_constant', 'conservation', vxConstant, {
       message: 'Horizontal velocity is constant (no air resistance).',
     }))
     checks.push(check('vertical_acceleration', 'constraint', Math.abs(model.acceleration.y + magnitude(model.gravity)) < 1e-10, {

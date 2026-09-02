@@ -329,3 +329,37 @@ describe('Derived-quantity regressions', () => {
     expect((maxH!.value as { value: number }).value).toBeCloseTo(20, 6)
   })
 })
+
+describe('Conservation checks exist and pass for valid scenes', () => {
+  const engine = new MechanicsEngine()
+
+  it('uniform_linear_motion exposes a passing velocity_conservation conservation check', () => {
+    const scene = createScene({
+      model: 'uniform_linear_motion',
+      mass: 1,
+      position: vec3(0, 0, 0),
+      velocity: vec3(5, 0, 0),
+    })
+    const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+    const vcheck = result.verification.checks.find((c) => c.id === 'velocity_conservation')
+    expect(vcheck).toBeDefined()
+    expect(vcheck!.type).toBe('conservation')
+    expect(vcheck!.passed).toBe(true)
+  })
+
+  it('projectile_motion exposes a passing horizontal_velocity_constant conservation check', () => {
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(10, 5, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
+    const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+    const vcheck = result.verification.checks.find((c) => c.id === 'horizontal_velocity_constant')
+    expect(vcheck).toBeDefined()
+    expect(vcheck!.type).toBe('conservation')
+    expect(vcheck!.passed).toBe(true)
+  })
+})
