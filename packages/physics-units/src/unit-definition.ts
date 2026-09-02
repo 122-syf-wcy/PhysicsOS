@@ -40,6 +40,7 @@ export type UnitKey =
   | 'farad'
   | 'henry'
   | 'hertz'
+  | 'kilohertz'
   | 'radian'
   | 'degree'
   | 'radian_per_second'
@@ -139,6 +140,10 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('farad', 'capacitance', 'F', 1, true),
   define('henry', 'inductance', 'H', 1, true),
   define('hertz', 'frequency', 'Hz', 1, true, ['s^-1']),
+  /* Wave labs quote frequency in kHz as often as Hz (ultrasound, string
+     harmonics), so the authoring unit exists rather than forcing every source
+     to pre-divide by 1000. */
+  define('kilohertz', 'frequency', 'kHz', 1e3, false, ['kilohertz']),
 
   define('radian', 'angle', 'rad', 1, true),
   define('degree', 'angle', 'deg', Math.PI / 180, false, ['\u00b0']),
