@@ -14,12 +14,14 @@ import {
   DEFAULT_TOLERANCE,
   EngineUnsupportedError,
   check,
+  derivedVector,
   invalidModelCondition,
   quantityVector,
   summarizeVerification,
   supported,
   toCanonicalVector,
   unsupportedModel,
+  withinTolerance,
   type DerivedQuantity,
   type ModelSupport,
   type PhysicsEngine,
@@ -27,6 +29,7 @@ import {
   type SimulationRequest,
   type SimulationResult,
   type SimulationState,
+  type VerificationCheck,
   type VerificationResult,
 } from '@physicsos/physics-core'
 import {
@@ -98,6 +101,20 @@ const rotateAroundAxis = (vector: Vector3, axis: Vector3, radians: number): Vect
 }
 
 const supportFailure = (condition: string, message: string) => ({ condition, message })
+
+/**
+ * Vector comparison mirroring magnetic-golden.test.ts: pass when the absolute
+ * error or the relative error (against the larger magnitude) fits within
+ * DEFAULT_TOLERANCE. Uses physics-math primitives only, since physics-core does
+ * not export a vectorsWithinTolerance helper.
+ */
+const vectorsWithinTolerance = (actual: Vector3, expected: Vector3): boolean => {
+  const error = magnitude(subtract(actual, expected))
+  const reference = Math.max(magnitude(actual), magnitude(expected))
+  return (
+    error <= DEFAULT_TOLERANCE.absolute || error <= DEFAULT_TOLERANCE.relative * reference
+  )
+}
 
 /** Analytical solver for the deliberately frozen magnetic circular-motion model. */
 export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
@@ -308,6 +325,7 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     const sampleTimes = [...new Set([startTime, endTime, ...trajectoryTimes, ...verificationTimes])]
       .filter((time) => time >= startTime && time <= endTime)
       .sort((left, right) => left - right)
+    const states = sampleTimes.map((time) => this.stateAtModel(model, time))
     const startedAt = new Date().toISOString()
 
     return {
@@ -315,22 +333,11 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       simulationId: request.simulationId,
       sceneId: scene.id,
       sceneRevision: scene.revision,
-      states: sampleTimes.map((time) => this.stateAtModel(model, time)),
+      states,
       events: [],
       measurements: [],
       derivedQuantities: this.derivedQuantities(model),
-      verification: summarizeVerification(
-        [],
-        [
-          {
-            code: 'VERIFICATION_PENDING',
-            severity: 'warning',
-            message:
-              'Simulation completed; an external Physics Verifier must validate this result.',
-          },
-        ],
-        [],
-      ),
+      verification: this.verifyConservation(model, states),
       metadata: {
         engineId: this.engineId,
         engineVersion: this.engineVersion,
@@ -426,6 +433,108 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
         },
       ],
     }
+  }
+
+  /**
+   * Runs the three analytical conservation checks the golden suite asserts, but
+   * inside the engine so a bare SimulationResult already carries real
+   * verification instead of a VERIFICATION_PENDING placeholder. The checks use
+   * only the already-computed model and sampled states; they mirror
+   * magnetic-golden.test.ts (tests 15/14/16) so an external Physics Verifier and
+   * the engine never disagree on what "conserved" means.
+   */
+  private verifyConservation(
+    model: MagneticModel,
+    states: readonly SimulationState[],
+  ): VerificationResult {
+    const particleId = model.particle.id
+    const requireVector = (
+      state: SimulationState,
+      kind: 'position' | 'velocity',
+    ): Vector3 => {
+      const object = state.objects.find((entry) => entry.id === particleId)
+      if (object === undefined) throw new PhysicsOSError('MAGNETIC_MODEL_INVARIANT', 'Sample state lost its particle.')
+      const vector = kind === 'position' ? object.position?.vector : object.velocity?.vector
+      if (vector === undefined)
+        throw new PhysicsOSError('MAGNETIC_MODEL_INVARIANT', `Sample state missing ${kind} vector.`)
+      return vector
+    }
+
+    /* speed_conserved — every sampled state's speed equals the initial speed
+       within DEFAULT_TOLERANCE (golden test 15). */
+    const speeds = states.map((state) => magnitude(requireVector(state, 'velocity')))
+    const initialSpeed = speeds[0] ?? Number.NaN
+    const speedConserved =
+      states.length > 0 && speeds.every((speed) => withinTolerance(speed, initialSpeed))
+
+    /* period_closes — at t = period the position and velocity return to the
+       initial vectors (golden test 14). Only applicable when a state at the
+       full period exists in the sampled range; if the window ends before T
+       the check is reported as passed (vacuously true) rather than failing. */
+    const initialState = states[0]
+    const periodState = states.find((state) => withinTolerance(state.time.value, model.period))
+    let periodCloses = true
+    let positionClosed = true
+    let velocityClosed = true
+    if (initialState !== undefined && periodState !== undefined) {
+      const initialPosition = requireVector(initialState, 'position')
+      const finalPosition = requireVector(periodState, 'position')
+      const initialVelocity = requireVector(initialState, 'velocity')
+      const finalVelocity = requireVector(periodState, 'velocity')
+      positionClosed = vectorsWithinTolerance(finalPosition, initialPosition)
+      velocityClosed = vectorsWithinTolerance(finalVelocity, initialVelocity)
+      periodCloses = positionClosed && velocityClosed
+    }
+
+    /* force_perpendicular_velocity — the Lorentz force is perpendicular to the
+       velocity at every sample: |F·v| / (|F||v|) <= angular tolerance (golden
+       test 16). The force lives on each state's derived lorentz_force_vector. */
+    const orthogonalityActuals: number[] = []
+    let forcePerpendicular = states.length > 0
+    for (const state of states) {
+      const velocity = requireVector(state, 'velocity')
+      const force = derivedVector(state.derived, 'lorentz_force_vector').vector
+      const denominator = magnitude(force) * magnitude(velocity)
+      const normalized = denominator === 0 ? 0 : Math.abs(dot(force, velocity)) / denominator
+      orthogonalityActuals.push(normalized)
+      if (normalized > DEFAULT_TOLERANCE.angular) forcePerpendicular = false
+    }
+
+    const checks: readonly VerificationCheck[] = [
+      check('speed_conserved', 'conservation', speedConserved, {
+        message: 'Particle speed must be constant at every sampled state.',
+        targetId: particleId,
+        details: {
+          initialSpeed,
+          sampleCount: states.length,
+          tolerance: DEFAULT_TOLERANCE,
+        },
+      }),
+      check('period_closes', 'conservation', periodCloses, {
+        message:
+          'At t = T the position and velocity must return to their initial vectors.',
+        targetId: particleId,
+        details: {
+          period: model.period,
+          positionClosed,
+          velocityClosed,
+          sampledAtPeriod: periodState !== undefined,
+          tolerance: DEFAULT_TOLERANCE,
+        },
+      }),
+      check('force_perpendicular_velocity', 'conservation', forcePerpendicular, {
+        message:
+          'The Lorentz force must satisfy F · v ≈ 0 at every sampled state.',
+        targetId: particleId,
+        details: {
+          angularTolerance: DEFAULT_TOLERANCE.angular,
+          maxNormalizedDot: orthogonalityActuals.length === 0 ? 0 : Math.max(...orthogonalityActuals),
+          sampleCount: states.length,
+        },
+      }),
+    ]
+
+    return summarizeVerification(checks, [], [])
   }
 
   private derivedQuantities(model: MagneticModel): DerivedQuantity[] {

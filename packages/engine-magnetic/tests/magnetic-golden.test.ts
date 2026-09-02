@@ -309,6 +309,55 @@ describe('Magnetic Golden Tests', () => {
   })
 })
 
+describe('engine self-verification', () => {
+  const engine = new MagneticEngine()
+
+  it('emits non-empty verification with all three conservation checks passed and no pending warning', () => {
+    const result = run(engine, createScene({ position: vec3(0.002, -0.001, 0) }))
+
+    expect(result.verification.checks.length).toBe(3)
+    expect(result.verification.status).toBe('passed')
+    expect(result.verification.warnings).toEqual([])
+    expect(result.verification.errors).toEqual([])
+    expect(result.verification.warnings.some((issue) => issue.code === 'VERIFICATION_PENDING')).toBe(
+      false,
+    )
+
+    const ids = result.verification.checks.map((entry) => entry.id)
+    expect(ids).toEqual([
+      'speed_conserved',
+      'period_closes',
+      'force_perpendicular_velocity',
+    ])
+    for (const entry of result.verification.checks) {
+      expect(entry.passed).toBe(true)
+      expect(entry.type).toBe('conservation')
+    }
+  })
+
+  it('conserves speed across every sampled state', () => {
+    const result = run(engine, createScene({ velocity: vec3(3e5, 4e5, 0) }))
+    expect(
+      result.verification.checks.find((entry) => entry.id === 'speed_conserved')?.passed,
+    ).toBe(true)
+  })
+
+  it('closes the orbit: position and velocity at T return to the initial vectors', () => {
+    const result = run(engine, createScene({ position: vec3(0.002, -0.001, 0) }))
+    expect(
+      result.verification.checks.find((entry) => entry.id === 'period_closes')?.passed,
+    ).toBe(true)
+  })
+
+  it('keeps the Lorentz force perpendicular to velocity at every sample', () => {
+    const result = run(engine, createScene())
+    expect(
+      result.verification.checks.find((entry) => entry.id === 'force_perpendicular_velocity')
+        ?.passed,
+    ).toBe(true)
+  })
+})
+
 const scalar = (result: SimulationResult, key: string): number =>
   derivedScalar(result.derivedQuantities, key).value
 
