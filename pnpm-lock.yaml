@@ -139,6 +139,72 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
+  packages/agent-tools:
+    dependencies:
+      '@physicsos/engine-acoustics':
+        specifier: file:../engine-acoustics
+        version: link:../engine-acoustics
+      '@physicsos/engine-circuit':
+        specifier: file:../engine-circuit
+        version: link:../engine-circuit
+      '@physicsos/engine-composite':
+        specifier: file:../engine-composite
+        version: link:../engine-composite
+      '@physicsos/engine-electric':
+        specifier: file:../engine-electric
+        version: link:../engine-electric
+      '@physicsos/engine-electric-region':
+        specifier: file:../engine-electric-region
+        version: link:../engine-electric-region
+      '@physicsos/engine-fluid':
+        specifier: file:../engine-fluid
+        version: link:../engine-fluid
+      '@physicsos/engine-induction':
+        specifier: file:../engine-induction
+        version: link:../engine-induction
+      '@physicsos/engine-lever':
+        specifier: file:../engine-lever
+        version: link:../engine-lever
+      '@physicsos/engine-magnetic':
+        specifier: file:../engine-magnetic
+        version: link:../engine-magnetic
+      '@physicsos/engine-mechanics':
+        specifier: file:../engine-mechanics
+        version: link:../engine-mechanics
+      '@physicsos/engine-optics':
+        specifier: file:../engine-optics
+        version: link:../engine-optics
+      '@physicsos/engine-thermal':
+        specifier: file:../engine-thermal
+        version: link:../engine-thermal
+      '@physicsos/engine-wave':
+        specifier: file:../engine-wave
+        version: link:../engine-wave
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-observation':
+        specifier: file:../physics-observation
+        version: link:../physics-observation
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/physics-verifier':
+        specifier: file:../physics-verifier
+        version: link:../physics-verifier
+      '@physicsos/question-core':
+        specifier: file:../question-core
+        version: link:../question-core
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
   packages/engine-acoustics:
     dependencies:
       '@physicsos/physics-core':

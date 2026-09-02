@@ -1,0 +1,39 @@
+{
+  "name": "@physicsos/agent-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Model-facing physics tool runtime over PhysicsScene, the engines and the Question Runtime (harness-independent)",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-math": "file:../physics-math",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene",
+    "@physicsos/physics-observation": "file:../physics-observation",
+    "@physicsos/physics-verifier": "file:../physics-verifier",
+    "@physicsos/engine-magnetic": "file:../engine-magnetic",
+    "@physicsos/engine-mechanics": "file:../engine-mechanics",
+    "@physicsos/engine-electric": "file:../engine-electric",
+    "@physicsos/engine-electric-region": "file:../engine-electric-region",
+    "@physicsos/engine-composite": "file:../engine-composite",
+    "@physicsos/engine-circuit": "file:../engine-circuit",
+    "@physicsos/engine-optics": "file:../engine-optics",
+    "@physicsos/engine-acoustics": "file:../engine-acoustics",
+    "@physicsos/engine-fluid": "file:../engine-fluid",
+    "@physicsos/engine-thermal": "file:../engine-thermal",
+    "@physicsos/engine-lever": "file:../engine-lever",
+    "@physicsos/engine-induction": "file:../engine-induction",
+    "@physicsos/engine-wave": "file:../engine-wave",
+    "@physicsos/question-core": "file:../question-core"
+  }
+}
