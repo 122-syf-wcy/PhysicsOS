@@ -22,6 +22,7 @@ export {
   WAVE_PROFILE_SAMPLES,
   WaveEngine,
   createWaveSimulationRequest,
+  profileSampleCountOf,
   resolveWave,
   waveAntinodeId,
   waveEngine,

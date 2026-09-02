@@ -44,8 +44,32 @@ export const STANDING_WAVE_MODEL = 'standing_wave'
 
 const DEFAULT_DURATION_SECONDS = 1
 const TRAJECTORY_SEGMENTS = 60
-/** Rope / string profile samples per state; enough to draw a smooth sinusoid. */
+/**
+ * Minimum rope / string profile samples per state. The actual count grows with
+ * the number of wavelengths drawn (see {@link profileSampleCountOf}) so a
+ * six-wavelength rope is sampled as smoothly as a three-wavelength one.
+ */
 export const WAVE_PROFILE_SAMPLES = 48
+/** Samples per wavelength the profile is drawn with. */
+const SAMPLES_PER_WAVELENGTH = 16
+const MAX_PROFILE_SAMPLES = 480
+
+/**
+ * Profile segments for a rig: 16 per wavelength across the drawn length, never
+ * fewer than {@link WAVE_PROFILE_SAMPLES}. Point i sits at x = length·i/count,
+ * so the last index is the far end of the rope or string.
+ */
+export const profileSampleCountOf = (model: ResolvedWaveModel): number => {
+  const length =
+    model.subModel === 'standing_wave'
+      ? (model.stringLength ?? 0)
+      : (model.ropeLength ?? 0)
+  const cycles = model.wavelength > 0 ? length / model.wavelength : 0
+  return Math.min(
+    MAX_PROFILE_SAMPLES,
+    Math.max(WAVE_PROFILE_SAMPLES, Math.ceil(cycles * SAMPLES_PER_WAVELENGTH)),
+  )
+}
 
 const WAVE_RELATIVE_TOLERANCE = 1e-9
 
@@ -290,14 +314,16 @@ const profileObjects = (
   model: ResolvedWaveModel,
   length: number,
   displacement: (x: number) => number,
-): ObjectState[] =>
-  Array.from({ length: WAVE_PROFILE_SAMPLES + 1 }, (_, index) => {
-    const x = (length * index) / WAVE_PROFILE_SAMPLES
+): ObjectState[] => {
+  const count = profileSampleCountOf(model)
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const x = (length * index) / count
     return {
       id: waveProfileId(model.benchId, index),
       position: quantityVector({ x, y: displacement(x), z: 0 }, 'm', 'length'),
     }
   })
+}
 
 const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState => {
   const benchValues: Record<string, Quantity> = {
@@ -547,8 +573,9 @@ const buildVerification = (
 
     /* Clamped ends and every node stay at zero displacement in every state. */
     const nodeIds = nodePositionsOf(model).map((_, index) => waveNodeId(model.benchId, index))
+    const lastSample = profileSampleCountOf(model)
     const endsFixed = states.every((state) =>
-      [waveProfileId(model.benchId, 0), waveProfileId(model.benchId, WAVE_PROFILE_SAMPLES)].every(
+      [waveProfileId(model.benchId, 0), waveProfileId(model.benchId, lastSample)].every(
         (id) => {
           const position = positionOf(state, id)
           return position !== undefined && Math.abs(position.y) <= WAVE_RELATIVE_TOLERANCE * model.amplitude

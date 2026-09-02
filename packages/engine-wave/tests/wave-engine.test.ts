@@ -25,6 +25,7 @@ import {
   createWaveSimulationRequest,
   interferenceVerdictOf,
   nodePositionsOf,
+  profileSampleCountOf,
   resolveWaveModel,
   waveEngine,
   waveMarkerId,
@@ -397,6 +398,21 @@ describe('Wave Engine · contract', () => {
     expect(scalar(result, 'frequency')).toBeCloseTo(80, 12)
     expect(scalar(result, 'wavelength')).toBeCloseTo(0.5, 12)
     expect(result.verification.status).toBe('passed')
+  })
+
+  it('27. samples the profile 16 points per wavelength, never fewer than 48 segments', () => {
+    /* Default rope: 3λ → 48 segments (the minimum). */
+    expect(profileSampleCountOf(resolveWaveModel(createTravellingWaveScene()))).toBe(48)
+    /* Six wavelengths of rope at 10 Hz in the same medium: 96 segments, and the
+       last sample still sits at the far end of the rope. */
+    const dense = createTravellingWaveScene({ waveSpeed: 2, frequency: 10, ropeLength: 1.2 })
+    expect(profileSampleCountOf(resolveWaveModel(dense))).toBe(96)
+    const end = at(dense, 0).objects.find((entry) => entry.id === waveProfileId('wave-bench-1', 96))
+    expect(end?.position?.vector.x).toBeCloseTo(1.2, 12)
+    expect(at(dense, 0).objects.some((entry) => entry.id === waveProfileId('wave-bench-1', 97))).toBe(false)
+    /* A second-harmonic string is one wavelength long: the floor applies. */
+    expect(profileSampleCountOf(resolveWaveModel(createStandingWaveScene()))).toBe(48)
+    expect(simulated(dense).verification.status).toBe('passed')
   })
 
   it('26. runs the time window the scene declares and reads kHz frequencies', () => {
