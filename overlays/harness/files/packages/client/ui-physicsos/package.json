@@ -56,6 +56,8 @@
     "@physicsos/engine-electric-region": "link:../../../../../packages/engine-electric-region",
     "@physicsos/engine-composite": "link:../../../../../packages/engine-composite",
     "@physicsos/engine-mechanics": "link:../../../../../packages/engine-mechanics",
+    "@physicsos/engine-induction": "link:../../../../../packages/engine-induction",
+    "@physicsos/engine-wave": "link:../../../../../packages/engine-wave",
     "@physicsos/physics-composite-core": "link:../../../../../packages/physics-composite-core",
     "@physicsos/physics-observation": "link:../../../../../packages/physics-observation",
     "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",

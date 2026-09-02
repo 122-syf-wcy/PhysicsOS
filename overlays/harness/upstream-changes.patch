@@ -1605,7 +1605,7 @@ index fbe42fc279..344e146033 100644
        fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
        expect(expandSidebar).toHaveBeenCalledTimes(1)
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..29db708145 100644
+index 1490a0f9f7..c5fc9520fd 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -42,6 +42,9 @@ importers:
@@ -1628,7 +1628,7 @@ index 1490a0f9f7..29db708145 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:^
          version: link:../../client/ui-plan
-@@ -2283,6 +2289,109 @@ importers:
+@@ -2283,6 +2289,112 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
@@ -1670,6 +1670,9 @@ index 1490a0f9f7..29db708145 100644
 +      '@physicsos/engine-thermal':
 +        specifier: link:../../../../../packages/engine-thermal
 +        version: link:../../../../../packages/engine-thermal
++      '@physicsos/engine-wave':
++        specifier: link:../../../../../packages/engine-wave
++        version: link:../../../../../packages/engine-wave
 +      '@physicsos/physics-composite-core':
 +        specifier: link:../../../../../packages/physics-composite-core
 +        version: link:../../../../../packages/physics-composite-core

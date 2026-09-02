@@ -165,6 +165,20 @@ export const inductionTopicOf = (context: PhysicsAgentContext): string | undefin
     : 'induction-flux-change'
 }
 
+/**
+ * The lab topic of a wave frame, read from the rig the runtime drew: a marked
+ * particle only exists on the rope, sources only on the interference tank,
+ * nodes only on the clamped string. A renamed or question-forked bench still
+ * resolves from what the canvas shows.
+ */
+export const waveTopicOf = (context: PhysicsAgentContext): string | undefined => {
+  if (context.status === 'failed' || context.domain !== 'wave') return undefined
+  if (context.drawnIds.some(id => id.endsWith('.marker'))) return 'wave-travelling'
+  if (context.drawnIds.some(id => id.endsWith('.source-1'))) return 'wave-interference'
+  if (context.drawnIds.some(id => id.includes('.node.'))) return 'wave-standing'
+  return undefined
+}
+
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   circuitTopicOf(context)
@@ -177,6 +191,7 @@ export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   ?? magneticTopicOf(context)
   ?? compositeTopicOf(context)
   ?? inductionTopicOf(context)
+  ?? waveTopicOf(context)
 
 /** The self-check set for the current frame; undefined keeps the tab hidden. */
 export const experimentSelfChecksOf = (
@@ -216,4 +231,7 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'composite-three-field': 'composite-ebg',
   'induction-bar-motion': 'induction-bar-motion',
   'induction-flux-change': 'induction-flux-change',
+  'wave-travelling': 'wave-travelling',
+  'wave-interference': 'wave-interference',
+  'wave-standing': 'wave-standing',
 }

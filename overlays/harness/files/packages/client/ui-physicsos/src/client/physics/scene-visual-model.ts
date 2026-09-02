@@ -32,6 +32,7 @@ export type PhysicsDomainId =
   | 'fluid'
   | 'thermal'
   | 'induction'
+  | 'wave'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -106,6 +107,11 @@ export type ObservableKey =
   | 'inductionCurrent'
   | 'flux'
   | 'barMotion'
+  // wave
+  | 'waveform'
+  | 'waveSpeed'
+  | 'superposition'
+  | 'nodes'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -707,6 +713,82 @@ export interface InductionCurrentVisual {
   sign: number
 }
 
+/* --------------------------------------------------------------------- wave -- */
+
+/**
+ * The rope / string profile at the current frame: the engine's sampled points
+ * in rope order, plus the equilibrium line they oscillate about. Displacements
+ * are already scaled by the bridge's vertical gain (see the overlay readout),
+ * so the renderer only projects them.
+ */
+export interface WaveProfileVisual {
+  id: string
+  kind: 'rope' | 'string'
+  points: readonly ScenePoint[]
+  /** Equilibrium line the profile oscillates about. */
+  equilibrium: { from: ScenePoint; to: ScenePoint }
+}
+
+/**
+ * A marked rope particle: fixed x, transverse SHM in y. Its velocity is drawn
+ * from the shared `vectors` array so the arrow follows the vector grammar.
+ */
+export interface WaveMarkerVisual {
+  id: string
+  at: ScenePoint
+  label: string
+}
+
+/** One of the two coherent sources of an interference rig. */
+export interface WaveSourceVisual {
+  id: string
+  at: ScenePoint
+  label: string
+}
+
+/**
+ * The observation point P of an interference rig. `verdict` is the engine's
+ * classification of Δ/λ (published as interference_type); `readout` is the
+ * formatted Δ / A_P line the renderer places beside the point.
+ */
+export interface WavePointVisual {
+  id: string
+  at: ScenePoint
+  verdict: 'constructive' | 'destructive' | 'partial'
+  readout: string
+}
+
+/** Node (still) or antinode (largest swing) on a standing-wave string. */
+export interface WaveNodeVisual {
+  id: string
+  kind: 'node' | 'antinode'
+  at: ScenePoint
+  label?: string
+}
+
+/**
+ * Amplitude envelope of a standing wave: the profile at t = 0 (cos ωt = 1) and
+ * its mirror. Two dashed curves the string never leaves — produced by asking the
+ * engine for its t = 0 state, never by evaluating sin here.
+ */
+export interface WaveEnvelopeVisual {
+  id: string
+  upper: readonly ScenePoint[]
+  lower: readonly ScenePoint[]
+}
+
+/**
+ * One circular crest spreading from a source at the current frame. Radii are
+ * the crests' distances r = v·t − kλ the bridge read off the engine's λ, v and
+ * t — presentation of where the in-phase fronts sit, not a new physical claim.
+ */
+export interface WaveFrontVisual {
+  id: string
+  center: ScenePoint
+  /** Crest radius in scene units. */
+  radius: number
+}
+
 /* ------------------------------------------------------------ view model --- */
 
 /** Canvas-internal readouts. Never a floating toolbar over the scene. */
@@ -820,6 +902,20 @@ export interface SceneVisualModel {
   inductionCoil?: InductionCoilVisual
   /** Current-direction arrow around the induction loop. */
   inductionCurrent?: InductionCurrentVisual
+  /** Sampled rope / string profile (wave domain); gated by the `waveform` observable. */
+  waveProfile?: WaveProfileVisual
+  /** Marked rope particle of a travelling wave. */
+  waveMarker?: WaveMarkerVisual
+  /** The two coherent sources of an interference rig. */
+  waveSources?: readonly WaveSourceVisual[]
+  /** Observation point of an interference rig; gated by the `superposition` observable. */
+  wavePoint?: WavePointVisual
+  /** Nodes and antinodes of a standing wave; gated by the `nodes` observable. */
+  waveNodes?: readonly WaveNodeVisual[]
+  /** Standing-wave amplitude envelope. */
+  waveEnvelope?: WaveEnvelopeVisual
+  /** Circular crests spreading from the interference sources at this frame. */
+  waveFronts?: readonly WaveFrontVisual[]
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

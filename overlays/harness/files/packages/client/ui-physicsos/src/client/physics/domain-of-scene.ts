@@ -7,6 +7,7 @@ import {
   isLeverScene,
   isOpticsScene,
   isThermalScene,
+  isWaveScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
@@ -21,20 +22,22 @@ export type SupportedSceneDomain =
   | 'fluid'
   | 'thermal'
   | 'induction'
+  | 'wave'
 export type SceneDomain = SupportedSceneDomain | 'unsupported'
 
 export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
-  /* Circuit, optics, acoustics, fluid, thermal, induction and lever scenes carry
-     no motion objects at all, so they must be classified before the body/particle
-     branches (which would all fall through to 'unsupported' — a blank surface
-     rather than an error). The accessors are mutually exclusive: each one
-     requires the other apparatus collections to be empty. */
+  /* Circuit, optics, acoustics, fluid, thermal, induction, wave and lever scenes
+     carry no motion objects at all, so they must be classified before the
+     body/particle branches (which would all fall through to 'unsupported' — a
+     blank surface rather than an error). The accessors are mutually exclusive:
+     each one requires the other apparatus collections to be empty. */
   if (isCircuitScene(scene)) return 'circuit'
   if (isOpticsScene(scene)) return 'optics'
   if (isAcousticsScene(scene)) return 'acoustics'
   if (isFluidScene(scene)) return 'fluid'
   if (isThermalScene(scene)) return 'thermal'
   if (isInductionScene(scene)) return 'induction'
+  if (isWaveScene(scene)) return 'wave'
   /* A lever has no particles or bodies — classifying it after the body branch
      would fall through to 'unsupported' and show a blank Lab. It stays in the
      mechanics picker group, so the domain id is still 'mechanics'. */

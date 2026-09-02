@@ -73,6 +73,15 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetInductionBarVelocity',
   'SetInductionBarLength',
   'SetInductionFluxRate',
+  /* Wave facts: amplitude, frequency, the medium's speed and the rig geometry
+     decide the profile, the interference verdict and the harmonic a question
+     stated. */
+  'SetWaveAmplitude',
+  'SetWaveFrequency',
+  'SetWaveSpeed',
+  'SetWavePathDifference',
+  'SetWaveStringLength',
+  'SetWaveHarmonic',
 ])
 
 export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.has(type)

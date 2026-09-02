@@ -103,6 +103,20 @@ const PHYSICS_TOKENS = `
   --physics-induction-rod: #4338ca;
   --physics-induction-current: #d97706;
 
+  /* ---------- wave ----------
+     Wave ink is rose — no other domain uses it, so a rope profile is never
+     mistaken for a trajectory (blue) or a field (violet/indigo). The profile
+     and the sources take the full tone, the envelope and spreading crests a
+     pale tint, the equilibrium rule stays neutral slate, and the marked
+     particle borrows the sky of the acoustics pulse so the eye finds the one
+     point that does NOT travel with the wave. */
+  --physics-wave-rope: #be185d;
+  --physics-wave-envelope: #f9a8d4;
+  --physics-wave-front: #f472b6;
+  --physics-wave-equilibrium: #94a3b8;
+  --physics-wave-node: #334155;
+  --physics-wave-marker: #0284c7;
+
   /* ---------- status ---------- */
   --physics-verification-ok: #2f9e5a;
   --physics-verification-warning: #d97706;
@@ -133,6 +147,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-thermal-tint: #fbe3e3;
   --physics-subject-induction: #4338ca;
   --physics-subject-induction-tint: #e8e8fb;
+  --physics-subject-wave: #db2777;
+  --physics-subject-wave-tint: #fce7f3;
 
   /* ---------- interaction ---------- */
   --physics-highlight: #f5a524;

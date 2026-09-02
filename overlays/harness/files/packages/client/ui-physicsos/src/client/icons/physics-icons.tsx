@@ -444,6 +444,41 @@ export const IconInductionCoil = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* -------------------------------------------------------------------- wave -- */
+
+/** Travelling rope wave: one sinusoid over its equilibrium line with a marked particle. */
+export const IconWaveRope = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 12h18" strokeOpacity="0.4" strokeDasharray="2 2" />
+    <path d="M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0" />
+    <circle cx="7.5" cy="8.4" r="1.4" fill="currentColor" stroke="none" />
+    <path d="M7.5 8.4v5.6" strokeOpacity="0.55" strokeDasharray="1.4 1.6" />
+  </Glyph>
+)
+
+/** Two-source interference: concentric crests from two points meeting at P. */
+export const IconWaveInterference = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <circle cx="7" cy="17" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="17" cy="17" r="1.4" fill="currentColor" stroke="none" />
+    <path d="M3.2 17a3.8 3.8 0 0 1 7.6 0" strokeOpacity="0.7" />
+    <path d="M13.2 17a3.8 3.8 0 0 1 7.6 0" strokeOpacity="0.7" />
+    <path d="M0.6 17a6.4 6.4 0 0 1 12.8 0" strokeOpacity="0.45" />
+    <path d="M10.6 17a6.4 6.4 0 0 1 12.8 0" strokeOpacity="0.45" />
+    <circle cx="12" cy="7.2" r="1.6" />
+  </Glyph>
+)
+
+/** Standing wave on a clamped string: two loops inside their dashed envelope. */
+export const IconStandingWave = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 5v14M21 5v14" strokeOpacity="0.6" />
+    <path d="M3 12c2-6 5-6 9 0s7 6 9 0" />
+    <path d="M3 12c2 6 5 6 9 0s7-6 9 0" strokeOpacity="0.45" strokeDasharray="1.8 1.8" />
+    <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

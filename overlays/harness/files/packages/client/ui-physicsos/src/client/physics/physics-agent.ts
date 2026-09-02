@@ -261,6 +261,16 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.inductionBar === undefined ? [] : [view.inductionBar.id]),
     ...(view.inductionCoil === undefined ? [] : [view.inductionCoil.id]),
     ...(view.inductionCurrent === undefined ? [] : [view.inductionCurrent.id]),
+    /* Wave rig primitives: the profile, the marked particle (travelling only),
+       the two sources and the observation point (interference only), the nodes
+       and antinodes plus the envelope (standing only) — which of them exist is
+       how the tutor and the self-checks tell the three rigs apart. */
+    ...(view.waveProfile === undefined ? [] : [view.waveProfile.id]),
+    ...(view.waveMarker === undefined ? [] : [view.waveMarker.id]),
+    ...(view.waveSources ?? []).map(source => source.id),
+    ...(view.wavePoint === undefined ? [] : [view.wavePoint.id]),
+    ...(view.waveNodes ?? []).map(node => node.id),
+    ...(view.waveEnvelope === undefined ? [] : [view.waveEnvelope.id]),
   ]
 }
 

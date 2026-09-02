@@ -1594,6 +1594,205 @@ const fluxChangeLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/* --------------------------------------------------------------------- wave -- */
+
+const travellingWaveLesson = (context: PhysicsAgentContext): TutorScript => {
+  const amplitude = derivedText(context, '振幅 A')
+  const wavelength = derivedText(context, '波长 λ')
+  const frequency = derivedText(context, '频率 f')
+  const speed = derivedText(context, '波速 v')
+  const period = derivedText(context, '周期 T')
+  const marker = context.drawnIds.find(id => id.endsWith('.marker'))
+  const profile = context.drawnIds.find(id => id.startsWith('wave-bench'))
+  return {
+    id: 'wave-travelling',
+    topic: '绳上的简谐横波',
+    observation: [
+      ...observeLine('振幅 A', amplitude),
+      ...observeLine('波长 λ', wavelength),
+      ...observeLine('频率 f', frequency),
+      ...observeLine('波速 v = λf', speed),
+      ...observeLine('周期 T = 1/f', period),
+    ],
+    question: '波形一直向右跑，蓝色的标记质点却始终在同一条竖线上。到底是什么在向右传播？',
+    hints: [
+      {
+        id: 'hint-particle',
+        title: '提示 1',
+        paragraphs: ['盯住标记质点：它的横坐标一格都没动，只是沿竖直方向上下往返 —— 这是一个简谐振动，振幅就是 A。'],
+        ...(marker === undefined ? {} : { highlights: [marker] }),
+      },
+      {
+        id: 'hint-profile',
+        title: '提示 2',
+        paragraphs: ['再看整条绳：每过一个周期 T，波形恰好整体前移一个波长 λ。位移量 λ 除以时间 T 就是波形跑的速度 v = λ/T = λf。'],
+        ...(profile === undefined ? {} : { highlights: [profile] }),
+      },
+      {
+        id: 'hint-medium',
+        title: '提示 3',
+        paragraphs: ['把频率调大试试：波形变密（λ 变短）但 v 不变，因为波速由绳子这个介质决定；波源只决定 f，λ = v/f 是两者共同的结果。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '向右传播的是振动这种"形式"以及随之传递的能量，介质本身（绳上的每个质点）只在各自的平衡位置附近做简谐振动，不随波迁移。',
+        [
+          amplitude === undefined ? '' : `A = ${amplitude}`,
+          wavelength === undefined ? '' : `λ = ${wavelength}`,
+          frequency === undefined ? '' : `f = ${frequency}`,
+          speed === undefined ? '' : `v = λf = ${speed}`,
+          period === undefined ? '' : `T = 1/f = ${period}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        '三个量的分工：介质定波速 v，波源定频率 f，波长 λ = v/f 由两者共同决定。',
+      ].filter(entry => entry.length > 0),
+      highlights: [marker, profile].filter((id): id is string => id !== undefined),
+    },
+    evidence: evidenceOf(context, [
+      'wave_speed_relation',
+      'period_frequency_reciprocal',
+      'profile_translation',
+      'particle_no_net_transport',
+    ]),
+  }
+}
+
+const waveInterferenceLesson = (context: PhysicsAgentContext): TutorScript => {
+  const pathDifference = derivedText(context, '路程差 Δ')
+  const ratio = derivedText(context, '路程差 / 波长 Δ/λ')
+  const resultant = derivedText(context, '合振幅 A_P')
+  const amplitude = derivedText(context, '振幅 A')
+  const wavelength = derivedText(context, '波长 λ')
+  const verdict = context.derived.find(row => row.label === 'P 点振动')?.value
+  const destructive = verdict === '振动减弱'
+  const point = context.drawnIds.find(id => id.endsWith('.point'))
+  const sources = context.drawnIds.filter(id => /\.source-\d$/.test(id))
+  return {
+    id: destructive ? 'wave-interference-destructive' : 'wave-interference-constructive',
+    topic: '双源干涉与波的叠加',
+    observation: [
+      ...observeLine('单个波源振幅 A', amplitude),
+      ...observeLine('波长 λ', wavelength),
+      ...observeLine('P 点路程差 Δ', pathDifference),
+      ...observeLine('Δ/λ', ratio),
+      ...observeLine('P 点合振幅 A_P', resultant),
+      ...observeLine('P 点振动', verdict),
+    ],
+    question: destructive
+      ? '两个波源都在振动，P 点却几乎不动。两列波去哪了？'
+      : 'P 点的振幅比任何一个波源都大。多出来的振幅是哪来的？',
+    hints: [
+      {
+        id: 'hint-path',
+        title: '提示 1',
+        paragraphs: ['两列波到 P 点走的路不一样长，路程差 Δ = |r₂ − r₁|。走得多的那列要晚到，晚到多少个周期，取决于 Δ 里装了几个波长。'],
+        ...(point === undefined ? {} : { highlights: [point] }),
+      },
+      {
+        id: 'hint-phase',
+        title: '提示 2',
+        paragraphs: ['Δ 是波长的整数倍时，两列波同相到达，波峰遇波峰，位移相加得 2A；Δ 是半波长的奇数倍时，反相到达，波峰遇波谷，位移相消得 0。'],
+        highlights: sources,
+      },
+      {
+        id: 'hint-formula',
+        title: '提示 3',
+        paragraphs: ['统一写成合振幅 A_P = |2A·cos(πΔ/λ)|：Δ/λ 取整数时 cos = ±1 得 2A，取半整数时 cos = 0 得 0，其余情况介于两者之间。拖动路程差看 A_P 连续变化。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        destructive
+          ? '两列波没有消失，只是在 P 点始终反相：一列到达波峰时另一列正好到达波谷，位移之和恒为零。能量被重新分配到了加强点上。'
+          : '多出来的振幅来自叠加：两列波同相到达 P，位移逐时刻相加，合振幅达到 2A。这不是能量凭空产生，而是干涉把能量从减弱点搬到了加强点。',
+        [
+          pathDifference === undefined ? '' : `Δ = ${pathDifference}`,
+          ratio === undefined ? '' : `Δ/λ = ${ratio}`,
+          resultant === undefined ? '' : `A_P = |2A·cos(πΔ/λ)| = ${resultant}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        '判据：Δ = nλ 振动加强，Δ = (n + ½)λ 振动减弱；相干条件是两源频率相同、相位差恒定。',
+      ].filter(entry => entry.length > 0),
+      highlights: [point, ...sources].filter((id): id is string => id !== undefined),
+    },
+    evidence: evidenceOf(context, [
+      'interference_geometry',
+      'path_difference_rule',
+      'superposition_bounds',
+      'wave_speed_relation',
+    ]),
+  }
+}
+
+const standingWaveLesson = (context: PhysicsAgentContext): TutorScript => {
+  const stringLength = derivedText(context, '弦长 L')
+  const harmonic = derivedText(context, '谐波次数 n')
+  const speed = derivedText(context, '波速 v')
+  const wavelength = derivedText(context, '波长 λ')
+  const frequency = derivedText(context, '频率 f')
+  const fundamental = derivedText(context, '基频 f₁')
+  const nodes = context.drawnIds.filter(id => id.includes('.node.'))
+  const antinodes = context.drawnIds.filter(id => id.includes('.antinode.'))
+  return {
+    id: 'wave-standing',
+    topic: '两端固定的弦驻波',
+    observation: [
+      ...observeLine('弦长 L', stringLength),
+      ...observeLine('谐波次数 n', harmonic),
+      ...observeLine('弦上波速 v', speed),
+      ...observeLine('波长 λ = 2L/n', wavelength),
+      ...observeLine('频率 f_n = n·v/2L', frequency),
+      ...observeLine('基频 f₁', fundamental),
+    ],
+    question: '弦在两条虚线之间来回摆，有几个点却始终纹丝不动。为什么这里的波"不走"了？',
+    hints: [
+      {
+        id: 'hint-nodes',
+        title: '提示 1',
+        paragraphs: ['先数不动的点：两端被夹住，本来就不能动；中间那些不动的点叫波节。相邻两个波节之间恰好隔半个波长 λ/2。'],
+        highlights: nodes,
+      },
+      {
+        id: 'hint-superpose',
+        title: '提示 2',
+        paragraphs: ['驻波是两列相同的波沿相反方向传播叠加的结果：波节处两列波始终反相、相消为零；波腹处始终同相、振幅最大。波形不再向前跑，只在原地涨落。'],
+        highlights: antinodes,
+      },
+      {
+        id: 'hint-harmonic',
+        title: '提示 3',
+        paragraphs: ['要两端都是波节，弦长必须装下整数个半波长：L = n·λ/2。于是 λ = 2L/n，再用 v = λf 得 f_n = n·v/(2L) = n·f₁ —— 把 n 改成 3 看频率和波节数怎么变。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '两列反向传播的波叠加成了驻波：在波节处它们永远反相抵消，位移恒为零；在波腹处永远同相，振幅最大。波形不传播，能量在相邻波节之间来回交换。',
+        [
+          stringLength === undefined ? '' : `L = ${stringLength}`,
+          harmonic === undefined ? '' : `n = ${harmonic}`,
+          wavelength === undefined ? '' : `λ = 2L/n = ${wavelength}`,
+          speed === undefined ? '' : `v = ${speed}`,
+          frequency === undefined ? '' : `f_n = n·v/(2L) = ${frequency}`,
+          fundamental === undefined ? '' : `f₁ = ${fundamental}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        '两端固定的弦只能在 f_n = n·f₁ 这些离散频率上共振，这就是弦乐器音高由弦长、张力（决定 v）与谐波次数共同决定的原因。',
+      ].filter(entry => entry.length > 0),
+      highlights: [...nodes, ...antinodes],
+    },
+    evidence: evidenceOf(context, [
+      'harmonic_relation',
+      'frequency_harmonic',
+      'boundary_nodes',
+      'node_positions_fixed',
+    ]),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1662,7 +1861,15 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
       ? barMotionLesson(context)
       : fluxChangeLesson(context)
   }
+  if (context.domain === 'wave') {
+    /* Each wave rig draws a primitive the others never do: the marked particle,
+       the sources, the nodes — so the lesson follows the canvas, not the title. */
+    if (context.drawnIds.some(id => id.endsWith('.marker'))) return travellingWaveLesson(context)
+    if (context.drawnIds.some(id => id.endsWith('.source-1'))) return waveInterferenceLesson(context)
+    if (context.drawnIds.some(id => id.includes('.node.'))) return standingWaveLesson(context)
+    return undefined
+  }
   /* Composite, magnetic, mechanics, circuit, optics, acoustics, fluid,
-     thermal and induction returned above; electric remains. */
+     thermal, induction and wave returned above; electric remains. */
   return electricLesson(context)
 }

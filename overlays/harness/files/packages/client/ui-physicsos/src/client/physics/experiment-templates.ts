@@ -41,6 +41,9 @@ import {
   createVelocitySelectorScene,
   createBarMotionScene,
   createFluxChangeScene,
+  createStandingWaveScene,
+  createTravellingWaveScene,
+  createWaveInterferenceScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 import type { ReactElement } from 'react'
@@ -75,10 +78,13 @@ import {
   IconProjectileHorizontal,
   IconProjectileOblique,
   IconRheostat,
+  IconStandingWave,
   IconTime,
   IconUniformElectric,
   IconVelocity,
   IconVelocitySelector,
+  IconWaveInterference,
+  IconWaveRope,
 } from '../icons/physics-icons.tsx'
 
 /** Domains a template belongs to, mirrored from the Lab runtime dispatch. */
@@ -93,6 +99,7 @@ export type ExperimentDomain =
   | 'fluid'
   | 'thermal'
   | 'induction'
+  | 'wave'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -930,11 +937,63 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* --------------------------------------------------------------------- wave -- */
+
+const waveTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'wave-travelling',
+    domain: 'wave',
+    stage: 'junior',
+    label: 'lab.template.waveTravelling',
+    hint: 'lab.template.waveTravelling.hint',
+    icon: IconWaveRope,
+    tags: ['机械波', '初中', '波速', 'v = λf'],
+    createScene: (title) => {
+      /* 绳上的简谐横波：A = 5 cm、λ = 0.4 m、f = 5 Hz、绳长 1.2 m —— v = λf = 2 m/s、
+         T = 0.2 s，正是教材建立 v = λf 的那组数。标记质点只上下振动、不随波走。 */
+      const scene = createTravellingWaveScene({ sceneId: stampId('wave-travelling'), title })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'wave-interference',
+    domain: 'wave',
+    stage: 'senior',
+    label: 'lab.template.waveInterference',
+    hint: 'lab.template.waveInterference.hint',
+    icon: IconWaveInterference,
+    tags: ['机械波', '高中', '干涉', '路程差'],
+    createScene: (title) => {
+      /* 双源干涉：两个 3 cm 的相干波源相距 0.8 m，λ = 0.2 m、f = 10 Hz；观察点到两源
+         1.0 m 与 1.4 m，路程差 0.4 m = 2λ 是加强点，合振幅 6 cm。拖路程差到 0.1 m
+         （λ/2）就变成减弱点。 */
+      const scene = createWaveInterferenceScene({ sceneId: stampId('wave-interference'), title })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'wave-standing',
+    domain: 'wave',
+    stage: 'senior',
+    label: 'lab.template.waveStanding',
+    hint: 'lab.template.waveStanding.hint',
+    icon: IconStandingWave,
+    tags: ['机械波', '高中', '驻波', '谐波'],
+    createScene: (title) => {
+      /* 两端固定的弦驻波：L = 1.0 m、v = 40 m/s、二次谐波 —— λ = 2L/n = 1.0 m、
+         f₂ = n·v/(2L) = 40 Hz，波节在 0 / 0.5 / 1.0 m。改 n 复现整张谐波表。 */
+      const scene = createStandingWaveScene({ sceneId: stampId('wave-standing'), title })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+]
+
 /** Ordered groups, one per domain. The "全部" tab is built by flattening these. */
 export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics', templates: mechanicsTemplates },
   { id: 'optics', label: 'lab.template.group.optics', templates: opticsTemplates },
   { id: 'acoustics', label: 'lab.template.group.acoustics', templates: acousticsTemplates },
+  { id: 'wave', label: 'lab.template.group.wave', templates: waveTemplates },
   { id: 'fluid', label: 'lab.template.group.fluid', templates: fluidTemplates },
   { id: 'thermal', label: 'lab.template.group.thermal', templates: thermalTemplates },
   { id: 'electric', label: 'lab.template.group.electric', templates: electricTemplates },

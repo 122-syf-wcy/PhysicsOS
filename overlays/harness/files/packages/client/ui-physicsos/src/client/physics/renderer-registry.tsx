@@ -17,6 +17,7 @@ import { InductionRenderer } from './induction-renderer.tsx'
 import { OpticsRenderer } from './optics-renderer.tsx'
 import { ThermalRenderer } from './thermal-renderer.tsx'
 import { LeverRenderer } from './lever-renderer.tsx'
+import { WaveRenderer } from './wave-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
 import {
   Angle,
@@ -962,6 +963,7 @@ export const RENDERERS = {
   fluid: FluidRenderer,
   thermal: ThermalRenderer,
   induction: InductionRenderer,
+  wave: WaveRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 
 export { CompositeRenderer, ElectricRenderer, MagneticRenderer, MechanicsRenderer }

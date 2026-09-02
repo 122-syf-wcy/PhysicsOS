@@ -40,15 +40,11 @@ import css from './ExperimentPicker.module.css'
 /** Locale keys for the domain tabs. 'all' is the union tab, not a group id. */
 type TabId = 'all' | ExperimentDomain
 
+/* One tab per registered group, in registry order, so a domain added to the
+   template registry shows up here without a second hand-kept list. */
 const TABS: readonly { id: TabId; label: PhysicsosKey }[] = [
   { id: 'all', label: 'lab.template.group.all' },
-  { id: 'mechanics', label: 'lab.template.group.mechanics' },
-  { id: 'optics', label: 'lab.template.group.optics' },
-  { id: 'acoustics', label: 'lab.template.group.acoustics' },
-  { id: 'electric', label: 'lab.template.group.electric' },
-  { id: 'magnetic', label: 'lab.template.group.magnetic' },
-  { id: 'circuit', label: 'lab.template.group.circuit' },
-  { id: 'composite', label: 'lab.template.group.composite' },
+  ...EXPERIMENT_TEMPLATE_GROUPS.map(group => ({ id: group.id, label: group.label })),
 ]
 
 /** 学段 partition switch. 'all' unions both stages, mirroring the domain tabs. */
@@ -63,15 +59,7 @@ const STAGES: readonly { id: StageId; label: PhysicsosKey }[] = [
 const RECENT_STORAGE_KEY = 'physicsos.recent-experiments'
 const RECENT_LIMIT = 3
 
-const DOMAIN_IDS: readonly ExperimentDomain[] = [
-  'mechanics',
-  'optics',
-  'acoustics',
-  'electric',
-  'magnetic',
-  'circuit',
-  'composite',
-]
+const DOMAIN_IDS: readonly ExperimentDomain[] = EXPERIMENT_TEMPLATE_GROUPS.map(group => group.id)
 
 /** Narrow a stored domain string to a subject-coloured domain, if it is one. */
 const asDomain = (value: string): ExperimentDomain | undefined =>

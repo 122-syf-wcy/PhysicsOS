@@ -758,3 +758,110 @@
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
+
+/* --------------------------------------------------------------------- wave -- */
+
+/* The equilibrium line: a quiet dashed rule the profile oscillates about. */
+.waveEquilibrium {
+  stroke: var(--physics-wave-equilibrium);
+  stroke-width: 1.1;
+  stroke-dasharray: 5 4;
+  fill: none;
+}
+
+/* The rope profile: the primary ink of the domain, round joins so the
+   sampled polyline reads as a smooth curve. */
+.waveRope,
+.waveString {
+  stroke: var(--physics-wave-rope);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.waveString {
+  stroke-width: 2.2;
+}
+
+/* Standing-wave envelope: two faint dashed curves the string never leaves. */
+.waveEnvelope {
+  stroke: var(--physics-wave-envelope);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 4;
+  fill: none;
+}
+
+/* Crests spreading from each source; fading so the picture stays legible when
+   two families overlap. */
+.waveFront {
+  stroke: var(--physics-wave-front);
+  stroke-width: 1.1;
+  fill: none;
+  opacity: 0.55;
+}
+
+.waveFrontGroup {
+  mix-blend-mode: multiply;
+}
+
+/* A node is a hollow ring (nothing moves here); an antinode a filled dot. */
+.waveNode {
+  fill: #fbfdff;
+  stroke: var(--physics-wave-node);
+  stroke-width: 1.8;
+}
+
+.waveAntinode {
+  fill: var(--physics-wave-rope);
+  stroke: #fbfdff;
+  stroke-width: 1.2;
+}
+
+/* The marked rope particle and the plumb line down to its equilibrium. */
+.waveMarker {
+  fill: var(--physics-wave-marker);
+  stroke: #fbfdff;
+  stroke-width: 1.4;
+}
+
+.waveMarkerGuide {
+  stroke: var(--physics-wave-marker);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.7;
+}
+
+/* Coherent sources of the interference rig. */
+.waveSource {
+  fill: var(--physics-wave-rope);
+  stroke: #fbfdff;
+  stroke-width: 1.4;
+}
+
+/* Observation point P, coloured by the engine's verdict. */
+.wavePoint {
+  stroke: #fbfdff;
+  stroke-width: 1.6;
+}
+
+.wavePointConstructive {
+  fill: var(--physics-verification-ok);
+}
+
+.wavePointDestructive {
+  fill: var(--physics-verification-error);
+}
+
+.wavePointPartial {
+  fill: var(--physics-verification-warning);
+}
+
+.wavePointLabel {
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}

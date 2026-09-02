@@ -717,6 +717,53 @@ const InductionCoilArt = () => (
   </>
 )
 
+/* --------------------------------------------------------------------- wave -- */
+
+/** 绳上的简谐横波: a sinusoid over its equilibrium, one particle plumbed to the line. */
+const WaveTravellingArt = () => (
+  <>
+    <Stroke d="M10 36 H110" width={1.3} opacity={0.4} dash="3 3" />
+    <Stroke d="M10 36 C18 12 26 12 34 36 S50 60 58 36 S74 12 82 36 S98 60 106 36" width={2.2} />
+    {/* The marked particle and its plumb line down to equilibrium */}
+    <Stroke d="M46 36 V22" width={1.3} opacity={0.6} dash="2 2" />
+    <Dot x={46} y={22} r={3} />
+    {/* Direction of travel and one wavelength */}
+    <Arrow x1={88} y1={10} x2={104} y2={10} width={1.6} opacity={0.75} head={4.2} />
+    <Stroke d="M34 60 H82" width={1.4} opacity={0.6} />
+    <Stroke d="M34 57 V63 M82 57 V63" width={1.4} opacity={0.6} />
+  </>
+)
+
+/** 双源干涉: crests spreading from two sources, meeting at the observation point. */
+const WaveInterferenceArt = () => (
+  <>
+    {[14, 26, 38].map(r => (
+      <Stroke key={`l${r}`} d={`M${40 - r} 56 A${r} ${r} 0 0 1 ${40 + r} 56`} width={1.4} opacity={0.75 - r / 90} />
+    ))}
+    {[14, 26, 38].map(r => (
+      <Stroke key={`r${r}`} d={`M${80 - r} 56 A${r} ${r} 0 0 1 ${80 + r} 56`} width={1.4} opacity={0.75 - r / 90} />
+    ))}
+    <Dot x={40} y={56} r={3} />
+    <Dot x={80} y={56} r={3} />
+    <Stroke d="M40 56 L60 22 L80 56" width={1.2} opacity={0.5} dash="2 3" />
+    <circle cx={60} cy={22} r={4.2} fill="none" stroke="currentColor" strokeWidth={2} />
+  </>
+)
+
+/** 弦驻波: two loops between clamped ends, inside their dashed envelope. */
+const WaveStandingArt = () => (
+  <>
+    <Stroke d="M14 14 V58 M106 14 V58" width={2.2} opacity={0.75} />
+    <Stroke d="M14 36 H106" width={1.3} opacity={0.4} dash="3 3" />
+    <Stroke d="M14 36 C26 12 48 12 60 36 S94 60 106 36" width={2.2} />
+    <Stroke d="M14 36 C26 60 48 60 60 36 S94 12 106 36" width={1.4} opacity={0.5} dash="3 3" />
+    {/* Nodes: hollow rings; antinodes: filled dots */}
+    <circle cx={60} cy={36} r={3.2} fill="#fff" stroke="currentColor" strokeWidth={1.6} />
+    <Dot x={37} y={18} r={2.6} />
+    <Dot x={83} y={54} r={2.6} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -778,6 +825,9 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'heat-capacity-comparison': HeatCapacityArt,
   'induction-bar-motion': InductionBarArt,
   'induction-flux-change': InductionCoilArt,
+  'wave-travelling': WaveTravellingArt,
+  'wave-interference': WaveInterferenceArt,
+  'wave-standing': WaveStandingArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -818,6 +868,9 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['heat-capacity-comparison', 'thermal-heat-capacity'],
   ['induction-bar-motion', 'induction-bar-motion'],
   ['induction-flux-change', 'induction-flux-change'],
+  ['wave-travelling', 'wave-travelling'],
+  ['wave-interference', 'wave-interference'],
+  ['wave-standing', 'wave-standing'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */
