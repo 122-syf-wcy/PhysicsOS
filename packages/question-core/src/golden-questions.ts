@@ -5,7 +5,7 @@ export interface GoldenQuestionDefinition {
   id: string
   title: string
   text: string
-  expectedDomain?: 'magnetic' | 'mechanics' | 'electric' | 'composite'
+  expectedDomain?: 'magnetic' | 'mechanics' | 'electric' | 'composite' | 'circuit' | 'optics' | 'induction'
   expectedChargeSign: 'positive' | 'negative' | 'unknown'
   expectedFieldDirection: 'into_page' | 'out_of_page' | 'unknown'
   expectedValidation: 'VALID' | 'AMBIGUOUS' | 'INVALID_SEMANTICS' | 'UNSUPPORTED_MODEL'
@@ -533,11 +533,192 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedFieldDirection: 'out_of_page',
     expectedValidation: 'UNSUPPORTED_MODEL',
   },
+
+  /* --------------------------------------------------------------- optics --- *
+   * Geometric optics imaging questions. Each names an optical element and
+   * the imaging quantities (focal length, object/image distance, magnification,
+   * image nature). The optics engine solves by the thin-lens / mirror equation
+   * (1/u + 1/v = 1/f) and reports image nature from the sign of v. */
+  {
+    id: 'opt-01-plane-mirror',
+    title: '平面镜成像',
+    text: '一支蜡烛放在平面镜前 15 cm 处。已知：蜡烛到平面镜的距离 u = 15 cm。求：1. 像距 v 2. 像的性质（正立或倒立、实像或虚像、放大或缩小）',
+    expectedDomain: 'optics',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'opt-02-convex-lens-beyond-2f',
+    title: '凸透镜成像（u>2f，倒立缩小实像）',
+    text: '凸透镜焦距 f = 10 cm，物体放在主光轴上距透镜 u = 30 cm 处。已知：f = 10 cm，u = 30 cm。求：1. 像距 v 2. 放大率 m 3. 像的性质',
+    expectedDomain: 'optics',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'opt-03-convex-lens-between-f-and-2f',
+    title: '凸透镜成像（f<u<2f，倒立放大实像）',
+    text: '凸透镜焦距 f = 10 cm，物体距透镜 u = 15 cm。已知：f = 10 cm，u = 15 cm。求：1. 像距 v 2. 放大率 m 3. 像的性质',
+    expectedDomain: 'optics',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'opt-04-convex-lens-within-f',
+    title: '凸透镜成像（u<f，正立放大虚像）',
+    text: '凸透镜焦距 f = 10 cm，物体距透镜 u = 6 cm。已知：f = 10 cm，u = 6 cm。求：1. 像距 v 2. 像的性质',
+    expectedDomain: 'optics',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'opt-05-concave-mirror-beyond-2f',
+    title: '凹面镜成像（u>2f，倒立缩小实像）',
+    text: '凹面镜焦距 f = 10 cm，物体距镜面 u = 30 cm（u>2f）。已知：f = 10 cm，u = 30 cm。求：1. 像距 v 2. 像的性质',
+    expectedDomain: 'optics',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'opt-06-convex-mirror',
+    title: '凸面镜成像（正立缩小虚像）',
+    text: '凸面镜焦距 f = -10 cm（发散面镜），物体距镜面 u = 20 cm。已知：f = -10 cm，u = 20 cm。求：像的性质',
+    expectedDomain: 'optics',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+
+  /* --------------------------------------------------------------- circuit -- *
+   * DC steady-state circuit questions. Each names an EMF, resistors and the
+   * topology (series / parallel / rheostat / emf-measurement), and asks for one
+   * of {电流, 电压, 电阻, 功率, 路端电压, 内阻}. The circuit engine solves the
+   * scene by MNA; values are chosen so the answer is exact or nearly so. */
+
+  {
+    id: 'circ-01-series-current',
+    title: '串联电路求电流',
+    text: '一个串联电路由电源、开关、电流表和两个电阻组成。电源电动势 E = 6 V（理想电源，内阻不计），电阻 R1 = 10 Ω，R2 = 20 Ω，串联连接。闭合开关，求电路中的电流。',
+    expectedDomain: 'circuit',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'circ-02-parallel-total-resistance',
+    title: '并联电路总电阻',
+    text: '一个并联电路由电源和两个并联电阻组成。电源电动势 E = 6 V（理想电源），电阻 R1 = 10 Ω，R2 = 15 Ω，并联连接。闭合开关，求电路的总电阻和干路电流。',
+    expectedDomain: 'circuit',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'circ-03-emf-internal',
+    title: '测电源电动势与内阻',
+    text: '用电流表、电压表和滑动变阻器测量电源的电动势和内阻。电源电动势 E = 4.5 V，内阻 r = 0.5 Ω，滑动变阻器最大阻值为 20 Ω，滑片置于中间位置。闭合开关，求电流表读数和电压表读数。',
+    expectedDomain: 'circuit',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'circ-04-rheostat',
+    title: '滑动变阻器调节电流',
+    text: '一个串联电路由电源、电流表、滑动变阻器和一个定值电阻组成。电源电动势 E = 6 V（理想电源），定值电阻 R0 = 10 Ω，滑动变阻器最大阻值为 20 Ω，滑片置于中间位置。闭合开关，求电路中的电流。',
+    expectedDomain: 'circuit',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'circ-05-power',
+    title: '电源功率',
+    text: '一个串联电路由电源和两个电阻组成。电源电动势 E = 6 V（理想电源），电阻 R1 = 10 Ω，R2 = 20 Ω，串联连接。闭合开关，求电源的总功率和外电路功率。',
+    expectedDomain: 'circuit',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'circ-06-terminal-voltage',
+    title: '路端电压',
+    text: '一个串联电路由电源和电阻组成。电源电动势 E = 9 V，内阻 r = 1 Ω，外电路电阻 R = 5 Ω，串联连接。闭合开关，求电路中的电流和路端电压。',
+    expectedDomain: 'circuit',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+
+  /* --------------------------------------------------------------- induction -- *
+   * Electromagnetic induction questions (电磁感应). Each names either a
+   * conducting rod cutting field lines (E = BLv) or a coil whose flux changes
+   * (E = -dΦ/dt), plus the loop resistance R so I = E/R. Values follow the
+   * engine's textbook templates so the answers are exact. */
+  {
+    id: 'ind-01-bar-motion-emf',
+    title: '导体棒切割磁感线求电动势',
+    text: '一个电磁感应实验：匀强磁场磁感应强度 B = 0.5 T，一根长 L = 20 cm 的导体棒垂直放在磁场中，以 v = 2 m/s 的速度垂直切割磁感线，与一个 R = 5 Ω 的回路构成闭合电路。求：1. 感应电动势 2. 感应电流',
+    expectedDomain: 'induction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'ind-02-bar-motion-lenz',
+    title: '导体棒反向切割的楞次方向',
+    text: '电磁感应装置：匀强磁场的磁感应强度 B = 0.2 T，导体棒长 L = 50 cm，以 v = -4 m/s 的速度沿反方向切割磁感线，回路电阻 R = 2 Ω。求：1. 感应电动势 2. 感应电流方向（楞次定律）',
+    expectedDomain: 'induction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'ind-03-flux-change-emf',
+    title: '磁通量变化求感应电动势',
+    text: '一个匝线圈放在磁场中，磁感应强度 B = 0.4 T，线圈面积 S = 50 cm²，磁通量变化率为 0.05 Wb/s（均匀增加），线圈回路电阻 R = 2 Ω。求：1. 感应电动势 2. 感应电流',
+    expectedDomain: 'induction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'ind-04-flux-change-lenz',
+    title: '磁通量减小时的楞次方向',
+    text: '电磁铁断电过程中，穿过线圈的磁通量每秒减少 0.08 Wb（磁通量变化率为 -0.08 Wb/s），线圈面积 S = 25 cm²，磁感应强度 B = 0.6 T，回路电阻 R = 4 Ω。求：1. 感应电动势 2. 感应电流方向',
+    expectedDomain: 'induction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'ind-05-bar-zero-velocity',
+    title: '导体棒静止无感应',
+    text: '电磁感应装置：磁感应强度 B = 0.5 T 的匀强磁场中，一根 L = 20 cm 的导体棒静止不动（v = 0 m/s），回路电阻 R = 5 Ω。求：感应电动势与感应电流',
+    expectedDomain: 'induction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'ind-06-missing-resistance',
+    title: '缺少回路电阻（无效）',
+    text: '匀强磁场磁感应强度 B = 0.5 T，一根长 L = 20 cm 的导体棒以 v = 2 m/s 的速度垂直切割磁感线。求：感应电动势',
+    expectedDomain: 'induction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'INVALID_SEMANTICS',
+  },
 ]
 
 export function createGoldenQuestionDocument(def: GoldenQuestionDefinition, now?: string): QuestionDocument {
   const ts = now ?? new Date().toISOString()
-  const domain = def.expectedDomain ?? (def.id.startsWith('mech-') ? 'mechanics' : 'magnetic')
+  const domain = def.expectedDomain ?? (def.id.startsWith('mech-') ? 'mechanics' : def.id.startsWith('circ-') ? 'circuit' : def.id.startsWith('opt-') ? 'optics' : def.id.startsWith('ind-') ? 'induction' : 'magnetic')
   return {
     id: asQuestionId('golden-' + def.id),
     content: {
@@ -548,7 +729,7 @@ export function createGoldenQuestionDocument(def: GoldenQuestionDefinition, now?
     },
     metadata: {
       title: def.title,
-      tags: [domain, domain === 'mechanics' ? 'motion' : 'charged-particle'],
+      tags: [domain, domain === 'mechanics' ? 'motion' : domain === 'circuit' ? 'dc-circuit' : 'charged-particle'],
       difficulty: 'standard',
     },
     createdAt: ts,

@@ -236,10 +236,11 @@ describe('Unmatched question text', () => {
     updatedAt: '2026-01-01T00:00:00Z',
   })
 
-  it('returns PARSE_FAILED instead of a magnetic IR for optics text', () => {
+  it('parses an optics question instead of returning PARSE_FAILED', () => {
     const result = processQuestion(runtimeDoc('凸透镜的焦距是 20 cm，物距 30 cm，求像距。'))
-    expect(result.workflowState).toBe('PARSE_FAILED')
-    expect(result.ir).toBeNull()
+    expect(result.workflowState).toBe('READY')
+    expect(result.ir?.domain).toBe('optics')
+    expect(result.ir?.model).toBe('thin_lens_imaging')
   })
 
   it('returns PARSE_FAILED instead of a magnetic IR for thermodynamics text', () => {

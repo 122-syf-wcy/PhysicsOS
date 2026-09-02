@@ -484,6 +484,9 @@ importers:
 
   packages/question-core:
     dependencies:
+      '@physicsos/engine-circuit':
+        specifier: file:../engine-circuit
+        version: link:../engine-circuit
       '@physicsos/engine-composite':
         specifier: file:../engine-composite
         version: link:../engine-composite
@@ -493,12 +496,18 @@ importers:
       '@physicsos/engine-electric-region':
         specifier: file:../engine-electric-region
         version: link:../engine-electric-region
+      '@physicsos/engine-induction':
+        specifier: file:../engine-induction
+        version: link:../engine-induction
       '@physicsos/engine-magnetic':
         specifier: file:../engine-magnetic
         version: link:../engine-magnetic
       '@physicsos/engine-mechanics':
         specifier: file:../engine-mechanics
         version: link:../engine-mechanics
+      '@physicsos/engine-optics':
+        specifier: file:../engine-optics
+        version: link:../engine-optics
       '@physicsos/physics-core':
         specifier: file:../physics-core
         version: link:../physics-core

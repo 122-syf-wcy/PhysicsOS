@@ -6,13 +6,17 @@ import { ElectricRegionEngine } from '@physicsos/engine-electric-region'
 import { CompositeEngine } from '@physicsos/engine-composite'
 import { MagneticEngine } from '@physicsos/engine-magnetic'
 import { MechanicsEngine } from '@physicsos/engine-mechanics'
-
+import { OpticsEngine } from '@physicsos/engine-optics'
+import { CircuitEngine } from '@physicsos/engine-circuit'
+import { InductionEngine } from '@physicsos/engine-induction'
 const electricEngine = new ElectricEngine()
 const electricRegionEngine = new ElectricRegionEngine()
 const compositeEngine = new CompositeEngine()
 const magneticEngine = new MagneticEngine()
 const mechanicsEngine = new MechanicsEngine()
-
+const opticsEngine = new OpticsEngine()
+const circuitEngine = new CircuitEngine()
+const inductionEngine = new InductionEngine()
 export interface EngineSelectionResult {
   engine: PhysicsEngine<PhysicsScene> | null
   support: ModelSupport | null
@@ -51,8 +55,20 @@ export function selectEngine(ir: PhysicsSemanticIR): EngineSelectionResult {
   if (ir.domain === 'magnetic' && ir.model === 'charged_particle_uniform_magnetic_field') {
     return { engine: magneticEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
   }
+  if (ir.domain === 'optics') {
+    return { engine: opticsEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
+  }
   if (ir.domain === 'mechanics') {
     return { engine: mechanicsEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
+  }
+  if (ir.domain === 'circuit' && ir.model === 'dc_steady_state_mna') {
+    return { engine: circuitEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
+  }
+  if (
+    (ir.domain === 'induction' && ir.model === 'bar_motion_emf') ||
+    (ir.domain === 'induction' && ir.model === 'flux_change_emf')
+  ) {
+    return { engine: inductionEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
   }
   return {
     engine: null,

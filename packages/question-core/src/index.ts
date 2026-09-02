@@ -7,8 +7,11 @@ export type {
 } from './question-document.ts'
 export type {
   MagneticModelId,
+  OpticsModelId,
   ElectricModelId,
   PhysicsModelId,
+  CircuitModelId,
+  InductionModelId,
   SemanticEntity,
   SemanticTarget,
   SemanticRelation,
@@ -38,9 +41,27 @@ export {
   DeterministicElectricQuestionParser,
   isElectricQuestionText,
 } from './deterministic-electric-parser.ts'
+export {
+  DeterministicOpticsQuestionParser,
+  isOpticsQuestionText,
+} from './deterministic-optics-parser.ts'
 export { validateSemanticIR } from './semantic-validator.ts'
 export { buildSceneFromIR } from './scene-builder.ts'
 export { buildElectricSceneFromIR, buildParallelPlateSceneFromIR } from './electric-scene-builder.ts'
+export { buildOpticsSceneFromIR } from './optics-scene-builder.ts'
+export type { OpticsSceneBuildResult } from './optics-scene-builder.ts'
+export {
+  DeterministicCircuitQuestionParser,
+  isCircuitQuestionText,
+} from './deterministic-circuit-parser.ts'
+export { buildCircuitSceneFromIR } from './circuit-scene-builder.ts'
+export type { CircuitSceneBuildResult } from './circuit-scene-builder.ts'
+export {
+  DeterministicInductionQuestionParser,
+  isInductionQuestionText,
+} from './deterministic-induction-parser.ts'
+export { buildInductionSceneFromIR } from './induction-scene-builder.ts'
+export type { InductionSceneBuildResult } from './induction-scene-builder.ts'
 export { selectEngine } from './engine-selector.ts'
 export { processQuestion } from './question-runtime.ts'
 export { GOLDEN_QUESTIONS, createGoldenQuestionDocument } from './golden-questions.ts'

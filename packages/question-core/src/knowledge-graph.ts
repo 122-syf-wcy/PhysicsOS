@@ -64,6 +64,14 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'em-velocity-selector', label: '速度选择器', domain: 'electromagnetism', parentId: 'electromagnetism' },
   { id: 'em-mass-spectrometer', label: '质谱仪', domain: 'electromagnetism', parentId: 'electromagnetism' },
   { id: 'em-three-field', label: '电、磁、重力三场平衡', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  /* 电磁感应 nodes back the golden induction questions (导体棒切割磁感线 /
+   * 磁通量变化) and the Lab's induction experiment self-checks. Golden
+   * question attempts and lab attempts both write to these nodes. */
+  { id: 'em-induction', label: '电磁感应现象', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  { id: 'em-motional-emf', label: '动生电动势 E = BLv', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  { id: 'em-faraday-law', label: '法拉第电磁感应定律 E = -dΦ/dt', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  { id: 'em-lenz-law', label: '楞次定律与感应方向', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  { id: 'em-magnetic-flux', label: '磁通量 Φ = B·S·cosθ', domain: 'electromagnetism', parentId: 'electromagnetism' },
 
   /* 电路 nodes are exercised by the Lab's experiment self-checks (there are no
      circuit golden questions yet); QUESTION_KNOWLEDGE therefore never maps to
@@ -76,9 +84,9 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'circ-power', label: '电功率', domain: 'circuit', parentId: 'circuit' },
   { id: 'circ-emf-internal', label: '电动势与内阻', domain: 'circuit', parentId: 'circuit' },
 
-  /* 光学 nodes are exercised by the Lab's optics experiment self-checks (平面镜
-     成像 / 凸透镜成像 / 凹面镜成像); like the circuit nodes they have no golden
-     questions yet, so the learning record reaches them through lab attempts. */
+  /* 光学 nodes back the golden optics questions (平面镜成像 / 凸透镜成像 / 凹面镜成像
+     / 凸面镜) and the Lab's optics experiment self-checks. Golden question
+     attempts and lab attempts both write to these nodes. */
   { id: 'optics', label: '光学', domain: 'optics' },
   { id: 'opt-light-reflection', label: '光的反射', domain: 'optics', parentId: 'optics' },
   { id: 'opt-plane-mirror', label: '平面镜成像', domain: 'optics', parentId: 'optics' },
@@ -186,6 +194,29 @@ export const QUESTION_KNOWLEDGE: Readonly<Record<string, readonly string[]>> = {
   'comp-19-ebg-droplet': ['em-three-field', 'dyn-force-analysis'],
   'comp-20-ebg-heavy-particle': ['em-three-field', 'dyn-force-analysis'],
   'comp-21-cyclotron-unsupported': ['em-crossed-fields'],
+
+  /* ---------------------------------------------------------------- optics -- */
+  'opt-01-plane-mirror': ['opt-plane-mirror', 'opt-real-virtual-image'],
+  'opt-02-convex-lens-beyond-2f': ['opt-lens-imaging', 'opt-real-virtual-image'],
+  'opt-03-convex-lens-between-f-and-2f': ['opt-lens-imaging', 'opt-real-virtual-image'],
+  'opt-04-convex-lens-within-f': ['opt-lens-imaging', 'opt-real-virtual-image'],
+  'opt-05-concave-mirror-beyond-2f': ['opt-curved-mirror', 'opt-real-virtual-image'],
+  'opt-06-convex-mirror': ['opt-curved-mirror', 'opt-real-virtual-image'],
+  /* -------------------------------------------------------------- circuit -- */
+  'circ-01-series-current': ['circ-ohm-law', 'circ-series'],
+  'circ-02-parallel-total-resistance': ['circ-parallel', 'circ-ohm-law'],
+  'circ-03-emf-internal': ['circ-emf-internal', 'circ-dynamic'],
+  'circ-04-rheostat': ['circ-dynamic', 'circ-ohm-law'],
+  'circ-05-power': ['circ-power', 'circ-ohm-law'],
+  'circ-06-terminal-voltage': ['circ-emf-internal', 'circ-ohm-law'],
+
+  /* -------------------------------------------------------------- induction -- */
+  'ind-01-bar-motion-emf': ['em-motional-emf', 'em-induction'],
+  'ind-02-bar-motion-lenz': ['em-motional-emf', 'em-lenz-law'],
+  'ind-03-flux-change-emf': ['em-faraday-law', 'em-magnetic-flux'],
+  'ind-04-flux-change-lenz': ['em-faraday-law', 'em-lenz-law'],
+  'ind-05-bar-zero-velocity': ['em-motional-emf', 'em-induction'],
+  'ind-06-missing-resistance': ['em-induction'],
 }
 
 /** Knowledge nodes for a question id, in table order; unknown ids yield []. */

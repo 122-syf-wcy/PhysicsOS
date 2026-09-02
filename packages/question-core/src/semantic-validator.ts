@@ -22,6 +22,15 @@ export function validateSemanticIR(ir: PhysicsSemanticIR): SemanticValidationRes
   if (ir.domain === 'electric') {
     return validateElectricIR(ir)
   }
+  if (ir.domain === 'optics') {
+    return validateOpticsIR(ir)
+  }
+  if (ir.domain === 'circuit') {
+    return validateCircuitIR(ir)
+  }
+  if (ir.domain === 'induction') {
+    return validateInductionIR(ir)
+  }
   return {
     status: 'UNSUPPORTED_MODEL',
     issues: [{
@@ -464,5 +473,180 @@ function validateMechanicsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     return { status: 'INVALID_SEMANTICS', issues, ambiguities }
   }
 
+  return { status: 'VALID', issues, ambiguities }
+}
+
+/**
+ * Optics IR validation.
+ *
+ * A lens or curved-mirror question needs a focal length and an object distance
+ * to solve the imaging equation 1/u + 1/v = 1/f; a plane-mirror question needs
+ * only the object distance (v = u, m = 1). The object distance u must be
+ * positive (the object stands on the incoming side of the element). A target
+ * must be stated — "求像距", "求放大率", or the general "成像" — otherwise the
+ * question is unanswerable.
+ */
+function validateOpticsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
+  const issues: QuestionParseIssue[] = []
+  const ambiguities: QuestionAmbiguity[] = []
+
+  const focalLength = ir.knowns.find((known) => known.key === 'focal_length')
+  const objectDistance = ir.knowns.find((known) => known.key === 'object_distance')
+
+  /* Plane mirrors have no focal length; every other element needs one. */
+  if (ir.model !== 'plane_mirror_imaging') {
+    if (focalLength === undefined) {
+      issues.push({ code: 'MISSING_FOCAL_LENGTH', message: '缺少焦距。', severity: 'error' })
+    } else if (!Number.isFinite(focalLength.value) || focalLength.value === 0) {
+      issues.push({ code: 'INVALID_FOCAL_LENGTH', message: '焦距必须是非零有限值。', severity: 'error' })
+    }
+  }
+
+  if (objectDistance === undefined) {
+    issues.push({ code: 'MISSING_OBJECT_DISTANCE', message: '缺少物距。', severity: 'error' })
+  } else if (!Number.isFinite(objectDistance.value) || objectDistance.value <= 0) {
+    issues.push({ code: 'INVALID_OBJECT_DISTANCE', message: '物距必须是正有限值。', severity: 'error' })
+  }
+  return { status: issues.length === 0 ? 'VALID' : 'INVALID_SEMANTICS', issues, ambiguities }
+}
+
+/**
+ * Circuit IR validation.
+ *
+ * A DC circuit question must carry at least one source (EMF, terminal voltage,
+ * or a known current with a resistance) and at least one resistance, and must
+ * ask for at least one circuit quantity. A question that names neither an EMF
+ * nor a voltage nor a current cannot define a circuit, so it is invalid
+ * rather than ambiguous. A question that omits all resistances is invalid too:
+ * the engine solves R from U/I, but the scene builder needs a resistance to
+ * place any component. There is no direction ambiguity in a DC circuit, so
+ * a valid IR is VALID, never AMBIGUOUS.
+ */
+function validateCircuitIR(ir: PhysicsSemanticIR): SemanticValidationResult {
+  const issues: QuestionParseIssue[] = []
+  const ambiguities: QuestionAmbiguity[] = []
+
+  const emf = ir.knowns.find((entry) => entry.key === 'emf')
+  const voltage = ir.knowns.find((entry) => entry.key === 'voltage')
+  const current = ir.knowns.find((entry) => entry.key === 'current')
+  const internal = ir.knowns.find((entry) => entry.key === 'internal_resistance')
+  const resistances = ir.knowns.filter((entry) => entry.key.startsWith('resistance_'))
+  const hasRheostat = ir.rheostatTotalResistance !== undefined
+
+  /* At least one source-like known must be present. */
+  if (emf === undefined && voltage === undefined && current === undefined) {
+    issues.push({ code: 'MISSING_SOURCE', message: '缺少电动势、电压或电流，无法定义电路。', severity: 'error' })
+  }
+  /* At least one resistance (or a rheostat) must be present. */
+  if (resistances.length === 0 && !hasRheostat && internal === undefined) {
+    issues.push({ code: 'MISSING_RESISTANCE', message: '缺少电阻值，无法构成电路。', severity: 'error' })
+  }
+  if (ir.targets.length === 0) {
+    issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
+  }
+
+  if (emf !== undefined && (!Number.isFinite(emf.value) || emf.value <= 0)) {
+    issues.push({ code: 'INVALID_EMF', message: '电动势必须为正有限值。', severity: 'error' })
+  }
+  if (voltage !== undefined && (!Number.isFinite(voltage.value) || voltage.value < 0)) {
+    issues.push({ code: 'INVALID_VOLTAGE', message: '电压必须为非负有限值。', severity: 'error' })
+  }
+  if (current !== undefined && (!Number.isFinite(current.value) || current.value < 0)) {
+    issues.push({ code: 'INVALID_CURRENT', message: '电流必须为非负有限值。', severity: 'error' })
+  }
+  for (const resistor of resistances) {
+    if (!Number.isFinite(resistor.value) || resistor.value <= 0) {
+      issues.push({ code: 'INVALID_RESISTANCE', message: '电阻必须为正有限值。', severity: 'error' })
+    }
+  }
+  if (internal !== undefined && (!Number.isFinite(internal.value) || internal.value < 0)) {
+    issues.push({ code: 'INVALID_INTERNAL', message: '内阻必须为非负有限值。', severity: 'error' })
+  }
+  if (issues.length > 0) {
+    return { status: 'INVALID_SEMANTICS', issues, ambiguities }
+  }
+
+  /* A DC steady-state circuit has no direction ambiguity. */
+  return { status: 'VALID', issues, ambiguities }
+}
+
+/**
+ * Induction IR validation.
+ *
+ * Both rigs need the magnetic flux density B > 0 and the loop resistance
+ * R > 0 — a zero field produces no EMF and a zero resistance is not a loop.
+ * Beyond that the rigs split: a bar-motion question needs the rod length
+ * L > 0 and the rod velocity v (finite, sign = direction); a flux-change
+ * question needs the flux rate dΦ/dt (finite, sign = Lenz direction) — the
+ * coil area and angle refine the flux but are optional, because the EMF
+ * depends only on the stated rate. A target must be stated, else the question
+ * is unanswerable. There is no AMBIGUOUS branch: the Lenz direction is
+ * encoded in the sign of v / dΦ/dt and shown as part of the answer, never
+ * asked to disambiguate before solving.
+ */
+function validateInductionIR(ir: PhysicsSemanticIR): SemanticValidationResult {
+  const issues: QuestionParseIssue[] = []
+  const ambiguities: QuestionAmbiguity[] = []
+
+  const field = ir.knowns.find((entry) => entry.key === 'magnetic_field_strength')
+  const resistance = ir.knowns.find(
+    (entry) => entry.key === 'resistance_1' || entry.key === 'resistance',
+  )
+
+  if (field === undefined) {
+    issues.push({ code: 'MISSING_B_FIELD', message: '缺少磁感应强度。', severity: 'error' })
+  } else if (!Number.isFinite(field.value) || field.value <= 0) {
+    issues.push({ code: 'INVALID_B_FIELD', message: '磁感应强度必须为正有限值。', severity: 'error' })
+  }
+  if (resistance === undefined) {
+    issues.push({ code: 'MISSING_RESISTANCE', message: '缺少回路电阻。', severity: 'error' })
+  } else if (!Number.isFinite(resistance.value) || resistance.value <= 0) {
+    issues.push({ code: 'INVALID_RESISTANCE', message: '回路电阻必须为正有限值。', severity: 'error' })
+  }
+
+  if (ir.model === 'bar_motion_emf') {
+    const barLength = ir.knowns.find((entry) => entry.key === 'bar_length')
+    const barVelocity = ir.knowns.find((entry) => entry.key === 'bar_velocity')
+    if (barLength === undefined) {
+      issues.push({ code: 'MISSING_BAR_LENGTH', message: '缺少导体棒长度。', severity: 'error' })
+    } else if (!Number.isFinite(barLength.value) || barLength.value <= 0) {
+      issues.push({ code: 'INVALID_BAR_LENGTH', message: '导体棒长度必须为正有限值。', severity: 'error' })
+    }
+    if (barVelocity === undefined) {
+      issues.push({ code: 'MISSING_BAR_VELOCITY', message: '缺少导体棒速度。', severity: 'error' })
+    } else if (!Number.isFinite(barVelocity.value)) {
+      issues.push({ code: 'INVALID_BAR_VELOCITY', message: '导体棒速度必须为有限值。', severity: 'error' })
+    }
+  } else if (ir.model === 'flux_change_emf') {
+    const fluxRate = ir.knowns.find((entry) => entry.key === 'flux_rate')
+    if (fluxRate === undefined) {
+      issues.push({
+        code: 'MISSING_FLUX_RATE',
+        message: '缺少磁通量变化率 dΦ/dt。',
+        severity: 'error',
+      })
+    } else if (!Number.isFinite(fluxRate.value)) {
+      issues.push({
+        code: 'INVALID_FLUX_RATE',
+        message: '磁通量变化率必须为有限值。',
+        severity: 'error',
+      })
+    }
+    const coilArea = ir.knowns.find((entry) => entry.key === 'coil_area')
+    if (coilArea !== undefined && (!Number.isFinite(coilArea.value) || coilArea.value <= 0)) {
+      issues.push({ code: 'INVALID_COIL_AREA', message: '线圈面积必须为正有限值。', severity: 'error' })
+    }
+  } else {
+    return { status: 'UNSUPPORTED_MODEL', issues, ambiguities }
+  }
+
+  if (ir.targets.length === 0) {
+    issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
+  }
+
+  if (issues.length > 0) {
+    return { status: 'INVALID_SEMANTICS', issues, ambiguities }
+  }
+  /* The induced direction is a readout with a sign convention, not a gate. */
   return { status: 'VALID', issues, ambiguities }
 }

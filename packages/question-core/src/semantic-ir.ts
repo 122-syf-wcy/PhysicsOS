@@ -2,6 +2,10 @@ import type { PhysicsDomain } from '@physicsos/physics-core'
 
 export type MagneticModelId = 'charged_particle_uniform_magnetic_field'
 
+export type OpticsModelId =
+  | 'thin_lens_imaging'
+  | 'plane_mirror_imaging'
+  | 'curved_mirror_imaging'
 export type ElectricModelId =
   | 'charged_particle_uniform_electric_field'
   | 'point_charge_electrostatic_field'
@@ -29,9 +33,29 @@ export type CompositeModelId =
 
 export type PhysicsModelId =
   | MagneticModelId
+  | OpticsModelId
   | ElectricModelId
   | MechanicsModelId
   | CompositeModelId
+  | CircuitModelId
+  | InductionModelId
+
+/**
+ * DC steady-state circuit model. The circuit engine solves a single-source
+ * circuit by modified nodal analysis (MNA); a variable resistor turns the
+ * timeline into a quasi-static slider sweep. Matches the engine's
+ * `DC_CIRCUIT_MODEL = 'dc_steady_state_mna'`.
+ */
+export type CircuitModelId = 'dc_steady_state_mna'
+
+/**
+ * Induction models, matching the engine's `BAR_MOTION_EMF_MODEL` /
+ * `FLUX_CHANGE_EMF_MODEL`. A bar-motion question names a conducting rod cutting
+ * field lines (E = BLv); a flux-change question names a coil whose flux changes
+ * at a stated rate (E = -dΦ/dt, Lenz sign). Both carry a loop resistance R so
+ * the induced current is I = E / R.
+ */
+export type InductionModelId = 'bar_motion_emf' | 'flux_change_emf'
 
 export type SemanticEntity =
   | 'particle'
@@ -41,7 +65,19 @@ export type SemanticEntity =
   | 'gravity_field'
   | 'incline'
   | 'ground'
-
+  | 'lens'
+  | 'mirror'
+  | 'optical_object'
+  | 'screen'
+  | 'resistor'
+  | 'battery'
+  | 'switch'
+  | 'ammeter'
+  | 'voltmeter'
+  | 'rheostat'
+  | 'circuit_loop'
+  | 'conducting_bar'
+  | 'coil'
 export type SemanticTarget =
   | 'force'
   | 'radius'
@@ -77,7 +113,28 @@ export type SemanticTarget =
   | 'magnetic_force'
   | 'final_kinetic_energy'
   | 'acceleration_count'
-
+  /* Optics imaging targets. */
+  | 'image_distance'
+  | 'image_height'
+  | 'magnification'
+  | 'image_nature'
+  | 'image_orientation'
+  | 'focal_length'
+  | 'object_distance'
+  | 'object_height'
+  | 'current'
+  | 'voltage'
+  | 'resistance'
+  | 'power'
+  | 'emf'
+  | 'internal_resistance'
+  | 'terminal_voltage'
+  /* Induction targets: the induced EMF / current of a cutting rod or a
+     flux-changing coil, the flux through it and the Lenz direction. */
+  | 'induced_emf'
+  | 'induced_current'
+  | 'magnetic_flux'
+  | 'induction_direction'
 export type SemanticRelation =
   | 'velocity_perpendicular_B'
   | 'velocity_parallel_B'
@@ -102,7 +159,19 @@ export type SemanticRelation =
   | 'alternating_acceleration'
   | 'particle_enters_region'
   | 'particle_exits_region'
-
+  /* Optics imaging relations. */
+  | 'thin_lens_imaging'
+  | 'plane_mirror_imaging'
+  | 'curved_mirror_imaging'
+  | 'series_circuit'
+  | 'parallel_circuit'
+  | 'ohms_law'
+  | 'rheostat_sweep'
+  /* Induction relations. */
+  | 'bar_cuts_field_lines'
+  | 'flux_changes_in_coil'
+  | 'faraday_law'
+  | 'lenz_law'
 export type SemanticAssumption =
   | 'uniform_magnetic_field'
   | 'magnetic_force_only'
@@ -127,7 +196,19 @@ export type SemanticAssumption =
   | 'crossed_fields'
   | 'electric_and_magnetic_force'
   | 'gravity_included'
-
+  /* Optics imaging assumptions. */
+  | 'thin_lens_imaging'
+  | 'plane_mirror_imaging'
+  | 'curved_mirror_imaging'
+  | 'paraxial_approximation'
+  | 'geometric_optics'
+  | 'ideal_source'
+  | 'ideal_meters'
+  /* Induction assumptions. */
+  | 'uniform_magnetic_field_perpendicular'
+  | 'constant_velocity_bar'
+  | 'constant_flux_rate'
+  | 'ideal_conducting_loop'
 export type PlanarDirection = 'right' | 'left' | 'up' | 'down' | 'unknown'
 
 export interface KnownValue {
@@ -226,6 +307,43 @@ export interface PhysicsSemanticIR {
   launchAngle?: number
   groundY?: number
   frictionCoefficient?: number
+
+  /**
+   * Circuit topology. Present only for `domain === 'circuit'`. When the text
+   * names 串联/并联 the parser records it so the scene builder lays out the
+   * matching netlist; a rheostat question is treated as a series circuit with
+   * one variable resistor.
+   */
+  circuitTopology?: 'series' | 'parallel' | 'mixed' | 'rheostat'
+  /**
+   * External resistances of a circuit question, in ohms. The first entry is the
+   * primary load; a parallel question carries two. Series and rheostat questions
+   * carry them in order.
+   */
+  circuitResistances?: readonly number[]
+  /** Whether the circuit question places a voltmeter across the source / a load. */
+  hasVoltmeter?: boolean
+  /** Whether the circuit question places an ammeter in the main loop. */
+  hasAmmeter?: boolean
+  /** Total resistance of the variable resistor in a rheostat question (ohms). */
+  rheostatTotalResistance?: number
+  /** Slider position (0..1) at which a rheostat question starts. */
+  rheostatSliderPosition?: number
+
+  /**
+   * Induction rig geometry, present only for `domain === 'induction'`. Which
+   * fields are meaningful depends on the model: `bar_motion_emf` reads
+   * barLength (metres) / barVelocity (m/s); `flux_change_emf` reads coilArea
+   * (square metres) / coilAngle (radians) / fluxRate (Wb/s). Both read
+   * magneticFluxDensity (tesla) and loopResistance (ohms) from the knowns
+   * table as well — these structured fields exist so the scene builder never
+   * re-parses knowns strings.
+   */
+  inductionBarLength?: number
+  inductionBarVelocity?: number
+  inductionCoilArea?: number
+  inductionCoilAngle?: number
+  inductionFluxRate?: number
 }
 
 export type ValidationResultStatus =

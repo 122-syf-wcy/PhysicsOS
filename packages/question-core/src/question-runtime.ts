@@ -11,15 +11,27 @@ import type { PhysicsScene } from '@physicsos/physics-scene'
 import { createElectricSimulationRequest } from '@physicsos/engine-electric'
 import { createElectricRegionSimulationRequest } from '@physicsos/engine-electric-region'
 import { createMechanicsSimulationRequest, MechanicsEngine } from '@physicsos/engine-mechanics'
+import { createCircuitSimulationRequest, CircuitEngine } from '@physicsos/engine-circuit'
+import { createOpticsSimulationRequest, OpticsEngine } from '@physicsos/engine-optics'
+import {
+  createInductionSimulationRequest,
+  InductionEngine,
+} from '@physicsos/engine-induction'
 import {
   observeElectricScene,
   observeMagneticScene,
   observeMechanicsScene,
   observeCompositeScene,
+  observeCircuitScene,
+  observeOpticsScene,
+  observeInductionScene,
   type CompositeObservationRuntimeState,
   type ElectricObservationRuntimeState,
   type MechanicsObservationRuntimeState,
   type ObservationRuntimeState,
+  type CircuitObservationRuntimeState,
+  type OpticsObservationRuntimeState,
+  type InductionObservationRuntimeState,
 } from '@physicsos/physics-observation'
 import { createMagneticSimulationRequest } from '@physicsos/engine-magnetic'
 import { createCompositeSimulationRequest } from '@physicsos/engine-composite'
@@ -40,6 +52,18 @@ import {
   isElectricQuestionText,
 } from './deterministic-electric-parser.ts'
 import {
+  DeterministicCircuitQuestionParser,
+  isCircuitQuestionText,
+} from './deterministic-circuit-parser.ts'
+import {
+  DeterministicOpticsQuestionParser,
+  isOpticsQuestionText,
+} from './deterministic-optics-parser.ts'
+import {
+  DeterministicInductionQuestionParser,
+  isInductionQuestionText,
+} from './deterministic-induction-parser.ts'
+import {
   DeterministicCompositeQuestionParser,
   isCompositeQuestionText,
   isCyclotronQuestionText,
@@ -53,6 +77,9 @@ import {
   buildPointChargeSceneFromIR,
   buildParallelPlateSceneFromIR,
 } from './electric-scene-builder.ts'
+import { buildCircuitSceneFromIR } from './circuit-scene-builder.ts'
+import { buildOpticsSceneFromIR } from './optics-scene-builder.ts'
+import { buildInductionSceneFromIR } from './induction-scene-builder.ts'
 import { selectEngine } from './engine-selector.ts'
 
 export interface QuestionRuntimeResult {
@@ -66,6 +93,9 @@ export interface QuestionRuntimeResult {
     | MechanicsObservationRuntimeState
     | ElectricObservationRuntimeState
     | CompositeObservationRuntimeState
+    | CircuitObservationRuntimeState
+    | OpticsObservationRuntimeState
+    | InductionObservationRuntimeState
     | null
   solution: QuestionSolution | null
   workflowState: QuestionWorkflowState
@@ -100,19 +130,38 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
      ignore the accelerating field, which is the fake this runtime must not ship.
      The composite validator rejects it as UNSUPPORTED_MODEL instead. */
   const isComposite = isCompositeQuestionText(text) || isCyclotronQuestionText(text)
-  const isElectric = !isComposite && isElectricQuestionText(text)
-  const isMagnetic = !isComposite && /匀强磁场|磁感应强度|磁场方向|洛伦兹力|\bB\s*=/i.test(text)
+  /* Circuit is tested BEFORE electric: a circuit question names 电动势/内阻/
+     串联/并联/电路/电表, none of which appear in an electrostatic-field
+     question, and `isCircuitQuestionText` rejects any text with an electric-
+     field keyword — so there is no overlap. */
+  const isCircuit = !isComposite && isCircuitQuestionText(text)
+  const isOptics = !isComposite && isOpticsQuestionText(text)
+  /* Induction is tested BEFORE the magnetic fallback: an induction question
+     names 磁感应强度/磁场 just like a Lorentz-force one, but `isInductionQuestionText`
+     requires an induction keyword (切割磁感线/磁通量/感应电动势/电磁感应) that a
+     circular-motion question never carries, and rejects composite rigs — so
+     there is no overlap. */
+  const isInduction =
+    !isComposite && !isCircuit && !isOptics && isInductionQuestionText(text)
+  const isElectric = !isComposite && !isCircuit && !isOptics && !isInduction && isElectricQuestionText(text)
+  const isMagnetic = !isComposite && !isInduction && /匀强磁场|磁感应强度|磁场方向|洛伦兹力|\bB\s*=/i.test(text)
   const isMechanics = !isComposite && /匀速|匀加速|匀变速|平抛|斜抛|抛体|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度/.test(text)
 
   const parseResult = isComposite
     ? DeterministicCompositeQuestionParser.parse(document)
-    : isElectric
-      ? DeterministicElectricQuestionParser.parse(document)
-      : isMagnetic
-        ? DeterministicMagneticQuestionParser.parse(document)
-        : isMechanics
-          ? DeterministicMechanicsQuestionParser.parse(document)
-          : null
+    : isCircuit
+      ? DeterministicCircuitQuestionParser.parse(document)
+      : isOptics
+        ? DeterministicOpticsQuestionParser.parse(document)
+        : isInduction
+          ? DeterministicInductionQuestionParser.parse(document)
+          : isElectric
+          ? DeterministicElectricQuestionParser.parse(document)
+          : isMagnetic
+            ? DeterministicMagneticQuestionParser.parse(document)
+            : isMechanics
+              ? DeterministicMechanicsQuestionParser.parse(document)
+              : null
 
   if (!parseResult || !parseResult.ir) {
     return {
@@ -145,6 +194,21 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     scene = buildResult.scene
     engine = new MechanicsEngine() as unknown as PhysicsEngine<PhysicsScene>
     request = createMechanicsSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
+  } else if (ir.domain === 'circuit') {
+    const buildResult = buildCircuitSceneFromIR(ir, { sceneId: 'question-' + docId, questionId: docId })
+    scene = buildResult.scene
+    engine = new CircuitEngine() as unknown as PhysicsEngine<PhysicsScene>
+    request = createCircuitSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
+  } else if (ir.domain === 'optics') {
+    const buildResult = buildOpticsSceneFromIR(ir, { sceneId: 'question-' + docId, questionId: docId })
+    scene = buildResult.scene
+    engine = new OpticsEngine() as unknown as PhysicsEngine<PhysicsScene>
+    request = createOpticsSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
+  } else if (ir.domain === 'induction') {
+    const buildResult = buildInductionSceneFromIR(ir, { sceneId: 'question-' + docId, questionId: docId })
+    scene = buildResult.scene
+    engine = new InductionEngine() as unknown as PhysicsEngine<PhysicsScene>
+    request = createInductionSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else {
     /* Composite is matched on the MODEL, not the domain: a crossed-field question
        can be tagged electromagnetic/electric/magnetic, and only the composite
@@ -215,7 +279,7 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
         ],
       },
     }
-  } else if (ir.domain !== 'electric' && ir.domain !== 'mechanics') {
+  } else if (ir.domain !== 'electric' && ir.domain !== 'mechanics' && ir.domain !== 'circuit' && ir.domain !== 'optics' && ir.domain !== 'induction') {
     /* The magnetic engine reports VERIFICATION_PENDING with zero checks — the
        external Physics Verifier owns its verification (same call the Lab bridge
        makes). Substituting the verifier's result gives the question the real
@@ -233,11 +297,20 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     | MechanicsObservationRuntimeState
     | ElectricObservationRuntimeState
     | CompositeObservationRuntimeState
+    | CircuitObservationRuntimeState
+    | OpticsObservationRuntimeState
+    | InductionObservationRuntimeState
     | null
   if (isCompositeModel) {
     observations = observeCompositeScene({ scene, simulation })
   } else if (ir.domain === 'mechanics') {
     observations = observeMechanicsScene({ scene, simulation })
+  } else if (ir.domain === 'circuit') {
+    observations = observeCircuitScene({ scene, simulation })
+  } else if (ir.domain === 'optics') {
+    observations = observeOpticsScene({ scene, simulation })
+  } else if (ir.domain === 'induction') {
+    observations = observeInductionScene({ scene, simulation })
   } else if (ir.domain === 'electric') {
     observations = observeElectricScene({ scene, simulation })
   } else {
@@ -750,6 +823,267 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR): Que
       steps.push({ index: steps.length + 1, title: '匀速直线运动', description: 's = vt' })
       derivationFormulas.push({ id: 'f-ulm', expression: 's = vt' })
     }
+  } else if (ir.domain === 'circuit') {
+    steps.push({
+      index: steps.length + 1,
+      title: '建立直流电路模型',
+      description: '电源、电阻与电表构成单回路，满足欧姆定律 I = U/R 与基尔霍夫定律。',
+    })
+    steps.push({
+      index: steps.length + 1,
+      title: '读取验证后的引擎结果',
+      description: '电流、电压与功率来自 Circuit SimulationResult（MNA 直流稳态求解）。',
+    })
+
+    const requested = (target: PhysicsSemanticIR['targets'][number]): boolean =>
+      ir.targets.includes(target)
+    const scalar = (key: string): number | undefined => {
+      const entry = dq.find((candidate) => candidate.key === key)
+      if (entry === undefined || 'vector' in entry.value) return undefined
+      return (entry.value as Quantity).value
+    }
+
+    const emf = scalar('emf')
+    const mainCurrent = scalar('main_current')
+    const terminalVoltage = scalar('terminal_voltage')
+    const externalResistance = scalar('external_resistance')
+    const totalPower = scalar('total_power')
+    const externalPower = scalar('external_power')
+    const internalPower = scalar('internal_power')
+
+    if (requested('current') && mainCurrent !== undefined) {
+      results['current'] = { symbol: 'I', label: '干路电流', value: fmt(mainCurrent), unit: 'A' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'I = E / (R + r)',
+        description: '由欧姆定律，干路电流等于电源电动势除以总电阻。',
+        resultSymbol: 'I',
+        resultValue: fmt(mainCurrent),
+        resultUnit: 'A',
+      })
+    }
+    if (requested('voltage') && terminalVoltage !== undefined) {
+      results['voltage'] = { symbol: 'U', label: '路端电压', value: fmt(terminalVoltage), unit: 'V' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'U = E − I·r',
+        description: '路端电压等于电动势减去内阻上的电压降。',
+        resultSymbol: 'U',
+        resultValue: fmt(terminalVoltage),
+        resultUnit: 'V',
+      })
+    }
+    if (requested('terminal_voltage') && terminalVoltage !== undefined) {
+      results['terminal_voltage'] = { symbol: 'U', label: '路端电压', value: fmt(terminalVoltage), unit: 'V' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'U = E − I·r',
+        description: '路端电压等于电动势减去内阻上的电压降。',
+        resultSymbol: 'U',
+        resultValue: fmt(terminalVoltage),
+        resultUnit: 'V',
+      })
+    }
+    if (requested('resistance') && externalResistance !== undefined) {
+      results['resistance'] = { symbol: 'R', label: '外电阻', value: fmt(externalResistance), unit: 'Ω' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'R = U / I',
+        description: '由欧姆定律，外电路电阻等于路端电压除以干路电流。',
+        resultSymbol: 'R',
+        resultValue: fmt(externalResistance),
+        resultUnit: 'Ω',
+      })
+    }
+    if (requested('emf') && emf !== undefined) {
+      results['emf'] = { symbol: 'E', label: '电动势', value: fmt(emf), unit: 'V' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'E = U + I·r',
+        description: '电动势等于路端电压加内阻电压降。',
+        resultSymbol: 'E',
+        resultValue: fmt(emf),
+        resultUnit: 'V',
+      })
+    }
+    if (requested('internal_resistance') && terminalVoltage !== undefined && emf !== undefined && mainCurrent !== undefined && Math.abs(mainCurrent) > 1e-12) {
+      const r = (emf - terminalVoltage) / mainCurrent
+      results['internal_resistance'] = { symbol: 'r', label: '内阻', value: fmt(r), unit: 'Ω' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'r = (E − U) / I',
+        description: '内阻等于电动势与路端电压之差除以干路电流。',
+        resultSymbol: 'r',
+        resultValue: fmt(r),
+        resultUnit: 'Ω',
+      })
+    }
+    if (requested('power') && totalPower !== undefined) {
+      results['power'] = { symbol: 'P', label: '电源总功率', value: fmt(totalPower), unit: 'W' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'P = E·I',
+        description: '电源总功率等于电动势乘以干路电流。',
+        resultSymbol: 'P',
+        resultValue: fmt(totalPower),
+        resultUnit: 'W',
+      })
+    }
+    if (requested('power') && externalPower !== undefined) {
+      results['external_power'] = { symbol: 'P外', label: '外电路功率', value: fmt(externalPower), unit: 'W' }
+    }
+    if (requested('power') && internalPower !== undefined) {
+      results['internal_power'] = { symbol: 'P内', label: '内阻消耗功率', value: fmt(internalPower), unit: 'W' }
+    }
+
+    derivationFormulas.push(
+      { id: 'circuit-ohm', expression: 'I = E / (R + r)' },
+      { id: 'circuit-terminal', expression: 'U = E − I·r' },
+      { id: 'circuit-power', expression: 'P = E·I = U·I + I²·r' },
+    )
+  } else if (ir.domain === 'optics') {
+    steps.push({
+      index: steps.length + 1,
+      title: '建立光学成像模型',
+      description: '物距 u、像距 v、焦距 f 满足成像公式，放大率 m = v/u。',
+    })
+    const requested = (target: PhysicsSemanticIR['targets'][number]): boolean =>
+      ir.targets.includes(target)
+    const u = dq.find((c) => c.key === 'object_distance')?.value
+    const v = dq.find((c) => c.key === 'image_distance')?.value
+    const f = dq.find((c) => c.key === 'focal_length')?.value
+    const m = dq.find((c) => c.key === 'magnification')?.value
+    const scalarOf = (q: typeof u): number | undefined =>
+      q && 'value' in q ? (q as { value: number }).value : undefined
+    if (ir.model === 'plane_mirror_imaging') {
+      derivationFormulas.push({ id: 'optics-mirror-symmetry', expression: 'v = u, m = 1（正立等大虚像）' })
+      if (requested('image_distance') && u !== undefined) {
+        const uVal = scalarOf(u)
+        if (uVal !== undefined) {
+          results['image_distance'] = { symbol: 'v', label: '像距', value: fmt(uVal), unit: 'cm' }
+          steps.push({ index: steps.length + 1, title: '平面镜成像：v = u', resultSymbol: 'v', resultValue: fmt(uVal), resultUnit: 'cm', description: '平面镜成等大正立虚像，像距等于物距。' })
+        }
+      }
+    } else if (ir.model === 'curved_mirror_imaging') {
+      derivationFormulas.push({ id: 'optics-curved-mirror-equation', expression: '1/u + 1/v = 1/f (f = R/2)' }, { id: 'optics-magnification', expression: 'm = v/u' })
+    } else {
+      derivationFormulas.push({ id: 'optics-lens-equation', expression: '1/u + 1/v = 1/f' }, { id: 'optics-magnification', expression: 'm = v/u' })
+    }
+    if (requested('image_distance') && v !== undefined) {
+      const vVal = scalarOf(v)
+      if (vVal !== undefined) {
+        results['image_distance'] = { symbol: 'v', label: '像距', value: fmt(Math.abs(vVal)), unit: 'cm' }
+        steps.push({ index: steps.length + 1, title: '解像距 v', resultSymbol: 'v', resultValue: fmt(Math.abs(vVal)), resultUnit: 'cm', description: '由 1/u + 1/v = 1/f 解得像距。' })
+      }
+    }
+    if (requested('magnification') && m !== undefined) {
+      const mVal = scalarOf(m)
+      if (mVal !== undefined) {
+        results['magnification'] = { symbol: 'm', label: '放大率', value: fmt(Math.abs(mVal)), unit: '' }
+        steps.push({ index: steps.length + 1, title: '放大率 m = v/u', resultSymbol: 'm', resultValue: fmt(Math.abs(mVal)), resultUnit: '', description: '横向放大率等于像距与物距之比。' })
+      }
+    }
+    void f
+  } else if (ir.domain === 'induction') {
+    steps.push({
+      index: steps.length + 1,
+      title: ir.model === 'bar_motion_emf' ? '建立动生电动势模型' : '建立法拉第电磁感应模型',
+      description:
+        ir.model === 'bar_motion_emf'
+          ? '导体棒在匀强磁场中垂直切割磁感线，产生动生电动势 E = BLv（右手定则定方向）。'
+          : '线圈磁通量变化产生感应电动势，E = -dΦ/dt（楞次定律定方向）。',
+    })
+    steps.push({
+      index: steps.length + 1,
+      title: '读取验证后的引擎结果',
+      description: '感应电动势与感应电流来自 Induction SimulationResult（闭式解）。',
+    })
+
+    const requested = (target: PhysicsSemanticIR['targets'][number]): boolean =>
+      ir.targets.includes(target)
+    const scalar = (key: string): number | undefined => {
+      const entry = dq.find((candidate) => candidate.key === key)
+      if (entry === undefined || 'vector' in entry.value) return undefined
+      return (entry.value as Quantity).value
+    }
+
+    const emf = scalar('induced_emf')
+    const current = scalar('induced_current')
+    const flux = scalar('magnetic_flux')
+
+    if (requested('induced_emf') && emf !== undefined) {
+      results['induced_emf'] = { symbol: 'E', label: '感应电动势', value: fmt(emf), unit: 'V' }
+      steps.push({
+        index: steps.length + 1,
+        title: ir.model === 'bar_motion_emf' ? 'E = BLv' : 'E = -dΦ/dt',
+        description:
+          ir.model === 'bar_motion_emf'
+            ? '动生电动势等于磁感应强度、棒长与速度的乘积。'
+            : '感应电动势的大小等于磁通量变化率，负号由楞次定律给出。',
+        resultSymbol: 'E',
+        resultValue: fmt(emf),
+        resultUnit: 'V',
+      })
+    }
+    if (requested('induced_current') && current !== undefined) {
+      results['induced_current'] = { symbol: 'I', label: '感应电流', value: fmt(current), unit: 'A' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'I = E / R',
+        description: '闭合回路欧姆定律：感应电流等于感应电动势除以回路电阻。',
+        resultSymbol: 'I',
+        resultValue: fmt(current),
+        resultUnit: 'A',
+      })
+    }
+    if (requested('magnetic_flux') && flux !== undefined) {
+      results['magnetic_flux'] = { symbol: 'Φ', label: '磁通量', value: fmt(flux), unit: 'Wb' }
+      steps.push({
+        index: steps.length + 1,
+        title: 'Φ = B·S·cosθ',
+        description: '磁通量等于磁感应强度与垂直磁场方向的有效面积的乘积。',
+        resultSymbol: 'Φ',
+        resultValue: fmt(flux),
+        resultUnit: 'Wb',
+      })
+    }
+    if (requested('induction_direction')) {
+      /* The lenz_direction sign carries OPPOSITE flux-change semantics per rig:
+         for flux_change E = -dΦ/dt, so sign(E) = -sign(dΦ/dt) — a positive
+         readout means the flux was DEcreasing and the induced current opposes
+         that decrease. For bar_motion E = BLv and the swept flux grows with
+         v·t, so sign(E) = sign(dΦ/dt) — the readout names the cutting
+         direction (右手定则), not an opposition. The narratives must not be
+         swapped. */
+      const lenz = scalar('lenz_direction')
+      const isFluxChange = ir.model === 'flux_change_emf'
+      const direction =
+        lenz === undefined
+          ? '由楞次定律判断：感应电流的磁场阻碍原磁通量的变化。'
+          : lenz === 0
+            ? '磁通量不变，无感应电流'
+            : isFluxChange
+              ? lenz > 0
+                ? '感应电流沿回路正方向（楞次定律：磁通量减少，感应磁场补偿原磁场）'
+                : '感应电流沿回路负方向（楞次定律：磁通量增加，感应磁场反抗原磁场）'
+              : lenz > 0
+                ? '沿棒运动的右手定则正方向（切割使回路磁通量增加，感应电流阻碍增加）'
+                : '沿棒运动的右手定则负方向（反向切割，感应电流阻碍磁通量减少）'
+      results['induction_direction'] = { symbol: '', label: '感应电流方向', value: direction, unit: '' }
+      steps.push({
+        index: steps.length + 1,
+        title: isFluxChange ? '楞次定律定方向' : '右手定则定方向',
+        description: direction,
+      })
+    }
+
+    derivationFormulas.push(
+      ir.model === 'bar_motion_emf'
+        ? { id: 'induction-bar-emf', expression: 'E = BLv' }
+        : { id: 'induction-faraday', expression: 'E = -dΦ/dt' },
+      { id: 'induction-ohm', expression: 'I = E / R' },
+      { id: 'induction-lenz', expression: '楞次定律：感应电流的磁场阻碍原磁通量的变化' },
+    )
   }
 
   return { steps, results, derivationFormulas }

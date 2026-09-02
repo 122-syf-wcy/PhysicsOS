@@ -28,6 +28,23 @@
  * question practice.
  */
 
+import {
+  CROSSED_NET_FORCE,
+  INDUCTION_BAR_EMF,
+  INDUCTION_FARADAY,
+  INDUCTION_LENZ,
+  INDUCTION_NO_CUT,
+  MAGNETIC_WORK,
+  PLATE_MOTION,
+  PLATE_OUTSIDE,
+  POINT_CHARGE_DIRECTION,
+  RADIUS_MASS,
+  SELECTOR_CONDITION,
+  SELECTOR_TOO_FAST,
+  SPECTROMETER_SPEED,
+  SUPERPOSITION,
+  THREE_FIELD_GRAVITY,
+} from './self-checks.ts'
 import type { SelfCheckItem } from './self-checks.ts'
 
 export interface ExperimentSelfCheckSet {
@@ -1078,6 +1095,71 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '探究杠杆的平衡条件',
     knowledge: ['dyn-lever-balance', 'dyn-moment'],
     items: [LEVER_DOUBLE_MASS, LEVER_SLIDE_OUT],
+  },
+  /* The three 电磁场 domains (electric / magnetic / composite) were lab-first
+     here: the golden-question bank keys its probes by question id, while these
+     lab benches carry NO golden question, so their conceptual probes are keyed
+     by a lab topic the web layer resolves from runtime facts instead. Each set
+     reuses the exact probe items the question bank already audited (see
+     self-checks.ts) — one source of truth per probe, never a hand copy. */
+  'magnetic-circular': {
+    id: 'magnetic-circular',
+    topic: '磁场中的圆周运动',
+    knowledge: ['em-lorentz', 'em-circular'],
+    items: [MAGNETIC_WORK, RADIUS_MASS],
+  },
+  'electric-point-charge': {
+    id: 'electric-point-charge',
+    topic: '点电荷的电场',
+    knowledge: ['em-field-strength', 'em-superposition', 'em-electric-force'],
+    items: [POINT_CHARGE_DIRECTION, SUPERPOSITION],
+  },
+  'electric-parallel-plate': {
+    id: 'electric-parallel-plate',
+    topic: '平行板电场中的带电粒子',
+    knowledge: ['em-uniform-deflection', 'em-bounded-field'],
+    items: [PLATE_MOTION, PLATE_OUTSIDE],
+  },
+  'composite-velocity-selector': {
+    id: 'composite-velocity-selector',
+    topic: '速度选择器',
+    knowledge: ['em-velocity-selector', 'em-crossed-fields'],
+    items: [SELECTOR_CONDITION, SELECTOR_TOO_FAST],
+  },
+  'composite-mass-spectrometer': {
+    id: 'composite-mass-spectrometer',
+    topic: '质谱仪',
+    knowledge: ['em-mass-spectrometer', 'em-circular'],
+    items: [RADIUS_MASS, SPECTROMETER_SPEED],
+  },
+  'composite-crossed-field': {
+    id: 'composite-crossed-field',
+    topic: '正交电磁场中的带电粒子',
+    knowledge: ['em-crossed-fields', 'em-lorentz'],
+    items: [CROSSED_NET_FORCE, MAGNETIC_WORK],
+  },
+  'composite-three-field': {
+    id: 'composite-three-field',
+    topic: '电、磁、重力三场平衡',
+    knowledge: ['em-three-field'],
+    items: [THREE_FIELD_GRAVITY, CROSSED_NET_FORCE],
+  },
+  /* The induction lab benches (导体棒切割磁感线 / 磁通量变化) carry golden
+     questions too, but the Lab's topic dispatch is fact-based, not
+     question-id-based: the web layer reads the bench type the runtime drew.
+     Both sets reuse the exact probe items the question bank audited (see
+     self-checks.ts) — one source of truth per probe, never a hand copy. */
+  'induction-bar-motion': {
+    id: 'induction-bar-motion',
+    topic: '导体棒切割磁感线',
+    knowledge: ['em-motional-emf', 'em-induction'],
+    items: [INDUCTION_BAR_EMF, INDUCTION_NO_CUT],
+  },
+  'induction-flux-change': {
+    id: 'induction-flux-change',
+    topic: '磁通量变化产生感应电动势',
+    knowledge: ['em-faraday-law', 'em-lenz-law'],
+    items: [INDUCTION_FARADAY, INDUCTION_LENZ],
   },
 }
 
