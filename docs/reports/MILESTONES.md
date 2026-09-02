@@ -403,34 +403,51 @@ physics-units workspace link）。
 
 ---
 
-## 进行中
-
-### WAVE_RUNTIME_PACK_V1（实验室切片已就位，题库与脚本化验收未做）
+### WAVE_RUNTIME_PACK_V1_COMPLETE
 
 **日期**：2026-09-02
 
-**范围**：Roadmap Phase 33 的第一个新领域 —— 机械波。三个闭式实验台走同一条
-Scene → Engine → Observation → WorkspaceRuntime → Renderer → Lab → 教学层 链。
+**范围**：Roadmap Phase 33「Remaining Physics Domains」的第一个领域 —— 机械波。三个闭式
+实验台（绳上的简谐横波 / 双源干涉 / 两端固定的弦驻波）走同一条 Scene → Engine →
+Verifier → Observation → WorkspaceRuntime → Renderer → Lab → 教学层 → Question 链。
 
-**已完成**：
-- `physics-scene` 波动台契约：WaveBench（travelling / interference / standing）、六条冻结
-  命令与校验；命令语义按「介质定波速、波源定频率」实现（改 f 或 v 都重推 λ = v/f，驻波改
-  v / L / n 重推 f_n），Δ > d 的不可达几何在命令层拒绝。13 项 runtime 测试。
-- `@physicsos/engine-wave`：y(x,t) 采样、标记质点、双源三角定位与 Δ/λ 判定、驻波波节波腹，
-  11 项引擎内置校验，26 个黄金测试。
-- `physics-observation` 波动观察量（waveform / wave_speed / wave_superposition / wave_nodes），
-  10 项测试。
-- 实验中心「机械波」分类与三个模板（共 38 个可创建）；分类 Tab 改由模板注册表派生，浮力 /
-  热学 / 电磁感应三个此前缺 Tab 的分类随之出现。
-- Lab：WaveWorkspaceRuntime + wave-visual-bridge（纵向放大倍数一次声明、写入坐标轴与读数）
-  + WaveRenderer；Tutor 三课、自测三套（question-core 四个知识节点、六个探针）、Agent 高亮。
-  `wave.client.spec` 17 项。
-- 浏览器手工核验：三个实验台画面、时间轴 seek、Tutor 抽屉与自测 tab，控制台零错误。
+**A. 契约与引擎**：`WaveBench` 三类子模型 + 六条冻结命令（`SetWaveAmplitude / Frequency /
+Speed / PathDifference / StringLength / Harmonic`），命令语义为「介质定波速、波源定频率」
+（绳波 / 干涉改 f 或 v 都重推 λ = v/f，驻波改 v / L / n 重推 f_n = n·v/2L），
+|r₂ − r₁| > d 在命令层拒绝；规格接受 v 替代 λ、f_n 替代 v。`@physicsos/engine-wave`
+发布绳形采样（每波长 16 点自适应）、标记质点、波源与 P 点三角定位、Δ/λ 判定
+（interference_type ±1/0）、波节 / 波腹，11 项引擎内置校验；减弱点合振幅精确归零。
+`physics-observation` 四类波动观察量。
 
-**未完成（不视为已交付）**：
-- Question Space 波动题（解析器、场景构建器、黄金题）—— README「尚未完成」已登记。
-- 脚本化浏览器验收（`tests/acceptance/wave-acceptance.mjs`）与 5 项门禁计数、截图回写。
-- `library-home-acceptance.mjs` 的「五色彩点」断言随 Tab 数变化需要更新（此前已过时）。
+**B. 实验室与教学层**：实验中心新增「机械波」分类与三个模板（共 38 个可创建），分类 Tab 与
+学科色改由 `EXPERIMENT_TEMPLATE_GROUPS` 派生（浮力 / 热学 / 电磁感应此前缺 Tab，随之
+出现；浮力色与电路去重）；`WaveWorkspaceRuntime` + `wave-visual-bridge`（纵向放大倍数一次
+声明并写进坐标轴与读数，数值保持真实值）+ `WaveRenderer`；Tutor 三课、自测三套（知识图谱
+「机械波」根 + 4 节点、六个探针）、Agent 高亮、实验分支策略纳入六条命令。
+
+**C. 题库**：`deterministic-wave-parser`（排除光的干涉 / 双缝 / 电磁波 / 回声）、
+`validateWaveIR`、`wave-scene-builder`（写入 `sourceQuestionId`）、runtime wave 分派与题解；
+6 道黄金题（波长频率求波速周期、波速频率求波长、Δ = 2λ 加强、Δ = 1.5λ 减弱、三次谐波、
+缺频率拒识），Question Space 74 → 80 题；QuestionWorkspace 以 `stateAt(t)` 绘制题目画布。
+
+依据：`docs/reports/WAVE-RUNTIME-PACK-V1-REPORT.md`
+（含 CASE A–G + 响应式、5 项门禁计数器、截图清单）
+
+验收数据：`typecheck`（core + web）零错误；`test:core` 全绿（physics-scene 80、engine-wave 27、
+physics-observation 24、question-core 399）；`test:web` 26 文件 347 用例全绿（`wave.client.spec`
+20 项）；浏览器验收 `wave-acceptance.mjs` 全 PASS、5 门禁为 0；回归八套 acceptance 全 PASS
+（library-home「五色彩点」→ 十一色、circuit「5 个实验」→ 7 个 两处过时断言随产品演进更新）；
+overlay 已回写。
+
+**不做**（明确边界）：纵波 / 反射 / 折射 / 衍射 / 多普勒（需新子模型）；干涉全平面强度分布
+（只判定并绘制一个观察点，波前示意）；阻尼；Agent 波动问答意图（backlog 不变）；波形图识别
+（backlog 不变）。
+
+---
+
+## 进行中
+
+（暂无）
 
 ---
 
