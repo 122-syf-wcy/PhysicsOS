@@ -15,6 +15,7 @@ export type PhysicalDimension =
   | 'electric_potential'
   | 'magnetic_flux_density'
   | 'magnetic_flux'
+  | 'magnetic_flux_rate'
   | 'resistance'
   | 'capacitance'
   | 'inductance'
@@ -25,6 +26,7 @@ export type PhysicalDimension =
   | 'pressure'
   | 'density'
   | 'volume'
+  | 'area'
   | 'specific_heat'
   | 'specific_latent_heat'
   | 'torque'
@@ -46,6 +48,7 @@ const ALL_DIMENSIONS: readonly PhysicalDimension[] = [
   'electric_potential',
   'magnetic_flux_density',
   'magnetic_flux',
+  'magnetic_flux_rate',
   'resistance',
   'capacitance',
   'inductance',
@@ -56,6 +59,7 @@ const ALL_DIMENSIONS: readonly PhysicalDimension[] = [
   'pressure',
   'density',
   'volume',
+  'area',
   'specific_heat',
   'specific_latent_heat',
   'torque',

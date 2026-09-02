@@ -35,6 +35,7 @@ export type UnitKey =
   | 'tesla'
   | 'millitesla'
   | 'weber'
+  | 'weber_per_second'
   | 'ohm'
   | 'farad'
   | 'henry'
@@ -49,6 +50,8 @@ export type UnitKey =
   | 'cubic_centimeter'
   | 'liter'
   | 'milliliter'
+  | 'square_meter'
+  | 'square_centimeter'
   | 'joule_per_kilogram_kelvin'
   | 'joule_per_kilogram'
   | 'newton_meter'
@@ -127,6 +130,11 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('tesla', 'magnetic_flux_density', 'T', 1, true),
   define('millitesla', 'magnetic_flux_density', 'mT', 1e-3, false),
   define('weber', 'magnetic_flux', 'Wb', 1, true),
+  /* Rate of change of magnetic flux. Faraday's law E = -d\u03a6/dt is in volts, and
+     1 V = 1 Wb/s by definition, but flux rate is kept as its own dimension so an
+     EMF (electric_potential) and a flux change (magnetic_flux_rate) cannot be
+     silently swapped. */
+  define('weber_per_second', 'magnetic_flux_rate', 'Wb/s', 1, true, ['Wb*s^-1']),
   define('ohm', 'resistance', '\u03a9', 1, true, ['\u2126', 'ohm', 'ohms']),
   define('farad', 'capacitance', 'F', 1, true),
   define('henry', 'inductance', 'H', 1, true),
@@ -147,6 +155,11 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('cubic_centimeter', 'volume', 'cm^3', 1e-6, false, ['cm\u00b3', 'cc']),
   define('liter', 'volume', 'L', 1e-3, false, ['litre']),
   define('milliliter', 'volume', 'mL', 1e-6, false, ['millilitre', 'ml']),
+
+  /* Area units for induction coil cross-sections. Square metres are canonical;
+     square centimetres convert at 1e-4 (1 cm\u00b2 = 1e-4 m\u00b2). */
+  define('square_meter', 'area', 'm^2', 1, true, ['m\u00b2']),
+  define('square_centimeter', 'area', 'cm^2', 1e-4, false, ['cm\u00b2']),
 
   /* Specific heat and latent heat are per-kilogram quantities: the °C in the
      textbook unit is a temperature DIFFERENCE, which is identical in kelvin,
