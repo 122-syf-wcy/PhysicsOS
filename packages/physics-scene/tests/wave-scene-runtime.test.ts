@@ -107,6 +107,23 @@ describe('createWaveScene', () => {
     expect(waveBenchOf(scene)!.ropeLength?.value).toBeCloseTo(1.5, 9)
   })
 
+  it('accepts the medium speed in place of λ and the harmonic frequency in place of v', () => {
+    /* v = 2 m/s at 10 Hz → λ = 0.2 m, rope defaults to 3λ = 0.6 m */
+    const rope = createTravellingWaveScene({ waveSpeed: 2, frequency: 10 })
+    expect(waveBenchOf(rope)!.wavelength?.value).toBeCloseTo(0.2, 9)
+    expect(waveBenchOf(rope)!.ropeLength?.value).toBeCloseTo(0.6, 9)
+    expect(validateScene(rope).status).toBe('passed')
+
+    /* Third harmonic at 60 Hz on a 1 m string → v = 2L·f/n = 40 m/s */
+    const string = createStandingWaveScene({ harmonic: 3, frequency: 60 })
+    expect(waveBenchOf(string)!.waveSpeed?.value).toBeCloseTo(40, 9)
+    expect(waveBenchOf(string)!.frequency.value).toBeCloseTo(60, 9)
+
+    expect(() =>
+      createWaveScene({ bench: { type: 'travelling', amplitude: 2, frequency: 4 } }),
+    ).toThrow(/wavelength or waveSpeed/)
+  })
+
   it('treats legacy scenes without the collection as having no benches', () => {
     const scene = createTravellingWaveScene()
     const legacy = { ...scene } as Partial<PhysicsScene>

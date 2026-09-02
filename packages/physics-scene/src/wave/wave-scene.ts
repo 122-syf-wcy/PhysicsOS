@@ -1,5 +1,5 @@
 import { quantity } from '@physicsos/physics-units'
-import { asObservableId, asSceneId, type IsoDateTime } from '@physicsos/shared'
+import { asObservableId, asSceneId, PhysicsOSError, type IsoDateTime } from '@physicsos/shared'
 
 import { defaultCoordinateSystem } from '../scene-validation.ts'
 import type { PhysicsScene, WaveBench, WaveBenchType } from '../scene.ts'
@@ -18,14 +18,22 @@ import type { PhysicsScene, WaveBench, WaveBenchType } from '../scene.ts'
  */
 export type WaveObservableKey = 'waveform' | 'wave_speed' | 'superposition' | 'nodes'
 
-/** Netlist-style authoring input for the travelling rope-wave rig. */
+/**
+ * Netlist-style authoring input for the travelling rope-wave rig.
+ *
+ * A source states either the wavelength or the medium's wave speed alongside
+ * the frequency — textbooks do both — and the bench keeps λ, so a speed is
+ * folded into λ = v/f here, the same identity the runtime commands maintain.
+ */
 export interface TravellingWaveSpec {
   readonly benchId?: string
   readonly type?: 'travelling'
   /** Amplitude in centimetres (> 0). */
   readonly amplitude: number
-  /** Wavelength in metres (> 0). */
-  readonly wavelength: number
+  /** Wavelength in metres (> 0). Required unless `waveSpeed` is given. */
+  readonly wavelength?: number
+  /** Wave speed of the medium in m/s (> 0); used as λ = v/f when `wavelength` is absent. */
+  readonly waveSpeed?: number
   /** Frequency in hertz (> 0). */
   readonly frequency: number
   /** Length of rope drawn in metres (> 0); defaults to three wavelengths. */
@@ -38,8 +46,10 @@ export interface InterferenceWaveSpec {
   readonly type: 'interference'
   /** Amplitude of each source in centimetres (> 0). */
   readonly amplitude: number
-  /** Wavelength in metres (> 0). */
-  readonly wavelength: number
+  /** Wavelength in metres (> 0). Required unless `waveSpeed` is given. */
+  readonly wavelength?: number
+  /** Wave speed of the medium in m/s (> 0); used as λ = v/f when `wavelength` is absent. */
+  readonly waveSpeed?: number
   /** Frequency in hertz (> 0). */
   readonly frequency: number
   /** Separation between the two coherent sources in metres (> 0). */
@@ -50,7 +60,11 @@ export interface InterferenceWaveSpec {
   readonly pathTwo: number
 }
 
-/** Authoring input for the clamped-string standing-wave rig. */
+/**
+ * Authoring input for the clamped-string standing-wave rig. The medium is
+ * stated either as the wave speed or as the frequency of the named harmonic;
+ * the bench keeps v, so a frequency is folded into v = 2L·f/n here.
+ */
 export interface StandingWaveSpec {
   readonly benchId?: string
   readonly type: 'standing'
@@ -60,8 +74,10 @@ export interface StandingWaveSpec {
   readonly stringLength: number
   /** Harmonic number n ≥ 1 (integral). */
   readonly harmonic: number
-  /** Wave speed on the string in m/s (> 0). */
-  readonly waveSpeed: number
+  /** Wave speed on the string in m/s (> 0). Required unless `frequency` is given. */
+  readonly waveSpeed?: number
+  /** Frequency of the n-th harmonic in hertz (> 0); used as v = 2L·f/n when `waveSpeed` is absent. */
+  readonly frequency?: number
 }
 
 /** Discriminated authoring input: one sub-model per bench. */
@@ -87,8 +103,29 @@ const typeOfSpec = (spec: WaveBenchSpec): WaveBenchType => spec.type ?? 'travell
  * frequency), while the engine re-derives it from L, n and v rather than
  * trusting this value.
  */
-const standingFrequency = (spec: StandingWaveSpec): number =>
-  (spec.harmonic * spec.waveSpeed) / (2 * spec.stringLength)
+/**
+ * The medium's speed on a standing bench: stated directly, or recovered from
+ * the named harmonic's frequency through the same f_n = n·v/(2L) the bench
+ * itself encodes. A spec with neither is not a rig.
+ */
+const standingSpeedOf = (spec: StandingWaveSpec): number => {
+  if (spec.waveSpeed !== undefined) return spec.waveSpeed
+  if (spec.frequency !== undefined) return (2 * spec.stringLength * spec.frequency) / spec.harmonic
+  throw new PhysicsOSError(
+    'WAVE_SPEC_INCOMPLETE',
+    'A standing wave spec needs either waveSpeed or the harmonic frequency.',
+  )
+}
+
+/** λ for a rope / tank spec: stated directly, or λ = v/f from the medium speed. */
+const wavelengthOf = (spec: TravellingWaveSpec | InterferenceWaveSpec): number => {
+  if (spec.wavelength !== undefined) return spec.wavelength
+  if (spec.waveSpeed !== undefined) return spec.waveSpeed / spec.frequency
+  throw new PhysicsOSError(
+    'WAVE_SPEC_INCOMPLETE',
+    'A travelling or interference wave spec needs either wavelength or waveSpeed.',
+  )
+}
 
 const toBench = (spec: WaveBenchSpec): WaveBench => {
   const id = spec.benchId ?? 'wave-bench-1'
@@ -97,14 +134,19 @@ const toBench = (spec: WaveBenchSpec): WaveBench => {
 
   if (type === 'standing') {
     const standing = spec as StandingWaveSpec
+    const waveSpeed = standingSpeedOf(standing)
     return {
       id,
       type: 'standing',
       amplitude,
-      frequency: quantity(standingFrequency(standing), 'Hz', 'frequency'),
+      frequency: quantity(
+        (standing.harmonic * waveSpeed) / (2 * standing.stringLength),
+        'Hz',
+        'frequency',
+      ),
       stringLength: quantity(standing.stringLength, 'm', 'length'),
       harmonic: standing.harmonic,
-      waveSpeed: quantity(standing.waveSpeed, 'm/s', 'velocity'),
+      waveSpeed: quantity(waveSpeed, 'm/s', 'velocity'),
     }
   }
 
@@ -115,7 +157,7 @@ const toBench = (spec: WaveBenchSpec): WaveBench => {
       type: 'interference',
       amplitude,
       frequency: quantity(pair.frequency, 'Hz', 'frequency'),
-      wavelength: quantity(pair.wavelength, 'm', 'length'),
+      wavelength: quantity(wavelengthOf(pair), 'm', 'length'),
       sourceSeparation: quantity(pair.sourceSeparation, 'm', 'length'),
       pathOne: quantity(pair.pathOne, 'm', 'length'),
       pathTwo: quantity(pair.pathTwo, 'm', 'length'),
@@ -123,15 +165,16 @@ const toBench = (spec: WaveBenchSpec): WaveBench => {
   }
 
   const rope = spec as TravellingWaveSpec
+  const wavelength = wavelengthOf(rope)
   return {
     id,
     type: 'travelling',
     amplitude,
     frequency: quantity(rope.frequency, 'Hz', 'frequency'),
-    wavelength: quantity(rope.wavelength, 'm', 'length'),
+    wavelength: quantity(wavelength, 'm', 'length'),
     /* Three wavelengths of rope reads as a wave train rather than a single
        hump, which is what the textbook figure shows. */
-    ropeLength: quantity(rope.ropeLength ?? rope.wavelength * 3, 'm', 'length'),
+    ropeLength: quantity(rope.ropeLength ?? wavelength * 3, 'm', 'length'),
   }
 }
 

@@ -16,14 +16,17 @@ export interface TravellingWaveSceneInput {
   readonly sceneId?: string
   /** Amplitude in centimetres (> 0). */
   readonly amplitude?: number
-  /** Wavelength in metres (> 0). */
+  /** Wavelength in metres (> 0); defaults to 0.4 m unless `waveSpeed` is given instead. */
   readonly wavelength?: number
+  /** Medium wave speed in m/s (> 0); an alternative to `wavelength` (λ = v/f). */
+  readonly waveSpeed?: number
   /** Frequency in hertz (> 0). */
   readonly frequency?: number
   /** Length of rope drawn in metres (> 0). */
   readonly ropeLength?: number
   readonly now?: IsoDateTime
   readonly title?: string
+  readonly description?: string
 }
 
 /**
@@ -40,20 +43,26 @@ export const createTravellingWaveScene = (
     bench: {
       type: 'travelling',
       amplitude: input.amplitude ?? 5,
-      wavelength: input.wavelength ?? 0.4,
+      ...(input.waveSpeed !== undefined && input.wavelength === undefined
+        ? { waveSpeed: input.waveSpeed }
+        : { wavelength: input.wavelength ?? 0.4 }),
       frequency: input.frequency ?? 5,
-      ropeLength: input.ropeLength ?? 1.2,
+      ...(input.ropeLength === undefined && input.waveSpeed !== undefined && input.wavelength === undefined
+        ? {}
+        : { ropeLength: input.ropeLength ?? 1.2 }),
     },
     title: input.title ?? '绳上的简谐横波',
-    description: 'Wave Engine · 波速 v = λf 与波形传播 y(x,t)',
+    description: input.description ?? 'Wave Engine · 波速 v = λf 与波形传播 y(x,t)',
   })
 
 export interface InterferenceWaveSceneInput {
   readonly sceneId?: string
   /** Amplitude of each source in centimetres (> 0). */
   readonly amplitude?: number
-  /** Wavelength in metres (> 0). */
+  /** Wavelength in metres (> 0); defaults to 0.2 m unless `waveSpeed` is given instead. */
   readonly wavelength?: number
+  /** Medium wave speed in m/s (> 0); an alternative to `wavelength` (λ = v/f). */
+  readonly waveSpeed?: number
   /** Frequency in hertz (> 0). */
   readonly frequency?: number
   /** Separation between the two coherent sources in metres (> 0). */
@@ -64,6 +73,7 @@ export interface InterferenceWaveSceneInput {
   readonly pathTwo?: number
   readonly now?: IsoDateTime
   readonly title?: string
+  readonly description?: string
 }
 
 /**
@@ -81,14 +91,16 @@ export const createWaveInterferenceScene = (
     bench: {
       type: 'interference',
       amplitude: input.amplitude ?? 3,
-      wavelength: input.wavelength ?? 0.2,
+      ...(input.waveSpeed !== undefined && input.wavelength === undefined
+        ? { waveSpeed: input.waveSpeed }
+        : { wavelength: input.wavelength ?? 0.2 }),
       frequency: input.frequency ?? 10,
       sourceSeparation: input.sourceSeparation ?? 0.8,
       pathOne: input.pathOne ?? 1.0,
       pathTwo: input.pathTwo ?? 1.4,
     },
     title: input.title ?? '双源干涉与波的叠加',
-    description: 'Wave Engine · 路程差 Δ = nλ 决定加强或减弱',
+    description: input.description ?? 'Wave Engine · 路程差 Δ = nλ 决定加强或减弱',
   })
 
 export interface StandingWaveSceneInput {
@@ -99,10 +111,13 @@ export interface StandingWaveSceneInput {
   readonly stringLength?: number
   /** Harmonic number n ≥ 1 (integral). */
   readonly harmonic?: number
-  /** Wave speed on the string in m/s (> 0). */
+  /** Wave speed on the string in m/s (> 0); defaults to 40 m/s unless `frequency` is given instead. */
   readonly waveSpeed?: number
+  /** Frequency of the named harmonic in hertz (> 0); an alternative to `waveSpeed` (v = 2L·f/n). */
+  readonly frequency?: number
   readonly now?: IsoDateTime
   readonly title?: string
+  readonly description?: string
 }
 
 /**
@@ -121,8 +136,10 @@ export const createStandingWaveScene = (
       amplitude: input.amplitude ?? 4,
       stringLength: input.stringLength ?? 1.0,
       harmonic: input.harmonic ?? 2,
-      waveSpeed: input.waveSpeed ?? 40,
+      ...(input.frequency !== undefined && input.waveSpeed === undefined
+        ? { frequency: input.frequency }
+        : { waveSpeed: input.waveSpeed ?? 40 }),
     },
     title: input.title ?? '两端固定的弦驻波',
-    description: 'Wave Engine · L = nλ/2 与波节波腹',
+    description: input.description ?? 'Wave Engine · L = nλ/2 与波节波腹',
   })
