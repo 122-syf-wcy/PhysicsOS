@@ -414,6 +414,25 @@ describe('Parallel-plate Golden Questions', () => {
     expect(candidate.ir.targets).toContain('plate_hit_time')
   })
 
+  it('Q13: hit-plate time is answered from the engine hit_time fact', () => {
+    const document = createGoldenQuestionDocument(electricQuestion('electric-13-hit-plate-time'))
+    const result = processQuestion(document)
+
+    expect(result.workflowState).toBe('READY')
+    /* a = |q|E/m = 1.6e-19 × 5000 / 9.11e-31 ≈ 8.7816e14 m/s²; the electron
+       enters on the mid-plane and must fall d/2 = 1 cm: t = √(2·0.01/a) ≈ 4.77e-9 s,
+       well inside the L/v0 = 2e-8 s crossing time, so it does strike the plate.
+       The scene parks the electron 1 cm before the plates, so the scene-clock
+       hit time is 1 ns later than the in-field time the question asks for. */
+    const inField = scalar(result, 'hit_time_in_field')
+    expect(inField).toBeCloseTo(Math.sqrt((2 * 0.01) / ((1.6e-19 * 5000) / 9.11e-31)), 12)
+    expect(scalar(result, 'hit_time') - inField).toBeCloseTo(0.01 / 1e7, 15)
+    const answer = result.solution?.results['plate_hit_time']
+    expect(answer?.unit).toBe('s')
+    expect(answer?.value).toBe('4.77×10⁻⁹')
+    expect(result.solution?.steps.some((step) => step.title.startsWith('t = √(2·(d/2) / a)'))).toBe(true)
+  })
+
   it('Q14: deflection direction target is recognized', () => {
     const document = createGoldenQuestionDocument(electricQuestion('electric-14-deflection-direction'))
     const candidate = DeterministicElectricQuestionParser.parse(document)

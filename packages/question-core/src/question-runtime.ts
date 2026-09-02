@@ -12,7 +12,7 @@ import { createElectricSimulationRequest } from '@physicsos/engine-electric'
 import { createElectricRegionSimulationRequest } from '@physicsos/engine-electric-region'
 import { createMechanicsSimulationRequest, MechanicsEngine } from '@physicsos/engine-mechanics'
 import { createCircuitSimulationRequest, CircuitEngine } from '@physicsos/engine-circuit'
-import { createOpticsSimulationRequest, OpticsEngine } from '@physicsos/engine-optics'
+import { createOpticsSimulationRequest, OpticsEngine, resolveOpticalImaging } from '@physicsos/engine-optics'
 import {
   createInductionSimulationRequest,
   InductionEngine,
@@ -352,7 +352,7 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
 
   const solution = isCompositeModel
     ? buildCompositeSolution(scene, simulation, ir)
-    : buildSolution(simulation, ir)
+    : buildSolution(simulation, ir, scene)
   return { document, ir, validation, scene, simulation, observations, solution, workflowState: 'READY' }
 }
 
@@ -567,7 +567,7 @@ function buildCompositeSolution(
   return { steps, results, derivationFormulas }
 }
 
-function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR): QuestionSolution {
+function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR, scene: PhysicsScene): QuestionSolution {
   const dq = simulation.derivedQuantities
   const steps: QuestionSolutionStep[] = []
   const results: QuestionSolution['results'] = {}
@@ -711,11 +711,25 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR): Que
       }
     }
     if (requested('plate_hit_time')) {
-      steps.push({
-        index: steps.length + 1,
-        title: 't = √(2d / a)',
-        description: '打板时间由竖直方向匀加速运动决定（若偏转距离不超过板间距/2）。',
-      })
+      const hitTime = dq.find((entry) => entry.key === 'hit_time_in_field')
+      if (hitTime !== undefined && !('vector' in hitTime.value)) {
+        const val = (hitTime.value as Quantity).value
+        results['plate_hit_time'] = { symbol: 't', label: '打板时间', value: fmt(val), unit: 's' }
+        steps.push({
+          index: steps.length + 1,
+          title: 't = √(2·(d/2) / a)',
+          description: '从进入电场起计时：粒子沿两板中线射入，竖直方向由静止匀加速，打到极板时竖直位移为 d/2；该时刻由引擎在场区内求得。',
+          resultSymbol: 't',
+          resultValue: fmt(val),
+          resultUnit: 's',
+        })
+      } else {
+        steps.push({
+          index: steps.length + 1,
+          title: '粒子未打到极板',
+          description: '引擎模拟中粒子在到达极板前已飞出场区（偏转距离不超过板间距/2），因此不存在打板时间。',
+        })
+      }
     }
     derivationFormulas.push(
       { id: 'electric-force', expression: 'F = qE' },
@@ -1014,6 +1028,61 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR): Que
       if (mVal !== undefined) {
         results['magnification'] = { symbol: 'm', label: '放大率', value: fmt(Math.abs(mVal)), unit: '' }
         steps.push({ index: steps.length + 1, title: '放大率 m = v/u', resultSymbol: 'm', resultValue: fmt(Math.abs(mVal)), resultUnit: '', description: '横向放大率等于像距与物距之比。' })
+      }
+    }
+    const imageHeight = dq.find((c) => c.key === 'image_height')?.value
+    if (requested('image_height') && imageHeight !== undefined) {
+      const hVal = scalarOf(imageHeight)
+      if (hVal !== undefined) {
+        results['image_height'] = { symbol: "h'", label: '像高', value: fmt(hVal), unit: 'cm' }
+        steps.push({ index: steps.length + 1, title: "像高 h' = m·h", resultSymbol: "h'", resultValue: fmt(hVal), resultUnit: 'cm', description: '像高等于放大率乘以物高。' })
+      }
+    }
+    // The engine's imaging verdict already names the nature and orientation;
+    // the solution quotes it and adds only the size word the magnification fixes.
+    const outcome = requested('image_nature') || requested('image_orientation')
+      ? resolveOpticalImaging(scene).outcome
+      : undefined
+    if (requested('image_orientation') && outcome !== undefined) {
+      const orientation = outcome.kind === 'image' ? (outcome.image.orientation === 'upright' ? '正立' : '倒立') : '不成像'
+      results['image_orientation'] = { symbol: '', label: '像的倒正', value: orientation, unit: '' }
+      steps.push({
+        index: steps.length + 1,
+        title: '判断像的倒正',
+        description: '实像由实际光线会聚而成，必倒立；虚像由反向延长线相交而成，必正立。',
+        resultSymbol: '',
+        resultValue: orientation,
+        resultUnit: '',
+      })
+    }
+    if (requested('image_nature') && outcome !== undefined) {
+      if (outcome.kind === 'image') {
+        const mVal = outcome.image.magnification
+        const size =
+          Math.abs(mVal - 1) <= 1e-9 ? '等大' : mVal > 1 ? '放大' : '缩小'
+        const nature = `${outcome.image.orientation === 'upright' ? '正立' : '倒立'}、${size}、${outcome.image.nature === 'real' ? '实像' : '虚像'}`
+        results['image_nature'] = { symbol: '', label: '像的性质', value: nature, unit: '' }
+        steps.push({
+          index: steps.length + 1,
+          title: '判断像的性质',
+          description:
+            outcome.image.nature === 'real'
+              ? '像距为正，光线实际会聚成像：实像必倒立；|m| 与 1 的大小关系决定放大或缩小。'
+              : '像距为负，反向延长线相交成像：虚像必正立；|m| 与 1 的大小关系决定放大或缩小。',
+          resultSymbol: '',
+          resultValue: nature,
+          resultUnit: '',
+        })
+      } else {
+        results['image_nature'] = { symbol: '', label: '像的性质', value: '不成像', unit: '' }
+        steps.push({
+          index: steps.length + 1,
+          title: '判断像的性质',
+          description: 'u = f 时折射（反射）光线平行射出，不会聚也不反向相交，因此不成像。',
+          resultSymbol: '',
+          resultValue: '不成像',
+          resultUnit: '',
+        })
       }
     }
     void f

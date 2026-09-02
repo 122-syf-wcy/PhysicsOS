@@ -150,6 +150,31 @@ describe('Optics Question full pipeline', () => {
     )
     expect(symmetryCheck?.passed).toBe(true)
   })
+
+  it('answers 像的性质 by quoting the engine imaging verdict (convex mirror: 正立缩小虚像)', () => {
+    const doc = inlineDoc('凸面镜焦距 f = -10 cm，物体距镜面 u = 20 cm。求：像的性质')
+    const result = processQuestion(doc)
+
+    expect(result.workflowState).toBe('READY')
+    expect(result.ir?.targets).toContain('image_nature')
+    expect(result.solution?.results['image_nature']?.value).toBe('正立、缩小、虚像')
+    /* No other target was asked for, so nothing else is answered. */
+    expect(Object.keys(result.solution?.results ?? {})).toEqual(['image_nature'])
+    const step = result.solution?.steps.find((candidate) => candidate.title === '判断像的性质')
+    expect(step?.resultValue).toBe('正立、缩小、虚像')
+  })
+
+  it('answers 倒正 and 像高 for a converging lens beyond 2f (倒立缩小实像)', () => {
+    const doc = inlineDoc('凸透镜焦距 f = 10 cm，物高 4 cm，物距 u = 30 cm。求：像高、像是倒立还是正立、像的虚实')
+    const result = processQuestion(doc)
+
+    expect(result.workflowState).toBe('READY')
+    expect(result.ir?.targets).toEqual(expect.arrayContaining(['image_height', 'image_orientation', 'image_nature']))
+    expect(result.solution?.results['image_orientation']?.value).toBe('倒立')
+    expect(result.solution?.results['image_nature']?.value).toBe('倒立、缩小、实像')
+    /* h' = m·h = 0.5 × 4 cm = 2 cm */
+    expect(Number(result.solution?.results['image_height']?.value)).toBeCloseTo(2, 6)
+  })
 })
 
 describe('Optics semantic validation', () => {

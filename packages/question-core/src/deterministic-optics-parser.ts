@@ -142,7 +142,7 @@ function detectTargets(text: string): SemanticTarget[] {
   if (/像距|image\s+distance|\bv\s*=/i.test(text)) add('image_distance')
   if (/像高|image\s+height/i.test(text)) add('image_height')
   if (/放大率|放大倍数|magnification|\bm\s*=/i.test(text)) add('magnification')
-  if (/虚像|实像|像的?(?:虚|实)/i.test(text)) add('image_nature')
+  if (/虚像|实像|像的?(?:虚|实)|像的(?:性质|特点)/i.test(text)) add('image_nature')
   if (/倒立|正立|倒正|像的?(?:倒|正)/i.test(text)) add('image_orientation')
   /* When the question asks for 成像 (imaging in general) without a specific
      target, surface the core imaging results. */
