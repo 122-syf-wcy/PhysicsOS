@@ -23,6 +23,10 @@ const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
+const emptyRecent: PhysicsSurfaceProps['useRecentExperiments'] = selector =>
+  selector({ items: [] })
+const emptyRecord: PhysicsSurfaceProps['useLearningRecord'] = selector =>
+  selector({ attempts: [] })
 
 afterEach(() => {
   cleanup()
@@ -108,9 +112,18 @@ describe('lever workspace runtime', () => {
     const doubled = runtime.editParameter('left-mass', 400)
     expect(doubled.sceneRevision).toBe(1)
     expect(derivedValue(doubled, '平衡判断')).toContain('左端')
-    const tipped = runtime.seek(doubled.clock.total)
+    expect(doubled.status).toBe('verified')
+    expect(doubled.verification.every(check => check.status === 'passed')).toBe(true)
+
+    runtime.setRunning(true)
+    const tipped = runtime.advance(doubled.clock.total)
+    expect(tipped.clock.running).toBe(false)
     expect(tipped.view.leverBeam?.tilt).toBeGreaterThan(0)
     expect(tipped.events.map(event => event.label)).toEqual(['开始倾斜', '倾斜到位'])
+    expect(tipped.status).toBe('verified')
+    expect(tipped.verification.every(check => check.status === 'passed')).toBe(true)
+    const balance = tipped.verification.find(check => check.id === 'moment_balance')
+    expect(balance?.detail).toContain('力矩不平衡')
 
     const restored = runtime.editParameter('left-arm', 7.5)
     expect(derivedValue(restored, '力矩比 M₁/M₂')).toBe('1')
@@ -135,10 +148,30 @@ describe('lever teaching layer', () => {
 
   it('switches the lesson question when the beam is unbalanced', () => {
     const runtime = createLeverWorkspaceRuntime(createLeverBalanceScene())
+    const view = render(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t as never}
+      />,
+    )
+    fireEvent.click(screen.getByRole('tab', { name: '引导' }))
+    expect(screen.getByText('为什么 200 g 挂在 15 cm 处，能和 300 g 挂在 10 cm 处平衡？')).toBeTruthy()
+
     runtime.editParameter('left-mass', 400)
-    const script = tutorScriptOf(physicsAgentContext(runtime.getSnapshot()))
-    expect(script?.question).toContain('重新平衡')
-    expect(script?.answer.paragraphs.join('')).toContain('F₁l₁ = F₂l₂')
+    view.rerender(
+      <AgentDrawer
+        snapshot={runtime.getSnapshot()}
+        runtime={runtime}
+        onSnapshot={vi.fn()}
+        onClose={vi.fn()}
+        t={t}
+      />,
+    )
+    expect(screen.getByText('杠杆向一边倾斜。怎样改力臂或质量，才能重新平衡？')).toBeTruthy()
+    expect(screen.queryByText('为什么 200 g 挂在 15 cm 处，能和 300 g 挂在 10 cm 处平衡？')).toBeNull()
   })
 
   it('publishes the lever primitives the tutor highlights', () => {
@@ -181,17 +214,74 @@ describe('lever self-checks in the drawer', () => {
     fireEvent.click(screen.getByRole('button', { name: '加倍（质量大了就要挂得更远）' }))
     expect(screen.getByText('概念错误')).toBeTruthy()
     expect(screen.getByText(/moment_from_force/)).toBeTruthy()
+    expect(screen.getByText(/F 变大时要保持/)).toBeTruthy()
+    expect(screen.getByText('力矩 M = F·l')).toBeTruthy()
 
-    expect(recordAttempt).toHaveBeenCalledOnce()
-    const attempt = recordAttempt.mock.calls[0]![0]
-    expect(attempt.questionId).toBe('mechanics-lever')
-    expect(attempt.correct).toBe(false)
-    expect(attempt.knowledge).toContain('dyn-lever-balance')
-    expect(attempt.experimentId).toBe('lever-balance')
+    fireEvent.click(screen.getByRole('button', { name: '钩码变重了，所以把杠杆压下去' }))
+    expect(screen.getByText(/weight_from_mass/)).toBeTruthy()
+    expect(screen.getByText(/重力 G = mg 也就没变/)).toBeTruthy()
+    expect(screen.getByText('G = mg 只由质量和 g 决定')).toBeTruthy()
+
+    expect(recordAttempt).toHaveBeenCalledTimes(2)
+    const [massAttempt, slideAttempt] = recordAttempt.mock.calls.map(call => call[0])
+    expect(massAttempt?.questionId).toBe('mechanics-lever')
+    expect(massAttempt?.correct).toBe(false)
+    expect(massAttempt?.selfCheckId).toBe('lever-double-mass')
+    expect(massAttempt?.knowledge).toContain('dyn-lever-balance')
+    expect(massAttempt?.experimentId).toBe('lever-balance')
+    expect(slideAttempt?.selfCheckId).toBe('lever-slide-out')
+    expect(slideAttempt?.correct).toBe(false)
+    expect(slideAttempt?.experimentId).toBe('lever-balance')
   })
 })
 
 describe('lever Lab surface', () => {
+  it('picks 探究杠杆的平衡条件 from the library and draws the beam plus hangers', () => {
+    const surface = createPhysicsSurfaceController()
+    surface.openExperimentPicker()
+    const picker = render(
+      <PhysicsSurface
+        useLearningRecord={emptyRecord}
+        useRecentExperiments={emptyRecent}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        openSurface={(id, sceneRef) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        }}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(picker.container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
+    const cards = screen.getAllByRole('button', { name: /探究杠杆的平衡条件/ })
+    const card = cards[0]
+    if (card === undefined) throw new Error('lever card missing from picker')
+    expect(card.getAttribute('disabled')).toBeNull()
+    expect(card.textContent).not.toContain('即将支持')
+    expect(card.textContent).toContain('支点在中间')
+    fireEvent.click(card)
+    picker.unmount()
+
+    const { container } = render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()
+    const lab = container.querySelector('[data-physicsos-surface="lab"]')
+    expect(lab?.getAttribute('data-verification-status')).toBe('verified')
+    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
+    expect(svgText.join(' ')).toContain('200')
+    expect(svgText.join(' ')).toContain('300')
+    expect(container.querySelectorAll('circle').length).toBeGreaterThanOrEqual(2)
+  })
+
   it('mounts a verified class-1 lever with both hangers drawn', () => {
     const { container } = mountLab('lever-balance')
 
