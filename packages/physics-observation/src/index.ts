@@ -297,3 +297,13 @@ export {
   type GroundObservation,
   type InclineObservation,
 } from './mechanics-observation.ts'
+export {
+  observeCircuitScene,
+  type CircuitCurrentObservation,
+  type CircuitVoltageObservation,
+  type CircuitPowerObservation,
+  type CircuitSourceSummaryObservation,
+  type CircuitObservation,
+  type CircuitObservationRuntimeState,
+  type CircuitObservationInput,
+} from './circuit-observation.ts'
