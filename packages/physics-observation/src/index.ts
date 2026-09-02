@@ -317,3 +317,15 @@ export {
   type CircuitObservationRuntimeState,
   type CircuitObservationInput,
 } from './circuit-observation.ts'
+export {
+  observeInductionScene,
+  isInductionEmfObservation,
+  isInductionCurrentObservation,
+  type InductionEmfObservation,
+  type InductionCurrentObservation,
+  type InductionFluxObservation,
+  type InductionDirectionObservation,
+  type InductionObservation,
+  type InductionObservationRuntimeState,
+  type InductionObservationInput,
+} from './induction-observation.ts'
