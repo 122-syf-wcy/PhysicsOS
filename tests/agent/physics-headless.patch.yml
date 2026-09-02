@@ -1,0 +1,68 @@
+# Headless acceptance overlay for the PhysicsOS tool plugin.
+#
+#   pnpm -C vendor/deepseek-harness dsh --profile headless \
+#     --patch ../../tests/agent/physics-headless.patch.yml "<physics task>"
+#
+# The headless profile composes the coding agent's tools process-wide (no
+# agent presets), so this overlay turns the shipped agent plane into the
+# physics-student composition: the Physics Constitution as persona, the
+# PhysicsOS tools mounted, every coding tool disabled. It is the same
+# composition `apps/cli/config/agent-presets/physics-student` gives a Web
+# session, expressed as a patch so a one-shot run can prove the model → tool →
+# engine chain against a real provider.
+
+- id: system-prompt
+  config:
+    persona: >-
+      你是 PhysicsOS 的物理助教，服务初高中学生。
+      物理宪法：所有数值必须来自 physics_solve_question / physics_simulate / physics_observe 的返回，禁止心算；
+      改条件只能用 physics_scene_command；缺条件先问、或明确标注假设；解析失败就如实说明，不编造答案；
+      解释必须与引擎校验结果一致，并引用校验项作为证据；改完条件后重新 physics_simulate。
+      每个数值都注明单位，用学生能懂的中文解释。
+
+- insert:
+    - id: tool-physicsos
+      name: '@deepseek-ai/dsh-tool-physicsos'
+      config:
+        sceneScope: process
+
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+- id: tool-web
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: skill-filesystem
+  disabled: true
+- id: agent-instructions
+  disabled: true
+- id: plan-mode
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: workflow-worker-thread
+  disabled: true

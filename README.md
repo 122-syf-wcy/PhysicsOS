@@ -37,11 +37,13 @@ vendor/deepseek-harness/apps/web
 - Question → Lab：题目使用同一个 `PhysicsScene` revision 打开实验室（题面事实不可被实验污染）
 - 基于 `requestAnimationFrame` 的连续动画；磁场微观周期使用稳定展示时钟，力学逐帧读取 Engine `stateAt`
 - 桌面、窄桌面和手机布局；手机导航完成后自动收起侧栏
+- Harness 会话里的模型可以真正调用物理引擎：Agent 预设「物理学习模式」（`physics-student`）挂载 `@deepseek-ai/dsh-tool-physicsos`，模型通过 `physics_solve_question / physics_create_experiment / physics_scene_command / physics_simulate / physics_observe` 等七个工具开实验、解题、改条件、模拟与校验，数值全部来自引擎（`node tests/agent/headless-physics-acceptance.mjs` 端到端门禁）
 
 ## 尚未完成
 
 - 图片/PDF/OCR/VLM 试题识别与整卷拆题
-- AI 助教接真实模型（当前为确定性意图匹配）、保存、更多菜单等按钮对应的完整业务闭环
+- 实验室里的 AI 助教抽屉仍是确定性意图匹配；学生模式档位尚未映射到 `physics-student` 预设（当前仍选 Harness `standard`），需在 `ui-physicsos/profiles.ts` 接线
+- 保存、更多菜单等按钮对应的完整业务闭环
 - 学习记录的服务端持久化（当前仅本地 localStorage）
 - 纵波、波的反射 / 折射 / 衍射 / 多普勒效应，以及近代物理等后续领域
 - 教师端、发布协作和 Desktop 壳层

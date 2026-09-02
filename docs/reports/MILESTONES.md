@@ -447,7 +447,23 @@ overlay 已回写。
 
 ## 进行中
 
-（暂无）
+### AGENT_TOOL_RUNTIME_V1
+
+Phase 16 Tool Runtime：让 Harness 会话里的模型真正调用物理引擎。
+
+**已完成（宿主侧接线）**：`@deepseek-ai/dsh-tool-physicsos`（overlay 内 Harness 工作区成员）把
+`@physicsos/agent-tools` 的 `PhysicsToolRuntime` 注册为七个 `physics_*` 工具，按会话隔离场景；
+Agent 预设「物理学习模式」（`apps/cli/config/agent-presets/physics-student`）= 物理宪法 persona +
+物理工具 + 提问工具，无编码工具；`upstream-changes.patch` 加 `apps/cli/package.json` 依赖与
+`tsconfig.host.json` 引用；根脚本 `build:agent / typecheck:agent / lint:agent / test:agent`。
+验收：`test:agent` 2 文件 17 用例全绿；`tests/agent/headless-physics-acceptance.mjs` 在真实 `dsh`
+进程 + mock LLM 下 13 项门禁全 PASS（模型 → `physics_solve_question` → 题目运行时 + 磁场引擎 +
+验证器 → R = 7.83 cm、T = 1.64×10⁻⁷ s → 回合 completed）；运行中的 Web 宿主设置页已列出该预设。
+
+**进行中**：`@physicsos/agent-tools` 运行时本体（另一会话）；`ui-physicsos/profiles.ts` 把学生档位
+映射到 `physics-student`；模型改动的场景推送到画布（Streaming / `SceneRevisionChanged`）。
+
+依据：`docs/reports/AGENT-TOOL-RUNTIME-V1-REPORT.md`
 
 ---
 

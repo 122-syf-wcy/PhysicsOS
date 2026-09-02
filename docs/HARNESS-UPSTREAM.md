@@ -71,7 +71,29 @@ Harness Agent 链路：
 @physicsos/agent-dsh-adapter           （唯一允许理解 Harness API）
         ↓
 vendor/deepseek-harness                （pin；Agent Loop / Session / Tools 不改）
+
+Harness 模型 → 物理引擎链路（Phase 16 Tool Runtime）：
+
+apps/cli/config/agent-presets/physics-student   （Agent 预设：物理宪法 persona + 物理工具）
+        ↓ 挂载
+@deepseek-ai/dsh-tool-physicsos                 （宿主侧工具插件，只做 ctx.tools 注册）
+        ↓ link: 源码桥接，打包内联
+@physicsos/agent-tools                          （PhysicsToolRuntime：实验目录 / 题目运行时 / SceneCommand / 模拟 / 观测）
+        ↓
+PhysicsScene → Engine → Verifier                （数值唯一来源）
 ```
+
+工具插件与预设都是 overlay 文件（`overlays/harness/files/packages/physicsos/tool-physicsos`、
+`overlays/harness/files/apps/cli/config/agent-presets/physics-student`），由
+`scripts/overlay/harness-overlay.mjs apply` 叠加进 submodule；`upstream-changes.patch` 只多两处
+hunk：`apps/cli/package.json` 声明对插件的 `workspace:^` 依赖（预设行的裸包名从宿主组装解析），
+`tsconfig.host.json` 加入项目引用。插件的构建 / 类型检查 / lint / 测试走仓库根的
+`build:agent` / `typecheck:agent` / `lint:agent` / `test:agent`；端到端门禁见
+`tests/agent/headless-physics-acceptance.mjs`（真实 `dsh` 进程 + mock LLM）。
+
+与 `ui-physicsos` 一样，`dsh-tool-physicsos` 是 Harness 工作区内的 PhysicsOS 自有集成层：它可以
+import Harness 的 `defineTool` / `Context` 这类公开插件 API，但不承载任何物理逻辑，也不修改
+Harness 内核；`@physicsos/agent-tools` 本身不 import Harness。
 
 产品 UI 叠加说明见 `docs/HARNESS-UI-OVERLAY.md`。
 
@@ -82,6 +104,7 @@ vendor/deepseek-harness                （pin；Agent Loop / Session / Tools 不
 - 在 `@physicsos/web` 或其他业务 package 直接 import Harness internal package
 - 用第二层全局顶栏替换 Harness Sidebar / Workspace UX
 - 在 `PhysicsCanvas`、Inspector 或其他 UI 组件中零散 import PhysicsOS domain package
+- 在 `dsh-tool-physicsos` 里计算物理量或持有第二套场景状态：它只转发到 `@physicsos/agent-tools`
 
 ## Upgrade procedure
 
