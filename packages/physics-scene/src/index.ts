@@ -60,6 +60,8 @@ export {
   type LeverBench,
   type LeverHanger,
   type LeverHangerSide,
+  type WaveBench,
+  type WaveBenchType,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -299,3 +301,24 @@ export {
   type BarMotionSceneInput,
   type FluxChangeSceneInput,
 } from './induction/induction-templates.ts'
+export {
+  createWaveScene,
+  isWaveScene,
+  waveBenchOf,
+  waveBenchesOf,
+  waveTypeOf,
+  type InterferenceWaveSpec,
+  type StandingWaveSpec,
+  type TravellingWaveSpec,
+  type WaveBenchSceneInput,
+  type WaveBenchSpec,
+  type WaveObservableKey,
+} from './wave/wave-scene.ts'
+export {
+  createStandingWaveScene,
+  createTravellingWaveScene,
+  createWaveInterferenceScene,
+  type InterferenceWaveSceneInput,
+  type StandingWaveSceneInput,
+  type TravellingWaveSceneInput,
+} from './wave/wave-templates.ts'

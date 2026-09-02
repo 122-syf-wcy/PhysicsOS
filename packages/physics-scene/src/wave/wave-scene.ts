@@ -1,0 +1,255 @@
+import { quantity } from '@physicsos/physics-units'
+import { asObservableId, asSceneId, type IsoDateTime } from '@physicsos/shared'
+
+import { defaultCoordinateSystem } from '../scene-validation.ts'
+import type { PhysicsScene, WaveBench, WaveBenchType } from '../scene.ts'
+
+/**
+ * Wave bench scenes carry a real timeline: a travelling wave advances one
+ * wavelength every period, and a standing wave oscillates between its extremes,
+ * so the displacement profile evolves with time. The scene does NOT store the
+ * wave speed or the displacement anywhere — A, λ, f and the geometry are the
+ * editable facts, so v = λf, T = 1/f, the interference verdict and the node
+ * positions are derived by the engine instead of persisted values that go stale
+ * on the next edit.
+ *
+ * Authoring units follow the lab: centimetres for amplitude, metres for
+ * wavelength and rig geometry, hertz for frequency.
+ */
+export type WaveObservableKey = 'waveform' | 'wave_speed' | 'superposition' | 'nodes'
+
+/** Netlist-style authoring input for the travelling rope-wave rig. */
+export interface TravellingWaveSpec {
+  readonly benchId?: string
+  readonly type?: 'travelling'
+  /** Amplitude in centimetres (> 0). */
+  readonly amplitude: number
+  /** Wavelength in metres (> 0). */
+  readonly wavelength: number
+  /** Frequency in hertz (> 0). */
+  readonly frequency: number
+  /** Length of rope drawn in metres (> 0); defaults to three wavelengths. */
+  readonly ropeLength?: number
+}
+
+/** Authoring input for the two-source interference rig. */
+export interface InterferenceWaveSpec {
+  readonly benchId?: string
+  readonly type: 'interference'
+  /** Amplitude of each source in centimetres (> 0). */
+  readonly amplitude: number
+  /** Wavelength in metres (> 0). */
+  readonly wavelength: number
+  /** Frequency in hertz (> 0). */
+  readonly frequency: number
+  /** Separation between the two coherent sources in metres (> 0). */
+  readonly sourceSeparation: number
+  /** Distance from source 1 to the observation point in metres (> 0). */
+  readonly pathOne: number
+  /** Distance from source 2 to the observation point in metres (> 0). */
+  readonly pathTwo: number
+}
+
+/** Authoring input for the clamped-string standing-wave rig. */
+export interface StandingWaveSpec {
+  readonly benchId?: string
+  readonly type: 'standing'
+  /** Amplitude in centimetres (> 0). */
+  readonly amplitude: number
+  /** Length of the clamped string in metres (> 0). */
+  readonly stringLength: number
+  /** Harmonic number n ≥ 1 (integral). */
+  readonly harmonic: number
+  /** Wave speed on the string in m/s (> 0). */
+  readonly waveSpeed: number
+}
+
+/** Discriminated authoring input: one sub-model per bench. */
+export type WaveBenchSpec = TravellingWaveSpec | InterferenceWaveSpec | StandingWaveSpec
+
+export interface WaveBenchSceneInput {
+  readonly sceneId?: string
+  readonly revision?: number
+  readonly bench: WaveBenchSpec
+  readonly observableVisibility?: Partial<Record<WaveObservableKey, boolean>>
+  readonly now?: IsoDateTime
+  readonly title?: string
+  readonly description?: string
+}
+
+const observableId = (key: WaveObservableKey) => asObservableId(`observable-wave-${key}`)
+
+const typeOfSpec = (spec: WaveBenchSpec): WaveBenchType => spec.type ?? 'travelling'
+
+/**
+ * A standing wave's frequency is fixed by the harmonic: f_n = n·v/(2L). It is
+ * stored on the bench so the contract stays uniform (every bench has a
+ * frequency), while the engine re-derives it from L, n and v rather than
+ * trusting this value.
+ */
+const standingFrequency = (spec: StandingWaveSpec): number =>
+  (spec.harmonic * spec.waveSpeed) / (2 * spec.stringLength)
+
+const toBench = (spec: WaveBenchSpec): WaveBench => {
+  const id = spec.benchId ?? 'wave-bench-1'
+  const amplitude = quantity(spec.amplitude, 'cm', 'length')
+  const type = typeOfSpec(spec)
+
+  if (type === 'standing') {
+    const standing = spec as StandingWaveSpec
+    return {
+      id,
+      type: 'standing',
+      amplitude,
+      frequency: quantity(standingFrequency(standing), 'Hz', 'frequency'),
+      stringLength: quantity(standing.stringLength, 'm', 'length'),
+      harmonic: standing.harmonic,
+      waveSpeed: quantity(standing.waveSpeed, 'm/s', 'velocity'),
+    }
+  }
+
+  if (type === 'interference') {
+    const pair = spec as InterferenceWaveSpec
+    return {
+      id,
+      type: 'interference',
+      amplitude,
+      frequency: quantity(pair.frequency, 'Hz', 'frequency'),
+      wavelength: quantity(pair.wavelength, 'm', 'length'),
+      sourceSeparation: quantity(pair.sourceSeparation, 'm', 'length'),
+      pathOne: quantity(pair.pathOne, 'm', 'length'),
+      pathTwo: quantity(pair.pathTwo, 'm', 'length'),
+    }
+  }
+
+  const rope = spec as TravellingWaveSpec
+  return {
+    id,
+    type: 'travelling',
+    amplitude,
+    frequency: quantity(rope.frequency, 'Hz', 'frequency'),
+    wavelength: quantity(rope.wavelength, 'm', 'length'),
+    /* Three wavelengths of rope reads as a wave train rather than a single
+       hump, which is what the textbook figure shows. */
+    ropeLength: quantity(rope.ropeLength ?? rope.wavelength * 3, 'm', 'length'),
+  }
+}
+
+/**
+ * Run window: two full periods of the slowest wave the junior lab uses. Long
+ * enough to see the profile repeat, short enough that the student does not wait
+ * for the point of the animation.
+ */
+const runSeconds = (bench: WaveBench): number => {
+  const f = bench.frequency.value
+  if (!Number.isFinite(f) || f <= 0) return 2
+  return Math.min(10, Math.max(1, (2 / f) * 1))
+}
+
+/** Create a single-bench wave scene. */
+export const createWaveScene = (input: WaveBenchSceneInput): PhysicsScene => {
+  const now = input.now ?? new Date().toISOString()
+  const sceneId = input.sceneId ?? 'wave-runtime-scene'
+  const visibility = input.observableVisibility ?? {}
+  const bench = toBench(input.bench)
+
+  return {
+    schemaVersion: 'physics-scene/1.0',
+    id: asSceneId(sceneId),
+    revision: input.revision ?? 0,
+    dimension: '2d',
+    coordinateSystem: defaultCoordinateSystem(),
+    timeline: {
+      currentTime: quantity(0, 's', 'time'),
+      startTime: quantity(0, 's', 'time'),
+      endTime: quantity(runSeconds(bench), 's', 'time'),
+      state: 'idle',
+      playbackRate: 1,
+    },
+    bodies: [],
+    particles: [],
+    fields: [],
+    forces: [],
+    regions: [],
+    boundaries: [],
+    constraints: [],
+    circuits: [],
+    opticalBenches: [],
+    acousticBenches: [],
+    fluidTanks: [],
+    thermalBenches: [],
+    leverBenches: [],
+    waveBenches: [bench],
+    measurementDefinitions: [],
+    observableDefinitions: [
+      {
+        id: observableId('waveform'),
+        type: 'geometry',
+        targetId: bench.id,
+        visible: visibility.waveform ?? true,
+      },
+      {
+        id: observableId('wave_speed'),
+        type: 'velocity',
+        targetId: bench.id,
+        visible: visibility.wave_speed ?? true,
+      },
+      ...(bench.type === 'interference'
+        ? [
+            {
+              id: observableId('superposition'),
+              type: 'annotation' as const,
+              targetId: bench.id,
+              visible: visibility.superposition ?? true,
+            },
+          ]
+        : []),
+      ...(bench.type === 'standing'
+        ? [
+            {
+              id: observableId('nodes'),
+              type: 'geometry' as const,
+              targetId: bench.id,
+              visible: visibility.nodes ?? true,
+            },
+          ]
+        : []),
+    ],
+    annotations: [],
+    metadata: {
+      createdAt: now,
+      updatedAt: now,
+      title: input.title ?? '机械波实验台',
+      description: input.description ?? 'Wave Engine · 波速 v = λf 与波的叠加',
+    },
+  }
+}
+
+/* ------------------------------------------------------------ accessors -- */
+
+/**
+ * Wave benches of a scene. Legacy-safe: scenes persisted before the wave slice
+ * have no `waveBenches` collection, so readers fall back to `[]`.
+ */
+export const waveBenchesOf = (scene: PhysicsScene): WaveBench[] => scene.waveBenches ?? []
+
+/** The single wave bench of a wave scene, if present. */
+export const waveBenchOf = (scene: PhysicsScene): WaveBench | undefined =>
+  waveBenchesOf(scene)[0]
+
+/** True when the scene is a pure single-bench wave scene. */
+export const isWaveScene = (scene: PhysicsScene): boolean =>
+  waveBenchesOf(scene).length === 1 &&
+  scene.particles.length === 0 &&
+  scene.bodies.length === 0 &&
+  scene.fields.length === 0 &&
+  scene.circuits.length === 0 &&
+  (scene.opticalBenches ?? []).length === 0 &&
+  (scene.acousticBenches ?? []).length === 0 &&
+  (scene.fluidTanks ?? []).length === 0 &&
+  (scene.thermalBenches ?? []).length === 0 &&
+  (scene.leverBenches ?? []).length === 0 &&
+  (scene.inductionBenches ?? []).length === 0
+
+/** The wave sub-model type of the bench. */
+export const waveTypeOf = (bench: WaveBench): WaveBenchType => bench.type

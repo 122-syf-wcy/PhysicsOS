@@ -679,6 +679,71 @@ export interface InductionBench extends PhysicsObjectBase {
   fluxRate?: Quantity<'magnetic_flux_rate'>
 }
 
+/* ------------------------------------------------------------ wave bench -- */
+
+/**
+ * Which closed-form wave sub-model the bench describes.
+ *
+ * - `travelling`: one sinusoidal wave running along a rope. v = λf, and the
+ *   snapshot y(x, t) = A·sin(2π(x/λ − ft)) is what the student watches move.
+ * - `interference`: two identical sources a fixed distance apart. The path
+ *   difference at the observation point decides constructive (Δ = nλ) or
+ *   destructive (Δ = (n + ½)λ) superposition.
+ * - `standing`: a string clamped at both ends driven into its n-th harmonic.
+ *   L = n·λ/2 fixes the wavelength, so f_n = n·v/(2L) and the node/antinode
+ *   positions follow.
+ */
+export type WaveBenchType = 'travelling' | 'interference' | 'standing'
+
+/**
+ * Wave bench (junior/senior wave slice). One bench carries a single wave rig:
+ * a travelling rope wave, a two-source interference pair, or a clamped string
+ * in a standing-wave harmonic.
+ *
+ * The scene does NOT store the wave speed, the period, or the displacement at
+ * any point. Amplitude, wavelength, frequency and geometry are the editable
+ * facts; v = λf, T = 1/f, the phase at a point and the interference verdict are
+ * all derived by the engine at the current time rather than persisted values
+ * that go stale on the next edit.
+ *
+ * Which optional fields carry meaning depends on `type` — the engine's
+ * `canHandle` rejects a bench whose sub-model fields are missing rather than
+ * silently substituting a default.
+ *
+ * Authoring units follow the lab: metres for lengths, hertz for frequency,
+ * centimetres for the amplitude of a rope wave.
+ */
+export interface WaveBench extends PhysicsObjectBase {
+  type: WaveBenchType
+  /** Peak displacement of the wave; finite and > 0. */
+  amplitude: Quantity<'length'>
+  /** Driving frequency; finite and > 0. */
+  frequency: Quantity<'frequency'>
+  /* ------------------------------------------- travelling / interference -- */
+  /**
+   * Wavelength of the wave; finite and > 0. Required for `travelling` and
+   * `interference`. For `standing` it is derived from L and n instead, so a
+   * bench that supplied both could contradict itself.
+   */
+  wavelength?: Quantity<'length'>
+  /** Length of rope drawn for a travelling wave; finite and > 0. */
+  ropeLength?: Quantity<'length'>
+  /* ------------------------------------------------------- interference -- */
+  /** Separation between the two coherent sources; finite and > 0. */
+  sourceSeparation?: Quantity<'length'>
+  /** Distance from source 1 to the observation point; finite and > 0. */
+  pathOne?: Quantity<'length'>
+  /** Distance from source 2 to the observation point; finite and > 0. */
+  pathTwo?: Quantity<'length'>
+  /* ----------------------------------------------------------- standing -- */
+  /** Length of the clamped string; finite and > 0. */
+  stringLength?: Quantity<'length'>
+  /** Harmonic number n ≥ 1; integral. L = n·λ/2. */
+  harmonic?: number
+  /** Wave speed on the string; finite and > 0 (standing only). */
+  waveSpeed?: Quantity<'velocity'>
+}
+
 /** docs/03 §64 */
 export interface MeasurementDefinition {
   id: string
@@ -736,6 +801,12 @@ export interface PhysicsScene {
    * populate an empty array — accessors fall back to `[]`.
    */
   inductionBenches?: InductionBench[]
+  /**
+   * Wave benches. Optional for the same reason as `inductionBenches`: scenes
+   * persisted before the wave slice must stay readable, so accessors fall back
+   * to `[]` rather than the schema demanding an empty array everywhere.
+   */
+  waveBenches?: WaveBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]

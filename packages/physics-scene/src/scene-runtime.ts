@@ -10,7 +10,12 @@ import {
   type QuantityVector,
   type TraceContext,
 } from '@physicsos/physics-core'
-import { canonicalValue, validateQuantity, type Quantity } from '@physicsos/physics-units'
+import {
+  canonicalValue,
+  quantity,
+  validateQuantity,
+  type Quantity,
+} from '@physicsos/physics-units'
 import {
   asPhysicsEventId,
   isIsoDateTime,
@@ -36,6 +41,7 @@ import type {
   ThermalBench,
   UniformElectricField,
   UniformMagneticField,
+  WaveBench,
 } from './scene.ts'
 
 export const SCENE_COMMAND_SCHEMA = 'scene-command/1.0' as const
@@ -85,6 +91,12 @@ export type SceneCommandType =
   | 'SetInductionBarVelocity'
   | 'SetInductionBarLength'
   | 'SetInductionFluxRate'
+  | 'SetWaveAmplitude'
+  | 'SetWaveFrequency'
+  | 'SetWaveSpeed'
+  | 'SetWavePathDifference'
+  | 'SetWaveStringLength'
+  | 'SetWaveHarmonic'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -277,6 +289,36 @@ export interface SceneCommandPayloadMap {
     /** Rate of change of flux dΦ/dt; finite (sign sets the Lenz direction). */
     fluxRate: Quantity<'magnetic_flux_rate'>
   }
+  SetWaveAmplitude: {
+    benchId: string
+    /** Wave amplitude; finite and > 0. */
+    amplitude: Quantity<'length'>
+  }
+  SetWaveFrequency: {
+    benchId: string
+    /** Source frequency; finite and > 0. */
+    frequency: Quantity<'frequency'>
+  }
+  SetWaveSpeed: {
+    benchId: string
+    /** Propagation speed set by the medium; finite and > 0. */
+    speed: Quantity<'velocity'>
+  }
+  SetWavePathDifference: {
+    benchId: string
+    /** Path difference at the observation point; finite and >= 0 (interference). */
+    pathDifference: Quantity<'length'>
+  }
+  SetWaveStringLength: {
+    benchId: string
+    /** Vibrating string length; finite and > 0 (standing wave). */
+    stringLength: Quantity<'length'>
+  }
+  SetWaveHarmonic: {
+    benchId: string
+    /** Harmonic number n; integer and >= 1 (standing wave). */
+    harmonic: number
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -347,6 +389,12 @@ export type PhysicsEventType =
   | 'InductionBarVelocityChanged'
   | 'InductionBarLengthChanged'
   | 'InductionFluxRateChanged'
+  | 'WaveAmplitudeChanged'
+  | 'WaveFrequencyChanged'
+  | 'WaveSpeedChanged'
+  | 'WavePathDifferenceChanged'
+  | 'WaveStringLengthChanged'
+  | 'WaveHarmonicChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -395,6 +443,12 @@ export interface PhysicsEventPayloadMap {
   InductionBarVelocityChanged: SceneCommandPayloadMap['SetInductionBarVelocity']
   InductionBarLengthChanged: SceneCommandPayloadMap['SetInductionBarLength']
   InductionFluxRateChanged: SceneCommandPayloadMap['SetInductionFluxRate']
+  WaveAmplitudeChanged: SceneCommandPayloadMap['SetWaveAmplitude']
+  WaveFrequencyChanged: SceneCommandPayloadMap['SetWaveFrequency']
+  WaveSpeedChanged: SceneCommandPayloadMap['SetWaveSpeed']
+  WavePathDifferenceChanged: SceneCommandPayloadMap['SetWavePathDifference']
+  WaveStringLengthChanged: SceneCommandPayloadMap['SetWaveStringLength']
+  WaveHarmonicChanged: SceneCommandPayloadMap['SetWaveHarmonic']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -485,6 +539,7 @@ const NOT_FOUND_CODES = {
   lever_bench: 'LEVER_NOT_FOUND',
   lever_hanger: 'HANGER_NOT_FOUND',
   induction_bench: 'INDUCTION_BENCH_NOT_FOUND',
+  wave_bench: 'WAVE_BENCH_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -662,6 +717,40 @@ const findInductionBench = (
   const bench = (scene.inductionBenches ?? []).find((entry) => entry.id === benchId)
   if (bench === undefined) return { ok: false, error: notFound('induction_bench', benchId) }
   return { ok: true, bench }
+}
+
+type WaveBenchLookup =
+  | { ok: true; bench: WaveBench }
+  | { ok: false; error: DomainError }
+
+const findWaveBench = (scene: PhysicsScene, benchId: string): WaveBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_WAVE_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.waveBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('wave_bench', benchId) }
+  return { ok: true, bench }
+}
+
+const waveWrongSubmodel = (bench: WaveBench, message: string): DomainError =>
+  invalidCommand('WAVE_WRONG_SUBMODEL', message, { benchId: bench.id, benchType: bench.type })
+
+/**
+ * A standing wave's frequency is not a free parameter: the clamped string only
+ * resonates at f_n = n·v/(2L). The bench keeps a `frequency` so every wave rig
+ * exposes the same shape, so any edit to L, n or v must re-derive it or the
+ * stored value would contradict the geometry it came from.
+ */
+const rederiveStandingFrequency = (bench: WaveBench): void => {
+  if (bench.type !== 'standing') return
+  if (bench.stringLength === undefined || bench.waveSpeed === undefined) return
+  if (bench.harmonic === undefined) return
+  const lengthSI = canonicalValue(bench.stringLength)
+  const speedSI = canonicalValue(bench.waveSpeed)
+  bench.frequency = quantity((bench.harmonic * speedSI) / (2 * lengthSI), 'Hz', 'frequency')
 }
 
 const electricDirectionVector = (direction: ElectricFieldDirection) => {
@@ -2087,6 +2176,218 @@ const applyCommand = (
           ...eventMetadata,
           type: 'InductionFluxRateChanged',
           payload: { benchId: command.payload.benchId, fluxRate: clone(fluxRate) },
+        },
+      }
+    }
+
+    case 'SetWaveAmplitude': {
+      const lookup = findWaveBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const amplitude = validateQuantity(command.payload.amplitude, 'length')
+      const amplitudeSI = canonicalValue(amplitude)
+      if (!Number.isFinite(amplitudeSI) || amplitudeSI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_WAVE_AMPLITUDE',
+            'Wave amplitude must be a positive finite length.',
+            { benchId: command.payload.benchId, amplitude: command.payload.amplitude },
+          ),
+        }
+      }
+      lookup.bench.amplitude = clone(amplitude)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'WaveAmplitudeChanged',
+          payload: { benchId: command.payload.benchId, amplitude: clone(amplitude) },
+        },
+      }
+    }
+
+    case 'SetWaveFrequency': {
+      const lookup = findWaveBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type === 'standing') {
+        return {
+          ok: false,
+          error: waveWrongSubmodel(
+            lookup.bench,
+            'A standing wave resonates at f_n = n·v/(2L); edit the string length, harmonic or wave speed instead of the frequency.',
+          ),
+        }
+      }
+      const frequency = validateQuantity(command.payload.frequency, 'frequency')
+      const frequencySI = canonicalValue(frequency)
+      if (!Number.isFinite(frequencySI) || frequencySI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_WAVE_FREQUENCY',
+            'Wave frequency must be a positive finite value.',
+            { benchId: command.payload.benchId, frequency: command.payload.frequency },
+          ),
+        }
+      }
+      lookup.bench.frequency = clone(frequency)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'WaveFrequencyChanged',
+          payload: { benchId: command.payload.benchId, frequency: clone(frequency) },
+        },
+      }
+    }
+
+    case 'SetWaveSpeed': {
+      const lookup = findWaveBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'standing') {
+        return {
+          ok: false,
+          error: waveWrongSubmodel(
+            lookup.bench,
+            'Wave speed is derived as v = λf on travelling and interference benches; it can only be set on a standing bench.',
+          ),
+        }
+      }
+      const speed = validateQuantity(command.payload.speed, 'velocity')
+      const speedSI = canonicalValue(speed)
+      if (!Number.isFinite(speedSI) || speedSI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_WAVE_SPEED',
+            'Wave speed must be a positive finite value.',
+            { benchId: command.payload.benchId, speed: command.payload.speed },
+          ),
+        }
+      }
+      lookup.bench.waveSpeed = clone(speed)
+      rederiveStandingFrequency(lookup.bench)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'WaveSpeedChanged',
+          payload: { benchId: command.payload.benchId, speed: clone(speed) },
+        },
+      }
+    }
+
+    case 'SetWavePathDifference': {
+      const lookup = findWaveBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'interference' || lookup.bench.pathOne === undefined) {
+        return {
+          ok: false,
+          error: waveWrongSubmodel(
+            lookup.bench,
+            'Path difference can only be set on an interference bench.',
+          ),
+        }
+      }
+      const pathDifference = validateQuantity(command.payload.pathDifference, 'length')
+      const pathDifferenceSI = canonicalValue(pathDifference)
+      if (!Number.isFinite(pathDifferenceSI) || pathDifferenceSI < 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_WAVE_PATH_DIFFERENCE',
+            'Path difference must be a finite length ≥ 0.',
+            {
+              benchId: command.payload.benchId,
+              pathDifference: command.payload.pathDifference,
+            },
+          ),
+        }
+      }
+      /* The bench stores the two path lengths, not Δ. Keep source 1 where it is
+         and move the observation point along path 2 so Δ = r₂ − r₁ exactly. */
+      const pathOneSI = canonicalValue(lookup.bench.pathOne)
+      lookup.bench.pathTwo = quantity(pathOneSI + pathDifferenceSI, 'm', 'length')
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'WavePathDifferenceChanged',
+          payload: {
+            benchId: command.payload.benchId,
+            pathDifference: clone(pathDifference),
+          },
+        },
+      }
+    }
+
+    case 'SetWaveStringLength': {
+      const lookup = findWaveBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'standing') {
+        return {
+          ok: false,
+          error: waveWrongSubmodel(
+            lookup.bench,
+            'String length can only be set on a standing bench.',
+          ),
+        }
+      }
+      const stringLength = validateQuantity(command.payload.stringLength, 'length')
+      const stringLengthSI = canonicalValue(stringLength)
+      if (!Number.isFinite(stringLengthSI) || stringLengthSI <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_WAVE_STRING_LENGTH',
+            'String length must be a positive finite length.',
+            { benchId: command.payload.benchId, stringLength: command.payload.stringLength },
+          ),
+        }
+      }
+      lookup.bench.stringLength = clone(stringLength)
+      rederiveStandingFrequency(lookup.bench)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'WaveStringLengthChanged',
+          payload: { benchId: command.payload.benchId, stringLength: clone(stringLength) },
+        },
+      }
+    }
+
+    case 'SetWaveHarmonic': {
+      const lookup = findWaveBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'standing') {
+        return {
+          ok: false,
+          error: waveWrongSubmodel(
+            lookup.bench,
+            'Harmonic number can only be set on a standing bench.',
+          ),
+        }
+      }
+      const harmonic = command.payload.harmonic
+      if (typeof harmonic !== 'number' || !Number.isInteger(harmonic) || harmonic < 1) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_WAVE_HARMONIC',
+            'Harmonic number must be an integer ≥ 1.',
+            { benchId: command.payload.benchId, harmonic },
+          ),
+        }
+      }
+      lookup.bench.harmonic = harmonic
+      rederiveStandingFrequency(lookup.bench)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'WaveHarmonicChanged',
+          payload: { benchId: command.payload.benchId, harmonic },
         },
       }
     }

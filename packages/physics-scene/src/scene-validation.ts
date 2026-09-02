@@ -79,6 +79,7 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ...(scene.leverBenches ?? []).map((entry) => entry.id),
     ...(scene.leverBenches ?? []).flatMap((entry) => entry.hangers.map((hanger) => hanger.id)),
     ...(scene.inductionBenches ?? []).map((entry) => entry.id),
+    ...(scene.waveBenches ?? []).map((entry) => entry.id),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -682,6 +683,73 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     checks.push(
       check(`induction_bench_values:${bench.id}`, 'constraint', valuesValid, {
         message: `Induction bench "${bench.id}" needs a positive magnetic flux density and resistance, and positive lengths/areas where applicable.`,
+        targetId: bench.id,
+      }),
+    )
+  }
+
+  for (const bench of scene.waveBenches ?? []) {
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+
+    const commonDimensions =
+      hasExpectedDimension(bench.amplitude, 'length') &&
+      hasExpectedDimension(bench.frequency, 'frequency')
+
+    let subDimensions: boolean
+    let subValues: boolean
+    if (bench.type === 'standing') {
+      subDimensions =
+        (bench.stringLength === undefined ||
+          hasExpectedDimension(bench.stringLength, 'length')) &&
+        (bench.waveSpeed === undefined || hasExpectedDimension(bench.waveSpeed, 'velocity'))
+      /* The harmonic is a mode index, not a measurement: n must be a positive
+         integer or L = nλ/2 describes no mode of a clamped string. */
+      subValues =
+        (bench.stringLength === undefined || positive(bench.stringLength)) &&
+        (bench.waveSpeed === undefined || positive(bench.waveSpeed)) &&
+        (bench.harmonic === undefined ||
+          (Number.isInteger(bench.harmonic) && bench.harmonic >= 1))
+    } else if (bench.type === 'interference') {
+      subDimensions =
+        (bench.wavelength === undefined || hasExpectedDimension(bench.wavelength, 'length')) &&
+        (bench.sourceSeparation === undefined ||
+          hasExpectedDimension(bench.sourceSeparation, 'length')) &&
+        (bench.pathOne === undefined || hasExpectedDimension(bench.pathOne, 'length')) &&
+        (bench.pathTwo === undefined || hasExpectedDimension(bench.pathTwo, 'length'))
+      subValues =
+        (bench.wavelength === undefined || positive(bench.wavelength)) &&
+        (bench.sourceSeparation === undefined || positive(bench.sourceSeparation)) &&
+        (bench.pathOne === undefined || positive(bench.pathOne)) &&
+        (bench.pathTwo === undefined || positive(bench.pathTwo))
+    } else {
+      /* travelling */
+      subDimensions =
+        (bench.wavelength === undefined || hasExpectedDimension(bench.wavelength, 'length')) &&
+        (bench.ropeLength === undefined || hasExpectedDimension(bench.ropeLength, 'length'))
+      subValues =
+        (bench.wavelength === undefined || positive(bench.wavelength)) &&
+        (bench.ropeLength === undefined || positive(bench.ropeLength))
+    }
+
+    const dimensionsValid = commonDimensions && subDimensions
+    checks.push(
+      check(`wave_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Wave bench "${bench.id}" quantities must use length / frequency and the sub-model's dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+
+    /* Every wave quantity is a magnitude: a zero or negative amplitude,
+       wavelength or frequency describes no wave, and unlike induction there is
+       no signed direction quantity on the bench. */
+    const valuesValid =
+      dimensionsValid && positive(bench.amplitude) && positive(bench.frequency) && subValues
+    checks.push(
+      check(`wave_bench_values:${bench.id}`, 'constraint', valuesValid, {
+        message: `Wave bench "${bench.id}" needs a positive amplitude and frequency, positive lengths, and an integral harmonic n ≥ 1.`,
         targetId: bench.id,
       }),
     )
