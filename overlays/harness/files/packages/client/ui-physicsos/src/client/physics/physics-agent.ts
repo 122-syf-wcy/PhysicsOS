@@ -254,6 +254,13 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
     ...(view.leverBeam === undefined ? [] : [view.leverBeam.id]),
     ...(view.leverFulcrum === undefined ? [] : [view.leverFulcrum.id]),
     ...(view.leverHangers ?? []).map(hanger => hanger.id),
+    /* Induction rig primitives: the field box, the rod (bar_motion only), the
+       coil (flux_change only) and the current arrow — the rod's presence is
+       how the tutor and the self-checks tell the two rigs apart. */
+    ...(view.inductionField === undefined ? [] : [view.inductionField.id]),
+    ...(view.inductionBar === undefined ? [] : [view.inductionBar.id]),
+    ...(view.inductionCoil === undefined ? [] : [view.inductionCoil.id]),
+    ...(view.inductionCurrent === undefined ? [] : [view.inductionCurrent.id]),
   ]
 }
 

@@ -421,6 +421,29 @@ export const IconEchoRanging = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/* --------------------------------------------------------------- induction -- */
+
+/** Induction bar-motion: a rod crossing a marked field on a closed rail. */
+export const IconInductionBar = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3.6 5.2h16.8v13.6H3.6z" strokeOpacity="0.5" strokeDasharray="2.4 1.8" />
+    <path d="M9.4 6.8v10.4" strokeWidth="2.2" />
+    <path d="M5.6 9.2l1.6 1.6M7.2 9.2l-1.6 1.6M5.6 13.4l1.6 1.6M7.2 13.4l-1.6 1.6" strokeOpacity="0.6" strokeWidth="1.1" />
+    <path d="M12.8 16.2a9 9 0 0 0 6.4-4.2" strokeOpacity="0.7" />
+    <path d="M18.8 10.6l1.2 1.9-2.2.4" strokeOpacity="0.7" strokeWidth="1.1" />
+  </Glyph>
+)
+
+/** Induction flux-change: a coil in a field with a changing arrow. */
+export const IconInductionCoil = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4.2 5h15.8v14H4.2z" strokeOpacity="0.5" strokeDasharray="2.4 1.8" />
+    <ellipse cx="12" cy="12" rx="4.2" ry="2.6" />
+    <path d="M9.4 12.6c1.4 1.2 3.8 1.2 5.2 0" strokeOpacity="0.6" />
+    <path d="M17 8.6l2-2.2M16.4 6.4h2.6v2.6" strokeWidth="1.3" />
+  </Glyph>
+)
+
 /* ------------------------------------------------------- time and analysis -- */
 
 /** Time: a clock with hands. */

@@ -1480,6 +1480,120 @@ const heatCapacityLesson = (context: PhysicsAgentContext): TutorScript => {
   }
 }
 
+/* ---------------------------------------------------------------- induction -- */
+
+const barMotionLesson = (context: PhysicsAgentContext): TutorScript => {
+  const emf = derivedText(context, '感应电动势 E')
+  const current = derivedText(context, '感应电流 I')
+  const field = derivedText(context, '磁感应强度 B')
+  const barLength = derivedText(context, '棒长 L')
+  const velocity = derivedText(context, '棒速 v')
+  const resistance = derivedText(context, '回路电阻 R')
+  return {
+    id: 'induction-bar-motion',
+    topic: '导体棒切割磁感线',
+    observation: [
+      ...observeLine('磁感应强度 B', field),
+      ...observeLine('棒速 v', velocity),
+      ...observeLine('感应电动势 E', emf),
+      ...observeLine('感应电流 I', current),
+    ],
+    question: '棒匀速滑动，读数一直是同一个值。这根棒到底在"发电"吗？能量从哪来？',
+    hints: [
+      {
+        id: 'hint-what-decides-emf',
+        title: '提示 1',
+        paragraphs: ['先把读数和公式对上：E = BLv。B、L、v 三个量在棒匀速滑动时全都不变，所以电动势不变 —— 读数稳定不是"没发电"，是"稳定地发电"。'],
+        highlights: ['induction-field', 'induction-bench-1.bar'],
+      },
+      {
+        id: 'hint-where-energy-from',
+        title: '提示 2',
+        paragraphs: ['棒里有电流，电流在磁场里受安培力，方向与运动相反。要让棒保持匀速，外力必须持续推它 —— 机械功正是通过克服安培力变成了电能。'],
+        highlights: ['induction-current-arrow'],
+      },
+      {
+        id: 'hint-direction',
+        title: '提示 3',
+        paragraphs: ['电流方向由右手定则给出：摊开右手让磁感线穿入手心，拇指指向棒的运动方向，四指就是感应电流方向。反向滑动，四指方向跟着反过来。'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '棒在稳定地发电：E = BLv 只由磁场、棒长和速度决定，与电阻无关；匀速滑动三个量都不变，电动势恒定。电流 I = E/R 同样恒定。',
+        [
+          field === undefined ? '' : `B = ${field}`,
+          barLength === undefined ? '' : `L = ${barLength}`,
+          velocity === undefined ? '' : `v = ${velocity}`,
+          resistance === undefined ? '' : `R = ${resistance}`,
+          emf === undefined ? '' : `E = BLv = ${emf}`,
+          current === undefined ? '' : `I = E/R = ${current}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        '能量账本：外力推棒的机械功，经安培力转手，变成了回路里的电能 —— 这就是发电机的雏形。棒一停（v = 0），E 立刻归零。',
+      ].filter(entry => entry.length > 0),
+      highlights: ['induction-bench-1.bar', 'induction-current-arrow'],
+    },
+    evidence: evidenceOf(context, ['faraday_law', 'lenz_direction', 'ohm_law_loop']),
+  }
+}
+
+const fluxChangeLesson = (context: PhysicsAgentContext): TutorScript => {
+  const emf = derivedText(context, '感应电动势 E')
+  const current = derivedText(context, '感应电流 I')
+  const flux = derivedText(context, '磁通量 Φ')
+  const field = derivedText(context, '磁感应强度 B')
+  const resistance = derivedText(context, '回路电阻 R')
+  return {
+    id: 'induction-flux-change',
+    topic: '磁通量变化产生感应电动势',
+    observation: [
+      ...observeLine('磁感应强度 B', field),
+      ...observeLine('磁通量 Φ', flux),
+      ...observeLine('感应电动势 E', emf),
+      ...observeLine('感应电流 I', current),
+    ],
+    question: '线圈一动不动，磁铁一插一拔，电流表指针就摆。是什么在变？',
+    hints: [
+      {
+        id: 'hint-what-is-flux',
+        title: '提示 1',
+        paragraphs: ['穿过线圈的磁感线根数叫磁通量 Φ = B·S·cosθ。线圈没动、面积没变，变的是 B —— 磁铁插近 B 变大，拔远 B 变小。'],
+        highlights: ['induction-field'],
+      },
+      {
+        id: 'hint-rate-not-value',
+        title: '提示 2',
+        paragraphs: ['感应电动势看的是变化率不是变化量：E = -dΦ/dt。磁通量变化越快，指针摆得越猛；慢慢插、慢慢拔，同一个最终 Φ 读数几乎不出电动势。'],
+      },
+      {
+        id: 'hint-lenz',
+        title: '提示 3',
+        paragraphs: ['负号是楞次定律：插入时磁通量增加，感应电流的磁场反抗增加（与原磁场反向）；拔出时磁通量减少，感应磁场补偿（与原磁场同向）。"阻碍变化"四个字把两种情况都涵盖了。'],
+        highlights: ['induction-current-arrow'],
+      },
+    ],
+    answer: {
+      id: 'answer',
+      title: '答案',
+      paragraphs: [
+        '变化的是磁通量：磁铁运动改变穿过线圈的 B，Φ = B·S·cosθ 随之变化。只要 dΦ/dt ≠ 0 就有感应电动势 E = -dΦ/dt，闭合回路里出现 I = E/R。',
+        [
+          field === undefined ? '' : `B = ${field}`,
+          flux === undefined ? '' : `Φ = ${flux}`,
+          resistance === undefined ? '' : `R = ${resistance}`,
+          emf === undefined ? '' : `E = -dΦ/dt = ${emf}`,
+          current === undefined ? '' : `I = E/R = ${current}`,
+        ].filter(entry => entry.length > 0).join('；'),
+        '楞次定律定方向：E 的符号与 dΦ/dt 相反 —— 插入（Φ 增加）与拔出（Φ 减少）给出的电流方向正好相反，这就是指针左右各摆一次的原因。',
+      ].filter(entry => entry.length > 0),
+      highlights: ['induction-bench-1', 'induction-current-arrow'],
+    },
+    evidence: evidenceOf(context, ['faraday_law', 'lenz_direction', 'ohm_law_loop']),
+  }
+}
+
 /* ------------------------------------------------------------------ dispatch -- */
 
 /**
@@ -1542,7 +1656,13 @@ export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undef
       ? heatCapacityLesson(context)
       : crystalMeltingLesson(context)
   }
-  /* Composite, magnetic, mechanics, circuit, optics, acoustics, fluid and
-     thermal returned above; electric remains. */
+  if (context.domain === 'induction') {
+    /* The rod object only exists on the cutting rig — a fact, not a title. */
+    return context.drawnIds.some(id => id.endsWith('.bar'))
+      ? barMotionLesson(context)
+      : fluxChangeLesson(context)
+  }
+  /* Composite, magnetic, mechanics, circuit, optics, acoustics, fluid,
+     thermal and induction returned above; electric remains. */
   return electricLesson(context)
 }

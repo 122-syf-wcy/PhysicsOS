@@ -39,6 +39,8 @@ import {
   createRheostatCircuitScene,
   createSeriesCircuitScene,
   createVelocitySelectorScene,
+  createBarMotionScene,
+  createFluxChangeScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 import type { ReactElement } from 'react'
@@ -56,6 +58,8 @@ import {
   IconConvexMirror,
   IconCrystalMelting,
   IconHeatCapacity,
+  IconInductionBar,
+  IconInductionCoil,
   IconEchoRanging,
   IconEmfMeasure,
   IconInclinedPlane,
@@ -88,6 +92,7 @@ export type ExperimentDomain =
   | 'acoustics'
   | 'fluid'
   | 'thermal'
+  | 'induction'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -888,6 +893,43 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
   },
 ]
 
+/* ---------------------------------------------------------------- induction -- */
+
+const inductionTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'induction-bar-motion',
+    domain: 'induction',
+    stage: 'senior',
+    label: 'lab.template.inductionBarMotion',
+    hint: 'lab.template.inductionBarMotion.hint',
+    icon: IconInductionBar,
+    tags: ['电磁感应', '高中'],
+    createScene: (title) => {
+      const scene = createBarMotionScene({
+        sceneId: stampId('induction-bar-motion'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'induction-flux-change',
+    domain: 'induction',
+    stage: 'senior',
+    label: 'lab.template.inductionFluxChange',
+    hint: 'lab.template.inductionFluxChange.hint',
+    icon: IconInductionCoil,
+    tags: ['电磁感应', '高中'],
+    createScene: (title) => {
+      const scene = createFluxChangeScene({
+        sceneId: stampId('induction-flux-change'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+]
+
 /** Ordered groups, one per domain. The "全部" tab is built by flattening these. */
 export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'mechanics', label: 'lab.template.group.mechanics', templates: mechanicsTemplates },
@@ -899,6 +941,7 @@ export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'magnetic', label: 'lab.template.group.magnetic', templates: magneticTemplates },
   { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },
   { id: 'composite', label: 'lab.template.group.composite', templates: compositeTemplates },
+  { id: 'induction', label: 'lab.template.group.induction', templates: inductionTemplates },
 ]
 
 /** Every selectable template, flattened across groups. */

@@ -707,3 +707,54 @@
   stroke: var(--physics-body-stroke);
   stroke-width: 2;
 }
+
+/* ---------------------------------------------------------------- induction -- */
+
+/* The uniform field box: a soft outline with ✕ marks (into page) on a grid. */
+.inductionFieldBox {
+  fill: none;
+  stroke: var(--physics-induction-field);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+
+.inductionFieldMark {
+  stroke: var(--physics-induction-field);
+  stroke-width: 1.2;
+  opacity: 0.65;
+}
+
+/* The conducting rod: solid indigo, thicker than the field ink. */
+.inductionRod {
+  stroke: var(--physics-induction-rod);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+/* The coil: a flat loop seen edge-on, drawn as connected arcs. */
+.inductionCoil {
+  stroke: var(--physics-induction-rod);
+  stroke-width: 2.4;
+  fill: none;
+  stroke-linecap: round;
+}
+
+/* The induced-current arrow on the loop rail. */
+.inductionCurrentArrow {
+  stroke: var(--physics-induction-current);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.inductionCurrentHead {
+  fill: var(--physics-induction-current);
+  stroke: none;
+}
+
+.inductionCurrentLabel {
+  fill: var(--physics-induction-current);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}

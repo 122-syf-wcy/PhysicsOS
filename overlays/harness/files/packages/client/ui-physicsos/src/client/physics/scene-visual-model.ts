@@ -31,6 +31,7 @@ export type PhysicsDomainId =
   | 'acoustics'
   | 'fluid'
   | 'thermal'
+  | 'induction'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics
@@ -100,6 +101,11 @@ export type ObservableKey =
   // lever statics (mechanics domain)
   | 'moments'
   | 'arms'
+  // induction
+  | 'emf'
+  | 'inductionCurrent'
+  | 'flux'
+  | 'barMotion'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -635,8 +641,7 @@ export interface ThermalHeaterVisual {
 /* -------------------------------------------------------------------- lever -- */
 
 /** The rigid beam of a class-1 lever, already rotated to the engine's tilt. */
-export interface LeverBeamVisual {
-  id: string
+export interface LeverBeamVisual {  id: string
   from: ScenePoint
   to: ScenePoint
   /** Rotation from horizontal, positive = CCW = left down (rad). */
@@ -658,6 +663,48 @@ export interface LeverHangerVisual {
   label: string
   /** Formatted mass shown under the blob, e.g. `200 g`. */
   massText: string
+}
+
+/* ---------------------------------------------------------------- induction -- */
+
+/**
+ * The uniform field region of an induction bench. The field is drawn as the
+ * textbook dotted plane; B's magnitude rides the readout, not the ink.
+ */
+export interface InductionFieldVisual {
+  id: string
+  /** Field box: lower-left corner and size, in scene units (cm). */
+  origin: ScenePoint
+  size: { width: number; height: number }
+  /** Field-direction marks per grid cell (✕ = into page, · = out of page). */
+  marks: 'into' | 'out'
+}
+
+/** The conducting rod of a bar_motion rig, at its swept position. */
+export interface InductionBarVisual {
+  id: string
+  /** Centre of the rod at this frame; the rod spans the field height. */
+  at: ScenePoint
+  length: number
+  label: string
+}
+
+/** The coil of a flux_change rig (a flat loop seen edge-on). */
+export interface InductionCoilVisual {
+  id: string
+  at: ScenePoint
+  /** Coil diameter, drawn as the loop's visible width. */
+  diameter: number
+  label: string
+}
+
+/** Current-direction arrow around the loop; sign comes from the engine's lenz readout. */
+export interface InductionCurrentVisual {
+  id: string
+  from: ScenePoint
+  to: ScenePoint
+  /** +1 / -1: the engine's lenz_direction sign. */
+  sign: number
 }
 
 /* ------------------------------------------------------------ view model --- */
@@ -765,6 +812,14 @@ export interface SceneVisualModel {
   leverFulcrum?: LeverFulcrumVisual
   /** Hanging loads on opposite arms. */
   leverHangers?: readonly LeverHangerVisual[]
+  /** Uniform field region of an induction bench. */
+  inductionField?: InductionFieldVisual
+  /** Conducting rod of a bar_motion rig at its swept position. */
+  inductionBar?: InductionBarVisual
+  /** Coil of a flux_change rig. */
+  inductionCoil?: InductionCoilVisual
+  /** Current-direction arrow around the induction loop. */
+  inductionCurrent?: InductionCurrentVisual
   /** Orbit centre (magnetic domain). */
   center?: ScenePoint
 

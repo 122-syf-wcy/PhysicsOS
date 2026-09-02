@@ -677,16 +677,55 @@ const EchoRangingArt = () => (
   </>
 )
 
+/* ---------------------------------------------------------------- induction -- */
+
+/** 切割磁感线: the marked field box, a rod on rails, the induced-current loop. */
+const InductionBarArt = () => (
+  <>
+    <Stroke d="M14 16 H106 V52 H14 Z" width={1.4} opacity={0.5} dash="3 3" />
+    {[24, 34, 44].map(x => (
+      <g key={x}>
+        <Stroke d={`M${x - 2.6} 24 l5.2 5.2 M${x + 2.6} 24 l-5.2 5.2`} width={1.2} opacity={0.5} />
+        <Stroke d={`M${x - 2.6} 36 l5.2 5.2 M${x + 2.6} 36 l-5.2 5.2`} width={1.2} opacity={0.5} />
+      </g>
+    ))}
+    {/* Rails and the sliding rod */}
+    <Stroke d="M14 34 H34 M74 34 H106" width={1.7} opacity={0.75} />
+    <Stroke d="M52 22 V46" width={3} />
+    {/* Closed loop below the field, arrow showing the induced current */}
+    <Stroke d="M30 52 V60 H86 V52" width={1.7} opacity={0.8} />
+    <Arrow x1={44} y1={60} x2={72} y2={60} width={1.7} opacity={0.9} head={4.4} />
+    <Dot x={52} y={34} r={2.4} />
+  </>
+)
+
+/** 磁通量变化: a coil inside the field box with the growing flux arrows. */
+const InductionCoilArt = () => (
+  <>
+    <Stroke d="M14 16 H106 V52 H14 Z" width={1.4} opacity={0.5} dash="3 3" />
+    {[26, 40, 54, 68, 82, 96].map(x => (
+      <Stroke key={x} d={`M${x - 2.2} 30 l4.4 4.4 M${x + 2.2} 30 l-4.4 4.4`} width={1.1} opacity={0.45} />
+    ))}
+    {/* The coil, edge-on: stacked arcs like wound wire */}
+    {[0, 1, 2].map(i => (
+      <ellipse key={i} cx={60} cy={40 - i * 5} rx={13} ry={5} fill="none" stroke="currentColor" strokeWidth={2} opacity={0.95 - i * 0.18} />
+    ))}
+    {/* Changing-flux arrows entering the box from above */}
+    <Arrow x1={44} y1={8} x2={44} y2={20} width={1.6} opacity={0.7} head={4.2} />
+    <Arrow x1={60} y1={8} x2={60} y2={20} width={1.6} opacity={0.7} head={4.2} />
+    <Arrow x1={76} y1={8} x2={76} y2={20} width={1.6} opacity={0.7} head={4.2} />
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
-const LabSceneArt = () => (
-  <>
-    <Stroke d="M52 14 h16 M55 14 v10 L41 47 a5 5 0 0 0 4.6 7 h28.8 a5 5 0 0 0 4.6 -7 L65 24 v-10" width={2.2} />
-    <Stroke d="M46 40 h28" width={1.7} opacity={0.5} />
-    <ellipse cx={60} cy={36} rx={34} ry={12} fill="none" stroke="currentColor" strokeWidth={1.4} strokeDasharray="1 5" opacity={0.55} transform="rotate(-14 60 36)" />
-    <Dot x={88} y={26} r={2.6} />
-  </>
+const LabSceneArt = () => (  <>
+  <Stroke d="M52 14 h16 M55 14 v10 L41 47 a5 5 0 0 0 4.6 7 h28.8 a5 5 0 0 0 4.6 -7 L65 24 v-10" width={2.2} />
+  <Stroke d="M46 40 h28" width={1.7} opacity={0.5} />
+  <ellipse cx={60} cy={36} rx={34} ry={12} fill="none" stroke="currentColor" strokeWidth={1.4} strokeDasharray="1 5" opacity={0.55} transform="rotate(-14 60 36)" />
+  <Dot x={88} y={26} r={2.6} />
+</>
 )
 
 /** A question-sourced scene: the sheet with a worked trajectory. */
@@ -737,6 +776,8 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'echo-ranging': EchoRangingArt,
   'crystal-melting': CrystalMeltingArt,
   'heat-capacity-comparison': HeatCapacityArt,
+  'induction-bar-motion': InductionBarArt,
+  'induction-flux-change': InductionCoilArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -775,6 +816,8 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['buoyancy', 'fluid-buoyancy'],
   ['crystal-melting', 'thermal-crystal-melting'],
   ['heat-capacity-comparison', 'thermal-heat-capacity'],
+  ['induction-bar-motion', 'induction-bar-motion'],
+  ['induction-flux-change', 'induction-flux-change'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

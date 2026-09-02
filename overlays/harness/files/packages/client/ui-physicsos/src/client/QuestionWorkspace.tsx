@@ -34,6 +34,9 @@ import {
   resolveUniformElectricModel,
 } from '@physicsos/engine-electric'
 import { electricRegionEngine } from '@physicsos/engine-electric-region'
+import { resolveCircuitOperatingPoint } from '@physicsos/engine-circuit'
+import { resolveOpticalImaging } from '@physicsos/engine-optics'
+import { resolveInductionModel } from '@physicsos/engine-induction'
 import { observeElectricScene, observeMechanicsScene } from '@physicsos/physics-observation'
 import { isParallelPlateScene, probeParticleOf } from '@physicsos/physics-scene'
 import {
@@ -63,6 +66,9 @@ import {
   electricSampleReadout,
   electricSceneVisualAt,
 } from './physics/electric-visual-bridge.ts'
+import { circuitSceneVisualAt } from './physics/circuit-visual-bridge.ts'
+import { opticsSceneVisual } from './physics/optics-visual-bridge.ts'
+import { inductionSceneVisual } from './physics/induction-visual-bridge.ts'
 import { IconPhysicsPause, IconPhysicsPlay } from './icons/physics-icons.tsx'
 import { createMagneticRuntime, type MagneticRuntimeBridge } from './physics-runtime-bridge.ts'
 import {
@@ -733,6 +739,45 @@ function useQuestionFrames(
         timeLabel,
         trajectoryTimes,
         sampleReadout: (index: number) => electricSampleReadout(simulation, probeId, index),
+      }
+    }
+    if (domain === 'circuit') {
+      /* Schematic paradigm: the MNA operating point is re-solved per frame, so a
+         rheostat sweep animates the slider and meter needles like the Lab does.
+         A static circuit yields the same point at every time — a still reading. */
+      const point = resolveCircuitOperatingPoint(scene, at)
+      return {
+        view: circuitSceneVisualAt({ scene, point, time: at }),
+        engineLabel: 'Circuit Engine · Verified',
+        ariaLabel: `${title}的可验证电路原理图`,
+        timeLabel,
+        trajectoryTimes,
+      }
+    }
+    if (domain === 'optics') {
+      /* One bench, one verified imaging result — a static ray diagram with no
+         time evolution. */
+      const state = simulation.states[0]
+      if (state === undefined) return null
+      const result = resolveOpticalImaging(scene)
+      return {
+        view: opticsSceneVisual({ scene, result }),
+        engineLabel: 'Optics Engine · Verified',
+        ariaLabel: `${title}的可验证光路图`,
+        timeLabel,
+        trajectoryTimes,
+      }
+    }
+    if (domain === 'induction') {
+      /* Closed-form rig: the EMF is constant, the rod's sweep x(t) = v·t is the
+         animation. The resolved model comes from the engine, never re-derived. */
+      const model = resolveInductionModel(scene)
+      return {
+        view: inductionSceneVisual({ scene, model, simulation, time: at }),
+        engineLabel: 'Induction Engine · Verified',
+        ariaLabel: `${title}的可验证电磁感应图`,
+        timeLabel,
+        trajectoryTimes,
       }
     }
     if (domain !== 'mechanics') return null

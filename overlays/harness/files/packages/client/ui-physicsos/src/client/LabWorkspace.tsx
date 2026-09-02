@@ -33,6 +33,7 @@ import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-run
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
 import { createLeverWorkspaceRuntime } from './physics/lever-workspace-runtime.ts'
 import { createOpticsWorkspaceRuntime } from './physics/optics-workspace-runtime.ts'
+import { createInductionWorkspaceRuntime } from './physics/induction-workspace-runtime.ts'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
 import type {
   PhysicsSceneRef, PhysicsSurfaceState, PhysicsSurfaceId, RecentExperimentsState,
@@ -213,6 +214,8 @@ const buildRuntime = (
       return scene === undefined ? null : createFluidWorkspaceRuntime(scene)
     case 'thermal':
       return scene === undefined ? null : createThermalWorkspaceRuntime(scene)
+    case 'induction':
+      return scene === undefined ? null : createInductionWorkspaceRuntime(scene)
     case 'composite':
       return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
     case 'magnetic':

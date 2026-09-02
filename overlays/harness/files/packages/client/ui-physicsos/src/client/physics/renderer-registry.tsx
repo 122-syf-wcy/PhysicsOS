@@ -13,6 +13,7 @@ import type { ReactElement } from 'react'
 import { AcousticsRenderer } from './acoustics-renderer.tsx'
 import { CircuitRenderer } from './circuit-renderer.tsx'
 import { FluidRenderer } from './fluid-renderer.tsx'
+import { InductionRenderer } from './induction-renderer.tsx'
 import { OpticsRenderer } from './optics-renderer.tsx'
 import { ThermalRenderer } from './thermal-renderer.tsx'
 import { LeverRenderer } from './lever-renderer.tsx'
@@ -960,6 +961,7 @@ export const RENDERERS = {
   acoustics: AcousticsRenderer,
   fluid: FluidRenderer,
   thermal: ThermalRenderer,
+  induction: InductionRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 
 export { CompositeRenderer, ElectricRenderer, MagneticRenderer, MechanicsRenderer }

@@ -109,6 +109,62 @@ export const thermalTopicOf = (context: PhysicsAgentContext): string | undefined
   return context.drawnIds.includes('sample-2') ? 'thermal-heat-capacity' : 'thermal-melting'
 }
 
+/**
+ * The lab topic of a magnetic frame. The magnetic bench models exactly one
+ * apparatus — a single charge in a uniform field — so the domain IS the topic:
+ * a renamed scene still gets the 洛伦兹力 / 圆周运动 probes, the same dispatch
+ * style as the acoustics and fluid benches.
+ */
+export const magneticTopicOf = (context: PhysicsAgentContext): string | undefined =>
+  context.status !== 'failed' && context.domain === 'magnetic' ? 'magnetic-circular' : undefined
+
+/**
+ * The lab topic of an electric frame, read from the apparatus actually drawn:
+ * the two plate boundaries of a parallel-plate rig vs the source sphere(s) of a
+ * point-charge rig. A renamed or question-forked bench still resolves from what
+ * the canvas shows — exactly how the optics topic reads the imaging element.
+ */
+export const electricTopicOf = (context: PhysicsAgentContext): string | undefined => {
+  if (context.status === 'failed' || context.domain !== 'electric') return undefined
+  return context.drawnIds.some(id => id.startsWith('plate-'))
+    ? 'electric-parallel-plate'
+    : 'electric-point-charge'
+}
+
+/**
+ * The lab topic of a composite frame, read from the apparatus regions the
+ * runtime drew — the same dispatch the tutor uses to tell its composite
+ * lessons apart. The mass-spectrometer deflection region is a fact, not a
+ * title; a non-zero gravity (read from the derived row the runtime already
+ * published) selects the three-field world; a velocity_selection_condition
+ * verifier check selects the selector; everything else is the crossed E+B
+ * rig. Order matters — the deflection arc also carries a magnetic field, and
+ * the selector also carries gravity-free E+B, so the most specific fact wins.
+ */
+export const compositeTopicOf = (context: PhysicsAgentContext): string | undefined => {
+  if (context.status === 'failed' || context.domain !== 'composite') return undefined
+  if (context.drawnIds.includes('spectrometer-deflection')) return 'composite-mass-spectrometer'
+  const gravity = context.derived.find(row => row.label === '重力大小')
+  if (gravity !== undefined && !/^0(\.0+)?$/.test(gravity.value)) return 'composite-three-field'
+  if (context.verification.some(check => check.id === 'velocity_selection_condition')) {
+    return 'composite-velocity-selector'
+  }
+  return 'composite-crossed-field'
+}
+
+/**
+ * The lab topic of an induction frame, read from the bench the runtime drew:
+ * the rod object (`…​.bar`) only exists on the cutting rig, everything else is
+ * the flux-changing coil. A renamed or question-forked bench still resolves
+ * from what the canvas shows.
+ */
+export const inductionTopicOf = (context: PhysicsAgentContext): string | undefined => {
+  if (context.status === 'failed' || context.domain !== 'induction') return undefined
+  return context.drawnIds.some(id => id.endsWith('.bar'))
+    ? 'induction-bar-motion'
+    : 'induction-flux-change'
+}
+
 /** The lab topic of any frame; undefined where no domain resolver claims it. */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   circuitTopicOf(context)
@@ -117,6 +173,10 @@ export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   ?? acousticsTopicOf(context)
   ?? fluidTopicOf(context)
   ?? thermalTopicOf(context)
+  ?? electricTopicOf(context)
+  ?? magneticTopicOf(context)
+  ?? compositeTopicOf(context)
+  ?? inductionTopicOf(context)
 
 /** The self-check set for the current frame; undefined keeps the tab hidden. */
 export const experimentSelfChecksOf = (
@@ -147,4 +207,13 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'fluid-buoyancy': 'buoyancy',
   'thermal-melting': 'crystal-melting',
   'thermal-heat-capacity': 'heat-capacity-comparison',
+  'magnetic-circular': 'magnetic-circular',
+  'electric-point-charge': 'point-charge',
+  'electric-parallel-plate': 'parallel-plate',
+  'composite-velocity-selector': 'velocity-selector',
+  'composite-mass-spectrometer': 'mass-spectrometer',
+  'composite-crossed-field': 'composite-eb',
+  'composite-three-field': 'composite-ebg',
+  'induction-bar-motion': 'induction-bar-motion',
+  'induction-flux-change': 'induction-flux-change',
 }

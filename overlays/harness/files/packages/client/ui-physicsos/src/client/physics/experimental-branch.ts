@@ -66,6 +66,13 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   /* Lever facts: hanger mass and arm length decide the moments. */
   'SetHangerMass',
   'SetHangerArm',
+  /* Induction facts: the field, the loop resistance and the rod's motion (or
+     the flux rate) decide the EMF a question stated. */
+  'SetInductionFieldStrength',
+  'SetInductionLoopResistance',
+  'SetInductionBarVelocity',
+  'SetInductionBarLength',
+  'SetInductionFluxRate',
 ])
 
 export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.has(type)

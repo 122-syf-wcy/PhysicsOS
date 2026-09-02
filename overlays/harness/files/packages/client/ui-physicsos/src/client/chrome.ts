@@ -94,6 +94,15 @@ const PHYSICS_TOKENS = `
   --physics-thermal-solid: #dbe6f0;
   --physics-thermal-liquid: #a8c8e4;
 
+  /* ---------- induction ----------
+     Induction ink is indigo — distinct from the violet subject chip of
+     magnetism (its parent subject) so a bench rod never reads as a particle
+     orbit: the field marks soft, the rod and coil solid, the induced current
+     amber-warm like the optics rays it shares "energy flowing" semantics with. */
+  --physics-induction-field: #8b9dc9;
+  --physics-induction-rod: #4338ca;
+  --physics-induction-current: #d97706;
+
   /* ---------- status ---------- */
   --physics-verification-ok: #2f9e5a;
   --physics-verification-warning: #d97706;
@@ -122,6 +131,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-fluid-tint: #dcf1ef;
   --physics-subject-thermal: #dc2626;
   --physics-subject-thermal-tint: #fbe3e3;
+  --physics-subject-induction: #4338ca;
+  --physics-subject-induction-tint: #e8e8fb;
 
   /* ---------- interaction ---------- */
   --physics-highlight: #f5a524;

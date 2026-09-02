@@ -215,7 +215,7 @@ describe('lab self-checks in the drawer', () => {
     expect(attempt.experimentId).toBe('series-circuit')
   })
 
-  it('keeps the 自测 tab off frames whose topic has no bank', () => {
+  it('brings 自测 to the composite velocity-selector run now that the bank covers it', () => {
     const runtime = createCompositeWorkspaceRuntime(createVelocitySelectorScene())
     render(
       <AgentDrawer
@@ -227,7 +227,7 @@ describe('lab self-checks in the drawer', () => {
         recordAttempt={vi.fn()}
       />,
     )
-    expect(screen.queryByRole('tab', { name: '自测' })).toBeNull()
+    expect(screen.getByRole('tab', { name: '自测' })).toBeTruthy()
   })
 
   it('tells the three slider rigs apart by their stamped titles', () => {
