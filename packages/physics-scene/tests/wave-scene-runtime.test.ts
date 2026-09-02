@@ -290,6 +290,14 @@ describe('wave scene commands', () => {
     )
     expect(negative.error.code).toBe('INVALID_WAVE_PATH_DIFFERENCE')
 
+    /* Δ > d = 0.8 m: no point in the plane is that much farther from S₁ than S₂. */
+    const before = runtime.getScene()
+    const unreachable = rejected(
+      execute(runtime, 'SetWavePathDifference', { benchId: 'wave-bench-1', pathDifference: m(1.5) }),
+    )
+    expect(unreachable.error.code).toBe('WAVE_PATH_DIFFERENCE_UNREACHABLE')
+    expect(runtime.getScene()).toEqual(before)
+
     const rope = new SceneRuntime(createTravellingWaveScene())
     const wrong = rejected(
       execute(rope, 'SetWavePathDifference', { benchId: 'wave-bench-1', pathDifference: m(0.2) }),

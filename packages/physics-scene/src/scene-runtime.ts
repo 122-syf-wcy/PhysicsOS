@@ -2329,6 +2329,27 @@ const applyCommand = (
           ),
         }
       }
+      /* No point in the plane is farther from one source than from the other by
+         more than the source separation (triangle inequality), so such a Δ is
+         refused here rather than handed to the engine as an unreachable rig. */
+      const separationSI =
+        lookup.bench.sourceSeparation === undefined
+          ? Number.POSITIVE_INFINITY
+          : canonicalValue(lookup.bench.sourceSeparation)
+      if (pathDifferenceSI > separationSI * (1 + 1e-9)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'WAVE_PATH_DIFFERENCE_UNREACHABLE',
+            'Path difference cannot exceed the source separation: |r₂ − r₁| ≤ d.',
+            {
+              benchId: command.payload.benchId,
+              pathDifference: command.payload.pathDifference,
+              sourceSeparation: lookup.bench.sourceSeparation,
+            },
+          ),
+        }
+      }
       /* The bench stores the two path lengths, not Δ. Keep source 1 where it is
          and move the observation point along path 2 so Δ = r₂ − r₁ exactly. */
       const pathOneSI = canonicalValue(lookup.bench.pathOne)
