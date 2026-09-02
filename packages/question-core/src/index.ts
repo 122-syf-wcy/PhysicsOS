@@ -12,6 +12,7 @@ export type {
   PhysicsModelId,
   CircuitModelId,
   InductionModelId,
+  WaveModelId,
   SemanticEntity,
   SemanticTarget,
   SemanticRelation,
@@ -62,6 +63,9 @@ export {
 } from './deterministic-induction-parser.ts'
 export { buildInductionSceneFromIR } from './induction-scene-builder.ts'
 export type { InductionSceneBuildResult } from './induction-scene-builder.ts'
+export { DeterministicWaveQuestionParser, isWaveQuestionText } from './deterministic-wave-parser.ts'
+export { buildWaveSceneFromIR } from './wave-scene-builder.ts'
+export type { WaveSceneBuildResult } from './wave-scene-builder.ts'
 export { selectEngine } from './engine-selector.ts'
 export { processQuestion } from './question-runtime.ts'
 export { GOLDEN_QUESTIONS, createGoldenQuestionDocument } from './golden-questions.ts'

@@ -39,6 +39,16 @@ export type PhysicsModelId =
   | CompositeModelId
   | CircuitModelId
   | InductionModelId
+  | WaveModelId
+
+/**
+ * Mechanical-wave models, matching the engine's `TRAVELLING_WAVE_MODEL` /
+ * `WAVE_INTERFERENCE_MODEL` / `STANDING_WAVE_MODEL`. A travelling question
+ * relates v, λ and f on one rope; an interference question judges a point by
+ * its path difference to two coherent sources; a standing question reads the
+ * harmonic of a string clamped at both ends.
+ */
+export type WaveModelId = 'travelling_wave' | 'wave_interference' | 'standing_wave'
 
 /**
  * DC steady-state circuit model. The circuit engine solves a single-source
@@ -78,6 +88,10 @@ export type SemanticEntity =
   | 'circuit_loop'
   | 'conducting_bar'
   | 'coil'
+  | 'rope'
+  | 'wave_source'
+  | 'observation_point'
+  | 'string'
 export type SemanticTarget =
   | 'force'
   | 'radius'
@@ -135,6 +149,17 @@ export type SemanticTarget =
   | 'induced_current'
   | 'magnetic_flux'
   | 'induction_direction'
+  /* Wave targets: the v = λf triple and period of a rope wave, the verdict and
+     resultant amplitude at a two-source observation point, the frequency /
+     wavelength / node count of a clamped-string harmonic. */
+  | 'wave_speed'
+  | 'wavelength'
+  | 'wave_frequency'
+  | 'wave_period'
+  | 'path_difference'
+  | 'interference_type'
+  | 'resultant_amplitude'
+  | 'node_count'
 export type SemanticRelation =
   | 'velocity_perpendicular_B'
   | 'velocity_parallel_B'
@@ -172,6 +197,10 @@ export type SemanticRelation =
   | 'flux_changes_in_coil'
   | 'faraday_law'
   | 'lenz_law'
+  /* Wave relations. */
+  | 'wave_speed_relation'
+  | 'path_difference_superposition'
+  | 'standing_wave_resonance'
 export type SemanticAssumption =
   | 'uniform_magnetic_field'
   | 'magnetic_force_only'
@@ -209,6 +238,10 @@ export type SemanticAssumption =
   | 'constant_velocity_bar'
   | 'constant_flux_rate'
   | 'ideal_conducting_loop'
+  /* Wave assumptions. */
+  | 'ideal_medium_no_damping'
+  | 'coherent_in_phase_sources'
+  | 'string_clamped_both_ends'
 export type PlanarDirection = 'right' | 'left' | 'up' | 'down' | 'unknown'
 
 export interface KnownValue {
@@ -344,6 +377,25 @@ export interface PhysicsSemanticIR {
   inductionCoilArea?: number
   inductionCoilAngle?: number
   inductionFluxRate?: number
+
+  /**
+   * Wave rig facts (SI), present only for `domain === 'wave'`. A travelling or
+   * interference question states the frequency plus either the wavelength or
+   * the medium's wave speed; an interference question adds the source
+   * separation and either both path lengths or the path difference; a standing
+   * question states the string length and harmonic plus the wave speed or the
+   * harmonic's frequency. Amplitude is display-grade and defaults when absent.
+   */
+  waveAmplitude?: number
+  waveWavelength?: number
+  waveFrequency?: number
+  waveSpeed?: number
+  waveSourceSeparation?: number
+  wavePathOne?: number
+  wavePathTwo?: number
+  wavePathDifference?: number
+  waveStringLength?: number
+  waveHarmonic?: number
 }
 
 export type ValidationResultStatus =

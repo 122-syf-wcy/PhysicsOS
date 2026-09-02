@@ -9,6 +9,7 @@ import { MechanicsEngine } from '@physicsos/engine-mechanics'
 import { OpticsEngine } from '@physicsos/engine-optics'
 import { CircuitEngine } from '@physicsos/engine-circuit'
 import { InductionEngine } from '@physicsos/engine-induction'
+import { WaveEngine } from '@physicsos/engine-wave'
 const electricEngine = new ElectricEngine()
 const electricRegionEngine = new ElectricRegionEngine()
 const compositeEngine = new CompositeEngine()
@@ -17,6 +18,7 @@ const mechanicsEngine = new MechanicsEngine()
 const opticsEngine = new OpticsEngine()
 const circuitEngine = new CircuitEngine()
 const inductionEngine = new InductionEngine()
+const waveEngine = new WaveEngine()
 export interface EngineSelectionResult {
   engine: PhysicsEngine<PhysicsScene> | null
   support: ModelSupport | null
@@ -69,6 +71,12 @@ export function selectEngine(ir: PhysicsSemanticIR): EngineSelectionResult {
     (ir.domain === 'induction' && ir.model === 'flux_change_emf')
   ) {
     return { engine: inductionEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
+  }
+  if (
+    ir.domain === 'wave' &&
+    (ir.model === 'travelling_wave' || ir.model === 'wave_interference' || ir.model === 'standing_wave')
+  ) {
+    return { engine: waveEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
   }
   return {
     engine: null,

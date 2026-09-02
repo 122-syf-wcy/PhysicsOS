@@ -27,6 +27,7 @@
     "@physicsos/engine-optics": "file:../engine-optics",
     "@physicsos/engine-circuit": "file:../engine-circuit",
     "@physicsos/engine-induction": "file:../engine-induction",
+    "@physicsos/engine-wave": "file:../engine-wave",
     "@physicsos/physics-observation": "file:../physics-observation",
     "@physicsos/physics-verifier": "file:../physics-verifier"
   }

@@ -17,6 +17,7 @@ import {
   createInductionSimulationRequest,
   InductionEngine,
 } from '@physicsos/engine-induction'
+import { createWaveSimulationRequest, WaveEngine } from '@physicsos/engine-wave'
 import {
   observeElectricScene,
   observeMagneticScene,
@@ -25,6 +26,7 @@ import {
   observeCircuitScene,
   observeOpticsScene,
   observeInductionScene,
+  observeWaveScene,
   type CompositeObservationRuntimeState,
   type ElectricObservationRuntimeState,
   type MechanicsObservationRuntimeState,
@@ -32,6 +34,7 @@ import {
   type CircuitObservationRuntimeState,
   type OpticsObservationRuntimeState,
   type InductionObservationRuntimeState,
+  type WaveObservationRuntimeState,
 } from '@physicsos/physics-observation'
 import { createMagneticSimulationRequest } from '@physicsos/engine-magnetic'
 import { createCompositeSimulationRequest } from '@physicsos/engine-composite'
@@ -63,6 +66,7 @@ import {
   DeterministicInductionQuestionParser,
   isInductionQuestionText,
 } from './deterministic-induction-parser.ts'
+import { DeterministicWaveQuestionParser, isWaveQuestionText } from './deterministic-wave-parser.ts'
 import {
   DeterministicCompositeQuestionParser,
   isCompositeQuestionText,
@@ -80,6 +84,7 @@ import {
 import { buildCircuitSceneFromIR } from './circuit-scene-builder.ts'
 import { buildOpticsSceneFromIR } from './optics-scene-builder.ts'
 import { buildInductionSceneFromIR } from './induction-scene-builder.ts'
+import { buildWaveSceneFromIR } from './wave-scene-builder.ts'
 import { selectEngine } from './engine-selector.ts'
 
 export interface QuestionRuntimeResult {
@@ -96,6 +101,7 @@ export interface QuestionRuntimeResult {
     | CircuitObservationRuntimeState
     | OpticsObservationRuntimeState
     | InductionObservationRuntimeState
+    | WaveObservationRuntimeState
     | null
   solution: QuestionSolution | null
   workflowState: QuestionWorkflowState
@@ -143,9 +149,19 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
      there is no overlap. */
   const isInduction =
     !isComposite && !isCircuit && !isOptics && isInductionQuestionText(text)
-  const isElectric = !isComposite && !isCircuit && !isOptics && !isInduction && isElectricQuestionText(text)
-  const isMagnetic = !isComposite && !isInduction && /匀强磁场|磁感应强度|磁场方向|洛伦兹力|\bB\s*=/i.test(text)
-  const isMechanics = !isComposite && /匀速|匀加速|匀变速|平抛|斜抛|抛体|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度/.test(text)
+  /* Wave is tested BEFORE electric / magnetic / mechanics: a rope-wave question
+     talks about 速度 and 位移 like a kinematics one, but `isWaveQuestionText`
+     requires a mechanical-wave keyword (波长/波速/驻波/干涉/波源…) that no
+     particle or projectile question carries, and it rejects optics
+     interference and the acoustics echo rig — so there is no overlap. */
+  const isWave =
+    !isComposite && !isCircuit && !isOptics && !isInduction && isWaveQuestionText(text)
+  const isElectric =
+    !isComposite && !isCircuit && !isOptics && !isInduction && !isWave && isElectricQuestionText(text)
+  const isMagnetic =
+    !isComposite && !isInduction && !isWave && /匀强磁场|磁感应强度|磁场方向|洛伦兹力|\bB\s*=/i.test(text)
+  const isMechanics =
+    !isComposite && !isWave && /匀速|匀加速|匀变速|平抛|斜抛|抛体|斜面|牛顿|加速度|位移|射程|运动.*时间|末速度/.test(text)
 
   const parseResult = isComposite
     ? DeterministicCompositeQuestionParser.parse(document)
@@ -155,13 +171,15 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
         ? DeterministicOpticsQuestionParser.parse(document)
         : isInduction
           ? DeterministicInductionQuestionParser.parse(document)
-          : isElectric
-          ? DeterministicElectricQuestionParser.parse(document)
-          : isMagnetic
-            ? DeterministicMagneticQuestionParser.parse(document)
-            : isMechanics
-              ? DeterministicMechanicsQuestionParser.parse(document)
-              : null
+          : isWave
+            ? DeterministicWaveQuestionParser.parse(document)
+            : isElectric
+              ? DeterministicElectricQuestionParser.parse(document)
+              : isMagnetic
+                ? DeterministicMagneticQuestionParser.parse(document)
+                : isMechanics
+                  ? DeterministicMechanicsQuestionParser.parse(document)
+                  : null
 
   if (!parseResult || !parseResult.ir) {
     return {
@@ -209,6 +227,11 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     scene = buildResult.scene
     engine = new InductionEngine() as unknown as PhysicsEngine<PhysicsScene>
     request = createInductionSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
+  } else if (ir.domain === 'wave') {
+    const buildResult = buildWaveSceneFromIR(ir, { sceneId: 'question-' + docId, questionId: docId })
+    scene = buildResult.scene
+    engine = new WaveEngine() as unknown as PhysicsEngine<PhysicsScene>
+    request = createWaveSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else {
     /* Composite is matched on the MODEL, not the domain: a crossed-field question
        can be tagged electromagnetic/electric/magnetic, and only the composite
@@ -279,7 +302,14 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
         ],
       },
     }
-  } else if (ir.domain !== 'electric' && ir.domain !== 'mechanics' && ir.domain !== 'circuit' && ir.domain !== 'optics' && ir.domain !== 'induction') {
+  } else if (
+    ir.domain !== 'electric' &&
+    ir.domain !== 'mechanics' &&
+    ir.domain !== 'circuit' &&
+    ir.domain !== 'optics' &&
+    ir.domain !== 'induction' &&
+    ir.domain !== 'wave'
+  ) {
     /* The magnetic engine reports VERIFICATION_PENDING with zero checks — the
        external Physics Verifier owns its verification (same call the Lab bridge
        makes). Substituting the verifier's result gives the question the real
@@ -300,6 +330,7 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     | CircuitObservationRuntimeState
     | OpticsObservationRuntimeState
     | InductionObservationRuntimeState
+    | WaveObservationRuntimeState
     | null
   if (isCompositeModel) {
     observations = observeCompositeScene({ scene, simulation })
@@ -311,6 +342,8 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     observations = observeOpticsScene({ scene, simulation })
   } else if (ir.domain === 'induction') {
     observations = observeInductionScene({ scene, simulation })
+  } else if (ir.domain === 'wave') {
+    observations = observeWaveScene({ scene, simulation })
   } else if (ir.domain === 'electric') {
     observations = observeElectricScene({ scene, simulation })
   } else {
@@ -1084,7 +1117,135 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR): Que
       { id: 'induction-ohm', expression: 'I = E / R' },
       { id: 'induction-lenz', expression: '楞次定律：感应电流的磁场阻碍原磁通量的变化' },
     )
+  } else if (ir.domain === 'wave') {
+    appendWaveSolution(ir, dq, steps, results, derivationFormulas)
   }
 
   return { steps, results, derivationFormulas }
+}
+
+/**
+ * Wave solution narrative. Every number is the engine's derived value; the
+ * formulas are shown as the reasoning a student writes, never evaluated here.
+ * Lengths that a student reads in centimetres (amplitudes) are converted for
+ * display only.
+ */
+function appendWaveSolution(
+  ir: PhysicsSemanticIR,
+  dq: readonly DerivedQuantity[],
+  steps: QuestionSolutionStep[],
+  results: QuestionSolution['results'],
+  derivationFormulas: FormulaRef[],
+): void {
+  const requested = (target: PhysicsSemanticIR['targets'][number]): boolean =>
+    ir.targets.includes(target)
+  const scalar = (key: string): number | undefined => {
+    const entry = dq.find((candidate) => candidate.key === key)
+    if (entry === undefined || 'vector' in entry.value) return undefined
+    return (entry.value as Quantity).value
+  }
+  const push = (
+    title: string,
+    description: string,
+    result?: { symbol: string; value: string; unit: string },
+  ): void => {
+    steps.push({
+      index: steps.length + 1,
+      title,
+      description,
+      ...(result === undefined
+        ? {}
+        : { resultSymbol: result.symbol, resultValue: result.value, resultUnit: result.unit }),
+    })
+  }
+
+  const speed = scalar('wave_speed')
+  const wavelength = scalar('wavelength')
+  const frequency = scalar('frequency')
+  const period = scalar('period')
+
+  if (ir.model === 'travelling_wave') {
+    push('建立绳波模型', '绳上的简谐横波：介质决定波速 v，波源决定频率 f，波长 λ = v/f 由两者共同决定；质点只在平衡位置附近振动。')
+  } else if (ir.model === 'wave_interference') {
+    push('建立双源干涉模型', '两个同相相干波源，观察点 P 到两源的路程差 Δ = |r₂ − r₁| 决定两列波到达时的相位差 2πΔ/λ。')
+  } else {
+    push('建立弦驻波模型', '两端固定的弦只能容纳整数个半波长：L = n·λ/2，谐波频率 f_n = n·v/(2L)。')
+  }
+  push('读取验证后的引擎结果', '波速、波长、频率与叠加判定来自 Wave SimulationResult（闭式解）。')
+
+  if (requested('wave_speed') && speed !== undefined) {
+    results['wave_speed'] = { symbol: 'v', label: '波速', value: fmt(speed), unit: 'm/s' }
+    push('v = λf', '波速等于波长与频率的乘积。', { symbol: 'v', value: fmt(speed), unit: 'm/s' })
+  }
+  if (requested('wavelength') && wavelength !== undefined) {
+    results['wavelength'] = { symbol: 'λ', label: '波长', value: fmt(wavelength), unit: 'm' }
+    push(
+      ir.model === 'standing_wave' ? 'λ = 2L/n' : 'λ = v/f',
+      ir.model === 'standing_wave' ? '弦长装下 n 个半波长。' : '同一介质中波速不变，波长随频率反比变化。',
+      { symbol: 'λ', value: fmt(wavelength), unit: 'm' },
+    )
+  }
+  if (requested('wave_frequency') && frequency !== undefined) {
+    results['wave_frequency'] = { symbol: 'f', label: '频率', value: fmt(frequency), unit: 'Hz' }
+    push(
+      ir.model === 'standing_wave' ? 'f_n = n·v/(2L)' : 'f = v/λ',
+      ir.model === 'standing_wave' ? '第 n 次谐波的频率是基频的 n 倍。' : '频率由波源决定，等于波速除以波长。',
+      { symbol: 'f', value: fmt(frequency), unit: 'Hz' },
+    )
+  }
+  if (requested('wave_period') && period !== undefined) {
+    results['wave_period'] = { symbol: 'T', label: '周期', value: fmt(period), unit: 's' }
+    push('T = 1/f', '周期与频率互为倒数；一个周期内波形前移一个波长。', { symbol: 'T', value: fmt(period), unit: 's' })
+  }
+
+  if (ir.model === 'wave_interference') {
+    const pathDifference = scalar('path_difference')
+    const ratio = scalar('path_difference_ratio')
+    const resultant = scalar('resultant_amplitude')
+    const sign = scalar('interference_type')
+    if (requested('path_difference') && pathDifference !== undefined) {
+      results['path_difference'] = { symbol: 'Δ', label: '路程差', value: fmt(pathDifference), unit: 'm' }
+      push('Δ = |r₂ − r₁|', '路程差是两列波到达 P 点多走的路。', { symbol: 'Δ', value: fmt(pathDifference), unit: 'm' })
+    }
+    if (requested('interference_type') && sign !== undefined && ratio !== undefined) {
+      const verdict = sign > 0 ? '振动加强' : sign < 0 ? '振动减弱' : '部分叠加'
+      const reason =
+        sign > 0
+          ? `Δ/λ = ${fmt(ratio)} 为整数，两列波同相到达，波峰遇波峰。`
+          : sign < 0
+            ? `Δ/λ = ${fmt(ratio)} 为半整数，两列波反相到达，波峰遇波谷。`
+            : `Δ/λ = ${fmt(ratio)} 既非整数也非半整数，两列波部分叠加。`
+      results['interference_type'] = { symbol: '', label: 'P 点振动', value: verdict, unit: '' }
+      push('Δ = nλ 加强，Δ = (n + ½)λ 减弱', reason)
+    }
+    if (requested('resultant_amplitude') && resultant !== undefined) {
+      results['resultant_amplitude'] = { symbol: 'A_P', label: '合振幅', value: fmt(resultant * 100), unit: 'cm' }
+      push('A_P = |2A·cos(πΔ/λ)|', '两列等幅波叠加后的振幅。', { symbol: 'A_P', value: fmt(resultant * 100), unit: 'cm' })
+    }
+    derivationFormulas.push(
+      { id: 'wave-speed', expression: 'v = λf' },
+      { id: 'wave-path-difference', expression: 'Δ = |r₂ − r₁|' },
+      { id: 'wave-superposition', expression: 'A_P = |2A·cos(πΔ/λ)|' },
+    )
+    return
+  }
+
+  if (ir.model === 'standing_wave') {
+    const nodeCount = scalar('node_count')
+    if (requested('node_count') && nodeCount !== undefined) {
+      results['node_count'] = { symbol: '', label: '波节个数', value: String(nodeCount), unit: '个' }
+      push('波节数 = n + 1', '两端固定的弦上，第 n 次谐波有 n + 1 个波节（含两端）和 n 个波腹。', { symbol: '', value: String(nodeCount), unit: '个' })
+    }
+    derivationFormulas.push(
+      { id: 'wave-standing-length', expression: 'L = n·λ/2' },
+      { id: 'wave-standing-frequency', expression: 'f_n = n·v/(2L)' },
+      { id: 'wave-speed', expression: 'v = λf' },
+    )
+    return
+  }
+
+  derivationFormulas.push(
+    { id: 'wave-speed', expression: 'v = λf' },
+    { id: 'wave-period', expression: 'T = 1/f' },
+  )
 }

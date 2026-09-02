@@ -529,6 +529,9 @@ importers:
       '@physicsos/engine-optics':
         specifier: file:../engine-optics
         version: link:../engine-optics
+      '@physicsos/engine-wave':
+        specifier: file:../engine-wave
+        version: link:../engine-wave
       '@physicsos/physics-core':
         specifier: file:../physics-core
         version: link:../physics-core

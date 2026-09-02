@@ -227,6 +227,14 @@ export const QUESTION_KNOWLEDGE: Readonly<Record<string, readonly string[]>> = {
   'ind-04-flux-change-lenz': ['em-faraday-law', 'em-lenz-law'],
   'ind-05-bar-zero-velocity': ['em-motional-emf', 'em-induction'],
   'ind-06-missing-resistance': ['em-induction'],
+
+  /* ------------------------------------------------------------------- wave -- */
+  'wave-01-speed-from-wavelength-frequency': ['wv-wave-speed', 'wv-particle-motion'],
+  'wave-02-wavelength-from-speed': ['wv-wave-speed'],
+  'wave-03-interference-constructive': ['wv-interference', 'wv-wave-speed'],
+  'wave-04-interference-destructive': ['wv-interference'],
+  'wave-05-standing-third-harmonic': ['wv-standing-wave', 'wv-wave-speed'],
+  'wave-06-missing-frequency': ['wv-wave-speed'],
 }
 
 /** Knowledge nodes for a question id, in table order; unknown ids yield []. */

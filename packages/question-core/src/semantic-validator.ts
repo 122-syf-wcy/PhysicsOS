@@ -31,6 +31,9 @@ export function validateSemanticIR(ir: PhysicsSemanticIR): SemanticValidationRes
   if (ir.domain === 'induction') {
     return validateInductionIR(ir)
   }
+  if (ir.domain === 'wave') {
+    return validateWaveIR(ir)
+  }
   return {
     status: 'UNSUPPORTED_MODEL',
     issues: [{
@@ -648,5 +651,115 @@ function validateInductionIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     return { status: 'INVALID_SEMANTICS', issues, ambiguities }
   }
   /* The induced direction is a readout with a sign convention, not a gate. */
+  return { status: 'VALID', issues, ambiguities }
+}
+
+/**
+ * Wave IR validation.
+ *
+ * A rope or ripple-tank question needs the frequency (or the period) and one
+ * of wavelength / wave speed — v = λf has three quantities and the question
+ * must fix two. An interference question additionally needs the path
+ * difference, stated directly or as the two path lengths, and a stated source
+ * separation must be able to reach it (|r₂ − r₁| ≤ d). A standing question
+ * needs the string length, the harmonic number and the medium (wave speed or
+ * the harmonic's frequency). Amplitude is display-grade and never gates. There
+ * is no AMBIGUOUS branch: the verdict at P is a readout the engine classifies.
+ */
+function validateWaveIR(ir: PhysicsSemanticIR): SemanticValidationResult {
+  const issues: QuestionParseIssue[] = []
+  const ambiguities: QuestionAmbiguity[] = []
+
+  const positiveKnown = (key: string, code: string, label: string): number | undefined => {
+    const entry = ir.knowns.find((candidate) => candidate.key === key)
+    if (entry === undefined) return undefined
+    if (!Number.isFinite(entry.value) || entry.value <= 0) {
+      issues.push({ code, message: `${label}必须为正有限值。`, severity: 'error' })
+    }
+    return entry.value
+  }
+
+  const amplitude = ir.knowns.find((entry) => entry.key === 'wave_amplitude')
+  if (amplitude !== undefined && (!Number.isFinite(amplitude.value) || amplitude.value <= 0)) {
+    issues.push({ code: 'INVALID_AMPLITUDE', message: '振幅必须为正有限值。', severity: 'error' })
+  }
+
+  const frequency = positiveKnown('wave_frequency', 'INVALID_FREQUENCY', '频率')
+  const period = positiveKnown('wave_period', 'INVALID_PERIOD', '周期')
+  const wavelength = positiveKnown('wavelength', 'INVALID_WAVELENGTH', '波长')
+  const waveSpeed = positiveKnown('wave_speed', 'INVALID_WAVE_SPEED', '波速')
+
+  if (ir.model === 'travelling_wave' || ir.model === 'wave_interference') {
+    if (frequency === undefined && period === undefined) {
+      issues.push({ code: 'MISSING_FREQUENCY', message: '缺少频率或周期。', severity: 'error' })
+    }
+    if (wavelength === undefined && waveSpeed === undefined) {
+      issues.push({
+        code: 'MISSING_WAVELENGTH_OR_SPEED',
+        message: '缺少波长或波速（v = λf 需要其中一个）。',
+        severity: 'error',
+      })
+    }
+  }
+
+  if (ir.model === 'wave_interference') {
+    const pathOne = positiveKnown('path_one', 'INVALID_PATH', '到波源的距离')
+    const pathTwo = positiveKnown('path_two', 'INVALID_PATH', '到波源的距离')
+    const stated = ir.knowns.find((entry) => entry.key === 'path_difference')
+    if (stated !== undefined && (!Number.isFinite(stated.value) || stated.value < 0)) {
+      issues.push({ code: 'INVALID_PATH_DIFFERENCE', message: '路程差必须为非负有限值。', severity: 'error' })
+    }
+    const pathDifference =
+      stated?.value ??
+      (pathOne !== undefined && pathTwo !== undefined ? Math.abs(pathTwo - pathOne) : undefined)
+    if (pathDifference === undefined) {
+      issues.push({
+        code: 'MISSING_PATH_DIFFERENCE',
+        message: '缺少到两波源的距离或路程差。',
+        severity: 'error',
+      })
+    }
+    const separation = positiveKnown('source_separation', 'INVALID_SOURCE_SEPARATION', '波源间距')
+    if (
+      separation !== undefined &&
+      pathDifference !== undefined &&
+      Number.isFinite(separation) &&
+      pathDifference > separation * (1 + 1e-9)
+    ) {
+      issues.push({
+        code: 'UNREACHABLE_PATH_DIFFERENCE',
+        message: '路程差不能超过两波源的间距（|r₂ − r₁| ≤ d）。',
+        severity: 'error',
+      })
+    }
+  } else if (ir.model === 'standing_wave') {
+    const stringLength = positiveKnown('string_length', 'INVALID_STRING_LENGTH', '弦长')
+    if (stringLength === undefined) {
+      issues.push({ code: 'MISSING_STRING_LENGTH', message: '缺少弦长。', severity: 'error' })
+    }
+    const harmonic = ir.knowns.find((entry) => entry.key === 'harmonic')
+    if (harmonic === undefined) {
+      issues.push({ code: 'MISSING_HARMONIC', message: '缺少谐波次数。', severity: 'error' })
+    } else if (!Number.isInteger(harmonic.value) || harmonic.value < 1) {
+      issues.push({ code: 'INVALID_HARMONIC', message: '谐波次数必须为正整数。', severity: 'error' })
+    }
+    if (waveSpeed === undefined && frequency === undefined) {
+      issues.push({
+        code: 'MISSING_WAVE_SPEED',
+        message: '缺少弦上波速或该谐波的频率。',
+        severity: 'error',
+      })
+    }
+  } else if (ir.model !== 'travelling_wave') {
+    return { status: 'UNSUPPORTED_MODEL', issues, ambiguities }
+  }
+
+  if (ir.targets.length === 0) {
+    issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
+  }
+
+  if (issues.length > 0) {
+    return { status: 'INVALID_SEMANTICS', issues, ambiguities }
+  }
   return { status: 'VALID', issues, ambiguities }
 }

@@ -44,6 +44,12 @@ import {
   SPECTROMETER_SPEED,
   SUPERPOSITION,
   THREE_FIELD_GRAVITY,
+  WAVE_DESTRUCTIVE_HALF,
+  WAVE_HARMONIC_FREQUENCY,
+  WAVE_NODE_MOTION,
+  WAVE_PARTICLE_TRANSPORT,
+  WAVE_PATH_DIFFERENCE,
+  WAVE_SPEED_FREQUENCY,
 } from './self-checks.ts'
 import type { SelfCheckItem } from './self-checks.ts'
 
@@ -998,200 +1004,6 @@ const EMF_OPEN_CIRCUIT: SelfCheckItem = {
   ],
 }
 
-/* ------------------------------------------------------------------- wave -- */
-
-const WAVE_SPEED_FREQUENCY: SelfCheckItem = {
-  id: 'wave-speed-frequency',
-  prompt: '把绳子抖得更快（频率加倍）、绳子不换，波速和波长各怎样变？',
-  takeaway:
-    '波速由介质决定，与抖动频率无关。v = λf 里 v 固定，频率加倍波长就减半 —— 抖得快，波形变密，但波跑得一样快。',
-  options: [
-    { id: 'speed-same-wavelength-half', label: '波速不变，波长减半', correct: true },
-    {
-      id: 'speed-doubles',
-      label: '波速加倍，波长不变',
-      mistake: {
-        type: 'concept',
-        explanation:
-          '波速是介质的性质（绳子的张力和线密度决定），抖动的快慢改变不了它。v = λf 中 v 固定，f 加倍只能让 λ 减半。',
-        review: ['波速由介质决定', 'v = λf'],
-        evidenceCheckId: 'wave_speed_relation',
-      },
-    },
-    {
-      id: 'both-double',
-      label: '波速和波长都加倍',
-      mistake: {
-        type: 'modeling',
-        explanation:
-          '若 v 与 λ 同时加倍，v = λf 会要求 f 减半，与"频率加倍"矛盾。同一根绳上 v 固定，只能是 λ 随 f 反比变化。',
-        review: ['v = λf：三个量只能独立选两个', '周期 T = 1/f'],
-        evidenceCheckId: 'period_frequency_reciprocal',
-      },
-    },
-  ],
-}
-
-const WAVE_PARTICLE_TRANSPORT: SelfCheckItem = {
-  id: 'wave-particle-transport',
-  prompt: '横波沿绳向右传播，绳上被标记的那个质点怎样运动？',
-  takeaway:
-    '质点只在自己的平衡位置附近上下振动，不随波向右迁移。向右传播的是振动形式和能量，不是绳子本身。',
-  options: [
-    { id: 'oscillates-in-place', label: '在原位置附近上下振动，不向右移动', correct: true },
-    {
-      id: 'travels-with-wave',
-      label: '跟着波一起向右运动',
-      mistake: {
-        type: 'concept',
-        explanation:
-          '波传播的是振动状态，不是介质。标记点的 x 坐标始终不变，只有 y 随时间做简谐振动 —— 画布上它的横坐标一格都没动。',
-        review: ['波传播的是振动形式与能量', '介质质点做简谐振动'],
-        evidenceCheckId: 'particle_no_net_transport',
-      },
-    },
-    {
-      id: 'round-trip-wavelength',
-      label: '先向右走一个波长再回到原位',
-      mistake: {
-        type: 'modeling',
-        explanation:
-          '质点从不离开自己的 x 位置。"一个周期后回到原位"说的是它完成一次上下的全振动，而不是在水平方向走了一个来回。',
-        review: ['一个周期 T = 1/f 内质点完成一次全振动', '波形在一个周期内平移一个波长'],
-        evidenceCheckId: 'profile_translation',
-      },
-    },
-  ],
-}
-
-const WAVE_PATH_DIFFERENCE: SelfCheckItem = {
-  id: 'wave-path-difference',
-  prompt: '两个同相的相干波源到 P 点的路程差 Δ = 2λ，P 点的振动情况是？',
-  takeaway:
-    '路程差是波长的整数倍时，两列波同相到达：波峰遇波峰、波谷遇波谷，振动加强，振幅为 2A。',
-  options: [
-    { id: 'constructive', label: '振动加强，振幅 2A', correct: true },
-    {
-      id: 'destructive',
-      label: '振动减弱，振幅为零',
-      mistake: {
-        type: 'concept',
-        explanation:
-          '减弱的条件是 Δ = (n + ½)λ，两列波反相抵消。Δ = 2λ 正好相差两个整周期，两列波同相叠加，是加强点。',
-        review: ['Δ = nλ 加强', 'Δ = (n + ½)λ 减弱'],
-        evidenceCheckId: 'path_difference_rule',
-      },
-    },
-    {
-      id: 'beats',
-      label: '振幅在 0 与 2A 之间来回变化',
-      mistake: {
-        type: 'modeling',
-        explanation:
-          '加强点的振幅稳定为 2A：P 点位移随时间在 −2A 与 +2A 之间振动，但振幅本身不变。相干波的加强、减弱分布是稳定的。',
-        review: ['干涉图样稳定不变', '合振幅 A_P = |2A·cos(πΔ/λ)|'],
-        evidenceCheckId: 'superposition_bounds',
-      },
-    },
-  ],
-}
-
-const WAVE_DESTRUCTIVE_HALF: SelfCheckItem = {
-  id: 'wave-destructive-half',
-  prompt: '把观察点移到路程差 Δ = λ/2 的位置，两列波在这里怎样叠加？',
-  takeaway:
-    '路程差半个波长时两列波反相到达，一列到波峰另一列正到波谷，位移始终相互抵消，振幅为零 —— 这就是减弱点。',
-  options: [
-    { id: 'cancel', label: '始终相互抵消，振幅为零', correct: true },
-    {
-      id: 'crest-on-crest',
-      label: '波峰叠波峰，振幅 2A',
-      mistake: {
-        type: 'concept',
-        explanation:
-          '半个波长的路程差意味着一列波到达波峰时另一列正好到达波谷，位移大小相等、方向相反，叠加后为零。',
-        review: ['Δ = (n + ½)λ 减弱', '相位差 = 2πΔ/λ'],
-        evidenceCheckId: 'path_difference_rule',
-      },
-    },
-    {
-      id: 'waves-vanish',
-      label: '两列波相遇后就都消失了',
-      mistake: {
-        type: 'modeling',
-        explanation:
-          '两列波只是在这一点位移相消，各自仍按原方向继续传播；能量没有消失，而是重新分布到了加强点上。',
-        review: ['波的独立传播原理', '干涉是能量的重新分布'],
-        evidenceCheckId: 'superposition_bounds',
-      },
-    },
-  ],
-}
-
-const WAVE_NODE_MOTION: SelfCheckItem = {
-  id: 'wave-node-motion',
-  prompt: '两端固定的弦形成驻波，波节处的质点怎样运动？',
-  takeaway:
-    '波节是两列反向传播的波始终反相叠加的位置，位移恒为零，质点静止不动；振幅最大的位置是波腹。',
-  options: [
-    { id: 'still', label: '始终静止，位移为零', correct: true },
-    {
-      id: 'max-amplitude',
-      label: '振幅最大，上下振动最猛',
-      mistake: {
-        type: 'concept',
-        explanation:
-          '振幅最大的位置叫波腹，不是波节。波节是两列波始终反相抵消的地方，位移恒为零 —— 画布上它一动不动。',
-        review: ['波节：位移恒为零', '波腹：振幅最大'],
-        evidenceCheckId: 'node_positions_fixed',
-      },
-    },
-    {
-      id: 'slides-along',
-      label: '沿弦来回移动',
-      mistake: {
-        type: 'modeling',
-        explanation:
-          '驻波的"驻"就是波形不传播：波节固定在 x = m·L/n，不随时间移动；两端固定的弦，两个端点本身就是波节。',
-        review: ['驻波波形不传播', '固定端是波节'],
-        evidenceCheckId: 'boundary_nodes',
-      },
-    },
-  ],
-}
-
-const WAVE_HARMONIC_FREQUENCY: SelfCheckItem = {
-  id: 'wave-harmonic-frequency',
-  prompt: '弦长 L、波速 v 不变，从二次谐波切到三次谐波，频率怎样变？',
-  takeaway:
-    'f_n = n·v/(2L)，谐波频率与 n 成正比：n 从 2 变 3，频率变为原来的 1.5 倍，弦上多出一个波节。',
-  options: [
-    { id: 'times-1-5', label: '变为原来的 1.5 倍（f_n ∝ n）', correct: true },
-    {
-      id: 'unchanged',
-      label: '不变，频率只由弦决定',
-      mistake: {
-        type: 'concept',
-        explanation:
-          '弦决定的是波速 v 和基频 f₁ = v/(2L)；第 n 次谐波的频率 f_n = n·f₁ 随 n 增大。同一根弦可以在多个频率上共振。',
-        review: ['f_n = n·v/(2L) = n·f₁', '基频与谐波'],
-        evidenceCheckId: 'frequency_harmonic',
-      },
-    },
-    {
-      id: 'two-thirds',
-      label: '变为原来的 2/3（波长变长了）',
-      mistake: {
-        type: 'modeling',
-        explanation:
-          'n 变大时 λ = 2L/n 变短而不是变长；v 不变，λ 变短则 f = v/λ 变大。三次谐波的波长是二次谐波的 2/3，频率是 1.5 倍。',
-        review: ['L = n·λ/2', 'v = λf'],
-        evidenceCheckId: 'harmonic_relation',
-      },
-    },
-  ],
-}
-
 /* ------------------------------------------------------------------ table -- */
 
 /**
@@ -1355,9 +1167,9 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     knowledge: ['em-faraday-law', 'em-lenz-law'],
     items: [INDUCTION_FARADAY, INDUCTION_LENZ],
   },
-  /* The wave benches are lab-first like optics and acoustics: the web layer
-     resolves the topic from the rig the runtime drew (a marked particle → 绳波,
-     two sources → 干涉, nodes → 驻波). */
+  /* The wave benches resolve their topic from the rig the runtime drew (a marked
+     particle → 绳波, two sources → 干涉, nodes → 驻波). The probes are shared with
+     the wave golden questions (see self-checks.ts) — one source of truth. */
   'wave-travelling': {
     id: 'wave-travelling',
     topic: '绳上的简谐横波',

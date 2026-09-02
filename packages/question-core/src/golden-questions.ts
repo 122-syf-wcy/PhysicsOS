@@ -5,7 +5,7 @@ export interface GoldenQuestionDefinition {
   id: string
   title: string
   text: string
-  expectedDomain?: 'magnetic' | 'mechanics' | 'electric' | 'composite' | 'circuit' | 'optics' | 'induction'
+  expectedDomain?: 'magnetic' | 'mechanics' | 'electric' | 'composite' | 'circuit' | 'optics' | 'induction' | 'wave'
   expectedChargeSign: 'positive' | 'negative' | 'unknown'
   expectedFieldDirection: 'into_page' | 'out_of_page' | 'unknown'
   expectedValidation: 'VALID' | 'AMBIGUOUS' | 'INVALID_SEMANTICS' | 'UNSUPPORTED_MODEL'
@@ -714,11 +714,71 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedFieldDirection: 'unknown',
     expectedValidation: 'INVALID_SEMANTICS',
   },
+
+  /* -------------------------------------------------------------------- wave -- *
+   * Mechanical-wave questions (机械波). A rope wave fixes two of v, λ, f and asks
+   * for the rest; an interference question judges a point by its path
+   * difference; a standing-wave question reads a clamped string's harmonic.
+   * Values follow the engine's textbook templates so the answers are exact. */
+  {
+    id: 'wave-01-speed-from-wavelength-frequency',
+    title: '由波长和频率求波速与周期',
+    text: '一列在绳上传播的简谐横波，振幅 A = 5 cm，波长 λ = 0.4 m，波源频率 f = 5 Hz。求：1. 波速 2. 周期',
+    expectedDomain: 'wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-02-wavelength-from-speed',
+    title: '由波速和频率求波长',
+    text: '机械波在绳上以 v = 2 m/s 的速度沿绳传播，波源以 10 Hz 的频率振动，振幅 4 cm。求：绳上波的波长',
+    expectedDomain: 'wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-03-interference-constructive',
+    title: '双源干涉：路程差为整数倍波长',
+    text: '水面上两个相干波源 S1、S2 同相振动，振幅均为 3 cm，波长 λ = 0.2 m，频率 f = 10 Hz，两波源间距 d = 0.8 m。P 点到 S1 的距离为 1.0 m，到 S2 的距离为 1.4 m。判断 P 点振动是加强还是减弱，并求 P 点的合振幅',
+    expectedDomain: 'wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-04-interference-destructive',
+    title: '双源干涉：路程差为半波长奇数倍',
+    text: '两个相干波源发出的水波波长 λ = 0.2 m，频率 f = 10 Hz，振幅均为 3 cm，两波源间距 d = 0.8 m。某点到两波源的路程差 Δ = 0.3 m。判断该点振动是加强还是减弱，并求合振幅',
+    expectedDomain: 'wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-05-standing-third-harmonic',
+    title: '弦驻波的三次谐波',
+    text: '一根长 L = 1.0 m 的弦两端固定，弦上波速 v = 40 m/s，弦振动时形成三次谐波的驻波，振幅 4 cm。求：1. 波长 2. 振动频率 3. 弦上波节的个数',
+    expectedDomain: 'wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-06-missing-frequency',
+    title: '缺少频率（无效）',
+    text: '一列绳上的横波，波长 λ = 0.4 m，振幅 5 cm。求：波速',
+    expectedDomain: 'wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'INVALID_SEMANTICS',
+  },
 ]
 
 export function createGoldenQuestionDocument(def: GoldenQuestionDefinition, now?: string): QuestionDocument {
   const ts = now ?? new Date().toISOString()
-  const domain = def.expectedDomain ?? (def.id.startsWith('mech-') ? 'mechanics' : def.id.startsWith('circ-') ? 'circuit' : def.id.startsWith('opt-') ? 'optics' : def.id.startsWith('ind-') ? 'induction' : 'magnetic')
+  const domain = def.expectedDomain ?? (def.id.startsWith('mech-') ? 'mechanics' : def.id.startsWith('circ-') ? 'circuit' : def.id.startsWith('opt-') ? 'optics' : def.id.startsWith('ind-') ? 'induction' : def.id.startsWith('wave-') ? 'wave' : 'magnetic')
   return {
     id: asQuestionId('golden-' + def.id),
     content: {
@@ -729,7 +789,16 @@ export function createGoldenQuestionDocument(def: GoldenQuestionDefinition, now?
     },
     metadata: {
       title: def.title,
-      tags: [domain, domain === 'mechanics' ? 'motion' : domain === 'circuit' ? 'dc-circuit' : 'charged-particle'],
+      tags: [
+        domain,
+        domain === 'mechanics'
+          ? 'motion'
+          : domain === 'circuit'
+            ? 'dc-circuit'
+            : domain === 'wave'
+              ? 'mechanical-wave'
+              : 'charged-particle',
+      ],
       difficulty: 'standard',
     },
     createdAt: ts,
