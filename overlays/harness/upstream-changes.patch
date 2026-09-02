@@ -1,3 +1,15 @@
+diff --git a/apps/cli/package.json b/apps/cli/package.json
+index fdd4740b3c..969ccf07df 100644
+--- a/apps/cli/package.json
++++ b/apps/cli/package.json
+@@ -63,6 +63,7 @@
+     "@deepseek-ai/dsh-tool-fs": "workspace:^",
+     "@deepseek-ai/dsh-tool-fs-search": "workspace:^",
+     "@deepseek-ai/dsh-tool-goal": "workspace:^",
++    "@deepseek-ai/dsh-tool-physicsos": "workspace:^",
+     "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
+     "@deepseek-ai/dsh-tool-ralph": "workspace:^",
+     "@deepseek-ai/dsh-schedule": "workspace:^",
 diff --git a/apps/web/tests/snapshots/cold-blank-session/sidebar.expected.md b/apps/web/tests/snapshots/cold-blank-session/sidebar.expected.md
 index d4d370892e..5035822d32 100644
 --- a/apps/web/tests/snapshots/cold-blank-session/sidebar.expected.md
@@ -1605,7 +1617,7 @@ index fbe42fc279..344e146033 100644
        fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
        expect(expandSidebar).toHaveBeenCalledTimes(1)
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..c5fc9520fd 100644
+index 1490a0f9f7..7f9dbbc053 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -42,6 +42,9 @@ importers:
@@ -1618,7 +1630,17 @@ index 1490a0f9f7..c5fc9520fd 100644
        '@types/spdx-expression-parse':
          specifier: ^4.0.0
          version: 4.0.0
-@@ -1324,6 +1327,9 @@ importers:
+@@ -267,6 +270,9 @@ importers:
+       '@deepseek-ai/dsh-tool-jobs':
+         specifier: workspace:^
+         version: link:../../packages/jobs/tool-jobs
++      '@deepseek-ai/dsh-tool-physicsos':
++        specifier: workspace:^
++        version: link:../../packages/physicsos/tool-physicsos
+       '@deepseek-ai/dsh-tool-pwsh':
+         specifier: workspace:^
+         version: link:../../packages/shell/tool-pwsh
+@@ -1324,6 +1330,9 @@ importers:
        '@deepseek-ai/dsh-client-ui-permission-presets':
          specifier: workspace:^
          version: link:../../client/ui-permission-presets
@@ -1628,7 +1650,7 @@ index 1490a0f9f7..c5fc9520fd 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:^
          version: link:../../client/ui-plan
-@@ -2283,6 +2289,112 @@ importers:
+@@ -2283,6 +2292,112 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
@@ -1741,6 +1763,62 @@ index 1490a0f9f7..c5fc9520fd 100644
    packages/client/ui-plan:
      devDependencies:
        '@deepseek-ai/cordis':
+@@ -5507,6 +5622,55 @@ importers:
+         specifier: ^2026.7.4
+         version: 2026.7.10(zod@4.4.3)
+ 
++  packages/physicsos/tool-physicsos:
++    dependencies:
++      '@deepseek-ai/schemastery':
++        specifier: link:../../../vendor/schemastery
++        version: link:../../../vendor/schemastery
++      '@physicsos/agent-tools':
++        specifier: link:../../../../../packages/agent-tools
++        version: link:../../../../../packages/agent-tools
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++      '@deepseek-ai/cordis-plugin-include':
++        specifier: workspace:^
++        version: link:../../../vendor/include
++      '@deepseek-ai/cordis-plugin-loader':
++        specifier: workspace:^
++        version: link:../../../vendor/loader
++      '@deepseek-ai/dsh-agent':
++        specifier: workspace:^
++        version: link:../../core/agent
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
++      '@deepseek-ai/dsh-llm':
++        specifier: workspace:^
++        version: link:../../llm/llm
++      '@deepseek-ai/dsh-persona':
++        specifier: workspace:^
++        version: link:../../preset/persona
++      '@deepseek-ai/dsh-scope':
++        specifier: workspace:^
++        version: link:../../core/scope
++      '@deepseek-ai/dsh-session':
++        specifier: workspace:^
++        version: link:../../core/session
++      '@deepseek-ai/dsh-system-prompt':
++        specifier: workspace:^
++        version: link:../../core/system-prompt
++      '@deepseek-ai/dsh-tools':
++        specifier: workspace:^
++        version: link:../../core/tools
++      '@types/js-yaml':
++        specifier: ^4.0.9
++        version: 4.0.9
++      js-yaml:
++        specifier: ^4.2.0
++        version: 4.2.0
++
+   packages/plan/plan-mode:
+     dependencies:
+       zod:
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
 index d38b4743c5..4f2e3e61e9 100644
 --- a/scripts/verify-package-readme-model-experience.ts
@@ -1765,3 +1843,15 @@ index e599f76f1b..5bb16f47c1 100644
      { "path": "./packages/client/ui-conversation" },
      { "path": "./packages/client/ui-tool" },
      { "path": "./packages/client/ui-deliverables" },
+diff --git a/tsconfig.host.json b/tsconfig.host.json
+index 459036247a..742561d135 100644
+--- a/tsconfig.host.json
++++ b/tsconfig.host.json
+@@ -270,6 +270,7 @@
+     { "path": "./packages/workflow/tool-workflow" },
+     { "path": "./packages/workflow/tool-ralph" },
+     { "path": "./packages/todo/tool-todo" },
++    { "path": "./packages/physicsos/tool-physicsos" },
+     { "path": "./packages/plan/plan-mode" },
+     { "path": "./packages/preset/agent-presets" },
+     { "path": "./packages/preset/persona" },

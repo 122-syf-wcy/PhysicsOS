@@ -17,6 +17,11 @@ const OVERLAY_PATHS = [
   'packages/client/ui-physicsos',
   'packages/client/ui-settings-models/src/client/protocol.ts',
   'apps/web/public/physicsos',
+  /* Host-plane physics tool plugin (glue over @physicsos/agent-tools) and the
+     PhysicsOS agent preset that mounts it; both are Harness workspace members
+     the upstream tree never had, so they are overlay files, not patch hunks. */
+  'packages/physicsos/tool-physicsos',
+  'apps/cli/config/agent-presets/physics-student',
 ]
 
 const EXCLUDED_NAMES = new Set(['node_modules', 'dist', 'lib', '.turbo'])
