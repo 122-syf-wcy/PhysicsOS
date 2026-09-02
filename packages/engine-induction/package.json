@@ -1,0 +1,23 @@
+{
+  "name": "@physicsos/engine-induction",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Induction physics engine: Faraday's law E = -dΦ/dt, motional EMF E = BLv, Lenz direction and loop current I = E/R",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-math": "file:../physics-math",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene"
+  }
+}
