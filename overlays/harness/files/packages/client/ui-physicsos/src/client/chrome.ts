@@ -141,8 +141,8 @@ const PHYSICS_TOKENS = `
   --physics-subject-optics-tint: #faf3d8;
   --physics-subject-acoustics: #0284c7;
   --physics-subject-acoustics-tint: #e3f2fb;
-  --physics-subject-fluid: #0d9488;
-  --physics-subject-fluid-tint: #dcf1ef;
+  --physics-subject-fluid: #0891b2;
+  --physics-subject-fluid-tint: #dff4f8;
   --physics-subject-thermal: #dc2626;
   --physics-subject-thermal-tint: #fbe3e3;
   --physics-subject-induction: #4338ca;

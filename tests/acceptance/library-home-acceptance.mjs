@@ -5,7 +5,7 @@
  * console/network gate:
  *
  *   A  首屏（无任何记录）：大标题「实验中心」（≥28px）；无继续卡片；「为你推荐」
- *      恰好 3 张经典卡且分属不同学科（卡片浅底色两两不同）；四个学科 Tab 带
+ *      恰好 3 张经典卡且分属不同学科（卡片浅底色两两不同）；十一个学科 Tab 带
  *      不同颜色圆点；网格图标块按学科着色；页面不滚动
  *   B  从推荐卡创建实验 → 工具栏「切换实验」→ 继续卡片为「返回当前实验 · 正在
  *      运行」，点击回到同一场景（revision 不变）
@@ -73,8 +73,10 @@ await picker().waitFor({ state: 'visible', timeout: 20_000 })
     state.cards.every((card) => card.reasonText === '经典实验'))
   const tints = new Set(state.cards.map((card) => card.bg))
   check('subject tints differ between the three domains', tints.size === 3, [...tints].join(' | '))
-  check('five domain tabs carry five distinct colour dots',
-    state.dotColors.length === 5 && new Set(state.dotColors).size === 5, state.dotColors.join(' | '))
+  /* One dot per registered domain tab (the 全部 tab carries none), every one in
+     its own subject colour — a duplicated token would show up as a collision. */
+  check('eleven domain tabs carry eleven distinct colour dots',
+    state.dotColors.length === 11 && new Set(state.dotColors).size === 11, state.dotColors.join(' | '))
   check('no page scroll on the library home', state.scrolls === false)
 
   /* Hand-drawn scene artwork: every card carries its template's dedicated SVG

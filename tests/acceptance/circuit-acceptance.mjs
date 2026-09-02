@@ -104,8 +104,9 @@ await page.getByRole('button', { name: '物理实验室' }).click()
 
   await page.getByRole('tab', { name: '电路' }).click()
   await page.waitForTimeout(200)
+  /* Five senior rigs plus the two 初中 measurement rigs (伏安法测电阻 / 测小灯泡电功率). */
   const circuitEntries = await page.locator('[class*="grid"] button').count()
-  check('circuit tab lists the five circuit experiments', circuitEntries === 5, `${circuitEntries} entries`)
+  check('circuit tab lists the seven circuit experiments', circuitEntries === 7, `${circuitEntries} entries`)
   await shot('circuit-library-1600x900')
 }
 
