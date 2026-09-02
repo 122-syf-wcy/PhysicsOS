@@ -1,0 +1,23 @@
+{
+  "name": "@physicsos/engine-wave",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Wave physics engine: travelling rope wave y(x,t) with v = λf, two-source interference by path difference, and standing waves on a clamped string",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-math": "file:../physics-math",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene"
+  }
+}
