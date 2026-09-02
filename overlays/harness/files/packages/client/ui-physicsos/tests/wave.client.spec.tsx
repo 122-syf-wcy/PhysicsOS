@@ -8,6 +8,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
+import { QuestionWorkspace } from '../src/client/QuestionWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
@@ -272,6 +273,50 @@ describe('wave tutor and self-checks', () => {
     const string = experimentSelfChecksOf(physicsAgentContext(createWaveWorkspaceRuntime(createStandingWaveScene()).getSnapshot()))
     expect(string?.id).toBe('wave-standing')
     expect(string?.knowledge).toEqual(['wv-standing-wave', 'wv-wave-speed'])
+  })
+})
+
+const questionSurface = (questionId: string) =>
+  ((selector: (s: { surface: string; questionId?: string }) => unknown) =>
+    selector({ surface: 'questions', questionId })) as never
+
+describe('wave Question Space', () => {
+  it('renders the rope question through the wave engine with the solved v and T', () => {
+    const { container } = render(
+      <QuestionWorkspace
+        t={t as never}
+        usePhysicsSurface={questionSurface('wave-01-speed-from-wavelength-frequency')}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+        openSurface={vi.fn()}
+        recordAttempt={vi.fn()}
+        consumeQuestion={vi.fn()}
+      />,
+    )
+    expect(container.textContent).toContain('Wave Engine · Verified')
+    /* The solution quotes the engine's numbers: v = λf = 2 m/s, T = 0.2 s. */
+    expect(container.textContent).toContain('2.0000')
+    expect(container.textContent).toContain('0.2000')
+    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
+    expect(svgText.join(' ')).toContain('v = λf = 2 m/s')
+    expect(container.querySelector('path[class*="waveRope"]')).toBeTruthy()
+  })
+
+  it('renders the interference question with the engine verdict on the canvas', () => {
+    const { container } = render(
+      <QuestionWorkspace
+        t={t as never}
+        usePhysicsSurface={questionSurface('wave-03-interference-constructive')}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+        openSurface={vi.fn()}
+        recordAttempt={vi.fn()}
+        consumeQuestion={vi.fn()}
+      />,
+    )
+    expect(container.textContent).toContain('振动加强')
+    expect(container.querySelectorAll('circle[class*="waveSource"]')).toHaveLength(2)
+    expect(container.querySelector('circle[class*="wavePointConstructive"]')).toBeTruthy()
   })
 })
 

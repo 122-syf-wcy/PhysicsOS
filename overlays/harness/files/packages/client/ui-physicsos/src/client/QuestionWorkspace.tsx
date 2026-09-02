@@ -37,6 +37,7 @@ import { electricRegionEngine } from '@physicsos/engine-electric-region'
 import { resolveCircuitOperatingPoint } from '@physicsos/engine-circuit'
 import { resolveOpticalImaging } from '@physicsos/engine-optics'
 import { resolveInductionModel } from '@physicsos/engine-induction'
+import { resolveWaveModel, waveEngine } from '@physicsos/engine-wave'
 import { observeElectricScene, observeMechanicsScene } from '@physicsos/physics-observation'
 import { isParallelPlateScene, probeParticleOf } from '@physicsos/physics-scene'
 import {
@@ -69,6 +70,7 @@ import {
 import { circuitSceneVisualAt } from './physics/circuit-visual-bridge.ts'
 import { opticsSceneVisual } from './physics/optics-visual-bridge.ts'
 import { inductionSceneVisual } from './physics/induction-visual-bridge.ts'
+import { waveSceneVisual } from './physics/wave-visual-bridge.ts'
 import { IconPhysicsPause, IconPhysicsPlay } from './icons/physics-icons.tsx'
 import { createMagneticRuntime, type MagneticRuntimeBridge } from './physics-runtime-bridge.ts'
 import {
@@ -776,6 +778,22 @@ function useQuestionFrames(
         view: inductionSceneVisual({ scene, model, simulation, time: at }),
         engineLabel: 'Induction Engine · Verified',
         ariaLabel: `${title}的可验证电磁感应图`,
+        timeLabel,
+        trajectoryTimes,
+      }
+    }
+    if (domain === 'wave') {
+      /* Closed-form rig: every frame is the engine's stateAt(t) — the rope
+         profile, the spreading crests or the swinging string — and the t = 0
+         state doubles as the standing-wave envelope. Nothing evaluates a sine
+         here. */
+      const model = resolveWaveModel(scene)
+      const state = waveEngine.stateAt(scene, { value: at, unit: 's', dimension: 'time' })
+      const envelopeState = waveEngine.stateAt(scene, { value: 0, unit: 's', dimension: 'time' })
+      return {
+        view: waveSceneVisual({ scene, model, simulation, state, envelopeState, time: at }),
+        engineLabel: 'Wave Engine · Verified',
+        ariaLabel: `${title}的可验证机械波图`,
         timeLabel,
         trajectoryTimes,
       }
