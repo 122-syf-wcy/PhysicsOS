@@ -14,6 +14,7 @@ import { HomeActions } from './HomeActions.tsx'
 import { HomeBrand } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface } from './LabWorkspace.tsx'
+import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
@@ -240,6 +241,28 @@ export function apply(ctx: ClientContext): void {
       const stop = scope.sessions.list.subscribe(() => { void controller.apply() })
       return () => { stop() }
     }, 'ui-physicsos: apply mapped preset')
+
+    /* Agent → Lab mirroring (docs/04 §92): the host folds every scene the model
+       touches through the physics tools into the session's `physicsScenes`
+       projection, which rides the session list rows. The first value seen for
+       a session only becomes the active scene; a later revision opens the Lab. */
+    const agentScenes = createAgentSceneSync({
+      adoptScene: (ref) => { surface.open(surface.store.getSnapshot().surface, ref) },
+      showScene: (ref) => { surface.open('lab', ref) },
+    })
+    const mirrorAgentScene = (): void => {
+      const state = scope.sessions.list.getSnapshot() as {
+        current?: string
+        byId: Record<string, { projectionValues?: Record<string, unknown> }>
+      }
+      const summary = state.current === undefined ? undefined : state.byId[state.current]
+      agentScenes.apply(state.current, summary?.projectionValues?.['physicsScenes'])
+    }
+    scope.effect(() => {
+      mirrorAgentScene()
+      const stop = scope.sessions.list.subscribe(mirrorAgentScene)
+      return () => { stop() }
+    }, 'ui-physicsos: mirror agent scenes')
 
     scope.slots.inject('conversation.session.header.actions', () => scope.slots.register({
       name: 'conversation.session.header.actions',

@@ -19,9 +19,9 @@ export interface PhysicsProfile {
 
 /** Student roster in display order. */
 export const STUDENT_PROFILES = [
-  { id: 'physics-experiment', runtimePreset: 'standard' },
-  { id: 'physics-question', runtimePreset: 'standard' },
-  { id: 'physics-tutor', runtimePreset: 'standard' },
+  { id: 'physics-experiment', runtimePreset: 'physics-student' },
+  { id: 'physics-question', runtimePreset: 'physics-student' },
+  { id: 'physics-tutor', runtimePreset: 'physics-student' },
 ] as const satisfies readonly [PhysicsProfile, ...PhysicsProfile[]]
 
 /** Future teacher roster; not offered on the student Home chip. */

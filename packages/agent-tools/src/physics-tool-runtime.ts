@@ -465,8 +465,8 @@ export class PhysicsToolRuntime {
     return {
       status: 'solved',
       workflowState: result.workflowState,
-      domain: ir?.domain,
-      model: ir?.model,
+      ...(ir?.domain === undefined ? {} : { domain: ir.domain }),
+      ...(ir?.model === undefined ? {} : { model: ir.model }),
       knowns,
       targets: ir?.targets ?? [],
       answers,
@@ -480,6 +480,15 @@ export class PhysicsToolRuntime {
 
   describeScene(sceneId: string): SceneDescription {
     return this.describe(sceneId, this.live(sceneId))
+  }
+
+  /**
+   * Deep copy of a live scene at its current revision. For consumers that
+   * mirror the scene elsewhere (a harness binding pushing it to the Lab canvas);
+   * the copy cannot bypass the SceneRuntime's command gate.
+   */
+  sceneSnapshot(sceneId: string): PhysicsScene {
+    return this.live(sceneId).runtime.getScene()
   }
 
   private describe(sceneId: string, live: LiveScene): SceneDescription {

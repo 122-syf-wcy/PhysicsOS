@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tool-physicsos",
-  "description": "PhysicsOS physics tools for the DeepSeek Harness agent: registers the @physicsos/agent-tools runtime (experiments, question solving, SceneCommands, simulation, observation) as model-facing tools",
+  "description": "PhysicsOS physics tools for the DeepSeek Harness agent: registers the @physicsos/agent-tools runtime (experiments, question solving, SceneCommands, simulation, observation) as model-facing tools and mirrors every touched scene to the session's physicsScenes projection",
   "version": "0.1.0-rc.5",
   "private": true,
   "repository": {
@@ -20,12 +20,21 @@
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
     },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./client": {
+      "types": "./lib/types/client.d.ts",
+      "default": "./lib/types/client.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
     "lib/invariant.js",
+    "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
   "scripts": {
@@ -35,12 +44,15 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^",
-    "@physicsos/agent-tools": "link:../../../../../packages/agent-tools"
+    "@physicsos/agent-tools": "link:../../../../../packages/agent-tools",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^"
   },
   "devDependencies": {
@@ -53,6 +65,7 @@
     "@deepseek-ai/dsh-persona": "workspace:^",
     "@deepseek-ai/dsh-scope": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@types/js-yaml": "^4.0.9",

@@ -445,23 +445,24 @@ overlay 已回写。
 
 ---
 
-## 进行中
+## AGENT_TOOL_RUNTIME_V1_COMPLETE
 
-### AGENT_TOOL_RUNTIME_V1
+**日期**：2026-09-07
 
-Phase 16 Tool Runtime：让 Harness 会话里的模型真正调用物理引擎。
+**范围**：docs/14 §19 Phase 16 Tool Runtime —— 让 Harness 会话里的模型真正调用物理引擎，并把模型改动的场景镜像到学生画布。宿主侧接线（工具注册 / `physics-student` 预设 / 端到端门禁）已在上半完成并验收，见下方依据；本收口补上运行时本体与「场景推送（Streaming / `SceneRevisionChanged`）」。
 
-**已完成（宿主侧接线）**：`@deepseek-ai/dsh-tool-physicsos`（overlay 内 Harness 工作区成员）把
-`@physicsos/agent-tools` 的 `PhysicsToolRuntime` 注册为七个 `physics_*` 工具，按会话隔离场景；
-Agent 预设「物理学习模式」（`apps/cli/config/agent-presets/physics-student`）= 物理宪法 persona +
-物理工具 + 提问工具，无编码工具；`upstream-changes.patch` 加 `apps/cli/package.json` 依赖与
-`tsconfig.host.json` 引用；根脚本 `build:agent / typecheck:agent / lint:agent / test:agent`。
-验收：`test:agent` 2 文件 17 用例全绿；`tests/agent/headless-physics-acceptance.mjs` 在真实 `dsh`
-进程 + mock LLM 下 13 项门禁全 PASS（模型 → `physics_solve_question` → 题目运行时 + 磁场引擎 +
-验证器 → R = 7.83 cm、T = 1.64×10⁻⁷ s → 回合 completed）；运行中的 Web 宿主设置页已列出该预设。
+**A. 运行时本体**：`PhysicsToolRuntime.sceneSnapshot` —— 当前修订的无损深拷贝，供宿主把场景推出进程（拷贝不能绕过 SceneRuntime 命令闸门）；顺带修掉上一半报告的严格可选属性隐患（`domain: ir?.domain` 直赋 `undefined` 改为条件展开，恢复 `exactOptionalPropertyTypes` 兼容）。
 
-**进行中**：`@physicsos/agent-tools` 运行时本体（另一会话）；`ui-physicsos/profiles.ts` 把学生档位
-映射到 `physics-student`；模型改动的场景推送到画布（Streaming / `SceneRevisionChanged`）。
+**B. 场景镜像（docs/04 §92）**：三件事接成一条链。
+- **发布**：tool-physicsos 每次 `physics_create_experiment` / `physics_solve_question` / 被接受的 `physics_scene_command` 之后，向调用 agent 的会话日志 append 一条 `physics/scene` 快照 —— 内嵌完整 `physics-scene/1.0` 场景的无损 JSON，附 revision / cause / commandType / eventType / sourceQuestionId。被运行时拒绝的命令不发（场景未变）；无 agent 的调用方（测试、Code Mode）不发。类型与 SessionEvent 声明收敛在 `src/types.ts` 单点，`./types` 与 `./client` 两个命名空间零内容重复。
+- **折叠**：`physicsScenes` session projection（按 scene id last-wins，`latest` 跟随最新），仅在 `sessionProjections` seam 组合时注册（headless 无 seam 的装配不受影响）。
+- **镜像**：ui-physicsos `physics/agent-scene-sync.ts` 把 projection 折成 Lab 导航 —— 每个会话的首个值是基线（静默 adopt，reload / 切会话不打断学生当前面），后续修订 live 打开 Lab；shape 校验严格（表头与内嵌 scene 的 id / revision / schema 任一不符即拒挂载，挂载前再过场景校验器）。接线在 `ui-physicsos/src/client/index.ts`：订阅 session 列表行、读 `projectionValues['physicsScenes']` 喂 sync，`surface.open` 作为 adopt / show 两个面动作。另加 `tool-physicsos-invariant` 伴生不变量：到达 durable log 的每条 `physics/scene` 在写前校验表头与内嵌 scene 一致。
+
+**C. 档位映射**：`ui-physicsos/profiles.ts` 学生档（探索 / 解题 / 引导）`runtimePreset` 从 `standard` 改为 `physics-student` —— 学生会话新建即进「物理学习模式」（物理工具 + 提问工具、无编码工具），不再落回编码 Agent；教师档保留 `standard`。断言随映射更新（`overlay.client.spec`）。
+
+**D. 验收数据**：`typecheck` / `lint`（core + web + agent）零错误；`test:agent` 22 全绿（含 5 条 scene mirroring：发布 / 拒发不发 / 解题发布 / agent-less 不发 / 折叠 last-wins 且不改状态）；`test:web` 28 文件 360 全绿（含 `agent-scene-sync.client.spec` 5 条镜像导航语义与 `overlay.client.spec` 档位断言）；agent-tools 32 全绿；端到端 `tests/agent/headless-physics-acceptance.mjs` 在真实 `dsh` 进程 + mock LLM 下 **16 项门禁全 PASS** —— 新增三条：解题后会话日志出现恰一条 `physics/scene`（cause `solved`）、内嵌 scene 与所登记 scene 同 id/revision 且 schema 为 `physics-scene/1.0`、本轮无多余发布。overlay 已同步 vendor。
+
+**不做**（明确边界）：浏览器画布「模型改场景实时跟随」的 GUI 端到端脚本 —— 与真实模型联调同受本机中继无 V4 通道限制（见报告），先由真实 dsh 进程的会话日志断言承载 publish，客户端镜像由 composition + 纯函数 spec 覆盖，`physicsScenes` 已随 session 行投影到 Web；Timeline 逐刻 streaming（快照按工具调用粒度发布，非每帧）；教师侧专用预设。
 
 依据：`docs/reports/AGENT-TOOL-RUNTIME-V1-REPORT.md`
 

@@ -264,16 +264,17 @@ describe('PhysicsOS overlay presentation', () => {
       'physics-tutor',
     ])
     expect(TEACHER_PROFILES.map(profile => profile.id)).toEqual(['physics-teacher'])
-    expect(STUDENT_PROFILES.every(profile => runtimePresetOf(profile.id) === 'standard')).toBe(
+    expect(STUDENT_PROFILES.every(profile => runtimePresetOf(profile.id) === 'physics-student')).toBe(
       true,
     )
+    expect(TEACHER_PROFILES.map(profile => profile.runtimePreset)).toEqual(['standard'])
     expect(readStoredProfile({ getItem: () => 'physics-question' })).toBe('physics-question')
     expect(readStoredProfile({ getItem: () => 'standard' })).toBe('physics-experiment')
   })
 
   it('keeps the product choice locally until the Harness host attaches', async () => {
     const select = vi.fn(async () => ({
-      result: { ok: true as const, value: { agentPreset: 'standard' } },
+      result: { ok: true as const, value: { agentPreset: 'physics-student' } },
     }))
     const controller = createPhysicsProfileController()
     await controller.select('physics-tutor')
@@ -281,7 +282,7 @@ describe('PhysicsOS overlay presentation', () => {
     expect(select).not.toHaveBeenCalled()
     controller.attach({ agentPresets: { select } }, () => ({ id: 's2', blank: true }))
     await waitFor(() => {
-      expect(select).toHaveBeenCalledWith({ sessionId: 's2', agentPreset: 'standard' })
+      expect(select).toHaveBeenCalledWith({ sessionId: 's2', agentPreset: 'physics-student' })
     })
   })
 
@@ -311,7 +312,7 @@ describe('PhysicsOS overlay presentation', () => {
 
   it('offers only PhysicsOS profiles and selects the mapped Harness preset', async () => {
     const select = vi.fn(async () => ({
-      result: { ok: true as const, value: { agentPreset: 'standard' } },
+      result: { ok: true as const, value: { agentPreset: 'physics-student' } },
     }))
     const controller = createPhysicsProfileController({ agentPresets: { select } }, () => ({
       id: 's1',
@@ -335,7 +336,7 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByText('自由实验、修改参数、观察规律。')).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: /解题模式/ }))
     await waitFor(() => {
-      expect(select).toHaveBeenCalledWith({ sessionId: 's1', agentPreset: 'standard' })
+      expect(select).toHaveBeenCalledWith({ sessionId: 's1', agentPreset: 'physics-student' })
     })
   })
 

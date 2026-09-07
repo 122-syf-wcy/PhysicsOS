@@ -4,11 +4,13 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { PHYSICS_TOOL_NAMES } from '@physicsos/agent-tools'
 
 import * as plugin from '../src/index.ts'
+import type { PhysicsSceneSnapshot, PhysicsScenesProjection } from '../src/types.ts'
 
 /**
  * Drives the REAL plugin body on a real `ToolRuntime`: every call goes through
@@ -246,5 +248,132 @@ describe('dsh-tool-physicsos', () => {
     const unwrapped = loader.unwrapExports(plugin) as Record<string, unknown>
     expect(unwrapped).toBe(plugin)
     expect(typeof unwrapped.apply).toBe('function')
+  })
+})
+
+/**
+ * Scene mirroring (docs/04 §92 SceneRevisionChanged): every tool call that
+ * creates or moves a scene appends a `physics/scene` snapshot to the calling
+ * agent's session log, and the `physicsScenes` projection folds them so the
+ * browser Lab can mount the scene without reaching into the host process.
+ */
+describe('dsh-tool-physicsos scene mirroring', () => {
+  async function bench(): Promise<{ ctx: Context; session: Session; agent: Agent }> {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(plugin, { sceneScope: 'session' })
+    const session = ctx.sessions.create()
+    const agent = { id: session.id, session } as unknown as Agent
+    return { ctx, session, agent }
+  }
+
+  const snapshots = (session: Session): PhysicsSceneSnapshot[] =>
+    session.events.flatMap(event => (event.type === 'physics/scene' ? [event.data] : []))
+
+  const projectionOf = (ctx: Context, session: Session): PhysicsScenesProjection | undefined =>
+    ctx.sessionProjections.snapshot(session).values.physicsScenes
+
+  it('publishes the created scene with its embedded PhysicsScene and folds it into physicsScenes', async () => {
+    const { ctx, session, agent } = await bench()
+    expect(projectionOf(ctx, session)).toEqual({ latest: null, scenes: {} })
+
+    const scene = await openExperiment(ctx, 'magnetic-circular', agent)
+    const published = snapshots(session)
+    expect(published).toHaveLength(1)
+    const snapshot = published[0]!
+    expect(snapshot).toMatchObject({
+      sceneId: scene.sceneId,
+      revision: 0,
+      domain: 'magnetic',
+      engineId: 'engine-magnetic',
+      cause: 'created',
+    })
+    const embedded = snapshot.scene as { id: string; revision: number; schemaVersion: string; particles: unknown[] }
+    expect(embedded.schemaVersion).toBe('physics-scene/1.0')
+    expect(embedded.id).toBe(scene.sceneId)
+    expect(embedded.revision).toBe(0)
+    expect(embedded.particles).toHaveLength(1)
+    /* Lossless JSON: what the log carries is what the wire and the Lab receive. */
+    expect(JSON.parse(JSON.stringify(snapshot))).toEqual(snapshot)
+
+    const projection = projectionOf(ctx, session)
+    expect(projection?.latest).toBe(scene.sceneId)
+    expect(projection?.scenes[scene.sceneId]).toEqual(snapshot)
+  })
+
+  it('publishes each accepted command at its new revision, and nothing for a refused one', async () => {
+    const { ctx, session, agent } = await bench()
+    const scene = await openExperiment(ctx, 'magnetic-circular', agent)
+    const field = scene.objects.find(object => object.kind === 'uniform_magnetic')!
+    await call(ctx, 'physics_scene_command', {
+      sceneId: scene.sceneId,
+      type: 'SetMagneticFieldStrength',
+      payload: { fieldId: field.id, strength: { value: 1, unit: 'T' } },
+    }, { agent })
+    const afterAccepted = snapshots(session)
+    expect(afterAccepted).toHaveLength(2)
+    expect(afterAccepted[1]).toMatchObject({
+      sceneId: scene.sceneId,
+      revision: 1,
+      cause: 'command',
+      commandType: 'SetMagneticFieldStrength',
+      eventType: 'MagneticFieldStrengthChanged',
+    })
+    interface EmbeddedScene {
+      revision: number
+      fields: { type: string; magneticFluxDensity?: { vector: { z: number } } }[]
+    }
+    const embedded = afterAccepted[1]!.scene as unknown as EmbeddedScene
+    expect(embedded.revision).toBe(1)
+    const magnetic = embedded.fields.find(entry => entry.type === 'uniform_magnetic')!
+    expect(Math.abs(magnetic.magneticFluxDensity!.vector.z)).toBe(1)
+
+    /* A refusal keeps the scene at revision 1 and appends no snapshot. */
+    await call(ctx, 'physics_scene_command', {
+      sceneId: scene.sceneId,
+      type: 'SetParticleMass',
+      payload: { particleId: 'particle-1', mass: { value: -1, unit: 'kg' } },
+    }, { agent })
+    expect(snapshots(session)).toHaveLength(2)
+    expect(projectionOf(ctx, session)?.scenes[scene.sceneId]?.revision).toBe(1)
+  })
+
+  it('publishes a solved question\'s scene and keeps every touched scene in the projection, latest last', async () => {
+    const { ctx, session, agent } = await bench()
+    const first = await openExperiment(ctx, 'uniform-linear', agent)
+    const solved = value<{ scene?: { sceneId: string } }>(await call(ctx, 'physics_solve_question', {
+      text: '一个质子以 3.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.40 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 轨道半径 2. 运动周期',
+    }, { agent }))
+    const questionSceneId = solved.scene!.sceneId
+    const published = snapshots(session)
+    expect(published.map(entry => entry.cause)).toEqual(['created', 'solved'])
+    expect(published[1]!.sourceQuestionId).toBeDefined()
+    const projection = projectionOf(ctx, session)!
+    expect(Object.keys(projection.scenes).sort()).toEqual([first.sceneId, questionSceneId].sort())
+    expect(projection.latest).toBe(questionSceneId)
+  })
+
+  it('publishes nothing for agent-less callers, which have no session log', async () => {
+    const { ctx, session } = await bench()
+    const scene = value<SceneDescription>(
+      await call(ctx, 'physics_create_experiment', { templateId: 'incline' }, { agent: undefined }),
+    )
+    expect(scene.revision).toBe(0)
+    expect(snapshots(session)).toHaveLength(0)
+  })
+
+  it('folds last-wins per scene id with latest following the newest snapshot', () => {
+    const a = { sceneId: 'a', revision: 0, domain: 'mechanics', engineId: 'engine-mechanics', title: 'A', cause: 'created', scene: {} } as const
+    const b = { ...a, sceneId: 'b' } as const
+    const a1 = { ...a, revision: 1, cause: 'command' } as const
+    const state0 = { latest: null, scenes: {} }
+    const state1 = plugin.foldPhysicsScene(state0, a)
+    const state2 = plugin.foldPhysicsScene(state1, b)
+    const state3 = plugin.foldPhysicsScene(state2, a1)
+    expect(state3).toEqual({ latest: 'a', scenes: { a: a1, b } })
+    expect(state0).toEqual({ latest: null, scenes: {} })
   })
 })

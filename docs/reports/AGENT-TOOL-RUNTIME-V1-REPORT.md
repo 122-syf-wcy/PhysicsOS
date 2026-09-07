@@ -1,8 +1,9 @@
 # Agent Tool Runtime V1 — Harness 接线报告
 
-> 日期：2026-09-02
-> 状态：`AGENT_TOOL_RUNTIME_V1`（进行中；本报告覆盖 Harness 插件 + 预设 + 端到端门禁这一半）
-> 范围：docs/14 §19 Phase 16 Tool Runtime 的宿主侧接线。`@physicsos/agent-tools` 本体由另一条并行会话负责，本报告只消费其 `PhysicsToolRuntime` 契约。
+> 日期：2026-09-02（宿主侧接线）；2026-09-07 收口（场景推送 + 档位映射，§6）
+> 状态：`AGENT_TOOL_RUNTIME_V1_COMPLETE`（已完成）
+> 范围：docs/14 §19 Phase 16 Tool Runtime 的宿主侧接线 + 运行时本体 + 「模型改场景推送到画布」。
+> §1–§5 记录宿主侧接线这一半；§6 是本报告的收口第二半。
 
 ---
 
@@ -101,3 +102,68 @@
 - `pnpm dsh` 在 submodule 下会因 pnpm `verify-deps-before-run` 触发带 lefthook 的 `install` 而失败
   （HARNESS-UPSTREAM 已记录）；跑过 `pnpm -C vendor/deepseek-harness install --offline --ignore-scripts`
   之后即恢复。验收脚本直接 spawn `node --import tsx/esm apps/cli/src/bin.ts` 绕开该检查。
+
+---
+
+## 6. 收口：场景镜像 + 档位映射（2026-09-07）
+
+§5 的待接线在本收口中落地（"实验室 AI 助教抽屉"一条是独立 backlog，不变），`AGENT_TOOL_RUNTIME_V1`
+关闭。新增代码走同一条 doc/04 §92 契约：引擎场景是物理真相，`physics/scene` 事件是
+`SceneRevisionChanged` 通知，projection 是其 last-wins 折叠。
+
+### 6.1 运行时本体
+
+- `PhysicsToolRuntime.sceneSnapshot(sceneId)`：当前修订的无损深拷贝，宿主凭它把场景推出进程镜像到
+  Lab；拷贝不能绕过 SceneRuntime 的命令闸门。
+- 修复 §5 记录的严格可选属性隐患：solved 分支不再直赋 `domain: ir?.domain` / `model: ir?.model`
+  （`undefined` 直赋在 `exactOptionalPropertyTypes` 下非法），改为与 rejected 分支一致的条件展开。
+  插件侧 tsconfig 的放宽从此可以收紧；本轮未对整图做全量严格收严（避免牵连内联的其余源码），留待
+  下轮。
+
+### 6.2 场景镜像链
+
+- **类型单点**：`tool-physicsos/src/types.ts` —— `physics/scene` SessionEvent 与 `physicsScenes`
+  projection-key 的唯一声明处，模块增广挂到 `dsh-session` / `dsh-session-projection`；包根
+  `./types`（宿主）与 `./client`（浏览器只取类型，不碰插件值图）两个命名空间零内容重复。
+- **发布**：`tool-physicsos/src/index.ts` —— `physics_create_experiment` / `physics_solve_question` /
+  被接受的 `physics_scene_command` 三处 execute 调 `publish(...)`：
+  `exec.agent.session.append('physics/scene', snapshot)`。快照内嵌 `runtime.sceneSnapshot` 生成的完整
+  `physics-scene/1.0` JSON，附 revision / cause / commandType / eventType / sourceQuestionId。被运行时
+  拒绝的命令不发（场景未变）；无 agent 的调用方不发。声明留在插件的 `./types`，无宿主值依赖。
+- **折叠**：`physicsScenes` session projection —— `foldPhysicsScene` 按 scene id last-wins、
+  `latest` 跟随最新；仅在 `sessionProjections` seam 组合时注册（headless 无 seam 的装配不受影响）。
+- **镜像**：`ui-physicsos physics/agent-scene-sync.ts` —— 纯框架同步器。`readAgentScenesProjection`
+  对来自 wire 的值做防御式 shape 校验（表头必须与内嵌 scene 同 id / revision / `physics-scene/1.0`，
+  否则整体拒收）；`createAgentSceneSync` 按会话记忆 `sceneId@revision`：会话首个值是基线 → 静默
+  adopt（reload / 切会话不把学生从当前面拽走），后续修订 → live 打开 Lab；挂载前再过场景校验器，
+  坏快照只记一次、projection 不动不重试。五条 spec 覆盖基线 adopt / 修订 shown / 重投 no-op / 切
+  会话 / 坏 scene 拒挂载。
+- **接线**：`ui-physicsos/src/client/index.ts` —— `surface.open` 提供 adopt（保持当前面）与 show
+  （进 Lab）两个面动作；订阅 session 列表行、读 `projectionValues['physicsScenes']` 喂 sync。
+- **不变量**：`tool-physicsos/src/invariant.ts` 从占位升级为真实伴生 —— 任何到达 durable log 的
+  `physics/scene` 快照写前校验表头与内嵌 scene 一致，配合 projection schema 双闸。
+
+### 6.3 档位映射
+
+`ui-physicsos/profiles.ts`：三个学生档（探索 / 解题 / 引导）`runtimePreset` → `physics-student`，
+教师档保留 `standard`。新建会话即进「物理学习模式」（persona 物理宪法 + 七工具 + 提问工具，无编码
+工具），不再因默认档位落回编码 Agent。`overlay.client.spec` 三处断言随映射更新。
+
+### 6.4 验收
+
+- `typecheck`（core + web + agent）与 `lint`（core + web + agent）零错误。
+- `test:agent` 22 用例（+5 scene mirroring：发布折叠 / 拒发不发 / solve 发布 + sourceQuestionId /
+  agent-less 不发 / fold last-wins 不改状态）；`test:web` 28 文件 360 用例（+`agent-scene-sync.client
+  .spec` 5 条、`overlay.client.spec` 档位断言更新）；agent-tools 32 用例。
+- 端到端 `headless-physics-acceptance.mjs` **16 项门禁全 PASS**：在真实 `dsh` 进程 + mock LLM 下，
+  `physics_solve_question` 之后会话日志出现恰一条 `physics/scene`（cause `solved`），内嵌 scene 与
+  工具结果登记的场景同 id / revision、schema 为 `physics-scene/1.0`，本轮无 create / command 类发布。
+
+### 6.5 仍不在本轮范围
+
+- 浏览器画布「模型改场景实时跟随」的 GUI 端到端脚本：真实模型联调仍受中继无
+  `DeepSeek-V4-Flash-0731` 通道限制（§5），本机跑不了真实 GUI agent 回合。publish 由真实 dsh 进程的
+  会话日志断言承载，客户端镜像由纯函数 spec + 组合 spec 覆盖，`physicsScenes` projection 已随 session
+  行投影到 Web —— GUI 脚本可作为真实模型通道恢复后的下一道验收，非阻塞。
+- Timeline 逐刻 streaming（快照按工具调用粒度发布，非每帧）；教师侧专用预设；
+  `AGENT_MODEL_BACKED_ANSWERS_BACKLOG` 等 backlog 不变。

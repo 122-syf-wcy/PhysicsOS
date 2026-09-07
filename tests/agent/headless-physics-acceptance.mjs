@@ -189,6 +189,34 @@ try {
   const sceneLine = resultText.match(/场景已就绪：sceneId = (question-agent-question-[\w-]+)/)
   check('scene registered for follow-up tools', sceneLine !== null, sceneLine?.[1])
 
+  /* docs/04 §92 SceneRevisionChanged: the tool call that solved the question
+     also appended a physics/scene snapshot to the agent's session log, so a
+     browser Lab can mirror the scene without reaching into the host process. */
+  const sceneEvents = events.filter((event) => event.type === 'physics/scene')
+  check(
+    'solved scene was published to the session log',
+    sceneEvents.length === 1 && sceneEvents[0]?.data?.cause === 'solved',
+    `${sceneEvents.length} physics/scene event(s)`,
+  )
+  const published = sceneEvents[0]?.data
+  const embedded = published?.scene
+  check(
+    'embedded PhysicsScene is the lossless JSON of the registered scene',
+    embedded?.id === published?.sceneId &&
+      embedded?.revision === published?.revision &&
+      embedded?.schemaVersion === 'physics-scene/1.0' &&
+      sceneLine?.[1] === published?.sceneId,
+    `${published?.sceneId}@${published?.revision} ${embedded?.schemaVersion ?? 'missing schema'}`,
+  )
+  check(
+    'no scene publication for a tool the runtime refused',
+    !events.some(
+      (event) =>
+        event.type === 'physics/scene' &&
+        (event.data?.cause === 'command' || event.data?.cause === 'created'),
+    ),
+  )
+
   const end = events.find((event) => event.type === 'turn/end')
   check('turn ended completed', end?.data?.reason?.kind === 'completed', JSON.stringify(end?.data?.reason))
 } catch (error) {

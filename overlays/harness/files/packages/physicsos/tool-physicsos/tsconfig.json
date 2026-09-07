@@ -35,6 +35,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../session/session-projection"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]
