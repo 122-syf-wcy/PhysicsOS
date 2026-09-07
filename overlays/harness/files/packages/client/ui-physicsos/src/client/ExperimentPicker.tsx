@@ -3,13 +3,20 @@
  *
  * The single chooser every entry point opens — sidebar "新建", the Home quick
  * action and the Lab empty state — so there is ONE template list, not three.
- * Reads as a learning-centre front page: a large title, a 继续上次实验 card
- * restoring the newest persisted scene, a 为你推荐 rail driven by the
- * student's own learning record, then the full searchable grid. Every card
- * carries hand-drawn scene artwork ({@link ExperimentArt}) painted in its
- * domain's subject colour, and the sections rise in with a staggered entrance
- * (disabled under prefers-reduced-motion). Picking one builds a real
- * PhysicsScene via the {@link ExperimentTemplateRegistry} and hands it to the Lab.
+ *
+ * Reading order is deliberately three beats, not seven:
+ *
+ *   1. Header — the mascot and the title. Where am I.
+ *   2. Focus row — 继续上次实验 as one large tile beside the 为你推荐 cards.
+ *      The single most likely next action sits first and biggest.
+ *   3. Browse — one filter bar (subject chips · search · 学段), then the grid
+ *      grouped by subject so 38 templates read as eleven short shelves rather
+ *      than one wall. A subject chip or a search collapses it to a flat list.
+ *
+ * Every card carries hand-drawn scene artwork ({@link ExperimentArt}) in its
+ * subject colour; sections rise in with a staggered entrance (disabled under
+ * prefers-reduced-motion). Picking one builds a real PhysicsScene via the
+ * {@link ExperimentTemplateRegistry} and hands it to the Lab.
  */
 
 import { useMemo, useState, type CSSProperties } from 'react'
@@ -22,7 +29,6 @@ import {
   createExperimentSceneRef,
   EXPERIMENT_TEMPLATES,
   EXPERIMENT_TEMPLATE_GROUPS,
-  findExperimentTemplate,
   SELECTABLE_TEMPLATE_COUNT,
   type ExperimentDomain,
   type ExperimentStage,
@@ -32,6 +38,7 @@ import { ExperimentArt, artTemplateIdOfSceneId } from './physics/experiment-artw
 import { recommendExperiments } from './physics/experiment-recommendations.ts'
 import type { LearningRecordState } from './learning-record-store.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { Mascot } from './Mascot.tsx'
 import type { PhysicsSurfaceId, RecentExperimentsState } from './surface-store.ts'
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import { IconPhysicsPlay } from './icons/physics-icons.tsx'
@@ -120,6 +127,13 @@ export interface ExperimentPickerProps {
   }
 }
 
+/** One shelf of the browse grid: a subject heading and its templates. */
+interface Shelf {
+  readonly id: ExperimentDomain | 'results'
+  readonly label: string
+  readonly templates: readonly ExperimentTemplate[]
+}
+
 export function ExperimentPicker({
   t, openSurface, useRecentExperiments, useLearningRecord, resume,
 }: ExperimentPickerProps) {
@@ -137,27 +151,46 @@ export function ExperimentPicker({
     setRecent(pushRecent(template.id))
   }
 
-  const filtered = useMemo(() => {
-    const byTab = tab === 'all'
+  const trimmedQuery = query.trim()
+  const searching = trimmedQuery !== ''
+
+  /* Grouped shelves while browsing 全部; a flat result list once a subject chip
+     or a search narrows the set — grouping a filtered list would just repeat
+     the filter as a heading. */
+  const shelves = useMemo<readonly Shelf[]>(() => {
+    const byStage = (templates: readonly ExperimentTemplate[]) =>
+      stage === 'all' ? templates : templates.filter(template => template.stage === stage)
+    const q = trimmedQuery.toLowerCase()
+    const byQuery = (templates: readonly ExperimentTemplate[]) =>
+      q === ''
+        ? templates
+        : templates.filter((template) => {
+          const name = t(template.label).toLowerCase()
+          const hint = t(template.hint).toLowerCase()
+          const tags = template.tags.join(' ').toLowerCase()
+          return name.includes(q) || hint.includes(q) || tags.includes(q) || template.id.includes(q)
+        })
+
+    if (tab === 'all' && q === '') {
+      return EXPERIMENT_TEMPLATE_GROUPS
+        .map(group => ({ id: group.id, label: t(group.label), templates: byStage(group.templates) }))
+        .filter(shelf => shelf.templates.length > 0)
+    }
+    const source = tab === 'all'
       ? EXPERIMENT_TEMPLATES
       : EXPERIMENT_TEMPLATE_GROUPS.find(group => group.id === tab)?.templates ?? []
-    const byStage = stage === 'all'
-      ? byTab
-      : byTab.filter(template => template.stage === stage)
-    const q = query.trim().toLowerCase()
-    if (q === '') return byStage
-    return byStage.filter((template) => {
-      const name = t(template.label).toLowerCase()
-      const hint = t(template.hint).toLowerCase()
-      const tags = template.tags.join(' ').toLowerCase()
-      return name.includes(q) || hint.includes(q) || tags.includes(q) || template.id.includes(q)
-    })
-  }, [tab, stage, query, t])
+    const templates = byQuery(byStage(source))
+    return templates.length === 0
+      ? []
+      : [{
+        id: tab === 'all' ? 'results' : tab,
+        label: tab === 'all' ? t('lab.template.picker.allTemplates') : t(`lab.template.group.${tab}`),
+        templates,
+      }]
+  }, [tab, stage, trimmedQuery, t])
 
-  const recentTemplates = recent
-    .map(id => findExperimentTemplate(id))
-    .filter((template): template is ExperimentTemplate => template !== undefined)
-    .filter(template => template.comingSoon !== true)
+  const grouped = tab === 'all' && !searching
+  const resultCount = shelves.reduce((sum, shelf) => sum + shelf.templates.length, 0)
 
   /* Weakness-targeted picks first, curated classics as fill; the student's own
      最近使用 stays off the classic fill so discovery never repeats it. */
@@ -198,156 +231,141 @@ export function ExperimentPicker({
       }
       : undefined
 
+  const hasFocusRow = continueCard !== undefined || recommendations.length > 0
+
   return (
     <div className={css.root} data-physicsos-surface="lab" data-physicsos-state="picker">
       <div className={css.panel}>
+        {/* ---------------------------------------------------------- header */}
         <header className={clsx(css.header, css.reveal)} style={revealAt(0)}>
-          <svg
-            className={css.heroMotif}
-            viewBox="0 0 260 120"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path d="M12 108 H248 M20 116 V8" stroke="currentColor" strokeWidth="1" opacity="0.5" />
-            <path
-              d="M20 108 C60 20 150 12 244 96"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeDasharray="1 7"
-              strokeLinecap="round"
-            />
-            <circle cx="58" cy="52" r="2.4" fill="currentColor" opacity="0.55" />
-            <circle cx="118" cy="26" r="2.4" fill="currentColor" opacity="0.75" />
-            <circle cx="188" cy="42" r="2.4" fill="currentColor" opacity="0.9" />
-          </svg>
-          <h2 className={css.title}>{t('lab.template.empty.title')}</h2>
-          <p className={css.body}>{t('lab.template.empty.body')}</p>
+          <Mascot pose="search" size={92} className={css.mascot} />
+          <div className={css.headerCopy}>
+            <h2 className={css.title}>{t('lab.template.empty.title')}</h2>
+            <p className={css.body}>{t('lab.template.empty.body')}</p>
+          </div>
+          <span className={css.headerCount}>
+            <IconPhysicsPlay size={13} />
+            {t('lab.template.picker.allTemplates')} · {SELECTABLE_TEMPLATE_COUNT}
+          </span>
         </header>
 
-        {continueCard === undefined ? null : (
-          <button
-            type="button"
-            className={clsx(
-              css.continueCard,
-              css.reveal,
-              continueCard.domain !== undefined && css[`subject-${continueCard.domain}`],
+        {/* ------------------------------------------------------- focus row */}
+        {hasFocusRow ? (
+          <div className={clsx(css.focusRow, continueCard === undefined && css.focusRowNoContinue)}>
+            {continueCard === undefined ? null : (
+              <button
+                type="button"
+                className={clsx(
+                  css.continueCard,
+                  css.reveal,
+                  continueCard.domain !== undefined && css[`subject-${continueCard.domain}`],
+                )}
+                style={revealAt(1)}
+                data-physicsos-continue={continueCard.state}
+                onClick={continueCard.onOpen}
+              >
+                <span className={css.continueArt} aria-hidden="true">
+                  <ExperimentArt templateId={continueCard.templateId} kind={continueCard.kind} fit="cover" />
+                </span>
+                <span className={css.continueBody}>
+                  <span className={css.continueEyebrow}>
+                    {continueCard.state === 'running' ? <span className={css.liveDot} aria-hidden="true" /> : null}
+                    {continueCard.eyebrow}
+                  </span>
+                  <span className={css.continueTitle}>{continueCard.title}</span>
+                  <span className={css.continueMeta}>{continueCard.meta}</span>
+                  <span className={css.continueCta}>
+                    {t('lab.picker.continue.cta')}
+                    <IconPhysicsPlay size={13} />
+                  </span>
+                </span>
+              </button>
             )}
-            style={revealAt(1)}
-            data-physicsos-continue={continueCard.state}
-            onClick={continueCard.onOpen}
-          >
-            <span className={clsx(css.art, css.artHero)}>
-              <ExperimentArt templateId={continueCard.templateId} kind={continueCard.kind} />
-            </span>
-            <span className={css.continueBody}>
-              <span className={css.continueEyebrow}>{continueCard.eyebrow}</span>
-              <span className={css.continueTitle}>{continueCard.title}</span>
-              <span className={css.continueMeta}>{continueCard.meta}</span>
-            </span>
-            <span className={css.continueCta}>
-              {t('lab.picker.continue.cta')}
-              <IconPhysicsPlay size={13} />
-            </span>
-          </button>
-        )}
 
-        {recommendations.length > 0 ? (
-          <section
-            className={css.recommendSection}
-            style={revealAt(2)}
-            aria-label={t('lab.picker.recommend.title')}
-            data-physicsos-recommend=""
-          >
-            <h3 className={clsx(css.sectionLabel, css.reveal)}>{t('lab.picker.recommend.title')}</h3>
-            <div className={css.recommendGrid}>
-              {recommendations.map(({ template, reason, nodeId }, index) => {
-                const node = nodeId === undefined ? undefined : knowledgeNodeOf(nodeId)
-                return (
-                  <button
-                    key={`recommend-${template.id}`}
-                    type="button"
-                    className={clsx(css.recommendCard, css.card, css[`subject-${template.domain}`])}
-                    style={cardAt(index)}
-                    data-template-id={template.id}
-                    data-reason={reason}
-                    onClick={() => { pick(template) }}
-                  >
-                    <span className={clsx(css.art, css.artBanner)}>
-                      <ExperimentArt templateId={template.id} fit="cover" />
-                    </span>
-                    <span className={css.recommendReason}>
-                      {reason === 'weakness'
-                        ? `${t('lab.picker.recommend.weakness')}${node === undefined ? '' : ` · ${node.label}`}`
-                        : t('lab.picker.recommend.classic')}
-                    </span>
-                    <span className={css.recommendName}>{t(template.label)}</span>
-                    <span className={css.recommendHint}>{t(template.hint)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+            {recommendations.length > 0 ? (
+              <section
+                className={clsx(css.recommendSection, css.reveal)}
+                style={revealAt(2)}
+                aria-label={t('lab.picker.recommend.title')}
+                data-physicsos-recommend=""
+              >
+                <h3 className={css.sectionLabel}>{t('lab.picker.recommend.title')}</h3>
+                <div className={css.recommendGrid}>
+                  {recommendations.map(({ template, reason, nodeId }, index) => {
+                    const node = nodeId === undefined ? undefined : knowledgeNodeOf(nodeId)
+                    return (
+                      <button
+                        key={`recommend-${template.id}`}
+                        type="button"
+                        className={clsx(css.recommendCard, css.card, css[`subject-${template.domain}`])}
+                        style={cardAt(index)}
+                        data-template-id={template.id}
+                        data-reason={reason}
+                        onClick={() => { pick(template) }}
+                      >
+                        <span className={clsx(css.art, css.artThumb)}>
+                          <ExperimentArt templateId={template.id} />
+                        </span>
+                        <span className={css.recommendText}>
+                          <span className={css.recommendReason}>
+                            {reason === 'weakness'
+                              ? `${t('lab.picker.recommend.weakness')}${node === undefined ? '' : ` · ${node.label}`}`
+                              : t('lab.picker.recommend.classic')}
+                          </span>
+                          <span className={css.recommendName}>{t(template.label)}</span>
+                          <span className={css.recommendHint}>{t(template.hint)}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            ) : null}
+          </div>
         ) : null}
 
-        <div className={clsx(css.searchRow, css.reveal)} style={revealAt(3)}>
-          <input
-            type="search"
-            className={css.search}
-            placeholder={t('lab.template.picker.search')}
-            aria-label={t('lab.template.picker.search')}
-            value={query}
-            onChange={(event) => { setQuery(event.target.value) }}
-          />
-          {/* 学段 partition: the coarse 初中/高中 cut ABOVE the domain tabs, so a
-              junior student never wades through 复合场 to find 伏安法. */}
-          <div
-            className={css.stageTabs}
-            role="tablist"
-            aria-label={t('lab.template.picker.stage')}
-            data-physicsos-stage={stage}
-          >
-            {STAGES.map(entry => (
-              <button
-                key={entry.id}
-                type="button"
-                role="tab"
-                aria-selected={stage === entry.id}
-                className={clsx(css.stageTab, stage === entry.id && css.stageTabActive)}
-                onClick={() => { setStage(entry.id) }}
-              >
-                {t(entry.label)}
-              </button>
-            ))}
+        {/* ------------------------------------------------------ filter bar */}
+        <div className={clsx(css.browseHead, css.reveal)} style={revealAt(3)}>
+          <div className={css.browseTitle}>
+            <h3 className={css.browseHeading}>{t('lab.template.picker.allTemplates')}</h3>
+            <span className={css.browseHint}>{t('lab.picker.browse.hint')}</span>
           </div>
-        </div>
-
-        {recentTemplates.length > 0 && query.trim() === '' ? (
-          <section
-            className={clsx(css.recentSection, css.reveal)}
-            style={revealAt(4)}
-            aria-label={t('lab.template.picker.recent')}
-          >
-            <h3 className={css.sectionLabel}>{t('lab.template.picker.recent')}</h3>
-            <div className={css.recentRow}>
-              {recentTemplates.map(template => (
+          <div className={css.browseControls}>
+            <input
+              type="search"
+              className={css.search}
+              placeholder={t('lab.template.picker.search')}
+              aria-label={t('lab.template.picker.search')}
+              value={query}
+              onChange={(event) => { setQuery(event.target.value) }}
+            />
+            {/* 学段 partition: the coarse 初中/高中 cut, so a junior student
+                never wades through 复合场 to find 伏安法. */}
+            <div
+              className={css.stageTabs}
+              role="tablist"
+              aria-label={t('lab.template.picker.stage')}
+              data-physicsos-stage={stage}
+            >
+              {STAGES.map(entry => (
                 <button
-                  key={`rail-${template.id}`}
+                  key={entry.id}
                   type="button"
-                  className={clsx(css.recentChip, css[`subject-${template.domain}`])}
-                  onClick={() => { pick(template) }}
+                  role="tab"
+                  aria-selected={stage === entry.id}
+                  className={clsx(css.stageTab, stage === entry.id && css.stageTabActive)}
+                  onClick={() => { setStage(entry.id) }}
                 >
-                  <span className={css.recentIcon}><template.icon size={16} /></span>
-                  <span className={css.recentName}>{t(template.label)}</span>
+                  {t(entry.label)}
                 </button>
               ))}
             </div>
-          </section>
-        ) : null}
+          </div>
+        </div>
 
         <div
           className={clsx(css.tabs, css.reveal)}
-          style={revealAt(5)}
+          style={revealAt(4)}
           role="tablist"
           aria-label={t('lab.template.picker.allTemplates')}
         >
@@ -370,55 +388,84 @@ export function ExperimentPicker({
           ))}
         </div>
 
-        {filtered.length === 0 ? (
-          <p className={css.empty}>{t('lab.template.picker.empty')}</p>
+        {/* ---------------------------------------------------------- shelves */}
+        {shelves.length === 0 ? (
+          <div className={css.empty}>
+            <p>{t('lab.template.picker.empty')}</p>
+          </div>
         ) : (
-          /* Keyed by the filters so switching re-runs the card entrance stagger. */
-          <div className={css.grid} style={revealAt(6)} key={`${tab}:${stage}:${query.trim()}`}>
-            {filtered.map((template, index) => (
-              <button
-                key={template.id}
-                type="button"
-                className={clsx(
-                  css.entry,
-                  css.card,
-                  css[`subject-${template.domain}`],
-                  template.comingSoon === true && css.entrySoon,
-                )}
-                style={cardAt(index)}
-                disabled={template.comingSoon === true}
-                data-stage={template.stage}
-                onClick={() => { pick(template) }}
+          /* Keyed by the filters so switching re-runs the shelf entrance stagger. */
+          <div className={css.shelves} key={`${tab}:${stage}:${trimmedQuery}`}>
+            {shelves.map((shelf, shelfIndex) => (
+              <section
+                key={shelf.id}
+                className={clsx(css.shelf, css.reveal, shelf.id !== 'results' && css[`subject-${shelf.id}`])}
+                style={revealAt(5 + Math.min(shelfIndex, 6))}
+                aria-label={shelf.label}
+                data-physicsos-shelf={shelf.id}
               >
-                <span className={clsx(css.art, css.artThumb)}>
-                  <ExperimentArt templateId={template.id} />
-                </span>
-                <span className={css.entryText}>
-                  <span className={css.entryName}>
-                    {t(template.label)}
-                    {template.comingSoon === true ? (
-                      <span className={css.soonBadge}>{t('lab.template.picker.comingSoon')}</span>
-                    ) : null}
-                  </span>
-                  <span className={css.entryHint}>{t(template.hint)}</span>
-                </span>
-                <span className={css.tagColumn}>
-                  <span className={css.domainTag}>
-                    {t(`lab.template.group.${template.domain}`)}
-                  </span>
-                  <span className={css.stageTag}>
-                    {t(`lab.template.stage.${template.stage}`)}
-                  </span>
-                </span>
-              </button>
+                {grouped ? (
+                  <h4 className={css.shelfHead}>
+                    <span className={css.shelfDot} aria-hidden="true" />
+                    {shelf.label}
+                    <span className={css.shelfCount}>{shelf.templates.length}</span>
+                  </h4>
+                ) : null}
+                <div className={css.grid}>
+                  {shelf.templates.map((template, index) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      className={clsx(
+                        css.entry,
+                        css.card,
+                        css[`subject-${template.domain}`],
+                        template.comingSoon === true && css.entrySoon,
+                      )}
+                      style={cardAt(index)}
+                      disabled={template.comingSoon === true}
+                      data-stage={template.stage}
+                      onClick={() => { pick(template) }}
+                    >
+                      <span className={clsx(css.art, css.artThumb)}>
+                        <ExperimentArt templateId={template.id} />
+                      </span>
+                      <span className={css.entryText}>
+                        <span className={css.entryName}>
+                          {t(template.label)}
+                          {template.comingSoon === true ? (
+                            <span className={css.soonBadge}>{t('lab.template.picker.comingSoon')}</span>
+                          ) : recent.includes(template.id) ? (
+                            <span className={css.recentBadge}>{t('lab.picker.recentBadge')}</span>
+                          ) : null}
+                        </span>
+                        <span className={css.entryHint}>{t(template.hint)}</span>
+                      </span>
+                      <span className={css.tagColumn}>
+                        {/* The subject is redundant under a subject shelf heading;
+                            it earns its place only on a flat cross-subject list. */}
+                        {grouped ? null : (
+                          <span className={css.domainTag}>
+                            {t(`lab.template.group.${template.domain}`)}
+                          </span>
+                        )}
+                        <span className={css.stageTag}>
+                          {t(`lab.template.stage.${template.stage}`)}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
 
         <footer className={clsx(css.footer, css.reveal)} style={revealAt(7)}>
           <span className={css.count}>
-            <IconPhysicsPlay size={14} />
-            {t('lab.template.picker.allTemplates')} · {SELECTABLE_TEMPLATE_COUNT}
+            {grouped
+              ? `${t('lab.template.picker.allTemplates')} · ${SELECTABLE_TEMPLATE_COUNT}`
+              : `${resultCount} / ${SELECTABLE_TEMPLATE_COUNT}`}
           </span>
         </footer>
       </div>

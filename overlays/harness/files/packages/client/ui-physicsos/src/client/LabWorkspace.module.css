@@ -1200,6 +1200,235 @@
 }
 
 /* ==========================================================================
+   Workspace motion
+   ==========================================================================
+
+   Entrance: the shell assembles around the canvas — toolbar settles from
+   above, the scene tree slides in from the left, the inspector from the right,
+   the canvas breathes in at the centre, transport and data rise from below.
+   One choreography, ~500ms, then still. Physics time is never animated by CSS;
+   only chrome moves. */
+
+@keyframes lab-settle-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lab-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lab-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lab-breathe-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lab-rise-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lab-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toolbar {
+  animation: lab-settle-down 360ms var(--physics-ease-emphasized) both;
+}
+
+.scenePanel {
+  animation: lab-slide-left 440ms var(--physics-ease-emphasized) both;
+  animation-delay: 60ms;
+}
+
+.canvas {
+  animation: lab-breathe-in 520ms var(--physics-ease-emphasized) both;
+  animation-delay: 90ms;
+}
+
+.inspectorPanel {
+  animation: lab-slide-right 440ms var(--physics-ease-emphasized) both;
+  animation-delay: 120ms;
+}
+
+.timeline {
+  animation: lab-rise-up 420ms var(--physics-ease-emphasized) both;
+  animation-delay: 170ms;
+}
+
+.dataPanel {
+  animation: lab-rise-up 420ms var(--physics-ease-emphasized) both;
+  animation-delay: 220ms;
+}
+
+.agentDock {
+  animation: lab-pop-in 520ms var(--physics-ease-emphasized) both;
+  animation-delay: 420ms;
+}
+
+/* Running state: the transport glows, the clock turns live blue, the canvas
+   frame warms up one step — the student can tell from anywhere on screen that
+   time is moving. */
+
+.primaryRunning {
+  background: #2f66b8;
+  box-shadow:
+    0 6px 16px rgba(66, 121, 200, 0.28),
+    0 0 0 3px rgba(66, 121, 200, 0.18);
+}
+
+.primaryRunning svg {
+  animation: lab-run-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes lab-run-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.cover[data-physicsos-running='true'] .canvas {
+  border-color: rgba(66, 121, 200, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 10px 26px rgba(65, 93, 122, 0.06),
+    0 0 0 3px rgba(66, 121, 200, 0.08);
+  transition: border-color 220ms var(--physics-ease), box-shadow 220ms var(--physics-ease);
+}
+
+.cover[data-physicsos-running='true'] .clock:first-of-type {
+  color: #2d5f9b;
+  font-weight: 600;
+}
+
+.cover[data-physicsos-running='true'] .transportPrimary {
+  box-shadow:
+    0 6px 16px rgba(66, 121, 200, 0.24),
+    0 0 0 4px rgba(66, 121, 200, 0.14);
+}
+
+.cover[data-physicsos-running='true'] .track::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--dsw-static-blue-600) 36%, transparent),
+    0 0 0 5px rgba(66, 121, 200, 0.16);
+}
+
+.clock,
+.transportPrimary,
+.track::-webkit-slider-thumb {
+  transition: color 200ms var(--physics-ease), box-shadow 220ms var(--physics-ease);
+}
+
+/* Buttons and rows answer the hand: a quick press-down, a quick lift. */
+.tool,
+.primary,
+.secondary,
+.ghost,
+.transport,
+.tab {
+  transition:
+    background-color var(--physics-motion-fast) var(--physics-ease),
+    color var(--physics-motion-fast) var(--physics-ease),
+    box-shadow var(--physics-motion-base) var(--physics-ease),
+    transform var(--physics-motion-fast) var(--physics-ease);
+}
+
+.tool:active:not(:disabled),
+.primary:active:not(:disabled),
+.secondary:active:not(:disabled),
+.ghost:active:not(:disabled),
+.transport:active {
+  transform: scale(0.96);
+}
+
+/* Verification rows tick in one after another when the list (re)appears. */
+.verificationItem {
+  animation: lab-rise-up 320ms var(--physics-ease-emphasized) both;
+  animation-delay: calc(var(--physics-row-index, 0) * 45ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .scenePanel,
+  .canvas,
+  .inspectorPanel,
+  .timeline,
+  .dataPanel,
+  .agentDock,
+  .verificationItem,
+  .primaryRunning svg {
+    animation: none;
+  }
+
+  .tool:active:not(:disabled),
+  .primary:active:not(:disabled),
+  .secondary:active:not(:disabled),
+  .ghost:active:not(:disabled),
+  .transport:active {
+    transform: none;
+  }
+}
+
+/* ==========================================================================
    Unified PhysicsWorkspace parts
    ========================================================================== */
 
@@ -1618,6 +1847,57 @@
   border-radius: 10px;
   background: rgba(225, 239, 255, 0.72);
   color: #2d5f9b;
+}
+
+/* The tutor has a face: the mascot in its thinking pose fronts every empty
+   state of the drawer, so "ask me something" reads as an invitation. */
+.agentMascot {
+  margin: 4px 0 -2px;
+}
+
+/* Dock button: mascot head as the avatar, spark as the AI cue. */
+.agentDockMascot {
+  margin: 0 -2px 0 -6px;
+  transform: translateY(1px);
+}
+
+.agentDockSpark {
+  color: #2d5f9b;
+}
+
+.agentDock {
+  height: 36px;
+  padding: 0 14px 0 8px;
+  gap: 5px;
+  transition:
+    box-shadow 220ms var(--physics-ease-emphasized),
+    transform 220ms var(--physics-ease-emphasized),
+    background-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.agentDock:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(20, 33, 61, 0.14);
+}
+
+/* Drawer slides in from the right, its cards rise one after another. */
+.agentDrawer {
+  animation: lab-slide-right 360ms var(--physics-ease-emphasized) both;
+}
+
+.agentCard {
+  animation: lab-rise-up 360ms var(--physics-ease-emphasized) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentDrawer,
+  .agentCard {
+    animation: none;
+  }
+
+  .agentDock:hover {
+    transform: none;
+  }
 }
 
 .agentIntro {

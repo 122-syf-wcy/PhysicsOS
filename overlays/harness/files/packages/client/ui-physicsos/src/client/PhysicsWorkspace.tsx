@@ -36,6 +36,8 @@ import { TimelineScrubber } from './TimelineScrubber.tsx'
 import { AgentDrawer } from './AgentDrawer.tsx'
 import { ExperimentReportPanel } from './ExperimentReportPanel.tsx'
 import { IconVariable, IconVerified } from './icons/physics-icons.tsx'
+import { Mascot } from './Mascot.tsx'
+import { useEventEffects } from './physics/event-effects.ts'
 import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
 import type { ObservableKey } from './physics/scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
@@ -123,11 +125,16 @@ export function PhysicsWorkspace({
 
   const observables = useMemo(() => collectObservables(snapshot), [snapshot])
 
+  /* Collision / boundary / turning-point bursts, fired as the clock crosses
+     each timeline event during playback. */
+  const effects = useEventEffects(clock, snapshot.events, snapshot.view)
+
   return (
     <div
       className={css.cover}
       data-physicsos-surface="lab"
       data-physicsos-domain={snapshot.domain}
+      data-physicsos-running={running ? 'true' : 'false'}
       data-scene-revision={snapshot.sceneRevision}
       data-verification-status={snapshot.status}
     >
@@ -189,8 +196,9 @@ export function PhysicsWorkspace({
           <span className={css.divider} />
           <button
             type="button"
-            className={css.primary}
+            className={clsx(css.primary, running && css.primaryRunning)}
             disabled={failed || clock.total <= 0}
+            aria-pressed={running}
             onClick={() => { setSnapshot(runtime.setRunning(true)) }}
           >
             <IconPlayOutline16 size={13} />
@@ -291,6 +299,8 @@ export function PhysicsWorkspace({
                 trajectoryTimes={snapshot.trajectoryTimes}
                 {...snapshot.sampleReadout === undefined ? {} : { sampleReadout: snapshot.sampleReadout }}
                 onSeekTime={seek}
+                effects={effects}
+                clockTime={clock.time}
               />
             </section>
 
@@ -420,7 +430,8 @@ export function PhysicsWorkspace({
         />
       ) : (
         <button type="button" className={css.agentDock} onClick={() => { setAgentOpen(true) }}>
-          <IconSparkle16 size={14} />
+          <Mascot pose="think" variant="avatar" size={26} className={css.agentDockMascot} />
+          <IconSparkle16 size={12} className={css.agentDockSpark} />
           {t('lab.agent')}
         </button>
       )}

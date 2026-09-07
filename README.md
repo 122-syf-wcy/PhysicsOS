@@ -103,9 +103,11 @@ pnpm build:web
 ## 视觉资产
 
 - `UI/generated/`：生成模型输出的 4K/原始资产与生成元数据
-- `vendor/deepseek-harness/apps/web/public/physicsos/`：经过网页压缩的正式运行资产
+- `UI/generated/mascot/`：IP 形象「小 Q」的透明原图（wave / think / search 三个姿态）
+- `vendor/deepseek-harness/apps/web/public/physicsos/`：经过网页压缩的正式运行资产（`mascot/` 下为 160/320/640 三档 WebP）
+- `scripts/design/cutout-mascot.py`：把白底渲染切成保留柔和阴影的透明图并导出网页尺寸
 
-当前正式首页使用真实磁场实验器材图，原始 4K 文件保留在 `UI/generated/`，网页不直接加载 8-10 MB 原图。
+首页 Hero 是一个实时弹性碰撞小场景加小 Q（装饰性，不进入物理引擎）；入口卡片仍使用真实磁场实验器材图，原始 4K 文件保留在 `UI/generated/`，网页不直接加载 8-10 MB 原图。IP 与动效规范见 `docs/06-UI-DESIGN-SYSTEM.md` §3.1 与 §37。
 
 ## 架构边界
 

@@ -261,12 +261,92 @@
   }
 }
 
+/* ---- entrance ---------------------------------------------------------------
+   Everything under the composer rises in after it, top to bottom, so the page
+   assembles in reading order instead of popping in as one block. */
+
+@keyframes home-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.examples {
+  animation: home-rise-in 460ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 300ms;
+}
+
+.portal {
+  animation: home-rise-in 520ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 360ms;
+}
+
+.portal:nth-child(2) {
+  animation-delay: 430ms;
+}
+
+.utilities {
+  animation: home-rise-in 460ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 500ms;
+}
+
+.recent {
+  animation: home-rise-in 460ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 560ms;
+}
+
+/* The portal photo eases up under the hand; the chevron leads the way. */
+.portalImage {
+  transition: transform 600ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.portal:hover .portalImage {
+  transform: scale(1.035);
+}
+
+.portalMeta svg {
+  transition: transform 240ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.portal:hover .portalMeta svg {
+  transform: translateX(3px);
+}
+
+.example {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 160ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.example:active {
+  transform: scale(0.97);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .portal {
+  .portal,
+  .portalImage,
+  .portalMeta svg,
+  .example {
     transition: none;
   }
 
-  .portal:hover {
+  .examples,
+  .portal,
+  .utilities,
+  .recent {
+    animation: none;
+  }
+
+  .portal:hover,
+  .portal:hover .portalImage,
+  .portal:hover .portalMeta svg {
     transform: none;
   }
 }

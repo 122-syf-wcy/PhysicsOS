@@ -39,6 +39,25 @@ export interface TrajectoryHover {
   rows: readonly { label: string; value: string }[]
 }
 
+/**
+ * One transient burst drawn over the frame when the playback clock crosses a
+ * timeline event — the visible "beat" of a collision, a field boundary or a
+ * turning point. Purely presentational: the position is a point the runtime
+ * already reported (a key point or the live body), never something the canvas
+ * computes, and the burst carries no physical quantity.
+ */
+export interface CanvasEffect {
+  /** Unique per firing so React never recycles a half-played animation. */
+  key: string
+  /** `impact` = collision / plate hit, `boundary` = field enter/exit, `mark` = launch / apex / generic. */
+  kind: 'impact' | 'boundary' | 'mark'
+  /** Scene-unit anchor of the burst. */
+  at: ScenePoint
+}
+
+/** Spark rays around an impact burst, in degrees. */
+const IMPACT_RAYS = [0, 45, 90, 135, 180, 225, 270, 315] as const
+
 export interface PhysicsCanvasProps {
   view: SceneVisualModel
   /** Accessible description of what the frame shows. */
@@ -53,7 +72,19 @@ export interface PhysicsCanvasProps {
   sampleReadout?: (index: number) => readonly { label: string; value: string }[]
   /** Click a trajectory point to seek the timeline to that scene time. */
   onSeekTime?: (time: number) => void
+  /** Transient event bursts (collision, boundary, mark) to draw over the frame. */
+  effects?: readonly CanvasEffect[]
+  /**
+   * Current playback time. When supplied together with `trajectoryTimes`, the
+   * canvas draws strobe ghosts of the moving body at fixed time intervals along
+   * the path it has ALREADY travelled — the textbook multi-flash photograph,
+   * built only from samples the runtime produced.
+   */
+  clockTime?: number
 }
+
+/** Strobe ghosts per full run: one every total/STROBE_DIVISIONS seconds. */
+const STROBE_DIVISIONS = 12
 
 /**
  * Render one physics frame.
@@ -64,6 +95,8 @@ export function PhysicsCanvas({
   trajectoryTimes,
   sampleReadout,
   onSeekTime,
+  effects,
+  clockTime,
 }: PhysicsCanvasProps) {
   const uid = useId().replace(/:/g, '')
   const svgRef = useRef<SVGSVGElement>(null)
@@ -231,6 +264,41 @@ export function PhysicsCanvas({
 
   const Renderer = RENDERERS[view.domain]
 
+  /* Strobe ghosts: the moving body's outline at every total/N seconds it has
+     already passed. Radius comes from the live body or the particle; positions
+     are trajectory samples — nothing here is a new physical claim. */
+  const strobe = useMemo(() => {
+    if (!interactive || clockTime === undefined) return []
+    const live = view.bodies.find(body => body.live === true)
+    const particle = view.particles[0]
+    const radius = live !== undefined
+      ? live.size * scale
+      : particle !== undefined
+        ? particle.radius * scale
+        : 0
+    if (radius <= 0) return []
+    const total = trajectoryTimes[trajectoryTimes.length - 1] ?? 0
+    if (total <= 0) return []
+    const interval = total / STROBE_DIVISIONS
+    const ghosts: { x: number; y: number; r: number; kind: 'ball' | 'block' | 'particle'; rotation: number }[] = []
+    let nextMark = interval
+    for (const [index, time] of trajectoryTimes.entries()) {
+      if (time > clockTime + 1e-9) break
+      if (time + 1e-9 < nextMark) continue
+      const point = trajectory.points[index]
+      if (point === undefined) continue
+      ghosts.push({
+        x: projection.px(point),
+        y: projection.py(point),
+        r: radius,
+        kind: live === undefined ? 'particle' : live.kind,
+        rotation: live?.rotation ?? 0,
+      })
+      nextMark += interval
+    }
+    return ghosts
+  }, [interactive, clockTime, view.bodies, view.particles, scale, trajectoryTimes, trajectory, projection])
+
   return (
     <div className={css.host} ref={hostRef}>
       <svg
@@ -260,6 +328,13 @@ export function PhysicsCanvas({
           <clipPath id={clipId}>
             <rect x={PAD.left} y={PAD.top} width={plotWidth} height={plotHeight} />
           </clipPath>
+          {/* Soft sphere shading for ball bodies (primitives.tsx Body). A
+              gradient, not a filter, so it costs nothing per frame. */}
+          <radialGradient id={`pc-ball-${uid}`} cx="36%" cy="32%" r="72%">
+            <stop offset="0%" className={css.ballHighlight} />
+            <stop offset="55%" className={css.ballMid} />
+            <stop offset="100%" className={css.ballShade} />
+          </radialGradient>
         </defs>
 
         <rect x={PAD.left} y={PAD.top} width={plotWidth} height={plotHeight} className={css.plot} />
@@ -306,10 +381,75 @@ export function PhysicsCanvas({
           {view.axes.y}
         </text>
 
+        {/* ---------- strobe ghosts ---------- */}
+        {strobe.length === 0 ? null : (
+          <g clipPath={`url(#${clipId})`} className={css.strobe} aria-hidden="true">
+            {strobe.map((ghost, index) => (
+              ghost.kind === 'block' ? (
+                <rect
+                  key={index}
+                  className={css.strobeBody}
+                  x={ghost.x - ghost.r}
+                  y={ghost.y - ghost.r}
+                  width={ghost.r * 2}
+                  height={ghost.r * 2}
+                  rx={ghost.r * 0.18}
+                  transform={ghost.rotation === 0 ? undefined : `rotate(${-ghost.rotation} ${ghost.x} ${ghost.y})`}
+                  style={{ opacity: 0.16 + (index / Math.max(1, strobe.length)) * 0.22 }}
+                />
+              ) : (
+                <circle
+                  key={index}
+                  className={css.strobeBody}
+                  cx={ghost.x}
+                  cy={ghost.y}
+                  r={ghost.r}
+                  style={{ opacity: 0.16 + (index / Math.max(1, strobe.length)) * 0.22 }}
+                />
+              )
+            ))}
+          </g>
+        )}
+
         {/* ---------- domain drawing ---------- */}
         <g clipPath={`url(#${clipId})`}>
           <Renderer view={view} projection={projection} />
         </g>
+
+        {/* ---------- event bursts ----------
+            Drawn above the domain layer and clipped with it. Each burst is a
+            CSS animation keyed per firing, so it plays out on its own clock and
+            never re-triggers on an unrelated re-render. */}
+        {effects === undefined || effects.length === 0 ? null : (
+          <g clipPath={`url(#${clipId})`} className={css.effects} aria-hidden="true">
+            {effects.map((effect) => {
+              const cx = projection.px(effect.at)
+              const cy = projection.py(effect.at)
+              const kindClass =
+                effect.kind === 'impact'
+                  ? css.effectImpact
+                  : effect.kind === 'boundary'
+                    ? css.effectBoundary
+                    : css.effectMark
+              return (
+                <g key={effect.key} className={clsx(css.effect, kindClass)} data-physicsos-effect={effect.kind}>
+                  <circle className={css.effectRing} cx={cx} cy={cy} r="6" />
+                  <circle className={clsx(css.effectRing, css.effectRingLate)} cx={cx} cy={cy} r="6" />
+                  <circle className={css.effectCore} cx={cx} cy={cy} r="3" />
+                  {/* The rotation lives on a wrapper: a CSS transform animation on
+                      the line itself would override its rotate() attribute. */}
+                  {effect.kind === 'impact'
+                    ? IMPACT_RAYS.map(angle => (
+                      <g key={angle} transform={`rotate(${angle} ${cx.toFixed(2)} ${cy.toFixed(2)})`}>
+                        <line className={css.effectRay} x1={cx} y1={cy - 4} x2={cx} y2={cy - 12} />
+                      </g>
+                    ))
+                    : null}
+                </g>
+              )
+            })}
+          </g>
+        )}
 
         {/* ---------- readout gutter ---------- */}
         {view.overlay.readout.length === 0 ? null : (

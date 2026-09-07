@@ -7,7 +7,7 @@
  * whatever the runtime reports and reports interactions back through callbacks.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import { IconCheckOutline14, IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -270,8 +270,13 @@ export function VerificationList({
   if (checks.length === 0) return <p className={css.dataStub}>{emptyLabel}</p>
   return (
     <ul className={css.verificationList}>
-      {checks.map(check => (
-        <li key={check.id} className={css.verificationItem} data-status={check.status}>
+      {checks.map((check, index) => (
+        <li
+          key={check.id}
+          className={css.verificationItem}
+          data-status={check.status}
+          style={{ '--physics-row-index': String(Math.min(index, 8)) } as CSSProperties}
+        >
           <span className={clsx(css.verificationMark, css[`verification_${check.status}`])}>
             <IconCheckOutline14 size={11} />
           </span>

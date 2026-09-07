@@ -169,6 +169,20 @@
 .bodyLive {
   stroke: var(--physics-body-live);
   stroke-width: 1.8;
+  transition: filter 200ms var(--physics-ease);
+}
+
+/* While the clock runs, the live body carries a soft halo so the eye keeps
+   the moving object among the static construction. Chrome only: the
+   geometry underneath is untouched. */
+:global([data-physicsos-running='true']) .bodyLive {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--physics-body-live) 55%, transparent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bodyLive {
+    transition: none;
+  }
 }
 
 .bodyGloss {

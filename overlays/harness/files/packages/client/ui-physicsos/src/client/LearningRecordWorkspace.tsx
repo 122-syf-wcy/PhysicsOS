@@ -19,6 +19,7 @@ import {
   recentMistakesOf,
   type LearningRecordState,
 } from './learning-record-store.ts'
+import { Mascot } from './Mascot.tsx'
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import css from './LearningRecordWorkspace.module.css'
 
@@ -89,6 +90,7 @@ export function LearningRecordWorkspace({
 
       {total === 0 ? (
         <div className={css.empty}>
+          <Mascot pose="search" size={128} className={css.emptyMascot} />
           <p className={css.emptyTitle}>{t('record.emptyTitle')}</p>
           <p className={css.emptyBody}>{t('record.emptyBody')}</p>
         </div>

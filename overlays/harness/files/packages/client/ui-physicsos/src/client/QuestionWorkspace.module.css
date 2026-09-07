@@ -66,8 +66,21 @@
 .sectionHeader { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .sectionHeader h3 { margin: 0; font-size: 11px; font-weight: 600; line-height: 17px; }
 .sectionHeader > span { color: var(--dsw-alias-label-caption); font-size: 10px; }
-.questionList { display: grid; gap: 3px; margin-top: 6px; }
-.questionItem { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 30px; padding: 5px 7px; border: none; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 11px; text-align: left; cursor: pointer; }
+.questionList { display: grid; gap: 12px; margin-top: 8px; }
+.questionShelf { display: grid; gap: 2px; }
+.questionShelfHead { display: flex; align-items: center; gap: 6px; margin: 0 0 3px; padding: 0 5px; color: var(--dsw-alias-label-secondary); font-size: 11px; font-weight: 600; line-height: 16px; }
+.questionShelfDot { width: 6px; height: 6px; border-radius: 50%; background: var(--physics-axis); }
+.questionShelfCount { margin-left: auto; color: var(--dsw-alias-label-caption); font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.questionShelf[data-question-domain='mechanics'] .questionShelfDot { background: var(--physics-subject-mechanics); }
+.questionShelf[data-question-domain='optics'] .questionShelfDot { background: var(--physics-subject-optics); }
+.questionShelf[data-question-domain='circuit'] .questionShelfDot { background: var(--physics-subject-circuit); }
+.questionShelf[data-question-domain='electric'] .questionShelfDot { background: var(--physics-subject-electric); }
+.questionShelf[data-question-domain='magnetic'] .questionShelfDot { background: var(--physics-subject-magnetic); }
+.questionShelf[data-question-domain='composite'] .questionShelfDot { background: var(--physics-subject-composite); }
+.questionShelf[data-question-domain='induction'] .questionShelfDot { background: var(--physics-subject-induction); }
+.questionShelf[data-question-domain='wave'] .questionShelfDot { background: var(--physics-subject-wave); }
+.questionItem { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 30px; padding: 5px 7px; border: none; border-radius: 7px; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 11.5px; line-height: 16px; text-align: left; cursor: pointer; transition: background-color var(--physics-motion-fast) var(--physics-ease), color var(--physics-motion-fast) var(--physics-ease); }
+.questionItem > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .questionItem:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .questionItemActive { background: var(--dsw-static-blue-50); color: var(--dsw-static-blue-600); }
 .questionItemArrow { flex: none; color: var(--dsw-alias-label-caption); font-size: 16px; line-height: 14px; }
@@ -787,4 +800,233 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 16px;
+}
+
+/* ==========================================================================
+   Focus and motion
+   ==========================================================================
+
+   The centre column is the subject: the question, its facts and the verified
+   picture. The rails are reference. So the centre gets the stronger surface
+   and the larger type; the rails step back one notch in tone and weight, and
+   the smallest 10px captions come up to a legible 11px. */
+
+.mainPanel {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    var(--physics-glass-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.leftRail,
+.rightRail {
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.stemBlock p {
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.stemBlock,
+.factBlock {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.stemLabel,
+.eyebrow,
+.panelSubhead,
+.panelMeta,
+.revision,
+.inputNote,
+.sectionHint,
+.canvasMeta,
+.canvasControls,
+.sectionHeader > span {
+  font-size: 11px;
+}
+
+.factBlock h3 {
+  font-size: 11.5px;
+}
+
+.factBlock li,
+.knownStatic,
+.knownButton {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.step strong {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.step p {
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.panelHeader h2 {
+  font-size: 13px;
+}
+
+/* Entrance: toolbar settles, the centre breathes in first, the rails follow
+   from their own sides. */
+
+@keyframes question-settle-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes question-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes question-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes question-breathe-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes question-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toolbar {
+  animation: question-settle-down 360ms var(--physics-ease-emphasized) both;
+}
+
+.mainPanel {
+  animation: question-breathe-in 480ms var(--physics-ease-emphasized) both;
+  animation-delay: 60ms;
+}
+
+.leftRail {
+  animation: question-slide-left 440ms var(--physics-ease-emphasized) both;
+  animation-delay: 120ms;
+}
+
+.rightRail {
+  animation: question-slide-right 440ms var(--physics-ease-emphasized) both;
+  animation-delay: 160ms;
+}
+
+/* The result and each solution step arrive in order once a question resolves. */
+.resultReady,
+.resultWarning {
+  animation: question-rise-in 360ms var(--physics-ease-emphasized) both;
+}
+
+.step {
+  animation: question-rise-in 360ms var(--physics-ease-emphasized) both;
+  animation-delay: calc(var(--physics-row-index, 0) * 50ms);
+}
+
+/* Verified: the canvas frame flashes green once, then settles. */
+@keyframes question-verified-flash {
+  0% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      0 10px 26px rgba(65, 93, 122, 0.06),
+      0 0 0 0 rgba(47, 158, 90, 0.4);
+  }
+
+  40% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      0 10px 26px rgba(65, 93, 122, 0.06),
+      0 0 0 6px rgba(47, 158, 90, 0.12);
+  }
+
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      0 10px 26px rgba(65, 93, 122, 0.06),
+      0 0 0 0 rgba(47, 158, 90, 0);
+  }
+}
+
+.cover[data-workflow='READY'] .canvasWrap {
+  animation: question-verified-flash 1100ms var(--physics-ease-emphasized) both;
+  animation-delay: 240ms;
+}
+
+.primaryButton,
+.secondaryButton,
+.processButton,
+.canvasControls button {
+  transition:
+    background-color var(--physics-motion-fast) var(--physics-ease),
+    color var(--physics-motion-fast) var(--physics-ease),
+    transform var(--physics-motion-fast) var(--physics-ease);
+}
+
+.primaryButton:active:not(:disabled),
+.secondaryButton:active:not(:disabled),
+.processButton:active:not(:disabled),
+.canvasControls button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .mainPanel,
+  .leftRail,
+  .rightRail,
+  .resultReady,
+  .resultWarning,
+  .step,
+  .cover[data-workflow='READY'] .canvasWrap {
+    animation: none;
+  }
+
+  .primaryButton:active:not(:disabled),
+  .secondaryButton:active:not(:disabled),
+  .processButton:active:not(:disabled),
+  .canvasControls button:active:not(:disabled) {
+    transform: none;
+  }
 }

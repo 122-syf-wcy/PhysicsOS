@@ -1,0 +1,69 @@
+/* PhysicsOS mascot. Flat storybook cut-outs with no frame: the figure's own
+   outline is the edge, so no shadow, border or plate is ever drawn around it. */
+
+.root {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--mascot-size, 120px) * var(--mascot-aspect, 0.8));
+  height: var(--mascot-size, 120px);
+  line-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+/* A slow, small breath — she is standing, not floating in a field. */
+.float .image {
+  transform-origin: 50% 100%;
+  animation: mascot-breathe 4.6s ease-in-out infinite;
+}
+
+@keyframes mascot-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-1.5%) scale(1.008);
+  }
+}
+
+/* ---- avatar: face crop in a circle -------------------------------------- */
+
+.avatar {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--mascot-size, 32px);
+  height: var(--mascot-size, 32px);
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #fff7e8, #f3e6cf);
+  box-shadow: inset 0 0 0 1px rgba(120, 90, 50, 0.16);
+  line-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.avatarImage {
+  position: absolute;
+  top: var(--mascot-face-y, 0);
+  left: var(--mascot-face-x, 0);
+  width: var(--mascot-figure-w);
+  height: var(--mascot-figure-h);
+  max-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float .image {
+    animation: none;
+  }
+}

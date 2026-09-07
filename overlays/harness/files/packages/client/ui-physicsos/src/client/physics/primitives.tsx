@@ -239,6 +239,7 @@ export const Body = ({
             cy={cy}
             r={radius}
             className={clsxJoin(css.bodyFill, body.live === true && css.bodyLive)}
+            style={{ fill: `url(#pc-ball-${projection.uid})` }}
           />
           {/* A single soft specular dot reads as a physical object without
               turning the marker into a glossy 3D ball. */}

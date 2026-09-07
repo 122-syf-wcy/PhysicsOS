@@ -23,6 +23,7 @@ import { agentSuggestions, matchIntent, type AgentAnswer } from './physics/physi
 import { experimentSelfChecksOf } from './physics/experiment-self-checks.ts'
 import { tutorScriptOf } from './physics/physics-tutor.ts'
 import { LabSelfCheckCard } from './LabSelfCheckCard.tsx'
+import { Mascot } from './Mascot.tsx'
 import { TutorCard } from './TutorCard.tsx'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
 import type { SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
@@ -183,7 +184,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
         <div className={css.agentBody}>
           {tutorScript === undefined ? (
             <div className={css.agentEmpty}>
-              <span className={css.agentEmptyIcon}><IconSparkle16 size={16} /></span>
+              <Mascot pose="think" size={88} className={css.agentMascot} />
               <p className={css.agentIntro}>{t('lab.tutor.unavailable')}</p>
             </div>
           ) : (
@@ -194,7 +195,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
         <div className={css.agentBody}>
           {turns.length === 0 ? (
             <div className={css.agentEmpty}>
-              <span className={css.agentEmptyIcon}><IconSparkle16 size={16} /></span>
+              <Mascot pose="think" size={88} className={css.agentMascot} />
               <p className={css.agentIntro}>{t('lab.agent.intro')}</p>
             </div>
           ) : (

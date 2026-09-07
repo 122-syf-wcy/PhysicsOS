@@ -16,7 +16,7 @@
  * computed in this file.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import {
   IconCheckOutline14,
@@ -179,6 +179,34 @@ const targetLabels = (ir: { domain: string; targets: readonly string[] } | null 
   ir === null || ir === undefined
     ? []
     : [...new Set(ir.targets.map(target => targetLabel(target, ir.domain)))]
+
+/** Subject of a golden question. */
+type QuestionDomain = NonNullable<GoldenQuestionDefinition['expectedDomain']>
+
+/**
+ * The bank's older entries carry no `expectedDomain`: the magnetic originals
+ * and the `mech-` mechanics set. The id prefix tells them apart.
+ */
+const questionDomainOf = (question: GoldenQuestionDefinition): QuestionDomain =>
+  question.expectedDomain ?? (question.id.startsWith('mech-') ? 'mechanics' : 'magnetic')
+
+/** Curriculum order of the example shelves, junior mechanics first. */
+const QUESTION_DOMAIN_ORDER: readonly QuestionDomain[] = [
+  'mechanics', 'optics', 'circuit', 'electric', 'magnetic', 'composite', 'induction', 'wave',
+]
+
+/** The example bank shelved by subject, empty shelves dropped. */
+const QUESTION_SHELVES: readonly {
+  readonly domain: QuestionDomain
+  readonly label: PhysicsosKey
+  readonly questions: readonly GoldenQuestionDefinition[]
+}[] = QUESTION_DOMAIN_ORDER
+  .map(domain => ({
+    domain,
+    label: `lab.template.group.${domain}` as const,
+    questions: GOLDEN_QUESTIONS.filter(question => questionDomainOf(question) === domain),
+  }))
+  .filter(shelf => shelf.questions.length > 0)
 
 const WORKFLOW_LABELS: Record<string, string> = {
   READY: '已完成求解',
@@ -1029,17 +1057,33 @@ export function QuestionWorkspace({
               <h3>示例题目</h3>
               <span>{GOLDEN_QUESTIONS.length}</span>
             </div>
+            {/* Grouped by subject: 80 flat rows read as a wall, eight short
+                shelves read as a table of contents. */}
             <div className={css.questionList}>
-              {GOLDEN_QUESTIONS.map(definition => (
-                <button
-                  type="button"
-                  key={definition.id}
-                  className={clsx(css.questionItem, document.metadata.title === definition.title && css.questionItemActive)}
-                  onClick={() => { selectQuestion(definition) }}
+              {QUESTION_SHELVES.map(shelf => (
+                <section
+                  key={shelf.domain}
+                  className={css.questionShelf}
+                  data-question-domain={shelf.domain}
+                  aria-label={t(shelf.label)}
                 >
-                  <span>{definition.title}</span>
-                  <span className={css.questionItemArrow}>›</span>
-                </button>
+                  <h4 className={css.questionShelfHead}>
+                    <span className={css.questionShelfDot} aria-hidden="true" />
+                    {t(shelf.label)}
+                    <span className={css.questionShelfCount}>{shelf.questions.length}</span>
+                  </h4>
+                  {shelf.questions.map(definition => (
+                    <button
+                      type="button"
+                      key={definition.id}
+                      className={clsx(css.questionItem, document.metadata.title === definition.title && css.questionItemActive)}
+                      onClick={() => { selectQuestion(definition) }}
+                    >
+                      <span>{definition.title}</span>
+                      <span className={css.questionItemArrow}>›</span>
+                    </button>
+                  ))}
+                </section>
               ))}
             </div>
           </div>
@@ -1428,7 +1472,7 @@ function SolutionSteps({
 }: HighlightControl & { readonly steps: readonly QuestionSolutionStep[] }) {
   return (
     <ol className={css.steps}>
-      {steps.map((step) => {
+      {steps.map((step, position) => {
         const formula = stepFormula(step)
         const symbol = step.resultSymbol
         const ids = symbol === undefined ? [] : highlightFor([symbol])
@@ -1443,7 +1487,11 @@ function SolutionSteps({
           </>
         )
         return (
-          <li key={step.index} className={css.step}>
+          <li
+            key={step.index}
+            className={css.step}
+            style={{ '--physics-row-index': String(Math.min(position, 8)) } as CSSProperties}
+          >
             <span className={css.stepIndex}>
               {t('questions.step', { index: String(step.index).padStart(2, '0') })}
             </span>

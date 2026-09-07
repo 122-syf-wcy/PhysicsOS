@@ -23,6 +23,33 @@
   fill: var(--physics-canvas-bg);
 }
 
+/* Ball shading stops (radialGradient in PhysicsCanvas defs). */
+.ballHighlight {
+  stop-color: #ffffff;
+}
+
+.ballMid {
+  stop-color: var(--physics-body-fill);
+}
+
+.ballShade {
+  stop-color: color-mix(in srgb, var(--physics-body-fill) 62%, var(--physics-body-stroke));
+}
+
+/* ---------- strobe ghosts ----------
+   Multi-flash outlines of the moving body along the path already travelled:
+   the same fill as the body, faded, newest brightest (opacity set inline). */
+
+.strobe {
+  pointer-events: none;
+}
+
+.strobeBody {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-live);
+  stroke-width: 1;
+}
+
 .gridMinor {
   stroke: var(--physics-grid-minor);
   stroke-width: 1;
@@ -87,6 +114,142 @@
   fill: var(--physics-measurement);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- event bursts ----------
+   The moment the clock crosses an event the canvas answers with one short,
+   legible beat — an expanding ring pair, a bright core, and for a collision a
+   ring of spark rays. Everything uses SVG geometry + CSS transforms with the
+   burst's own centre as transform-box origin, so it plays identically at any
+   zoom. Colour follows the event's physics: impact red, boundary field-blue,
+   turning point amber. */
+
+.effects {
+  pointer-events: none;
+}
+
+.effect {
+  --effect-ink: var(--physics-keypoint-impact);
+}
+
+.effectImpact {
+  --effect-ink: var(--physics-keypoint-impact);
+}
+
+.effectBoundary {
+  --effect-ink: var(--physics-field);
+}
+
+.effectMark {
+  --effect-ink: var(--physics-keypoint-apex);
+}
+
+.effectRing {
+  fill: none;
+  stroke: var(--effect-ink);
+  stroke-width: 1.8;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: physics-burst-ring 720ms var(--physics-ease-emphasized) both;
+}
+
+.effectRingLate {
+  stroke-width: 1.1;
+  animation-duration: 900ms;
+  animation-delay: 90ms;
+}
+
+.effectBoundary .effectRing {
+  animation-name: physics-burst-ring-wide;
+  stroke-dasharray: 3 3;
+}
+
+.effectMark .effectRing {
+  animation-duration: 560ms;
+}
+
+.effectCore {
+  fill: var(--effect-ink);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: physics-burst-core 420ms var(--physics-ease-emphasized) both;
+}
+
+.effectRay {
+  stroke: var(--effect-ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: physics-burst-ray 520ms var(--physics-ease-emphasized) both;
+}
+
+@keyframes physics-burst-ring {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.4);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(5.2);
+  }
+}
+
+@keyframes physics-burst-ring-wide {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(6);
+  }
+}
+
+@keyframes physics-burst-core {
+  0% {
+    opacity: 1;
+    transform: scale(0.6);
+  }
+
+  40% {
+    opacity: 0.9;
+    transform: scale(1.9);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes physics-burst-ray {
+  0% {
+    opacity: 0.95;
+    transform: translateY(-2px) scaleY(0.2);
+  }
+
+  55% {
+    opacity: 0.85;
+    transform: translateY(-12px) scaleY(1.1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scaleY(0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .effectRing,
+  .effectRingLate,
+  .effectCore,
+  .effectRay {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* ---------- trajectory tooltip ---------- */

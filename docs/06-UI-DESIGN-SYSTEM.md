@@ -107,6 +107,38 @@ PhysicsOS 字标
 
 ---
 
+# 3.1 IP 形象「小 Q」
+
+PhysicsOS 有一个 IP 形象：蓝色光泽球体 + 白色面罩 + 一圈电子轨道环。它把品牌几何（蓝、空间、轨道）给了一张脸，是产品里唯一允许“拟人化”的元素。
+
+资产：
+
+```text
+UI/generated/mascot/                       原始透明 PNG（生成模型输出经 cutout 处理）
+apps/web/public/physicsos/mascot/          网页用 WebP：{wave,think,search}-{160,320,640}.webp
+scripts/design/cutout-mascot.py            白底渲染 → 透明切图（保留柔和阴影）
+ui-physicsos/src/client/Mascot.tsx         唯一的渲染组件（姿态 / 尺寸 / 悬浮）
+```
+
+三个姿态各有语义，不得混用：
+
+```text
+wave     问候 —— 首页 Hero、AI 助教入口按钮
+think    思考 / 讲解 —— AI 助教空态、推导、加载
+search   寻找 —— 实验中心头部、学习记录空态、无结果
+```
+
+规则：
+
+```text
+业务代码只通过 <Mascot pose size /> 使用，不直接引用 webp
+一个视图最多出现一个小 Q
+不出现在 PhysicsCanvas 内部（画布只画物理）
+不与物理数据同框争夺焦点
+```
+
+---
+
 # 4. 基础颜色 Token
 
 推荐：
@@ -834,6 +866,41 @@ Error：
 ```css
 cubic-bezier(.2,.8,.2,1)
 ```
+
+## 37.1 动效分层
+
+动效只有三层，每层有明确的 token（见 `chrome.ts`）：
+
+```text
+响应    --physics-motion-fast/base/slow (120–180ms)   按钮、行、chip 的悬停与按下
+入场    --physics-motion-entrance (460ms) + --physics-ease-emphasized
+        页面骨架“围绕画布装配”：工具栏自上落下、场景树自左滑入、
+        Inspector 自右滑入、画布中央呼吸放大、时间轴与数据面板自下升起；
+        列表内元素以 --physics-card-index / --physics-row-index 错峰
+物理事件  PhysicsCanvas effects（碰撞 / 进出场 / 关键点冲击波）
+```
+
+## 37.2 物理事件动效
+
+播放时钟越过一个 `TimelineEvent`，画布在事件发生处打出一次冲击波（`CanvasEffect`）：
+
+```text
+impact / plate-impact   红色双环 + 八向火花（碰撞、打到极板、落地）
+enter / exit            场色虚线宽环（进入 / 离开场区）
+launch / apex / generic 琥珀色小脉冲（起点、最高点）
+```
+
+锚点只取运行时已声明的事实：同 id 的 KeyPoint，否则当前帧的运动物体；跳转（seek）不触发。实现见 `physics/event-effects.ts`，动效本身不承载任何物理量。
+
+## 37.3 运行态
+
+时钟运行时（`data-physicsos-running="true"`）：运行按钮加外环并呼吸、画布外框加一圈蓝色、当前时刻读数转为蓝色、运动物体带柔光。
+
+## 37.4 首页物理小场景
+
+首页 Hero 右侧是一个装饰性的弹性碰撞世界（`HomePlayground`）：若干小球在无摩擦盒子里运动，与墙、彼此、小 Q 的身体（静态圆形碰撞体）发生弹性碰撞，留下轨迹尾迹并在接触点闪一圈；指针靠近会轻轻推开小球。它**不是**物理结果，不进入 `PhysicsScene`，不显示任何数值。
+
+所有入场与循环动效在 `prefers-reduced-motion: reduce` 下关闭。
 
 ---
 

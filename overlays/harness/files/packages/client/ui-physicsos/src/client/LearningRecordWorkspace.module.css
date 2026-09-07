@@ -90,6 +90,39 @@
   font-size: 13px;
 }
 
+.emptyMascot {
+  margin-bottom: 6px;
+}
+
+/* Entrance: the ledger panels rise in, the mistake cards one after another. */
+@keyframes record-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.panel,
+.empty {
+  animation: record-rise-in 420ms var(--physics-ease-emphasized) both;
+}
+
+.panel + .panel {
+  animation-delay: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .empty {
+    animation: none;
+  }
+}
+
 .body {
   flex: 1;
   display: grid;
