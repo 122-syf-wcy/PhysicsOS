@@ -16,7 +16,7 @@
  * computed in this file.
  */
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import {
   IconCheckOutline14,
@@ -288,6 +288,15 @@ const HIGHLIGHTS_BY_DOMAIN: Readonly<Record<string, Readonly<Record<string, read
   mechanics: MECHANICS_HIGHLIGHTS,
   electric: ELECTRIC_HIGHLIGHTS,
   magnetic: MAGNETIC_HIGHLIGHTS,
+}
+
+/** Set equality for the drawn-id Selection summary (content, not reference). */
+const sameDrawnSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => {
+  if (a.size !== b.size) return false
+  for (const id of a) {
+    if (!b.has(id)) return false
+  }
+  return true
 }
 
 /** Every id the current frame can actually light up. */
@@ -851,18 +860,45 @@ function useQuestionFrames(
  * The single canvas surface in Question Space: provenance line, the shared
  * PhysicsCanvas, one set of playback controls. Every domain reaches the student
  * through here, so play / step / scrub behave identically everywhere.
+ *
+ * #123 decoupling: this component owns the playback clock and the per-frame
+ * visual computation, so animation frames re-render ONLY this subtree. The
+ * surrounding rails (question list, solution, verification) subscribe to the
+ * drawn-id Selection summary via {@link onDrawnChange} instead of re-rendering
+ * on every frame.
  */
 function QuestionVisualization({
-  frames,
-  playback,
+  result,
+  title,
+  sceneKey,
   sceneId,
   highlighted,
+  onDrawnChange,
+  t,
 }: {
-  readonly frames: QuestionFrames
-  readonly playback: Playback
+  readonly result: QuestionRuntimeResult
+  readonly title: string
+  readonly sceneKey: string
   readonly sceneId: string
   readonly highlighted: readonly string[]
+  readonly onDrawnChange: (drawn: ReadonlySet<string>) => void
+  readonly t: Translate
 }) {
+  const timeline = useMemo(() => questionTimeline(result), [result])
+  const playback = usePlayback(timeline, sceneKey)
+  const frames = useQuestionFrames(result, title, playback.time)
+
+  /* Selection summary: report the drawn-id set upward, but only when it actually
+     changed, so the parent rails never re-render on animation frames. */
+  const drawn = useMemo(() => drawnIds(frames?.view ?? null), [frames])
+  useEffect(() => {
+    onDrawnChange(drawn)
+  }, [drawn, onDrawnChange])
+
+  if (frames === null) {
+    return <WorkflowProgress state={result.workflowState} t={t} />
+  }
+
   const view = highlighted.length === 0 ? frames.view : { ...frames.view, highlighted }
   return (
     <div className={css.canvasWrap}>
@@ -930,13 +966,19 @@ export function QuestionWorkspace({
   const canOpenInLab = scene !== null
   const title = document.metadata.title ?? '未命名题目'
   const sceneKey = scene === null ? String(document.id) : `${String(scene.id)}:${scene.revision}`
-  const timeline = useMemo(() => questionTimeline(result), [result])
-  const playback = usePlayback(timeline, sceneKey)
-  const frames = useQuestionFrames(result, title, playback.time)
-  const drawn = useMemo(() => drawnIds(frames?.view ?? null), [frames])
+  /* Selection summary: the visualization reports which ids are drawn, but only
+     when the SET actually changes, so the rails never re-render on animation
+     frames (#123). */
+  const [drawn, setDrawn] = useState<ReadonlySet<string>>(() => new Set())
+  const onDrawnChange = useCallback((next: ReadonlySet<string>) => {
+    setDrawn(previous => sameDrawnSet(previous, next) ? previous : next)
+  }, [])
 
-  const highlightFor = (symbols: readonly string[]): readonly string[] =>
-    highlightableIds(symbols, result.ir?.domain, scene?.bodies[0]?.id, drawn)
+  const highlightFor = useCallback(
+    (symbols: readonly string[]): readonly string[] =>
+      highlightableIds(symbols, result.ir?.domain, scene?.bodies[0]?.id, drawn),
+    [drawn, result.ir?.domain, scene],
+  )
   const toggleHighlight = (token: string, ids: readonly string[]) => {
     setHighlight(active => (active?.token === token ? null : { token, ids }))
   }
@@ -1139,14 +1181,17 @@ export function QuestionWorkspace({
                 </div>
                 {result.validation?.status === 'VALID' ? <span className={css.validBadge}><IconCheckOutline14 size={12} />条件完整</span> : null}
               </div>
-              {frames === null || scene === null
+              {scene === null
                 ? <WorkflowProgress state={result.workflowState} t={t} />
                 : (
                   <QuestionVisualization
-                    frames={frames}
-                    playback={playback}
+                    result={result}
+                    title={title}
+                    sceneKey={sceneKey}
                     sceneId={String(scene.id)}
                     highlighted={highlight?.ids ?? []}
+                    onDrawnChange={onDrawnChange}
+                    t={t}
                   />
                 )}
             </section>

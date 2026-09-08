@@ -9,6 +9,7 @@ import {
 import { magnitude, type Vector3 } from '@physicsos/physics-math'
 import { PhysicsOSError } from '@physicsos/shared'
 import type { ObservableDefinition, PhysicsScene } from '@physicsos/physics-scene'
+import { MAX_TRAJECTORY_RENDER_POINTS, decimateTrajectoryPoints } from '@physicsos/physics-scene'
 import type { Quantity } from '@physicsos/physics-units'
 
 export interface PositionObservation {
@@ -141,12 +142,28 @@ const selectState = (scene: PhysicsScene, simulation: SimulationResult): Simulat
   )
 }
 
-const trajectoryPoints = (simulation: SimulationResult, bodyId: string) =>
-  simulation.states.flatMap((state) => {
-    const obj = findBodyState(state, bodyId)
-    if (!obj?.position) return []
-    return [{ time: state.time, position: obj.position }]
-  })
+type MechanicsTrajectoryPoints = MechanicsTrajectoryObservation['points']
+
+const trajectoryCache = new WeakMap<SimulationResult, Map<string, MechanicsTrajectoryPoints>>()
+
+const trajectoryPoints = (simulation: SimulationResult, bodyId: string): MechanicsTrajectoryPoints => {
+  const cachedByParticle = trajectoryCache.get(simulation)
+  const cached = cachedByParticle?.get(bodyId)
+  if (cached !== undefined) return cached
+
+  const points = decimateTrajectoryPoints(
+    simulation.states.flatMap((state) => {
+      const obj = findBodyState(state, bodyId)
+      if (!obj?.position) return []
+      return [{ time: state.time, position: obj.position }]
+    }),
+    MAX_TRAJECTORY_RENDER_POINTS,
+  )
+  const nextByParticle = cachedByParticle ?? new Map<string, MechanicsTrajectoryPoints>()
+  nextByParticle.set(bodyId, points)
+  if (cachedByParticle === undefined) trajectoryCache.set(simulation, nextByParticle)
+  return points
+}
 
 /** Semantic label of an individual force, so the renderer can colour it. */
 export type MechanicsForceLabel =

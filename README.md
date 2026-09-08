@@ -42,7 +42,7 @@ vendor/deepseek-harness/apps/web
 ## 尚未完成
 
 - 图片/PDF/OCR/VLM 试题识别与整卷拆题
-- 实验室里的 AI 助教抽屉仍是确定性意图匹配；学生模式档位尚未映射到 `physics-student` 预设（当前仍选 Harness `standard`），需在 `ui-physicsos/profiles.ts` 接线
+- 实验室里的 AI 助教抽屉仍是确定性意图匹配（模型化回答见 backlog `AGENT_MODEL_BACKED_ANSWERS_BACKLOG`）；学生模式档位已映射到 `physics-student` 预设（`ui-physicsos/profiles.ts`）
 - 保存、更多菜单等按钮对应的完整业务闭环
 - 学习记录的服务端持久化（当前仅本地 localStorage）
 - 纵波、波的反射 / 折射 / 衍射 / 多普勒效应，以及近代物理等后续领域

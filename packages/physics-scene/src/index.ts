@@ -322,3 +322,11 @@ export {
   type StandingWaveSceneInput,
   type TravellingWaveSceneInput,
 } from './wave/wave-templates.ts'
+export {
+  MAX_TRAJECTORY_RENDER_POINTS,
+  MAX_TRAJECTORY_STORAGE_SAMPLES,
+  chunkTrajectoryPoints,
+  decimateTrajectoryPoints,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
+} from './trajectory-sampling.ts'

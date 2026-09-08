@@ -19,6 +19,7 @@ import {
 import { magnitude } from '@physicsos/physics-math'
 import { PhysicsOSError } from '@physicsos/shared'
 import type { ObservableDefinition, PhysicsScene } from '@physicsos/physics-scene'
+import { MAX_TRAJECTORY_RENDER_POINTS, decimateTrajectoryPoints } from '@physicsos/physics-scene'
 import { type PhysicalDimension, type Quantity } from '@physicsos/physics-units'
 
 export interface CompositeObservationBase {
@@ -139,12 +140,60 @@ const selectState = (scene: PhysicsScene, simulation: SimulationResult): Simulat
   )
 }
 
-const trajectoryPoints = (simulation: SimulationResult, particleId: string) =>
-  simulation.states.flatMap((state) => {
+type CompositeTrajectoryPoints = CompositeTrajectoryObservation['points']
+
+const trajectoryCache = new WeakMap<SimulationResult, Map<string, CompositeTrajectoryPoints>>()
+
+const boundaryEventTimes = (simulation: SimulationResult): readonly number[] => {
+  const times: number[] = []
+  for (const event of simulation.events) {
+    if (event.type !== 'EnterRegion' && event.type !== 'ExitRegion' && event.type !== 'SwitchField') {
+      continue
+    }
+    if (event.time !== undefined) times.push(event.time)
+  }
+  return times
+}
+
+const trajectoryPoints = (simulation: SimulationResult, particleId: string): CompositeTrajectoryPoints => {
+  const cachedByParticle = trajectoryCache.get(simulation)
+  const cached = cachedByParticle?.get(particleId)
+  if (cached !== undefined) return cached
+
+  /* The engine stores every phase-boundary instant as a state AND emits a
+     timed boundary event for it. Decimation to the render budget must keep
+     those states: a region-crossing kink dropped between two evenly spaced
+     picks would be drawn as a straight chord across the boundary (t8 F2). */
+  const boundaryTimes = boundaryEventTimes(simulation)
+
+  const rawPoints: { time: Quantity<'time'>; position: QuantityVector<'length'> }[] = []
+  const stateIndexByPoint: number[] = []
+  simulation.states.forEach((state, stateIndex) => {
     const object = findParticleState(state, particleId)
-    if (object?.position === undefined) return []
-    return [{ time: state.time, position: object.position }]
+    if (object?.position === undefined) return
+    stateIndexByPoint.push(stateIndex)
+    rawPoints.push({ time: state.time, position: object.position })
   })
+
+  const protect: number[] = []
+  if (boundaryTimes.length > 0) {
+    for (let pointIndex = 0; pointIndex < rawPoints.length; pointIndex += 1) {
+      const stateIndex = stateIndexByPoint[pointIndex]
+      if (stateIndex === undefined) continue
+      const stateTime = simulation.states[stateIndex]?.time.value
+      if (stateTime === undefined) continue
+      if (boundaryTimes.some((boundaryTime) => Math.abs(stateTime - boundaryTime) < 1e-9)) {
+        protect.push(pointIndex)
+      }
+    }
+  }
+
+  const points = decimateTrajectoryPoints(rawPoints, MAX_TRAJECTORY_RENDER_POINTS, protect)
+  const nextByParticle = cachedByParticle ?? new Map<string, CompositeTrajectoryPoints>()
+  nextByParticle.set(particleId, points)
+  if (cachedByParticle === undefined) trajectoryCache.set(simulation, nextByParticle)
+  return points
+}
 
 /**
  * Map verified composite engine facts into renderer-neutral observations.

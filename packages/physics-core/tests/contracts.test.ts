@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { magnitude, vec3 } from '@physicsos/physics-math'
 import { DimensionMismatchError } from '@physicsos/physics-units'
+import { asSceneId, asSimulationId, asTraceId } from '@physicsos/shared'
 
 import {
   fromCanonicalVector,
@@ -24,6 +25,12 @@ import {
   EngineUnsupportedError,
 } from '../src/engine.ts'
 import { derivedScalar, derivedVector, type DerivedQuantity } from '../src/simulation-state.ts'
+import {
+  SIMULATION_WORKER_MESSAGE_KINDS,
+  SIMULATION_WORKER_SCHEMA,
+  parseSimulationWorkerMessage,
+  type SimulationWorkerMessage,
+} from '../src/simulation.ts'
 
 describe('QuantityVector', () => {
   it('carries unit and dimension alongside the vector', () => {
@@ -200,5 +207,129 @@ describe('derived quantity access', () => {
 
   it('throws when a scalar is requested but the value is a vector', () => {
     expect(() => derivedScalar(derived, 'net_force')).toThrow(/vector/)
+  })
+})
+
+describe('simulation worker message contract', () => {
+  const request: SimulationWorkerMessage = {
+    schemaVersion: SIMULATION_WORKER_SCHEMA,
+    kind: 'simulation-request',
+    payload: {
+      schemaVersion: 'simulation-request/1.0',
+      simulationId: asSimulationId('sim-1'),
+      sceneId: asSceneId('scene-1'),
+      sceneRevision: 0,
+      options: {},
+      trace: { traceId: asTraceId('trace-1') },
+    },
+  }
+
+  it('round-trips every message kind through the narrow parser', () => {
+    const progress: SimulationWorkerMessage = {
+      schemaVersion: SIMULATION_WORKER_SCHEMA,
+      kind: 'simulation-progress',
+      payload: { simulationId: asSimulationId('sim-1'), progress: 0.5, simulatedTime: 0.25 },
+    }
+    const error: SimulationWorkerMessage = {
+      schemaVersion: SIMULATION_WORKER_SCHEMA,
+      kind: 'simulation-error',
+      payload: { code: 'SIMULATION_FAILED', message: 'boom', retryable: false },
+    }
+    for (const message of [request, progress, error] as const) {
+      expect(parseSimulationWorkerMessage(message)).toEqual(message)
+    }
+  })
+
+  it('rejects messages without the worker schema version', () => {
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: 'simulation-result/1.0',
+        kind: 'simulation-progress',
+      }),
+    ).toBeUndefined()
+  })
+
+  it('rejects unknown message kinds', () => {
+    expect(
+      parseSimulationWorkerMessage({ schemaVersion: SIMULATION_WORKER_SCHEMA, kind: 'teleport' }),
+    ).toBeUndefined()
+  })
+
+  it('rejects non-object payloads', () => {
+    expect(parseSimulationWorkerMessage(null)).toBeUndefined()
+    expect(parseSimulationWorkerMessage('simulation-request')).toBeUndefined()
+  })
+
+  it('rejects progress payloads with an out-of-range progress (t9 F1)', () => {
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-progress',
+        payload: { simulationId: asSimulationId('sim-1'), progress: 1.5 },
+      }),
+    ).toBeUndefined()
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-progress',
+        payload: { simulationId: asSimulationId('sim-1'), progress: Number.NaN },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('rejects progress payloads missing the simulationId (t9 F1)', () => {
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-progress',
+        payload: { progress: 0.5 },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('rejects error payloads with a non-boolean retryable (t9 F1)', () => {
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-error',
+        payload: { code: 'BOOM', message: 'boom', retryable: 'yes' },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('rejects result payloads without states or events arrays (t9 F1)', () => {
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-result',
+        payload: { schemaVersion: 'simulation-result/1.0', simulationId: 'sim-1', sceneId: 'scene-1' },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('rejects request payloads with a missing trace or non-number revision (t9 F1)', () => {
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-request',
+        payload: { schemaVersion: 'simulation-request/1.0', simulationId: 'sim-1', sceneId: 'scene-1', sceneRevision: 0 },
+      }),
+    ).toBeUndefined()
+    expect(
+      parseSimulationWorkerMessage({
+        schemaVersion: SIMULATION_WORKER_SCHEMA,
+        kind: 'simulation-request',
+        payload: { schemaVersion: 'simulation-request/1.0', simulationId: 'sim-1', sceneId: 'scene-1', sceneRevision: '0', options: {}, trace: {} },
+      }),
+    ).toBeUndefined()
+  })
+
+  it('exposes the exhaustive kind list', () => {
+    expect(SIMULATION_WORKER_MESSAGE_KINDS).toEqual([
+      'simulation-request',
+      'simulation-progress',
+      'simulation-result',
+      'simulation-error',
+    ])
   })
 })

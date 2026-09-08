@@ -17,7 +17,13 @@ import {
   type VerificationResult,
 } from '@physicsos/physics-core'
 import type { Vector3 } from '@physicsos/physics-math'
-import { validateScene, waveBenchesOf, type PhysicsScene } from '@physicsos/physics-scene'
+import {
+  validateScene,
+  waveBenchesOf,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
+  type PhysicsScene,
+} from '@physicsos/physics-scene'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
@@ -782,9 +788,10 @@ export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike>
       )
     }
 
-    const times = Array.from(
-      { length: TRAJECTORY_SEGMENTS + 1 },
-      (_, index) => startTime + ((endTime - startTime) * index) / TRAJECTORY_SEGMENTS,
+    const times = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
     )
     const states = times.map((time) => stateOf(model, time))
 

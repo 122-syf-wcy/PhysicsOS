@@ -26,6 +26,8 @@ import {
 } from '@physicsos/physics-core'
 import {
   validateScene,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
   type PhysicsScene,
   type UniformElectricField,
 } from '@physicsos/physics-scene'
@@ -411,9 +413,10 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'Electric simulation range must satisfy 0 <= startTime <= endTime.')
     }
 
-    const times = Array.from(
-      { length: DEFAULT_TRAJECTORY_SEGMENTS + 1 },
-      (_, index) => startTime + ((endTime - startTime) * index) / DEFAULT_TRAJECTORY_SEGMENTS,
+    const times = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
     )
     const states = times.map((time) => stateForModel(model, time))
     const startedAt = new Date().toISOString()

@@ -20,6 +20,8 @@ import type { Vector3 } from '@physicsos/physics-math'
 import {
   inductionBenchesOf,
   validateScene,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
@@ -472,9 +474,10 @@ export class InductionEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       )
     }
 
-    const times = Array.from(
-      { length: TRAJECTORY_SEGMENTS + 1 },
-      (_, index) => startTime + ((endTime - startTime) * index) / TRAJECTORY_SEGMENTS,
+    const times = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
     )
     const states = times.map((time) => stateOf(model, time))
 

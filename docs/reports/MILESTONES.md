@@ -468,6 +468,30 @@ overlay 已回写。
 
 ---
 
+## PHYSICSOS_PERF_OPT_V1_COMPLETE
+
+**日期**：2026-09-08
+
+**范围**：按 docs/01 §84–86 与 docs/02 §26/#123/#124/#125/#150 的性能约束做全局优化 —— 渲染/React 解耦、轨迹存储有界与采样率分离、O(n²) 消除、Worker 消息契约。物理数值结果与公共契约不变，默认行为零变化。
+
+**A. 渲染/React 解耦（#123）**：新 `ui-physicsos physics/frame-source.ts`（`createFrameSource` / `useFrameSource`，`useSyncExternalStore` 外部 store）。`PhysicsWorkspace` 动画时钟每帧发布到 FrameSource，只有画布订阅 → 每帧只重渲染画布；React 壳按 250ms 摘要节流刷新，Status / sceneRevision / running 变化即时刷新，交互动作（seek / highlight / 切场景）`commit` 双写保证面板与画布一致。`QuestionWorkspace` 播放时钟与逐帧视觉计算下沉到画布子树，drawn-id Selection 以 set 相等守卫向上汇报，父级 rails 不随帧重渲染。新增 `frame-source.client.spec`（4）与 `renderer-decoupling.client.spec.tsx`（2，浏览器级验证逐帧只更新画布读数）。
+
+**B. 轨迹采样/抽稀/分块（#85/#124）**：新 `physics-scene trajectory-sampling.ts` —— 存储上界 1024、渲染预算 512、`outputSampleRate` 钩子（钳制 [2,1024]，缺省 fallback 与原分段常量一致）、保首尾抽稀 + `protect` 索引集、chunk 分块原语。6 个引擎（mechanics/magnetic/electric/wave/induction/composite）接入钩子；4 个观察层轨迹构建器抽稀到 512，composite 把 phase-boundary 时刻收集进 `protect`（区域穿越拐点不丢）。新 14 个用例。
+
+**C. 计算路径 O(n²) 消除（#150/#26）**：`summarizeVerification` O(E×C)→O(E+C)；composite `phaseAt` 线性扫描→二分（O(states×phases)→O(states×log phases)，语义逐分支等价）；`fieldAt` 融合单遍累加消除中间分配；electric-verifier 每状态派生量 Map 索引化；magnetic `assumptionsFromResult` O(A²)→O(A)。
+
+**D. Worker 契约（#125）**：`SimulationWorkerMessage` 判别联合 + `SimulationProgress` / `SimulationError` + `parseSimulationWorkerMessage` 结构校验器（schema `simulation-worker/1.0`），纯增量导出，供未来 Worker 化直接复用（生产实现为登记跟进项）。
+
+**E. 收口修复**：web lint 对新增文件暴露 7 处问题已全部修复（eol-last ×3、`FrameSource` 接口方法 `this: void` ×3、`no-unsafe-return` 经中间变量对齐既有写法），lint 归零。
+
+依据：`docs/reports/PERF-OPT-RUNTIME-V1-REPORT.md`
+
+验收数据：`typecheck`（core + web + agent）零错误；`lint`（core + web + agent）零错误；`test:core` 27 包 1090 用例全绿（physics-scene 99 含新 14、physics-core 33 含新 5 Worker 契约用例、question-core 402）；`test:web` 30 文件 366 全绿（含新 2 文件 6 用例）；`test:agent` 22 全绿；agent-tools 32 全绿；端到端 headless-physics-acceptance 16/16（R/T 与基线一致）。
+
+**不做**（明确边界）：生产 Worker 实现（契约已备，composite phase 分解与点电荷格点采样为候选）；#86 Lazy Loading；chart 独立采样率；chunk 懒加载消费；剩余有界引擎 `outputSampleRate` 统一；不改 `apps/web`（`APPS_WEB_STANDALONE_RETIREMENT_BACKLOG` 不变）。
+
+---
+
 ## 明确延后
 
 见 `docs/reports/BACKLOG.md`：

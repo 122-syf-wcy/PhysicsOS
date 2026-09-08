@@ -62,10 +62,17 @@ export const summarizeVerification = (
   errors: readonly VerificationIssue[],
 ): VerificationResult => {
   const failedChecks = checks.filter((entry) => !entry.passed)
+  /* De-duplicating failed checks against already-reported error codes is a set
+     membership test, not a nested scan: with C checks and E errors the previous
+     `errors.some(...)` per failed check made the whole pass O(E·C). A Set keeps
+     it O(E+C), so a long simulation with a growing error list cannot turn
+     verification into an accidental O(n²). (docs/02 §150: no O(n²) unbounded
+     growth in hot paths.) */
+  const reportedErrorCodes = new Set(errors.map((issue) => issue.code))
   const allErrors: VerificationIssue[] = [
     ...errors,
     ...failedChecks
-      .filter((entry) => !errors.some((issue) => issue.code === entry.id))
+      .filter((entry) => !reportedErrorCodes.has(entry.id))
       .map<VerificationIssue>((entry) => ({
         code: entry.id,
         severity: 'error',

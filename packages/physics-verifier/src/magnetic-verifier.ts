@@ -346,6 +346,11 @@ const findStateAt = (
     try {
       const stateTime = canonicalValue(state.time)
       const distance = Math.abs(stateTime - timeSeconds)
+      /* Linear scan per requested key time. The analytical engines emit a bounded
+         trajectory (docs/02 §124 decimation), so verifying one result stays
+         O(states × keyTimes); a future stream of unboundedly long trajectories
+         should carry decimated states into this verifier rather than pushing the
+         scan cost back here (docs/02 §150). */
       if (withinTolerance(stateTime, timeSeconds, tolerance) && distance < closestDistance) {
         closest = state
         closestDistance = distance
@@ -380,11 +385,17 @@ const collectNonFinite = (
 }
 
 const assumptionsFromResult = (result: SimulationResult): string[] => {
+  /* A Set keeps de-duplication linear in the total number of assumptions. The
+     previous `assumptions.includes(...)` inside the loop scanned the growing
+     list for every entry — O(total²) once a result carries many derived entries,
+     e.g. a long simulation aggregating per-state assumption sets. */
+  const seen = new Set<string>()
   const assumptions: string[] = []
   for (const entry of result.derivedQuantities) {
     if (!Array.isArray(entry.assumptions)) continue
     for (const assumption of entry.assumptions) {
-      if (typeof assumption === 'string' && !assumptions.includes(assumption)) {
+      if (typeof assumption === 'string' && !seen.has(assumption)) {
+        seen.add(assumption)
         assumptions.push(assumption)
       }
     }

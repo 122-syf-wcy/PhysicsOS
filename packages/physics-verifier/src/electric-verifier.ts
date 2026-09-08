@@ -1,8 +1,8 @@
 import {
   DEFAULT_TOLERANCE,
   check,
-  derivedScalar,
-  derivedVector,
+  isQuantityVector,
+  isScalarQuantity,
   summarizeVerification,
   toCanonicalVector,
   withinTolerance,
@@ -12,7 +12,16 @@ import {
   type VerificationIssue,
   type VerificationResult,
 } from '@physicsos/physics-core'
-import { add, angleBetween, dot, magnitude, scale, subtract, tryNormalize, type Vector3 } from '@physicsos/physics-math'
+import {
+  add,
+  angleBetween,
+  dot,
+  magnitude,
+  scale,
+  subtract,
+  tryNormalize,
+  type Vector3,
+} from '@physicsos/physics-math'
 import {
   fieldSamplePointOf,
   sourceChargesOf,
@@ -66,15 +75,18 @@ export function verifyElectricScene(scene: PhysicsScene): VerificationResult {
     warnings.push(...validation.warnings)
     errors.push(...validation.errors)
   } catch (error: unknown) {
-    checks.push(check('electric_scene_valid', 'schema', false, {
-      message: error instanceof Error ? error.message : 'Electric scene validation failed.',
-    }))
+    checks.push(
+      check('electric_scene_valid', 'schema', false, {
+        message: error instanceof Error ? error.message : 'Electric scene validation failed.',
+      }),
+    )
   }
 
   const particle = scene.particles[0]
   const fields = uniformFields(scene)
   const field = fields[0]
-  const fieldVector = field === undefined ? undefined : toCanonicalVector(field.fieldStrength).vectorSI
+  const fieldVector =
+    field === undefined ? undefined : toCanonicalVector(field.fieldStrength).vectorSI
   checks.push(
     check('electric_scene_2d', 'constraint', scene.dimension === '2d', {
       message: 'Electric V1 requires a 2D scene.',
@@ -116,7 +128,10 @@ export function verifyElectricScene(scene: PhysicsScene): VerificationResult {
       'electric_scene_force_only',
       'constraint',
       scene.forces.length === 0 && scene.boundaries.length === 0 && scene.constraints.length === 0,
-      { message: 'Electric V1 accepts only electric force without explicit boundaries or constraints.' },
+      {
+        message:
+          'Electric V1 accepts only electric force without explicit boundaries or constraints.',
+      },
     ),
   )
 
@@ -149,9 +164,14 @@ function verifyUniformElectricSimulation(
   const field = uniformFields(scene)[0]
 
   checks.push(
-    check('electric_result_schema', 'schema', simulation.schemaVersion === 'simulation-result/1.0', {
-      message: 'SimulationResult must use schema simulation-result/1.0.',
-    }),
+    check(
+      'electric_result_schema',
+      'schema',
+      simulation.schemaVersion === 'simulation-result/1.0',
+      {
+        message: 'SimulationResult must use schema simulation-result/1.0.',
+      },
+    ),
     check('electric_result_scene_id', 'schema', simulation.sceneId === scene.id, {
       message: 'SimulationResult must reference the supplied scene id.',
       details: { expected: scene.id, actual: simulation.sceneId },
@@ -180,23 +200,57 @@ function verifyUniformElectricSimulation(
 
   const samples = simulation.states.map((state) => {
     const object = state.objects.find((candidate) => candidate.id === particle.id)
-    if (object?.position === undefined || object.velocity === undefined || object.acceleration === undefined) {
-      return { complete: false, kinematics: false, force: false, acceleration: false, energy: false }
+    if (
+      object?.position === undefined ||
+      object.velocity === undefined ||
+      object.acceleration === undefined
+    ) {
+      return {
+        complete: false,
+        kinematics: false,
+        force: false,
+        acceleration: false,
+        energy: false,
+      }
+    }
+    /* Index the state's derived quantities once: `derivedVector`/`derivedScalar`
+       each scan the whole `derived` array, and this loop read seven of them per
+       state. A `Map` lookup keeps the verify pass linear in the number of states
+       (docs/02 §150: no accidental O(states × derived) hot-path growth). */
+    const derivedByKey = new Map(state.derived.map((entry) => [entry.key, entry]))
+    const readVector = (key: string): Vector3 => {
+      const entry = derivedByKey.get(key)
+      if (entry === undefined) throw new Error(`Derived quantity "${key}" is absent.`)
+      if (!isQuantityVector(entry.value)) {
+        throw new Error(`Derived quantity "${key}" is a scalar, not a vector.`)
+      }
+      return toCanonicalVector(entry.value).vectorSI
+    }
+    const readScalar = (key: string): number => {
+      const entry = derivedByKey.get(key)
+      if (entry === undefined) throw new Error(`Derived quantity "${key}" is absent.`)
+      if (!isScalarQuantity(entry.value)) {
+        throw new Error(`Derived quantity "${key}" is a vector, not a scalar.`)
+      }
+      return canonicalValue(entry.value)
     }
     try {
       const time = canonicalValue(state.time)
       const position = toCanonicalVector(object.position).vectorSI
       const velocity = toCanonicalVector(object.velocity).vectorSI
       const acceleration = toCanonicalVector(object.acceleration).vectorSI
-      const displacement = add(scale(initialVelocity, time), scale(expectedAcceleration, 0.5 * time * time))
+      const displacement = add(
+        scale(initialVelocity, time),
+        scale(expectedAcceleration, 0.5 * time * time),
+      )
       const expectedPosition = add(initialPosition, displacement)
       const expectedVelocity = add(initialVelocity, scale(expectedAcceleration, time))
-      const actualForce = toCanonicalVector(derivedVector(state.derived, 'electric_force_vector')).vectorSI
-      const actualDerivedAcceleration = toCanonicalVector(derivedVector(state.derived, 'acceleration_vector')).vectorSI
-      const potentialChange = canonicalValue(derivedScalar(state.derived, 'electric_potential_change'))
-      const potentialEnergyChange = canonicalValue(derivedScalar(state.derived, 'electric_potential_energy_change'))
-      const work = canonicalValue(derivedScalar(state.derived, 'work_by_electric_field'))
-      const kineticEnergy = canonicalValue(derivedScalar(state.derived, 'kinetic_energy'))
+      const actualForce = readVector('electric_force_vector')
+      const actualDerivedAcceleration = readVector('acceleration_vector')
+      const potentialChange = readScalar('electric_potential_change')
+      const potentialEnergyChange = readScalar('electric_potential_energy_change')
+      const work = readScalar('work_by_electric_field')
+      const kineticEnergy = readScalar('kinetic_energy')
       const expectedPotentialChange = -dot(electricField, displacement)
       const expectedPotentialEnergyChange = charge * expectedPotentialChange
       const expectedWork = dot(expectedForce, displacement)
@@ -220,26 +274,58 @@ function verifyUniformElectricSimulation(
           withinTolerance(work, -potentialEnergyChange, tolerance),
       }
     } catch {
-      return { complete: false, kinematics: false, force: false, acceleration: false, energy: false }
+      return {
+        complete: false,
+        kinematics: false,
+        force: false,
+        acceleration: false,
+        energy: false,
+      }
     }
   })
 
   checks.push(
-    check('electric_state_objects_complete', 'trajectory', samples.every((sample) => sample.complete), {
-      message: 'Every electric state must contain particle position, velocity, acceleration and derived facts.',
-    }),
-    check('electric_kinematic_consistency', 'trajectory', samples.every((sample) => sample.kinematics), {
-      message: 'Every state must satisfy r = r0 + v0t + 0.5at² and v = v0 + at.',
-    }),
-    check('electric_force_consistency', 'constraint', samples.every((sample) => sample.force), {
-      message: 'Every state must satisfy F = qE.',
-    }),
-    check('electric_acceleration_consistency', 'constraint', samples.every((sample) => sample.acceleration), {
-      message: 'Every state must satisfy a = F/m.',
-    }),
-    check('electric_energy_consistency', 'conservation', samples.every((sample) => sample.energy), {
-      message: 'Every state must satisfy ΔK = W = -ΔU and ΔU = qΔφ.',
-    }),
+    check(
+      'electric_state_objects_complete',
+      'trajectory',
+      samples.every((sample) => sample.complete),
+      {
+        message:
+          'Every electric state must contain particle position, velocity, acceleration and derived facts.',
+      },
+    ),
+    check(
+      'electric_kinematic_consistency',
+      'trajectory',
+      samples.every((sample) => sample.kinematics),
+      {
+        message: 'Every state must satisfy r = r0 + v0t + 0.5at² and v = v0 + at.',
+      },
+    ),
+    check(
+      'electric_force_consistency',
+      'constraint',
+      samples.every((sample) => sample.force),
+      {
+        message: 'Every state must satisfy F = qE.',
+      },
+    ),
+    check(
+      'electric_acceleration_consistency',
+      'constraint',
+      samples.every((sample) => sample.acceleration),
+      {
+        message: 'Every state must satisfy a = F/m.',
+      },
+    ),
+    check(
+      'electric_energy_consistency',
+      'conservation',
+      samples.every((sample) => sample.energy),
+      {
+        message: 'Every state must satisfy ΔK = W = -ΔU and ΔU = qΔφ.',
+      },
+    ),
   )
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
@@ -265,9 +351,11 @@ function verifyPointChargeScene(scene: PhysicsScene): VerificationResult {
     warnings.push(...validation.warnings)
     errors.push(...validation.errors)
   } catch (error: unknown) {
-    checks.push(check('electric_scene_valid', 'schema', false, {
-      message: error instanceof Error ? error.message : 'Point-charge scene validation failed.',
-    }))
+    checks.push(
+      check('electric_scene_valid', 'schema', false, {
+        message: error instanceof Error ? error.message : 'Point-charge scene validation failed.',
+      }),
+    )
   }
 
   const fields = pointChargeFields(scene)
@@ -278,21 +366,13 @@ function verifyPointChargeScene(scene: PhysicsScene): VerificationResult {
     check('point_charge_field_present', 'constraint', fields.length > 0, {
       message: 'The scene declares no point-charge field.',
     }),
-    check(
-      'point_charge_fields_only',
-      'constraint',
-      scene.fields.length === fields.length,
-      {
-        message: 'Mixing a point-charge field with another field type is not supported yet.',
-        details: { fieldCount: scene.fields.length, pointChargeFieldCount: fields.length },
-      },
-    ),
-    check(
-      'charges_only',
-      'constraint',
-      scene.bodies.length === 0 && scene.circuits.length === 0,
-      { message: 'Electric V1 solves charges, not rigid bodies or circuits.' },
-    ),
+    check('point_charge_fields_only', 'constraint', scene.fields.length === fields.length, {
+      message: 'Mixing a point-charge field with another field type is not supported yet.',
+      details: { fieldCount: scene.fields.length, pointChargeFieldCount: fields.length },
+    }),
+    check('charges_only', 'constraint', scene.bodies.length === 0 && scene.circuits.length === 0, {
+      message: 'Electric V1 solves charges, not rigid bodies or circuits.',
+    }),
     check(
       'electric_force_only',
       'constraint',
@@ -303,12 +383,9 @@ function verifyPointChargeScene(scene: PhysicsScene): VerificationResult {
 
   const sources = sourceChargesOf(scene.particles, scene.fields)
   checks.push(
-    check(
-      'field_source_exists',
-      'constraint',
-      sources.length === fields.length,
-      { message: 'Every point-charge field must name a particle that exists in the scene.' },
-    ),
+    check('field_source_exists', 'constraint', sources.length === fields.length, {
+      message: 'Every point-charge field must name a particle that exists in the scene.',
+    }),
   )
   for (const source of sources) {
     if (source.charge === undefined) {
@@ -326,9 +403,14 @@ function verifyPointChargeScene(scene: PhysicsScene): VerificationResult {
       }),
     )
     checks.push(
-      check('static_sources', 'constraint', magnitude(toCanonicalVector(source.velocity).vectorSI) <= 1e-12, {
-        message: `Source particle "${source.id}" must be at rest; a moving source produces a time-varying field.`,
-      }),
+      check(
+        'static_sources',
+        'constraint',
+        magnitude(toCanonicalVector(source.velocity).vectorSI) <= 1e-12,
+        {
+          message: `Source particle "${source.id}" must be at rest; a moving source produces a time-varying field.`,
+        },
+      ),
     )
   }
 
@@ -353,9 +435,14 @@ function verifyPointChargeSimulation(
   const checks: VerificationCheck[] = [...sceneVerification.checks]
 
   checks.push(
-    check('electric_result_schema', 'schema', simulation.schemaVersion === 'simulation-result/1.0', {
-      message: 'SimulationResult must use schema simulation-result/1.0.',
-    }),
+    check(
+      'electric_result_schema',
+      'schema',
+      simulation.schemaVersion === 'simulation-result/1.0',
+      {
+        message: 'SimulationResult must use schema simulation-result/1.0.',
+      },
+    ),
     check('electric_result_scene_id', 'schema', simulation.sceneId === scene.id, {
       message: 'SimulationResult must reference the supplied scene id.',
       details: { expected: scene.id, actual: simulation.sceneId },
@@ -371,9 +458,7 @@ function verifyPointChargeSimulation(
 
   /* Scene-shape rejection pre-empts the physical checks below; a scene that
      fails structural validation cannot be meaningfully compared. */
-  const structuralFailure = checks.some(
-    (entry) => !entry.passed && REJECT_MODEL.includes(entry.id),
-  )
+  const structuralFailure = checks.some((entry) => !entry.passed && REJECT_MODEL.includes(entry.id))
   if (structuralFailure || simulation.states.length === 0) {
     return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
   }
@@ -395,9 +480,8 @@ function verifyPointChargeSimulation(
 
   /* Sample point: the probe position when one is present, else the scene's
      declared sample, else the derived target's location. */
-  const samplePoint = probe !== undefined
-    ? toCanonicalVector(probe.position).vectorSI
-    : fieldSamplePointOf(scene)
+  const samplePoint =
+    probe !== undefined ? toCanonicalVector(probe.position).vectorSI : fieldSamplePointOf(scene)
   if (samplePoint === undefined) {
     checks.push(
       check('sample_point_declared', 'constraint', false, {
@@ -414,7 +498,8 @@ function verifyPointChargeSimulation(
   const expectedField = fieldAt(resolvedCharges, samplePoint)
   const expectedPotential = resolvedCharges.reduce(
     (total, charge) =>
-      total + (COULOMB_CONSTANT * charge.charge) / magnitude(subtract(samplePoint, charge.position)),
+      total +
+      (COULOMB_CONSTANT * charge.charge) / magnitude(subtract(samplePoint, charge.position)),
     0,
   )
 
@@ -428,60 +513,76 @@ function verifyPointChargeSimulation(
      reported value disagree with 4×E(2r). Only meaningful for a single source with a
      clean ray; skipped otherwise. */
   const primary = resolvedCharges[0]
-  const inverseSquareOk = primary === undefined || actualFieldMagnitude === undefined
-    ? true
-    : (() => {
-        if (resolvedCharges.length !== 1) return true /* superposition has no single ray */
-        const ray = subtract(samplePoint, primary.position)
-        const rayLength = magnitude(ray)
-        if (rayLength === 0) return true
-        const unit = scale(ray, 1 / rayLength)
-        const nearAt = add(primary.position, scale(unit, rayLength))
-        const farAt = add(primary.position, scale(unit, rayLength * 2))
-        const nearExpected = magnitude(pointChargeElectricField(primary.charge, primary.position, nearAt))
-        const farExpected = magnitude(pointChargeElectricField(primary.charge, primary.position, farAt))
-        if (nearExpected === 0) return true
-        /* The reported value at r must match E(r), and 4×E(2r) must match E(r). */
-        return withinTolerance(actualFieldMagnitude, nearExpected, tolerance)
-          && withinTolerance(nearExpected, 4 * farExpected, tolerance)
-      })()
+  const inverseSquareOk =
+    primary === undefined || actualFieldMagnitude === undefined
+      ? true
+      : (() => {
+          if (resolvedCharges.length !== 1) return true /* superposition has no single ray */
+          const ray = subtract(samplePoint, primary.position)
+          const rayLength = magnitude(ray)
+          if (rayLength === 0) return true
+          const unit = scale(ray, 1 / rayLength)
+          const nearAt = add(primary.position, scale(unit, rayLength))
+          const farAt = add(primary.position, scale(unit, rayLength * 2))
+          const nearExpected = magnitude(
+            pointChargeElectricField(primary.charge, primary.position, nearAt),
+          )
+          const farExpected = magnitude(
+            pointChargeElectricField(primary.charge, primary.position, farAt),
+          )
+          if (nearExpected === 0) return true
+          /* The reported value at r must match E(r), and 4×E(2r) must match E(r). */
+          return (
+            withinTolerance(actualFieldMagnitude, nearExpected, tolerance) &&
+            withinTolerance(nearExpected, 4 * farExpected, tolerance)
+          )
+        })()
 
   /* 2. Direction: for a SINGLE source the reported field must point along the radial
      ray — outward from a positive charge, inward toward a negative one. Stated as an
      angle between the reported field and the radial unit vector: ≈0 for positive,
      ≈π for negative. Skipped for superposition (no single radial direction). */
-  const directionOk = primary === undefined || resolvedCharges.length !== 1 || actualField === undefined
-    ? true
-    : (() => {
-        const radialUnit = tryNormalize(subtract(samplePoint, primary.position))
-        const fieldUnit = tryNormalize(actualField)
-        if (radialUnit === undefined || fieldUnit === undefined) return true
-        const angle = angleBetween(radialUnit, fieldUnit)
-        if (primary.charge > 0) return angle <= tolerance.angular
-        if (primary.charge < 0) return Math.abs(angle - Math.PI) <= tolerance.angular
-        return true
-      })()
+  const directionOk =
+    primary === undefined || resolvedCharges.length !== 1 || actualField === undefined
+      ? true
+      : (() => {
+          const radialUnit = tryNormalize(subtract(samplePoint, primary.position))
+          const fieldUnit = tryNormalize(actualField)
+          if (radialUnit === undefined || fieldUnit === undefined) return true
+          const angle = angleBetween(radialUnit, fieldUnit)
+          if (primary.charge > 0) return angle <= tolerance.angular
+          if (primary.charge < 0) return Math.abs(angle - Math.PI) <= tolerance.angular
+          return true
+        })()
 
   /* 3. Superposition: removing one source from the total must change the field by
      exactly that source's contribution. Falsifiable: |E_total_reported − E(others)|
      must equal |E(source_0)|. Only meaningful for ≥2 sources; skipped otherwise. */
-  const superpositionOk = resolvedCharges.length <= 1 || actualField === undefined
-    ? true
-    : (() => {
-        const removed = resolvedCharges[0]
-        if (removed === undefined) return true
-        const others = resolvedCharges.slice(1)
-        const othersField = others.length === 0
-          ? { x: 0, y: 0, z: 0 } as Vector3
-          : superposeElectricFields(
-              others.map((charge) => pointChargeElectricField(charge.charge, charge.position, samplePoint)),
-            )
-        const removedContribution = pointChargeElectricField(removed.charge, removed.position, samplePoint)
-        const expectedDelta = magnitude(subtract(actualField, othersField))
-        const contributionMagnitude = magnitude(removedContribution)
-        if (contributionMagnitude === 0) return true
-        return withinTolerance(expectedDelta, contributionMagnitude, tolerance)
-      })()
+  const superpositionOk =
+    resolvedCharges.length <= 1 || actualField === undefined
+      ? true
+      : (() => {
+          const removed = resolvedCharges[0]
+          if (removed === undefined) return true
+          const others = resolvedCharges.slice(1)
+          const othersField =
+            others.length === 0
+              ? ({ x: 0, y: 0, z: 0 } as Vector3)
+              : superposeElectricFields(
+                  others.map((charge) =>
+                    pointChargeElectricField(charge.charge, charge.position, samplePoint),
+                  ),
+                )
+          const removedContribution = pointChargeElectricField(
+            removed.charge,
+            removed.position,
+            samplePoint,
+          )
+          const expectedDelta = magnitude(subtract(actualField, othersField))
+          const contributionMagnitude = magnitude(removedContribution)
+          if (contributionMagnitude === 0) return true
+          return withinTolerance(expectedDelta, contributionMagnitude, tolerance)
+        })()
 
   checks.push(
     check('electric_field_1_over_r2', 'constraint', inverseSquareOk, {
@@ -494,26 +595,53 @@ function verifyPointChargeSimulation(
       message: 'The total field must equal the vector sum of each source contribution.',
     }),
     ...(actualField === undefined
-      ? [check('electric_field_vector_present', 'constraint', false, {
-          message: 'The simulation did not report an electric_field_vector.',
-        })]
-      : [check('electric_field_vector_matches', 'constraint', vectorMatches(actualField, expectedField.field, tolerance), {
-          message: 'Reported E must equal Σ kq·r̂/r² recomputed from the sources.',
-        })]),
+      ? [
+          check('electric_field_vector_present', 'constraint', false, {
+            message: 'The simulation did not report an electric_field_vector.',
+          }),
+        ]
+      : [
+          check(
+            'electric_field_vector_matches',
+            'constraint',
+            vectorMatches(actualField, expectedField.field, tolerance),
+            {
+              message: 'Reported E must equal Σ kq·r̂/r² recomputed from the sources.',
+            },
+          ),
+        ]),
     ...(actualFieldMagnitude === undefined
-      ? [check('electric_field_magnitude_present', 'constraint', false, {
-          message: 'The simulation did not report an electric_field_magnitude.',
-        })]
-      : [check('electric_field_magnitude_matches', 'constraint', withinTolerance(actualFieldMagnitude, expectedField.magnitude, tolerance), {
-          message: 'Reported |E| must match the recomputed magnitude.',
-        })]),
+      ? [
+          check('electric_field_magnitude_present', 'constraint', false, {
+            message: 'The simulation did not report an electric_field_magnitude.',
+          }),
+        ]
+      : [
+          check(
+            'electric_field_magnitude_matches',
+            'constraint',
+            withinTolerance(actualFieldMagnitude, expectedField.magnitude, tolerance),
+            {
+              message: 'Reported |E| must match the recomputed magnitude.',
+            },
+          ),
+        ]),
     ...(actualPotential === undefined
-      ? [check('electric_potential_present', 'constraint', false, {
-          message: 'The simulation did not report a potential.',
-        })]
-      : [check('electric_potential_matches', 'constraint', withinTolerance(actualPotential, expectedPotential, tolerance), {
-          message: 'Reported V must equal Σ kq/r recomputed from the sources.',
-        })]),
+      ? [
+          check('electric_potential_present', 'constraint', false, {
+            message: 'The simulation did not report a potential.',
+          }),
+        ]
+      : [
+          check(
+            'electric_potential_matches',
+            'constraint',
+            withinTolerance(actualPotential, expectedPotential, tolerance),
+            {
+              message: 'Reported V must equal Σ kq/r recomputed from the sources.',
+            },
+          ),
+        ]),
   )
 
   /* 4. Force on the probe: F = qE. */
@@ -525,8 +653,8 @@ function verifyPointChargeSimulation(
         message: 'Probe mass must be greater than zero.',
       }),
     )
-    const onSource = resolvedCharges.some((charge) =>
-      magnitude(subtract(samplePoint, charge.position)) <= 0,
+    const onSource = resolvedCharges.some(
+      (charge) => magnitude(subtract(samplePoint, charge.position)) <= 0,
     )
     checks.push(
       check('probe_not_on_source', 'constraint', !onSource, {
@@ -538,27 +666,50 @@ function verifyPointChargeSimulation(
     const actualForceMagnitude = readScalar(state.derived, 'electric_force_magnitude')
     checks.push(
       ...(actualForce === undefined
-        ? [check('electric_force_vector_present', 'constraint', false, {
-            message: 'The simulation did not report an electric_force_vector for the probe.',
-          })]
-        : [check('electric_force_qE', 'constraint', vectorMatches(actualForce, expectedForce, tolerance), {
-            message: 'Force on the probe must satisfy F = qE.',
-          })]),
+        ? [
+            check('electric_force_vector_present', 'constraint', false, {
+              message: 'The simulation did not report an electric_force_vector for the probe.',
+            }),
+          ]
+        : [
+            check(
+              'electric_force_qE',
+              'constraint',
+              vectorMatches(actualForce, expectedForce, tolerance),
+              {
+                message: 'Force on the probe must satisfy F = qE.',
+              },
+            ),
+          ]),
       ...(actualForceMagnitude === undefined
-        ? [check('electric_force_magnitude_present', 'constraint', false, {
-            message: 'The simulation did not report an electric_force_magnitude for the probe.',
-          })]
-        : [check('electric_force_magnitude_matches', 'constraint', withinTolerance(actualForceMagnitude, magnitude(expectedForce), tolerance), {
-            message: 'Reported |F| must match |qE|.',
-          })]),
+        ? [
+            check('electric_force_magnitude_present', 'constraint', false, {
+              message: 'The simulation did not report an electric_force_magnitude for the probe.',
+            }),
+          ]
+        : [
+            check(
+              'electric_force_magnitude_matches',
+              'constraint',
+              withinTolerance(actualForceMagnitude, magnitude(expectedForce), tolerance),
+              {
+                message: 'Reported |F| must match |qE|.',
+              },
+            ),
+          ]),
     )
     const actualAcceleration = readVector(state.derived, 'acceleration_vector')
     if (actualAcceleration !== undefined && probeMass > 0) {
       const expectedAcceleration = scale(expectedForce, 1 / probeMass)
       checks.push(
-        check('electric_acceleration_qE_over_m', 'constraint', vectorMatches(actualAcceleration, expectedAcceleration, tolerance), {
-          message: 'Probe acceleration must satisfy a = qE/m.',
-        }),
+        check(
+          'electric_acceleration_qE_over_m',
+          'constraint',
+          vectorMatches(actualAcceleration, expectedAcceleration, tolerance),
+          {
+            message: 'Probe acceleration must satisfy a = qE/m.',
+          },
+        ),
       )
     }
   }
@@ -567,18 +718,23 @@ function verifyPointChargeSimulation(
 }
 
 /** Read a derived vector, returning undefined when absent (rather than throwing). */
-const readVector = (derived: SimulationResult['states'][number]['derived'], key: string): Vector3 | undefined => {
+const readVector = (
+  derived: SimulationResult['states'][number]['derived'],
+  key: string,
+): Vector3 | undefined => {
   const found = derived.find((entry) => entry.key === key)
   if (found === undefined || !('vector' in found.value)) return undefined
   return toCanonicalVector(found.value).vectorSI
 }
 
 /** Read a derived scalar, returning undefined when absent. */
-const readScalar = (derived: SimulationResult['states'][number]['derived'], key: string): number | undefined => {
+const readScalar = (
+  derived: SimulationResult['states'][number]['derived'],
+  key: string,
+): number | undefined => {
   const found = derived.find((entry) => entry.key === key)
   if (found === undefined || !('value' in found.value)) return undefined
   return canonicalValue(found.value)
 }
 
 export { verifyPointChargeScene, verifyPointChargeSimulation }
-

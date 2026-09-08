@@ -52,11 +52,17 @@ export {
 export {
   SIMULATION_REQUEST_SCHEMA,
   SIMULATION_RESULT_SCHEMA,
+  SIMULATION_WORKER_MESSAGE_KINDS,
+  SIMULATION_WORKER_SCHEMA,
+  parseSimulationWorkerMessage,
   type PhysicsEventLike,
+  type SimulationError,
   type SimulationMetadata,
   type SimulationOptions,
+  type SimulationProgress,
   type SimulationRequest,
   type SimulationResult,
+  type SimulationWorkerMessage,
 } from './simulation.ts'
 export {
   EngineUnsupportedError,

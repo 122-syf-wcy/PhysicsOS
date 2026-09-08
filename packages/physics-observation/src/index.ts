@@ -9,6 +9,7 @@ import {
 import { magnitude } from '@physicsos/physics-math'
 import { PhysicsOSError } from '@physicsos/shared'
 import type { ObservableDefinition, PhysicsScene } from '@physicsos/physics-scene'
+import { MAX_TRAJECTORY_RENDER_POINTS, decimateTrajectoryPoints } from '@physicsos/physics-scene'
 import { validateQuantity, type PhysicalDimension, type Quantity } from '@physicsos/physics-units'
 
 export interface ObservationBase {
@@ -138,12 +139,31 @@ const selectState = (scene: PhysicsScene, simulation: SimulationResult): Simulat
   )
 }
 
-const trajectoryPoints = (simulation: SimulationResult, particleId: string): TrajectoryPoint[] =>
-  simulation.states.flatMap((state) => {
-    const object = findParticleState(state, particleId)
-    if (object?.position === undefined) return []
-    return [{ time: state.time, position: object.position }]
-  })
+type MagneticTrajectoryPoints = readonly TrajectoryPoint[]
+
+const trajectoryCache = new WeakMap<SimulationResult, Map<string, MagneticTrajectoryPoints>>()
+
+const trajectoryPoints = (
+  simulation: SimulationResult,
+  particleId: string,
+): MagneticTrajectoryPoints => {
+  const cachedByParticle = trajectoryCache.get(simulation)
+  const cached = cachedByParticle?.get(particleId)
+  if (cached !== undefined) return cached
+
+  const points = decimateTrajectoryPoints(
+    simulation.states.flatMap((state) => {
+      const object = findParticleState(state, particleId)
+      if (object?.position === undefined) return []
+      return [{ time: state.time, position: object.position }]
+    }),
+    MAX_TRAJECTORY_RENDER_POINTS,
+  )
+  const nextByParticle = cachedByParticle ?? new Map<string, MagneticTrajectoryPoints>()
+  nextByParticle.set(particleId, points)
+  if (cachedByParticle === undefined) trajectoryCache.set(simulation, nextByParticle)
+  return points
+}
 
 const directionFromSimulation = (simulation: SimulationResult): 'clockwise' | 'counterclockwise' =>
   derivedScalarOf(simulation.derivedQuantities, 'rotation_direction', 'dimensionless').value >= 0

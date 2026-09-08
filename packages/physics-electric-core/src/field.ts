@@ -10,7 +10,7 @@
  * Everything here is pure: no scene, no engine, no renderer. Units are SI.
  */
 
-import { add, magnitude, scale, subtract, type Vector3 } from '@physicsos/physics-math'
+import { add, magnitude, scale, subtract, vec3, type Vector3 } from '@physicsos/physics-math'
 import { PhysicsOSError } from '@physicsos/shared'
 
 /** Coulomb constant k = 1/(4πε₀), in N·m²/C². */
@@ -56,8 +56,6 @@ export type ChargeSign = 'positive' | 'negative' | 'neutral'
 export const chargeSignOf = (charge: number): ChargeSign =>
   charge > 0 ? 'positive' : charge < 0 ? 'negative' : 'neutral'
 
-const displacement = (source: Vector3, sample: Vector3): Vector3 => subtract(sample, source)
-
 /**
  * Distance from a source, refusing the singular point.
  *
@@ -86,7 +84,7 @@ export const pointChargeElectricField = (
   sourcePosition: Vector3,
   samplePosition: Vector3,
 ): Vector3 => {
-  const offset = displacement(sourcePosition, samplePosition)
+  const offset = subtract(samplePosition, sourcePosition)
   const distance = requireNonZeroDistance(offset)
   return scale(offset, (COULOMB_CONSTANT * sourceCharge) / distance ** 3)
 }
@@ -97,7 +95,7 @@ export const pointChargePotential = (
   sourcePosition: Vector3,
   samplePosition: Vector3,
 ): number => {
-  const distance = requireNonZeroDistance(displacement(sourcePosition, samplePosition))
+  const distance = requireNonZeroDistance(subtract(samplePosition, sourcePosition))
   return (COULOMB_CONSTANT * sourceCharge) / distance
 }
 
@@ -122,16 +120,36 @@ export const coulombForce = (
  *
  * A sample sitting exactly on a source is a modelling error, not a value to
  * approximate, so the singularity propagates rather than being silently skipped.
+ *
+ * The superposition is accumulated inline so `n` sources cost one pass and a
+ * constant number of allocations: the previous shape (`charges.map(...)` into an
+ * array, then `reduce` over it) allocated `n` intermediate field vectors and
+ * walked the list twice for every sample point. Display lattices and potential
+ * grids call this once per cell, so that per-call overhead multiplies
+ * (docs/02 §150: no main-thread long tasks from lattice sampling).
  */
 export const fieldAt = (
   charges: readonly PointCharge[],
   samplePosition: Vector3,
 ): ElectricFieldSample => {
-  const field = superposeElectricFields(
-    charges.map((charge) =>
-      pointChargeElectricField(charge.charge, charge.position, samplePosition),
-    ),
-  )
+  let sumX = 0
+  let sumY = 0
+  let sumZ = 0
+  for (const charge of charges) {
+    const offset = subtract(samplePosition, charge.position)
+    const distance = magnitude(offset)
+    if (!Number.isFinite(distance) || distance <= 0) {
+      throw new PhysicsOSError(
+        'ELECTRIC_FIELD_SINGULARITY',
+        'Point-charge field and potential are undefined at the source position.',
+      )
+    }
+    const scaled = (COULOMB_CONSTANT * charge.charge) / distance ** 3
+    sumX += offset.x * scaled
+    sumY += offset.y * scaled
+    sumZ += offset.z * scaled
+  }
+  const field = vec3(sumX, sumY, sumZ)
   return { at: samplePosition, field, magnitude: magnitude(field) }
 }
 

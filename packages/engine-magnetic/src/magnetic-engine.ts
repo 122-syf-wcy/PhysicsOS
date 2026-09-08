@@ -34,6 +34,8 @@ import {
 } from '@physicsos/physics-core'
 import {
   validateScene,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
   type Particle,
   type PhysicsScene,
   type UniformMagneticField,
@@ -318,9 +320,10 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       (3 * model.period) / 4,
       model.period,
     ]
-    const trajectoryTimes = Array.from(
-      { length: DEFAULT_TRAJECTORY_SEGMENTS + 1 },
-      (_, index) => startTime + ((endTime - startTime) * index) / DEFAULT_TRAJECTORY_SEGMENTS,
+    const trajectoryTimes = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
     )
     const sampleTimes = [...new Set([startTime, endTime, ...trajectoryTimes, ...verificationTimes])]
       .filter((time) => time >= startTime && time <= endTime)

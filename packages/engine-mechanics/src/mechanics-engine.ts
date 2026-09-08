@@ -26,6 +26,8 @@ import {
 } from '@physicsos/physics-core'
 import {
   validateScene,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 import type { MechanicsModel } from './models/types.ts'
@@ -458,9 +460,10 @@ export class MechanicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'endTime must be >= startTime.')
     }
 
-    const trajectoryTimes = Array.from(
-      { length: DEFAULT_TRAJECTORY_SEGMENTS + 1 },
-      (_, i) => startTime + ((endTime - startTime) * i) / DEFAULT_TRAJECTORY_SEGMENTS,
+    const trajectoryTimes = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
     )
 
     const states = trajectoryTimes.map((t) => stateAtForModel(model, t))

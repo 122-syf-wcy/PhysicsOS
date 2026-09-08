@@ -54,6 +54,8 @@ import {
   isCompositeFieldScene,
   sameFieldEnvironment,
   sampleFieldsAt,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
   validateScene,
   type FieldSample,
   type PhysicsScene,
@@ -258,9 +260,35 @@ export const decomposePhases = (
 }
 
 const phaseAt = (phases: readonly CompositePhase[], time: number): CompositePhase | undefined => {
-  for (const phase of phases) {
-    if (time >= phase.startTime && time <= phase.endTime) return phase
+  if (phases.length === 0) return undefined
+  /* Phases are contiguous, non-overlapping time intervals emitted in ascending
+     start order (decomposePhases). The original linear scan returned the FIRST
+     phase containing `time` — at an exact boundary between two phases that is
+     the earlier one, i.e. the first phase whose endTime >= time. Binary search
+     preserves that semantics exactly, turning O(phases) per lookup into
+     O(log phases) for the O(states) stateAtForModel walk. */
+  let low = 0
+  let high = phases.length - 1
+  let firstEndAtOrAfter: number = phases.length
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const midPhase = phases[mid]
+    if (midPhase !== undefined && midPhase.endTime >= time) {
+      firstEndAtOrAfter = mid
+      high = mid - 1
+    } else {
+      low = mid + 1
+    }
   }
+  if (firstEndAtOrAfter === phases.length) {
+    /* No phase ends at or after `time` (time past the run's end): the linear
+       scan fell through the loop and returned the last phase. */
+    return phases[phases.length - 1]
+  }
+  const candidate = phases[firstEndAtOrAfter]
+  /* Mirror the loop's containment test; a time before the first phase's start
+     (outside the covered range) also fell through to the last phase. */
+  if (candidate !== undefined && time >= candidate.startTime) return candidate
   return phases[phases.length - 1]
 }
 
@@ -889,10 +917,13 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
        gyration arc that starts and ends between two samples would be drawn as a
        straight chord, and the region-crossing instant — which the timeline marks —
        would be off by up to one sample interval. */
-    const times = new Set<number>()
-    for (let i = 0; i <= TRAJECTORY_SAMPLES; i += 1) {
-      times.add(startTime + ((endTime - startTime) * i) / TRAJECTORY_SAMPLES)
-    }
+    const times = new Set<number>(
+      trajectorySampleTimes(
+        startTime,
+        endTime,
+        trajectoryStorageSampleCount(request.options, TRAJECTORY_SAMPLES + 1),
+      ),
+    )
     for (const phase of phases) {
       if (phase.startTime >= startTime && phase.startTime <= endTime) times.add(phase.startTime)
       if (phase.endTime >= startTime && phase.endTime <= endTime) times.add(phase.endTime)

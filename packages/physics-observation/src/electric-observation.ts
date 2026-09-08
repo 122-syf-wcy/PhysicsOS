@@ -11,6 +11,8 @@ import { PhysicsOSError } from '@physicsos/shared'
 import {
   fieldSamplePointOf,
   sourceChargesOf,
+  MAX_TRAJECTORY_RENDER_POINTS,
+  decimateTrajectoryPoints,
   type ObservableDefinition,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
@@ -154,10 +156,13 @@ const trajectoryPointsOf = (
   const cached = cachedByParticle?.get(particleId)
   if (cached !== undefined) return cached
 
-  const points = simulation.states.flatMap((sample) => {
-    const object = sample.objects.find(candidate => candidate.id === particleId)
-    return object?.position === undefined ? [] : [{ time: sample.time, position: object.position }]
-  })
+  const points = decimateTrajectoryPoints(
+    simulation.states.flatMap((sample) => {
+      const object = sample.objects.find(candidate => candidate.id === particleId)
+      return object?.position === undefined ? [] : [{ time: sample.time, position: object.position }]
+    }),
+    MAX_TRAJECTORY_RENDER_POINTS,
+  )
   const nextByParticle = cachedByParticle ?? new Map<string, ElectricTrajectoryPoints>()
   nextByParticle.set(particleId, points)
   if (cachedByParticle === undefined) trajectoryCache.set(simulation, nextByParticle)

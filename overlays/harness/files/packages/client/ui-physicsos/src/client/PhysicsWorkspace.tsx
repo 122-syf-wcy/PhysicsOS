@@ -38,6 +38,7 @@ import { ExperimentReportPanel } from './ExperimentReportPanel.tsx'
 import { IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
 import { useEventEffects } from './physics/event-effects.ts'
+import { createFrameSource, useFrameSource, type FrameSource } from './physics/frame-source.ts'
 import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
 import type { ObservableKey } from './physics/scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
@@ -57,6 +58,10 @@ type Translate = (key: PhysicsosKey) => string
 
 const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
 
+/** Wall-clock interval at which the React tree refreshes its summary while the
+    animation loop publishes every frame to the renderer channel (#123). */
+const SUMMARY_INTERVAL_MS = 250
+
 export interface PhysicsWorkspaceProps {
   readonly runtime: WorkspaceRuntime
   readonly t: Translate
@@ -75,6 +80,15 @@ export interface PhysicsWorkspaceProps {
   readonly recordAttempt?: (attempt: SelfCheckAttemptInput) => void
 }
 
+/**
+ * The one physics workspace.
+ *
+ * Rendering is decoupled per #123: the animation clock publishes every frame to
+ * a {@link FrameSource} that only the canvas subscribes to, so per-frame updates
+ * re-render the canvas alone. The React shell (toolbar, tree, inspector, data
+ * panel, status) refreshes from a throttled summary, so a 60 fps playback never
+ * re-renders the whole tree.
+ */
 export function PhysicsWorkspace({
   runtime, t, toolbarExtra, onSwitchExperiment, recordAttempt,
 }: PhysicsWorkspaceProps) {
@@ -89,30 +103,64 @@ export function PhysicsWorkspace({
      it actually needs to reach the canvas. */
   const highlightRef = useRef<string | undefined>(undefined)
 
+  /* The renderer channel: the canvas subscribes to the latest frame directly.
+     Created once per workspace instance (the Lab remounts this shell per scene). */
+  const [frameSource] = useState(() => createFrameSource<WorkspaceSnapshot>(runtime.getSnapshot()))
+  /* Latest frame already reflected in React state, for change detection. */
+  const summaryRef = useRef(snapshot)
+  const lastSummaryAt = useRef(0)
+
   const clock = snapshot.clock
   const running = clock.running
   /* One unit for the whole timeline, chosen from the run window, so the moving
      clock and its total stay comparable — `3.75 µs / 10.00 µs`, never `1e-5s`. */
   const clockScale = timeScaleOf(clock.total)
 
+  /** Publish a frame to the renderer channel AND to React. Used by discrete
+      user actions so the canvas and the panels agree immediately. */
+  const commit = useCallback((next: WorkspaceSnapshot) => {
+    frameSource.set(next)
+    summaryRef.current = next
+    setSnapshot(next)
+  }, [frameSource])
+
+  /* The animation loop is the renderer's independent update loop (#123): every
+     frame goes straight to the canvas channel; React only gets a throttled
+     summary, or an immediate refresh when Status / Selection / Panel Data /
+     revision actually changed. */
   useAnimationClock(running, useCallback((elapsed: number) => {
-    setSnapshot(runtime.advance(elapsed))
-  }, [runtime]))
+    const next = runtime.advance(elapsed)
+    frameSource.set(next)
+    const previous = summaryRef.current
+    const now = typeof performance === 'undefined' ? 0 : performance.now()
+    const significant =
+      next.status !== previous.status ||
+      next.sceneRevision !== previous.sceneRevision ||
+      next.clock.running !== previous.clock.running
+    if (significant || now - lastSummaryAt.current >= SUMMARY_INTERVAL_MS) {
+      lastSummaryAt.current = now
+      summaryRef.current = next
+      setSnapshot(next)
+    }
+  }, [runtime, frameSource]))
 
   /* A new runtime instance (different scene) must not keep the previous frame. */
   useEffect(() => {
-    setSnapshot(runtime.getSnapshot())
-  }, [runtime])
+    const next = runtime.getSnapshot()
+    frameSource.set(next)
+    summaryRef.current = next
+    setSnapshot(next)
+  }, [runtime, frameSource])
 
   const highlight = useCallback((id: string | undefined) => {
     if (highlightRef.current === id) return
     highlightRef.current = id
-    setSnapshot(runtime.setHighlight(id === undefined ? [] : [id]))
-  }, [runtime])
+    commit(runtime.setHighlight(id === undefined ? [] : [id]))
+  }, [runtime, commit])
 
   const seek = useCallback((time: number) => {
-    setSnapshot(runtime.seek(time))
-  }, [runtime])
+    commit(runtime.seek(time))
+  }, [runtime, commit])
 
   const statusLabel =
     snapshot.status === 'verified'
@@ -124,10 +172,6 @@ export function PhysicsWorkspace({
   const failed = snapshot.status === 'failed'
 
   const observables = useMemo(() => collectObservables(snapshot), [snapshot])
-
-  /* Collision / boundary / turning-point bursts, fired as the clock crosses
-     each timeline event during playback. */
-  const effects = useEventEffects(clock, snapshot.events, snapshot.view)
 
   return (
     <div
@@ -178,7 +222,7 @@ export function PhysicsWorkspace({
                   className={css.branchRestore}
                   onClick={() => {
                     const next = runtime.restoreOrigin?.()
-                    if (next !== undefined) setSnapshot(next)
+                    if (next !== undefined) commit(next)
                   }}
                 >
                   {t('lab.branch.restore')}
@@ -199,7 +243,7 @@ export function PhysicsWorkspace({
             className={clsx(css.primary, running && css.primaryRunning)}
             disabled={failed || clock.total <= 0}
             aria-pressed={running}
-            onClick={() => { setSnapshot(runtime.setRunning(true)) }}
+            onClick={() => { commit(runtime.setRunning(true)) }}
           >
             <IconPlayOutline16 size={13} />
             {t('lab.run')}
@@ -208,7 +252,7 @@ export function PhysicsWorkspace({
             type="button"
             className={css.secondary}
             disabled={failed}
-            onClick={() => { setSnapshot(runtime.setRunning(false)) }}
+            onClick={() => { commit(runtime.setRunning(false)) }}
           >
             <IconPauseOutline16 size={13} />
             {t('lab.pause')}
@@ -217,7 +261,7 @@ export function PhysicsWorkspace({
             type="button"
             className={css.ghost}
             disabled={failed}
-            onClick={() => { setSnapshot(runtime.step(clock.total * STEP_FRACTION)) }}
+            onClick={() => { commit(runtime.step(clock.total * STEP_FRACTION)) }}
           >
             <IconChevronRightOutline14 size={13} />
             {t('lab.step')}
@@ -226,7 +270,7 @@ export function PhysicsWorkspace({
             type="button"
             className={css.ghost}
             disabled={failed}
-            onClick={() => { setSnapshot(runtime.seek(0)) }}
+            onClick={() => { commit(runtime.seek(0)) }}
           >
             <IconRefreshOutline16 size={13} />
             {t('lab.reset')}
@@ -284,7 +328,7 @@ export function PhysicsWorkspace({
                 selected={selected}
                 onSelect={setSelected}
                 onToggle={(observable: ObservableKey, next: boolean) => {
-                  setSnapshot(runtime.setObservable(observable, next))
+                  commit(runtime.setObservable(observable, next))
                 }}
                 onHover={(id) => { highlight(id ?? undefined) }}
               />
@@ -293,14 +337,12 @@ export function PhysicsWorkspace({
 
           <div className={css.stage}>
             <section className={css.canvas} aria-label={t('lab.canvas')}>
-              <PhysicsCanvas
-                view={snapshot.view}
+              {/* The canvas is the renderer: it subscribes to the frame source
+                  directly, so animation frames re-render only this subtree (#123). */}
+              <CanvasFrame
+                source={frameSource}
                 ariaLabel={snapshot.ariaLabel}
-                trajectoryTimes={snapshot.trajectoryTimes}
-                {...snapshot.sampleReadout === undefined ? {} : { sampleReadout: snapshot.sampleReadout }}
                 onSeekTime={seek}
-                effects={effects}
-                clockTime={clock.time}
               />
             </section>
 
@@ -309,7 +351,7 @@ export function PhysicsWorkspace({
                 type="button"
                 className={clsx(css.transport, css.transportPrimary)}
                 aria-label={t('lab.playPause')}
-                onClick={() => { setSnapshot(runtime.setRunning(!running)) }}
+                onClick={() => { commit(runtime.setRunning(!running)) }}
               >
                 {running ? <IconPauseOutline16 size={14} /> : <IconPlayOutline16 size={14} />}
               </button>
@@ -317,7 +359,7 @@ export function PhysicsWorkspace({
                 type="button"
                 className={css.transport}
                 aria-label={t('lab.stepBack')}
-                onClick={() => { setSnapshot(runtime.step(-clock.total * STEP_FRACTION)) }}
+                onClick={() => { commit(runtime.step(-clock.total * STEP_FRACTION)) }}
               >
                 <IconChevronLeftOutline14 size={13} />
               </button>
@@ -325,7 +367,7 @@ export function PhysicsWorkspace({
                 type="button"
                 className={css.transport}
                 aria-label={t('lab.step')}
-                onClick={() => { setSnapshot(runtime.step(clock.total * STEP_FRACTION)) }}
+                onClick={() => { commit(runtime.step(clock.total * STEP_FRACTION)) }}
               >
                 <IconChevronRightOutline14 size={13} />
               </button>
@@ -346,7 +388,7 @@ export function PhysicsWorkspace({
                 className={css.rate}
                 aria-label={t('lab.rate')}
                 value={clock.rate}
-                onChange={(event) => { setSnapshot(runtime.setRate(Number(event.target.value))) }}
+                onChange={(event) => { commit(runtime.setRate(Number(event.target.value))) }}
               >
                 {PLAYBACK_RATES.map(rate => (
                   <option key={rate} value={rate}>{`${rate}x`}</option>
@@ -409,8 +451,8 @@ export function PhysicsWorkspace({
             <InspectorSections
               sections={snapshot.inspector}
               note={t('lab.derivedNote')}
-              onEdit={(id, value) => { setSnapshot(runtime.editParameter(id, value)) }}
-              onChoice={(id, value) => { setSnapshot(runtime.setChoice(id, value)) }}
+              onEdit={(id, value) => { commit(runtime.editParameter(id, value)) }}
+              onChoice={(id, value) => { commit(runtime.setChoice(id, value)) }}
               onHighlight={highlight}
             />
             <p className={css.sectionLabel}>{t('lab.verification')}</p>
@@ -423,7 +465,7 @@ export function PhysicsWorkspace({
         <AgentDrawer
           snapshot={snapshot}
           runtime={runtime}
-          onSnapshot={setSnapshot}
+          onSnapshot={commit}
           onClose={() => { setAgentOpen(false) }}
           t={t}
           {...(recordAttempt === undefined ? {} : { recordAttempt })}
@@ -443,3 +485,35 @@ export function PhysicsWorkspace({
 const collectObservables = (
   snapshot: WorkspaceSnapshot,
 ): Readonly<Partial<Record<ObservableKey, boolean>>> => snapshot.view.visible
+
+/**
+ * The renderer's independent update loop (#123).
+ *
+ * Subscribes to the frame source, so every animation frame re-renders ONLY this
+ * canvas subtree: the surrounding React shell (toolbar, tree, inspector, panels)
+ * stays on the throttled summary. Event bursts are derived here from the live
+ * frame, so a collision is still seen the exact frame it happens.
+ */
+function CanvasFrame({
+  source,
+  ariaLabel,
+  onSeekTime,
+}: {
+  source: FrameSource<WorkspaceSnapshot>
+  ariaLabel: string
+  onSeekTime: (time: number) => void
+}) {
+  const frame = useFrameSource(source)
+  const effects = useEventEffects(frame.clock, frame.events, frame.view)
+  return (
+    <PhysicsCanvas
+      view={frame.view}
+      ariaLabel={ariaLabel}
+      trajectoryTimes={frame.trajectoryTimes}
+      {...frame.sampleReadout === undefined ? {} : { sampleReadout: frame.sampleReadout }}
+      onSeekTime={onSeekTime}
+      effects={effects}
+      clockTime={frame.clock.time}
+    />
+  )
+}
