@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { createMechanicsScene, createPointChargeScene, createElectricScene, createParallelPlateScene } from '@physicsos/physics-scene'
+import {
+  createEmfMeasurementScene,
+  createMechanicsScene,
+  createParallelCircuitScene,
+  createParallelPlateScene,
+  createPointChargeScene,
+  createElectricScene,
+  createRheostatCircuitScene,
+  createSeriesCircuitScene,
+} from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { createMechanicsWorkspaceRuntime } from '../src/client/physics/mechanics-workspace-runtime.ts'
 import { createElectricWorkspaceRuntime } from '../src/client/physics/electric-workspace-runtime.ts'
+import { createCircuitWorkspaceRuntime } from '../src/client/physics/circuit-workspace-runtime.ts'
 import {
   drawnVisualIds,
   physicsAgentContext,
@@ -966,5 +976,223 @@ describe('agent answers — bounded-field parallel-plate electric', () => {
       expect(answer, `${id} must answer at t = 0`).toBeDefined()
       expect(answer?.paragraphs.join(' '), `${id} must explain the zero`).toContain('板外')
     }
+  })
+})
+
+describe('agent answers — DC circuit', () => {
+  /* The four circuit templates: series (R₁+R₂ in one loop, meters in the loop),
+     parallel (R₁ ∥ R₂, junction dots), rheostat (variable resistor in series)
+     and EMF-measurement (source with internal resistance). The intents must
+     dispatch on the CircuitAgentFacts the runtime publishes — never on titles. */
+  const seriesRuntime = () =>
+    createCircuitWorkspaceRuntime(
+      createSeriesCircuitScene({ sceneId: 'scene-circuit-series-agent', title: '串联电路' }),
+    )
+  const parallelRuntime = () =>
+    createCircuitWorkspaceRuntime(
+      createParallelCircuitScene({ sceneId: 'scene-circuit-parallel-agent', title: '并联电路' }),
+    )
+  const rheostatRuntime = () =>
+    createCircuitWorkspaceRuntime(
+      createRheostatCircuitScene({ sceneId: 'scene-circuit-rheostat-agent', title: '滑动变阻器电路' }),
+    )
+  const emfRuntime = () =>
+    createCircuitWorkspaceRuntime(
+      createEmfMeasurementScene({ sceneId: 'scene-circuit-emf-agent', title: '测电动势与内阻' }),
+    )
+
+  const idsOf = (runtime: ReturnType<typeof seriesRuntime>) =>
+    agentSuggestions(physicsAgentContext(runtime.getSnapshot())).map(entry => entry.id)
+
+  const CIRCUIT_INTENTS = [
+    'circuit-ohm-current',
+    'circuit-terminal-voltage',
+    'circuit-internal-resistance',
+    'circuit-series-loop',
+    'circuit-parallel-split',
+    'circuit-rheostat-sweep',
+    'circuit-power-balance',
+    'circuit-meters-ideal',
+  ] as const
+
+  it('publishes circuit facts and drawn component ids for a series frame', () => {
+    const context = physicsAgentContext(seriesRuntime().getSnapshot())
+
+    expect(context.domain).toBe('circuit')
+    expect(context.circuit).toBeDefined()
+    expect(context.circuit?.junctionCount).toBe(0)
+    expect(context.circuit?.hasSlider).toBe(false)
+    expect(context.circuit?.internalResistance).toBe(0)
+    /* Every schematic symbol is a valid highlight target. */
+    for (const id of ['bat', 'am', 'vm', 'r1', 'r2']) {
+      expect(context.drawnIds, `component ${id} must be drawn`).toContain(id)
+    }
+  })
+
+  it('dispatches the topology-specific intents on the published facts', () => {
+    const series = idsOf(seriesRuntime())
+    const parallel = idsOf(parallelRuntime())
+    const rheostat = idsOf(rheostatRuntime())
+    const emf = idsOf(emfRuntime())
+
+    /* Series frame: loop + meters, no slider, no junction, no internal R. */
+    expect(series).toContain('circuit-series-loop')
+    expect(series).not.toContain('circuit-parallel-split')
+    expect(series).not.toContain('circuit-rheostat-sweep')
+    expect(series).not.toContain('circuit-internal-resistance')
+    /* Parallel frame: junction dots present. */
+    expect(parallel).toContain('circuit-parallel-split')
+    expect(parallel).not.toContain('circuit-series-loop')
+    /* Rheostat frame: slider symbol present. */
+    expect(rheostat).toContain('circuit-rheostat-sweep')
+    expect(rheostat).not.toContain('circuit-parallel-split')
+    /* EMF-measurement frame: internal resistance > 0. */
+    expect(emf).toContain('circuit-internal-resistance')
+    /* All four frames carry the common current / voltage / power / meter intents. */
+    for (const id of ['circuit-ohm-current', 'circuit-terminal-voltage', 'circuit-power-balance', 'circuit-meters-ideal']) {
+      expect(series, id).toContain(id)
+      expect(parallel, id).toContain(id)
+      expect(rheostat, id).toContain(id)
+      expect(emf, id).toContain(id)
+    }
+  })
+
+  it('circuit-ohm-current cites the KCL check and the derived current, and highlights the source', () => {
+    const context = physicsAgentContext(seriesRuntime().getSnapshot())
+    const answer = matchIntent('这个电流是怎么来的？', context)
+
+    expect(answer).toBeDefined()
+    expect(answer?.paragraphs.some(p => p.includes('I = E / (R'))).toBe(true)
+    const kcl = context.verification.find(check => check.id === 'kcl_current_conservation')
+    if (kcl !== undefined) {
+      expect(answer?.sources.some(s => s.kind === 'verification' && s.label === kcl.label)).toBe(true)
+    }
+    /* The derived row the Inspector published is cited by the answer. */
+    expect(answer?.paragraphs.some(p => p.includes('干路电流'))).toBe(true)
+    expect(answer?.tools[0]).toEqual({
+      tool: 'physics.ui.highlight',
+      targetId: 'bat',
+      duration: 1800,
+    })
+  })
+
+  it('circuit-terminal-voltage cites the U = E − I·r law and explains the drop', () => {
+    const context = physicsAgentContext(emfRuntime().getSnapshot())
+    const answer = matchIntent('路端电压为什么比电动势小？', context)
+
+    expect(answer).toBeDefined()
+    expect(answer?.paragraphs.some(p => p.includes('U = E − I·r'))).toBe(true)
+    const law = context.verification.find(check => check.id?.startsWith('terminal_voltage_law'))
+    if (law !== undefined) {
+      expect(answer?.sources.some(s => s.kind === 'verification' && s.label === law.label)).toBe(true)
+    }
+    expect(highlightTargetOf(answer?.tools[0])).toBe('bat')
+  })
+
+  it('circuit-internal-resistance only answers when the source really has r > 0', () => {
+    const withInternal = matchIntent('内阻有什么用？', physicsAgentContext(emfRuntime().getSnapshot()))
+    const idealSource = matchIntent('内阻有什么用？', physicsAgentContext(seriesRuntime().getSnapshot()))
+
+    expect(withInternal).toBeDefined()
+    expect(withInternal?.paragraphs.some(p => p.includes('内阻'))).toBe(true)
+    /* A series frame with r = 0 must not answer "what the internal resistance
+       does" as if the scene had one. */
+    expect(idealSource).toBeUndefined()
+    /* Addressing by id must not sneak past the gate either. */
+    expect(matchIntent('circuit-internal-resistance', physicsAgentContext(seriesRuntime().getSnapshot()))).toBeUndefined()
+  })
+
+  it('routes student questions to the circuit intents', () => {
+    const series = physicsAgentContext(seriesRuntime().getSnapshot())
+    const parallel = physicsAgentContext(parallelRuntime().getSnapshot())
+    const rheostat = physicsAgentContext(rheostatRuntime().getSnapshot())
+
+    const routes: readonly { context: ReturnType<typeof physicsAgentContext>; query: string; question: string }[] = [
+      { context: series, query: '这个电流是怎么来的？', question: '这个电流是怎么来的？' },
+      { context: series, query: '串联电路里电流为什么处处相等？', question: '串联电路里电流为什么处处相等？' },
+      { context: parallel, query: '电流在结点处是怎么分的？', question: '电流在结点处是怎么分的？' },
+      { context: rheostat, query: '滑片移动时电流怎么变？', question: '滑片移动时电流怎么变？' },
+      { context: series, query: '电源的功率去哪了？', question: '电源的功率去哪了？' },
+      { context: series, query: '理想电表为什么不影响电路？', question: '理想电表为什么不影响电路？' },
+    ]
+    for (const route of routes) {
+      const answer = matchIntent(route.query, route.context)
+      expect(answer, `"${route.query}" must be answerable`).toBeDefined()
+      expect(answer?.question, `"${route.query}" routed to the wrong intent`).toBe(route.question)
+    }
+  })
+
+  it('keeps every available circuit highlight resolvable to a drawn schematic symbol', () => {
+    /* Per-frame availability follows the CircuitAgentFacts gates: r = 0 frames
+       cannot answer the internal-resistance intent, slider-less frames cannot
+       answer the sweep intent, and junction-less frames cannot answer the split
+       intent. The unavailable ids must be rejected (by id and by keyword); the
+       available ones must answer AND resolve their highlight to a drawn symbol. */
+    const frames: readonly { runtime: ReturnType<typeof seriesRuntime>; unavailable: readonly string[] }[] = [
+      { runtime: seriesRuntime(), unavailable: ['circuit-internal-resistance', 'circuit-rheostat-sweep', 'circuit-parallel-split'] },
+      { runtime: parallelRuntime(), unavailable: ['circuit-internal-resistance', 'circuit-rheostat-sweep', 'circuit-series-loop'] },
+      { runtime: rheostatRuntime(), unavailable: ['circuit-internal-resistance', 'circuit-parallel-split'] },
+      { runtime: emfRuntime(), unavailable: ['circuit-parallel-split'] },
+    ]
+    for (const { runtime, unavailable } of frames) {
+      const snapshot = runtime.getSnapshot()
+      const context = physicsAgentContext(snapshot)
+      const drawn = drawnVisualIds(snapshot)
+
+      for (const id of CIRCUIT_INTENTS) {
+        if (unavailable.includes(id)) {
+          expect(matchIntent(id, context), `${id} must not answer on ${snapshot.title}`).toBeUndefined()
+          continue
+        }
+        const answer = matchIntent(id, context)
+        expect(answer, `${id} must answer for ${snapshot.title}`).toBeDefined()
+        for (const call of answer?.tools ?? []) {
+          if (call.tool !== 'physics.ui.highlight') continue
+          expect(
+            resolveHighlightTarget(call.targetId, drawn).length,
+            `${id} highlight "${call.targetId}" must resolve on ${snapshot.title}`,
+          ).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it('a circuit highlight is view state: the scene revision does not advance', () => {
+    const runtime = seriesRuntime()
+    const before = runtime.getSnapshot()
+    const outcome = runPhysicsAgentTool(runtime, {
+      tool: 'physics.ui.highlight',
+      targetId: 'bat',
+    })
+
+    expect(outcome.ok).toBe(true)
+    expect(outcome.mutatedScene).toBe(false)
+    expect(outcome.snapshot.sceneRevision).toBe(before.sceneRevision)
+    expect(outcome.snapshot.view.highlighted).toEqual(['bat'])
+  })
+
+  it('does not offer circuit intents for mechanics or electric frames', () => {
+    const mechanics = idsOf(
+      createMechanicsWorkspaceRuntime(projectileScene()),
+    )
+    const electric = idsOf(
+      createElectricWorkspaceRuntime(positivePointChargeScene()),
+    )
+
+    for (const id of CIRCUIT_INTENTS) {
+      expect(mechanics, `${id} must not fire on a mechanics frame`).not.toContain(id)
+      expect(electric, `${id} must not fire on an electric frame`).not.toContain(id)
+      /* Addressing by id must not sneak past the domain gate. */
+      expect(matchIntent(id, physicsAgentContext(createMechanicsWorkspaceRuntime(projectileScene()).getSnapshot()))).toBeUndefined()
+    }
+  })
+
+  it('does not let a "电流" query leak into a magnetic or induction frame via the circuit rules', () => {
+    /* A magnetic-frame current question (induction-style) must not be answered by
+       circuit-ohm-current: the circuit intents are gated on domain === 'circuit'. */
+    const mechanics = physicsAgentContext(
+      createMechanicsWorkspaceRuntime(projectileScene()).getSnapshot(),
+    )
+    expect(matchIntent('电流多大？', mechanics)).toBeUndefined()
   })
 })

@@ -492,6 +492,24 @@ overlay 已回写。
 
 ---
 
+## CIRCUIT_QUESTION_AGENT_SLICE_COMPLETE
+
+**日期**：2026-09-08
+
+**范围**：`CIRCUIT_RUNTIME_PACK_V1` 报告「不做」清单点名的下一切片 —— Question Space 电路题全链路核实 + Agent 电路意图补齐。电路引擎 / 场景 / 模板 / 可视化 / 实验室此前已验收，本轮不重复。
+
+**A. 现状核实**：Question Space 电路题已就位 —— `deterministic-circuit-parser`（电路信号 + 电动势/内阻/电阻/电流/电压/功率提取 + 拓扑判定）、`circuit-scene-builder`、`question-runtime` 电路分派（优先于电学判定）、`engine-selector` 路由 `CircuitEngine`、6 道黄金题（串联电流 / 并联总电阻 / 滑变电流 / 总功率与外功率 / 电流与路端电压 / 内阻题），QuestionWorkspace 经 `resolveCircuitOperatingPoint` + `circuitSceneVisualAt` 渲染可验证原理图（question-core 402 用例覆盖）。缺口只在 Agent 侧。
+
+**B. Agent 电路意图**：`physics-agent-answers.ts` 新增 8 个意图 —— `circuit-ohm-current`（I = E/(R外+r)）、`circuit-terminal-voltage`（U = E − I·r）、`circuit-internal-resistance`（r > 0 闸门，P内 = I²·r）、`circuit-series-loop`（junctionCount = 0）、`circuit-parallel-split`（junctionCount > 0，反比分流）、`circuit-rheostat-sweep`（hasSlider，R滑 = p·R全）、`circuit-power-balance`（P总 = P外 + P内）、`circuit-meters-ideal`（画布有电表符号）。每个意图只引用引擎派生量（干路电流 I / 路端电压 U / 电源总功率 / 输出功率 / 内阻耗散功率 / 接入电阻 R滑）与具名校验（`kcl_current_conservation` / `power_balance` / `terminal_voltage_law:<id>`（按前缀匹配）/ `ideal_meters_non_intrusive`）；拓扑分派读 `CircuitAgentFacts`（内阻 / 滑变 / 结点数），高亮目标动态取画布真实绘制的组件 id（优先电源，`resolveHighlightTarget` 兜底）；`matchIntent` 电路规则以 `domain === 'circuit'` 收口，不截胡力学 / 电场 / 电磁感应的电流电压问题。
+
+**C. 验收数据**：`typecheck:web` 零错误；`lint:web` 零错误；`test:web` 30 文件 376 全绿（`physics-agent.client.spec.tsx` 62 用例，+10 电路：事实发布 / 拓扑分派 / 具名校验引用 / 学生问法路由 / 四帧全部可用意图高亮可解析 / 高亮为视图态 / 域隔离）；`test:core` 全绿（question-core 402 含电路黄金题全链路）。
+
+依据：`docs/reports/CIRCUIT-QUESTION-AGENT-SLICE-REPORT.md`
+
+**不做**（明确边界）：Question Space 电路题本体（已交付，仅核实）；模型化 Agent 回答（`AGENT_MODEL_BACKED_ANSWERS_BACKLOG` 不变，接真实模型仍只替换 `matchIntent`）；电路引擎 / 校验 / 模板扩展（交流瞬态、电容电感、多电源仍由 `canHandle` 拒识）；不触 `packages/` 与 Harness 上游。
+
+---
+
 ## 明确延后
 
 见 `docs/reports/BACKLOG.md`：

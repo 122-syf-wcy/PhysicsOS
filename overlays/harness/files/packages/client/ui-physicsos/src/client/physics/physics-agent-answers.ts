@@ -94,6 +94,42 @@ const outsideFieldRegion = (context: PhysicsAgentContext): boolean => {
   return numbers !== null && numbers.every(entry => Number.parseFloat(entry) === 0)
 }
 
+/** Whether the frame is a DC circuit — the only domain the circuit intents describe. */
+const isCircuitFrame = (context: PhysicsAgentContext): boolean => context.domain === 'circuit'
+
+/**
+ * The circuit engine emits the terminal-voltage law as one check per source
+ * (`terminal_voltage_law:<componentId>`), so the Agent looks it up by prefix —
+ * the check IS the runtime's judgement that U = E − I·r holds for this source.
+ */
+const terminalVoltageLawCheck = (context: PhysicsAgentContext) =>
+  context.verification.find(check => check.id.startsWith('terminal_voltage_law'))
+
+/**
+ * A component id that is actually drawn in the current circuit frame, for a
+ * highlight tool call. Prefers the source, then a resistor, then any drawn
+ * component, so the Agent never points at something the canvas is not drawing.
+ */
+const circuitComponentTarget = (
+  context: PhysicsAgentContext,
+  preferredPrefix?: string,
+): string => {
+  const components = context.drawnIds
+  if (preferredPrefix !== undefined) {
+    const preferred = components.find(id => id.startsWith(preferredPrefix))
+    if (preferred !== undefined) return preferred
+  }
+  const source = components.find(id => /^(bat|source|src|emf)/i.test(id))
+  if (source !== undefined) return source
+  const resistor = components.find(id => /^r\d*$/i.test(id))
+  if (resistor !== undefined) return resistor
+  return components[0] ?? 'bat'
+}
+
+/** Whether an ammeter or voltmeter symbol is drawn on the schematic. */
+const hasMeter = (context: PhysicsAgentContext): boolean =>
+  context.drawnIds.some(id => /^(am|vm)|meter|表/.test(id))
+
 interface Intent {
   readonly id: string
   readonly prompt: string
@@ -1218,6 +1254,228 @@ const INTENTS: readonly Intent[] = [
       tools: [{ tool: 'physics.ui.highlight', targetId: 'field-region', duration: 2200 }],
     }),
   },
+  /* ---------------------------------------------------------------- circuit --
+     DC steady-state intents. Every number read from the verified operating
+     point (inspector derived rows); every check named is one the circuit engine
+     actually emitted (kcl / power balance / U = E − Ir / ideal meters). The
+     available-gates dispatch on CircuitAgentFacts so a series loop never claims
+     junction splitting and a non-rheostat frame never answers a slider question. */
+  {
+    id: 'circuit-ohm-current',
+    prompt: '这个电流是怎么来的？',
+    available: isCircuitFrame,
+    answer: (context) => {
+      const current = findDerived(context, '干路电流')
+      const kcl = findCheck(context, 'kcl_current_conservation')
+      return {
+        question: '这个电流是怎么来的？',
+        paragraphs: [
+          '闭合回路里电流由电动势和总电阻共同决定：I = E / (R外 + r)。外电路电阻越大电流越小；内阻 r 也分走一部分电压，所以同一个电动势接上负载后电流不是 E/R 而是 E/(R+r)。',
+          [
+            current === undefined ? '' : `当前干路电流 ${current.value} ${current.unit}`,
+          ].filter(entry => entry.length > 0).join('；') || '当前帧没有发布干路电流。',
+          kcl === undefined
+            ? ''
+            : `引擎的「${kcl.label}」校验为 ${kcl.status === 'passed' ? '通过' : '未通过'}——每个节点流入的电流等于流出的电流。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(current === undefined ? [] : [chip('simulation', '干路电流 I')]),
+          ...(kcl === undefined ? [] : [chip('verification', kcl.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-terminal-voltage',
+    prompt: '路端电压为什么比电动势小？',
+    available: isCircuitFrame,
+    answer: (context) => {
+      const terminal = findDerived(context, '路端电压')
+      const law = terminalVoltageLawCheck(context)
+      const internal = context.circuit?.internalResistance ?? 0
+      return {
+        question: '路端电压为什么比电动势小？',
+        paragraphs: [
+          internal > 0
+            ? '电流通过电源内阻 r 时也要分压，所以路端电压 U = E − I·r，比电动势 E 小一个「内压降」；电流越大（外电阻越小）内压降越大，路端电压越低。'
+            : '这个电源内阻不计（r = 0），所以路端电压等于电动势；一旦接上内阻，路端电压就会变成 U = E − I·r。',
+          terminal === undefined
+            ? '当前帧没有发布路端电压。'
+            : `当前路端电压 ${terminal.value} ${terminal.unit}。`,
+          law === undefined
+            ? ''
+            : `引擎的「${law.label}」校验为 ${law.status === 'passed' ? '通过' : '未通过'}，保证这个 U 确实满足 U = E − I·r。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(terminal === undefined ? [] : [chip('simulation', '路端电压 U')]),
+          ...(law === undefined ? [] : [chip('verification', law.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-internal-resistance',
+    prompt: '内阻有什么用？',
+    available: context => isCircuitFrame(context) && (context.circuit?.internalResistance ?? 0) > 0,
+    answer: (context) => {
+      const internal = context.circuit?.internalResistance ?? 0
+      const internalPower = findDerived(context, '内阻耗散功率')
+      const law = terminalVoltageLawCheck(context)
+      return {
+        question: '内阻有什么用？',
+        paragraphs: [
+          `这个电源的内阻 r = ${internal} Ω。内阻和负载电阻一样分走电压（U = E − I·r），并且把一部分电功率变成热：P内 = I²·r。它不是「坏了」，而是真实电源的固有属性——高中题里「内阻不计」只是把它理想化为零。`,
+          internalPower === undefined
+            ? '当前帧没有发布内阻耗散功率。'
+            : `当前内阻耗散功率 ${internalPower.value} ${internalPower.unit}。`,
+          law === undefined
+            ? ''
+            : `引擎的「${law.label}」校验为 ${law.status === 'passed' ? '通过' : '未通过'}，说明读到的路端电压确实扣掉了这 ${internal} Ω 上的压降。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(internalPower === undefined ? [] : [chip('simulation', '内阻耗散功率')]),
+          ...(law === undefined ? [] : [chip('verification', law.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-series-loop',
+    prompt: '串联电路里电流为什么处处相等？',
+    available: context => isCircuitFrame(context) && (context.circuit?.junctionCount ?? 0) === 0,
+    answer: (context) => {
+      const current = findDerived(context, '干路电流')
+      const kcl = findCheck(context, 'kcl_current_conservation')
+      return {
+        question: '串联电路里电流为什么处处相等？',
+        paragraphs: [
+          '串联回路只有一条通路，电荷没有第二个地方可去：每个节点流入多少就流出多少（基尔霍夫电流定律），所以通过电源、开关、每个电阻的电流都相同，就是干路电流 I。',
+          current === undefined
+            ? '当前帧没有发布干路电流。'
+            : `当前干路电流 ${current.value} ${current.unit}。`,
+          kcl === undefined
+            ? ''
+            : `引擎的「${kcl.label}」校验为 ${kcl.status === 'passed' ? '通过' : '未通过'}。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(current === undefined ? [] : [chip('simulation', '干路电流 I')]),
+          ...(kcl === undefined ? [] : [chip('verification', kcl.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context, 'r'), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-parallel-split',
+    prompt: '电流在结点处是怎么分的？',
+    available: context => isCircuitFrame(context) && (context.circuit?.junctionCount ?? 0) > 0,
+    answer: (context) => {
+      const current = findDerived(context, '干路电流')
+      const kcl = findCheck(context, 'kcl_current_conservation')
+      return {
+        question: '电流在结点处是怎么分的？',
+        paragraphs: [
+          '干路电流在结点按电阻反比分流：每条支路两端的电压相同，所以 I支 = U/R支，电阻小的支路电流大。流入结点的电流等于流出结点的电流（基尔霍夫电流定律），这就是并联电路「分流」的来源。',
+          current === undefined
+            ? '当前帧没有发布干路电流。'
+            : `当前干路电流 ${current.value} ${current.unit}，各支路分走它的一部分。`,
+          kcl === undefined
+            ? ''
+            : `引擎的「${kcl.label}」校验为 ${kcl.status === 'passed' ? '通过' : '未通过'}，保证分岔处的分配满足电流守恒。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(current === undefined ? [] : [chip('simulation', '干路电流 I')]),
+          ...(kcl === undefined ? [] : [chip('verification', kcl.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context, 'r'), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-rheostat-sweep',
+    prompt: '滑片移动时电流怎么变？',
+    available: context => isCircuitFrame(context) && context.circuit?.hasSlider === true,
+    answer: (context) => {
+      const slider = findDerived(context, '接入电阻')
+      const current = findDerived(context, '干路电流')
+      return {
+        question: '滑片移动时电流怎么变？',
+        paragraphs: [
+          '滑片改变的是接入电路的电阻值 R滑（R滑 = p·R全，p 是滑片位置）。总电阻变大 → 电流 I = E/(R总) 变小；总电阻变小 → 电流变大。这就是滑动变阻器「控制电流」的原理。',
+          [
+            slider === undefined ? '' : `当前接入电阻 ${slider.value} ${slider.unit}`,
+            current === undefined ? '' : `当前干路电流 ${current.value} ${current.unit}`,
+          ].filter(entry => entry.length > 0).join('；') || '当前帧没有发布滑变读数。',
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(slider === undefined ? [] : [chip('simulation', '接入电阻 R滑')]),
+          ...(current === undefined ? [] : [chip('simulation', '干路电流 I')]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context, 'rv'), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-power-balance',
+    prompt: '电源的功率去哪了？',
+    available: isCircuitFrame,
+    answer: (context) => {
+      const total = findDerived(context, '电源总功率')
+      const external = findDerived(context, '输出功率')
+      const internal = findDerived(context, '内阻耗散功率')
+      const balance = findCheck(context, 'power_balance')
+      return {
+        question: '电源的功率去哪了？',
+        paragraphs: [
+          '电源做的总功 P总 = E·I，分给外电路和电源内阻两部分：外电路得到输出功率 P外 = U·I，内阻把剩下 P内 = I²·r 变成热。三者的关系是 P总 = P外 + P内（能量守恒）。',
+          [
+            total === undefined ? '' : `电源总功率 ${total.value} ${total.unit}`,
+            external === undefined ? '' : `输出功率 ${external.value} ${external.unit}`,
+            internal === undefined ? '' : `内阻耗散功率 ${internal.value} ${internal.unit}`,
+          ].filter(entry => entry.length > 0).join('；') || '当前帧没有发布功率读数。',
+          balance === undefined
+            ? ''
+            : `引擎的「${balance.label}」校验为 ${balance.status === 'passed' ? '通过' : '未通过'}，保证画布上的功率确实对得上账。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(balance === undefined ? [] : [chip('verification', balance.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: circuitComponentTarget(context), duration: 1800 }],
+      }
+    },
+  },
+  {
+    id: 'circuit-meters-ideal',
+    prompt: '理想电表为什么不影响电路？',
+    available: context => isCircuitFrame(context) && hasMeter(context),
+    answer: (context) => {
+      const meters = findCheck(context, 'ideal_meters_non_intrusive')
+      return {
+        question: '理想电表为什么不影响电路？',
+        paragraphs: [
+          '理想电流表内阻视为零，串联在支路里不产生压降；理想电压表内阻视为无穷大，并联在两点间不分走电流。所以读数「是」电路原来的样子，而不是表自己改变了电路。',
+          meters === undefined
+            ? '当前场景没有给出电表校验。'
+            : `引擎的「${meters.label}」校验为 ${meters.status === 'passed' ? '通过' : '未通过'}，确认读数不是电表干扰出来的。`,
+        ].filter(entry => entry.length > 0),
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          ...(meters === undefined ? [] : [chip('verification', meters.label)]),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: context.drawnIds.find(id => /^(am|vm)/.test(id)) ?? circuitComponentTarget(context), duration: 1800 }],
+      }
+    },
+  },
 ]
 
 /** Prompts this scene can actually answer. */
@@ -1261,6 +1519,20 @@ export const matchIntent = (
     { id: 'composite-gravity-balance', test: /重力.{0,6}(忽略|不计|能不能)|要不要.{0,4}重力/i },
     { id: 'composite-net-force', test: /合力.{0,6}(怎么|如何|算)|三个力|矢量和/i },
     { id: 'composite-region-transition', test: /边界|场区.{0,4}(交界|切换|过渡)|穿过.{0,4}场区|区域.{0,4}切换/i },
+    /* Circuit intents are gated on `domain === 'circuit'` via their
+       available-predicate, so the rules here never steal an electric / magnetic
+       / induction question about 电流 or 电压: in a non-circuit frame the
+       intents are skipped and the rules below still answer. Rheostat / parallel
+       / meter rules are tried before the generic current rule so a slider or
+       junction question reaches its specific answer. */
+    { id: 'circuit-rheostat-sweep', test: /滑动变阻器|变阻器|滑片|滑键|接入电阻|阻值.*(调|变|增|减|大|小)/i },
+    { id: 'circuit-parallel-split', test: /并联|分流|分叉|结点|节点|支路|各支路|两条路/i },
+    { id: 'circuit-series-loop', test: /串联|处处相等|各用电器.*电流|电流.*(处处|都)相等/i },
+    { id: 'circuit-meters-ideal', test: /电流表|电压表|电表|安培表|伏特表/i },
+    { id: 'circuit-internal-resistance', test: /内阻/i },
+    { id: 'circuit-terminal-voltage', test: /路端电压|端电压|输出电压|电压.*(变小|降低|减小|降)|电动势.*(和|与).{0,4}电压|为什么.*电压/i },
+    { id: 'circuit-power-balance', test: /功率|能量守恒|能量.*去哪|电源.*功率|输出功率|内阻.*发热|电功/i },
+    { id: 'circuit-ohm-current', test: /电流.*(怎么|为什么|多少|大小|算)|求.*电流|干路电流|电流强度/i },
     { id: 'horizontal-velocity', test: /水平速度|vx|v_x|水平方向/i },
     { id: 'normal-force-direction', test: /支持力|法向|normal/i },
     { id: 'height-meaning', test: /高度|20\s*m|h\s*=/i },
