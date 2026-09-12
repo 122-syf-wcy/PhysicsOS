@@ -305,6 +305,20 @@
   stroke-width: 3px;
 }
 
+/* A drifting charge carrier on a live wire: a bead in the current's
+   velocity-green with a paper halo, matching the direction-arrow ink. */
+.circuitChargeDot {
+  fill: var(--physics-vector-velocity);
+  stroke: #fbfdff;
+  stroke-width: 1.1;
+}
+
+/* Lamp halo disc behind a dissipating load: the radial gradient does the
+   painting, the class only keeps the disc out of pointer hit-testing. */
+.circuitLampGlow {
+  pointer-events: none;
+}
+
 /* ---------- optical bench ---------- */
 
 /* The principal axis is construction geometry, not a light path. */
@@ -661,6 +675,18 @@
   stroke: var(--physics-verification-ok);
 }
 
+/* The dial needle: the reading made visible before the digits are read. */
+.fluidScaleNeedle {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.fluidScalePivot {
+  fill: var(--physics-measurement);
+  stroke: none;
+}
+
 /* ------------------------------------------------------------------- thermal -- */
 
 .thermalBeakerWall {
@@ -960,6 +986,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A drifting charge carrier on a live induction loop: a small amber bead in
+   the current's colour with a paper halo so it stays legible over rail and
+   field ink. */
+.inductionChargeDot {
+  fill: var(--physics-induction-current);
+  stroke: #fbfdff;
+  stroke-width: 1.1;
+}
+
 /* --------------------------------------------------------------------- wave -- */
 
 /* The equilibrium line: a quiet dashed rule the profile oscillates about. */
@@ -1098,4 +1133,29 @@
   paint-order: stroke fill;
   stroke: #fbfdff;
   stroke-width: 3px;
+}
+
+/* Medium beads: fixed-x particles riding the profile — the medium oscillates
+   in place, it does not travel with the wave. Same sky as the marked
+   particle, which is the same fact in the singular. */
+.waveMedium {
+  fill: var(--physics-wave-marker);
+  stroke: #fbfdff;
+  stroke-width: 1;
+  opacity: 0.85;
+}
+
+/* A bead snapped onto a node never leaves equilibrium: solid slate sitting
+   inside the node's hollow ring. */
+.waveMediumNode {
+  fill: var(--physics-wave-node);
+  stroke: none;
+  opacity: 1;
+}
+
+/* Hairline plumb from each bead down to its equilibrium — the fixed-x cue. */
+.waveMediumGuide {
+  stroke: var(--physics-wave-marker);
+  stroke-width: 0.8;
+  opacity: 0.3;
 }

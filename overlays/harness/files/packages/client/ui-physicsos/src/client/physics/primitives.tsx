@@ -271,22 +271,49 @@ export const Body = ({
             x2={cx + radius * 0.85}
             y2={cy + radius * 0.68}
           />
-          {[cx - radius * 0.85, cx + radius * 0.85].map(wheelX => (
-            <g key={wheelX}>
-              <circle
-                cx={wheelX}
-                cy={cy + radius * 0.68}
-                r={radius * 0.32}
-                className={css.cartWheel}
-              />
-              <circle
-                cx={wheelX}
-                cy={cy + radius * 0.68}
-                r={radius * 0.1}
-                className={css.cartHub}
-              />
-            </g>
-          ))}
+          {[cx - radius * 0.85, cx + radius * 0.85].map(wheelX => {
+            const wheelY = cy + radius * 0.68
+            const wheelRadius = radius * 0.32
+            /* Rolling without slipping: the wheel turns through the arc the
+               cart has covered, θ = s/R with R = body.size·0.32 in scene
+               units. Position → angle is pure geometry, so pause and scrub
+               need no clock — the spokes freeze and reverse for free. */
+            const roll = (((body.at.x / (body.size * 0.32)) * 180) / Math.PI % 360 + 360) % 360
+            return (
+              <g key={wheelX}>
+                <circle
+                  cx={wheelX}
+                  cy={wheelY}
+                  r={wheelRadius}
+                  className={css.cartWheel}
+                />
+                <g
+                  data-testid="cart-spokes"
+                  transform={`rotate(${roll.toFixed(2)} ${wheelX.toFixed(2)} ${wheelY.toFixed(2)})`}
+                >
+                  {[0, 1, 2].map(spoke => {
+                    const angle = (spoke * 2 * Math.PI) / 3 - Math.PI / 2
+                    return (
+                      <line
+                        key={spoke}
+                        className={css.cartSpoke}
+                        x1={wheelX}
+                        y1={wheelY}
+                        x2={wheelX + wheelRadius * 0.78 * Math.cos(angle)}
+                        y2={wheelY + wheelRadius * 0.78 * Math.sin(angle)}
+                      />
+                    )
+                  })}
+                </g>
+                <circle
+                  cx={wheelX}
+                  cy={wheelY}
+                  r={radius * 0.1}
+                  className={css.cartHub}
+                />
+              </g>
+            )
+          })}
         </>
       ) : (
         <rect

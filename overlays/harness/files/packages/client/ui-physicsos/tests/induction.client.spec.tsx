@@ -3,6 +3,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createBarMotionScene,
+  createDoubleBarRailScene,
   createFluxChangeScene,
 } from '@physicsos/physics-scene'
 
@@ -14,6 +15,8 @@ import {
   createExperimentSceneRef,
   findExperimentTemplate,
 } from '../src/client/physics/experiment-templates.ts'
+import { InductionRenderer } from '../src/client/physics/induction-renderer.tsx'
+import type { RendererProjection } from '../src/client/physics/renderer-registry.tsx'
 import { createInductionWorkspaceRuntime } from '../src/client/physics/induction-workspace-runtime.ts'
 import { physicsAgentContext } from '../src/client/physics/physics-agent.ts'
 import { tutorScriptOf } from '../src/client/physics/physics-tutor.ts'
@@ -159,6 +162,72 @@ describe('induction workspace runtime', () => {
     expect(end.clock.running).toBe(false)
     expect(end.clock.time).toBe(end.clock.total)
   })
+
+  it('emits a closed charge-flow loop carrying the engine signed current', () => {
+    const runtime = createInductionWorkspaceRuntime(createBarMotionScene())
+    const snapshot = runtime.getSnapshot()
+
+    const flows = snapshot.view.chargeFlows ?? []
+    expect(flows).toHaveLength(1)
+    const flow = flows[0]!
+    /* The loop closes: resistor wire → bottom rail → rod → top rail. */
+    expect(flow.path.length).toBe(5)
+    const first = flow.path[0]!
+    const last = flow.path[flow.path.length - 1]!
+    expect(last).toEqual(first)
+    /* The engine's I = E/R = 0.04 A, sign matching the lenz arrow (+1). */
+    expect(flow.current).toBeCloseTo(0.04, 6)
+    expect(Math.sign(flow.current)).toBe(snapshot.view.inductionCurrent?.sign)
+    /* The loop's right side is the rod at its engine-published position. */
+    const rod = snapshot.view.inductionBar
+    expect(rod).toBeDefined()
+    expect(flow.path[1]).toEqual({ x: rod!.at.x, y: -rod!.length / 2 })
+    expect(flow.path[2]).toEqual({ x: rod!.at.x, y: rod!.length / 2 })
+  })
+
+  it('reverses the charge-flow sign with the Lenz direction', () => {
+    const runtime = createInductionWorkspaceRuntime(createBarMotionScene())
+    const reversed = runtime.editParameter('bar-velocity', -2)
+    const flow = reversed.view.chargeFlows?.[0]
+    expect(flow?.current).toBeCloseTo(-0.04, 6)
+    expect(Math.sign(flow?.current ?? 0)).toBe(reversed.view.inductionCurrent?.sign)
+  })
+
+  it('emits no charge flow while the bar stands still', () => {
+    const runtime = createInductionWorkspaceRuntime(createBarMotionScene())
+    const stopped = runtime.editParameter('bar-velocity', 0)
+    expect(stopped.view.chargeFlows ?? []).toHaveLength(0)
+  })
+
+  it('wraps the flux rig coil in a closed charge-flow ring', () => {
+    const runtime = createInductionWorkspaceRuntime(createFluxChangeScene())
+    const snapshot = runtime.getSnapshot()
+
+    const flow = snapshot.view.chargeFlows?.[0]
+    expect(flow).toBeDefined()
+    expect(flow!.path.length).toBeGreaterThan(4)
+    /* A closed ring: the last point repeats the first. */
+    expect(flow!.path[flow!.path.length - 1]).toEqual(flow!.path[0])
+    /* I = E/R = −0.05 V / 2 Ω = −0.025 A — the engine's signed value. */
+    expect(flow!.current).toBeCloseTo(-0.025, 6)
+    expect(Math.sign(flow!.current)).toBe(snapshot.view.inductionCurrent?.sign)
+  })
+
+  it('flows charge around the two-bar window with the engine loop current', () => {
+    const runtime = createInductionWorkspaceRuntime(createDoubleBarRailScene())
+    const snapshot = runtime.getSnapshot()
+
+    const flow = snapshot.view.chargeFlows?.[0]
+    expect(flow).toBeDefined()
+    expect(flow!.path.length).toBe(5)
+    expect(flow!.path[flow!.path.length - 1]).toEqual(flow!.path[0])
+    /* I₀ = BL(v₁−v₂)/R = 0.5·0.2·2/0.1 = 2 A. */
+    expect(flow!.current).toBeCloseTo(2, 6)
+    /* The loop spans the gap between the bars (bar2 at −20 cm, bar1 at +20 cm). */
+    const xs = flow!.path.map(point => point.x)
+    expect(Math.min(...xs)).toBeCloseTo(-20, 6)
+    expect(Math.max(...xs)).toBeCloseTo(20, 6)
+  })
 })
 
 describe('induction tutor and self-checks', () => {
@@ -220,5 +289,74 @@ describe('induction Lab surface', () => {
     const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
     expect(svgText.join(' ')).toContain('E = BLv')
     expect(svgText.join(' ')).toContain('0.2')
+  })
+})
+
+describe('induction charge-flow renderer', () => {
+  /* A pass-through projection: scene units become screen px unchanged except
+     for the y flip, so dot positions read as scene geometry. */
+  const projection: RendererProjection = {
+    px: point => point.x,
+    py: point => -point.y,
+    scale: 1,
+    uid: 'test',
+    path: () => '',
+    highlighted: () => false,
+  }
+  const beadPositions = (container: HTMLElement): readonly { x: number; y: number }[] =>
+    [...container.querySelectorAll('[data-charge-flow] circle')].map(circle => ({
+      x: Number(circle.getAttribute('cx')),
+      y: Number(circle.getAttribute('cy')),
+    }))
+
+  it('draws drifting charge beads on the loop while the current is live', () => {
+    const view = createInductionWorkspaceRuntime(createBarMotionScene()).getSnapshot().view
+    const { container } = render(
+      <svg>
+        <InductionRenderer view={view} projection={projection} time={0} />
+      </svg>,
+    )
+    const beads = beadPositions(container)
+    expect(beads.length).toBeGreaterThan(2)
+    /* Bead 0 sits at the loop's first point (resistor foot on the bottom rail). */
+    const flow = view.chargeFlows?.[0]
+    expect(beads[0]?.x).toBeCloseTo(flow!.path[0]!.x, 6)
+    expect(beads[0]?.y).toBeCloseTo(-(flow!.path[0]!.y), 6)
+  })
+
+  it('advances the beads with the engine clock, direction following the current sign', () => {
+    const view = createInductionWorkspaceRuntime(createBarMotionScene()).getSnapshot().view
+    const at0 = render(
+      <svg>
+        <InductionRenderer view={view} projection={projection} time={0} />
+      </svg>,
+    )
+    const at1 = render(
+      <svg>
+        <InductionRenderer view={view} projection={projection} time={0.1} />
+      </svg>,
+    )
+    const before = beadPositions(at0.container)
+    const after = beadPositions(at1.container)
+    expect(after.length).toBe(before.length)
+    /* Positive current: bead 0 leaves the resistor foot along the bottom rail,
+       left→right — the direction the current arrow draws for lenz > 0. */
+    expect(after[0]!.x).toBeGreaterThan(before[0]!.x)
+    expect(after[0]!.y).toBeCloseTo(before[0]!.y, 6)
+    /* Every bead moved (none parked). */
+    expect(after.some((dot, index) => dot.x !== before[index]!.x || dot.y !== before[index]!.y)).toBe(true)
+    at0.unmount()
+    at1.unmount()
+  })
+
+  it('parks the beads when the bridge reports no current', () => {
+    const runtime = createInductionWorkspaceRuntime(createBarMotionScene())
+    const stopped = runtime.editParameter('bar-velocity', 0)
+    const { container } = render(
+      <svg>
+        <InductionRenderer view={stopped.view} projection={projection} time={1} />
+      </svg>,
+    )
+    expect(container.querySelectorAll('[data-charge-flow] circle')).toHaveLength(0)
   })
 })

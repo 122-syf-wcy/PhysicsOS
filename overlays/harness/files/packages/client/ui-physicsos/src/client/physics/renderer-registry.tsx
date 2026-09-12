@@ -57,6 +57,9 @@ export interface RendererProjection {
 export interface RendererProps {
   view: SceneVisualModel
   projection: RendererProjection
+  /** Elapsed scene time in seconds — the same clock the timeline scrubs.
+     * Animations phase-locked to it freeze on pause and reverse on scrub. */
+  time?: number
 }
 
 /* ---------------------------------------------------------------- magnetic -- */

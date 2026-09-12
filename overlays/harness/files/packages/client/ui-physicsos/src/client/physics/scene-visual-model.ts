@@ -431,12 +431,29 @@ export interface CircuitComponentVisual {
   closed?: boolean
   /** Variable resistor only: slider position 0..1 at the current frame. */
   sliderPosition?: number
+  /** Dissipated power normalized 0..1 across the circuit's loads; the bridge
+     * emits it only on components drawn as lamps, which light by Joule heat. */
+  glow?: number
 }
 
 /** One wire polyline between two terminals, waypoints included. */
 export interface CircuitWireVisual {
   id: string
   points: readonly ScenePoint[]
+}
+
+/**
+ * Charge-carrier drift along one conductor run: a polyline in current order
+ * plus the signed current the engine solved for it. `current` sign is the
+ * direction along `path` order — the renderer turns it into a dot advance
+ * rate and never re-derives direction.
+ */
+export interface ChargeFlowVisual {
+  id: string
+  /** Polyline in conductor order; a closed loop repeats its first point. */
+  path: readonly ScenePoint[]
+  /** Signed current in amperes along `path` order. */
+  current: number
 }
 
 /** Junction dot where conductors meet on the schematic. */
@@ -613,6 +630,8 @@ export interface FluidScaleVisual {
   at: ScenePoint
   /** Formatted reading shown on the dial, e.g. `1.67 N`. */
   reading: string
+  /** Needle deflection 0..1 across the dial; matches `reading`. */
+  dialFraction?: number
   label?: string
 }
 
@@ -920,6 +939,8 @@ export interface SceneVisualModel {
   circuitWires?: readonly CircuitWireVisual[]
   /** Circuit junction dots. */
   circuitJunctions?: readonly CircuitJunctionVisual[]
+  /** Charge-carrier drift runs (circuit wires, induction rail loops). */
+  chargeFlows?: readonly ChargeFlowVisual[]
   /** Optical bench primitives (optics domain). */
   opticalObjects?: readonly OpticalObjectVisual[]
   /** Imaging elements: thin lenses / plane mirrors. */

@@ -8,6 +8,7 @@ import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorks
 import type { SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
+import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
 import {
   createExperimentSceneRef,
@@ -232,6 +233,28 @@ describe('thermal Lab surface', () => {
     expect(svgText).toContain('加热器 50 W')
     expect(svgText).toContain('-20.0 ℃')
     expect(svgText).toContain('熔点 0 ℃')
+  })
+
+  it('sways the flame tongues with the scene clock', () => {
+    const runtime = createThermalWorkspaceRuntime(createCrystalMeltingScene())
+    const { view } = runtime.getSnapshot()
+
+    const early = render(<PhysicsCanvas view={view} ariaLabel="晶体熔化" clockTime={1.7} />)
+    const flames = early.container.querySelectorAll('[data-testid="thermal-flame"]')
+    expect(flames.length).toBe(3)
+    const transforms = [...flames].map(node => node.getAttribute('transform') ?? '')
+    expect(transforms.every(value => value.startsWith('translate('))).toBe(true)
+    /* The three tongues carry their own phase, not one shared pose. */
+    expect(new Set(transforms).size).toBe(3)
+    early.unmount()
+
+    /* A different clock time reads a different sway — the flicker is the
+       engine clock's, not a wall-clock animation. */
+    const late = render(<PhysicsCanvas view={view} ariaLabel="晶体熔化" clockTime={2.9} />)
+    const later = [...late.container.querySelectorAll('[data-testid="thermal-flame"]')].map(
+      node => node.getAttribute('transform'),
+    )
+    expect(later).not.toEqual(transforms)
   })
 
   it('commits a 加热功率 edit from the inspector as an auditable revision', () => {

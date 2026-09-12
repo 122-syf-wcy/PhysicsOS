@@ -447,7 +447,7 @@ export function PhysicsCanvas({
 
         {/* ---------- domain drawing ---------- */}
         <g clipPath={`url(#${clipId})`}>
-          <Renderer view={view} projection={projection} />
+          <Renderer view={view} projection={projection} {...clockTime === undefined ? {} : { time: clockTime }} />
         </g>
 
         {/* ---------- event bursts ----------

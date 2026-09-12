@@ -25,14 +25,26 @@ const ScaleGlyph = ({
   y,
   size,
   reading,
+  dialFraction,
   highlighted,
 }: {
   x: number
   y: number
   size: number
   reading: string
+  /** Needle deflection 0..1; undefined draws the dial without a needle. */
+  dialFraction?: number | undefined
   highlighted: boolean
-}) => (
+}) => {
+  /* The needle hangs from the dial's top edge and sweeps its upper half:
+     zero sits 50° left of straight down, full deflection 50° right. */
+  const needleAngle = ((140 - (dialFraction ?? 0) * 100) * Math.PI) / 180
+  const pivotY = y - size * 0.34
+  const tip = {
+    x: x + size * 0.3 * Math.cos(needleAngle),
+    y: pivotY + size * 0.3 * Math.sin(needleAngle),
+  }
+  return (
   <g className={highlighted ? css.highlightGroup : undefined}>
     {/* Suspension ring the instrument hangs from; its bottom edge touches the
         barrel top. */}
@@ -60,6 +72,18 @@ const ScaleGlyph = ({
       height={size * 0.8}
       rx={size * 0.14}
     />
+    {dialFraction === undefined ? null : (
+      <g data-testid="scale-needle">
+        <line
+          className={css.fluidScaleNeedle}
+          x1={x}
+          y1={pivotY}
+          x2={tip.x}
+          y2={tip.y}
+        />
+        <circle className={css.fluidScalePivot} cx={x} cy={pivotY} r={size * 0.045} />
+      </g>
+    )}
     <text className={css.fluidScaleReading} x={x} y={y + size * 0.16} textAnchor="middle">
       {reading}
     </text>
@@ -69,7 +93,8 @@ const ScaleGlyph = ({
       d={`M${x} ${y + size * 0.62} v${size * 0.1} a${size * 0.16} ${size * 0.16} 0 1 0 ${size * 0.02} ${size * 0.24}`}
     />
   </g>
-)
+  )
+}
 
 export function FluidRenderer({ view, projection }: RendererProps) {
   const showForces = view.visible.forces === true
@@ -192,6 +217,7 @@ export function FluidRenderer({ view, projection }: RendererProps) {
             y={projection.py(scale.at)}
             size={size}
             reading={scale.reading}
+            dialFraction={scale.dialFraction}
             highlighted={projection.highlighted(scale.id)}
           />
           {scale.label === undefined ? null : (

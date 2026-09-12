@@ -12,6 +12,8 @@ import {
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
+import { CircuitRenderer } from '../src/client/physics/circuit-renderer.tsx'
+import type { RendererProjection } from '../src/client/physics/renderer-registry.tsx'
 import { createCircuitWorkspaceRuntime } from '../src/client/physics/circuit-workspace-runtime.ts'
 import {
   createExperimentSceneRef,
@@ -162,6 +164,171 @@ describe('circuit workspace runtime', () => {
     expect(rebalanced.sceneRevision).toBe(2)
     /* 12 V across 10 + 50 Ω → 0.2 A. */
     expect(componentVisual(rebalanced, 'am').reading).toBe('0.2 A')
+  })
+})
+
+describe('circuit charge flow and lamp glow', () => {
+  const flowOf = (
+    snapshot: ReturnType<ReturnType<typeof createCircuitWorkspaceRuntime>['getSnapshot']>,
+    connectionId: string,
+  ) => snapshot.view.chargeFlows?.find(entry => entry.id === `flow-${connectionId}`)
+
+  it('emits a signed charge flow on every power-loop wire of the series circuit', () => {
+    const runtime = createCircuitWorkspaceRuntime(createSeriesCircuitScene())
+    const snapshot = runtime.getSnapshot()
+    const flows = snapshot.view.chargeFlows ?? []
+
+    /* Loop wires conn-n1-0 … conn-n5-0 all carry the 0.2 A main current along
+       their path order; the voltmeter taps (conn-n4-1, conn-n5-1) stay silent. */
+    expect(flows).toHaveLength(5)
+    for (const flow of flows) {
+      expect(Math.abs(flow.current), `${flow.id} carries the loop current`).toBeCloseTo(0.2, 6)
+      expect(flow.path.length).toBeGreaterThanOrEqual(2)
+    }
+    /* Discharge leaves the battery positive terminal along the wire's path
+       order (+0.2); the return leg conn-n5-0 is authored bat.− → r2.b, so its
+       sign is − — beads travel r2.b → bat.−, back into the source. */
+    expect(flowOf(snapshot, 'conn-n1-0')?.current).toBeCloseTo(0.2, 6)
+    expect(flowOf(snapshot, 'conn-n5-0')?.current).toBeCloseTo(-0.2, 6)
+    expect(flowOf(snapshot, 'conn-n4-1')).toBeUndefined()
+    expect(flowOf(snapshot, 'conn-n5-1')).toBeUndefined()
+
+    /* A flow path IS the wire's routed polyline, not a rebuilt geometry. */
+    const wire = snapshot.view.circuitWires?.find(entry => entry.id === 'conn-n1-0')
+    expect(flowOf(snapshot, 'conn-n1-0')?.path).toEqual(wire?.points)
+  })
+
+  it('splits the main current into branch flows in the parallel circuit', () => {
+    const runtime = createCircuitWorkspaceRuntime(createParallelCircuitScene())
+    const snapshot = runtime.getSnapshot()
+
+    /* Main line I = 6/10 + 6/15 = 1.0 A; the r2 end-tap carries only I₂ = 0.4 A
+       and the bottom rail returns it with the opposite sign. Taps between two
+       junction terminals emit no flow. */
+    expect(flowOf(snapshot, 'conn-n4-0')?.current).toBeCloseTo(1, 6)
+    expect(flowOf(snapshot, 'conn-n4-2')?.current).toBeCloseTo(0.4, 6)
+    expect(flowOf(snapshot, 'conn-n3-0')?.current).toBeCloseTo(-1, 6)
+    expect(flowOf(snapshot, 'conn-n3-2')?.current).toBeCloseTo(-0.4, 6)
+    expect(flowOf(snapshot, 'conn-n4-1')).toBeUndefined()
+    expect(flowOf(snapshot, 'conn-n3-1')).toBeUndefined()
+  })
+
+  it('emits neither flow nor glow on an open loop', () => {
+    const runtime = createCircuitWorkspaceRuntime(createSeriesCircuitScene())
+    const open = runtime.setChoice('switch:sw', 'open')
+
+    expect(open.view.chargeFlows ?? []).toHaveLength(0)
+    for (const visual of open.view.circuitComponents ?? []) {
+      expect(visual.glow, `${visual.id} must not glow`).toBeUndefined()
+    }
+  })
+
+  it('lights loads ∝ their dissipation and dims the bulb over the rheostat sweep', () => {
+    const runtime = createCircuitWorkspaceRuntime(
+      createRheostatCircuitScene({ fixedResistance: 8.3, sliderPosition: 0.3 }),
+    )
+    const start = runtime.getSnapshot()
+
+    /* Slider 0.3 → rheostat 6 Ω vs bulb 8.3 Ω in series (P = I²R): the bulb
+       is the brightest load, the rheostat a 6/8.3 share. */
+    expect(componentVisual(start, 'r0').glow).toBeCloseTo(1, 6)
+    expect(componentVisual(start, 'rv').glow).toBeCloseTo(6 / 8.3, 3)
+    /* Source, meters and the switch never glow — they are not loads. */
+    expect(componentVisual(start, 'bat').glow).toBeUndefined()
+    expect(componentVisual(start, 'am').glow).toBeUndefined()
+    expect(componentVisual(start, 'vm').glow).toBeUndefined()
+    expect(componentVisual(start, 'sw').glow).toBeUndefined()
+
+    /* End of the sweep: the 20 Ω rheostat out-dissipates the bulb → it dims. */
+    const end = runtime.seek(8)
+    expect(componentVisual(end, 'r0').glow).toBeCloseTo(8.3 / 20, 3)
+    expect(componentVisual(end, 'rv').glow).toBeCloseTo(1, 6)
+  })
+})
+
+describe('circuit charge-flow renderer', () => {
+  /* A pass-through projection: scene units become 10 screen px each with the
+     y flip, so bead positions read as scene geometry. */
+  const projection: RendererProjection = {
+    px: point => point.x * 10,
+    py: point => -point.y * 10,
+    scale: 10,
+    uid: 'test',
+    path: () => '',
+    highlighted: () => false,
+  }
+
+  const beadPositions = (container: HTMLElement): readonly { x: number; y: number }[] =>
+    [...container.querySelectorAll('[data-charge-flow] circle')].map(circle => ({
+      x: Number(circle.getAttribute('cx')),
+      y: Number(circle.getAttribute('cy')),
+    }))
+
+  it('draws charge beads on every live wire, gated by the current observable', () => {
+    const view = createCircuitWorkspaceRuntime(createSeriesCircuitScene()).getSnapshot().view
+    const { container, unmount } = render(
+      <svg>
+        <CircuitRenderer view={view} projection={projection} time={0} />
+      </svg>,
+    )
+    expect(container.querySelectorAll('[data-charge-flow]')).toHaveLength(5)
+    expect(beadPositions(container).length).toBeGreaterThan(5)
+    unmount()
+
+    const hidden = { ...view, visible: { ...view.visible, current: false } }
+    const { container: off } = render(
+      <svg>
+        <CircuitRenderer view={hidden} projection={projection} time={0} />
+      </svg>,
+    )
+    expect(off.querySelectorAll('[data-charge-flow]')).toHaveLength(0)
+  })
+
+  it('advances the beads with the engine clock, direction following the current sign', () => {
+    const view = createCircuitWorkspaceRuntime(createSeriesCircuitScene()).getSnapshot().view
+    /* conn-n1-0 runs battery + → switch along +x first; its current is +. */
+    const at0 = render(
+      <svg>
+        <CircuitRenderer view={view} projection={projection} time={0} />
+      </svg>,
+    )
+    const at1 = render(
+      <svg>
+        <CircuitRenderer view={view} projection={projection} time={0.5} />
+      </svg>,
+    )
+    const beadAt = (container: HTMLElement) => {
+      const circle = container.querySelector('[data-charge-flow="flow-conn-n1-0"] circle')
+      return { x: Number(circle?.getAttribute('cx')), y: Number(circle?.getAttribute('cy')) }
+    }
+    const before = beadAt(at0.container)
+    const after = beadAt(at1.container)
+    /* Positive current: bead 0 leaves the battery positive terminal along +x. */
+    expect(after.x).toBeGreaterThan(before.x)
+    expect(after.y).toBeCloseTo(before.y, 6)
+    at0.unmount()
+    at1.unmount()
+  })
+
+  it('lights the dissipating loads with a radial halo, never the meters', () => {
+    const view = createCircuitWorkspaceRuntime(createSeriesCircuitScene()).getSnapshot().view
+    const { container } = render(
+      <svg>
+        <CircuitRenderer view={view} projection={projection} time={0} />
+      </svg>,
+    )
+    const r1Glow = container.querySelector('[data-testid="glow-r1"]')
+    const r2Glow = container.querySelector('[data-testid="glow-r2"]')
+    expect(r1Glow).toBeTruthy()
+    expect(r2Glow).toBeTruthy()
+    /* R₂ (20 Ω) dissipates twice R₁'s power → the stronger halo. */
+    expect(Number(r2Glow?.getAttribute('opacity')))
+      .toBeGreaterThan(Number(r1Glow?.getAttribute('opacity')))
+    expect(Number(r2Glow?.getAttribute('r')))
+      .toBeGreaterThan(Number(r1Glow?.getAttribute('r')))
+    for (const id of ['bat', 'sw', 'am', 'vm']) {
+      expect(container.querySelector(`[data-testid="glow-${id}"]`)).toBeNull()
+    }
   })
 })
 

@@ -18,6 +18,8 @@ import {
 } from '../src/client/physics/experiment-templates.ts'
 import { physicsAgentContext } from '../src/client/physics/physics-agent.ts'
 import { tutorScriptOf } from '../src/client/physics/physics-tutor.ts'
+import type { RendererProjection } from '../src/client/physics/renderer-registry.tsx'
+import { WaveRenderer } from '../src/client/physics/wave-renderer.tsx'
 import { verticalGainOf } from '../src/client/physics/wave-visual-bridge.ts'
 import { createWaveWorkspaceRuntime } from '../src/client/physics/wave-workspace-runtime.ts'
 import { zh } from '../src/client/locales.ts'
@@ -235,6 +237,103 @@ describe('wave workspace runtime · interference and standing', () => {
     const faster = runtime.editParameter('wave-speed', 80)
     expect(derivedValue(faster, '频率 f')).toBe('80')
     expect(derivedValue(faster, '波长 λ')).toBe('1')
+  })
+})
+
+describe('wave medium beads', () => {
+  /* Identity projection: bead assertions read scene units straight off the
+     attributes — px/py only have to be deterministic, not truthful. */
+  const projection: RendererProjection = {
+    px: point => point.x,
+    py: point => point.y,
+    scale: 1,
+    uid: 'beads',
+    path: () => '',
+    highlighted: () => false,
+  }
+  const beadsOf = (container: HTMLElement) =>
+    [...container.querySelectorAll('circle[class*="waveMedium"]')]
+
+  it('keeps every bead on a fixed x while the rope profile moves under it', () => {
+    const runtime = createWaveWorkspaceRuntime(createTravellingWaveScene())
+    const start = render(
+      <svg>
+        <WaveRenderer view={runtime.getSnapshot().view} projection={projection} />
+      </svg>,
+    )
+    const later = render(
+      <svg>
+        <WaveRenderer view={runtime.seek(0.07).view} projection={projection} />
+      </svg>,
+    )
+    const startBeads = beadsOf(start.container)
+    const laterBeads = beadsOf(later.container)
+    expect(startBeads.length).toBeGreaterThanOrEqual(10)
+    expect(startBeads.length).toBeLessThanOrEqual(14)
+    expect(laterBeads).toHaveLength(startBeads.length)
+    /* Fixed x: the same cx list, bead for bead, one seek later. */
+    expect(laterBeads.map(bead => bead.getAttribute('cx'))).toEqual(
+      startBeads.map(bead => bead.getAttribute('cx')),
+    )
+    /* …while y rides the profile: most beads sat at a different height. */
+    const moved = startBeads.filter(
+      (bead, index) => bead.getAttribute('cy') !== laterBeads[index]?.getAttribute('cy'),
+    )
+    expect(moved.length).toBeGreaterThan(startBeads.length / 2)
+  })
+
+  it('snaps a bead onto the interior node: still while the string swings', () => {
+    const runtime = createWaveWorkspaceRuntime(createStandingWaveScene())
+    const start = render(
+      <svg>
+        <WaveRenderer view={runtime.getSnapshot().view} projection={projection} />
+      </svg>,
+    )
+    /* n = 2 on a 1 m string: the only interior node sits at x = L/2 = 50 cm
+       and the engine samples a profile point exactly there, so the snapped
+       bead interpolates to the equilibrium line. */
+    const nodeBeads = [...start.container.querySelectorAll('circle[class*="waveMediumNode"]')]
+    expect(nodeBeads).toHaveLength(1)
+    expect(Number(nodeBeads[0]?.getAttribute('cx'))).toBeCloseTo(50, 6)
+    expect(Number(nodeBeads[0]?.getAttribute('cy'))).toBeCloseTo(0, 6)
+
+    const later = render(
+      <svg>
+        <WaveRenderer view={runtime.seek(0.011).view} projection={projection} />
+      </svg>,
+    )
+    const laterNodeBeads = [...later.container.querySelectorAll('circle[class*="waveMediumNode"]')]
+    expect(laterNodeBeads).toHaveLength(1)
+    expect(Number(laterNodeBeads[0]?.getAttribute('cx'))).toBeCloseTo(50, 6)
+    expect(Number(laterNodeBeads[0]?.getAttribute('cy'))).toBeCloseTo(0, 6)
+    /* The node's neighbours did swing: at least one ordinary bead moved. */
+    const laterBeads = beadsOf(later.container)
+    const moved = beadsOf(start.container).filter(
+      (bead, index) => bead.getAttribute('cy') !== laterBeads[index]?.getAttribute('cy'),
+    )
+    expect(moved.length).toBeGreaterThan(0)
+  })
+
+  it('draws no beads where there is no sampled profile to resample', () => {
+    const runtime = createWaveWorkspaceRuntime(createWaveInterferenceScene())
+    const { container } = render(
+      <svg>
+        <WaveRenderer view={runtime.seek(0.05).view} projection={projection} />
+      </svg>,
+    )
+    expect(container.querySelectorAll('circle[class*="waveMedium"]')).toHaveLength(0)
+  })
+
+  it('hides with the profile when the waveform observable is toggled off', () => {
+    const runtime = createWaveWorkspaceRuntime(createTravellingWaveScene())
+    const hidden = runtime.setObservable('waveform', false)
+    const { container } = render(
+      <svg>
+        <WaveRenderer view={hidden.view} projection={projection} />
+      </svg>,
+    )
+    expect(container.querySelectorAll('circle[class*="waveMedium"]')).toHaveLength(0)
+    expect(container.querySelectorAll('line[class*="waveMediumGuide"]')).toHaveLength(0)
   })
 })
 

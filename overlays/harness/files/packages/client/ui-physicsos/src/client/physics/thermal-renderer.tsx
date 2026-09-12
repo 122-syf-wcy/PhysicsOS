@@ -21,10 +21,13 @@ const HeaterGlyph = ({
   x,
   y,
   halfWidth,
+  time,
 }: {
   x: number
   y: number
   halfWidth: number
+  /** Scene clock in seconds; undefined draws a still flame. */
+  time?: number | undefined
 }) => (
   <g>
     <rect
@@ -35,18 +38,32 @@ const HeaterGlyph = ({
       height={halfWidth * 0.42}
       rx={halfWidth * 0.16}
     />
-    {[-0.5, 0, 0.5].map(offset => (
-      <path
-        key={offset}
-        className={css.thermalFlame}
-        d={[
-          `M${x + offset * halfWidth} ${y}`,
-          `q${halfWidth * 0.2} ${-halfWidth * 0.34} 0 ${-halfWidth * 0.62}`,
-          `q${-halfWidth * 0.2} ${halfWidth * 0.28} 0 ${halfWidth * 0.62}`,
-          'z',
-        ].join(' ')}
-      />
-    ))}
+    {[-0.5, 0, 0.5].map((offset, index) => {
+      /* Flicker is phase-locked to the scene clock, so it freezes on pause
+         and reverses on scrub. The lean skews around the flame's base point
+         (local origin) so the root stays planted on the burner. */
+      const phase = (time ?? 0) * 7.1 + index * 2.3
+      const sway = Math.sin(phase) * 0.8
+      const lean = Math.sin(phase * 1.31 + 1.1) * 2.6
+      return (
+        <g
+          key={offset}
+          data-testid="thermal-flame"
+          transform={`translate(${(x + offset * halfWidth + sway).toFixed(2)} ${y.toFixed(2)})`}
+        >
+          <path
+            className={css.thermalFlame}
+            transform={`skewX(${lean.toFixed(2)})`}
+            d={[
+              'M0 0',
+              `q${halfWidth * 0.2} ${-halfWidth * 0.34} 0 ${-halfWidth * 0.62}`,
+              `q${-halfWidth * 0.2} ${halfWidth * 0.28} 0 ${halfWidth * 0.62}`,
+              'z',
+            ].join(' ')}
+          />
+        </g>
+      )
+    })}
   </g>
 )
 
@@ -192,15 +209,18 @@ const ThermometerGlyph = ({
 const HeaterLabel = ({
   heater,
   projection,
+  time,
 }: {
   heater: NonNullable<RendererProps['view']['thermalHeater']>
   projection: RendererProps['projection']
+  time?: number | undefined
 }) => (
   <g className={projection.highlighted(heater.id) ? css.highlightGroup : undefined}>
     <HeaterGlyph
       x={projection.px(heater.at)}
       y={projection.py(heater.at)}
       halfWidth={heater.halfWidth * projection.scale}
+      time={time}
     />
     <text
       className={css.annotation}
@@ -213,7 +233,7 @@ const HeaterLabel = ({
   </g>
 )
 
-export function ThermalRenderer({ view, projection }: RendererProps) {
+export function ThermalRenderer({ view, projection, time }: RendererProps) {
   const showThermometer = view.visible.thermometer === true
   const showPhase = view.visible.phase === true
   const sample = view.thermalSample
@@ -253,10 +273,12 @@ export function ThermalRenderer({ view, projection }: RendererProps) {
         ))
         : null}
 
-      {heater === undefined ? null : <HeaterLabel heater={heater} projection={projection} />}
+      {heater === undefined
+        ? null
+        : <HeaterLabel heater={heater} projection={projection} time={time} />}
       {comparisonHeater === undefined
         ? null
-        : <HeaterLabel heater={comparisonHeater} projection={projection} />}
+        : <HeaterLabel heater={comparisonHeater} projection={projection} time={time} />}
 
       {sample === undefined ? null : <BeakerGlyph sample={sample} projection={projection} />}
       {comparisonSample === undefined

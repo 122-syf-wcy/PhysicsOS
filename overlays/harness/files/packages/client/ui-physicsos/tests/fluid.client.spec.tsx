@@ -8,6 +8,7 @@ import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorks
 import type { SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
+import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
 import {
   createExperimentSceneRef,
@@ -127,6 +128,32 @@ describe('fluid workspace runtime', () => {
     expect(deeper.view.fluidBlock?.at.y).toBeLessThan(covered.view.fluidBlock!.at.y)
   })
 
+  it('emits a dialFraction in 0..1 that tracks the scale reading', () => {
+    const runtime = createFluidWorkspaceRuntime(createArchimedesScene())
+
+    /* In air the reading IS the weight: full deflection. */
+    const dry = runtime.getSnapshot()
+    expect(dry.view.fluidScale?.dialFraction).toBeCloseTo(1, 9)
+
+    /* Covered: 1.666 N out of a 2.646 N full scale. */
+    const covered = runtime.seek(2.5)
+    expect(covered.view.fluidScale?.dialFraction).toBeCloseTo(1.666 / 2.646, 3)
+
+    /* A floating block unloads the scale entirely: zero deflection. */
+    runtime.editParameter('block-mass', 60)
+    const floating = runtime.seek(runtime.getSnapshot().clock.total)
+    expect(floating.view.fluidScale?.reading).toBe('0.00 N')
+    /* G − F_浮 cancels down to float residue, not an exact zero. */
+    expect(floating.view.fluidScale?.dialFraction).toBeCloseTo(0, 9)
+
+    /* Every sampled frame stays inside the dial's range. */
+    for (const time of [0, 1.25, 2.5, 5]) {
+      const fraction = runtime.seek(time).view.fluidScale?.dialFraction
+      expect(fraction).toBeGreaterThanOrEqual(0)
+      expect(fraction).toBeLessThanOrEqual(1)
+    }
+  })
+
   it('re-solves the rig through real scene commands: liquid swap and mass edit', () => {
     const runtime = createFluidWorkspaceRuntime(createArchimedesScene())
 
@@ -243,6 +270,26 @@ describe('fluid Lab surface', () => {
     expect(svgText).toContain('弹簧测力计')
     /* The dial shows the dry weight before the block is lowered. */
     expect(svgText).toContain('2.65 N')
+  })
+
+  it('draws the scale needle and deflects it with the reading', () => {
+    const runtime = createFluidWorkspaceRuntime(createArchimedesScene())
+    const dry = render(<PhysicsCanvas view={runtime.getSnapshot().view} ariaLabel="浮力" />)
+    const dryNeedle = dry.container.querySelector('[data-testid="scale-needle"] line')
+    expect(dryNeedle).toBeTruthy()
+    const dryTip = Number(dryNeedle?.getAttribute('x2'))
+    const dryPivot = Number(dryNeedle?.getAttribute('x1'))
+    /* Dry: full deflection — the tip sits right of the pivot. */
+    expect(dryTip).toBeGreaterThan(dryPivot)
+    dry.unmount()
+
+    /* Floating: zero reading — the tip sits left of the pivot. */
+    runtime.editParameter('block-mass', 60)
+    const floating = runtime.seek(runtime.getSnapshot().clock.total)
+    const floated = render(<PhysicsCanvas view={floating.view} ariaLabel="浮力" />)
+    const needle = floated.container.querySelector('[data-testid="scale-needle"] line')
+    expect(needle).toBeTruthy()
+    expect(Number(needle?.getAttribute('x2'))).toBeLessThan(Number(needle?.getAttribute('x1')))
   })
 
   it('commits a 液体密度 edit from the inspector as an auditable revision', () => {

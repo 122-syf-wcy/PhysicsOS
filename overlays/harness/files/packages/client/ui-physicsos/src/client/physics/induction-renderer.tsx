@@ -26,7 +26,37 @@ const headAt = (x: number, y: number, ux: number, uy: number, size: number): str
   return `M${x} ${y} L${bx + px} ${by + py} L${bx - px} ${by - py} Z`
 }
 
-export function InductionRenderer({ view, projection }: RendererProps) {
+/** Charge-carrier drift: one bead every ~22 px of conductor; the advance rate
+    is ∝ |I| (px/s per ampere), floored so a small current still visibly drifts
+    and capped so a strong one stays readable. */
+const CHARGE_SPACING_PX = 22
+const CHARGE_SPEED_PER_AMP = 1000
+const CHARGE_SPEED_MIN = 10
+const CHARGE_SPEED_MAX = 110
+
+/** Screen-space point at arc length `s` along a projected polyline. */
+const pointAlong = (
+  screen: readonly { x: number; y: number }[],
+  lengths: readonly number[],
+  s: number,
+): { x: number; y: number } => {
+  const first = screen[0] ?? { x: 0, y: 0 }
+  let walked = 0
+  for (let index = 0; index < lengths.length; index += 1) {
+    const length = lengths[index] ?? 0
+    const a = screen[index]
+    const b = screen[index + 1]
+    if (a === undefined || b === undefined) break
+    if (s <= walked + length || index === lengths.length - 1) {
+      const t = length <= 0 ? 0 : Math.min(1, Math.max(0, (s - walked) / length))
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    }
+    walked += length
+  }
+  return first
+}
+
+export function InductionRenderer({ view, projection, time }: RendererProps) {
   const field = view.inductionField
   const bar = view.inductionBar
   const coil = view.inductionCoil
@@ -300,6 +330,57 @@ export function InductionRenderer({ view, projection }: RendererProps) {
             </g>
           )
         })()
+        : null}
+
+      {/* Drifting charge carriers along each solved loop run: evenly spaced
+          beads whose advance rate is ∝ |I| (clamped) and whose travel sense is
+          the current's sign along the path order. The phase is the engine
+          clock — pause freezes the drift, scrubbing reverses it — and a zero
+          current parks the beads. Gated by the same 感应电流 observable as
+          the direction arrow. */}
+      {view.visible.inductionCurrent === true
+        ? (view.chargeFlows ?? []).map((flow) => {
+          const screen = flow.path.map(point => ({
+            x: projection.px(point),
+            y: projection.py(point),
+          }))
+          const lengths: number[] = []
+          let total = 0
+          for (let index = 1; index < screen.length; index += 1) {
+            const a = screen[index - 1]
+            const b = screen[index]
+            if (a === undefined || b === undefined) continue
+            const length = Math.hypot(b.x - a.x, b.y - a.y)
+            lengths.push(length)
+            total += length
+          }
+          if (screen.length < 2 || total <= 0) return null
+          const count = Math.max(2, Math.round(total / CHARGE_SPACING_PX))
+          const stepLength = total / count
+          const speed = Math.min(
+            CHARGE_SPEED_MAX,
+            Math.max(CHARGE_SPEED_MIN, Math.abs(flow.current) * CHARGE_SPEED_PER_AMP),
+          )
+          const advance =
+            flow.current === 0 ? 0 : Math.sign(flow.current) * speed * (time ?? 0)
+          return (
+            <g key={flow.id} data-charge-flow={flow.id} aria-hidden="true">
+              {Array.from({ length: count }, (_, index) => {
+                const s = (((index * stepLength + advance) % total) + total) % total
+                const dot = pointAlong(screen, lengths, s)
+                return (
+                  <circle
+                    key={index}
+                    className={css.inductionChargeDot}
+                    cx={dot.x}
+                    cy={dot.y}
+                    r={2.6}
+                  />
+                )
+              })}
+            </g>
+          )
+        })
         : null}
     </>
   )

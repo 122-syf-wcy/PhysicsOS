@@ -215,6 +215,25 @@ export const inductionSceneVisual = ({
       to: { x: displacementCm - 2, y: -railHalf },
       sign: lenz,
     }
+    /* The live loop the induced current runs around: resistor wire → bottom
+       rail → rod → top rail, ordered so a POSITIVE current travels the bottom
+       rail left→right — the direction the arrow draws for lenz > 0. The
+       engine's signed induced_current already carries that sign (R > 0 gives
+       sign(I) = sign(E) = lenz); a zero current emits no flow. */
+    const chargeFlows: SceneVisualModel['chargeFlows'] =
+      Number.isFinite(current) && Math.abs(current) > 1e-12
+        ? [{
+            id: 'induction-loop-flow',
+            path: [
+              { x: closureX, y: -railHalf },
+              { x: displacementCm, y: -railHalf },
+              { x: displacementCm, y: railHalf },
+              { x: closureX, y: railHalf },
+              { x: closureX, y: -railHalf },
+            ],
+            current,
+          }]
+        : undefined
     return emptyVisualModel('induction', {
       extent: { width: fieldWidthCm + 8, height: fieldHeightCm + 24 },
       origin: { x: fieldOrigin.x - 4, y: fieldOrigin.y - 16 },
@@ -231,6 +250,7 @@ export const inductionSceneVisual = ({
       inductionResistor: resistor,
       inductionBar: rod,
       inductionCurrent: currentArrow,
+      ...(chargeFlows === undefined ? {} : { chargeFlows }),
       overlay: { readout, scale: { label: '10 cm', length: 10 } },
       visible: visibilityOf(scene),
     })
@@ -251,6 +271,24 @@ export const inductionSceneVisual = ({
     to: { x: fieldOrigin.x + fieldWidthCm - 4, y: fieldOrigin.y - 6 },
     sign: lenz,
   }
+  /* The coil IS the loop: charges circulate its edge-on ring, ordered so a
+     positive current runs the front (bottom) arc left→right — the reading the
+     legend arrow gives for lenz > 0. The 0.34 squash matches the ellipse the
+     renderer draws for this coil; the ring repeats its first point to close. */
+  const coilRadius = Math.max(6, coilDiameter) / 2
+  const coilRing: ScenePoint[] = Array.from({ length: COIL_FLOW_SEGMENTS }, (_, index) => {
+    const theta = Math.PI + (2 * Math.PI * index) / COIL_FLOW_SEGMENTS
+    return { x: coilRadius * Math.cos(theta), y: coilRadius * 0.34 * Math.sin(theta) }
+  })
+  const firstRingPoint = coilRing[0]
+  const chargeFlows: SceneVisualModel['chargeFlows'] =
+    firstRingPoint !== undefined && Number.isFinite(current) && Math.abs(current) > 1e-12
+      ? [{
+          id: 'induction-loop-flow',
+          path: [...coilRing, firstRingPoint],
+          current,
+        }]
+      : undefined
   return emptyVisualModel('induction', {
     extent: { width: fieldWidthCm + 8, height: fieldHeightCm + 24 },
     origin: { x: fieldOrigin.x - 4, y: fieldOrigin.y - 16 },
@@ -265,6 +303,7 @@ export const inductionSceneVisual = ({
     },
     inductionCoil: coil,
     inductionCurrent: currentArrow,
+    ...(chargeFlows === undefined ? {} : { chargeFlows }),
     overlay: { readout, scale: { label: '10 cm', length: 10 } },
     visible: visibilityOf(scene),
   })
@@ -272,6 +311,9 @@ export const inductionSceneVisual = ({
 
 /** Metres → centimetres for a single length. */
 const cmOf = (metres: number): number => metres * CM_PER_METRE
+
+/** Beads-per-ring resolution of the flux_change coil's charge-flow path. */
+const COIL_FLOW_SEGMENTS = 24
 
 /* ------------------------------------------------------ double_bar_rail -- */
 
@@ -380,6 +422,27 @@ const doubleBarSceneVisual = ({
     sign: lenz,
   }
 
+  /* The live loop is the window between the two bars: bottom rail left→right
+     for a positive current — the direction the legend arrow draws for
+     lenz > 0. Corners are ordered by bar position so the path stays a simple
+     rectangle; the engine's signed induced_current carries the lenz sign. */
+  const leftX = Math.min(x1Cm, x2Cm)
+  const rightX = Math.max(x1Cm, x2Cm)
+  const chargeFlows: SceneVisualModel['chargeFlows'] =
+    Number.isFinite(current) && Math.abs(current) > 1e-12
+      ? [{
+          id: 'induction-loop-flow',
+          path: [
+            { x: leftX, y: -railSpacingCm / 2 },
+            { x: rightX, y: -railSpacingCm / 2 },
+            { x: rightX, y: railSpacingCm / 2 },
+            { x: leftX, y: railSpacingCm / 2 },
+            { x: leftX, y: -railSpacingCm / 2 },
+          ],
+          current,
+        }]
+      : undefined
+
   /* The narrative must match the rig's actual regime: a free pair relaxes to a
      common velocity (current decaying), while a constant pull drives the
      relative velocity UP toward the terminal u∞ (current rising to a plateau).
@@ -413,6 +476,7 @@ const doubleBarSceneVisual = ({
     inductionPairBars: bars,
     inductionForceArrows: forceArrows,
     inductionCurrent: currentArrow,
+    ...(chargeFlows === undefined ? {} : { chargeFlows }),
     overlay: { readout, scale: { label: '10 cm', length: 10 } },
     visible: visibilityOf(scene),
   })

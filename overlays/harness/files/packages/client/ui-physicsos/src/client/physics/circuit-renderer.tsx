@@ -20,7 +20,37 @@ import css from './renderers.module.css'
 /** Half the symbol length in scene units; matches the scene-side constant. */
 const HALF = 0.75
 
+/* Charge-carrier drift: one bead every ~14 px of wire; the advance rate is
+   ∝ |I| (px/s per ampere), floored so a small current still visibly drifts
+   and capped so a strong one stays readable. */
+const CHARGE_SPACING_PX = 14
+const CHARGE_SPEED_PER_AMP = 110
+const CHARGE_SPEED_MIN = 8
+const CHARGE_SPEED_MAX = 90
+
 const isVertical = (rotation: number): boolean => Math.abs(rotation % 180) === 90
+
+/** Screen-space point at arc length `s` along a projected polyline. */
+const pointAlong = (
+  screen: readonly { x: number; y: number }[],
+  lengths: readonly number[],
+  s: number,
+): { x: number; y: number } => {
+  const first = screen[0] ?? { x: 0, y: 0 }
+  let walked = 0
+  for (let index = 0; index < lengths.length; index += 1) {
+    const length = lengths[index] ?? 0
+    const a = screen[index]
+    const b = screen[index + 1]
+    if (a === undefined || b === undefined) break
+    if (s <= walked + length || index === lengths.length - 1) {
+      const t = length <= 0 ? 0 : Math.min(1, Math.max(0, (s - walked) / length))
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    }
+    walked += length
+  }
+  return first
+}
 
 interface SymbolProps {
   readonly component: CircuitComponentVisual
@@ -156,11 +186,13 @@ function CurrentArrow({ component, cx, cy, scale }: SymbolProps) {
  * Circuit renderer. Registered for `domain: 'circuit'` in the renderer
  * registry; receives the shared frame and only reads the circuit primitives.
  */
-export function CircuitRenderer({ view, projection }: RendererProps) {
+export function CircuitRenderer({ view, projection, time }: RendererProps) {
   const components = view.circuitComponents ?? []
   const wires = view.circuitWires ?? []
   const junctions = view.circuitJunctions ?? []
+  const chargeFlows = view.chargeFlows ?? []
   const scale = projection.scale
+  const lampGlowId = `circuit-lamp-glow-${projection.uid}`
 
   const showCurrent = view.visible.current === true
   const showVoltage = view.visible.voltage === true
@@ -168,9 +200,67 @@ export function CircuitRenderer({ view, projection }: RendererProps) {
 
   return (
     <>
+      <defs>
+        <radialGradient id={lampGlowId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffe6a8" stopOpacity="0.95" />
+          <stop offset="55%" stopColor="#f5a524" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#f5a524" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
       {wires.map(wire => (
         <path key={wire.id} className={css.circuitWire} d={projection.path(wire.points)} />
       ))}
+
+      {/* Drifting charge carriers on each wire with a solved current: beads
+          every ~14 px advance at a rate ∝ |I| (clamped), the current's sign
+          setting the travel sense along the wire's path order. The phase is
+          the engine clock — pause freezes the drift, scrubbing reverses it —
+          and the layer rides the 电流 observable like the direction arrows. */}
+      {showCurrent
+        ? chargeFlows.map((flow) => {
+          const screen = flow.path.map(point => ({
+            x: projection.px(point),
+            y: projection.py(point),
+          }))
+          const lengths: number[] = []
+          let total = 0
+          for (let index = 1; index < screen.length; index += 1) {
+            const a = screen[index - 1]
+            const b = screen[index]
+            if (a === undefined || b === undefined) continue
+            const length = Math.hypot(b.x - a.x, b.y - a.y)
+            lengths.push(length)
+            total += length
+          }
+          if (screen.length < 2 || total <= 0) return null
+          const count = Math.max(2, Math.round(total / CHARGE_SPACING_PX))
+          const stepLength = total / count
+          const speed = Math.min(
+            CHARGE_SPEED_MAX,
+            Math.max(CHARGE_SPEED_MIN, Math.abs(flow.current) * CHARGE_SPEED_PER_AMP),
+          )
+          const advance =
+            flow.current === 0 ? 0 : Math.sign(flow.current) * speed * (time ?? 0)
+          return (
+            <g key={flow.id} data-charge-flow={flow.id} aria-hidden="true">
+              {Array.from({ length: count }, (_, index) => {
+                const s = (((index * stepLength + advance) % total) + total) % total
+                const dot = pointAlong(screen, lengths, s)
+                return (
+                  <circle
+                    key={index}
+                    className={css.circuitChargeDot}
+                    cx={dot.x}
+                    cy={dot.y}
+                    r={2.4}
+                  />
+                )
+              })}
+            </g>
+          )
+        })
+        : null}
 
       {junctions.map(junction => (
         <circle
@@ -219,8 +309,23 @@ export function CircuitRenderer({ view, projection }: RendererProps) {
           ? { x: cx + 0.62 * scale + 4, y: cy - ((rows.length - 1) * 13) / 2 + 4 }
           : { x: cx, y: cy + 0.55 * scale + 13 }
 
+        /* A dissipating load is drawn as a lamp: a warm halo behind the
+           symbol whose radius and opacity scale with the bridge's normalized
+           power — a dead or unsolved load carries no `glow` and stays dark. */
+        const glow = component.glow ?? 0
         return (
           <g key={component.id} className={highlighted ? css.highlightGroup : undefined} data-component-id={component.id}>
+            {glow > 0 ? (
+              <circle
+                data-testid={`glow-${component.id}`}
+                className={css.circuitLampGlow}
+                cx={cx}
+                cy={cy}
+                r={(0.55 + 0.75 * glow) * scale}
+                fill={`url(#${lampGlowId})`}
+                opacity={Math.min(1, 0.85 * glow)}
+              />
+            ) : null}
             <g transform={`rotate(${svgRotation} ${cx} ${cy})`}>
               <SymbolGeometry component={component} cx={cx} cy={cy} scale={scale} />
               {showCurrent && component.currentText !== undefined ? (

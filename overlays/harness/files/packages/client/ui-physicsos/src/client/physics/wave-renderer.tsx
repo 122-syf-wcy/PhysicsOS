@@ -15,7 +15,94 @@
 
 import type { RendererProps } from './renderer-registry.tsx'
 import { ArrowMarkers, Dimension, MathLabel, Vectors, clsxJoin } from './primitives.tsx'
+import type { ScenePoint, WaveNodeVisual, WaveProfileVisual } from './scene-visual-model.ts'
 import css from './renderers.module.css'
+
+/* --------------------------------------------------------- medium beads --
+ * A row of particles at FIXED x, each riding the profile's height: the
+ * medium oscillates in place and does not travel with the wave. All of it is
+ * geometry over the engine's sampled profile — nothing here evaluates y(x,t).
+ */
+
+/** Beads per rig; the layout keeps the row inside the ~10–14 spec. */
+const MEDIUM_BEAD_COUNT = 12
+
+interface MediumBead {
+  /** Fixed horizontal position in scene units. */
+  x: number
+  /** Profile height under the bead this frame. */
+  y: number
+  /** Equilibrium height under the bead — the plumb guide's anchor. */
+  equilibriumY: number
+  /** Snapped onto a node: never leaves equilibrium. */
+  atNode: boolean
+}
+
+/**
+ * Piecewise-linear resample of the profile polyline at x. The engine owns
+ * every sampled displacement; interpolating between neighbours is geometric
+ * resampling, not a physics evaluation. Outside the span the end value holds.
+ */
+const profileYAt = (points: readonly ScenePoint[], x: number): number => {
+  let previous: ScenePoint | undefined
+  for (const point of points) {
+    if (previous !== undefined && x >= previous.x && x <= point.x) {
+      const span = point.x - previous.x
+      const ratio = span === 0 ? 0 : (x - previous.x) / span
+      return previous.y + (point.y - previous.y) * ratio
+    }
+    previous = point
+  }
+  const first = points[0]
+  const last = points[points.length - 1]
+  if (first === undefined || last === undefined) return 0
+  return x < first.x ? first.y : last.y
+}
+
+/**
+ * The bead row for one frame: an even spread half a step in from each end (so
+ * no bead sits on the clamp or the driver), with the bead nearest every
+ * interior node snapped onto it — the row itself then carries a particle that
+ * never moves. Heights come from {@link profileYAt}.
+ */
+const mediumBeadsOf = (profile: WaveProfileVisual, nodes: readonly WaveNodeVisual[]): MediumBead[] => {
+  const first = profile.points[0]
+  const last = profile.points[profile.points.length - 1]
+  if (first === undefined || last === undefined) return []
+  const span = last.x - first.x
+  if (span <= 0) return []
+  const margin = span * 0.02
+  const beads = Array.from({ length: MEDIUM_BEAD_COUNT }, (_, index) => ({
+    x: first.x + ((index + 0.5) * span) / MEDIUM_BEAD_COUNT,
+    atNode: false,
+  }))
+  const nodeXs = nodes
+    .filter(node => node.kind === 'node' && node.at.x > first.x + margin && node.at.x < last.x - margin)
+    .map(node => node.at.x)
+    .sort((left, right) => left - right)
+  for (const nodeX of nodeXs) {
+    let nearest: number | undefined
+    for (const [index, bead] of beads.entries()) {
+      if (bead.atNode) continue
+      const anchor = nearest === undefined ? undefined : beads[nearest]
+      if (anchor === undefined || Math.abs(bead.x - nodeX) < Math.abs(anchor.x - nodeX)) nearest = index
+    }
+    const bead = nearest === undefined ? undefined : beads[nearest]
+    if (bead === undefined) continue
+    bead.x = nodeX
+    bead.atNode = true
+  }
+  const { from, to } = profile.equilibrium
+  const equilibriumSpan = to.x - from.x
+  return beads
+    .map(bead => ({
+      ...bead,
+      y: profileYAt(profile.points, bead.x),
+      equilibriumY:
+        equilibriumSpan === 0 ? from.y : from.y + ((to.y - from.y) * (bead.x - from.x)) / equilibriumSpan,
+    }))
+    .sort((left, right) => left.x - right.x)
+}
 
 export function WaveRenderer({ view, projection }: RendererProps) {
   const profile = view.waveProfile
@@ -195,6 +282,36 @@ export function WaveRenderer({ view, projection }: RendererProps) {
           </g>
         )
       })}
+
+      {/* Medium beads: a row of particles at fixed x, each riding the
+          profile's interpolated height. Nodes keep a bead that never moves —
+          "the medium oscillates in place" made visible. Shares the profile's
+          `waveform` toggle; a rig with no profile (interference) draws none. */}
+      {profile === undefined || !showWaveform || profile.points.length < 2 ? null : (
+        <g aria-hidden="true">
+          {mediumBeadsOf(profile, nodes).map(bead => {
+            const cx = projection.px(bead)
+            const cy = projection.py(bead)
+            return (
+              <g key={bead.x}>
+                <line
+                  className={css.waveMediumGuide}
+                  x1={cx}
+                  y1={projection.py({ x: bead.x, y: bead.equilibriumY })}
+                  x2={cx}
+                  y2={cy}
+                />
+                <circle
+                  className={clsxJoin(css.waveMedium, bead.atNode && css.waveMediumNode)}
+                  cx={cx}
+                  cy={cy}
+                  r={bead.atNode ? 2.6 : 3.2}
+                />
+              </g>
+            )
+          })}
+        </g>
+      )}
 
       {/* Transverse-velocity arrow of the marked particle */}
       <Vectors

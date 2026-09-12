@@ -27,12 +27,14 @@ import {
   type Circuit,
   type CircuitComponent,
   type CircuitComponentPlacement,
+  type CircuitTerminal,
   type ObservableDefinition,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
 import { emptyVisualModel } from './scene-visual-model.ts'
 import type {
+  ChargeFlowVisual,
   CircuitComponentVisual,
   CircuitJunctionVisual,
   CircuitSymbolKind,
@@ -45,6 +47,12 @@ import type {
 
 /** Currents below this read as "no current" (open branch, voltmeter leak). */
 export const NO_CURRENT_AMPS = 1e-9
+
+/** Dissipation below this reads as "no heat" — the lamp halo stays off. */
+const LAMP_MIN_WATTS = 1e-9
+
+/** Currents below this never drift beads: meter leaks (~nA) and solve noise. */
+const FLOW_MIN_AMPS = 1e-6
 
 export const fmtQuantityValue = (value: number, digits = 3): string => {
   if (!Number.isFinite(value)) return '—'
@@ -133,6 +141,7 @@ const componentVisualOf = (
   placement: CircuitComponentPlacement,
   operating: ComponentOperatingPoint | undefined,
   sweep: { time: number; duration: number },
+  lampScale: number,
 ): CircuitComponentVisual | undefined => {
   const kind = kindOf(component)
   if (kind === undefined) return undefined
@@ -157,6 +166,13 @@ const componentVisualOf = (
   /* U/P annotations belong to the elements that drop voltage / convert power. */
   const showsVoltage = kind === 'resistor' || kind === 'variable_resistor' || kind === 'voltage_source'
   const showsPower = kind === 'resistor' || kind === 'variable_resistor'
+  /* The dissipating loads double as lamps: the halo is their Joule heat,
+     normalized by the brightest dissipation in the frame. No solved power —
+     no glow. */
+  const lamp = kind === 'resistor' || kind === 'variable_resistor'
+  const glow = lamp && operating !== undefined && lampScale > 0 && Number.isFinite(power)
+    ? Math.min(1, Math.max(0, Math.abs(power) / lampScale))
+    : undefined
 
   return {
     id,
@@ -174,6 +190,7 @@ const componentVisualOf = (
         currentDirection: current >= 0 ? 'forward' as const : 'reverse' as const,
       }
       : {}),
+    ...(glow === undefined ? {} : { glow }),
     ...(component.type === 'switch' ? { closed: component.state === 'closed' } : {}),
     ...(component.type === 'variable_resistor'
       ? {
@@ -273,6 +290,68 @@ const junctionsOf = (
   return junctions
 }
 
+/**
+ * Current LEAVING a component terminal into its wire, in amperes. The
+ * operating point reads a→b for two-terminal parts (current enters `a`,
+ * leaves `b`) and discharge-out-of-positive for the source, so the head
+ * terminal (`b` / `positive`) always carries +I and the tail −I. A disabled
+ * or unsolved component reports nothing.
+ */
+const terminalOutflow = (
+  terminal: CircuitTerminal,
+  components: ReadonlyMap<string, CircuitComponent>,
+  operatingOf: ReadonlyMap<string, ComponentOperatingPoint>,
+): number | undefined => {
+  const component = components.get(String(terminal.componentId))
+  const operating = operatingOf.get(String(terminal.componentId))
+  if (component === undefined || operating === undefined) return undefined
+  return terminal.terminalKey === 'b' || terminal.terminalKey === 'positive'
+    ? operating.current
+    : -operating.current
+}
+
+/**
+ * One charge-drift run per wire whose current the operating point pins down.
+ * A wire touching a degree-1 terminal carries that terminal's whole branch
+ * current — series segments resolve at either end, tap chains resolve at the
+ * end terminal they feed. A wire between two junction terminals splits its
+ * net's current in a way per-component readouts do not divide, so it emits no
+ * flow; a segment under the drift floor (voltmeter's nA leak, an open loop)
+ * emits none either — the leak stays off the canvas like the annotations do.
+ */
+const chargeFlowsOf = (
+  circuit: Circuit,
+  wires: readonly CircuitWireVisual[],
+  operatingOf: ReadonlyMap<string, ComponentOperatingPoint>,
+): readonly ChargeFlowVisual[] => {
+  const degree = new Map<string, number>()
+  for (const connection of circuit.connections) {
+    degree.set(connection.from.id, (degree.get(connection.from.id) ?? 0) + 1)
+    degree.set(connection.to.id, (degree.get(connection.to.id) ?? 0) + 1)
+  }
+  const components = new Map(circuit.components.map(entry => [String(entry.id), entry]))
+  const wireOf = new Map(wires.map(entry => [entry.id, entry]))
+
+  const flows: ChargeFlowVisual[] = []
+  for (const connection of circuit.connections) {
+    const wire = wireOf.get(connection.id)
+    if (wire === undefined) continue
+    let current: number | undefined
+    if ((degree.get(connection.from.id) ?? 0) === 1) {
+      current = terminalOutflow(connection.from, components, operatingOf)
+    }
+    if (current === undefined && (degree.get(connection.to.id) ?? 0) === 1) {
+      const outflow = terminalOutflow(connection.to, components, operatingOf)
+      if (outflow !== undefined) current = -outflow
+    }
+    if (current === undefined || !Number.isFinite(current) || Math.abs(current) <= FLOW_MIN_AMPS) {
+      continue
+    }
+    flows.push({ id: `flow-${connection.id}`, path: wire.points, current })
+  }
+  return flows
+}
+
 export interface CircuitVisualInput {
   readonly scene: PhysicsScene
   /** Solved operating point at the frame being drawn. */
@@ -292,6 +371,16 @@ export const circuitSceneVisualAt = (
   const operatingOf = new Map(point.components.map(entry => [entry.componentId, entry]))
   const sweep = { time, duration: point.model.sweepDuration }
 
+  /* The brightest dissipation across the loads is the lamp halo's full
+     scale; below the noise floor nothing glows (open loop, dead run). */
+  const maxLoadPower = Math.max(
+    0,
+    ...point.components
+      .filter(entry => entry.type === 'resistor' || entry.type === 'variable_resistor')
+      .map(entry => Math.abs(entry.power)),
+  )
+  const lampScale = maxLoadPower > LAMP_MIN_WATTS ? maxLoadPower : 0
+
   const components: CircuitComponentVisual[] = []
   for (const component of circuit.components) {
     const placement = placements.get(String(component.id))
@@ -301,11 +390,13 @@ export const circuitSceneVisualAt = (
       placement,
       operatingOf.get(String(component.id)),
       sweep,
+      lampScale,
     )
     if (visual !== undefined) components.push(visual)
   }
   const wires = wiresOf(circuit, placements)
   const junctions = junctionsOf(circuit, placements)
+  const chargeFlows = chargeFlowsOf(circuit, wires, operatingOf)
 
   /* Frame the schematic: bounding box of symbols, terminals and wire bends,
      padded so the perpendicular text rows never clip at the canvas edge. */
@@ -353,6 +444,7 @@ export const circuitSceneVisualAt = (
     circuitComponents: components,
     circuitWires: wires,
     circuitJunctions: junctions,
+    chargeFlows,
     overlay: { readout, scale: { label: '1', length: 1 } },
     visible: visibilityOf(scene),
   })

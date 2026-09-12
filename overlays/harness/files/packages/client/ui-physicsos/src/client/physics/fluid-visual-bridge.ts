@@ -135,6 +135,9 @@ export const fluidSceneVisual = ({
     id: 'spring-scale',
     at: { x: 0, y: blockHeight * 2.4 },
     reading: `${immersion.scaleReading.toFixed(2)} N`,
+    /* The rig authors no gauge range, so full deflection is the dry weight —
+       the largest reading this scale can ever show on it. */
+    dialFraction: weight === 0 ? 0 : Math.min(1, Math.max(0, immersion.scaleReading / weight)),
     label: '弹簧测力计',
   }
 

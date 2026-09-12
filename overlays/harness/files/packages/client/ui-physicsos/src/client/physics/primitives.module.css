@@ -206,6 +206,13 @@
   stroke: none;
 }
 
+/* Wheel spokes: the rotation mark that lets the eye see θ = s/R. */
+.cartSpoke {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+
 /* ---------- motion marks ---------- */
 
 /* Ticker-tape dots: filled where the body has already been, ringed while the
