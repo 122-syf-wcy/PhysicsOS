@@ -318,9 +318,31 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
    * already owns, the incline angle. Nothing new is computed here — this projects
    * known magnitudes onto the known surface frame.
    */
+  /* Horizontal-track constraint force.
+   *
+   * A body under gravity whose vertical coordinate never accelerates is held up
+   * by the surface it rides on — N = mg is implied by the modelled trajectory
+   * itself, not assumed by the drawing layer. On an incline the surface frame
+   * branch below already publishes normal and friction; a projectile falls
+   * (ay = −g), so no normal force is claimed there. */
   const inclineDef = scene.observableDefinitions.find(
     (def) => def.parameters?.['kind'] === 'incline' && typeof def.parameters['angle'] === 'number',
   )
+  const verticalAcceleration = bodyState.acceleration?.vector.y ?? 0
+  const verticalVelocity = bodyState.velocity?.vector.y ?? 0
+  if (
+    inclineDef === undefined &&
+    gravityMagnitude !== undefined &&
+    gravityMagnitude > 0 &&
+    Math.abs(verticalAcceleration) < 1e-9 &&
+    Math.abs(verticalVelocity) < 1e-9
+  ) {
+    for (const def of visible(scene, 'force')) {
+      observations.push(
+        forceObservation(def.id, body.id, state.time, bodyState.position, { x: 0, y: gravityMagnitude, z: 0 }, 'normal'),
+      )
+    }
+  }
   if (inclineDef !== undefined) {
     const angleDegrees = inclineDef.parameters?.['angle'] as number
     const radians = (angleDegrees * Math.PI) / 180

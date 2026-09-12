@@ -147,6 +147,9 @@ importers:
       '@physicsos/engine-circuit':
         specifier: file:../engine-circuit
         version: link:../engine-circuit
+      '@physicsos/engine-collision':
+        specifier: file:../engine-collision
+        version: link:../engine-collision
       '@physicsos/engine-composite':
         specifier: file:../engine-composite
         version: link:../engine-composite
@@ -231,6 +234,27 @@ importers:
       '@physicsos/physics-units':
         specifier: file:../physics-units
         version: link:../physics-units
+      '@physicsos/shared':
+        specifier: file:../shared
+        version: link:../shared
+
+  packages/engine-collision:
+    dependencies:
+      '@physicsos/physics-core':
+        specifier: file:../physics-core
+        version: link:../physics-core
+      '@physicsos/physics-math':
+        specifier: file:../physics-math
+        version: link:../physics-math
+      '@physicsos/physics-scene':
+        specifier: file:../physics-scene
+        version: link:../physics-scene
+      '@physicsos/physics-units':
+        specifier: file:../physics-units
+        version: link:../physics-units
+      '@physicsos/physics-verifier':
+        specifier: file:../physics-verifier
+        version: link:../physics-verifier
       '@physicsos/shared':
         specifier: file:../shared
         version: link:../shared

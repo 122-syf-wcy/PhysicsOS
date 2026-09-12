@@ -19,6 +19,7 @@ import type { PhysicsScene } from '@physicsos/physics-scene'
 import { verifyMagneticScene } from '@physicsos/physics-verifier'
 import { MagneticEngine, createMagneticSimulationRequest } from '@physicsos/engine-magnetic'
 import { MechanicsEngine, createMechanicsSimulationRequest } from '@physicsos/engine-mechanics'
+import { CollisionEngine, createCollisionSimulationRequest } from '@physicsos/engine-collision'
 import { ElectricEngine, createElectricSimulationRequest } from '@physicsos/engine-electric'
 import {
   ElectricRegionEngine,
@@ -59,6 +60,7 @@ export const ENGINES: readonly EngineEntry[] = [
   entry(new ElectricEngine(), createElectricSimulationRequest),
   entry(new MagneticEngine(), createMagneticSimulationRequest),
   entry(new MechanicsEngine(), createMechanicsSimulationRequest),
+  entry(new CollisionEngine(), createCollisionSimulationRequest),
   entry(new LeverEngine(), createLeverSimulationRequest),
   entry(new CircuitEngine(), createCircuitSimulationRequest),
   entry(new OpticsEngine(), createOpticsSimulationRequest),

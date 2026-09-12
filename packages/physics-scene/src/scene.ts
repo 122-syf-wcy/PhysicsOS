@@ -645,8 +645,13 @@ export interface LeverBench extends PhysicsObjectBase {
  *   uniform field B; the motional EMF is E = BLv.
  * - `flux_change`: a coil of area S sits in a field B whose flux changes at a
  *   constant rate dΦ/dt; Faraday's law gives E = -dΦ/dt.
+ * - `double_bar_rail`: two conducting bars slide on parallel rails in a uniform
+ *   field; the loop EMF is E = BL(v₁−v₂), the magnetic coupling exchanges
+ *   momentum between the bars (τ = R·m₁m₂/(B²L²(m₁+m₂)) decay) and a constant
+ *   external force on bar 1 drives a terminal relative velocity
+ *   u∞ = F·R·m₂/(B²L²(m₁+m₂)).
  */
-export type InductionBenchType = 'bar_motion' | 'flux_change'
+export type InductionBenchType = 'bar_motion' | 'flux_change' | 'double_bar_rail'
 
 /**
  * Electromagnetic induction bench (junior induction slice). One bench carries
@@ -677,6 +682,15 @@ export interface InductionBench extends PhysicsObjectBase {
   coilAngle?: Quantity<'angle'>
   /** Constant rate of change of flux dΦ/dt; finite (flux_change only). */
   fluxRate?: Quantity<'magnetic_flux_rate'>
+  /* ------------------------------------------------- double_bar_rail fields -- */
+  /** Masses of the two bars, positional [bar1, bar2]; each finite and > 0. */
+  barMasses?: readonly [Quantity<'mass'>, Quantity<'mass'>]
+  /** Velocities of the two bars along the rails; each finite, sign = direction. */
+  barVelocities?: readonly [Quantity<'velocity'>, Quantity<'velocity'>]
+  /** Initial x positions of the two bars; each finite, sign = side of the origin. */
+  barPositions?: readonly [Quantity<'length'>, Quantity<'length'>]
+  /** Constant external force on bar 1 along +x; finite and ≥ 0 (0 = free pair). */
+  externalForce?: Quantity<'force'>
 }
 
 /* ------------------------------------------------------------ wave bench -- */

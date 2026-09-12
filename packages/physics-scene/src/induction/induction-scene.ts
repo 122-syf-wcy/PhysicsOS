@@ -47,8 +47,34 @@ export interface FluxChangeSpec {
   readonly resistance: number
 }
 
+/**
+ * Authoring input for the two-bar rail rig: two conducting bars slide on
+ * parallel rails a `barLength` apart inside a uniform field. The loop EMF is
+ * E = BL(v₁−v₂); the magnetic force couples the bars, so without an external
+ * force the pair's momentum is conserved while the relative velocity decays
+ * with τ = R·m₁m₂/(B²L²(m₁+m₂)).
+ */
+export interface DoubleBarRailSpec {
+  readonly benchId?: string
+  readonly type?: 'double_bar_rail'
+  /** Magnetic flux density in tesla (> 0). */
+  readonly magneticFluxDensity: number
+  /** Rail spacing = bar length in centimetres (> 0). */
+  readonly barLength: number
+  /** Bar masses in grams, positional [bar1, bar2] (each > 0). */
+  readonly barMasses: readonly [number, number]
+  /** Bar velocities in m/s, positional [bar1, bar2]; sign = direction. */
+  readonly barVelocities: readonly [number, number]
+  /** Initial x positions in centimetres, positional [bar1, bar2]; signed. */
+  readonly barPositions: readonly [number, number]
+  /** Constant external force on bar 1 in newtons (≥ 0; omitted/0 = free pair). */
+  readonly externalForce?: number
+  /** Loop resistance in ohms (> 0). */
+  readonly resistance: number
+}
+
 /** Discriminated authoring input: one sub-model per bench. */
-export type InductionBenchSpec = BarMotionSpec | FluxChangeSpec
+export type InductionBenchSpec = BarMotionSpec | FluxChangeSpec | DoubleBarRailSpec
 
 export interface InductionBenchSceneInput {
   readonly sceneId?: string
@@ -66,7 +92,34 @@ const observableId = (key: InductionObservableKey) =>
 const isBarMotion = (spec: InductionBenchSpec): spec is BarMotionSpec =>
   (spec.type ?? 'bar_motion') === 'bar_motion'
 
+const isDoubleBarRail = (spec: InductionBenchSpec): spec is DoubleBarRailSpec =>
+  spec.type === 'double_bar_rail'
+
 const toBench = (spec: InductionBenchSpec): InductionBench => {
+  if (isDoubleBarRail(spec)) {
+    return {
+      id: spec.benchId ?? 'induction-bench-1',
+      type: 'double_bar_rail',
+      magneticFluxDensity: quantity(spec.magneticFluxDensity, 'T', 'magnetic_flux_density'),
+      resistance: quantity(spec.resistance, 'Ω', 'resistance'),
+      barLength: quantity(spec.barLength, 'cm', 'length'),
+      barMasses: [
+        quantity(spec.barMasses[0], 'g', 'mass'),
+        quantity(spec.barMasses[1], 'g', 'mass'),
+      ],
+      barVelocities: [
+        quantity(spec.barVelocities[0], 'm/s', 'velocity'),
+        quantity(spec.barVelocities[1], 'm/s', 'velocity'),
+      ],
+      barPositions: [
+        quantity(spec.barPositions[0], 'cm', 'length'),
+        quantity(spec.barPositions[1], 'cm', 'length'),
+      ],
+      ...(spec.externalForce === undefined
+        ? {}
+        : { externalForce: quantity(spec.externalForce, 'N', 'force') }),
+    }
+  }
   if (isBarMotion(spec)) {
     return {
       id: spec.benchId ?? 'induction-bench-1',
@@ -109,8 +162,11 @@ export const createInductionScene = (input: InductionBenchSceneInput): PhysicsSc
       startTime: quantity(0, 's', 'time'),
       /* The rod sweeps at constant v, so a 5 s window gives a visible
          displacement; flux_change is steady but still benefits from a run to
-         show the constant EMF over time. */
-      endTime: quantity(5, 's', 'time'),
+         show the constant EMF over time. The double-bar rail relaxes with
+         τ = R·m₁m₂/(B²L²(m₁+m₂)) = 0.25 s on the template defaults, so 4 s
+         (16 τ) shows the whole exchange and then the pair drifting as one;
+         the UI run window reads this stamp. */
+      endTime: quantity(bench.type === 'double_bar_rail' ? 4 : 5, 's', 'time'),
       state: 'idle',
       playbackRate: 1,
     },

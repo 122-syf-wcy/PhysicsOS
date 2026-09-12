@@ -26,7 +26,43 @@ const runProjectile = (velocity: ReturnType<typeof vec3>, height: number) => {
   return { scene, simulation }
 }
 
+const runUniform = (velocity: ReturnType<typeof vec3>, mass: number) => {
+  const scene = createMechanicsScene({
+    model: 'uniform_linear_motion',
+    mass,
+    position: vec3(0, 0, 0),
+    velocity,
+  })
+  const engine = new MechanicsEngine()
+  const simulation = engine.simulate(
+    scene,
+    createMechanicsSimulationRequest(scene, 'simulation-uniform', 'trace-uniform'),
+  )
+  return { scene, simulation }
+}
+
 describe('observeMechanicsScene', () => {
+  it('balances weight with a normal force for supported horizontal motion', () => {
+    const { scene, simulation } = runUniform(vec3(4, 0, 0), 2)
+    const observed = observeMechanicsScene({ scene, simulation })
+    const normal = observed.observations.find(
+      (entry) => entry.type === 'mechanics_force' && entry.label === 'normal',
+    )
+    if (normal?.type !== 'mechanics_force') throw new Error('Normal force is absent.')
+    const vector = toCanonicalVector(normal.vector).vectorSI
+    expect(vector.x).toBeCloseTo(0, 8)
+    expect(vector.y).toBeCloseTo(19.6, 8)
+  })
+
+  it('reports no normal force for a projectile in free fall', () => {
+    const { scene, simulation } = runProjectile(vec3(10, 0, 0), 20)
+    const observed = observeMechanicsScene({ scene, simulation })
+    const normal = observed.observations.find(
+      (entry) => entry.type === 'mechanics_force' && entry.label === 'normal',
+    )
+    expect(normal).toBeUndefined()
+  })
+
   it('keeps the horizontal-projectile apex at the launch point', () => {
     const { scene, simulation } = runProjectile(vec3(10, 0, 0), 20)
     const observed = observeMechanicsScene({ scene, simulation })

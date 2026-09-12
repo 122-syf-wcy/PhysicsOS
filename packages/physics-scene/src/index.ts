@@ -290,6 +290,7 @@ export {
   inductionTypeOf,
   isInductionScene,
   type BarMotionSpec,
+  type DoubleBarRailSpec,
   type FluxChangeSpec,
   type InductionBenchSceneInput,
   type InductionBenchSpec,
@@ -297,8 +298,10 @@ export {
 } from './induction/induction-scene.ts'
 export {
   createBarMotionScene,
+  createDoubleBarRailScene,
   createFluxChangeScene,
   type BarMotionSceneInput,
+  type DoubleBarRailSceneInput,
   type FluxChangeSceneInput,
 } from './induction/induction-templates.ts'
 export {
@@ -330,3 +333,9 @@ export {
   trajectorySampleTimes,
   trajectoryStorageSampleCount,
 } from './trajectory-sampling.ts'
+export {
+  createCollisionScene,
+  createCollisionSimulationRequest,
+  type CollisionBodySpec,
+  type CollisionSceneInput,
+} from './collision/collision-scene-factory.ts'

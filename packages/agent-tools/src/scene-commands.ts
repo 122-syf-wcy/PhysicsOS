@@ -254,6 +254,24 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
     summary: '改磁通量变化率 dΦ/dt（正负 = 增加 / 减少）',
     fields: { benchId: id('感应台 id'), fluxRate: quantity('magnetic_flux_rate', '如 {value:0.05, unit:"Wb/s"}') },
   },
+  SetInductionBarMasses: {
+    domain: 'induction（双棒）',
+    summary: '改两根导体棒的质量（各自 > 0，按 [棒1, 棒2] 位置）',
+    fields: {
+      benchId: id('感应台 id'),
+      masses: quantity('mass', '如 [{value:100, unit:"g"}, {value:0.1, unit:"kg"}]，各元素单位独立'),
+    },
+  },
+  SetInductionBarVelocityOne: {
+    domain: 'induction（双棒）',
+    summary: '改某一根棒的初速度（正负 = 沿导轨方向；barIndex 1 = 棒1，2 = 棒2）',
+    fields: { benchId: id('感应台 id'), barIndex: choice(['1', '2'], '1 = 棒1，2 = 棒2'), velocity: quantity('velocity', '如 {value:2, unit:"m/s"}') },
+  },
+  SetInductionExternalForce: {
+    domain: 'induction（双棒）',
+    summary: '改作用在棒 1 上的恒定外力（≥ 0；0 = 自由双棒，动量守恒）',
+    fields: { benchId: id('感应台 id'), force: quantity('force', '如 {value:0.01, unit:"N"}') },
+  },
   SetWaveAmplitude: {
     domain: 'wave',
     summary: '改振幅（> 0）',

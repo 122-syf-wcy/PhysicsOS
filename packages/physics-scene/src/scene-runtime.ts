@@ -91,6 +91,9 @@ export type SceneCommandType =
   | 'SetInductionBarVelocity'
   | 'SetInductionBarLength'
   | 'SetInductionFluxRate'
+  | 'SetInductionBarMasses'
+  | 'SetInductionBarVelocityOne'
+  | 'SetInductionExternalForce'
   | 'SetWaveAmplitude'
   | 'SetWaveFrequency'
   | 'SetWaveSpeed'
@@ -289,6 +292,25 @@ export interface SceneCommandPayloadMap {
     /** Rate of change of flux dΦ/dt; finite (sign sets the Lenz direction). */
     fluxRate: Quantity<'magnetic_flux_rate'>
   }
+  SetInductionBarMasses: {
+    benchId: string
+    /** Bar masses, positional [bar1, bar2]; each > 0. Each element carries its
+        own unit — callers may send 'g' for the edited bar and 'kg' for the
+        untouched one, so they are canonicalized independently. */
+    masses: [Quantity<'mass'>, Quantity<'mass'>]
+  }
+  SetInductionBarVelocityOne: {
+    benchId: string
+    /** Which bar the velocity belongs to (1 = bar1, 2 = bar2). */
+    barIndex: 1 | 2
+    /** Velocity of that bar; finite (sign encodes direction along the rails). */
+    velocity: Quantity<'velocity'>
+  }
+  SetInductionExternalForce: {
+    benchId: string
+    /** Constant external force on bar 1; finite and ≥ 0 (0 = free pair). */
+    force: Quantity<'force'>
+  }
   SetWaveAmplitude: {
     benchId: string
     /** Wave amplitude; finite and > 0. */
@@ -389,6 +411,9 @@ export type PhysicsEventType =
   | 'InductionBarVelocityChanged'
   | 'InductionBarLengthChanged'
   | 'InductionFluxRateChanged'
+  | 'InductionBarMassesChanged'
+  | 'InductionBarVelocityOneChanged'
+  | 'InductionExternalForceChanged'
   | 'WaveAmplitudeChanged'
   | 'WaveFrequencyChanged'
   | 'WaveSpeedChanged'
@@ -443,6 +468,9 @@ export interface PhysicsEventPayloadMap {
   InductionBarVelocityChanged: SceneCommandPayloadMap['SetInductionBarVelocity']
   InductionBarLengthChanged: SceneCommandPayloadMap['SetInductionBarLength']
   InductionFluxRateChanged: SceneCommandPayloadMap['SetInductionFluxRate']
+  InductionBarMassesChanged: SceneCommandPayloadMap['SetInductionBarMasses']
+  InductionBarVelocityOneChanged: SceneCommandPayloadMap['SetInductionBarVelocityOne']
+  InductionExternalForceChanged: SceneCommandPayloadMap['SetInductionExternalForce']
   WaveAmplitudeChanged: SceneCommandPayloadMap['SetWaveAmplitude']
   WaveFrequencyChanged: SceneCommandPayloadMap['SetWaveFrequency']
   WaveSpeedChanged: SceneCommandPayloadMap['SetWaveSpeed']
@@ -2120,12 +2148,12 @@ const applyCommand = (
     case 'SetInductionBarLength': {
       const lookup = findInductionBench(scene, command.payload.benchId)
       if (!lookup.ok) return { ok: false, error: lookup.error }
-      if (lookup.bench.type !== 'bar_motion') {
+      if (lookup.bench.type !== 'bar_motion' && lookup.bench.type !== 'double_bar_rail') {
         return {
           ok: false,
           error: invalidCommand(
             'INDUCTION_WRONG_SUBMODEL',
-            'Bar length can only be set on a bar_motion bench.',
+            'Bar length can only be set on a bar_motion or double_bar_rail bench.',
             { benchId: command.payload.benchId, benchType: lookup.bench.type },
           ),
         }
@@ -2189,6 +2217,125 @@ const applyCommand = (
           ...eventMetadata,
           type: 'InductionFluxRateChanged',
           payload: { benchId: command.payload.benchId, fluxRate: clone(fluxRate) },
+        },
+      }
+    }
+
+    case 'SetInductionBarMasses': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'double_bar_rail') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INDUCTION_WRONG_SUBMODEL',
+            'Bar masses can only be set on a double_bar_rail bench.',
+            { benchId: command.payload.benchId, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const masses = [
+        validateQuantity(command.payload.masses[0], 'mass'),
+        validateQuantity(command.payload.masses[1], 'mass'),
+      ] as [Quantity<'mass'>, Quantity<'mass'>]
+      const massesSI = masses.map((mass) => canonicalValue(mass))
+      if (!Number.isFinite(massesSI[0]) || !Number.isFinite(massesSI[1]) || massesSI[0]! <= 0 || massesSI[1]! <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_BAR_MASSES',
+            'Each bar mass must be a positive finite mass.',
+            { benchId: command.payload.benchId, masses: command.payload.masses },
+          ),
+        }
+      }
+      lookup.bench.barMasses = [clone(masses[0]), clone(masses[1])]
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionBarMassesChanged',
+          payload: { benchId: command.payload.benchId, masses },
+        },
+      }
+    }
+
+    case 'SetInductionBarVelocityOne': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'double_bar_rail') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INDUCTION_WRONG_SUBMODEL',
+            'Per-bar velocity can only be set on a double_bar_rail bench.',
+            { benchId: command.payload.benchId, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const velocity = validateQuantity(command.payload.velocity, 'velocity')
+      const velocitySI = canonicalValue(velocity)
+      if (!Number.isFinite(velocitySI)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_BAR_VELOCITY_ONE',
+            'Bar velocity must be finite.',
+            { benchId: command.payload.benchId, barIndex: command.payload.barIndex, velocity: command.payload.velocity },
+          ),
+        }
+      }
+      const index = command.payload.barIndex === 1 ? 0 : 1
+      const current = lookup.bench.barVelocities ?? [
+        quantity(0, 'm/s', 'velocity'),
+        quantity(0, 'm/s', 'velocity'),
+      ]
+      lookup.bench.barVelocities = [
+        clone(index === 0 ? velocity : current[0]),
+        clone(index === 1 ? velocity : current[1]),
+      ]
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionBarVelocityOneChanged',
+          payload: { benchId: command.payload.benchId, barIndex: command.payload.barIndex, velocity: clone(velocity) },
+        },
+      }
+    }
+
+    case 'SetInductionExternalForce': {
+      const lookup = findInductionBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'double_bar_rail') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INDUCTION_WRONG_SUBMODEL',
+            'The external force can only be set on a double_bar_rail bench.',
+            { benchId: command.payload.benchId, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const force = validateQuantity(command.payload.force, 'force')
+      const forceSI = canonicalValue(force)
+      if (!Number.isFinite(forceSI) || forceSI < 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INDUCTION_EXTERNAL_FORCE',
+            'The external force must be a finite value ≥ 0.',
+            { benchId: command.payload.benchId, force: command.payload.force },
+          ),
+        }
+      }
+      lookup.bench.externalForce = clone(force)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'InductionExternalForceChanged',
+          payload: { benchId: command.payload.benchId, force: clone(force) },
         },
       }
     }

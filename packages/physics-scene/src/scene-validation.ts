@@ -656,6 +656,27 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       subValues =
         (bench.barLength === undefined || positive(bench.barLength)) &&
         (bench.barVelocity === undefined || finite(bench.barVelocity))
+    } else if (bench.type === 'double_bar_rail') {
+      /* Masses are per-element positive; velocities / positions are signed
+         (direction along the rails); the external force may not be negative. */
+      subDimensions =
+        (bench.barLength === undefined || hasExpectedDimension(bench.barLength, 'length')) &&
+        (bench.barMasses === undefined ||
+          (hasExpectedDimension(bench.barMasses[0], 'mass') &&
+            hasExpectedDimension(bench.barMasses[1], 'mass'))) &&
+        (bench.barVelocities === undefined ||
+          (hasExpectedDimension(bench.barVelocities[0], 'velocity') &&
+            hasExpectedDimension(bench.barVelocities[1], 'velocity'))) &&
+        (bench.barPositions === undefined ||
+          (hasExpectedDimension(bench.barPositions[0], 'length') &&
+            hasExpectedDimension(bench.barPositions[1], 'length'))) &&
+        (bench.externalForce === undefined || hasExpectedDimension(bench.externalForce, 'force'))
+      subValues =
+        (bench.barLength === undefined || positive(bench.barLength)) &&
+        (bench.barMasses === undefined || (positive(bench.barMasses[0]) && positive(bench.barMasses[1]))) &&
+        (bench.barVelocities === undefined || (finite(bench.barVelocities[0]) && finite(bench.barVelocities[1]))) &&
+        (bench.barPositions === undefined || (finite(bench.barPositions[0]) && finite(bench.barPositions[1]))) &&
+        (bench.externalForce === undefined || canonicalValue(bench.externalForce) >= 0)
     } else {
       /* flux_change */
       subDimensions =

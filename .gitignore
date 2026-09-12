@@ -46,6 +46,12 @@ DRELOCA*
 .playwright-mcp/
 .pos_manifest.tmp.json
 .anna-manifest.json
+.agent-teams/
+.dsh-vision-router/
+
+# Raw AI-generated artwork sources (134MB+); compressed copies live under
+# overlays/harness/files/apps/web/public/physicsos/
+UI/generated/
 
 # Local verification output
 *-typecheck.txt
