@@ -759,10 +759,19 @@
 
 /* ------------------------------------------------------------------- lever -- */
 
-.leverBeam {
+/* The beam is a rigid bar: filled body with graduation ticks on the upper
+   edge, so lever arms read as measured distances not just a drawn line. */
+.leverBeamBar {
+  fill: var(--physics-body-fill);
   stroke: var(--physics-body-stroke);
-  stroke-width: 5;
-  stroke-linecap: round;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.leverBeamTick {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1;
+  opacity: 0.55;
 }
 
 .leverFulcrum {
@@ -771,16 +780,40 @@
   stroke-width: 2;
 }
 
+.leverFulcrumStand {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.4;
+}
+
+.leverFulcrumBase {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+}
+
 .leverString {
   stroke: var(--physics-body-stroke);
   stroke-width: 1.6;
   opacity: 0.7;
 }
 
+/* 钩码: hooked cylinder — ring, body, centre slot. */
+.leverMassHook {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
 .leverMass {
   fill: var(--physics-body-fill);
   stroke: var(--physics-body-stroke);
   stroke-width: 2;
+}
+
+.leverMassSlot {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.1;
+  opacity: 0.6;
 }
 
 /* ---------------------------------------------------------------- induction -- */
@@ -1000,11 +1033,44 @@
   opacity: 0.7;
 }
 
-/* Coherent sources of the interference rig. */
+/* Coherent sources of the interference rig: the contact dot plus the dipper
+   stem it vibrates on. */
 .waveSource {
   fill: var(--physics-wave-rope);
   stroke: #fbfdff;
   stroke-width: 1.4;
+}
+
+.waveSourceStem {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.5;
+}
+
+/* Fixed ends of the standing-wave string: a solid clamp with hatch marks. */
+.waveClamp {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
+.waveClampHatch {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+/* The vibrator box driving a travelling rope at its left end. */
+.waveDriver {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
+.waveDriverPin {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 /* Observation point P, coloured by the engine's verdict. */

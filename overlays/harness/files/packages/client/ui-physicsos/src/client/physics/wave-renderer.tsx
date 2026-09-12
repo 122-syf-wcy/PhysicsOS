@@ -44,6 +44,65 @@ export function WaveRenderer({ view, projection }: RendererProps) {
         />
       )}
 
+      {/* Apparatus ends: a standing-wave string is clamped at both ends;
+          a travelling rope is driven by a vibrator at its left end. */}
+      {profile === undefined ? null : (() => {
+        const fromX = projection.px(profile.equilibrium.from)
+        const fromY = projection.py(profile.equilibrium.from)
+        const toX = projection.px(profile.equilibrium.to)
+        const toY = projection.py(profile.equilibrium.to)
+        if (profile.kind === 'string') {
+          return (
+            <g aria-hidden="true">
+              {[fromX, toX].map((x, index) => (
+                <g key={index}>
+                  <rect
+                    className={css.waveClamp}
+                    x={x - (index === 0 ? 9 : 0)}
+                    y={(index === 0 ? fromY : toY) - 9}
+                    width={9}
+                    height={18}
+                  />
+                  {[-6, 0, 6].map(offset => (
+                    <line
+                      key={offset}
+                      className={css.waveClampHatch}
+                      x1={x - (index === 0 ? 9 : 0) + offset + 7}
+                      y1={(index === 0 ? fromY : toY) - 9}
+                      x2={x - (index === 0 ? 9 : 0) + offset}
+                      y2={(index === 0 ? fromY : toY) - 14}
+                    />
+                  ))}
+                </g>
+              ))}
+            </g>
+          )
+        }
+        /* Rope: driver box left of the first point, pin to the rope end. */
+        return (
+          <g aria-hidden="true">
+            <rect
+              className={css.waveDriver}
+              x={fromX - 16}
+              y={fromY - 8}
+              width={11}
+              height={16}
+              rx={2}
+            />
+            <line
+              className={css.waveDriverPin}
+              x1={fromX - 5}
+              y1={fromY}
+              x2={fromX}
+              y2={fromY}
+            />
+            <text className={css.annotation} x={fromX - 10} y={fromY + 22} textAnchor="middle">
+              振源
+            </text>
+          </g>
+        )
+      })()}
+
       {/* Standing-wave envelope: the two curves the string never leaves */}
       {envelope === undefined || !showWaveform ? null : (
         <g className={projection.highlighted(envelope.id) ? css.highlightGroup : undefined} aria-hidden="true">
@@ -108,12 +167,27 @@ export function WaveRenderer({ view, projection }: RendererProps) {
           )
         })}
 
-      {/* The two coherent sources */}
+      {/* The two coherent sources: dipper stem above each contact dot */}
       {sources.map((source) => {
         const cx = projection.px(source.at)
         const cy = projection.py(source.at)
         return (
           <g key={source.id} className={projection.highlighted(source.id) ? css.highlightGroup : undefined}>
+            <line
+              className={css.waveSourceStem}
+              x1={cx}
+              y1={cy - 5}
+              x2={cx}
+              y2={cy - 15}
+            />
+            <rect
+              className={css.waveSourceStem}
+              x={cx - 4}
+              y={cy - 20}
+              width={8}
+              height={6}
+              rx={1.5}
+            />
             <circle className={css.waveSource} cx={cx} cy={cy} r={5} />
             <text className={css.annotation} x={cx} y={cy + 17} textAnchor="middle">
               {source.label}
