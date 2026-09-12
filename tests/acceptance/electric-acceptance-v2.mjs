@@ -188,13 +188,19 @@ stdout.write('\nCASE K · 多源场景渲染 + Inspector 编辑\n')
     /* Bending streamlines + equipotentials: the canvas paints many strokes. */
     check('K: canvas paints field geometry', g.paintedStrokes > 8, `${g.paintedStrokes} strokes`)
 
+    /* Derived readings live on the 读数 inspector tab since the tab redesign. */
+    await lab().getByRole('tab', { name: '读数' }).click()
+    await page.waitForTimeout(200)
     const rows = await derivedRows()
     check('K: field magnitude is published', '电场强度' in rows, JSON.stringify(rows))
 
     await shot('electric-equipotential-1600x900')
 
     /* Edit the second source charge in the Inspector — a multi-source scene
-       must expose every source, not just the first. */
+       must expose every source, not just the first. Editable fields live on
+       the 属性 tab. */
+    await lab().getByRole('tab', { name: '属性' }).click()
+    await page.waitForTimeout(200)
     const sourceChargeInputs = page.getByRole('textbox', { name: /^正电荷$|^负电荷$/ })
     const inputCount = await sourceChargeInputs.count()
     check('K: Inspector exposes multiple source charges', inputCount >= 2, `${inputCount} source inputs`)

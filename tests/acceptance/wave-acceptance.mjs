@@ -220,7 +220,14 @@ await waitForWaveLab()
   const g = await geometry()
   check('interference lab is verified', g.status === 'verified', g.status)
   check('two sources drawn', g.sources === 2, `${g.sources} sources`)
-  check('spreading crests drawn', g.frontCircles >= 8, `${g.frontCircles} crests`)
+  /* Causality: at t = 0 no crest has left either source, and the first one
+     only forms a quarter period in. Assert the empty opening frame, then let
+     the wave run and count the crests it has actually launched. */
+  check('no crest before the wave has left its source', g.frontCircles === 0, `${g.frontCircles} crests at t = 0`)
+  await page.getByRole('slider', { name: '时间轴' }).fill('0.5')
+  await page.waitForTimeout(400)
+  const spread = await geometry()
+  check('spreading crests drawn', spread.frontCircles >= 8, `${spread.frontCircles} crests`)
   check('P is classified constructive', g.pointClass.includes('wavePointConstructive'), g.pointClass)
   /* Δ = 1.4 − 1.0 = 0.4 m = 2λ → 加强, A_P = 6 cm. */
   check('readout states Δ = 2λ → 振动加强',
