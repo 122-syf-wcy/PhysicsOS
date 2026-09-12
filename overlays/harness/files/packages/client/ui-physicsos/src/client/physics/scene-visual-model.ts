@@ -120,14 +120,27 @@ export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolea
 /** Solid body: block or ball. */
 export interface BodyVisual {
   id: string
-  kind: 'block' | 'ball'
+  kind: 'block' | 'ball' | 'cart'
   at: ScenePoint
-  /** Radius (ball) or half-edge (block) in scene units. */
+  /** Radius (ball) or half-edge (block); for a cart, half the axle spacing. */
   size: number
   /** Body rotation in degrees, counter-clockwise. Used on an incline. */
   rotation?: number
   /** Highlighted while it is the live simulated position. */
   live?: boolean
+  label?: string
+}
+
+/**
+ * One strobe mark: the body's position at an equal-time sample. The spacing
+ * between marks IS the physics lesson — constant for uniform motion, widening
+ * for acceleration — so every sampled frame earns a dot, and sparse marks carry
+ * a `t` label.
+ */
+export interface MotionMarkVisual {
+  id: string
+  at: ScenePoint
+  /** Elapsed scene time at this mark, e.g. `t = 2 s`. Undefined hides the label. */
   label?: string
 }
 
@@ -693,6 +706,54 @@ export interface InductionBarVisual {
   at: ScenePoint
   length: number
   label: string
+  /** Slide direction along the rails: the sign of the rod's velocity. */
+  direction: 1 | -1
+}
+
+/**
+ * The resistor that closes the rail loop of a bar_motion rig: a vertical wire
+ * bridging the two rails at one end, with the resistor zigzag in the middle.
+ */
+export interface InductionResistorVisual {
+  id: string
+  /** Centre of the closure wire. */
+  at: ScenePoint
+  /** Rail spacing the wire spans (cm). */
+  span: number
+  label: string
+}
+
+/** One rail line of a double_bar_rail rig (a straight conductor both bars slide on). */
+export interface InductionRailVisual {
+  id: string
+  from: ScenePoint
+  to: ScenePoint
+}
+
+/** One conducting bar of a double_bar_rail rig at its current position. */
+export interface InductionPairBarVisual {
+  id: string
+  /** Centre of the bar at this frame; the bar spans the two rails. */
+  at: ScenePoint
+  length: number
+  label: string
+}
+
+/**
+ * Magnetic force on one bar of a double_bar_rail rig, drawn as a short arrow
+ * along the rails. The magnitude is the engine's BIL fact scaled into scene
+ * units; the direction carries the engine's sign (Lenz: opposes relative
+ * motion).
+ */
+export interface InductionForceArrowVisual {
+  id: string
+  /** Tail of the arrow at the bar centre. */
+  at: ScenePoint
+  /** +x or -x along the rails. */
+  direction: 1 | -1
+  /** Arrow length in scene units (cm). */
+  length: number
+  label: string
 }
 
 /** The coil of a flux_change rig (a flat loop seen edge-on). */
@@ -813,6 +874,13 @@ export interface SceneVisualModel {
   axes: { x: string; y: string }
   /** Scene units per axis tick label; omitted hides numeric ticks. */
   tickStep?: number
+  /**
+   * Scene-coordinate ranges whose tick LABELS are dropped (tick marks stay).
+   * A bounded field's axis crosses the apparatus, so the labels inside the
+   * region print on top of plates and field ink; the bridge names the band and
+   * the canvas keeps the flanking labels.
+   */
+  tickLabelAvoid?: { x?: readonly [number, number]; y?: readonly [number, number] }
 
   bodies: readonly BodyVisual[]
   particles: readonly ParticleVisual[]
@@ -827,6 +895,8 @@ export interface SceneVisualModel {
   ground?: GroundVisual
   incline?: InclineVisual
   platform?: PlatformVisual
+  /** Equal-time strobe marks along the path (ticker-tape style). */
+  motionMarks?: readonly MotionMarkVisual[]
   coordinate?: CoordinateVisual
   field?: FieldVisual
   electricField?: ElectricFieldVisual
@@ -898,6 +968,13 @@ export interface SceneVisualModel {
   inductionField?: InductionFieldVisual
   /** Conducting rod of a bar_motion rig at its swept position. */
   inductionBar?: InductionBarVisual
+  /** The rail-loop closure resistor of a bar_motion rig. */
+  inductionResistor?: InductionResistorVisual
+  /** Rails and two bars of a double_bar_rail rig. */
+  inductionRails?: readonly InductionRailVisual[]
+  inductionPairBars?: readonly InductionPairBarVisual[]
+  /** Magnetic force arrows on each bar; values come from the engine's BIL fact. */
+  inductionForceArrows?: readonly InductionForceArrowVisual[]
   /** Coil of a flux_change rig. */
   inductionCoil?: InductionCoilVisual
   /** Current-direction arrow around the induction loop. */

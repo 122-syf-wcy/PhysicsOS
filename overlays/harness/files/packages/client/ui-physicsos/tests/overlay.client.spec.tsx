@@ -468,9 +468,9 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.queryByText('F = qv × B')).toBeNull()
 
     // Inspector separates editable parameters from read-only derived values.
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     expect(screen.getByText('粒子属性')).toBeTruthy()
-    expect(screen.getByText('派生量')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: '读数' }))
     expect(screen.getByText('派生量由引擎计算，只读。')).toBeTruthy()
     expect(screen.getByText(/轨道半径/)).toBeTruthy()
 
@@ -677,7 +677,7 @@ describe('PhysicsOS overlay presentation', () => {
     /* A question scene is editable in the Lab: continuing the same revisioned
        Scene is what keeps solve and experiment in one physical world, and an edit
        is a new revision rather than a second source of truth. */
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     const massInput = screen.getByRole('textbox', { name: '质量' })
     if (!(massInput instanceof HTMLInputElement)) throw new Error('mass editor is not an input.')
     fireEvent.change(massInput, { target: { value: '3' } })

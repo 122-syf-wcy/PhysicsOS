@@ -127,27 +127,38 @@ export const leverSceneVisual = ({
 
   const dimensions: DimensionVisual[] = [
     {
+      /* The arm of a vertical weight is the HORIZONTAL distance from the
+         fulcrum to its line of action — the projected attach x, l·cos θ — so
+         the rule stays true while the beam tilts (18° max) instead of floating
+         ~5 % past the hanger. */
       id: 'arm-left',
       from: { x: 0, y: 2.4 },
-      to: { x: -leftArm, y: 2.4 },
+      to: { x: leftAttach.x, y: 2.4 },
       label: `l₁ = ${fmtLeverValue(leftArm, 3)} cm`,
     },
     {
       id: 'arm-right',
       from: { x: 0, y: 2.4 },
-      to: { x: rightArm, y: 2.4 },
+      to: { x: rightAttach.x, y: 2.4 },
       label: `l₂ = ${fmtLeverValue(rightArm, 3)} cm`,
     },
   ]
 
-  const arrow = 6
-  const vectors: VectorVisual[] = [
+  const leftWeight = Math.abs(state.moments.leftWeight)
+  const rightWeight = Math.abs(state.moments.rightWeight)
+  const largestWeight = Math.max(leftWeight, rightWeight, 1e-9)
+  const arrowSpan = 8
+  /* Weight arrows scale with the engine's own per-state weights, so a 200 g
+     hanger visibly outweighs a 20 g one — the length a fixed constant erased
+     is exactly the trade-off the experiment teaches (F₁l₁ = F₂l₂). A weight of
+     zero earns no arrow: a massless hook is not a force. */
+  const weightVectors: VectorVisual[] = ([
     {
       id: 'force-left',
       observable: 'moments',
       role: 'gravity',
       from: leftMass,
-      to: { x: leftMass.x, y: leftMass.y - arrow },
+      to: { x: leftMass.x, y: leftMass.y - arrowSpan * (leftWeight / largestWeight) },
       symbol: 'G₁',
     },
     {
@@ -155,10 +166,13 @@ export const leverSceneVisual = ({
       observable: 'moments',
       role: 'gravity',
       from: rightMass,
-      to: { x: rightMass.x, y: rightMass.y - arrow },
+      to: { x: rightMass.x, y: rightMass.y - arrowSpan * (rightWeight / largestWeight) },
       symbol: 'G₂',
     },
-  ]
+  ] satisfies VectorVisual[]).filter((vector) => {
+    const weight = vector.id === 'force-left' ? leftWeight : rightWeight
+    return weight > 1e-9
+  })
 
   const leftMomentCm = state.moments.leftMoment * 100
   const rightMomentCm = state.moments.rightMoment * 100
@@ -171,13 +185,16 @@ export const leverSceneVisual = ({
 
   const span = halfBeam * 2 + 8
   return emptyVisualModel('mechanics', {
-    extent: { width: span, height: 28 },
-    origin: { x: -span / 2, y: -16 },
+    /* The hanger hardware, its weight arrow and the G label all hang BELOW the
+       beam, so a floor at y = −16 cut the lower load's annotation (and the whole
+       arrow when the beam tips). Keep the ceiling, drop the floor. */
+    extent: { width: span, height: 34 },
+    origin: { x: -span / 2, y: -22 },
     grid: { minor: 1, major: 5 },
     axes: { x: '', y: '' },
     tickStep: 5,
     dimensions,
-    vectors,
+    vectors: weightVectors,
     leverBeam,
     leverFulcrum,
     leverHangers: [leftHanger, rightHanger],

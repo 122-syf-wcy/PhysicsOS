@@ -255,8 +255,11 @@ export const thermalSceneVisual = ({
   ]
 
   return emptyVisualModel('thermal', {
-    extent: { width: 30, height: 22 },
-    origin: { x: -16, y: -2 },
+    /* The heater sits at y = 0 and is drawn with its body and power label
+       BELOW that line, so a frame whose bottom edge was y = −2 cut the
+       "加热器 50 W" annotation off entirely. Hold the top and drop the floor. */
+    extent: { width: 30, height: 27 },
+    origin: { x: -16, y: -7 },
     grid: { minor: 1, major: 5 },
     axes: { x: '', y: '' },
     tickStep: 5,

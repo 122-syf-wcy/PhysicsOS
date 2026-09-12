@@ -331,11 +331,18 @@ export const circuitSceneVisualAt = (
   const minY = Math.min(...ys) - pad
   const maxY = Math.max(...ys) + pad
 
+  /* Power, labelled by WHICH power. A bare "P" beside U invited the reading
+     P = U·I, but E·I is the source's total power — they differ by the internal
+     dissipation whenever r > 0. Each line is the engine's own number (or the
+     product of the two engine readouts printed directly above it), so the
+     balance reads straight off the canvas. */
   const readout = [
     `E = ${fmtQuantityValue(point.emf)} V`,
     `I = ${fmtQuantityValue(point.mainCurrent)} A`,
     `U = ${fmtQuantityValue(point.terminalVoltage)} V`,
-    `P = ${fmtQuantityValue(point.emf * point.mainCurrent)} W`,
+    `P总 = E·I = ${fmtQuantityValue(point.emf * point.mainCurrent)} W`,
+    `P外 = U·I = ${fmtQuantityValue(point.terminalVoltage * point.mainCurrent)} W`,
+    `P内 = I²r = ${fmtQuantityValue(point.internalPower)} W`,
   ]
 
   return emptyVisualModel('circuit', {

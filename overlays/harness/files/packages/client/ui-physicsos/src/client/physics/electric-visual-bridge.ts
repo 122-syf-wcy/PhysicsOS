@@ -32,6 +32,7 @@ import {
   type SceneVisualModel,
   type VectorVisual,
 } from './scene-visual-model.ts'
+import { latticeSpacingOf, radialCountForCharge, splitTrajectoryAtTime } from './bridge-helpers.ts'
 import { formatTimeAt } from './time-format.ts'
 
 export interface ElectricVisualInput {
@@ -41,12 +42,16 @@ export interface ElectricVisualInput {
   readonly state: SimulationState
 }
 
-const formatNumber = (value: number, digits = 2): string => {
+/* Same significant-figures contract as the Inspector's fmt: three sig figs,
+   exponent form outside [1e-3, 1e4) — a fixed two decimals printed the
+   millimetre-scale deflections this bench exists to show as "0.00". */
+const formatNumber = (value: number, digits = 3): string => {
   if (!Number.isFinite(value)) return '—'
   const absolute = Math.abs(value)
-  return absolute !== 0 && (absolute < 1e-3 || absolute >= 1e4)
-    ? value.toExponential(digits)
-    : value.toFixed(digits)
+  if (absolute === 0) return '0'
+  return absolute < 1e-3 || absolute >= 1e4
+    ? value.toExponential(Math.max(1, digits - 1))
+    : String(Number(value.toPrecision(digits)))
 }
 
 const pointOf = (vector: { readonly x: number; readonly y: number }): ScenePoint => ({
@@ -130,13 +135,21 @@ const visibilityOf = (scene: PhysicsScene): SceneVisualModel['visible'] => {
 }
 
 const observedTrajectoryCache = new WeakMap<object, readonly ScenePoint[]>()
+const observedTrajectoryTimeCache = new WeakMap<object, readonly number[]>()
 const simulationTrajectoryCache = new WeakMap<SimulationResult, Map<string, readonly ScenePoint[]>>()
+const simulationTrajectoryTimeCache = new WeakMap<SimulationResult, Map<string, readonly number[]>>()
 const visualFrameCache = new WeakMap<object, {
   readonly origin: ScenePoint
   readonly extent: { readonly width: number; readonly height: number }
   readonly vectorBase: number
-  readonly trajectories: SceneVisualModel['trajectories']
+  readonly points: readonly ScenePoint[]
+  readonly times: readonly number[]
 }>()
+
+/* A textbook uniform field is ~10³ V/m and a bounded plate gap runs the same
+   order; that is the magnitude at which the lattice sits at its BASE density.
+   Stronger fields pack it denser (see latticeSpacingOf), weaker ones sparser. */
+const FIELD_BASE_SCALE = 1e3
 
 const observedTrajectoryPoints = (
   points: ElectricTrajectoryObservation['points'],
@@ -148,26 +161,58 @@ const observedTrajectoryPoints = (
   return projected
 }
 
-const simulationTrajectoryPoints = (
-  simulation: SimulationResult,
-  particleId: string,
-): readonly ScenePoint[] => {
-  const cachedByParticle = simulationTrajectoryCache.get(simulation)
-  const cached = cachedByParticle?.get(particleId)
+/** Engine sample times, parallel to {@link observedTrajectoryPoints} — the only
+ *  clock the canvas may split "travelled / future" against. */
+const observedTrajectoryTimes = (
+  points: ElectricTrajectoryObservation['points'],
+): readonly number[] => {
+  const cached = observedTrajectoryTimeCache.get(points)
   if (cached !== undefined) return cached
-  const projected = simulation.states.flatMap((sample) => {
-    const sampleObject = sample.objects.find(candidate => candidate.id === particleId)
-    return sampleObject?.position === undefined
-      ? []
-      : [pointOf(toCanonicalVector(sampleObject.position).vectorSI)]
-  })
-  const nextByParticle = cachedByParticle ?? new Map<string, readonly ScenePoint[]>()
-  nextByParticle.set(particleId, projected)
-  if (cachedByParticle === undefined) simulationTrajectoryCache.set(simulation, nextByParticle)
-  return projected
+  const times = points.map(point => point.time.value)
+  observedTrajectoryTimeCache.set(points, times)
+  return times
 }
 
-const stableVisualFrame = (points: readonly ScenePoint[], fallback: ScenePoint) => {
+const simulationTrajectorySamples = (
+  simulation: SimulationResult,
+  particleId: string,
+): { readonly points: readonly ScenePoint[]; readonly times: readonly number[] } => {
+  const cachedByParticle = simulationTrajectoryCache.get(simulation)
+  const cached = cachedByParticle?.get(particleId)
+  const cachedTimes = simulationTrajectoryTimeCache.get(simulation)?.get(particleId)
+  if (cached !== undefined && cachedTimes !== undefined) return { points: cached, times: cachedTimes }
+  const sampled = simulation.states.reduce<{ points: ScenePoint[]; times: number[] }>((acc, sample) => {
+    const sampleObject = sample.objects.find(candidate => candidate.id === particleId)
+    if (sampleObject?.position !== undefined) {
+      acc.points.push(pointOf(toCanonicalVector(sampleObject.position).vectorSI))
+      acc.times.push(sample.time.value)
+    }
+    return acc
+  }, { points: [], times: [] })
+  const nextByParticle = cachedByParticle ?? new Map<string, readonly ScenePoint[]>()
+  nextByParticle.set(particleId, sampled.points)
+  if (cachedByParticle === undefined) simulationTrajectoryCache.set(simulation, nextByParticle)
+  const nextTimesByParticle = simulationTrajectoryTimeCache.get(simulation)
+    ?? new Map<string, readonly number[]>()
+  nextTimesByParticle.set(particleId, sampled.times)
+  if (simulationTrajectoryTimeCache.get(simulation) === undefined) {
+    simulationTrajectoryTimeCache.set(simulation, nextTimesByParticle)
+  }
+  return sampled
+}
+
+/**
+ * Split one equally-time-sampled path at the playhead the engine reported.
+ * Delegates to {@link splitTrajectoryAtTime} — kept as a thin local binding so
+ * both call sites read as the same rule.
+ */
+const splitTrajectory = splitTrajectoryAtTime
+
+const stableVisualFrame = (
+  points: readonly ScenePoint[],
+  times: readonly number[],
+  fallback: ScenePoint,
+) => {
   const key = points.length === 0 ? [fallback] : points
   const cached = visualFrameCache.get(key)
   if (cached !== undefined) return cached
@@ -187,9 +232,8 @@ const stableVisualFrame = (points: readonly ScenePoint[], fallback: ScenePoint) 
     origin: { x: center.x - width / 2, y: center.y - height / 2 },
     extent: { width, height },
     vectorBase,
-    trajectories: points.length < 2
-      ? []
-      : [{ id: 'electric-trajectory', kind: 'history' as const, points }],
+    points,
+    times,
   }
   visualFrameCache.set(key, frame)
   return frame
@@ -283,7 +327,10 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
   const sceneFieldVector = sceneField === undefined
     ? undefined
     : toCanonicalVector(sceneField.fieldStrength).vectorSI
-  const fieldDirection = sceneFieldVector === undefined
+  const sceneFieldMagnitude = sceneFieldVector === undefined
+    ? 0
+    : Math.hypot(sceneFieldVector.x, sceneFieldVector.y)
+  const fieldDirection = sceneFieldVector === undefined || sceneFieldMagnitude === 0
     ? { x: 1, y: 0 }
     : normalized(sceneFieldVector)
 
@@ -320,9 +367,13 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
 
   const positionVector = toCanonicalVector(object.position).vectorSI
   const position = pointOf(positionVector)
-  const trajectoryPoints = trajectory === undefined
-    ? simulationTrajectoryPoints(simulation, particle.id)
-    : observedTrajectoryPoints(trajectory.points)
+  const trajectorySamples = trajectory === undefined
+    ? simulationTrajectorySamples(simulation, particle.id)
+    : {
+      points: observedTrajectoryPoints(trajectory.points),
+      times: observedTrajectoryTimes(trajectory.points),
+    }
+  const trajectoryPoints = trajectorySamples.points
 
   /* Frame: cover the plates + trajectory + particle start position. The plates
      span ±plateLength/2 in x and ±plateSeparation/2 in y. The particle may
@@ -336,18 +387,57 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
   const frame = regionVisualFrame(framePoints, position)
   const base = frame.vectorBase
 
-  const boundedField: BoundedFieldVisual = {
-    at: regionCenter,
-    width: plateLength,
-    height: plateSeparation,
-    direction: fieldDirection,
-    spacing: Math.min(plateLength, plateSeparation) / 4,
+  /* No field, no field ink. latticeSpacingOf degrades a zero magnitude to the
+     sparsest spacing and the direction falls back to +x, so an E = 0 region
+     would still draw a lattice pointing right — a uniform field that is not
+     there. The plate geometry is drawn separately and stays visible, so the
+     capacitor still reads as a capacitor. */
+  const boundedField: BoundedFieldVisual | undefined = sceneFieldMagnitude > 0
+    ? {
+      at: regionCenter,
+      width: plateLength,
+      height: plateSeparation,
+      direction: fieldDirection,
+      spacing: latticeSpacingOf(
+        Math.min(plateLength, plateSeparation) / 4,
+        sceneFieldMagnitude,
+        FIELD_BASE_SCALE,
+      ),
+    }
+    : undefined
+
+  /* Vectors: E, F, v, a — same scaling strategy as the uniform-field bridge.
+     E shares the magnitude>0 guard F/v/a already use: in a bounded field the
+     engine zeroes the field outside the plates, and `normalized` maps the zero
+     vector to {x:1,y:0}, so without the guard an |E| = 0 frame drew a phantom
+     E arrow pointing +x. The scene's field vector (not this observation) still
+     drives the lattice direction and plate polarity, so those stay correct. */
+
+  /* The E arrow claims the field exists wherever it reaches, so inside a
+     bounded region its tip stops at the boundary — past the plate it would
+     paint a field the engine says is zero there. F / v / a are particle
+     vectors and may extend past the plates without making that claim. */
+  const regionRect = {
+    xMin: regionCenter.x - plateLength / 2,
+    xMax: regionCenter.x + plateLength / 2,
+    yMin: regionCenter.y - plateSeparation / 2,
+    yMax: regionCenter.y + plateSeparation / 2,
+  }
+  const clampToRegion = (from: ScenePoint, to: ScenePoint): ScenePoint => {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    let k = 1
+    if (dx > 0 && to.x > regionRect.xMax) k = Math.min(k, (regionRect.xMax - from.x) / dx)
+    if (dx < 0 && to.x < regionRect.xMin) k = Math.min(k, (regionRect.xMin - from.x) / dx)
+    if (dy > 0 && to.y > regionRect.yMax) k = Math.min(k, (regionRect.yMax - from.y) / dy)
+    if (dy < 0 && to.y < regionRect.yMin) k = Math.min(k, (regionRect.yMin - from.y) / dy)
+    const clamped = Math.max(0, Math.min(1, k)) * 0.92
+    return { x: from.x + dx * clamped, y: from.y + dy * clamped }
   }
 
-  /* Vectors: E, F, v, a — same scaling strategy as the uniform-field bridge. */
   const vectors: VectorVisual[] = []
-  if (field !== undefined) {
-    vectors.push(vectorVisual(
+  if (field !== undefined && field.magnitude.value > 0) {
+    const eVector = vectorVisual(
       'electric-field-vector',
       'field',
       'electricField',
@@ -355,7 +445,8 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
       position,
       toCanonicalVector(field.vector).vectorSI,
       base * 0.18,
-    ))
+    )
+    vectors.push({ ...eVector, to: clampToRegion(eVector.from, eVector.to) })
   }
   if (force !== undefined && force.magnitude.value > 0) {
     vectors.push(vectorVisual(
@@ -400,6 +491,9 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
     ...(acceleration === undefined ? [] : [`|a| = ${formatNumber(acceleration.magnitude.value)} ${acceleration.magnitude.unit}`]),
     ...(potential === undefined ? [] : [`Δφ = ${formatNumber(potential.change.value)} ${potential.change.unit}`]),
     ...(energy === undefined ? [] : [`K = ${formatNumber(energy.kinetic.value)} ${energy.kinetic.unit}`]),
+    /* Between ideal plates the field is uniform and ends at the region edge;
+       the drawn lines are parallel and even — no density-to-strength claim. */
+    '板间匀强场 E 恒定 · 板外 E = 0',
   ]
 
   /* Tick step, particle radius and the scale bar all have to be derived from the
@@ -428,6 +522,9 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
     grid: { minor: frame.extent.width / 24, major: frame.extent.width / 6 },
     axes: { x: 'x / m', y: 'y / m' },
     tickStep,
+    /* The x axis runs through the field region, so its labels inside the plate
+       span would print on the region edge and the field lines. */
+    tickLabelAvoid: { x: [regionRect.xMin, regionRect.xMax] },
     particles: [{
       id: particle.id,
       at: position,
@@ -436,11 +533,14 @@ const electricRegionVisualAt = (input: ElectricVisualInput): SceneVisualModel =>
       symbol: charge < 0 ? 'q⁻' : 'q⁺',
     }],
     vectors,
-    trajectories: trajectoryPoints.length < 2
-      ? []
-      : [{ id: 'electric-trajectory', kind: 'history' as const, points: trajectoryPoints }],
+    trajectories: splitTrajectory(
+      'electric-trajectory',
+      trajectoryPoints,
+      trajectorySamples.times,
+      state.time.value,
+    ),
     plates,
-    boundedField,
+    ...(boundedField === undefined ? {} : { boundedField }),
     overlay: {
       readout,
       scale: { label: scaleLabel, length: scaleLength },
@@ -464,13 +564,17 @@ const electricUniformVisualAt = (input: ElectricVisualInput): SceneVisualModel =
   const trajectory = observationOf(observations, 'electric_trajectory')
   const potential = observationOf(observations, 'electric_potential')
   const energy = observationOf(observations, 'electric_energy')
-  const trajectoryPoints = trajectory === undefined
-    ? simulationTrajectoryPoints(simulation, particle.id)
-    : observedTrajectoryPoints(trajectory.points)
-  const frame = stableVisualFrame(trajectoryPoints, position)
+  const trajectorySamples = trajectory === undefined
+    ? simulationTrajectorySamples(simulation, particle.id)
+    : {
+      points: observedTrajectoryPoints(trajectory.points),
+      times: observedTrajectoryTimes(trajectory.points),
+    }
+  const trajectoryPoints = trajectorySamples.points
+  const frame = stableVisualFrame(trajectoryPoints, trajectorySamples.times, position)
   const base = frame.vectorBase
   const vectors: VectorVisual[] = []
-  if (field !== undefined) {
+  if (field !== undefined && field.magnitude.value > 0) {
     vectors.push(vectorVisual(
       'electric-field-vector',
       'field',
@@ -524,9 +628,17 @@ const electricUniformVisualAt = (input: ElectricVisualInput): SceneVisualModel =
     ...(acceleration === undefined ? [] : [`|a| = ${formatNumber(acceleration.magnitude.value)} ${acceleration.magnitude.unit}`]),
     ...(potential === undefined ? [] : [`Δφ = ${formatNumber(potential.change.value)} ${potential.change.unit}`]),
     ...(energy === undefined ? [] : [`K = ${formatNumber(energy.kinetic.value)} ${energy.kinetic.unit}`]),
+    /* The field-line lattice packs denser as |E| grows — a relative reading aid,
+       never a quantitative one (the numbers above are). */
+    '场线疏密示意相对强弱、非定量',
   ]
+  /* Uniform field: the scene's E is a constant, so a zero-magnitude |E| means the
+     student set E = 0 — then there is no field direction to draw either. Omit the
+     whole lattice rather than emit the normalized() {x:1,y:0} zero-vector default,
+     which would paint a uniform field pointing +x that the engine says is absent. */
+  const fieldMagnitude = field?.magnitude.value ?? 0
   const fieldDirection = field === undefined
-    ? { x: 1, y: 0 }
+    ? undefined
     : normalized(toCanonicalVector(field.vector).vectorSI)
 
   return emptyVisualModel('electric', {
@@ -543,11 +655,18 @@ const electricUniformVisualAt = (input: ElectricVisualInput): SceneVisualModel =
       symbol: charge < 0 ? 'q⁻' : 'q⁺',
     }],
     vectors,
-    trajectories: frame.trajectories,
-    electricField: {
-      direction: fieldDirection,
-      spacing: frame.extent.width / 8,
-    },
+    trajectories: splitTrajectory(
+      'electric-trajectory',
+      frame.points,
+      frame.times,
+      state.time.value,
+    ),
+    ...(fieldDirection === undefined || fieldMagnitude === 0 ? {} : {
+      electricField: {
+        direction: fieldDirection,
+        spacing: latticeSpacingOf(frame.extent.width / 8, fieldMagnitude, FIELD_BASE_SCALE),
+      },
+    }),
     overlay: {
       readout,
       scale: { label: frame.extent.width <= 20 ? '1 m' : '5 m', length: frame.extent.width <= 20 ? 1 : 5 },
@@ -867,12 +986,13 @@ const electricPointChargeVisualAt = (input: ElectricVisualInput): SceneVisualMod
   const samplePoint = probeParticle === undefined ? fieldSamplePointOf(scene) : undefined
   const originPoint = probePoint ?? (samplePoint ? { x: samplePoint.x, y: samplePoint.y } : { x: 0, y: 0 })
 
-  /* Frame from all charge + probe positions so the whole scene fits. */
+  /* Frame from all charge + probe positions so the whole scene fits. No
+     trajectory stream here — this world is instantaneous. */
   const framePoints: ScenePoint[] = [
     ...sources.map(source => ({ x: source.position.x, y: source.position.y })),
     ...(probePoint === undefined ? [] : [probePoint]),
   ]
-  const frame = stableVisualFrame(framePoints, originPoint)
+  const frame = stableVisualFrame(framePoints, [], originPoint)
   const base = frame.vectorBase
 
   const pointChargeSources: PointChargeSourceVisual[] = sources.map(source => ({
@@ -903,7 +1023,11 @@ const electricPointChargeVisualAt = (input: ElectricVisualInput): SceneVisualMod
     minY: frame.origin.y - frame.extent.height * 0.05,
     maxY: frame.origin.y + frame.extent.height * 1.05,
   }
-  const radialCount = sources.length === 1 ? 12 : 8
+  /* Density bands with |q| for a single source (6/12/18 lines — see
+     radialCountForCharge); a multi-source world keeps 8 per source so the
+     combined picture stays legible. */
+  const radialCountFor = (chargeCoulombs: number): number =>
+    sources.length === 1 ? radialCountForCharge(chargeCoulombs) : 8
   const step = base * 0.06
   const maxSteps = 60
   const minRadius = base * 0.05
@@ -911,6 +1035,7 @@ const electricPointChargeVisualAt = (input: ElectricVisualInput): SceneVisualMod
   for (const source of sources) {
     /* Positive → trace with the field (outward); negative → against (outward
        geometry), then reverse so the arrow points inward. */
+    const radialCount = radialCountFor(source.charge)
     const forward = source.charge >= 0
     for (let i = 0; i < radialCount; i += 1) {
       const angle = (i / radialCount) * Math.PI * 2
@@ -948,7 +1073,7 @@ const electricPointChargeVisualAt = (input: ElectricVisualInput): SceneVisualMod
   const acceleration = observationOf(observations, 'electric_acceleration')
   const vectors: VectorVisual[] = []
   if (probePoint !== undefined) {
-    if (field !== undefined) {
+    if (field !== undefined && field.magnitude.value > 0) {
       vectors.push(vectorVisual(
         'electric-field-vector',
         'field',

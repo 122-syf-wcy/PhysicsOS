@@ -187,7 +187,8 @@
   color: var(--subject, var(--physics-vector-force));
 }
 
-.art svg {
+.art svg,
+.art img {
   display: block;
   width: 100%;
   height: 100%;
@@ -195,7 +196,14 @@
   transition: transform 480ms var(--physics-ease-emphasized);
 }
 
-.card:hover .art svg {
+/* Generated plates are square renders; the thumb letterboxes them to the
+   card's aspect so nothing important is cropped at this size. */
+.art img {
+  object-fit: cover;
+}
+
+.card:hover .art svg,
+.card:hover .art img {
   transform: scale(1.06);
 }
 
@@ -330,7 +338,8 @@
     var(--subject-tint, var(--physics-incline-fill));
 }
 
-.continueArt svg {
+.continueArt svg,
+.continueArt img {
   width: 100%;
   height: 100%;
   opacity: 0.9;
@@ -338,7 +347,12 @@
   transition: transform 700ms var(--physics-ease-emphasized);
 }
 
-.continueCard:hover .continueArt svg {
+.continueArt img {
+  object-fit: cover;
+}
+
+.continueCard:hover .continueArt svg,
+.continueCard:hover .continueArt img {
   transform: scale(1.06);
 }
 
@@ -829,7 +843,8 @@
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
 }
 
-.entrySoon:hover .art svg {
+.entrySoon:hover .art svg,
+.entrySoon:hover .art img {
   transform: none;
 }
 
@@ -997,7 +1012,9 @@
   }
 
   .art svg,
+  .art img,
   .continueArt svg,
+  .continueArt img,
   .continueCta svg,
   .tabDot,
   .stageTab,
@@ -1009,7 +1026,9 @@
   }
 
   .card:hover .art svg,
-  .continueCard:hover .continueArt svg {
+  .card:hover .art img,
+  .continueCard:hover .continueArt svg,
+  .continueCard:hover .continueArt img {
     transform: none;
   }
 

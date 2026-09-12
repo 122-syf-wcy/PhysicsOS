@@ -12,6 +12,7 @@ import { branchBadgeOf } from './experimental-branch.ts'
 import type { PhysicsScene, MechanicsSceneInput } from '@physicsos/physics-scene'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 import type { ObservableKey } from './scene-visual-model.ts'
+import { formatSignificant } from './number-format.ts'
 
 const MODEL_SUBTITLE: Record<string, string> = {
   uniform_linear_motion: '运动学 · 匀速直线运动',
@@ -21,8 +22,7 @@ const MODEL_SUBTITLE: Record<string, string> = {
   inclined_plane: '力与运动 · 斜面',
 }
 
-const fmt = (value: number, digits = 2): string =>
-  Number.isFinite(value) ? value.toFixed(digits) : '—'
+const fmt = formatSignificant
 
 export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: MechanicsRuntimeBridge

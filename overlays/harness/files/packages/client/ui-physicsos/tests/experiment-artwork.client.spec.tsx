@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 
 import {
   ExperimentArt,
@@ -25,14 +25,17 @@ describe('experiment artwork registry', () => {
   it('draws real strokes for every registered piece, never an empty stage', () => {
     for (const key of Object.keys(TEMPLATE_ART)) {
       const { container, unmount } = render(<ExperimentArt templateId={key} />)
-      const svg = container.querySelector('svg')
-      expect(svg?.getAttribute('data-physicsos-art')).toBe(key)
-      /* At least one painted element: a blank composition would pass a plain
-         "renders" check while shipping an empty tile. */
-      expect(
-        svg?.querySelectorAll('path, line, circle, rect, ellipse').length ?? 0,
-        `artwork ${key} must draw something`,
-      ).toBeGreaterThan(0)
+      const art = container.querySelector('svg, img')
+      expect(art?.getAttribute('data-physicsos-art')).toBe(key)
+      /* Generated plates render as <img>; inline art must still paint at least
+         one element — a blank composition would pass a plain "renders" check
+         while shipping an empty tile. */
+      if (art?.tagName === 'svg' || art?.tagName === 'SVG') {
+        expect(
+          art.querySelectorAll('path, line, circle, rect, ellipse').length,
+          `artwork ${key} must draw something`,
+        ).toBeGreaterThan(0)
+      }
       unmount()
     }
   })
@@ -71,18 +74,29 @@ describe('resolveArtKey', () => {
 
 describe('<ExperimentArt />', () => {
   it('letterboxes by default and crops to fill when fit="cover"', () => {
-    const contain = render(<ExperimentArt templateId="incline" />)
+    /* lever-balance has no generated plate yet, so it exercises the SVG path. */
+    const contain = render(<ExperimentArt templateId="lever-balance" />)
     expect(contain.container.querySelector('svg')?.getAttribute('preserveAspectRatio'))
       .toBe('xMidYMid meet')
     contain.unmount()
 
-    const cover = render(<ExperimentArt templateId="incline" fit="cover" />)
+    const cover = render(<ExperimentArt templateId="lever-balance" fit="cover" />)
     expect(cover.container.querySelector('svg')?.getAttribute('preserveAspectRatio'))
       .toBe('xMidYMid slice')
   })
 
+  it('prefers the generated plate when one exists and falls back on error', () => {
+    const { container } = render(<ExperimentArt templateId="incline" />)
+    const img = container.querySelector('img')
+    expect(img?.getAttribute('src')).toBe('/physicsos/experiment-art/incline.jpg')
+    expect(img?.getAttribute('data-physicsos-art')).toBe('incline')
+    /* A missing/corrupt file must never blank the card: the inline art returns. */
+    fireEvent.error(img as Element)
+    expect(container.querySelector('svg')?.getAttribute('data-physicsos-art')).toBe('incline')
+  })
+
   it('stays decorative: hidden from the accessibility tree', () => {
-    const { container } = render(<ExperimentArt templateId="point-charge" />)
+    const { container } = render(<ExperimentArt templateId="lever-balance" />)
     const svg = container.querySelector('svg')
     expect(svg?.getAttribute('aria-hidden')).toBe('true')
     expect(svg?.getAttribute('focusable')).toBe('false')

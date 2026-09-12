@@ -15,6 +15,7 @@ import type {
   GroundVisual,
   InclineVisual,
   KeyPointVisual,
+  MotionMarkVisual,
   PlatformVisual,
   ScenePoint,
   VectorVisual,
@@ -249,6 +250,43 @@ export const Body = ({
             r={radius * 0.24}
             className={css.bodyGloss}
           />
+        </>
+      ) : body.kind === 'cart' ? (
+        /* A wheeled cart: box body riding on two visible wheels. The bridge
+           anchors `at` at the centre of mass, so the box sits above the wheel
+           line and the track passes under the wheels. */
+        <>
+          <rect
+            x={cx - radius * 1.35}
+            y={cy - radius * 0.62}
+            width={radius * 2.7}
+            height={radius * 1.1}
+            rx={radius * 0.16}
+            className={clsxJoin(css.bodyFill, body.live === true && css.bodyLive)}
+          />
+          <line
+            className={css.cartAxle}
+            x1={cx - radius * 0.85}
+            y1={cy + radius * 0.68}
+            x2={cx + radius * 0.85}
+            y2={cy + radius * 0.68}
+          />
+          {[cx - radius * 0.85, cx + radius * 0.85].map(wheelX => (
+            <g key={wheelX}>
+              <circle
+                cx={wheelX}
+                cy={cy + radius * 0.68}
+                r={radius * 0.32}
+                className={css.cartWheel}
+              />
+              <circle
+                cx={wheelX}
+                cy={cy + radius * 0.68}
+                r={radius * 0.1}
+                className={css.cartHub}
+              />
+            </g>
+          ))}
         </>
       ) : (
         <rect
@@ -491,6 +529,32 @@ export const Dimension = ({
     </g>
   )
 }
+
+/** Equal-time strobe marks along the path; spacing between dots IS the physics. */
+export const MotionMarks = ({
+  marks,
+  projection,
+}: {
+  marks: readonly MotionMarkVisual[]
+  projection: RendererProjection
+}) => (
+  <g>
+    {marks.map(mark => {
+      const cx = projection.px(mark.at)
+      const cy = projection.py(mark.at)
+      return (
+        <g key={mark.id} className={projection.highlighted(mark.id) ? css.highlightGroup : undefined}>
+          <circle className={css.motionMark} cx={cx} cy={cy} r="3" />
+          {mark.label === undefined ? null : (
+            <text className={css.motionMarkLabel} x={cx} y={cy + 14} textAnchor="middle">
+              {mark.label}
+            </text>
+          )}
+        </g>
+      )
+    })}
+  </g>
+)
 
 /** Key point marker: a small precise ring, not a big coloured dot. */
 export const KeyPoint = ({

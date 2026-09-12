@@ -21,14 +21,9 @@ import type {
   TimelineEvent,
   VerificationCheckView,
 } from './scene-visual-model.ts'
+import { formatSignificant } from './number-format.ts'
 
-/* Numeric formatting shared with the bridge. */
-const fmt = (value: number, digits = 2): string => {
-  if (!Number.isFinite(value)) return '—'
-  const magnitude = Math.abs(value)
-  if (magnitude !== 0 && (magnitude < 1e-3 || magnitude >= 1e5)) return value.toExponential(digits)
-  return value.toFixed(digits)
-}
+const fmt = formatSignificant
 
 const scalar = (dq: readonly DerivedQuantity[], key: string): number | undefined => {
   const entry = dq.find(d => d.key === key)
@@ -522,7 +517,14 @@ function eventsOf(
   const m = model as Extract<MechanicsModel, { modelId: 'projectile_motion' }>
   const events: TimelineEvent[] = [{ id: 'launch', time: 0, label: '发射', kind: 'launch' }]
   if (m.launchAngle > 0.01) {
-    events.push({ id: 'apex', time: m.flightTime / 2, label: '最高点', kind: 'apex' })
+    /* Apex is where vy = 0: t = vy0/g, not flightTime/2 — the two only agree
+       when launch and ground are at the same height. The engine's flight time
+       covers the extra fall from launch height, so half of it lands the pulse
+       after the ball has already passed its top. */
+    const gravity = Math.hypot(m.gravity.x, m.gravity.y) || 9.8
+    const vy0 = m.initialVelocity.y
+    const apexTime = vy0 > 0 ? vy0 / gravity : m.flightTime / 2
+    events.push({ id: 'apex', time: apexTime, label: '最高点', kind: 'apex' })
   }
   events.push({ id: 'impact', time: m.flightTime, label: '落地', kind: 'impact' })
   return events

@@ -248,7 +248,7 @@ describe('fluid Lab surface', () => {
   it('commits a 液体密度 edit from the inspector as an auditable revision', () => {
     const { container } = mountLab('buoyancy')
 
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     const densityInput = screen.getByRole('textbox', { name: '液体密度' })
     if (!(densityInput instanceof HTMLInputElement)) throw new Error('Expected 液体密度 input.')
     fireEvent.change(densityInput, { target: { value: '1100' } })
@@ -256,6 +256,7 @@ describe('fluid Lab surface', () => {
 
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
     /* Denser liquid, bigger buoyant force on the same displaced volume. */
+    fireEvent.click(screen.getByRole('tab', { name: '读数' }))
     expect(screen.getAllByText('浮力 F_浮')[0]?.parentElement?.textContent).toContain('1.078')
   })
 })

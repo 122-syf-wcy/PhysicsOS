@@ -135,7 +135,7 @@
 
 .surfaceLabel {
   fill: var(--dsw-alias-label-caption);
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
 .inclineBody {
@@ -188,6 +188,40 @@
 .bodyGloss {
   fill: rgba(255, 255, 255, 0.62);
   stroke: none;
+}
+
+.cartAxle {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+}
+
+.cartWheel {
+  fill: #fff;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+}
+
+.cartHub {
+  fill: var(--physics-body-stroke);
+  stroke: none;
+}
+
+/* ---------- motion marks ---------- */
+
+/* Ticker-tape dots: filled where the body has already been, ringed while the
+   mark is still ahead of the playhead. */
+.motionMark {
+  fill: var(--physics-trajectory);
+  stroke: none;
+}
+
+.motionMarkLabel {
+  fill: var(--dsw-alias-label-caption);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
 }
 
 .bodyLabel {
@@ -286,7 +320,7 @@
 
 .keyLabel {
   fill: var(--dsw-alias-label-secondary);
-  font-size: 9.5px;
+  font-size: 10.5px;
   paint-order: stroke fill;
   stroke: #fbfdff;
   stroke-width: 3px;

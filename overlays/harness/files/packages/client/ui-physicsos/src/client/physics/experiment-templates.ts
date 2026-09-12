@@ -31,6 +31,7 @@ import {
   createMechanicsScene,
   createMixedCircuitScene,
   createMultiRegionFieldScene,
+  createElectricScene,
   createMagneticScene,
   createParallelCircuitScene,
   createParallelPlateScene,
@@ -40,10 +41,12 @@ import {
   createSeriesCircuitScene,
   createVelocitySelectorScene,
   createBarMotionScene,
+  createDoubleBarRailScene,
   createFluxChangeScene,
   createStandingWaveScene,
   createTravellingWaveScene,
   createWaveInterferenceScene,
+  createCollisionScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 import type { ReactElement } from 'react'
@@ -85,6 +88,7 @@ import {
   IconVelocitySelector,
   IconWaveInterference,
   IconWaveRope,
+  IconCollision,
 } from '../icons/physics-icons.tsx'
 
 /** Domains a template belongs to, mirrored from the Lab runtime dispatch. */
@@ -319,6 +323,75 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
       return { sceneId: String(scene.id), scene }
     },
   },
+  {
+    id: 'collision-elastic',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.collisionElastic',
+    hint: 'lab.template.collisionElastic.hint',
+    icon: IconCollision,
+    tags: ['动量守恒', '碰撞'],
+    createScene: (title) => {
+      /* 弹性对心碰撞：等质量相向，交换速度；动量动能双守恒。 */
+      const scene = createCollisionScene({
+        sceneId: stampId('collision-elastic'),
+        bodies: [
+          { id: 'ball-a', mass: 1, position: [-2.4, 0], velocity: [2, 0], radius: 0.5, restitution: 1 },
+          { id: 'ball-b', mass: 1, position: [2.4, 0], velocity: [-1.5, 0], radius: 0.5, restitution: 1 },
+        ],
+        boundary: { width: 12, height: 5 },
+        boundaryRestitution: 1,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'collision-inelastic',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.collisionInelastic',
+    hint: 'lab.template.collisionInelastic.hint',
+    icon: IconCollision,
+    tags: ['动量守恒', '碰撞'],
+    createScene: (title) => {
+      /* 部分弹性（e = 0.5）：大球追小球，碰撞后相对速度缩小一半。 */
+      const scene = createCollisionScene({
+        sceneId: stampId('collision-inelastic'),
+        bodies: [
+          { id: 'ball-a', mass: 2, position: [-2.6, 0], velocity: [1.6, 0], radius: 0.55, restitution: 0.5 },
+          { id: 'ball-b', mass: 1, position: [2.6, 0], velocity: [0, 0], radius: 0.4, restitution: 0.5 },
+        ],
+        boundary: { width: 12, height: 5 },
+        boundaryRestitution: 0.8,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'collision-perfectly-inelastic',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.collisionPerfectlyInelastic',
+    hint: 'lab.template.collisionPerfectlyInelastic.hint',
+    icon: IconCollision,
+    tags: ['动量守恒', '碰撞'],
+    createScene: (title) => {
+      /* 完全非弹性：两球粘合共速，动能损失最大。 */
+      const scene = createCollisionScene({
+        sceneId: stampId('collision-perfectly-inelastic'),
+        bodies: [
+          { id: 'ball-a', mass: 1, position: [-2.6, 0], velocity: [3, 0], radius: 0.45, restitution: 0 },
+          { id: 'ball-b', mass: 1, position: [2.6, 0], velocity: [0, 0], radius: 0.45, restitution: 0 },
+        ],
+        boundary: { width: 12, height: 5 },
+        boundaryRestitution: 1,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
 ]
 
 /* ------------------------------------------------------------------ electric -- */
@@ -372,10 +445,19 @@ const electricTemplates: readonly ExperimentTemplate[] = [
     icon: IconUniformElectric,
     tags: ['电场'],
     createScene: (title) => {
-      const scene = createPointChargeScene({
+      /* A real uniform-field scene: the charged小球 enters horizontally and
+         the constant qE curves it into a projectile-like parabola — the
+         electric analogue of 平抛. A point-charge scene here would draw radial
+         field lines and contradict the template's own name. */
+      const scene = createElectricScene({
         sceneId: stampId('electric-uniform-particle'),
-        charges: [{ id: 'source-1', charge: 5e-6, position: { x: 0, y: 0, z: 0 } }],
-        probe: { id: 'probe-1', charge: -1.6e-19, mass: 9.11e-31, position: { x: 0.2, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } },
+        charge: 1e-6,
+        mass: 0.01,
+        position: { x: -2.5, y: 0.5, z: 0 },
+        velocity: { x: 2, y: 0, z: 0 },
+        electricFieldStrength: 1e4,
+        electricFieldDirection: 'down',
+        duration: 3,
         title,
       })
       return { sceneId: String(scene.id), scene }
@@ -915,6 +997,59 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
       const scene = createBarMotionScene({
         sceneId: stampId('induction-bar-motion'),
         title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'induction-double-bar-momentum',
+    domain: 'induction',
+    stage: 'senior',
+    label: 'lab.template.inductionDoubleBarMomentum',
+    hint: 'lab.template.inductionDoubleBarMomentum.hint',
+    icon: IconInductionBar,
+    tags: ['电磁感应', '高中', '双棒', '动量守恒'],
+    createScene: (title) => {
+      /* 双棒冲量型：棒 1 在前，以 2 m/s 远离静止的棒 2 —— 磁力刹前棒、拽后棒，
+         两棒间距只增不减，永不相撞（若把运动棒放在后方，相对位移 τ·u₀ 会让它
+         直接穿过前棒，引擎不建模碰撞）。无外力 → 系统动量守恒，共同速度
+         v = m₁v₀/(m₁+m₂) = 1 m/s；相对速度按 u(t) = u₀·e^(−t/τ) 衰减，
+         τ = R·m₁m₂/(B²L²(m₁+m₂)) = 0.25 s，一次运行内看完整个交换过程。 */
+      const scene = createDoubleBarRailScene({
+        sceneId: stampId('induction-double-bar-momentum'),
+        title,
+        magneticFluxDensity: 0.5,
+        barLength: 20,
+        resistance: 0.1,
+        barMasses: [50, 50],
+        barVelocities: [2, 0],
+        barPositions: [20, -20],
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'induction-double-bar-force',
+    domain: 'induction',
+    stage: 'senior',
+    label: 'lab.template.inductionDoubleBarForce',
+    hint: 'lab.template.inductionDoubleBarForce.hint',
+    icon: IconInductionBar,
+    tags: ['电磁感应', '高中', '双棒', '恒定外力'],
+    createScene: (title) => {
+      /* 双棒恒力型：0.1 N 恒定外力拉前棒 1。终态相对速度
+         u∞ = F·R·m₂/(B²L²(m₁+m₂)) = 0.5 m/s，终态电流 I∞ = F·m₂/(BL(m₁+m₂)) = 0.5 A，
+         两棒共同加速度 a = F/(m₁+m₂) = 1 m/s²。 */
+      const scene = createDoubleBarRailScene({
+        sceneId: stampId('induction-double-bar-force'),
+        title,
+        magneticFluxDensity: 0.5,
+        barLength: 20,
+        resistance: 0.1,
+        barMasses: [50, 50],
+        barVelocities: [0, 0],
+        externalForce: 0.1,
+        barPositions: [20, -20],
       })
       return { sceneId: String(scene.id), scene }
     },

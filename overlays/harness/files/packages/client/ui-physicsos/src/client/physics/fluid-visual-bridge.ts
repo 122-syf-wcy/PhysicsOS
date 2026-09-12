@@ -213,12 +213,19 @@ export const fluidSceneVisual = ({
     `ρ_液 = ${fmtFluidValue(model.liquidDensity)} kg/m³`,
   ]
 
-  const top = blockHeight * 3
+  /* Head-room above the block for the spring-scale body and its "弹簧测力计"
+     label, which the old 3× block height cut off by ~10 px on screen. */
+  const top = blockHeight * 3.4
   const margin = blockWidth * 0.6
+  /* The weight arrow hangs BELOW the block, so when the block rests on the
+     tank floor the arrow head and its "G" label fall past the floor line and
+     were clipped by a frame whose bottom was the floor itself. Reserve the
+     arrow's drop depth under the floor. */
+  const belowFloor = arrowSpan * 1.3
 
   return emptyVisualModel('fluid', {
-    extent: { width: tankWidth + 2 * margin, height: top - floor },
-    origin: { x: left - margin, y: floor },
+    extent: { width: tankWidth + 2 * margin, height: top - floor + belowFloor },
+    origin: { x: left - margin, y: floor - belowFloor },
     grid: { minor: 1, major: 5 },
     axes: { x: '', y: 'y / cm' },
     tickStep: 5,

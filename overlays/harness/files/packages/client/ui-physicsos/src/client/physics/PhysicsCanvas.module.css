@@ -72,34 +72,34 @@
 
 .tickLabel {
   fill: var(--dsw-alias-label-caption);
-  font-size: 9.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
 .axisLabel {
   fill: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  font-size: 12.5px;
   font-style: italic;
 }
 
 /* ---------- readout gutter ---------- */
 
 .readoutPanel {
-  fill: rgba(255, 255, 255, 0.86);
+  fill: rgba(255, 255, 255, 0.78);
   stroke: var(--physics-grid-major);
-  stroke-width: 1;
+  stroke-width: 0.8;
 }
 
 .readoutTitle {
   fill: var(--dsw-alias-label-primary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .readoutLine {
   fill: var(--dsw-alias-label-secondary);
-  font-size: 10.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -112,7 +112,7 @@
 
 .scaleLabel {
   fill: var(--physics-measurement);
-  font-size: 10px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
 

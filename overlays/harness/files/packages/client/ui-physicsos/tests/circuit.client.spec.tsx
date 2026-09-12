@@ -193,7 +193,7 @@ describe('circuit Lab surface', () => {
   it('commits an EMF edit from the inspector as an auditable revision', () => {
     const { container } = mountLab('series-circuit')
 
-    const inspectorToggle = screen.getByRole('button', { name: '属性' })
+    const inspectorToggle = screen.getByRole('button', { name: '检查器' })
     fireEvent.click(inspectorToggle)
     const emfInput = screen.getByRole('textbox', { name: '电动势' })
     if (!(emfInput instanceof HTMLInputElement)) throw new Error('Expected EMF input.')
@@ -208,7 +208,7 @@ describe('circuit Lab surface', () => {
   it('toggles the switch from the inspector and the schematic reacts', () => {
     const { container } = mountLab('series-circuit')
 
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     const switchSelect = screen.getByRole('combobox', { name: 'S' })
     fireEvent.change(switchSelect, { target: { value: 'open' } })
 

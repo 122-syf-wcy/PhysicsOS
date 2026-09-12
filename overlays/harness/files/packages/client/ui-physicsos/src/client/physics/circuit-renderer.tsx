@@ -109,8 +109,11 @@ function SymbolGeometry({ component, cx, cy, scale }: SymbolProps) {
         <g data-testid={`switch-${component.id}`} data-closed={closed ? 'true' : 'false'}>
           <line className={css.circuitSymbol} x1={cx - half} y1={cy} x2={cx - pivot} y2={cy} />
           <line className={css.circuitSymbol} x1={cx + pivot} y1={cy} x2={cx + half} y2={cy} />
-          <circle className={css.circuitSymbolFill} cx={cx - pivot} cy={cy} r={2.3} />
-          <circle className={css.circuitSymbolFill} cx={cx + pivot} cy={cy} r={2.3} />
+          {/* Pivot dots scale with the symbol family (meter circles use
+              0.42·scale); a fixed px radius drifts off the schematic when the
+              bench zooms. */}
+          <circle className={css.circuitSymbolFill} cx={cx - pivot} cy={cy} r={Math.max(1.6, 0.09 * scale)} />
+          <circle className={css.circuitSymbolFill} cx={cx + pivot} cy={cy} r={Math.max(1.6, 0.09 * scale)} />
           <line className={css.circuitSymbol} x1={cx - pivot} y1={cy} x2={leverX} y2={leverY} />
         </g>
       )

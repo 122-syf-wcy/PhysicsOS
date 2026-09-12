@@ -454,7 +454,7 @@ describe('optics Lab surface', () => {
   it('commits a 物距 edit from the inspector as an auditable revision', () => {
     const { container } = mountLab('convex-lens')
 
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     const distanceInput = screen.getByRole('textbox', { name: '物距' })
     if (!(distanceInput instanceof HTMLInputElement)) throw new Error('Expected 物距 input.')
     fireEvent.change(distanceInput, { target: { value: '15' } })

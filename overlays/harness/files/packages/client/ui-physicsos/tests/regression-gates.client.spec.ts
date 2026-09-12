@@ -170,3 +170,55 @@ describe('gate B · the canvas paints real ink in every domain', () => {
     expect(magnetic.view.field).toBeDefined()
   })
 })
+
+describe('gate I · the body stays inside the frame for the whole run', () => {
+  it('frames on the full simulation window, not the trail sampled so far', () => {
+    /* The failure mode this guards: the camera framed on the trajectory
+       OBSERVABLE, so the body could slide out of the canvas as it moved (and
+       the extent shrank when the trail toggle was off). The extent must cover
+       every engine state from t=0 to t=total regardless of visibility. */
+    const engine = new MechanicsEngine()
+    const scenes = [
+      projectile(),
+      createMechanicsScene({
+        model: 'uniformly_accelerated_motion',
+        mass: 2,
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 4, y: 0, z: 0 },
+        acceleration: { x: 0.5, y: 0, z: 0 },
+      }),
+      createMechanicsScene({
+        model: 'uniform_linear_motion',
+        velocity: { x: 4, y: 0, z: 0 },
+      }),
+    ]
+    for (const scene of scenes) {
+      const view = createMechanicsWorkspaceRuntime(scene).getSnapshot().view
+      const simulation = engine.simulate(
+        scene,
+        createMechanicsSimulationRequest(scene, 'gate-sim-i', 'gate-trace-i'),
+      )
+      for (const sampled of simulation.states) {
+        const body = sampled.objects[0]
+        if (body?.position === undefined) continue
+        const { x, y } = body.position.vector
+        expect(
+          x >= view.origin.x - 1e-6 && x <= view.origin.x + view.extent.width + 1e-6,
+          `state t=${sampled.time.value}s x=${x} outside frame for scene ${String(scene.id)}`,
+        ).toBe(true)
+        expect(
+          y >= view.origin.y - 1e-6 && y <= view.origin.y + view.extent.height + 1e-6,
+          `state t=${sampled.time.value}s y=${y} outside frame for scene ${String(scene.id)}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('the frame does not move when the trajectory layer is toggled off', () => {
+    const runtime = createMechanicsWorkspaceRuntime(projectile())
+    const extentBefore = runtime.getSnapshot().view.extent
+    const off = runtime.setObservable('trajectory', false)
+    expect(off.view.trajectories.length).toBe(0)
+    expect(off.view.extent).toEqual(extentBefore)
+  })
+})

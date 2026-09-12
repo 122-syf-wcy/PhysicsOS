@@ -221,9 +221,16 @@ export const waveSceneVisual = ({
       },
     ]
 
+    /* The λ ruler runs from the rope's left end out to λ (in cm). λ = v/f is
+       editable, so at a low enough frequency the ruler reaches past the rope
+       and used to be clipped by a frame sized on ropeCm alone. Frame the wider
+       of the two; the default rig (λ = 0.4 m on a 1.2 m rope) is unchanged. */
+    const wavelengthCm = cmOf(model.wavelength)
+    const framedWidthCm = Math.max(ropeCm, wavelengthCm + displayedAmplitude * 0.6)
+
     return emptyVisualModel('wave', {
-      extent: { width: ropeCm * 1.18, height: displayedAmplitude * 3.6 },
-      origin: { x: -ropeCm * 0.06, y: -displayedAmplitude * 1.8 },
+      extent: { width: framedWidthCm * 1.18, height: displayedAmplitude * 3.6 },
+      origin: { x: -framedWidthCm * 0.06, y: -displayedAmplitude * 1.8 },
       grid: { minor: ropeCm / 24, major: ropeCm / 6 },
       axes: { x: 'x / cm', y: `y / cm（×${gain}）` },
       tickStep: ropeCm / 6,
@@ -275,12 +282,20 @@ export const waveSceneVisual = ({
     const verdict = verdictOf(derivedScalar(simulation.derivedQuantities, 'interference_type').value)
     const displacement = scalarValueOf(state, `${model.benchId}.point`, 'displacement') ?? 0
 
-    /* Crests r = v·t − kλ ≥ 0 from each source, out to the farthest path. */
-    const reach = Math.max(model.pathOne ?? 0, model.pathTwo ?? 0) + model.wavelength
+    /* Crest circles must respect causality and the engine's own phase.
+       The engine drives each source as A·sin(2πft) with phase(r,t) =
+       2π(ft − r/λ), so a crest (sin = 1) left the source a quarter period
+       ago: r = v·t − λ/4 − kλ, and nothing can be further out than v·t.
+       The old code drew full-radius rings from λ upward at t = 0 and put
+       the rings on the engine's zero-displacement circles (λ/4 early). */
+    const frontReach = Math.min(
+      Math.max(model.pathOne ?? 0, model.pathTwo ?? 0) + model.wavelength,
+      speed * time,
+    )
+    const crestRadius0 = ((speed * time - model.wavelength / 4) % model.wavelength + model.wavelength) % model.wavelength
     const fronts: WaveFrontVisual[] = []
-    const phaseOffset = (speed * time) % model.wavelength
     for (const [index, source] of [s1, s2].entries()) {
-      for (let radius = phaseOffset; radius <= reach; radius += model.wavelength) {
+      for (let radius = crestRadius0; radius <= frontReach; radius += model.wavelength) {
         if (radius <= 1e-9) continue
         fronts.push({
           id: `wave-front-${index + 1}-${Math.round(radius / model.wavelength)}`,

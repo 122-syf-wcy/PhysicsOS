@@ -14,6 +14,7 @@ import { IconCheckOutline14, IconChevronDownOutline14 } from '@deepseek-ai/dsh-c
 import { SCENE_TREE_ICONS } from './icons/physics-icons.tsx'
 import { MathText } from './physics/MathText.tsx'
 import { formatTimeAt, timeAriaText } from './physics/time-format.ts'
+import { presentDerived, presentVerification, typesetNumber } from './physics/verification-presentation.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -192,67 +193,161 @@ export function QuantityField({
   )
 }
 
-/** Inspector sections: editable parameters, enumerated choices, derived rows. */
-export function InspectorSections({
+/** The editable rows of one section: quantity fields plus enumerated choices. */
+const SectionFields = ({
+  section,
+  onEdit,
+  onChoice,
+  onHighlight,
+}: {
+  readonly section: InspectorSection
+  readonly onEdit: (id: string, value: number) => void
+  readonly onChoice: (id: string, value: string) => void
+  readonly onHighlight: (highlight: string | undefined) => void
+}) => (
+  <>
+    {section.parameters?.map(parameter => (
+      <QuantityField
+        key={parameter.id}
+        parameter={parameter}
+        onCommit={(value) => { onEdit(parameter.id, value) }}
+        onFocusChange={onHighlight}
+      />
+    ))}
+    {section.choices?.map(choice => (
+      <div key={choice.id} className={css.field}>
+        <span className={css.fieldLabel}>{choice.label}</span>
+        <select
+          className={css.select}
+          value={choice.value}
+          aria-label={choice.label}
+          onChange={(event) => { onChoice(choice.id, event.target.value) }}
+        >
+          {choice.options.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+    ))}
+  </>
+)
+
+/** The engine-computed readings of one section. */
+const SectionDerived = ({
+  section,
+  onHighlight,
+}: {
+  readonly section: InspectorSection
+  readonly onHighlight: (highlight: string | undefined) => void
+}) => (
+  <>
+    {presentDerived(section.derived ?? []).map(item => (
+      <div
+        key={item.id}
+        className={css.derived}
+        onMouseEnter={() => { onHighlight(item.highlights) }}
+        onMouseLeave={() => { onHighlight(undefined) }}
+      >
+        <span className={css.derivedName}>
+          {item.label} <MathText expression={item.symbol} />
+        </span>
+        <span className={css.derivedReading}>
+          <span>
+            <span className={css.derivedValue}>{typesetNumber(item.value)}</span>{' '}
+            <span className={css.derivedUnit}>{item.unit}</span>
+          </span>
+          {item.components === undefined ? null : (
+            <span className={css.derivedComponents}>{typesetNumber(item.components)}</span>
+          )}
+        </span>
+      </div>
+    ))}
+  </>
+)
+
+/* Inspector tabs: the prototype's right column splits the inspector into
+   属性 (editable parameters + choices), 读数 (engine-computed values) and
+   校验 (verification checks) instead of one undifferentiated column — a
+   student editing a plate gap never has to scroll past the readings to find
+   the input. */
+export type InspectorTabId = 'properties' | 'readings' | 'checks'
+
+export function InspectorTabs({
   sections,
+  checks,
   note,
+  emptyLabel,
+  label,
+  labels,
   onEdit,
   onChoice,
   onHighlight,
 }: {
   readonly sections: readonly InspectorSection[]
+  readonly checks: readonly VerificationCheckView[]
   readonly note: string
+  readonly emptyLabel: string
+  readonly label: string
+  readonly labels: { readonly properties: string; readonly readings: string; readonly checks: string }
   readonly onEdit: (id: string, value: number) => void
   readonly onChoice: (id: string, value: string) => void
   readonly onHighlight: (highlight: string | undefined) => void
 }) {
+  const [tab, setTab] = useState<InspectorTabId>('properties')
+  const tabs: readonly (readonly [InspectorTabId, string])[] = [
+    ['properties', labels.properties],
+    ['readings', labels.readings],
+    ['checks', labels.checks],
+  ]
   return (
     <>
-      {sections.map(section => (
-        <div key={section.id}>
-          <p className={css.sectionLabel}>{section.title}</p>
-          {section.parameters?.map(parameter => (
-            <QuantityField
-              key={parameter.id}
-              parameter={parameter}
-              onCommit={(value) => { onEdit(parameter.id, value) }}
-              onFocusChange={onHighlight}
-            />
-          ))}
-          {section.choices?.map(choice => (
-            <div key={choice.id} className={css.field}>
-              <span className={css.fieldLabel}>{choice.label}</span>
-              <select
-                className={css.select}
-                value={choice.value}
-                aria-label={choice.label}
-                onChange={(event) => { onChoice(choice.id, event.target.value) }}
-              >
-                {choice.options.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-          ))}
-          {section.derived?.map(item => (
-            <div
-              key={item.id}
-              className={css.derived}
-              onMouseEnter={() => { onHighlight(item.highlights) }}
-              onMouseLeave={() => { onHighlight(undefined) }}
-            >
-              <span className={css.derivedName}>
-                {item.label} <MathText expression={item.symbol} />
-              </span>
-              <span>
-                <span className={css.derivedValue}>{item.value}</span>{' '}
-                <span className={css.derivedUnit}>{item.unit}</span>
-              </span>
+      <div className={css.inspectorTabBar} role="tablist" aria-label={label}>
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={clsx(css.inspectorTab, tab === id && css.inspectorTabActive)}
+            onClick={() => { setTab(id) }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'properties' ? (
+        <div role="tabpanel">
+          {sections.map(section => (
+            <div key={section.id}>
+              <p className={css.sectionLabel}>{section.title}</p>
+              <SectionFields
+                section={section}
+                onEdit={onEdit}
+                onChoice={onChoice}
+                onHighlight={onHighlight}
+              />
             </div>
           ))}
         </div>
-      ))}
-      <p className={css.readonlyNote}>{note}</p>
+      ) : null}
+      {tab === 'readings' ? (
+        <div role="tabpanel">
+          {sections.map(section => (
+            <div key={section.id}>
+              {(section.derived?.length ?? 0) === 0 ? null : (
+                <p className={css.sectionLabel}>{section.title}</p>
+              )}
+              <SectionDerived section={section} onHighlight={onHighlight} />
+            </div>
+          ))}
+          <p className={css.readonlyNote}>{note}</p>
+        </div>
+      ) : null}
+      {tab === 'checks' ? (
+        <div role="tabpanel">
+          <VerificationList checks={checks} emptyLabel={emptyLabel} />
+        </div>
+      ) : null}
     </>
   )
 }
@@ -268,9 +363,16 @@ export function VerificationList({
   readonly emptyLabel: string
 }) {
   if (checks.length === 0) return <p className={css.dataStub}>{emptyLabel}</p>
+  /* Physical laws one per row; the structural preconditions (schema, ids,
+     dimensions) fold into a single count so the panel reads as physics, not
+     as a validator log. Failed structural checks are the only ones that
+     still list themselves — a student must see what broke. */
+  const { laws, structure } = presentVerification(checks)
+  const structureStatus: VerificationCheckView['status'] =
+    structure.failed.length === 0 ? 'passed' : 'failed'
   return (
     <ul className={css.verificationList}>
-      {checks.map((check, index) => (
+      {laws.map((check, index) => (
         <li
           key={check.id}
           className={css.verificationItem}
@@ -282,8 +384,35 @@ export function VerificationList({
           </span>
           <span className={css.verificationLabel}>{check.label}</span>
           <span className={css.verificationStatus}>
-            {check.status === 'passed' ? 'PASS' : check.status === 'warning' ? 'WARN' : 'FAIL'}
+            {check.status === 'passed' ? '通过' : check.status === 'warning' ? '警告' : '未通过'}
           </span>
+        </li>
+      ))}
+      {structure.total === 0 ? null : (
+        <li
+          key="scene-structure-summary"
+          className={clsx(css.verificationItem, css.verificationStructure)}
+          data-status={structureStatus}
+          data-physicsos-structure-checks={structure.total}
+          style={{ '--physics-row-index': String(Math.min(laws.length, 8)) } as CSSProperties}
+        >
+          <span className={clsx(css.verificationMark, css[`verification_${structureStatus}`])}>
+            <IconCheckOutline14 size={11} />
+          </span>
+          <span className={css.verificationLabel}>
+            场景结构
+            <span className={css.verificationCount}>{structure.passed}/{structure.total}</span>
+          </span>
+          <span className={css.verificationStatus}>{structureStatus === 'passed' ? '通过' : '未通过'}</span>
+        </li>
+      )}
+      {structure.failed.map((check) => (
+        <li key={check.id} className={clsx(css.verificationItem, css.verificationStructureDetail)} data-status={check.status}>
+          <span className={clsx(css.verificationMark, css[`verification_${check.status}`])}>
+            <IconCheckOutline14 size={11} />
+          </span>
+          <span className={css.verificationLabel}>{check.label}</span>
+          <span className={css.verificationStatus}>未通过</span>
         </li>
       ))}
     </ul>

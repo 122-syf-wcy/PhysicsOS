@@ -94,6 +94,24 @@ describe('Electric parallel-plate visual bridge', () => {
     expect(observableKeys).toContain('electricField')
   })
 
+  it('keeps the E arrow tip inside the bounded field region', () => {
+    const { view } = regionView()
+    const region = view.boundedField
+    expect(region).toBeDefined()
+    const eVector = view.vectors.find(vector => vector.observable === 'electricField')
+    expect(eVector).toBeDefined()
+    /* The field is zero outside the plates, so an arrow crossing the region
+       edge would paint a field that is not there. */
+    const xMin = (region?.at.x ?? 0) - (region?.width ?? 0) / 2
+    const xMax = (region?.at.x ?? 0) + (region?.width ?? 0) / 2
+    const yMin = (region?.at.y ?? 0) - (region?.height ?? 0) / 2
+    const yMax = (region?.at.y ?? 0) + (region?.height ?? 0) / 2
+    expect(eVector?.to.x).toBeGreaterThanOrEqual(xMin - 1e-9)
+    expect(eVector?.to.x).toBeLessThanOrEqual(xMax + 1e-9)
+    expect(eVector?.to.y).toBeGreaterThanOrEqual(yMin - 1e-9)
+    expect(eVector?.to.y).toBeLessThanOrEqual(yMax + 1e-9)
+  })
+
   it('does not trigger the region branch for a uniform-field scene', () => {
     const scene = createElectricScene()
     /* A plain uniform-field scene has no regions or boundaries — the structure
@@ -117,15 +135,39 @@ describe('Electric parallel-plate visual bridge', () => {
     const plateRects = container.querySelectorAll('[data-testid^="plate-"] rect')
     expect(plateRects.length).toBe(2)
 
-    /* Field arrows: lines with marker-end attribute inside a clipped group.
-       CSS module class names are hashed in jsdom, so select by the marker
-       reference instead. */
-    const fieldLines = container.querySelectorAll('g[clip-path] line[marker-end]')
-    expect(fieldLines.length).toBeGreaterThan(0)
+    /* Field lines: clipped to the region rect, each carrying one mid-line
+       arrowhead (the marker-end lines). `pc-region-clip-*` distinguishes the
+       field layer from the plot-wide clip that also wraps the vectors —
+       jsdom's selector engine chokes on `url(#…)` inside `[attr^=]`, so the
+       filter runs on the attribute string instead. */
+    const regionFieldInk = Array.from(container.querySelectorAll('g[clip-path]'))
+      .filter(group => group.getAttribute('clip-path')?.startsWith('url(#pc-region-clip'))
+      .flatMap(group => Array.from(group.querySelectorAll('line[marker-end]')))
+    expect(regionFieldInk.length).toBeGreaterThan(0)
 
     /* Trajectory path exists. */
     const paths = container.querySelectorAll('svg path')
     expect(paths.length).toBeGreaterThan(0)
+  })
+
+  it('hides the field lines when the electricField observable is off', () => {
+    const { view } = regionView()
+    const hidden = {
+      ...view,
+      visible: { ...view.visible, electricField: false },
+    }
+    const { container } = render(<PhysicsCanvas view={hidden} ariaLabel="平行板电场" />)
+
+    /* No clipped field-line group at all — the toggle controls real ink. The
+       region clip (`pc-region-clip-*`) is the field layer; the plot clip
+       wraps the vectors and must not be counted. */
+    const regionFieldInk = Array.from(container.querySelectorAll('g[clip-path]'))
+      .filter(group => group.getAttribute('clip-path')?.startsWith('url(#pc-region-clip'))
+      .flatMap(group => Array.from(group.querySelectorAll('line[marker-end]')))
+    expect(regionFieldInk.length).toBe(0)
+    /* Plates still render — the toggle hides the field layer, not the
+       apparatus. */
+    expect(container.querySelector('[data-testid="plate-top"]')).toBeTruthy()
   })
 
   it('does not render plate elements for a point-charge scene', () => {

@@ -56,51 +56,79 @@ const BeakerGlyph = ({
 }: {
   sample: NonNullable<RendererProps['view']['thermalSample']>
   projection: RendererProps['projection']
-}) => (
-  <g className={projection.highlighted(sample.id) ? css.highlightGroup : undefined}>
-    <rect
-      className={css.thermalSampleSolid}
-      x={projection.px({ x: sample.at.x - sample.halfWidth, y: 0 })}
-      y={projection.py({ x: 0, y: sample.at.y + sample.halfHeight })}
-      width={sample.halfWidth * 2 * projection.scale}
-      height={sample.halfHeight * 2 * projection.scale}
-    />
-    {sample.meltedFraction <= 0 ? null : (
+}) => {
+  const left = projection.px({ x: sample.at.x - sample.halfWidth, y: 0 })
+  const right = projection.px({ x: sample.at.x + sample.halfWidth, y: 0 })
+  const top = projection.py({ x: 0, y: sample.at.y + sample.halfHeight })
+  const bottom = projection.py({ x: 0, y: sample.at.y - sample.halfHeight })
+  const rim = 5
+  const corner = Math.min(9, (bottom - top) * 0.12)
+  const liquidTop = sample.meltedFraction <= 0
+    ? null
+    : projection.py({
+      x: 0,
+      y: sample.at.y - sample.halfHeight + 2 * sample.halfHeight * sample.meltedFraction,
+    })
+  return (
+    <g className={projection.highlighted(sample.id) ? css.highlightGroup : undefined}>
       <rect
-        className={clsxJoin(
-          css.thermalSampleLiquid,
-          sample.phase === 'melting' && css.thermalSampleMelting,
-        )}
-        x={projection.px({ x: sample.at.x - sample.halfWidth, y: 0 })}
-        y={projection.py({
-          x: 0,
-          y: sample.at.y - sample.halfHeight + 2 * sample.halfHeight * sample.meltedFraction,
-        })}
-        width={sample.halfWidth * 2 * projection.scale}
-        height={sample.halfHeight * 2 * projection.scale * sample.meltedFraction}
+        className={css.thermalSampleSolid}
+        x={left}
+        y={top}
+        width={right - left}
+        height={bottom - top}
       />
-    )}
-    <path
-      className={css.thermalBeakerWall}
-      d={[
-        `M${projection.px({ x: sample.at.x - sample.halfWidth, y: 0 })} ${projection.py({ x: 0, y: sample.at.y + sample.halfHeight + 1 })}`,
-        `V${projection.py({ x: 0, y: sample.at.y - sample.halfHeight })}`,
-        `H${projection.px({ x: sample.at.x + sample.halfWidth, y: 0 })}`,
-        `V${projection.py({ x: 0, y: sample.at.y + sample.halfHeight + 1 })}`,
-      ].join(' ')}
-    />
-    {sample.label === undefined ? null : (
-      <text
-        className={css.annotation}
-        x={projection.px(sample.at)}
-        y={projection.py({ x: 0, y: sample.at.y + sample.halfHeight + 1 }) - 8}
-        textAnchor="middle"
-      >
-        {sample.label}
-      </text>
-    )}
-  </g>
-)
+      {liquidTop === null ? null : (
+        <>
+          <rect
+            className={clsxJoin(
+              css.thermalSampleLiquid,
+              sample.phase === 'melting' && css.thermalSampleMelting,
+            )}
+            x={left}
+            y={liquidTop}
+            width={right - left}
+            height={bottom - liquidTop}
+          />
+          {/* The liquid's free surface: a meniscus line is what makes the
+              melted fraction read as a level, not a second fill. */}
+          <line
+            className={css.thermalSurface}
+            x1={left}
+            y1={liquidTop}
+            x2={right}
+            y2={liquidTop}
+          />
+        </>
+      )}
+      {/* Glass beaker: an open-top vessel with a lip on both walls and a
+          rounded bottom corner — the silhouette of labware, not a U. */}
+      <path
+        className={css.thermalBeakerWall}
+        d={[
+          `M${left - rim} ${top - rim}`,
+          `L${left} ${top}`,
+          `V${bottom - corner}`,
+          `Q${left} ${bottom} ${left + corner} ${bottom}`,
+          `H${right - corner}`,
+          `Q${right} ${bottom} ${right} ${bottom - corner}`,
+          `V${top}`,
+          `L${right + rim} ${top - rim}`,
+        ].join(' ')}
+      />
+      {sample.label === undefined ? null : (
+        <text
+          className={css.annotation}
+          x={projection.px(sample.at)}
+          y={top - 9}
+          textAnchor="middle"
+        >
+          {sample.label}
+        </text>
+      )}
+    </g>
+  )
+}
 
 const ThermometerGlyph = ({
   thermometer,
@@ -108,37 +136,58 @@ const ThermometerGlyph = ({
 }: {
   thermometer: NonNullable<RendererProps['view']['thermalThermometer']>
   projection: RendererProps['projection']
-}) => (
-  <g className={projection.highlighted(thermometer.id) ? css.highlightGroup : undefined}>
-    <line
-      className={css.thermalTube}
-      x1={projection.px(thermometer.at)}
-      y1={projection.py(thermometer.at)}
-      x2={projection.px(thermometer.at)}
-      y2={projection.py({ x: 0, y: thermometer.at.y + 15 })}
-    />
-    <line
-      className={css.thermalColumn}
-      x1={projection.px(thermometer.at)}
-      y1={projection.py(thermometer.at)}
-      x2={projection.px(thermometer.at)}
-      y2={projection.py({ x: 0, y: thermometer.at.y + thermometer.columnHeight })}
-    />
-    <circle
-      className={css.thermalBulb}
-      cx={projection.px(thermometer.at)}
-      cy={projection.py(thermometer.at)}
-      r={6}
-    />
-    <text
-      className={css.thermalReading}
-      x={projection.px(thermometer.at) + 12}
-      y={projection.py({ x: 0, y: thermometer.at.y + thermometer.columnHeight })}
-    >
-      {thermometer.reading}
-    </text>
-  </g>
-)
+}) => {
+  const cx = projection.px(thermometer.at)
+  const bulbY = projection.py(thermometer.at)
+  const tubeTop = projection.py({ x: 0, y: thermometer.at.y + 15 })
+  const columnTop = projection.py({ x: 0, y: thermometer.at.y + thermometer.columnHeight })
+  const tubeW = 9
+  const ticks = [0.2, 0.4, 0.6, 0.8]
+  return (
+    <g className={projection.highlighted(thermometer.id) ? css.highlightGroup : undefined}>
+      {/* The instrument: a glass tube (rounded capsule) holding a red column
+          that grows out of the bulb, with scale ticks on the right. */}
+      <rect
+        className={css.thermalTubeOuter}
+        x={cx - tubeW / 2}
+        y={tubeTop}
+        width={tubeW}
+        height={bulbY - tubeTop}
+        rx={tubeW / 2}
+      />
+      <line
+        className={css.thermalColumn}
+        x1={cx}
+        y1={bulbY}
+        x2={cx}
+        y2={columnTop}
+      />
+      <circle
+        className={css.thermalBulb}
+        cx={cx}
+        cy={bulbY}
+        r={7}
+      />
+      {ticks.map(fraction => (
+        <line
+          key={fraction}
+          className={css.thermalTick}
+          x1={cx + tubeW / 2}
+          y1={bulbY - fraction * (bulbY - tubeTop)}
+          x2={cx + tubeW / 2 + 4}
+          y2={bulbY - fraction * (bulbY - tubeTop)}
+        />
+      ))}
+      <text
+        className={css.thermalReading}
+        x={cx + tubeW / 2 + 8}
+        y={columnTop + 4}
+      >
+        {thermometer.reading}
+      </text>
+    </g>
+  )
+}
 
 const HeaterLabel = ({
   heater,

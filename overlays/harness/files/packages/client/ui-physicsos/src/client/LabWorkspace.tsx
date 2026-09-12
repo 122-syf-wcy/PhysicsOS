@@ -31,6 +31,7 @@ import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-r
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
+import { createCollisionWorkspaceRuntime, isCollisionSceneInput } from './physics/collision-workspace-runtime.ts'
 import { createLeverWorkspaceRuntime } from './physics/lever-workspace-runtime.ts'
 import { createOpticsWorkspaceRuntime } from './physics/optics-workspace-runtime.ts'
 import { createInductionWorkspaceRuntime } from './physics/induction-workspace-runtime.ts'
@@ -202,6 +203,7 @@ const buildRuntime = (
       return null
     case 'mechanics':
       if (scene !== undefined && isLeverScene(scene)) return createLeverWorkspaceRuntime(scene)
+      if (scene !== undefined && isCollisionSceneInput(scene)) return createCollisionWorkspaceRuntime(scene)
       return scene === undefined ? null : createMechanicsWorkspaceRuntime(scene)
     case 'electric':
       return scene === undefined ? null : createElectricWorkspaceRuntime(scene)

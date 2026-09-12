@@ -182,7 +182,12 @@ describe('wave workspace runtime · interference and standing', () => {
     expect(derivedValue(snapshot, 'P 点振动')).toBe('振动加强')
     expect(snapshot.view.wavePoint?.verdict).toBe('constructive')
     expect(snapshot.view.waveSources).toHaveLength(2)
-    expect(snapshot.view.waveFronts?.length ?? 0).toBeGreaterThan(0)
+    /* Causality: at t = 0 nothing has left either source, and the first crest
+       only forms a quarter period in — a ring drawn at t = 0 would claim a
+       wavefront the engine has not launched. */
+    expect(snapshot.view.waveFronts ?? []).toHaveLength(0)
+    const underway = runtime.seek(0.05)
+    expect(underway.view.waveFronts?.length ?? 0).toBeGreaterThan(0)
     expect(snapshot.table.columns).toEqual(['A / cm', 'λ / m', 'd / m', 'Δ / m', 'Δ/λ', 'A_P / cm', 'P 点'])
 
     const moved = runtime.editParameter('path-difference', 0.1)

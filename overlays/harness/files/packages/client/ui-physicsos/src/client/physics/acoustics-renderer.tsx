@@ -40,30 +40,54 @@ const wavefrontArc = (
   return `M${apex - (forward ? radius : -radius) * 0.36} ${cy - spread} Q${apex} ${cy} ${apex - (forward ? radius : -radius) * 0.36} ${cy + spread}`
 }
 
-/** The loudspeaker horn: box body, trapezoid mouth facing +x. */
+/** The loudspeaker on its tripod stand: box body, flared horn facing +x,
+ *  an inner cone line, and two short emission arcs at the mouth marking it as
+ *  the source. The stand reaches down to `footY` (the ground line). */
 const SpeakerGlyph = ({
   x,
-  y,
+  footY,
   size,
   highlighted,
 }: {
   x: number
-  y: number
+  footY: number
   size: number
   highlighted: boolean
-}) => (
-  <g className={highlighted ? css.highlightGroup : undefined}>
-    <path
-      className={css.acousticSourceBody}
-      d={[
-        `M${x - size * 0.7} ${y - size * 0.42}`,
-        `h${size * 0.55} l${size * 0.6} ${-size * 0.34}`,
-        `v${size * 1.52} l${-size * 0.6} ${-size * 0.34}`,
-        `h${-size * 0.55} z`,
-      ].join(' ')}
-    />
-  </g>
-)
+}) => {
+  const y = footY - size * 1.02
+  return (
+    <g className={highlighted ? css.highlightGroup : undefined}>
+      {/* Tripod stand reaching the ground */}
+      <path
+        className={css.acousticSourceStand}
+        d={`M${x - size * 0.3} ${y + size * 0.42} L${x - size * 0.62} ${footY} M${x - size * 0.3} ${y + size * 0.42} L${x + size * 0.02} ${footY}`}
+      />
+      <path
+        className={css.acousticSourceBody}
+        d={[
+          `M${x - size * 0.7} ${y - size * 0.42}`,
+          `h${size * 0.55} l${size * 0.6} ${-size * 0.34}`,
+          `v${size * 1.52} l${-size * 0.6} ${-size * 0.34}`,
+          `h${-size * 0.55} z`,
+        ].join(' ')}
+      />
+      {/* Inner cone line inside the horn mouth */}
+      <path
+        className={css.acousticSourceCone}
+        d={`M${x - size * 0.15} ${y - size * 0.3} L${x + size * 0.32} ${y - size * 0.58} M${x - size * 0.15} ${y + size * 0.3} L${x + size * 0.32} ${y + size * 0.58}`}
+      />
+      {/* Two short arcs at the mouth — the "this end emits" mark */}
+      <path
+        className={css.acousticSourceWave}
+        d={`M${x + size * 0.55} ${y - size * 0.34} Q${x + size * 0.72} ${y} ${x + size * 0.55} ${y + size * 0.34}`}
+      />
+      <path
+        className={css.acousticSourceWave}
+        d={`M${x + size * 0.72} ${y - size * 0.5} Q${x + size * 0.98} ${y} ${x + size * 0.72} ${y + size * 0.5}`}
+      />
+    </g>
+  )
+}
 
 export function AcousticsRenderer({ view, projection }: RendererProps) {
   const showWavefronts = view.visible.wavefronts === true
@@ -119,7 +143,8 @@ export function AcousticsRenderer({ view, projection }: RendererProps) {
         <Dimension key={dimension.id} dimension={dimension} projection={projection} />
       ))}
 
-      {/* Reflecting walls: heavy plate with the hatched back on +x */}
+      {/* Reflecting walls: a solid face — filled body behind the reflecting
+          edge, hatched on the +x (non-reflecting) side */}
       {(view.acousticReflectors ?? []).map((wall) => {
         const x = projection.px(wall.at)
         const footY = projection.py(wall.at)
@@ -128,6 +153,13 @@ export function AcousticsRenderer({ view, projection }: RendererProps) {
         const highlighted = projection.highlighted(wall.id)
         return (
           <g key={wall.id} className={highlighted ? css.highlightGroup : undefined}>
+            <rect
+              className={css.acousticWallFace}
+              x={x}
+              y={topY}
+              width={13}
+              height={footY - topY}
+            />
             <line className={css.acousticWallPlate} x1={x} y1={topY} x2={x} y2={footY} />
             {Array.from({ length: hatchCount }, (_, index) => {
               const y = topY + ((index + 0.5) / hatchCount) * (footY - topY)
@@ -135,9 +167,9 @@ export function AcousticsRenderer({ view, projection }: RendererProps) {
                 <line
                   key={index}
                   className={css.acousticWallHatch}
-                  x1={x + 2}
+                  x1={x + 3}
                   y1={y + 4.5}
-                  x2={x + 9}
+                  x2={x + 11}
                   y2={y - 4.5}
                 />
               )
@@ -159,7 +191,7 @@ export function AcousticsRenderer({ view, projection }: RendererProps) {
           <g key={source.id}>
             <SpeakerGlyph
               x={x}
-              y={footY - speakerSize * 0.62}
+              footY={footY}
               size={speakerSize}
               highlighted={projection.highlighted(source.id)}
             />

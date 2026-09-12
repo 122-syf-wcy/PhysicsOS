@@ -61,14 +61,9 @@ import type {
   VerificationCheckView,
 } from './scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
+import { formatSignificant } from './number-format.ts'
 
-const fmt = (value: number, digits = 2): string => {
-  if (!Number.isFinite(value)) return '—'
-  const absolute = Math.abs(value)
-  return absolute !== 0 && (absolute < 1e-3 || absolute >= 1e4)
-    ? value.toExponential(digits)
-    : value.toFixed(digits)
-}
+const fmt = formatSignificant
 
 const derivedText = (derived: DerivedQuantity): string =>
   isQuantityVector(derived.value)

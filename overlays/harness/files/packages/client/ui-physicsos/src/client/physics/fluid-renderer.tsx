@@ -18,7 +18,8 @@ import type { RendererProps } from './renderer-registry.tsx'
 import { ArrowMarkers, Dimension, Vectors, clsxJoin } from './primitives.tsx'
 import css from './renderers.module.css'
 
-/** The spring scale: barrel, dial face and the hook the wire hangs from. */
+/** The spring scale: a hanging dynamometer — barrel, dial window with a
+ *  needle, and the top ring it hangs from. */
 const ScaleGlyph = ({
   x,
   y,
@@ -33,6 +34,15 @@ const ScaleGlyph = ({
   highlighted: boolean
 }) => (
   <g className={highlighted ? css.highlightGroup : undefined}>
+    {/* Suspension ring the instrument hangs from; its bottom edge touches the
+        barrel top. */}
+    <circle
+      className={css.fluidScaleRing}
+      cx={x}
+      cy={y - size * 0.86}
+      r={size * 0.24}
+    />
+    {/* Barrel */}
     <rect
       className={css.fluidScaleBody}
       x={x - size * 0.9}
@@ -41,9 +51,23 @@ const ScaleGlyph = ({
       height={size * 1.24}
       rx={size * 0.26}
     />
-    <text className={css.fluidScaleReading} x={x} y={y + size * 0.2} textAnchor="middle">
+    {/* Dial window with the live reading */}
+    <rect
+      className={css.fluidScaleDial}
+      x={x - size * 0.68}
+      y={y - size * 0.4}
+      width={size * 1.36}
+      height={size * 0.8}
+      rx={size * 0.14}
+    />
+    <text className={css.fluidScaleReading} x={x} y={y + size * 0.16} textAnchor="middle">
       {reading}
     </text>
+    {/* Bottom hook the wire attaches to */}
+    <path
+      className={css.fluidScaleRing}
+      d={`M${x} ${y + size * 0.62} v${size * 0.1} a${size * 0.16} ${size * 0.16} 0 1 0 ${size * 0.02} ${size * 0.24}`}
+    />
   </g>
 )
 
@@ -60,27 +84,50 @@ export function FluidRenderer({ view, projection }: RendererProps) {
         <ArrowMarkers uid={projection.uid} />
       </defs>
 
-      {/* Tank: liquid body first, then the three walls over its edges */}
-      {liquid === undefined ? null : (
+      {/* Tank: liquid body first (gradient depth), then the glass walls with
+          rim lips, then the surface line — the level the displaced volume is
+          measured against. */}
+      {liquid === undefined ? null : (() => {
+        const left = projection.px({ x: liquid.left, y: 0 })
+        const right = projection.px({ x: liquid.right, y: 0 })
+        const surfaceY = projection.py({ x: 0, y: liquid.surface })
+        const floorY = projection.py({ x: 0, y: liquid.floor })
+        const lipY = projection.py({ x: 0, y: liquid.surface + (liquid.surface - liquid.floor) * 0.18 })
+        return (
         <g className={projection.highlighted(liquid.id) ? css.highlightGroup : undefined}>
+          <defs>
+            <linearGradient id={`fluid-liquid-${projection.uid}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#dcedf9" />
+              <stop offset="1" stopColor="#a8cbe8" />
+            </linearGradient>
+          </defs>
           <rect
             className={css.fluidLiquidBody}
-            x={projection.px({ x: liquid.left, y: 0 })}
-            y={projection.py({ x: 0, y: liquid.surface })}
-            width={
-              projection.px({ x: liquid.right, y: 0 }) - projection.px({ x: liquid.left, y: 0 })
-            }
-            height={
-              projection.py({ x: 0, y: liquid.floor }) - projection.py({ x: 0, y: liquid.surface })
-            }
+            x={left}
+            y={surfaceY}
+            width={right - left}
+            height={floorY - surfaceY}
+            style={{ fill: `url(#fluid-liquid-${projection.uid})` }}
+          />
+          {/* Meniscus: the surface line across the whole tank */}
+          <line
+            className={css.fluidSurface}
+            x1={left}
+            y1={surfaceY}
+            x2={right}
+            y2={surfaceY}
           />
           <path
             className={css.fluidTankWall}
             d={[
-              `M${projection.px({ x: liquid.left, y: 0 })} ${projection.py({ x: 0, y: liquid.surface + (liquid.surface - liquid.floor) * 0.18 })}`,
-              `V${projection.py({ x: 0, y: liquid.floor })}`,
-              `H${projection.px({ x: liquid.right, y: 0 })}`,
-              `V${projection.py({ x: 0, y: liquid.surface + (liquid.surface - liquid.floor) * 0.18 })}`,
+              `M${left - 4} ${lipY - 3}`,
+              `L${left} ${lipY}`,
+              `V${floorY - 6}`,
+              `Q${left} ${floorY} ${left + 6} ${floorY}`,
+              `H${right - 6}`,
+              `Q${right} ${floorY} ${right} ${floorY - 6}`,
+              `V${lipY}`,
+              `L${right + 4} ${lipY - 3}`,
             ].join(' ')}
           />
           {liquid.label === undefined ? null : (
@@ -94,7 +141,8 @@ export function FluidRenderer({ view, projection }: RendererProps) {
             </text>
           )}
         </g>
-      )}
+        )
+      })()}
 
       {/* Surface line continued across the whole tank */}
       {showDisplaced
@@ -128,19 +176,21 @@ export function FluidRenderer({ view, projection }: RendererProps) {
         : null}
 
       {/* Spring scale and the wire down to the block */}
-      {scale === undefined || block === undefined ? null : (
+      {scale === undefined || block === undefined ? null : (() => {
+        const size = Math.max(16, Math.min(38, block.halfHeight * projection.scale * 0.9))
+        return (
         <g>
           <line
             className={css.fluidWire}
             x1={projection.px(scale.at)}
-            y1={projection.py(scale.at)}
+            y1={projection.py(scale.at) + size * 0.72}
             x2={projection.px(block.at)}
             y2={projection.py({ x: block.at.x, y: block.at.y + block.halfHeight })}
           />
           <ScaleGlyph
             x={projection.px(scale.at)}
             y={projection.py(scale.at)}
-            size={Math.max(16, Math.min(38, block.halfHeight * projection.scale * 0.9))}
+            size={size}
             reading={scale.reading}
             highlighted={projection.highlighted(scale.id)}
           />
@@ -155,7 +205,8 @@ export function FluidRenderer({ view, projection }: RendererProps) {
             </text>
           )}
         </g>
-      )}
+        )
+      })()}
 
       {/* The block: full outline, with only the submerged slab shaded */}
       {block === undefined ? null : (

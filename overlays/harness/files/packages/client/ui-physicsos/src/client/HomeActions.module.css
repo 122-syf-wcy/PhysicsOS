@@ -184,6 +184,16 @@
   padding: 4px 2px 0;
 }
 
+.emptyImage {
+  width: min(520px, 100%);
+  aspect-ratio: 3 / 1;
+  margin-bottom: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center;
+}
+
 .emptyTitle {
   margin: 0;
   color: var(--dsw-alias-label-primary);

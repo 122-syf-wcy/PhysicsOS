@@ -87,7 +87,10 @@ describe('the physics-student agent preset', () => {
     for (const row of await presetRows()) {
       const plugin = MODULES[row.name]
       if (plugin === undefined) throw new Error(`preset row ${row.id} names an unmapped module ${row.name}`)
-      await scope.ctx.plugin(plugin as never, row.config)
+      /* MODULES rows carry heterogeneous plugin configs; a Record-typed plugin
+         keeps the dynamic composition honest without `any`. */
+      const rowConfig: Record<string, unknown> = row.config ?? {}
+      await scope.ctx.plugin(plugin as { new (...args: unknown[]): unknown }, rowConfig)
     }
 
     const assembly = await ctx.systemPrompt.assemble({ scope: key })

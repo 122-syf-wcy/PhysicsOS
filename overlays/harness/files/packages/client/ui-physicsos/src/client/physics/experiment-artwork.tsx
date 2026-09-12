@@ -12,7 +12,7 @@
  * the SVG itself stays transparent so one composition works at every card size.
  */
 
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 
 /* ------------------------------------------------------------------ helpers -- */
 
@@ -533,6 +533,44 @@ const LeverBalanceArt = () => (
   </>
 )
 
+/* ---------------------------------------------------------------- collision -- */
+
+/** 弹性碰撞: equal balls approaching head-on, opposite arrows. */
+const CollisionElasticArt = () => (
+  <>
+    <Stroke d="M10 50 H110" width={1.6} opacity={0.35} />
+    {[26, 40, 54, 68, 82, 96].map(x => (
+      <Stroke key={x} d={`M${x} 54 v4`} width={1.3} opacity={0.22} />
+    ))}
+    <circle cx={38} cy={38} r={12} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <circle cx={82} cy={38} r={12} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={52} y1={25} x2={66} y2={25} width={2} opacity={0.8} />
+    <Arrow x1={68} y1={51} x2={54} y2={51} width={2} opacity={0.8} />
+  </>
+)
+
+/** 非弹性碰撞: a heavy ball chasing a light one, with a restitution note. */
+const CollisionInelasticArt = () => (
+  <>
+    <Stroke d="M10 50 H110" width={1.6} opacity={0.35} />
+    <circle cx={40} cy={38} r={14} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <circle cx={86} cy={38} r={9} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={24} y1={27} x2={56} y2={27} width={2.4} />
+    <Stroke d="M62 24 l4.5 5.5 -4.5 5.5" width={1.8} opacity={0.55} />
+  </>
+)
+
+/** 完全非弹性碰撞: two balls already stuck together, one shared arrow. */
+const CollisionPerfectlyInelasticArt = () => (
+  <>
+    <Stroke d="M10 50 H110" width={1.6} opacity={0.35} />
+    <circle cx={52} cy={38} r={10} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <circle cx={70} cy={38} r={10} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={32} y1={26} x2={62} y2={26} width={2.4} />
+    <Stroke d="M90 22 l5.5 5 -5.5 5" width={1.8} opacity={0.55} />
+  </>
+)
+
 /** 浮力: a beaker, the waterline, a submerged block with upthrust vs. weight. */
 const BuoyancyArt = () => (
   <>
@@ -699,6 +737,32 @@ const InductionBarArt = () => (
   </>
 )
 
+/** 导轨双棒: two rails, two sliding bars closing the loop, opposing force arrows. */
+const InductionDoubleBarArt = () => (
+  <>
+    <Stroke d="M14 16 H106 V52 H14 Z" width={1.4} opacity={0.5} dash="3 3" />
+    {[24, 34, 44].map(x => (
+      <g key={x}>
+        <Stroke d={`M${x - 2.6} 24 l5.2 5.2 M${x + 2.6} 24 l-5.2 5.2`} width={1.2} opacity={0.5} />
+        <Stroke d={`M${x - 2.6} 36 l5.2 5.2 M${x + 2.6} 36 l-5.2 5.2`} width={1.2} opacity={0.5} />
+      </g>
+    ))}
+    {/* The two rails the bars slide on */}
+    <Stroke d="M14 22 H106 M14 46 H106" width={1.8} opacity={0.8} />
+    {/* Bar 1 (moving right) and bar 2 (at rest, about to be nudged) */}
+    <Stroke d="M40 22 V46" width={3} />
+    <Stroke d="M80 22 V46" width={3} />
+    {/* Closed loop below the rails with the induced current */}
+    <Stroke d="M40 46 V60 H80 V46" width={1.6} opacity={0.75} />
+    <Arrow x1={50} y1={60} x2={70} y2={60} width={1.6} opacity={0.85} head={4.2} />
+    {/* Opposing BIL forces: braking bar 1, dragging bar 2 along */}
+    <Arrow x1={40} y1={14} x2={28} y2={14} width={1.6} opacity={0.8} head={4.2} />
+    <Arrow x1={80} y1={14} x2={92} y2={14} width={1.6} opacity={0.8} head={4.2} />
+    <Dot x={40} y={34} r={2.2} />
+    <Dot x={80} y={34} r={2.2} />
+  </>
+)
+
 /** 磁通量变化: a coil inside the field box with the growing flux arrows. */
 const InductionCoilArt = () => (
   <>
@@ -815,6 +879,9 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'va-resistance': VaResistanceArt,
   'bulb-power': BulbPowerArt,
   'lever-balance': LeverBalanceArt,
+  'collision-elastic': CollisionElasticArt,
+  'collision-inelastic': CollisionInelasticArt,
+  'collision-perfectly-inelastic': CollisionPerfectlyInelasticArt,
   buoyancy: BuoyancyArt,
   'plane-mirror': PlaneMirrorArt,
   'convex-lens': ConvexLensArt,
@@ -825,6 +892,8 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'heat-capacity-comparison': HeatCapacityArt,
   'induction-bar-motion': InductionBarArt,
   'induction-flux-change': InductionCoilArt,
+  'induction-double-bar-momentum': InductionDoubleBarArt,
+  'induction-double-bar-force': InductionDoubleBarArt,
   'wave-travelling': WaveTravellingArt,
   'wave-interference': WaveInterferenceArt,
   'wave-standing': WaveStandingArt,
@@ -840,6 +909,9 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['newton-second-law', 'mechanics-newton-second-law'],
   ['incline', 'mechanics-incline'],
   ['lever-balance', 'mechanics-lever-balance'],
+  ['collision-elastic', 'collision-elastic'],
+  ['collision-inelastic', 'collision-inelastic'],
+  ['collision-perfectly-inelastic', 'collision-perfectly-inelastic'],
   ['point-charge', 'electric-point-charge'],
   ['multi-point-charge', 'electric-multi-point-charge'],
   ['uniform-electric', 'electric-uniform-particle'],
@@ -868,6 +940,8 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['heat-capacity-comparison', 'thermal-heat-capacity'],
   ['induction-bar-motion', 'induction-bar-motion'],
   ['induction-flux-change', 'induction-flux-change'],
+  ['induction-double-bar-momentum', 'induction-double-bar-momentum'],
+  ['induction-double-bar-force', 'induction-double-bar-force'],
   ['wave-travelling', 'wave-travelling'],
   ['wave-interference', 'wave-interference'],
   ['wave-standing', 'wave-standing'],
@@ -896,10 +970,51 @@ export const resolveArtKey = (
   return kind === 'question' ? 'question' : 'lab'
 }
 
-/** The scene artwork itself: a transparent 120x68 stage painted in currentColor. */
+/** Templates whose card art ships as a generated raster under
+   * `public/physicsos/experiment-art/<id>.jpg`. Unlisted keys and load failures
+   * fall back to the inline SVG below, so a missing file never blanks a card. */
+const RASTER_ART: ReadonlySet<string> = new Set([
+  'uniform-linear',
+  'uniform-acceleration',
+  'projectile-horizontal',
+  'projectile-oblique',
+  'newton-second-law',
+  'incline',
+  'point-charge',
+  'multi-point-charge',
+  'uniform-electric',
+  'parallel-plate',
+  'magnetic-circular',
+  'velocity-selector',
+  'mass-spectrometer',
+  'composite-eb',
+  'composite-ebg',
+  'multi-region-field',
+  'cyclotron',
+  'question',
+  'lab',
+])
+
+/** The scene artwork itself: a generated plate when one exists, else a
+   * transparent 120x68 stage painted in currentColor. */
 export function ExperimentArt({ templateId, kind, fit = 'contain', className }: ExperimentArtProps) {
   const key = resolveArtKey(templateId, kind)
+  const [rasterFailed, setRasterFailed] = useState(false)
   const Art = TEMPLATE_ART[key] ?? (key === 'question' ? QuestionSceneArt : LabSceneArt)
+  if (RASTER_ART.has(key) && !rasterFailed) {
+    return (
+      <img
+        src={`/physicsos/experiment-art/${key}.jpg`}
+        alt=""
+        loading="lazy"
+        draggable={false}
+        data-physicsos-art={key}
+        aria-hidden="true"
+        className={className}
+        onError={() => { setRasterFailed(true) }}
+      />
+    )
+  }
   return (
     <svg
       viewBox="0 0 120 68"

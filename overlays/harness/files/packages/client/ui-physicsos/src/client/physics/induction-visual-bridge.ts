@@ -14,10 +14,11 @@
  */
 
 import type { ResolvedInductionModel } from '@physicsos/engine-induction'
-import { derivedScalar, type SimulationResult } from '@physicsos/physics-core'
+import { isScalarQuantity, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
 import { inductionBenchOf, type ObservableDefinition, type PhysicsScene } from '@physicsos/physics-scene'
 
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { formatSignificant } from './number-format.ts'
 import type {
   ObservableKey,
   ObservableVisibility,
@@ -28,16 +29,13 @@ import type {
 /** Engine model lengths are SI metres; the bench displays centimetres. */
 const CM_PER_METRE = 100
 
-export const fmtInductionValue = (value: number, digits = 3): string => {
-  if (!Number.isFinite(value)) return '—'
-  if (Math.abs(value) < 1e-12) return '0'
-  return String(Number.parseFloat(value.toPrecision(digits)))
-}
+export const fmtInductionValue = (value: number, digits = 3): string =>
+  formatSignificant(value, digits)
 
 /**
  * Scene observable definition → canvas toggle key. The induction factory stamps
- * `observable-induction-emf / -current / -flux / -bar-motion`, all keyed by the
- * id suffix.
+ * `observable-induction-emf / -current / -flux / -bar_motion` (the scene key is
+ * the snake-case observable name), all keyed by the id suffix.
  */
 export const inductionObservableKeyOf = (
   definition: ObservableDefinition,
@@ -46,7 +44,7 @@ export const inductionObservableKeyOf = (
   if (id.endsWith('-emf')) return 'emf'
   if (id.endsWith('-current')) return 'inductionCurrent'
   if (id.endsWith('-flux')) return 'flux'
-  if (id.endsWith('-bar-motion')) return 'barMotion'
+  if (id.endsWith('-bar-motion') || id.endsWith('-bar_motion')) return 'barMotion'
   return undefined
 }
 
@@ -59,16 +57,17 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-/** Student-facing one-liner for the Lenz direction readout. */
-export const lenzDirectionText = (model: ResolvedInductionModel): string => {
-  if (model.subModel === 'bar_motion_emf') {
-    const emf = model.magneticFluxDensity * model.barLength * model.barVelocity
-    if (Math.abs(emf) < 1e-12) return '棒静止，无感应电流'
-    return emf > 0 ? '右手定则：感应电流沿回路正方向' : '右手定则：感应电流沿回路负方向'
+/** Student-facing one-liner for the Lenz direction readout. The value that
+ *  decides the sentence is an engine fact — for a sweeping bar the derived EMF
+ *  (E = BLv, its sign is the cutting direction), for the coil the bench's
+ *  stated flux rate — never an EMF this module recomputes from B·L·v. */
+export const lenzDirectionText = (isBar: boolean, signedValue: number): string => {
+  if (isBar) {
+    if (!Number.isFinite(signedValue) || Math.abs(signedValue) < 1e-12) return '棒静止，无感应电流'
+    return signedValue > 0 ? '右手定则：感应电流沿回路正方向' : '右手定则：感应电流沿回路负方向'
   }
-  const rate = model.fluxRate ?? 0
-  if (Math.abs(rate) < 1e-12) return '磁通量不变，无感应电流'
-  return rate > 0
+  if (!Number.isFinite(signedValue) || Math.abs(signedValue) < 1e-12) return '磁通量不变，无感应电流'
+  return signedValue > 0
     ? '楞次定律：磁通量增加，感应磁场反抗原磁场'
     : '楞次定律：磁通量减少，感应磁场补偿原磁场'
 }
@@ -78,6 +77,33 @@ export interface InductionVisualInput {
   readonly model: ResolvedInductionModel
   readonly simulation: SimulationResult
   readonly time: number
+  /**
+   * The engine's EXACT state at `time` (closed form via `stateAt`). Without it
+   * the frame falls back to the nearest sampled state, whose time can sit
+   * 1/60 of the run away from the clock — on a τ = 0.25 s exchange that is a
+   * 7 % error between the "t =" the student reads and the numbers beside it.
+   */
+  readonly state?: SimulationState
+}
+
+/** The sampled state nearest the requested time — the fallback when the
+ *  caller did not supply the engine's exact state for this frame. */
+const nearestState = (simulation: SimulationResult, time: number): SimulationState | undefined => {
+  const first = simulation.states[0]
+  if (first === undefined) return undefined
+  let nearest = first
+  for (const state of simulation.states) {
+    if (Math.abs(state.time.value - time) < Math.abs(nearest.time.value - time)) {
+      nearest = state
+    }
+  }
+  return nearest
+}
+
+/** The engine's published x for an object in a frame state — never re-derived. */
+const objectX = (state: SimulationState | undefined, objectId: string): number => {
+  const position = state?.objects.find(entry => entry.id === objectId)?.position
+  return position === undefined ? 0 : position.vector.x
 }
 
 /**
@@ -85,57 +111,108 @@ export interface InductionVisualInput {
  *
  * The bar_motion rig draws the field box with the rod at x(t) = v·t; the
  * flux_change rig draws the coil in a uniform field whose readout carries the
- * rate. The current arrow's sign comes from the engine's lenz_direction
- * derived quantity — never re-derived here.
+ * rate; the double_bar_rail rig draws two rails, both bars at their integrated
+ * positions, the BIL force arrows on each bar and the loop current. The
+ * current arrow's sign and every number come from the engine — never re-derived
+ * here.
  */
 export const inductionSceneVisual = ({
   scene,
   model,
   simulation,
   time,
+  state,
 }: InductionVisualInput): SceneVisualModel => {
   const bench = inductionBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('induction')
 
   const isBar = model.subModel === 'bar_motion_emf'
+  const isDoubleBar = model.subModel === 'double_bar_rail'
 
-  /* The field box: wide enough to hold the rod's whole sweep. */
-  const fieldWidthCm = isBar
-    ? Math.max(40, Math.abs(model.barVelocity) * 5 * CM_PER_METRE + cmOf(model.barLength) + 20)
-    : 40
+  /* Per-frame readouts from the engine's own state at this time. */
+  const frameState = state ?? nearestState(simulation, time)
+  const frameDerived = frameState?.derived ?? simulation.derivedQuantities
+  const scalarAt = (key: string): number => {
+    const entry = frameDerived.find(candidate => candidate.key === key)
+    return entry === undefined || !isScalarQuantity(entry.value) ? Number.NaN : entry.value.value
+  }
+
+  if (isDoubleBar) {
+    return doubleBarSceneVisual({ scene, model, frameState, time, scalarAt })
+  }
+
+  /* Follow camera for the sweeping rod. The rod travels metres along a field
+     20 cm tall, so a frame that holds the whole sweep flattens the rig into a
+     hairline; instead the window rides with the rod at a fixed comfortable
+     scale and the field marks scroll past it — which is exactly the flux
+     cutting the student is meant to see. The rod's position is the engine's
+     published state at this frame. */
   const fieldHeightCm = isBar ? cmOf(model.barLength) + 6 : 26
-  const fieldOrigin: ScenePoint = { x: -fieldWidthCm / 2, y: -fieldHeightCm / 2 }
+  let fieldOrigin: ScenePoint
+  let fieldWidthCm: number
+  if (isBar) {
+    const rodXCm = cmOf(objectX(frameState, `${model.benchId}.bar`))
+    fieldWidthCm = Math.max(cmOf(model.barLength) * 5, 100)
+    fieldOrigin = { x: rodXCm - fieldWidthCm / 2, y: -fieldHeightCm / 2 }
+  } else {
+    fieldWidthCm = 40
+    fieldOrigin = { x: -fieldWidthCm / 2, y: -fieldHeightCm / 2 }
+  }
 
-  /* Readouts from the engine's derived set. */
-  const emf = derivedScalar(simulation.derivedQuantities, 'induced_emf').value
-  const current = derivedScalar(simulation.derivedQuantities, 'induced_current').value
-  const lenz = derivedScalar(simulation.derivedQuantities, 'lenz_direction').value
+  /* Readouts from the engine's derived set at this frame. */
+  const emf = scalarAt('induced_emf')
+  const current = scalarAt('induced_current')
+  const lenz = scalarAt('lenz_direction')
+  const fluxRate = scalarAt('flux_rate')
 
   const readout: string[] = [
     '感应读数',
     isBar
       ? `E = BLv = ${fmtInductionValue(emf)} V · I = E/R = ${fmtInductionValue(current)} A`
       : `E = -dΦ/dt = ${fmtInductionValue(emf)} V · I = E/R = ${fmtInductionValue(current)} A`,
-    lenzDirectionText(model),
+    /* Direction quotes an engine value: the bar's EMF sign (右手定则) or the
+       coil's stated flux rate (楞次定律), never a B·L·v recomputed here. */
+    lenzDirectionText(isBar, isBar ? emf : fluxRate),
   ]
   if (!isBar) {
     readout.push(`t = ${time.toFixed(2)} s（磁通量匀速变化，E 恒定）`)
   }
 
   if (isBar) {
-    /* The rod sweeps at constant v; x(t) = v·t from the engine's state. */
-    const displacementCm = model.barVelocity * time * CM_PER_METRE
+    /* The rod's swept position comes from the engine's published object state
+       (bar_motion_emf integrates x = v·t into its states), sampled at this
+       frame — the same channel the double-bar rig already uses. The bridge
+       must not re-derive kinematics from parameters. */
+    const displacementCm = cmOf(objectX(frameState, `${model.benchId}.bar`))
     const rod: SceneVisualModel['inductionBar'] = {
       id: `${model.benchId}.bar`,
       at: { x: displacementCm, y: 0 },
       length: cmOf(model.barLength),
       label: `L = ${fmtInductionValue(cmOf(model.barLength))} cm · v = ${fmtInductionValue(model.barVelocity, 3)} m/s`,
+      direction: model.barVelocity < 0 ? -1 : 1,
     }
-    /* The current arrow follows the loop rail below the field box. */
+    /* The rail-and-resistor rig: two horizontal rails the rod bridges, closed
+       at the left end by the resistor wire — the loop the induced current
+       actually runs around. The resistor sits inside the field's left margin,
+       upstream of the rod's start. */
+    const railHalf = cmOf(model.barLength) / 2
+    const closureX = fieldOrigin.x + 5
+    const rails: SceneVisualModel['inductionRails'] = [
+      { id: 'induction-rail-top', from: { x: fieldOrigin.x, y: railHalf }, to: { x: fieldOrigin.x + fieldWidthCm, y: railHalf } },
+      { id: 'induction-rail-bottom', from: { x: fieldOrigin.x, y: -railHalf }, to: { x: fieldOrigin.x + fieldWidthCm, y: -railHalf } },
+    ]
+    const resistor: SceneVisualModel['inductionResistor'] = {
+      id: 'induction-resistor',
+      at: { x: closureX, y: 0 },
+      span: railHalf * 2,
+      label: `R = ${fmtInductionValue(model.resistance)} Ω`,
+    }
+    /* The current arrow rides the bottom rail between the closure and the rod:
+       the segment of the loop where the induced current visibly returns. */
     const currentArrow: SceneVisualModel['inductionCurrent'] = {
       id: 'induction-current-arrow',
-      from: { x: fieldOrigin.x + 4, y: fieldOrigin.y - 6 },
-      to: { x: fieldOrigin.x + fieldWidthCm - 4, y: fieldOrigin.y - 6 },
+      from: { x: closureX + 2, y: -railHalf },
+      to: { x: displacementCm - 2, y: -railHalf },
       sign: lenz,
     }
     return emptyVisualModel('induction', {
@@ -150,6 +227,8 @@ export const inductionSceneVisual = ({
         size: { width: fieldWidthCm, height: fieldHeightCm },
         marks: 'into',
       },
+      inductionRails: rails,
+      inductionResistor: resistor,
       inductionBar: rod,
       inductionCurrent: currentArrow,
       overlay: { readout, scale: { label: '10 cm', length: 10 } },
@@ -193,3 +272,148 @@ export const inductionSceneVisual = ({
 
 /** Metres → centimetres for a single length. */
 const cmOf = (metres: number): number => metres * CM_PER_METRE
+
+/* ------------------------------------------------------ double_bar_rail -- */
+
+/**
+ * Frame for the two-bar rail rig: two horizontal rails, both bars at their
+ * integrated positions, the BIL force arrows on each bar and the loop-current
+ * arrow along the bottom rail. Every number (v₁, v₂, E, I, F磁) comes from the
+ * engine's per-state derived set — this module only turns them into geometry.
+ */
+const doubleBarSceneVisual = ({
+  scene,
+  model,
+  frameState,
+  time,
+  scalarAt,
+}: {
+  scene: PhysicsScene
+  model: ResolvedInductionModel
+  time: number
+  scalarAt: (key: string) => number
+  frameState: SimulationState | undefined
+}): SceneVisualModel => {
+  const railSpacingCm = cmOf(model.barLength)
+
+  /* Follow camera. A rail rig is one-dimensional: the pair drifts metres along
+     rails 20 cm apart, so any frame that holds the whole run flattens the
+     apparatus into a hairline. The window rides with the pair's centre instead,
+     sized by the bars' CURRENT separation plus room for their labels, so the
+     bars stay legible from first frame to last; rails and field marks run to
+     the frame edges and the scrolling axis ticks carry the motion. Positions
+     are the engine's published states — the bridge frames, it never
+     re-integrates. */
+  const x1Cm = cmOf(objectX(frameState, `${model.benchId}.bar1`))
+  const x2Cm = cmOf(objectX(frameState, `${model.benchId}.bar2`))
+  const gapCm = Math.abs(x1Cm - x2Cm)
+  const fieldWidthCm = Math.max(railSpacingCm * 5, gapCm + railSpacingCm * 3.5)
+  const fieldOrigin: ScenePoint = {
+    x: (x1Cm + x2Cm) / 2 - fieldWidthCm / 2,
+    y: -(railSpacingCm + 8) / 2,
+  }
+  const fieldHeightCm = railSpacingCm + 8
+
+  const v1 = scalarAt('bar1_velocity')
+  const v2 = scalarAt('bar2_velocity')
+  const emf = scalarAt('induced_emf')
+  const current = scalarAt('induced_current')
+  const force1 = scalarAt('magnetic_force')
+  const force2 = -force1
+  const lenz = scalarAt('lenz_direction')
+
+  /* Bars: two vertical conductors spanning the rails at x₁ / x₂. */
+  const bars: SceneVisualModel['inductionPairBars'] = [
+    {
+      id: `${model.benchId}.bar1`,
+      at: { x: x1Cm, y: 0 },
+      length: railSpacingCm,
+      label: `m₁ = ${fmtInductionValue((model.barMasses?.[0] ?? 0) * 1000, 3)} g · v₁ = ${fmtInductionValue(v1, 3)} m/s`,
+    },
+    {
+      id: `${model.benchId}.bar2`,
+      at: { x: x2Cm, y: 0 },
+      length: railSpacingCm,
+      label: `m₂ = ${fmtInductionValue((model.barMasses?.[1] ?? 0) * 1000, 3)} g · v₂ = ${fmtInductionValue(v2, 3)} m/s`,
+    },
+  ]
+
+  /* Force arrows: engine BIL facts, drawn at each bar along the rails. The
+     arrow length scales with the force magnitude (10 cm per N). A zero force
+     earns NO arrow — at t = 0 of the free two-bar rig the engine's force is
+     exactly 0, and a floor-length stub would claim a push that never happened
+     (and with `< 0 ? -1 : 1` it would point both bars the same way). */
+  const forceArrows: SceneVisualModel['inductionForceArrows'] = [
+    {
+      id: 'induction-force-bar1',
+      at: { x: x1Cm, y: railSpacingCm / 2 + 4 },
+      force: force1,
+    },
+    {
+      id: 'induction-force-bar2',
+      at: { x: x2Cm, y: -railSpacingCm / 2 - 4 },
+      /* Same current, same length, opposite side of the loop: the reaction is
+         the engine's own forceOnBar1 with flipped sign. */
+      force: force2,
+    },
+  ]
+    .filter(arrow => Number.isFinite(arrow.force) && Math.abs(arrow.force) > 1e-12)
+    .map((arrow) => {
+      const direction = arrow.force < 0 ? -1 : 1
+      return {
+        id: arrow.id,
+        at: arrow.at,
+        direction,
+        /* 80 cm per newton, capped at 1.2 rail spacings: the opening F磁 = BIL
+           = 0.2 N draws 16 cm — long enough to read its direction, short
+           enough that it never spans the gap and reads as a link between the
+           bars. The length tracks the decay, so the brake visibly lets go. */
+        length: Math.max(2, Math.min(railSpacingCm * 1.2, Math.abs(arrow.force) * 80)),
+        label: `F磁 = ${fmtInductionValue(arrow.force, 3)} N`,
+      }
+    })
+
+  const currentArrow: SceneVisualModel['inductionCurrent'] = {
+    id: 'induction-current-arrow',
+    from: { x: fieldOrigin.x + 4, y: fieldOrigin.y - 6 },
+    to: { x: fieldOrigin.x + fieldWidthCm - 4, y: fieldOrigin.y - 6 },
+    sign: lenz,
+  }
+
+  /* The narrative must match the rig's actual regime: a free pair relaxes to a
+     common velocity (current decaying), while a constant pull drives the
+     relative velocity UP toward the terminal u∞ (current rising to a plateau).
+     Quoting the decay story on the driven rig would teach the opposite law. */
+  const driven = (model.externalForce ?? 0) > 0
+  const readout: string[] = [
+    '双棒读数',
+    `E = BL(v₁−v₂) = ${fmtInductionValue(emf, 3)} V · I = ${fmtInductionValue(current, 3)} A`,
+    `v₁ = ${fmtInductionValue(v1, 3)} m/s · v₂ = ${fmtInductionValue(v2, 3)} m/s`,
+    driven
+      ? `t = ${time.toFixed(2)} s（外力驱动，相对速度趋向 u∞，电流趋于稳定）`
+      : `t = ${time.toFixed(2)} s（相对速度指数衰减，电流随之减小）`,
+  ]
+
+  return emptyVisualModel('induction', {
+    extent: { width: fieldWidthCm + 8, height: fieldHeightCm + 40 },
+    origin: { x: fieldOrigin.x - 4, y: fieldOrigin.y - 20 },
+    grid: { minor: 2, major: 10 },
+    axes: { x: 'x / cm', y: '' },
+    tickStep: 10,
+    inductionField: {
+      id: 'induction-field',
+      origin: fieldOrigin,
+      size: { width: fieldWidthCm, height: fieldHeightCm },
+      marks: 'into',
+    },
+    inductionRails: [
+      { id: 'induction-rail-top', from: { x: fieldOrigin.x, y: railSpacingCm / 2 }, to: { x: fieldOrigin.x + fieldWidthCm, y: railSpacingCm / 2 } },
+      { id: 'induction-rail-bottom', from: { x: fieldOrigin.x, y: -railSpacingCm / 2 }, to: { x: fieldOrigin.x + fieldWidthCm, y: -railSpacingCm / 2 } },
+    ],
+    inductionPairBars: bars,
+    inductionForceArrows: forceArrows,
+    inductionCurrent: currentArrow,
+    overlay: { readout, scale: { label: '10 cm', length: 10 } },
+    visible: visibilityOf(scene),
+  })
+}

@@ -9,6 +9,12 @@
  * ring at every contact point. The pointer gently repels them so the hero
  * responds to the hand before the student has typed anything.
  *
+ * The drawing follows the PhysicsCanvas body primitive so the hero reads as the
+ * same product: a lit sphere (specular glint, rim, inner hairline, contact
+ * shadow), a minor/major grid, and velocity arrows on a white halo so they stay
+ * legible over the grid. Contact flashes scale with the impact, so a graze
+ * barely marks the frame and a real hit rings.
+ *
  * The loop honours prefers-reduced-motion (one static frame), pauses while the
  * hero is scrolled out of view or the tab is hidden, and draws in CSS pixels on
  * a DPR-scaled canvas so strokes stay crisp on any display.
@@ -25,6 +31,8 @@ interface Ball {
   vy: number
   r: number
   m: number
+  /** Spawn time in ms; drives the pop-in only — the physics radius is `r`. */
+  born: number
   /** Ring buffer of recent positions for the trail. */
   trail: { x: number; y: number }[]
 }
@@ -67,10 +75,17 @@ export const MASCOT_COLLIDERS: readonly { x: number; y: number; r: number }[] = 
 const BALL_COUNT = 7
 const MIN_SPEED = 42
 const MAX_SPEED = 190
+/** Bodies at or above this radius carry the live rim and a velocity arrow. */
+const HEAVY_R = 12
 const TRAIL_LENGTH = 16
 const FLASH_LIFE = 520
 const POINTER_RADIUS = 96
 const GRID = 26
+/** Pop-in duration and the stagger between balls, ms. */
+const ENTRANCE_LIFE = 340
+const ENTRANCE_STAGGER = 70
+/** Below this impact speed a contact is too gentle to deserve a ring. */
+const MIN_FLASH_SPEED = 26
 
 const readToken = (host: Element, name: string, fallback: string): string => {
   const value = getComputedStyle(host).getPropertyValue(name).trim()
@@ -79,13 +94,35 @@ const readToken = (host: Element, name: string, fallback: string): string => {
 
 const rand = (min: number, max: number): number => min + Math.random() * (max - min)
 
+const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value)
+
+/** Canvas gradients take the body stroke's RGB so the shading tracks the theme. */
+const rgbTriple = (color: string): readonly [number, number, number] => {
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())
+  if (hex?.[1] !== undefined) {
+    let digits = hex[1]
+    if (digits.length === 3) digits = digits.replace(/./g, ch => ch + ch)
+    const value = Number.parseInt(digits, 16)
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
+  }
+  const nums = color.match(/\d+(?:\.\d+)?/g)
+  if (nums === null || nums.length < 3) return [51, 80, 127]
+  return [Number(nums[0]), Number(nums[1]), Number(nums[2])]
+}
+
 interface Collider {
   x: number
   y: number
   r: number
 }
 
-const spawn = (width: number, height: number, colliders: readonly Collider[]): Ball[] => {
+const spawn = (
+  width: number,
+  height: number,
+  colliders: readonly Collider[],
+  now: number,
+  stagger: number,
+): Ball[] => {
   const balls: Ball[] = []
   let guard = 0
   while (balls.length < BALL_COUNT && guard < 400) {
@@ -102,6 +139,7 @@ const spawn = (width: number, height: number, colliders: readonly Collider[]): B
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       m: r * r,
+      born: now + balls.length * stagger,
       trail: [],
     })
   }
@@ -121,6 +159,16 @@ const clampSpeed = (ball: Ball): void => {
     ball.vx *= k
     ball.vy *= k
   }
+}
+
+/** easeOutBack: the sphere overshoots a hair and settles, like a bubble surfacing. */
+const popScale = (ball: Ball, now: number): number => {
+  const p = clamp01((now - ball.born) / ENTRANCE_LIFE)
+  if (p >= 1) return 1
+  if (p <= 0) return 0
+  const c1 = 1.70158
+  const c3 = c1 + 1
+  return 0.5 + 0.5 * (1 + c3 * (p - 1) ** 3 + c1 * (p - 1) ** 2)
 }
 
 export interface HomePlaygroundProps {
@@ -203,13 +251,22 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       if (balls.length === 0) {
-        balls = spawn(width, height, colliders())
+        balls = spawn(width, height, colliders(), performance.now(), ENTRANCE_STAGGER)
+        /* Reduced motion draws exactly one frame, so the entrance is skipped
+           rather than frozen half-open. */
+        if (reduceMotion) for (const ball of balls) ball.born = 0
       } else {
         for (const ball of balls) {
           ball.x = Math.min(Math.max(ball.x, ball.r), width - ball.r)
           ball.y = Math.min(Math.max(ball.y, ball.r), height - ball.r)
         }
       }
+    }
+
+    /* A contact only earns a ring if it was felt; grazes stay silent. */
+    const flashAt = (x: number, y: number, speed: number, scale: number): void => {
+      if (speed < MIN_FLASH_SPEED) return
+      flashes.push({ x, y, born: last, strength: Math.min(1, speed / scale) })
     }
 
     const step = (dt: number) => {
@@ -232,21 +289,25 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
         /* Walls. */
         if (ball.x - ball.r < 0) {
           ball.x = ball.r
-          ball.vx = Math.abs(ball.vx)
-          flashes.push({ x: 0, y: ball.y, born: last, strength: 0.6 })
+          const impact = Math.abs(ball.vx)
+          ball.vx = impact
+          flashAt(2, ball.y, impact, 170)
         } else if (ball.x + ball.r > width) {
           ball.x = width - ball.r
-          ball.vx = -Math.abs(ball.vx)
-          flashes.push({ x: width, y: ball.y, born: last, strength: 0.6 })
+          const impact = Math.abs(ball.vx)
+          ball.vx = -impact
+          flashAt(width - 2, ball.y, impact, 170)
         }
         if (ball.y - ball.r < 0) {
           ball.y = ball.r
-          ball.vy = Math.abs(ball.vy)
-          flashes.push({ x: ball.x, y: 0, born: last, strength: 0.6 })
+          const impact = Math.abs(ball.vy)
+          ball.vy = impact
+          flashAt(ball.x, 2, impact, 170)
         } else if (ball.y + ball.r > height) {
           ball.y = height - ball.r
-          ball.vy = -Math.abs(ball.vy)
-          flashes.push({ x: ball.x, y: height, born: last, strength: 0.6 })
+          const impact = Math.abs(ball.vy)
+          ball.vy = -impact
+          flashAt(ball.x, height - 2, impact, 170)
         }
 
         /* Mascot: immovable solids. Reflect the normal component. */
@@ -262,7 +323,7 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
             if (vn < 0) {
               ball.vx -= 2 * vn * nx
               ball.vy -= 2 * vn * ny
-              flashes.push({ x: c.x + nx * c.r, y: c.y + ny * c.r, born: last, strength: 1 })
+              flashAt(c.x + nx * c.r, c.y + ny * c.r, -vn, 150)
             }
             ball.x = c.x + nx * minD
             ball.y = c.y + ny * minD
@@ -289,12 +350,7 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
             a.vy += impulse * b.m * ny
             b.vx -= impulse * a.m * nx
             b.vy -= impulse * a.m * ny
-            flashes.push({
-              x: a.x + nx * a.r,
-              y: a.y + ny * a.r,
-              born: last,
-              strength: Math.min(1, Math.abs(vn) / 160),
-            })
+            flashAt(a.x + nx * a.r, a.y + ny * a.r, -vn, 160)
           }
           /* Separate so they never sink into each other. */
           const overlap = (minD - d) / 2
@@ -307,34 +363,40 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
 
       for (const ball of balls) {
         clampSpeed(ball)
-        ball.trail.push({ x: ball.x, y: ball.y })
-        if (ball.trail.length > TRAIL_LENGTH) ball.trail.shift()
+        /* No wake before the body has surfaced. */
+        if (last >= ball.born) {
+          ball.trail.push({ x: ball.x, y: ball.y })
+          if (ball.trail.length > TRAIL_LENGTH) ball.trail.shift()
+        }
       }
       while (flashes.length > 0 && last - (flashes[0]?.born ?? last) > FLASH_LIFE) flashes.shift()
       if (flashes.length > 24) flashes.splice(0, flashes.length - 24)
     }
 
-    const draw = (now: number) => {
-      context.setTransform(dpr, 0, 0, dpr, 0, 0)
-      context.clearRect(0, 0, width, height)
-
-      /* Faint lab grid, same idea as the PhysicsCanvas minor grid. */
-      context.beginPath()
-      for (let x = GRID; x < width; x += GRID) {
-        context.moveTo(x + 0.5, 0)
-        context.lineTo(x + 0.5, height)
-      }
-      for (let y = GRID; y < height; y += GRID) {
-        context.moveTo(0, y + 0.5)
-        context.lineTo(width, y + 0.5)
-      }
+    const drawGrid = () => {
+      /* Minor grid every cell, major every fourth — the PhysicsCanvas
+         convention at a fraction of its weight, so it reads as paper. */
       context.strokeStyle = palette.grid
-      context.globalAlpha = 0.34
       context.lineWidth = 1
-      context.stroke()
+      for (const [alpha, major] of [[0.2, false], [0.36, true]] as [number, boolean][]) {
+        context.globalAlpha = alpha
+        context.beginPath()
+        for (let x = GRID, i = 1; x < width; x += GRID, i += 1) {
+          if ((i % 4 === 0) !== major) continue
+          context.moveTo(x + 0.5, 0)
+          context.lineTo(x + 0.5, height)
+        }
+        for (let y = GRID, i = 1; y < height; y += GRID, i += 1) {
+          if ((i % 4 === 0) !== major) continue
+          context.moveTo(0, y + 0.5)
+          context.lineTo(width, y + 0.5)
+        }
+        context.stroke()
+      }
       context.globalAlpha = 1
+    }
 
-      /* Trails. */
+    const drawTrails = () => {
       for (const ball of balls) {
         if (ball.trail.length < 2) continue
         for (const [i, to] of ball.trail.entries()) {
@@ -345,76 +407,189 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
           context.moveTo(from.x, from.y)
           context.lineTo(to.x, to.y)
           context.strokeStyle = palette.trajectory
-          context.globalAlpha = 0.04 + t * 0.26
-          context.lineWidth = 1.2 + t * 0.9
+          context.globalAlpha = 0.03 + t * (ball.r >= HEAVY_R ? 0.24 : 0.15)
+          /* The wake is proportional to the body: a light ball drags a thread,
+             a heavy one a ribbon. */
+          context.lineWidth = Math.min(3.4, ball.r * (0.1 + t * 0.13))
           context.lineCap = 'round'
           context.stroke()
         }
       }
       context.globalAlpha = 1
+    }
 
-      /* Contact flashes: an expanding ring that fades — the "碰撞" beat. */
+    const drawFlashes = (now: number) => {
+      /* Expanding ring — the "碰撞" beat. The radius eases out so the ring snaps
+         open then drifts; a hard hit echoes in the amber highlight. */
       for (const flash of flashes) {
-        const p = Math.min(1, (now - flash.born) / FLASH_LIFE)
-        const radius = 4 + p * (18 + flash.strength * 16)
+        const age = (now - flash.born) / FLASH_LIFE
+        if (age < 0) continue
+        const p = clamp01(age)
+        const radius = 4 + (1 - (1 - p) * (1 - p)) * (16 + flash.strength * 18)
+        const fade = 1 - p
         context.beginPath()
         context.arc(flash.x, flash.y, radius, 0, Math.PI * 2)
         context.strokeStyle = palette.live
-        context.globalAlpha = (1 - p) * (0.28 + flash.strength * 0.36)
-        context.lineWidth = 1.6 - p
+        context.globalAlpha = fade * (0.24 + flash.strength * 0.4)
+        context.lineWidth = 1.7 - p * 1.1
         context.stroke()
+        if (flash.strength > 0.55) {
+          context.beginPath()
+          context.arc(flash.x, flash.y, radius * 0.62, 0, Math.PI * 2)
+          context.strokeStyle = palette.ring
+          context.globalAlpha = fade * 0.4 * flash.strength
+          context.lineWidth = 1
+          context.stroke()
+        }
         if (flash.strength > 0.7) {
           context.beginPath()
-          context.arc(flash.x, flash.y, radius * 0.55, 0, Math.PI * 2)
+          context.arc(flash.x, flash.y, radius * 0.4, 0, Math.PI * 2)
           context.fillStyle = palette.live
-          context.globalAlpha = (1 - p) * 0.1
+          context.globalAlpha = fade * 0.12 * flash.strength
           context.fill()
         }
       }
       context.globalAlpha = 1
+    }
 
-      /* Balls. */
-      for (const ball of balls) {
+    const drawBody = (ball: Ball, now: number) => {
+      const scale = popScale(ball, now)
+      if (scale <= 0.01) return
+      const r = ball.r * scale
+      const heavy = ball.r >= HEAVY_R
+      const sx = ball.x + r * 0.2
+      const sy = ball.y + r * 0.34
+      /* The shading is derived from the body stroke so it follows whatever
+         theme token the canvas is painted with, instead of a fixed navy. */
+      const [sr, sg, sb] = rgbTriple(palette.stroke)
+      const rgba = (alpha: number): string => `rgba(${sr}, ${sg}, ${sb}, ${alpha})`
+
+      /* Contact shadow, offset down-right: the sphere floats above the paper. */
+      const shadow = context.createRadialGradient(sx, sy, r * 0.1, sx, sy, r * 1.18)
+      shadow.addColorStop(0, rgba(0.16))
+      shadow.addColorStop(1, rgba(0))
+      context.beginPath()
+      context.arc(sx, sy, r * 1.18, 0, Math.PI * 2)
+      context.fillStyle = shadow
+      context.fill()
+
+      context.beginPath()
+      context.arc(ball.x, ball.y, r, 0, Math.PI * 2)
+      context.fillStyle = palette.fill
+      context.fill()
+
+      /* Lit from the upper left, darkened toward the rim. */
+      const shade = context.createRadialGradient(
+        ball.x - r * 0.3, ball.y - r * 0.34, r * 0.15,
+        ball.x, ball.y, r,
+      )
+      shade.addColorStop(0, 'rgba(255, 255, 255, 0.6)')
+      shade.addColorStop(0.42, 'rgba(255, 255, 255, 0)')
+      shade.addColorStop(0.86, rgba(0.07))
+      shade.addColorStop(1, rgba(0.19))
+      context.fillStyle = shade
+      context.fill()
+
+      context.lineWidth = heavy ? 1.7 : 1.4
+      context.strokeStyle = heavy ? palette.live : palette.stroke
+      context.globalAlpha = heavy ? 0.95 : 0.78
+      context.stroke()
+      context.globalAlpha = 1
+
+      /* Inner hairline just inside the rim — the same glass edge the canvas
+         bodies carry; it keeps the sphere crisp where trails cross it. */
+      if (r > 6) {
         context.beginPath()
-        context.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2)
-        context.fillStyle = palette.fill
-        context.fill()
-        context.lineWidth = 1.5
-        context.strokeStyle = ball.r >= 12 ? palette.live : palette.stroke
+        context.arc(ball.x, ball.y, r - 2.6, 0, Math.PI * 2)
+        context.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+        context.lineWidth = 1
         context.stroke()
-        /* Specular dot, mirroring the canvas body primitive. */
-        context.beginPath()
-        context.arc(ball.x - ball.r * 0.32, ball.y - ball.r * 0.34, ball.r * 0.24, 0, Math.PI * 2)
-        context.fillStyle = 'rgba(255,255,255,0.7)'
-        context.fill()
+      }
 
-        /* Velocity arrow on the larger bodies. */
-        if (ball.r >= 12) {
-          const speed = Math.hypot(ball.vx, ball.vy)
-          if (speed > 1) {
-            const len = 14 + (speed / MAX_SPEED) * 22
-            const ux = ball.vx / speed
-            const uy = ball.vy / speed
-            const sx = ball.x + ux * (ball.r + 2)
-            const sy = ball.y + uy * (ball.r + 2)
-            const ex = sx + ux * len
-            const ey = sy + uy * len
-            context.beginPath()
-            context.moveTo(sx, sy)
-            context.lineTo(ex, ey)
-            context.strokeStyle = palette.velocity
-            context.lineWidth = 1.8
-            context.lineCap = 'round'
-            context.stroke()
-            context.beginPath()
-            context.moveTo(ex + ux * 5, ey + uy * 5)
-            context.lineTo(ex - uy * 3.4, ey + ux * 3.4)
-            context.lineTo(ex + uy * 3.4, ey - ux * 3.4)
-            context.closePath()
-            context.fillStyle = palette.velocity
-            context.fill()
-          }
-        }
+      /* Specular glint, plus a small bounce-light dot opposite it. */
+      context.beginPath()
+      context.arc(ball.x - r * 0.34, ball.y - r * 0.36, r * 0.23, 0, Math.PI * 2)
+      context.fillStyle = 'rgba(255, 255, 255, 0.8)'
+      context.fill()
+      if (r > 9) {
+        context.beginPath()
+        context.arc(ball.x + r * 0.3, ball.y + r * 0.42, r * 0.1, 0, Math.PI * 2)
+        context.fillStyle = 'rgba(255, 255, 255, 0.32)'
+        context.fill()
+      }
+    }
+
+    const arrowHead = (ex: number, ey: number, ux: number, uy: number, size: number, wing: number) => {
+      context.beginPath()
+      context.moveTo(ex + ux * size, ey + uy * size)
+      context.lineTo(ex - uy * wing, ey + ux * wing)
+      context.lineTo(ex + uy * wing, ey - ux * wing)
+      context.closePath()
+    }
+
+    const drawVelocityArrow = (ball: Ball, now: number) => {
+      const speed = Math.hypot(ball.vx, ball.vy)
+      /* A near-stopped body has no honest direction: fade the arrow out instead
+         of letting it spin through a full revolution as the vector flips. */
+      const alpha = clamp01((speed - 14) / 44) * popScale(ball, now)
+      if (alpha <= 0.02) return
+      const scale = popScale(ball, now)
+      const r = ball.r * scale
+      /* sqrt so the arrow grows with momentum without running off the stage. */
+      const len = (10 + Math.sqrt(Math.min(speed / MAX_SPEED, 1.25)) * (ball.r * 0.55 + 12)) * scale
+      const ux = ball.vx / speed
+      const uy = ball.vy / speed
+      const sx = ball.x + ux * (r + 3.5)
+      const sy = ball.y + uy * (r + 3.5)
+      const ex = sx + ux * len
+      const ey = sy + uy * len
+      const size = 5.2 + ball.r * 0.13
+      const wing = 3.2 + ball.r * 0.08
+      const tailX = ex - ux * size * 0.5
+      const tailY = ey - uy * size * 0.5
+
+      context.globalAlpha = alpha
+      context.lineCap = 'round'
+      context.lineJoin = 'round'
+      /* White halo under the coloured stroke so the arrow reads on the grid,
+         across a trail, or over the body it is leaving. */
+      context.strokeStyle = 'rgba(255, 255, 255, 0.8)'
+      context.lineWidth = 4.4
+      context.beginPath()
+      context.moveTo(sx, sy)
+      context.lineTo(tailX, tailY)
+      context.stroke()
+      arrowHead(ex, ey, ux, uy, size, wing)
+      context.fillStyle = 'rgba(255, 255, 255, 0.8)'
+      context.fill()
+
+      context.strokeStyle = palette.velocity
+      context.lineWidth = 1.9
+      context.beginPath()
+      context.moveTo(sx, sy)
+      context.lineTo(tailX, tailY)
+      context.stroke()
+      arrowHead(ex, ey, ux, uy, size, wing)
+      context.fillStyle = palette.velocity
+      context.fill()
+      context.globalAlpha = 1
+    }
+
+    const draw = (now: number) => {
+      context.setTransform(dpr, 0, 0, dpr, 0, 0)
+      context.clearRect(0, 0, width, height)
+
+      drawGrid()
+      drawTrails()
+      drawFlashes(now)
+
+      /* Light bodies first, heavy ones last: the stack reads with depth and the
+         big spheres carry the eye across the stage. */
+      const ordered = [...balls].sort((a, b) => a.r - b.r)
+      for (const ball of ordered) drawBody(ball, now)
+      /* Arrows above every body, so a vector is never clipped by a neighbour. */
+      for (const ball of ordered) {
+        if (ball.r >= HEAVY_R) drawVelocityArrow(ball, now)
       }
     }
 
@@ -488,6 +663,7 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
       const rect = host.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
+      let strongest = 0
       for (const ball of balls) {
         const dx = ball.x - x
         const dy = ball.y - y
@@ -496,9 +672,10 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
           const push = (1 - d / 180) * 240
           ball.vx += (dx / d) * push
           ball.vy += (dy / d) * push
+          strongest = Math.max(strongest, push)
         }
       }
-      flashes.push({ x, y, born: performance.now(), strength: 1 })
+      flashes.push({ x, y, born: performance.now(), strength: strongest > 0 ? clamp01(strongest / 200) : 1 })
     }
     host.addEventListener('pointermove', onMove)
     host.addEventListener('pointerleave', onLeave)

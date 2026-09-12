@@ -31,13 +31,21 @@ export function InductionRenderer({ view, projection }: RendererProps) {
   const bar = view.inductionBar
   const coil = view.inductionCoil
   const current = view.inductionCurrent
+  const rails = view.inductionRails
+  const pairBars = view.inductionPairBars
+  const forceArrows = view.inductionForceArrows
   if (field === undefined) return <></>
 
   const fx = projection.px(field.origin)
   const fy = projection.py({ x: field.origin.x, y: field.origin.y + field.size.height })
   const fw =
     projection.px({ x: field.origin.x + field.size.width, y: field.origin.y }) - fx
-  const fh = fy - projection.py(field.origin)
+  /* The projection flips y (scene +y is up, screen y grows down), so the
+     screen top is py(origin.y + height) and the box height is the absolute
+     difference — a raw `fy - py(origin)` is negative and Chrome rejects a
+     negative rect height. */
+  const fh = Math.abs(fy - projection.py(field.origin))
+  const boxTop = Math.min(fy, projection.py(field.origin))
 
   /* ✕ marks (into page) on a coarse grid inside the field box. */
   const marks: Array<{ x: number; y: number }> = []
@@ -47,7 +55,7 @@ export function InductionRenderer({ view, projection }: RendererProps) {
     for (let row = 0; row < rows; row += 1) {
       marks.push({
         x: fx + ((col + 0.5) * fw) / cols,
-        y: fy + ((row + 0.5) * fh) / rows,
+        y: boxTop + ((row + 0.5) * fh) / rows,
       })
     }
   }
@@ -57,7 +65,7 @@ export function InductionRenderer({ view, projection }: RendererProps) {
     <>
       {/* Uniform field box with into-page marks */}
       <g className={projection.highlighted(field.id) ? css.highlightGroup : undefined}>
-        <rect className={css.inductionFieldBox} x={fx} y={fy} width={fw} height={fh} />
+        <rect className={css.inductionFieldBox} x={fx} y={boxTop} width={fw} height={fh} />
         {marks.map((mark, index) => (
           <g key={index} className={css.inductionFieldMark}>
             <line x1={mark.x - markHalf} y1={mark.y - markHalf} x2={mark.x + markHalf} y2={mark.y + markHalf} />
@@ -66,16 +74,90 @@ export function InductionRenderer({ view, projection }: RendererProps) {
         ))}
       </g>
 
-      {/* The conducting rod, vertical, spanning the field height (bar_motion) */}
+      {/* Rails — drawn for every rail rig, single- or double-bar. Each rail is
+          a conductor band: a dark baseline plus a lighter top edge so the pair
+          reads as metal, not as two plot lines. */}
+      {rails === undefined ? null : rails.map((rail) => {
+        const from = { x: projection.px(rail.from), y: projection.py(rail.from) }
+        const to = { x: projection.px(rail.to), y: projection.py(rail.to) }
+        return (
+          <g key={rail.id}>
+            <line
+              className={css.inductionRailEdge}
+              x1={from.x}
+              y1={from.y - 1.4}
+              x2={to.x}
+              y2={to.y - 1.4}
+            />
+            <line
+              className={css.inductionRail}
+              x1={from.x}
+              y1={from.y}
+              x2={to.x}
+              y2={to.y}
+            />
+          </g>
+        )
+      })}
+
+      {/* Loop closure: the resistor wire bridging the rails at the left end
+          (bar_motion). The zigzag sits mid-wire so the element reads as a
+          resistor, not a rail joint. */}
+      {view.inductionResistor === undefined ? null : (() => {
+        const resistor = view.inductionResistor
+        const cx = projection.px(resistor.at)
+        const topY = projection.py({ x: 0, y: resistor.at.y + resistor.span / 2 })
+        const bottomY = projection.py({ x: 0, y: resistor.at.y - resistor.span / 2 })
+        const midY = (topY + bottomY) / 2
+        const lead = (bottomY - topY) * 0.28
+        /* Zigzag between the two leads: 6 half-cycles, ±4.5 px wide. */
+        const zig = Array.from({ length: 6 }, (_, i) =>
+          `L${cx + (i % 2 === 0 ? 4.5 : -4.5)} ${topY + lead + ((i + 0.5) / 6) * (bottomY - topY - lead * 2)}`)
+          .join(' ')
+        return (
+          <g className={projection.highlighted(resistor.id) ? css.highlightGroup : undefined}>
+            <path
+              className={css.inductionResistor}
+              d={`M${cx} ${topY} L${cx} ${topY + lead} ${zig} L${cx} ${bottomY}`}
+            />
+            <text className={css.inductionResistorLabel} x={cx - 8} y={midY + 4} textAnchor="end">
+              {resistor.label}
+            </text>
+          </g>
+        )
+      })()}
+
+      {/* The conducting rod: a metal bar bridging the rails, with contact dots
+          at the rail crossings and a velocity arrow in its slide direction. */}
       {bar !== undefined && view.visible.barMotion === true
         ? (() => {
           const bx = projection.px(bar.at)
           const topY = projection.py({ x: 0, y: bar.at.y + bar.length / 2 })
           const bottomY = projection.py({ x: 0, y: bar.at.y - bar.length / 2 })
+          const arrowTail = { x: bx + 6, y: topY - 12 }
+          const arrowTip = { x: bx + 6 + bar.direction * 34, y: topY - 12 }
+          const ux = bar.direction
           return (
             <g className={projection.highlighted(bar.id) ? css.highlightGroup : undefined}>
+              <line className={css.inductionRodBed} x1={bx} y1={topY} x2={bx} y2={bottomY} />
               <line className={css.inductionRod} x1={bx} y1={topY} x2={bx} y2={bottomY} />
-              <text className={css.annotation} x={bx + 10} y={topY - 6}>
+              <circle className={css.inductionRodContact} cx={bx} cy={topY} r={3.2} />
+              <circle className={css.inductionRodContact} cx={bx} cy={bottomY} r={3.2} />
+              <line
+                className={css.inductionVelocity}
+                x1={arrowTail.x}
+                y1={arrowTail.y}
+                x2={arrowTip.x}
+                y2={arrowTip.y}
+              />
+              <path
+                className={css.inductionVelocityHead}
+                d={headAt(arrowTip.x, arrowTip.y, ux, 0, 7)}
+              />
+              <text className={css.inductionVelocityLabel} x={(arrowTail.x + arrowTip.x) / 2} y={arrowTail.y - 5} textAnchor="middle">
+                v
+              </text>
+              <text className={css.annotation} x={bx + 10} y={topY - 26}>
                 {bar.label}
               </text>
             </g>
@@ -115,6 +197,71 @@ export function InductionRenderer({ view, projection }: RendererProps) {
             </g>
           )
         })()
+        : null}
+
+      {/* Two bars of the double_bar_rail rig (the rails themselves are drawn
+          above, shared with the single-bar rig). */}
+      {pairBars !== undefined
+        ? (
+          <>
+            {pairBars.map((pairBar) => {
+              const bx = projection.px(pairBar.at)
+              const topY = projection.py({ x: 0, y: pairBar.at.y + pairBar.length / 2 })
+              const bottomY = projection.py({ x: 0, y: pairBar.at.y - pairBar.length / 2 })
+              return (
+                <g
+                  key={pairBar.id}
+                  className={projection.highlighted(pairBar.id) ? css.highlightGroup : undefined}
+                >
+                  <line className={css.inductionRod} x1={bx} y1={topY} x2={bx} y2={bottomY} />
+                  <text className={css.annotation} x={bx + 10} y={topY - 4}>
+                    {pairBar.label}
+                  </text>
+                </g>
+              )
+            })}
+          </>
+        )
+        : null}
+
+      {/* Magnetic force arrows on each bar (double_bar_rail); engine BIL facts.
+          They carry the force colour, not the current colour: the same rig shows
+          an induced current in amber, so a force drawn in amber would read as a
+          second current. The arrow length is ∝ |F|, so the braking force visibly
+          fades as the bars approach a common velocity. */}
+      {forceArrows !== undefined
+        ? forceArrows.map((arrow) => {
+          const tail = { x: projection.px(arrow.at), y: projection.py(arrow.at) }
+          const tip = {
+            x: projection.px({ x: arrow.at.x + arrow.direction * arrow.length, y: arrow.at.y }),
+            y: projection.py(arrow.at),
+          }
+          const dx = tip.x - tail.x
+          const dy = tip.y - tail.y
+          const length = Math.hypot(dx, dy)
+          const ux = length === 0 ? arrow.direction : dx / length
+          const uy = length === 0 ? 0 : dy / length
+          /* Bar 1 sits above the rails, bar 2 below: keep each label on the
+             outside of its arrow so it never lands on a rail. */
+          const above = arrow.at.y > 0
+          return (
+            <g
+              key={arrow.id}
+              className={projection.highlighted(arrow.id) ? css.highlightGroup : undefined}
+            >
+              <line className={css.inductionForceArrow} x1={tail.x} y1={tail.y} x2={tip.x} y2={tip.y} />
+              <path className={css.inductionForceHead} d={headAt(tip.x, tip.y, ux, uy, 7)} />
+              <text
+                className={css.inductionForceLabel}
+                x={(tail.x + tip.x) / 2}
+                y={above ? tail.y - 7 : tail.y + 15}
+                textAnchor="middle"
+              >
+                {arrow.label}
+              </text>
+            </g>
+          )
+        })
         : null}
 
       {/* Induced-current arrow on the loop rail; sign = engine's Lenz readout */}

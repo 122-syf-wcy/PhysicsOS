@@ -56,7 +56,10 @@ import type {
 } from './scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 
-/** Bar sweep window: enough for a visible crossing at the default v = 2 m/s. */
+/** Bar sweep window: enough for a visible crossing at the default v = 2 m/s.
+    The double_bar_rail rig needs a longer window — its relative velocity decays
+    with τ = R·m₁m₂/(B²L²(m₁+m₂)) ≈ 10 s on the defaults — so the run length
+    comes from the scene's timeline (the double-bar factory stamps 10 s). */
 const RUN_DURATION_SECONDS = 5
 
 const OBSERVABLE_LABELS: Record<string, string> = {
@@ -64,6 +67,7 @@ const OBSERVABLE_LABELS: Record<string, string> = {
   inductionCurrent: '感应电流',
   flux: '磁通量',
   barMotion: '导体棒运动',
+  barVelocity: '双棒速度',
 }
 
 const DERIVED_LABELS: Record<string, string> = {
@@ -71,16 +75,27 @@ const DERIVED_LABELS: Record<string, string> = {
   induced_current: '感应电流 I',
   loop_resistance: '回路电阻 R',
   magnetic_flux_density: '磁感应强度 B',
-  bar_length: '棒长 L',
+  bar_length: '棒长 L（导轨间距）',
   bar_velocity: '棒速 v',
   flux_rate: '磁通量变化率 dΦ/dt',
   magnetic_flux: '磁通量 Φ',
   lenz_direction: '感应方向（+1/−1）',
+  bar1_velocity: '棒 1 速度 v₁',
+  bar2_velocity: '棒 2 速度 v₂',
+  relative_velocity: '相对速度 u = v₁ − v₂',
+  magnetic_force: '磁力 F磁 = BIL',
+  momentum1: '棒 1 动量 p₁',
+  momentum2: '棒 2 动量 p₂',
+  kinetic_energy: '总动能 K',
+  joule_heat: '焦耳热 Q',
 }
 
 const VERIFICATION_LABELS: Record<string, string> = {
-  faraday_law: '法拉第定律 E = BLv / E = -dΦ/dt',
+  faraday_law: '法拉第定律 E = BLv / E = -dΦ/dt / E = BL(v₁−v₂)',
   lenz_direction: '楞次定律方向',
+  lenz_force_opposes_relative_motion: '楞次定律：磁力阻碍相对运动',
+  momentum_conservation: '动量守恒（无外力双棒）',
+  energy_bookkeeping: '能量守恒：K + Q = K₀ + W',
   ohm_law_loop: '回路欧姆定律 I = E/R',
   scene_schema_version: '场景结构有效',
   scene_revision_valid: '场景修订有效',
@@ -99,9 +114,24 @@ const verificationLabelOf = (id: string): string =>
 
 const derivedLabelOf = (key: string): string => DERIVED_LABELS[key] ?? key
 
+/** The run window comes from the scene's timeline (double-bar stamps 10 s). */
+const runDurationOf = (scene: PhysicsScene): number => {
+  const end = scene.timeline.endTime
+  return end === undefined ? RUN_DURATION_SECONDS : canonicalValue(end)
+}
+
 interface Computed {
   readonly simulation: SimulationResult
   readonly model: ResolvedInductionModel
+}
+
+/** The signed engine fact behind the 感应方向 sentence: a sweeping bar quotes
+ *  its derived EMF (E = BLv, sign = cutting direction), a coil rig quotes the
+ *  stated flux rate dΦ/dt. Both are engine published values, never recomputed. */
+const lenzReadoutOf = (simulation: SimulationResult, model: ResolvedInductionModel): number => {
+  const key = model.subModel === 'bar_motion_emf' ? 'induced_emf' : 'flux_rate'
+  const entry = simulation.derivedQuantities.find(candidate => candidate.key === key)
+  return entry === undefined || !isScalarQuantity(entry.value) ? Number.NaN : entry.value.value
 }
 
 export class InductionWorkspaceRuntime implements WorkspaceRuntime {
@@ -146,7 +176,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         return
       }
       const model = resolveInductionModel(scene)
-      this.currentTime = Math.min(this.currentTime, RUN_DURATION_SECONDS)
+      this.currentTime = Math.min(this.currentTime, runDurationOf(scene))
       this.failure = undefined
       this.computed = { simulation, model }
     } catch (error: unknown) {
@@ -216,11 +246,17 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
+    /* The frame is drawn from the engine's EXACT state at the clock time, not
+       the nearest of 61 samples: on the double-bar rig (τ = 0.25 s) a sample
+       can sit 0.03 s from the clock, and the E / v readouts would then belong
+       to a different instant than the "t =" printed beside them. */
+    const frameState = this.engine.stateAt(scene, quantity(this.currentTime, 's', 'time'))
     const view = inductionSceneVisual({
       scene,
       model,
       simulation,
       time: this.currentTime,
+      state: frameState,
     })
 
     const status =
@@ -239,7 +275,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
       view: this.highlighted.length === 0 ? view : { ...view, highlighted: this.highlighted },
       ariaLabel: `${title}的可验证物理画布`,
       tree: this.treeOf(scene, bench),
-      inspector: this.inspectorOf(bench, model),
+      inspector: this.inspectorOf(bench, model, frameState.derived),
       charts: chartsOf(simulation, model),
       table: tableOf(model, simulation),
       derivation: simulation.derivedQuantities
@@ -264,7 +300,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
       /* The bar sweep is the animation; a flux_change run is a steady reading. */
       clock: {
         time: this.currentTime,
-        total: RUN_DURATION_SECONDS,
+        total: runDurationOf(scene),
         running: this.running,
         rate: this.rate,
       },
@@ -283,10 +319,11 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
 
   private treeOf(scene: PhysicsScene, bench: InductionBench): readonly SceneTreeNode[] {
     const model = this.computed?.model
+    const isDoubleBar = bench.type === 'double_bar_rail'
     const benchChildren: SceneTreeNode[] = [
       {
         id: bench.id,
-        label: bench.type === 'bar_motion' ? '导体棒与导轨' : '线圈',
+        label: isDoubleBar ? '导轨与双棒' : bench.type === 'bar_motion' ? '导体棒与导轨' : '线圈',
         secondary: model === undefined
           ? ''
           : `B = ${fmtInductionValue(model.magneticFluxDensity, 3)} T · R = ${fmtInductionValue(model.resistance, 3)} Ω`,
@@ -299,6 +336,26 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         id: `${bench.id}.bar`,
         label: '导体棒',
         secondary: `L = ${fmtInductionValue(canonicalValue(bench.barLength) * 100, 3)} cm · v = ${model === undefined ? '—' : fmtInductionValue(model.barVelocity, 3)} m/s`,
+        icon: 'body' as const,
+        kind: 'object' as const,
+      })
+    }
+    if (isDoubleBar) {
+      benchChildren.push({
+        id: `${bench.id}.bar1`,
+        label: '棒 1（左）',
+        secondary: model === undefined
+          ? ''
+          : `m₁ = ${fmtInductionValue((model.barMasses?.[0] ?? 0) * 1000, 3)} g · v₁₀ = ${fmtInductionValue(model.barVelocities?.[0] ?? 0, 3)} m/s`,
+        icon: 'body' as const,
+        kind: 'object' as const,
+      })
+      benchChildren.push({
+        id: `${bench.id}.bar2`,
+        label: '棒 2（右）',
+        secondary: model === undefined
+          ? ''
+          : `m₂ = ${fmtInductionValue((model.barMasses?.[1] ?? 0) * 1000, 3)} g · v₂₀ = ${fmtInductionValue(model.barVelocities?.[1] ?? 0, 3)} m/s`,
         icon: 'body' as const,
         kind: 'object' as const,
       })
@@ -317,7 +374,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
       },
     )
     return [
-      { id: 'bench', label: bench.type === 'bar_motion' ? '切割磁感线装置' : '磁通量变化装置', icon: 'folder', kind: 'group', children: benchChildren },
+      { id: 'bench', label: bench.type === 'bar_motion' ? '切割磁感线装置' : bench.type === 'double_bar_rail' ? '导轨双棒装置' : '磁通量变化装置', icon: 'folder', kind: 'group', children: benchChildren },
       { id: 'observables', label: '可观察量', icon: 'folder', kind: 'group', children: observableChildren },
     ]
   }
@@ -325,9 +382,11 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   private inspectorOf(
     bench: InductionBench,
     model: ResolvedInductionModel | undefined,
+    frameDerived?: SimulationResult['derivedQuantities'],
   ): readonly InspectorSection[] {
     const sections: InspectorSection[] = []
     const isBar = bench.type === 'bar_motion'
+    const isDoubleBar = bench.type === 'double_bar_rail'
 
     const parameters: QuantityParameter[] = [
       {
@@ -384,6 +443,83 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
           highlights: `${bench.id}.bar`,
         },
       )
+    } else if (isDoubleBar) {
+      parameters.push(
+        {
+          id: 'bar-length',
+          label: '导轨间距（棒长）',
+          symbol: 'L',
+          unit: 'cm',
+          value: model === undefined
+            ? Number.NaN
+            : Number.parseFloat((model.barLength * 100).toFixed(1)),
+          min: 5,
+          step: 5,
+          highlights: bench.id,
+        },
+        {
+          id: 'bar-mass-1',
+          label: '棒 1 质量',
+          symbol: 'm₁',
+          unit: 'g',
+          value: model === undefined
+            ? Number.NaN
+            : Number.parseFloat(((model.barMasses?.[0] ?? 1) * 1000).toFixed(1)),
+          min: 10,
+          step: 10,
+          highlights: `${bench.id}.bar1`,
+        },
+        {
+          id: 'bar-mass-2',
+          label: '棒 2 质量',
+          symbol: 'm₂',
+          unit: 'g',
+          value: model === undefined
+            ? Number.NaN
+            : Number.parseFloat(((model.barMasses?.[1] ?? 1) * 1000).toFixed(1)),
+          min: 10,
+          step: 10,
+          highlights: `${bench.id}.bar2`,
+        },
+        {
+          id: 'bar-velocity-1',
+          label: '棒 1 初速度（正负 = 方向）',
+          symbol: 'v₁₀',
+          unit: 'm/s',
+          value: model === undefined
+            ? Number.NaN
+            : Number.parseFloat((model.barVelocities?.[0] ?? 0).toFixed(2)),
+          min: -10,
+          max: 10,
+          step: 0.5,
+          highlights: `${bench.id}.bar1`,
+        },
+        {
+          id: 'bar-velocity-2',
+          label: '棒 2 初速度（正负 = 方向）',
+          symbol: 'v₂₀',
+          unit: 'm/s',
+          value: model === undefined
+            ? Number.NaN
+            : Number.parseFloat((model.barVelocities?.[1] ?? 0).toFixed(2)),
+          min: -10,
+          max: 10,
+          step: 0.5,
+          highlights: `${bench.id}.bar2`,
+        },
+        {
+          id: 'external-force',
+          label: '棒 1 恒定外力（0 = 自由双棒）',
+          symbol: 'F',
+          unit: 'N',
+          value: model === undefined
+            ? Number.NaN
+            : Number.parseFloat((model.externalForce ?? 0).toFixed(3)),
+          min: 0,
+          step: 0.01,
+          highlights: `${bench.id}.bar1`,
+        },
+      )
     } else {
       parameters.push({
         id: 'flux-rate',
@@ -399,10 +535,18 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         highlights: bench.id,
       })
     }
-    sections.push({ id: 'bench', title: isBar ? '切割磁感线' : '磁通量变化', parameters })
+    sections.push({
+      id: 'bench',
+      title: isBar ? '切割磁感线' : isDoubleBar ? '导轨双棒' : '磁通量变化',
+      parameters,
+    })
 
     if (this.computed !== undefined && model !== undefined) {
-      const derived: DerivedQuantityView[] = this.computed.simulation.derivedQuantities
+      /* Derived rows follow the clock: on a time-varying rig the end-of-run
+         snapshot in `simulation.derivedQuantities` would print E ≈ 0 while the
+         canvas beside it reads E = 0.2 V at t = 0. The frame's own derived set
+         is the same engine fact at the instant the student is looking at. */
+      const derived: DerivedQuantityView[] = (frameDerived ?? this.computed.simulation.derivedQuantities)
         .filter(entry => isScalarQuantity(entry.value))
         .map(entry => ({
           id: entry.key,
@@ -416,7 +560,12 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         id: 'lenz-text',
         label: '感应方向',
         symbol: '',
-        value: lenzDirectionText(model),
+        /* Direction facts come from the engine: the bar rig quotes its derived
+           EMF sign, the coil rig quotes the bench's stated flux rate. */
+        value: lenzDirectionText(
+          model.subModel === 'bar_motion_emf',
+          lenzReadoutOf(this.computed.simulation, model),
+        ),
         unit: '',
         highlights: model.benchId,
       })
@@ -454,6 +603,41 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         benchId: bench.id,
         fluxRate: quantity(value, 'Wb/s', 'magnetic_flux_rate'),
       })
+    } else if (id === 'bar-mass-1') {
+      const model = this.computed?.model
+      this.command('SetInductionBarMasses', {
+        benchId: bench.id,
+        masses: [
+          quantity(value, 'g', 'mass'),
+          quantity(model === undefined || model.barMasses === undefined ? 0.1 : model.barMasses[1], 'kg', 'mass'),
+        ],
+      })
+    } else if (id === 'bar-mass-2') {
+      const model = this.computed?.model
+      this.command('SetInductionBarMasses', {
+        benchId: bench.id,
+        masses: [
+          quantity(model === undefined || model.barMasses === undefined ? 0.1 : model.barMasses[0], 'kg', 'mass'),
+          quantity(value, 'g', 'mass'),
+        ],
+      })
+    } else if (id === 'bar-velocity-1') {
+      this.command('SetInductionBarVelocityOne', {
+        benchId: bench.id,
+        barIndex: 1,
+        velocity: quantity(value, 'm/s', 'velocity'),
+      })
+    } else if (id === 'bar-velocity-2') {
+      this.command('SetInductionBarVelocityOne', {
+        benchId: bench.id,
+        barIndex: 2,
+        velocity: quantity(value, 'm/s', 'velocity'),
+      })
+    } else if (id === 'external-force') {
+      this.command('SetInductionExternalForce', {
+        benchId: bench.id,
+        force: quantity(value, 'N', 'force'),
+      })
     }
     return this.getSnapshot()
   }
@@ -474,7 +658,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
 
   setRunning(running: boolean): WorkspaceSnapshot {
     if (running && this.computed !== undefined) {
-      if (this.currentTime >= RUN_DURATION_SECONDS) this.currentTime = 0
+      if (this.currentTime >= runDurationOf(this.sceneRuntime.getScene())) this.currentTime = 0
     }
     this.running = running
     return this.getSnapshot()
@@ -486,8 +670,9 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   seek(time: number): WorkspaceSnapshot {
+    const total = runDurationOf(this.sceneRuntime.getScene())
     this.currentTime = Number.isFinite(time)
-      ? Math.min(RUN_DURATION_SECONDS, Math.max(0, time))
+      ? Math.min(total, Math.max(0, time))
       : 0
     this.running = false
     return this.getSnapshot()
@@ -499,9 +684,10 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
+      const total = runDurationOf(this.sceneRuntime.getScene())
       const next = this.currentTime + wallClockSeconds * this.rate
-      this.currentTime = next >= RUN_DURATION_SECONDS ? RUN_DURATION_SECONDS : next
-      if (this.currentTime >= RUN_DURATION_SECONDS) this.running = false
+      this.currentTime = next >= total ? total : next
+      if (this.currentTime >= total) this.running = false
     }
     return this.getSnapshot()
   }
@@ -552,10 +738,20 @@ const chartsOf = (
     if (entry === undefined || !isScalarQuantity(entry.value)) return { t: canonicalValue(state.time), value: Number.NaN }
     return { t: canonicalValue(state.time), value: entry.value.value }
   })
-  void model
+  /* The curve's shape depends on the rig, not just the sub-model: a free pair
+     decays toward a common velocity (E falls), while a constant pull drives the
+     relative velocity UP to the terminal u∞ (E rises to a plateau). Titling the
+     driven rig "E 减小" would caption the chart against its own data. */
+  const driven = (model.externalForce ?? 0) > 0
+  const title =
+    model.subModel === 'double_bar_rail'
+      ? driven
+        ? '感应电动势 E–t（外力驱动：相对速度趋向 u∞ → E 趋于稳定）'
+        : '感应电动势 E–t（相对速度指数衰减 → E 减小）'
+      : '感应电动势 E–t（匀速切割 / 恒定变化率 → E 恒定）'
   return [{
     id: 'induction-emf',
-    title: '感应电动势 E–t（匀速切割 / 恒定变化率 → E 恒定）',
+    title,
     xLabel: 't / s',
     yLabel: 'E / V',
     role: 'trajectory',
@@ -571,6 +767,26 @@ const tableOf = (model: ResolvedInductionModel, simulation: SimulationResult): D
     return fmtInductionValue(entry.value.value, 4)
   }
   const isBar = model.subModel === 'bar_motion_emf'
+  const isDoubleBar = model.subModel === 'double_bar_rail'
+  if (isDoubleBar) {
+    return {
+      columns: ['B / T', 'L / cm', 'R / Ω', 'm₁ / g', 'm₂ / g', 'v₁₀ / (m/s)', 'v₂₀ / (m/s)', 'E / V', 'I / A'],
+      rows: [{
+        step: 0,
+        values: [
+          fmtInductionValue(model.magneticFluxDensity, 3),
+          fmtInductionValue(model.barLength * 100, 3),
+          fmtInductionValue(model.resistance, 3),
+          fmtInductionValue((model.barMasses?.[0] ?? 0) * 1000, 3),
+          fmtInductionValue((model.barMasses?.[1] ?? 0) * 1000, 3),
+          fmtInductionValue(model.barVelocities?.[0] ?? 0, 3),
+          fmtInductionValue(model.barVelocities?.[1] ?? 0, 3),
+          scalarOf('induced_emf'),
+          scalarOf('induced_current'),
+        ],
+      }],
+    }
+  }
   return {
     columns: isBar
       ? ['B / T', 'L / cm', 'v / (m/s)', 'R / Ω', 'E / V', 'I / A']

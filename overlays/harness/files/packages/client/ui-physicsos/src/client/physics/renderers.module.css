@@ -16,6 +16,13 @@
   fill: none;
 }
 
+/* Parallel-plate field lines: thinner than the lattice arrows so a full-span
+   stroke reads as continuous field ink, not a row of dashes. */
+.electricFieldLine {
+  stroke-width: 0.9;
+  opacity: 0.7;
+}
+
 /* ---------- point-charge streamlines ---------- */
 
 .electricFieldStreamline {
@@ -274,9 +281,11 @@
 }
 
 /* Current direction arrow and its I = … annotation share the velocity token:
-   current is the circuit's "motion". */
+   current is the circuit's "motion". The token is --physics-vector-velocity —
+   the bare --physics-velocity was never defined, so `stroke` fell back to an
+   invalid value and the arrow did not paint at all. */
 .circuitCurrent {
-  stroke: var(--physics-velocity);
+  stroke: var(--physics-vector-velocity);
   stroke-width: 1.6;
   stroke-linecap: round;
   fill: none;
@@ -331,6 +340,9 @@
   stroke-linejoin: round;
   fill: none;
   opacity: 0.92;
+  /* Light reads as light: a warm halo, the same energy vocabulary the screen
+     spot uses. A drop-shadow (like .highlightGroup) so geometry never shifts. */
+  filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--physics-optics-ray) 40%, transparent));
 }
 
 .opticalRayHead {
@@ -473,6 +485,36 @@
   stroke-linejoin: round;
 }
 
+.acousticSourceStand {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.acousticSourceCone {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.2;
+  opacity: 0.65;
+}
+
+/* Static emission arcs at the horn mouth — the "source" mark, distinct from
+   the animated wavefronts that travel with the pulse. */
+.acousticSourceWave {
+  fill: none;
+  stroke: var(--physics-acoustics-wave);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+/* The reflector is a solid face: a filled body behind the reflecting edge. */
+.acousticWallFace {
+  fill: var(--physics-body-fill);
+  opacity: 0.55;
+}
+
 .acousticWallPlate {
   stroke: var(--physics-body-stroke);
   stroke-width: 3.4;
@@ -559,6 +601,26 @@
   user-select: none;
 }
 
+/* The meniscus: the liquid's own surface line, always drawn — the level the
+   displaced volume is measured against. */
+.fluidSurface {
+  stroke: #7fb2d9;
+  stroke-width: 1.6;
+}
+
+/* Dynamometer furniture: the suspension ring, the hook and the dial window. */
+.fluidScaleRing {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.8;
+}
+
+.fluidScaleDial {
+  fill: #fdfefe;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.2;
+}
+
 .fluidWire {
   stroke: var(--physics-body-stroke);
   stroke-width: 1.6;
@@ -637,11 +699,24 @@
   opacity: 0.85;
 }
 
-.thermalTube {
+/* The thermometer tube: a frosted glass capsule the column lives inside. */
+.thermalTubeOuter {
+  fill: rgba(255, 255, 255, 0.72);
   stroke: var(--physics-body-stroke);
-  stroke-width: 5;
-  stroke-linecap: round;
-  opacity: 0.35;
+  stroke-width: 1.6;
+}
+
+.thermalTick {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+/* The melted liquid's surface line — a level, not a fill edge. */
+.thermalSurface {
+  stroke: var(--physics-thermal-heat);
+  stroke-width: 1.4;
+  opacity: 0.7;
 }
 
 .thermalColumn {
@@ -710,9 +785,10 @@
 
 /* ---------------------------------------------------------------- induction -- */
 
-/* The uniform field box: a soft outline with ✕ marks (into page) on a grid. */
+/* The uniform field box: a soft outline with a faint tint so the region reads
+   as a place, with ✕ marks (into page) on a grid. */
 .inductionFieldBox {
-  fill: none;
+  fill: rgba(91, 108, 197, 0.05);
   stroke: var(--physics-induction-field);
   stroke-width: 1.4;
   stroke-dasharray: 5 4;
@@ -730,6 +806,98 @@
   stroke: var(--physics-induction-rod);
   stroke-width: 5;
   stroke-linecap: round;
+}
+
+/* The two rails of a double_bar_rail rig: thin parallel conductors. They take
+   the rod's indigo (they are conductors too) at low opacity so the two sliding
+   bars stay the darkest ink — amber is reserved for the induced current, so a
+   live loop never reads as a hot rail. */
+.inductionRail {
+  stroke: var(--physics-induction-rod);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  opacity: 0.62;
+}
+
+/* The rail's top edge highlight: a lighter parallel line that makes the pair
+   read as a metal band instead of a bare plot line. */
+.inductionRailEdge {
+  stroke: #9aa8d8;
+  stroke-width: 1;
+  opacity: 0.8;
+}
+
+/* A soft under-stroke behind the rod so it reads as a bar resting ON the
+   rails, not a hairline crossing them. */
+.inductionRodBed {
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.inductionRodContact {
+  fill: var(--physics-induction-rod);
+  stroke: #fbfdff;
+  stroke-width: 1.2;
+}
+
+/* Rod velocity arrow — physics velocity green, drawn just above the rod. */
+.inductionVelocity {
+  stroke: var(--physics-vector-velocity);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.inductionVelocityHead {
+  fill: var(--physics-vector-velocity);
+}
+
+.inductionVelocityLabel {
+  fill: var(--physics-vector-velocity);
+  font-size: 10.5px;
+  font-style: italic;
+}
+
+/* The loop-closure resistor: the wire and its zigzag in the conductor ink. */
+.inductionResistor {
+  fill: none;
+  stroke: var(--physics-induction-rod);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+.inductionResistorLabel {
+  fill: var(--physics-induction-rod);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
+}
+
+/* Magnetic (BIL) force on a bar of the double_bar_rail rig. Physics semantic
+   colour: Force is blue (§26), and the magnetic force has its own token so it
+   never reads as the amber induced current flowing in the same rig. */
+.inductionForceArrow {
+  stroke: var(--physics-vector-magnetic-force);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.inductionForceHead {
+  fill: var(--physics-vector-magnetic-force);
+}
+
+/* The force readout rides on top of the field grid, so it keeps the canvas
+   background as a halo (paint-order) the way every canvas annotation does. */
+.inductionForceLabel {
+  fill: var(--physics-vector-magnetic-force);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: #fbfdff;
+  stroke-width: 3px;
 }
 
 /* The coil: a flat loop seen edge-on, drawn as connected arcs. */

@@ -92,6 +92,17 @@ export const IconVelocity = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Collision: two balls approaching along a line, ready to collide. */
+export const IconCollision = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 13h18" />
+    <circle cx="8" cy="13" r="2.6" />
+    <circle cx="16" cy="13" r="2.6" />
+    <path d="M5.4 10.6 3.8 13l1.6 2.4" />
+    <path d="M18.6 10.6l1.6 2.4-1.6 2.4" />
+  </Glyph>
+)
+
 /** Acceleration: a growing double chevron along a shaft. */
 export const IconAcceleration = (props: PhysicsIconProps) => (
   <Glyph {...props}>

@@ -40,6 +40,14 @@ import type {
 
 type MechanicsSimulation = ReturnType<MechanicsEngine['simulate']>
 
+/** Scene-derived facts that only change when the scene itself changes. */
+interface MechanicsSimulationCache {
+  readonly sceneRevision: number
+  readonly simulation: MechanicsSimulation
+  readonly verification: ReturnType<typeof verifyMechanicsSimulation>
+  readonly status: RuntimeStatus
+}
+
 /* -------------------------------------------------------------- snapshot --- */
 
 export interface MechanicsRuntimeSnapshot {
@@ -148,6 +156,8 @@ export class MechanicsRuntimeBridge {
   private traceSequence = 0
   private highlighted: readonly string[] = []
   private snapshot!: MechanicsRuntimeSnapshot
+  /** Simulation of the current scene revision, reused across clock frames. */
+  private simulationCache: MechanicsSimulationCache | undefined
 
   constructor(input: MechanicsSceneInput | PhysicsScene) {
     this.sceneRuntime = new SceneRuntime(
@@ -215,6 +225,9 @@ export class MechanicsRuntimeBridge {
       this.sceneRuntime = new SceneRuntime(
         forkExperimentalScene({ scene: this.sceneRuntime.getScene() }),
       )
+      /* A fresh SceneRuntime restarts the revision counter, so the cached
+         simulation (keyed by revision) must not survive the fork. */
+      this.simulationCache = undefined
       this.currentTime = 0
       this.running = false
     }
@@ -236,6 +249,7 @@ export class MechanicsRuntimeBridge {
   /** Discard the branch and return to the scene the question stated. */
   restoreOrigin(origin: PhysicsScene): MechanicsRuntimeSnapshot {
     this.sceneRuntime = new SceneRuntime(origin)
+    this.simulationCache = undefined
     this.currentTime = 0
     this.running = false
     this.highlighted = []
@@ -392,13 +406,24 @@ export class MechanicsRuntimeBridge {
         return this.snapshot
       }
 
-      const request = createMechanicsSimulationRequest(
-        scene,
-        `mech-sim-${scene.revision}`,
-        `physicsos-mech-${scene.revision}-${this.traceSequence}`,
-      )
-      const simulation = this.engine.simulate(scene, request)
-      const verification = verifyMechanicsSimulation(scene, simulation)
+      /* One simulation per scene revision: the analytical engine is exact at any
+         t, so replaying it every animation frame recomputed 65 states, derived
+         quantities and the verification for identical values. That per-frame work
+         — not the renderer — is what made playback stutter. A command bumps the
+         revision and misses the cache. */
+      const cached = this.simulationCache
+      const fresh = cached === undefined || cached.sceneRevision !== scene.revision
+      const simulation = fresh
+        ? this.engine.simulate(
+          scene,
+          createMechanicsSimulationRequest(
+            scene,
+            `mech-sim-${scene.revision}`,
+            `physicsos-mech-${scene.revision}-${this.traceSequence}`,
+          ),
+        )
+        : cached.simulation
+      const verification = fresh ? verifyMechanicsSimulation(scene, simulation) : cached.verification
       const status: RuntimeStatus =
         simulation.verification.status === 'failed' || verification.status === 'failed'
           ? 'failed'
@@ -406,6 +431,7 @@ export class MechanicsRuntimeBridge {
               verification.status === 'passed_with_warnings'
             ? 'warning'
             : 'verified'
+      this.simulationCache = { sceneRevision: scene.revision, simulation, verification, status }
 
       if (status === 'failed') {
         this.snapshot = this.failedSnapshot(scene, modelId, {

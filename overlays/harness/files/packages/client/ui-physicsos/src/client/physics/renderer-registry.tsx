@@ -29,6 +29,7 @@ import {
   Incline,
   KeyPoint,
   MathLabel,
+  MotionMarks,
   Platform,
   Vectors,
   clsxJoin,
@@ -114,7 +115,7 @@ function MagneticRenderer({ view, projection }: RendererProps) {
         ? view.trajectories.map((trajectory) => {
           const marker = trajectory.points[Math.floor(trajectory.points.length / 4)]
           return (
-            <g key={trajectory.id}>
+            <g key={`${trajectory.id}:${trajectory.kind}`}>
               <path
                 className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
                 d={projection.path(trajectory.points)}
@@ -292,7 +293,7 @@ function ElectricRenderer({ view, projection }: RendererProps) {
       {view.visible.trajectory === true
         ? trajectoryPaths.map(trajectory => (
           <path
-            key={trajectory.id}
+            key={`${trajectory.id}:${trajectory.kind}`}
             className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
             d={trajectory.path}
           />
@@ -444,36 +445,47 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
   const glowId = `pc-region-glow-${projection.uid}`
   const clipId = `pc-region-clip-${projection.uid}`
 
-  /* Field-line lattice: arrows only inside the bounded region. A clipPath
-     keeps the arrows within the rectangle so the lattice never leaks past the
-     plates — the "field is zero outside" fact is carried by geometry, not a
-     label. */
-  const fieldArrows = useMemo(() => {
+  /* Field lines: full-span parallel strokes from plate to plate with one
+     mid-line arrowhead each — the textbook reading of a bounded uniform field.
+     Even spacing carries "uniform"; the region edge carries "zero outside".
+     The whole layer is gated by the 电场 observable so the tree toggle hides
+     both the lines and the E vector. */
+  const fieldLines = useMemo(() => {
     if (boundedField === undefined) return []
     const { at, width, height, direction, spacing } = boundedField
-    const columns = Math.max(1, Math.floor(width / spacing))
-    const rows = Math.max(1, Math.floor(height / spacing))
-    const arrowLength = spacing * 0.58
-    const left = at.x - width / 2
-    const bottom = at.y - height / 2
-    return Array.from({ length: columns }, (_, column) =>
-      Array.from({ length: rows }, (_, row) => {
-        const center = {
-          x: left + spacing * (column + 0.5),
-          y: bottom + spacing * (row + 0.5),
-        }
+    const xMin = at.x - width / 2
+    const yMin = at.y - height / 2
+    const vertical = Math.abs(direction.y) >= Math.abs(direction.x)
+    const across = vertical ? width : height
+    const count = Math.min(14, Math.max(4, Math.round(across / spacing)))
+    const arrow = Math.min(width, height) * 0.06
+    return Array.from({ length: count }, (_, index) => {
+      const t = (index + 0.5) / count
+      if (vertical) {
+        const x = xMin + width * t
+        const yStart = direction.y >= 0 ? yMin : yMin + height
+        const yEnd = direction.y >= 0 ? yMin + height : yMin
+        const yMid = yMin + height / 2
+        const dy = direction.y >= 0 ? arrow : -arrow
         return {
-          from: {
-            x: center.x - direction.x * arrowLength * 0.5,
-            y: center.y - direction.y * arrowLength * 0.5,
-          },
-          to: {
-            x: center.x + direction.x * arrowLength * 0.5,
-            y: center.y + direction.y * arrowLength * 0.5,
-          },
+          from: { x, y: yStart },
+          to: { x, y: yEnd },
+          arrowFrom: { x, y: yMid - dy },
+          arrowTo: { x, y: yMid + dy },
         }
-      }),
-    ).flat()
+      }
+      const y = yMin + height * t
+      const xStart = direction.x >= 0 ? xMin : xMin + width
+      const xEnd = direction.x >= 0 ? xMin + width : xMin
+      const xMid = xMin + width / 2
+      const dx = direction.x >= 0 ? arrow : -arrow
+      return {
+        from: { x: xStart, y },
+        to: { x: xEnd, y },
+        arrowFrom: { x: xMid - dx, y },
+        arrowTo: { x: xMid + dx, y },
+      }
+    })
   }, [boundedField])
 
   return (
@@ -497,26 +509,37 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
         )}
       </defs>
 
-      {/* Bounded field lattice — clipped to the region rectangle */}
-      {boundedField === undefined || fieldArrows.length === 0 ? null : (
+      {/* Bounded field lines — clipped to the region rectangle, hidden when
+          the 电场 observable is off */}
+      {boundedField === undefined || view.visible.electricField !== true || fieldLines.length === 0 ? null : (
         <g className={css.electricFieldLattice} clipPath={`url(#${clipId})`} aria-hidden="true">
-          {fieldArrows.map((arrow, index) => (
-            <line
-              key={index}
-              x1={projection.px(arrow.from)}
-              y1={projection.py(arrow.from)}
-              x2={projection.px(arrow.to)}
-              y2={projection.py(arrow.to)}
-              markerEnd={`url(#${markerId('field', projection.uid)})`}
-            />
+          {fieldLines.map((line, index) => (
+            <g key={index}>
+              <line
+                className={css.electricFieldLine}
+                x1={projection.px(line.from)}
+                y1={projection.py(line.from)}
+                x2={projection.px(line.to)}
+                y2={projection.py(line.to)}
+              />
+              <line
+                x1={projection.px(line.arrowFrom)}
+                y1={projection.py(line.arrowFrom)}
+                x2={projection.px(line.arrowTo)}
+                y2={projection.py(line.arrowTo)}
+                markerEnd={`url(#${markerId('field', projection.uid)})`}
+              />
+            </g>
           ))}
         </g>
       )}
 
-      {/* Region outline: a faint rectangle between the plates */}
+      {/* Region outline with the same light electric tint the composite
+          regions carry: "the field exists in here" should read as an area,
+          not just a hairline box the grid shows straight through. */}
       {boundedField === undefined ? null : (
         <rect
-          className={css.boundedFieldRegion}
+          className={clsxJoin(css.boundedFieldRegion, css.regionTintElectric)}
           x={projection.px({ x: boundedField.at.x - boundedField.width / 2, y: 0 })}
           y={projection.py({ x: 0, y: boundedField.at.y + boundedField.height / 2 })}
           width={boundedField.width * projection.scale}
@@ -539,18 +562,28 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
               height={5}
               rx={1.5}
             />
+            {/* Surface charge signs sit on the plate's inner face — where the
+                charge physically resides — spaced along the whole bar. */}
             {plate.sign === undefined ? null : (
-              <text
-                className={clsxJoin(
-                  css.plateSignLabel,
-                  plate.sign === 'negative' && css.particleLabelNegative,
+              <g aria-hidden="true">
+                {Array.from(
+                  { length: Math.max(3, Math.floor((halfLength * 2) / 26)) },
+                  (_, index) => (
+                    <text
+                      key={index}
+                      className={clsxJoin(
+                        css.plateSignLabel,
+                        plate.sign === 'negative' && css.particleLabelNegative,
+                      )}
+                      x={cx - halfLength + ((index + 0.5) * halfLength * 2) / Math.max(3, Math.floor((halfLength * 2) / 26))}
+                      y={cy + (plate.top ? 14 : -8)}
+                      textAnchor="middle"
+                    >
+                      {plate.sign === 'negative' ? '−' : '+'}
+                    </text>
+                  ),
                 )}
-                x={cx - halfLength - 8}
-                y={cy + 4}
-                textAnchor="end"
-              >
-                {plate.sign === 'negative' ? '−' : '+'}
-              </text>
+              </g>
             )}
           </g>
         )
@@ -560,7 +593,7 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
       {view.visible.trajectory === true
         ? view.trajectories.map(trajectory => (
           <path
-            key={trajectory.id}
+            key={`${trajectory.id}:${trajectory.kind}`}
             className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
             d={projection.path(trajectory.points)}
           />
@@ -727,6 +760,23 @@ function CompositeRenderer({ view, projection }: RendererProps) {
     path: projection.path(trajectory.points),
   })), [projection, view.trajectories])
 
+  /* Region labels stagger upward when two tops land within one text row —
+     the stacked spectrometer regions would otherwise overwrite each other. */
+  const regionLabelY = useMemo(() => {
+    const map = new Map<string, number>()
+    let lastX = Number.NEGATIVE_INFINITY
+    let lastY = 0
+    for (const { region } of [...regionPaint].sort((a, b) => a.region.at.x - b.region.at.x)) {
+      const x = projection.px({ x: region.at.x, y: 0 })
+      let y = projection.py({ x: 0, y: region.at.y + region.height / 2 }) - 6
+      if (x - lastX < 96 && lastY - y < 14) y = lastY - 14
+      lastX = x
+      lastY = y
+      map.set(region.id, y)
+    }
+    return map
+  }, [regionPaint, projection])
+
   return (
     <>
       <defs>
@@ -825,7 +875,7 @@ function CompositeRenderer({ view, projection }: RendererProps) {
             <text
               className={css.annotation}
               x={projection.px({ x: region.at.x, y: 0 })}
-              y={projection.py({ x: 0, y: top }) - 6}
+              y={regionLabelY.get(region.id) ?? projection.py({ x: 0, y: top }) - 6}
               textAnchor="middle"
             >
               {region.label}
@@ -838,7 +888,7 @@ function CompositeRenderer({ view, projection }: RendererProps) {
       {view.visible.trajectory === true
         ? trajectoryPaths.map(trajectory => (
           <path
-            key={trajectory.id}
+            key={`${trajectory.id}:${trajectory.kind}`}
             className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
             d={trajectory.path}
           />
@@ -898,10 +948,14 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
       )}
       {view.ground === undefined ? null : <Ground ground={view.ground} projection={projection} />}
 
+      {view.motionMarks === undefined || view.visible.trajectory !== true ? null : (
+        <MotionMarks marks={view.motionMarks} projection={projection} />
+      )}
+
       {view.visible.trajectory === true
         ? view.trajectories.map(trajectory => (
           <path
-            key={trajectory.id}
+            key={`${trajectory.id}:${trajectory.kind}`}
             className={
               trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
             }
@@ -921,6 +975,19 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
       {view.coordinate === undefined ? null : (
         <Coordinate coordinate={view.coordinate} projection={projection} />
       )}
+
+      {view.guides
+        .filter(guide => view.visible[guide.observable] === true)
+        .map(guide => (
+          <line
+            key={guide.id}
+            className={css.guideLine}
+            x1={projection.px(guide.from)}
+            y1={projection.py(guide.from)}
+            x2={projection.px(guide.to)}
+            y2={projection.py(guide.to)}
+          />
+        ))}
 
       {view.visible.keyPoints === true
         ? view.keyPoints.map(keyPoint => (

@@ -37,6 +37,7 @@ import type {
   LabVectorView,
 } from './lab-view-model.ts'
 import type { SceneVisualModel } from './physics/scene-visual-model.ts'
+import { latticeSpacingOf } from './physics/bridge-helpers.ts'
 
 type MagneticSimulation = ReturnType<MagneticEngine['simulate']>
 type MagneticState = ReturnType<MagneticEngine['stateAtSeconds']>
@@ -92,6 +93,41 @@ const VIEWPORT = {
   velocityArrow: 2.6,
   forceArrow: 1.9,
 } as const
+
+/**
+ * The canvas box for an orbit: the fixed viewport grows so the whole circle
+ * fits with a margin. At small B the cyclotron radius reaches ~20 cm, whose
+ * 42 cm diameter did not fit the old fixed 24 cm box — the orbit left the
+ * canvas as a clipped arc and the student could not see the closed circle
+ * that IS the fact. Grid, lattice and arrows scale with the box so density
+ * and ink stay constant in screen terms; one view unit remains one cm.
+ */
+const viewportFor = (
+  radiusCm: number,
+  fieldStrengthTesla: number,
+): { [K in keyof typeof VIEWPORT]: number } & { scale: number } => {
+  const needed = Number.isFinite(radiusCm) && radiusCm > 0 ? radiusCm * 2 * 1.3 : 0
+  /* The orbit is a circle, so it has to fit BOTH axes. Scaling on width alone
+     kept the box's 24 : 13.5 aspect and left height = 13.5·scale, which is
+     smaller than the diameter the width was sized for — the orbit survived as a
+     clipped arc again, just at a different radius. Scale on whichever axis
+     binds; the box keeps the viewport's aspect either way. */
+  const scale = Math.max(1, needed / VIEWPORT.width, needed / VIEWPORT.height)
+  const width = VIEWPORT.width * scale
+  /* Lattice density tracks |B| (stronger field → denser marks), same rule the
+     electric and composite textures use. */
+  return {
+    ...VIEWPORT,
+    width,
+    height: VIEWPORT.height * scale,
+    fieldSpacing: latticeSpacingOf(VIEWPORT.fieldSpacing * scale, fieldStrengthTesla, B_REFERENCE),
+    velocityArrow: VIEWPORT.velocityArrow * scale,
+    forceArrow: VIEWPORT.forceArrow * scale,
+    scale,
+  }
+}
+
+const B_REFERENCE = 0.5
 
 const OBSERVABLE_KEYS: readonly LabObservableId[] = [
   'velocity',
@@ -436,9 +472,10 @@ const treeOf = (scene: PhysicsScene): readonly LabTreeNode[] => {
 const mapPoint = (
   point: { x: number; y: number; z: number },
   center: { x: number; y: number; z: number },
+  vp: { readonly width: number; readonly height: number } = VIEWPORT,
 ): LabPoint => ({
-  x: VIEWPORT.width / 2 + (point.x - center.x) * 100,
-  y: VIEWPORT.height / 2 + (point.y - center.y) * 100,
+  x: vp.width / 2 + (point.x - center.x) * 100,
+  y: vp.height / 2 + (point.y - center.y) * 100,
 })
 
 const makeArrow = (
@@ -488,8 +525,15 @@ const viewOf = (
   const centerFact = vectorFact(simulation, 'orbit_center')
   const center = centerFact?.vector ?? particleState?.position?.vector ?? { x: 0, y: 0, z: 0 }
   const position = particleState?.position?.vector ?? center
-  const particlePoint = mapPoint(position, center)
-  const centerPoint = mapPoint(center, center)
+  /* The box grows with the engine's own orbit radius, so small-B circles stay
+     fully on canvas. Radius in cm = the derived cyclotron radius (metres) ×100. */
+  const radiusFact = scalarFact(simulation, 'cyclotron_radius')
+  const vp = viewportFor(
+    radiusFact === undefined ? 0 : Math.abs(radiusFact.value) * 100,
+    fieldStrengthOf(scene),
+  )
+  const particlePoint = mapPoint(position, center, vp)
+  const centerPoint = mapPoint(center, center, vp)
   const velocityObservation = findObservation(observations.observations, 'velocity')
   const forceObservation = findObservation(observations.observations, 'lorentz_force')
   const trajectoryObservation = findObservation(observations.observations, 'trajectory')
@@ -503,7 +547,7 @@ const viewOf = (
       'velocity',
       particlePoint,
       velocityObservation.vector.vector,
-      VIEWPORT.velocityArrow,
+      vp.velocityArrow,
       'v',
     )
     if (arrow !== undefined) vectors.push(arrow)
@@ -514,7 +558,7 @@ const viewOf = (
       'force',
       particlePoint,
       forceObservation.vector.vector,
-      VIEWPORT.forceArrow,
+      vp.forceArrow,
       'F',
     )
     if (arrow !== undefined) vectors.push(arrow)
@@ -529,7 +573,7 @@ const viewOf = (
           kind: 'history',
           direction: trajectoryObservation.direction,
           points: trajectoryObservation.points.map(point =>
-            mapPoint(point.position.vector, center),
+            mapPoint(point.position.vector, center, vp),
           ),
         },
       ]
@@ -553,10 +597,10 @@ const viewOf = (
   visible.guides = guidesVisible
 
   return {
-    extent: { width: VIEWPORT.width, height: VIEWPORT.height },
-    grid: { minor: VIEWPORT.minorGrid, major: VIEWPORT.majorGrid },
+    extent: { width: vp.width, height: vp.height },
+    grid: { minor: VIEWPORT.minorGrid * vp.scale, major: VIEWPORT.majorGrid * vp.scale },
     axes: { x: 'x / cm', y: 'y / cm' },
-    field: { direction: fieldDirectionOf(scene), spacing: VIEWPORT.fieldSpacing },
+    field: { direction: fieldDirectionOf(scene), spacing: vp.fieldSpacing },
     particles:
       particle === undefined
         ? []
@@ -568,7 +612,7 @@ const viewOf = (
                 particle.charge?.value !== undefined && particle.charge.value < 0
                   ? 'negative'
                   : 'positive',
-            radius: 0.32,
+            radius: 0.32 * vp.scale,
             symbol: 'q',
           },
         ],
@@ -581,7 +625,10 @@ const viewOf = (
         `B = ${formatNumber(fieldStrengthOf(scene), 2)} T`,
         `方向：${fieldDirectionOf(scene) === 'into-page' ? '垂直纸面向里' : '垂直纸面向外'}`,
       ],
-      scale: { label: `${VIEWPORT.minorGrid} cm`, length: VIEWPORT.minorGrid },
+      scale: {
+        label: `${formatNumber(VIEWPORT.minorGrid * vp.scale, 1)} cm`,
+        length: VIEWPORT.minorGrid * vp.scale,
+      },
     },
     visible,
   }

@@ -71,14 +71,9 @@ import type {
   VerificationCheckView,
 } from './scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
+import { formatSignificant } from './number-format.ts'
 
-const fmt = (value: number, digits = 2): string => {
-  if (!Number.isFinite(value)) return '—'
-  const absolute = Math.abs(value)
-  return absolute !== 0 && (absolute < 1e-3 || absolute >= 1e4)
-    ? value.toExponential(digits)
-    : value.toFixed(digits)
-}
+const fmt = formatSignificant
 
 const derivedText = (derived: DerivedQuantity): string =>
   isQuantityVector(derived.value)
@@ -129,11 +124,15 @@ const OBSERVABLE_LABELS: Record<string, string> = {
   force: '电场力',
   trajectory: '运动轨迹',
   acceleration: '加速度',
+  electric_field: '电场',
+  electric_potential: '电势',
+  energy: '能量',
+  geometry: '几何标注',
 }
 
 const observableKeyOf = (definition: ObservableDefinition): ObservableKey | undefined => {
   if (definition.type === 'velocity') return 'velocity'
-  if (definition.type === 'force') return 'forces'
+  if (definition.type === 'force') return 'force'
   if (definition.type === 'trajectory') return 'trajectory'
   if (definition.type === 'acceleration') return 'acceleration'
   if (definition.type === 'electric_field') return 'electricField'
@@ -1177,7 +1176,21 @@ const regionInspectorOf = (
           id: 'direction',
           label: '电场方向',
           value: fieldDirectionOf(scene),
-          options: DIRECTION_OPTIONS.map(option => ({ value: option.value, label: option.label })),
+          /* The bounded (parallel-plate) solver only integrates a.y — a horizontal
+             E between the plates would draw a sideways field the picture cannot
+             honour — so the choice list offers the vertical pair. A scene already
+             stating a horizontal legacy direction keeps that option visible so the
+             student can see the current state and move off it. */
+          options: (() => {
+            const current = fieldDirectionOf(scene)
+            const verticalOnly = DIRECTION_OPTIONS.filter(
+              option => option.value === 'up' || option.value === 'down',
+            )
+            const horizontal = DIRECTION_OPTIONS.find(option => option.value === current)
+            return horizontal === undefined
+              ? verticalOnly.map(option => ({ value: option.value, label: option.label }))
+              : DIRECTION_OPTIONS.map(option => ({ value: option.value, label: option.label }))
+          })(),
         },
       ],
     },
@@ -1402,34 +1415,50 @@ const computeRegionPhases = (model: ParallelPlateModel): {
   const { position: p0, velocity: v0, acceleration: a, xLeft, xRight, yTop, yBottom } = model
   const vx = v0.x
 
-  /* Enter time: when the particle first reaches the left edge of the field. */
+  /* Enter time — mirrors the engine's own phase solver (computePhases in
+     electric-region-engine.ts) branch for branch: entry from the left OR the
+     right, already-inside starts at 0, and a particle that moves away never
+     enters (Infinity keeps it out of the field for the whole run). The old
+     local copy dropped the right-side branch and folded its NaN into 0, which
+     stamped wrong or missing times on the engine's real EnterField/HitPlate
+     events. */
   let enterTime: number
-  if (vx > 0 && p0.x < xLeft) {
+  let entrySide: 'left' | 'right' | 'inside'
+  if (p0.x >= xLeft && p0.x <= xRight) {
+    enterTime = 0
+    entrySide = 'inside'
+  } else if (vx > 0 && p0.x < xLeft) {
     enterTime = (xLeft - p0.x) / vx
-  } else if (p0.x >= xLeft && p0.x <= xRight) {
-    enterTime = 0
+    entrySide = 'left'
+  } else if (vx < 0 && p0.x > xRight) {
+    enterTime = (p0.x - xRight) / -vx
+    entrySide = 'right'
   } else {
-    enterTime = Number.NaN
+    enterTime = Number.POSITIVE_INFINITY
+    entrySide = 'inside'
   }
-  if (!Number.isFinite(enterTime) || enterTime < 0) {
-    enterTime = 0
+  if (!Number.isFinite(enterTime)) {
+    return { enterTime: Number.POSITIVE_INFINITY, exitTime: null, hitTime: null, hitPlate: null }
   }
 
-  /* Time inside the field region (entry to exit at x = xRight). */
-  const tInside = vx !== 0 ? (xRight - xLeft) / vx : Infinity
+  /* Which edge the particle crossed in, and which edge it leaves by — both
+     depend on the entry side and the travel direction, so a right-entry or an
+     already-inside start measures the REMAINING distance, not the full width,
+     and tInside stays positive. */
+  const entryX = entrySide === 'right' ? xRight : entrySide === 'left' ? xLeft : p0.x
+  const exitX = vx >= 0 ? xRight : xLeft
+  const tInside = vx !== 0 ? (exitX - entryX) / vx : Infinity
 
-  /* Solve for plate hit: y(t_in) = yTarget inside [0, tInside]. */
-  const aY = a.y
-  const vyEntry = v0.y
   const yEntry = p0.y + v0.y * enterTime
+  const vyEntry = v0.y
 
   const solveHit = (yTarget: number): number | null => {
-    if (Math.abs(aY) < 1e-30) {
+    const halfA = 0.5 * a.y
+    if (Math.abs(a.y) < 1e-30) {
       if (Math.abs(vyEntry) < 1e-30) return null
       const t = (yTarget - yEntry) / vyEntry
       return t >= 0 && t <= tInside ? t : null
     }
-    const halfA = 0.5 * aY
     const b = vyEntry
     const c = yEntry - yTarget
     const disc = b * b - 4 * halfA * c

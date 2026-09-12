@@ -72,7 +72,7 @@ describe('induction workspace runtime', () => {
     expect(derivedValue(snapshot, '感应电动势 E')).toBe('0.2')
     expect(derivedValue(snapshot, '感应电流 I')).toBe('0.04')
     expect(derivedValue(snapshot, '回路电阻 R')).toBe('5')
-    expect(derivedValue(snapshot, '棒长 L')).toBe('20')
+    expect(derivedValue(snapshot, '棒长 L（导轨间距）')).toBe('20')
     expect(derivedValue(snapshot, '棒速 v')).toBe('2')
 
     /* The engine's three law checks all pass. */

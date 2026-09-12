@@ -45,10 +45,9 @@ import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-ru
 import type { SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
 import {
   DataPanelBody,
-  InspectorSections,
+  InspectorTabs,
   SceneTreePanel,
   TimelineMarkers,
-  VerificationList,
   type DataTab,
 } from './workspace-parts.tsx'
 import type { PhysicsosKey } from './locales.ts'
@@ -173,8 +172,32 @@ export function PhysicsWorkspace({
 
   const observables = useMemo(() => collectObservables(snapshot), [snapshot])
 
+  /* The cover is absolutely positioned inside the host's scroll body, whose
+     content (the home hero and recent list) is taller than the viewport. Any
+     scroll of that body — a card click's scrollIntoView is enough — drags the
+     whole lab up and clips the toolbar. While a lab is mounted the body has
+     nothing visible to scroll to, so lock it and pin it to the top. */
+  const coverRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const cover = coverRef.current
+    if (cover === null) return
+    let node: HTMLElement | null = cover.parentElement
+    while (node !== null) {
+      const { overflowY } = getComputedStyle(node)
+      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) break
+      node = node.parentElement
+    }
+    if (node === null) return
+    const scroller = node
+    const previousOverflow = scroller.style.overflowY
+    scroller.scrollTop = 0
+    scroller.style.overflowY = 'hidden'
+    return () => { scroller.style.overflowY = previousOverflow }
+  }, [])
+
   return (
     <div
+      ref={coverRef}
       className={css.cover}
       data-physicsos-surface="lab"
       data-physicsos-domain={snapshot.domain}
@@ -285,7 +308,7 @@ export function PhysicsWorkspace({
           >
             {t('lab.report.open')}
           </button>
-          <ResponsiveInspectorToggle controller={inspector} label={t('lab.inspector')} />
+          <ResponsiveInspectorToggle controller={inspector} label={t('lab.inspectorPanel')} />
           <button type="button" className={clsx(css.tool, css.toolIcon)} aria-label={t('lab.more')} disabled>
             <IconEllipsisOutline16 size={14} />
           </button>
@@ -371,7 +394,7 @@ export function PhysicsWorkspace({
               >
                 <IconChevronRightOutline14 size={13} />
               </button>
-              <span className={css.clock}>{formatTimeIn(clock.time, clockScale)}</span>
+              <LiveClock source={frameSource} scale={clockScale} />
               <div className={css.trackWrap}>
                 <TimelineScrubber
                   label={t('lab.timeline')}
@@ -445,18 +468,24 @@ export function PhysicsWorkspace({
 
           <ResponsiveInspector
             controller={inspector}
-            label={t('lab.inspector')}
+            label={t('lab.inspectorPanel')}
             closeLabel={t('lab.closeInspector')}
           >
-            <InspectorSections
+            <InspectorTabs
               sections={snapshot.inspector}
+              checks={snapshot.verification}
               note={t('lab.derivedNote')}
+              emptyLabel={t('lab.dataStub')}
+              label={t('lab.inspectorPanel')}
+              labels={{
+                properties: t('lab.inspectorTab.properties'),
+                readings: t('lab.inspectorTab.readings'),
+                checks: t('lab.inspectorTab.checks'),
+              }}
               onEdit={(id, value) => { commit(runtime.editParameter(id, value)) }}
               onChoice={(id, value) => { commit(runtime.setChoice(id, value)) }}
               onHighlight={highlight}
             />
-            <p className={css.sectionLabel}>{t('lab.verification')}</p>
-            <VerificationList checks={snapshot.verification} emptyLabel={t('lab.dataStub')} />
           </ResponsiveInspector>
         </div>
       )}
@@ -494,6 +523,23 @@ const collectObservables = (
  * stays on the throttled summary. Event bursts are derived here from the live
  * frame, so a collision is still seen the exact frame it happens.
  */
+/* The timeline's current-time label reads the same per-frame source the
+   canvas HUD does, so the two clocks can never disagree — the summary clock
+   the rest of the shell uses is throttled to 250 ms and would lag the
+   canvas by up to a quarter second while running. Only this tiny span
+   subscribes; the scrubber keeps the summary clock so a drag is never
+   fighting per-frame writes. */
+function LiveClock({
+  source,
+  scale,
+}: {
+  source: FrameSource<WorkspaceSnapshot>
+  scale: ReturnType<typeof timeScaleOf>
+}) {
+  const frame = useFrameSource(source)
+  return <span className={css.clock}>{formatTimeIn(frame.clock.time, scale)}</span>
+}
+
 function CanvasFrame({
   source,
   ariaLabel,

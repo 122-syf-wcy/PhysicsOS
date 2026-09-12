@@ -50,7 +50,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
         >
           <img
             className={css.portalImage}
-            src="/physicsos/magnetic-lab-hero.jpg"
+            src="/physicsos/lab-portal-hero.jpg"
             alt=""
             aria-hidden="true"
           />
@@ -74,7 +74,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
         >
           <img
             className={css.portalImage}
-            src="/physicsos/magnetic-question-hero.jpg"
+            src="/physicsos/question-portal-hero.jpg"
             alt=""
             aria-hidden="true"
           />
@@ -115,6 +115,12 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
         <h2 className={css.recentTitle}>{t('recent.title')}</h2>
         {items.length === 0 ? (
           <div className={css.empty}>
+            <img
+              className={css.emptyImage}
+              src="/physicsos/lab-empty-hero.jpg"
+              alt=""
+              aria-hidden="true"
+            />
             <p className={css.emptyTitle}>{t('recent.emptyTitle')}</p>
             <p className={css.emptyBody}>{t('recent.emptyBody')}</p>
             <button

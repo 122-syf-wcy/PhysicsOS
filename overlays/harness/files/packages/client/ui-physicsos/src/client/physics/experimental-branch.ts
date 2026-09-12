@@ -67,12 +67,16 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetHangerMass',
   'SetHangerArm',
   /* Induction facts: the field, the loop resistance and the rod's motion (or
-     the flux rate) decide the EMF a question stated. */
+     the flux rate) decide the EMF a question stated. The double-bar rig adds
+     masses, per-bar velocity and the external force as stated facts. */
   'SetInductionFieldStrength',
   'SetInductionLoopResistance',
   'SetInductionBarVelocity',
   'SetInductionBarLength',
   'SetInductionFluxRate',
+  'SetInductionBarMasses',
+  'SetInductionBarVelocityOne',
+  'SetInductionExternalForce',
   /* Wave facts: amplitude, frequency, the medium's speed and the rig geometry
      decide the profile, the interference verdict and the harmonic a question
      stated. */

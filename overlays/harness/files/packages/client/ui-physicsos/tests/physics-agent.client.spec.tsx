@@ -1001,7 +1001,7 @@ describe('agent answers — DC circuit', () => {
       createEmfMeasurementScene({ sceneId: 'scene-circuit-emf-agent', title: '测电动势与内阻' }),
     )
 
-  const idsOf = (runtime: ReturnType<typeof seriesRuntime>) =>
+  const idsOf = (runtime: { getSnapshot(): ReturnType<ReturnType<typeof seriesRuntime>['getSnapshot']> }) =>
     agentSuggestions(physicsAgentContext(runtime.getSnapshot())).map(entry => entry.id)
 
   const CIRCUIT_INTENTS = [

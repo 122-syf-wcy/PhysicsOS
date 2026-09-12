@@ -31,6 +31,14 @@ import {
   type VectorVisual,
 } from './scene-visual-model.ts'
 import { formatTimeAt } from './time-format.ts'
+import { formatSignificant } from './number-format.ts'
+import { latticeSpacingOf, splitTrajectoryAtTime } from './bridge-helpers.ts'
+
+/* Typical teaching magnitudes: the lattice density reads RELATIVE strength via
+   log10(1 + |E|/E_REF), so dragging the strength visibly re-packs the texture
+   instead of leaving a parameter-independent fake pattern. */
+const E_REFERENCE = 100
+const B_REFERENCE = 0.5
 
 export interface CompositeVisualInput {
   readonly scene: PhysicsScene
@@ -39,13 +47,7 @@ export interface CompositeVisualInput {
   readonly state: SimulationState
 }
 
-const formatNumber = (value: number, digits = 2): string => {
-  if (!Number.isFinite(value)) return '—'
-  const absolute = Math.abs(value)
-  return absolute !== 0 && (absolute < 1e-3 || absolute >= 1e4)
-    ? value.toExponential(digits)
-    : value.toFixed(digits)
-}
+const formatNumber = formatSignificant
 
 const pointOf = (vector: { readonly x: number; readonly y: number }): ScenePoint => ({
   x: vector.x,
@@ -103,7 +105,7 @@ const electricFieldVisualOf = (
   if (magnitude === 0) return undefined
   return {
     direction: { x: vector.x / magnitude, y: vector.y / magnitude },
-    spacing: regionWidthOf(region) / 4,
+    spacing: latticeSpacingOf(regionWidthOf(region) / 4, magnitude, E_REFERENCE),
   }
 }
 
@@ -118,7 +120,11 @@ const magneticFieldVisualOf = (
   const bz = toCanonicalVector(field.magneticFluxDensity).vectorSI.z
   return {
     direction: bz < 0 ? 'into-page' : 'out-of-page',
-    spacing: Math.min(regionWidthOf(region), regionHeightOf(region)) / 3,
+    spacing: latticeSpacingOf(
+      Math.min(regionWidthOf(region), regionHeightOf(region)) / 3,
+      Math.abs(bz),
+      B_REFERENCE,
+    ),
   }
 }
 
@@ -141,8 +147,9 @@ const globalElectricVisualOf = (
   if (magnitude === 0) return undefined
   return {
     direction: { x: vector.x / magnitude, y: vector.y / magnitude },
-    /* Same lattice density the uniform electric view uses for its canvas. */
-    spacing: frameWidth / 8,
+    /* Same lattice density the uniform electric view uses for its canvas,
+       packed by |E| so strength changes read on screen. */
+    spacing: latticeSpacingOf(frameWidth / 8, magnitude, E_REFERENCE),
   }
 }
 
@@ -158,7 +165,11 @@ const globalMagneticVisualOf = (
   if (bz === 0) return undefined
   return {
     direction: bz < 0 ? 'into-page' : 'out-of-page',
-    spacing: Math.min(extent.width, extent.height) / 6,
+    spacing: latticeSpacingOf(
+      Math.min(extent.width, extent.height) / 6,
+      Math.abs(bz),
+      B_REFERENCE,
+    ),
   }
 }
 
@@ -277,14 +288,19 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
   const regions = compositeRegionsOf(scene)
 
   /* Trajectory from the simulation state stream — every sampled position, in
-     order. The observation carries it too, but the simulation stream is the
-     source of truth for hover/seek because it is parallel to trajectoryTimes. */
-  const trajectoryPoints: ScenePoint[] = simulation.states.flatMap((sample) => {
+     order, with its engine time kept PARALLEL (same filter both sides) so the
+     canvas can split travelled/future at the playhead and hover/seek keep
+     indexing against trajectoryTimes. The observation carries it too, but the
+     simulation stream is the source of truth. */
+  const trajectorySamples = simulation.states.reduce<{ points: ScenePoint[]; times: number[] }>((acc, sample) => {
     const sampleObject = sample.objects.find(candidate => candidate.id === particle.id)
-    return sampleObject?.position === undefined
-      ? []
-      : [pointOf(toCanonicalVector(sampleObject.position).vectorSI)]
-  })
+    if (sampleObject?.position !== undefined) {
+      acc.points.push(pointOf(toCanonicalVector(sampleObject.position).vectorSI))
+      acc.times.push(sample.time.value)
+    }
+    return acc
+  }, { points: [], times: [] })
+  const trajectoryPoints: ScenePoint[] = trajectorySamples.points
 
   /* Frame: cover every region rectangle + the trajectory + the particle start. */
   const framePoints: ScenePoint[] = [
@@ -381,9 +397,12 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
       symbol: charge < 0 ? 'q⁻' : 'q⁺',
     }],
     vectors,
-    trajectories: trajectoryPoints.length < 2
-      ? []
-      : [{ id: 'composite-trajectory', kind: 'history' as const, points: trajectoryPoints }],
+    trajectories: splitTrajectoryAtTime(
+      'composite-trajectory',
+      trajectoryPoints,
+      trajectorySamples.times,
+      state.time.value,
+    ),
     compositeRegions: regions,
     ...(globalElectric === undefined ? {} : { electricField: globalElectric }),
     ...(globalMagnetic === undefined ? {} : { field: globalMagnetic }),

@@ -64,16 +64,20 @@ describe('#123 renderer/React decoupling', () => {
     act(() => { frames.get(2)?.(116.67) })
 
     /* The renderer channel delivered the advanced frame to the canvas alone:
-       the readout now carries t = 0.02 s. */
-    expect(screen.getByText('t = 0.02 s')).toBeTruthy()
-    /* The React tree (toolbar clock) has NOT re-rendered with the frame: it still
-       shows the initial 0.00 s summary, because 250 ms have not elapsed. */
-    expect(screen.getByText('0.00 s')).toBeTruthy()
+       the readout now carries t = 0.01667 s. */
+    expect(screen.getByText('t = 0.01667 s')).toBeTruthy()
+    /* The timeline's current-time label is deliberately live — it shares the
+       canvas's frame source so the two clocks can never disagree while a run
+       plays. The REST of the React tree still rides the throttled summary:
+       the scrubber's aria-valuetext keeps the initial 0.00 s. */
+    const scrubber = container.querySelector('input[type="range"]')
+    expect(scrubber?.getAttribute('aria-valuetext')).toContain('0.00 s')
+    expect(screen.getByText('0.02 s')).toBeTruthy()
 
     /* Once the summary interval elapses, the React tree catches up. */
     now = 300
     act(() => { frames.get(3)?.(216.67) })
-    expect(screen.queryByText('0.00 s')).toBeNull()
+    expect(scrubber?.getAttribute('aria-valuetext')).not.toContain('0.00 s /')
   })
 
   it('keeps discrete interactions immediate (run → pause via the toolbar)', () => {

@@ -31,7 +31,7 @@ async function setup(config: Partial<plugin.Config> = {}): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(plugin, { sceneScope: 'session', ...config })
+  await ctx.plugin(plugin, { sceneScope: 'session', maxScenes: 64, ...config })
   return ctx
 }
 
@@ -234,7 +234,7 @@ describe('dsh-tool-physicsos', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    const fiber = await ctx.plugin(plugin, { sceneScope: 'session' })
+    const fiber = await ctx.plugin(plugin, { sceneScope: 'session', maxScenes: 64 })
     expect(ctx.tools.schemas().some(schema => schema.name === 'physics_simulate')).toBe(true)
     await fiber.dispose()
     expect(ctx.tools.schemas().some(schema => schema.name.startsWith('physics_'))).toBe(false)
@@ -264,7 +264,7 @@ describe('dsh-tool-physicsos scene mirroring', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(plugin, { sceneScope: 'session' })
+    await ctx.plugin(plugin, { sceneScope: 'session', maxScenes: 64 })
     const session = ctx.sessions.create()
     const agent = { id: session.id, session } as unknown as Agent
     return { ctx, session, agent }

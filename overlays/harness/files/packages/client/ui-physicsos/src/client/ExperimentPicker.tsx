@@ -425,6 +425,7 @@ export function ExperimentPicker({
                       style={cardAt(index)}
                       disabled={template.comingSoon === true}
                       data-stage={template.stage}
+                      data-template-id={template.id}
                       onClick={() => { pick(template) }}
                     >
                       <span className={clsx(css.art, css.artThumb)}>

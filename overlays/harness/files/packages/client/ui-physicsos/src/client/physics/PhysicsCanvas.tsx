@@ -182,22 +182,40 @@ export function PhysicsCanvas({
     if (step === undefined || step <= 0) return { x: [], y: [] }
     const xs: { at: number; label: string }[] = []
     const ys: { at: number; label: string }[] = []
-    const decimals = step < 1 ? 1 : 0
+    /* Enough decimals to tell adjacent ticks apart: a cm-scale bench
+       (step 0.02) would otherwise label every tick "-0.0 / 0.0 / 0.1". */
+    const decimals = step < 1 ? Math.max(1, -Math.floor(Math.log10(step))) : 0
     const maxX = view.origin.x + view.extent.width
     const maxY = view.origin.y + view.extent.height
+    const avoid = view.tickLabelAvoid
+    const labelFor = (scene: number, range: readonly [number, number] | undefined): string =>
+      range !== undefined && scene > range[0] && scene < range[1] ? '' : scene.toFixed(decimals)
     for (let scene = Math.ceil(view.origin.x / step) * step; scene <= maxX + 1e-9; scene += step) {
-      xs.push({ at: projection.px({ x: scene, y: 0 }), label: scene.toFixed(decimals) })
+      xs.push({ at: projection.px({ x: scene, y: 0 }), label: labelFor(scene, avoid?.x) })
     }
     for (let scene = Math.ceil(view.origin.y / step) * step; scene <= maxY + 1e-9; scene += step) {
-      ys.push({ at: projection.py({ x: 0, y: scene }), label: scene.toFixed(decimals) })
+      ys.push({ at: projection.py({ x: 0, y: scene }), label: labelFor(scene, avoid?.y) })
     }
     return { x: xs, y: ys }
-  }, [view.tickStep, view.extent.width, view.extent.height, view.origin.x, view.origin.y, projection])
+  }, [view.tickStep, view.tickLabelAvoid, view.extent.width, view.extent.height, view.origin.x, view.origin.y, projection])
 
   const axisX = Math.min(PAD.left + plotWidth, Math.max(PAD.left, projection.px({ x: 0, y: 0 })))
   const axisY = Math.min(originY, Math.max(PAD.top, projection.py({ x: 0, y: 0 })))
 
-  const trajectory = view.trajectories.find(entry => entry.kind === 'history')
+  /* Hover / seek / strobe pair against one equally-time-spaced path per body.
+     A bridge may split that path at the playhead (solid travelled + dashed
+     predicted); both pieces share the id and stay parallel to the runtime's
+     trajectoryTimes, so re-joining them here keeps the index contract exact. */
+  const trajectory = useMemo(() => {
+    const first = view.trajectories[0]
+    if (first === undefined) return undefined
+    const parts = view.trajectories.filter(entry => entry.id === first.id)
+    const points = [
+      ...parts.filter(entry => entry.kind === 'history').flatMap(entry => entry.points),
+      ...parts.filter(entry => entry.kind === 'predicted').flatMap(entry => entry.points),
+    ]
+    return { id: first.id, points }
+  }, [view.trajectories])
   const interactive =
     trajectory !== undefined &&
     trajectoryTimes !== undefined &&
@@ -280,7 +298,7 @@ export function PhysicsCanvas({
     const total = trajectoryTimes[trajectoryTimes.length - 1] ?? 0
     if (total <= 0) return []
     const interval = total / STROBE_DIVISIONS
-    const ghosts: { x: number; y: number; r: number; kind: 'ball' | 'block' | 'particle'; rotation: number }[] = []
+    const ghosts: { x: number; y: number; r: number; kind: 'ball' | 'block' | 'cart' | 'particle'; rotation: number }[] = []
     let nextMark = interval
     for (const [index, time] of trajectoryTimes.entries()) {
       if (time > clockTime + 1e-9) break
@@ -355,37 +373,53 @@ export function PhysicsCanvas({
           opacity="0.38"
         />
 
-        {/* ---------- axes ---------- */}
-        <line className={css.axis} x1={PAD.left} y1={axisY} x2={PAD.left + plotWidth} y2={axisY} />
-        <line className={css.axis} x1={axisX} y1={originY} x2={axisX} y2={PAD.top} />
-        {ticks.x.map(tick => (
-          <g key={`tx-${tick.at}`}>
-            <line className={css.tick} x1={tick.at} y1={axisY} x2={tick.at} y2={axisY + 4} />
-            <text className={css.tickLabel} x={tick.at} y={axisY + 15} textAnchor="middle">
-              {tick.label}
+        {/* ---------- axes ----------
+            An axis is drawn only when the bridge named it. A one-dimensional
+            rig (rails, a rod) has no meaningful y, and a circuit schematic has
+            no coordinates at all — an unnamed axis line through the apparatus
+            is noise, not a reading aid. */}
+        {view.axes.x.length === 0 ? null : (
+          <>
+            <line className={css.axis} x1={PAD.left} y1={axisY} x2={PAD.left + plotWidth} y2={axisY} />
+            {ticks.x.map(tick => (
+              <g key={`tx-${tick.at}`}>
+                <line className={css.tick} x1={tick.at} y1={axisY} x2={tick.at} y2={axisY + 4} />
+                {tick.label === '' ? null : (
+                  <text className={css.tickLabel} x={tick.at} y={axisY + 15} textAnchor="middle">
+                    {tick.label}
+                  </text>
+                )}
+              </g>
+            ))}
+            <text className={css.axisLabel} x={PAD.left + plotWidth} y={Math.min(originY + 29, axisY + 29)} textAnchor="end">
+              {view.axes.x}
             </text>
-          </g>
-        ))}
-        {ticks.y.map(tick => (
-          <g key={`ty-${tick.at}`}>
-            <line className={css.tick} x1={axisX - 4} y1={tick.at} x2={axisX} y2={tick.at} />
-            <text className={css.tickLabel} x={axisX - 7} y={tick.at + 3.4} textAnchor="end">
-              {tick.label}
+          </>
+        )}
+        {view.axes.y.length === 0 ? null : (
+          <>
+            <line className={css.axis} x1={axisX} y1={originY} x2={axisX} y2={PAD.top} />
+            {ticks.y.map(tick => (
+              <g key={`ty-${tick.at}`}>
+                <line className={css.tick} x1={axisX - 4} y1={tick.at} x2={axisX} y2={tick.at} />
+                {tick.label === '' ? null : (
+                  <text className={css.tickLabel} x={axisX - 7} y={tick.at + 3.4} textAnchor="end">
+                    {tick.label}
+                  </text>
+                )}
+              </g>
+            ))}
+            <text className={css.axisLabel} x={Math.max(PAD.left - 8, axisX - 8)} y={PAD.top + 9} textAnchor="end">
+              {view.axes.y}
             </text>
-          </g>
-        ))}
-        <text className={css.axisLabel} x={PAD.left + plotWidth} y={Math.min(originY + 29, axisY + 29)} textAnchor="end">
-          {view.axes.x}
-        </text>
-        <text className={css.axisLabel} x={Math.max(PAD.left - 8, axisX - 8)} y={PAD.top + 9} textAnchor="end">
-          {view.axes.y}
-        </text>
+          </>
+        )}
 
         {/* ---------- strobe ghosts ---------- */}
         {strobe.length === 0 ? null : (
           <g clipPath={`url(#${clipId})`} className={css.strobe} aria-hidden="true">
             {strobe.map((ghost, index) => (
-              ghost.kind === 'block' ? (
+              ghost.kind === 'block' || ghost.kind === 'cart' ? (
                 <rect
                   key={index}
                   className={css.strobeBody}
@@ -451,33 +485,53 @@ export function PhysicsCanvas({
           </g>
         )}
 
-        {/* ---------- readout gutter ---------- */}
+        {/* ---------- readout gutter ----------
+            The card sizes itself to its widest line: a fixed narrow panel
+            clipped scene titles and crammed the readouts against the border. */}
         {view.overlay.readout.length === 0 ? null : (
           <g>
-            <rect
-              className={css.readoutPanel}
-              x={PAD.left + 10}
-              y={PAD.top + 10}
-              width={188}
-              height={20 + view.overlay.readout.length * 16}
-              rx="8"
-            />
-            {view.overlay.readout.map((line, index) => (
-              <text
-                key={line}
-                className={index === 0 ? css.readoutTitle : css.readoutLine}
-                x={PAD.left + 22}
-                y={PAD.top + 29 + index * 16}
-              >
-                {line}
-              </text>
-            ))}
+            {(() => {
+              /* CJK glyphs are ~1em wide, latin/digits ~0.62em at these sizes. */
+              const textWidth = (line: string): number => {
+                let units = 0
+                for (const ch of line) units += ch.charCodeAt(0) > 0x2e80 ? 1 : 0.62
+                return units * 11.5
+              }
+              const panelWidth = Math.min(
+                Math.max(...view.overlay.readout.map(textWidth)) + 24,
+                plotWidth - 24,
+              )
+              return (
+                <>
+                  <rect
+                    className={css.readoutPanel}
+                    x={PAD.left + 8}
+                    y={PAD.top + 8}
+                    width={panelWidth}
+                    height={20 + view.overlay.readout.length * 16}
+                    rx="8"
+                  />
+                  {view.overlay.readout.map((line, index) => (
+                    <text
+                      key={line}
+                      className={index === 0 ? css.readoutTitle : css.readoutLine}
+                      x={PAD.left + 20}
+                      y={PAD.top + 27 + index * 16}
+                    >
+                      {line}
+                    </text>
+                  ))}
+                </>
+              )
+            })()}
           </g>
         )}
 
-        {/* ---------- scale bar ---------- */}
+        {/* ---------- scale bar ----------
+            Hidden on schematics: a circuit grid has no physical length, so a
+            bar reading "1" would be a number with nothing to measure. */}
         <g>
-          {(() => {
+          {view.overlay.scale.label.length === 0 || view.axes.x.length === 0 && view.axes.y.length === 0 ? null : (() => {
             const barLength = view.overlay.scale.length * scale
             const right = PAD.left + plotWidth - 18
             const left = right - barLength

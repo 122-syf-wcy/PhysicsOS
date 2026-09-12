@@ -29,7 +29,9 @@ const headAt = (x: number, y: number, ux: number, uy: number, size: number): str
   return `M${x} ${y} L${bx + px} ${by + py} L${bx - px} ${by - py} Z`
 }
 
-/** Direction chevron at the midpoint of one ray segment; null when too short. */
+/** Direction chevron at the midpoint of one ray segment; null when too short.
+ *  The head scales with the segment so a zoomed-out bench keeps its arrows
+ *  instead of dropping every direction mark at once below a fixed threshold. */
 const rayChevron = (
   from: ScenePoint,
   to: ScenePoint,
@@ -42,10 +44,10 @@ const rayChevron = (
   const dx = x2 - x1
   const dy = y2 - y1
   const length = Math.hypot(dx, dy)
-  if (length < 30) return null
+  if (length < 14) return null
   const ux = dx / length
   const uy = dy / length
-  return headAt((x1 + x2) / 2, (y1 + y2) / 2, ux, uy, 7)
+  return headAt((x1 + x2) / 2, (y1 + y2) / 2, ux, uy, Math.min(7, Math.max(3.4, length * 0.16)))
 }
 
 /** Vertical arrow (object / image): shaft plus a filled head at the tip. */

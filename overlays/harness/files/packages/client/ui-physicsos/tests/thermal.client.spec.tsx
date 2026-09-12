@@ -237,7 +237,7 @@ describe('thermal Lab surface', () => {
   it('commits a 加热功率 edit from the inspector as an auditable revision', () => {
     const { container } = mountLab('crystal-melting')
 
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     const powerInput = screen.getByRole('textbox', { name: '加热功率' })
     if (!(powerInput instanceof HTMLInputElement)) throw new Error('Expected 加热功率 input.')
     fireEvent.change(powerInput, { target: { value: '100' } })
@@ -245,6 +245,7 @@ describe('thermal Lab surface', () => {
 
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
     /* Same heat needed, delivered twice as fast: the plateau halves. */
+    fireEvent.click(screen.getByRole('tab', { name: '读数' }))
     expect(screen.getAllByText('熔化耗时 t_熔')[0]?.parentElement?.textContent).toContain('334')
   })
 })

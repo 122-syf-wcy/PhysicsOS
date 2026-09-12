@@ -393,6 +393,50 @@
 
 /* ---------- Inspector ---------- */
 
+/* Underline tabs under the panel head — the prototype's 属性/读数/校验 row. */
+.inspectorTabBar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  margin: 0 -2px 4px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+}
+
+.inspectorTab {
+  position: relative;
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.inspectorTab:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.inspectorTabActive {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.inspectorTabActive::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-static-blue-500);
+}
+
 .sectionLabel {
   margin: 10px 4px 6px;
   color: var(--dsw-alias-label-caption);
@@ -504,6 +548,20 @@
 .derivedUnit {
   color: var(--dsw-alias-label-caption);
   font-size: 11px;
+}
+
+/* A magnitude with its vector folded beneath it: one fact, two readings. */
+.derivedReading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.derivedComponents {
+  color: var(--dsw-alias-label-caption);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .readonlyNote {
@@ -649,7 +707,10 @@
 }
 
 .dataPanelOpen {
-  height: 196px;
+  /* Chart cards need ~140px of body room; a fixed 196px panel clipped the row
+     on short windows. Grow with the viewport, capped so the canvas keeps the
+     majority of the stage. */
+  height: clamp(220px, 36svh, 340px);
 }
 
 .dataHead {
@@ -1494,6 +1555,30 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+}
+
+/* The folded structural-precondition row sits under the physical laws in a
+   quieter tone: it is bookkeeping the student can trust, not a law to learn. */
+.verificationStructure {
+  margin-top: 4px;
+  border-top: 1px solid rgba(148, 173, 199, 0.32);
+  border-bottom: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.verificationStructure .verificationLabel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.verificationCount {
+  margin-left: 6px;
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.verificationStructureDetail {
+  padding-left: 22px;
+  border-bottom: none;
 }
 
 .verifiedStateFailed {

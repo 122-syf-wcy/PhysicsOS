@@ -253,6 +253,31 @@ describe('ElectricWorkspaceRuntime — parallel-plate tree and inspector', () =>
     expect(treeLabels(snapshot.tree)).toContain('匀强电场')
   })
 
+  it('wires the 电场力 toggle to the force arrow the renderer draws', () => {
+    const runtime = createElectricWorkspaceRuntime(parallelPlateScene())
+    /* At t = 0 the particle is still outside the plates and |F| = 0, so seek
+       into the field first — the toggle must control the arrow that is
+       actually on stage. */
+    runtime.seek(runtime.getSnapshot().clock.total * 0.5)
+    const before = runtime.getSnapshot()
+
+    /* The observable key the renderer filters on is `force`, not the
+       mechanics-only `forces` layer. */
+    expect(before.view.visible.force).toBe(true)
+    const drawnBefore = before.view.vectors.filter(
+      vector => before.view.visible[vector.observable] === true,
+    )
+    expect(drawnBefore.map(vector => vector.observable)).toContain('force')
+
+    const after = runtime.setObservable('force', false)
+    expect(after.view.visible.force).toBe(false)
+    const drawnAfter = after.view.vectors.filter(
+      vector => after.view.visible[vector.observable] === true,
+    )
+    expect(drawnAfter.map(vector => vector.observable)).not.toContain('force')
+    expect(drawnAfter.length).toBeLessThan(drawnBefore.length)
+  })
+
   it('bumps the revision and stays verified when the plate separation changes', () => {
     const runtime = createElectricWorkspaceRuntime(parallelPlateScene())
     const before = runtime.getSnapshot()
@@ -270,8 +295,8 @@ describe('ElectricWorkspaceRuntime — parallel-plate tree and inspector', () =>
       .flatMap(node => node.children ?? [])
       .filter(node => node.label === '上极板' || node.label === '下极板')
     expect(plateRows).toHaveLength(2)
-    expect(plateRows.find(node => node.label === '上极板')?.secondary).toBe('y = 0.030 m')
-    expect(plateRows.find(node => node.label === '下极板')?.secondary).toBe('y = -0.030 m')
+    expect(plateRows.find(node => node.label === '上极板')?.secondary).toBe('y = 0.03 m')
+    expect(plateRows.find(node => node.label === '下极板')?.secondary).toBe('y = -0.03 m')
   })
 
   it('bumps the revision and stays verified when the plate length changes', () => {

@@ -869,8 +869,16 @@ const INTENTS: readonly Intent[] = [
   {
     id: 'plate-field-uniform',
     prompt: '板间为什么是匀强场？',
+    /* Offered wherever the bounded field exists, not only where the E arrow is
+       drawn: at t = 0 the particle is still outside the plates, the engine
+       zeroes the field there, and the bridge (rightly) draws no phantom E
+       vector — but "板间为什么是匀强场" is exactly the question a student opens
+       the scene with. The plates are drawn from the first frame, so they gate
+       availability and carry the highlight whenever E is absent. */
     available: context =>
-      isBoundedElectricField(context) && context.drawnIds.includes('electric-field-vector'),
+      isBoundedElectricField(context) &&
+      (context.drawnIds.includes('electric-field-vector') ||
+        context.drawnIds.some(id => id.startsWith('plate-'))),
     answer: (context) => {
       const check = findCheck(context, 'bounded_field_geometry')
       const field = findDerived(context, '电场强度')
@@ -891,7 +899,11 @@ const INTENTS: readonly Intent[] = [
           ...(field === undefined ? [] : [chip('simulation', `E = ${field.value} ${field.unit}`)]),
           ...(check === undefined ? [] : [chip('verification', check.label)]),
         ],
-        tools: [{ tool: 'physics.ui.highlight', targetId: 'electric-field-vector', duration: 1800 }],
+        tools: [{
+          tool: 'physics.ui.highlight',
+          targetId: context.drawnIds.includes('electric-field-vector') ? 'electric-field-vector' : 'plate-*',
+          duration: 1800,
+        }],
       }
     },
   },

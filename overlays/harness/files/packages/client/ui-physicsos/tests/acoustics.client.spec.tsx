@@ -241,7 +241,7 @@ describe('acoustics Lab surface', () => {
   it('commits a 峭壁距离 edit from the inspector as an auditable revision', () => {
     const { container } = mountLab('echo-ranging')
 
-    fireEvent.click(screen.getByRole('button', { name: '属性' }))
+    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
     const distanceInput = screen.getByRole('textbox', { name: '峭壁距离' })
     if (!(distanceInput instanceof HTMLInputElement)) throw new Error('Expected 峭壁距离 input.')
     fireEvent.change(distanceInput, { target: { value: '680' } })
@@ -249,6 +249,7 @@ describe('acoustics Lab surface', () => {
 
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
     /* The echo delay doubles with the range — the reading the lesson turns on. */
+    fireEvent.click(screen.getByRole('tab', { name: '读数' }))
     expect(screen.getAllByText('回声时间 t')[0]?.parentElement?.textContent).toContain('4 s')
   })
 })

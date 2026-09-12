@@ -17,6 +17,8 @@ import {
   type SceneVisualModel,
   type VectorVisual,
 } from './scene-visual-model.ts'
+import { splitTrajectoryAtTime } from './bridge-helpers.ts'
+import { formatSignificant } from './number-format.ts'
 
 interface VectorValue {
   readonly x: number
@@ -87,13 +89,7 @@ const pointOf = (value: QuantityVector | undefined): ScenePoint | undefined => {
 const vectorMagnitude = (value: VectorValue): number =>
   Math.hypot(value.x, value.y, value.z)
 
-const formatNumber = (value: number, digits = 2): string => {
-  if (!Number.isFinite(value)) return '—'
-  const absolute = Math.abs(value)
-  return absolute !== 0 && (absolute < 1e-3 || absolute >= 1e4)
-    ? value.toExponential(digits)
-    : value.toFixed(digits)
-}
+const formatNumber = formatSignificant
 
 const niceStep = (span: number): number => {
   const rough = Math.max(span / 6, 1e-6)
@@ -301,6 +297,10 @@ export const mechanicsSceneVisualAt = ({
     const at = pointOf(point.position)
     return at === undefined ? [] : [at]
   }) ?? []
+  /* The engine stamps each trail sample with its own time; the playhead split
+     cuts against those times, not an invented fraction. */
+  const trajectoryTimes = trajectoryObservation?.points
+    .flatMap(point => (pointOf(point.position) === undefined ? [] : [point.time.value])) ?? []
   const launchPoint = pointOf(keyPointObservation?.launchPoint)
   const apexPoint = pointOf(keyPointObservation?.apexPoint)
   const impactPoint = pointOf(keyPointObservation?.impactPoint)
@@ -314,8 +314,18 @@ export const mechanicsSceneVisualAt = ({
      diagram at the current instant, so the incline frames on those and lets the
      motion run through the frame instead. */
   const framesOnTrajectory = model !== 'inclined_plane'
+  /* The camera frames the FULL simulation window for every non-incline model,
+     taken from the engine states directly — not from the trajectory observable.
+     The trail layer is a view toggle, and a student who turns it off must still
+     never watch the body slide out of frame. */
+  const pathPoints: ScenePoint[] = framesOnTrajectory
+    ? simulation.states.flatMap((sampled) => {
+      const at = pointOf(sampled.objects.find(object => object.id === body.id)?.position)
+      return at === undefined ? [] : [at]
+    })
+    : []
   const geometryPoints: ScenePoint[] = framesOnTrajectory
-    ? [position, initialPosition, ...trajectoryPoints]
+    ? [position, initialPosition, ...pathPoints]
     : [position, initialPosition]
   if (framesOnTrajectory) {
     for (const point of [launchPoint, apexPoint, impactPoint]) {
@@ -358,7 +368,7 @@ export const mechanicsSceneVisualAt = ({
 
   const bounds = boundsOf(geometryPoints)
   const majorGrid = niceStep(Math.max(bounds.extent.width, bounds.extent.height))
-  const arrowLength = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.16, 0.5)
+  const arrowLength = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.19, 0.6)
   const netForce = derivedVectorOf(state, 'net_force')
 
   /* Individual forces come from the Observation layer, which owns each arrow's
@@ -548,7 +558,46 @@ export const mechanicsSceneVisualAt = ({
 
   const velocity = canonicalVector(bodyState.velocity)
   const acceleration = canonicalVector(bodyState.acceleration)
-  const bodySize = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.025, 0.16)
+  /* The body keeps a visible presence: at a 0.025 factor a block on a 1-D run
+     of 40 m rendered ~14 px in a 960 px canvas — the scene read as an empty
+     grid with a dot. The floor covers short-window scenes (incline wedges). */
+  const bodySize = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.045, 0.28)
+
+  /* A 1-D run happens on a surface even when the scene never declared one:
+     the cart's wheels have to sit on something, and the observation layer
+     already balances mg with N there. The track top sits one wheel-diameter
+     below the body's centre of mass. */
+  const isLinearModel =
+    model === 'uniform_linear_motion' ||
+    model === 'uniformly_accelerated_motion' ||
+    model === 'newton_second_law'
+  const trackGround =
+    isLinearModel && groundObservation === undefined
+      ? {
+          y: initialPosition.y - bodySize * 1.0,
+          from: bounds.origin.x,
+          to: bounds.origin.x + bounds.extent.width,
+          label: '水平轨道',
+        }
+      : undefined
+
+  /* Ticker-tape marks: sample the simulated states at equal time intervals so
+     mark spacing itself shows the physics — equal spacing is constant velocity,
+     growing spacing is acceleration. ~9 marks read clearly without clutter. */
+  const sampledStates = simulation.states
+  const markCount = Math.min(9, sampledStates.length)
+  const motionMarks = markCount === 0
+    ? []
+    : Array.from({ length: markCount }, (_, index) => {
+      const sample = sampledStates[Math.round((index * (sampledStates.length - 1)) / (markCount - 1))]
+      const at = sample === undefined
+        ? undefined
+        : pointOf(sample.objects.find(object => object.id === body.id)?.position)
+      if (at === undefined || sample === undefined) return undefined
+      return index % 2 === 0
+        ? { id: `mark-${index}`, at, label: `t=${formatNumber(sample.time.value)}` }
+        : { id: `mark-${index}`, at }
+    }).filter((mark): mark is NonNullable<typeof mark> => mark !== undefined)
 
   return {
     domain: 'mechanics',
@@ -560,7 +609,12 @@ export const mechanicsSceneVisualAt = ({
     bodies: [
       {
         id: body.id,
-        kind: model === 'projectile_motion' ? 'ball' : 'block',
+        kind:
+          model === 'projectile_motion'
+            ? 'ball'
+            : isLinearModel
+              ? 'cart'
+              : 'block',
         at: position,
         size: bodySize,
         live: true,
@@ -570,16 +624,22 @@ export const mechanicsSceneVisualAt = ({
     ],
     particles: [],
     vectors,
-    trajectories: trajectoryPoints.length === 0
-      ? []
-      : [{ id: 'trajectory', kind: 'history', points: trajectoryPoints }],
+    trajectories: splitTrajectoryAtTime(
+      'trajectory',
+      trajectoryPoints,
+      trajectoryTimes,
+      state.time.value,
+    ),
     keyPoints,
     angles,
     dimensions,
     labels: [],
     guides: [],
+    motionMarks,
     ...(groundObservation === undefined
-      ? {}
+      ? trackGround === undefined
+        ? {}
+        : { ground: trackGround }
       : {
         ground: {
           y: groundObservation.groundY,

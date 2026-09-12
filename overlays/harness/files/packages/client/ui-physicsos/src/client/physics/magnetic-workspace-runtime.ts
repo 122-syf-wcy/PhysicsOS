@@ -116,13 +116,37 @@ const mapTree = (nodes: readonly LabTreeNode[]): readonly SceneTreeNode[] =>
 
 const verificationOf = (snapshot: MagneticRuntimeSnapshot): readonly VerificationCheckView[] => {
   const checks = snapshot.verification?.checks ?? []
+  /* Keys are the REAL ids emitted by verifyMagneticScene; every check shows —
+     an earlier slice(0,6) kept only the schema prelude and cut away exactly
+     the law checks (radius, period, F ⊥ v) a student is asked to trust. */
   const labels: Record<string, string> = {
-    velocity_perpendicular_field: '速度垂直于磁场',
-    lorentz_force_centripetal: '洛伦兹力提供向心力',
-    speed_conserved: '速率守恒（洛伦兹力不做功）',
-    circular_motion: '匀速圆周运动',
+    all_finite: '数值全部有限',
+    scene_validity: '场景结构有效',
+    scene_revision_validity: '场景修订有效',
+    result_schema_version: '结果格式版本',
+    result_scene_id_match: '结果对应场景',
+    result_scene_revision_match: '结果对应修订',
+    magnetic_model_preconditions: '模型前提（v ⊥ B、仅匀强磁场）',
+    model_assumptions: '引擎假设声明',
+    orbit_center_unit: '圆心量纲',
+    rotation_direction_unit: '旋转方向量纲',
+    force_vector_unit: '力矢量量纲',
+    radius_consistency: '半径 r = mv/qB',
+    period_consistency: '周期 T = 2πm/qB',
+    angular_velocity_consistency: '角速度 ω = qB/m',
+    force_magnitude_consistency: '力大小 F = qvB',
+    orbit_center_consistency: '圆心位置一致',
+    rotation_direction_consistency: '旋转手性一致',
+    trajectory_radius_consistency: '轨迹到圆心等距',
+    lorentz_force_vector_consistency: 'F = qv×B 矢量一致',
+    speed_conservation: '速率守恒（洛伦兹力不做功）',
+    force_state_representations: '力在派生量与状态中一致',
+    lorentz_force_vector_samples: '抽样点 F = qv×B',
+    force_velocity_orthogonality: 'F ⊥ v',
+    initial_state_matches_scene: '初始状态对应场景',
+    state_at_period_matches_initial: '整周期回到初始状态',
   }
-  return checks.slice(0, 6).map(check => ({
+  return checks.map(check => ({
     id: check.id,
     label: labels[check.id] ?? check.id,
     status: check.passed ? 'passed' : 'failed',
