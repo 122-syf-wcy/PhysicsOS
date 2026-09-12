@@ -83,6 +83,13 @@ const PALETTE = {
   electric: 'Palette: warm amber and soft cream pastels with white; accents in deep honey gold.',
   magnetic: 'Palette: soft violet and lilac pastels with white; accents in deep plum.',
   composite: 'Palette: calm teal and mint pastels with white; accents in deep pine green.',
+  optics: 'Palette: airy cyan and pale glass pastels with white; accents in deep sapphire.',
+  thermal: 'Palette: warm coral and peach pastels with white; accents in deep terracotta.',
+  fluid: 'Palette: aqua and powder-blue pastels with white; accents in deep ocean blue.',
+  wave: 'Palette: periwinkle and lavender pastels with white; accents in deep indigo.',
+  circuit: 'Palette: honey and cream pastels with white; accents in warm bronze.',
+  acoustics: 'Palette: soft sea-blue and foam pastels with white; accents in deep slate teal.',
+  induction: 'Palette: dusty denim-blue and silver pastels with white; accents in deep navy.',
 }
 
 /** subject → what the miniature scene shows (mirrors the SVG artwork motifs). */
@@ -106,6 +113,49 @@ const ASSETS = {
   cyclotron: ['composite', 'Two facing D-shaped half discs with a narrow gap, a tiny sphere spiraling outward from the center in a clean expanding spiral.'],
   lab: ['mechanics', 'A minimal rounded laboratory flask with a single dotted elliptical orbit ring tilted around it, one tiny sphere on the ring.'],
   question: ['magnetic', 'A minimal rounded sheet of paper with a folded corner, one smooth dotted trajectory arc lifting off the page into space.'],
+
+  /* ------------------------------------------------------- mechanics, rest -- */
+  'average-speed': ['mechanics', 'A small wheeled cart crossing three evenly spaced gate posts on a straight track, one tiny stopwatch floating above.'],
+  'lever-balance': ['mechanics', 'A slim beam resting level on a small triangular fulcrum, one small cylinder weight hanging on each side.'],
+  'collision-elastic': ['mechanics', 'Two glossy spheres on a slim air track about to touch, a soft motion ghost trailing the incoming sphere.'],
+  'collision-inelastic': ['mechanics', 'Two glossy spheres on a slim air track just past contact, one slightly dented, short motion ghosts.'],
+  'collision-perfectly-inelastic': ['mechanics', 'Two glossy spheres joined as one lump gliding on a slim air track, a shared motion ghost behind.'],
+
+  /* -------------------------------------------------------------- optics -- */
+  'plane-mirror': ['optics', 'A small lit candle standing before a tall flat mirror panel, an identical soft candle image appearing behind the glass.'],
+  'convex-lens': ['optics', 'A small candle left of a standing oval glass lens, two slim light rays converging to a tiny inverted image on the right.'],
+  'concave-mirror': ['optics', 'A small candle before a dish-shaped concave mirror, two slim rays folding back to a tiny inverted image in front.'],
+  'convex-mirror': ['optics', 'A small candle before a dome-shaped outward-curving mirror holding a tiny upright shrunken reflection.'],
+
+  /* ------------------------------------------------------------- thermal -- */
+  'crystal-melting': ['thermal', 'A small glass beaker of ice cubes resting over a rounded heater with three tiny flames, a slim thermometer standing beside.'],
+  'heat-capacity-comparison': ['thermal', 'Two small identical beakers side by side over two small heaters, their thermometers risen to different heights.'],
+
+  /* --------------------------------------------------------------- fluid -- */
+  buoyancy: ['fluid', 'A small cube hanging from a round spring scale dial, half-dipped into a glass tank of calm water.'],
+
+  /* ---------------------------------------------------------------- wave -- */
+  'wave-travelling': ['wave', 'A taut cord leaving a small driver box on the left, carrying one smooth travelling sine wave to the right.'],
+  'wave-interference': ['wave', 'Two small round dippers touching a flat water surface, two overlapping families of concentric circular ripples.'],
+  'wave-standing': ['wave', 'A taut string clamped between two small posts, shaped into a smooth two-hump standing wave with a faint envelope.'],
+
+  /* ------------------------------------------------------------- circuit -- */
+  'series-circuit': ['circuit', 'A small rounded battery and two tiny glowing bulbs joined by one single smooth looping wire.'],
+  'parallel-circuit': ['circuit', 'A small rounded battery feeding two side-by-side branches each holding a tiny bulb, wires splitting and rejoining.'],
+  'mixed-circuit': ['circuit', 'A small battery with one tiny bulb in line and two more bulbs sharing a forked branch, wires forming a compact loop.'],
+  'rheostat-circuit': ['circuit', 'A small battery, a tiny bulb and a sliding-contact resistor bar wired in one loop, the slider mid-travel.'],
+  'va-resistance': ['circuit', 'A small battery, a slim resistor cylinder and two tiny round meter dials joined by a single wire loop.'],
+  'bulb-power': ['circuit', 'A small battery and one tiny bulb glowing with a soft halo on a simple wire loop.'],
+  'emf-measurement': ['circuit', 'A small battery wired to a round voltmeter dial and a tiny bulb, the needle sitting mid-scale.'],
+
+  /* ----------------------------------------------------------- acoustics -- */
+  'echo-ranging': ['acoustics', 'A tiny rounded loudspeaker on a small tripod facing a tall soft cliff, two dotted sound arcs travelling out and back.'],
+
+  /* ----------------------------------------------------------- induction -- */
+  'induction-bar-motion': ['induction', 'Two parallel metal rails with a small bar sliding across them through a dotted field zone, joined at one end by a tiny resistor.'],
+  'induction-double-bar-momentum': ['induction', 'Two parallel metal rails carrying two small bars drifting toward each other through a faint dotted field.'],
+  'induction-double-bar-force': ['induction', 'Two parallel metal rails with two small bars, one pushed by a slim horizontal arrow, faint field dots.'],
+  'induction-flux-change': ['induction', 'A small wire coil ring with a tiny bar magnet sliding through it, a small round meter dial beside.'],
 }
 
 /* ----------------------------------------------------------------- http ---- */

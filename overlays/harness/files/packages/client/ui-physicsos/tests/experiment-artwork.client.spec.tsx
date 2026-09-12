@@ -74,13 +74,16 @@ describe('resolveArtKey', () => {
 
 describe('<ExperimentArt />', () => {
   it('letterboxes by default and crops to fill when fit="cover"', () => {
-    /* lever-balance has no generated plate yet, so it exercises the SVG path. */
+    /* Every template ships a plate now: the SVG path is the load-failure
+       fallback, so force it with an error event before asserting. */
     const contain = render(<ExperimentArt templateId="lever-balance" />)
+    fireEvent.error(contain.container.querySelector('img') as Element)
     expect(contain.container.querySelector('svg')?.getAttribute('preserveAspectRatio'))
       .toBe('xMidYMid meet')
     contain.unmount()
 
     const cover = render(<ExperimentArt templateId="lever-balance" fit="cover" />)
+    fireEvent.error(cover.container.querySelector('img') as Element)
     expect(cover.container.querySelector('svg')?.getAttribute('preserveAspectRatio'))
       .toBe('xMidYMid slice')
   })
@@ -97,6 +100,7 @@ describe('<ExperimentArt />', () => {
 
   it('stays decorative: hidden from the accessibility tree', () => {
     const { container } = render(<ExperimentArt templateId="lever-balance" />)
+    fireEvent.error(container.querySelector('img') as Element)
     const svg = container.querySelector('svg')
     expect(svg?.getAttribute('aria-hidden')).toBe('true')
     expect(svg?.getAttribute('focusable')).toBe('false')
