@@ -117,6 +117,22 @@ const PHYSICS_TOKENS = `
   --physics-wave-node: #334155;
   --physics-wave-marker: #0284c7;
 
+  /* ---------- circuit ----------
+     Current is energy in motion, so it borrows the warm gold the induction
+     current and the optics rays already carry — but as its own token, because
+     the flowing dash layer must be tunable without dragging those with it. The
+     conductor is a cable rather than a hairline: a dark body with a cool sheen
+     so the gold beads read against it. Lamp light is three steps of one warm
+     ramp (core → hot → bloom) because a single flat halo is exactly what made
+     the bulbs read as stickers. */
+  --physics-wire: #31363f;
+  --physics-wire-sheen: #7b8698;
+  --physics-current-flow: #ffe08a;
+  --physics-current-flow-glow: rgb(120 70 0 / 55%);
+  --physics-lamp-core: #fff8e6;
+  --physics-lamp-hot: #ffd166;
+  --physics-lamp-bloom: #ff9d2e;
+
   /* ---------- status ---------- */
   --physics-verification-ok: #2f9e5a;
   --physics-verification-warning: #d97706;

@@ -1,0 +1,11 @@
+{
+  "id": "lamp-off",
+  "file": "lamp-off.png",
+  "model": "gpt-image-2",
+  "endpoint": "https://zz.211b.site",
+  "bytes": 1055439,
+  "createdAt": "2026-09-12T13:46:14.252Z",
+  "elapsedMs": 72818,
+  "attempts": 1,
+  "prompt": "a small incandescent lamp bulb with a clear glass envelope and a brass screw base, switched off, the filament inside visible as a thin dark wire. photorealistic 3D render of a single school-laboratory physics apparatus item, three-quarter view from above at roughly 45 degrees elevation, orthographic lens, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite, only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop All items are rendered at a consistent scale relative to a 1 cm binding post."
+}

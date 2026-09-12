@@ -206,12 +206,17 @@
 
 /* Conductors and symbol outlines share one ink so the schematic reads like a
    printed diagram; state (readings, current arrows) carries the colour. */
+/* The conductor is a cable, not a hairline. The old 1.6px mid-grey line read as
+   a diagram rule, which is what left the rendered parts looking pasted onto an
+   empty drawing. A darker body plus a slight lift gives the wire enough weight
+   to sit under the fittings. */
 .circuitWire {
-  stroke: #3f4652;
-  stroke-width: 1.6;
+  stroke: var(--physics-wire);
+  stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
+  filter: drop-shadow(0 0.6px 0.6px rgb(20 26 36 / 22%));
 }
 
 .circuitJunction {
@@ -307,16 +312,50 @@
 
 /* A drifting charge carrier on a live wire: a bead in the current's
    velocity-green with a paper halo, matching the direction-arrow ink. */
-.circuitChargeDot {
-  fill: var(--physics-vector-velocity);
-  stroke: #fbfdff;
-  stroke-width: 1.1;
+/* Travelling current: a dashed overlay riding the conductor, advanced every
+   frame by stroke-dashoffset (the renderer owns the offset; the pattern here
+   only fixes the look). The round cap turns each 0.1-long dash into a bead, so
+   a run of wire reads as charge in motion rather than as a dotted decoration.
+   Width exceeds the cable's so the beads sit proud of it. */
+.circuitChargeFlow {
+  stroke: var(--physics-current-flow);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  fill: none;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--physics-current-flow-glow));
 }
 
-/* Lamp halo disc behind a dissipating load: the radial gradient does the
-   painting, the class only keeps the disc out of pointer hit-testing. */
+/* Lamp light, three layers of one warm ramp. A single radial disc was the
+   whole of the old glow and it is what made a lit bulb read as a sticker: no
+   core, no falloff, nothing blowing out. Bloom and core blend in `screen` so
+   they add light against the bench rather than paint over it, and the bloom
+   is what actually throws light onto the surrounding wires. */
+.circuitLampBloom {
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
 .circuitLampGlow {
   pointer-events: none;
+}
+
+.circuitLampCore {
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* The filament is the part that says "this is a lamp, and it is hot". Cool and
+   dim when the load barely dissipates, white-hot at full glow; the renderer
+   drives its opacity, the colour stays here with the rest of the lamp ramp. */
+.circuitLampFilament {
+  fill: none;
+  stroke: var(--physics-lamp-hot);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1.2px var(--physics-lamp-bloom));
 }
 
 /* ---------- optical bench ---------- */

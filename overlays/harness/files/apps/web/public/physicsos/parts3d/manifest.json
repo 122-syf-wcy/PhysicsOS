@@ -1,0 +1,166 @@
+{
+  "note": "电学台器材目录。solidBox 是零件实体轮廓在图片中的归一化位置，渲染层据此把实体映射到接线端跨度；anchorSource=geometry-convention 表示锚点来自几何约定而非逐件目视测量。",
+  "solidAlphaThreshold": 200,
+  "parts": [
+    {
+      "id": "ammeter",
+      "file": "ammeter.png",
+      "pixels": "389x414",
+      "bytes": 177290,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.5838,
+      "solidBox": {
+        "left": 0.0592,
+        "top": 0.0342,
+        "width": 0.8822,
+        "height": 0.9275
+      },
+      "axis": "base",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "battery",
+      "file": "battery.png",
+      "pixels": "349x409",
+      "bytes": 184135,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6177,
+      "solidBox": {
+        "left": 0.0653,
+        "top": 0.0322,
+        "width": 0.8702,
+        "height": 0.9389
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "lamp-off",
+      "file": "lamp-off.png",
+      "pixels": "262x430",
+      "bytes": 124618,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.4942,
+      "solidBox": {
+        "left": 0.0872,
+        "top": 0.0531,
+        "width": 0.8271,
+        "height": 0.893
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "lamp-on",
+      "file": "lamp-on.png",
+      "pixels": "269x428",
+      "bytes": 126554,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.4795,
+      "solidBox": {
+        "left": 0.0854,
+        "top": 0.0497,
+        "width": 0.8284,
+        "height": 0.8972
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "resistor",
+      "file": "resistor.png",
+      "pixels": "423x312",
+      "bytes": 37754,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.0755,
+      "solidBox": {
+        "left": 0.0469,
+        "top": 0.0729,
+        "width": 0.9078,
+        "height": 0.8532
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "rheostat",
+      "file": "rheostat.png",
+      "pixels": "405x384",
+      "bytes": 179401,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.4115,
+      "solidBox": {
+        "left": 0.0205,
+        "top": 0.0598,
+        "width": 0.9481,
+        "height": 0.8928
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "switch-closed",
+      "file": "switch-closed.png",
+      "pixels": "393x318",
+      "bytes": 122731,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.3821,
+      "solidBox": {
+        "left": 0.0117,
+        "top": 0.0725,
+        "width": 0.9771,
+        "height": 0.8537
+      },
+      "axis": "base",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "switch-open",
+      "file": "switch-open.png",
+      "pixels": "409x384",
+      "bytes": 128761,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.3094,
+      "solidBox": {
+        "left": 0.0361,
+        "top": 0.0593,
+        "width": 0.9389,
+        "height": 0.8824
+      },
+      "axis": "base",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "terminal",
+      "file": "terminal.png",
+      "pixels": "224x430",
+      "bytes": 116782,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.4734,
+      "solidBox": {
+        "left": 0.1019,
+        "top": 0.0531,
+        "width": 0.795,
+        "height": 0.893
+      },
+      "axis": "base",
+      "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "voltmeter",
+      "file": "voltmeter.png",
+      "pixels": "402x402",
+      "bytes": 185010,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6131,
+      "solidBox": {
+        "left": 0.0381,
+        "top": 0.0195,
+        "width": 0.9249,
+        "height": 0.9552
+      },
+      "axis": "base",
+      "anchorSource": "geometry-convention"
+    }
+  ]
+}

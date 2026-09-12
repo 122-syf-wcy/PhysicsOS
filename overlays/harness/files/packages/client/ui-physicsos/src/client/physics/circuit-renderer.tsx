@@ -30,28 +30,6 @@ const CHARGE_SPEED_MAX = 90
 
 const isVertical = (rotation: number): boolean => Math.abs(rotation % 180) === 90
 
-/** Screen-space point at arc length `s` along a projected polyline. */
-const pointAlong = (
-  screen: readonly { x: number; y: number }[],
-  lengths: readonly number[],
-  s: number,
-): { x: number; y: number } => {
-  const first = screen[0] ?? { x: 0, y: 0 }
-  let walked = 0
-  for (let index = 0; index < lengths.length; index += 1) {
-    const length = lengths[index] ?? 0
-    const a = screen[index]
-    const b = screen[index + 1]
-    if (a === undefined || b === undefined) break
-    if (s <= walked + length || index === lengths.length - 1) {
-      const t = length <= 0 ? 0 : Math.min(1, Math.max(0, (s - walked) / length))
-      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
-    }
-    walked += length
-  }
-  return first
-}
-
 interface SymbolProps {
   readonly component: CircuitComponentVisual
   readonly cx: number
@@ -193,6 +171,8 @@ export function CircuitRenderer({ view, projection, time }: RendererProps) {
   const chargeFlows = view.chargeFlows ?? []
   const scale = projection.scale
   const lampGlowId = `circuit-lamp-glow-${projection.uid}`
+  const lampBloomId = `circuit-lamp-bloom-${projection.uid}`
+  const lampCoreId = `circuit-lamp-core-${projection.uid}`
 
   const showCurrent = view.visible.current === true
   const showVoltage = view.visible.voltage === true
@@ -201,10 +181,26 @@ export function CircuitRenderer({ view, projection, time }: RendererProps) {
   return (
     <>
       <defs>
+        {/* Three stops of one warm ramp: the core blows out near-white, the
+            glow disc carries the body of the light, the bloom is the wide
+            falloff that spills onto the wires around the bulb. Stops stay
+            literal rather than token-driven — this gradient is the one place
+            a missing var() would silently paint nothing, and it already
+            worked that way. */}
         <radialGradient id={lampGlowId} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#ffe6a8" stopOpacity="0.95" />
           <stop offset="55%" stopColor="#f5a524" stopOpacity="0.55" />
           <stop offset="100%" stopColor="#f5a524" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={lampBloomId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ff9d2e" stopOpacity="0.42" />
+          <stop offset="60%" stopColor="#ff9d2e" stopOpacity="0.14" />
+          <stop offset="100%" stopColor="#ff9d2e" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={lampCoreId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fff8e6" stopOpacity="1" />
+          <stop offset="70%" stopColor="#fff8e6" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#fff8e6" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -212,52 +208,34 @@ export function CircuitRenderer({ view, projection, time }: RendererProps) {
         <path key={wire.id} className={css.circuitWire} d={projection.path(wire.points)} />
       ))}
 
-      {/* Drifting charge carriers on each wire with a solved current: beads
-          every ~14 px advance at a rate ∝ |I| (clamped), the current's sign
-          setting the travel sense along the wire's path order. The phase is
-          the engine clock — pause freezes the drift, scrubbing reverses it —
-          and the layer rides the 电流 observable like the direction arrows. */}
+      {/* Current as travelling light: one dashed path per conducting run, the
+          pattern advanced by stroke-dashoffset each frame. The advance is ∝ |I|
+          (clamped) and its SIGN follows the solved current, so a run carrying
+          reversed current streams the other way. Only the dash phase moves —
+          the geometry is the wire's own polyline — which is how the drawing
+          stays per-segment KCL-honest while reading as charge in motion. */}
       {showCurrent
         ? chargeFlows.map((flow) => {
-          const screen = flow.path.map(point => ({
-            x: projection.px(point),
-            y: projection.py(point),
-          }))
-          const lengths: number[] = []
-          let total = 0
-          for (let index = 1; index < screen.length; index += 1) {
-            const a = screen[index - 1]
-            const b = screen[index]
-            if (a === undefined || b === undefined) continue
-            const length = Math.hypot(b.x - a.x, b.y - a.y)
-            lengths.push(length)
-            total += length
-          }
-          if (screen.length < 2 || total <= 0) return null
-          const count = Math.max(2, Math.round(total / CHARGE_SPACING_PX))
-          const stepLength = total / count
           const speed = Math.min(
             CHARGE_SPEED_MAX,
             Math.max(CHARGE_SPEED_MIN, Math.abs(flow.current) * CHARGE_SPEED_PER_AMP),
           )
+          /* Decreasing dashoffset walks the pattern forward along the path. */
           const advance =
-            flow.current === 0 ? 0 : Math.sign(flow.current) * speed * (time ?? 0)
+            flow.current === 0 ? 0 : -Math.sign(flow.current) * speed * (time ?? 0)
           return (
-            <g key={flow.id} data-charge-flow={flow.id} aria-hidden="true">
-              {Array.from({ length: count }, (_, index) => {
-                const s = (((index * stepLength + advance) % total) + total) % total
-                const dot = pointAlong(screen, lengths, s)
-                return (
-                  <circle
-                    key={index}
-                    className={css.circuitChargeDot}
-                    cx={dot.x}
-                    cy={dot.y}
-                    r={2.4}
-                  />
-                )
-              })}
-            </g>
+            <path
+              key={flow.id}
+              className={css.circuitChargeFlow}
+              data-charge-flow={flow.id}
+              data-current-sign={
+                flow.current > 0 ? 'forward' : flow.current < 0 ? 'reverse' : 'idle'
+              }
+              d={projection.path(flow.path)}
+              strokeDasharray={`0.1 ${CHARGE_SPACING_PX}`}
+              strokeDashoffset={advance}
+              aria-hidden="true"
+            />
           )
         })
         : null}
@@ -315,19 +293,63 @@ export function CircuitRenderer({ view, projection, time }: RendererProps) {
         const glow = component.glow ?? 0
         return (
           <g key={component.id} className={highlighted ? css.highlightGroup : undefined} data-component-id={component.id}>
+            {/* Light, laid down before the part: the bloom is thrown widest and
+                softest, the disc carries the body of the light, the core is the
+                hot centre. Bloom and core blend in `screen` (see the CSS) so
+                they add light to the bench instead of painting a disc over it.
+                The disc keeps the measured `r`/`opacity` that the glow tests
+                read, so brightness still tracks dissipation exactly. */}
             {glow > 0 ? (
-              <circle
-                data-testid={`glow-${component.id}`}
-                className={css.circuitLampGlow}
-                cx={cx}
-                cy={cy}
-                r={(0.55 + 0.75 * glow) * scale}
-                fill={`url(#${lampGlowId})`}
-                opacity={Math.min(1, 0.85 * glow)}
-              />
+              <>
+                <circle
+                  className={css.circuitLampBloom}
+                  cx={cx}
+                  cy={cy}
+                  r={(1.5 + 2.6 * glow) * scale}
+                  fill={`url(#${lampBloomId})`}
+                  opacity={Math.min(1, 0.9 * glow)}
+                />
+                <circle
+                  data-testid={`glow-${component.id}`}
+                  className={css.circuitLampGlow}
+                  cx={cx}
+                  cy={cy}
+                  r={(0.55 + 0.75 * glow) * scale}
+                  fill={`url(#${lampGlowId})`}
+                  opacity={Math.min(1, 0.85 * glow)}
+                />
+                <circle
+                  className={css.circuitLampCore}
+                  cx={cx}
+                  cy={cy}
+                  r={(0.32 + 0.3 * glow) * scale}
+                  fill={`url(#${lampCoreId})`}
+                  opacity={Math.min(1, 1.05 * glow)}
+                />
+              </>
             ) : null}
             <g transform={`rotate(${svgRotation} ${cx} ${cy})`}>
               <SymbolGeometry component={component} cx={cx} cy={cy} scale={scale} />
+              {/* Hot wire, behind nothing: the filament is what separates a lit
+                  load from a dead one. Its brightness rides the same normalized
+                  glow the halo uses, so the two can never disagree about how
+                  hard the element is working. */}
+              {component.glow !== undefined ? (
+                <path
+                  data-testid={`filament-${component.id}`}
+                  className={css.circuitLampFilament}
+                  d={
+                    `M${cx - 0.62 * scale} ${cy}`
+                    + ` L${cx - 0.42 * scale} ${cy - 0.2 * scale}`
+                    + ` L${cx - 0.2 * scale} ${cy + 0.2 * scale}`
+                    + ` L${cx} ${cy - 0.14 * scale}`
+                    + ` L${cx + 0.2 * scale} ${cy + 0.2 * scale}`
+                    + ` L${cx + 0.42 * scale} ${cy - 0.2 * scale}`
+                    + ` L${cx + 0.62 * scale} ${cy}`
+                  }
+                  opacity={Math.min(1, 0.25 + 0.75 * glow)}
+                />
+              ) : null}
               {showCurrent && component.currentText !== undefined ? (
                 <CurrentArrow component={component} cx={cx} cy={cy} scale={scale} />
               ) : null}

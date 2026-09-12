@@ -258,21 +258,27 @@ describe('circuit charge-flow renderer', () => {
     highlighted: () => false,
   }
 
-  const beadPositions = (container: HTMLElement): readonly { x: number; y: number }[] =>
-    [...container.querySelectorAll('[data-charge-flow] circle')].map(circle => ({
-      x: Number(circle.getAttribute('cx')),
-      y: Number(circle.getAttribute('cy')),
-    }))
+  /* The current layer is one dashed path per run, so there is no per-bead
+     geometry to measure any more: what carries the physics is the dash phase,
+     which the renderer advances every frame. */
+  const flowOffset = (container: HTMLElement, id: string): number => {
+    const node = container.querySelector(`[data-charge-flow="${id}"]`)
+    return Number(node?.getAttribute('stroke-dashoffset') ?? Number.NaN)
+  }
 
-  it('draws charge beads on every live wire, gated by the current observable', () => {
+  it('draws a flowing current layer on every live wire, gated by the current observable', () => {
     const view = createCircuitWorkspaceRuntime(createSeriesCircuitScene()).getSnapshot().view
     const { container, unmount } = render(
       <svg>
         <CircuitRenderer view={view} projection={projection} time={0} />
       </svg>,
     )
-    expect(container.querySelectorAll('[data-charge-flow]')).toHaveLength(5)
-    expect(beadPositions(container).length).toBeGreaterThan(5)
+    const flows = [...container.querySelectorAll('[data-charge-flow]')]
+    expect(flows).toHaveLength(5)
+    for (const flow of flows) {
+      expect(flow.tagName.toLowerCase()).toBe('path')
+      expect(flow.getAttribute('stroke-dasharray')).toBeTruthy()
+    }
     unmount()
 
     const hidden = { ...view, visible: { ...view.visible, current: false } }
@@ -284,7 +290,7 @@ describe('circuit charge-flow renderer', () => {
     expect(off.querySelectorAll('[data-charge-flow]')).toHaveLength(0)
   })
 
-  it('advances the beads with the engine clock, direction following the current sign', () => {
+  it('advances the dash pattern with the engine clock, direction following the current sign', () => {
     const view = createCircuitWorkspaceRuntime(createSeriesCircuitScene()).getSnapshot().view
     /* conn-n1-0 runs battery + → switch along +x first; its current is +. */
     const at0 = render(
@@ -297,15 +303,12 @@ describe('circuit charge-flow renderer', () => {
         <CircuitRenderer view={view} projection={projection} time={0.5} />
       </svg>,
     )
-    const beadAt = (container: HTMLElement) => {
-      const circle = container.querySelector('[data-charge-flow="flow-conn-n1-0"] circle')
-      return { x: Number(circle?.getAttribute('cx')), y: Number(circle?.getAttribute('cy')) }
-    }
-    const before = beadAt(at0.container)
-    const after = beadAt(at1.container)
-    /* Positive current: bead 0 leaves the battery positive terminal along +x. */
-    expect(after.x).toBeGreaterThan(before.x)
-    expect(after.y).toBeCloseTo(before.y, 6)
+    /* 0.2 A at 110 px/s per amp = 22 px/s (inside the 8..90 clamp). Decreasing
+       dashoffset walks the pattern forward along the path, so a run carrying
+       positive current reads negative and a reversed run reads positive. */
+    expect(flowOffset(at0.container, 'flow-conn-n1-0')).toBeCloseTo(0, 6)
+    expect(flowOffset(at1.container, 'flow-conn-n1-0')).toBeCloseTo(-11, 6)
+    expect(flowOffset(at1.container, 'flow-conn-n5-0')).toBeCloseTo(11, 6)
     at0.unmount()
     at1.unmount()
   })
