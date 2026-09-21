@@ -8,7 +8,10 @@
  * partial — the prefecture site publishes no 初中名录 and county rosters
  * were unreachable; additions belong here as they surface.
  *
- * Generated — do not hand-edit rows; regenerate from the source TSV.
+ * Rows before the 2026-09-21 block are generated from a source TSV that is
+ * NOT in this repository (see BACKLOG: GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP) —
+ * so that directive is currently unsatisfiable and the additions at the end of
+ * the array are hand-maintained with their sources recorded inline.
  */
 
 /** One roster row: full school name plus its prefecture (and county when known). */
@@ -1590,4 +1593,39 @@ export const GUIZHOU_SCHOOLS: readonly SchoolSeedEntry[] = [
   row('龙里县第三中学', '黔南州', '龙里县'),
   row('龙里县羊场初级中学', '黔南州', '龙里县'),
   row('龙里县醒狮初级中学', '黔南州', '龙里县'),
+  /* ---- 2026-09-21 补齐：官方名录逐条比对后新增 ----------------------------
+     上面 1566 行汇编自贵阳/黔南/黔东南/黔西南的招生计划与统计表，**高中侧
+     覆盖不均**：黔西南州那一批来源是《义务教育统计表》，所以兴义市在册的
+     几乎全是镇/街道初中，州府的高中一所都没有。
+
+     以下 15 所是逐条比对官方名录后新增的（比对方法：抓官方页面 → 解析表格
+     → 与在册名单取差集）。来源：
+
+     - 黔东南州教育局《2025年全州高中教育学校名录》
+       https://www.qdn.gov.cn/zwgk_5871642/zdlyxxgk/ggqsy_5872177/202408/t20240820_85407269.html
+       该页 48 所普通高中，46 所已在册（在册名用的是官方全称，例如
+       「贵州省凯里市第一中学」而不是口语的「凯里一中」），补 2 所。
+     - 黔西南州教育局《黔西南州2025年高中阶段民办学校年检结果公示》
+       https://www.qxn.gov.cn/zwgk/zfjg/zjyj_5135007/bmxxgkml_5135010/mbjy/202606/t20260630_90569855.html
+       年检合格的高中阶段民办学校，补 13 所（含同批基础教育栏目提及的
+       兴义笔山中学、望谟民族中学）。
+
+     ⚠️ 仍然是**不全的**：兴义市公办高中（兴义一中、兴义八中、兴义五中 …）
+     与遵义市第四中学等仍未进来——本轮没找到对应的官方名录页。
+     详见 docs/reports/BACKLOG.md 的 GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP。 */
+  row('镇远县文德民族中学校', '黔东南州', '镇远县'),
+  row('贵州省镇远中学校', '黔东南州', '镇远县'),
+  row('兴义市兴铭高中', '黔西南州', '兴义市'),
+  row('兴仁市树德高级中学', '黔西南州', '兴仁市'),
+  row('黔西南峰林高级中学', '黔西南州', '兴义市'),
+  row('黔西南州义龙翔泰高级中学', '黔西南州', '安龙县'),
+  row('黔西南州同源中学', '黔西南州', '兴义市'),
+  row('黔西南州崇文高级中学', '黔西南州', '兴义市'),
+  row('黔西南州昌文高级中学', '黔西南州', '兴义市'),
+  row('黔西南州自强中学', '黔西南州', '兴义市'),
+  row('黔西南州蓝天高级中学', '黔西南州', '兴义市'),
+  row('黔西南州赛文高级中学', '黔西南州', '兴义市'),
+  row('黔西南州顶兴高级中学', '黔西南州', '兴义市'),
+  row('兴义笔山中学', '黔西南州', '兴义市'),
+  row('望谟民族中学', '黔西南州', '望谟县'),
 ]
