@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import z from '@deepseek-ai/schemastery'
 import { openAuthDomain } from './domain.ts'
-import { ARGON2_AVAILABLE } from './passwords.ts'
+import { ARGON2_AVAILABLE, ARGON2_UNAVAILABLE_REASON } from './passwords.ts'
 import { AuthService, DEFAULT_AUTH_CONFIG, type AuthServiceConfig } from './service.ts'
 import { seedBootstrapAdmins, type BootstrapAdmin } from './bootstrap.ts'
 import { seedSchools } from './schools.ts'
@@ -64,7 +64,10 @@ export const Config: z<Config> = z.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   if (!ARGON2_AVAILABLE) {
-    throw new Error('auth-host requires node:crypto.argon2 (Node >= 24.7)')
+    throw new Error(
+      `auth-host requires a working argon2id: ${ARGON2_UNAVAILABLE_REASON ?? 'unknown reason'}`
+      + ` (Node ${process.version}; needs >= 24.7 built against an OpenSSL with argon2id)`,
+    )
   }
   await ctx.effect(async function* () {
     const domain = await openAuthDomain(ctx)

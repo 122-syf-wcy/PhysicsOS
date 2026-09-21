@@ -10,6 +10,12 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AuthService } from '../src/service.ts'
 import { authRoutes } from '../src/routes.ts'
+import {
+  ARGON2_AVAILABLE,
+  ARGON2_UNAVAILABLE_REASON,
+  hashPassword,
+  verifyPassword,
+} from '../src/passwords.ts'
 import type { AuthDomain, School } from '../src/domain.ts'
 
 /* Map-backed stand-in for Domain<typeof authDomain> — the service only uses
@@ -58,7 +64,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/physicsos/auth`
 })
 
-afterAll(() => new Promise<void>(resolve => server.close(() => resolve())))
+afterAll(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
 
 const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`${base}${path}`, {
@@ -268,5 +274,27 @@ describe('auth routes — guards', () => {
     expect(exists.status).toBe(200)
     expect(ghost.status).toBe(200)
     expect(await exists.json()).toEqual(await ghost.json())
+  })
+})
+
+/* Regression guard for a false-positive capability gate: `typeof
+   crypto.argon2Sync === 'function'` is true on builds whose OpenSSL lacks
+   argon2id, so the plugin used to activate and then die with a cryptic
+   ERR_CRYPTO_ARGON2_NOT_SUPPORTED stack from inside bootstrap seeding. The
+   invariant is one-directional and therefore holds on every machine: claiming
+   availability must imply hashing actually works. */
+describe('argon2 capability gate', () => {
+  it('never reports available when hashing would fail', () => {
+    if (!ARGON2_AVAILABLE) {
+      // Environment genuinely cannot argon2id — the reason must say why.
+      expect(ARGON2_UNAVAILABLE_REASON).toBeTypeOf('string')
+      expect(ARGON2_UNAVAILABLE_REASON).not.toBe('')
+      return
+    }
+    expect(ARGON2_UNAVAILABLE_REASON).toBeUndefined()
+    const stored = hashPassword('gate-probe-password')
+    expect(stored.startsWith('argon2id$v=19$')).toBe(true)
+    expect(verifyPassword('gate-probe-password', stored)).toBe(true)
+    expect(verifyPassword('wrong-password', stored)).toBe(false)
   })
 })

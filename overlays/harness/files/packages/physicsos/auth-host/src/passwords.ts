@@ -22,8 +22,59 @@ const argon2Sync = (crypto as unknown as {
   argon2Sync?: (algorithm: 'argon2id', parameters: Argon2Parameters) => Buffer
 }).argon2Sync
 
-/** True on Node ≥ 24.7; the plugin checks this before serving. */
-export const ARGON2_AVAILABLE = typeof argon2Sync === 'function'
+/**
+ * Whether this runtime can actually compute argon2id.
+ *
+ * `typeof argon2Sync === 'function'` is deliberately NOT the test: a build can
+ * expose the entry point while its OpenSSL provider lacks argon2id, and the call
+ * then throws `ERR_CRYPTO_ARGON2_NOT_SUPPORTED`. That combination is real
+ * (observed on a vendored Node 24.18.1 build) and it turns the boot gate into a
+ * false positive — the plugin activates, then dies with a cryptic stack from
+ * deep inside bootstrap seeding instead of the intended one-line diagnosis.
+ *
+ * Probing once with the cheapest legal parameters (RFC 9106 floor: 8 KiB, one
+ * pass, single lane) costs microseconds and keeps the gate honest.
+ */
+const ARGON2_PROBE: { readonly ok: boolean; readonly reason: string | undefined } = (() => {
+  if (typeof argon2Sync !== 'function') {
+    return { ok: false, reason: 'node:crypto.argon2 is absent (requires Node >= 24.7)' }
+  }
+  try {
+    const digest = argon2Sync('argon2id', {
+      message: 'probe',
+      nonce: Buffer.alloc(16),
+      parallelism: 1,
+      memory: 8,
+      passes: 1,
+      tagLength: 16,
+    })
+    return digest.length === 16
+      ? { ok: true, reason: undefined }
+      : { ok: false, reason: `argon2id returned a ${digest.length}-byte digest, expected 16` }
+  } catch (error) {
+    const code = (error as { code?: unknown }).code
+    return { ok: false, reason: `argon2id is exposed but unusable in this runtime (${String(code ?? error)})` }
+  }
+})()
+
+/** True when this runtime computes argon2id for real, not merely exposes it. */
+export const ARGON2_AVAILABLE = ARGON2_PROBE.ok
+
+/** Why argon2id is unusable — undefined exactly when {@link ARGON2_AVAILABLE}. */
+export const ARGON2_UNAVAILABLE_REASON = ARGON2_PROBE.reason
+
+/**
+ * The argon2id entry point, or a throw naming the runtime deficiency.
+ *
+ * Callers run only after {@link ARGON2_AVAILABLE} gated plugin activation, so
+ * this is unreachable in practice — but it keeps the call sites free of a
+ * non-null assertion, which would otherwise suppress the very check the probe
+ * exists to make.
+ */
+const requireArgon2 = (): NonNullable<typeof argon2Sync> => {
+  if (argon2Sync === undefined) throw new Error('argon2id unavailable in this runtime')
+  return argon2Sync
+}
 
 const MEMORY = 65_536 // 64 MiB — OWASP-recommended argon2id profile
 const PASSES = 3
@@ -37,7 +88,7 @@ const TAG_LENGTH = 32
  */
 export function hashPassword(password: string): string {
   const nonce = crypto.randomBytes(16)
-  const digest = argon2Sync!('argon2id', {
+  const digest = requireArgon2()('argon2id', {
     message: password,
     nonce,
     parallelism: PARALLELISM,
@@ -71,7 +122,7 @@ export function verifyPassword(password: string, stored: string): boolean {
   }
   if (expected.length === 0) return false
   try {
-    const digest = argon2Sync!('argon2id', {
+    const digest = requireArgon2()('argon2id', {
       message: password,
       nonce,
       parallelism: Number(m[3]),
