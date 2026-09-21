@@ -324,6 +324,28 @@ Agent 侧同理：`dsh-tool-physicsos` 把 `@physicsos/*` 源码内联进
 endTime 修复在浏览器里仍报 v=30/200m，就是这个原因——重建后恢复 v=20/75m）。
 `grep "关键改动代码片段" lib/index.js` 可直接确认 bundle 新旧。
 
+**三个 host 插件同理**（`auth-host` / `paper-host` / `tool-physicsos`）：
+服务加载的是各自的 `lib/index.js`，不是 `src/`。改完源码必须重建再重启：
+
+```bash
+cd vendor/deepseek-harness
+for p in auth-host paper-host tool-physicsos; do
+  ./node_modules/.bin/tsc -b packages/physicsos/$p/tsconfig.json
+  (cd packages/physicsos/$p && ../../../node_modules/.bin/tsdown)
+done
+```
+
+**注意顺序**：`tsdown` 的入口是 `lib/types/index.js`（`tsc` 产物），
+**必须先 `tsc -b` 再 `tsdown`**；直接跑 `tsdown` 打的是上一次的旧产物，
+表现是"路由/数据明明在源码里却 404 或查不到"。
+（包内有 `pnpm run bundle` 按正确顺序跑两步，但它会触发 pnpm 的依赖检查，
+在 lefthook postinstall 失败的环境里会被打断——所以上面给的是直连写法。）
+
+> 2026-09-21 就踩过一次：往名录里加了 15 所学校、`apply` 也同步了、
+> 单测全绿，但隔离服务注册新校名仍然 `SCHOOL_NOT_FOUND`——因为
+> `auth-host/lib` 还是旧的。重建后 4 所全部 201。
+> **症状识别**：单测（跑 `src/`）与真实服务（跑 `lib/`）结论不一致。
+
 排查手法：`lib/client.js.map` 的 `sourcesContent` 里存着**打包当时**的全部源码，
 把它和当前 `src/` 逐文件 diff，就能看出 `lib/` 落后在哪：
 

@@ -42,6 +42,31 @@ describe('GUIZHOU_SCHOOLS roster integrity', () => {
       expect(school.name).not.toMatch(/幼儿园|小学|大学$|学院$|培训|教育科技|公司$/)
     }
   })
+
+  /* The 2026-09-21 additions were each verified against an official roster page
+     (URLs recorded inline in the data file). They are the only rows whose
+     provenance is traceable, so pin them: a future regeneration from the
+     out-of-repo source TSV would otherwise drop them silently and shrink the
+     high-school side back to what the 义务教育 statistics happened to cover. */
+  it('keeps the verified high-school additions', () => {
+    const names = new Set(GUIZHOU_SCHOOLS.map(s => s.name))
+    for (const name of [
+      '镇远县文德民族中学校', '贵州省镇远中学校',
+      '兴义市兴铭高中', '兴义笔山中学', '望谟民族中学', '黔西南州赛文高级中学',
+    ]) {
+      expect(names.has(name), name).toBe(true)
+    }
+  })
+
+  it('carries a senior-high cohort, not only 义务教育 rows', () => {
+    /* 黔西南州 was compiled from a 义务教育 statistics table, so its rows were
+       almost entirely town-level middle schools; these additions are what give
+       the prefecture any senior-high tenants at all. */
+    const seniorHigh = GUIZHOU_SCHOOLS.filter(s => /高级中学|高中|第[一二三四五六七八九十]+中学/.test(s.name))
+    expect(seniorHigh.length).toBeGreaterThan(200)
+    const qianxinanSenior = seniorHigh.filter(s => s.city === '黔西南州')
+    expect(qianxinanSenior.length).toBeGreaterThanOrEqual(13)
+  })
 })
 
 describe('rosterSchoolId', () => {
