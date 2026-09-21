@@ -642,7 +642,7 @@ HANDOVER 那条"新机器上手"走完它**根本不存在**。已补进 overlay
 **C. 门禁断档**：根 `pnpm test` 的 `test:agent` **只跑 `tool-physicsos`**，
 `auth-host`（4 spec）与 `paper-host`（1 spec）不在任何日常门禁里。
 现 `typecheck:agent` / `lint:agent` / `test:agent` 覆盖三个包
-（91 测试，原 20）。接线当场暴露 141 项从未检查过的 lint 错误，已全部清偿
+（93 测试，原 20）。接线当场暴露 141 项从未检查过的 lint 错误，已全部清偿
 （含 40 处非空断言换成真实收窄、`parse<T>` 的 T 只用一次、动态 delete 等）。
 
 **D. `pnpm lint` 全绿**（三条门禁首次同时为 0）。四处红分别清偿：
@@ -676,7 +676,7 @@ support 又把它计入 `errorResponses`，于是任何套件都会在跑第一�
 | --- | --- | --- |
 | `pnpm typecheck` | core + web + 三个 host 插件 | 0 错 |
 | `pnpm lint` | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件（30 文件） | **0 错 0 警** |
-| `pnpm test` | core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **91 测试** | 全绿 |
+| `pnpm test` | core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **93 测试** | 全绿 |
 
 `auth-acceptance.mjs` 8 CASE / 22 断言 + 5 项浏览器门禁全 PASS。
 
