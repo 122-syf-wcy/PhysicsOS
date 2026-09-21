@@ -562,7 +562,7 @@ argon2id**（本机一个 vendored Node 24.18.1 即如此）。后果是插件�
 校名注册进入应用、STUDENT 无管理后台入口、登出后旧会话 401、同名多校消歧候选
 带地区标签、SUPER_ADMIN 控制台 tab、以及**申请→审批→建校→建教师→教师登录→
 禁用→401** 全链（另加 TEACHER 打管理 API 403、审计台账落行）。
-`test:agent` 7 文件 91 测试全绿；`typecheck` / `lint` 全绿。
+`test:agent` 7 文件 93 测试全绿；`typecheck` / `lint` 全绿。
 
 ---
 
