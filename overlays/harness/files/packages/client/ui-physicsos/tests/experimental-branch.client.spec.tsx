@@ -119,6 +119,7 @@ describe('experimental branch', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
 

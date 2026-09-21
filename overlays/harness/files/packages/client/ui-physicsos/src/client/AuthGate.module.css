@@ -1,0 +1,287 @@
+/* AuthGate — the full-viewport 账户体系 entrance over `shell.overlay`.
+   Quiet brand surface: token bg + the generated low-contrast physics
+   horizon image at half opacity, then a token-tinted veil so the center
+   column always reads clean in light or dark appearance. */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-base);
+  /* The overlay layer is click-through by default; the gate opts in. */
+  pointer-events: auto;
+}
+
+.gate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/physicsos/login/horizon.png');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.gate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
+  pointer-events: none;
+}
+
+.gate > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- chrome ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 0;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.wordmarkIcon {
+  display: block;
+}
+
+.topLinks {
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 24px 64px;
+}
+
+.heroMark {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.tagline {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dsw-alias-label-primary);
+}
+
+.support {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.footer {
+  padding: 0 28px 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dsw-alias-label-quaternary);
+}
+
+/* ---------- form ---------- */
+
+.form {
+  width: 100%;
+  max-width: 380px;
+  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.formTitle {
+  margin: 0 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  text-align: center;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.fieldLabelInvalid {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.input {
+  box-sizing: border-box;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 13px;
+  border: 1px solid var(--dsw-alias-border-l);
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  outline: none;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus-visible {
+  border-color: var(--dsw-alias-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
+}
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap .input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.eye:hover {
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.terms {
+  margin-top: -2px;
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--dsw-alias-label-link);
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.error {
+  margin: -2px 0 0;
+  font-size: 12.5px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.submit {
+  height: 46px;
+  border: none;
+  border-radius: 13px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.alt {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+/* Selects reuse the input skin; the UA arrow needs the option surface dark-safe. */
+select.input {
+  appearance: auto;
+  width: 100%;
+}
+
+.receipt {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+}
+
+/* ---------- loading ---------- */
+
+.loadingDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
+  animation: authGatePulse 1.1s ease-in-out infinite;
+}
+
+@keyframes authGatePulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}

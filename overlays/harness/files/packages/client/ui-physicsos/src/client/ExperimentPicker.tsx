@@ -6,22 +6,21 @@
  *
  * Reading order is deliberately three beats, not seven:
  *
- *   1. Header — the mascot and the title. Where am I.
- *   2. Focus row — 继续上次实验 as one large tile beside the 为你推荐 cards.
- *      The single most likely next action sits first and biggest.
+ *   1. Header — the mascot, title and available-experiment count.
+ *   2. Focus row — continue the active/recent scene or open a recommendation.
  *   3. Browse — one filter bar (subject chips · search · 学段), then the grid
  *      grouped by subject so 38 templates read as eleven short shelves rather
  *      than one wall. A subject chip or a search collapses it to a flat list.
  *
- * Every card carries hand-drawn scene artwork ({@link ExperimentArt}) in its
- * subject colour; sections rise in with a staggered entrance (disabled under
- * prefers-reduced-motion). Picking one builds a real PhysicsScene via the
+ * Every card carries scene artwork ({@link ExperimentArt}) on a consistent
+ * plate; section fades respect prefers-reduced-motion. Picking one builds a real PhysicsScene via the
  * {@link ExperimentTemplateRegistry} and hands it to the Lab.
  */
 
 import { useMemo, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconSearchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { knowledgeNodeOf } from '@physicsos/question-core'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 
@@ -35,13 +34,14 @@ import {
   type ExperimentTemplate,
 } from './physics/experiment-templates.ts'
 import { ExperimentArt, artTemplateIdOfSceneId } from './physics/experiment-artwork.tsx'
+import { experimentMetaOf } from './physics/experiment-summaries.ts'
 import { recommendExperiments } from './physics/experiment-recommendations.ts'
 import type { LearningRecordState } from './learning-record-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { Mascot } from './Mascot.tsx'
 import type { PhysicsSurfaceId, RecentExperimentsState } from './surface-store.ts'
 import { formatUpdatedAt } from './workspaceMeta.ts'
-import { IconPhysicsPlay } from './icons/physics-icons.tsx'
+import { IconPhysicsPlay, IconCircuitSeries } from './icons/physics-icons.tsx'
 import css from './ExperimentPicker.module.css'
 
 /** Locale keys for the domain tabs. 'all' is the union tab, not a group id. */
@@ -125,6 +125,11 @@ export interface ExperimentPickerProps {
     readonly sceneId?: string
     readonly onResume: () => void
   }
+  /**
+   * Open the Lab assembling a circuit from scratch. Optional so the chooser can
+   * still be mounted without a builder host (tests, embeds).
+   */
+  readonly onFreeBuild?: () => void
 }
 
 /** One shelf of the browse grid: a subject heading and its templates. */
@@ -135,7 +140,12 @@ interface Shelf {
 }
 
 export function ExperimentPicker({
-  t, openSurface, useRecentExperiments, useLearningRecord, resume,
+  t,
+  openSurface,
+  useRecentExperiments,
+  useLearningRecord,
+  resume,
+  onFreeBuild,
 }: ExperimentPickerProps) {
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState<TabId>('all')
@@ -168,25 +178,43 @@ export function ExperimentPicker({
           const name = t(template.label).toLowerCase()
           const hint = t(template.hint).toLowerCase()
           const tags = template.tags.join(' ').toLowerCase()
-          return name.includes(q) || hint.includes(q) || tags.includes(q) || template.id.includes(q)
+          /* Aliases carry exam keywords and synonyms (斜上抛、伏安法…) that
+             never appear in the visible name — same role as the reference
+             lab's searchAliases. */
+          const aliases = (experimentMetaOf(template.id)?.aliases ?? []).join(' ').toLowerCase()
+          return (
+            name.includes(q) ||
+            hint.includes(q) ||
+            tags.includes(q) ||
+            aliases.includes(q) ||
+            template.id.includes(q)
+          )
         })
 
     if (tab === 'all' && q === '') {
-      return EXPERIMENT_TEMPLATE_GROUPS
-        .map(group => ({ id: group.id, label: t(group.label), templates: byStage(group.templates) }))
-        .filter(shelf => shelf.templates.length > 0)
+      return EXPERIMENT_TEMPLATE_GROUPS.map(group => ({
+        id: group.id,
+        label: t(group.label),
+        templates: byStage(group.templates),
+      })).filter(shelf => shelf.templates.length > 0)
     }
-    const source = tab === 'all'
-      ? EXPERIMENT_TEMPLATES
-      : EXPERIMENT_TEMPLATE_GROUPS.find(group => group.id === tab)?.templates ?? []
+    const source =
+      tab === 'all'
+        ? EXPERIMENT_TEMPLATES
+        : (EXPERIMENT_TEMPLATE_GROUPS.find(group => group.id === tab)?.templates ?? [])
     const templates = byQuery(byStage(source))
     return templates.length === 0
       ? []
-      : [{
-        id: tab === 'all' ? 'results' : tab,
-        label: tab === 'all' ? t('lab.template.picker.allTemplates') : t(`lab.template.group.${tab}`),
-        templates,
-      }]
+      : [
+        {
+          id: tab === 'all' ? 'results' : tab,
+          label:
+              tab === 'all'
+                ? t('lab.template.picker.allTemplates')
+                : t(`lab.template.group.${tab}`),
+          templates,
+        },
+      ]
   }, [tab, stage, trimmedQuery, t])
 
   const grouped = tab === 'all' && !searching
@@ -203,33 +231,39 @@ export function ExperimentPicker({
      over a running experiment), else the newest persisted scene — restorable
      across reloads exactly as created. */
   const lastDomain = lastScene === undefined ? undefined : asDomain(lastScene.domain)
-  const continueCard = resume !== undefined
-    ? {
-      eyebrow: t('lab.template.picker.resume'),
-      title: resume.title,
-      meta: t('lab.picker.continue.running'),
-      domain: resume.domain === undefined ? undefined : asDomain(resume.domain),
-      templateId: resume.sceneId === undefined ? undefined : artTemplateIdOfSceneId(resume.sceneId),
-      kind: 'experiment' as const,
-      state: 'running',
-      onOpen: resume.onResume,
-    }
-    : lastScene !== undefined
+  const continueCard =
+    resume !== undefined
       ? {
-        eyebrow: t('lab.picker.continue.title'),
-        title: lastScene.title,
-        meta: [
-          lastDomain === undefined ? undefined : t(`lab.template.group.${lastDomain}`),
-          t(lastScene.kind === 'question' ? 'recent.kind.question' : 'recent.kind.experiment'),
-          formatUpdatedAt(lastScene.updatedAt),
-        ].filter((part): part is string => part !== undefined && part !== '').join(' · '),
-        domain: lastDomain,
-        templateId: artTemplateIdOfSceneId(lastScene.sceneId),
-        kind: lastScene.kind,
-        state: 'stored',
-        onOpen: () => { openSurface('lab', { sceneId: lastScene.sceneId, scene: lastScene.scene }) },
+        eyebrow: t('lab.template.picker.resume'),
+        title: resume.title,
+        meta: t('lab.picker.continue.running'),
+        domain: resume.domain === undefined ? undefined : asDomain(resume.domain),
+        templateId:
+            resume.sceneId === undefined ? undefined : artTemplateIdOfSceneId(resume.sceneId),
+        kind: 'experiment' as const,
+        state: 'running',
+        onOpen: resume.onResume,
       }
-      : undefined
+      : lastScene !== undefined
+        ? {
+          eyebrow: t('lab.picker.continue.title'),
+          title: lastScene.title,
+          meta: [
+            lastDomain === undefined ? undefined : t(`lab.template.group.${lastDomain}`),
+            t(lastScene.kind === 'question' ? 'recent.kind.question' : 'recent.kind.experiment'),
+            formatUpdatedAt(lastScene.updatedAt),
+          ]
+            .filter((part): part is string => part !== undefined && part !== '')
+            .join(' · '),
+          domain: lastDomain,
+          templateId: artTemplateIdOfSceneId(lastScene.sceneId),
+          kind: lastScene.kind,
+          state: 'stored',
+          onOpen: () => {
+            openSurface('lab', { sceneId: lastScene.sceneId, scene: lastScene.scene })
+          },
+        }
+        : undefined
 
   const hasFocusRow = continueCard !== undefined || recommendations.length > 0
 
@@ -238,14 +272,14 @@ export function ExperimentPicker({
       <div className={css.panel}>
         {/* ---------------------------------------------------------- header */}
         <header className={clsx(css.header, css.reveal)} style={revealAt(0)}>
-          <Mascot pose="search" size={92} className={css.mascot} />
+          <Mascot pose="search" size={72} className={css.mascot} />
           <div className={css.headerCopy}>
             <h2 className={css.title}>{t('lab.template.empty.title')}</h2>
             <p className={css.body}>{t('lab.template.empty.body')}</p>
           </div>
           <span className={css.headerCount}>
-            <IconPhysicsPlay size={13} />
-            {t('lab.template.picker.allTemplates')} · {SELECTABLE_TEMPLATE_COUNT}
+            <strong className={css.headerCountValue}>{SELECTABLE_TEMPLATE_COUNT}</strong>
+            <span>{t('lab.template.picker.allTemplates')}</span>
           </span>
         </header>
 
@@ -265,11 +299,13 @@ export function ExperimentPicker({
                 onClick={continueCard.onOpen}
               >
                 <span className={css.continueArt} aria-hidden="true">
-                  <ExperimentArt templateId={continueCard.templateId} kind={continueCard.kind} fit="cover" />
+                  <ExperimentArt templateId={continueCard.templateId} kind={continueCard.kind} />
                 </span>
                 <span className={css.continueBody}>
                   <span className={css.continueEyebrow}>
-                    {continueCard.state === 'running' ? <span className={css.liveDot} aria-hidden="true" /> : null}
+                    {continueCard.state === 'running' ? (
+                      <span className={css.liveDot} aria-hidden="true" />
+                    ) : null}
                     {continueCard.eyebrow}
                   </span>
                   <span className={css.continueTitle}>{continueCard.title}</span>
@@ -297,11 +333,17 @@ export function ExperimentPicker({
                       <button
                         key={`recommend-${template.id}`}
                         type="button"
-                        className={clsx(css.recommendCard, css.card, css[`subject-${template.domain}`])}
+                        className={clsx(
+                          css.recommendCard,
+                          css.card,
+                          css[`subject-${template.domain}`],
+                        )}
                         style={cardAt(index)}
                         data-template-id={template.id}
                         data-reason={reason}
-                        onClick={() => { pick(template) }}
+                        onClick={() => {
+                          pick(template)
+                        }}
                       >
                         <span className={clsx(css.art, css.artThumb)}>
                           <ExperimentArt templateId={template.id} />
@@ -324,6 +366,25 @@ export function ExperimentPicker({
           </div>
         ) : null}
 
+        {/* ------------------------------------------------------ free build */}
+        {onFreeBuild === undefined ? null : (
+          <button
+            type="button"
+            className={clsx(css.freeBuild, css.reveal)}
+            style={revealAt(2)}
+            onClick={onFreeBuild}
+          >
+            <span className={css.freeBuildIcon} aria-hidden="true">
+              <IconCircuitSeries size={20} />
+            </span>
+            <span className={css.freeBuildText}>
+              <span className={css.freeBuildTitle}>{t('lab.picker.freeBuild.title')}</span>
+              <span className={css.freeBuildHint}>{t('lab.picker.freeBuild.hint')}</span>
+            </span>
+            <span className={css.freeBuildCta}>{t('lab.picker.freeBuild.cta')}</span>
+          </button>
+        )}
+
         {/* ------------------------------------------------------ filter bar */}
         <div className={clsx(css.browseHead, css.reveal)} style={revealAt(3)}>
           <div className={css.browseTitle}>
@@ -331,14 +392,19 @@ export function ExperimentPicker({
             <span className={css.browseHint}>{t('lab.picker.browse.hint')}</span>
           </div>
           <div className={css.browseControls}>
-            <input
-              type="search"
-              className={css.search}
-              placeholder={t('lab.template.picker.search')}
-              aria-label={t('lab.template.picker.search')}
-              value={query}
-              onChange={(event) => { setQuery(event.target.value) }}
-            />
+            <div className={css.searchField}>
+              <IconSearchOutline16 size={16} />
+              <input
+                type="search"
+                className={css.search}
+                placeholder={t('lab.template.picker.search')}
+                aria-label={t('lab.template.picker.search')}
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                }}
+              />
+            </div>
             {/* 学段 partition: the coarse 初中/高中 cut, so a junior student
                 never wades through 复合场 to find 伏安法. */}
             <div
@@ -354,7 +420,9 @@ export function ExperimentPicker({
                   role="tab"
                   aria-selected={stage === entry.id}
                   className={clsx(css.stageTab, stage === entry.id && css.stageTabActive)}
-                  onClick={() => { setStage(entry.id) }}
+                  onClick={() => {
+                    setStage(entry.id)
+                  }}
                 >
                   {t(entry.label)}
                 </button>
@@ -380,7 +448,9 @@ export function ExperimentPicker({
                 tab === entry.id && css.tabActive,
                 entry.id !== 'all' && css[`subject-${entry.id}`],
               )}
-              onClick={() => { setTab(entry.id) }}
+              onClick={() => {
+                setTab(entry.id)
+              }}
             >
               {entry.id === 'all' ? null : <span className={css.tabDot} aria-hidden="true" />}
               {t(entry.label)}
@@ -399,7 +469,11 @@ export function ExperimentPicker({
             {shelves.map((shelf, shelfIndex) => (
               <section
                 key={shelf.id}
-                className={clsx(css.shelf, css.reveal, shelf.id !== 'results' && css[`subject-${shelf.id}`])}
+                className={clsx(
+                  css.shelf,
+                  css.reveal,
+                  shelf.id !== 'results' && css[`subject-${shelf.id}`],
+                )}
                 style={revealAt(5 + Math.min(shelfIndex, 6))}
                 aria-label={shelf.label}
                 data-physicsos-shelf={shelf.id}
@@ -426,16 +500,20 @@ export function ExperimentPicker({
                       disabled={template.comingSoon === true}
                       data-stage={template.stage}
                       data-template-id={template.id}
-                      onClick={() => { pick(template) }}
+                      onClick={() => {
+                        pick(template)
+                      }}
                     >
                       <span className={clsx(css.art, css.artThumb)}>
                         <ExperimentArt templateId={template.id} />
                       </span>
                       <span className={css.entryText}>
                         <span className={css.entryName}>
-                          {t(template.label)}
+                          <span>{t(template.label)}</span>
                           {template.comingSoon === true ? (
-                            <span className={css.soonBadge}>{t('lab.template.picker.comingSoon')}</span>
+                            <span className={css.soonBadge}>
+                              {t('lab.template.picker.comingSoon')}
+                            </span>
                           ) : recent.includes(template.id) ? (
                             <span className={css.recentBadge}>{t('lab.picker.recentBadge')}</span>
                           ) : null}
@@ -453,6 +531,11 @@ export function ExperimentPicker({
                         <span className={css.stageTag}>
                           {t(`lab.template.stage.${template.stage}`)}
                         </span>
+                        {template.comingSoon === true ? null : (
+                          <span className={css.entryPlay} aria-hidden="true">
+                            <IconPhysicsPlay size={15} />
+                          </span>
+                        )}
                       </span>
                     </button>
                   ))}

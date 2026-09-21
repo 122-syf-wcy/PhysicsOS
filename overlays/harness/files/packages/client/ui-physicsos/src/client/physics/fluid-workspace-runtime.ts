@@ -54,6 +54,7 @@ import type {
   DerivedQuantityView,
   InspectorSection,
   ObservableKey,
+  ScenePoint,
   SceneTreeNode,
   TimelineEvent,
   VerificationCheckView,
@@ -516,6 +517,37 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
     return this.seek(this.currentTime + delta)
   }
 
+  /* Block dragging: grabbing the block and pulling it down IS scrubbing the
+     descent clock — the depth under the pointer maps to the scene time at
+     which the rig reaches that depth, so the scale reading, buoyancy and V_排
+     that follow the hand are the engine's own values. The baseline the grab
+     started from is kept so a cancelled gesture snaps back. */
+  private dragBaseline: { time: number; running: boolean } | undefined
+
+  previewComponentPlacement(componentId: string, at: ScenePoint): WorkspaceSnapshot {
+    const model = this.computed?.model
+    if (model === undefined || componentId !== model.blockId) return this.getSnapshot()
+    this.dragBaseline ??= { time: this.currentTime, running: this.running }
+    return this.seek(timeForBlockCentre(at.y, model))
+  }
+
+  commitComponentPlacement(componentId: string, at: ScenePoint): WorkspaceSnapshot {
+    this.dragBaseline = undefined
+    const model = this.computed?.model
+    if (model === undefined || componentId !== model.blockId) return this.getSnapshot()
+    return this.seek(timeForBlockCentre(at.y, model))
+  }
+
+  cancelComponentPlacement(): WorkspaceSnapshot {
+    const baseline = this.dragBaseline
+    this.dragBaseline = undefined
+    if (baseline !== undefined) {
+      this.currentTime = baseline.time
+      this.running = baseline.running
+    }
+    return this.getSnapshot()
+  }
+
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     /* Lowering runs at human seconds, so wall time maps 1:1 onto scene time.
        The run stops where the block settles rather than looping: the steady
@@ -547,6 +579,18 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
 }
 
 /* -------------------------------------------------------------- projections -- */
+
+/**
+ * The scene time at which the block's centre sits at `centreY` on the canvas.
+ * The view's y axis is centimetres of height with the liquid surface at 0 —
+ * the bottom face is half a block below the centre, its depth below the
+ * surface grows at `lowerRate`, and `seek` clamps to the descent's own range.
+ */
+const timeForBlockCentre = (centreY: number, model: ResolvedFluidModel): number => {
+  const halfHeightCm = (model.blockHeight * 100) / 2
+  const depthMetres = Math.max(0, (halfHeightCm - centreY) / 100)
+  return depthMetres / model.lowerRate
+}
 
 /** Scale reading against depth — the curve that bends and then goes flat. */
 const chartsOf = (

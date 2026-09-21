@@ -571,6 +571,130 @@ const CollisionPerfectlyInelasticArt = () => (
   </>
 )
 
+/** v–t 图像: axes, a rising v–t line, and the shaded trapezoid it displaces. */
+const VtAreaArt = () => (
+  <>
+    <Stroke d="M18 12 V54 H108" width={2} opacity={0.8} />
+    <path d="M18 40 L92 20 V54 H18 Z" fill="currentColor" fillOpacity={0.14} />
+    <Stroke d="M18 40 L92 20" width={2.4} />
+    <Stroke d="M92 20 V54" width={1.4} opacity={0.5} dash="2 3" />
+    <Stroke d="M18 40 H8" width={1.4} opacity={0.5} />
+    <Dot x={18} y={40} r={2.4} />
+    <Arrow x1={100} y1={54} x2={110} y2={54} width={1.6} opacity={0.6} head={4} />
+    <Arrow x1={18} y1={54} x2={18} y2={12} width={1.6} opacity={0.6} head={4} />
+  </>
+)
+
+/** 力的合成: two perpendicular pulls from a block and the resultant diagonal. */
+const ForceCompositionArt = () => (
+  <>
+    <rect x={48} y={32} width={18} height={18} rx={2.4} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={48} y1={41} x2={18} y2={41} width={2.4} />
+    <Arrow x1={57} y1={32} x2={57} y2={10} width={2.4} />
+    <Arrow x1={60} y1={28} x2={88} y2={14} width={2.4} opacity={0.85} />
+    <Stroke d="M48 32 L88 14 M66 50 L96 32" width={1.3} opacity={0.4} dash="3 3" />
+    <Stroke d="M66 32 L96 32 L96 50" width={1.3} opacity={0.35} dash="3 3" />
+  </>
+)
+
+/** 共点力平衡: three arrows out of one point at 120°, no resultant. */
+const ConcurrentEquilibriumArt = () => (
+  <>
+    <Dot x={60} y={34} r={4} />
+    <Arrow x1={60} y1={34} x2={94} y2={34} width={2.2} />
+    <Arrow x1={60} y1={34} x2={43} y2={14} width={2.2} />
+    <Arrow x1={60} y1={34} x2={43} y2={54} width={2.2} />
+    <Stroke d="M60 34 m7 0 a7 7 0 0 1 -3.5 6" width={1.3} opacity={0.5} />
+    <Stroke d="M60 34 m-7 0 a7 7 0 0 1 3.5 -6" width={1.3} opacity={0.5} />
+  </>
+)
+
+/** 超重失重: a person on the lift floor; the N arrow visibly outweighs mg. */
+const ApparentWeightArt = () => (
+  <>
+    <Stroke d="M34 14 H86 V54 H34 Z" width={1.8} opacity={0.55} />
+    <rect x={50} y={30} width={20} height={14} rx={2.4} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={60} y1={44} x2={60} y2={20} width={2.6} />
+    <Arrow x1={60} y1={44} x2={60} y2={58} width={1.8} opacity={0.6} head={4.2} />
+    <Arrow x1={94} y1={48} x2={94} y2={30} width={2} opacity={0.7} />
+    <Arrow x1={26} y1={48} x2={26} y2={30} width={2} opacity={0.7} />
+  </>
+)
+
+/** 追及相遇: two lanes, a fast dot closing on a slow one toward the meet flag. */
+const ChaseMeetingArt = () => (
+  <>
+    <Stroke d="M8 28 H112 M8 48 H112" width={1.5} opacity={0.4} dash="4 3" />
+    <Dot x={30} y={28} r={3.4} />
+    <Dot x={64} y={48} r={3.4} opacity={0.7} />
+    <Arrow x1={36} y1={28} x2={58} y2={28} width={2.4} />
+    <Arrow x1={70} y1={48} x2={84} y2={48} width={1.7} opacity={0.6} />
+    <Stroke d="M96 14 V56" width={2} />
+    <Stroke d="M96 14 l12 4 -12 4" width={1.8} />
+    <Stroke d="M30 22 V56 M64 42 V56" width={1.2} opacity={0.4} dash="2 3" />
+  </>
+)
+
+/** 胡克定律: a ceiling spring stretching under a hanging load. */
+const HookeLawArt = () => (
+  <>
+    <Stroke d="M40 10 H80" width={2.2} opacity={0.7} />
+    {[44, 54, 64, 74].map(x => (
+      <Stroke key={x} d={`M${x} 7 v3`} width={1.3} opacity={0.4} />
+    ))}
+    <Stroke d="M60 10 V14" width={2} />
+    <path d="M60 14 l-6 4 12 4 -12 4 12 4 -12 4 12 4 -6 4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" />
+    <rect x={52} y={44} width={16} height={12} rx={2} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={88} y1={30} x2={88} y2={50} width={1.8} opacity={0.6} head={4.2} />
+    <Stroke d="M76 50 H84" width={1.4} opacity={0.5} />
+  </>
+)
+
+/** 弹簧振子: wall plate, horizontal coil, and a block mid-swing. */
+const SpringOscillatorArt = () => (
+  <>
+    <Stroke d="M14 14 V50" width={2.2} opacity={0.7} />
+    {[20, 30, 40].map(y => (
+      <Stroke key={y} d={`M14 ${y} l-5 4`} width={1.2} opacity={0.35} />
+    ))}
+    <path d="M14 32 h6 l4 -7 4 14 4 -14 4 14 4 -14 4 14 4 -7 h8" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" />
+    <rect x={52} y={22} width={18} height={18} rx={2} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Stroke d="M86 32 h20" width={1.5} opacity={0.55} dash="1 4" />
+    <Arrow x1={70} y1={14} x2={88} y2={14} width={1.7} opacity={0.6} head={4} />
+    <Arrow x1={88} y1={18} x2={70} y2={18} width={1.7} opacity={0.45} head={4} />
+  </>
+)
+
+/** 单摆: ceiling mount, string swung off the dashed rest line, bob. */
+const PendulumArt = () => (
+  <>
+    <Stroke d="M38 8 H82" width={2.2} opacity={0.7} />
+    {[46, 58, 70].map(x => (
+      <Stroke key={x} d={`M${x} 8 l-4 -4`} width={1.2} opacity={0.35} />
+    ))}
+    <Stroke d="M60 8 V50" width={1.4} opacity={0.5} dash="1 4" />
+    <Stroke d="M60 8 L44 40" width={2} />
+    <circle cx={42.4} cy={44} r={5.4} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <path d="M60 50 A42 42 0 0 0 48 47.4" fill="none" stroke="currentColor" strokeWidth={1.4} opacity={0.55} strokeDasharray="2 3" />
+    <Arrow x1={78} y1={30} x2={70} y2={40} width={1.6} opacity={0.6} head={4} />
+  </>
+)
+
+/** 静动摩擦: a block on rough ground, pull vs friction arrows nearly balanced. */
+const FrictionStaticArt = () => (
+  <>
+    <Stroke d="M10 50 H110" width={1.8} opacity={0.6} />
+    {[18, 34, 50, 66, 82, 98].map(x => (
+      <Stroke key={x} d={`M${x} 52 l5 -5`} width={1.2} opacity={0.35} />
+    ))}
+    <rect x={44} y={28} width={28} height={20} rx={2.4} fill="currentColor" fillOpacity={0.14} stroke="currentColor" strokeWidth={2} />
+    <Arrow x1={72} y1={38} x2={100} y2={38} width={2.4} />
+    <Arrow x1={44} y1={38} x2={22} y2={38} width={2.4} opacity={0.8} />
+    <Stroke d="M58 14 V24" width={1.5} opacity={0.5} />
+    <Arrow x1={58} y1={14} x2={58} y2={24} width={1.5} opacity={0.5} head={4} />
+  </>
+)
+
 /** 浮力: a beaker, the waterline, a submerged block with upthrust vs. weight. */
 const BuoyancyArt = () => (
   <>
@@ -897,6 +1021,16 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'wave-travelling': WaveTravellingArt,
   'wave-interference': WaveInterferenceArt,
   'wave-standing': WaveStandingArt,
+  'vt-area': VtAreaArt,
+  'force-composition': ForceCompositionArt,
+  'concurrent-equilibrium': ConcurrentEquilibriumArt,
+  'apparent-weight': ApparentWeightArt,
+  'chase-meeting': ChaseMeetingArt,
+  'hooke-law': HookeLawArt,
+  'spring-oscillator': SpringOscillatorArt,
+  'simple-pendulum': PendulumArt,
+  'friction-static': FrictionStaticArt,
+  'friction-mu': FrictionStaticArt,
 }
 
 /* Scene ids are stamped as `${base}-${time}-${serial}` by the template registry;
@@ -945,6 +1079,16 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['wave-travelling', 'wave-travelling'],
   ['wave-interference', 'wave-interference'],
   ['wave-standing', 'wave-standing'],
+  ['vt-area', 'mechanics-vt-area'],
+  ['force-composition', 'mechanics-force-composition'],
+  ['concurrent-equilibrium', 'mechanics-concurrent-equilibrium'],
+  ['apparent-weight', 'mechanics-apparent-weight'],
+  ['chase-meeting', 'mechanics-chase-meeting'],
+  ['hooke-law', 'mechanics-hooke-law'],
+  ['spring-oscillator', 'mechanics-spring-oscillator'],
+  ['simple-pendulum', 'mechanics-simple-pendulum'],
+  ['friction-static', 'mechanics-friction-static'],
+  ['friction-mu', 'mechanics-friction-mu'],
 ]
 
 /** Recover the source template of a stored scene from its stamped scene id. */

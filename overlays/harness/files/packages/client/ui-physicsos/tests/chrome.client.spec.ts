@@ -33,6 +33,8 @@ describe('mountPhysicsOSChrome', () => {
       '--physics-measurement',
       '--physics-angle',
       '--physics-canvas-bg',
+      '--physics-canvas-text',
+      '--physics-canvas-text-muted',
       '--physics-grid-minor',
       '--physics-grid-major',
       '--physics-axis',
@@ -73,5 +75,36 @@ describe('mountPhysicsOSChrome', () => {
     expect(document.head.querySelectorAll('style[data-physicsos-chrome]')).toHaveLength(1)
     second()
     expect(document.head.querySelectorAll('style[data-physicsos-chrome]')).toHaveLength(0)
+  })
+
+  it('follows the host palette: surfaces bind at body scope and darken with the theme', () => {
+    mountPhysicsOSChrome()
+    const css = document.head.querySelector('style[data-physicsos-chrome]')?.textContent ?? ''
+
+    /* The host writes its alias palette onto body. A surface token defined on the
+       root element would resolve against the root, find nothing, and silently
+       keep its light hex — leaving a white desk under a dark host. */
+    expect(css, 'the desk must follow the host palette from body scope')
+      .toMatch(/body\s*\{[^}]*--physics-workspace-bg:\s*var\(--dsw-alias-bg-base/)
+    expect(css, 'a root-scoped definition silently falls back to the light hex')
+      .not.toMatch(/:root\s*\{[^}]*--physics-workspace-bg/)
+
+    /* The desk and the floating panels go dark; the sheet above them does not,
+       because the physics inks are tuned against a white canvas. */
+    const darkBlocks = [...css.matchAll(/body\[data-ds-dark-theme\]\s*\{([^}]*)\}/g)]
+      .map(match => match[1])
+      .join('\n')
+    for (const token of [
+      '--physics-glass-fill',
+      '--physics-glass-border',
+      '--physics-glass-shadow',
+      '--physics-glass-inset',
+      '--physics-glass-plate',
+      '--dsh-scrollbar-thumb',
+    ]) {
+      expect(darkBlocks, `the dark palette must redefine ${token}`).toContain(token)
+    }
+    expect(darkBlocks, 'the canvas sheet keeps its fixed light ink')
+      .not.toContain('--physics-canvas-bg')
   })
 })

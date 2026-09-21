@@ -18,8 +18,8 @@ import type { PhysicsosKey } from './locales.ts'
 import css from './SidebarNew.module.css'
 
 const ITEMS: readonly { id: string; label: PhysicsosKey; disabled?: boolean }[] = [
+  { id: 'chat', label: 'create.chat' },
   { id: 'lab', label: 'create.lab' },
-  { id: 'upload', label: 'create.upload' },
   { id: 'blank', label: 'create.blank', disabled: true },
   { id: 'import', label: 'create.import', disabled: true },
 ]
@@ -29,7 +29,7 @@ export interface SidebarNewInjected {
   startSession: (workspaceId?: WorkspaceId) => void
   /** With a `sceneRef` the Lab continues that scene; without one it opens the picker. */
   openSurface: (
-    surface: 'lab' | 'questions' | 'home',
+    surface: 'lab' | 'home',
     sceneRef?: { sceneId: string; scene: PhysicsScene },
   ) => void
 }
@@ -44,7 +44,7 @@ export type SidebarNewProps =
  * Render the “新建” control and its create menu.
  * @param props - column width, session start, and product copy.
  */
-export function SidebarNew({ wide, openSurface, t }: SidebarNewProps) {
+export function SidebarNew({ wide, startSession, openSurface, t }: SidebarNewProps) {
   const [open, setOpen] = useState(false)
 
   /* No inline template list: "新建物理实验" opens the full experiment picker,
@@ -66,8 +66,8 @@ export function SidebarNew({ wide, openSurface, t }: SidebarNewProps) {
       items={entries}
       onSelect={(id) => {
         setOpen(false)
-        if (id === 'lab') openSurface('lab')
-        else if (id === 'upload') openSurface('questions')
+        if (id === 'chat') startSession()
+        else if (id === 'lab') openSurface('lab')
       }}
       anchor={(
         <button

@@ -1,25 +1,64 @@
+import { useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconFolderOpenOutline16, IconListPenOutline16,
+  IconFolderOpenOutline16, IconListPenOutline16, IconUserOutline16, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarFooterActionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type { AuthState } from './auth-store.ts'
 import css from './SidebarFooter.module.css'
 
 export type SidebarFooterInjected = {
   startSession: () => void
   /** Open the 学习记录 surface. */
   openRecord?: () => void
+  /** Open the 学习空间 (PhysicsOS home) surface. */
+  openHome: () => void
+  /** Open the 管理后台 surface — offered only to SCHOOL_ADMIN/SUPER_ADMIN. */
+  openAdmin?: () => void
+  /** Revoke the server session and return to the auth gate. */
+  logout: () => Promise<void>
+  hooks: {
+    auth: SnapshotStore<AuthState>
+  }
 }
 
 export type SidebarFooterProps =
   & PropsRuntime<'sidebar.footer.action'>
   & SidebarFooterActionOwnerProps
-  & SidebarFooterInjected
+  & InjectFace<SidebarFooterInjected>
   & PropsLocale<'physicsos'>
 
-/** Learning history and library seats above Settings. */
-export function SidebarFooter({ wide, openRecord, t }: SidebarFooterProps) {
+/** Learning history and library seats above Settings, plus the account menu. */
+export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, useAuth, t }: SidebarFooterProps) {
+  const user = useAuth(state => state.user)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  /* The menu only OFFERS the admin entry — the host re-checks the role on
+     every call, so hiding it here is convenience, never the security check. */
+  const isAdmin = user?.role === 'SCHOOL_ADMIN' || user?.role === 'SUPER_ADMIN'
+
+  const accountItems: MenuEntry[] = user === undefined ? [] : [
+    { type: 'label', id: 'identity', text: `${user.displayName} · ${user.username}` },
+    { type: 'label', id: 'school', text: user.schoolName },
+    { type: 'separator', id: 'sep-1' },
+    { id: 'space', label: t('auth.menu.space') },
+    ...(isAdmin && openAdmin !== undefined
+      ? [{ id: 'admin', label: t('auth.menu.admin') } satisfies MenuEntry]
+      : []),
+    { type: 'separator', id: 'sep-2' },
+    { id: 'logout', label: t('auth.menu.logout'), danger: true },
+  ]
+
+  const onAccountSelect = (id: string): void => {
+    setMenuOpen(false)
+    if (id === 'space') openHome()
+    if (id === 'admin') openAdmin?.()
+    if (id === 'logout') void logout()
+  }
+
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
       <button
@@ -42,6 +81,35 @@ export function SidebarFooter({ wide, openRecord, t }: SidebarFooterProps) {
         <IconFolderOpenOutline16 size={wide ? 16 : 18} />
         {wide && <span>{t('nav.library')}</span>}
       </button>
+      {user !== undefined && (
+        <Menu
+          open={menuOpen}
+          side="top"
+          align="start"
+          portal
+          items={accountItems}
+          onSelect={onAccountSelect}
+          onClose={() => { setMenuOpen(false) }}
+          anchor={(
+            <button
+              type="button"
+              className={clsx(css.item, css.account)}
+              aria-label={t('auth.menu.aria')}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              title={wide ? undefined : `${user.displayName} · ${user.schoolName}`}
+              onClick={() => { setMenuOpen(current => !current) }}
+            >
+              <span className={css.avatar} aria-hidden>
+                {user.avatarUrl === undefined
+                  ? (user.displayName.trim().charAt(0) || <IconUserOutline16 size={14} />)
+                  : <img src={user.avatarUrl} alt="" className={css.avatarImg} />}
+              </span>
+              {wide && <span className={css.accountName}>{user.displayName}</span>}
+            </button>
+          )}
+        />
+      )}
     </div>
   )
 }

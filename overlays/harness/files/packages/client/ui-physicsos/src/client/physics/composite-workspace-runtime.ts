@@ -618,7 +618,10 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   setRunning(running: boolean): WorkspaceSnapshot {
-    this.running = running && (this.computed?.endTime ?? 0) > 0
+    const end = this.computed?.endTime ?? 0
+    /* Replay contract: run pressed at the end restarts from t = 0. */
+    if (running && end > 0 && this.currentTime >= end) this.currentTime = 0
+    this.running = running && end > 0
     return this.getSnapshot()
   }
 

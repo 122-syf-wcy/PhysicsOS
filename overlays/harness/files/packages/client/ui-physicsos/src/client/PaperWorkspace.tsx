@@ -1,0 +1,1244 @@
+/**
+ * 出卷专区 workspace — the teacher-facing surface for Guizhou-localized paper
+ * generation. Four panels: 新建试卷 (request → spec table → draft), 草稿与审核
+ * (per-question review, findings, approval), 已定稿 (export bundle + PDF
+ * preview), 真题资料库 (source papers, annotations, CSV import, stats).
+ *
+ * The surface covers the whole conversation column — the chat composer is
+ * unrelated to this workflow and stays hidden under it.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import clsx from 'clsx'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  AnnotationRow, BankItemRow, BankPlanRow, BlueprintRow, ExportBundleRow, PaperApi, PaperJobWire, SourcePaperRow,
+} from './paper-api.ts'
+import {
+  DIFFICULTY_PRESETS, coefficientLabel, mixCoefficient, specCoefficient,
+  type Difficulty, type DifficultyMix,
+} from '@physicsos/question-paper/difficulty'
+import { MathText } from './physics/MathText.tsx'
+import css from './PaperWorkspace.module.css'
+
+type Tab = 'new' | 'jobs' | 'final' | 'bank' | 'sources'
+
+export interface PaperWorkspaceInjected {
+  readonly api: PaperApi
+}
+
+export type PaperWorkspaceProps =
+  PropsRuntime<'conversation.surface'> &
+  PropsLocale<'physicsos'> &
+  InjectFace<PaperWorkspaceInjected>
+
+const KIND_LABEL: Record<string, string> = {
+  unit: '单元测试', weekly: '周考', monthly: '月考',
+  midterm: '期中', final: '期末', mock: '模拟预测',
+}
+const STATUS_LABEL: Record<string, string> = {
+  spec: '细目表待确认', drafting: '起草中', checking: '检查中',
+  review: '待审核', approved: '已批准', exported: '已定稿', failed: '失败',
+}
+const ANNOTATION_STATUS: Record<string, string> = {
+  pending: '待复核', verified: '已核验', rejected: '已退回',
+}
+const SUBJECT_LABEL: Record<string, string> = {
+  physics: '物理', chemistry: '化学', combined: '理化综合',
+}
+const EVIDENCE_LABEL: Record<string, string> = {
+  policy: '政策文件', 'original-scan': '原卷扫描', 'manual-transcript': '人工转录',
+  'institution-analysis': '机构解析', 'web-public': '公开网络题源', recalled: '回忆版',
+}
+/* Supply mode of a spec row or a printed question — bank plan and question
+   provenance share the same vocabulary. */
+const PLAN_LABEL: Record<string, string> = {
+  verbatim: '原题', adapt: '改编', adapted: '改编', generate: 'AI 起草', generated: 'AI 起草', gap: '缺口',
+}
+const KINDS = ['unit', 'weekly', 'monthly', 'midterm', 'final', 'mock'] as const
+
+const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
+
+/**
+ * Estimated difficulty rating for a job — score-weighted over the confirmed
+ * spec table once it exists, otherwise the request's stated target mix.
+ */
+const jobRating = (job: PaperJobWire): string =>
+  coefficientLabel(job.specTable.length > 0
+    ? specCoefficient(job.specTable as readonly { score: number; difficulty: Difficulty }[])
+    : mixCoefficient(job.request.difficulty as DifficultyMix))
+
+/** Model-authored prose with inline `$...$` math — KaTeX renders the spans. */
+const Rich = ({ text }: { readonly text: string }) => (
+  <>{text.split(/(\$[^$]+\$)/g).map((part, i) =>
+    part.length > 2 && part.startsWith('$')
+      ? <MathText key={i} expression={part.slice(1, -1)} />
+      : part)}</>
+)
+
+/** Colored status pill — one chip per PaperJobStatus value. */
+function StatusChip({ status }: { status: string }) {
+  return <span className={clsx(css.chip, css[`chip-${status}`])}>{STATUS_LABEL[status] ?? status}</span>
+}
+
+/** Pipeline stage of a job: which phase the teacher-facing workflow is in. */
+const STAGE_OF_STATUS: Record<string, number> = {
+  spec: 0, drafting: 1, checking: 2, review: 3, approved: 4, exported: 4, failed: 0,
+}
+const STAGE_LABELS = ['细目表', 'AI 起草', '自动检查', '逐题审核', '定稿导出'] as const
+
+/** Horizontal stage rail — shows where a job sits in the generation pipeline. */
+function StageRail({ status }: { readonly status: string }) {
+  const current = STAGE_OF_STATUS[status] ?? 0
+  return (
+    <ol className={css.stageRail} aria-label="任务阶段">
+      {STAGE_LABELS.map((label, i) => (
+        <li key={label}
+          className={clsx(css.stageItem,
+            i < current && css.stageDone,
+            i === current && css.stageCurrent,
+            status === 'failed' && i === current && css.stageFailed)}>
+          <span className={css.stageDot} aria-hidden="true">{i < current ? '✓' : i + 1}</span>
+          <span className={css.stageName}>{label}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+/** Empty-state block: generated illustration plus one line of guidance. */
+function Empty({ text }: { text: string }) {
+  return (
+    <div className={css.emptyState}>
+      <img src="/physicsos/paper-empty.jpg" alt="" />
+      <p>{text}</p>
+    </div>
+  )
+}
+
+export function PaperWorkspace({ api }: PaperWorkspaceProps) {
+  const [tab, setTab] = useState<Tab>('new')
+  const [sources, setSources] = useState<SourcePaperRow[]>([])
+  const [annotations, setAnnotations] = useState<AnnotationRow[]>([])
+  const [stats, setStats] = useState<Record<string, { count: number; score: number; papers: number }>>({})
+  const [blueprints, setBlueprints] = useState<BlueprintRow[]>([])
+  const [jobs, setJobs] = useState<PaperJobWire[]>([])
+  const [exports_, setExports] = useState<ExportBundleRow[]>([])
+  const [bankItems, setBankItems] = useState<BankItemRow[]>([])
+  const [activeJob, setActiveJob] = useState<PaperJobWire | undefined>()
+  const [reviewer, setReviewer] = useState('教研组')
+  const [notice, setNotice] = useState<string>()
+
+  const refresh = useCallback(async () => {
+    try {
+      const [s, a, st, b, j, e, k] = await Promise.all([
+        api.listSources(), api.listAnnotations(), api.annotationStats(),
+        api.listBlueprints(), api.listJobs(), api.listExports(), api.listBankItems(),
+      ])
+      setSources(s); setAnnotations(a); setStats(st); setBlueprints(b); setJobs(j); setExports(e)
+      setBankItems(k)
+    } catch (e) { setNotice(`加载失败：${err(e)}`) }
+  }, [api])
+
+  useEffect(() => { void refresh() }, [refresh])
+
+  const openJob = useCallback(async (id: string) => {
+    try { setActiveJob(await api.getJob(id)) } catch (e) { setNotice(err(e)) }
+  }, [api])
+
+  /* Poll while a job is in an async stage. */
+  useEffect(() => {
+    if (activeJob === undefined) return
+    if (activeJob.status !== 'drafting' && activeJob.status !== 'checking') return
+    const timer = setInterval(() => { void openJob(activeJob.id) }, 3000)
+    return () => { clearInterval(timer) }
+  }, [activeJob, openJob])
+
+  const run = useCallback(async (action: () => Promise<unknown>) => {
+    try { await action(); await refresh() } catch (e) { setNotice(err(e)) }
+  }, [refresh])
+
+  const verifiedBlueprints = blueprints.filter(b => b.status === 'verified')
+  const draftJobs = jobs.filter(j => j.status !== 'exported')
+  const finalJobs = jobs.filter(j => j.status === 'exported' || j.status === 'approved')
+
+  /* The cover is position:fixed over the whole conversation column — header
+     tabs, scroll body, and composer alike, none of which belong to this
+     workflow. The scroll body's parent owns that full rect; we pin the
+     scroll, lock it, and track the rect while mounted. */
+  const coverRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const cover = coverRef.current
+    if (cover === null) return
+    let node: HTMLElement | null = cover.parentElement
+    /* The marker, not overflow state: a short conversation never overflows,
+       so scrollHeight > clientHeight misses the body and the cover would
+       stay shrink-to-fit at top-left instead of covering the column. */
+    while (node !== null && !node.hasAttribute('data-conversation-scroll')) {
+      node = node.parentElement
+    }
+    if (node === null) return
+    const scroller = node
+    const host = scroller.parentElement ?? scroller
+    const fit = () => {
+      const rect = host.getBoundingClientRect()
+      cover.style.top = `${rect.top}px`
+      cover.style.left = `${rect.left}px`
+      cover.style.width = `${rect.width}px`
+      cover.style.height = `${rect.height}px`
+    }
+    const observer = new ResizeObserver(fit)
+    observer.observe(host)
+    fit()
+    const previousOverflow = scroller.style.overflowY
+    scroller.scrollTop = 0
+    scroller.style.overflowY = 'hidden'
+    return () => {
+      observer.disconnect()
+      scroller.style.overflowY = previousOverflow
+    }
+  }, [])
+
+  const pipeline: readonly { id: Tab; step: number; label: string; count?: number }[] = [
+    { id: 'new', step: 1, label: '新建试卷' },
+    { id: 'jobs', step: 2, label: '草稿与审核', count: draftJobs.length },
+    { id: 'final', step: 3, label: '已定稿', count: finalJobs.length },
+  ]
+
+  return (
+    <div ref={coverRef} className={css.root} data-physicsos-surface="paper">
+      <header className={css.hero}>
+        <div className={css.heroText}>
+          <h1 className={css.title}>出卷专区</h1>
+          <p className={css.subtitle}>贵州本土 · 2027 届 — 初中理综 / 高中物理 · 单元 · 周考 · 月考 · 期中 · 期末 · 模拟</p>
+        </div>
+        <label className={css.reviewer}>
+          复核人
+          <input value={reviewer} onChange={e => setReviewer(e.target.value)} />
+        </label>
+      </header>
+
+      <nav className={css.steps} aria-label="出卷流程">
+        {pipeline.map((s, i) => (
+          <div key={s.id} className={css.stepWrap}>
+            {i > 0 && <span className={css.stepLine} aria-hidden="true" />}
+            <button type="button"
+              className={clsx(css.step, tab === s.id && css.stepActive)}
+              onClick={() => setTab(s.id)}>
+              <span className={css.stepNo}>{s.step}</span>
+              <span className={css.stepLabel}>{s.label}</span>
+              {s.count !== undefined && s.count > 0 && (
+                <span className={css.tabCount}>{s.count}</span>
+              )}
+            </button>
+          </div>
+        ))}
+        <button type="button"
+          className={clsx(css.step, css.stepSource, tab === 'bank' && css.stepActive)}
+          onClick={() => setTab('bank')}>
+          <span className={css.stepLabel}>题库</span>
+          {bankItems.length > 0 && <span className={css.tabCount}>{bankItems.length}</span>}
+        </button>
+        <button type="button"
+          className={clsx(css.step, css.stepSource, tab === 'sources' && css.stepActive)}
+          onClick={() => setTab('sources')}>
+          <span className={css.stepLabel}>真题资料库</span>
+          {sources.length > 0 && <span className={css.tabCount}>{sources.length}</span>}
+        </button>
+      </nav>
+
+      {notice !== undefined && (
+        <p className={css.notice} role="alert">
+          {notice}
+          <button type="button" onClick={() => setNotice(undefined)}>×</button>
+        </p>
+      )}
+
+      {tab === 'new' && (
+        <NewPaperPanel
+          blueprints={verifiedBlueprints}
+          api={api}
+          onCreated={job => { setActiveJob(job); setTab('jobs'); void refresh() }}
+          onError={setNotice}
+        />
+      )}
+      {tab === 'jobs' && (
+        <JobsPanel
+          jobs={draftJobs} activeJob={activeJob} reviewer={reviewer}
+          api={api} openJob={openJob} run={run}
+          onJobUpdate={setActiveJob}
+        />
+      )}
+      {tab === 'final' && (
+        <FinalPanel jobs={finalJobs} exports_={exports_} api={api} />
+      )}
+      {tab === 'bank' && (
+        <BankPanel
+          items={bankItems} reviewer={reviewer} api={api}
+          run={run} onError={setNotice}
+        />
+      )}
+      {tab === 'sources' && (
+        <SourcesPanel
+          sources={sources} annotations={annotations} stats={stats}
+          blueprints={blueprints} reviewer={reviewer} api={api}
+          run={run} onError={setNotice}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------- 新建试卷 -- */
+
+function NewPaperPanel({ blueprints, api, onCreated, onError }: {
+  blueprints: BlueprintRow[]
+  api: PaperApi
+  onCreated: (job: PaperJobWire) => void
+  onError: (message: string) => void
+}) {
+  const [blueprintId, setBlueprintId] = useState('')
+  const [kind, setKind] = useState<string>('unit')
+  const [chapters, setChapters] = useState('')
+  const [exclude, setExclude] = useState('')
+  const [presetKey, setPresetKey] = useState<string>('standard')
+  const [busy, setBusy] = useState(false)
+
+  const preset = DIFFICULTY_PRESETS.find(p => p.key === presetKey) ?? DIFFICULTY_PRESETS[1]
+
+  const blueprint = blueprints.find(b => b.id === blueprintId)
+
+  const create = async () => {
+    if (blueprint === undefined) { onError('请先选择试卷结构模板'); return }
+    setBusy(true)
+    try {
+      const job = await api.createJob(blueprintId, {
+        level: blueprint.level,
+        subjects: [blueprint.subject],
+        kind: kind as PaperJobWire['request']['kind'],
+        totalScore: blueprint.totalScore,
+        minutes: blueprint.minutes,
+        chapters: chapters.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
+        exclude: exclude.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
+        difficulty: { basic: preset.mix.basic, medium: preset.mix.medium, hard: preset.mix.hard },
+        targetYear: 2027,
+        textbook: '人教版',
+      })
+      onCreated(job)
+    } catch (e) { onError(err(e)) } finally { setBusy(false) }
+  }
+
+  return (
+    <section className={css.panel}>
+      {blueprints.length === 0 && (
+        <p className={css.empty}>
+          暂无已核验的试卷结构。请先在「真题资料库」录入并核验对应年份的真题，再回到这里。
+        </p>
+      )}
+      <div className={css.wizard}>
+        <div className={css.wizardMain}>
+          <div className={css.stepCard}>
+            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>1</span>选择试卷结构</h3>
+            <label className={css.field}>结构模板（已核验）
+              <select value={blueprintId} onChange={e => setBlueprintId(e.target.value)}>
+                <option value="">— 选择 —</option>
+                {blueprints.map(b => (
+                  <option key={b.id} value={b.id}>{b.title}（{b.totalScore} 分 / {b.minutes} 分钟）</option>
+                ))}
+              </select>
+            </label>
+            {blueprint !== undefined && (
+              <div className={css.bpInfo}>
+                {blueprint.sections.map((s, i) => (
+                  <span key={i} className={css.bpSection}>
+                    {s.title} · {s.slots.length} 题
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={css.stepCard}>
+            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>2</span>划定考试范围</h3>
+            <div className={css.fieldRow}>
+              <label className={css.field}>卷型
+                <select value={kind} onChange={e => setKind(e.target.value)}>
+                  {KINDS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className={css.field}>已教章节（分号或换行分隔）
+              <textarea value={chapters} onChange={e => setChapters(e.target.value)}
+                placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={2} />
+            </label>
+            <label className={css.field}>排除内容
+              <textarea value={exclude} onChange={e => setExclude(e.target.value)}
+                placeholder="如：电功率综合计算" rows={2} />
+            </label>
+          </div>
+
+          <div className={css.stepCard}>
+            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>3</span>设定难度配比</h3>
+            <label className={css.field}>难度系数（贵州中高考标准档）
+              <select value={presetKey} onChange={e => setPresetKey(e.target.value)}>
+                {DIFFICULTY_PRESETS.map(p => (
+                  <option key={p.key} value={p.key}>
+                    {p.label} — 系数 ≈{mixCoefficient(p.mix).toFixed(2)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <MixBar mix={preset.mix} />
+          </div>
+        </div>
+
+        <aside className={css.wizardSide}>
+          <div className={css.summaryCard}>
+            <h3 className={css.summaryTitle}>试卷摘要</h3>
+            <dl className={css.summaryList}>
+              <div><dt>结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
+              <div><dt>满分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
+              <div><dt>卷型</dt><dd>{KIND_LABEL[kind] ?? kind}</dd></div>
+              <div><dt>章节范围</dt><dd>{chapters.trim() === '' ? '未填写' : `${chapters.split(/[;；\n]/).filter(s => s.trim() !== '').length} 章`}</dd></div>
+              <div><dt>难度目标</dt><dd>{coefficientLabel(mixCoefficient(preset.mix))}</dd></div>
+            </dl>
+            {blueprint?.policyLabel !== undefined && <p className={css.policy}>{blueprint.policyLabel}</p>}
+            <button type="button" className={css.primary} disabled={busy || blueprint === undefined}
+              onClick={() => { void create() }}>
+              {busy ? '创建中…' : '生成双向细目表'}
+            </button>
+            <p className={css.summaryHint}>确认细目表后进入 AI 起草与逐题审核</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  )
+}
+
+/** Segmented difficulty bar — the basic/medium/hard mix drawn to proportion. */
+function MixBar({ mix }: { readonly mix: DifficultyMix }) {
+  const parts: readonly { label: string; frac: number; cls: string | undefined }[] = [
+    { label: '基础', frac: mix.basic, cls: css.mixBasic },
+    { label: '中档', frac: mix.medium, cls: css.mixMedium },
+    { label: '提高', frac: mix.hard, cls: css.mixHard },
+  ]
+  return (
+    <div className={css.mixBar} role="img"
+      aria-label={`难度配比 基础 ${Math.round(mix.basic * 100)}%，中档 ${Math.round(mix.medium * 100)}%，提高 ${Math.round(mix.hard * 100)}%`}>
+      {parts.map(p => p.frac > 0 && (
+        <span key={p.label} className={clsx(css.mixSeg, p.cls)} style={{ width: `${p.frac * 100}%` }}>
+          {p.label} {Math.round(p.frac * 100)}%
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/* --------------------------------------------------------- 草稿与审核 -- */
+
+function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }: {
+  jobs: PaperJobWire[]
+  activeJob: PaperJobWire | undefined
+  reviewer: string
+  api: PaperApi
+  openJob: (id: string) => Promise<void>
+  run: (action: () => Promise<unknown>) => Promise<void>
+  onJobUpdate: (job: PaperJobWire) => void
+}) {
+  return (
+    <section className={css.panel}>
+      <div className={css.split}>
+        <aside className={css.jobList}>
+          {jobs.length === 0 && <Empty text="暂无进行中的试卷任务" />}
+          {jobs.map(job => {
+            const items = job.document?.sections.flatMap(s => s.items) ?? []
+            const approved = items.filter(q => q.status === 'approved').length
+            return (
+              <button key={job.id} type="button"
+                className={clsx(css.jobRow, activeJob?.id === job.id && css.jobRowActive)}
+                onClick={() => { void openJob(job.id) }}>
+                <span className={css.jobRowTop}>
+                  <span className={css.jobTitle}>{job.document?.title ?? `${KIND_LABEL[job.request.kind] ?? '试卷'} · ${job.blueprintId}`}</span>
+                  <StatusChip status={job.status} />
+                </span>
+                <span className={css.jobMeta}>
+                  {KIND_LABEL[job.request.kind] ?? job.request.kind} · {jobRating(job)}
+                  {job.versions.length > 0 && ` · v${job.versions.at(-1)?.version}`}
+                  {` · ${job.updatedAt.slice(0, 10)}`}
+                </span>
+                {items.length > 0 && (
+                  <span className={css.jobProgress} role="img"
+                    aria-label={`已审 ${approved}/${items.length} 题`}>
+                    <span className={css.jobProgressBar} style={{ width: `${(approved / items.length) * 100}%` }} />
+                    <span className={css.jobProgressText}>{approved}/{items.length} 题已审</span>
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </aside>
+        <div className={css.jobDetail}>
+          {activeJob === undefined
+            ? <Empty text="从左侧选择一个试卷任务" />
+            : <JobDetail job={activeJob} reviewer={reviewer} api={api}
+                run={run} onJobUpdate={onJobUpdate} />}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
+  job: PaperJobWire
+  reviewer: string
+  api: PaperApi
+  run: (action: () => Promise<unknown>) => Promise<void>
+  onJobUpdate: (job: PaperJobWire) => void
+}) {
+  const reload = () => run(async () => { onJobUpdate(await api.getJob(job.id)) })
+  /* 退回修改 modal: the suggestion goes to the model, which revises the
+     question in place; the new version lands as status 'draft' again. */
+  const [repairTarget, setRepairTarget] = useState<number | null>(null)
+  const [repairText, setRepairText] = useState('')
+  const [repairPending, setRepairPending] = useState<{ no: number; version: number; since: number } | null>(null)
+  useEffect(() => {
+    if (repairPending === null) return
+    const timer = setInterval(() => {
+      void api.getJob(job.id).then(latest => {
+        onJobUpdate(latest)
+        const landed = (latest.versions.at(-1)?.version ?? 0) > repairPending.version
+        if (landed || Date.now() - repairPending.since > 180_000) setRepairPending(null)
+      }).catch(() => {})
+    }, 3000)
+    return () => { clearInterval(timer) }
+  }, [repairPending, api, job.id, onJobUpdate])
+  /* 题库换题：同退回修订的轮询——等新版本落库。 */
+  const [replacePending, setReplacePending] = useState<{ no: number; version: number; since: number } | null>(null)
+  useEffect(() => {
+    if (replacePending === null) return
+    const timer = setInterval(() => {
+      void api.getJob(job.id).then(latest => {
+        onJobUpdate(latest)
+        const landed = (latest.versions.at(-1)?.version ?? 0) > replacePending.version
+        if (landed || Date.now() - replacePending.since > 180_000) setReplacePending(null)
+      }).catch(() => {})
+    }, 3000)
+    return () => { clearInterval(timer) }
+  }, [replacePending, api, job.id, onJobUpdate])
+  /* Live assembly preview: how the bank would serve this spec table now —
+     shown on the confirm table and reused for the swap button. */
+  const [bankPlan, setBankPlan] = useState<readonly BankPlanRow[] | null>(null)
+  useEffect(() => {
+    if (job.specTable.length === 0) { setBankPlan(null); return }
+    let live = true
+    void api.bankPlan(job.id)
+      .then(plan => { if (live) setBankPlan(plan) })
+      .catch(() => { if (live) setBankPlan(null) })
+    return () => { live = false }
+  }, [api, job.id, job.specTable.length, job.status])
+  const planByNo = useMemo(
+    () => new Map((bankPlan ?? []).map(plan => [plan.questionNo, plan])),
+    [bankPlan],
+  )
+  const questions = useMemo(
+    () => job.document?.sections.flatMap(s => s.items) ?? [],
+    [job.document],
+  )
+  const approvedCount = questions.filter(q => q.status === 'approved').length
+
+  return (
+    <div>
+      <h2 className={css.detailTitle}>
+        {job.document?.title ?? job.blueprintId}
+        <StatusChip status={job.status} />
+      </h2>
+      <p className={css.jobMeta}>
+        {job.id}
+        {job.versions.length > 0 && ` · v${job.versions.at(-1)?.version}`}
+        {` · ${jobRating(job)}`}
+      </p>
+      <StageRail status={job.status} />
+      {job.status === 'failed' && job.lastError !== undefined && (
+        <p className={css.errorNote}>起草/检查失败：{job.lastError}（可在下方重新确认细目表后重试）</p>
+      )}
+
+      {/* 细目表确认 — 'failed' jobs retry through the same confirm step. */}
+      {(job.status === 'spec' || job.status === 'failed') && (
+        <div className={css.block}>
+          <h3>双向细目表（{job.specTable.length} 题 / {job.specTable.reduce((n, r) => n + r.score, 0)} 分 · {jobRating(job)}）</h3>
+          <table className={css.table}>
+            <thead><tr><th>题号</th><th>板块</th><th>题型</th><th>分值</th><th>考点</th><th>能力</th><th>题库供给</th></tr></thead>
+            <tbody>
+              {job.specTable.map(row => {
+                const plan = planByNo.get(row.questionNo)
+                return (
+                  <tr key={row.questionNo}>
+                    <td>{row.questionNo}</td><td className={css.cellText}>{row.sectionTitle}</td><td>{row.kind}</td>
+                    <td>{row.score}</td><td className={css.cellText}>{row.knowledge.join('、')}</td><td>{row.ability}</td>
+                    <td>
+                      {plan === undefined
+                        ? <span className={css.jobMeta}>…</span>
+                        : <span className={clsx(css.chip, css[`plan-${plan.mode}`])}
+                            title={plan.item === undefined ? `候选 ${plan.candidates} 道` : `${plan.item.sourceLabel ?? plan.item.id} · 候选 ${plan.candidates} 道`}>
+                            {PLAN_LABEL[plan.mode] ?? plan.mode}·{plan.candidates}
+                          </span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <button type="button" className={css.primary}
+            onClick={() => { void run(async () => { onJobUpdate(await api.confirmSpec(job.id, job.specTable)) }) }}>
+            确认细目表
+          </button>
+        </div>
+      )}
+
+      {/* 阶段动作 */}
+      <div className={css.actions}>
+        {job.status !== 'spec' && job.status !== 'drafting' && job.status !== 'checking'
+          && job.status !== 'approved' && job.status !== 'exported' && (
+          <button type="button" className={css.primary}
+            onClick={() => { void run(async () => { await api.runDraft(job.id); await api.runChecks(job.id) }) }}>
+            AI 起草 + 自动检查
+          </button>
+        )}
+        {job.status === 'spec' && job.specTable.length > 0 && (
+          <button type="button" className={css.primary}
+            onClick={() => { void run(async () => { await api.confirmSpec(job.id, job.specTable); await api.runDraft(job.id); await api.runChecks(job.id) }) }}>
+            确认细目表并开始起草
+          </button>
+        )}
+      </div>
+
+      {/* 检查发现 */}
+      {job.findings.length > 0 && (
+        <div className={css.block}>
+          <h3>自动检查（{job.findings.filter(f => f.severity === 'error').length} 个错误 /
+            {job.findings.filter(f => f.severity !== 'error').length} 个提示）</h3>
+          <ul className={css.findings}>
+            {job.findings.map((f, i) => (
+              <li key={i} className={f.severity === 'error' ? css.findingError : css.findingWarn}>
+                {f.questionNo !== undefined && `第 ${f.questionNo} 题：`}<Rich text={f.detail} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 独立解题报告 */}
+      {job.solveReport.length > 0 && (
+        <div className={css.block}>
+          <h3>独立解题比对</h3>
+          <ul className={css.findings}>
+            {job.solveReport.map((r, i) => (
+              <li key={i} className={r.consistent ? css.findingOk : css.findingWarn}>
+                第 {r.questionNo} 题：{r.consistent
+                  ? '一致'
+                  : <>不一致（起草「<Rich text={r.draftAnswer} />」/ 独立解「<Rich text={r.solvedAnswer} />」）</>}
+                {r.note !== undefined && <> — <Rich text={r.note} /></>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 逐题审核 */}
+      {questions.length > 0 && (
+        <div className={css.block}>
+          <h3>逐题审核（{approvedCount}/{questions.length} 已通过）</h3>
+          {questions.map(q => (
+            <details key={q.number} className={css.question} open={q.status !== 'approved'}>
+              <summary>
+                <span className={css.qNo}>第 {q.number} 题</span>
+                <span className={css.qMeta}>{q.kind} · {q.score} 分 · {q.knowledge.join('、')}</span>
+                {q.provenance !== undefined && (
+                  <span className={clsx(css.chip, css[`plan-${q.provenance.mode === 'verbatim' ? 'verbatim' : q.provenance.mode === 'adapted' ? 'adapt' : 'generate'}`])}
+                    title={q.provenance.sourceLabel ?? q.provenance.bankItemId ?? 'AI 起草'}>
+                    {PLAN_LABEL[q.provenance.mode] ?? q.provenance.mode}
+                  </span>
+                )}
+                <span className={clsx(css.qStatus, q.status === 'approved' && css.qApproved)}>
+                  {q.status === 'approved' ? '✓ 已通过' : q.status === 'rejected' ? '✗ 退回' : '待审'}
+                </span>
+              </summary>
+              <div className={css.qBody}>
+                <p className={css.stem}><Rich text={q.stem} /></p>
+                {q.options !== undefined && q.options.length > 0 && (
+                  <ul className={css.options}>{q.options.map((o, i) => <li key={i}><Rich text={o} /></li>)}</ul>
+                )}
+                {q.subQuestions !== undefined && q.subQuestions.map(s => (
+                  <p key={s.no} className={css.sub}>（{s.no}）（{s.score} 分）<Rich text={s.text} /></p>
+                ))}
+                {q.figure !== undefined && <p className={css.figure}>[题图：{q.figure.caption ?? q.figure.ref}]</p>}
+                {q.answer !== undefined && (
+                  <div className={css.answer}>
+                    <p><b>答案：</b><Rich text={q.answer.result} /></p>
+                    {q.answer.steps.map((s, i) => <p key={i} className={css.step}><Rich text={s} /></p>)}
+                    <p className={css.grading}>
+                      评分点：{q.answer.gradingPoints.map((p, i) => (
+                        <span key={i}>{i > 0 && '；'}<Rich text={p.text} />（{p.score}分）</span>
+                      ))}
+                    </p>
+                  </div>
+                )}
+                {q.reviewNote !== undefined && <p className={css.note}>审核意见：{q.reviewNote}</p>}
+                <div className={css.qActions}>
+                  <button type="button"
+                    onClick={() => { void run(async () => { onJobUpdate(await api.reviewQuestion(job.id, q.number, 'approved', reviewer)) }) }}>
+                    通过
+                  </button>
+                  <button type="button"
+                    disabled={repairPending !== null}
+                    onClick={() => { setRepairTarget(q.number); setRepairText('') }}>
+                    {repairPending?.no === q.number ? 'AI 修订中…' : '退回修改'}
+                  </button>
+                  {job.status === 'review' && (planByNo.get(q.number)?.candidates ?? 0) > 0 && (
+                    <button type="button"
+                      disabled={replacePending !== null}
+                      title="从题库换一道同考点候选题（原题或改编）"
+                      onClick={() => {
+                        setReplacePending({ no: q.number, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
+                        void run(async () => { await api.replaceQuestion(job.id, q.number, reviewer) })
+                      }}>
+                      {replacePending?.no === q.number ? '换题中…' : '换一道候选题'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+
+      {/* 整卷批准与导出 */}
+      {job.status === 'review' && questions.length > 0 && (
+        <div className={css.actions}>
+          <button type="button" className={css.primary}
+            onClick={() => { void run(async () => { onJobUpdate(await api.approve(job.id, reviewer, 'physics')) }) }}>
+            物理部分批准
+          </button>
+          {job.request.subjects.includes('chemistry') && (
+            <button type="button" className={css.primary}
+              onClick={() => { void run(async () => { onJobUpdate(await api.approve(job.id, reviewer, 'chemistry')) }) }}>
+              化学部分批准
+            </button>
+          )}
+        </div>
+      )}
+      {job.status === 'approved' && (
+        <div className={css.actions}>
+          <button type="button" className={css.primary}
+            onClick={() => { void run(async () => { await api.runExport(job.id); onJobUpdate(await api.getJob(job.id)) }) }}>
+            导出 A4 试卷 + 答案解析（PDF/Word）
+          </button>
+        </div>
+      )}
+      <button type="button" className={css.link} onClick={() => { void reload() }}>刷新任务状态</button>
+
+      {/* Portal to <body>: a fixed overlay inside the surface would anchor to
+          any transformed ancestor instead of the viewport. */}
+      {repairTarget !== null ? createPortal(
+        <div className={css.modalOverlay} onClick={() => setRepairTarget(null)}>
+          <div className={css.modal} onClick={e => e.stopPropagation()}>
+            <h3>退回修改 · 第 {repairTarget} 题</h3>
+            <p className={css.jobMeta}>写下修改建议，AI 会在原题基础上修订（题型/分值/考点不变），修订后需重新审核。</p>
+            <textarea
+              autoFocus rows={4} value={repairText}
+              onChange={e => setRepairText(e.target.value)}
+              placeholder="例如：数据改为更真实的量级；把第（2）问改为求电功率；情境换成贵州天眼…"
+            />
+            <div className={css.qActions}>
+              <button type="button" onClick={() => setRepairTarget(null)}>取消</button>
+              <button type="button" className={css.primary}
+                disabled={repairText.trim() === ''}
+                onClick={() => {
+                  const no = repairTarget
+                  const suggestion = repairText.trim()
+                  setRepairTarget(null)
+                  setRepairPending({ no, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
+                  void run(async () => { await api.repairQuestion(job.id, no, suggestion, reviewer) })
+                }}>
+                提交修订
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------- 已定稿 -- */
+
+function FinalPanel({ jobs, exports_, api }: {
+  jobs: PaperJobWire[]
+  exports_: ExportBundleRow[]
+  api: PaperApi
+}) {
+  const [preview, setPreview] = useState<{ jobId: string; name: string } | undefined>()
+  return (
+    <section className={css.panel}>
+      <h2>已定稿试卷</h2>
+      {jobs.length === 0 && <Empty text="暂无已定稿的试卷 — 批准并导出的试卷会出现在这里" />}
+      <div className={css.split}>
+        <aside className={css.jobList}>
+          {jobs.map(job => {
+            const bundle = exports_.find(e => e.paperId === job.id)
+            return (
+              <div key={job.id} className={css.jobRow}>
+                <span className={css.jobTitle}>{job.document?.title ?? job.id}</span>
+                <span className={css.jobMeta}><StatusChip status={job.status} /> v{job.versions.at(-1)?.version ?? '-'} · {jobRating(job)}</span>
+                <div className={css.fileLinks}>
+                  {bundle?.files.paperPdf !== undefined && (
+                    <button type="button" onClick={() => setPreview({ jobId: job.id, name: bundle.files.paperPdf! })}>试卷.pdf</button>
+                  )}
+                  {bundle?.files.answerPdf !== undefined && (
+                    <button type="button" onClick={() => setPreview({ jobId: job.id, name: bundle.files.answerPdf! })}>答案解析.pdf</button>
+                  )}
+                  {bundle?.files.paperDocx !== undefined && (
+                    <a href={api.fileUrl(job.id, bundle.files.paperDocx)} download>试卷.docx</a>
+                  )}
+                  {bundle?.files.answerDocx !== undefined && (
+                    <a href={api.fileUrl(job.id, bundle.files.answerDocx)} download>答案解析.docx</a>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </aside>
+        <div className={css.jobDetail}>
+          {preview === undefined
+            ? <p className={css.empty}>选择一份 PDF 在此预览（即最终打印版式）。</p>
+            : <iframe className={css.preview} title="试卷 PDF 预览"
+                src={api.fileUrl(preview.jobId, preview.name)} />}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ---------------------------------------------------------- 真题资料库 -- */
+
+function SourcesPanel({ sources, annotations, stats, blueprints, reviewer, api, run, onError }: {
+  sources: SourcePaperRow[]
+  annotations: AnnotationRow[]
+  stats: Record<string, { count: number; score: number; papers: number }>
+  blueprints: BlueprintRow[]
+  reviewer: string
+  api: PaperApi
+  run: (action: () => Promise<unknown>) => Promise<void>
+  onError: (message: string) => void
+}) {
+  const [form, setForm] = useState({ id: '', year: '2025', level: 'zhongkao', subject: 'combined', examName: '', sourceRef: '', evidenceTier: 'original-scan', region: '', school: '', kind: 'real', featured: false })
+  const [csvSource, setCsvSource] = useState('')
+  const [csvText, setCsvText] = useState('')
+  const [annoSource, setAnnoSource] = useState('')
+  const [anno, setAnno] = useState({ questionNo: '', subject: 'physics', kind: 'choice-single', score: '3', knowledgePrimary: '', ability: '应用', pageNo: '', stem: '' })
+
+  const addSource = () => run(async () => {
+    if (form.id.length === 0 || form.examName.length === 0 || form.sourceRef.length === 0) {
+      throw new Error('请填写原卷编号、名称与出处')
+    }
+    await api.addSource({
+      id: form.id, year: Number(form.year), level: form.level as SourcePaperRow['level'],
+      subject: form.subject, examName: form.examName, sourceRef: form.sourceRef,
+      evidenceTier: form.evidenceTier, enteredBy: reviewer,
+      ...(form.region.trim() === '' ? {} : { region: form.region.trim() }),
+      ...(form.school.trim() === '' ? {} : { school: form.school.trim() }),
+      kind: form.kind as NonNullable<SourcePaperRow['kind']>,
+      ...(form.featured ? { featured: true } : {}),
+    })
+    setForm(f => ({ ...f, id: '', examName: '', sourceRef: '' }))
+  }).catch(e => onError(err(e)))
+
+  const addAnnotation = () => run(async () => {
+    if (annoSource.length === 0) throw new Error('请先选择原卷')
+    if (anno.stem.trim().length === 0) throw new Error('请填写题干（真题板块按题展示正文）')
+    await api.addAnnotation({
+      id: `${annoSource}-${anno.questionNo}`, sourcePaperId: annoSource,
+      questionNo: anno.questionNo, subject: anno.subject, kind: anno.kind,
+      score: Number(anno.score) || 1, knowledgePrimary: anno.knowledgePrimary,
+      knowledgeSecondary: [], ability: anno.ability,
+      pageNo: anno.pageNo === '' ? undefined : Number(anno.pageNo),
+      stem: anno.stem.trim(),
+      answerSource: 'manual-transcript', reviewer,
+    } as Omit<AnnotationRow, 'status'>)
+    setAnno(a => ({ ...a, questionNo: '', knowledgePrimary: '', stem: '' }))
+  }).catch(e => onError(err(e)))
+
+  const importCsv = () => run(async () => {
+    if (csvSource.length === 0) throw new Error('请先选择原卷')
+    const result = await api.importCsv(csvSource, csvText, reviewer)
+    onError(`已导入 ${result.created} 条考点记录（待复核）`)
+    setCsvText('')
+  }).catch(e => onError(err(e)))
+
+  return (
+    <section className={css.panel}>
+      <div className={css.splitWide}>
+        <div className={css.jobDetail}>
+          <div className={css.card}>
+          <h2>原卷台账</h2>
+          <table className={css.table}>
+            <thead><tr><th>编号</th><th>年份</th><th>学段</th><th>科目</th><th>名称</th><th>证据</th><th>状态</th><th /></tr></thead>
+            <tbody>
+              {sources.map(s => (
+                <tr key={s.id}>
+                  <td>{s.id}</td><td>{s.year}</td><td>{s.level === 'zhongkao' ? '中考' : '高考'}</td>
+                  <td>{SUBJECT_LABEL[s.subject] ?? s.subject}</td><td className={css.cellText}>{s.examName}</td><td>{EVIDENCE_LABEL[s.evidenceTier] ?? s.evidenceTier}</td>
+                  <td>{ANNOTATION_STATUS[s.status] ?? s.status}</td>
+                  <td>{s.status === 'pending' && (
+                    <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.verifySource(s.id, reviewer)) }}>核验</button>
+                  )}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+
+          <div className={css.card}>
+          <h3>录入原卷</h3>
+          <div className={css.formGrid}>
+            <label className={css.fld}><span>编号</span>
+              <input placeholder="如 2025-gz-jh-lz" value={form.id}
+                onChange={e => setForm(f => ({ ...f, id: e.target.value }))} /></label>
+            <label className={css.fld}><span>年份</span>
+              <input value={form.year}
+                onChange={e => setForm(f => ({ ...f, year: e.target.value }))} /></label>
+            <label className={css.fld}><span>学段</span>
+              <select value={form.level} onChange={e => setForm(f => ({ ...f, level: e.target.value }))}>
+                <option value="zhongkao">中考（理综）</option>
+                <option value="gaokao">高考（选择性考试物理）</option>
+              </select></label>
+            <label className={css.fld}><span>科目</span>
+              <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
+                <option value="combined">理综（物理+化学）</option>
+                <option value="physics">物理</option>
+                <option value="chemistry">化学</option>
+              </select></label>
+            <label className={clsx(css.fld, css.fldWide)}><span>原卷名称</span>
+              <input placeholder="如 2025 年贵州省中考理综卷" value={form.examName}
+                onChange={e => setForm(f => ({ ...f, examName: e.target.value }))} /></label>
+            <label className={clsx(css.fld, css.fldWide)}><span>出处 / 存档位置</span>
+              <input value={form.sourceRef}
+                onChange={e => setForm(f => ({ ...f, sourceRef: e.target.value }))} /></label>
+            <label className={css.fld}><span>证据等级</span>
+              <select value={form.evidenceTier} onChange={e => setForm(f => ({ ...f, evidenceTier: e.target.value }))}>
+                <option value="policy">政策文件</option>
+                <option value="original-scan">原卷扫描</option>
+                <option value="manual-transcript">人工转录</option>
+                <option value="institution-analysis">机构解析</option>
+                <option value="recalled">回忆版（不进正式统计）</option>
+              </select></label>
+            <label className={css.fld}><span>地区</span>
+              <input placeholder="如 贵州·贵阳（省级留空）" value={form.region}
+                onChange={e => setForm(f => ({ ...f, region: e.target.value }))} /></label>
+            <label className={css.fld}><span>出题学校</span>
+              <input placeholder="如 贵阳一中（统考留空）" value={form.school}
+                onChange={e => setForm(f => ({ ...f, school: e.target.value }))} /></label>
+            <label className={css.fld}><span>卷类型</span>
+              <select value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
+                <option value="real">真题</option>
+                <option value="mock">模拟预测</option>
+                <option value="monthly">月考</option>
+                <option value="midterm">期中</option>
+                <option value="final">期末</option>
+                <option value="joint">联考/统考</option>
+              </select></label>
+            <label className={clsx(css.fld, css.fldCheck)}><span>含金量</span>
+              <span className={css.checkRow}>
+                <input type="checkbox" checked={form.featured}
+                  onChange={e => setForm(f => ({ ...f, featured: e.target.checked }))} />
+                名校卷 / 教研推荐（卷库置顶徽标）
+              </span></label>
+            <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void addSource() }}>保存原卷</button>
+          </div>
+          </div>
+
+          <div className={css.card}>
+          <h3>逐题考点录入</h3>
+          <div className={css.formGrid}>
+            <label className={clsx(css.fld, css.fldWide)}><span>原卷</span>
+              <select value={annoSource} onChange={e => setAnnoSource(e.target.value)}>
+                <option value="">— 选择原卷 —</option>
+                {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
+              </select></label>
+            <label className={css.fld}><span>题号</span>
+              <input value={anno.questionNo}
+                onChange={e => setAnno(a => ({ ...a, questionNo: e.target.value }))} /></label>
+            <label className={css.fld}><span>科目</span>
+              <select value={anno.subject} onChange={e => setAnno(a => ({ ...a, subject: e.target.value }))}>
+                <option value="physics">物理</option>
+                <option value="chemistry">化学</option>
+              </select></label>
+            <label className={css.fld}><span>题型</span>
+              <select value={anno.kind} onChange={e => setAnno(a => ({ ...a, kind: e.target.value }))}>
+                <option value="choice-single">单选</option>
+                <option value="choice-multi">多选</option>
+                <option value="blank">填空</option>
+                <option value="drawing">作图</option>
+                <option value="short-answer">简答</option>
+                <option value="experiment">实验探究</option>
+                <option value="calculation">综合计算</option>
+              </select></label>
+            <label className={css.fld}><span>分值</span>
+              <input value={anno.score}
+                onChange={e => setAnno(a => ({ ...a, score: e.target.value }))} /></label>
+            <label className={css.fld}><span>主考点</span>
+              <input value={anno.knowledgePrimary}
+                onChange={e => setAnno(a => ({ ...a, knowledgePrimary: e.target.value }))} /></label>
+            <label className={css.fld}><span>页码</span>
+              <input value={anno.pageNo}
+                onChange={e => setAnno(a => ({ ...a, pageNo: e.target.value }))} /></label>
+            <label className={clsx(css.fld, css.fldWide)}><span>题干（真题板块按题展示）</span>
+              <textarea value={anno.stem} rows={3}
+                placeholder="逐字转录题干，如：如图所示，质量为 2kg 的物块……"
+                onChange={e => setAnno(a => ({ ...a, stem: e.target.value }))} /></label>
+            <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void addAnnotation() }}>保存考点</button>
+          </div>
+          </div>
+
+          <div className={css.card}>
+          <h3>CSV 批量导入</h3>
+          <div className={css.formGrid}>
+            <label className={css.fld}><span>原卷</span>
+              <select value={csvSource} onChange={e => setCsvSource(e.target.value)}>
+                <option value="">— 选择原卷 —</option>
+                {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
+              </select></label>
+            <label className={clsx(css.fld, css.fldWide)}><span>CSV 内容</span>
+              <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={5}
+                placeholder={'题号,科目,题型,分值,主考点,次考点,能力,页码\n1,物理,choice-single,3,参照物,,理解,1'} /></label>
+            <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void importCsv() }}>导入</button>
+          </div>
+          </div>
+        </div>
+
+        <aside className={css.jobList}>
+          <div className={css.card}>
+          <h3>考点频次（已核验）</h3>
+          {Object.keys(stats).length === 0 && <p className={css.empty}>暂无已核验考点数据。</p>}
+          <table className={css.table}>
+            <thead><tr><th>考点</th><th>题次</th><th>分值</th><th>覆盖卷数</th></tr></thead>
+            <tbody>
+              {Object.entries(stats).sort((a, b) => b[1].score - a[1].score).map(([k, v]) => (
+                <tr key={k}><td className={css.cellText}>{k}</td><td>{v.count}</td><td>{v.score}</td><td>{v.papers}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+
+          <div className={css.card}>
+          <h3>结构模板</h3>
+          {blueprints.map(b => (
+            <div key={b.id} className={css.jobRow}>
+              <span className={css.jobTitle}>{b.title}</span>
+              <span className={css.jobMeta}>{b.totalScore}分 · {ANNOTATION_STATUS[b.status] ?? b.status}</span>
+              {b.status === 'pending' && (
+                <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.verifyBlueprint(b.id)) }}>核验结构</button>
+              )}
+            </div>
+          ))}
+          </div>
+
+          <div className={css.card}>
+          <h3>考点记录（{annotations.length}）</h3>
+          <div className={css.annoList}>
+            {annotations.slice(0, 100).map(a => (
+              <div key={a.id} className={css.annoRow}>
+                <span>{a.questionNo} 题 · {a.knowledgePrimary} · {a.score}分</span>
+                <span className={css.jobMeta}>{ANNOTATION_STATUS[a.status] ?? a.status}</span>
+                {a.status === 'pending' && (
+                  <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.reviewAnnotation(a.id, 'verified')) }}>核验</button>
+                )}
+              </div>
+            ))}
+          </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  )
+}
+
+/* ----------------------------------------------------------------- 题库 -- */
+
+/** 题库 — paste-ingest queue and the verified reusable-question pool. */
+function BankPanel({ items, reviewer, api, run, onError }: {
+  items: BankItemRow[]
+  reviewer: string
+  api: PaperApi
+  run: (action: () => Promise<unknown>) => Promise<void>
+  onError: (message: string) => void
+}) {
+  const [paste, setPaste] = useState('')
+  const [level, setLevel] = useState<'zhongkao' | 'gaokao'>('gaokao')
+  const [subject, setSubject] = useState<'physics' | 'chemistry'>('physics')
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [ingesting, setIngesting] = useState(false)
+  const [ingestResult, setIngestResult] = useState<string>()
+  const [expanded, setExpanded] = useState<string | undefined>()
+
+  const pending = items.filter(i => i.status === 'pending')
+  const verified = items.filter(i => i.status === 'verified')
+  const rejected = items.filter(i => i.status === 'rejected')
+
+  const ingest = () => {
+    if (paste.trim().length === 0) { onError('请先粘贴题目文本'); return }
+    setIngesting(true)
+    setIngestResult(undefined)
+    api.ingestBank({
+      text: paste, level, subject,
+      ...(sourceUrl.trim() === '' ? {} : { sourceUrl: sourceUrl.trim() }),
+      enteredBy: reviewer,
+    }).then(result => {
+      const dupNote = result.duplicates.length === 0 ? ''
+        : `；重复跳过 ${result.duplicates.length} 题：${result.duplicates.join('；')}`
+      setIngestResult(`入库 ${result.created.length} 题（待核验）${dupNote}`)
+      if (result.created.length > 0) setPaste('')
+      void run(() => Promise.resolve())
+    }).catch(e => onError(err(e)))
+      .finally(() => setIngesting(false))
+  }
+
+  const toggleMode = (item: BankItemRow, mode: 'verbatim' | 'adapt') => run(async () => {
+    const modes = item.reuseModes.includes(mode)
+      ? item.reuseModes.filter(m => m !== mode)
+      : [...item.reuseModes, mode]
+    if (modes.length === 0) throw new Error('至少保留一种使用方式')
+    await api.updateBankItem(item.id, { reuseModes: modes })
+  })
+
+  const kindLabel = (kind: string): string => ({
+    'choice-single': '单选', 'choice-multi': '多选', blank: '填空', drawing: '作图',
+    'short-answer': '简答', experiment: '实验', calculation: '计算',
+  } as Record<string, string>)[kind] ?? kind
+
+  const itemCard = (item: BankItemRow) => {
+    const open = expanded === item.id
+    return (
+      <div key={item.id} className={css.bankCard} data-bank-item={item.id}>
+        <div className={css.bankHead}>
+          <span className={css.bankTags}>
+            <span className={clsx(css.chip, css['chip-spec'])}>{kindLabel(item.kind)}</span>
+            <span className={clsx(css.chip, css['chip-spec'])}>{item.score}分</span>
+            <span className={clsx(css.chip, css['chip-spec'])}>{({ basic: '基础', medium: '中档', hard: '较难' } as Record<string, string>)[item.difficulty] ?? item.difficulty}</span>
+            {item.knowledge.map(k => <span key={k} className={clsx(css.chip, css['chip-review'])}>{k}</span>)}
+          </span>
+          <span className={css.bankSource}>
+            {item.sourceLabel ?? '无来源标注'}{item.sourceQuestionNo === undefined ? '' : ` · T${item.sourceQuestionNo}`}
+          </span>
+        </div>
+        <p className={css.bankStem}>{open ? item.stem : `${item.stem.slice(0, 140)}${item.stem.length > 140 ? '…' : ''}`}</p>
+        {item.anomalies.length > 0 && (
+          <div className={css.anomaly} role="alert">
+            ⚠ 数据疑点：{item.anomalies.join('；')}
+          </div>
+        )}
+        {open && (
+          <div className={css.bankDetail}>
+            {item.options !== undefined && item.options.length > 0 && (
+              <p className={css.bankLine}>{item.options.join('　')}</p>
+            )}
+            <p className={css.bankLine}><strong>答案：</strong>{item.answer.result}</p>
+            {item.answer.steps.map((step, i) => (
+              <p key={i} className={css.bankLine}>{step}</p>
+            ))}
+          </div>
+        )}
+        <div className={css.bankActions}>
+          <button type="button" className={css.miniBtn}
+            onClick={() => setExpanded(open ? undefined : item.id)}>
+            {open ? '收起' : '展开全文'}
+          </button>
+          {item.status === 'pending' && (
+            <>
+              <label className={css.modeCheck}>
+                <input type="checkbox" checked={item.reuseModes.includes('verbatim')}
+                  onChange={() => { void toggleMode(item, 'verbatim') }} />原题直用
+              </label>
+              <label className={css.modeCheck}>
+                <input type="checkbox" checked={item.reuseModes.includes('adapt')}
+                  onChange={() => { void toggleMode(item, 'adapt') }} />允许改编
+              </label>
+              <button type="button" className={clsx(css.miniBtn, css.miniBtnPrimary)}
+                onClick={() => { void run(() => api.reviewBankItem(item.id, 'verified', reviewer)) }}>核验入库</button>
+              <button type="button" className={css.miniBtn}
+                onClick={() => { void run(() => api.reviewBankItem(item.id, 'rejected', reviewer)) }}>退回</button>
+            </>
+          )}
+          {item.status === 'verified' && (
+            <span className={css.jobMeta}>
+              {item.reuseModes.map(m => m === 'verbatim' ? '可原题' : '可改编').join('·')}
+              {item.verifiedBy === undefined ? '' : ` · ${item.verifiedBy} 核验`}
+            </span>
+          )}
+          {item.status === 'rejected' && (
+            <button type="button" className={css.miniBtn}
+              onClick={() => { void run(() => api.reviewBankItem(item.id, 'pending', reviewer)) }}>恢复待核验</button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <section className={css.panel}>
+      <div className={css.splitWide}>
+        <div className={css.jobDetail}>
+          <div className={css.card}>
+            <h3>粘贴导入（网络题源）</h3>
+            <div className={css.formGrid}>
+              <label className={css.fld}><span>学段</span>
+                <select value={level} onChange={e => setLevel(e.target.value as 'zhongkao' | 'gaokao')}>
+                  <option value="gaokao">高中（高考）</option>
+                  <option value="zhongkao">初中（中考）</option>
+                </select></label>
+              <label className={css.fld}><span>科目</span>
+                <select value={subject} onChange={e => setSubject(e.target.value as 'physics' | 'chemistry')}>
+                  <option value="physics">物理</option>
+                  <option value="chemistry">化学</option>
+                </select></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>来源链接（可选）</span>
+                <input value={sourceUrl} placeholder="题目出处页面 URL"
+                  onChange={e => setSourceUrl(e.target.value)} /></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>题目文本（可含多题，带【答案】【解析】最佳）</span>
+                <textarea value={paste} rows={10}
+                  placeholder={'从网页/资料粘贴题目原文，例如：\n5．（2024·贵阳一中高三月考）如图所示，质量为 m=2kg 的物块……\n【答案】C\n【解析】物块沿斜面向上匀速运动……'}
+                  onChange={e => setPaste(e.target.value)} /></label>
+              <button type="button" className={clsx(css.primary, css.fldBtn)}
+                disabled={ingesting} onClick={ingest}>
+                {ingesting ? '结构化中…' : '结构化入库'}
+              </button>
+            </div>
+            {ingestResult !== undefined && <p className={css.ingestResult}>{ingestResult}</p>}
+          </div>
+
+          <div className={css.card}>
+            <h3>待核验（{pending.length}）</h3>
+            {pending.length === 0 && <p className={css.empty}>暂无待核验题目——粘贴网络题目后先在这里复核。</p>}
+            {pending.map(itemCard)}
+          </div>
+        </div>
+
+        <aside className={css.jobList}>
+          <div className={css.card}>
+            <h3>已入库（{verified.length}）</h3>
+            {verified.length === 0 && <p className={css.empty}>暂无已核验题目。</p>}
+            {verified.map(itemCard)}
+          </div>
+          {rejected.length > 0 && (
+            <div className={css.card}>
+              <h3>已退回（{rejected.length}）</h3>
+              {rejected.map(itemCard)}
+            </div>
+          )}
+        </aside>
+      </div>
+    </section>
+  )
+}

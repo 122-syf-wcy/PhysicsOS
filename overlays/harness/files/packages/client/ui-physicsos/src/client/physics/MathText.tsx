@@ -1,26 +1,35 @@
 /**
  * Inline math for HTML surfaces (inspector rows, derivation steps, solution
- * text). The canvas equivalent is `MathLabel` in primitives.tsx; both share
- * {@link parseMathSymbol} so a symbol reads identically in a panel and on the
- * canvas.
+ * text). Expressions are authored in two dialects — TeX (`\tfrac`, `\Sigma`)
+ * and the engines' Unicode shorthand (`K = ½mᵢvᵢ²`) — {@link toTexExpression}
+ * normalises both to TeX and KaTeX does the typesetting. The canvas
+ * equivalent is `MathLabel` in primitives.tsx, which keeps the lighter
+ * `parseMathSymbol` because SVG labels never carry fractions or radicals.
  */
 
-import { parseMathSymbol } from './math-symbol.ts'
+import { renderTexToReact } from '@deepseek-ai/dsh-client-ui-primitives'
+import { toTexExpression } from './math-symbol.ts'
 import css from './MathText.module.css'
 
+/* KaTeX's stylesheet cannot ride the client bundle — only *.module.css is
+   compiled there — so it is served as a static asset and linked once, the
+   same way the bundle injects module styles. The fonts it @font-faces sit
+   next to it under /physicsos/katex/. */
+const KATEX_CSS_HREF = '/physicsos/katex/katex.min.css'
+if (
+  typeof document !== 'undefined' &&
+  document.querySelector(`link[href="${KATEX_CSS_HREF}"]`) === null
+) {
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = KATEX_CSS_HREF
+  document.head.appendChild(link)
+}
+
 export function MathText({ expression }: { readonly expression: string }) {
-  const parts = parseMathSymbol(expression)
   return (
-    <span className={css.math}>
-      {parts.map((part, index) =>
-        part.script === 'sub' ? (
-          <sub key={index}>{part.text}</sub>
-        ) : part.script === 'super' ? (
-          <sup key={index}>{part.text}</sup>
-        ) : (
-          <span key={index}>{part.text}</span>
-        ),
-      )}
+    <span className={css.math} title={expression}>
+      {renderTexToReact(toTexExpression(expression), false)}
     </span>
   )
 }

@@ -128,6 +128,12 @@ export const inductionSceneVisual = ({
 
   const isBar = model.subModel === 'bar_motion_emf'
   const isDoubleBar = model.subModel === 'double_bar_rail'
+  const visible = visibilityOf(scene)
+  /* 感应电动势 gates the `E = …` fragment; 磁通量 gates the `dΦ/dt = …`
+     fragment — both on the readout line, which is where those numbers live.
+     Absent definitions mean visible (the scene declares them true). */
+  const showEmf = visible.emf !== false
+  const showFlux = visible.flux !== false
 
   /* Per-frame readouts from the engine's own state at this time. */
   const frameState = state ?? nearestState(simulation, time)
@@ -167,9 +173,7 @@ export const inductionSceneVisual = ({
 
   const readout: string[] = [
     '感应读数',
-    isBar
-      ? `E = BLv = ${fmtInductionValue(emf)} V · I = E/R = ${fmtInductionValue(current)} A`
-      : `E = -dΦ/dt = ${fmtInductionValue(emf)} V · I = E/R = ${fmtInductionValue(current)} A`,
+    `${showEmf ? `${isBar ? 'E = BLv' : 'E = -dΦ/dt'} = ${fmtInductionValue(emf)} V · ` : ''}I = E/R = ${fmtInductionValue(current)} A${showFlux ? ` · dΦ/dt = ${fmtInductionValue(fluxRate)} Wb/s` : ''}`,
     /* Direction quotes an engine value: the bar's EMF sign (右手定则) or the
        coil's stated flux rate (楞次定律), never a B·L·v recomputed here. */
     lenzDirectionText(isBar, isBar ? emf : fluxRate),
@@ -223,16 +227,16 @@ export const inductionSceneVisual = ({
     const chargeFlows: SceneVisualModel['chargeFlows'] =
       Number.isFinite(current) && Math.abs(current) > 1e-12
         ? [{
-            id: 'induction-loop-flow',
-            path: [
-              { x: closureX, y: -railHalf },
-              { x: displacementCm, y: -railHalf },
-              { x: displacementCm, y: railHalf },
-              { x: closureX, y: railHalf },
-              { x: closureX, y: -railHalf },
-            ],
-            current,
-          }]
+          id: 'induction-loop-flow',
+          path: [
+            { x: closureX, y: -railHalf },
+            { x: displacementCm, y: -railHalf },
+            { x: displacementCm, y: railHalf },
+            { x: closureX, y: railHalf },
+            { x: closureX, y: -railHalf },
+          ],
+          current,
+        }]
         : undefined
     return emptyVisualModel('induction', {
       extent: { width: fieldWidthCm + 8, height: fieldHeightCm + 24 },
@@ -252,7 +256,7 @@ export const inductionSceneVisual = ({
       inductionCurrent: currentArrow,
       ...(chargeFlows === undefined ? {} : { chargeFlows }),
       overlay: { readout, scale: { label: '10 cm', length: 10 } },
-      visible: visibilityOf(scene),
+      visible,
     })
   }
 
@@ -284,10 +288,10 @@ export const inductionSceneVisual = ({
   const chargeFlows: SceneVisualModel['chargeFlows'] =
     firstRingPoint !== undefined && Number.isFinite(current) && Math.abs(current) > 1e-12
       ? [{
-          id: 'induction-loop-flow',
-          path: [...coilRing, firstRingPoint],
-          current,
-        }]
+        id: 'induction-loop-flow',
+        path: [...coilRing, firstRingPoint],
+        current,
+      }]
       : undefined
   return emptyVisualModel('induction', {
     extent: { width: fieldWidthCm + 8, height: fieldHeightCm + 24 },
@@ -305,7 +309,7 @@ export const inductionSceneVisual = ({
     inductionCurrent: currentArrow,
     ...(chargeFlows === undefined ? {} : { chargeFlows }),
     overlay: { readout, scale: { label: '10 cm', length: 10 } },
-    visible: visibilityOf(scene),
+    visible,
   })
 }
 
@@ -431,16 +435,16 @@ const doubleBarSceneVisual = ({
   const chargeFlows: SceneVisualModel['chargeFlows'] =
     Number.isFinite(current) && Math.abs(current) > 1e-12
       ? [{
-          id: 'induction-loop-flow',
-          path: [
-            { x: leftX, y: -railSpacingCm / 2 },
-            { x: rightX, y: -railSpacingCm / 2 },
-            { x: rightX, y: railSpacingCm / 2 },
-            { x: leftX, y: railSpacingCm / 2 },
-            { x: leftX, y: -railSpacingCm / 2 },
-          ],
-          current,
-        }]
+        id: 'induction-loop-flow',
+        path: [
+          { x: leftX, y: -railSpacingCm / 2 },
+          { x: rightX, y: -railSpacingCm / 2 },
+          { x: rightX, y: railSpacingCm / 2 },
+          { x: leftX, y: railSpacingCm / 2 },
+          { x: leftX, y: -railSpacingCm / 2 },
+        ],
+        current,
+      }]
       : undefined
 
   /* The narrative must match the rig's actual regime: a free pair relaxes to a
@@ -448,9 +452,11 @@ const doubleBarSceneVisual = ({
      relative velocity UP toward the terminal u∞ (current rising to a plateau).
      Quoting the decay story on the driven rig would teach the opposite law. */
   const driven = (model.externalForce ?? 0) > 0
+  const doubleBarVisible = visibilityOf(scene)
+  const showEmf = doubleBarVisible.emf !== false
   const readout: string[] = [
     '双棒读数',
-    `E = BL(v₁−v₂) = ${fmtInductionValue(emf, 3)} V · I = ${fmtInductionValue(current, 3)} A`,
+    `${showEmf ? `E = BL(v₁−v₂) = ${fmtInductionValue(emf, 3)} V · ` : ''}I = ${fmtInductionValue(current, 3)} A`,
     `v₁ = ${fmtInductionValue(v1, 3)} m/s · v₂ = ${fmtInductionValue(v2, 3)} m/s`,
     driven
       ? `t = ${time.toFixed(2)} s（外力驱动，相对速度趋向 u∞，电流趋于稳定）`
@@ -478,6 +484,6 @@ const doubleBarSceneVisual = ({
     inductionCurrent: currentArrow,
     ...(chargeFlows === undefined ? {} : { chargeFlows }),
     overlay: { readout, scale: { label: '10 cm', length: 10 } },
-    visible: visibilityOf(scene),
+    visible: doubleBarVisible,
   })
 }

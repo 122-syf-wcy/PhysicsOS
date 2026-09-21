@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { IconCloseOutline16, IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseOutline16, IconSendOutline14, IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import {
   highlightLabel,
@@ -26,7 +26,7 @@ import { LabSelfCheckCard } from './LabSelfCheckCard.tsx'
 import { Mascot } from './Mascot.tsx'
 import { TutorCard } from './TutorCard.tsx'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
-import type { SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
+import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import css from './LabWorkspace.module.css'
 
@@ -57,8 +57,17 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
      bank's conceptual probes. One drawer, three teaching styles — all read the
      same runtime facts. */
   const [mode, setMode] = useState<'ask' | 'tutor' | 'selfcheck'>('ask')
+  const [draft, setDraft] = useState('')
   const turnId = useRef(0)
   const clearTimer = useRef<number | undefined>(undefined)
+  const bodyRef = useRef<HTMLDivElement>(null)
+
+  /* A submitted question lands at the bottom of the thread, so the scroll
+     follows the newest card the same way a conversation does. */
+  useEffect(() => {
+    const body = bodyRef.current
+    if (body !== null) body.scrollTop = body.scrollHeight
+  }, [turns.length])
 
   const context = useMemo(() => physicsAgentContext(snapshot), [snapshot])
   const suggestions = useMemo(() => agentSuggestions(context), [context])
@@ -82,6 +91,17 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
     if (clearTimer.current !== undefined) window.clearTimeout(clearTimer.current)
     onSnapshot(runtime.setHighlight([]))
   }, [runtime, onSnapshot])
+
+  /* The drawer is a non-modal side panel (complementary, no backdrop): Esc
+     closes it the same way the inspector's does, and the parent returns
+     focus to the re-mounted dock button. */
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => { window.removeEventListener('keydown', handleKeyDown) }
+  }, [onClose])
 
   const runTools = useCallback(
     (tools: readonly PhysicsAgentToolCall[]): readonly { ok: boolean; detail: string }[] => {
@@ -192,7 +212,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
           )}
         </div>
       ) : (
-        <div className={css.agentBody}>
+        <div ref={bodyRef} className={css.agentBody}>
           {turns.length === 0 ? (
             <div className={css.agentEmpty}>
               <Mascot pose="think" size={88} className={css.agentMascot} />
@@ -282,6 +302,37 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
           )}
         </div>
       )}
+
+      {activeMode === 'ask' ? (
+        /* Free-form questions enter the same local Q&A thread as the
+           suggestion chips — grounded in runtime facts, never the main
+           conversation. */
+        <form
+          className={css.agentComposer}
+          onSubmit={(event) => {
+            event.preventDefault()
+            ask(draft)
+            setDraft('')
+          }}
+        >
+          <input
+            className={css.agentInput}
+            type="text"
+            value={draft}
+            placeholder={t('lab.agent.placeholder')}
+            aria-label={t('lab.agent.placeholder')}
+            onChange={(event) => { setDraft(event.target.value) }}
+          />
+          <button
+            type="submit"
+            className={clsx(css.tool, css.toolIcon)}
+            aria-label={t('lab.agent.send')}
+            disabled={draft.trim().length === 0}
+          >
+            <IconSendOutline14 size={13} />
+          </button>
+        </form>
+      ) : null}
     </aside>
   )
 }

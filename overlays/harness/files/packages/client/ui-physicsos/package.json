@@ -67,7 +67,10 @@
     "@physicsos/physics-core": "link:../../../../../packages/physics-core",
     "@physicsos/physics-electric-core": "link:../../../../../packages/physics-electric-core",
     "@physicsos/question-core": "link:../../../../../packages/question-core",
-    "clsx": "^2.0.0"
+    "@physicsos/question-paper": "link:../../../../../packages/question-paper",
+    "clsx": "^2.0.0",
+    "katex": "^0.16.47",
+    "pdfjs-dist": "6.2.108"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-locale": "workspace:^",
@@ -79,7 +82,8 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-client-locale": "workspace:^",
@@ -91,9 +95,12 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-tool-physicsos": "workspace:^",
     "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
     "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "files": [
     "lib/index.js",

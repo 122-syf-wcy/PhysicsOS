@@ -53,6 +53,7 @@ describe('#123 renderer/React decoupling', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     const lab = container.querySelector('[data-physicsos-surface="lab"]')
@@ -91,6 +92,7 @@ describe('#123 renderer/React decoupling', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '运行' }))

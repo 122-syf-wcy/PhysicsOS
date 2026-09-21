@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
   createEmfMeasurementScene,
   createMechanicsScene,
@@ -225,6 +225,34 @@ describe('agent answers', () => {
     })
   })
 
+  it('answers an apex question from the derived readout, not the launch height', () => {
+    /* An angled throw has a distinct apex; the flat-throw scene above does not
+       draw one, so this case builds its own inclined launch. */
+    const angledScene = createMechanicsScene({
+      sceneId: 'scene-projectile-angled',
+      model: 'projectile_motion',
+      mass: 1,
+      position: { x: 0, y: 0, z: 0 },
+      velocity: { x: 10, y: 10, z: 0 },
+      gravity: { x: 0, y: -9.8, z: 0 },
+      groundY: 0,
+      title: '斜抛运动',
+    })
+    const context = physicsAgentContext(
+      createMechanicsWorkspaceRuntime(angledScene).getSnapshot(),
+    )
+    const answer = matchIntent('最高点的高度是多少？', context)
+    expect(answer).toBeDefined()
+    /* A ground launch draws no launch-height dimension, so the broad 高度 rule
+       must not swallow this — the answer cites the apex readout instead. */
+    expect(answer?.paragraphs.join('')).toContain('最大高度')
+    expect(answer?.tools[0]).toEqual({
+      tool: 'physics.ui.highlight',
+      targetId: 'apex',
+      duration: 1800,
+    })
+  })
+
   it('returns nothing for a question it cannot ground in the runtime', () => {
     const context = physicsAgentContext(
       createMechanicsWorkspaceRuntime(projectileScene()).getSnapshot(),
@@ -246,6 +274,7 @@ describe('agent drawer', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
 
@@ -262,6 +291,37 @@ describe('agent drawer', () => {
     ).toBe('0')
   })
 
+  it('closes on Escape and returns focus to the dock button', async () => {
+    const surface = createPhysicsSurfaceController()
+    const scene = projectileScene()
+    surface.open('lab', { sceneId: String(scene.id), scene })
+    render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+        useAuth={neverHook}
+      />,
+    )
+
+    const dock = screen.getByRole('button', { name: /AI 助教/ })
+    dock.focus()
+    fireEvent.click(dock)
+    expect(screen.getByRole('complementary', { name: 'AI 助教' })).toBeTruthy()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('complementary', { name: 'AI 助教' })).toBeNull()
+    /* The dock button unmounts while the drawer is open, so focus must be
+       handed to the freshly re-mounted button, not left on <body>. The
+       hand-off is scheduled on a microtask after the close commit. */
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /AI 助教/ }))
+    })
+  })
+
   it('drives a real scene command from a question', () => {
     const surface = createPhysicsSurfaceController()
     const scene = inclineScene()
@@ -274,6 +334,7 @@ describe('agent drawer', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
 
@@ -283,6 +344,10 @@ describe('agent drawer', () => {
     expect(
       container.querySelector('[data-physicsos-surface="lab"]')?.getAttribute('data-scene-revision'),
     ).toBe('1')
+    /* Drawer and inspector share the right rail: the committed value is read
+       back on the inspector after the drawer hands the rail over. */
+    const drawer = screen.getByRole('complementary', { name: 'AI 助教' })
+    fireEvent.click(within(drawer).getByRole('button', { name: '收起' }))
     const angle = screen.getByRole('textbox', { name: '倾角' })
     if (!(angle instanceof HTMLInputElement)) throw new Error('angle editor is not an input.')
     expect(angle.value).toBe('45')

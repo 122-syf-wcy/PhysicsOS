@@ -7,12 +7,15 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
+  color: var(--physics-canvas-text);
+  background: var(--physics-canvas-bg);
 }
 
 .root {
   display: block;
   width: 100%;
   height: 100%;
+  font-variant-numeric: tabular-nums;
 }
 
 .interactive {
@@ -52,12 +55,12 @@
 
 .gridMinor {
   stroke: var(--physics-grid-minor);
-  stroke-width: 1;
+  stroke-width: 0.65;
 }
 
 .gridMajor {
   stroke: var(--physics-grid-major);
-  stroke-width: 1;
+  stroke-width: 0.9;
 }
 
 .axis {
@@ -71,13 +74,13 @@
 }
 
 .tickLabel {
-  fill: var(--dsw-alias-label-caption);
-  font-size: 11px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .axisLabel {
-  fill: var(--dsw-alias-label-secondary);
+  fill: var(--physics-canvas-text-muted);
   font-size: 12.5px;
   font-style: italic;
 }
@@ -85,22 +88,33 @@
 /* ---------- readout gutter ---------- */
 
 .readoutPanel {
-  fill: rgba(255, 255, 255, 0.78);
+  fill: color-mix(in srgb, var(--physics-canvas-bg) 94%, transparent);
   stroke: var(--physics-grid-major);
   stroke-width: 0.8;
 }
 
 .readoutTitle {
-  fill: var(--dsw-alias-label-primary);
+  fill: var(--physics-canvas-text);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .readoutLine {
-  fill: var(--dsw-alias-label-secondary);
-  font-size: 11px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
+}
+
+/* The card is repositionable chrome: grab cursor over it, grabbing while it
+   follows the pointer. touch-action keeps a touch drag from scrolling. */
+.readoutDraggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.readoutDragging {
+  cursor: grabbing;
 }
 
 /* ---------- scale bar ---------- */
@@ -111,8 +125,8 @@
 }
 
 .scaleLabel {
-  fill: var(--physics-measurement);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -260,9 +274,9 @@
   display: grid;
   gap: 1px;
   padding: 6px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 1px solid var(--physics-grid-major);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.97);
+  background: color-mix(in srgb, var(--physics-canvas-bg) 97%, transparent);
   box-shadow: 0 4px 14px rgba(20, 33, 61, 0.12);
   pointer-events: none;
   transform: translate(10px, -50%);
@@ -274,16 +288,25 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  font-size: 11px;
-  line-height: 15px;
+  font-size: 12px;
+  line-height: 17px;
 }
 
 .tooltipLabel {
-  color: var(--dsw-alias-label-caption);
+  color: var(--physics-canvas-text-muted);
   font-style: italic;
 }
 
 .tooltipValue {
-  color: var(--dsw-alias-label-primary);
+  color: var(--physics-canvas-text);
   font-variant-numeric: tabular-nums;
+}
+
+.tickLabel,
+.axisLabel,
+.scaleLabel {
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }

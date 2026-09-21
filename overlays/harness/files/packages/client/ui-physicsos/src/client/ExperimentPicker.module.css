@@ -1,14 +1,5 @@
-/* Experiment library home.
-
-   Three beats top to bottom — header, focus row, browse — each one visual
-   notch quieter than the last, so the eye lands on 继续上次实验 first, the
-   recommendations second and the shelves only when it goes looking.
-
-   Motion: the panel rises once, sections follow in document order (one
-   --physics-reveal-delay beat each), and cards inside a rail or shelf add their
-   own --physics-card-index stagger on top of the section's beat. Hovering lifts
-   a card, blooms a subject-tinted shadow and eases the artwork up 5%; pressing
-   settles it back. All of it collapses under prefers-reduced-motion. */
+/* Experiment library: quiet paper surfaces, consistent apparatus previews,
+   and visible subject filters. Only the artwork carries a subject colour. */
 
 .root {
   position: absolute;
@@ -17,99 +8,88 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 20px 24px 24px;
+  min-width: 0;
+  padding: 24px 28px;
   box-sizing: border-box;
-  overflow: hidden;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-module-platform);
+  container-type: inline-size;
+  container-name: experiment-library;
 }
+
 
 .panel {
-  position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1040px, 100%);
+  width: min(1160px, 100%);
+  min-width: 0;
   max-height: 100%;
-  overflow-y: auto;
-  padding: 26px 30px 18px;
+  padding: 2px 8px 20px;
   box-sizing: border-box;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 18px;
-  background: var(--physics-glass-fill-strong);
-  box-shadow: var(--physics-glass-shadow);
-  backdrop-filter: blur(18px) saturate(120%);
+  overflow: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  animation: physics-panel-in var(--physics-motion-entrance) var(--physics-ease-emphasized) both;
 }
 
-/* ------------------------------------------------------------------ motion -- */
-
-@keyframes physics-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.988);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.header {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  flex: none;
+  min-height: 78px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
-@keyframes physics-rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.mascot {
+  margin: 0;
 }
 
-@keyframes physics-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.headerCopy {
+  min-width: 0;
 }
 
-@keyframes physics-live-dot {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--subject, #2f9e5a) 40%, transparent);
-  }
-
-  60% {
-    box-shadow: 0 0 0 5px transparent;
-  }
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 38px;
+  letter-spacing: -0.025em;
 }
 
-/* A section that rises in at its own beat. */
-.reveal {
-  animation: physics-rise-in var(--physics-motion-entrance) var(--physics-ease-emphasized) both;
-  animation-delay: var(--physics-reveal-delay, 0ms);
+.body {
+  max-width: 42em;
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 21px;
+  overflow-wrap: anywhere;
 }
 
-/* A card inside a rail/shelf: inherits the section beat, adds its own index. */
-.card {
-  animation: physics-card-in var(--physics-motion-entrance) var(--physics-ease-emphasized) both;
-  animation-delay: calc(
-    var(--physics-reveal-delay, 0ms) +
-    min(calc(var(--physics-card-index, 0) * 26ms), 320ms)
-  );
+.headerCount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
-/* ---------------------------------------------------------------- subjects --
-   One modifier class per domain, setting the two custom properties every
-   subject-coloured element consumes. Undecorated elements fall back to the
-   neutral system colours. */
+.headerCountValue {
+  color: var(--dsw-alias-button-info-fill);
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 30px;
+  font-variant-numeric: tabular-nums;
+}
 
+/* Subject aliases remain presentation-local; physical vectors use their own
+   tokens inside the renderer, independently of these library labels. */
 .subject-mechanics {
   --subject: var(--physics-subject-mechanics);
   --subject-tint: var(--physics-subject-mechanics-tint);
@@ -165,126 +145,48 @@
   --subject-tint: var(--physics-subject-wave-tint);
 }
 
-/* ----------------------------------------------------------------- artwork --
-   Shared canvas for the hand-drawn scene art: subject-tinted wash, a soft
-   diagonal light, a hairline inset ring. The SVG strokes paint in the subject
-   colour via currentColor and ease up a touch on card hover. */
-
-.art {
+/* All previews use the same plate ratio and preserve the complete apparatus. */
+.art,
+.continueArt {
   position: relative;
   display: block;
   flex: none;
+  min-width: 0;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 10px;
-  background:
-    linear-gradient(
-      142deg,
-      color-mix(in srgb, var(--subject, #4c6a84) 15%, transparent),
-      transparent 58%
-    ),
-    var(--subject-tint, var(--physics-incline-fill));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--subject, #4c6a84) 12%, transparent);
+  background: color-mix(in srgb, var(--subject-tint, var(--physics-incline-fill)) 48%, var(--dsw-alias-bg-base));
   color: var(--subject, var(--physics-vector-force));
 }
 
 .art svg,
-.art img {
+.art img,
+.continueArt svg,
+.continueArt img {
   display: block;
   width: 100%;
   height: 100%;
-  transform-origin: 52% 58%;
-  transition: transform 480ms var(--physics-ease-emphasized);
+  object-fit: contain;
 }
 
-/* Generated plates are square renders; the thumb letterboxes them to the
-   card's aspect so nothing important is cropped at this size. */
-.art img {
+/* Generated plates are full scenes, drawn to bleed; cover fills the plate
+   instead of letterboxing the square source inside a 16:10 frame. */
+.art img,
+.continueArt img {
   object-fit: cover;
 }
 
-.card:hover .art svg,
-.card:hover .art img {
-  transform: scale(1.06);
-}
-
 .artThumb {
-  width: 84px;
-  aspect-ratio: 30 / 17;
+  width: 100%;
 }
-
-/* ------------------------------------------------------------------ header -- */
-
-.header {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 16px;
-  min-height: 92px;
-}
-
-.mascot {
-  flex: none;
-  margin: -6px 0 -10px -6px;
-}
-
-.headerCopy {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.title {
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 36px;
-}
-
-.body {
-  margin: 0;
-  max-width: 40em;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.headerCount {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  margin-top: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-base);
-  box-shadow: inset 0 0 0 1px var(--physics-glass-border-soft);
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.headerCount svg {
-  color: var(--physics-vector-velocity);
-}
-
-/* --------------------------------------------------------------- focus row --
-   继续上次实验 (one wide tile) beside 为你推荐 (three compact cards). One row,
-   one primary action, everything else visibly secondary. */
 
 .focusRow {
   display: grid;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 2fr);
-  gap: 14px;
-  align-items: stretch;
+  grid-template-columns: minmax(270px, 1fr) minmax(0, 1.7fr);
+  gap: 18px;
   flex: none;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .focusRowNoContinue {
@@ -292,160 +194,80 @@
 }
 
 .continueCard {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 150px;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--subject, var(--physics-field)) 28%, transparent);
-  border-radius: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-inline-start: 3px solid var(--subject, var(--dsw-alias-button-info-fill));
+  border-radius: 14px;
   background: var(--dsw-alias-bg-base);
   text-align: left;
   cursor: pointer;
-  box-shadow:
-    0 1px 2px rgba(16, 24, 40, 0.04),
-    0 12px 28px -18px color-mix(in srgb, var(--subject, #26425a) 45%, transparent);
-  transition:
-    border-color var(--physics-motion-base) var(--physics-ease),
-    box-shadow 260ms var(--physics-ease-emphasized),
-    transform 260ms var(--physics-ease-emphasized);
 }
 
-.continueCard:hover {
-  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 55%, transparent);
-  transform: translateY(-2px);
-  box-shadow:
-    0 18px 36px -16px color-mix(in srgb, var(--subject, #26425a) 48%, transparent),
-    0 2px 6px rgba(16, 24, 40, 0.05);
-}
-
-.continueCard:active {
-  transform: translateY(0) scale(0.995);
-}
-
-/* Artwork as the tile's sky: it fills the top, fades into the body. */
 .continueArt {
-  position: absolute;
-  inset: 0;
-  color: var(--subject, var(--physics-vector-force));
-  background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--subject, #4c6a84) 18%, transparent),
-      transparent 60%
-    ),
-    var(--subject-tint, var(--physics-incline-fill));
-}
-
-.continueArt svg,
-.continueArt img {
-  width: 100%;
-  height: 100%;
-  opacity: 0.9;
-  transform-origin: 60% 40%;
-  transition: transform 700ms var(--physics-ease-emphasized);
-}
-
-.continueArt img {
-  object-fit: cover;
-}
-
-.continueCard:hover .continueArt svg,
-.continueCard:hover .continueArt img {
-  transform: scale(1.06);
-}
-
-.continueArt::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0) 18%,
-    rgba(255, 255, 255, 0.82) 58%,
-    rgba(255, 255, 255, 0.98) 100%
-  );
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .continueBody {
-  position: relative;
-  z-index: 1;
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
-  justify-content: flex-end;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 6px;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
-  padding: 14px 16px 14px;
 }
 
 .continueEyebrow {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--subject, var(--dsw-alias-label-tertiary));
-  font-size: 11px;
-  line-height: 15px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
 }
 
 .liveDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--subject, #2f9e5a);
-  animation: physics-live-dot 1.8s ease-out infinite;
+  background: var(--physics-verification-ok);
 }
 
 .continueTitle {
-  overflow: hidden;
   color: var(--dsw-alias-label-primary);
-  font-size: 17px;
-  line-height: 24px;
-  font-weight: 680;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 26px;
+  overflow-wrap: anywhere;
 }
 
 .continueMeta {
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
-  line-height: 17px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }
 
 .continueCta {
   display: inline-flex;
-  align-self: flex-start;
   align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 7px 14px;
-  border-radius: 999px;
-  background: var(--subject, var(--physics-vector-force));
-  color: #fff;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
   font-size: 12px;
-  line-height: 18px;
   font-weight: 600;
-  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--subject, #2563eb) 70%, transparent);
-  transition: filter var(--physics-motion-base) var(--physics-ease);
+  line-height: 18px;
 }
-
-.continueCta svg {
-  transition: transform 240ms var(--physics-ease-emphasized);
-}
-
-.continueCard:hover .continueCta {
-  filter: brightness(0.94);
-}
-
-.continueCard:hover .continueCta svg {
-  transform: translateX(2px);
-}
-
-/* --------------------------------------------------------------- recommend -- */
 
 .recommendSection {
   display: flex;
@@ -454,116 +276,321 @@
 }
 
 .sectionLabel {
-  margin: 0 0 8px;
-  color: var(--dsw-alias-label-tertiary);
+  margin: 0 0 9px;
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
-  line-height: 16px;
   font-weight: 600;
+  line-height: 18px;
 }
 
 .recommendGrid {
   display: grid;
-  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.focusRowNoContinue .recommendGrid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
 }
 
 .recommendCard {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding: 8px 8px 10px;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 16px;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
   background: var(--dsw-alias-bg-base);
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  transition:
-    border-color var(--physics-motion-base) var(--physics-ease),
-    box-shadow 260ms var(--physics-ease-emphasized),
-    transform 260ms var(--physics-ease-emphasized);
-}
-
-.recommendCard .art {
-  width: 100%;
-  aspect-ratio: 16 / 6;
-}
-
-.recommendCard:hover {
-  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 45%, transparent);
-  transform: translateY(-2px);
-  box-shadow:
-    0 14px 30px -14px color-mix(in srgb, var(--subject, #26425a) 38%, transparent),
-    0 2px 6px rgba(16, 24, 40, 0.05);
-}
-
-.recommendCard:active {
-  transform: translateY(0) scale(0.99);
 }
 
 .recommendText {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   min-width: 0;
-  padding: 0 4px;
 }
 
 .recommendReason {
-  overflow: hidden;
-  color: var(--subject, var(--dsw-alias-label-tertiary));
-  font-size: 11px;
-  line-height: 15px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recommendName {
-  overflow: hidden;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13.5px;
-  line-height: 20px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recommendHint {
-  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 16px;
-  font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-/* --------------------------------------------------------------- browse head --
-   One bar: heading on the left, search + 学段 on the right. */
+.recommendName {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.recommendHint {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Free build entry ---------- */
+
+/* Sits between the recommendation rail and the template grid: a different
+   relation to the material (author it) than picking one of the 43. */
+.freeBuild {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  width: 100%;
+  margin-top: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    background-color var(--physics-motion-base) var(--physics-ease);
+}
+
+.freeBuild:hover {
+  border-color: var(--physics-body-live);
+}
+
+.freeBuild:focus-visible {
+  outline: 2px solid var(--physics-body-live);
+  outline-offset: 2px;
+}
+
+.freeBuildIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  color: var(--physics-body-live);
+}
+
+.freeBuildText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.freeBuildTitle {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 22px;
+}
+
+.freeBuildHint {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.freeBuildCta {
+  flex: none;
+  color: var(--physics-body-live);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .freeBuild {
+    flex-wrap: wrap;
+  }
+
+  .freeBuildCta {
+    margin-left: 52px;
+  }
+}
 
 .browseHead {
   display: flex;
-  flex: none;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: 14px 20px;
+  flex: none;
   margin-top: 26px;
-  padding-top: 18px;
-  border-top: 1px solid var(--physics-glass-border-soft);
+  padding-top: 22px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
 .browseTitle {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .browseHeading {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 26px;
+}
+
+.browseHint {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.browseControls {
+  display: flex;
+  flex: 0 1 530px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchField > svg {
+  flex: none;
+}
+
+.searchField:focus-within {
+  border-color: var(--physicsos-focus);
+  outline: 2px solid color-mix(in srgb, var(--physicsos-focus) 18%, transparent);
+  outline-offset: 1px;
+}
+
+.search {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.search:focus-visible {
+  outline: none;
+}
+
+.search::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stageTabs {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 38px;
+  padding: 3px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-base);
+  box-sizing: border-box;
+}
+
+.stageTab {
+  min-height: 30px;
+  padding: 4px 11px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.stageTabActive,
+.stageTabActive:hover {
+  background: var(--dsw-alias-label-primary-bluish);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-weight: 600;
+}
+
+/* Wrapping leaves every subject discoverable without a hidden scroll rail. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  margin: 16px 0 0;
+  padding: 2px 0 6px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.tabDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--subject, currentColor);
+}
+
+.tabActive,
+.tabActive:hover {
+  border-color: var(--dsw-alias-button-info-fill);
+  background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 7%, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-button-info-fill);
+  font-weight: 600;
+}
+
+.shelves {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  margin-top: 18px;
+}
+
+.shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shelfHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   margin: 0;
   color: var(--dsw-alias-label-primary);
   font-size: 15px;
@@ -571,222 +598,174 @@
   line-height: 22px;
 }
 
-.browseHint {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 16px;
-}
-
-.browseControls {
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.search {
-  flex: 1 1 200px;
-  width: 220px;
-  height: 34px;
-  padding: 0 12px;
-  box-sizing: border-box;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 20px;
-  outline: none;
-  transition:
-    border-color var(--physics-motion-base) var(--physics-ease),
-    box-shadow var(--physics-motion-base) var(--physics-ease);
-}
-
-.search:focus {
-  border-color: var(--physics-field);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--physics-field) 14%, transparent);
-}
-
-.search::placeholder {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-/* 学段 segmented switch: one visual notch heavier than the domain chips so it
-   reads as the primary cut. */
-.stageTabs {
-  flex: none;
-  display: flex;
-  gap: 3px;
-  height: 34px;
-  padding: 3px;
-  box-sizing: border-box;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-base);
-}
-
-.stageTab {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 12px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-  transition:
-    background-color var(--physics-motion-base) var(--physics-ease),
-    color var(--physics-motion-base) var(--physics-ease);
-}
-
-.stageTab:hover {
-  color: var(--dsw-alias-label-primary);
-  background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 55%, transparent);
-}
-
-.stageTabActive,
-.stageTabActive:hover {
-  background: var(--physics-vector-gravity);
-  color: #fff;
-  font-weight: 600;
-}
-
-/* ------------------------------------------------------------ subject chips --
-   A single scrolling row instead of a wrapping block, so the bar keeps one
-   line of height however many subjects the registry grows to. */
-
-.tabs {
-  flex: none;
-  display: flex;
-  gap: 4px;
-  margin-top: 12px;
-  padding: 2px 0 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.tab {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12.5px;
-  line-height: 18px;
-  cursor: pointer;
-  transition:
-    background-color var(--physics-motion-base) var(--physics-ease),
-    border-color var(--physics-motion-base) var(--physics-ease),
-    color var(--physics-motion-base) var(--physics-ease);
-}
-
-.tab:hover {
-  color: var(--dsw-alias-label-primary);
-  background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 65%, transparent);
-}
-
-.tabDot {
-  display: inline-block;
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--subject, currentColor);
-  opacity: 0.55;
-  transform: scale(0.6);
-  transition:
-    transform 280ms var(--physics-ease-emphasized),
-    opacity var(--physics-motion-base) var(--physics-ease);
-}
-
-.tabActive,
-.tabActive:hover {
-  border-color: color-mix(in srgb, var(--subject, var(--physics-vector-gravity)) 40%, transparent);
-  background: color-mix(in srgb, var(--subject-tint, var(--dsw-alias-interactive-bg-hover)) 80%, var(--dsw-alias-bg-base));
-  color: var(--subject, var(--dsw-alias-label-primary));
-  font-weight: 600;
-}
-
-.tabActive .tabDot {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* ----------------------------------------------------------------- shelves -- */
-
-.shelves {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-top: 8px;
-}
-
-.shelf {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.shelfHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 18px;
+.shelfHead::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  margin-left: 4px;
+  background: var(--dsw-alias-border-l2);
 }
 
 .shelfDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
   background: var(--subject, var(--physics-axis));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--subject, var(--physics-axis)) 16%, transparent);
 }
 
 .shelfCount {
-  padding: 0 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--subject-tint, var(--dsw-alias-interactive-bg-hover)) 90%, transparent);
-  color: var(--subject, var(--dsw-alias-label-tertiary));
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
   line-height: 18px;
   font-variant-numeric: tabular-nums;
 }
 
-.shelfHead::after {
-  content: '';
-  flex: 1 1 auto;
-  height: 1px;
-  margin-left: 4px;
-  background: linear-gradient(90deg, var(--physics-glass-border-soft), transparent);
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 218px), 1fr));
+  gap: 12px;
+}
+
+.entry {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The play affordance sits at the end of the tag row, never over the art. */
+.entryPlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: -3px 0 -3px auto;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-button-info-fill);
+}
+
+.entryPlay svg {
+  width: 15px;
+  height: 15px;
+}
+
+.entryText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.entryName {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 21px;
+}
+
+.entryName > span:first-child {
+  flex: 1 1 11ch;
+  overflow-wrap: anywhere;
+}
+
+.entryHint {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.soonBadge,
+.recentBadge {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.soonBadge {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.recentBadge {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-label-primary-bluish);
+}
+
+.entrySoon {
+  border-style: dashed;
+  color: var(--dsw-alias-label-secondary);
+  cursor: not-allowed;
+}
+
+.entrySoon .art {
+  opacity: 0.65;
+}
+
+.tagColumn {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 2px 0;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  box-sizing: border-box;
+}
+
+.domainTag,
+.stageTag {
+  padding: 2px 7px;
+  border-radius: 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.domainTag {
+  background: color-mix(in srgb, var(--subject, currentColor) 8%, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-label-secondary);
+}
+
+.stageTag {
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 .empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin: 28px 0 20px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 21px;
+  display: grid;
+  place-content: center;
+  min-height: 180px;
+  margin-top: 18px;
+  padding: 24px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 22px;
   text-align: center;
 }
 
@@ -794,247 +773,248 @@
   margin: 0;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 8px;
-}
-
-.entry {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px 8px 8px;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 14px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
-  transition:
-    border-color var(--physics-motion-base) var(--physics-ease),
-    box-shadow 260ms var(--physics-ease-emphasized),
-    transform 260ms var(--physics-ease-emphasized);
-}
-
-.entry:hover {
-  border-color: color-mix(in srgb, var(--subject, var(--physics-field)) 45%, transparent);
-  transform: translateY(-2px);
-  box-shadow:
-    0 12px 26px -14px color-mix(in srgb, var(--subject, #26425a) 36%, transparent),
-    0 2px 5px rgba(16, 24, 40, 0.05);
-}
-
-.entry:active {
-  transform: translateY(0) scale(0.99);
-  box-shadow: 0 3px 10px -8px color-mix(in srgb, var(--subject, #26425a) 30%, transparent);
-}
-
-.entrySoon {
-  cursor: not-allowed;
-  opacity: 0.62;
-}
-
-.entrySoon:hover {
-  border-color: var(--physics-glass-border-soft);
-  background: var(--dsw-alias-bg-base);
-  transform: none;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
-}
-
-.entrySoon:hover .art svg,
-.entrySoon:hover .art img {
-  transform: none;
-}
-
-.entryText {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.entryName {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-}
-
-.soonBadge,
-.recentBadge {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10px;
-  line-height: 14px;
-  font-weight: 600;
-}
-
-.soonBadge {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.recentBadge {
-  background: color-mix(in srgb, var(--subject-tint, var(--dsw-alias-interactive-bg-hover)) 90%, transparent);
-  color: var(--subject, var(--dsw-alias-label-tertiary));
-}
-
-.entryHint {
-  overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
-  font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Tag stack on each grid row: subject chip (flat lists only) above the 学段 chip. */
-.tagColumn {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-}
-
-.domainTag {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 5px;
-  font-size: 10px;
-  line-height: 14px;
-  font-weight: 600;
-  color: var(--subject, var(--dsw-alias-label-tertiary));
-  background: var(--subject-tint, var(--dsw-alias-interactive-bg-hover));
-}
-
-/* 学段 tag: neutral outline chip so the subject colour stays the card's only
-   hue; the stage switch, not this label, carries the partition weight. */
-.stageTag {
-  flex: none;
-  padding: 1px 7px;
-  border-radius: 5px;
-  box-shadow: inset 0 0 0 1px var(--physics-glass-border-soft);
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 10px;
-  line-height: 14px;
-  font-weight: 600;
-}
-
 .footer {
   display: flex;
-  flex: none;
-  align-items: center;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding-top: 10px;
-  border-top: 1px solid var(--physics-glass-border-soft);
+  flex: none;
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
 .count {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
 }
 
-/* -------------------------------------------------------------- responsive -- */
+.card,
+.continueCard,
+.tab,
+.stageTab {
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    background-color var(--physics-motion-base) var(--physics-ease);
+}
 
-@media (max-width: 880px) {
+.card:hover:not(:disabled),
+.continueCard:hover {
+  border-color: color-mix(in srgb, var(--dsw-alias-button-info-fill) 58%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--physics-incline-fill) 24%, var(--dsw-alias-bg-base));
+}
+
+.tab:hover:not(.tabActive),
+.stageTab:hover:not(.stageTabActive) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* Cards announce themselves under the pointer: a one-px lift plus the
+   subject-tinted border, and the play chip fills in. */
+.entry:not(:disabled):hover,
+.recommendCard:hover,
+.continueCard:hover,
+.freeBuild:hover {
+  border-color: color-mix(in srgb, var(--subject, var(--dsw-alias-border-l1)) 55%, var(--dsw-alias-border-l2));
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--subject, #20242e) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.entry:not(:disabled):hover .entryPlay {
+  background: var(--subject, var(--dsw-alias-button-info-fill));
+  border-color: var(--subject, var(--dsw-alias-button-info-fill));
+  color: var(--dsw-alias-bg-base);
+}
+
+.entry,
+.recommendCard,
+.continueCard,
+.freeBuild,
+.entryPlay {
+  transition:
+    transform 160ms var(--physics-ease, ease),
+    border-color 160ms var(--physics-ease, ease),
+    box-shadow 160ms var(--physics-ease, ease),
+    background 160ms var(--physics-ease, ease),
+    color 160ms var(--physics-ease, ease);
+}
+
+.entry:focus-visible,
+.recommendCard:focus-visible,
+.continueCard:focus-visible,
+.tab:focus-visible,
+.stageTab:focus-visible {
+  outline: 2px solid var(--physicsos-focus);
+  outline-offset: 3px;
+}
+
+.reveal {
+  animation: library-reveal var(--physics-motion-base) var(--physics-ease) both;
+  animation-delay: min(var(--physics-reveal-delay, 0ms), 140ms);
+}
+
+@keyframes library-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@container experiment-library (max-width: 900px) {
   .focusRow {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .recommendGrid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  .continueCard {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, 25%);
+  }
+
+  .recommendGrid,
+  .focusRowNoContinue .recommendGrid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  }
+
+  .browseControls {
+    flex-grow: 1;
+  }
+}
+
+@container experiment-library (max-width: 560px) {
+  .panel {
+    padding-inline: 2px;
+  }
+
+  .header {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 6px 12px;
+    padding-bottom: 18px;
+  }
+
+  .mascot {
+    grid-row: 1 / 3;
+    max-width: 56px;
+    max-height: 56px;
+  }
+
+  .title {
+    font-size: 24px;
+    line-height: 32px;
+  }
+
+  .body {
+    font-size: 12px;
+    line-height: 19px;
   }
 
   .headerCount {
-    display: none;
+    grid-column: 2;
+    gap: 7px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .headerCountValue {
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  .focusRow {
+    margin-top: 18px;
+  }
+
+  .continueCard {
+    grid-template-columns: minmax(0, 1fr) 92px;
+    padding: 14px;
+  }
+
+  .continueTitle {
+    font-size: 16px;
+    line-height: 23px;
+  }
+
+  .recommendCard {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .browseHead {
+    margin-top: 20px;
+    padding-top: 18px;
+  }
+
+  .searchField {
+    flex-basis: 100%;
+  }
+
+  .tabs {
+    gap: 6px;
+  }
+
+  .tab,
+  .stageTab {
+    min-height: 36px;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .entry {
+    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 8px 12px;
+    padding: 10px;
+  }
+
+  .entry .artThumb {
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+
+  .entryText,
+  .tagColumn {
+    grid-column: 2;
+    padding-inline: 0;
+  }
+
+  .entryName > span:first-child {
+    flex-basis: 100%;
+  }
+
+  .entryPlay {
+    width: 24px;
+    height: 24px;
+  }
+
+  .entryPlay svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .tagColumn {
+    padding-top: 6px;
   }
 }
 
 @media (max-width: 720px) {
   .root {
-    padding: 12px;
-  }
-
-  .panel {
-    padding: 20px 16px 14px;
-    border-radius: 14px;
-  }
-
-  .header {
-    gap: 10px;
-  }
-
-  .mascot {
-    --mascot-size: 64px;
-  }
-
-  .title {
-    font-size: 24px;
-    line-height: 30px;
-  }
-
-  .grid,
-  .recommendGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .artThumb {
-    width: 72px;
-  }
-
-  .search {
-    width: 100%;
+    padding: 16px 12px;
   }
 }
 
-/* Motion is an accent, never a requirement. */
 @media (prefers-reduced-motion: reduce) {
-  .panel,
-  .reveal,
-  .card {
+  .reveal {
     animation: none;
   }
 
-  .liveDot {
-    animation: none;
-  }
-
-  .art svg,
-  .art img,
-  .continueArt svg,
-  .continueArt img,
-  .continueCta svg,
-  .tabDot,
-  .stageTab,
-  .tab,
+  .card,
+  .continueCard,
+  .freeBuild,
   .entry,
+  .entryPlay,
   .recommendCard,
-  .continueCard {
+  .tab,
+  .stageTab {
     transition: none;
-  }
-
-  .card:hover .art svg,
-  .card:hover .art img,
-  .continueCard:hover .continueArt svg,
-  .continueCard:hover .continueArt img {
-    transform: none;
-  }
-
-  .entry:hover,
-  .recommendCard:hover,
-  .continueCard:hover {
-    transform: none;
   }
 }

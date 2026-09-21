@@ -5,7 +5,7 @@ import { createLeverBalanceScene } from '@physicsos/physics-scene'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
-import type { SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
+import type { SelfCheckAttemptInput } from '../src/client/learning-record-store.ts'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
@@ -50,6 +50,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
+      useAuth={neverHook}
     />,
   )
   return { surface, ...view }
@@ -251,6 +252,7 @@ describe('lever Lab surface', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     expect(picker.container.querySelector('[data-physicsos-state="picker"]')).toBeTruthy()
@@ -271,6 +273,7 @@ describe('lever Lab surface', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     expect(container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()

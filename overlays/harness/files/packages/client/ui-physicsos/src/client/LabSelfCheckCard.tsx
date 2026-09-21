@@ -23,7 +23,7 @@ import type {
 
 import { SELF_CHECK_EXPERIMENT } from './physics/experiment-self-checks.ts'
 import type { VerificationCheckView } from './physics/scene-visual-model.ts'
-import type { SelfCheckAttemptInput } from './QuestionWorkspace.tsx'
+import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import css from './LabWorkspace.module.css'
 
 const MISTAKE_TYPE_LABELS: Record<string, string> = {

@@ -14,7 +14,10 @@
  * being explained is never buried.
  */
 
+import { useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { RendererProps } from './renderer-registry.tsx'
+import type { ScenePoint } from './scene-visual-model.ts'
 import { ArrowMarkers, Dimension, Vectors, clsxJoin } from './primitives.tsx'
 import css from './renderers.module.css'
 
@@ -96,12 +99,76 @@ const ScaleGlyph = ({
   )
 }
 
-export function FluidRenderer({ view, projection }: RendererProps) {
+export function FluidRenderer({ view, projection, componentDrag }: RendererProps) {
   const showForces = view.visible.forces === true
   const showDisplaced = view.visible.displaced === true
   const liquid = view.fluidLiquid
   const block = view.fluidBlock
   const scale = view.fluidScale
+
+  /* Block grab: the pointer pulls the block's centre along the descent line —
+     a live scrub of the immersion clock, not a free reposition. grabY keeps
+     the distance between the press point and the centre so the part does not
+     jump to the finger; ~3 px of travel declares a drag over a click. */
+  const dragRef = useRef<{ pointerId: number; grabY: number; moved: boolean } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const sceneAt = (event: ReactPointerEvent<SVGGElement>): ScenePoint | undefined => {
+    const svg = event.currentTarget.ownerSVGElement
+    if (svg === null) return undefined
+    const rect = svg.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return undefined
+    const viewBox = svg.viewBox.baseVal
+    if (viewBox.width === 0 || viewBox.height === 0) return undefined
+    const viewX = viewBox.x + ((event.clientX - rect.left) / rect.width) * viewBox.width
+    const viewY = viewBox.y + ((event.clientY - rect.top) / rect.height) * viewBox.height
+    return { x: projection.sx(viewX), y: projection.sy(viewY) }
+  }
+
+  const onBlockPointerDown = (event: ReactPointerEvent<SVGGElement>) => {
+    if (componentDrag === undefined || block === undefined) return
+    const at = sceneAt(event)
+    if (at === undefined) return
+    /* jsdom has no pointer capture — the guard keeps the spec DOM happy. */
+    if (typeof event.currentTarget.setPointerCapture === 'function') {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+    dragRef.current = { pointerId: event.pointerId, grabY: at.y - block.at.y, moved: false }
+    event.stopPropagation()
+  }
+
+  const onBlockPointerMove = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId || block === undefined) return
+    const at = sceneAt(event)
+    if (at === undefined) return
+    const y = at.y - drag.grabY
+    if (!drag.moved) {
+      if (Math.abs(y - block.at.y) * projection.scale < 3) return
+      drag.moved = true
+      setDragging(true)
+    }
+    componentDrag?.preview(block.id, { x: block.at.x, y })
+  }
+
+  const endBlockDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    dragRef.current = null
+    setDragging(false)
+    if (!drag.moved || block === undefined) return
+    const at = sceneAt(event)
+    if (at === undefined) return
+    componentDrag?.commit(block.id, { x: block.at.x, y: at.y - drag.grabY })
+  }
+
+  const cancelBlockDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    dragRef.current = null
+    setDragging(false)
+    componentDrag?.cancel()
+  }
 
   return (
     <>
@@ -234,9 +301,22 @@ export function FluidRenderer({ view, projection }: RendererProps) {
         )
       })()}
 
-      {/* The block: full outline, with only the submerged slab shaded */}
+      {/* The block: full outline, with only the submerged slab shaded. When the
+          workspace exposes the drag channel it is also the descent handle —
+          pulling it scrubs the immersion clock. */}
       {block === undefined ? null : (
-        <g className={projection.highlighted(block.id) ? css.highlightGroup : undefined}>
+        <g
+          className={clsxJoin(
+            projection.highlighted(block.id) ? css.highlightGroup : undefined,
+            componentDrag === undefined ? undefined : css.fluidDraggable,
+            dragging ? css.fluidDragging : undefined,
+          )}
+          onPointerDown={componentDrag === undefined ? undefined : onBlockPointerDown}
+          onPointerMove={componentDrag === undefined ? undefined : onBlockPointerMove}
+          onPointerUp={componentDrag === undefined ? undefined : endBlockDrag}
+          onPointerCancel={componentDrag === undefined ? undefined : cancelBlockDrag}
+        >
+          {componentDrag === undefined ? null : <title>拖动物块改变浸入深度，读数实时跟随</title>}
           <rect
             className={clsxJoin(
               css.fluidBlockBody,

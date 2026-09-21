@@ -11,10 +11,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 12px 12px;
+  min-width: 0;
+  padding: 10px;
   box-sizing: border-box;
   overflow: hidden;
-  background: var(--dsw-alias-bg-base);
+  background: var(--dsw-alias-bg-module-platform);
   container-type: inline-size;
   container-name: physics-lab;
 }
@@ -23,33 +24,36 @@
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px 18px;
   flex: none;
-  height: 44px;
-  padding: 0 10px 0 12px;
+  min-height: 58px;
+  max-height: 45%;
+  padding: 10px 14px;
+  overflow: auto;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
 }
 
 .sceneIdentity {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 6px;
+  flex: 1 1 220px;
   min-width: 0;
 }
 
 .title {
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 24px;
+  overflow-wrap: anywhere;
 }
 
 /* Scene name doubles as the experiment-switch affordance. */
@@ -58,14 +62,17 @@
 }
 
 .titleClickable:hover {
-  color: var(--dsw-static-blue-600);
+  color: var(--dsw-alias-button-info-fill);
 }
 
 /* Keyboard/AT path for the switch: a real button beside the heading. */
 .titleSwitch {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex: none;
+  width: 28px;
+  height: 28px;
   margin: 0;
   padding: 2px 4px;
   border: 0;
@@ -77,29 +84,38 @@
 
 .titleSwitch:hover {
   background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-static-blue-600);
+  color: var(--dsw-alias-button-info-fill);
 }
 
 .saveState {
-  color: var(--dsw-alias-label-caption);
+  grid-column: 1 / -1;
+  color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   line-height: 16px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .toolGroup {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  flex: 0 1 auto;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: none;
+  max-width: 100%;
 }
 
-.toolGroup::-webkit-scrollbar {
-  display: none;
+.playbackTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 .divider {
@@ -116,9 +132,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
-  padding: 0 9px;
-  border-radius: 7px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
   line-height: 16px;
@@ -137,30 +153,33 @@
 }
 
 .tool:disabled {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--physics-ink-muted);
   cursor: not-allowed;
 }
 
 .toolIcon {
-  width: 28px;
+  width: 32px;
   padding: 0;
   justify-content: center;
 }
 
 .inspectorToggle,
 .inspectorClose,
-.inspectorBackdrop {
+.inspectorBackdrop,
+.sceneToggle,
+.sceneClose,
+.sceneBackdrop {
   display: none;
 }
 
 .primary {
   border: 1px solid transparent;
-  background: var(--dsw-static-blue-500);
-  color: #fff;
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
 }
 
-.primary:hover {
-  background: var(--dsw-static-blue-600);
+.primary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover);
 }
 
 .secondary {
@@ -184,8 +203,16 @@
 }
 
 .toolActive {
-  background: var(--dsw-static-blue-50);
-  color: var(--dsw-static-blue-600);
+  border-color: color-mix(in srgb, var(--dsw-alias-button-info-fill) 25%, transparent);
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-button-info-fill);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .tool:focus-visible,
@@ -197,19 +224,22 @@
 .tab:focus-visible,
 .transport:focus-visible,
 .rate:focus-visible,
-.track:focus-visible {
-  outline: 2px solid var(--physicsos-focus, #3b82f6);
+.track:focus-visible,
+.titleSwitch:focus-visible,
+.inspectorTab:focus-visible,
+.select:focus-visible,
+.agentDock:focus-visible {
+  outline: 2px solid var(--physicsos-focus);
   outline-offset: 2px;
 }
 
 /* ---------- Body ---------- */
 
 .body {
+  position: relative;
   display: grid;
-  /* Scene 230 / Canvas flex / Inspector 268 — the canvas keeps well over 55%
-     of the inner workspace at the 1600px baseline. */
-  grid-template-columns: 230px minmax(0, 1fr) 268px;
-  gap: 10px;
+  grid-template-columns: 200px minmax(0, 1fr) 264px;
+  gap: 12px;
   min-height: 0;
   flex: 1;
 }
@@ -219,12 +249,20 @@
   min-width: 0;
 }
 
+/* Focus mode: the side tracks unmount, so the grid collapses to the stage
+   column — the canvas, timeline and data strip keep the whole width. */
+.body.bodyFocused {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .stage {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   min-width: 0;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .panel {
@@ -232,8 +270,8 @@
   flex-direction: column;
   min-height: 0;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
   overflow: hidden;
 }
 
@@ -243,13 +281,14 @@
   justify-content: space-between;
   gap: 8px;
   flex: none;
-  padding: 9px 10px 7px 12px;
+  min-height: 40px;
+  padding: 4px 10px 4px 14px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .panelTitle {
   margin: 0;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
@@ -258,18 +297,37 @@
 .panelBody {
   flex: 1;
   min-height: 0;
-  padding: 8px;
+  padding: 10px;
   overflow-y: auto;
-  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .canvas {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 260px;
+  min-height: 260px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: #fbfdff;
+  border-radius: 14px 14px 0 0;
+  border-bottom: 0;
+  background: var(--dsw-alias-bg-base);
   overflow: hidden;
+  /* The section remounts per experiment (keyed on the scene), so this fade
+     only runs on an experiment switch, not on parameter edits. */
+  animation: canvasIn 0.24s ease-out;
+}
+
+@keyframes canvasIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas {
+    animation: none;
+  }
 }
 
 /* ---------- Scene tree ---------- */
@@ -283,7 +341,9 @@
 }
 
 .treeChildren {
-  padding-left: 12px;
+  margin-left: 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--dsw-alias-border-l1);
 }
 
 .treeRowWrap {
@@ -298,7 +358,8 @@
   gap: 6px;
   flex: 1;
   min-width: 0;
-  padding: 5px 6px;
+  min-height: 32px;
+  padding: 6px;
   border: none;
   border-radius: 7px;
   background: transparent;
@@ -315,14 +376,20 @@
 
 .treeSelected,
 .treeSelected:hover {
-  /* Very light blue selection, not a filled chip. */
-  background: var(--dsw-static-blue-50);
-  color: var(--dsw-static-blue-600);
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-button-info-fill);
 }
 
 .treeGroup {
+  margin-top: 6px;
   color: var(--dsw-alias-label-secondary);
   font-weight: 600;
+}
+
+/* A folded group turns its chevron sideways — the glyph reads open vs
+   collapsed at a glance. */
+.treeCollapsed .treeIcon svg {
+  transform: rotate(-90deg);
 }
 
 .treeIcon {
@@ -332,22 +399,23 @@
 }
 
 .treeSelected .treeIcon {
-  color: var(--dsw-static-blue-500);
+  color: var(--dsw-alias-button-info-fill);
 }
 
 .treeLabel {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .treeValue {
-  flex: none;
-  color: var(--dsw-alias-label-caption);
+  flex: 0 1 auto;
+  max-width: 50%;
+  color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .eye {
@@ -386,9 +454,9 @@
 }
 
 .checkboxOn {
-  border-color: var(--dsw-static-blue-500);
-  background: var(--dsw-static-blue-500);
-  color: #fff;
+  border-color: var(--dsw-alias-button-info-fill);
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
 }
 
 /* ---------- Inspector ---------- */
@@ -399,21 +467,24 @@
   top: 0;
   z-index: 2;
   display: flex;
-  gap: 2px;
-  margin: 0 -2px 4px;
-  padding: 0 2px;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0 0 7px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  background: var(--dsw-alias-bg-base);
 }
 
 .inspectorTab {
   position: relative;
-  height: 30px;
-  padding: 0 12px;
+  flex: 1;
+  min-height: 32px;
+  padding: 5px 8px;
   border: none;
+  border-radius: 7px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
 }
 
@@ -422,25 +493,20 @@
 }
 
 .inspectorTabActive {
-  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-button-info-fill);
   font-weight: 600;
 }
 
 .inspectorTabActive::after {
-  content: '';
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--dsw-static-blue-500);
+  content: none;
 }
 
 .sectionLabel {
-  margin: 10px 4px 6px;
-  color: var(--dsw-alias-label-caption);
-  font-size: 11px;
+  margin: 16px 4px 7px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -453,8 +519,8 @@
 .field {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
-  padding: 4px;
+  gap: 6px;
+  padding: 6px 4px;
 }
 
 .fieldLabel {
@@ -463,8 +529,8 @@
   justify-content: space-between;
   gap: 6px;
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .fieldSymbol {
@@ -476,15 +542,16 @@
   display: flex;
   align-items: center;
   gap: 0;
-  height: 28px;
+  height: 34px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--dsw-alias-bg-base);
   overflow: hidden;
 }
 
 .quantity:focus-within {
-  border-color: var(--dsw-static-blue-500);
+  border-color: var(--physicsos-focus);
+  outline: 2px solid color-mix(in srgb, var(--physicsos-focus) 16%, transparent);
 }
 
 .quantityInput {
@@ -495,7 +562,8 @@
   border: none;
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -507,17 +575,18 @@
   flex: none;
   padding: 0 8px;
   border-left: 1px solid var(--dsw-alias-border-l2);
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
-  line-height: 26px;
+  line-height: 32px;
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 .select {
   width: 100%;
-  height: 28px;
+  height: 34px;
   padding: 0 8px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
@@ -530,8 +599,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 4px;
-  border-bottom: 1px dashed var(--dsw-alias-border-l1);
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
   font-size: 12px;
   line-height: 18px;
 }
@@ -543,6 +612,7 @@
 .derivedValue {
   color: var(--dsw-alias-label-primary);
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .derivedUnit {
@@ -578,19 +648,20 @@
   align-items: center;
   gap: 10px;
   flex: none;
-  height: 58px;
+  min-height: 52px;
   padding: 0 12px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  border-radius: 0 0 14px 14px;
+  background: var(--dsw-alias-bg-base);
 }
 
 .transport {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  flex: none;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 7px;
   background: var(--dsw-alias-button-elevated-fill);
@@ -604,12 +675,12 @@
 
 .transportPrimary {
   border-color: transparent;
-  background: var(--dsw-static-blue-500);
-  color: #fff;
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
 }
 
 .transportPrimary:hover {
-  background: var(--dsw-static-blue-600);
+  background: var(--dsw-alias-button-info-hover);
 }
 
 .clock {
@@ -617,11 +688,20 @@
   min-width: 46px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
 }
 
 .clockEnd {
   text-align: right;
+}
+
+.trackWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 .track {
@@ -684,7 +764,7 @@
 
 .rate {
   flex: none;
-  height: 26px;
+  height: 30px;
   padding: 0 6px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 7px;
@@ -700,26 +780,25 @@
   display: flex;
   flex-direction: column;
   flex: none;
+  margin-top: 12px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
   overflow: hidden;
 }
 
 .dataPanelOpen {
-  /* Chart cards need ~140px of body room; a fixed 196px panel clipped the row
-     on short windows. Grow with the viewport, capped so the canvas keeps the
-     majority of the stage. */
-  height: clamp(220px, 36svh, 340px);
+  height: clamp(180px, 27svh, 240px);
 }
 
 .dataHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   flex: none;
-  height: 34px;
-  padding: 0 8px 0 4px;
+  min-height: 40px;
+  padding: 4px 8px;
   border-bottom: 1px solid transparent;
 }
 
@@ -728,13 +807,14 @@
 }
 
 .tab {
-  height: 24px;
-  padding: 0 9px;
+  min-height: 30px;
+  padding: 5px 10px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
 }
 
@@ -743,9 +823,9 @@
 }
 
 .tabActive {
-  background: var(--dsw-static-blue-50);
-  color: var(--dsw-static-blue-600);
-  font-weight: 500;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-button-info-fill);
+  font-weight: 600;
 }
 
 .dataSpacer {
@@ -755,7 +835,7 @@
 .dataBody {
   flex: 1;
   min-height: 0;
-  padding: 8px 12px 10px;
+  padding: 12px;
   overflow: auto;
 }
 
@@ -770,49 +850,145 @@
   display: grid;
   /* Auto-fit rather than a fixed 3: a projectile publishes four series, and a
      fixed column count wrapped the fourth chart out of the panel's height. */
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 10px;
 }
 
 .chartCard {
   min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 .chartTitle {
-  margin: 0 0 2px;
+  margin: 0 0 6px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+/* Experiment summary cards (要点 tab): the structured per-template metadata —
+   core model, parameters, feedback and errors — rendered like the reference
+   lab's summary grid, four cards in a responsive row. */
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+
+.summaryCard {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.summaryHeading {
+  margin: 0 0 6px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.summaryCore {
+  margin: 0;
   color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.summaryList {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.summaryList li + li {
+  margin-top: 2px;
+}
+
+.summaryTextbook {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 实验指南 overlay lists. */
+.guideSteps {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.guideSteps li + li {
+  margin-top: 6px;
+}
+
+.guideList {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.guideList li + li {
+  margin-top: 4px;
 }
 
 .dataTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
   text-align: left;
 }
 
 .dataTable th {
-  padding: 3px 6px 3px 0;
-  color: var(--dsw-alias-label-caption);
+  position: sticky;
+  top: 0;
+  padding: 7px 10px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
   font-weight: 500;
 }
 
 .dataTable td {
-  padding: 3px 6px 3px 0;
+  padding: 7px 10px;
   border-top: 1px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-primary);
+}
+
+/* The highlighted row tracks the playhead the same way the chart cursor does —
+   same highlight token, lighter wash so the numbers stay readable. */
+.dataRowCurrent td {
+  background: color-mix(in srgb, var(--physics-highlight) 12%, transparent);
 }
 
 .verifiedState {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #16824b;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--physics-verification-ok) 20%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--physics-verification-ok) 6%, transparent);
+  color: color-mix(in srgb, var(--physics-verification-ok) 72%, var(--dsw-alias-label-primary));
   font-size: 11px;
   line-height: 16px;
   white-space: nowrap;
@@ -843,7 +1019,7 @@
   align-items: center;
   gap: 5px;
   margin: 10px 4px 0;
-  color: #16824b;
+  color: var(--physics-ink-ok);
   font-size: 11px;
   line-height: 16px;
 }
@@ -883,6 +1059,24 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Free-build diagnostics ---------- */
+
+/* A circuit that does not solve yet is a step in building one, not a dead end:
+   the reason sits above the schematic, which keeps drawing the wiring. */
+.buildDiagnostic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .emptyRuntime {
   display: grid;
   align-content: center;
@@ -903,19 +1097,14 @@
 /* ---------- Agent drawer ---------- */
 
 .agentDock {
-  position: absolute;
-  right: 14px;
-  bottom: 84px;
-  z-index: 6;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
+  border-radius: 9px;
   background: var(--dsw-alias-button-elevated-fill);
-  box-shadow: 0 4px 14px rgba(20, 33, 61, 0.08);
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
   cursor: pointer;
@@ -934,10 +1123,11 @@
   display: flex;
   flex-direction: column;
   width: 356px;
+  max-width: calc(100% - 24px);
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
-  box-shadow: 0 12px 34px rgba(20, 33, 61, 0.1);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--physics-glass-shadow);
   overflow: hidden;
 }
 
@@ -949,6 +1139,41 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 19px;
+}
+
+.agentComposer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-base);
+}
+
+.agentInput {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-surface, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 30px;
+}
+
+.agentInput::placeholder {
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+}
+
+.agentInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-button-info-fill);
+}
+
+.agentComposer .tool:disabled {
+  opacity: 0.45;
 }
 
 /* ---------- Question stub ---------- */
@@ -975,11 +1200,8 @@
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1560px) {
-  /* Both tracks fall to the low end of their allowed ranges (Scene 220-240,
-     Inspector 250-290) so the canvas keeps at least 55% of the workspace at
-     the 1440px baseline. */
   .body {
-    grid-template-columns: 220px minmax(0, 1fr) 250px;
+    grid-template-columns: 184px minmax(0, 1fr) 248px;
   }
 }
 
@@ -1003,8 +1225,8 @@
     z-index: 9;
     display: flex;
     width: min(320px, calc(100% - 44px));
-    box-shadow: 0 12px 34px rgba(20, 33, 61, 0.14);
-    animation: inspector-enter 160ms cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--physics-glass-shadow);
+    animation: inspector-enter var(--physics-motion-base) var(--physics-ease);
   }
 
   .inspectorBackdropOpen {
@@ -1026,15 +1248,27 @@
 @container physics-lab (max-width: 1080px) {
   .body {
     position: relative;
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
+  /* At conversation-embed widths the canvas is the lesson: both side tracks
+     become on-demand drawers instead of fixed columns that starve the stage. */
+  .scenePanel,
   .inspectorPanel {
     display: none;
   }
 
-  .inspectorToggle {
+  .inspectorToggle,
+  .inspectorClose,
+  .sceneToggle,
+  .sceneClose {
     display: inline-flex;
+  }
+
+  /* Drawer widths own dismissal through the close button; the track chevron
+     would fold nothing because there is no track to give back. */
+  .panelCollapse {
+    display: none;
   }
 
   .inspectorPanelOpen {
@@ -1043,11 +1277,22 @@
     z-index: 9;
     display: flex;
     width: min(320px, calc(100% - 44px));
-    box-shadow: 0 12px 34px rgba(20, 33, 61, 0.14);
-    animation: inspector-enter 160ms cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--physics-glass-shadow);
+    animation: inspector-enter var(--physics-motion-base) var(--physics-ease);
   }
 
-  .inspectorBackdropOpen {
+  .scenePanelOpen {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 9;
+    display: flex;
+    width: min(300px, calc(100% - 36px));
+    box-shadow: var(--physics-glass-shadow);
+    animation: none;
+  }
+
+  .inspectorBackdropOpen,
+  .sceneBackdropOpen {
     position: absolute;
     inset: 0;
     z-index: 8;
@@ -1058,71 +1303,205 @@
     cursor: default;
   }
 
-  .inspectorClose {
-    display: inline-flex;
-  }
-}
-
-@container physics-lab (max-width: 760px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
+  /* One compact toolbar row: every control keeps its icon and drops the
+     label; the glyphs alone carry the affordance at this width. */
+  .toolbar {
+    min-height: 0;
+    padding: 8px 10px;
+    gap: 6px 10px;
   }
 
-  .scenePanel {
+  .title {
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  /* Subtitle line folds away so the identity block stays a single row. */
+  .saveState {
     display: none;
   }
 
   .toolbar .primary,
   .toolbar .secondary,
-  .toolbar .ghost {
-    justify-content: center;
-    width: 28px;
-    padding: 0;
+  .toolbar .ghost,
+  .toolbar .tool {
+    min-height: 30px;
+    padding: 4px 6px;
     gap: 0;
     font-size: 0;
   }
 
-  .verifiedState,
-  .saveState {
+  .toolbar .toolIcon {
+    width: 30px;
+    padding: 4px 0;
+  }
+
+  .playbackTools {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .agentDock {
+    height: 30px;
+    padding: 0 8px 0 6px;
+    gap: 3px;
+    font-size: 0;
+  }
+
+  .agentDockMascot {
+    margin-left: -2px;
+  }
+
+  /* The chart strip floats over the canvas instead of consuming a row: at
+     this width a fixed strip would cost the stage a third of its height, so
+     it docks above the timeline (54px + gap, anchored to .body) and
+     collapses to a 40px handle. */
+  .dataPanel {
+    position: absolute;
+    right: 10px;
+    bottom: 66px;
+    left: 10px;
+    z-index: 6;
+    margin-top: 0;
+    box-shadow: var(--physics-glass-shadow);
+  }
+
+  /* Drawer widths dock the agent under the stage instead of over it: the
+     canvas keeps its full width while the thread scrolls in the bottom row.
+     The floating chart strip lifts above the docked drawer. */
+  .cover[data-agent-open='true'] .body {
+    grid-template-rows: minmax(0, 1fr) min(320px, 42%);
+  }
+
+  .cover[data-agent-open='true'] .agentDrawer {
+    position: static;
+    z-index: auto;
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    box-shadow: none;
+  }
+
+  .cover[data-agent-open='true'] .dataPanel {
+    bottom: calc(min(320px, 42%) + 66px);
+  }
+
+  .dataPanelOpen {
+    height: clamp(110px, 18svh, 150px);
+  }
+
+  .dataBody {
+    padding: 8px;
+  }
+
+  .chartRow {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  }
+
+  .chartCard {
+    padding: 8px;
+  }
+}
+
+@container physics-lab (max-width: 760px) {
+  .sceneIdentity {
+    flex-basis: 100%;
+  }
+
+  .toolGroup {
+    justify-content: flex-start;
+  }
+}
+
+/* Track widths only: a collapsed panel returns its grid column to the stage
+   and its toolbar toggle resurfaces as the restore affordance. Inside drawer
+   widths these flags stay inert — the drawer state owns visibility there. */
+@container physics-lab (min-width: 1081px) {
+  .cover[data-scene-collapsed='true'] .scenePanel,
+  .cover[data-inspector-collapsed='true'] .inspectorPanel {
     display: none;
+  }
+
+  .cover[data-scene-collapsed='true'] .body {
+    grid-template-columns: minmax(0, 1fr) 264px;
+  }
+
+  .cover[data-inspector-collapsed='true'] .body {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .cover[data-scene-collapsed='true'][data-inspector-collapsed='true'] .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cover[data-scene-collapsed='true'] .sceneToggle,
+  .cover[data-scene-drawer-open='true'] .sceneToggle,
+  .cover[data-inspector-collapsed='true'] .inspectorToggle,
+  .cover[data-inspector-drawer-open='true'] .inspectorToggle {
+    display: inline-flex;
+  }
+
+  /* Docked agent: the drawer trades its overlay for the inspector's grid
+     track, so the canvas keeps its full width minus a fixed rail. */
+  .cover[data-agent-open='true'] .agentDrawer {
+    position: static;
+    z-index: auto;
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    box-shadow: none;
+  }
+
+  .cover[data-agent-open='true'] .body {
+    grid-template-columns: 200px minmax(0, 1fr) 356px;
+  }
+
+  .cover[data-agent-open='true'][data-scene-collapsed='true'] .body,
+  .cover[data-agent-open='true'] .body.bodyFocused {
+    grid-template-columns: minmax(0, 1fr) 356px;
   }
 }
 
 @container physics-lab (max-width: 520px) {
-  .cover {
-    gap: 8px;
-    padding: 8px;
-  }
-
   .toolbar {
-    gap: 8px;
+    gap: 8px 6px;
     min-width: 0;
-    overflow: hidden;
+    padding: 10px;
   }
 
-  .sceneIdentity {
-    display: none;
+  .title {
+    font-size: 15px;
+    line-height: 22px;
   }
 
   .toolGroup {
-    flex: 1 1 0;
+    gap: 5px;
     width: 100%;
   }
 
   .timeline {
+    flex-wrap: wrap;
     gap: 5px;
-    padding: 0 8px;
+    padding: 8px;
   }
 
   .canvas {
-    flex: none;
-    width: 100%;
-    min-height: 0;
-    aspect-ratio: 16 / 9;
+    flex-basis: 220px;
+    min-height: 220px;
   }
 
   .clock {
-    display: none;
+    font-size: 11px;
+  }
+
+  .clockEnd {
+    margin-left: auto;
+  }
+
+  .trackWrap {
+    order: 2;
+    flex-basis: 100%;
+    min-height: 28px;
   }
 
   .chartRow {
@@ -1132,21 +1511,17 @@
 }
 
 @media (max-width: 520px) {
+  .cover {
+    gap: 8px;
+    padding: 8px;
+  }
+
   .body {
-    position: fixed;
-    inset: 60px 14px 8px 64px;
+    gap: 8px;
   }
 
-  .inspectorPanelOpen {
-    position: fixed;
-    inset: 60px 8px 8px 64px;
-    width: auto;
-    animation: none;
-  }
-
-  .inspectorBackdropOpen {
-    position: fixed;
-    inset: 60px 0 0 56px;
+  .dataPanel {
+    margin-top: 8px;
   }
 }
 
@@ -1168,97 +1543,6 @@
   }
 }
 
-/* Light liquid-glass workspace language: panels float over a calm paper-blue
-   field while the physics canvas stays opaque and legible. */
-.cover {
-  background: var(--physics-workspace-bg);
-}
-
-.toolbar,
-.panel,
-.timeline,
-.dataPanel {
-  border-color: var(--physics-glass-border);
-  border-radius: 16px;
-  background: var(--physics-glass-fill);
-  box-shadow: var(--physics-glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(18px) saturate(125%);
-}
-
-.toolbar {
-  height: 48px;
-  padding-inline: 14px;
-}
-
-.panelHead,
-.dataPanelOpen .dataHead {
-  border-bottom-color: rgba(148, 173, 199, 0.22);
-}
-
-.canvas {
-  border-color: rgba(170, 191, 213, 0.44);
-  border-radius: 18px;
-  background: #fcfeff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 10px 26px rgba(65, 93, 122, 0.06);
-}
-
-.quantity,
-.select,
-.readOnlyValue,
-.rate,
-.transport {
-  border-color: var(--physics-glass-border-soft);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.66);
-}
-
-.treeRow:hover,
-.eye:hover,
-.tab:hover,
-.tool:hover:not(:disabled),
-.ghost:hover,
-.secondary:hover,
-.transport:hover,
-.rate:hover {
-  background: rgba(255, 255, 255, 0.74);
-}
-
-.treeSelected,
-.treeSelected:hover,
-.toolActive,
-.tabActive {
-  background: rgba(225, 239, 255, 0.78);
-  color: #2d5f9b;
-}
-
-.primary,
-.transportPrimary {
-  background: #4279c8;
-  box-shadow: 0 6px 16px rgba(66, 121, 200, 0.2);
-}
-
-.primary:hover,
-.transportPrimary:hover {
-  background: #3569b4;
-}
-
-.inspectorPanelOpen {
-  border-color: var(--physics-glass-border);
-  border-radius: 18px 0 0 18px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: -16px 12px 36px rgba(65, 93, 122, 0.16), inset 1px 0 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(24px) saturate(130%);
-}
-
-@container physics-lab (max-width: 520px) {
-  .toolbar,
-  .panel,
-  .timeline,
-  .dataPanel {
-    box-shadow: 0 8px 20px rgba(65, 93, 122, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(12px) saturate(118%);
-  }
-}
 
 /* ==========================================================================
    Workspace motion
@@ -1381,15 +1665,12 @@
   animation-delay: 420ms;
 }
 
-/* Running state: the transport glows, the clock turns live blue, the canvas
-   frame warms up one step — the student can tell from anywhere on screen that
-   time is moving. */
+/* Running state uses the same semantic action colour in the transport,
+   clock and canvas border. */
 
 .primaryRunning {
-  background: #2f66b8;
-  box-shadow:
-    0 6px 16px rgba(66, 121, 200, 0.28),
-    0 0 0 3px rgba(66, 121, 200, 0.18);
+  background: var(--dsw-alias-button-info-fill);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-button-info-fill) 18%, transparent);
 }
 
 .primaryRunning svg {
@@ -1408,23 +1689,17 @@
 }
 
 .cover[data-physicsos-running='true'] .canvas {
-  border-color: rgba(66, 121, 200, 0.42);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.94),
-    0 10px 26px rgba(65, 93, 122, 0.06),
-    0 0 0 3px rgba(66, 121, 200, 0.08);
+  border-color: color-mix(in srgb, var(--dsw-alias-button-info-fill) 45%, var(--dsw-alias-border-l2));
   transition: border-color 220ms var(--physics-ease), box-shadow 220ms var(--physics-ease);
 }
 
 .cover[data-physicsos-running='true'] .clock:first-of-type {
-  color: #2d5f9b;
+  color: var(--dsw-alias-button-info-fill);
   font-weight: 600;
 }
 
 .cover[data-physicsos-running='true'] .transportPrimary {
-  box-shadow:
-    0 6px 16px rgba(66, 121, 200, 0.24),
-    0 0 0 4px rgba(66, 121, 200, 0.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-button-info-fill) 14%, transparent);
 }
 
 .cover[data-physicsos-running='true'] .track::-webkit-slider-thumb {
@@ -1583,6 +1858,14 @@
 
 .verifiedStateFailed {
   color: var(--physics-verification-error);
+  border-color: color-mix(in srgb, var(--physics-verification-error) 24%, transparent);
+  background: color-mix(in srgb, var(--physics-verification-error) 6%, transparent);
+}
+
+.verifiedState[data-status='warning'] {
+  color: var(--dsw-alias-state-warn-label);
+  border-color: color-mix(in srgb, var(--physics-verification-warning) 24%, transparent);
+  background: color-mix(in srgb, var(--physics-verification-warning) 7%, transparent);
 }
 
 .recognizedList {
@@ -1614,21 +1897,27 @@
 
 /* A chart is a measurement, not decoration: named axes, a zero line when the
    data crosses it, and a cursor locked to the scene clock. */
+.chartLine,
+.chartZero,
+.chartCursor {
+  stroke: color-mix(in srgb, var(--physics-chart-color) 65%, var(--dsw-alias-label-primary));
+}
+
 .chartAxis {
-  stroke: var(--physics-axis);
+  stroke: var(--dsw-alias-label-tertiary);
   stroke-width: 1;
 }
 
 .chartZero {
-  stroke: var(--physics-measurement-soft);
+  --physics-chart-color: var(--physics-measurement-soft);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 
 .chartTick,
 .chartAxisLabel {
-  fill: var(--dsw-alias-label-caption);
-  font-size: 8.5px;
+  fill: var(--dsw-alias-label-secondary);
+  font-size: 9.5px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1644,46 +1933,46 @@
 }
 
 .chartRole_velocity {
-  stroke: var(--physics-vector-velocity);
+  --physics-chart-color: var(--physics-vector-velocity);
 }
 
 .chartRole_velocity-component {
-  stroke: var(--physics-vector-velocity-soft);
+  --physics-chart-color: var(--physics-vector-velocity-soft);
 }
 
 .chartRole_force,
 .chartRole_normal,
 .chartRole_net-force {
-  stroke: var(--physics-vector-force);
+  --physics-chart-color: var(--physics-vector-force);
 }
 
 .chartRole_acceleration {
-  stroke: var(--physics-vector-acceleration);
+  --physics-chart-color: var(--physics-vector-acceleration);
 }
 
 .chartRole_gravity {
-  stroke: var(--physics-vector-gravity);
+  --physics-chart-color: var(--physics-vector-gravity);
 }
 
 .chartRole_friction {
-  stroke: var(--physics-vector-friction);
+  --physics-chart-color: var(--physics-vector-friction);
 }
 
 .chartRole_trajectory {
-  stroke: var(--physics-trajectory);
+  --physics-chart-color: var(--physics-trajectory);
 }
 
 .chartRole_field {
-  stroke: var(--physics-field);
+  --physics-chart-color: var(--physics-field);
 }
 
 .chartRole_measurement,
 .chartRole_neutral {
-  stroke: var(--physics-measurement);
+  --physics-chart-color: var(--physics-measurement);
 }
 
 .chartCursor {
-  stroke: var(--physics-highlight);
+  --physics-chart-color: var(--physics-highlight);
   stroke-width: 1.2;
 }
 
@@ -1777,7 +2066,15 @@
 }
 
 .eventRow:hover {
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.eventRow .eventMark {
+  background: color-mix(in srgb, var(--physics-event-color) 65%, var(--dsw-alias-label-primary));
+}
+
+.eventRow .eventLabel {
+  color: var(--dsw-alias-label-primary);
 }
 
 .eventMark {
@@ -1785,39 +2082,47 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--physics-measurement);
+  --physics-event-color: var(--physics-measurement);
+  background: var(--physics-event-color);
 }
 
 .eventMark_launch {
-  background: var(--physics-keypoint-launch);
+  --physics-event-color: var(--physics-keypoint-launch);
+  background: var(--physics-event-color);
 }
 
 .eventMark_apex {
-  background: var(--physics-keypoint-apex);
+  --physics-event-color: var(--physics-keypoint-apex);
+  background: var(--physics-event-color);
   border-radius: 1px;
   transform: rotate(45deg);
 }
 
 .eventMark_impact {
-  background: var(--physics-keypoint-impact);
+  --physics-event-color: var(--physics-keypoint-impact);
+  background: var(--physics-event-color);
   border-radius: 1px;
 }
 
 .eventMark_enter {
-  background: var(--physics-field);
+  --physics-event-color: var(--physics-field);
+  background: var(--physics-event-color);
 }
 
 .eventMark_exit {
-  background: var(--physics-trajectory);
+  --physics-event-color: var(--physics-trajectory);
+  background: var(--physics-event-color);
 }
 
 .eventMark_plate-impact {
-  background: var(--physics-keypoint-impact);
+  --physics-event-color: var(--physics-keypoint-impact);
+  background: var(--physics-event-color);
   border-radius: 1px;
 }
 
 .eventMark_generic {
-  background: var(--physics-measurement);
+  --physics-event-color: var(--physics-measurement);
+  background: var(--physics-event-color);
 }
 
 .eventLabel {
@@ -1825,9 +2130,9 @@
   min-width: 0;
 }
 
-.eventTime {
+.eventRow .eventTime {
   flex: none;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -1836,14 +2141,6 @@
 
 /* The scrubber keeps its own hit area; markers sit above it and are the only
    pointer targets inside the layer, so dragging the range still works. */
-.trackWrap {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-}
-
 .markerLayer {
   position: absolute;
   inset: 0;
@@ -1882,17 +2179,21 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid rgba(217, 119, 6, 0.28);
-  border-radius: 999px;
-  background: rgba(217, 119, 6, 0.08);
+  flex-wrap: wrap;
+  min-width: 0;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--physics-verification-warning) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--physics-verification-warning) 7%, transparent);
   color: var(--physics-vector-acceleration);
   font-size: 11px;
-  white-space: nowrap;
+  line-height: 17px;
+  overflow-wrap: anywhere;
 }
 
 .branchOrigin {
+  min-width: 0;
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -1931,7 +2232,7 @@
   height: 32px;
   border-radius: 10px;
   background: rgba(225, 239, 255, 0.72);
-  color: #2d5f9b;
+  color: var(--physics-ink-link);
 }
 
 /* The tutor has a face: the mascot in its thinking pose fronts every empty
@@ -1947,7 +2248,7 @@
 }
 
 .agentDockSpark {
-  color: #2d5f9b;
+  color: var(--dsw-alias-button-info-fill);
 }
 
 .agentDock {
@@ -1961,8 +2262,7 @@
 }
 
 .agentDock:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(20, 33, 61, 0.14);
+  border-color: color-mix(in srgb, var(--dsw-alias-button-info-fill) 35%, var(--dsw-alias-border-l2));
 }
 
 /* Drawer slides in from the right, its cards rise one after another. */
@@ -1994,7 +2294,7 @@
 
 .agentUnknown {
   margin: 0;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 19px;
 }
@@ -2005,13 +2305,13 @@
   margin-bottom: 10px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .agentCardLabel {
   display: block;
   margin-bottom: 4px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2060,7 +2360,7 @@
   padding: 1px 7px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-secondary);
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
@@ -2074,17 +2374,17 @@
 
 .agentChip[data-kind='simulation'] {
   border-color: rgba(66, 121, 200, 0.28);
-  color: #2d5f9b;
+  color: var(--dsw-alias-label-primary-bluish);
 }
 
 .agentChip[data-kind='verification'] {
   border-color: rgba(47, 158, 90, 0.32);
-  color: var(--physics-verification-ok);
+  color: color-mix(in srgb, var(--physics-verification-ok) 50%, var(--dsw-alias-label-primary));
 }
 
 .agentChip[data-kind='question'] {
   border-color: rgba(217, 119, 6, 0.28);
-  color: var(--physics-vector-acceleration);
+  color: color-mix(in srgb, var(--physics-vector-acceleration) 50%, var(--dsw-alias-label-primary));
 }
 
 /* Action buttons: re-triggerable tool calls. */
@@ -2106,7 +2406,7 @@
   padding: 0 10px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.66);
+  background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   font-size: 11px;
   font-weight: 500;
@@ -2119,7 +2419,7 @@
 
 .agentAction:hover {
   border-color: rgba(66, 121, 200, 0.36);
-  background: rgba(225, 239, 255, 0.72);
+  background: var(--dsw-alias-state-business-tertiary);
 }
 
 .agentAction:focus-visible {
@@ -2129,7 +2429,7 @@
 
 .agentAction_physics_ui_highlight {
   border-color: rgba(217, 119, 6, 0.22);
-  color: var(--physics-vector-acceleration);
+  color: color-mix(in srgb, var(--physics-vector-acceleration) 50%, var(--dsw-alias-label-primary));
 }
 
 .agentAction_physics_ui_highlight:hover {
@@ -2139,24 +2439,24 @@
 
 .agentAction_physics_scene_setParameter {
   border-color: rgba(66, 121, 200, 0.22);
-  color: #2d5f9b;
+  color: var(--dsw-alias-label-primary-bluish);
 }
 
 .agentAction_physics_scene_setParameter:hover {
   border-color: rgba(66, 121, 200, 0.4);
-  background: rgba(225, 239, 255, 0.78);
+  background: var(--dsw-alias-state-business-tertiary);
 }
 
 .agentEffects {
   margin: 8px 0 0;
   padding-left: 16px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 17px;
 }
 
 .agentEffects li[data-ok='false'] {
-  color: var(--physics-verification-warning);
+  color: color-mix(in srgb, var(--physics-verification-warning) 50%, var(--dsw-alias-label-primary));
 }
 
 .agentSuggestions {
@@ -2172,7 +2472,7 @@
   padding: 6px 8px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
   text-align: left;
@@ -2181,7 +2481,7 @@
 }
 
 .agentSuggestion:hover {
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* ----------------------------------------------------------- tutor mode -- */
@@ -2218,7 +2518,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--dsw-static-blue-600);
+  color: color-mix(in srgb, var(--dsw-static-blue-600) 50%, var(--dsw-alias-label-primary));
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
@@ -2241,7 +2541,7 @@
   padding: 8px 10px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .tutorAnswer {
@@ -2253,7 +2553,7 @@
 
 .tutorAnswer .agentChip[data-status='failed'] {
   border-color: rgba(217, 119, 6, 0.4);
-  color: #b45309;
+  color: color-mix(in srgb, #b45309 50%, var(--dsw-alias-label-primary));
 }
 
 .tutorControls {
@@ -2276,7 +2576,7 @@
   padding: 9px 11px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .quizPrompt {
@@ -2297,7 +2597,7 @@
   padding: 6px 10px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.66);
+  background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -2312,24 +2612,24 @@
 
 .quizOption:disabled {
   cursor: default;
-  opacity: 0.86;
+  opacity: 1;
 }
 
 .quizOptionCorrect {
-  border-color: rgba(5, 150, 105, 0.5);
+  border-color: currentColor;
   background: rgba(5, 150, 105, 0.08);
-  color: #047857;
+  color: color-mix(in srgb, #047857 50%, var(--dsw-alias-label-primary));
 }
 
 .quizOptionWrong {
-  border-color: rgba(217, 119, 6, 0.5);
+  border-color: currentColor;
   background: rgba(217, 119, 6, 0.08);
-  color: #b45309;
+  color: color-mix(in srgb, #b45309 50%, var(--dsw-alias-label-primary));
 }
 
 .quizOptionReveal {
-  border-color: rgba(5, 150, 105, 0.35);
-  color: #047857;
+  border-color: currentColor;
+  color: color-mix(in srgb, #047857 50%, var(--dsw-alias-label-primary));
 }
 
 .quizTakeaway {
@@ -2337,7 +2637,7 @@
   gap: 6px;
   align-items: flex-start;
   margin-top: 8px;
-  color: #047857;
+  color: color-mix(in srgb, #047857 50%, var(--dsw-alias-label-primary));
   font-size: 12px;
   line-height: 18px;
 }
@@ -2358,22 +2658,22 @@
   line-height: 15px;
   font-weight: 600;
   background: rgba(217, 119, 6, 0.16);
-  color: #b45309;
+  color: color-mix(in srgb, #b45309 50%, var(--dsw-alias-label-primary));
 }
 
 .quizBadge[data-mistake='concept'] {
   background: rgba(219, 39, 119, 0.12);
-  color: #be185d;
+  color: color-mix(in srgb, #be185d 50%, var(--dsw-alias-label-primary));
 }
 
 .quizBadge[data-mistake='direction'] {
   background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  color: color-mix(in srgb, #1d4ed8 50%, var(--dsw-alias-label-primary));
 }
 
 .quizBadge[data-mistake='modeling'] {
   background: rgba(5, 150, 105, 0.12);
-  color: #047857;
+  color: color-mix(in srgb, #047857 50%, var(--dsw-alias-label-primary));
 }
 
 .quizExplanation {
@@ -2388,11 +2688,11 @@
   font-size: 11px;
   line-height: 16px;
   font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .quizEvidence[data-passed='true'] {
-  color: #047857;
+  color: color-mix(in srgb, #047857 50%, var(--dsw-alias-label-primary));
 }
 
 .quizReview {
@@ -2400,7 +2700,7 @@
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
 }
 
@@ -2408,7 +2708,7 @@
   padding: 1px 7px;
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--dsw-alias-bg-module-platform);
   color: var(--dsw-alias-label-secondary);
 }
 
@@ -2523,11 +2823,11 @@
 
 .reportCheckStatus {
   font-variant-numeric: tabular-nums;
-  color: #047857;
+  color: var(--physics-ink-ok);
 }
 
 .reportChecks li[data-status='FAIL'] .reportCheckStatus {
-  color: #b45309;
+  color: var(--physics-ink-warn);
 }
 
 .reportConclusion {
@@ -2537,3 +2837,49 @@
   line-height: 19px;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .tool,
+  .primary,
+  .secondary,
+  .ghost,
+  .transport,
+  .clock,
+  .tab,
+  .agentDock,
+  .cover[data-physicsos-running='true'] .canvas,
+  .track::-webkit-slider-thumb {
+    transition: none;
+  }
+}
+
+/* While a PhysicsOS surface covers the conversation column, the session
+   chrome it sits under — title crumbs, view tabs, the covered transcript,
+   and the composer — belongs to a conversation the lab scene is not part
+   of. The cover carries its own chrome and tutor dock, so the session
+   slots' content and the seat hide; the slot anchors carry inline
+   `display: contents`, so their children — not the anchors — are what a
+   sheet can hide. */
+:global(
+  [data-phase]:has(> [data-conversation-scroll] > [data-slot='conversation.surface'] > [data-physicsos-surface])
+    > [data-slot='conversation.session.header']
+    > *
+) {
+  display: none;
+}
+
+:global(
+  [data-phase]
+    > [data-conversation-scroll]:has(> [data-slot='conversation.surface'] > [data-physicsos-surface])
+    > [data-slot='conversation.session']
+    > *
+) {
+  display: none;
+}
+
+:global(
+  [data-phase]
+    > [data-conversation-scroll]:has(> [data-slot='conversation.surface'] > [data-physicsos-surface])
+    > [data-composer-seat]
+) {
+  display: none;
+}

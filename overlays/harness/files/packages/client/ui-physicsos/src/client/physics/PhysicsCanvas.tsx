@@ -13,10 +13,19 @@
  */
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import clsx from 'clsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
-import { RENDERERS, type RendererProjection } from './renderer-registry.tsx'
+import {
+  RENDERERS,
+  type ComponentControlChannel,
+  type ComponentDragChannel,
+  type ComponentWiringChannel,
+  type RendererProjection,
+} from './renderer-registry.tsx'
 import css from './PhysicsCanvas.module.css'
 
 /** Room for axes and gutters, in px. */
@@ -72,6 +81,15 @@ export interface PhysicsCanvasProps {
   sampleReadout?: (index: number) => readonly { label: string; value: string }[]
   /** Click a trajectory point to seek the timeline to that scene time. */
   onSeekTime?: (time: number) => void
+  /**
+   * Pointer-drag channel for schematic components (circuit domain). Forwarded
+   * to the domain renderer; undefined leaves every part fixed.
+   */
+  componentDrag?: ComponentDragChannel
+  /** Bench controls (switch flip, rheostat slider push); forwarded like the drag channel. */
+  componentControl?: ComponentControlChannel
+  /** Present only while the student is assembling a circuit, by hand. */
+  componentWiring?: ComponentWiringChannel
   /** Transient event bursts (collision, boundary, mark) to draw over the frame. */
   effects?: readonly CanvasEffect[]
   /**
@@ -95,6 +113,9 @@ export function PhysicsCanvas({
   trajectoryTimes,
   sampleReadout,
   onSeekTime,
+  componentDrag,
+  componentControl,
+  componentWiring,
   effects,
   clockTime,
 }: PhysicsCanvasProps) {
@@ -106,6 +127,21 @@ export function PhysicsCanvas({
     width: NOMINAL_PLOT.width + PAD.left + PAD.right,
     height: NOMINAL_PLOT.height + PAD.top + PAD.bottom,
   })
+  /* The readout card parks in the top-left gutter but can cover the scene —
+     it is chrome, not physics, so the student may drag it anywhere inside the
+     canvas. readoutPos stays undefined until the card is first moved. */
+  const [readoutPos, setReadoutPos] = useState<{ x: number; y: number } | undefined>(undefined)
+  const readoutDragRef = useRef<{
+    pointerId: number
+    grabX: number
+    grabY: number
+    downX: number
+    downY: number
+    moved: boolean
+  } | null>(null)
+  const [readoutDragging, setReadoutDragging] = useState(false)
+  /* A press released on the card must not fall through to a trajectory seek. */
+  const suppressClickRef = useRef(false)
 
   /* Measure the host so the viewBox can match its pixel size. Without this the SVG
      is letterboxed and scaled by whatever ratio the container happens to have. */
@@ -159,6 +195,11 @@ export function PhysicsCanvas({
     return {
       px,
       py,
+      /* Inverse pair: pointer positions arrive in viewBox units and must
+         land back on the schematic's own grid before a drag can be reported
+         in scene units. */
+      sx: (x: number) => view.origin.x + (x - PAD.left - insetX) / scale,
+      sy: (y: number) => view.origin.y + (originY - y) / scale,
       scale,
       uid,
       path: (points: readonly ScenePoint[]) =>
@@ -248,6 +289,8 @@ export function PhysicsCanvas({
 
   const handleMove = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
+      /* While the readout card is dragged the hover must not chase the pointer. */
+      if (readoutDragRef.current !== null) return
       if (!interactive) return
       const index = nearestSample(event)
       if (index === null) {
@@ -271,6 +314,12 @@ export function PhysicsCanvas({
 
   const handleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
+      /* Any press that ended on the readout card is a card interaction, never
+         a trajectory seek. */
+      if (suppressClickRef.current) {
+        suppressClickRef.current = false
+        return
+      }
       if (!interactive || onSeekTime === undefined) return
       const index = nearestSample(event)
       if (index === null) return
@@ -298,7 +347,7 @@ export function PhysicsCanvas({
     const total = trajectoryTimes[trajectoryTimes.length - 1] ?? 0
     if (total <= 0) return []
     const interval = total / STROBE_DIVISIONS
-    const ghosts: { x: number; y: number; r: number; kind: 'ball' | 'block' | 'cart' | 'particle'; rotation: number }[] = []
+    const ghosts: { x: number; y: number; r: number; kind: 'ball' | 'block' | 'cart' | 'weight-hook' | 'particle'; rotation: number }[] = []
     let nextMark = interval
     for (const [index, time] of trajectoryTimes.entries()) {
       if (time > clockTime + 1e-9) break
@@ -316,6 +365,87 @@ export function PhysicsCanvas({
     }
     return ghosts
   }, [interactive, clockTime, view.bodies, view.particles, scale, trajectoryTimes, trajectory, projection])
+
+  /* The readout card sizes itself to its widest line — CJK glyphs ~1em,
+     latin/digits ~0.62em at these sizes — and sits in viewBox coordinates. */
+  const readoutTextWidth = (line: string): number => {
+    let units = 0
+    for (const ch of line) units += ch.charCodeAt(0) > 0x2e80 ? 1 : 0.62
+    return units * 11.5
+  }
+  const readoutWidth =
+    view.overlay.readout.length === 0
+      ? 0
+      : Math.min(Math.max(...view.overlay.readout.map(readoutTextWidth)) + 24, plotWidth - 24)
+  const readoutHeight = 20 + view.overlay.readout.length * 16
+  /* Render-time clamp too: a parked card must stay inside when the lines grow
+     wider or the canvas shrinks after it was dragged. */
+  const readoutOrigin =
+    readoutPos === undefined
+      ? { x: PAD.left + 8, y: PAD.top + 8 }
+      : {
+          x: Math.min(Math.max(readoutPos.x, 4), width - readoutWidth - 4),
+          y: Math.min(Math.max(readoutPos.y, 4), height - readoutHeight - 4),
+        }
+
+  const viewPoint = (event: { clientX: number; clientY: number }) => {
+    const box = svgRef.current?.getBoundingClientRect()
+    if (box === undefined || box.width === 0 || box.height === 0) return undefined
+    return {
+      x: ((event.clientX - box.left) / box.width) * width,
+      y: ((event.clientY - box.top) / box.height) * height,
+    }
+  }
+
+  const onReadoutPointerDown = (event: ReactPointerEvent<SVGGElement>) => {
+    const at = viewPoint(event)
+    if (at === undefined) return
+    /* jsdom has no pointer capture — the guard keeps the spec DOM happy. */
+    if (typeof event.currentTarget.setPointerCapture === 'function') {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+    readoutDragRef.current = {
+      pointerId: event.pointerId,
+      grabX: at.x - readoutOrigin.x,
+      grabY: at.y - readoutOrigin.y,
+      downX: at.x,
+      downY: at.y,
+      moved: false,
+    }
+    event.stopPropagation()
+  }
+
+  const onReadoutPointerMove = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = readoutDragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    const at = viewPoint(event)
+    if (at === undefined) return
+    if (!drag.moved) {
+      /* ~2 viewBox px of travel before the press becomes a drag. */
+      if (Math.hypot(at.x - drag.downX, at.y - drag.downY) < 2) return
+      drag.moved = true
+      setReadoutDragging(true)
+    }
+    setReadoutPos({
+      x: Math.min(Math.max(at.x - drag.grabX, 4), width - readoutWidth - 4),
+      y: Math.min(Math.max(at.y - drag.grabY, 4), height - readoutHeight - 4),
+    })
+    event.stopPropagation()
+  }
+
+  const endReadoutDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    const drag = readoutDragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) return
+    readoutDragRef.current = null
+    setReadoutDragging(false)
+    suppressClickRef.current = true
+  }
+
+  const cancelReadoutDrag = (event: ReactPointerEvent<SVGGElement>) => {
+    if (readoutDragRef.current?.pointerId !== event.pointerId) return
+    readoutDragRef.current = null
+    setReadoutDragging(false)
+  }
 
   return (
     <div className={css.host} ref={hostRef}>
@@ -409,7 +539,15 @@ export function PhysicsCanvas({
                 )}
               </g>
             ))}
-            <text className={css.axisLabel} x={Math.max(PAD.left - 8, axisX - 8)} y={PAD.top + 9} textAnchor="end">
+            {/* Right of the axis line: every y-tick label ends at axisX − 7 on
+                the left, so the axis name can never share their row. Clamped
+                inside the plot for the all-negative-x edge case. */}
+            <text
+              className={css.axisLabel}
+              x={Math.min(axisX + 8, PAD.left + plotWidth - 36)}
+              y={PAD.top + 12}
+              textAnchor="start"
+            >
               {view.axes.y}
             </text>
           </>
@@ -447,7 +585,14 @@ export function PhysicsCanvas({
 
         {/* ---------- domain drawing ---------- */}
         <g clipPath={`url(#${clipId})`}>
-          <Renderer view={view} projection={projection} {...clockTime === undefined ? {} : { time: clockTime }} />
+          <Renderer
+            view={view}
+            projection={projection}
+            {...clockTime === undefined ? {} : { time: clockTime }}
+            {...componentDrag === undefined ? {} : { componentDrag }}
+            {...componentControl === undefined ? {} : { componentControl }}
+            {...componentWiring === undefined ? {} : { componentWiring }}
+          />
         </g>
 
         {/* ---------- event bursts ----------
@@ -486,44 +631,39 @@ export function PhysicsCanvas({
         )}
 
         {/* ---------- readout gutter ----------
-            The card sizes itself to its widest line: a fixed narrow panel
-            clipped scene titles and crammed the readouts against the border. */}
+            The card sizes itself to its widest line and parks top-left by
+            default; it is chrome over the scene, so the student can drag it
+            anywhere inside the canvas when it covers the picture. */}
         {view.overlay.readout.length === 0 ? null : (
-          <g>
-            {(() => {
-              /* CJK glyphs are ~1em wide, latin/digits ~0.62em at these sizes. */
-              const textWidth = (line: string): number => {
-                let units = 0
-                for (const ch of line) units += ch.charCodeAt(0) > 0x2e80 ? 1 : 0.62
-                return units * 11.5
-              }
-              const panelWidth = Math.min(
-                Math.max(...view.overlay.readout.map(textWidth)) + 24,
-                plotWidth - 24,
-              )
-              return (
-                <>
-                  <rect
-                    className={css.readoutPanel}
-                    x={PAD.left + 8}
-                    y={PAD.top + 8}
-                    width={panelWidth}
-                    height={20 + view.overlay.readout.length * 16}
-                    rx="8"
-                  />
-                  {view.overlay.readout.map((line, index) => (
-                    <text
-                      key={line}
-                      className={index === 0 ? css.readoutTitle : css.readoutLine}
-                      x={PAD.left + 20}
-                      y={PAD.top + 27 + index * 16}
-                    >
-                      {line}
-                    </text>
-                  ))}
-                </>
-              )
-            })()}
+          <g
+            className={clsx(
+              css.readoutDraggable,
+              readoutDragging ? css.readoutDragging : undefined,
+            )}
+            onPointerDown={onReadoutPointerDown}
+            onPointerMove={onReadoutPointerMove}
+            onPointerUp={endReadoutDrag}
+            onPointerCancel={cancelReadoutDrag}
+          >
+            <title>拖动调整读数卡片位置</title>
+            <rect
+              className={css.readoutPanel}
+              x={readoutOrigin.x}
+              y={readoutOrigin.y}
+              width={readoutWidth}
+              height={readoutHeight}
+              rx="8"
+            />
+            {view.overlay.readout.map((line, index) => (
+              <text
+                key={line}
+                className={index === 0 ? css.readoutTitle : css.readoutLine}
+                x={readoutOrigin.x + 12}
+                y={readoutOrigin.y + 19 + index * 16}
+              >
+                {line}
+              </text>
+            ))}
           </g>
         )}
 

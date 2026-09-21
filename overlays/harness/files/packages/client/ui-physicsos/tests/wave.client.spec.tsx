@@ -8,7 +8,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
-import { QuestionWorkspace } from '../src/client/QuestionWorkspace.tsx'
+import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
@@ -23,6 +23,7 @@ import { WaveRenderer } from '../src/client/physics/wave-renderer.tsx'
 import { verticalGainOf } from '../src/client/physics/wave-visual-bridge.ts'
 import { createWaveWorkspaceRuntime } from '../src/client/physics/wave-workspace-runtime.ts'
 import { zh } from '../src/client/locales.ts'
+import { cardSession, solvedCardData } from './solved-card-fixture.ts'
 
 const translations: Readonly<Record<string, string>> = zh
 const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
@@ -171,6 +172,20 @@ describe('wave workspace runtime · travelling rope', () => {
     expect(hidden.view.visible.waveform).toBe(false)
     expect(hidden.sceneRevision).toBe(1)
   })
+
+  it('hides the v = λf readout when the wave-speed observable is toggled off', () => {
+    const runtime = createWaveWorkspaceRuntime(createTravellingWaveScene())
+    expect(
+      runtime.getSnapshot().view.overlay.readout.some(line => line.includes('v = λf')),
+    ).toBe(true)
+    const hidden = runtime.setObservable('waveSpeed', false)
+    expect(hidden.view.visible.waveSpeed).toBe(false)
+    expect(
+      hidden.view.overlay.readout.some(line => line.includes('v = λf')),
+    ).toBe(false)
+    /* The rest of the readout stays — only the speed line is the observable's. */
+    expect(hidden.view.overlay.readout.some(line => line.includes('λ ='))).toBe(true)
+  })
 })
 
 describe('wave workspace runtime · interference and standing', () => {
@@ -246,6 +261,8 @@ describe('wave medium beads', () => {
   const projection: RendererProjection = {
     px: point => point.x,
     py: point => point.y,
+    sx: x => x,
+    sy: y => y,
     scale: 1,
     uid: 'beads',
     path: () => '',
@@ -380,24 +397,20 @@ describe('wave tutor and self-checks', () => {
   })
 })
 
-const questionSurface = (questionId: string) =>
-  ((selector: (s: { surface: string; questionId?: string }) => unknown) =>
-    selector({ surface: 'questions', questionId })) as never
-
-describe('wave Question Space', () => {
+describe('wave solved cards', () => {
   it('renders the rope question through the wave engine with the solved v and T', () => {
     const { container } = render(
-      <QuestionWorkspace
-        t={t as never}
-        usePhysicsSurface={questionSurface('wave-01-speed-from-wavelength-frequency')}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={vi.fn()}
-        recordAttempt={vi.fn()}
-        consumeQuestion={vi.fn()}
-      />,
+      <SceneChatCard {...({
+        node: {
+          key: 'card:wave-rope', kind: 'physics-scene-card', anchorSeq: 1.9,
+          data: solvedCardData('wave-01-speed-from-wavelength-frequency'),
+        },
+        t,
+        openSceneInLab: vi.fn(),
+        useSession: cardSession(),
+      } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
-    expect(container.textContent).toContain('Wave Engine · Verified')
+    expect(container.textContent).toContain('已验证')
     /* The solution quotes the engine's numbers: v = λf = 2 m/s, T = 0.2 s. */
     expect(container.textContent).toContain('2.0000')
     expect(container.textContent).toContain('0.2000')
@@ -408,15 +421,15 @@ describe('wave Question Space', () => {
 
   it('renders the interference question with the engine verdict on the canvas', () => {
     const { container } = render(
-      <QuestionWorkspace
-        t={t as never}
-        usePhysicsSurface={questionSurface('wave-03-interference-constructive')}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={vi.fn()}
-        recordAttempt={vi.fn()}
-        consumeQuestion={vi.fn()}
-      />,
+      <SceneChatCard {...({
+        node: {
+          key: 'card:wave-interference', kind: 'physics-scene-card', anchorSeq: 1.9,
+          data: solvedCardData('wave-03-interference-constructive'),
+        },
+        t,
+        openSceneInLab: vi.fn(),
+        useSession: cardSession(),
+      } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('振动加强')
     expect(container.querySelectorAll('circle[class*="waveSource"]')).toHaveLength(2)
@@ -436,6 +449,7 @@ describe('wave Lab surface', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     expect(container.querySelector('[data-physicsos-domain="wave"]')).toBeTruthy()

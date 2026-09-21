@@ -14,13 +14,16 @@ import { EXPERIMENT_SELF_CHECKS } from '@physicsos/question-core'
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
 import { ExperimentReportPanel } from '../src/client/ExperimentReportPanel.tsx'
 import { LearningRecordWorkspace } from '../src/client/LearningRecordWorkspace.tsx'
-import { QuestionWorkspace, type SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
+import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import type { PhysicsSceneCardData } from '../src/client/scene-chat-node.ts'
+import { cardSession, solvedCardData } from './solved-card-fixture.ts'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import {
   createLearningRecordController,
   knowledgeMasteryOf,
   mistakeCountsOf,
   recentMistakesOf,
+  type SelfCheckAttemptInput,
 } from '../src/client/learning-record-store.ts'
 import { buildExperimentReport } from '../src/client/physics/experiment-report.ts'
 import { physicsAgentContext } from '../src/client/physics/physics-agent.ts'
@@ -377,7 +380,7 @@ describe('学习记录 surface', () => {
       <LearningRecordWorkspace
         t={t}
         useLearningRecord={useLearningRecord}
-        openQuestion={vi.fn()}
+        practiceQuestion={vi.fn()}
         openExperiment={vi.fn()}
         useSessions={neverHook}
         useWorkspaces={neverHook}
@@ -399,7 +402,7 @@ describe('学习记录 surface', () => {
       mistakeType: 'concept',
       knowledge: ['em-velocity-selector'],
     })
-    const openQuestion = vi.fn()
+    const practiceQuestion = vi.fn().mockResolvedValue({ ok: true })
     const useLearningRecord = ((
       selector: (s: ReturnType<typeof controller.store.getSnapshot>) => unknown,
     ) => selector(controller.store.getSnapshot())) as never
@@ -407,18 +410,102 @@ describe('学习记录 surface', () => {
       <LearningRecordWorkspace
         t={t}
         useLearningRecord={useLearningRecord}
-        openQuestion={openQuestion}
+        practiceQuestion={practiceQuestion}
         openExperiment={vi.fn()}
         useSessions={neverHook}
         useWorkspaces={neverHook}
       />,
     )
     expect(screen.getAllByText('概念错误').length).toBeGreaterThan(0)
-    expect(screen.getByText('速度选择器：恰好通过')).toBeTruthy()
+    expect(screen.getAllByText('速度选择器：恰好通过').length).toBeGreaterThan(0)
     /* Knowledge mastery lists the node with its curriculum label. */
     expect(screen.getByText('速度选择器')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '重新练习' }))
-    expect(openQuestion).toHaveBeenCalledWith('comp-01-selector-balance')
+    expect(practiceQuestion).toHaveBeenCalledWith('comp-01-selector-balance')
+  })
+
+  it('lists correct attempts in the ledger too — the record shows records', () => {
+    const controller = createLearningRecordController()
+    controller.record({
+      questionId: 'mech-projectile',
+      questionTitle: '平抛运动',
+      selfCheckId: 'sc-1',
+      prompt: '平抛运动的水平分运动是？',
+      answerId: 'uniform',
+      answerLabel: '匀速直线运动',
+      correct: true,
+      knowledge: ['kin-projectile'],
+    })
+    const useLearningRecord = ((
+      selector: (s: ReturnType<typeof controller.store.getSnapshot>) => unknown,
+    ) => selector(controller.store.getSnapshot())) as never
+    render(
+      <LearningRecordWorkspace
+        t={t}
+        useLearningRecord={useLearningRecord}
+        practiceQuestion={vi.fn()}
+        openExperiment={vi.fn()}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    /* A correct attempt carries a green 答对 badge — not a mistake type. */
+    const row = document.querySelector('[data-correct="true"]')
+    expect(row).toBeTruthy()
+    expect(row?.querySelector('[data-result="correct"]')?.textContent).toBe('答对')
+    expect(row?.textContent).toContain('平抛运动')
+    /* Practised leaf node fills the mastery bar. */
+    expect(document.querySelector('[data-node="kin-projectile"]')?.textContent).toContain('1/1')
+  })
+
+  it('explains the empty mastery panel instead of leaving a blank box', () => {
+    const controller = createLearningRecordController()
+    /* An attempt on a question that maps to no curriculum leaf: stats count
+       it, the mastery panel gets an honest empty state. */
+    controller.record({
+      questionId: 'q-orphan',
+      questionTitle: '未挂节点的题',
+      selfCheckId: 'sc-o',
+      prompt: 'p',
+      answerId: 'a',
+      answerLabel: 'A',
+      correct: true,
+      knowledge: [],
+    })
+    const useLearningRecord = ((
+      selector: (s: ReturnType<typeof controller.store.getSnapshot>) => unknown,
+    ) => selector(controller.store.getSnapshot())) as never
+    render(
+      <LearningRecordWorkspace
+        t={t}
+        useLearningRecord={useLearningRecord}
+        practiceQuestion={vi.fn()}
+        openExperiment={vi.fn()}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    expect(screen.getByText('完成自测后，这里会按知识点显示你的掌握情况。')).toBeTruthy()
+  })
+
+  it('groups the question bank by domain so 80 chips stay scannable', () => {
+    const controller = createLearningRecordController()
+    const useLearningRecord = ((
+      selector: (s: ReturnType<typeof controller.store.getSnapshot>) => unknown,
+    ) => selector(controller.store.getSnapshot())) as never
+    render(
+      <LearningRecordWorkspace
+        t={t}
+        useLearningRecord={useLearningRecord}
+        practiceQuestion={vi.fn()}
+        openExperiment={vi.fn()}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+    for (const group of ['磁场与洛伦兹力', '电场', '复合场', '力学', '电路', '几何光学', '电磁感应', '振动与波']) {
+      expect(screen.getByText(group)).toBeTruthy()
+    }
   })
 
   it('re-practises a lab 自测 mistake on the experiment, not in Question Space', () => {
@@ -435,7 +522,7 @@ describe('学习记录 surface', () => {
       knowledge: ['circ-emf-internal'],
       experimentId: 'emf-measurement',
     })
-    const openQuestion = vi.fn()
+    const practiceQuestion = vi.fn().mockResolvedValue({ ok: true })
     const openExperiment = vi.fn()
     const useLearningRecord = ((
       selector: (s: ReturnType<typeof controller.store.getSnapshot>) => unknown,
@@ -444,7 +531,7 @@ describe('学习记录 surface', () => {
       <LearningRecordWorkspace
         t={t}
         useLearningRecord={useLearningRecord}
-        openQuestion={openQuestion}
+        practiceQuestion={practiceQuestion}
         openExperiment={openExperiment}
         useSessions={neverHook}
         useWorkspaces={neverHook}
@@ -454,7 +541,7 @@ describe('学习记录 surface', () => {
     expect(screen.getByText('电动势与内阻')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '重做实验' }))
     expect(openExperiment).toHaveBeenCalledWith('emf-measurement')
-    expect(openQuestion).not.toHaveBeenCalled()
+    expect(practiceQuestion).not.toHaveBeenCalled()
   })
 })
 
@@ -466,6 +553,9 @@ describe('sidebar 学习记录 entry', () => {
         wide
         startSession={vi.fn()}
         openRecord={openRecord}
+        openHome={vi.fn()}
+        logout={vi.fn(async () => {})}
+        useAuth={selector => selector({ status: 'guest' })}
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
@@ -478,36 +568,32 @@ describe('sidebar 学习记录 entry', () => {
   })
 })
 
-/* -------------------------------------------------- question space diagnosis -- */
+/* ------------------------------------------------ scene card self-checks -- */
 
-const questionSurface = (questionId?: string) =>
-  ((selector: (s: { surface: string; questionId?: string }) => unknown) =>
-    selector({ surface: 'questions', ...(questionId === undefined ? {} : { questionId }) })) as never
+const renderSolvedCard = (questionId: string, recordAttempt?: (a: SelfCheckAttemptInput) => void) =>
+  render(
+    <SceneChatCard {...({
+      node: { key: 'card:test', kind: 'physics-scene-card', anchorSeq: 1.9, data: solvedCardData(questionId) },
+      t,
+      openSceneInLab: vi.fn(),
+      ...(recordAttempt === undefined ? {} : { recordAttempt }),
+      useSession: cardSession(),
+    } as unknown as Parameters<typeof SceneChatCard>[0])} />,
+  )
 
-describe('question space self-checks', () => {
+
+describe('solved-card self-checks (the migrated practice loop)', () => {
   it('diagnoses a wrong answer with class, evidence and review, and records it', () => {
     const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
-    render(
-      <QuestionWorkspace
-        t={t}
-        usePhysicsSurface={questionSurface()}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={vi.fn()}
-        recordAttempt={recordAttempt}
-        consumeQuestion={vi.fn()}
-      />,
-    )
-    /* The default document is the first golden question (proton in a field),
-       whose bank includes the magnetic-work probe. */
-    expect(screen.getByText('错误诊断 · 自测')).toBeTruthy()
+    renderSolvedCard('01-proton-basic', recordAttempt)
+    /* The golden proton question carries the magnetic-work probe in its bank,
+       now rendered by the card's 自测 section. */
     fireEvent.click(screen.getByRole('button', { name: '做正功，速度越来越大' }))
 
     expect(screen.getByText('概念错误')).toBeTruthy()
     expect(screen.getByText(/洛伦兹力方向始终垂直于速度方向/)).toBeTruthy()
-    expect(screen.getByText(/magnetic_force_does_no_work/)).toBeTruthy()
-    /* 左手定则 appears both as this card's review chip and inside the second
-       self-check's option label, so assert presence rather than uniqueness. */
+    /* The bank cites composite-engine check ids; a pure-magnetic scene has no
+       such live check, so the card renders no fabricated evidence line. */
     expect(screen.getAllByText(/左手定则/).length).toBeGreaterThan(0)
 
     expect(recordAttempt).toHaveBeenCalledOnce()
@@ -523,55 +609,26 @@ describe('question space self-checks', () => {
 
   it('reinforces a correct answer with the takeaway and records it as correct', () => {
     const recordAttempt = vi.fn<(attempt: SelfCheckAttemptInput) => void>()
-    render(
-      <QuestionWorkspace
-        t={t}
-        usePhysicsSurface={questionSurface()}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={vi.fn()}
-        recordAttempt={recordAttempt}
-        consumeQuestion={vi.fn()}
-      />,
-    )
+    renderSolvedCard('01-proton-basic', recordAttempt)
     fireEvent.click(screen.getByRole('button', { name: '不做功，速率保持不变' }))
     expect(screen.getByText(/洛伦兹力始终垂直于速度方向，不做功/)).toBeTruthy()
     expect(recordAttempt.mock.calls[0]![0].correct).toBe(true)
   })
 
-  it('shows the knowledge summary chips for the current question', () => {
-    const { container } = render(
-      <QuestionWorkspace
-        t={t}
-        usePhysicsSurface={questionSurface()}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={vi.fn()}
-      />,
+  it('shows no self-check section when the solve carried no golden id', () => {
+    const plain: PhysicsSceneCardData = {
+      ...solvedCardData('01-proton-basic'),
+      solve: { knowns: [], targets: [], answers: [], steps: [], issues: [] },
+    }
+    const view = render(
+      <SceneChatCard {...({
+        node: { key: 'card:plain', kind: 'physics-scene-card', anchorSeq: 1.9, data: plain },
+        t,
+        openSceneInLab: vi.fn(),
+        useSession: cardSession(),
+      } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
-    /* Scoped to the 知识总结 section: 洛伦兹力 also appears as a result-row
-       label elsewhere in the document. */
-    const section = container.querySelector('[data-physicsos-knowledge]')
-    expect(section).toBeTruthy()
-    expect(section?.textContent).toContain('知识总结')
-    expect(section?.textContent).toContain('洛伦兹力')
-    expect(section?.textContent).toContain('磁场中的圆周运动')
-  })
-
-  it('consumes the 重新练习 deep link and opens that golden question', () => {
-    const consumeQuestion = vi.fn()
-    render(
-      <QuestionWorkspace
-        t={t}
-        usePhysicsSurface={questionSurface('comp-01-selector-balance')}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={vi.fn()}
-        consumeQuestion={consumeQuestion}
-      />,
-    )
-    expect(screen.getByRole('heading', { name: '速度选择器：恰好通过' })).toBeTruthy()
-    expect(consumeQuestion).toHaveBeenCalled()
+    expect(view.queryByText('自测')).toBeNull()
   })
 })
 

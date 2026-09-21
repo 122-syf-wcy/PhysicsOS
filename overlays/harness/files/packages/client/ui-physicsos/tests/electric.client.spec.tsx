@@ -8,7 +8,9 @@ import {
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
-import { QuestionWorkspace, type QuestionWorkspaceProps } from '../src/client/QuestionWorkspace.tsx'
+import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { cardSession, solvedCardData } from './solved-card-fixture.ts'
+import type { PhysicsSceneRef } from '../src/client/surface-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { TimelineScrubber } from '../src/client/TimelineScrubber.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
@@ -86,6 +88,7 @@ describe('Electric product slice', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
 
@@ -109,23 +112,21 @@ describe('Electric product slice', () => {
     expect(fieldInput.value).toBe('1.2')
   })
 
-  it('previews an Electric golden question and passes its exact scene to Lab', () => {
+  it('passes an Electric golden question scene to Lab from a solved card', () => {
+    const data = solvedCardData('electric-01-perpendicular-deflection')
     let openedScene: PhysicsScene | undefined
-    const openSurface: NonNullable<QuestionWorkspaceProps['openSurface']> = (_id, sceneRef) => {
-      openedScene = sceneRef?.scene
+    const openSceneInLab = (sceneRef: PhysicsSceneRef) => {
+      openedScene = sceneRef.scene
     }
     render(
-      <QuestionWorkspace
-        t={t}
-        usePhysicsSurface={selector => selector({ surface: 'questions' })}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        openSurface={openSurface}
-      />,
+      <SceneChatCard {...({
+        node: { key: 'card:electric', kind: 'physics-scene-card', anchorSeq: 1.9, data },
+        t,
+        openSceneInLab,
+        useSession: cardSession(),
+      } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /正电荷在匀强电场中偏转/ }))
-    expect(screen.getByText('Electric Engine · Verified')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '在物理世界中打开' }))
     expect(openedScene?.fields[0]?.type).toBe('uniform_electric')
   })

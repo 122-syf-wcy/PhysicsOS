@@ -5,7 +5,7 @@ import { createEchoRangingScene } from '@physicsos/physics-scene'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
-import type { SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
+import type { SelfCheckAttemptInput } from '../src/client/learning-record-store.ts'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { createAcousticsWorkspaceRuntime } from '../src/client/physics/acoustics-workspace-runtime.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
@@ -46,6 +46,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
+      useAuth={neverHook}
     />,
   )
   return { surface, ...view }

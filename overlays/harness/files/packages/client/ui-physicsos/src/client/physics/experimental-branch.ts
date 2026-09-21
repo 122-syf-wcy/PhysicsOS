@@ -22,6 +22,8 @@ import {
  * `SetObservableEnabled` is deliberately absent: showing or hiding a layer changes
  * what the student is looking at, not what is true, so it must not fork a question
  * scene — and it still advances the scene's own revision as an auditable event.
+ * `SetComponentPlacement` is absent for the same reason: where a part sits on the
+ * schematic is dressing, not physics — the solver reads the netlist, not the layout.
  */
 const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetParticleCharge',

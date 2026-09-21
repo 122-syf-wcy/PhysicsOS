@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react'
 import type { ReactElement } from 'react'
+import type { TerminalRef } from './circuit-builder.ts'
 import { AcousticsRenderer } from './acoustics-renderer.tsx'
 import { CircuitRenderer } from './circuit-renderer.tsx'
 import { FluidRenderer } from './fluid-renderer.tsx'
@@ -21,6 +22,7 @@ import { WaveRenderer } from './wave-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
 import {
   Angle,
+  Apparatus,
   ArrowMarkers,
   Body,
   Coordinate,
@@ -30,7 +32,9 @@ import {
   KeyPoint,
   MathLabel,
   MotionMarks,
+  PendulumRig,
   Platform,
+  SpringCoil,
   Vectors,
   clsxJoin,
   markerId,
@@ -44,6 +48,10 @@ export interface RendererProjection {
   px: (point: ScenePoint) => number
   /** Scene y → SVG y (flipped). */
   py: (point: ScenePoint) => number
+  /** SVG x → scene x (inverse of {@link RendererProjection.px}). */
+  sx: (x: number) => number
+  /** SVG y → scene y (inverse of {@link RendererProjection.py}). */
+  sy: (y: number) => number
   /** SVG px per scene unit. */
   scale: number
   /** Canvas instance id, for unique marker/pattern ids. */
@@ -54,12 +62,60 @@ export interface RendererProjection {
   highlighted: (id: string) => boolean
 }
 
+/**
+ * Pointer-drag channel for schematic components (circuit domain). `preview`
+ * fires per pointer move with the scene-space position under the grab point;
+ * `commit` fires once on release with the drop position. A domain that cannot
+ * move its visuals leaves the channel undefined and its parts stay fixed.
+ */
+export interface ComponentDragChannel {
+  readonly preview: (componentId: string, at: ScenePoint) => void
+  readonly commit: (componentId: string, at: ScenePoint) => void
+  /** Pointer-cancel path: abandon the in-flight preview without committing. */
+  readonly cancel: () => void
+}
+
+/**
+ * Build-mode wiring channel (circuit domain). Present only while the student is
+ * assembling a circuit; the renderer then draws a focusable target on every
+ * terminal and reports presses through `start`. The first press opens a wire,
+ * the second closes it.
+ */
+export interface ComponentWiringChannel {
+  /** Press on a terminal: opens a wire, or closes the one already open. */
+  readonly start: (ref: TerminalRef) => void
+  /** Terminal a wire is currently open from, for the pending highlight. */
+  readonly pending?: TerminalRef | undefined
+}
+
+/**
+ * Bench controls channel (circuit domain): the gestures that operate the
+ * apparatus rather than rearrange it. A sub-threshold press on a switch flips
+ * it; a press on the rheostat knob pushes the slider — `previewSlider` fires
+ * per move, `commitSlider` once on release. Kept separate from
+ * {@link ComponentDragChannel}: dragging furniture and operating it are
+ * different intents, and a domain may offer one without the other.
+ */
+export interface ComponentControlChannel {
+  readonly setSwitch: (componentId: string, state: 'open' | 'closed') => void
+  readonly previewSlider: (componentId: string, position: number) => void
+  readonly commitSlider: (componentId: string, position: number) => void
+  /** Pointer-cancel path: abandon the in-flight preview without committing. */
+  readonly cancelSlider: () => void
+}
+
 export interface RendererProps {
   view: SceneVisualModel
   projection: RendererProjection
   /** Elapsed scene time in seconds — the same clock the timeline scrubs.
-     * Animations phase-locked to it freeze on pause and reverse on scrub. */
+   * Animations phase-locked to it freeze on pause and reverse on scrub. */
   time?: number
+  /** Present when the workspace lets the student rearrange parts by pointer. */
+  componentDrag?: ComponentDragChannel
+  /** Present when the workspace lets the student operate parts on the bench. */
+  componentControl?: ComponentControlChannel
+  /** Present only while the student is assembling a circuit, by hand. */
+  componentWiring?: ComponentWiringChannel
 }
 
 /* ---------------------------------------------------------------- magnetic -- */
@@ -120,7 +176,9 @@ function MagneticRenderer({ view, projection }: RendererProps) {
           return (
             <g key={`${trajectory.id}:${trajectory.kind}`}>
               <path
-                className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
+                className={
+                  trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
+                }
                 d={projection.path(trajectory.points)}
               />
               {marker === undefined || trajectory.direction === undefined ? null : (
@@ -223,41 +281,49 @@ function ElectricRenderer({ view, projection }: RendererProps) {
   const columns = hasField ? Math.max(1, Math.floor(view.extent.width / fieldSpacing)) : 0
   const rows = hasField ? Math.max(1, Math.floor(view.extent.height / fieldSpacing)) : 0
   const arrowLength = fieldSpacing * 0.58
-  const arrows = useMemo(() => !hasField
-    ? []
-    : Array.from({ length: columns }, (_, column) =>
-      Array.from({ length: rows }, (_, row) => {
-        const center = {
-          x: view.origin.x + fieldSpacing * (column + 0.5),
-          y: view.origin.y + fieldSpacing * (row + 0.5),
-        }
-        return {
-          from: {
-            x: center.x - fieldDirectionX * arrowLength * 0.5,
-            y: center.y - fieldDirectionY * arrowLength * 0.5,
-          },
-          to: {
-            x: center.x + fieldDirectionX * arrowLength * 0.5,
-            y: center.y + fieldDirectionY * arrowLength * 0.5,
-          },
-        }
-      }),
-    ).flat(), [
-    arrowLength,
-    columns,
-    fieldDirectionX,
-    fieldDirectionY,
-    fieldSpacing,
-    hasField,
-    rows,
-    view.origin.x,
-    view.origin.y,
-  ])
-  const trajectoryPaths = useMemo(() => view.trajectories.map(trajectory => ({
-    id: trajectory.id,
-    kind: trajectory.kind,
-    path: projection.path(trajectory.points),
-  })), [projection, view.trajectories])
+  const arrows = useMemo(
+    () =>
+      !hasField
+        ? []
+        : Array.from({ length: columns }, (_, column) =>
+          Array.from({ length: rows }, (_, row) => {
+            const center = {
+              x: view.origin.x + fieldSpacing * (column + 0.5),
+              y: view.origin.y + fieldSpacing * (row + 0.5),
+            }
+            return {
+              from: {
+                x: center.x - fieldDirectionX * arrowLength * 0.5,
+                y: center.y - fieldDirectionY * arrowLength * 0.5,
+              },
+              to: {
+                x: center.x + fieldDirectionX * arrowLength * 0.5,
+                y: center.y + fieldDirectionY * arrowLength * 0.5,
+              },
+            }
+          }),
+        ).flat(),
+    [
+      arrowLength,
+      columns,
+      fieldDirectionX,
+      fieldDirectionY,
+      fieldSpacing,
+      hasField,
+      rows,
+      view.origin.x,
+      view.origin.y,
+    ],
+  )
+  const trajectoryPaths = useMemo(
+    () =>
+      view.trajectories.map(trajectory => ({
+        id: trajectory.id,
+        kind: trajectory.kind,
+        path: projection.path(trajectory.points),
+      })),
+    [projection, view.trajectories],
+  )
 
   if (view.pointChargeSources !== undefined) {
     return <ElectricPointChargeRenderer view={view} projection={projection} />
@@ -297,7 +363,9 @@ function ElectricRenderer({ view, projection }: RendererProps) {
         ? trajectoryPaths.map(trajectory => (
           <path
             key={`${trajectory.id}:${trajectory.kind}`}
-            className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
+            className={
+              trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
+            }
             d={trajectory.path}
           />
         ))
@@ -315,9 +383,17 @@ function ElectricRenderer({ view, projection }: RendererProps) {
         return (
           <g key={item.id}>
             <circle cx={cx} cy={cy} r={radius} fill={`url(#${glowId})`} />
-            <circle cx={cx - radius * 0.3} cy={cy - radius * 0.34} r={radius * 0.24} fill="rgba(255, 255, 255, 0.62)" />
+            <circle
+              cx={cx - radius * 0.3}
+              cy={cy - radius * 0.34}
+              r={radius * 0.24}
+              fill="rgba(255, 255, 255, 0.62)"
+            />
             <text
-              className={clsxJoin(css.particleLabel, item.sign === 'negative' && css.particleLabelNegative)}
+              className={clsxJoin(
+                css.particleLabel,
+                item.sign === 'negative' && css.particleLabelNegative,
+              )}
               x={cx - radius - 6}
               y={cy - radius - 5}
               textAnchor="end"
@@ -358,13 +434,11 @@ function ElectricPointChargeRenderer({ view, projection }: RendererProps) {
         {streamlines.map((streamline) => {
           const midIndex = Math.floor(streamline.points.length / 2)
           const firstHalf = streamline.points.slice(0, midIndex + 1)
-          const highlighted = streamline.sourceId !== undefined && projection.highlighted(streamline.sourceId)
+          const highlighted =
+            streamline.sourceId !== undefined && projection.highlighted(streamline.sourceId)
           return (
             <g key={streamline.id} className={highlighted ? css.highlightGroup : undefined}>
-              <path
-                className={css.streamlinePath}
-                d={projection.path(streamline.points)}
-              />
+              <path className={css.streamlinePath} d={projection.path(streamline.points)} />
               {firstHalf.length >= 2 ? (
                 <path
                   className={css.streamlineArrow}
@@ -404,9 +478,17 @@ function ElectricPointChargeRenderer({ view, projection }: RendererProps) {
         return (
           <g key={source.id} className={highlighted ? css.highlightGroup : undefined}>
             <circle cx={cx} cy={cy} r={radius} fill={`url(#${glowId})`} />
-            <circle cx={cx - radius * 0.3} cy={cy - radius * 0.34} r={radius * 0.24} fill="rgba(255, 255, 255, 0.62)" />
+            <circle
+              cx={cx - radius * 0.3}
+              cy={cy - radius * 0.34}
+              r={radius * 0.24}
+              fill="rgba(255, 255, 255, 0.62)"
+            />
             <text
-              className={clsxJoin(css.particleLabel, source.sign === 'negative' && css.particleLabelNegative)}
+              className={clsxJoin(
+                css.particleLabel,
+                source.sign === 'negative' && css.particleLabelNegative,
+              )}
               x={cx}
               y={cy + radius + 14}
               textAnchor="middle"
@@ -417,16 +499,18 @@ function ElectricPointChargeRenderer({ view, projection }: RendererProps) {
         )
       })}
 
-      {view.probe === undefined ? null : (() => {
-        const cx = projection.px(view.probe.at)
-        const cy = projection.py(view.probe.at)
-        const highlighted = projection.highlighted(view.probe.id)
-        return (
-          <g key={view.probe.id} className={highlighted ? css.highlightGroup : undefined}>
-            <circle cx={cx} cy={cy} r={3.2} className={css.probeDot} />
-          </g>
-        )
-      })()}
+      {view.probe === undefined
+        ? null
+        : (() => {
+          const cx = projection.px(view.probe.at)
+          const cy = projection.py(view.probe.at)
+          const highlighted = projection.highlighted(view.probe.id)
+          return (
+            <g key={view.probe.id} className={highlighted ? css.highlightGroup : undefined}>
+              <circle cx={cx} cy={cy} r={3.2} className={css.probeDot} />
+            </g>
+          )
+        })()}
     </>
   )
 }
@@ -514,28 +598,30 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
 
       {/* Bounded field lines — clipped to the region rectangle, hidden when
           the 电场 observable is off */}
-      {boundedField === undefined || view.visible.electricField !== true || fieldLines.length === 0 ? null : (
-        <g className={css.electricFieldLattice} clipPath={`url(#${clipId})`} aria-hidden="true">
-          {fieldLines.map((line, index) => (
-            <g key={index}>
-              <line
-                className={css.electricFieldLine}
-                x1={projection.px(line.from)}
-                y1={projection.py(line.from)}
-                x2={projection.px(line.to)}
-                y2={projection.py(line.to)}
-              />
-              <line
-                x1={projection.px(line.arrowFrom)}
-                y1={projection.py(line.arrowFrom)}
-                x2={projection.px(line.arrowTo)}
-                y2={projection.py(line.arrowTo)}
-                markerEnd={`url(#${markerId('field', projection.uid)})`}
-              />
-            </g>
-          ))}
-        </g>
-      )}
+      {boundedField === undefined ||
+      view.visible.electricField !== true ||
+      fieldLines.length === 0 ? null : (
+          <g className={css.electricFieldLattice} clipPath={`url(#${clipId})`} aria-hidden="true">
+            {fieldLines.map((line, index) => (
+              <g key={index}>
+                <line
+                  className={css.electricFieldLine}
+                  x1={projection.px(line.from)}
+                  y1={projection.py(line.from)}
+                  x2={projection.px(line.to)}
+                  y2={projection.py(line.to)}
+                />
+                <line
+                  x1={projection.px(line.arrowFrom)}
+                  y1={projection.py(line.arrowFrom)}
+                  x2={projection.px(line.arrowTo)}
+                  y2={projection.py(line.arrowTo)}
+                  markerEnd={`url(#${markerId('field', projection.uid)})`}
+                />
+              </g>
+            ))}
+          </g>
+        )}
 
       {/* Region outline with the same light electric tint the composite
           regions carry: "the field exists in here" should read as an area,
@@ -578,7 +664,12 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
                         css.plateSignLabel,
                         plate.sign === 'negative' && css.particleLabelNegative,
                       )}
-                      x={cx - halfLength + ((index + 0.5) * halfLength * 2) / Math.max(3, Math.floor((halfLength * 2) / 26))}
+                      x={
+                        cx -
+                        halfLength +
+                        ((index + 0.5) * halfLength * 2) /
+                          Math.max(3, Math.floor((halfLength * 2) / 26))
+                      }
                       y={cy + (plate.top ? 14 : -8)}
                       textAnchor="middle"
                     >
@@ -597,7 +688,9 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
         ? view.trajectories.map(trajectory => (
           <path
             key={`${trajectory.id}:${trajectory.kind}`}
-            className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
+            className={
+              trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
+            }
             d={projection.path(trajectory.points)}
           />
         ))
@@ -617,9 +710,17 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
         return (
           <g key={item.id}>
             <circle cx={cx} cy={cy} r={radius} fill={`url(#${glowId})`} />
-            <circle cx={cx - radius * 0.3} cy={cy - radius * 0.34} r={radius * 0.24} fill="rgba(255, 255, 255, 0.62)" />
+            <circle
+              cx={cx - radius * 0.3}
+              cy={cy - radius * 0.34}
+              r={radius * 0.24}
+              fill="rgba(255, 255, 255, 0.62)"
+            />
             <text
-              className={clsxJoin(css.particleLabel, item.sign === 'negative' && css.particleLabelNegative)}
+              className={clsxJoin(
+                css.particleLabel,
+                item.sign === 'negative' && css.particleLabelNegative,
+              )}
               x={cx - radius - 6}
               y={cy - radius - 5}
               textAnchor="end"
@@ -704,64 +805,72 @@ function CompositeRenderer({ view, projection }: RendererProps) {
 
   /* Precompute, per region, the lattice of E-arrows (clipped) and the B-glyph
      grid — both laid out inside that region's rectangle only. */
-  const regionPaint = useMemo(() => regions.map((region) => {
-    const eArrows: { from: ScenePoint; to: ScenePoint }[] = []
-    const eField = region.electricField
-    if (eField !== undefined) {
-      const spacing = eField.spacing
-      const columns = Math.max(1, Math.floor(region.width / spacing))
-      const rows = Math.max(1, Math.floor(region.height / spacing))
-      const arrowLength = spacing * 0.58
-      const left = region.at.x - region.width / 2
-      const bottom = region.at.y - region.height / 2
-      for (let column = 0; column < columns; column += 1) {
-        for (let row = 0; row < rows; row += 1) {
-          const center = {
-            x: left + spacing * (column + 0.5),
-            y: bottom + spacing * (row + 0.5),
+  const regionPaint = useMemo(
+    () =>
+      regions.map((region) => {
+        const eArrows: { from: ScenePoint; to: ScenePoint }[] = []
+        const eField = region.electricField
+        if (eField !== undefined) {
+          const spacing = eField.spacing
+          const columns = Math.max(1, Math.floor(region.width / spacing))
+          const rows = Math.max(1, Math.floor(region.height / spacing))
+          const arrowLength = spacing * 0.58
+          const left = region.at.x - region.width / 2
+          const bottom = region.at.y - region.height / 2
+          for (let column = 0; column < columns; column += 1) {
+            for (let row = 0; row < rows; row += 1) {
+              const center = {
+                x: left + spacing * (column + 0.5),
+                y: bottom + spacing * (row + 0.5),
+              }
+              eArrows.push({
+                from: {
+                  x: center.x - eField.direction.x * arrowLength * 0.5,
+                  y: center.y - eField.direction.y * arrowLength * 0.5,
+                },
+                to: {
+                  x: center.x + eField.direction.x * arrowLength * 0.5,
+                  y: center.y + eField.direction.y * arrowLength * 0.5,
+                },
+              })
+            }
           }
-          eArrows.push({
-            from: {
-              x: center.x - eField.direction.x * arrowLength * 0.5,
-              y: center.y - eField.direction.y * arrowLength * 0.5,
-            },
-            to: {
-              x: center.x + eField.direction.x * arrowLength * 0.5,
-              y: center.y + eField.direction.y * arrowLength * 0.5,
-            },
-          })
         }
-      }
-    }
-    const bGlyphs: { at: ScenePoint; glyph: string }[] = []
-    const bField = region.magneticField
-    if (bField !== undefined) {
-      const spacing = bField.spacing
-      const columns = Math.max(1, Math.floor(region.width / spacing))
-      const rows = Math.max(1, Math.floor(region.height / spacing))
-      const glyph = bField.direction === 'into-page' ? '×' : '·'
-      const left = region.at.x - region.width / 2
-      const bottom = region.at.y - region.height / 2
-      for (let column = 0; column < columns; column += 1) {
-        for (let row = 0; row < rows; row += 1) {
-          bGlyphs.push({
-            at: {
-              x: left + spacing * (column + 0.5),
-              y: bottom + spacing * (row + 0.5),
-            },
-            glyph,
-          })
+        const bGlyphs: { at: ScenePoint; glyph: string }[] = []
+        const bField = region.magneticField
+        if (bField !== undefined) {
+          const spacing = bField.spacing
+          const columns = Math.max(1, Math.floor(region.width / spacing))
+          const rows = Math.max(1, Math.floor(region.height / spacing))
+          const glyph = bField.direction === 'into-page' ? '×' : '·'
+          const left = region.at.x - region.width / 2
+          const bottom = region.at.y - region.height / 2
+          for (let column = 0; column < columns; column += 1) {
+            for (let row = 0; row < rows; row += 1) {
+              bGlyphs.push({
+                at: {
+                  x: left + spacing * (column + 0.5),
+                  y: bottom + spacing * (row + 0.5),
+                },
+                glyph,
+              })
+            }
+          }
         }
-      }
-    }
-    return { region, eArrows, bGlyphs }
-  }), [regions])
+        return { region, eArrows, bGlyphs }
+      }),
+    [regions],
+  )
 
-  const trajectoryPaths = useMemo(() => view.trajectories.map(trajectory => ({
-    id: trajectory.id,
-    kind: trajectory.kind,
-    path: projection.path(trajectory.points),
-  })), [projection, view.trajectories])
+  const trajectoryPaths = useMemo(
+    () =>
+      view.trajectories.map(trajectory => ({
+        id: trajectory.id,
+        kind: trajectory.kind,
+        path: projection.path(trajectory.points),
+      })),
+    [projection, view.trajectories],
+  )
 
   /* Region labels stagger upward when two tops land within one text row —
      the stacked spectrometer regions would otherwise overwrite each other. */
@@ -793,15 +902,17 @@ function CompositeRenderer({ view, projection }: RendererProps) {
 
       {/* Global magnetic field: ×/· glyph grid over the whole canvas, shown
           only while its observable toggle is on. */}
-      {view.visible.magneticField === true && globalField !== undefined && globalGlyphs.length > 0 ? (
-        <g className={css.fieldGlyph} textAnchor="middle" aria-hidden="true">
-          {globalGlyphs.map((at, index) => (
-            <text key={index} x={projection.px(at)} y={projection.py(at)}>
-              {globalField.direction === 'into-page' ? '×' : '·'}
-            </text>
-          ))}
-        </g>
-      ) : null}
+      {view.visible.magneticField === true &&
+      globalField !== undefined &&
+      globalGlyphs.length > 0 ? (
+          <g className={css.fieldGlyph} textAnchor="middle" aria-hidden="true">
+            {globalGlyphs.map((at, index) => (
+              <text key={index} x={projection.px(at)} y={projection.py(at)}>
+                {globalField.direction === 'into-page' ? '×' : '·'}
+              </text>
+            ))}
+          </g>
+        ) : null}
 
       {/* Global electric field: arrow lattice over the whole canvas, same
           gating. */}
@@ -828,13 +939,14 @@ function CompositeRenderer({ view, projection }: RendererProps) {
         const left = region.at.x - region.width / 2
         const top = region.at.y + region.height / 2
         const highlighted = projection.highlighted(region.id)
-        const tint = region.electricField !== undefined && region.magneticField !== undefined
-          ? css.regionTintCrossed
-          : region.magneticField !== undefined
-            ? css.regionTintMagnetic
-            : region.electricField !== undefined
-              ? css.regionTintElectric
-              : undefined
+        const tint =
+          region.electricField !== undefined && region.magneticField !== undefined
+            ? css.regionTintCrossed
+            : region.magneticField !== undefined
+              ? css.regionTintMagnetic
+              : region.electricField !== undefined
+                ? css.regionTintElectric
+                : undefined
         return (
           <g key={region.id} className={highlighted ? css.highlightGroup : undefined}>
             <clipPath id={clipId}>
@@ -853,7 +965,11 @@ function CompositeRenderer({ view, projection }: RendererProps) {
               height={region.height * projection.scale}
             />
             {eArrows.length > 0 ? (
-              <g className={css.electricFieldLattice} clipPath={`url(#${clipId})`} aria-hidden="true">
+              <g
+                className={css.electricFieldLattice}
+                clipPath={`url(#${clipId})`}
+                aria-hidden="true"
+              >
                 {eArrows.map((arrow, index) => (
                   <line
                     key={index}
@@ -867,7 +983,12 @@ function CompositeRenderer({ view, projection }: RendererProps) {
               </g>
             ) : null}
             {bGlyphs.length > 0 ? (
-              <g className={css.fieldGlyph} textAnchor="middle" clipPath={`url(#${clipId})`} aria-hidden="true">
+              <g
+                className={css.fieldGlyph}
+                textAnchor="middle"
+                clipPath={`url(#${clipId})`}
+                aria-hidden="true"
+              >
                 {bGlyphs.map((glyph, index) => (
                   <text key={index} x={projection.px(glyph.at)} y={projection.py(glyph.at)}>
                     {glyph.glyph}
@@ -892,7 +1013,9 @@ function CompositeRenderer({ view, projection }: RendererProps) {
         ? trajectoryPaths.map(trajectory => (
           <path
             key={`${trajectory.id}:${trajectory.kind}`}
-            className={trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted}
+            className={
+              trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
+            }
             d={trajectory.path}
           />
         ))
@@ -912,9 +1035,17 @@ function CompositeRenderer({ view, projection }: RendererProps) {
         return (
           <g key={item.id}>
             <circle cx={cx} cy={cy} r={radius} fill={`url(#${glowId})`} />
-            <circle cx={cx - radius * 0.3} cy={cy - radius * 0.34} r={radius * 0.24} fill="rgba(255, 255, 255, 0.62)" />
+            <circle
+              cx={cx - radius * 0.3}
+              cy={cy - radius * 0.34}
+              r={radius * 0.24}
+              fill="rgba(255, 255, 255, 0.62)"
+            />
             <text
-              className={clsxJoin(css.particleLabel, item.sign === 'negative' && css.particleLabelNegative)}
+              className={clsxJoin(
+                css.particleLabel,
+                item.sign === 'negative' && css.particleLabelNegative,
+              )}
               x={cx - radius - 6}
               y={cy - radius - 5}
               textAnchor="end"
@@ -945,11 +1076,26 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
         <ArrowMarkers uid={projection.uid} />
       </defs>
 
-      {view.incline === undefined ? null : <Incline incline={view.incline} projection={projection} />}
+      {view.incline === undefined ? null : (
+        <Incline incline={view.incline} projection={projection} />
+      )}
       {view.platform === undefined ? null : (
         <Platform platform={view.platform} projection={projection} />
       )}
       {view.ground === undefined ? null : <Ground ground={view.ground} projection={projection} />}
+
+      {/* Photographed rig apparatus draws under the parametric rigs: the
+          protractor disc sits behind the swinging string, the rail under the
+          sliding body, and the clamp ring around the coil's top joint. */}
+      {view.apparatus?.map(sprite => (
+        <Apparatus key={sprite.id} sprite={sprite} projection={projection} />
+      ))}
+      {view.spring === undefined ? null : (
+        <SpringCoil spring={view.spring} projection={projection} />
+      )}
+      {view.pendulum === undefined ? null : (
+        <PendulumRig pendulum={view.pendulum} projection={projection} />
+      )}
 
       {view.motionMarks === undefined || view.visible.trajectory !== true ? null : (
         <MotionMarks marks={view.motionMarks} projection={projection} />
@@ -1014,7 +1160,10 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
           y={projection.py(label.at)}
           anchor={label.anchor ?? 'middle'}
           symbol={label.text}
-          className={clsxJoin(css.annotation, label.role === undefined ? undefined : roleClass(label.role))}
+          className={clsxJoin(
+            css.annotation,
+            label.role === undefined ? undefined : roleClass(label.role),
+          )}
         />
       ))}
     </>

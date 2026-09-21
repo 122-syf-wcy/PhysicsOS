@@ -128,8 +128,9 @@ const visibilityOf = (scene: PhysicsScene): SceneVisualModel['visible'] => {
     velocity: visible('velocity'),
     acceleration: visible('acceleration'),
     trajectory: visible('trajectory'),
-    potential: visible('electric_potential'),
-    energy: visible('energy'),
+    /* Δφ/K readouts are gated upstream by the engine honouring the scene's
+       electric_potential/energy observable bits — no canvas consumer reads
+       a `visible.potential`/`visible.energy` key, so none is published. */
     equipotentials: equipotentialsVisible,
   }
 }

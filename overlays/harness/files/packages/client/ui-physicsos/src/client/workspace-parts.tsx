@@ -7,12 +7,13 @@
  * whatever the runtime reports and reports interactions back through callbacks.
  */
 
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import { IconCheckOutline14, IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { SCENE_TREE_ICONS } from './icons/physics-icons.tsx'
 import { MathText } from './physics/MathText.tsx'
+import type { ExperimentMeta } from './physics/experiment-summaries.ts'
 import { formatTimeAt, timeAriaText } from './physics/time-format.ts'
 import { presentDerived, presentVerification, typesetNumber } from './physics/verification-presentation.ts'
 import type {
@@ -34,7 +35,6 @@ export function SceneTreePanel({
   nodes,
   visible,
   selected,
-  depth = 0,
   onSelect,
   onToggle,
   onHover,
@@ -42,9 +42,49 @@ export function SceneTreePanel({
   readonly nodes: readonly SceneTreeNode[]
   readonly visible: Readonly<Partial<Record<ObservableKey, boolean>>>
   readonly selected: string
+  readonly onSelect: (id: string) => void
+  readonly onToggle: (observable: ObservableKey, next: boolean) => void
+  readonly onHover: (id: string | null) => void
+}) {
+  /* Group rows really fold: the chevron is an affordance, not decoration. The
+     collapsed set lives at the root so recursion shares one fold state. */
+  const [collapsedIds, setCollapsedIds] = useState<readonly string[]>([])
+  const onToggleGroup = useCallback((id: string) => {
+    setCollapsedIds(list => (list.includes(id) ? list.filter(item => item !== id) : [...list, id]))
+  }, [])
+  return (
+    <SceneTreeNodes
+      nodes={nodes}
+      visible={visible}
+      selected={selected}
+      collapsedIds={collapsedIds}
+      onSelect={onSelect}
+      onToggle={onToggle}
+      onToggleGroup={onToggleGroup}
+      onHover={onHover}
+    />
+  )
+}
+
+function SceneTreeNodes({
+  nodes,
+  visible,
+  selected,
+  collapsedIds,
+  depth = 0,
+  onSelect,
+  onToggle,
+  onToggleGroup,
+  onHover,
+}: {
+  readonly nodes: readonly SceneTreeNode[]
+  readonly visible: Readonly<Partial<Record<ObservableKey, boolean>>>
+  readonly selected: string
+  readonly collapsedIds: readonly string[]
   readonly depth?: number
   readonly onSelect: (id: string) => void
   readonly onToggle: (observable: ObservableKey, next: boolean) => void
+  readonly onToggleGroup: (id: string) => void
   readonly onHover: (id: string | null) => void
 }) {
   return (
@@ -53,6 +93,7 @@ export function SceneTreePanel({
         const Icon = SCENE_TREE_ICONS[node.icon]
         const observable = node.observable
         const on = observable === undefined ? false : visible[observable] === true
+        const collapsed = collapsedIds.includes(node.id)
         return (
           <li key={node.id}>
             <div className={css.treeRowWrap}>
@@ -61,12 +102,15 @@ export function SceneTreePanel({
                 className={clsx(
                   css.treeRow,
                   node.kind === 'group' && css.treeGroup,
+                  collapsed && css.treeCollapsed,
                   node.id === selected && css.treeSelected,
                 )}
                 aria-current={node.id === selected ? 'true' : undefined}
                 aria-pressed={observable === undefined ? undefined : on}
+                aria-expanded={node.kind === 'group' ? !collapsed : undefined}
                 onClick={() => {
                   onSelect(node.id)
+                  if (node.kind === 'group') onToggleGroup(node.id)
                   /* An observable row is a real state change, not a CSS hide: the
                      toggle goes back to the runtime and through the scene. */
                   if (observable !== undefined) onToggle(observable, !on)
@@ -93,14 +137,16 @@ export function SceneTreePanel({
                 )}
               </button>
             </div>
-            {node.children === undefined ? null : (
-              <SceneTreePanel
+            {node.children === undefined || collapsed ? null : (
+              <SceneTreeNodes
                 nodes={node.children}
                 visible={visible}
                 selected={selected}
+                collapsedIds={collapsedIds}
                 depth={depth + 1}
                 onSelect={onSelect}
                 onToggle={onToggle}
+                onToggleGroup={onToggleGroup}
                 onHover={onHover}
               />
             )}
@@ -317,17 +363,25 @@ export function InspectorTabs({
       </div>
       {tab === 'properties' ? (
         <div role="tabpanel">
-          {sections.map(section => (
-            <div key={section.id}>
-              <p className={css.sectionLabel}>{section.title}</p>
-              <SectionFields
-                section={section}
-                onEdit={onEdit}
-                onChoice={onChoice}
-                onHighlight={onHighlight}
-              />
-            </div>
-          ))}
+          {sections.map((section) => {
+            const fields = (section.parameters?.length ?? 0) + (section.choices?.length ?? 0)
+            /* Skip sections with nothing to show at all; a readings-only
+               section (e.g. 派生量) still earns its title — its rows tick live
+               while the scene runs, which is the feedback the bench needs. */
+            if (fields === 0 && (section.derived?.length ?? 0) === 0) return null
+            return (
+              <div key={section.id}>
+                <p className={css.sectionLabel}>{section.title}</p>
+                <SectionFields
+                  section={section}
+                  onEdit={onEdit}
+                  onChoice={onChoice}
+                  onHighlight={onHighlight}
+                />
+                <SectionDerived section={section} onHighlight={onHighlight} />
+              </div>
+            )
+          })}
         </div>
       ) : null}
       {tab === 'readings' ? (
@@ -406,7 +460,7 @@ export function VerificationList({
           <span className={css.verificationStatus}>{structureStatus === 'passed' ? '通过' : '未通过'}</span>
         </li>
       )}
-      {structure.failed.map((check) => (
+      {structure.failed.map(check => (
         <li key={check.id} className={clsx(css.verificationItem, css.verificationStructureDetail)} data-status={check.status}>
           <span className={clsx(css.verificationMark, css[`verification_${check.status}`])}>
             <IconCheckOutline14 size={11} />
@@ -539,7 +593,7 @@ const formatValue = (value: number): string => {
 
 /* -------------------------------------------------------------- data panel -- */
 
-export type DataTab = 'data' | 'charts' | 'derivation' | 'events'
+export type DataTab = 'data' | 'charts' | 'derivation' | 'events' | 'summary'
 
 /** Bottom panel: sampled table, charts, derivation steps, timeline events. */
 export function DataPanelBody({
@@ -550,6 +604,8 @@ export function DataPanelBody({
   events,
   clock,
   emptyLabel,
+  experimentMeta,
+  summaryLabels,
   onHoverTime,
   onSeek,
 }: {
@@ -560,9 +616,58 @@ export function DataPanelBody({
   readonly events: readonly TimelineEvent[]
   readonly clock: { readonly time: number; readonly total: number }
   readonly emptyLabel: string
+  readonly experimentMeta?: ExperimentMeta | undefined
+  readonly summaryLabels?: {
+    readonly coreModel: string
+    readonly parameters: string
+    readonly feedback: string
+    readonly errors: string
+    readonly textbook: string
+  } | undefined
   readonly onHoverTime?: (time: number | null) => void
   readonly onSeek?: (time: number) => void
 }) {
+  if (tab === 'summary') {
+    if (experimentMeta === undefined || summaryLabels === undefined) {
+      return <p className={css.dataStub}>{emptyLabel}</p>
+    }
+    const { summary, textbook } = experimentMeta
+    return (
+      <div className={css.summaryGrid}>
+        <article className={css.summaryCard}>
+          <h4 className={css.summaryHeading}>{summaryLabels.coreModel}</h4>
+          <p className={css.summaryCore}>{summary.coreModel}</p>
+        </article>
+        <article className={css.summaryCard}>
+          <h4 className={css.summaryHeading}>{summaryLabels.parameters}</h4>
+          <ul className={css.summaryList}>
+            {summary.parameters.map(item => <li key={item}>{item}</li>)}
+          </ul>
+        </article>
+        <article className={css.summaryCard}>
+          <h4 className={css.summaryHeading}>{summaryLabels.feedback}</h4>
+          <ul className={css.summaryList}>
+            {summary.feedback.map(item => <li key={item}>{item}</li>)}
+          </ul>
+        </article>
+        <article className={css.summaryCard}>
+          <h4 className={css.summaryHeading}>{summaryLabels.errors}</h4>
+          <ul className={css.summaryList}>
+            {summary.errors.map(item => <li key={item}>{item}</li>)}
+          </ul>
+        </article>
+        {textbook === undefined || textbook.length === 0 ? null : (
+          <p className={css.summaryTextbook}>
+            {summaryLabels.textbook}：
+            {textbook
+              .map(entry => `${entry.edition} · ${entry.volume} · ${entry.chapter}`)
+              .join('；')}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   if (tab === 'charts') {
     if (charts.length === 0) return <p className={css.dataStub}>{emptyLabel}</p>
     return (
@@ -586,16 +691,26 @@ export function DataPanelBody({
 
   if (tab === 'data') {
     if (table.rows.length === 0) return <p className={css.dataStub}>{emptyLabel}</p>
+    /* Rows are uniform time samples, so the row nearest the playhead is the
+       one the canvas is showing right now — highlight it like the chart cursor
+       does. */
+    const activeRow =
+      clock.total > 0 && table.rows.length > 1
+        ? Math.round((clock.time / clock.total) * (table.rows.length - 1))
+        : -1
     return (
       <table className={css.dataTable}>
         <thead>
           <tr>{table.columns.map(column => <th key={column}>{column}</th>)}</tr>
         </thead>
         <tbody>
-          {table.rows.map(row => (
-            <tr key={row.step}>
-              {row.values.map((value, index) => (
-                <td key={`${row.step}-${table.columns[index] ?? index}`}>{value}</td>
+          {table.rows.map((row, index) => (
+            <tr
+              key={row.step}
+              className={index === activeRow ? css.dataRowCurrent : undefined}
+            >
+              {row.values.map((value, cellIndex) => (
+                <td key={`${row.step}-${table.columns[cellIndex] ?? cellIndex}`}>{value}</td>
               ))}
             </tr>
           ))}
@@ -686,5 +801,4 @@ export function TimelineMarkers({
     </div>
   )
 }
-
 

@@ -4,12 +4,16 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { PromptContentPart, RpcResult, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
+import { createAdminApi, createAuthApi } from './auth-api.ts'
+import { createAuthController } from './auth-store.ts'
+import { AuthGate } from './AuthGate.tsx'
 import { HomeActions } from './HomeActions.tsx'
 import { HomeBrand } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
@@ -19,14 +23,21 @@ import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
+import { SceneChatCard } from './SceneChatCard.tsx'
+import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-chat-node.ts'
 import { SidebarBrand } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
 import { SidebarNav } from './SidebarNav.tsx'
 import { SidebarNew } from './SidebarNew.tsx'
-import { createPhysicsSurfaceController } from './surface-store.ts'
+import { createPaperApi } from './paper-api.ts'
+import { createPhysicsSurfaceController, type PhysicsSceneRef } from './surface-store.ts'
+import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { en, zh, type PhysicsosKey } from './locales.ts'
 
 export type { PhysicsosKey } from './locales.ts'
+export type { AuthApi, AuthUser, SchoolRow } from './auth-api.ts'
+export type { AuthState } from './auth-store.ts'
+export type { AuthGateInjected, AuthGateProps } from './AuthGate.tsx'
 export type { HomeActionsInjected, HomeActionsProps } from './HomeActions.tsx'
 export type { HomeBrandProps } from './HomeBrand.tsx'
 export type { PhysicsProfileLabelInjected, PhysicsProfileLabelProps } from './PhysicsProfileLabel.tsx'
@@ -56,7 +67,7 @@ const NS = 'physicsos'
 const PRODUCT_TITLE = 'PhysicsOS'
 
 /** Services required by the PhysicsOS overlay. */
-export const inject = ['slots', 'locale', 'workspaces', 'layout']
+export const inject = ['slots', 'locale', 'workspaces', 'layout', 'sessions', 'conversationEvents']
 
 /**
  * Register PhysicsOS brand, sidebar navigation, home workspace, and the
@@ -76,16 +87,75 @@ export function apply(ctx: ClientContext): void {
   const startSession = (workspaceId?: WorkspaceId) => {
     ctx.workspaces.startSession(workspaceId)
   }
-  /* localStorage-backed so 最近空间 survives a reload with restorable scenes. */
-  const surface = createPhysicsSurfaceController(globalThis.localStorage)
-  /* The student's attempt history: written by Question Space self-checks, read
-     by the 学习记录 surface. Persisted so the record survives a reload. */
-  const learningRecord = createLearningRecordController(globalThis.localStorage)
+
+  /* 账户体系 Auth V1: the cookie session resolves through /me; every per-user
+     store below binds the account's localStorage namespace, so progress is
+     owned by the account, not the browser. boot() runs alongside registration —
+     the gate covers the shell until the first answer lands. */
+  const authApi = createAuthApi()
+  const auth = createAuthController(authApi, globalThis.localStorage)
+  void auth.boot()
+
+  /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
+     under an account it lands in that user's namespace. */
+  const surface = createPhysicsSurfaceController(auth.userStorage)
+  const paperApi = createPaperApi()
+  /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
+     reads the role from the auth store; the host enforces it on every call. */
+  const adminApi = createAdminApi()
+
+  /* The student's attempt history: written by self-checks (the Lab's 自测 tab
+     and golden-question cards), read by the 学习记录 surface. Persisted so the
+     record survives a reload. Created before the scene card registers because
+     the card's recordAttempt closure writes to it. */
+  const learningRecord = createLearningRecordController(auth.userStorage)
+
+  /* The inline scene card: every physics/scene snapshot the agent publishes
+     materializes one chat node where the tool call left it (docs/04 §92). The
+     card replays the published scene locally — the host's EventStore stays
+     authoritative. */
+  ctx.effect(
+    () => ctx.conversationEvents.register(physicsSceneCardDefinition),
+    'ui-physicsos: scene card definition',
+  )
+  ctx.effect(
+    () => ctx.conversationEvents.register(physicsSceneTurnDefinition),
+    'ui-physicsos: scene turn definition',
+  )
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
+    name: 'conversation.chat.node',
+    key: 'physics-scene-card',
+    locale: NS,
+    inject: () => ({
+      openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
+      recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
+        learningRecord.record(attempt)
+      },
+    }),
+  }, SceneChatCard))
+
+  /* The auth gate: one root-scoped overlay entry that covers the shell while
+     the session is unresolved, and holds the login/register/forgot flow for
+     guests. Authed renders nothing — the shell underneath is the real app. */
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'physicsos-auth-gate',
+    locale: NS,
+    inject: () => ({
+      hooks: { auth: auth.store },
+      login: auth.login,
+      register: auth.register,
+      forgotPassword: authApi.forgotPassword,
+    }),
+  }, AuthGate))
 
   ctx.slots.inject('sidebar.brand', () => ctx.slots.register({
     name: 'sidebar.brand',
     locale: NS,
-    inject: () => ({ openHome: () => { surface.open('home') } }),
+    inject: () => ({
+      hooks: { auth: auth.store },
+      openHome: () => { surface.open('home') },
+    }),
   }, SidebarBrand))
 
   ctx.slots.inject('sidebar.new', () => ctx.slots.register({
@@ -94,7 +164,7 @@ export function apply(ctx: ClientContext): void {
     inject: () => ({
       startSession: () => { startSession() },
       openSurface: (
-        id: 'lab' | 'questions' | 'home',
+        id: 'lab' | 'home',
         sceneRef?: { sceneId: string; scene: PhysicsScene },
       ) => {
         /* “新建物理实验” asks for a NEW experiment, so it lands on the picker
@@ -112,11 +182,14 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { physicsSurface: surface.store },
-      openSurface: (id: Parameters<typeof surface.open>[0]) => {
+      openSurface: (id: Parameters<typeof surface.open>[0], drawerOpen: boolean) => {
         surface.open(id)
-        // Below the layout shell's 1024px auto-collapse breakpoint, a manual
-        // expansion behaves as a navigation drawer and should close after use.
-        if (window.innerWidth < 1024) ctx.layout.toggleSidebar()
+        /* Below the layout shell's 1024px auto-collapse breakpoint the sidebar
+           is a drawer. Navigating from the open drawer closes it; a tap on the
+           resting rail must navigate without flipping the rail open, which is
+           why the caller reports the sidebar's state instead of this reading
+           the viewport alone. */
+        if (drawerOpen && window.innerWidth < 1024) ctx.layout.toggleSidebar()
       },
     }),
   }, SidebarNav))
@@ -132,6 +205,16 @@ export function apply(ctx: ClientContext): void {
         id: Parameters<typeof surface.open>[0],
         sceneRef?: Parameters<typeof surface.open>[1],
       ) => { surface.open(id, sceneRef) },
+      removeRecent: (sceneId: string) => { surface.removeRecent(sceneId) },
+      /* 历史对话 rows reopen the Harness session itself — the same verb the
+         workspace browser uses; conversation state lives server-side. */
+      openSession: (sessionId: SessionId) => { ctx.sessions.open(sessionId) },
+      /* Archive is Harness's session-removal verb (session logs are durable);
+         the row hides when archivedSessionIds echoes back. */
+      archiveSession: (sessionId: SessionId) => {
+        ctx.workspaces.archiveSession(sessionId)
+          .catch((reason: unknown) => { console.warn('archive session failed:', reason) })
+      },
     }),
   }, RecentSpaces))
 
@@ -140,9 +223,14 @@ export function apply(ctx: ClientContext): void {
     id: 'physicsos-footer',
     locale: NS,
     inject: () => ({
+      hooks: { auth: auth.store },
       startSession: () => { startSession() },
       /* 学习记录 is a real surface now: attempts, mistakes, mastery. */
       openRecord: () => { surface.open('record') },
+      openHome: () => { surface.open('home') },
+      /* 管理后台 — the menu only shows this for admin roles. */
+      openAdmin: () => { surface.open('admin') },
+      logout: auth.logout,
     }),
   }, SidebarFooter))
 
@@ -161,7 +249,7 @@ export function apply(ctx: ClientContext): void {
          than on the magnetic demo — the same chooser the sidebar uses. A recent
          entry hands its stored scene over and restores it directly. */
       openSurface: (
-        id: 'home' | 'lab' | 'questions',
+        id: 'home' | 'lab' | 'record',
         sceneRef?: Parameters<typeof surface.open>[1],
       ) => {
         if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
@@ -170,37 +258,7 @@ export function apply(ctx: ClientContext): void {
     }),
   }, HomeActions))
 
-  const controller = createPhysicsProfileController(undefined, undefined, globalThis.localStorage)
-
-  ctx.slots.inject('conversation.surface', () => ctx.slots.register({
-    name: 'conversation.surface',
-    locale: NS,
-    inject: () => ({
-      hooks: {
-        physicsSurface: surface.store,
-        learningRecord: learningRecord.store,
-        /* 继续上次实验 on the library home restores the newest persisted scene. */
-        recentExperiments: surface.recent,
-      },
-      openSurface: (
-        id: 'home' | 'lab' | 'questions' | 'record',
-        sceneRef?: Parameters<typeof surface.open>[1],
-      ) => {
-        /* A handover with a scene always lands in the Lab, whatever surface the
-           caller was on when it created the scene. */
-        if (sceneRef === undefined) surface.open(id)
-        else surface.open('lab', sceneRef)
-      },
-      /* Toolbar 切换实验: chooser over the running scene, resumable. */
-      openExperimentPicker: () => { surface.openExperimentPicker() },
-      /* Question Space 自测 → 学习记录; 学习记录 → 重新练习 → Question Space. */
-      recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
-        learningRecord.record(attempt)
-      },
-      openQuestion: (questionId: string) => { surface.openQuestion(questionId) },
-      consumeQuestion: () => { surface.consumeQuestion() },
-    }),
-  }, PhysicsSurface))
+  const controller = createPhysicsProfileController(undefined, undefined, auth.userStorage)
 
   ctx.slots.inject('conversation.hero.agentPreset', () => ctx.slots.register({
     name: 'conversation.hero.agentPreset',
@@ -212,7 +270,7 @@ export function apply(ctx: ClientContext): void {
     }),
   }, PhysicsProfileSeat))
 
-  ctx.inject(['connection', 'sessions'], (scope: ClientContext) => {
+  ctx.inject(['connection', 'sessions', 'workspaces'], (scope: ClientContext) => {
     const connection = scope.get('connection') as {
       api: {
         agentPresets: {
@@ -263,6 +321,100 @@ export function apply(ctx: ClientContext): void {
       const stop = scope.sessions.list.subscribe(mirrorAgentScene)
       return () => { stop() }
     }, 'ui-physicsos: mirror agent scenes')
+
+    /* Practice hand-off: a golden question's stem reaches the tutor agent as one
+       queued prompt on the student's current session — the tutor, never the UI,
+       owns interpretation; the solved scene card streams back into the chat. */
+    const submitToTutor = async (
+      text: string,
+    ): Promise<{ ok: true } | { ok: false; error: string }> => {
+      let sessionId = scope.sessions.list.getSnapshot().current
+      if (sessionId === undefined) {
+        /* startSession is asynchronous: the workspace connect resolves, then
+           sessions.open publishes the new current id. Wait briefly for it. */
+        scope.workspaces.startSession()
+        sessionId = await new Promise<SessionId | undefined>((resolve) => {
+          const timer = setTimeout(() => { stop(); resolve(undefined) }, 8000)
+          const stop = scope.sessions.list.subscribe(() => {
+            const current = scope.sessions.list.getSnapshot().current
+            if (current !== undefined) {
+              clearTimeout(timer)
+              stop()
+              resolve(current)
+            }
+          })
+        })
+        if (sessionId === undefined) {
+          return { ok: false, error: '未能创建学习会话——请先在对话页开始一次学习，再上传题目。' }
+        }
+      }
+      const sessionCtx = scope.sessions.scope(sessionId)
+      const session = sessionCtx === undefined ? undefined : scope.sessions.sessionOf(sessionCtx)
+      if (session === undefined) {
+        return { ok: false, error: '学习会话尚未就绪，请稍后重试。' }
+      }
+      const parts: PromptContentPart[] = [{ type: 'text', text }]
+      const result: RpcResult<{ accepted: true }> = await session.prompt(parts, 'queue')
+      return result.ok ? { ok: true } : { ok: false, error: result.error.message }
+    }
+
+    /* 重新练习 / 题库练习 → the golden stem goes to the tutor; on success the
+       surface returns to the conversation so the student watches the solve
+       card stream in where the answer lives. */
+    const practiceQuestion = async (
+      questionId: string,
+    ): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const golden = GOLDEN_QUESTIONS.find(question => question.id === questionId)
+      if (golden === undefined) {
+        return { ok: false, error: `题库中找不到这道题（${questionId}）。` }
+      }
+      const result = await submitToTutor(
+        `这是学生要练习的题目：\n\n${golden.text}\n\n请调用 physics_solve_question 求解（text 传上方题干原文，questionId 传 "${golden.id}"），把场景、推导步骤与验证结果展示给学生。`,
+      )
+      if (result.ok) surface.open('home')
+      return result
+    }
+
+    scope.slots.inject('conversation.surface', () => scope.slots.register({
+      name: 'conversation.surface',
+      locale: NS,
+      inject: () => ({
+        hooks: {
+          physicsSurface: surface.store,
+          learningRecord: learningRecord.store,
+          /* Persisted recent scenes — RecentSpaces, HomeActions and the Lab
+            restore the newest scene from here. */
+          recentExperiments: surface.recent,
+          /* 管理后台 reads the session role from here. */
+          auth: auth.store,
+        },
+        /* 出卷专区 talks to the host's `/physicsos/paper` REST surface; the
+           client is one injected callback bag, built once in apply. */
+        paperApi,
+        adminApi,
+        openSurface: (
+          id: Parameters<typeof surface.open>[0],
+          sceneRef?: Parameters<typeof surface.open>[1],
+        ) => {
+          /* A handover with a scene always lands in the Lab, whatever surface the
+            caller was on when it created the scene. */
+          if (sceneRef === undefined) surface.open(id)
+          else surface.open('lab', sceneRef)
+        },
+        /* Toolbar 切换实验: chooser over the running scene, resumable. */
+        openExperimentPicker: () => { surface.openExperimentPicker() },
+        /* 实验中心 → 自由搭建: open the Lab assembling a circuit, not reading one. */
+        openBuilder: (sceneRef: Parameters<typeof surface.openBuilder>[0]) => {
+          surface.openBuilder(sceneRef)
+        },
+        /* Lab 自测 / golden-card self-checks → 学习记录;
+           学习记录 → 重新练习 → tutor prompt in the conversation. */
+        recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
+          learningRecord.record(attempt)
+        },
+        practiceQuestion,
+      }),
+    }, PhysicsSurface))
 
     scope.slots.inject('conversation.session.header.actions', () => scope.slots.register({
       name: 'conversation.session.header.actions',

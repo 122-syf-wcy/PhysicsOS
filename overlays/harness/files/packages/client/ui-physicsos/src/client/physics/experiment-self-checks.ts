@@ -61,6 +61,14 @@ export const circuitTopicOf = (context: PhysicsAgentContext): string | undefined
 export const mechanicsTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'mechanics') return undefined
   if (context.drawnIds.includes('hanger-left')) return 'mechanics-lever'
+  /* Connector rigs resolve on the verification the engine actually ran — a
+     check id is a fact about the model, so a rebuilt or question-forked rig
+     still gets the probes that match what the canvas shows. */
+  const checkIds = new Set(context.verification.map(check => check.id))
+  if (checkIds.has('rope_length')) return 'mechanics-pendulum'
+  if (checkIds.has('restoring_force')) return 'mechanics-spring-oscillator'
+  if (checkIds.has('hooke_equilibrium')) return 'mechanics-spring-statics'
+  if (checkIds.has('static_friction_balance')) return 'mechanics-friction'
   return /平均速度|average speed/i.test(context.sceneTitle)
     ? 'mechanics-average-speed'
     : undefined
@@ -215,6 +223,10 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'circuit-emf': 'emf-measurement',
   'mechanics-average-speed': 'average-speed',
   'mechanics-lever': 'lever-balance',
+  'mechanics-spring-statics': 'hooke-law',
+  'mechanics-spring-oscillator': 'spring-oscillator',
+  'mechanics-pendulum': 'simple-pendulum',
+  'mechanics-friction': 'friction-static',
   'optics-plane-mirror': 'plane-mirror',
   'optics-convex-lens': 'convex-lens',
   'optics-curved-mirror': 'concave-mirror',

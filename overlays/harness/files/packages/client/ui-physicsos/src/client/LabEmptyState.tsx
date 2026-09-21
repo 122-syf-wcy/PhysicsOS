@@ -29,6 +29,8 @@ export interface LabEmptyStateProps {
   readonly useLearningRecord: ExperimentPickerProps['useLearningRecord']
   /** Present when a scene is still active behind the chooser. */
   readonly resume?: ExperimentPickerProps['resume']
+  /** Open the Lab assembling a circuit from scratch. */
+  readonly onFreeBuild?: () => void
 }
 
 /**
@@ -36,7 +38,12 @@ export interface LabEmptyStateProps {
  * sidebar "新建", the Home quick action and the Lab empty state are one chooser.
  */
 export function LabEmptyState({
-  t, openSurface, useRecentExperiments, useLearningRecord, resume,
+  t,
+  openSurface,
+  useRecentExperiments,
+  useLearningRecord,
+  resume,
+  onFreeBuild,
 }: LabEmptyStateProps) {
   return (
     <ExperimentPicker
@@ -45,6 +52,7 @@ export function LabEmptyState({
       useRecentExperiments={useRecentExperiments}
       useLearningRecord={useLearningRecord}
       {...(resume === undefined ? {} : { resume })}
+      {...(onFreeBuild === undefined ? {} : { onFreeBuild })}
     />
   )
 }

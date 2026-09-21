@@ -71,6 +71,23 @@ export const IconQuestionSheet = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Conversation: a speech bubble with two text lines. */
+export const IconChatBubble = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v7a2.5 2.5 0 0 1-2.5 2.5H9l-4.2 3.4A1 1 0 0 1 3.2 17.6V5.5" />
+    <path d="M8 8.5h8M8 11.5h5" />
+  </Glyph>
+)
+
+/** Archive: a lidded storage box. */
+export const IconArchive = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 4h16v3.5H4z" />
+    <path d="M5.5 7.5V18A1.5 1.5 0 0 0 7 19.5h10a1.5 1.5 0 0 0 1.5-1.5V7.5" />
+    <path d="M10 11h4" />
+  </Glyph>
+)
+
 /* -------------------------------------------------------------- kinematics -- */
 
 /** Kinematics: stroboscopic samples with widening spacing. */
@@ -194,6 +211,26 @@ export const IconFriction = (props: PhysicsIconProps) => (
     <rect x="6" y="6.5" width="12" height="6.5" rx="1.1" />
     <path d="M3 16.8h18" />
     <path d="M4.5 20.4l2-3.2M9 20.4l2-3.2M13.5 20.4l2-3.2M18 20.4l2-3.2" strokeWidth="1.2" />
+  </Glyph>
+)
+
+/** Coil spring: a wall plate and a stretched zigzag. */
+export const IconSpring = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M3 5v14" />
+    <path d="M4.8 6.5l-1.8 3M4.8 12l-1.8 3M4.8 17.5l-1.8 3" strokeWidth="1.2" />
+    <path d="M3 12h3l2-3.4 2 6.8 2-6.8 2 6.8 2-6.8L18 12h3" />
+  </Glyph>
+)
+
+/** Simple pendulum: ceiling mount, string, and a bob swung off vertical. */
+export const IconPendulum = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M6 4.5h12" />
+    <path d="M8.5 4.5L7 2.4M12 4.5l-1.5-2.1M15.5 4.5L14 2.4" strokeWidth="1.2" />
+    <path d="M12 4.5 8.6 16" />
+    <path d="M12 4.5V20" strokeDasharray="2.2 2" strokeOpacity="0.5" />
+    <circle cx="8.2" cy="18.2" r="2.5" />
   </Glyph>
 )
 
@@ -573,6 +610,14 @@ export const IconGround = (props: PhysicsIconProps) => (
   <Glyph {...props}>
     <path d="M2.5 10h19" />
     <path d="M4 14.6l2.4-3.2M9 14.6l2.4-3.2M14 14.6l2.4-3.2M19 14.6l2.4-3.2" strokeWidth="1.2" />
+  </Glyph>
+)
+
+/** Resource library: an open book resting on a shelf line. */
+export const IconLibrary = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M12 6.4C10.4 5 8.1 4.4 4.6 4.4c-.4 0-.7.3-.7.7v12.6c0 .4.3.7.7.7 3.5 0 5.8.6 7.4 2 1.6-1.4 3.9-2 7.4-2 .4 0 .7-.3.7-.7V5.1c0-.4-.3-.7-.7-.7-3.5 0-5.8.6-7.4 2z" />
+    <path d="M12 6.4v13.4" />
   </Glyph>
 )
 

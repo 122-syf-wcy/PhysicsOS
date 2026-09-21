@@ -56,12 +56,24 @@ export function readStoredProfile(storage?: Pick<Storage, 'getItem'>): PhysicsPr
 }
 
 /**
- * Persist the student profile without touching Harness settings.
+ * Persist the student profile without touching Harness settings. A throwing
+ * storage (quota, privacy mode) must not break the UI — persistence is
+ * best-effort, so the failure is returned for the caller to surface rather
+ * than raised.
  * @param id - student profile to remember.
  * @param storage - web storage; omitted when unavailable.
+ * @returns the failure message, or `null` on success/absent storage.
  */
-export function persistProfile(id: PhysicsProfileId, storage?: Pick<Storage, 'setItem'>): void {
-  storage?.setItem(PHYSICS_PROFILE_STORAGE_KEY, id)
+export function persistProfile(
+  id: PhysicsProfileId,
+  storage?: Pick<Storage, 'setItem'>,
+): string | null {
+  try {
+    storage?.setItem(PHYSICS_PROFILE_STORAGE_KEY, id)
+    return null
+  } catch (error) {
+    return messageOf(error)
+  }
 }
 
 function messageOf(error: unknown): string {
@@ -121,9 +133,11 @@ export function createPhysicsProfileController(
       void apply()
     },
     select: async (id) => {
-      persistProfile(id, storage)
+      const persisted = persistProfile(id, storage)
       pending = id
-      store.set({ ...store.getSnapshot(), current: id, error: null })
+      /* The chip still moves on a write failure — the choice is live for the
+         session; `error` records only that persistence did not stick. */
+      store.set({ ...store.getSnapshot(), current: id, error: persisted })
       await apply()
     },
   }

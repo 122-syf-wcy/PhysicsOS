@@ -41,6 +41,8 @@ const PHYSICS_TOKENS = `
   --physics-vector-gravity: #475f8a;
   --physics-vector-normal: #1d4ed8;
   --physics-vector-friction: #b4553f;
+  --physics-vector-spring: #b06f2e;
+  --physics-vector-tension: #7c6bd9;
   --physics-vector-net-force: #1e40af;
 
   /* ---------- geometry ---------- */
@@ -53,6 +55,9 @@ const PHYSICS_TOKENS = `
 
   /* ---------- surfaces ---------- */
   --physics-canvas-bg: #fbfdff;
+  /* Canvas ink stays paired with the fixed light canvas, including dark hosts. */
+  --physics-canvas-text: #24364b;
+  --physics-canvas-text-muted: #52677e;
   --physics-grid-minor: #e6eef9;
   --physics-grid-major: #d3e0f2;
   --physics-axis: #94a7c4;
@@ -199,12 +204,77 @@ const PHYSICS_TOKENS = `
 const PHYSICSOS_CHROME_CSS = `${PHYSICS_TOKENS}
 :root {
   --physicsos-focus: var(--dsw-static-blue-500, #3b82f6);
-  --physics-workspace-bg: #f3f6fa;
+
+  /* ---------- surfaces ----------
+     The glass material is shared by every floating panel (cards, palette,
+     inspector, composer). The desk itself is bound on body below, because its
+     source token lives there. The canvas tokens above stay fixed-light on
+     purpose: the physics inks are tuned against a white sheet, so a dark host
+     keeps the sheet and darkens only the desk and the panels around it. */
   --physics-glass-fill: rgba(255, 255, 255, 0.68);
   --physics-glass-fill-strong: rgba(255, 255, 255, 0.82);
   --physics-glass-border: rgba(255, 255, 255, 0.84);
   --physics-glass-border-soft: rgba(148, 173, 199, 0.34);
   --physics-glass-shadow: 0 16px 36px rgba(65, 93, 122, 0.1);
+  --physics-glass-shadow-raised: 0 18px 42px rgba(65, 93, 122, 0.14);
+  --physics-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --physics-glass-plate: #f7f9fc;
+
+  /* Interaction tint: a pale wash of the meaning colour over the host's base
+     surface. Written as a mix rather than a fixed pale hex so a dark host gets
+     a deep tint instead of a near-white block, and the ink flips with it. */
+  --physics-tint-accent: color-mix(in srgb, var(--dsw-static-blue-500) 12%, var(--dsw-alias-bg-base, #ffffff));
+  --physics-tint-accent-strong: color-mix(in srgb, var(--dsw-static-blue-500) 22%, var(--dsw-alias-bg-base, #ffffff));
+  --physics-tint-accent-ink: var(--dsw-static-blue-600);
+  --physics-tint-verified: color-mix(in srgb, var(--physics-verification-ok) 12%, var(--dsw-alias-bg-base, #ffffff));
+  --physics-tint-warning: color-mix(in srgb, var(--physics-verification-warning) 14%, var(--dsw-alias-bg-base, #ffffff));
+  --physics-tint-verified-edge: color-mix(in srgb, var(--physics-verification-ok) 38%, transparent);
+  --physics-tint-warning-edge: color-mix(in srgb, var(--physics-verification-warning) 38%, transparent);
+
+  /* ---------- ink ----------
+     The physics tokens above colour physics; these colour words. Text needs its
+     own layer because a surface can afford to sit near the background while a
+     label cannot: the host's dimmed label resolves to a mid grey that is legible
+     on a light desk and all but invisible on a dark one. Light values are the
+     ink the product already used. */
+  --physics-ink: #34506d;
+  --physics-ink-strong: #23456b;
+  --physics-ink-muted: var(--dsw-alias-label-dimmed, #6b7280);
+  --physics-ink-link: #1d4ed8;
+  --physics-ink-ok: #047857;
+  --physics-ink-warn: #b45309;
+  --physics-ink-mark: #be185d;
+}
+
+/* The host writes its alias palette onto body, so a surface token can only
+   follow it from that same scope: defined on the root element the reference
+   would resolve there, find nothing, and silently keep the light hex - a dark
+   host would then sit on a white desk. */
+body {
+  --physics-workspace-bg: var(--dsw-alias-bg-base, #f3f6fa);
+}
+
+/* Dark host: the sheet stays, the desk and the panels go dark. */
+body[data-ds-dark-theme] {
+  --physics-glass-fill: rgba(35, 35, 36, 0.72);
+  --physics-glass-fill-strong: rgba(44, 44, 46, 0.88);
+  --physics-glass-border: rgba(255, 255, 255, 0.08);
+  --physics-glass-border-soft: rgba(255, 255, 255, 0.14);
+  --physics-glass-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  --physics-glass-shadow-raised: 0 18px 42px rgba(0, 0, 0, 0.6);
+  --physics-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --physics-glass-plate: var(--dsw-alias-bg-layer-2, #2c2c2e);
+  --physics-tint-accent-ink: var(--dsw-static-blue-300, #93c5fd);
+
+  /* Ink flips to the light end of each hue: the same words sit on a near-black
+     desk now, so a hue that read as "deep" on white reads as "invisible" here. */
+  --physics-ink: #cbd6e4;
+  --physics-ink-strong: #e2e8f0;
+  --physics-ink-muted: var(--dsw-alias-label-secondary, #a3aab4);
+  --physics-ink-link: var(--dsw-static-blue-300, #93c5fd);
+  --physics-ink-ok: var(--dsw-static-green-400, #4ed17e);
+  --physics-ink-warn: var(--dsw-static-amber-400, #f7ad31);
+  --physics-ink-mark: #f9a8d4;
 }
 *:focus {
   outline: none;
@@ -233,6 +303,11 @@ body {
   --dsh-scrollbar-thumb: rgba(15, 23, 42, 0.16);
   --dsh-scrollbar-thumb-hover: rgba(15, 23, 42, 0.28);
   --dsh-scrollbar-width: 6px;
+}
+
+body[data-ds-dark-theme] {
+  --dsh-scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --dsh-scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
 }
 
 ::-webkit-scrollbar {

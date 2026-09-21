@@ -100,11 +100,11 @@
 }
 
 .guideLabel {
-  fill: var(--physics-measurement);
-  font-size: 11px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   font-style: italic;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -120,7 +120,7 @@
   font-style: italic;
   font-weight: 600;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -131,11 +131,12 @@
 /* ---------- annotations ---------- */
 
 .annotation {
-  fill: var(--dsw-alias-label-secondary);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Agent-driven highlight glow for point-charge primitives (spheres, streamlines,
@@ -170,7 +171,7 @@
   font-style: italic;
   font-weight: 600;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -220,11 +221,11 @@
 }
 
 .circuitJunction {
-  fill: #3f4652;
+  fill: var(--physics-wire);
 }
 
 .circuitSymbol {
-  stroke: #3f4652;
+  stroke: var(--physics-wire);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -233,55 +234,56 @@
 
 /* Battery negative plate: shorter AND thicker, per the GB symbol. */
 .circuitSymbolThick {
-  stroke: #3f4652;
+  stroke: var(--physics-wire);
   stroke-width: 3.4;
   stroke-linecap: butt;
   fill: none;
 }
 
 .circuitSymbolFill {
-  fill: #3f4652;
+  fill: var(--physics-wire);
   stroke: none;
 }
 
 .circuitMeterFace {
-  fill: #fbfdff;
+  fill: var(--physics-canvas-bg);
 }
 
 .circuitMeterLetter {
-  fill: #3f4652;
-  font-size: 12px;
+  fill: var(--physics-canvas-text);
+  font-size: 11px;
   font-style: italic;
   font-weight: 600;
   user-select: none;
+  dominant-baseline: middle;
 }
 
 .circuitName {
-  fill: var(--dsw-alias-label-primary, #2c313a);
-  font-size: 11.5px;
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
   font-style: italic;
   font-weight: 600;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
 .circuitAnnotation {
-  fill: var(--dsw-alias-label-secondary);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11px;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
-/* Live meter reading: measurement colour, so a changing number is findable. */
+/* Live meter readings use strong canvas ink and tabular digits. */
 .circuitReading {
-  fill: var(--physics-measurement);
-  font-size: 11px;
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -297,16 +299,16 @@
 }
 
 .circuitCurrentHead {
-  fill: var(--physics-velocity);
+  fill: var(--physics-vector-velocity);
   stroke: none;
 }
 
 .circuitCurrentText {
-  fill: var(--physics-velocity);
-  font-size: 10.5px;
+  fill: var(--physics-vector-velocity);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -358,6 +360,77 @@
   filter: drop-shadow(0 0 1.2px var(--physics-lamp-bloom));
 }
 
+/* A wired part's raster body. The drop-shadow traces the sprite's alpha edge
+   with the same slight lift the cable gets, so the part sits on the bench
+   rather than floating over the drawing. */
+.circuitPartSprite {
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1.2px rgb(20 26 36 / 22%));
+}
+
+/* Draggable schematic part (circuit domain): the part grabs like a bench
+   prop, and touch-action keeps a touch drag from scrolling the page. */
+.circuitDraggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.circuitDragging {
+  cursor: grabbing;
+}
+
+/* Transparent but painted — the drag gesture's hit target over a part whose
+   raster body ignores pointer events. */
+.circuitHitArea {
+  fill: transparent;
+}
+
+/* Keyboard-operable bench control (switch blade, rheostat knob): invisible
+   like the hit area, but it can take focus — the focus ring is the only
+   paint it ever shows. */
+.circuitControl {
+  fill: transparent;
+  outline: none;
+  touch-action: none;
+}
+
+.circuitControl:focus-visible {
+  stroke: var(--physics-body-live);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+/* ---------- build-mode terminals ---------- */
+
+/* Each terminal is a real target while assembling: visible enough to aim at,
+   quiet enough not to redraw the schematic as a diagram about terminals. */
+.circuitTerminal {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-body-live);
+  stroke-width: 1.5;
+  cursor: crosshair;
+  outline: none;
+  touch-action: none;
+  opacity: 0.85;
+}
+
+.circuitTerminal:hover {
+  opacity: 1;
+  fill: var(--physics-body-live);
+}
+
+.circuitTerminal:focus-visible {
+  stroke-width: 3;
+  stroke-dasharray: 3 2;
+  opacity: 1;
+}
+
+/* The terminal a half-finished wire started from. */
+.circuitTerminalPending {
+  fill: var(--physics-body-live);
+  opacity: 1;
+}
+
 /* ---------- optical bench ---------- */
 
 /* The principal axis is construction geometry, not a light path. */
@@ -374,12 +447,12 @@
 }
 
 .focalLabel {
-  fill: var(--physics-measurement);
-  font-size: 11px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   font-style: italic;
   font-weight: 600;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
   user-select: none;
 }
@@ -582,7 +655,7 @@
 
 .acousticPulseDot {
   fill: var(--physics-acoustics-wave);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.4;
 }
 
@@ -614,9 +687,9 @@
 
 .acousticPathLabel {
   fill: var(--physics-acoustics-wave);
-  font-size: 11px;
+  font-size: 11.5px;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
   user-select: none;
 }
@@ -647,9 +720,9 @@
 
 .fluidSurfaceLabel {
   fill: var(--physics-fluid-liquid);
-  font-size: 11px;
+  font-size: 11.5px;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
   user-select: none;
 }
@@ -689,7 +762,7 @@
 /* The dial reading is the measurement the whole rig exists to produce, so it
    is typeset as a reading rather than a decorative label. */
 .fluidScaleReading {
-  fill: var(--physics-measurement);
+  fill: var(--physics-canvas-text);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -712,6 +785,18 @@
 
 .fluidBlockFloating {
   stroke: var(--physics-verification-ok);
+}
+
+/* The block doubles as the descent handle: grab cursor over it, grabbing
+   while the drag scrubs the immersion clock. touch-action keeps a touch
+   drag from scrolling the page. */
+.fluidDraggable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.fluidDragging {
+  cursor: grabbing;
 }
 
 /* The dial needle: the reading made visible before the digits are read. */
@@ -792,14 +877,14 @@
 
 .thermalBulb {
   fill: var(--physics-thermal-heat);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.4;
 }
 
 /* The reading is the measurement the run produces, so it is typeset as one. */
 .thermalReading {
   dominant-baseline: middle;
-  fill: var(--physics-measurement);
+  fill: var(--physics-canvas-text);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -815,9 +900,9 @@
 
 .thermalMeltingLabel {
   fill: var(--physics-thermal-heat);
-  font-size: 11px;
+  font-size: 11.5px;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
   user-select: none;
 }
@@ -935,7 +1020,7 @@
 
 .inductionRodContact {
   fill: var(--physics-induction-rod);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.2;
 }
 
@@ -952,7 +1037,7 @@
 
 .inductionVelocityLabel {
   fill: var(--physics-vector-velocity);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-style: italic;
 }
 
@@ -967,10 +1052,10 @@
 
 .inductionResistorLabel {
   fill: var(--physics-induction-rod);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -991,10 +1076,10 @@
    background as a halo (paint-order) the way every canvas annotation does. */
 .inductionForceLabel {
   fill: var(--physics-vector-magnetic-force);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -1021,7 +1106,7 @@
 
 .inductionCurrentLabel {
   fill: var(--physics-induction-current);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1030,7 +1115,7 @@
    field ink. */
 .inductionChargeDot {
   fill: var(--physics-induction-current);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.1;
 }
 
@@ -1082,21 +1167,21 @@
 
 /* A node is a hollow ring (nothing moves here); an antinode a filled dot. */
 .waveNode {
-  fill: #fbfdff;
+  fill: var(--physics-canvas-bg);
   stroke: var(--physics-wave-node);
   stroke-width: 1.8;
 }
 
 .waveAntinode {
   fill: var(--physics-wave-rope);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.2;
 }
 
 /* The marked rope particle and the plumb line down to its equilibrium. */
 .waveMarker {
   fill: var(--physics-wave-marker);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.4;
 }
 
@@ -1111,7 +1196,7 @@
    stem it vibrates on. */
 .waveSource {
   fill: var(--physics-wave-rope);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.4;
 }
 
@@ -1149,7 +1234,7 @@
 
 /* Observation point P, coloured by the engine's verdict. */
 .wavePoint {
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1.6;
 }
 
@@ -1166,11 +1251,11 @@
 }
 
 .wavePointLabel {
-  fill: var(--dsw-alias-label-secondary);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -1179,7 +1264,7 @@
    particle, which is the same fact in the singular. */
 .waveMedium {
   fill: var(--physics-wave-marker);
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 1;
   opacity: 0.85;
 }
@@ -1197,4 +1282,46 @@
   stroke: var(--physics-wave-marker);
   stroke-width: 0.8;
   opacity: 0.3;
+}
+
+.circuitDialReading {
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  dominant-baseline: middle;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 1.5px;
+  user-select: none;
+}
+
+.circuitSliderFallback {
+  fill: var(--physics-body-live);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.circuitControl[role='switch'] {
+  cursor: pointer;
+}
+
+.circuitControl[role='slider'] {
+  cursor: ew-resize;
+}
+
+.circuitControl[aria-orientation='vertical'] {
+  cursor: ns-resize;
+}
+
+.inductionVelocityLabel,
+.inductionCurrentLabel,
+.fluidScaleReading,
+.thermalReading {
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 2px;
+  stroke-linejoin: round;
 }

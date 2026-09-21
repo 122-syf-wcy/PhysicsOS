@@ -43,6 +43,16 @@
   fill: var(--physics-vector-friction);
 }
 
+.roleSpring {
+  stroke: var(--physics-vector-spring);
+  fill: var(--physics-vector-spring);
+}
+
+.roleTension {
+  stroke: var(--physics-vector-tension);
+  fill: var(--physics-vector-tension);
+}
+
 .roleNetForce {
   stroke: var(--physics-vector-net-force);
   fill: var(--physics-vector-net-force);
@@ -76,10 +86,12 @@
 /* ---------- vectors ---------- */
 
 .vectorLine {
-  stroke-width: 2;
+  stroke-width: 2.2;
   stroke-linecap: round;
   fill: none;
   transition: stroke-width var(--physics-motion-fast) var(--physics-ease);
+  /* Same lift the conductor gets: a vector is drawn ink, not a hairline. */
+  filter: drop-shadow(0 0.6px 0.6px rgb(20 26 36 / 18%));
 }
 
 /* Components are one visual step weaker than the resultant they belong to. */
@@ -93,15 +105,14 @@
   font-size: 11.5px;
   font-style: italic;
   font-weight: 600;
-  stroke: none;
   paint-order: stroke fill;
   stroke-width: 3.2px;
   /* A white halo keeps a label legible where it crosses grid or trajectory. */
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
 }
 
 .vectorLabelSubordinate {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 500;
   opacity: 0.92;
 }
@@ -134,8 +145,11 @@
 }
 
 .surfaceLabel {
-  fill: var(--dsw-alias-label-caption);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11px;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
 }
 
 .inclineBody {
@@ -143,6 +157,56 @@
   stroke: var(--physics-body-stroke);
   stroke-width: 1.5;
   stroke-linejoin: round;
+}
+
+/* ---------- connector rigs (spring, pendulum) ---------- */
+
+.springCoil {
+  stroke: var(--physics-vector-spring);
+  stroke-width: 2;
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* The helix's far strand: same family, thinner and dimmer, so the eye reads
+   one wound wire instead of two parallel lines. */
+.springCoilBack {
+  stroke: var(--physics-vector-spring);
+  stroke-width: 1.1;
+  opacity: 0.45;
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.springPlate {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3;
+  fill: none;
+}
+
+.springHatch {
+  stroke: var(--physics-surface-hatch);
+  stroke-width: 1.1;
+  fill: none;
+}
+
+.springJoint {
+  fill: var(--physics-body-stroke);
+}
+
+.pendulumString {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+  fill: none;
+}
+
+.pendulumRest {
+  stroke: var(--physics-surface-hatch);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  fill: none;
 }
 
 .platformBody {
@@ -190,6 +254,14 @@
   stroke: none;
 }
 
+/* A photographed apparatus body (block/cart/ball/plank): never interactive —
+   hit areas and labels live in the overlay layer; the same slight alpha-edge
+   lift as the circuit sprites keeps the part on the bench. */
+.partSprite {
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1.2px rgb(20 26 36 / 22%));
+}
+
 .cartAxle {
   stroke: var(--physics-body-stroke);
   stroke-width: 1.4;
@@ -223,21 +295,21 @@
 }
 
 .motionMarkLabel {
-  fill: var(--dsw-alias-label-caption);
-  font-size: 9.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
 .bodyLabel {
-  fill: var(--dsw-alias-label-primary);
-  font-size: 11px;
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
   font-style: italic;
   font-weight: 600;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -263,7 +335,7 @@
   font-style: italic;
   font-weight: 600;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -286,11 +358,11 @@
 }
 
 .dimensionLabel {
-  fill: var(--physics-measurement);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3.2px;
 }
 
@@ -326,10 +398,10 @@
 }
 
 .keyLabel {
-  fill: var(--dsw-alias-label-secondary);
-  font-size: 10.5px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11px;
   paint-order: stroke fill;
-  stroke: #fbfdff;
+  stroke: var(--physics-canvas-bg);
   stroke-width: 3px;
 }
 
@@ -341,8 +413,8 @@
 }
 
 .basisLabel {
-  fill: var(--physics-measurement);
-  font-size: 10px;
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11px;
   font-style: italic;
 }
 

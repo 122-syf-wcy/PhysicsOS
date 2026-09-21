@@ -232,6 +232,10 @@ export class CollisionRuntimeBridge {
   }
 
   setRunning(running: boolean): CollisionRuntimeSnapshot {
+    const total = this.snapshot.clock.total
+    /* Same replay contract as the other finite runtimes: run pressed at the
+       end restarts from t = 0 rather than dead-ending. */
+    if (running && total > 0 && this.currentTime >= total) this.currentTime = 0
     this.running = running
     return this.recompute()
   }

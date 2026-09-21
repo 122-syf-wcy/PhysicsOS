@@ -82,6 +82,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isPhysicsScene = (value: MechanicsSceneInput | PhysicsScene): value is PhysicsScene =>
   isRecord(value) && value.schemaVersion === 'physics-scene/1.0' && Array.isArray(value.bodies)
 
+/* Models whose run window is nominal — nothing physical terminates at the
+   clock edge, so playback loops back to t = 0 and keeps going. Models left out
+   end on a real event (projectile impact) or on the finished reading itself
+   (the filled v–t area), so they stop instead. */
+const CYCLIC_MODELS: ReadonlySet<MechanicsModelId> = new Set([
+  'uniform_linear_motion',
+  'inclined_plane',
+  'newton_second_law',
+  /* Oscillators never stop: the period IS the demo, so the playhead wraps. */
+  'spring_oscillator',
+  'simple_pendulum',
+])
+
 const runtimeErrorOf = (error: unknown, model: MechanicsModelId): RuntimeErrorView => {
   const base = isRecord(error) && isRecord(error.domainError) ? error.domainError : error
   const code =
@@ -179,11 +192,25 @@ export class MechanicsRuntimeBridge {
     if (!Number.isFinite(value)) return this.snapshot
     switch (id) {
       case 'mass':
-        return this.setBodyMass(value).snapshot
+      case 'gravity':
+      case 'springConstant': {
+        /* A statics rig reports the SETTLED state: editing m, g or k moves the
+           equilibrium, so re-seat the body there as a second auditable command
+           instead of leaving it stranded off-balance and unverified. */
+        const primary =
+          id === 'mass'
+            ? this.setBodyMass(value)
+            : id === 'gravity'
+              ? this.setGravity(value)
+              : this.setSpringConstant(value)
+        if (primary.result.ok && this.modelId() === 'spring_statics') {
+          const reseat = this.resettleStatics()
+          if (reseat !== undefined) return reseat.snapshot
+        }
+        return primary.snapshot
+      }
       case 'height':
         return this.setInitialHeight(value).snapshot
-      case 'gravity':
-        return this.setGravity(value).snapshot
       case 'angle':
         return this.modelId() === 'inclined_plane'
           ? this.setInclineAngle(value).snapshot
@@ -192,8 +219,14 @@ export class MechanicsRuntimeBridge {
         return this.setInitialSpeed(value, 'x').snapshot
       case 'friction':
         return this.setFriction(value).snapshot
+      case 'staticFriction':
+        return this.setStaticFriction(value).snapshot
       case 'force':
         return this.setAppliedForce(value).snapshot
+      case 'pendulumLength':
+        return this.setPendulumLength(value).snapshot
+      case 'amplitude':
+        return this.setAmplitude(value).snapshot
       default:
         return this.snapshot
     }
@@ -321,6 +354,100 @@ export class MechanicsRuntimeBridge {
     return this.command('SetFrictionCoefficient', { bodyId, coefficient })
   }
 
+  setStaticFriction(coefficient: number): MechanicsRuntimeCommandOutcome {
+    const bodyId = this.sceneRuntime.getScene().bodies[0]?.id ?? 'body-1'
+    return this.command('SetStaticFrictionCoefficient', { bodyId, coefficient })
+  }
+
+  setSpringConstant(constant: number): MechanicsRuntimeCommandOutcome {
+    const spring = this.sceneRuntime.getScene().constraints.find(c => c.type === 'spring')
+    if (spring === undefined) return { result: this.noSuchTarget(), snapshot: this.snapshot }
+    return this.command('SetSpringConstant', { constraintId: spring.id, constant })
+  }
+
+  /* On a vertical statics rig the drawn position IS the equilibrium claim:
+     after m, g or k changes, move the body to x_eq = anchor − L0 − mg/k so the
+     scene stays a verified balance instead of an off-equilibrium contradiction. */
+  private resettleStatics(): MechanicsRuntimeCommandOutcome | undefined {
+    const scene = this.sceneRuntime.getScene()
+    const body = scene.bodies[0]
+    const spring = scene.constraints.find(c => c.type === 'spring')
+    const field = scene.fields.find(f => f.type === 'uniform_gravity')
+    if (body === undefined || spring === undefined || field === undefined) {
+      return undefined
+    }
+    const anchor = spring.parameters['anchor'] as { x?: number; y?: number } | undefined
+    const natural = Number(spring.parameters['naturalLength'] ?? 0)
+    const stiffness = Number(spring.parameters['stiffness'] ?? 0)
+    if (stiffness <= 0) return undefined
+    const g = Math.abs(field.acceleration.vector.y)
+    const extension = (body.mass.value * g) / stiffness
+    const position = {
+      x: anchor?.x ?? 0,
+      y: (anchor?.y ?? 0) - natural - extension,
+      z: 0,
+    }
+    const current = body.position.vector
+    if (Math.hypot(position.x - current.x, position.y - current.y) < 1e-9) {
+      return undefined
+    }
+    return this.command('SetBodyPosition', {
+      bodyId: body.id,
+      position: { vector: position, unit: 'm', dimension: 'length' },
+    })
+  }
+
+  setPendulumLength(length: number): MechanicsRuntimeCommandOutcome {
+    const rope = this.sceneRuntime.getScene().constraints.find(c => c.type === 'rope')
+    if (rope === undefined) return { result: this.noSuchTarget(), snapshot: this.snapshot }
+    return this.command('SetPendulumLength', { constraintId: rope.id, length })
+  }
+
+  /** Release offset: where the oscillator/bob starts, read off the constraint axis. */
+  setAmplitude(offset: number): MechanicsRuntimeCommandOutcome {
+    const scene = this.sceneRuntime.getScene()
+    const body = scene.bodies[0]
+    const spring = scene.constraints.find(c => c.type === 'spring')
+    const rope = scene.constraints.find(c => c.type === 'rope')
+    if (body === undefined) return { result: this.noSuchTarget(), snapshot: this.snapshot }
+    if (spring !== undefined) {
+      const anchor = spring.parameters['anchor'] as { x?: number; y?: number } | undefined
+      const natural = Number(spring.parameters['naturalLength'] ?? 0)
+      const ax = anchor?.x ?? 0
+      const ay = anchor?.y ?? 0
+      const position =
+        spring.parameters['axis'] === 'vertical'
+          ? { x: ax, y: ay - natural - offset, z: 0 }
+          : { x: ax + natural + offset, y: ay, z: 0 }
+      return this.command('SetBodyPosition', {
+        bodyId: body.id,
+        position: { vector: position, unit: 'm', dimension: 'length' },
+      })
+    }
+    if (rope !== undefined) {
+      /* Pendulum amplitude is an angle: swing the bob to `offset` degrees from
+         vertical while keeping it on the string circle. */
+      const pivot = rope.parameters['pivot'] as { x?: number; y?: number } | undefined
+      const length = Number(rope.parameters['length'] ?? 1)
+      const radians = (offset * Math.PI) / 180
+      const px = pivot?.x ?? 0
+      const py = pivot?.y ?? 0
+      return this.command('SetBodyPosition', {
+        bodyId: body.id,
+        position: {
+          vector: {
+            x: px + length * Math.sin(radians),
+            y: py - length * Math.cos(radians),
+            z: 0,
+          },
+          unit: 'm',
+          dimension: 'length',
+        },
+      })
+    }
+    return { result: this.noSuchTarget(), snapshot: this.snapshot }
+  }
+
   setAppliedForce(value: number): MechanicsRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
@@ -346,6 +473,11 @@ export class MechanicsRuntimeBridge {
   }
 
   setRunning(running: boolean): MechanicsRuntimeSnapshot {
+    const total = this.snapshot.clock.total
+    /* Replay contract shared with every finite runtime: pressing run after the
+       clock reached the end restarts from t = 0 instead of dead-ending on the
+       first advanced frame. */
+    if (running && total > 0 && this.currentTime >= total) this.currentTime = 0
     this.running = running
     return this.recompute()
   }
@@ -370,10 +502,21 @@ export class MechanicsRuntimeBridge {
     const total = this.snapshot.clock.total
     if (this.running && Number.isFinite(wallClockSeconds) && total > 0) {
       const next = this.currentTime + wallClockSeconds * this.playbackRate
-      /* Motion stops at impact rather than looping: a projectile does not restart
-         in mid-air. Cyclic models (linear/incline over a nominal window) loop. */
-      this.currentTime = next >= total ? total : next
-      if (this.currentTime >= total) this.running = false
+      if (next >= total) {
+        /* Nominal-window demos (linear / incline / newton) loop: nothing physical
+           ends at the clock edge, so the bench keeps breathing. A projectile
+           stops at impact — it does not restart in mid-air — and a uniformly
+           accelerated run stops too, because the finished v–t area IS the
+           reading the student takes. */
+        if (CYCLIC_MODELS.has(this.snapshot.modelId)) {
+          this.currentTime = next % total
+        } else {
+          this.currentTime = total
+          this.running = false
+        }
+      } else {
+        this.currentTime = next
+      }
     }
     return this.recompute()
   }

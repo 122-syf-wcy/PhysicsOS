@@ -1,0 +1,342 @@
+/* Inline physics-scene card in the conversation flow. Mirrors the Lab shell's
+   visual language at message scale: a bordered module, a fixed-height canvas
+   stage, and a compact transport row. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 720px;
+  margin: 8px 0;
+  padding: 12px 14px 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-module-platform);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.rev {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+.open {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-link);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.open:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.stage {
+  flex: none;
+  /* Follow the chat column width but keep enough height for labels above and
+     below a trajectory — 220px clipped axis captions and force arrows. */
+  height: clamp(280px, 42vh, 380px);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+  overflow: hidden;
+}
+
+.unsupported {
+  margin: 0;
+  padding: 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.control:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.control:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.controlPrimary {
+  color: var(--dsw-alias-label-link);
+}
+
+.clock {
+  flex: none;
+  min-width: 52px;
+  text-align: right;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+.trackWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.clockEnd {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+/* -------------------------------------------------------- solve section -- */
+
+.solve {
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base);
+  overflow: hidden;
+}
+
+.solveSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.solveSummary::-webkit-details-marker {
+  display: none;
+}
+
+.solveSummary::before {
+  content: '';
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+
+.solve[open] > .solveSummary::before {
+  transform: rotate(90deg);
+}
+
+.solveSummaryMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.solveVerdict {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.solveVerdict[data-status='passed'] {
+  background: var(--physics-highlight);
+  color: var(--dsw-alias-label-primary);
+}
+
+.solveVerdict[data-status='failed'],
+.solveVerdict[data-status='error'] {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+}
+
+.solveBlock {
+  padding: 4px 10px 8px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.solveHeading {
+  margin: 2px 0 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.solveHint {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.knownList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knownButton {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 3px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.knownButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.knownButtonActive {
+  border-color: var(--physics-highlight);
+  background: var(--physics-highlight);
+}
+
+.knownStatic {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 3px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.knownValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.targetList,
+.answerList,
+.issueList {
+  margin: 0;
+  padding: 0 0 0 16px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.answerList li {
+  font-weight: 600;
+}
+
+.issueList li {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 20px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.stepBody p {
+  margin: 2px 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.stepFormula {
+  font-weight: 600;
+}
+
+.stepSubstitution {
+  font-variant-numeric: tabular-nums;
+}
+
+.stepResult {
+  display: block;
+  margin-top: 2px;
+  font-weight: 600;
+}

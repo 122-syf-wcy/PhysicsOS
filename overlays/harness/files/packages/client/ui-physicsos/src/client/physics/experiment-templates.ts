@@ -56,6 +56,7 @@ import type { PhysicsIconProps } from '../icons/physics-icons.tsx'
 import {
   IconBuoyancy,
   IconBulb,
+  IconChart,
   IconCircuitParallel,
   IconCircuitSeries,
   IconCompositeField,
@@ -63,6 +64,8 @@ import {
   IconConvexLens,
   IconConvexMirror,
   IconCrystalMelting,
+  IconForce,
+  IconFriction,
   IconHeatCapacity,
   IconInductionBar,
   IconInductionCoil,
@@ -74,13 +77,17 @@ import {
   IconMagneticCircle,
   IconMassSpectrometer,
   IconMeasurement,
+  IconNetForce,
   IconNewtonLaw,
+  IconNormalForce,
   IconParallelPlate,
+  IconPendulum,
   IconPlaneMirror,
   IconPointCharge,
   IconProjectileHorizontal,
   IconProjectileOblique,
   IconRheostat,
+  IconSpring,
   IconStandingWave,
   IconTime,
   IconUniformElectric,
@@ -387,6 +394,280 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
         ],
         boundary: { width: 12, height: 5 },
         boundaryRestitution: 1,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'vt-area',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.vtArea',
+    hint: 'lab.template.vtArea.hint',
+    icon: IconChart,
+    tags: ['运动学', '图像'],
+    createScene: (title) => {
+      /* v–t 图线下面积 = 位移：v₀ = 2、a = 1.5 让梯形面积在一屏内既看得出
+         斜率也算得出数值。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-vt-area'),
+        model: 'uniformly_accelerated_motion',
+        mass: 1,
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 2, y: 0, z: 0 },
+        acceleration: { x: 1.5, y: 0, z: 0 },
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'force-composition',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.forceComposition',
+    hint: 'lab.template.forceComposition.hint',
+    icon: IconNetForce,
+    tags: ['力与运动', '力的合成'],
+    createScene: (title) => {
+      /* 3-4-5：F₁ = 3 N 向东、F₂ = 4 N 向北，合力恰为 5 N——平行四边形法则
+         的数值在加速度上直接可验。自由物体不声明重力场：mg/N 力对只会
+         互相抵消、还给受力图添两个虚构箭头，零重力下合力仍严格为 5 N。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-force-composition'),
+        model: 'newton_second_law',
+        mass: 1,
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: 0, z: 0 },
+        appliedForce: { x: 3, y: 0, z: 0 },
+        appliedForces: [{ x: 0, y: 4, z: 0 }],
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'concurrent-equilibrium',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.concurrentEquilibrium',
+    hint: 'lab.template.concurrentEquilibrium.hint',
+    icon: IconForce,
+    tags: ['力与运动', '平衡'],
+    createScene: (title) => {
+      /* 三力共点平衡：F₁ = 8 N 向东，F₂/F₃ 各 8 N、与 F₁ 成 ±120°，合力
+         严格为零——物块静止，受力图本身就是结论。 */
+      const side = 4 * Math.sqrt(3)
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-concurrent-equilibrium'),
+        model: 'newton_second_law',
+        mass: 2,
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: -g, z: 0 },
+        appliedForce: { x: 8, y: 0, z: 0 },
+        appliedForces: [
+          { x: -4, y: side, z: 0 },
+          { x: -4, y: -side, z: 0 },
+        ],
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'apparent-weight',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.apparentWeight',
+    hint: 'lab.template.apparentWeight.hint',
+    icon: IconNormalForce,
+    tags: ['力与运动', '超重失重'],
+    createScene: (title) => {
+      /* 电梯加速上行：人随轿厢以 a = 2 m/s² 上升，支持力 N = m(g + a) 即
+         视重，由引擎加速度实时派生——竖直加速度非零的线性模型自动出现
+         「视重」派生行，a_y = −g 时读数为 0 即完全失重。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-apparent-weight'),
+        model: 'uniformly_accelerated_motion',
+        mass: 60,
+        position: { x: 0, y: 0, z: 0 },
+        velocity: { x: 0, y: 1, z: 0 },
+        acceleration: { x: 0, y: 2, z: 0 },
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'chase-meeting',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.chaseMeeting',
+    hint: 'lab.template.chaseMeeting.hint',
+    icon: IconVelocity,
+    tags: ['运动学', '追及相遇'],
+    createScene: (title) => {
+      /* 同向匀速追及：快者 3 m/s 落后 4 m 追 1 m/s 慢者，t = 2 s 在 x = 2 m
+         处相遇。两球错开一条车道（y 间距 1.4 m > 两半径之和），永不碰撞，
+         双体引擎只负责真实运动学；x–t 图交点即相遇时刻。 */
+      const scene = createCollisionScene({
+        sceneId: stampId('mechanics-chase-meeting'),
+        bodies: [
+          { id: 'chaser', mass: 1, position: [-4, 0.7], velocity: [3, 0], radius: 0.45, restitution: 1 },
+          { id: 'leader', mass: 1, position: [0, -0.7], velocity: [1, 0], radius: 0.45, restitution: 1 },
+        ],
+        boundary: { width: 24, height: 4 },
+        boundaryRestitution: 1,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'hooke-law',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.hookeLaw',
+    hint: 'lab.template.hookeLaw.hint',
+    icon: IconSpring,
+    tags: ['力与运动', '弹簧', '初中'],
+    createScene: (title) => {
+      /* 竖直悬挂胡克台：m = 1 kg、k = 49 N/m → Δx = mg/k = 0.2 m，物块恰停
+         在 anchor − L0 − Δx = 0.8 m 处（引擎 equilibrium_position 校验要求
+         场景如实放置）。改 k 或 m，弹力与伸长量同步变。 */
+      const mass = 1
+      const stiffness = 49
+      const anchor = { x: 0, y: 3, z: 0 }
+      const natural = 2
+      const extension = (mass * g) / stiffness
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-hooke-law'),
+        model: 'spring_statics',
+        mass,
+        position: { x: 0, y: anchor.y - natural - extension, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: -g, z: 0 },
+        springConstant: stiffness,
+        springNaturalLength: natural,
+        springAnchor: anchor,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'spring-oscillator',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.springOscillator',
+    hint: 'lab.template.springOscillator.hint',
+    icon: IconSpring,
+    tags: ['振动', '弹簧', '简谐运动'],
+    createScene: (title) => {
+      /* 水平弹簧振子：墙在 x = −3，L0 = 2 → 平衡位置 x = −1；从 x = −0.5
+         释放（A = 0.5 m），m = 1、k = 50 → T = 2π√(1/50) ≈ 0.89 s。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-spring-oscillator'),
+        model: 'spring_oscillator',
+        mass: 1,
+        position: { x: -0.5, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: -g, z: 0 },
+        springConstant: 50,
+        springNaturalLength: 2,
+        springAnchor: { x: -3, y: 0, z: 0 },
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'simple-pendulum',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.simplePendulum',
+    hint: 'lab.template.simplePendulum.hint',
+    icon: IconPendulum,
+    tags: ['振动', '单摆', '简谐运动'],
+    createScene: (title) => {
+      /* 摆长 2 m、悬点 (0, 3)，摆角 15° 释放——小角近似内 T = 2π√(L/g)
+         ≈ 2.84 s 成立，且大得足以看清弧线。 */
+      const length = 2
+      const pivot = { x: 0, y: 3, z: 0 }
+      const radians = (15 * Math.PI) / 180
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-simple-pendulum'),
+        model: 'simple_pendulum',
+        mass: 0.5,
+        position: {
+          x: pivot.x + length * Math.sin(radians),
+          y: pivot.y - length * Math.cos(radians),
+          z: 0,
+        },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: -g, z: 0 },
+        pendulumLength: length,
+        pendulumPivot: pivot,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'friction-static',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.frictionStatic',
+    hint: 'lab.template.frictionStatic.hint',
+    icon: IconFriction,
+    tags: ['力与运动', '摩擦', '初中'],
+    createScene: (title) => {
+      /* 弹簧测力计协议：拉力以 2 N/s 渐增，m = 2、μs = 0.5、μk = 0.3 →
+         N = 19.6 N、最大静摩擦 9.8 N，t = 4.9 s 起滑；静段 f = F 逐帧同步，
+         滑动瞬间 f 跌为 5.88 N——一次播放看全「等拉力→突变→恒值」。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-friction-static'),
+        model: 'horizontal_friction',
+        mass: 2,
+        position: { x: 0, y: 0.6, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: -g, z: 0 },
+        appliedForce: { x: 0, y: 0, z: 0 },
+        frictionCoefficient: 0.3,
+        staticFrictionCoefficient: 0.5,
+        appliedForceRamp: 2,
+        maxAppliedForce: 30,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'friction-mu',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.frictionMu',
+    hint: 'lab.template.frictionMu.hint',
+    icon: IconMeasurement,
+    tags: ['力与运动', '摩擦', '测量', '初中'],
+    createScene: (title) => {
+      /* 恒定拉力 15 N 立即起滑（μsN = 7.84 N < 15 N）：滑动后数据面板读
+         f = μkN = 5.88 N 与 N = 19.6 N，μk = f/N 由学生自己算。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-friction-mu'),
+        model: 'horizontal_friction',
+        mass: 2,
+        position: { x: 0, y: 0.6, z: 0 },
+        velocity: { x: 0, y: 0, z: 0 },
+        gravity: { x: 0, y: -g, z: 0 },
+        appliedForce: { x: 15, y: 0, z: 0 },
+        frictionCoefficient: 0.3,
+        staticFrictionCoefficient: 0.4,
+        appliedForceRamp: 0,
+        maxAppliedForce: 15,
         title,
       })
       return { sceneId: String(scene.id), scene }

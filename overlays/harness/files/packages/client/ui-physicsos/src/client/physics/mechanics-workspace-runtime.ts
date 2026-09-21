@@ -20,6 +20,10 @@ const MODEL_SUBTITLE: Record<string, string> = {
   projectile_motion: '抛体运动 · 水平/斜抛',
   newton_second_law: '力与运动 · 牛顿第二定律',
   inclined_plane: '力与运动 · 斜面',
+  spring_oscillator: '机械振动 · 弹簧振子',
+  simple_pendulum: '机械振动 · 单摆',
+  horizontal_friction: '力与运动 · 水平面摩擦',
+  spring_statics: '力与运动 · 胡克定律',
 }
 
 const fmt = formatSignificant

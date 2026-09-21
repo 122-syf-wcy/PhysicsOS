@@ -39,6 +39,9 @@ export interface LearningRecordState {
   attempts: readonly StudentAttempt[]
 }
 
+/** One answered self-check, as a surface reports it to {@link LearningRecordController.record}. */
+export type SelfCheckAttemptInput = Omit<StudentAttempt, 'id' | 'at'>
+
 const STORAGE_KEY = 'physicsos.learning-record'
 const ATTEMPT_LIMIT = 200
 
@@ -55,7 +58,10 @@ const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
         typeof entry === 'object' && entry !== null &&
         typeof (entry as { questionId?: unknown }).questionId === 'string' &&
         typeof (entry as { selfCheckId?: unknown }).selfCheckId === 'string' &&
-        typeof (entry as { correct?: unknown }).correct === 'boolean')
+        typeof (entry as { correct?: unknown }).correct === 'boolean' &&
+        /* `knowledge` drives `for…of` in mastery aggregation — a row that
+           lacks it is corrupt and is dropped here, not downstream. */
+        Array.isArray((entry as { knowledge?: unknown }).knowledge))
       .slice(0, ATTEMPT_LIMIT)
   } catch {
     return []

@@ -24,9 +24,9 @@
   align-items: center;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid rgba(154, 177, 201, 0.38);
+  border: 1px solid var(--physics-glass-border-soft);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.52);
+  background: var(--physics-glass-fill);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -34,7 +34,7 @@
 }
 
 .example:hover {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--physics-glass-fill-strong);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -59,10 +59,10 @@
   min-width: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--physics-glass-border);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.64);
-  box-shadow: 0 14px 34px rgba(65, 93, 122, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  background: var(--physics-glass-fill);
+  box-shadow: var(--physics-glass-shadow), var(--physics-glass-inset);
   backdrop-filter: blur(18px) saturate(125%);
   color: var(--dsw-alias-label-primary);
   text-align: left;
@@ -71,8 +71,8 @@
 }
 
 .portal:hover {
-  border-color: rgba(63, 126, 201, 0.48);
-  box-shadow: 0 18px 42px rgba(65, 93, 122, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  border-color: color-mix(in srgb, var(--physicsos-focus) 45%, transparent);
+  box-shadow: var(--physics-glass-shadow-raised), var(--physics-glass-inset);
   transform: translateY(-2px);
 }
 
@@ -82,8 +82,8 @@
   height: 132px;
   object-fit: cover;
   object-position: center 56%;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
-  background: #f7f9fc;
+  border-bottom: 1px solid var(--physics-glass-border);
+  background: var(--physics-glass-plate);
 }
 
 .portalBody {
@@ -147,10 +147,10 @@
   gap: 8px;
   height: 40px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--physics-glass-border);
   border-radius: 15px;
-  background: rgba(255, 255, 255, 0.56);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  background: var(--physics-glass-fill);
+  box-shadow: var(--physics-glass-inset);
   backdrop-filter: blur(14px) saturate(120%);
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
@@ -160,17 +160,17 @@
 }
 
 .action:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--physics-glass-fill-strong);
 }
 
 .action:disabled {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--physics-ink-muted);
   cursor: not-allowed;
 }
 
 .recentTitle {
   margin: 0 0 8px;
-  color: #4e6680;
+  color: var(--physics-ink);
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
@@ -216,7 +216,7 @@
   padding: 0 12px;
   border: 1px solid color-mix(in srgb, var(--dsw-static-blue-500) 16%, var(--dsw-alias-border-l2));
   border-radius: 8px;
-  background: var(--dsw-static-blue-50);
+  background: var(--physics-tint-accent);
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   font-weight: 500;
@@ -224,7 +224,7 @@
 }
 
 .emptyCta:hover {
-  background: var(--dsw-static-blue-75);
+  background: var(--physics-tint-accent-strong);
 }
 
 .list {
@@ -257,7 +257,7 @@
 }
 
 .recentItem:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--physics-glass-fill);
 }
 
 @media (max-width: 720px) {

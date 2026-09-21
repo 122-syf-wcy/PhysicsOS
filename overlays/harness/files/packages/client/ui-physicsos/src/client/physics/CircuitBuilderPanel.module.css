@@ -1,0 +1,303 @@
+/*
+ * Free-build bench panel.
+ *
+ * Reuses the Lab's panel chrome (borders, radii, label colours) so the bench
+ * reads as the same surface as the scene tree it replaces, not a new screen.
+ */
+
+.builder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- palette ---------- */
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 7px 7px 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--physics-motion-base) var(--physics-ease),
+    background-color var(--physics-motion-base) var(--physics-ease);
+}
+
+/* The shot sits on the same fixed pale bench the canvas uses, so the photographed
+   part keeps its own lighting instead of picking up the host theme behind it. */
+.partShot {
+  display: block;
+  width: 100%;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: var(--physics-canvas-bg, #fbfdff);
+}
+
+.partLabel {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.part:hover {
+  border-color: var(--physics-body-live);
+}
+
+.part:focus-visible {
+  outline: 2px solid var(--physics-body-live);
+  outline-offset: 1px;
+}
+
+.partNote {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+}
+
+.hint,
+.empty {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ---------- placed list ---------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.row[aria-pressed='true'] {
+  border-color: var(--physics-body-live);
+}
+
+.rowId {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rowKind {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  text-align: right;
+}
+
+.rowNets {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 5px;
+}
+
+.net {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- selected part ---------- */
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fieldLabel {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.fieldInput {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fieldInput input {
+  width: 74px;
+  padding: 4px 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.fieldUnit {
+  min-width: 14px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.choiceRow {
+  display: flex;
+  gap: 5px;
+}
+
+.choiceButton {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.choiceButton[aria-pressed='true'] {
+  border-color: var(--physics-body-live);
+  color: var(--physics-body-live);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.action {
+  padding: 5px 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  border-color: var(--physics-body-live);
+}
+
+.action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.danger:hover:not(:disabled) {
+  border-color: var(--physics-danger, var(--physics-body-live));
+  color: var(--physics-danger, var(--physics-body-live));
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.history {
+  display: flex;
+  gap: 5px;
+}
+
+.status {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* An unfinished circuit is normal while building — say so quietly. */
+.statusOpen {
+  border: 1px dashed var(--dsw-alias-border-l2);
+  background: transparent;
+}

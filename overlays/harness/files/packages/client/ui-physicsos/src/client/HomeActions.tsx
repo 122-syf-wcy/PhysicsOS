@@ -12,7 +12,7 @@ import css from './HomeActions.module.css'
 
 export type HomeActionsInjected = {
   startSession: (workspaceId?: WorkspaceId) => void
-  openSurface: (surface: 'home' | 'lab' | 'questions', sceneRef?: PhysicsSceneRef) => void
+  openSurface: (surface: 'home' | 'lab' | 'record', sceneRef?: PhysicsSceneRef) => void
   hooks: {
     recentExperiments: SnapshotStore<RecentExperimentsState>
   }
@@ -66,11 +66,13 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
             </span>
           </span>
         </button>
+        {/* The question bank lives on the record surface: picking one hands the
+            stem to the tutor and the solved scene card lands in the chat. */}
         <button
           type="button"
           className={css.portal}
           aria-label={t('action.upload')}
-          onClick={() => { openSurface('questions') }}
+          onClick={() => { openSurface('record') }}
         >
           <img
             className={css.portalImage}

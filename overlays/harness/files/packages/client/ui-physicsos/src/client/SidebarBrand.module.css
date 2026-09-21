@@ -27,6 +27,24 @@
   white-space: nowrap;
 }
 
+/* Brand + school tenant stack under the wordmark. */
+.brandCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.school {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
 .mark,
 .rail {
   flex: none;

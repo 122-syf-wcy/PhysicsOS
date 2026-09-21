@@ -5,7 +5,7 @@ import { createArchimedesScene } from '@physicsos/physics-scene'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
-import type { SelfCheckAttemptInput } from '../src/client/QuestionWorkspace.tsx'
+import type { SelfCheckAttemptInput } from '../src/client/learning-record-store.ts'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
@@ -47,6 +47,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
+      useAuth={neverHook}
     />,
   )
   return { surface, ...view }
@@ -126,6 +127,37 @@ describe('fluid workspace runtime', () => {
     expect(deeper.view.fluidBlock?.phase).toBe('submerged')
     expect(deeper.view.fluidScale?.reading).toBe('1.67 N')
     expect(deeper.view.fluidBlock?.at.y).toBeLessThan(covered.view.fluidBlock!.at.y)
+  })
+
+  it('lets the block be dragged along the descent: the hand scrubs the immersion clock', () => {
+    const runtime = createFluidWorkspaceRuntime(createArchimedesScene())
+    const blockId = runtime.getSnapshot().view.fluidBlock!.id
+
+    /* The canvas only accepts a drag on the block itself. */
+    expect(
+      runtime.previewComponentPlacement('spring-scale', { x: 0, y: -20 }).clock.time,
+    ).toBe(0)
+
+    /* Centre on the surface line puts the bottom face half-in — the frame
+       seek(1.25) produces, reached through the hand instead of the clock. */
+    const half = runtime.previewComponentPlacement(blockId, { x: 0, y: 0 })
+    expect(half.clock.time).toBeCloseTo(1.25, 9)
+    expect(half.view.fluidBlock?.phase).toBe('entering')
+    expect(half.view.fluidScale?.reading).toBe('2.16 N')
+
+    /* Dragging past the settle depth clamps at the descent's own end. */
+    const bottom = runtime.previewComponentPlacement(blockId, { x: 0, y: -20 })
+    expect(bottom.clock.time).toBeCloseTo(bottom.clock.total, 9)
+
+    /* Pointer-cancel restores the frame the grab started from. */
+    expect(runtime.cancelComponentPlacement().clock.time).toBe(0)
+
+    /* The release lands the drop: the clock stays where the hand let go. */
+    runtime.previewComponentPlacement(blockId, { x: 0, y: -2.5 })
+    const committed = runtime.commitComponentPlacement(blockId, { x: 0, y: -2.5 })
+    expect(committed.clock.time).toBeCloseTo(2.5, 9)
+    expect(committed.view.fluidBlock?.phase).toBe('submerged')
+    expect(committed.view.fluidScale?.reading).toBe('1.67 N')
   })
 
   it('emits a dialFraction in 0..1 that tracks the scale reading', () => {

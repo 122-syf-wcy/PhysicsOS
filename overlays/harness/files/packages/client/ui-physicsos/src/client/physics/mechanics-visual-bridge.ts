@@ -11,6 +11,7 @@ import type { MechanicsModelId, PhysicsScene } from '@physicsos/physics-scene'
 
 import {
   emptyVisualModel,
+  type ApparatusSpriteVisual,
   type ObservableVisibility,
   type PhysicsSemanticRole,
   type ScenePoint,
@@ -40,6 +41,10 @@ const MODEL_LABELS: Readonly<Record<MechanicsModelId, string>> = {
   projectile_motion: '抛体运动',
   newton_second_law: '牛顿第二定律',
   inclined_plane: '斜面运动',
+  spring_oscillator: '弹簧振子（简谐运动）',
+  simple_pendulum: '单摆',
+  horizontal_friction: '静摩擦与滑动摩擦',
+  spring_statics: '胡克定律',
 }
 
 const MECHANICS_OBSERVATION_TYPES: readonly MechanicsObservation['type'][] = [
@@ -209,6 +214,8 @@ const FORCE_STYLES: Record<
     symbol: 'mg\\cos\\theta',
     subordinate: true,
   },
+  spring: { role: 'spring', observable: 'forces', symbol: 'F_{弹}' },
+  tension: { role: 'tension', observable: 'forces', symbol: 'T' },
 }
 
 /** Component arrow from a plain scene-space delta, already display-scaled. */
@@ -366,6 +373,31 @@ export const mechanicsSceneVisualAt = ({
     )
   }
 
+  /* Connector rigs: the spring's drawn length follows the body (stretch IS
+     the physics), and the pendulum string runs pivot → bob each frame. The
+     rest position (straight below the pivot) joins the framing so the arc
+     never reads against an implied centre. */
+  const springConstraint = scene.constraints.find(c => c.type === 'spring')
+  const springAnchorParam = springConstraint?.parameters['anchor'] as
+    | { x?: number; y?: number }
+    | undefined
+  const springAxis = springConstraint?.parameters['axis'] === 'vertical' ? 'vertical' : 'horizontal'
+  const springNatural = Number(springConstraint?.parameters['naturalLength'] ?? 0)
+  if (springConstraint !== undefined && springAnchorParam !== undefined) {
+    geometryPoints.push({ x: springAnchorParam.x ?? 0, y: springAnchorParam.y ?? 0 })
+  }
+  const ropeConstraint = scene.constraints.find(c => c.type === 'rope')
+  const pendulumPivotParam = ropeConstraint?.parameters['pivot'] as
+    | { x?: number; y?: number }
+    | undefined
+  const pendulumLength = Number(ropeConstraint?.parameters['length'] ?? 0)
+  if (ropeConstraint !== undefined && pendulumPivotParam !== undefined) {
+    geometryPoints.push({
+      x: pendulumPivotParam.x ?? 0,
+      y: (pendulumPivotParam.y ?? 0) - (Number.isFinite(pendulumLength) ? pendulumLength : 0),
+    })
+  }
+
   const bounds = boundsOf(geometryPoints)
   const majorGrid = niceStep(Math.max(bounds.extent.width, bounds.extent.height))
   const arrowLength = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.19, 0.6)
@@ -383,18 +415,28 @@ export const mechanicsSceneVisualAt = ({
     (largest, observation) => Math.max(largest, observation.magnitude.value),
     0,
   )
+  /* Two applied pulls both carry the label `applied`, so id and symbol are
+     indexed: a composition experiment needs to tell F₁ from F₂, and duplicate
+     element ids would also collide in the DOM. A single applied force keeps
+     the plain F. */
+  const appliedTotal = forceObservations.filter(o => o.label === 'applied').length
+  let appliedIndex = 0
   const forceVectors = forceObservations.flatMap((observation) => {
     const style = FORCE_STYLES[observation.label]
     if (style === undefined) return []
+    const isIndexedApplied = observation.label === 'applied' && appliedTotal > 1
+    const idSuffix = isIndexedApplied ? `-${appliedIndex}` : ''
+    const symbol = isIndexedApplied ? `F_${appliedIndex + 1}` : style.symbol
+    if (observation.label === 'applied') appliedIndex += 1
     const share = largestForce === 0 ? 1 : observation.magnitude.value / largestForce
     const vector = displayVector(
-      `force-${observation.label}`,
+      `force-${observation.label}${idSuffix}`,
       style.role,
       style.observable,
       position,
       observation.vector,
       arrowLength * (0.45 + 0.55 * share),
-      style.symbol,
+      symbol,
     )
     if (vector === undefined) return []
     return [style.subordinate === true ? { ...vector, subordinate: true } : vector]
@@ -504,7 +546,13 @@ export const mechanicsSceneVisualAt = ({
   ].filter((point): point is NonNullable<typeof point> => point !== undefined)
 
   const dimensions = []
-  if (launchPoint !== undefined && groundObservation !== undefined) {
+  /* A rule shorter than the platform threshold has nothing to measure — a
+     ground launch skips the h dimension instead of drawing a zero-length stub. */
+  if (
+    launchPoint !== undefined &&
+    groundObservation !== undefined &&
+    launchPoint.y - groundObservation.groundY > bounds.extent.height * 0.04
+  ) {
     /* Offset the height rule into the left gutter so it never overlaps the launch
        platform or the first stretch of the trajectory. */
     const gutterX = bounds.origin.x + bounds.extent.width * 0.06
@@ -528,6 +576,9 @@ export const mechanicsSceneVisualAt = ({
 
   const initialVelocity = canonicalVector(
     simulation.states[0]?.objects.find(object => object.id === body.id)?.velocity,
+  )
+  const initialAcceleration = canonicalVector(
+    simulation.states[0]?.objects.find(object => object.id === body.id)?.acceleration,
   )
   const launchAngle = initialVelocity === undefined
     ? 0
@@ -563,22 +614,38 @@ export const mechanicsSceneVisualAt = ({
      grid with a dot. The floor covers short-window scenes (incline wedges). */
   const bodySize = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.045, 0.28)
 
-  /* A 1-D run happens on a surface even when the scene never declared one:
-     the cart's wheels have to sit on something, and the observation layer
-     already balances mg with N there. The track top sits one wheel-diameter
-     below the body's centre of mass. */
-  const isLinearModel =
-    model === 'uniform_linear_motion' ||
-    model === 'uniformly_accelerated_motion' ||
-    model === 'newton_second_law'
+  /* A horizontal 1-D run happens on a surface even when the scene never
+     declared one: the cart's wheels have to sit on something, and the
+     observation layer already balances mg with N there. The track top sits one
+     wheel-diameter below the body's centre of mass. Vertical motion (an
+     elevator) and diagonal motion (a free body under combined forces) get no
+     track — drawing rails under either would put them in mid-air — and the
+     body renders as a block rather than a wheeled cart. */
+  const isHorizontalLinear =
+    (model === 'uniform_linear_motion' ||
+      model === 'uniformly_accelerated_motion' ||
+      model === 'newton_second_law' ||
+      model === 'horizontal_friction' ||
+      model === 'spring_oscillator') &&
+    Math.abs(initialVelocity?.y ?? 0) < 1e-9 &&
+    Math.abs(initialAcceleration?.y ?? 0) < 1e-9
+  /* A friction-surface scene declares its level surface explicitly; other
+     horizontal 1-D runs get the implied track under the body's wheels. */
+  const frictionSurface = scene.observableDefinitions.find(
+    definition => definition.parameters?.['kind'] === 'friction_surface',
+  )
+  const frictionSurfaceY =
+    frictionSurface !== undefined && typeof frictionSurface.parameters?.['surfaceY'] === 'number'
+      ? frictionSurface.parameters['surfaceY']
+      : undefined
   const trackGround =
-    isLinearModel && groundObservation === undefined
+    isHorizontalLinear && groundObservation === undefined
       ? {
-          y: initialPosition.y - bodySize * 1.0,
-          from: bounds.origin.x,
-          to: bounds.origin.x + bounds.extent.width,
-          label: '水平轨道',
-        }
+        y: frictionSurfaceY ?? initialPosition.y - bodySize * 1.0,
+        from: bounds.origin.x,
+        to: bounds.origin.x + bounds.extent.width,
+        label: model === 'horizontal_friction' ? '水平面' : '水平轨道',
+      }
       : undefined
 
   /* Ticker-tape marks: sample the simulated states at equal time intervals so
@@ -594,10 +661,75 @@ export const mechanicsSceneVisualAt = ({
         ? undefined
         : pointOf(sample.objects.find(object => object.id === body.id)?.position)
       if (at === undefined || sample === undefined) return undefined
-      return index % 2 === 0
+      /* The first and last marks sit inside the launch/impact clusters, whose
+         keypoint readouts already state those times — labelling the marks
+         again would just add ink on top of ink. */
+      return index !== 0 && index !== markCount - 1 && index % 2 === 0
         ? { id: `mark-${index}`, at, label: `t=${formatNumber(sample.time.value)}` }
         : { id: `mark-${index}`, at }
     }).filter((mark): mark is NonNullable<typeof mark> => mark !== undefined)
+
+  /* Photographed rig apparatus: the clamp a coil/string hangs from and the
+     spring scale that pulls a friction block. Sprites anchor by their
+     catalogued point and track it every frame. */
+  const apparatus: ApparatusSpriteVisual[] = []
+  if (springConstraint !== undefined && springAnchorParam !== undefined && springAxis === 'vertical') {
+    apparatus.push({
+      id: `${springConstraint.id}-mount`,
+      part: 'support-clamp',
+      at: { x: springAnchorParam.x ?? 0, y: springAnchorParam.y ?? 0 },
+      size: 0.55,
+    })
+  }
+  if (ropeConstraint !== undefined && pendulumPivotParam !== undefined) {
+    apparatus.push({
+      id: `${ropeConstraint.id}-mount`,
+      part: 'support-clamp',
+      at: { x: pendulumPivotParam.x ?? 0, y: pendulumPivotParam.y ?? 0 },
+      size: 0.55,
+    })
+    /* The protractor hangs directly behind the pivot — the release angle is
+       read off its arc, exactly as on the bench rig. */
+    apparatus.push({
+      id: 'pivot-protractor',
+      part: 'protractor',
+      at: { x: pendulumPivotParam.x ?? 0, y: pendulumPivotParam.y ?? 0 },
+      size: 0.95,
+    })
+  }
+  if (model === 'spring_statics' && springAnchorParam !== undefined) {
+    /* The extension ruler mounts beside the spring at anchor height — the
+       Δx protocol reads the coil's lower end against it. */
+    apparatus.push({
+      id: 'extension-ruler',
+      part: 'ruler-vertical',
+      at: { x: (springAnchorParam.x ?? 0) + 0.85, y: springAnchorParam.y ?? 0 },
+      size: 2.6,
+    })
+  }
+  if (trackGround !== undefined) {
+    /* Every horizontal 1-D run gets a real rail under the body: the sprite's
+       top edge is the surface line, stretched across the tracked span. */
+    apparatus.push({
+      id: 'track-rail',
+      part: 'track-rail',
+      at: { x: (trackGround.from + trackGround.to) / 2, y: trackGround.y },
+      size: 0.32,
+      width: trackGround.to - trackGround.from,
+    })
+  }
+  if (model === 'horizontal_friction') {
+    /* The dynamometer sits ahead of the block on the pull side, its hook
+       pinned to the block face — the pull direction is +x for every friction
+       template, so the sprite flips to put the hook on the block side. */
+    apparatus.push({
+      id: 'puller-scale',
+      part: 'spring-scale',
+      at: { x: position.x + bodySize, y: position.y },
+      size: 0.45,
+      flip: true,
+    })
+  }
 
   return {
     domain: 'mechanics',
@@ -606,15 +738,30 @@ export const mechanicsSceneVisualAt = ({
     grid: { minor: majorGrid / 5, major: majorGrid },
     axes: { x: 'x / m', y: 'y / m' },
     tickStep: majorGrid,
+    /* A launch on or near the y-axis puts the 起点 label in the tick-label
+       column — blank the ticks on that row instead of shoving the label away
+       from its point. Tick marks stay; only the numbers drop. */
+    ...(launchPoint !== undefined && Math.abs(launchPoint.x) < majorGrid * 0.45
+      ? {
+        tickLabelAvoid: {
+          y: [launchPoint.y - majorGrid * 0.2, launchPoint.y + majorGrid * 0.6],
+        },
+      }
+      : {}),
     bodies: [
       {
         id: body.id,
         kind:
-          model === 'projectile_motion'
+          model === 'projectile_motion' || model === 'simple_pendulum'
             ? 'ball'
-            : isLinearModel
-              ? 'cart'
-              : 'block',
+            : model === 'spring_statics'
+              /* The textbook rig hangs a hooked weight from the spring. */
+              ? 'weight-hook'
+              : model === 'horizontal_friction'
+                ? 'block'
+                : isHorizontalLinear
+                  ? 'cart'
+                  : 'block',
         at: position,
         size: bodySize,
         live: true,
@@ -651,6 +798,39 @@ export const mechanicsSceneVisualAt = ({
     ...(model === 'inclined_plane'
       ? { incline: { origin: inclineOrigin, base: inclineBase, angle: inclineAngle } }
       : {}),
+    ...(springConstraint === undefined || springAnchorParam === undefined
+      ? {}
+      : {
+        spring: {
+          id: springConstraint.id,
+          anchor: { x: springAnchorParam.x ?? 0, y: springAnchorParam.y ?? 0 },
+          /* The coil ends at the body's near face, so the drawn length tracks
+             the true extension every frame. */
+          end:
+            springAxis === 'vertical'
+              ? { x: position.x, y: position.y + bodySize }
+              : { x: position.x - Math.sign(position.x - (springAnchorParam.x ?? 0)) * bodySize, y: position.y },
+          naturalLength: Number.isFinite(springNatural) ? springNatural : 0,
+          axis: springAxis,
+          /* The relaxed-end position: where the coil tip rests with zero
+             stretch, so a stretched/compressed coil has a reference. */
+          equilibrium:
+            springAxis === 'vertical'
+              ? (springAnchorParam.y ?? 0) - (Number.isFinite(springNatural) ? springNatural : 0)
+              : (springAnchorParam.x ?? 0) + (Number.isFinite(springNatural) ? springNatural : 0),
+        },
+      }),
+    ...(ropeConstraint === undefined || pendulumPivotParam === undefined
+      ? {}
+      : {
+        pendulum: {
+          id: ropeConstraint.id,
+          pivot: { x: pendulumPivotParam.x ?? 0, y: pendulumPivotParam.y ?? 0 },
+          bob: position,
+          length: Number.isFinite(pendulumLength) ? pendulumLength : 0,
+        },
+      }),
+    ...(apparatus.length === 0 ? {} : { apparatus }),
     /* A launch platform is a short slab at launch height, not a column down to the
        ground: the drop is already stated by the `h` dimension, and a full-height
        block would cut the scene in half. */

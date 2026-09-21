@@ -246,6 +246,28 @@ const INTENTS: readonly Intent[] = [
     },
   },
   {
+    id: 'apex-height',
+    prompt: '最高点的高度是多少？',
+    available: context => context.drawnIds.includes('apex'),
+    answer: (context) => {
+      const apex = findDerived(context, '最大高度')
+      return {
+        question: '最高点的高度是多少？',
+        paragraphs: [
+          '最高点是竖直方向速度减为零的位置，它由 v_y²/2g 决定，与水平方向的匀速运动无关。',
+          apex === undefined
+            ? '当前快照没有给出最大高度的数值。'
+            : `引擎给出的最大高度为 ${apex.value} ${apex.unit}，画布的「最高点」标注就是这个位置。`,
+        ],
+        sources: [
+          chip('scene', `场景 rev. ${context.sceneRevision}`),
+          chip('simulation', '仿真已验证'),
+        ],
+        tools: [{ tool: 'physics.ui.highlight', targetId: 'apex', duration: 1800 }],
+      }
+    },
+  },
+  {
     id: 'set-incline-45',
     prompt: '把斜面角度改成 45° 看看',
     available: context =>
@@ -1547,6 +1569,9 @@ export const matchIntent = (
     { id: 'circuit-ohm-current', test: /电流.*(怎么|为什么|多少|大小|算)|求.*电流|干路电流|电流强度/i },
     { id: 'horizontal-velocity', test: /水平速度|vx|v_x|水平方向/i },
     { id: 'normal-force-direction', test: /支持力|法向|normal/i },
+    /* 最高点 asks for the apex readout; the broad 高度 rule below answers the
+       launch height instead, so the apex probe must be tried first. */
+    { id: 'apex-height', test: /最高点|最大高度|射高|顶点/i },
     { id: 'height-meaning', test: /高度|20\s*m|h\s*=/i },
     { id: 'set-incline-45', test: /(倾角|角度|θ).*(改|设|变).*(45|四十五)|45.*(度|°)/i },
     { id: 'lorentz-no-work', test: /洛伦兹力.*做功|不做功/i },

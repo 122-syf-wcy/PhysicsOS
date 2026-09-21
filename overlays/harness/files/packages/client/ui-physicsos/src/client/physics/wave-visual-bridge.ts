@@ -175,6 +175,9 @@ export const waveSceneVisual = ({
   const amplitudeCm = cmOf(model.amplitude)
   const gain = verticalGainOf(model)
   const visible = visibilityOf(scene)
+  /* 波速读数 observable gates every `v = …` fragment; absent definition
+     means visible (the scene declares it true by default). */
+  const showSpeed = visible.waveSpeed !== false
   const timeText = `t = ${time.toFixed(2)} s`
 
   if (model.subModel === 'travelling_wave') {
@@ -255,7 +258,7 @@ export const waveSceneVisual = ({
         readout: [
           '绳上的简谐横波',
           `A = ${fmtWaveValue(amplitudeCm)} cm · λ = ${fmtWaveValue(model.wavelength)} m · f = ${fmtWaveValue(model.frequency)} Hz`,
-          `v = λf = ${fmtWaveValue(speed)} m/s · T = 1/f = ${fmtWaveValue(period)} s`,
+          ...(showSpeed ? [`v = λf = ${fmtWaveValue(speed)} m/s · T = 1/f = ${fmtWaveValue(period)} s`] : []),
           `${timeText} · 纵向放大 ×${gain}（读数为真实值）`,
         ],
         scale: { label: '10 cm', length: 10 },
@@ -342,7 +345,7 @@ export const waveSceneVisual = ({
       overlay: {
         readout: [
           '双源干涉与波的叠加',
-          `A = ${fmtWaveValue(amplitudeCm)} cm · λ = ${fmtWaveValue(model.wavelength)} m · f = ${fmtWaveValue(model.frequency)} Hz · v = ${fmtWaveValue(speed)} m/s`,
+          `A = ${fmtWaveValue(amplitudeCm)} cm · λ = ${fmtWaveValue(model.wavelength)} m · f = ${fmtWaveValue(model.frequency)} Hz${showSpeed ? ` · v = ${fmtWaveValue(speed)} m/s` : ''}`,
           `Δ = |r₂ − r₁| = ${fmtWaveValue(pathDifference)} m = ${fmtWaveValue(ratio)} λ → ${interferenceVerdictText(verdict)}`,
           `A_P = |2A·cos(πΔ/λ)| = ${fmtWaveValue(cmOf(resultant))} cm · y_P(${timeText.slice(4)}) = ${fmtWaveValue(cmOf(displacement))} cm`,
         ],
@@ -422,7 +425,7 @@ export const waveSceneVisual = ({
     overlay: {
       readout: [
         '两端固定的弦驻波',
-        `L = ${fmtWaveValue(model.stringLength ?? 0)} m · n = ${harmonic} · v = ${fmtWaveValue(speed)} m/s`,
+        `L = ${fmtWaveValue(model.stringLength ?? 0)} m · n = ${harmonic}${showSpeed ? ` · v = ${fmtWaveValue(speed)} m/s` : ''}`,
         `λ = 2L/n = ${fmtWaveValue(model.wavelength)} m · f_n = n·v/2L = ${fmtWaveValue(model.frequency)} Hz（f₁ = ${fmtWaveValue(fundamental)} Hz）`,
         `波节 ${nodes.length} 个 · 波腹 ${antinodes.length} 个 · ${timeText} · 纵向放大 ×${gain}`,
       ],

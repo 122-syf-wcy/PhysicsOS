@@ -54,6 +54,7 @@ const mountLab = (templateId: string) => {
       t={t}
       useSessions={neverHook}
       useWorkspaces={neverHook}
+      useAuth={neverHook}
     />,
   )
   return { surface, ...view }
@@ -347,6 +348,7 @@ describe('composite Lab surface', () => {
         openExperimentPicker={openExperimentPicker}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     fireEvent.click(screen.getByTitle('切换实验'))
@@ -372,6 +374,7 @@ describe('composite Lab surface', () => {
         openSurface={openSurface}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     expect(screen.getByText('实验中心')).toBeTruthy()

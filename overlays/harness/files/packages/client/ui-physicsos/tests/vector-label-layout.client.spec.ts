@@ -113,4 +113,43 @@ describe('parseMathSymbol', () => {
   it('returns nothing for an empty symbol rather than an empty run', () => {
     expect(parseMathSymbol('')).toEqual([])
   })
+
+  it('parses \\frac into a structural part with a flattened fallback', () => {
+    const [lead, frac] = parseMathSymbol('v = \\frac{a}{b}')
+    expect(lead).toEqual({ text: 'v = ' })
+    expect(frac?.frac?.num).toEqual([{ text: 'a' }])
+    expect(frac?.frac?.den).toEqual([{ text: 'b' }])
+    expect(frac?.text).toBe('(a)/(b)')
+  })
+
+  it('parses \\tfrac groups and the unbraced \\tfrac12 shorthand', () => {
+    expect(parseMathSymbol('h = \\tfrac{1}{2} g t^2')[1]?.text).toBe('(1)/(2)')
+    const [shorthand] = parseMathSymbol('\\tfrac12 m')
+    expect(shorthand?.frac?.num).toEqual([{ text: '1' }])
+    expect(shorthand?.frac?.den).toEqual([{ text: '2' }])
+  })
+
+  it('parses \\sqrt with and without a root index', () => {
+    const [, sqrt] = parseMathSymbol('t = \\sqrt{2 h / g}')
+    expect(sqrt?.sqrt?.body).toBeDefined()
+    expect(sqrt?.text).toBe('√(2 h / g)')
+    const [cubed] = parseMathSymbol('\\sqrt[3]{x}')
+    expect(cubed?.sqrt?.index).toEqual([{ text: '3' }])
+    expect(cubed?.text).toBe('3√(x)')
+  })
+
+  it('renders \\text group contents literally', () => {
+    expect(parseMathSymbol('E_k = \\text{const}')).toEqual([
+      { text: 'E' },
+      { text: 'k', script: 'sub' },
+      { text: ' = const' },
+    ])
+  })
+
+  it('keeps a fraction usable inside a script group', () => {
+    const parts = parseMathSymbol('x^{\\frac{1}{2}}')
+    expect(parts[0]).toEqual({ text: 'x' })
+    expect(parts[1]?.script).toBe('super')
+    expect(parts[1]?.frac?.den).toEqual([{ text: '2' }])
+  })
 })

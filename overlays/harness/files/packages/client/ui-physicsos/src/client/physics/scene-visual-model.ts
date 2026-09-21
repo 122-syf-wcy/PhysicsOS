@@ -56,6 +56,10 @@ export type PhysicsSemanticRole =
      magnetic force cobalt, gravity slate, net force orange. */
   | 'electric-force'
   | 'magnetic-force'
+  /* Connector forces on mechanics rigs: spring restoring pull and rope
+     tension get their own ink so the free-body reading names them apart. */
+  | 'spring'
+  | 'tension'
 
 /** Observable layers a student can switch on and off. */
 export type ObservableKey =
@@ -120,7 +124,7 @@ export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolea
 /** Solid body: block or ball. */
 export interface BodyVisual {
   id: string
-  kind: 'block' | 'ball' | 'cart'
+  kind: 'block' | 'ball' | 'cart' | 'weight-hook'
   at: ScenePoint
   /** Radius (ball) or half-edge (block); for a cart, half the axle spacing. */
   size: number
@@ -168,6 +172,60 @@ export interface PlatformVisual {
   width: number
   /** Drop from the platform top down to the ground, in scene units. */
   height: number
+}
+
+/**
+ * A coil spring between its anchor and the body's near edge. The renderer
+ * draws the coil parametrically — its length IS the physics (stretch =
+ * x − L₀), so it is a drawn primitive, never a bitmap.
+ */
+export interface SpringVisual {
+  /** Scene constraint id — the element key the inspector highlights. */
+  id: string
+  /** Fixed wall/support end. */
+  anchor: ScenePoint
+  /** End attached to the body at the current frame. */
+  end: ScenePoint
+  /** Relaxed length in scene units — drawn as a faint reference mark. */
+  naturalLength: number
+  /** 'horizontal' stretches sideways; 'vertical' hangs. */
+  axis: 'horizontal' | 'vertical'
+  /** Equilibrium position on the motion axis, for the rest-position tick. */
+  equilibrium?: number
+}
+
+/** Pendulum rig: pivot mount, taut string, and the rest-position marker. */
+export interface PendulumVisual {
+  /** Scene constraint id — the element key the inspector highlights. */
+  id: string
+  pivot: ScenePoint
+  /** Bob centre at the current frame — the string runs pivot → bob. */
+  bob: ScenePoint
+  /** String length in scene units. */
+  length: number
+}
+
+/**
+ * A photographed apparatus sprite placed by its catalogued anchor: the
+ * spring scale hooked to a friction block, the boss-head clamp a coil or
+ * string hangs from. `at` is the scene point the sprite's `anchorPoint`
+ * lands on; `size` is its drawn height in scene units. `flip` mirrors the
+ * sprite horizontally — e.g. the scale's hook must face the block. The
+ * sprite moves with the scene point it is anchored to, so a puller tracks
+ * its body every frame.
+ */
+export interface ApparatusSpriteVisual {
+  /** Element key — inspector highlights can target it. */
+  id: string
+  /** Key into the mechanics parts3d catalog. */
+  part: string
+  at: ScenePoint
+  /** Drawn height in scene units; width follows the sprite aspect. */
+  size: number
+  /** Explicit width in scene units — stretches the sprite for extent-spanning parts (rails). */
+  width?: number
+  /** Mirror horizontally about the anchor point. */
+  flip?: boolean
 }
 
 /** One trajectory polyline. `history` is solid, `predicted` is a faint dash. */
@@ -417,6 +475,12 @@ export interface CircuitComponentVisual {
   label: string
   /** Nameplate rating, e.g. `10 Ω` or `E=6 V · r=0.5 Ω`. */
   value?: string
+  /**
+   * The rating behind {@link value} as a number: volts for a source, ohms for a
+   * resistor or rheostat. The canvas picks which catalogued apparatus to draw
+   * from it, so the part shown is the part the student set.
+   */
+  ratingValue?: number
   /** Live meter face, e.g. `0.20 A`. Ammeter gated by `current`, voltmeter by `voltage`. */
   reading?: string
   /** Voltage across the component, gated by the `voltage` observable. */
@@ -914,6 +978,12 @@ export interface SceneVisualModel {
   ground?: GroundVisual
   incline?: InclineVisual
   platform?: PlatformVisual
+  /** Coil spring rig (mechanics spring_oscillator / spring_statics). */
+  spring?: SpringVisual
+  /** String + pivot of a simple_pendulum rig. */
+  pendulum?: PendulumVisual
+  /** Photographed rig apparatus (puller scale, suspension clamp). */
+  apparatus?: readonly ApparatusSpriteVisual[]
   /** Equal-time strobe marks along the path (ticker-tape style). */
   motionMarks?: readonly MotionMarkVisual[]
   coordinate?: CoordinateVisual
@@ -1197,6 +1267,12 @@ export interface RuntimeErrorView {
   /** Student-facing explanation in the product language. */
   message: string
   retryable: boolean
+  /**
+   * Engine precondition that failed, when the failure was a named one (e.g.
+   * `single_voltage_source`). The shell localizes this; `message` stays the
+   * engine's own wording, for cases no key covers.
+   */
+  condition?: string
   /** Conditions the parser did recognise, so the student is not stranded. */
   recognized?: readonly { label: string; value: string }[]
 }

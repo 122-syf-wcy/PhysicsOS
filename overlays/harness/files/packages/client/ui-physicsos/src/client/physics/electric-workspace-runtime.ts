@@ -119,15 +119,15 @@ const DERIVED_LABELS: Record<string, string> = {
   hit_time_in_field: '打板时间（进场起计）',
 }
 
+/* Only types `observableKeyOf` admits ever reach the tree — labels for the
+   other scene-declared types (electric_potential/energy/geometry) were dead
+   entries and are gone rather than kept "just in case". */
 const OBSERVABLE_LABELS: Record<string, string> = {
   velocity: '速度',
   force: '电场力',
   trajectory: '运动轨迹',
   acceleration: '加速度',
   electric_field: '电场',
-  electric_potential: '电势',
-  energy: '能量',
-  geometry: '几何标注',
 }
 
 const observableKeyOf = (definition: ObservableDefinition): ObservableKey | undefined => {
@@ -758,7 +758,9 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   setRunning(running: boolean): WorkspaceSnapshot {
-    this.running = running && (this.computed?.endTime ?? 0) > 0
+    const end = this.computed?.endTime ?? 0
+    if (running && end > 0 && this.currentTime >= end) this.currentTime = 0
+    this.running = running && end > 0
     return this.getSnapshot()
   }
 

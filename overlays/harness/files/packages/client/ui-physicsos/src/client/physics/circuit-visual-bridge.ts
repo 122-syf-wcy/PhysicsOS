@@ -48,6 +48,11 @@ import type {
 /** Currents below this read as "no current" (open branch, voltmeter leak). */
 export const NO_CURRENT_AMPS = 1e-9
 
+/** Display floor for formatted readouts: solver residue on near-ideal
+    elements (a 0 Ω span, an ideal meter's leak) lands around 1e-7, still far
+    below any bench reading. */
+const READOUT_NOISE_FLOOR = 1e-6
+
 /** Dissipation below this reads as "no heat" — the lamp halo stays off. */
 const LAMP_MIN_WATTS = 1e-9
 
@@ -57,10 +62,11 @@ const FLOW_MIN_AMPS = 1e-6
 export const fmtQuantityValue = (value: number, digits = 3): string => {
   if (!Number.isFinite(value)) return '—'
   const absolute = Math.abs(value)
-  /* Below any pedagogically meaningful magnitude sits Gaussian-elimination
-     noise (an open circuit solves to ~1e-16 A, not exactly 0); showing it as
-     an exponential would claim precision the solve does not have. */
-  if (absolute < NO_CURRENT_AMPS) return '0'
+  /* Below any pedagogically meaningful magnitude sits solver residue — an
+     open circuit solves to ~1e-16 A and a 0 Ω rheostat drop to ~1e-7 V.
+     Showing those as exponentials would claim precision the solve does not
+     have, so the readout prints them as 0. */
+  if (absolute < READOUT_NOISE_FLOOR) return '0'
   if (absolute < 1e-3 || absolute >= 1e5) return value.toExponential(2)
   return String(Number.parseFloat(value.toPrecision(digits)))
 }
@@ -118,6 +124,19 @@ const kindOf = (component: CircuitComponent): CircuitSymbolKind | undefined =>
     ? component.type
     : undefined
 
+const ratingOf = (component: CircuitComponent): number | undefined => {
+  switch (component.type) {
+    case 'resistor':
+      return canonicalValue(component.resistance)
+    case 'variable_resistor':
+      return canonicalValue(component.totalResistance)
+    case 'voltage_source':
+      return canonicalValue(component.voltage)
+    default:
+      return undefined
+  }
+}
+
 const nameplateOf = (component: CircuitComponent): string | undefined => {
   switch (component.type) {
     case 'resistor':
@@ -148,6 +167,7 @@ const componentVisualOf = (
   const id = String(component.id)
   const label = component.name ?? id
   const nameplate = nameplateOf(component)
+  const rating = ratingOf(component)
   const current = operating?.current ?? 0
   const voltage = operating?.voltage ?? 0
   const power = operating?.power ?? 0
@@ -181,6 +201,7 @@ const componentVisualOf = (
     rotation: placement.rotation ?? 0,
     label,
     ...(nameplate === undefined ? {} : { value: nameplate }),
+    ...(rating === undefined ? {} : { ratingValue: rating }),
     ...(reading === undefined ? {} : { reading }),
     ...(showsVoltage ? { voltageText: `U=${fmtQuantityValue(voltage)} V` } : {}),
     ...(showsPower ? { powerText: `P=${fmtQuantityValue(power)} W` } : {}),
@@ -358,11 +379,21 @@ export interface CircuitVisualInput {
   readonly point: CircuitOperatingPoint
   /** Scene time in seconds; positions the rheostat slider on a sweep. */
   readonly time: number
+  /**
+   * Pinned viewport. While a component is being dragged the layout's bounding
+   * box tracks the pointer — fitting it every move would zoom the canvas under
+   * the student's hand. The caller pins the pre-drag frame and the bridge draws
+   * the displaced schematic inside it.
+   */
+  readonly frame?: {
+    readonly origin: ScenePoint
+    readonly extent: { readonly width: number; readonly height: number }
+  }
 }
 
 /** Build the one visual frame the circuit renderer consumes. */
 export const circuitSceneVisualAt = (
-  { scene, point, time }: CircuitVisualInput,
+  { scene, point, time, frame }: CircuitVisualInput,
 ): SceneVisualModel => {
   const circuit = circuitOf(scene)
   if (circuit === undefined) return emptyVisualModel('circuit')
@@ -416,7 +447,7 @@ export const circuitSceneVisualAt = (
     xs.push(0)
     ys.push(0)
   }
-  const pad = 2.4
+  const pad = 1.7
   const minX = Math.min(...xs) - pad
   const maxX = Math.max(...xs) + pad
   const minY = Math.min(...ys) - pad
@@ -437,8 +468,8 @@ export const circuitSceneVisualAt = (
   ]
 
   return emptyVisualModel('circuit', {
-    extent: { width: maxX - minX, height: maxY - minY },
-    origin: { x: minX, y: minY },
+    extent: frame?.extent ?? { width: maxX - minX, height: maxY - minY },
+    origin: frame?.origin ?? { x: minX, y: minY },
     grid: { minor: 1, major: 5 },
     axes: { x: '', y: '' },
     circuitComponents: components,

@@ -53,7 +53,7 @@ const runtimeFor = (scene: PhysicsScene): WorkspaceRuntime => {
     case 'wave': return createWaveWorkspaceRuntime(scene)
     case 'composite': return createCompositeWorkspaceRuntime(scene)
     case 'magnetic': return createMagneticWorkspaceRuntime(scene)
-    default: throw new Error(`no runtime for domain ${String(domain)}`)
+    default: throw new Error(`no runtime for domain ${domain}`)
   }
 }
 
@@ -112,11 +112,11 @@ const near = (actual: number, expected: number, context: string, relTol = 5e-3) 
 const derivedOf = (snapshot: WorkspaceSnapshot, pattern: RegExp): number => {
   const row = snapshot.inspector
     .flatMap(section => section.derived ?? [])
-    .find(entry => pattern.test(entry.label) || pattern.test(entry.symbol ?? ''))
+    .find(entry => entry !== undefined && (pattern.test(entry.label) || pattern.test(entry.symbol ?? '')))
   if (row === undefined) {
     const labels = snapshot.inspector
       .flatMap(section => section.derived ?? [])
-      .map(entry => entry.label)
+      .map(entry => entry?.label ?? '')
       .join(' | ')
     throw new Error(`derived row ${pattern} missing; have: ${labels}`)
   }
@@ -126,11 +126,11 @@ const derivedOf = (snapshot: WorkspaceSnapshot, pattern: RegExp): number => {
 const parameterOf = (snapshot: WorkspaceSnapshot, pattern: RegExp): number => {
   const row = snapshot.inspector
     .flatMap(section => section.parameters)
-    .find(entry => pattern.test(entry.label) || pattern.test(entry.symbol ?? ''))
+    .find(entry => entry !== undefined && (pattern.test(entry.label) || pattern.test(entry.symbol ?? '')))
   if (row === undefined) {
     const labels = snapshot.inspector
       .flatMap(section => section.parameters)
-      .map(entry => entry.label)
+      .map(entry => entry?.label ?? '')
       .join(' | ')
     throw new Error(`parameter ${pattern} missing; have: ${labels}`)
   }
@@ -238,7 +238,7 @@ describe('numeric audit · analytic formulas on published numbers', () => {
     const d = parameterOf(snapshot, /峭壁距离|距离/)
     const last = snapshot.table.rows[snapshot.table.rows.length - 1]
     if (last === undefined) throw new Error('echo table empty')
-    const travel = num(last.values[columnIndex(snapshot, /路程/)], 'final 路程')
+    const travel = num(last.values[columnIndex(snapshot, /路程/)] ?? '', 'final 路程')
     near(travel, 2 * d, '路程 = 2d', 2e-2)
   })
 

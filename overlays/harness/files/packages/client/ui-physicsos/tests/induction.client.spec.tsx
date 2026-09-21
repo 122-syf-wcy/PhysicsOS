@@ -110,6 +110,25 @@ describe('induction workspace runtime', () => {
     expect(snapshot.table.columns).toEqual(['B / T', 'S / cm²', 'dΦ/dt / (Wb/s)', 'R / Ω', 'E / V', 'I / A'])
   })
 
+  it('gates the E and dΦ/dt readout fragments behind the emf/flux observables', () => {
+    const runtime = createInductionWorkspaceRuntime(createBarMotionScene())
+    const shown = runtime.getSnapshot().view.overlay.readout.find(line => line.includes('I = E/R'))
+    expect(shown).toContain('E = BLv')
+    expect(shown).toContain('dΦ/dt')
+
+    /* Each declared observable owns a fragment: hiding emf drops the E part
+       but keeps the current the rig still carries. */
+    const emfHidden = runtime.setObservable('emf', false)
+    const emfLine = emfHidden.view.overlay.readout.find(line => line.includes('I = E/R'))
+    expect(emfLine).not.toContain('E = BLv')
+    expect(emfLine).toContain('I = E/R')
+
+    const fluxHidden = runtime.setObservable('flux', false)
+    const fluxLine = fluxHidden.view.overlay.readout.find(line => line.includes('I = E/R'))
+    expect(fluxLine).not.toContain('dΦ/dt')
+    expect(fluxLine).toContain('I = E/R')
+  })
+
   it('doubles the EMF through a real velocity edit and bumps the revision', () => {
     const runtime = createInductionWorkspaceRuntime(createBarMotionScene())
     const edited = runtime.editParameter('bar-velocity', 4)
@@ -279,6 +298,7 @@ describe('induction Lab surface', () => {
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
+        useAuth={neverHook}
       />,
     )
     expect(container.querySelector('[data-physicsos-domain="induction"]')).toBeTruthy()
@@ -298,6 +318,8 @@ describe('induction charge-flow renderer', () => {
   const projection: RendererProjection = {
     px: point => point.x,
     py: point => -point.y,
+    sx: x => x,
+    sy: y => -y,
     scale: 1,
     uid: 'test',
     path: () => '',
