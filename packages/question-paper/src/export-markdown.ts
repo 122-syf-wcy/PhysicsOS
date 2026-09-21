@@ -91,11 +91,11 @@ export function renderPaperMarkdown(doc: PaperDocument, figures?: ReadonlyMap<st
   const lines: string[] = [
     `% ${doc.title}`,
     '',
-    `**${doc.header.examName}**　${doc.header.grade}　${doc.header.subjectLine}`,
+    `**${doc.header.examName}**\u3000${doc.header.grade}\u3000${doc.header.subjectLine}`,
     '',
-    `满分：${doc.header.totalScore} 分　　考试时间：${doc.header.minutes} 分钟`,
+    `满分：${doc.header.totalScore} 分\u3000\u3000考试时间：${doc.header.minutes} 分钟`,
     '',
-    `${doc.header.candidateFields.join('　　')}：____________`,
+    `${doc.header.candidateFields.join('\u3000\u3000')}：____________`,
     '',
     '**注意事项：**',
     '',
@@ -117,7 +117,7 @@ export function renderPaperMarkdown(doc: PaperDocument, figures?: ReadonlyMap<st
       lines.push(`**${question.number}.**（${question.score} 分）${tex(question.stem)}`, '')
       lines.push(...renderOptions(question), '')
       for (const sub of question.subQuestions ?? []) {
-        lines.push(`　（${subNo(sub.no)}）（${sub.score} 分）${tex(sub.text)}`, '')
+        lines.push(`\u3000（${subNo(sub.no)}）（${sub.score} 分）${tex(sub.text)}`, '')
       }
       if (question.figure !== undefined) {
         const caption = tex(question.figure.caption ?? question.figure.ref)
