@@ -178,7 +178,7 @@ describe('dsh-tool-physicsos', () => {
     const ctx = await setup()
     const solved = value<{ status: string; answers: { key: string }[]; scene?: { sceneId: string } }>(
       await call(ctx, 'physics_solve_question', {
-        text: '一个质子以 3.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.40 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 轨道半径 2. 运动周期',
+        text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 洛伦兹力大小 2. 轨道半径 3. 运动周期 4. 判断运动方向 5. 显示运动轨迹',
       }),
     )
     expect(solved.status).toBe('solved')
@@ -345,15 +345,41 @@ describe('dsh-tool-physicsos scene mirroring', () => {
     const { ctx, session, agent } = await bench()
     const first = await openExperiment(ctx, 'uniform-linear', agent)
     const solved = value<{ scene?: { sceneId: string } }>(await call(ctx, 'physics_solve_question', {
-      text: '一个质子以 3.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.40 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 轨道半径 2. 运动周期',
+      text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 洛伦兹力大小 2. 轨道半径 3. 运动周期 4. 判断运动方向 5. 显示运动轨迹',
     }, { agent }))
     const questionSceneId = solved.scene!.sceneId
     const published = snapshots(session)
     expect(published.map(entry => entry.cause)).toEqual(['created', 'solved'])
     expect(published[1]!.sourceQuestionId).toBeDefined()
+    /* The solved snapshot carries the structured solve so the chat card can
+       render knowns/steps/verification without re-running the question. */
+    const solve = published[1]!.solve!
+    expect(solve.knowns.map(known => known.symbol)).toContain('q')
+    expect(solve.targets).toContain('radius')
+    expect(solve.answers.length).toBeGreaterThan(0)
+    expect(solve.steps.length).toBeGreaterThan(0)
+    expect(solve.verification?.status).toBe('passed')
+    expect(solve.goldenQuestionId).toBe('01-proton-basic')
     const projection = projectionOf(ctx, session)!
     expect(Object.keys(projection.scenes).sort()).toEqual([first.sceneId, questionSceneId].sort())
     expect(projection.latest).toBe(questionSceneId)
+  })
+
+  it('keeps the golden link when questionId accompanies a paraphrased stem', async () => {
+    const { ctx, session, agent } = await bench()
+    /* The practice hand-off wraps the stem in instructions; the model may not
+       echo it verbatim, so the bank identity travels in `questionId`. */
+    const solved = value<{ goldenQuestionId?: string; status: string }>(
+      await call(ctx, 'physics_solve_question', {
+        text: '质子在匀强磁场中做圆周运动，已知速度、磁场、质量和电荷量，求半径与周期。',
+        questionId: '01-proton-basic',
+      }, { agent }),
+    )
+    expect(solved.status).toBe('solved')
+    expect(solved.goldenQuestionId).toBe('01-proton-basic')
+    const published = snapshots(session)
+    expect(published[0]!.cause).toBe('solved')
+    expect(published[0]!.solve!.goldenQuestionId).toBe('01-proton-basic')
   })
 
   it('publishes nothing for agent-less callers, which have no session log', async () => {

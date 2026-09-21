@@ -20,6 +20,54 @@ import type { JsonValue } from '@deepseek-ai/dsh-session/types'
 export type PhysicsSceneSnapshotCause = 'created' | 'solved' | 'command'
 
 /**
+ * The structured half of a `physics_solve_question` result, carried on the
+ * `cause: 'solved'` snapshot so the chat card can present the question
+ * understanding (knowns, targets), the worked steps and the engine verdict —
+ * the same contract Question Space drew, without a second pipeline.
+ * All fields are lossless JSON (`value: null` marks a non-finite parse).
+ */
+export interface PhysicsSceneSolveSummary {
+  /** Quantities the parser read off the stem. `key` feeds canvas highlighting. */
+  readonly knowns: readonly {
+    readonly key: string
+    readonly label: string
+    readonly symbol: string
+    readonly value: number | null
+    readonly unit: string
+  }[]
+  /** Quantities the stem asks for, in the solver's own vocabulary. */
+  readonly targets: readonly string[]
+  /** Solved target values, already formatted for the student. */
+  readonly answers: readonly {
+    readonly key: string
+    readonly label: string
+    readonly symbol: string
+    readonly value: string
+    readonly unit: string
+  }[]
+  readonly steps: readonly {
+    readonly index: number
+    readonly title: string
+    readonly description: string
+    readonly substitution?: string
+    readonly result?: string
+  }[]
+  readonly verification?: {
+    readonly status: string
+    readonly checks: readonly { readonly id: string; readonly passed: boolean; readonly message?: string }[]
+  }
+  /** Parser/validator complaints; empty when the run was clean. */
+  readonly issues: readonly {
+    readonly code: string
+    readonly message: string
+    readonly severity: string
+  }[]
+  /** Golden-bank id when the stem matched a built-in question — the card
+      attaches that question's self-check items and records attempts. */
+  readonly goldenQuestionId?: string
+}
+
+/**
  * One scene as the tool runtime holds it at one revision. `scene` is the
  * complete `PhysicsScene` (`physics-scene/1.0`) as lossless JSON, so a client
  * can mount it in the Lab without reaching back into the host process.
@@ -37,6 +85,10 @@ export interface PhysicsSceneSnapshot {
   eventType?: string
   /** Question id when the scene was built by `physics_solve_question`. */
   sourceQuestionId?: string
+  /** Agent turn that produced the snapshot; absent in logs written before it. */
+  turn?: number
+  /** Structured solve result; present only on `cause: 'solved'` snapshots. */
+  solve?: PhysicsSceneSolveSummary
   scene: JsonValue
 }
 

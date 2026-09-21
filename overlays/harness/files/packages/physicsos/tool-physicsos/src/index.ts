@@ -34,7 +34,7 @@ import {
   type PhysicsToolName,
   type SceneDescription,
 } from '@physicsos/agent-tools'
-import type { PhysicsSceneSnapshot, PhysicsSceneSnapshotCause, PhysicsScenesProjection } from './types.ts'
+import type { PhysicsSceneSnapshot, PhysicsSceneSnapshotCause, PhysicsSceneSolveSummary, PhysicsScenesProjection } from './types.ts'
 
 // The `physics/scene` event and `physicsScenes` projection-key declarations
 // live in src/types.ts (their one home); this re-export projects the type face
@@ -113,6 +113,7 @@ const physicsScenesProjectionSchema: ZodType<PhysicsScenesProjection> = zod.obje
     commandType: zod.string().optional(),
     eventType: zod.string().optional(),
     sourceQuestionId: zod.string().optional(),
+    turn: zod.number().optional(),
     scene: zod.custom<JsonValue>(() => true),
   })),
 })
@@ -185,9 +186,21 @@ export function apply(ctx: Context, config: Config): void {
     runtime: PhysicsToolRuntime,
     description: SceneDescription,
     cause: PhysicsSceneSnapshotCause,
-    extra: { commandType?: string; eventType?: string } = {},
+    extra: { commandType?: string; eventType?: string; solve?: PhysicsSceneSolveSummary } = {},
   ): void => {
     if (exec.agent === undefined) return
+    /* The snapshot rides the owning turn so the chat card can dock at the
+       answer: the tool call's own events carry the turn, this one does not —
+       read it back off the open turn/start. */
+    const events = exec.agent.session.events
+    let turn: number | undefined
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]
+      if (event?.type === 'turn/start') {
+        turn = event.data.turn
+        break
+      }
+    }
     const snapshot: PhysicsSceneSnapshot = {
       sceneId: description.sceneId,
       revision: description.revision,
@@ -195,9 +208,11 @@ export function apply(ctx: Context, config: Config): void {
       engineId: description.engineId,
       title: description.title,
       cause,
+      ...(turn === undefined ? {} : { turn }),
       ...(extra.commandType === undefined ? {} : { commandType: extra.commandType }),
       ...(extra.eventType === undefined ? {} : { eventType: extra.eventType }),
       ...(description.sourceQuestionId === undefined ? {} : { sourceQuestionId: description.sourceQuestionId }),
+      ...(extra.solve === undefined ? {} : { solve: extra.solve }),
       scene: runtime.sceneSnapshot(description.sceneId) as unknown as JsonValue,
     }
     exec.agent.session.append('physics/scene', snapshot)
@@ -240,12 +255,33 @@ export function apply(ctx: Context, config: Config): void {
     description: PHYSICS_TOOL_DOCS.physics_solve_question.description,
     parameters: {
       text: { type: 'string', required: true, description: '完整的中文题面，包含所有已知量和所求。' },
+      questionId: {
+        type: 'string',
+        description: '可选：题库题 id（练习链路附在题面后）；命中题库时按题库原文求解。',
+      },
     },
     output: { schema: ANY_OBJECT, render: renderFor('physics_solve_question') },
     execute: (args, exec) => {
       const runtime = runtimeFor(exec)
-      const solved = guarded(() => runtime.solveQuestion(args.text))
-      if (solved.scene !== undefined) publish(exec, runtime, solved.scene, 'solved')
+      const solved = guarded(() => runtime.solveQuestion(args.text, args.questionId))
+      if (solved.scene !== undefined) {
+        publish(exec, runtime, solved.scene, 'solved', {
+          solve: {
+            knowns: solved.knowns,
+            targets: solved.targets,
+            answers: solved.answers,
+            steps: solved.steps,
+            ...(solved.verification === undefined ? {} : {
+              verification: {
+                status: solved.verification.status,
+                checks: solved.verification.checks,
+              },
+            }),
+            issues: solved.issues,
+            ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
+          },
+        })
+      }
       return Promise.resolve(solved as unknown as AnyObject)
     },
     presentCall: args => ({ card: 'generic', title: '题目运行时求解', kind: 'other', rawInput: args.text }),
