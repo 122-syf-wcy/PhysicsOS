@@ -15,7 +15,23 @@ import {
   sourcePaperWire, specTableWire,
 } from './domain.ts'
 import type { IngestInput } from './ingest.ts'
-import type { BankSelectionPolicy, PaperDocument, PaperRequest } from '@physicsos/question-paper'
+import type {
+  BankSelectionPolicy, PaperDocument, PaperRequest, ReviewStatus,
+} from '@physicsos/question-paper'
+
+const REVIEW_STATUSES: readonly ReviewStatus[] = ['pending', 'verified', 'rejected']
+
+/**
+ * Bank review-status filter. An unrecognised value is a client error rather
+ * than a silently ignored filter — the old `as never` cast both defeated the
+ * type check and made every typo return the unfiltered list.
+ */
+const reviewStatusOf = (value: string | null): ReviewStatus | undefined => {
+  if (value === null) return undefined
+  const match = REVIEW_STATUSES.find(status => status === value)
+  if (match === undefined) throw new PaperError(400, 'BAD_QUERY', `未知的题库状态：${value}`)
+  return match
+}
 
 /** Downloadable file whitelist — nothing else under the export dir serves. */
 const FILE_NAMES = new Set(['试卷.pdf', '试卷.docx', '答案解析.pdf', '答案解析.docx'])
@@ -37,6 +53,13 @@ const sendError = (res: ServerResponse, error: unknown): void => {
     return
   }
   send(res, 500, { error: { code: 'INTERNAL', message: error instanceof Error ? error.message : String(error) } })
+}
+
+/** Path segment `index`; a shorter path than the route matched answers 400. */
+const segment = (parts: readonly string[], index: number): string => {
+  const value = parts[index]
+  if (value === undefined) throw new PaperError(400, 'BAD_ROUTE', '路径缺少参数')
+  return value
 }
 
 const readJson = async (req: IncomingMessage): Promise<unknown> => {
@@ -73,15 +96,15 @@ export interface RouteDeps {
 
 type Body = Record<string, unknown>
 const str = (body: Body, key: string): string =>
-  typeof body[key] === 'string' && (body[key] as string).length > 0 ? body[key] as string : ''
+  typeof body[key] === 'string' && (body[key]).length > 0 ? body[key] : ''
 
-interface WireSchema { parse(data: unknown): unknown }
+interface WireSchema<T> { parse(data: unknown): T }
 /* Wire bodies hit the durable domain verbatim; validate at the boundary —
    a malformed row written through would fail domain-open schema checks on
    the next boot. */
-const parse = <T>(schema: WireSchema, data: unknown): T => {
+const parse = <T>(schema: WireSchema<T>, data: unknown): T => {
   try {
-    return schema.parse(data) as T
+    return schema.parse(data)
   } catch (error) {
     throw new PaperError(400, 'BAD_BODY', error instanceof Error ? error.message : String(error))
   }
@@ -102,30 +125,39 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
       const seg = path.split('/').filter(Boolean)
 
       /* --- 原卷与考点录入 --- */
-      if (method === 'GET' && path === '/sources') return send(res, 200, service.listSources())
+      if (method === 'GET' && path === '/sources') {
+        send(res, 200, service.listSources())
+        return
+      }
       if (method === 'POST' && path === '/sources') {
         const body = await readJson(req)
-        return send(res, 201, await service.addSource(parse(sourcePaperWire, body)))
+        send(res, 201, await service.addSource(parse(sourcePaperWire, body)))
+        return
       }
       if (method === 'GET' && path === '/annotations') {
-        return send(res, 200, service.listAnnotations(url.searchParams.get('source') ?? undefined))
+        send(res, 200, service.listAnnotations(url.searchParams.get('source') ?? undefined))
+        return
       }
       if (method === 'POST' && seg[0] === 'sources' && seg[2] === 'annotations') {
         const body = await readJson(req)
-        return send(res, 201, await service.addAnnotation(
+        send(res, 201, await service.addAnnotation(
           parse(annotationWire, { ...(body as object), sourcePaperId: seg[1] })))
+        return
       }
       if (method === 'POST' && seg[0] === 'sources' && seg[2] === 'verify') {
         const body = await readJson(req) as Body
-        return send(res, 200, await service.reviewSource(seg[1]!, 'verified', str(body, 'reviewer')))
+        send(res, 200, await service.reviewSource(segment(seg, 1), 'verified', str(body, 'reviewer')))
+        return
       }
       if (method === 'POST' && seg[0] === 'annotations' && seg[2] === 'review') {
         const body = await readJson(req) as Body
         const status = body['status'] === 'verified' ? 'verified' : body['status'] === 'rejected' ? 'rejected' : 'pending'
-        return send(res, 200, await service.reviewAnnotation(seg[1]!, status))
+        send(res, 200, await service.reviewAnnotation(segment(seg, 1), status))
+        return
       }
       if (method === 'GET' && path === '/stats') {
-        return send(res, 200, service.annotationStats(url.searchParams.get('source') ?? undefined))
+        send(res, 200, service.annotationStats(url.searchParams.get('source') ?? undefined))
+        return
       }
       if (method === 'POST' && path === '/import/csv') {
         const body = await readJson(req) as Body
@@ -157,22 +189,25 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
           }
         }
         for (const row of parsed) {
-          await service.addAnnotation(row as Parameters<typeof service.addAnnotation>[0])
+          await service.addAnnotation(row)
         }
-        return send(res, 201, { created: parsed.length })
+        send(res, 201, { created: parsed.length })
+        return
       }
 
       /* --- 题库 --- */
       if (method === 'GET' && path === '/bank/items') {
-        return send(res, 200, service.listBankItems({
-          status: url.searchParams.get('status') as never ?? undefined,
+        send(res, 200, service.listBankItems({
+          status: reviewStatusOf(url.searchParams.get('status')),
           level: url.searchParams.get('level') ?? undefined,
           kind: url.searchParams.get('kind') ?? undefined,
         }))
+        return
       }
       if (method === 'POST' && path === '/bank/items') {
         const body = await readJson(req)
-        return send(res, 201, await service.addBankItem(parse(bankItemWire, body)))
+        send(res, 201, await service.addBankItem(parse(bankItemWire, body)))
+        return
       }
       if (method === 'POST' && path === '/bank/ingest') {
         const body = await readJson(req) as Body
@@ -180,60 +215,73 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         if (text.length === 0) throw new PaperError(400, 'BAD_REQUEST', 'ingest needs pasted question text')
         const level = body['level'] === 'gaokao' ? 'gaokao' : 'zhongkao'
         const subject = body['subject'] === 'chemistry' ? 'chemistry' : 'physics'
-        return send(res, 200, await deps.runIngest({
+        send(res, 200, await deps.runIngest({
           text, level, subject,
           sourceUrl: str(body, 'sourceUrl') || undefined,
           sourcePaperId: str(body, 'sourcePaperId') || undefined,
           enteredBy: str(body, 'enteredBy') || 'ingest',
         }))
+        return
       }
       if (method === 'PUT' && seg[0] === 'bank' && seg[1] === 'items' && seg.length === 3) {
         const body = await readJson(req)
-        return send(res, 200, await service.updateBankItem(
-          seg[2]!, parse(bankItemPatchWire, body)))
+        send(res, 200, await service.updateBankItem(
+          segment(seg, 2), parse(bankItemPatchWire, body)))
+        return
       }
       if (method === 'POST' && seg[0] === 'bank' && seg[1] === 'items' && seg[3] === 'review') {
         const body = await readJson(req) as Body
         const status = body['status'] === 'verified' ? 'verified' : body['status'] === 'rejected' ? 'rejected' : 'pending'
-        return send(res, 200, await service.reviewBankItem(seg[2]!, status, str(body, 'reviewer') || 'reviewer'))
+        send(res, 200, await service.reviewBankItem(segment(seg, 2), status, str(body, 'reviewer') || 'reviewer'))
+        return
       }
       if (method === 'GET' && seg[0] === 'bank' && seg[1] === 'items' && seg[3] === 'usage') {
-        return send(res, 200, service.bankUsageFor(seg[2]!))
+        send(res, 200, service.bankUsageFor(segment(seg, 2)))
+        return
       }
 
       /* --- 结构模板 --- */
-      if (method === 'GET' && path === '/blueprints') return send(res, 200, service.listBlueprints())
+      if (method === 'GET' && path === '/blueprints') {
+        send(res, 200, service.listBlueprints())
+        return
+      }
       if (method === 'POST' && path === '/blueprints') {
         const body = await readJson(req) as Body
-        return send(res, 201, await service.addBlueprint(parse(blueprintWire, body)))
+        send(res, 201, await service.addBlueprint(parse(blueprintWire, body)))
+        return
       }
       if (method === 'POST' && seg[0] === 'blueprints' && seg[2] === 'verify') {
-        return send(res, 200, await service.verifyBlueprint(seg[1]!))
+        send(res, 200, await service.verifyBlueprint(segment(seg, 1)))
+        return
       }
 
       /* --- 试卷任务 --- */
       if (method === 'GET' && path === '/jobs') {
-        return send(res, 200, service.listJobs((url.searchParams.get('status') ?? undefined) as never))
+        send(res, 200, service.listJobs((url.searchParams.get('status') ?? undefined) as never))
+        return
       }
       if (method === 'POST' && path === '/jobs') {
         const body = await readJson(req)
-        return send(res, 201, await service.createJob(
+        send(res, 201, await service.createJob(
           parse<{ blueprintId: string; request: PaperRequest }>(jobCreateWire, body)))
+        return
       }
       if (method === 'GET' && seg[0] === 'jobs' && seg.length === 2) {
-        return send(res, 200, service.getJob(seg[1]!))
+        send(res, 200, service.getJob(segment(seg, 1)))
+        return
       }
       if (method === 'PUT' && seg[0] === 'jobs' && seg[2] === 'spec') {
         const body = await readJson(req) as Body
-        return send(res, 200, await service.confirmSpec(seg[1]!, parse(specTableWire, body['specTable'])))
+        send(res, 200, await service.confirmSpec(segment(seg, 1), parse(specTableWire, body['specTable'])))
+        return
       }
       /* Live assembly preview: how the confirmed spec table would be served
          by the bank right now — per-row mode, candidate count, chosen item.
          Recomputed on each call so bank edits show immediately. */
       if (method === 'GET' && seg[0] === 'jobs' && seg[2] === 'bank-plan') {
-        const job = service.getJob(seg[1]!)
+        const job = service.getJob(segment(seg, 1))
         const plans = service.bankPlanFor(job.specTable, job.request, deps.bankPolicy)
-        return send(res, 200, plans.map(plan => ({
+        send(res, 200, plans.map(plan => ({
           questionNo: plan.row.questionNo,
           sectionTitle: plan.row.sectionTitle,
           mode: plan.mode,
@@ -246,70 +294,79 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
             stem: plan.item.stem.slice(0, 120),
           },
         })))
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'draft') {
         /* Draft runs long: answer 202 and let the client poll the job —
            the driver marks the job 'failed' with its error on rejection. */
-        void deps.runDraft(seg[1]!).catch((error: unknown) => {
+        void deps.runDraft(segment(seg, 1)).catch((error: unknown) => {
           console.error(`[paper-host] draft ${seg[1]} failed:`, error)
         })
-        return send(res, 202, { status: 'drafting' })
+        send(res, 202, { status: 'drafting' })
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'check') {
-        void deps.runChecks(seg[1]!).catch((error: unknown) => {
+        void deps.runChecks(segment(seg, 1)).catch((error: unknown) => {
           console.error(`[paper-host] check ${seg[1]} failed:`, error)
         })
-        return send(res, 202, { status: 'checking' })
+        send(res, 202, { status: 'checking' })
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'questions' && seg[4] === 'repair') {
         const body = await readJson(req) as Body
         const suggestion = str(body, 'suggestion')
         if (suggestion === '') throw new PaperError(400, 'BAD_REQUEST', 'repair needs a suggestion')
-        void deps.runRepair(seg[1]!, Number(seg[3]), suggestion, str(body, 'reviewer')).catch((error: unknown) => {
+        void deps.runRepair(segment(seg, 1), Number(seg[3]), suggestion, str(body, 'reviewer')).catch((error: unknown) => {
           console.error(`[paper-host] repair ${seg[1]}#${seg[3]} failed:`, error)
         })
-        return send(res, 202, { status: 'repairing' })
+        send(res, 202, { status: 'repairing' })
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'questions' && seg[4] === 'replace') {
         const body = await readJson(req) as Body
         /* Validate first — a row with no spare candidate answers 404
            synchronously instead of vanishing into the async driver. */
-        deps.planReplace(seg[1]!, Number(seg[3]))
-        void deps.runReplace(seg[1]!, Number(seg[3]), str(body, 'reviewer')).catch((error: unknown) => {
+        deps.planReplace(segment(seg, 1), Number(seg[3]))
+        void deps.runReplace(segment(seg, 1), Number(seg[3]), str(body, 'reviewer')).catch((error: unknown) => {
           console.error(`[paper-host] replace ${seg[1]}#${seg[3]} failed:`, error)
         })
-        return send(res, 202, { status: 'replacing' })
+        send(res, 202, { status: 'replacing' })
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'questions' && seg[4] === 'review') {
         const body = await readJson(req) as Body
-        return send(res, 200, await service.reviewQuestion(
-          seg[1]!, Number(seg[3]),
+        send(res, 200, await service.reviewQuestion(
+          segment(seg, 1), Number(seg[3]),
           body['verdict'] === 'approved' ? 'approved' : 'changes-requested',
           str(body, 'reviewer'),
           body['note'] as string | undefined,
         ))
+        return
       }
       if (method === 'PUT' && seg[0] === 'jobs' && seg[2] === 'document') {
         const body = await readJson(req) as Body
-        return send(res, 200, await service.commitDocument(
-          seg[1]!, parse<PaperDocument>(paperDocumentWire, body['document']), str(body, 'summary') || 'edit',
+        send(res, 200, await service.commitDocument(
+          segment(seg, 1), parse<PaperDocument>(paperDocumentWire, body['document']), str(body, 'summary') || 'edit',
           typeof body['expectedVersion'] === 'number' ? body['expectedVersion'] : undefined,
         ))
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'approve') {
         const body = await readJson(req) as Body
-        return send(res, 200, await service.approve(
-          seg[1]!, str(body, 'reviewer'),
+        send(res, 200, await service.approve(
+          segment(seg, 1), str(body, 'reviewer'),
           body['subject'] === 'chemistry' ? 'chemistry' : 'physics',
         ))
+        return
       }
       if (method === 'POST' && seg[0] === 'jobs' && seg[2] === 'export') {
-        return send(res, 200, await deps.runExport(seg[1]!))
+        send(res, 200, await deps.runExport(segment(seg, 1)))
+        return
       }
       if (method === 'GET' && seg[0] === 'jobs' && seg[2] === 'files') {
         const name = decodeURIComponent(seg[3] ?? '')
         if (!FILE_NAMES.has(name)) throw new PaperError(404, 'NO_FILE', 'no such export file')
-        const file = join(deps.exportDir, seg[1]!, normalize(name))
+        const file = join(deps.exportDir, segment(seg, 1), normalize(name))
         const content = await readFile(file).catch(() => undefined)
         if (content === undefined) throw new PaperError(404, 'NO_FILE', `file '${name}' not produced`)
         res.writeHead(200, {
@@ -320,7 +377,10 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         res.end(content)
         return
       }
-      if (method === 'GET' && path === '/exports') return send(res, 200, service.listExports())
+      if (method === 'GET' && path === '/exports') {
+        send(res, 200, service.listExports())
+        return
+      }
 
       send(res, 404, { error: { code: 'NO_ROUTE', message: `${method} ${path}` } })
     } catch (error) {

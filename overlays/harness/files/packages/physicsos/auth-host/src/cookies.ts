@@ -53,7 +53,7 @@ function appendSetCookie(res: http.ServerResponse, value: string): void {
   const prior = res.getHeader('set-cookie')
   const next = prior === undefined ? [value]
     : Array.isArray(prior) ? [...prior, value]
-    : [String(prior), value]
+      : [String(prior), value]
   res.setHeader('set-cookie', next)
 }
 

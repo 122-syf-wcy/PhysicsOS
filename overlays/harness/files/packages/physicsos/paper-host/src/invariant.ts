@@ -48,8 +48,7 @@ const check = (ctx: Context, change: DomainChanged, fail: InvariantFailure): voi
     else if (job.approval.versionHash !== current.hash) {
       fail(`job '${job.id}' approval binds ${job.approval.versionHash}, current is ${current.hash}`)
     }
-    if (job.document !== undefined && current !== undefined
-      && documentHash(job.document) !== current.hash) {
+    if (job.document !== undefined && documentHash(job.document) !== current.hash) {
       fail(`job '${job.id}' document hash drifted from version ${current.version}`)
     }
   }
@@ -57,7 +56,7 @@ const check = (ctx: Context, change: DomainChanged, fail: InvariantFailure): voi
 
 /** Install the relation checks on every domain change. */
 const install: InvariantInstaller = (ctx, fail) => {
-  ctx.on('domain/changed', change => check(ctx, change, fail))
+  ctx.on('domain/changed', (change) => { check(ctx, change, fail) })
 }
 
 /**

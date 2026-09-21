@@ -42,16 +42,16 @@ const run = (cmd: string, args: string[], cwd: string, timeoutMs: number, env?: 
   new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, env: env === undefined ? undefined : { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
     let stderr = ''
-    child.stderr.on('data', chunk => { stderr += chunk })
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error(`${cmd} timed out after ${timeoutMs}ms`))
     }, timeoutMs)
-    child.on('error', error => {
+    child.on('error', (error) => {
       clearTimeout(timer)
       reject(new Error(`${cmd} failed to start: ${error.message}`))
     })
-    child.on('close', code => {
+    child.on('close', (code) => {
       clearTimeout(timer)
       if (code === 0) resolve()
       else reject(new Error(`${cmd} exited ${code}: ${stderr.slice(0, 500)}`))
@@ -80,9 +80,12 @@ async function ensureReferenceDocx(tools: ExportTools): Promise<string> {
   const stock = await new Promise<Buffer>((resolve, reject) => {
     const child = spawn(tools.pandoc, ['--print-default-data-file', 'reference.docx'], { stdio: ['ignore', 'pipe', 'pipe'] })
     const chunks: Buffer[] = []
-    child.stdout.on('data', chunk => chunks.push(chunk))
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
     child.on('error', reject)
-    child.on('close', code => code === 0 ? resolve(Buffer.concat(chunks)) : reject(new Error('pandoc reference.docx failed')))
+    child.on('close', (code) => {
+      if (code === 0) resolve(Buffer.concat(chunks))
+      else reject(new Error('pandoc reference.docx failed'))
+    })
   })
   await writeFile(join(dir, 'reference.docx'), stock)
 
@@ -101,8 +104,8 @@ async function ensureReferenceDocx(tools: ExportTools): Promise<string> {
   const stockDoc = await readFile(docXml, 'utf8')
   const patchedDoc = stockDoc.includes('<w:pgSz')
     ? stockDoc
-        .replace(/<w:pgSz[^/]*\/>/, '<w:pgSz w:w="11906" w:h="16838"/>')
-        .replace(/<w:pgMar[^/]*\/>/, '<w:pgMar w:top="1021" w:right="1021" w:bottom="1021" w:left="1021" w:header="720" w:footer="720" w:gutter="0"/>')
+      .replace(/<w:pgSz[^/]*\/>/, '<w:pgSz w:w="11906" w:h="16838"/>')
+      .replace(/<w:pgMar[^/]*\/>/, '<w:pgMar w:top="1021" w:right="1021" w:bottom="1021" w:left="1021" w:header="720" w:footer="720" w:gutter="0"/>')
     : stockDoc.replace('</w:sectPr>', `${pageSetup}</w:sectPr>`)
   await writeFile(docXml, patchedDoc)
   // The stock docDefaults already set 12 pt body (`w:sz 24` half-points) and
@@ -203,7 +206,9 @@ async function generateFigures(tools: ExportTools, doc: PaperDocument, dir: stri
   return files
 }
 
-export async function exportPaper(tools: ExportTools, jobId: string, doc: PaperDocument, solves?: readonly SolveResult[]): Promise<ExportFileSet> {
+export async function exportPaper(
+  tools: ExportTools, jobId: string, doc: PaperDocument, solves?: readonly SolveResult[],
+): Promise<ExportFileSet> {
   const dir = join(tools.exportDir, jobId)
   await mkdir(dir, { recursive: true })
   const reference = await ensureReferenceDocx(tools)

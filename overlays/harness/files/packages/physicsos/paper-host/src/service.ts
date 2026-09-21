@@ -351,8 +351,9 @@ export class PaperService {
         entry.knowledgePrimary.includes(banned) || banned.includes(entry.knowledgePrimary))) continue
       seen.add(entry.knowledgePrimary)
       const pooled: KnowledgePoolEntry = { knowledge: entry.knowledgePrimary, chapter: entry.chapter }
-      const inScope = entry.chapter !== undefined && request.chapters.some(scope =>
-        entry.chapter!.includes(scope) || scope.includes(entry.chapter!))
+      const chapter = entry.chapter
+      const inScope = chapter !== undefined && request.chapters.some(scope =>
+        chapter.includes(scope) || scope.includes(chapter))
       ;(inScope ? inChapter : rest).push(pooled)
     }
     const weight = (entry: KnowledgePoolEntry) => stats[entry.knowledge]?.score ?? 0
@@ -440,12 +441,14 @@ export class PaperService {
   /** Record auto-check findings and the independent-solve report. */
   async recordCheckResults(id: string, findings: readonly CheckFinding[], solve: readonly SolveResult[]): Promise<PaperJob> {
     const job = this.requireJob(id)
-    const hasErrors = findings.some(f => f.severity === 'error')
     const next: PaperJob = {
       ...job,
       findings: [...findings],
       solveReport: [...solve],
-      status: hasErrors ? 'review' : 'review',
+      /* Checks always hand the paper to the teacher: `findings` carries the
+         severities, so even an error-free run needs a human verdict before
+         approval. This was a ternary whose two branches were identical. */
+      status: 'review',
       updatedAt: now(),
     }
     await this.domain.table('jobs').put(id, next)
@@ -474,7 +477,7 @@ export class PaperService {
     const adjudicable = new Set(['solve-mismatch', 'engine-mismatch', 'spec-mismatch'])
     const findings = verdict === 'approved'
       ? job.findings.filter(f =>
-          !(f.questionNo === questionNo && adjudicable.has(f.code)))
+        !(f.questionNo === questionNo && adjudicable.has(f.code)))
       : job.findings
     const next: PaperJob = { ...job, reviews: [...job.reviews, record], findings, updatedAt: now() }
     await this.domain.table('jobs').put(id, next)
@@ -587,7 +590,10 @@ export class PaperService {
   /** Record a produced export bundle. */
   async recordExport(id: string, files: { paperPdf?: string; paperDocx?: string; answerPdf?: string; answerDocx?: string }): Promise<void> {
     const { job } = this.requireApprovedDocument(id)
-    const current = job.versions.at(-1)!
+    const current = job.versions.at(-1)
+    if (current === undefined) {
+      throw new PaperError(409, 'NO_VERSION', `试卷 ${id} 没有任何已提交版本`)
+    }
     await this.domain.table('exports').put(`${id}@${current.version}`, {
       paperId: id, version: current.version, hash: current.hash, files, exportedAt: now(),
     })

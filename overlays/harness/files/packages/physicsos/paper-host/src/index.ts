@@ -268,10 +268,13 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.commitDocument(jobId, nextDoc, `第${questionNo}题按审核意见修订`)
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const [solved] = await independentSolve(ctx, route, [{ ...revised }], config.solveDelayMs, config.solveTimeoutMs)
+        if (solved === undefined) {
+          throw new PaperError(500, 'SOLVE_FAILED', `第${questionNo}题独立重解没有产出记录`)
+        }
         const prior = service.getJob(jobId).solveReport
         const merged = prior.some(r => r.questionNo === questionNo)
-          ? prior.map(r => r.questionNo === questionNo ? solved! : r)
-          : [...prior, solved!]
+          ? prior.map(r => r.questionNo === questionNo ? solved : r)
+          : [...prior, solved]
         await service.recordCheckResults(jobId, [...findings, ...solveFindings(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: repair ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -316,13 +319,13 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       if (plan.item === undefined) {
         throw new PaperError(404, 'NO_CANDIDATE', `第${questionNo}题题库中没有其他可用候选`)
       }
-      return { job, doc, row, plan }
+      /* `item` is narrowed here so `runReplace` never re-asserts it. */
+      return { job, doc, row, plan, item: plan.item }
     }
 
     const runReplace = async (jobId: string, questionNo: number, reviewer: string): Promise<void> => {
       try {
-        const { job, doc, row, plan } = planReplace(jobId, questionNo)
-        const item = plan.item!
+        const { job, doc, row, plan, item } = planReplace(jobId, questionNo)
         const replacement = plan.mode === 'verbatim'
           ? questionFromBankItem(row, item)
           : await adaptBankItem(ctx, route, job, item, row)
@@ -338,10 +341,13 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.recordBankUsage(item.id, jobId, plan.mode === 'verbatim' ? 'verbatim' : 'adapted')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const [solved] = await independentSolve(ctx, route, [{ ...replacement }], config.solveDelayMs, config.solveTimeoutMs)
+        if (solved === undefined) {
+          throw new PaperError(500, 'SOLVE_FAILED', `第${questionNo}题独立重解没有产出记录`)
+        }
         const prior = service.getJob(jobId).solveReport
         const merged = prior.some(r => r.questionNo === questionNo)
-          ? prior.map(r => r.questionNo === questionNo ? solved! : r)
-          : [...prior, solved!]
+          ? prior.map(r => r.questionNo === questionNo ? solved : r)
+          : [...prior, solved]
         await service.recordCheckResults(jobId, [...findings, ...solveFindings(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: replace ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -381,7 +387,10 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/paper',
-      handler: paperRoutes({ service, exportDir: config.exportDir, runDraft, runChecks, runRepair, runReplace, planReplace, runExport, runIngest, bankPolicy }),
+      handler: paperRoutes({
+        service, exportDir: config.exportDir, bankPolicy,
+        runDraft, runChecks, runRepair, runReplace, planReplace, runExport, runIngest,
+      }),
     })
     yield () => domain.close()
   }, 'paper-host')

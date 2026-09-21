@@ -46,7 +46,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/physicsos/paper`
 })
 
-afterAll(() => new Promise<void>(resolve => server.close(() => resolve())))
+afterAll(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
 
 const post = (path: string, body: unknown) =>
   fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })

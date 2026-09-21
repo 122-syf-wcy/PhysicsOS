@@ -69,7 +69,7 @@ const check = (ctx: Context, change: DomainChanged, fail: InvariantFailure): voi
 /** Install the relation checks on every domain change; the child fiber waits for storageDomain. */
 const install: InvariantInstaller = Object.assign(
   (ctx: Context, fail: InvariantFailure) => {
-    ctx.on('domain/changed', (change: DomainChanged) => check(ctx, change, fail))
+    ctx.on('domain/changed', (change: DomainChanged) => { check(ctx, change, fail) })
   },
   { inject: ['storageDomain'] },
 )

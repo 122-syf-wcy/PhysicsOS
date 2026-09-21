@@ -28,9 +28,11 @@ const draftSectionSchema = z.array(paperQuestionSchema.omit({ status: true }))
  * — the one required array — falls back to empty for the checker to flag. */
 export function sanitizeQuestion(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw
-  const q = { ...(raw as Record<string, unknown>) }
-  for (const key of Object.keys(q)) {
-    if (q[key] === null) delete q[key]
+  /* Copy without the nulls in one pass — a `delete` on a computed key would
+     mutate the caller's object shape and defeats the compiler's tracking. */
+  const q: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (value !== null) q[key] = value
   }
   q['knowledge'] ??= []
   /* Models reach for `type` as the question-kind key when the prompt does

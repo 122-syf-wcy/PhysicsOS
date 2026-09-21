@@ -93,7 +93,7 @@ beforeAll(async () => {
   admin = `${base}/physicsos/admin`
 })
 
-afterAll(() => new Promise<void>(resolve => server.close(() => resolve())))
+afterAll(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
 
 const post = (base: string, path: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`${base}${path}`, {

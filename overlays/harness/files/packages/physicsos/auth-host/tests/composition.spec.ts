@@ -56,22 +56,22 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
 describe('real Loader composition', () => {
   it('boots the shipped plugin chain and serves register → me → logout over HTTP', { timeout: 60_000 }, async () => {
     const loaded = await loadYaml(root => [
-      "- id: webserver",
+      '- id: webserver',
       "  name: '@deepseek-ai/dsh-host-webserver'",
       '  config:',
       "    host: '127.0.0.1'",
       '    port: 0',
-      "- id: storage",
+      '- id: storage',
       "  name: '@deepseek-ai/dsh-storage'",
-      "- id: storage-json",
+      '- id: storage-json',
       "  name: '@deepseek-ai/dsh-storage-json'",
       '  config:',
       `    root: ${JSON.stringify(join(root, 'storages'))}`,
-      "- id: storage-domain",
+      '- id: storage-domain',
       "  name: '@deepseek-ai/dsh-storage-domain'",
       '  config:',
       '    backend: json',
-      "- id: auth-host",
+      '- id: auth-host',
       "  name: '@deepseek-ai/dsh-auth-host'",
     ])
 
@@ -97,7 +97,8 @@ describe('real Loader composition', () => {
 
     const me = await fetch(`${base}/physicsos/auth/me`, { headers: { cookie: cookie!.split(';')[0]! } })
     expect(me.status).toBe(200)
-    expect((await me.json()).user).toMatchObject({
+    const meBody = await me.json() as { user: Record<string, unknown> }
+    expect(meBody.user).toMatchObject({
       username: 's2024001', schoolId: 'PHYSICSOS-OPEN', role: 'STUDENT',
     })
 
@@ -114,22 +115,22 @@ describe('real Loader composition', () => {
 
   it('boots a seeded SUPER_ADMIN and serves the application → approval → admin-login flow', { timeout: 60_000 }, async () => {
     const loaded = await loadYaml(root => [
-      "- id: webserver",
+      '- id: webserver',
       "  name: '@deepseek-ai/dsh-host-webserver'",
       '  config:',
       "    host: '127.0.0.1'",
       '    port: 0',
-      "- id: storage",
+      '- id: storage',
       "  name: '@deepseek-ai/dsh-storage'",
-      "- id: storage-json",
+      '- id: storage-json',
       "  name: '@deepseek-ai/dsh-storage-json'",
       '  config:',
       `    root: ${JSON.stringify(join(root, 'storages'))}`,
-      "- id: storage-domain",
+      '- id: storage-domain',
       "  name: '@deepseek-ai/dsh-storage-domain'",
       '  config:',
       '    backend: json',
-      "- id: auth-host",
+      '- id: auth-host',
       "  name: '@deepseek-ai/dsh-auth-host'",
       '  config:',
       '    bootstrapAdmins:',

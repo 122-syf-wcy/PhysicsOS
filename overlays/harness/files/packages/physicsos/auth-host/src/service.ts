@@ -192,7 +192,11 @@ export class AuthService {
   /** Wire shape for a disambiguation candidate — region labels ride along so
       the picker can tell same-name schools apart. */
   private toCandidate(school: School): {
-    id: string; name: string; shortName?: string; city?: string; county?: string
+    id: string
+    name: string
+    shortName?: string
+    city?: string
+    county?: string
   } {
     return {
       id: school.id,
@@ -321,7 +325,11 @@ export class AuthService {
       })
     }
     this.accountLimiter.reset(accountKey)
-    const { record, school } = matches[0]!
+    const match = matches[0]
+    if (match === undefined) {
+      throw new AuthError(401, 'INVALID_CREDENTIALS', '账号或密码错误')
+    }
+    const { record, school } = match
     const result = await this.issueSession(record, school, remember, sourceIp, userAgent)
     await this.users.put(userKey(school.id, record.username), {
       ...record, lastLoginAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -369,7 +377,9 @@ export class AuthService {
    * Resolve a raw cookie token to the live principal, or null when the session
    * is absent, revoked, expired, or its user/school left `active`.
    */
-  async resolveSession(token: string): Promise<ResolvedSession | null> {
+  /* Reads an in-memory index only, so it is sync — `await` at the call sites
+     still works, and the plugin never has to invent a promise. */
+  resolveSession(token: string): ResolvedSession | null {
     const session = this.sessions.get(sessionTokenHash(token))
     if (session === undefined || session.revokedAt !== undefined) return null
     if (Date.parse(session.expiresAt) <= Date.now()) return null
@@ -394,8 +404,9 @@ export class AuthService {
     }
     const { username, schoolId } = input.data
     const candidates = this.loginCandidates(username, schoolId)
-    if (candidates.length !== 1) return
-    const { record, school } = candidates[0]!
+    const only = candidates.length === 1 ? candidates[0] : undefined
+    if (only === undefined) return
+    const { record, school } = only
     const id = `rr_${crypto.randomBytes(9).toString('base64url')}`
     await this.resets.put(id, {
       id,
@@ -445,7 +456,7 @@ export class AuthService {
   }
 
   /** Applications queue — SUPER_ADMIN only; newest first, optional status filter. */
-  async listSchoolRequests(actor: AdminActor, status?: string): Promise<SchoolRequestRecord[]> {
+  listSchoolRequests(actor: AdminActor, status?: string): SchoolRequestRecord[] {
     this.requireSuper(actor)
     return [...this.requests.entries()]
       .map(([, request]) => request)
@@ -522,7 +533,7 @@ export class AuthService {
   }
 
   /** Tenant list — SUPER_ADMIN sees all; a school admin sees exactly its own. */
-  async listSchoolsAdmin(actor: AdminActor): Promise<School[]> {
+  listSchoolsAdmin(actor: AdminActor): School[] {
     this.requireAdmin(actor)
     const all = [...this.schools.entries()].map(([, school]) => school)
     const visible = actor.role === 'SUPER_ADMIN'
@@ -576,9 +587,9 @@ export class AuthService {
    * User list — a school admin's `schoolId` filter is forced to its own tenant
    * regardless of what the wire asked for.
    */
-  async listUsers(
+  listUsers(
     actor: AdminActor, filter: { schoolId?: string; role?: string; q?: string },
-  ): Promise<AdminUserRow[]> {
+  ): AdminUserRow[] {
     this.requireAdmin(actor)
     const schoolId = actor.role === 'SUPER_ADMIN' ? filter.schoolId : actor.schoolId
     const needle = filter.q?.trim().toLowerCase()
@@ -690,9 +701,9 @@ export class AuthService {
    * Audit ledger — append-only on the write side; school admins read only
    * their own tenant's rows, supers may narrow with `schoolId`.
    */
-  async listAudit(
+  listAudit(
     actor: AdminActor, filter: { schoolId?: string; limit?: number },
-  ): Promise<AuditEvent[]> {
+  ): AuditEvent[] {
     this.requireAdmin(actor)
     const schoolId = actor.role === 'SUPER_ADMIN' ? filter.schoolId : actor.schoolId
     const limit = filter.limit ?? 200
@@ -736,7 +747,7 @@ export class AuthService {
   private manageRank(actor: AdminActor): number {
     return actor.role === 'SUPER_ADMIN' ? ROLE_RANK.SCHOOL_ADMIN
       : actor.role === 'SCHOOL_ADMIN' ? ROLE_RANK.TEACHER
-      : -1
+        : -1
   }
 
   private async createUserRecord(

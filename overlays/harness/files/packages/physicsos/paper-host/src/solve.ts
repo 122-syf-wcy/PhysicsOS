@@ -92,13 +92,16 @@ export async function independentSolve(
     let lastError: Error | undefined
     for (let attempt = 0; attempt < 2; attempt++) {
       const controller = new AbortController()
-      let timedOut = false
-      const timeout = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
+      /* A holder object, not a `let`: control-flow analysis cannot see the
+         assignment inside the timer callback and narrows a plain boolean to
+         its initial `false`, which makes the read below look dead. */
+      const elapsed = { timedOut: false }
+      const timeout = setTimeout(() => { elapsed.timedOut = true; controller.abort() }, timeoutMs)
       try {
         const raw = await Promise.race([
           solveOne(ctx, route, question, controller.signal),
           new Promise<never>((_resolve, reject) =>
-            setTimeout(() => reject(new Error('solve-timeout')), timeoutMs)),
+            setTimeout(() => { reject(new Error('solve-timeout')) }, timeoutMs)),
         ])
         const parsed = JSON.parse(raw.replace(/```(?:json)?/g, '').trim()) as { answer?: string; note?: string }
         const solved = parsed.answer ?? ''
@@ -112,7 +115,7 @@ export async function independentSolve(
         lastError = undefined
         break
       } catch (error) {
-        lastError = timedOut
+        lastError = elapsed.timedOut
           ? new Error(`独立解题超时（${timeoutMs / 1000}s）`)
           : error instanceof Error ? error : new Error(String(error))
       } finally {

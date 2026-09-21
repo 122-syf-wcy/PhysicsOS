@@ -28,6 +28,13 @@ const sendError = (res: ServerResponse, error: unknown): void => {
   send(res, 500, { error: { code: 'INTERNAL', message: 'internal error' } })
 }
 
+/** Path segment `index`; a shorter path than the route matched answers 400. */
+const segment = (parts: readonly string[], index: number): string => {
+  const value = parts[index]
+  if (value === undefined) throw new AuthError(400, 'BAD_REQUEST', '路径缺少参数')
+  return value
+}
+
 /** Reads a capped JSON body; over-limit and non-JSON fail as BAD_REQUEST. */
 const readJson = async (req: IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = []
@@ -77,7 +84,8 @@ const checkCsrf = (req: IncomingMessage): void => {
 const clientIp = (req: IncomingMessage): string => {
   const forwarded = req.headers['x-forwarded-for']
   if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0]!.trim()
+    const first = forwarded.split(',')[0]
+    if (first !== undefined && first.length > 0) return first.trim()
   }
   return req.socket.remoteAddress ?? 'unknown'
 }
@@ -88,7 +96,7 @@ const clientIp = (req: IncomingMessage): string => {
  * @returns the webServer route handler.
  */
 export function authRoutes(service: AuthService):
-  (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+(req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://x')
@@ -102,7 +110,8 @@ export function authRoutes(service: AuthService):
         const result = await service.register(await readJson(req), ip, userAgent)
         writeSessionCookie(req, res, result.token, result.cookieMaxAge)
         const { user } = result
-        return send(res, 201, { user })
+        send(res, 201, { user })
+        return
       }
 
       if (method === 'POST' && path === '/login') {
@@ -110,29 +119,33 @@ export function authRoutes(service: AuthService):
         const result = await service.login(await readJson(req), ip, userAgent)
         writeSessionCookie(req, res, result.token, result.cookieMaxAge)
         const { user } = result
-        return send(res, 200, { user })
+        send(res, 200, { user })
+        return
       }
 
       if (method === 'POST' && path === '/logout') {
         await service.logout(readSessionCookie(req))
         writeSessionCookie(req, res, null, 0)
-        return send(res, 200, { ok: true })
+        send(res, 200, { ok: true })
+        return
       }
 
       if (method === 'GET' && path === '/me') {
         const token = readSessionCookie(req)
-        const resolved = token === null ? null : await service.resolveSession(token)
+        const resolved = token === null ? null : service.resolveSession(token)
         if (resolved === null) {
           throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
         }
-        return send(res, 200, { user: resolved.user })
+        send(res, 200, { user: resolved.user })
+        return
       }
 
       if (method === 'POST' && path === '/password/forgot') {
         checkCsrf(req)
         await service.requestPasswordReset(await readJson(req), ip)
         /* Uniform receipt — never reveals whether the account exists. */
-        return send(res, 200, { ok: true })
+        send(res, 200, { ok: true })
+        return
       }
 
       /* 申请加入: anonymous by design (the applicant has no account yet); the
@@ -140,15 +153,17 @@ export function authRoutes(service: AuthService):
       if (method === 'POST' && path === '/school-requests') {
         checkCsrf(req)
         const token = readSessionCookie(req)
-        const resolved = token === null ? null : await service.resolveSession(token)
+        const resolved = token === null ? null : service.resolveSession(token)
         const requestedBy = resolved === null
           ? null
           : userKey(resolved.user.schoolId, resolved.user.username)
         const request = await service.submitSchoolRequest(await readJson(req), requestedBy, ip)
-        return send(res, 201, { request })
+        send(res, 201, { request })
+        return
       }
 
-      return send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
+      send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
+      return
     } catch (error) {
       sendError(res, error)
     }
@@ -164,7 +179,7 @@ export function authRoutes(service: AuthService):
  * @returns the webServer route handler.
  */
 export function adminRoutes(service: AuthService):
-  (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+(req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://x')
@@ -173,7 +188,7 @@ export function adminRoutes(service: AuthService):
       const segments = path.split('/').filter(Boolean)
 
       const token = readSessionCookie(req)
-      const resolved = token === null ? null : await service.resolveSession(token)
+      const resolved = token === null ? null : service.resolveSession(token)
       if (resolved === null) {
         throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
       }
@@ -185,97 +200,109 @@ export function adminRoutes(service: AuthService):
       }
 
       if (method === 'GET' && path === '/school-requests') {
-        return send(res, 200, {
-          requests: await service.listSchoolRequests(
+        send(res, 200, {
+          requests: service.listSchoolRequests(
             actor, url.searchParams.get('status') ?? undefined),
         })
+        return
       }
 
       if (method === 'POST' && segments[0] === 'school-requests' && segments.length === 3) {
         checkCsrf(req)
-        const [, id, verb] = segments
-        if (verb === 'approve') {
-          return send(res, 200, await service.approveSchoolRequest(actor, id!, await readJson(req)))
+        const id = segments[1]
+        const verb = segments[2]
+        if (id !== undefined && verb === 'approve') {
+          send(res, 200, await service.approveSchoolRequest(actor, id, await readJson(req)))
+          return
         }
-        if (verb === 'reject') {
-          return send(res, 200, {
-            request: await service.rejectSchoolRequest(actor, id!, await readJson(req)),
+        if (id !== undefined && verb === 'reject') {
+          send(res, 200, {
+            request: await service.rejectSchoolRequest(actor, id, await readJson(req)),
           })
+          return
         }
       }
 
       if (method === 'GET' && path === '/schools') {
-        return send(res, 200, { schools: await service.listSchoolsAdmin(actor) })
+        send(res, 200, { schools: service.listSchoolsAdmin(actor) })
+        return
       }
 
       if (method === 'POST' && path === '/schools') {
         checkCsrf(req)
-        return send(res, 201, { school: await service.createSchool(actor, await readJson(req)) })
+        send(res, 201, { school: await service.createSchool(actor, await readJson(req)) })
+        return
       }
 
       if (method === 'POST' && segments[0] === 'schools' && segments[2] === 'status') {
         checkCsrf(req)
-        return send(res, 200, {
-          school: await service.setSchoolStatus(actor, segments[1]!, await readJson(req)),
+        send(res, 200, {
+          school: await service.setSchoolStatus(actor, segment(segments, 1), await readJson(req)),
         })
+        return
       }
 
       if (method === 'GET' && path === '/users') {
-        return send(res, 200, {
-          users: await service.listUsers(actor, {
-            ...(url.searchParams.get('schoolId') !== null
-              ? { schoolId: url.searchParams.get('schoolId')! } : {}),
-            ...(url.searchParams.get('role') !== null
-              ? { role: url.searchParams.get('role')! } : {}),
-            ...(url.searchParams.get('q') !== null
-              ? { q: url.searchParams.get('q')! } : {}),
-          }),
-        })
+        /* Narrow each filter where it is read — repeating `searchParams.get`
+           inside the spread would discard the null check. */
+        const filters: { schoolId?: string; role?: string; q?: string } = {}
+        const schoolId = url.searchParams.get('schoolId')
+        if (schoolId !== null) filters.schoolId = schoolId
+        const role = url.searchParams.get('role')
+        if (role !== null) filters.role = role
+        const q = url.searchParams.get('q')
+        if (q !== null) filters.q = q
+        send(res, 200, { users: service.listUsers(actor, filters) })
+        return
       }
 
       if (method === 'POST' && path === '/users') {
         checkCsrf(req)
-        return send(res, 201, { user: await service.createUser(actor, await readJson(req)) })
+        send(res, 201, { user: await service.createUser(actor, await readJson(req)) })
+        return
       }
 
       /* The user path key is `schoolId:username` — schoolId's wire alphabet
          excludes ':', so the first colon is an unambiguous split point. */
       if (method === 'POST' && segments[0] === 'users' && segments.length === 3) {
         checkCsrf(req)
-        const key = decodeURIComponent(segments[1]!)
+        const key = decodeURIComponent(segment(segments, 1))
         const split = key.indexOf(':')
         if (split > 0) {
           const schoolId = key.slice(0, split)
           const username = key.slice(split + 1)
           const verb = segments[2]
           if (verb === 'status') {
-            return send(res, 200, {
+            send(res, 200, {
               user: await service.setUserStatus(actor, schoolId, username, await readJson(req)),
             })
+            return
           }
           if (verb === 'reset-password') {
             await service.resetUserPassword(actor, schoolId, username, await readJson(req))
-            return send(res, 200, { ok: true })
+            send(res, 200, { ok: true })
+            return
           }
           if (verb === 'revoke-sessions') {
             await service.revokeUserSessionsByAdmin(actor, schoolId, username)
-            return send(res, 200, { ok: true })
+            send(res, 200, { ok: true })
+            return
           }
         }
       }
 
       if (method === 'GET' && path === '/audit') {
         const limitParam = url.searchParams.get('limit')
-        return send(res, 200, {
-          events: await service.listAudit(actor, {
-            ...(url.searchParams.get('schoolId') !== null
-              ? { schoolId: url.searchParams.get('schoolId')! } : {}),
-            ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-          }),
-        })
+        const scope: { schoolId?: string; limit?: number } = {}
+        const schoolId = url.searchParams.get('schoolId')
+        if (schoolId !== null) scope.schoolId = schoolId
+        if (limitParam !== null) scope.limit = Number(limitParam)
+        send(res, 200, { events: service.listAudit(actor, scope) })
+        return
       }
 
-      return send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
+      send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
+      return
     } catch (error) {
       sendError(res, error)
     }
