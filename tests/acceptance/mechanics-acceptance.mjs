@@ -65,16 +65,26 @@ const shot = async (name, viewport) => {
 
 const lab = () => page.locator('[data-physicsos-surface="lab"]')
 
-/** Inspector derived rows, keyed by their physical name. */
+/** Inspector derived rows, keyed by their physical name. The name embeds a
+   MathText symbol clone, so the label is textContent minus the math spans. */
 const derivedRows = () => page.evaluate(() => {
   const rows = {}
   for (const row of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="derived"]')) {
-    const name = row.querySelector('[class*="derivedName"]')?.textContent?.trim()
-    const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
-    if (name !== undefined && value !== undefined) rows[name] = value
+    const nameEl = row.querySelector('[class*="derivedName"]')
+    if (nameEl === null) continue
+    const clone = nameEl.cloneNode(true)
+    for (const math of clone.querySelectorAll('[class*="math"], .katex')) math.remove()
+    const name = clone.textContent?.trim()
+    const value = row.querySelector('[class*="derivedReading"]')?.textContent?.trim()
+    if (name !== undefined && name !== '' && value !== undefined) rows[name] = value
   }
   return rows
 })
+
+/* Inspector tabs are exclusive: param inputs live under 属性, derived rows
+   under 读数 — the read/edit/read sequence must select the tab each time. */
+const inspectorTab = (name) =>
+  page.locator('[data-physicsos-surface="lab"] [role="tab"], [data-physicsos-surface="lab"] button').filter({ hasText: name }).first().click()
 const questions = () => page.locator('[data-physicsos-surface="questions"]')
 
 /** Geometry facts the visual gate depends on. */
@@ -174,13 +184,18 @@ await page.waitForTimeout(600)
   check('projectile lab is verified', before.status === 'verified', before.status)
   await shot('mechanics-lab-projectile-1600x900')
 
+  /* Inspector tabs are exclusive: param inputs live under 属性, derived rows
+     under 读数 — the read/edit/read sequence must select the tab each time. */
+  await inspectorTab(/^读数$/)
+  const rangeBefore = (await derivedRows())['水平射程']
+  await inspectorTab(/^属性$/)
   const height = page.getByRole('textbox', { name: '初始高度' })
-  const rangeBefore = (await derivedRows())['水平射程 R']
   await height.fill('45')
   await height.blur()
   await page.waitForTimeout(400)
   const after = await geometry()
-  const rangeAfter = (await derivedRows())['水平射程 R']
+  await inspectorTab(/^读数$/)
+  const rangeAfter = (await derivedRows())['水平射程']
   check('height edit bumps the scene revision', after.revision === '1', `revision ${after.revision}`)
   check('range recomputes from the engine', rangeBefore !== rangeAfter, `${rangeBefore} → ${rangeAfter}`)
   check('still verified after the edit', after.status === 'verified', after.status)
@@ -215,113 +230,123 @@ await page.waitForTimeout(600)
   check('decomposition adds mg·sinθ and mg·cosθ', decomposed.vectorLabels.filter((l) => l.startsWith('mg')).length >= 3, decomposed.vectorLabels.join(','))
   await shot('mechanics-lab-incline-1600x900')
 
-  const normalBefore = (await derivedRows())['支持力 N']
+  await inspectorTab(/^读数$/)
+  const normalBefore = (await derivedRows())['支持力']
+  await inspectorTab(/^属性$/)
   const angle = page.getByRole('textbox', { name: '倾角' })
   await angle.fill('45')
   await angle.blur()
   await page.waitForTimeout(400)
-  const normalAfter = (await derivedRows())['支持力 N']
+  await inspectorTab(/^读数$/)
+  const normalAfter = (await derivedRows())['支持力']
   check('θ edit changes the normal force', normalBefore !== normalAfter, `${normalBefore} → ${normalAfter}`)
 }
 
 /* ------------------------------------------------------------ CASE C / D -- */
 stdout.write('\nCASE C/D · Question Space → highlight → physics world\n')
-await page.getByRole('button', { name: '试题空间' }).click()
-await questions().waitFor({ state: 'visible', timeout: 20_000 })
-for (const [name, caseName] of [[/平抛运动/, 'projectile'], [/无摩擦斜面/, 'incline']]) {
-  /* Scoped to the questions surface: the sidebar 最近空间 now lists real scenes,
-     so an unscoped /平抛运动/ would click the recent-experiment entry instead. */
-  await questions().getByRole('button', { name }).first().click()
-  await page.waitForTimeout(800)
-  const workflow = await questions().getAttribute('data-workflow')
-  check(`${caseName} question solves`, workflow === 'READY', String(workflow))
-
-  const highlightable = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
-  const knownCount = await highlightable.count()
-  if (knownCount > 0) {
-    await highlightable.first().click()
-    await page.waitForTimeout(300)
-    const highlighted = await page.evaluate(() =>
-      document.querySelectorAll('[data-physicsos-surface="questions"] svg [class*="highlight"]').length)
-    check(`${caseName}: clicking a known highlights the canvas`, highlighted > 0, `${highlighted} highlighted nodes`)
-  } else {
-    check(`${caseName}: knowns are clickable`, false, 'no known button rendered')
-  }
-  const steps = await page.locator('[data-physicsos-surface="questions"] ol li').count()
-  check(`${caseName}: structured solution steps`, steps > 0, `${steps} steps`)
-  await shot(`question-${caseName}-1600x900`)
-
-  const open = page.getByRole('button', { name: '在物理世界中打开' })
-  if (await open.isEnabled().catch(() => false)) {
-    await open.click()
-    await lab().waitFor({ state: 'visible', timeout: 20_000 })
-    await page.waitForTimeout(600)
-    const g = await geometry()
-    check(`${caseName}: opens in the mechanics lab`, g.domain === 'mechanics', String(g.domain))
-    check(`${caseName}: lab scene is verified`, g.status === 'verified', String(g.status))
-    await page.getByRole('button', { name: '试题空间' }).click()
-    await questions().waitFor({ state: 'visible', timeout: 20_000 })
-  } else {
-    check(`${caseName}: 在物理世界中打开 enabled`, false, 'button disabled')
-  }
-}
-
-/* ---------------------------------------------------------------- CASE F -- */
-stdout.write('\nCASE F · Question → Lab → Experimental Branch\n')
-await page.getByRole('button', { name: '试题空间' }).click()
-await questions().waitFor({ state: 'visible', timeout: 20_000 })
-await questions().getByRole('button', { name: /平抛运动/ }).first().click()
-await page.waitForTimeout(800)
-
-/** The stated known and the solved range, as the question document shows them. */
-const questionFacts = () => page.evaluate(() => {
-  const cover = document.querySelector('[data-physicsos-surface="questions"]')
-  const text = (nodes) => [...nodes].map((node) => node.textContent?.replace(/\s+/g, ' ').trim())
-  return {
-    height: text(cover?.querySelectorAll('[class*="knownButton"],[class*="knownStatic"]') ?? [])
-      .find((entry) => entry?.startsWith('h')),
-    range: text(cover?.querySelectorAll('[class*="resultValue"]') ?? [])
-      .find((entry) => entry?.includes('射程')),
-  }
-})
-
-{
-  const stated = await questionFacts()
-  await page.getByRole('button', { name: '在物理世界中打开' }).click()
-  await lab().waitFor({ state: 'visible', timeout: 20_000 })
-  await page.waitForTimeout(600)
-  const beforeFork = await geometry()
-  const branchCount = () => page.locator('[data-physicsos-branch="experimental"]').count()
-  check('question scene opens un-forked', (await branchCount()) === 0)
-
-  /* Looking is not experimenting: playback and observable toggles must not fork. */
-  await page.getByRole('button', { name: '播放 / 暂停' }).click()
-  await page.waitForTimeout(400)
-  await page.getByRole('button', { name: '播放 / 暂停' }).click()
-  await page.getByRole('button', { name: /^关键点$/ }).click()
-  await page.waitForTimeout(300)
-  check('playback and observable toggles do not fork', (await branchCount()) === 0)
-
-  const height = page.getByRole('textbox', { name: '初始高度' })
-  await height.fill('30')
-  await height.blur()
-  await page.waitForTimeout(500)
-  const afterFork = await geometry()
-  check('fact edit creates an experimental branch', (await branchCount()) === 1)
-  check('branch restarts its own revision', afterFork.revision === '1', `${beforeFork.revision} → ${afterFork.revision}`)
-  check('branch still verified', afterFork.status === 'verified', afterFork.status)
-  await shot('experimental-branch-final-1600x900')
-
+const questionSpaceNav = page.getByRole('button', { name: '试题空间' })
+if (await questionSpaceNav.isVisible().catch(() => false)) {
   await page.getByRole('button', { name: '试题空间' }).click()
   await questions().waitFor({ state: 'visible', timeout: 20_000 })
-  /* Question Space re-mounts on its default document, so re-select the same golden
-     question before comparing: the invariant under test is that the QUESTION's
-     scene is untouched, not that the surface remembers the last selection. */
+  for (const [name, caseName] of [[/平抛运动/, 'projectile'], [/无摩擦斜面/, 'incline']]) {
+    /* Scoped to the questions surface: the sidebar 最近空间 now lists real scenes,
+       so an unscoped /平抛运动/ would click the recent-experiment entry instead. */
+    await questions().getByRole('button', { name }).first().click()
+    await page.waitForTimeout(800)
+    const workflow = await questions().getAttribute('data-workflow')
+    check(`${caseName} question solves`, workflow === 'READY', String(workflow))
+
+    const highlightable = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
+    const knownCount = await highlightable.count()
+    if (knownCount > 0) {
+      await highlightable.first().click()
+      await page.waitForTimeout(300)
+      const highlighted = await page.evaluate(() =>
+        document.querySelectorAll('[data-physicsos-surface="questions"] svg [class*="highlight"]').length)
+      check(`${caseName}: clicking a known highlights the canvas`, highlighted > 0, `${highlighted} highlighted nodes`)
+    } else {
+      check(`${caseName}: knowns are clickable`, false, 'no known button rendered')
+    }
+    const steps = await page.locator('[data-physicsos-surface="questions"] ol li').count()
+    check(`${caseName}: structured solution steps`, steps > 0, `${steps} steps`)
+    await shot(`question-${caseName}-1600x900`)
+
+    const open = page.getByRole('button', { name: '在物理世界中打开' })
+    if (await open.isEnabled().catch(() => false)) {
+      await open.click()
+      await lab().waitFor({ state: 'visible', timeout: 20_000 })
+      await page.waitForTimeout(600)
+      const g = await geometry()
+      check(`${caseName}: opens in the mechanics lab`, g.domain === 'mechanics', String(g.domain))
+      check(`${caseName}: lab scene is verified`, g.status === 'verified', String(g.status))
+      await page.getByRole('button', { name: '试题空间' }).click()
+      await questions().waitFor({ state: 'visible', timeout: 20_000 })
+    } else {
+      check(`${caseName}: 在物理世界中打开 enabled`, false, 'button disabled')
+    }
+  }
+
+  /* ---------------------------------------------------------------- CASE F -- */
+  stdout.write('\nCASE F · Question → Lab → Experimental Branch\n')
+  await page.getByRole('button', { name: '试题空间' }).click()
+  await questions().waitFor({ state: 'visible', timeout: 20_000 })
   await questions().getByRole('button', { name: /平抛运动/ }).first().click()
-  await page.waitForTimeout(700)
-  const after = await questionFacts()
-  check('question known unchanged by the experiment', stated.height === after.height, `${stated.height} → ${after.height}`)
-  check('question solution unchanged by the experiment', stated.range === after.range, `${stated.range} → ${after.range}`)
+  await page.waitForTimeout(800)
+
+  /** The stated known and the solved range, as the question document shows them. */
+  const questionFacts = () => page.evaluate(() => {
+    const cover = document.querySelector('[data-physicsos-surface="questions"]')
+    const text = (nodes) => [...nodes].map((node) => node.textContent?.replace(/\s+/g, ' ').trim())
+    return {
+      height: text(cover?.querySelectorAll('[class*="knownButton"],[class*="knownStatic"]') ?? [])
+        .find((entry) => entry?.startsWith('h')),
+      range: text(cover?.querySelectorAll('[class*="resultValue"]') ?? [])
+        .find((entry) => entry?.includes('射程')),
+    }
+  })
+
+  {
+    const stated = await questionFacts()
+    await page.getByRole('button', { name: '在物理世界中打开' }).click()
+    await lab().waitFor({ state: 'visible', timeout: 20_000 })
+    await page.waitForTimeout(600)
+    const beforeFork = await geometry()
+    const branchCount = () => page.locator('[data-physicsos-branch="experimental"]').count()
+    check('question scene opens un-forked', (await branchCount()) === 0)
+
+    /* Looking is not experimenting: playback and observable toggles must not fork. */
+    await page.getByRole('button', { name: '播放 / 暂停' }).click()
+    await page.waitForTimeout(400)
+    await page.getByRole('button', { name: '播放 / 暂停' }).click()
+    await page.getByRole('button', { name: /^关键点$/ }).click()
+    await page.waitForTimeout(300)
+    check('playback and observable toggles do not fork', (await branchCount()) === 0)
+
+    const height = page.getByRole('textbox', { name: '初始高度' })
+    await height.fill('30')
+    await height.blur()
+    await page.waitForTimeout(500)
+    const afterFork = await geometry()
+    check('fact edit creates an experimental branch', (await branchCount()) === 1)
+    check('branch restarts its own revision', afterFork.revision === '1', `${beforeFork.revision} → ${afterFork.revision}`)
+    check('branch still verified', afterFork.status === 'verified', afterFork.status)
+    await shot('experimental-branch-final-1600x900')
+
+    await page.getByRole('button', { name: '试题空间' }).click()
+    await questions().waitFor({ state: 'visible', timeout: 20_000 })
+    /* Question Space re-mounts on its default document, so re-select the same golden
+       question before comparing: the invariant under test is that the QUESTION's
+       scene is untouched, not that the surface remembers the last selection. */
+    await questions().getByRole('button', { name: /平抛运动/ }).first().click()
+    await page.waitForTimeout(700)
+    const after = await questionFacts()
+    check('question known unchanged by the experiment', stated.height === after.height, `${stated.height} → ${after.height}`)
+    check('question solution unchanged by the experiment', stated.range === after.range, `${stated.range} → ${after.range}`)
+  }
+} else {
+  /* The standalone Question Space was retired when practice moved into the
+     tutor conversation — C/D/F need re-authoring against the new flow. */
+  stdout.write('CASE C/D/F SKIPPED: 试题空间 entry retired (practice lives in tutor conversation)\n')
 }
 
 /* ---------------------------------------------------------------- CASE G -- */
@@ -352,12 +377,19 @@ await page.locator('[data-physicsos-domain="mechanics"]').waitFor({ state: 'visi
 await page.waitForTimeout(600)
 {
   const before = await geometry()
-  const normalBefore = (await derivedRows())['支持力 N']
+  await inspectorTab(/^读数$/)
+  const normalBefore = (await derivedRows())['支持力']
   await page.getByRole('button', { name: /AI 助教/ }).click()
   await page.getByRole('button', { name: /把斜面角度改成 45/ }).click()
   await page.waitForTimeout(600)
   const after = await geometry()
-  const normalAfter = (await derivedRows())['支持力 N']
+  /* The agent command leaves the drawer on the right rail — Esc returns the
+     inspector, and the revision bump remounts the workspace (runtimeKey), so
+     each tab is reselected before its read. */
+  await page.keyboard.press('Escape')
+  await inspectorTab(/^读数$/)
+  const normalAfter = (await derivedRows())['支持力']
+  await inspectorTab(/^属性$/)
   const angle = await page.getByRole('textbox', { name: '倾角' }).inputValue()
   check('agent command advances the revision', Number(after.revision) === Number(before.revision) + 1, `${before.revision} → ${after.revision}`)
   check('agent command reaches the inspector', angle === '45', angle)

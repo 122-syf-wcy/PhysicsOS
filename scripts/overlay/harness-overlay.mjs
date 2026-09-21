@@ -17,10 +17,16 @@ const OVERLAY_PATHS = [
   'packages/client/ui-physicsos',
   'packages/client/ui-settings-models/src/client/protocol.ts',
   'apps/web/public/physicsos',
+  /* Generated-image source material (prompt manifests + alternates) kept out
+     of public/ so dist stays lean; mirrored like the shipped assets. */
+  'apps/web/design-assets',
   /* Host-plane physics tool plugin (glue over @physicsos/agent-tools) and the
      PhysicsOS agent preset that mounts it; both are Harness workspace members
      the upstream tree never had, so they are overlay files, not patch hunks. */
   'packages/physicsos/tool-physicsos',
+  /* PhysicsOS 账户体系 host plugin — school tenants, school-scoped users,
+     hash-keyed sessions, and the /physicsos/auth REST surface. */
+  'packages/physicsos/auth-host',
   'apps/cli/config/agent-presets/physics-student',
 ]
 

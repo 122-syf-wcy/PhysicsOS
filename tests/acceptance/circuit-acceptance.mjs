@@ -39,6 +39,8 @@ const geometry = () => page.evaluate(() => {
     wireCount: canvas?.querySelectorAll('path[class*="circuitWire"]').length ?? 0,
     junctionCount: canvas?.querySelectorAll('circle[class*="circuitJunction"]').length ?? 0,
     symbolCount: canvas?.querySelectorAll('[class*="circuitSymbol"]').length ?? 0,
+    spriteCount: canvas?.querySelectorAll('[data-testid^="sprite-"]').length ?? 0,
+    imageCount: canvas?.querySelectorAll('image').length ?? 0,
     currentArrows: canvas?.querySelectorAll('[data-testid^="current-"]').length ?? 0,
     switchClosed: canvas?.querySelector('[data-testid="switch-sw"]')?.getAttribute('data-closed'),
     sliderArrow: canvas?.querySelector('[data-testid="slider-rv"]') !== null,
@@ -59,15 +61,23 @@ const geometry = () => page.evaluate(() => {
   }
 })
 
-/** Verification rows: label → passed/failed, from the inspector list. */
-const verificationRows = () => page.evaluate(() => {
+/** Verification rows live on the inspector's 校验 tab — select it, read,
+    then leave the inspector back on 属性 for the next interaction. */
+const verificationRows = async () => {
+  await page.getByRole('tab', { name: '校验' }).click()
+  await page.waitForTimeout(250)
+  const rows = await page.evaluate(() => {
   const rows = {}
-  for (const item of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="verificationItem"]')) {
-    const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
-    if (label !== undefined) rows[label] = item.getAttribute('data-status')
-  }
+    for (const item of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="verificationItem"]')) {
+      const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
+      if (label !== undefined) rows[label] = item.getAttribute('data-status')
+    }
+    return rows
+  })
+  await page.getByRole('tab', { name: '属性' }).click()
+  await page.waitForTimeout(250)
   return rows
-})
+}
 
 /** Create an experiment through the shared picker (must already be visible). */
 const pickTemplate = async (namePattern) => {
@@ -120,8 +130,10 @@ await waitForCircuitLab()
   check('series circuit is verified', g.status === 'verified', g.status)
   check('wires drawn as real paths', g.wireCount >= 5, `${g.wireCount} wires`)
   check('junction dots at shared terminals', g.junctionCount >= 2, `${g.junctionCount} junctions`)
-  check('schematic symbols painted', g.symbolCount >= 10, `${g.symbolCount} symbol strokes`)
-  check('canvas actually paints', g.paintedStrokes > 20, `${g.paintedStrokes} stroked nodes`)
+  /* Components render as photographed parts3d sprites — the vector-symbol
+     count is the fallback path, not the default one. */
+  check('component sprites painted', g.spriteCount >= 5, `${g.spriteCount} sprites, ${g.symbolCount} vector symbols`)
+  check('canvas actually paints', g.paintedStrokes + g.imageCount > 20, `${g.paintedStrokes} strokes + ${g.imageCount} images`)
   /* 6 V across 10 + 20 Ω → 0.2 A; the voltmeter across R₂ reads 4 V. */
   check('ammeter reads the engine current 0.2 A', g.canvasTexts.includes('0.2 A'), g.canvasTexts.join(','))
   check('voltmeter reads U₂ = 4 V', g.canvasTexts.includes('4 V'), g.canvasTexts.join(','))

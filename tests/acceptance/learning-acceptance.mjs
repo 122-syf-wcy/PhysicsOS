@@ -7,13 +7,15 @@
  *   A  Tutor Mode（AI 助教 → 引导）：观察引用真实派生量 → 提示逐级揭示并高亮画布
  *      → 答案引用「速度选择条件 · PASS」；纯视图操作，revision 不变
  *   B  Tutor 读活的 Runtime：改 v₀ → 课程翻到「为什么偏转」并引用 FAIL；恢复
- *   C  试题空间「错误诊断 · 自测」：答错 → 概念错误卡片 + Verifier 证据 +
- *      建议复习；选项锁定并揭示正确项；知识总结 chips 来自知识图谱
+ *   C  实验室自测（AI 助教 → 自测）：答错 → 概念错误卡片 + Verifier 证据 +
+ *      建议复习；选项锁定并揭示正确项；知识 chips 来自知识图谱
  *   D  学习记录：自测次数/错题/错误类型/知识点掌握全部由真实 attempt 聚合；
- *      「重新练习」深链回到同一道题
+ *      「重做实验」深链回实验室；「题库练习」列出 golden 题
  *   E  实验报告：工具栏「报告」→ 参数/派生量/验证/结论全部来自当前帧，
  *      可下载 Markdown
  *   F  学习记录持久化：整页刷新后 attempt 仍在
+ *   G  题库练习 → 会话解题卡片：题干交给助教 → physics_solve_question →
+ *      结构化解题卡（已知量/推导/验证/自测）+ 可播画布（真实模型链路）
  *
  * node tests/acceptance/learning-acceptance.mjs
  */
@@ -24,8 +26,8 @@ import { BASE, openAcceptance } from './support.mjs'
 const { page, check, shot, dismissOnboarding, finish } = await openAcceptance(import.meta.url)
 
 const lab = () => page.locator('[data-physicsos-surface="lab"]')
-const questions = () => page.locator('[data-physicsos-surface="questions"]')
 const record = () => page.locator('[data-physicsos-surface="record"]')
+const sceneCard = () => page.locator('[data-scene-card]')
 const picker = () => page.locator('[data-physicsos-state="picker"]')
 
 const labState = () => page.evaluate(() => {
@@ -95,10 +97,16 @@ await page.waitForTimeout(600)
 /* ---------------------------------------------------------------- CASE B -- */
 stdout.write('\nCASE B · Tutor 读活的 Runtime：v ≠ E/B → 课程翻面并引用 FAIL\n')
 {
+  /* The tutor drawer docks in the inspector's rail — the parameter editor
+     unmounts while it is open, so close it before touching v₀. */
+  await lab().getByRole('button', { name: '收起', exact: true }).click()
   const v0 = page.getByRole('textbox', { name: '初速度' })
   await v0.fill('150000')
   await v0.blur()
   await page.waitForTimeout(500)
+  await page.getByRole('button', { name: /AI 助教/ }).click()
+  await page.getByRole('tab', { name: '引导' }).click()
+  await page.waitForTimeout(300)
   const card = lab().locator('[data-physicsos-tutor]')
   check('lesson flips to the deflecting variant',
     (await card.getAttribute('data-physicsos-tutor')) === 'selector-deflecting')
@@ -110,31 +118,31 @@ stdout.write('\nCASE B · Tutor 读活的 Runtime：v ≠ E/B → 课程翻面�
   check('answer cites 速度选择条件 · FAIL', answered.includes('速度选择条件 · FAIL'))
   await shot('tutor-deflecting-1600x900')
 
+  await lab().getByRole('button', { name: '收起', exact: true }).click()
   await v0.fill('100000')
   await v0.blur()
   await page.waitForTimeout(500)
+  await page.getByRole('button', { name: /AI 助教/ }).click()
+  await page.getByRole('tab', { name: '引导' }).click()
+  await page.waitForTimeout(300)
+  const cardBack = lab().locator('[data-physicsos-tutor]')
   check('restoring v = E/B returns the balanced lesson',
-    (await card.getAttribute('data-physicsos-tutor')) === 'selector-balanced')
+    (await cardBack.getAttribute('data-physicsos-tutor')) === 'selector-balanced')
 }
 
 /* ---------------------------------------------------------------- CASE C -- */
-stdout.write('\nCASE C · 试题空间自测：答错 → 分类诊断 + Verifier 证据 + 建议复习\n')
-await page.getByRole('button', { name: '试题空间' }).click()
-await questions().waitFor({ state: 'visible', timeout: 20_000 })
+stdout.write('\nCASE C · 实验室自测：答错 → 分类诊断 + Verifier 证据 + 建议复习\n')
 {
-  await questions().getByRole('button', { name: /质子垂直进入匀强磁场/ }).first().click()
-  await page.waitForTimeout(900)
-  check('golden question solves', (await questions().getAttribute('data-workflow')) === 'READY')
-
-  const knowledge = questions().locator('[data-physicsos-knowledge]')
-  check('知识总结 section rendered', (await knowledge.count()) === 1)
-  const knowledgeText = await knowledge.innerText()
+  const selfCheck = lab().locator('[data-physicsos-lab-selfcheck]')
+  await lab().getByRole('tab', { name: '自测' }).click()
+  await selfCheck.waitFor({ state: 'visible', timeout: 10_000 })
+  check('self-check set mounts for the selector',
+    (await selfCheck.getAttribute('data-physicsos-lab-selfcheck')) === 'composite-velocity-selector')
+  const knowledgeText = await selfCheck.innerText()
   check('knowledge chips come from the curriculum graph',
-    knowledgeText.includes('洛伦兹力') && knowledgeText.includes('磁场中的圆周运动'), knowledgeText)
+    knowledgeText.includes('速度选择器') && knowledgeText.includes('复合场'), knowledgeText)
 
-  const selfCheck = questions().locator('[data-physicsos-selfcheck]')
-  check('错误诊断 · 自测 section rendered', (await selfCheck.count()) === 1)
-  await selfCheck.getByRole('button', { name: '做正功，速度越来越大' }).click()
+  await selfCheck.getByRole('button', { name: '只有正电荷才能直线通过' }).click()
   await page.waitForTimeout(300)
 
   const diagnosis = selfCheck.locator('[data-selfcheck-result="wrong"]')
@@ -142,18 +150,18 @@ await questions().waitFor({ state: 'visible', timeout: 20_000 })
   check('the mistake is classified 概念错误',
     (await diagnosis.first().getAttribute('data-mistake')) === 'concept')
   const diagnosisText = await diagnosis.first().innerText()
-  check('diagnosis explains the physics', diagnosisText.includes('洛伦兹力方向始终垂直于速度方向'))
-  check('diagnosis cites the live Verifier check', diagnosisText.includes('magnetic_force_does_no_work'))
+  check('diagnosis explains the physics', diagnosisText.includes('电场力与洛伦兹力同时反向'))
+  check('diagnosis cites the live Verifier check', diagnosisText.includes('velocity_selection_condition'))
   check('diagnosis points at review topics', diagnosisText.includes('建议复习'))
 
-  const correctOption = selfCheck.getByRole('button', { name: '不做功，速率保持不变' })
+  const correctOption = selfCheck.getByRole('button', { name: 'v = E/B，电场力与洛伦兹力平衡' })
   check('options lock and the correct one is revealed',
     (await correctOption.isDisabled()) === true)
   await shot('selfcheck-diagnosis-1600x900')
 }
 
 /* ---------------------------------------------------------------- CASE D -- */
-stdout.write('\nCASE D · 学习记录：错题/错误类型/知识点掌握 → 重新练习深链\n')
+stdout.write('\nCASE D · 学习记录：错题/错误类型/知识点掌握 → 重做实验深链 + 题库练习\n')
 await page.getByRole('button', { name: '学习记录' }).click()
 await record().waitFor({ state: 'visible', timeout: 20_000 })
 {
@@ -161,23 +169,30 @@ await record().waitFor({ state: 'visible', timeout: 20_000 })
   check('the record heading is up', text.includes('我的物理学习记录'))
   /* Metric cards render the value above the label: 「1 ⏎ 自测次数」. */
   check('one attempt aggregated', /1\s*自测次数/.test(text.replace(/\n/g, ' ')), text.slice(0, 200))
-  check('the mistake is listed with its question title', text.includes('质子垂直进入匀强磁场'))
+  check('the mistake is listed with its scene title', text.includes('速度选择器'))
   check('the mistake keeps its class 概念错误', text.includes('概念错误'))
-  check('the student answer is quoted', text.includes('做正功，速度越来越大'))
-  check('knowledge mastery lists the curriculum node', text.includes('洛伦兹力'))
+  check('the student answer is quoted', text.includes('只有正电荷才能直线通过'))
+  check('knowledge mastery lists the curriculum node', text.includes('复合场'))
   const state = await page.evaluate(() => ({
     scrolls: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
     bars: document.querySelectorAll('[data-physicsos-surface="record"] [class*="knowledgeBar"]').length,
   }))
   check('mastery bars rendered', state.bars >= 1, `${state.bars} bars`)
   check('no page scroll on the record surface', state.scrolls === false)
+
+  const bank = record().locator('[data-practice]')
+  check('题库练习 lists golden questions', (await bank.count()) >= 10, `${await bank.count()} rows`)
+  check('the bank carries the proton question',
+    (await record().locator('[data-practice="01-proton-basic"]').count()) === 1)
   await shot('learning-record-1600x900')
 
-  await record().getByRole('button', { name: '重新练习' }).first().click()
-  await questions().waitFor({ state: 'visible', timeout: 20_000 })
-  await page.waitForTimeout(900)
-  check('重新练习 deep-links into the same golden question',
-    (await questions().getByRole('heading', { name: '质子垂直进入匀强磁场' }).count()) === 1)
+  /* A lab attempt deep-links to a FRESH instance of the same apparatus. */
+  await record().locator('[data-practise="experiment"]').first().click()
+  await page.locator('[data-physicsos-domain="composite"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page.waitForTimeout(400)
+  /* data-physicsos-domain sits on the lab root itself. */
+  check('重做实验 deep-links back to a fresh selector bench',
+    (await page.locator('[data-physicsos-surface="lab"][data-physicsos-domain="composite"]').count()) === 1)
 }
 
 /* ---------------------------------------------------------------- CASE E -- */
@@ -213,8 +228,38 @@ await dismissOnboarding()
 {
   await page.getByRole('button', { name: '学习记录' }).click()
   await record().waitFor({ state: 'visible', timeout: 20_000 })
-  const text = await record().innerText()
-  check('the attempt survives a reload', text.includes('质子垂直进入匀强磁场') && text.includes('概念错误'))
+  /* Scope to the mistakes list — the practice bank prints the same titles. */
+  const mistakes = record().locator('[data-practise]')
+  check('the attempt survives a reload', (await mistakes.count()) >= 1)
+  const first = await mistakes.first().evaluate(el => el.closest('li')?.innerText ?? '')
+  check('the persisted row keeps class and scene', first.includes('概念错误') && first.includes('速度选择器'), first.slice(0, 120))
+}
+
+/* ---------------------------------------------------------------- CASE G -- */
+stdout.write('\nCASE G · 题库练习 → 会话解题卡片（真实 tutor → physics_solve_question 链路）\n')
+{
+  const proton = record().locator('[data-practice="01-proton-basic"]')
+  await proton.waitFor({ state: 'visible', timeout: 10_000 })
+  await proton.click()
+  /* The hand-off queues the stem on the tutor session and returns to the
+     conversation — the solved scene card streams in as a chat node. */
+  await sceneCard().first().waitFor({ state: 'visible', timeout: 150_000 })
+    .catch(() => undefined)
+  const cards = await sceneCard().count()
+  check('the solved scene card streams into the conversation', cards >= 1, `${cards} cards`)
+  if (cards >= 1) {
+    const card = sceneCard().last()
+    check('card carries the structured solve section',
+      (await card.locator('[data-solve-section]').count()) === 1)
+    const solveText = await card.locator('[data-solve-section]').innerText()
+    check('solve lists knowns and targets', solveText.includes('已知条件') && solveText.includes('求解目标'), solveText.slice(0, 160))
+    check('solve shows derivation steps', solveText.includes('解题步骤'), solveText.slice(0, 200))
+    check('the golden question carries its self-check',
+      (await card.locator('[data-physicsos-lab-selfcheck]').count()) === 1)
+    check('a playable canvas is embedded',
+      (await card.locator('canvas, svg').count()) >= 1)
+    await shot('solved-card-in-conversation-1600x900')
+  }
 }
 
 /* ------------------------------------------------------------------ gate -- */

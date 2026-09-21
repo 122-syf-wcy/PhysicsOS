@@ -40,6 +40,8 @@ AXIS_BY_ID = {
     "ammeter": "base",
     "voltmeter": "base",
     "terminal": "base",
+    # 力学批：钩码上端是挂钩、重心天然靠下，按立式器材豁免偏心检查。
+    "weight-hook": "base",
 }
 
 
@@ -97,6 +99,13 @@ def main() -> int:
         content = alpha.point(lambda v: 1 if v >= CONTENT_ALPHA else 0)
         solid = alpha.point(lambda v: 1 if v >= SOLID_ALPHA else 0)
         pixels = content.load()
+
+        # 覆盖率只是信息列。老批次的记录里没有这个字段，就按图现算 —— 一批验收
+        # 不该因为一个纯展示字段的缺失而整批中断。
+        coverage = entry.get("alphaCoverage")
+        if coverage is None:
+            histogram = alpha.histogram()
+            coverage = sum(histogram[CONTENT_ALPHA:]) / (width * height)
 
         # 1. 边缘截断：内容贴到任意一条边就算被切。
         border_hits = 0
@@ -162,7 +171,7 @@ def main() -> int:
                 body_ratio = round(max(occupied) / median, 2) if median else 0.0
 
         print(
-            f"{entry['id']:16s} {entry['pixels']:11s} {entry['alphaCoverage']:6.1%}"
+            f"{entry['id']:16s} {entry['pixels']:11s} {coverage:6.1%}"
             f" {border_hits:5d} {blob_count:6d} {fill:6.3f} {off_center:6.3f} {body_ratio:6.2f}"
         )
 
@@ -187,7 +196,7 @@ def main() -> int:
         for line in problems:
             print(f"  - {line}")
         return 1
-    print("全部 10 件通过：无截断、单连通、填充与居心正常")
+    print(f"全部 {len(manifest['parts'])} 件通过：无截断、单连通、填充与居心正常")
     return 0
 
 

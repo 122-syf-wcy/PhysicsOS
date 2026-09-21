@@ -28,7 +28,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
-const OUT_DIR = path.join('overlays', 'harness', 'files', 'apps', 'web', 'public', 'physicsos', 'parts3d')
+const OUT_DIR = process.env.PARTS3D_OUT
+  ? path.join('overlays', 'harness', 'files', 'apps', 'web', 'public', 'physicsos', 'parts3d', process.env.PARTS3D_OUT)
+  : path.join('overlays', 'harness', 'files', 'apps', 'web', 'public', 'physicsos', 'parts3d')
 const CONCURRENCY = 3
 const MAX_ATTEMPTS = 3
 const BACKOFF_MS = [15_000, 45_000]
@@ -55,10 +57,25 @@ if (!BASE_URL || !API_KEY) throw new Error('缺少 PHYSICSOS_IMAGE_PRIMARY_BASE_
 
 /* ------------------------------------------------------------------- 风格 -- */
 
-/* 全套共用。任何一条改动都会让新旧器材的相机/光向对不上，所以改风格就要重生成全套。 */
-const STYLE = [
+/* 相机条款两套。轴向器材（两端接线柱要贴到导线上）必须正俯视：3/4 视角下器材
+ * 长轴在画面里是斜的，两端接线柱必然不在同一水平线上，渲染层无法把它们同时压
+ * 到导线上 —— 这是 studio-v3 首批七件全部返工的原因。 */
+const CAMERA_THREE_QUARTER =
+  'three-quarter view from above at roughly 45 degrees elevation, orthographic lens,'
+const CAMERA_FLAT =
+  'strictly top-down 90 degree orthographic view seen from straight above, '
+  + 'no perspective foreshortening, no isometric or oblique tilt, no diagonal rotation, '
+  + 'the apparatus lying level across the frame parallel to the image edge,'
+
+/* 量接线柱的前提：两个端子在同一水平中线上、位于器材最左与最右、且不被遮挡。 */
+const TERMINALS_LEVEL =
+  'the two brass binding posts are the leftmost and rightmost points of the apparatus, '
+  + 'their centres on one identical horizontal centre line, both fully visible and unoccluded,'
+
+/** 风格串。除相机条款外全套共用；改任何一条都要重生成整批。 */
+const style = (camera) => [
   'photorealistic 3D render of a single school-laboratory physics apparatus item,',
-  'three-quarter view from above at roughly 45 degrees elevation, orthographic lens,',
+  camera,
   'object perfectly centred and fully inside the frame with generous margin,',
   'soft studio lighting with one key light from the upper left and gentle fill,',
   'subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite,',
@@ -67,6 +84,12 @@ const STYLE = [
   'professional product-shot clarity, physically plausible proportions,',
   'no text, no letters, no numbers, no logo, no watermark, no border, no backdrop',
 ].join(' ')
+
+/* 电源类器材的正负极必须看得出来：渲染层在精灵路径上不画极性符号，A/V 与 +/−
+ * 全靠照片里的红黑接线柱表达。 */
+const POLARITY =
+  'one binding post at the right hand end is bright red and the one at the left hand end is '
+  + 'black, so the positive terminal is unmistakably on the right,'
 
 /** 以 1cm 接线柱为参照，保证器材之间的相对尺度一致。 */
 const SCALE_NOTE = 'All items are rendered at a consistent scale relative to a 1 cm binding post.'
@@ -85,9 +108,9 @@ const PARTS = [
   },
   {
     id: 'resistor',
-    body: 'a cylindrical carbon-film resistor with axial wire leads, a light ceramic body painted '
-      + 'with three coloured bands and a gold tolerance band, both straight metal leads extending '
-      + 'left and right along the same horizontal axis',
+    body: 'a laboratory fixed resistor mounted as a bench apparatus: a horizontal ceramic tube '
+      + 'wound with dark resistance wire on a small dark wooden base, with one brass binding post '
+      + 'at each end of the base, matching the knife switch and rheostat family',
   },
   {
     id: 'rheostat',
@@ -122,13 +145,84 @@ const PARTS = [
   {
     id: 'voltmeter',
     body: 'an analogue panel voltmeter in a rectangular black bakelite housing with a brushed metal '
-      + 'bezel, a blank white dial face that is completely empty with no markings of any kind, a thin '
-      + 'black needle resting near the middle, two brass binding posts at the lower edge',
+      + 'bezel, standing upright on a desk; the blank white dial face is completely empty with no '
+      + 'markings of any kind and is turned toward the viewer and clearly readable, a thin black '
+      + 'needle resting near the middle, two brass binding posts at the lower front edge',
   },
   {
     id: 'terminal',
     body: 'a single brass laboratory binding post terminal, a short threaded metal post with a '
       + 'knurled nut and a flat base, standing upright',
+  },
+
+  /* ---------------------------------------------------------------------------
+   * 台面扩充批次（studio-v3）。上面的 10 件是"每种元件一张图"，用到器材栏里就
+   * 会出现三个电池长得一模一样的问题 —— 器材栏要像真实的器材盘，同一种元件的
+   * 不同规格必须是**看得出区别的实物**。这一批全部落在引擎已有的 6 种元件类型
+   * 内（resistor / voltage_source / switch / ammeter / voltmeter /
+   * variable_resistor），没有一个新类型，所以每一件都能真解出读数。
+   * 风格串与上面完全一致，混在一起不会露馅。
+   * ------------------------------------------------------------------------- */
+  {
+    id: 'cell-aa',
+    flat: true,
+    polarity: true,
+    body: 'a single AA dry cell battery lying flat on its side and extended along the horizontal, '
+      + 'a slim cylindrical zinc-carbon cell wrapped in a plain muted grey-blue paper jacket, '
+      + 'one short insulated lead ending in a small brass crocodile clip at each end so that the '
+      + 'two clips are the extreme left and right of the apparatus',
+  },
+  {
+    id: 'battery-pack',
+    flat: true,
+    polarity: true,
+    body: 'a laboratory battery pack laid flat and extended along the horizontal: four cylindrical '
+      + 'dry cells held side by side in a dark bakelite carrier, brass connecting straps linking '
+      + 'them in series, and one brass binding post at each end of the holder, the two posts being '
+      + 'the extreme left and right of the apparatus',
+  },
+  {
+    id: 'supply-dc',
+    flat: true,
+    polarity: true,
+    body: 'a bench DC power supply unit in a low rectangular steel case seen from directly above, '
+      + 'a brushed aluminium panel bearing two large black knurled rotary knobs, one brass binding '
+      + 'post at each end of the front edge so that the two posts are the extreme left and right of '
+      + 'the apparatus, and a small blank dark display window showing no digits; plain panel with '
+      + 'no lettering, no dial markings and no logo',
+  },
+  {
+    id: 'switch-button',
+    body: 'a laboratory push-button switch mounted on a small dark wooden base: a round black '
+      + 'bakelite button on a short brass shaft above two brass contact posts, with one brass '
+      + 'binding post at each end of the base',
+  },
+  {
+    id: 'resistor-5',
+    flat: true,
+    body: 'a laboratory fixed resistor on a small dark wooden base, a horizontal ceramic tube '
+      + 'wound with resistance wire and coated in a pale beige vitreous enamel, a single narrow '
+      + 'green painted band around the middle of the coating, one brass binding post at each end '
+      + 'of the base, the two posts being the extreme left and right of the apparatus',
+  },
+  {
+    id: 'resistor-50',
+    flat: true,
+    body: 'a laboratory fixed resistor on a small dark wooden base, a noticeably longer and thicker '
+      + 'horizontal ceramic tube wound with resistance wire and coated in a pale beige vitreous '
+      + 'enamel, three separate narrow painted bands (orange, orange, black) around the middle of '
+      + 'the coating, one brass binding post at each end of the base, the two posts being the '
+      + 'extreme left and right of the apparatus',
+  },
+  {
+    id: 'rheostat-50',
+    flat: true,
+    body: 'a large laboratory sliding rheostat laid flat and extended along the horizontal, a long '
+      + 'thick horizontal ceramic tube densely wound with bare resistance wire, a heavy bare metal '
+      + 'slider riding on a brass guide rail with a black bakelite knob, one brass binding post at '
+      + 'each end of the base so that the two posts are the extreme left and right of the '
+      + 'apparatus, with a longer ceramic tube than a small rheostat, the whole apparatus including '
+      + 'both end brackets well inside the frame',
   },
 ]
 
@@ -180,7 +274,14 @@ const requestOnce = async (prompt) => {
 
 /** 同一件器材最多试 MAX_ATTEMPTS 次；5xx 与网络错误退避重试，4xx 立即放弃。 */
 const generateWithRetry = async (part) => {
-  const prompt = `${part.body}. ${STYLE} ${SCALE_NOTE}`
+  const flat = part.flat === true
+  const prompt = [
+    `${part.body}.`,
+    style(flat ? CAMERA_FLAT : CAMERA_THREE_QUARTER),
+    flat ? TERMINALS_LEVEL : undefined,
+    part.polarity === true ? POLARITY : undefined,
+    SCALE_NOTE,
+  ].filter((clause) => clause !== undefined).join(' ')
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const started = Date.now()
     const result = await requestOnce(prompt)

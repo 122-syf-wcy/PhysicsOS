@@ -16,12 +16,17 @@
 """
 
 import json
+import os
 import pathlib
 import sys
 
 from PIL import Image
 
 PARTS_DIR = pathlib.Path("overlays/harness/files/apps/web/public/physicsos/parts3d")
+# 子批次目录：生图按批次落到 studio-vN/，裁剪也只在那一批内进行 —— 这个脚本
+# 会就地覆盖 PNG，绝不能让新批次的参数回头去改已经上线的老图。
+if os.environ.get("PARTS3D_OUT"):
+    PARTS_DIR = PARTS_DIR / os.environ["PARTS3D_OUT"]
 
 # 实体轮廓的 alpha 阈值：够高以排除辉光与半透明阴影，够低以保住抗锯齿边缘。
 SOLID_ALPHA = 200
@@ -32,19 +37,28 @@ PAD_RATIO = 0.06
 # 归一化后实体最长边像素数。台面零件绘制尺寸约几十像素，384 足够 2x DPI。
 TARGET_MAX = 384
 
-# 器材轴向：'axial' = 两端接线柱在实体左右边缘（电阻/灯泡/电源这类轴向元件）；
-# 'base' = 接线柱在底边（电表、开关、接线柱这类立式器材）。
+# 器材轴向：'axial' = 两端接线柱在实体左右边缘（轴向引线元件，当前无）；
+# 'base' = 器材立在导线上、接线柱在底边/顶面（电表、开关、电池、电阻座、
+# 灯泡、接线柱这类座式器材——电池与滑变的接线柱也不在实体左右边缘）。
 AXIS_BY_ID = {
-    "resistor": "axial",
-    "lamp-off": "axial",
-    "lamp-on": "axial",
-    "battery": "axial",
-    "rheostat": "axial",
+    "resistor": "base",
+    "lamp-off": "base",
+    "lamp-on": "base",
+    "battery": "base",
+    "rheostat": "base",
     "switch-open": "base",
     "switch-closed": "base",
     "ammeter": "base",
     "voltmeter": "base",
     "terminal": "base",
+    # studio-v3 批次：全部是两端带接线柱的台上器材，与 v2 的轴向精灵同族。
+    "cell-aa": "axial",
+    "battery-pack": "axial",
+    "supply-dc": "axial",
+    "switch-button": "axial",
+    "resistor-5": "axial",
+    "resistor-50": "axial",
+    "rheostat-50": "axial",
 }
 
 
@@ -58,7 +72,18 @@ def main() -> int:
         print(f"缺少目录 {PARTS_DIR}；先跑 generate-parts3d.mjs", file=sys.stderr)
         return 1
 
-    sources = sorted(PARTS_DIR.glob("*.png"))
+    # 可选：只处理命令行给出的 id。裁剪会就地覆盖 PNG，重复处理同一张会二次裁
+    # 剪，所以局部重出某一批零件时必须能限定范围；清单按 id 合并，未处理项原样
+    # 保留。
+    only = [argument for argument in sys.argv[1:] if not argument.startswith("-")]
+    if only:
+        sources = [PARTS_DIR / f"{part_id}.png" for part_id in only]
+        missing = [source.name for source in sources if not source.is_file()]
+        if missing:
+            print(f"{PARTS_DIR} 下缺少 {', '.join(missing)}", file=sys.stderr)
+            return 1
+    else:
+        sources = sorted(PARTS_DIR.glob("*.png"))
     if not sources:
         print(f"{PARTS_DIR} 下没有 PNG", file=sys.stderr)
         return 1
@@ -125,18 +150,31 @@ def main() -> int:
             f"  {source.stat().st_size / 1024:6.1f} KiB  实体占比 {entry['alphaCoverage']:.1%}"
         )
 
+    # 按 id 合并进已有清单：局部重出时不能把没动的零件从清单里抹掉。被本次处理
+    # 的零件整条替换 —— 图重出了，旧的实测接线柱坐标就不再成立，必须由测量步骤
+    # 重新给出，不能让它悄悄留在清单里。
+    manifest_file = PARTS_DIR / "manifest.json"
+    merged: dict[str, dict] = {}
+    if manifest_file.is_file():
+        for entry in json.loads(manifest_file.read_text(encoding="utf-8")).get("parts", []):
+            merged[entry["id"]] = entry
+    for entry in entries:
+        merged[entry["id"]] = entry
+
     manifest = {
         "note": "电学台器材目录。solidBox 是零件实体轮廓在图片中的归一化位置，"
-                "渲染层据此把实体映射到接线端跨度；anchorSource=geometry-convention "
-                "表示锚点来自几何约定而非逐件目视测量。",
+                "渲染层据此把实体映射到接线端跨度；anchorSource 标注锚点来源："
+                "geometry-convention 表示几何约定，visual-measurement-source-pixels / "
+                "alpha-silhouette-measurement 表示从图里量得。",
         "solidAlphaThreshold": SOLID_ALPHA,
-        "parts": entries,
+        "parts": list(merged.values()),
     }
-    (PARTS_DIR / "manifest.json").write_text(
+    manifest_file.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    total_bytes = sum(entry["bytes"] for entry in entries)
-    print(f"\n{len(entries)} 件，合计 {total_bytes / 1024:.0f} KiB，清单写入 manifest.json")
+    total_bytes = sum(entry["bytes"] for entry in merged.values())
+    print(f"\n本次处理 {len(entries)} 件，清单共 {len(merged)} 件，"
+          f"合计 {total_bytes / 1024:.0f} KiB，清单写入 manifest.json")
     return 0
 
 
