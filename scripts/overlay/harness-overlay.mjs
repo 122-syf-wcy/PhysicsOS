@@ -27,6 +27,10 @@ const OVERLAY_PATHS = [
   /* PhysicsOS 账户体系 host plugin — school tenants, school-scoped users,
      hash-keyed sessions, and the /physicsos/auth REST surface. */
   'packages/physicsos/auth-host',
+  /* PhysicsOS 出卷专区 host plugin — the paper domain (blueprints, spec
+     tables, drafts, review, approval, export) and the /physicsos/paper REST
+     surface the 真题卷库 browses. */
+  'packages/physicsos/paper-host',
   'apps/cli/config/agent-presets/physics-student',
 ]
 
