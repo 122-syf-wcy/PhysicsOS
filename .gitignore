@@ -57,6 +57,17 @@ UI/generated/
 *-typecheck.txt
 golden-test.txt
 
+# Image-generation intermediates (prompt dumps, raw/alpha alternates). The
+# shipped, normalized copies live under
+# overlays/harness/files/apps/web/public/physicsos/ — this is the scratch tray
+# the design scripts write into before postprocess/verify run.
+output/
+
+# One-off acceptance probes and screenshot scratch scripts. Durable checks live
+# in tests/acceptance/*-acceptance.mjs; these are session-local throwaways.
+tests/acceptance/*-tmp.mjs
+tests/acceptance/probe-*.mjs
+
 # Local harness baseline snapshot (not part of the project source)
 _baseline-harness/
 
