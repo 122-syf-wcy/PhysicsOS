@@ -115,13 +115,20 @@ export const renderSolve = (result: SolveQuestionResult): string => {
   }
   lines.push('步骤：')
   for (const step of result.steps) {
-    lines.push(`${step.index}. ${step.title} — ${step.description}${step.result === undefined ? '' : `（${step.result}）`}`)
+    lines.push(`${step.index}. ${step.title}${step.description === '' ? '' : ` — ${step.description}`}`)
+    if (step.substitution !== undefined) lines.push(`   代入：${step.substitution}`)
+    if (step.result !== undefined) lines.push(`   结果：${step.result}`)
   }
   if (result.verification !== undefined) lines.push(...verificationLines(result.verification))
   for (const issue of result.issues) lines.push(`- [${issue.severity}] ${issue.code}：${issue.message}`)
   if (result.scene !== undefined) {
-    lines.push(`场景已就绪：sceneId = ${result.scene.sceneId}（修订 ${result.scene.revision}，引擎 ${result.scene.engineId}）。`)
+    lines.push(
+      result.reusedScene === true
+        ? `题面与之前相同：复用已有场景 ${result.scene.sceneId}（修订 ${result.scene.revision}），没有新建场景。`
+        : `场景已就绪：sceneId = ${result.scene.sceneId}（修订 ${result.scene.revision}，引擎 ${result.scene.engineId}）。`,
+    )
     lines.push('对象：' + result.scene.objects.map((object) => `${object.id}[${object.kind}]`).join('、'))
+    lines.push('告诉学生：左侧"最近空间"里打开该场景即可看动画（点"运行"播放运动过程）。')
   }
   return lines.join('\n')
 }
@@ -153,10 +160,10 @@ export const renderObserve = (result: ObserveResult): string => {
   for (const object of result.objects) {
     const parts: string[] = []
     if (object.position !== undefined) {
-      parts.push(`位置 (${fmt(object.position.x)}, ${fmt(object.position.y)}${object.position.z === 0 ? '' : `, ${fmt(object.position.z)}`}) ${object.position.unit}`)
+      parts.push(`位置 (${fmt(object.position.x)}, ${fmt(object.position.y)}${object.position.z ? `, ${fmt(object.position.z)}` : ''}) ${object.position.unit}`)
     }
     if (object.velocity !== undefined) {
-      parts.push(`速度 (${fmt(object.velocity.x)}, ${fmt(object.velocity.y)}${object.velocity.z === 0 ? '' : `, ${fmt(object.velocity.z)}`}) ${object.velocity.unit}`)
+      parts.push(`速度 (${fmt(object.velocity.x)}, ${fmt(object.velocity.y)}${object.velocity.z ? `, ${fmt(object.velocity.z)}` : ''}) ${object.velocity.unit}`)
     }
     for (const value of object.values) parts.push(`${value.key} = ${fmt(value.value)}${value.unit === '' ? '' : ` ${value.unit}`}`)
     lines.push(`- ${object.id}：${parts.length === 0 ? '（无数值）' : parts.join('；')}`)

@@ -7,6 +7,10 @@ import {
   resolveProjectileModel,
   resolveNewtonSecondLawModel,
   resolveInclinedPlaneModel,
+  resolveSpringOscillatorModel,
+  resolveSimplePendulumModel,
+  resolveHorizontalFrictionModel,
+  resolveSpringStaticsModel,
 } from './models/model-resolvers.ts'
 
 export function detectMechanicsModel(scene: PhysicsScene): MechanicsModelId | null {
@@ -29,6 +33,17 @@ export function detectMechanicsModel(scene: PhysicsScene): MechanicsModelId | nu
   // The mechanics scene factory attaches one to *every* mechanics scene, so
   // routing on it alone would classify every scene as projectile. The ground
   // observable is the real projectile signal; gravity merely confirms it.
+  /* Connector constraints are unambiguous: a spring constraint means a spring
+     rig (vertical springs are the statics Hooke bench, horizontal ones the
+     oscillator), a rope constraint means a pendulum. */
+  const spring = scene.constraints.find((c) => c.type === 'spring')
+  if (spring !== undefined) {
+    return spring.parameters['axis'] === 'vertical' ? 'spring_statics' : 'spring_oscillator'
+  }
+  if (scene.constraints.some((c) => c.type === 'rope')) return 'simple_pendulum'
+  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'friction_surface'))
+    return 'horizontal_friction'
+
   if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'ground')) return 'projectile_motion'
   if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'incline')) return 'inclined_plane'
   if (scene.forces.some((f) => f.type === 'friction')) return 'inclined_plane'
@@ -64,6 +79,14 @@ export function resolveMechanicsModel(scene: PhysicsScene): MechanicsModel {
       return resolveNewtonSecondLawModel(scene)
     case 'inclined_plane':
       return resolveInclinedPlaneModel(scene)
+    case 'spring_oscillator':
+      return resolveSpringOscillatorModel(scene)
+    case 'simple_pendulum':
+      return resolveSimplePendulumModel(scene)
+    case 'horizontal_friction':
+      return resolveHorizontalFrictionModel(scene)
+    case 'spring_statics':
+      return resolveSpringStaticsModel(scene)
     default:
       return resolveUniformLinearModel(scene)
   }

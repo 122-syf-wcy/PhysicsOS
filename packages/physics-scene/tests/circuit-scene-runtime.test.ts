@@ -119,6 +119,58 @@ describe('circuit scene commands', () => {
     expect(runtime.getScene()).toEqual(before)
   })
 
+  it('moves a component placement and re-routes its wires along the old spine', () => {
+    const runtime = new SceneRuntime(createSeriesCircuitScene())
+    const layout = circuitLayoutOf(circuitOf(runtime.getScene())!)
+    const at0 = layout?.components['r1']
+    expect(at0).toBeDefined()
+    if (at0 === undefined) throw new Error('r1 has no authored placement.')
+    const circuit = circuitOf(runtime.getScene())!
+    const touched = circuit.connections.filter(
+      entry =>
+        String(entry.from.componentId) === 'r1' || String(entry.to.componentId) === 'r1',
+    )
+    const shaped = touched.filter(entry => (layout?.wires?.[entry.id]?.length ?? 0) > 0)
+    expect(shaped.length).toBeGreaterThan(0)
+
+    const result = execute(runtime, 'SetComponentPlacement', {
+      circuitId: 'circuit-1',
+      componentId: 'r1',
+      x: at0.x + 2,
+      y: at0.y + 1,
+    })
+    expect(result.ok).toBe(true)
+    const after = circuitLayoutOf(circuitOf(runtime.getScene())!)
+    expect(after?.components['r1']).toEqual({ x: at0.x + 2, y: at0.y + 1, rotation: at0.rotation })
+    /* Touched wires keep the unmoved side's bends and gain a bridge onto the
+       old spine; wires that never touched r1 keep theirs verbatim. */
+    for (const connection of shaped) {
+      const oldWaypoints = layout?.wires?.[connection.id] ?? []
+      const derived = after?.wires?.[connection.id] ?? []
+      for (const waypoint of oldWaypoints) {
+        expect(derived).toContainEqual(waypoint)
+      }
+    }
+    /* The untouched corner wire keeps its single authored bend. */
+    expect(after?.wires?.['conn-n5-0']).toEqual([{ x: -5, y: -3 }])
+    expect(runtime.getEvents()[0]?.type).toBe('ComponentPlacementChanged')
+  })
+
+  it('rejects a non-finite placement without touching the scene', () => {
+    const runtime = new SceneRuntime(createSeriesCircuitScene())
+    const before = runtime.getScene()
+    const bad = execute(runtime, 'SetComponentPlacement', {
+      circuitId: 'circuit-1',
+      componentId: 'r1',
+      x: Number.NaN,
+      y: 0,
+    })
+    expect(bad.ok).toBe(false)
+    if (bad.ok) throw new Error('Expected command rejection.')
+    expect(bad.error.code).toBe('INVALID_COMPONENT_PLACEMENT')
+    expect(runtime.getScene()).toEqual(before)
+  })
+
   it('updates resistor and rheostat resistances through one command', () => {
     const runtime = new SceneRuntime(createRheostatCircuitScene())
     const fixed = execute(runtime, 'SetComponentResistance', {

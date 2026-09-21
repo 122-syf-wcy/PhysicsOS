@@ -50,6 +50,11 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
      探究杠杆的平衡条件 self-checks are what write attempts against it. */
   { id: 'dyn-lever-balance', label: '杠杆平衡条件 F₁l₁ = F₂l₂', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-moment', label: '力臂与力矩', domain: 'mechanics', parentId: 'mechanics' },
+  /* 摩擦与振动节点：由 Lab 的摩擦/弹簧/单摆实验自测写入，暂无 golden 题。 */
+  { id: 'dyn-friction', label: '摩擦力（静摩擦与滑动摩擦）', domain: 'mechanics', parentId: 'mechanics' },
+  { id: 'dyn-hooke', label: '胡克定律 F = kx', domain: 'mechanics', parentId: 'mechanics' },
+  { id: 'osc-spring', label: '弹簧振子与简谐运动', domain: 'mechanics', parentId: 'mechanics' },
+  { id: 'osc-pendulum', label: '单摆与周期测量', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'method-units', label: '单位与数量级', domain: 'mechanics', parentId: 'mechanics' },
 
   { id: 'electromagnetism', label: '电磁学', domain: 'electromagnetism' },
@@ -181,6 +186,10 @@ export const QUESTION_KNOWLEDGE: Readonly<Record<string, readonly string[]>> = {
   'mech-04-newton-second-law': ['dyn-newton-second', 'dyn-force-analysis'],
   'mech-05-incline-no-friction': ['dyn-incline', 'dyn-force-analysis'],
   'mech-06-unit-conversion': ['kin-uniform-acceleration', 'method-units'],
+  'mech-07-uniform-distance': ['kin-average-speed'],
+  'mech-08-sound-propagation': ['ac-sound-propagation'],
+  'mech-09-echo-ranging': ['ac-echo-ranging', 'ac-echo'],
+  'mech-10-netforce-friction': ['dyn-friction', 'dyn-newton-second'],
 
   /* ------------------------------------------------------------- composite -- */
   'comp-01-selector-balance': ['em-velocity-selector', 'em-crossed-fields', 'em-lorentz'],

@@ -944,6 +944,193 @@ const LEVER_SLIDE_OUT: SelfCheckItem = {
   ],
 }
 
+/* --------------------------------------------------------------- friction -- */
+
+const FRICTION_STATIC_FOLLOWS: SelfCheckItem = {
+  id: 'friction-static-follows',
+  prompt: '用弹簧测力计水平拉物块，拉力从 0 慢慢增大但物块还没动。此时静摩擦力多大？',
+  takeaway:
+    '静摩擦是「被动力」：物块静止说明合力为零，静摩擦力始终等于当前拉力 f = F，随拉力同步增大，直到触及上限 μsN。',
+  options: [
+    { id: 'equals-pull', label: '等于此时的拉力（f = F，随拉力增大）', correct: true },
+    {
+      id: 'fixed-muk',
+      label: '恒等于 μkN，与拉力无关',
+      mistake: {
+        type: 'concept',
+        explanation:
+          'μkN 是滑动摩擦的大小，物块还没滑动。静止时静摩擦取「刚好平衡拉力」的值：拉力 3 N 时 f 就是 3 N，不是 μkN 的固定值。',
+        review: ['静摩擦是被动力：f = F（未滑动时）', '滑动摩擦才是 f = μkN'],
+        evidenceCheckId: 'static_friction_balance',
+      },
+    },
+    {
+      id: 'always-max',
+      label: '始终等于最大静摩擦 μsN',
+      mistake: {
+        type: 'concept',
+        explanation:
+          'μsN 是静摩擦的上限，不是它的当前值。只有拉力增大到即将滑动的瞬间，静摩擦才达到 μsN；此前 f 只等于拉力本身。',
+        review: ['f_静 ≤ μsN 是不等式上限', '滑动临界：F = μsN'],
+        evidenceCheckId: 'static_limit',
+      },
+    },
+  ],
+}
+
+const FRICTION_KINETIC_CONSTANT: SelfCheckItem = {
+  id: 'friction-kinetic-constant',
+  prompt: '物块已经滑起来了。把拉力再调大一些，滑动摩擦力怎样变？',
+  takeaway:
+    '滑动摩擦 f = μkN 只由 μk 与支持力 N 决定，与拉力无关。拉力增大改变的是合力与加速度 a = (F − f)/m，不是 f 本身。',
+  options: [
+    { id: 'unchanged', label: '不变，仍是 μkN（变大的只有加速度）', correct: true },
+    {
+      id: 'grows-with-pull',
+      label: '随拉力一起增大',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '把「静摩擦随外力增大」误套到了滑动段。一旦滑动，f = μkN 就固定了；数据页能看到拉力再涨、f 读数不再变。',
+        review: ['滑动摩擦 f = μkN 与外力无关', 'a = (F − f)/m 才是随拉力变的量'],
+        evidenceCheckId: 'kinetic_friction',
+      },
+    },
+    {
+      id: 'equals-pull',
+      label: '等于拉力（保持平衡）',
+      mistake: {
+        type: 'modeling',
+        explanation:
+          'f = F 是静止段的平衡条件。物块已经在加速，合力不为零：F > f，差值产生加速度。',
+        review: ['滑动段合力 F − μkN ≠ 0', 'f = F 只对静止成立'],
+        evidenceCheckId: 'kinetic_friction',
+      },
+    },
+  ],
+}
+
+/* ----------------------------------------------------------------- spring -- */
+
+const SPRING_PERIOD_MASS: SelfCheckItem = {
+  id: 'spring-period-mass',
+  prompt: '弹簧振子实验中把振子质量换成 4 倍，振动周期怎样变？',
+  takeaway: 'T = 2π√(m/k)：周期与 √m 成正比。m 变 4 倍，T 恰好变 2 倍——这是「周期与振幅无关」之外的第二个可测结论。',
+  options: [
+    { id: 'doubles', label: '变为 2 倍（T ∝ √m）', correct: true },
+    {
+      id: 'quadruples',
+      label: '变为 4 倍（质量几倍周期就几倍）',
+      mistake: {
+        type: 'concept',
+        explanation: 'T = 2π√(m/k) 里 m 在根号内：正比的是 √m 不是 m。4 倍质量只把 √m 变 2 倍。',
+        review: ['T = 2π√(m/k)', '根号关系：量 4 倍 → 根号 2 倍'],
+        evidenceCheckId: 'period_consistency',
+      },
+    },
+    {
+      id: 'unchanged',
+      label: '不变，周期只由弹簧决定',
+      mistake: {
+        type: 'concept',
+        explanation: 'T 由 m 和 k 共同决定。「与振幅无关」不等于「与质量无关」——把 A 加倍 T 才不变。',
+        review: ['T = 2π√(m/k) 含 m', 'T 与振幅 A 无关'],
+        evidenceCheckId: 'period_consistency',
+      },
+    },
+  ],
+}
+
+const SPRING_HOOKE_EXTENSION: SelfCheckItem = {
+  id: 'spring-hooke-extension',
+  prompt: '竖直悬挂的弹簧下，钩码质量加倍后重新静止，伸长量 Δx 怎样变？',
+  takeaway: '平衡条件 kΔx = mg：Δx = mg/k 与 m 成正比。质量加倍，伸长量正好加倍——这就是用弹簧测力计标刻度的原理。',
+  options: [
+    { id: 'doubles', label: '也加倍（Δx = mg/k ∝ m）', correct: true },
+    {
+      id: 'unchanged',
+      label: '不变，伸长量由弹簧自身决定',
+      mistake: {
+        type: 'concept',
+        explanation: '弹簧只决定 k；伸长量还由悬挂的重量决定。mg 加倍而 k 不变，平衡位置必须下移同样的倍数。',
+        review: ['kΔx = mg', 'Δx = mg/k'],
+        evidenceCheckId: 'hooke_equilibrium',
+      },
+    },
+    {
+      id: 'squares',
+      label: '变为 4 倍（力和形变是平方关系）',
+      mistake: {
+        type: 'concept',
+        explanation: 'F = kx 是一次线性关系，不是平方。力加倍 → 形变加倍，F–x 图是过原点的直线。',
+        review: ['F = kx 是线性关系', '弹性限度内 F–x 成正比'],
+        evidenceCheckId: 'hooke_equilibrium',
+      },
+    },
+  ],
+}
+
+/* --------------------------------------------------------------- pendulum -- */
+
+const PENDULUM_PERIOD_MASS: SelfCheckItem = {
+  id: 'pendulum-period-mass',
+  prompt: '把单摆的摆球换成更重的（摆长不变），周期怎样变？',
+  takeaway: 'T = 2π√(L/g) 里没有 m：周期与摆球质量无关。伽利略在教堂里看吊灯发现的就是这条。',
+  options: [
+    { id: 'unchanged', label: '不变（T 与摆球质量无关）', correct: true },
+    {
+      id: 'heavier-slower',
+      label: '变长，重的摆球摆得慢',
+      mistake: {
+        type: 'concept',
+        explanation:
+          '重球确实受更大重力，但质量也大同样倍数——F = ma 两边 m 约掉了。这就是「惯性质量 = 引力质量」的直接体现。',
+        review: ['T = 2π√(L/g)', '重力 ∝ m，加速度里 m 约掉'],
+        evidenceCheckId: 'period_consistency',
+      },
+    },
+    {
+      id: 'heavier-faster',
+      label: '变短，重球下落更快',
+      mistake: {
+        type: 'concept',
+        explanation: '「重的落得快」是亚里士多德直觉，自由落体和单摆都证伪了它：加速度与质量无关，周期也就与质量无关。',
+        review: ['T = 2π√(L/g)', '下落快慢与质量无关'],
+        evidenceCheckId: 'period_consistency',
+      },
+    },
+  ],
+}
+
+const PENDULUM_LENGTH_PERIOD: SelfCheckItem = {
+  id: 'pendulum-length-period',
+  prompt: '摆长 L 调为 4 倍，单摆周期变为几倍？用它可以怎么测 g？',
+  takeaway: 'T = 2π√(L/g) → L 变 4 倍，T 变 2 倍；反过来测出 T 与 L 就能算 g = 4π²L/T²——这是「用单摆测重力加速度」实验的原理。',
+  options: [
+    { id: 'doubles', label: 'T 变 2 倍；由 g = 4π²L/T² 反算 g', correct: true },
+    {
+      id: 'quadruples',
+      label: 'T 变 4 倍（摆长几倍周期就几倍）',
+      mistake: {
+        type: 'concept',
+        explanation: 'L 在根号里：T ∝ √L。摆长 4 倍只让 √L 翻倍，T 是 2 倍不是 4 倍。',
+        review: ['T = 2π√(L/g)', 'T ∝ √L 非线性'],
+        evidenceCheckId: 'period_consistency',
+      },
+    },
+    {
+      id: 'halves',
+      label: 'T 减半（摆长越长摆得越快）',
+      mistake: {
+        type: 'modeling',
+        explanation: '方向反了：摆长更长，摆球走的路程更长而回复加速度同量级，摆动更慢，T 变大。',
+        review: ['T = 2π√(L/g)', '长摆周期长'],
+        evidenceCheckId: 'rope_length',
+      },
+    },
+  ],
+}
+
 /* -------------------------------------------------------------------- emf -- */
 
 const EMF_TERMINAL_VOLTAGE: SelfCheckItem = {
@@ -1101,6 +1288,35 @@ export const EXPERIMENT_SELF_CHECKS: Readonly<Record<string, ExperimentSelfCheck
     topic: '探究杠杆的平衡条件',
     knowledge: ['dyn-lever-balance', 'dyn-moment'],
     items: [LEVER_DOUBLE_MASS, LEVER_SLIDE_OUT],
+  },
+  /* 弹簧/单摆/摩擦 topics are resolved from runtime verification facts (the
+     hooke_equilibrium / rope_length / static_friction_balance checks), not the
+     template id — a student-forked rig still gets the matching probes. The two
+     spring rigs share the probe pool but keep separate topics so 重新练习
+     deep-links back to the same apparatus the attempt was recorded on. */
+  'mechanics-spring-statics': {
+    id: 'mechanics-spring-statics',
+    topic: '弹簧弹力与形变量（胡克定律）',
+    knowledge: ['dyn-hooke'],
+    items: [SPRING_HOOKE_EXTENSION],
+  },
+  'mechanics-spring-oscillator': {
+    id: 'mechanics-spring-oscillator',
+    topic: '弹簧振子与简谐振动',
+    knowledge: ['osc-spring', 'dyn-hooke'],
+    items: [SPRING_PERIOD_MASS, SPRING_HOOKE_EXTENSION],
+  },
+  'mechanics-pendulum': {
+    id: 'mechanics-pendulum',
+    topic: '单摆与周期测量',
+    knowledge: ['osc-pendulum'],
+    items: [PENDULUM_PERIOD_MASS, PENDULUM_LENGTH_PERIOD],
+  },
+  'mechanics-friction': {
+    id: 'mechanics-friction',
+    topic: '静摩擦与滑动摩擦',
+    knowledge: ['dyn-friction'],
+    items: [FRICTION_STATIC_FOLLOWS, FRICTION_KINETIC_CONSTANT],
   },
   /* The three 电磁场 domains (electric / magnetic / composite) were lab-first
      here: the golden-question bank keys its probes by question id, while these

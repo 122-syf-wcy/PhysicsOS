@@ -1,4 +1,5 @@
-import type { QuestionSource } from './question-document.ts'
+import { asQuestionId } from '@physicsos/shared'
+import type { QuestionDocument, QuestionSource } from './question-document.ts'
 
 export type IngestProviderStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'WAITING_PROVIDER'
 
@@ -54,3 +55,55 @@ export const DEFAULT_INGEST_PROVIDERS: QuestionIngestProvider[] = [
   new StubImageIngestProvider(),
   new StubPdfIngestProvider(),
 ]
+
+/* ------------------------------------------------- uploaded documents -- */
+
+/**
+ * Provenance a client-side upload carries into the document: the file name,
+ * which pages produced the text (PDF text-layer extraction), and the provider
+ * that produced it (`browser-pdfjs` today — vision extraction stays with the
+ * agent through session attachments, not through this seam).
+ */
+export interface UploadedQuestionProvenance {
+  readonly fileName?: string
+  readonly pages?: readonly number[]
+  readonly provider?: string
+}
+
+/**
+ * A QuestionDocument whose text came out of an uploaded file rather than the
+ * textarea. `extractedText` is what the pipeline reads; `rawText` mirrors it so
+ * the stem block shows the same words the student just confirmed. The document
+ * starts EXTRACTED, never READY — the deterministic pipeline still validates it.
+ */
+export function createUploadedQuestionDocument(input: {
+  readonly source: Extract<QuestionSource, 'image' | 'pdf'>
+  readonly extractedText: string
+  readonly title?: string
+  readonly provenance?: UploadedQuestionProvenance
+  readonly now?: string
+}): QuestionDocument {
+  const ts = input.now ?? new Date().toISOString()
+  const provenance = input.provenance
+  return {
+    id: asQuestionId(`upload-${Math.random().toString(36).slice(2, 10)}`),
+    content: {
+      source: input.source,
+      rawText: input.extractedText,
+      extractedText: input.extractedText,
+      status: 'EXTRACTED',
+      ...(input.source === 'pdf' && provenance?.pages !== undefined
+        ? { pdfRefs: provenance.pages.map(page => `page-${page}`) }
+        : {}),
+      ...(input.source === 'image' && provenance?.fileName !== undefined
+        ? { imageRefs: [provenance.fileName] }
+        : {}),
+    },
+    metadata: {
+      title: input.title ?? provenance?.fileName ?? '上传题目',
+      source: provenance?.provider ?? 'upload',
+    },
+    createdAt: ts,
+    updatedAt: ts,
+  }
+}

@@ -47,6 +47,7 @@ import {
 import type { QuestionDocument } from './question-document.ts'
 import type { PhysicsSemanticIR, SemanticValidationResult } from './semantic-ir.ts'
 import type { QuestionSolution, QuestionSolutionStep } from './question-solution.ts'
+import { attachSubstitutions } from './solution-substitution.ts'
 import type { QuestionWorkflowState } from './workflow.ts'
 import { DeterministicMagneticQuestionParser } from './deterministic-magnetic-parser.ts'
 import { DeterministicMechanicsQuestionParser } from './deterministic-mechanics-parser.ts'
@@ -353,6 +354,9 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
   const solution = isCompositeModel
     ? buildCompositeSolution(scene, simulation, ir)
     : buildSolution(simulation, ir, scene)
+  /* Exam-format 代入 row: fill it from the stated knowns once for every
+     domain rather than teaching each builder to repeat itself. */
+  attachSubstitutions(solution.steps, ir.knowns)
   return { document, ir, validation, scene, simulation, observations, solution, workflowState: 'READY' }
 }
 
@@ -575,7 +579,6 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR, scen
   if (ir.domain === 'magnetic') {
     steps.push({ index: steps.length + 1, title: '洛伦兹力提供向心力', description: '带电粒子在匀强磁场中做匀速圆周运动，洛伦兹力等于向心力。' })
     steps.push({ index: steps.length + 1, title: 'qvB = mv²/r', description: '洛伦兹力 F = qvB，向心力 F = mv²/r，两者相等。' })
-    steps.push({ index: steps.length + 1, title: '代入数值', description: '将已知量代入公式计算。' })
 
     const force = dq.find((d) => d.key === 'lorentz_force_magnitude')
     if (force && !('vector' in force.value)) {
@@ -680,15 +683,25 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR, scen
     appendScalar('work_by_electric_field', 'work_by_electric_field', 'W', '电场力做功', 'J', 'W = -ΔU')
 
     if (requested('deflection') || requested('displacement')) {
+      /* The engine publishes `deflection` = y at field exit — the value the
+         carded formula y = 0.5·(qE/m)·t² actually describes. displacement.y at
+         query time includes the post-exit uniform drift and answers ~2.8× too
+         large; only reach for it when the engine never published deflection. */
+      const published = dq.find((entry) => entry.key === 'deflection')
+      const publishedY = published !== undefined && !('vector' in published.value)
+        ? Math.abs((published.value as Quantity).value)
+        : undefined
       const displacement = dq.find((entry) => entry.key === 'displacement_vector')
-      if (displacement !== undefined && 'vector' in displacement.value) {
-        const vector = (displacement.value as QuantityVector<'length'>).vector
-        const deflectionY = Math.abs(vector.y)
+      const driftedY = displacement !== undefined && 'vector' in displacement.value
+        ? Math.abs((displacement.value as QuantityVector<'length'>).vector.y)
+        : undefined
+      const deflectionY = publishedY ?? driftedY
+      if (deflectionY !== undefined) {
         results['deflection'] = { symbol: 'y', label: '偏转距离', value: fmt(deflectionY), unit: 'm' }
         steps.push({
           index: steps.length + 1,
           title: 'y = 0.5 × (qE/m) × t²',
-          description: '偏转距离为竖直方向位移大小，t 为穿越板长的时间 L/v0。',
+          description: '偏转距离为离开电场时的竖直位移，t 为穿越板长的时间 L/v0。',
           resultSymbol: 'y',
           resultValue: fmt(deflectionY),
           resultUnit: 'm',
@@ -801,7 +814,6 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR, scen
     const model = ir.model
     if (model === 'uniformly_accelerated_motion') {
       steps.push({ index: steps.length + 1, title: '匀变速直线运动', description: 'v = v0 + at, s = v0*t + 0.5*a*t²' })
-      steps.push({ index: steps.length + 1, title: '代入数值', description: '' })
       const finalV = dq.find((d) => d.key === 'final_velocity')
       if (finalV && !('vector' in finalV.value)) {
         const val = (finalV.value as Quantity).value
@@ -868,6 +880,13 @@ function buildSolution(simulation: SimulationResult, ir: PhysicsSemanticIR, scen
       derivationFormulas.push({ id: 'f-incline-a', expression: 'a = g(sinθ - μcosθ)' }, { id: 'f-normal', expression: 'N = mg*cos(θ)' })
     } else if (model === 'uniform_linear_motion') {
       steps.push({ index: steps.length + 1, title: '匀速直线运动', description: 's = vt' })
+      const disp = dq.find((d) => d.key === 'displacement')
+      if (disp && 'vector' in disp.value) {
+        const val = (disp.value as QuantityVector<'length'>).vector
+        const mag = Math.hypot(val.x, val.y, val.z)
+        results['displacement'] = { symbol: 's', label: '位移', value: mag.toFixed(2), unit: 'm' }
+        steps.push({ index: steps.length + 1, title: 's = vt', resultSymbol: 's', resultValue: mag.toFixed(2), resultUnit: 'm', description: '' })
+      }
       derivationFormulas.push({ id: 'f-ulm', expression: 's = vt' })
     }
   } else if (ir.domain === 'circuit') {

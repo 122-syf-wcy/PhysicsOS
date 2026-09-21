@@ -103,7 +103,8 @@ export interface QuestionKnown {
   readonly key: string
   readonly label: string
   readonly symbol: string
-  readonly value: number
+  /** Null when the parser produced a non-finite number; `-0` canonicalizes to `0`. */
+  readonly value: number | null
   readonly unit: string
 }
 
@@ -119,6 +120,8 @@ export interface QuestionStep {
   readonly index: number
   readonly title: string
   readonly description: string
+  /** Exam-format substitution row: the formula with knowns plugged in. */
+  readonly substitution?: string
   readonly result?: string
 }
 
@@ -143,6 +146,8 @@ export interface SolveQuestionResult {
   readonly scene?: SceneDescription
   /** Set when the text matched a built-in golden question. */
   readonly goldenQuestionId?: string
+  /** True when the same normalized text was already solved and the existing scene is reused. */
+  readonly reusedScene?: boolean
 }
 
 export interface CommandResult {
@@ -168,8 +173,9 @@ export interface SimulateResult {
 
 export interface ObservedObject {
   readonly id: string
-  readonly position?: { readonly x: number; readonly y: number; readonly z: number; readonly unit: string }
-  readonly velocity?: { readonly x: number; readonly y: number; readonly z: number; readonly unit: string }
+  /** Non-finite components become null; `-0` canonicalizes to `0` for the lossless-JSON boundary. */
+  readonly position?: { readonly x: number | null; readonly y: number | null; readonly z: number | null; readonly unit: string }
+  readonly velocity?: { readonly x: number | null; readonly y: number | null; readonly z: number | null; readonly unit: string }
   readonly values: readonly ToolScalar[]
 }
 
@@ -195,7 +201,12 @@ export class ToolRuntimeError extends Error {
 
 /* --------------------------------------------------------------- helpers -- */
 
-const finiteOrNull = (value: number): number | null => (Number.isFinite(value) ? value : null)
+/**
+ * Canonicalize an engine number for the tool-result boundary: non-finite
+ * values become null, and `-0` becomes `0` because the Harness tool registry
+ * only accepts lossless JSON (JSON cannot distinguish `-0` from `0`).
+ */
+const finiteOrNull = (value: number): number | null => (Number.isFinite(value) ? value + 0 : null)
 
 const scalarsOf = (derived: readonly DerivedQuantity[]): ToolScalar[] =>
   derived.flatMap((entry) => {
@@ -295,6 +306,7 @@ export const DEFAULT_MAX_SCENES = 64
 
 export class PhysicsToolRuntime {
   private readonly scenes = new Map<string, LiveScene>()
+  private readonly solvedQuestions = new Map<string, SolveQuestionResult>()
   private readonly maxScenes: number
   private serial = 0
 
@@ -375,13 +387,32 @@ export class PhysicsToolRuntime {
   /**
    * Run a question text through the Question Runtime. A READY result also
    * registers the built scene so the agent can keep exploring it with commands.
+   *
+   * `questionId` is the practice hand-off: when it resolves to a golden bank
+   * entry the canonical stem replaces the passed text, so a paraphrased stem
+   * still links the attempt back to the bank (self-checks, learning record).
    */
-  solveQuestion(text: string): SolveQuestionResult {
-    const trimmed = text.trim()
+  solveQuestion(text: string, questionId?: string): SolveQuestionResult {
+    const byId = questionId === undefined
+      ? undefined
+      : GOLDEN_QUESTIONS.find((candidate) => candidate.id === questionId)
+    const trimmed = (byId?.text ?? text).trim()
     if (trimmed.length === 0) {
       throw new ToolRuntimeError('EMPTY_QUESTION', '题面为空。')
     }
-    const golden = GOLDEN_QUESTIONS.find((candidate) => candidate.text.trim() === trimmed)
+    /* 同一题面重复求解复用已注册场景，避免重试时向学生重复刷"新建实验"。
+       场景被容量上限淘汰后照常重新求解。 */
+    const dedupeKey = trimmed.replace(/\s+/g, ' ')
+    const cached = this.solvedQuestions.get(dedupeKey)
+    if (
+      cached !== undefined &&
+      cached.status === 'solved' &&
+      cached.scene !== undefined &&
+      this.scenes.has(cached.scene.sceneId)
+    ) {
+      return { ...cached, reusedScene: true }
+    }
+    const golden = byId ?? GOLDEN_QUESTIONS.find((candidate) => candidate.text.trim() === trimmed)
     const document: QuestionDocument =
       golden !== undefined
         ? createGoldenQuestionDocument(golden)
@@ -393,7 +424,9 @@ export class PhysicsToolRuntime {
             updatedAt: new Date().toISOString(),
           } as unknown as QuestionDocument
     const result = processQuestion(document)
-    return this.solveResultOf(result, String(document.id), golden?.id)
+    const solved = this.solveResultOf(result, String(document.id), golden?.id)
+    if (solved.status === 'solved') this.solvedQuestions.set(dedupeKey, solved)
+    return solved
   }
 
   private solveResultOf(
@@ -406,7 +439,7 @@ export class PhysicsToolRuntime {
       key: known.key,
       label: known.label,
       symbol: known.symbol,
-      value: known.value,
+      value: finiteOrNull(known.value),
       unit: known.unit,
     }))
     const issues: QuestionIssue[] = [
@@ -458,6 +491,7 @@ export class PhysicsToolRuntime {
       index: step.index,
       title: step.title,
       description: step.description,
+      ...(step.substitution === undefined ? {} : { substitution: step.substitution }),
       ...(step.resultValue === undefined
         ? {}
         : { result: `${step.resultSymbol ?? ''} = ${step.resultValue} ${step.resultUnit ?? ''}`.trim() }),
@@ -505,7 +539,7 @@ export class PhysicsToolRuntime {
         ? {}
         : { sourceQuestionId: String(scene.metadata.sourceQuestionId) }),
       timeline: {
-        start: scene.timeline.startTime?.value ?? 0,
+        start: scene.timeline.startTime === undefined ? 0 : (finiteOrNull(scene.timeline.startTime.value) ?? 0),
         end: scene.timeline.endTime === undefined ? null : finiteOrNull(scene.timeline.endTime.value),
       },
       objects: objectsOf(scene),
@@ -647,10 +681,24 @@ export class PhysicsToolRuntime {
         id: object.id,
         ...(object.position === undefined
           ? {}
-          : { position: { ...object.position.vector, unit: object.position.unit } }),
+          : {
+            position: {
+              x: finiteOrNull(object.position.vector.x),
+              y: finiteOrNull(object.position.vector.y),
+              z: finiteOrNull(object.position.vector.z),
+              unit: object.position.unit,
+            },
+          }),
         ...(object.velocity === undefined
           ? {}
-          : { velocity: { ...object.velocity.vector, unit: object.velocity.unit } }),
+          : {
+            velocity: {
+              x: finiteOrNull(object.velocity.vector.x),
+              y: finiteOrNull(object.velocity.vector.y),
+              z: finiteOrNull(object.velocity.vector.z),
+              unit: object.velocity.unit,
+            },
+          }),
         values: Object.entries(object.values ?? {}).flatMap(([key, value]) =>
           'vector' in value
             ? []

@@ -126,6 +126,27 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
     summary: '改动摩擦因数 μ（≥ 0）',
     fields: { bodyId: id('物体 id'), coefficient: number('μ，无量纲') },
   },
+  SetStaticFrictionCoefficient: {
+    domain: 'mechanics（摩擦台）',
+    summary: '改静摩擦因数 μs（≥ 0）——最大静摩擦的阈值系数',
+    fields: { bodyId: id('物体 id'), coefficient: number('μs，无量纲') },
+  },
+  SetSpringConstant: {
+    domain: 'mechanics（弹簧）',
+    summary: '改弹簧劲度系数 k（> 0）',
+    fields: {
+      constraintId: id('弹簧约束 id（携带 stiffness 参数）'),
+      constant: number('劲度系数 k，单位 N/m'),
+    },
+  },
+  SetPendulumLength: {
+    domain: 'mechanics（单摆）',
+    summary: '改摆长 L（> 0）',
+    fields: {
+      constraintId: id('摆绳约束 id（携带 length 参数）'),
+      length: number('摆长，单位 m'),
+    },
+  },
   SetAppliedForce: {
     domain: 'mechanics（牛顿第二定律）',
     summary: '改外力矢量',
@@ -163,6 +184,16 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
     domain: 'circuit',
     summary: '改滑动变阻器滑片位置（0..1）',
     fields: { circuitId: id('电路 id'), componentId: id('滑动变阻器 id'), position: number('0 到 1') },
+  },
+  SetComponentPlacement: {
+    domain: 'circuit',
+    summary: '移动元件在原理图上的摆放位置（纯展示，不改物理事实，不触发实验分支）',
+    fields: {
+      circuitId: id('电路 id'),
+      componentId: id('元件 id'),
+      x: number('原理图栅格 x'),
+      y: number('原理图栅格 y'),
+    },
   },
   SetOpticalObjectPosition: {
     domain: 'optics',

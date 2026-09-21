@@ -96,7 +96,10 @@ export type ShapeDefinition =
 /** docs/03 §30 */
 export interface MaterialDefinition {
   density?: Quantity<'density'>
+  /** Kinetic coefficient μk — the friction while the body slides. */
   frictionCoefficient?: number
+  /** Static limit coefficient μs ≥ μk — the pull a resting body withstands. */
+  staticFrictionCoefficient?: number
   restitution?: number
   custom?: Record<string, unknown>
 }

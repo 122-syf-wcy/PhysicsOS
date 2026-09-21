@@ -41,6 +41,27 @@ const runUniform = (velocity: ReturnType<typeof vec3>, mass: number) => {
   return { scene, simulation }
 }
 
+const runNewton = (
+  appliedForce: ReturnType<typeof vec3>,
+  appliedForces: readonly ReturnType<typeof vec3>[],
+) => {
+  const scene = createMechanicsScene({
+    model: 'newton_second_law',
+    mass: 1,
+    position: vec3(0, 0, 0),
+    velocity: vec3(0, 0, 0),
+    gravity: vec3(0, -9.8, 0),
+    appliedForce,
+    appliedForces,
+  })
+  const engine = new MechanicsEngine()
+  const simulation = engine.simulate(
+    scene,
+    createMechanicsSimulationRequest(scene, 'simulation-newton', 'trace-newton'),
+  )
+  return { scene, simulation }
+}
+
 describe('observeMechanicsScene', () => {
   it('balances weight with a normal force for supported horizontal motion', () => {
     const { scene, simulation } = runUniform(vec3(4, 0, 0), 2)
@@ -89,5 +110,40 @@ describe('observeMechanicsScene', () => {
     const apex = toCanonicalVector(keyPoint.apexPoint).vectorSI
     expect(apex.x).toBeCloseTo(expected.x, 8)
     expect(apex.y).toBeCloseTo(expected.y, 8)
+  })
+
+  it('publishes every declared applied force as its own observation', () => {
+    const { scene, simulation } = runNewton(vec3(3, 0, 0), [vec3(0, 4, 0)])
+    const observed = observeMechanicsScene({ scene, simulation })
+    const applied = observed.observations.filter(
+      (entry) => entry.type === 'mechanics_force' && entry.label === 'applied',
+    )
+    expect(applied.length).toBe(2)
+    const vectors = applied.map((entry) => {
+      if (entry.type !== 'mechanics_force') throw new Error('unreachable')
+      return toCanonicalVector(entry.vector).vectorSI
+    })
+    expect(vectors[0]?.x).toBeCloseTo(3, 8)
+    expect(vectors[0]?.y).toBeCloseTo(0, 8)
+    expect(vectors[1]?.x).toBeCloseTo(0, 8)
+    expect(vectors[1]?.y).toBeCloseTo(4, 8)
+  })
+
+  it('keeps a balanced concurrent-force body at rest with zero net force', () => {
+    const side = 4 * Math.sqrt(3)
+    const { scene, simulation } = runNewton(vec3(8, 0, 0), [vec3(-4, side, 0), vec3(-4, -side, 0)])
+    const observed = observeMechanicsScene({ scene, simulation })
+    const applied = observed.observations.filter(
+      (entry) => entry.type === 'mechanics_force' && entry.label === 'applied',
+    )
+    expect(applied.length).toBe(3)
+    const last = simulation.states[simulation.states.length - 1]
+    const body = last?.objects[0]
+    if (body?.position === undefined || body.velocity === undefined) {
+      throw new Error('Equilibrium body state is absent.')
+    }
+    expect(toCanonicalVector(body.position).vectorSI.x).toBeCloseTo(0, 8)
+    const speed = toCanonicalVector(body.velocity).vectorSI
+    expect(Math.hypot(speed.x, speed.y)).toBeCloseTo(0, 8)
   })
 })

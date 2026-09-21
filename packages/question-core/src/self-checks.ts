@@ -401,6 +401,87 @@ const INCLINE_NORMAL: SelfCheckItem = {
   ],
 }
 
+const UNIFORM_LINEAR_MOTION: SelfCheckItem = {
+  id: 'uniform-motion-condition',
+  prompt: '物体做匀速直线运动时，它受到的合力是？',
+  takeaway: '匀速直线运动的条件是合力为零（牛顿第一定律）：速度大小方向都不变，s = vt 才成立。',
+  options: [
+    { id: 'zero', label: '合力为零', correct: true },
+    {
+      id: 'constant-nonzero',
+      label: '受到恒定的非零合力',
+      mistake: {
+        type: 'concept',
+        explanation: '恒定非零合力产生恒定加速度，速度会持续变化，不可能保持匀速。',
+        review: ['牛顿第一定律', '牛顿第二定律 F = ma'],
+      },
+    },
+    {
+      id: 'forward-force',
+      label: '必须有向前的牵引力',
+      mistake: {
+        type: 'concept',
+        explanation: '维持匀速不需要净力；牵引力存在时只是恰好抵消了阻力，合力仍为零。',
+        review: ['牛顿第一定律', '力不是维持运动的原因'],
+      },
+    },
+  ],
+}
+
+const SOUND_MEDIUM_SPEED: SelfCheckItem = {
+  id: 'sound-speed-medium',
+  prompt: '声音在水中的传播速度与空气中相比，通常如何？',
+  takeaway: '声速由介质决定：一般固体 > 液体 > 气体，水中约 1500 m/s，空气（15 ℃）约 340 m/s。',
+  options: [
+    { id: 'faster', label: '水中比空气中快', correct: true },
+    {
+      id: 'slower',
+      label: '水中比空气中慢',
+      mistake: {
+        type: 'concept',
+        explanation: '介质越致密弹性传声越快：海水中约 1500 m/s，远大于空气中的 340 m/s。',
+        review: ['声速与介质的关系'],
+      },
+    },
+    {
+      id: 'same',
+      label: '一样快',
+      mistake: {
+        type: 'concept',
+        explanation: '声速不是常数，它随介质种类和温度变化，不能跨介质直接套用空气中的数值。',
+        review: ['声速的决定因素'],
+      },
+    },
+  ],
+}
+
+const ECHO_RANGING_HALF: SelfCheckItem = {
+  id: 'echo-round-trip',
+  prompt: '回声测距中，v·t 算出的是深度本身吗？',
+  takeaway: 'v·t 是声音"去程 + 回程"的总路程，海底深度要再除以 2：d = v·t/2。',
+  options: [
+    { id: 'half', label: '不是，要除以 2', correct: true },
+    {
+      id: 'direct',
+      label: '是，v·t 就是深度',
+      mistake: {
+        type: 'modeling',
+        explanation: '回声是往返信号：v·t 包含去程与回程两段路程，直接用会算成两倍深度。',
+        review: ['回声测距模型 d = v·t/2'],
+      },
+    },
+    {
+      id: 'quarter',
+      label: '不是，要除以 4',
+      mistake: {
+        type: 'modeling',
+        explanation: '往返只有两段路程，除以 2 即可；除以 4 是误把"来回"当成四段。',
+        review: ['回声测距模型 d = v·t/2'],
+      },
+    },
+  ],
+}
+
 export const POINT_CHARGE_DIRECTION: SelfCheckItem = {
   id: 'point-charge-field-direction',
   prompt: '正点电荷周围某点的电场方向是？',
@@ -1187,6 +1268,10 @@ export const QUESTION_SELF_CHECKS: Readonly<Record<string, readonly SelfCheckIte
   'mech-04-newton-second-law': [NEWTON_SECOND],
   'mech-05-incline-no-friction': [INCLINE_NORMAL, NEWTON_SECOND],
   'mech-06-unit-conversion': [UNIFORM_ACCELERATION],
+  'mech-07-uniform-distance': [UNIFORM_LINEAR_MOTION],
+  'mech-08-sound-propagation': [SOUND_MEDIUM_SPEED, UNIFORM_LINEAR_MOTION],
+  'mech-09-echo-ranging': [ECHO_RANGING_HALF],
+  'mech-10-netforce-friction': [NEWTON_SECOND],
 
   'comp-01-selector-balance': SELECTOR,
   'comp-02-selector-selected-velocity': SELECTOR,

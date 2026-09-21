@@ -31,6 +31,14 @@ export type CompositeModelId =
   | 'cyclotron'
   | 'charged_particle_composite_field'
 
+/**
+ * Not a physics model: the parser recognised a question SHAPE the pipeline
+ * cannot honestly answer (e.g. one document comparing two cases). Validation
+ * maps it to UNSUPPORTED_MODEL so the reason reaches the student instead of a
+ * silently single-solved pseudo-result.
+ */
+export type UnsupportedModelId = 'multi_case_comparison'
+
 export type PhysicsModelId =
   | MagneticModelId
   | OpticsModelId
@@ -40,6 +48,7 @@ export type PhysicsModelId =
   | CircuitModelId
   | InductionModelId
   | WaveModelId
+  | UnsupportedModelId
 
 /**
  * Mechanical-wave models, matching the engine's `TRAVELLING_WAVE_MODEL` /

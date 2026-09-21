@@ -65,11 +65,16 @@ describe('mech-01: Uniform Acceleration', () => {
   it('should compute v=20 m/s', () => {
     const finalV = result.simulation!.derivedQuantities.find((d) => d.key === 'final_velocity')
     expect(finalV).toBeDefined()
+    /* The question states "运动 5 s" — the run window is t=5, not the engine's
+       default 10 s: v = v0 + at = 10 + 2·5 = 20 m/s. */
+    expect((finalV!.value as { value: number }).value).toBeCloseTo(20, 1)
   })
 
   it('should compute s=75 m', () => {
     const disp = result.simulation!.derivedQuantities.find((d) => d.key === 'displacement')
     expect(disp).toBeDefined()
+    /* s = v0·t + ½at² = 10·5 + 0.5·2·25 = 75 m. */
+    expect(((disp!.value as { vector: { x: number } }).vector.x)).toBeCloseTo(75, 1)
   })
 })
 
@@ -113,6 +118,11 @@ describe('mech-03: Oblique Projectile', () => {
     expect(ft).toBeDefined()
     expect(maxH).toBeDefined()
     expect(range).toBeDefined()
+    /* v0=20 m/s at 30° from the ground: t = 2v0·sin30°/g = 2 s,
+       H = (v0·sin30°)²/(2g) ≈ 5 m, R = vx·t = 20·cos30°·2 ≈ 34.64 m. */
+    expect((ft!.value as { value: number }).value).toBeCloseTo(2, 1)
+    expect((maxH!.value as { value: number }).value).toBeCloseTo(5, 0)
+    expect((range!.value as { value: number }).value).toBeCloseTo(34.64, 1)
   })
 })
 
@@ -128,6 +138,10 @@ describe('mech-04: Newton Second Law', () => {
   it('should compute a = 5 m/s²', () => {
     const acc = result.simulation!.derivedQuantities.find((d) => d.key === 'acceleration')
     expect(acc).toBeDefined()
+    /* 水平合力 10 N on 2 kg: the declared normal balances gravity, so the net
+       is exactly the stated horizontal force — a = F/m = 5, not √(5²+9.8²). */
+    expect(((acc!.value as { vector: { x: number; y: number } }).vector.x)).toBeCloseTo(5, 1)
+    expect(((acc!.value as { vector: { y: number } }).vector.y)).toBeCloseTo(0, 6)
   })
 })
 
@@ -361,5 +375,153 @@ describe('Conservation checks exist and pass for valid scenes', () => {
     expect(vcheck).toBeDefined()
     expect(vcheck!.type).toBe('conservation')
     expect(vcheck!.passed).toBe(true)
+  })
+})
+
+describe('spring_oscillator (简谐振动)', () => {
+  const engine = new MechanicsEngine()
+  const scene = createScene({
+    model: 'spring_oscillator',
+    mass: 0.5,
+    position: vec3(-1, 0, 0),
+    velocity: vec3(0, 0, 0),
+    springConstant: 50,
+    springNaturalLength: 2,
+    springAnchor: vec3(-3, 0, 0),
+  })
+  const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+
+  it('resolves the model from the spring constraint', () => {
+    expect(result.verification.status).not.toBe('failed')
+    expect(result.derivedQuantities.find((d) => d.key === 'period')).toBeDefined()
+  })
+
+  it('period equals 2π√(m/k)', () => {
+    const period = result.derivedQuantities.find((d) => d.key === 'period')
+    expect((period!.value as { value: number }).value).toBeCloseTo(2 * Math.PI * Math.sqrt(0.5 / 50), 9)
+  })
+
+  it('passes energy conservation and restoring-force checks', () => {
+    for (const id of ['energy_conservation', 'restoring_force', 'period_consistency']) {
+      const check = result.verification.checks.find((c) => c.id === id)
+      expect(check, id).toBeDefined()
+      expect(check!.passed, id).toBe(true)
+    }
+  })
+
+  it('returns to the release point after one period', () => {
+    const model = (result.derivedQuantities.find((d) => d.key === 'period')!.value as { value: number }).value
+    const state = engine.stateAt(scene, { value: model, unit: 's', dimension: 'time' })
+    expect(state.objects[0]!.position!.vector.x).toBeCloseTo(-1, 6)
+    expect(state.objects[0]!.velocity!.vector.x).toBeCloseTo(0, 6)
+  })
+})
+
+describe('simple_pendulum (单摆)', () => {
+  const engine = new MechanicsEngine()
+  /* Bob starts 0.1 m to the right of the vertical through the pivot — a small
+     angle, so the small-angle period claim is honest. */
+  const L = 1
+  const pivot = vec3(0, 0, 0)
+  const scene = createScene({
+    model: 'simple_pendulum',
+    mass: 0.2,
+    position: vec3(0.1, -Math.sqrt(L * L - 0.01), 0),
+    velocity: vec3(0, 0, 0),
+    pendulumLength: L,
+    pendulumPivot: pivot,
+    gravity: vec3(0, -9.8, 0),
+  })
+  const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+
+  it('period equals 2π√(L/g)', () => {
+    const period = result.derivedQuantities.find((d) => d.key === 'period')
+    expect((period!.value as { value: number }).value).toBeCloseTo(2 * Math.PI * Math.sqrt(1 / 9.8), 9)
+  })
+
+  it('keeps the bob on the rope circle', () => {
+    const check = result.verification.checks.find((c) => c.id === 'rope_length')
+    expect(check).toBeDefined()
+    expect(check!.passed).toBe(true)
+  })
+
+  it('swings to the mirror side at half a period', () => {
+    const T = (result.derivedQuantities.find((d) => d.key === 'period')!.value as { value: number }).value
+    const state = engine.stateAt(scene, { value: T / 2, unit: 's', dimension: 'time' })
+    expect(state.objects[0]!.position!.vector.x).toBeCloseTo(-0.1, 6)
+  })
+})
+
+describe('horizontal_friction (静/动摩擦)', () => {
+  const engine = new MechanicsEngine()
+  const scene = createScene({
+    model: 'horizontal_friction',
+    mass: 2,
+    position: vec3(0, 0, 0),
+    velocity: vec3(0, 0, 0),
+    gravity: vec3(0, -9.8, 0),
+    frictionCoefficient: 0.2,
+    staticFrictionCoefficient: 0.4,
+    appliedForce: vec3(0, 0, 0),
+    appliedForceRamp: 4,
+    maxAppliedForce: 30,
+  })
+  const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+
+  it('slips exactly when the ramp reaches μsN', () => {
+    const slip = result.derivedQuantities.find((d) => d.key === 'slip_time')
+    /* μsN = 0.4 · 2 · 9.8 = 7.84 N; ramp 4 N/s → slip at 1.96 s. */
+    expect((slip!.value as { value: number }).value).toBeCloseTo(7.84 / 4, 6)
+  })
+
+  it('stays at rest before slip and accelerates after', () => {
+    const before = engine.stateAt(scene, { value: 1, unit: 's', dimension: 'time' })
+    expect(before.objects[0]!.velocity!.vector.x).toBe(0)
+    const after = engine.stateAt(scene, { value: 3.96, unit: 's', dimension: 'time' })
+    expect(after.objects[0]!.velocity!.vector.x).toBeGreaterThan(0)
+  })
+
+  it('static and kinetic friction checks pass', () => {
+    for (const id of ['static_friction_balance', 'kinetic_friction', 'static_limit']) {
+      const check = result.verification.checks.find((c) => c.id === id)
+      expect(check, id).toBeDefined()
+      expect(check!.passed, id).toBe(true)
+    }
+  })
+})
+
+describe('spring_statics (胡克定律)', () => {
+  const engine = new MechanicsEngine()
+  const k = 50
+  const m = 0.5
+  const g = 9.8
+  const anchorY = 3
+  const L0 = 2
+  const scene = createScene({
+    model: 'spring_statics',
+    mass: m,
+    /* Equilibrium: anchor − L0 − mg/k. */
+    position: vec3(0, anchorY - L0 - (m * g) / k, 0),
+    velocity: vec3(0, 0, 0),
+    springConstant: k,
+    springNaturalLength: L0,
+    springAnchor: vec3(0, anchorY, 0),
+    gravity: vec3(0, -g, 0),
+  })
+  const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
+
+  it('extension equals mg/k', () => {
+    const ext = result.derivedQuantities.find((d) => d.key === 'spring_extension')
+    expect((ext!.value as { value: number }).value).toBeCloseTo((m * g) / k, 9)
+  })
+
+  it('equilibrium checks pass and the body stays put', () => {
+    for (const id of ['hooke_equilibrium', 'equilibrium_position']) {
+      const check = result.verification.checks.find((c) => c.id === id)
+      expect(check, id).toBeDefined()
+      expect(check!.passed, id).toBe(true)
+    }
+    const state = engine.stateAt(scene, { value: 2, unit: 's', dimension: 'time' })
+    expect(state.objects[0]!.velocity!.vector.y).toBe(0)
   })
 })

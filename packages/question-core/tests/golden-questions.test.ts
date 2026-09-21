@@ -16,6 +16,11 @@ describe('Golden Questions', () => {
       it('should have expected validation status', () => {
         if (def.expectedValidation === 'VALID') {
           expect(result.validation?.status).toBe('VALID')
+          /* VALID means the pipeline actually answered: status alone used to
+             let "solved" comparisons and never-run scenes pass as VALID. */
+          expect(result.workflowState).toBe('READY')
+          expect(result.solution).not.toBeNull()
+          expect(Object.keys(result.solution!.results).length).toBeGreaterThan(0)
         } else if (def.expectedValidation === 'AMBIGUOUS') {
           expect(result.workflowState).toBe('AMBIGUOUS')
         } else if (def.expectedValidation === 'INVALID_SEMANTICS') {

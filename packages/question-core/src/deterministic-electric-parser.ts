@@ -149,6 +149,18 @@ const UNIFORM_FIELD_SIGNAL = /匀强电场/
 /** A multi-source superposition question names two or more point charges. */
 const MULTI_SOURCE_SIGNAL = /两个点电荷|两电荷|等量同种|等量异种|电偶极子|q\s*1|q\s*2/i
 
+/**
+ * Comparison / multi-case phrasing: "比较两个电子…", "与板长为 12 cm 时的…比较",
+ * "大小关系". The pipeline solves exactly one scene per document — a question
+ * asking for two cases under one stem cannot be honestly answered by silently
+ * keeping only the first case, so it is reported as UNSUPPORTED_MODEL.
+ */
+const COMPARISON_SIGNAL = /比较|大小关系/,
+  MULTI_CASE_SIGNAL = /两个|两者|两种|分别|并与|不同(?:的|板长|粒子|初速度|电荷)/
+
+const isComparisonQuestionText = (text: string): boolean =>
+  COMPARISON_SIGNAL.test(text) && MULTI_CASE_SIGNAL.test(text)
+
 /** Whether a text describes a point-charge world rather than a uniform field. */
 export const isPointChargeQuestionText = (text: string): boolean =>
   POINT_CHARGE_SIGNAL.test(text) && !UNIFORM_FIELD_SIGNAL.test(text)
@@ -198,10 +210,16 @@ function detectElectricFieldDirection(text: string): PlanarDirection {
   return beforeField?.[1] === undefined ? 'unknown' : directionIn(beforeField[1])
 }
 
+/** 场方向子句（"电场方向竖直向下"、"磁感应强度方向垂直纸面向里"）里的
+    方向词属于场而不是初速度；匹配速度方向前先遮蔽，防止跨子句误捕获。 */
+const FIELD_DIRECTION_CLAUSE =
+  /(?:电场|场强|磁场|磁感应强度|电势|电压)[^。；;，,]{0,12}?(?:方向(?:为|是)?|沿)\s*[^，,。；;]{0,12}/gi
+
 function detectInitialVelocityDirection(text: string): PlanarDirection {
-  const explicit = /(?:初速度|速度|以)[^。；;]{0,40}?(?:方向(?:为|是)?|沿)\s*([^，,。；;]+)/i.exec(text)
+  const scrubbed = text.replace(FIELD_DIRECTION_CLAUSE, (clause) => '　'.repeat(clause.length))
+  const explicit = /(?:初速度|速度|以)[^。；;]{0,40}?(?:方向(?:为|是)?|沿)\s*([^，,。；;]+)/i.exec(scrubbed)
   if (explicit?.[1] !== undefined) return directionIn(explicit[1])
-  const afterSpeed = /(?:m\/s|km\/s|km\/h)\s*(?:，|,)?\s*(?:速度)?(?:方向(?:为|是)?|沿)?\s*((?:水平|竖直)?向[上下左右]|[xy]\s*轴[正负]方向)/i.exec(text)
+  const afterSpeed = /(?:m\/s|km\/s|km\/h)\s*(?:，|,)?\s*(?:速度)?(?:方向(?:为|是)?|沿)?\s*((?:水平|竖直)?向[上下左右]|[xy]\s*轴[正负]方向)/i.exec(scrubbed)
   return afterSpeed?.[1] === undefined ? 'unknown' : directionIn(afterSpeed[1])
 }
 
@@ -619,6 +637,29 @@ export const DeterministicElectricQuestionParser: QuestionParserProvider = {
     const electricFieldDirection = detectElectricFieldDirection(text)
     const initialVelocityDirection = detectInitialVelocityDirection(text)
     const targets = detectTargets(text)
+
+    /* Comparison asks beat every domain sub-path: whichever scene was built,
+       it would answer only the first case and still present itself as solved. */
+    if (isComparisonQuestionText(text)) {
+      const ir: PhysicsSemanticIR = {
+        schemaVersion: 'physics-ir/1.0',
+        domain: 'electric',
+        model: 'multi_case_comparison',
+        entities: ['particle', 'electric_field'],
+        knowns,
+        unknowns: targets.map((target) => ({ key: target, ...targetMetadata(target) })),
+        constraints: [],
+        relations: [],
+        targets,
+        assumptions: [],
+        chargeSign: chargeSign(text, chargeValue),
+        fieldDirection: 'unknown',
+        velocityDirection: 'unknown',
+        electricFieldDirection,
+        initialVelocityDirection,
+      }
+      return { ir, issues, confidence: 0.9 }
+    }
 
     /* Parallel-plate / bounded field takes priority over multi-source, point-charge
        and generic uniform-field parsing: a text that names 平行板/极板/板间 describes a

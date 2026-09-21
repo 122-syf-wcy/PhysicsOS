@@ -428,6 +428,132 @@ export const circuitLayoutOf = (circuit: Circuit): CircuitLayout | undefined => 
   return layout as CircuitLayout
 }
 
+/** Squared-distance under which two schematic points count as identical. */
+const POINT_EPSILON = 1e-6
+
+const samePoint = (
+  a: { readonly x: number; readonly y: number },
+  b: { readonly x: number; readonly y: number },
+): boolean => Math.abs(a.x - b.x) < POINT_EPSILON && Math.abs(a.y - b.y) < POINT_EPSILON
+
+/**
+ * Re-route one wire after an endpoint moved, treating it like a physical wire:
+ * the bends nearest the UNMOVED terminal keep their shape, and only the run
+ * that reaches the moved terminal stretches. The stretch lands on the old
+ * spine line — a wire that left its part horizontally keeps leaving
+ * horizontally — so the loop stays rectilinear instead of collapsing into a
+ * diagonal-looking slash across the schematic.
+ *
+ * `oldFrom`/`oldTo` are the terminal points before the move; `newFrom`/`newTo`
+ * after. `fromMoved`/`toMoved` say which end's component moved (both is the
+ * degenerate self-loop case — drop the shape and take the plain elbow).
+ */
+const rerouteWire = (input: {
+  readonly oldFrom: { readonly x: number; readonly y: number }
+  readonly oldTo: { readonly x: number; readonly y: number }
+  readonly newFrom: { readonly x: number; readonly y: number }
+  readonly newTo: { readonly x: number; readonly y: number }
+  readonly waypoints: readonly { x: number; y: number }[]
+  readonly fromMoved: boolean
+  readonly toMoved: boolean
+}): { x: number; y: number }[] => {
+  const { oldFrom, oldTo, newFrom, newTo, waypoints, fromMoved, toMoved } = input
+  if (fromMoved === toMoved) return []
+  /* The old route may have skipped explicit waypoints entirely — infer the
+     habit from the straight run so the elbow still follows the old line. */
+  if (waypoints.length === 0) {
+    const horizontal = Math.abs(oldFrom.y - oldTo.y) < POINT_EPSILON
+    const vertical = Math.abs(oldFrom.x - oldTo.x) < POINT_EPSILON
+    if (!horizontal && !vertical) return []
+    /* Keep the unmoved end's approach line: a wire that ran vertically keeps
+       running vertically (V-first elbow); horizontal likewise (the default
+       H-first elbow needs no stored waypoint). */
+    return vertical ? [{ x: newFrom.x, y: newTo.y }] : []
+  }
+  const head = waypoints[0]
+  const tail = waypoints[waypoints.length - 1]
+  if (head === undefined || tail === undefined) return []
+  if (fromMoved) {
+    /* Old first run oldFrom→head: horizontal means the wire hugged the line
+       y=head.y, vertical means the column x=head.x. Bridge the new terminal
+       onto that same spine, then keep every surviving bend. */
+    const horizontal = Math.abs(oldFrom.y - head.y) < POINT_EPSILON
+    const bridge = horizontal
+      ? { x: newFrom.x, y: head.y }
+      : { x: head.x, y: newFrom.y }
+    if (samePoint(newFrom, head) || samePoint(bridge, newFrom) || samePoint(bridge, head)) {
+      return [...waypoints]
+    }
+    return [bridge, ...waypoints]
+  }
+  const horizontal = Math.abs(tail.y - oldTo.y) < POINT_EPSILON
+  const bridge = horizontal
+    ? { x: newTo.x, y: tail.y }
+    : { x: tail.x, y: newTo.y }
+  if (samePoint(newTo, tail) || samePoint(bridge, newTo) || samePoint(bridge, tail)) {
+    return [...waypoints]
+  }
+  return [...waypoints, bridge]
+}
+
+/**
+ * Write one component's schematic placement into `circuit.metadata.layout`.
+ *
+ * Wires touching the moved component re-derive their waypoints via
+ * {@link rerouteWire}: the unmoved side keeps its bends, the moved side
+ * stretches onto the old spine line. An omitted rotation keeps the previous
+ * one. Presentation only: the solver reads the netlist, never the layout.
+ */
+export const circuitLayoutPlace = (
+  circuit: Circuit,
+  componentId: string,
+  placement: { readonly x: number; readonly y: number; readonly rotation?: 0 | 90 | 180 | 270 },
+): void => {
+  const existing = circuitLayoutOf(circuit)
+  const previous = existing?.components[componentId]
+  const rotation = placement.rotation ?? previous?.rotation
+  const next: CircuitComponentPlacement = {
+    x: placement.x,
+    y: placement.y,
+    ...(rotation === undefined ? {} : { rotation }),
+  }
+  const components: Record<string, CircuitComponentPlacement> = {
+    ...(existing?.components ?? {}),
+    [componentId]: next,
+  }
+  const wires: Record<string, readonly { x: number; y: number }[]> = {
+    ...(existing?.wires ?? {}),
+  }
+  for (const connection of circuit.connections) {
+    const fromMoved = String(connection.from.componentId) === componentId
+    const toMoved = String(connection.to.componentId) === componentId
+    if (!fromMoved && !toMoved) continue
+    const fromPlacement = existing?.components[String(connection.from.componentId)]
+    const toPlacement = existing?.components[String(connection.to.componentId)]
+    if (fromPlacement === undefined || toPlacement === undefined) continue
+    const oldFrom = circuitTerminalPoint(fromPlacement, connection.from.terminalKey)
+    const oldTo = circuitTerminalPoint(toPlacement, connection.to.terminalKey)
+    const derived = rerouteWire({
+      oldFrom,
+      oldTo,
+      newFrom: fromMoved ? circuitTerminalPoint(next, connection.from.terminalKey) : oldFrom,
+      newTo: toMoved ? circuitTerminalPoint(next, connection.to.terminalKey) : oldTo,
+      waypoints: existing?.wires?.[connection.id] ?? [],
+      fromMoved,
+      toMoved,
+    })
+    if (derived.length === 0) delete wires[connection.id]
+    else wires[connection.id] = derived
+  }
+  circuit.metadata = {
+    ...(circuit.metadata ?? {}),
+    layout: {
+      components,
+      ...(Object.keys(wires).length === 0 ? {} : { wires }),
+    } satisfies CircuitLayout,
+  }
+}
+
 /** Terminal keys a component exposes, by contract. */
 export const terminalKeysOf = (component: CircuitComponent): readonly string[] =>
   component.type === 'voltage_source' ? SOURCE_TERMINAL_KEYS : TWO_TERMINAL_KEYS

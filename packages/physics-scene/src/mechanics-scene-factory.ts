@@ -4,7 +4,7 @@ import { asSceneId, asObservableId, asQuestionId, asSimulationId, asTraceId, typ
 import { quantity } from '@physicsos/physics-units'
 import type { SimulationRequest } from '@physicsos/physics-core'
 import { defaultCoordinateSystem } from './scene-validation.ts'
-import type { PhysicsScene, Body, Force, GravityField, ShapeDefinition, ObservableDefinition } from './scene.ts'
+import type { PhysicsScene, Body, Constraint, Force, GravityField, ShapeDefinition, ObservableDefinition } from './scene.ts'
 
 export type MechanicsModelId =
   | 'uniform_linear_motion'
@@ -12,6 +12,10 @@ export type MechanicsModelId =
   | 'projectile_motion'
   | 'newton_second_law'
   | 'inclined_plane'
+  | 'spring_oscillator'
+  | 'simple_pendulum'
+  | 'horizontal_friction'
+  | 'spring_statics'
 
 export interface MechanicsSceneInput {
   readonly sceneId?: string
@@ -29,6 +33,49 @@ export interface MechanicsSceneInput {
   readonly inclineAngle?: number
   readonly frictionCoefficient?: number
   readonly appliedForce?: Vector3
+  /**
+   * Additional applied forces beyond {@link appliedForce} — a force-
+   * composition experiment declares F₂ (and F₃) here so every pull is a
+   * declared scene force the solver and the observation layer both see, not a
+   * renderer invention.
+   */
+  readonly appliedForces?: readonly Vector3[]
+  /**
+   * Spring stiffness in N/m for `spring_oscillator` (horizontal) and
+   * `spring_statics` (vertical, Hooke's law) scenes. Carried on the spring
+   * constraint's parameters.
+   */
+  readonly springConstant?: number
+  /** Spring's relaxed length in m. */
+  readonly springNaturalLength?: number
+  /**
+   * Where the spring's fixed end sits, in scene coordinates. A horizontal
+   * spring anchors on the wall to the left of the body; a vertical spring
+   * hangs from a support above it.
+   */
+  readonly springAnchor?: Vector3
+  /** String length in m for `simple_pendulum` (pivot to bob centre). */
+  readonly pendulumLength?: number
+  /** Pendulum pivot point in scene coordinates; defaults to above the bob. */
+  readonly pendulumPivot?: Vector3
+  /**
+   * Static friction limit coefficient μs for `horizontal_friction` scenes.
+   * Stored on the body's material next to the kinetic `frictionCoefficient`.
+   */
+  readonly staticFrictionCoefficient?: number
+  /**
+   * How fast the applied pull grows, in N/s, for `horizontal_friction`
+   * scenes — the classic "increase the pull until it slips" protocol.
+   * A zero ramp models a constant pull.
+   */
+  readonly appliedForceRamp?: number
+  /** Cap on the applied pull in N for `horizontal_friction` scenes. */
+  readonly maxAppliedForce?: number
+  /**
+   * How long the motion runs, in seconds. A question that states "运动 5 s"
+   * pins this; engines fall back to their own default duration when unset.
+   */
+  readonly endTime?: number
   readonly now?: IsoDateTime
   readonly title?: string
   readonly description?: string
@@ -51,8 +98,16 @@ function makeBody(
   velocity: Vector3,
   acceleration?: Vector3,
   frictionCoefficient?: number,
+  staticFrictionCoefficient?: number,
 ): Body {
   const shape: ShapeDefinition = { type: 'circle', radius: quantity(0.5, 'm', 'length') }
+  const material =
+    frictionCoefficient === undefined && staticFrictionCoefficient === undefined
+      ? undefined
+      : {
+        ...(frictionCoefficient === undefined ? {} : { frictionCoefficient }),
+        ...(staticFrictionCoefficient === undefined ? {} : { staticFrictionCoefficient }),
+      }
   return {
     id,
     type: 'rigid_body',
@@ -63,7 +118,7 @@ function makeBody(
     /* μ lives on the body's material because that is where the model resolver
        reads it: declaring a friction FORCE without it would let a scene claim
        friction while the solver silently used μ = 0. */
-    ...(frictionCoefficient !== undefined ? { material: { frictionCoefficient } } : {}),
+    ...(material === undefined ? {} : { material }),
     shape,
   }
 }
@@ -98,6 +153,15 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
       model: 'applied',
     })
   }
+  input.appliedForces?.forEach((vector, index) => {
+    forces.push({
+      id: `force-applied-${index + 2}`,
+      type: 'custom',
+      targetId: bodyId,
+      vector: quantityVector(vector, 'N', 'force'),
+      model: 'applied',
+    })
+  })
 
   const observableDefs: ObservableDefinition[] = [
     { id: asObservableId('obs-position'), type: 'geometry' as const, targetId: bodyId, visible: false, parameters: { kind: 'position' } },
@@ -156,6 +220,72 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
     })
   }
 
+  const constraints: Constraint[] = []
+
+  /* Spring rigs carry their physical parameters on a `spring` constraint —
+     the schema's designated place for connectors — so the engine resolves
+     k / natural length / anchor from scene truth rather than a title hint. */
+  if (model === 'spring_oscillator' || model === 'spring_statics') {
+    const axis = model === 'spring_statics' ? 'vertical' : 'horizontal'
+    const anchor = input.springAnchor ?? (axis === 'vertical' ? vec3(0, 3, 0) : vec3(-3, 0, 0))
+    constraints.push({
+      id: 'spring-1',
+      type: 'spring',
+      targets: [bodyId],
+      parameters: {
+        stiffness: input.springConstant ?? 50,
+        naturalLength: input.springNaturalLength ?? 2,
+        anchor: { x: anchor.x, y: anchor.y },
+        axis,
+      },
+    })
+  }
+
+  /* A pendulum's string is a `rope` constraint: pivot + length are the whole
+     physical declaration; the engine derives the small-angle motion. */
+  if (model === 'simple_pendulum') {
+    const pivot = input.pendulumPivot ?? vec3(0, 0, 0)
+    constraints.push({
+      id: 'rope-1',
+      type: 'rope',
+      targets: [bodyId],
+      parameters: {
+        pivot: { x: pivot.x, y: pivot.y },
+        length: input.pendulumLength ?? 1,
+      },
+    })
+  }
+
+  /* Horizontal friction: the pull ramps linearly (the classic force-sensor
+     protocol) and the surface declares μs alongside the body's μk. Ramp and
+     cap ride on a geometry observable — the established place for model
+     parameters the inspector can name. */
+  if (model === 'horizontal_friction') {
+    observableDefs.push({
+      id: asObservableId('obs-friction-surface'),
+      type: 'geometry' as const,
+      visible: true,
+      parameters: {
+        kind: 'friction_surface',
+        surfaceY: position.y,
+        rampRate: input.appliedForceRamp ?? 2,
+        maxForce: input.maxAppliedForce ?? 30,
+      },
+    })
+    forces.push({
+      id: 'force-friction',
+      type: 'friction',
+      targetId: bodyId,
+      model: 'static_then_kinetic',
+    })
+    forces.push({
+      id: 'force-normal',
+      type: 'normal',
+      targetId: bodyId,
+      model: 'surface_normal',
+    })
+  }
+
   return {
     schemaVersion: 'physics-scene/1.0',
     id: asSceneId(input.sceneId ?? `mechanics-${model}-scene`),
@@ -165,16 +295,17 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
     timeline: {
       currentTime: quantity(0, 's', 'time'),
       startTime: quantity(0, 's', 'time'),
+      ...(input.endTime === undefined ? {} : { endTime: quantity(input.endTime, 's', 'time') }),
       state: 'idle',
       playbackRate: 1,
     },
-    bodies: [makeBody(bodyId, mass, position, velocity, acceleration, input.frictionCoefficient)],
+    bodies: [makeBody(bodyId, mass, position, velocity, acceleration, input.frictionCoefficient, input.staticFrictionCoefficient)],
     particles: [],
     fields,
     forces,
     regions: [],
     boundaries: [],
-    constraints: [],
+    constraints,
     circuits: [],
     opticalBenches: [],
     acousticBenches: [],
@@ -207,7 +338,9 @@ export const createMechanicsSimulationRequest = (
     sceneId: scene.id,
     sceneRevision: scene.revision,
     requestedDomain: 'mechanics',
-    options: {},
+    /* The scene's declared end time is the run window the question states —
+       the engine honours options.endTime and falls back to its model default. */
+    options: scene.timeline.endTime === undefined ? {} : { endTime: scene.timeline.endTime },
     trace: {
       traceId: asTraceId(traceId),
       sceneId: scene.id,

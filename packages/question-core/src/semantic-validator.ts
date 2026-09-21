@@ -6,6 +6,20 @@ import type {
 } from './semantic-ir.ts'
 
 export function validateSemanticIR(ir: PhysicsSemanticIR): SemanticValidationResult {
+  /* A recognised-but-unsolvable question shape (see UnsupportedModelId) is not a
+     domain problem: the parser already knows the pipeline would silently drop
+     the second case, so validation says so before any scene is built. */
+  if (ir.model === 'multi_case_comparison') {
+    return {
+      status: 'UNSUPPORTED_MODEL',
+      issues: [{
+        code: 'MULTI_CASE_COMPARISON',
+        message: '比较/多情形题目暂不支持：当前一条流水线只求解一个场景，请拆成单题分别求解。',
+        severity: 'error',
+      }],
+      ambiguities: [],
+    }
+  }
   /* Composite models are matched on the model id BEFORE the domain, exactly as the
      engine selector does: a crossed-field question can arrive tagged
      'electromagnetic', 'electric' or 'magnetic' depending on which parser claimed
@@ -302,6 +316,25 @@ function validateBoundedElectricIR(ir: PhysicsSemanticIR): SemanticValidationRes
   }
   if (ir.targets.length === 0) {
     issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
+  }
+
+  /* 初速度沿/逆电场方向时粒子不会横穿极板，"偏转/轨迹/出场速度"类目标没有
+     类平抛运动可言。防止方向解析错误（或题面本身如此）时给出无意义的
+     deflection 数值。 */
+  const lateralTargets = ['deflection', 'displacement', 'trajectory', 'exit_velocity', 'electric_field_direction']
+  const asksLateral = ir.targets.some((t) => lateralTargets.includes(t))
+  const parallelPair =
+    (ir.initialVelocityDirection === 'up' || ir.initialVelocityDirection === 'down') &&
+    (ir.electricFieldDirection === 'up' || ir.electricFieldDirection === 'down')
+      ? true
+      : (ir.initialVelocityDirection === 'left' || ir.initialVelocityDirection === 'right') &&
+        (ir.electricFieldDirection === 'left' || ir.electricFieldDirection === 'right')
+  if (asksLateral && parallelPair) {
+    issues.push({
+      code: 'VELOCITY_PARALLEL_TO_FIELD',
+      message: '初速度方向与电场方向平行，粒子不做类平抛偏转，请核对题面中的速度方向与电场方向。',
+      severity: 'error',
+    })
   }
 
   if (issues.length > 0) {

@@ -64,6 +64,50 @@ describe('DeterministicElectricQuestionParser', () => {
     expect(candidate.ir.knowns.find((known) => known.key === 'time')?.value).toBe(2)
   })
 
+  it('does not read the field-direction clause as the velocity direction', () => {
+    /* 回归：旧实现里 `初速度 … 电场方向竖直向下` 会把 velocity 解析成 down，
+       场景里粒子竖直运动，deflection 给出 0.2 m 的错误结果。 */
+    const text =
+      '质子以初速度 v0 = 2×10^6 m/s 水平射入平行板电场，电场方向竖直向下。' +
+      '已知质子质量 m = 1.67×10^-27 kg，电荷量 q = +1.6×10^-19 C，' +
+      '电场强度 E = 5000 V/m，板间距 d = 2 cm，板长 L = 10 cm。求质子射出电场时的偏转距离。'
+    const document = {
+      id: 'regression-field-direction' as never,
+      content: { source: 'text', rawText: text, extractedText: text, status: 'EXTRACTED' },
+      metadata: { title: '回归', tags: [], difficulty: 'standard' },
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    } as Parameters<typeof processQuestion>[0]
+
+    const result = processQuestion(document)
+    expect(result.validation?.status).toBe('VALID')
+    const particle = result.scene?.particles?.[0]
+    expect(particle?.velocity.vector.x).toBeCloseTo(2e6)
+    expect(particle?.velocity.vector.y).toBe(0)
+    const deflection = result.solution?.results?.deflection
+    expect(deflection && 'value' in deflection ? deflection.value : undefined).toBe('5.99×10⁻⁴')
+  })
+
+  it('rejects lateral targets when the velocity is parallel to the field', () => {
+    const text =
+      '质子以初速度 v0 = 2×10^6 m/s 射入平行板电场，初速度方向竖直向下。' +
+      '已知质子质量 m = 1.67×10^-27 kg，电荷量 q = +1.6×10^-19 C，' +
+      '电场强度 E = 5000 V/m，方向竖直向下，板间距 d = 2 cm，板长 L = 10 cm。求质子的偏转距离。'
+    const document = {
+      id: 'regression-parallel' as never,
+      content: { source: 'text', rawText: text, extractedText: text, status: 'EXTRACTED' },
+      metadata: { title: '回归', tags: [], difficulty: 'standard' },
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    } as Parameters<typeof processQuestion>[0]
+
+    const result = processQuestion(document)
+    expect(result.validation?.status).toBe('INVALID_SEMANTICS')
+    expect(result.validation?.issues).toContainEqual(
+      expect.objectContaining({ code: 'VELOCITY_PARALLEL_TO_FIELD' }),
+    )
+  })
+
   it('does not claim a magnetic-field question', () => {
     const magnetic = electricQuestion('01-proton-basic')
     const document = createGoldenQuestionDocument(magnetic)
@@ -368,9 +412,10 @@ describe('Parallel-plate Golden Questions', () => {
        a = 1.6e-19 * 2000 / 9.11e-31 ≈ 3.513×10^14 m/s²
        t = 0.12 / 3e7 = 4e-9 s
        y = 0.5 * 3.513e14 * (4e-9)² ≈ 2.811×10^-3 m ≈ 2.81 mm
-       The engine computes displacement_vector; |y| is the deflection. */
-    const displacement = vector(result, 'displacement_vector')
-    expect(Math.abs(displacement.y)).toBeCloseTo(2.811e-3, -2)
+       Assert the engine's `deflection` (y at field exit), not
+       displacement_vector — the query instant is after exit, so its y
+       includes the post-exit uniform drift and reads ~2.8× too large. */
+    expect(Math.abs(scalar(result, 'deflection'))).toBeCloseTo(2.811e-3, 5)
   })
 
   it('Q12: computes exit velocity for an electron leaving the parallel-plate field', () => {

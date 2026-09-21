@@ -1,7 +1,7 @@
 import type { PhysicsScene, Body } from '@physicsos/physics-scene'
 import { toCanonicalVector } from '@physicsos/physics-core'
 import { canonicalValue } from '@physicsos/physics-units'
-import { vec3, scale, type Vector3 } from '@physicsos/physics-math'
+import { vec3, scale, magnitude, type Vector3 } from '@physicsos/physics-math'
 import type { MechanicsModel } from './types.ts'
 import { newtonSecondLaw, inclineAcceleration } from '../solvers/force-dynamics.ts'
 
@@ -47,6 +47,159 @@ export function resolveInclineAngle(scene: PhysicsScene): number {
     }
   }
   return 30
+}
+
+/** Spring connector facts — resolved from the scene's `spring` constraint. */
+const springConstraint = (scene: PhysicsScene) =>
+  scene.constraints.find((c) => c.type === 'spring')
+
+export function resolveSpringOscillatorModel(scene: PhysicsScene): MechanicsModel {
+  const { body, mass, position, velocity } = resolveBody(scene)
+  const spring = springConstraint(scene)
+  const stiffness = Number(spring?.parameters['stiffness'])
+  const naturalLength = Number(spring?.parameters['naturalLength'])
+  const anchorParam = spring?.parameters['anchor'] as { x?: number; y?: number } | undefined
+  if (!Number.isFinite(stiffness) || stiffness <= 0) {
+    throw new Error('spring_oscillator requires a spring constraint with stiffness > 0')
+  }
+  const anchor = vec3(anchorParam?.x ?? -3, anchorParam?.y ?? 0, 0)
+  /* Equilibrium sits one natural length from the anchor towards the body:
+     left-mounted springs hold the body to their right and vice versa. */
+  const side = position.x >= anchor.x ? 1 : -1
+  const equilibriumX = anchor.x + side * (Number.isFinite(naturalLength) ? naturalLength : 2)
+  const angularFrequency = Math.sqrt(stiffness / mass)
+  /* x(t) = x_eq + A cos(ωt) + B sin(ωt); A = x0 − x_eq, B = v0/ω. The
+     amplitude/phase pair is the same oscillation written with one cosine. */
+  const A = position.x - equilibriumX
+  const B = velocity.x / angularFrequency
+  const amplitude = Math.hypot(A, B)
+  const phase = Math.atan2(-B, A)
+  return {
+    modelId: 'spring_oscillator',
+    bodyId: body.id,
+    mass,
+    position,
+    velocity,
+    acceleration: vec3(-angularFrequency * angularFrequency * A, 0, 0),
+    stiffness,
+    naturalLength: Number.isFinite(naturalLength) ? naturalLength : 2,
+    anchor,
+    angularFrequency,
+    period: (2 * Math.PI) / angularFrequency,
+    amplitude,
+    phase,
+    equilibriumX,
+  }
+}
+
+export function resolveSimplePendulumModel(scene: PhysicsScene): MechanicsModel {
+  const { body, mass, position, velocity } = resolveBody(scene)
+  const rope = scene.constraints.find((c) => c.type === 'rope')
+  const pivotParam = rope?.parameters['pivot'] as { x?: number; y?: number } | undefined
+  const length = Number(rope?.parameters['length'])
+  if (!Number.isFinite(length) || length <= 0) {
+    throw new Error('simple_pendulum requires a rope constraint with length > 0')
+  }
+  const pivot = vec3(pivotParam?.x ?? 0, pivotParam?.y ?? 0, 0)
+  const gravity = resolveGravity(scene)
+  const g = magnitude(gravity)
+  const angularFrequency = Math.sqrt(g / length)
+  /* θ measured from straight down; θ(t) = θ0 cos(ωt) + (θ̇0/ω) sin(ωt).
+     θ̇0 comes from the tangential launch speed: θ̇ = v·ê_t / L. */
+  const dx = position.x - pivot.x
+  const dy = position.y - pivot.y
+  const theta0 = Math.atan2(dx, -dy)
+  const tangent = { x: Math.cos(theta0), y: Math.sin(theta0) }
+  const thetaDot0 = (velocity.x * tangent.x + velocity.y * tangent.y) / length
+  const amplitude = Math.hypot(theta0, thetaDot0 / angularFrequency)
+  const phase = Math.atan2(-thetaDot0 / angularFrequency, theta0)
+  return {
+    modelId: 'simple_pendulum',
+    bodyId: body.id,
+    mass,
+    position,
+    velocity,
+    acceleration: vec3(0, 0, 0),
+    length,
+    pivot,
+    gravity,
+    angularFrequency,
+    period: (2 * Math.PI) / angularFrequency,
+    amplitude,
+    phase,
+  }
+}
+
+export function resolveHorizontalFrictionModel(scene: PhysicsScene): MechanicsModel {
+  const { body, mass, position, velocity } = resolveBody(scene)
+  const gravity = resolveGravity(scene)
+  const g = magnitude(gravity)
+  const kineticCoefficient = body.material?.frictionCoefficient ?? 0
+  /* μs ≥ μk physically; a scene that omits μs models them as equal. */
+  const staticCoefficient = body.material?.staticFrictionCoefficient ?? kineticCoefficient
+  const surface = scene.observableDefinitions.find(
+    (o) => o.parameters?.['kind'] === 'friction_surface',
+  )
+  const forceRamp = Number(surface?.parameters?.['rampRate'] ?? 0)
+  const maxForce = Number(surface?.parameters?.['maxForce'] ?? 30)
+  const initialForce = scene.forces
+    .filter((f) => f.targetId === body.id && f.type === 'custom' && f.vector)
+    .reduce((sum, f) => sum + f.vector!.vector.x, 0)
+  const normalForce = mass * g
+  const staticLimit = staticCoefficient * normalForce
+  /* The pull grows F0 + ramp·t and the body slips when it crosses μsN —
+     unless the pull is already moving it or the cap never reaches the limit. */
+  const slipTime =
+    Math.abs(velocity.x) > 1e-9 || initialForce > staticLimit
+      ? 0
+      : forceRamp > 0 && staticLimit > initialForce
+        ? (staticLimit - initialForce) / forceRamp
+        : Number.POSITIVE_INFINITY
+  return {
+    modelId: 'horizontal_friction',
+    bodyId: body.id,
+    mass,
+    position,
+    velocity,
+    acceleration: vec3(0, 0, 0),
+    staticCoefficient,
+    kineticCoefficient,
+    gravity,
+    initialForce,
+    forceRamp,
+    maxForce,
+    normalForce,
+    slipTime,
+  }
+}
+
+export function resolveSpringStaticsModel(scene: PhysicsScene): MechanicsModel {
+  const { body, mass, position, velocity } = resolveBody(scene)
+  const spring = springConstraint(scene)
+  const stiffness = Number(spring?.parameters['stiffness'])
+  const naturalLength = Number(spring?.parameters['naturalLength'])
+  const anchorParam = spring?.parameters['anchor'] as { x?: number; y?: number } | undefined
+  if (!Number.isFinite(stiffness) || stiffness <= 0) {
+    throw new Error('spring_statics requires a spring constraint with stiffness > 0')
+  }
+  const gravity = resolveGravity(scene)
+  const g = magnitude(gravity)
+  const anchor = vec3(anchorParam?.x ?? 0, anchorParam?.y ?? 3, 0)
+  const extension = (mass * g) / stiffness
+  return {
+    modelId: 'spring_statics',
+    bodyId: body.id,
+    mass,
+    position,
+    velocity,
+    acceleration: vec3(0, 0, 0),
+    stiffness,
+    naturalLength: Number.isFinite(naturalLength) ? naturalLength : 2,
+    anchor,
+    gravity,
+    extension,
+    springForce: mass * g,
+  }
 }
 
 export function resolveFrictionCoefficient(scene: PhysicsScene): number {
@@ -159,8 +312,15 @@ export function resolveNewtonSecondLawModel(scene: PhysicsScene): MechanicsModel
   const gravityForce = scale(gravity, mass)
   
   const allForces = [...appliedForces]
-  if (scene.forces.some((f) => f.type === 'gravity')) {
+  if (scene.forces.some((f) => f.type === 'gravity' && f.targetId === body.id)) {
     allForces.push(gravityForce)
+  }
+  /* A declared surface normal on the flat ground is the reaction balancing
+     gravity — the block accelerates horizontally only. Without this term the
+     gravity/normal force pair the scene declares injects gravity unbalanced
+     (net force picked up -mg vertically, inflating |a| to ~2× F/m). */
+  if (scene.forces.some((f) => f.type === 'normal' && f.targetId === body.id)) {
+    allForces.push(scale(gravityForce, -1))
   }
   
   const { netForce, acceleration } = newtonSecondLaw(mass, allForces)

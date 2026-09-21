@@ -198,12 +198,19 @@ export const createInductionScene = (input: InductionBenchSceneInput): PhysicsSc
         targetId: bench.id,
         visible: visibility.current ?? true,
       },
-      {
-        id: observableId('flux'),
-        type: 'magnetic_field',
-        targetId: bench.id,
-        visible: visibility.flux ?? true,
-      },
+      /* dΦ/dt is published only by the single-bench rigs; the double-bar
+         engine carries no flux quantity, so declaring the toggle there would
+         hand the student a switch that changes nothing. */
+      ...(bench.type === 'double_bar_rail'
+        ? []
+        : [
+            {
+              id: observableId('flux'),
+              type: 'magnetic_field' as const,
+              targetId: bench.id,
+              visible: visibility.flux ?? true,
+            },
+          ]),
       ...(isBar
         ? [
             {

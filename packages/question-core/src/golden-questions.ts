@@ -236,7 +236,7 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedDomain: 'electric',
     expectedChargeSign: 'negative',
     expectedFieldDirection: 'unknown',
-    expectedValidation: 'VALID',
+    expectedValidation: 'UNSUPPORTED_MODEL',
   },
   {
     id: 'electric-17-different-charge',
@@ -245,7 +245,7 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedDomain: 'electric',
     expectedChargeSign: 'negative',
     expectedFieldDirection: 'unknown',
-    expectedValidation: 'VALID',
+    expectedValidation: 'UNSUPPORTED_MODEL',
   },
   {
     id: 'electric-18-plate-length-effect',
@@ -254,7 +254,7 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedDomain: 'electric',
     expectedChargeSign: 'negative',
     expectedFieldDirection: 'unknown',
-    expectedValidation: 'VALID',
+    expectedValidation: 'UNSUPPORTED_MODEL',
   },
   {
     id: 'electric-19-energy',
@@ -774,11 +774,69 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedFieldDirection: 'unknown',
     expectedValidation: 'INVALID_SEMANTICS',
   },
+
+  /* ------------------------------------------------------------- mechanics -- *
+   * 匀速直线运动与牛顿第二定律：初中教材章节的入门题。写杠杆、单摆、浮力、热学
+   * 题目会先撞到解析器（无对应模型，PARSE_FAILED）或被误读成别的模型——所以
+   * 这里只收引擎能真实解出的题，其余章节交给 Lab 自测覆盖。 */
+  {
+    id: 'mech-07-uniform-distance',
+    title: '匀速直线运动求路程',
+    text: '小明骑自行车沿平直道路匀速前进，速度为 5 m/s，骑行了 600 s。已知：v = 5 m/s，t = 600 s。求：小明通过的路程 s',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'mech-08-sound-propagation',
+    title: '声音的传播距离',
+    text: '声音在空气中以 340 m/s 的速度匀速传播，经过 10 s。已知：v = 340 m/s，t = 10 s。求：声音传播的路程 s',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'mech-09-echo-ranging',
+    title: '回声测距求传播路程',
+    text: '声音在海水中以 1500 m/s 的速度匀速传播，从海面竖直向下发出后 4 s 收到海底反射的回声。已知：v = 1500 m/s，t = 4 s。求：超声波传播的路程 s',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'mech-10-netforce-friction',
+    title: '含摩擦情境的合力与加速度',
+    text: '一个质量为 10 kg 的物体在水平面上受到拉力与摩擦力作用，水平方向的合力为 20 N，物体做匀加速直线运动。已知：m = 10 kg，合力 F = 20 N。求：物体的加速度 a',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
 ]
+
+/**
+ * Domain a golden question exercises: the explicit `expectedDomain` when set,
+ * otherwise the family the id prefix encodes (mech-/circ-/opt-/ind-/wave-).
+ * Composite questions always declare theirs explicitly.
+ */
+export const goldenQuestionDomain = (
+  def: GoldenQuestionDefinition,
+): NonNullable<GoldenQuestionDefinition['expectedDomain']> =>
+  def.expectedDomain ??
+  (def.id.startsWith('mech-')
+    ? 'mechanics'
+    : def.id.startsWith('circ-')
+      ? 'circuit'
+      : def.id.startsWith('opt-')
+        ? 'optics'
+        : def.id.startsWith('ind-')
+          ? 'induction'
+          : def.id.startsWith('wave-')
+            ? 'wave'
+            : 'magnetic')
 
 export function createGoldenQuestionDocument(def: GoldenQuestionDefinition, now?: string): QuestionDocument {
   const ts = now ?? new Date().toISOString()
-  const domain = def.expectedDomain ?? (def.id.startsWith('mech-') ? 'mechanics' : def.id.startsWith('circ-') ? 'circuit' : def.id.startsWith('opt-') ? 'optics' : def.id.startsWith('ind-') ? 'induction' : def.id.startsWith('wave-') ? 'wave' : 'magnetic')
+  const domain = goldenQuestionDomain(def)
   return {
     id: asQuestionId('golden-' + def.id),
     content: {

@@ -28,6 +28,7 @@ import {
   type TraceId,
 } from '@physicsos/shared'
 
+import { circuitLayoutPlace } from './circuit/circuit-scene.ts'
 import { validateScene } from './scene-validation.ts'
 import type {
   AcousticBench,
@@ -66,6 +67,9 @@ export type SceneCommandType =
   | 'SetGravityAcceleration'
   | 'SetInclineAngle'
   | 'SetFrictionCoefficient'
+  | 'SetStaticFrictionCoefficient'
+  | 'SetSpringConstant'
+  | 'SetPendulumLength'
   | 'SetAppliedForce'
   | 'SetGroundLevel'
   | 'SetComponentResistance'
@@ -73,6 +77,7 @@ export type SceneCommandType =
   | 'SetSourceInternalResistance'
   | 'SetSwitchState'
   | 'SetSliderPosition'
+  | 'SetComponentPlacement'
   | 'SetOpticalObjectPosition'
   | 'SetOpticalObjectHeight'
   | 'SetLensFocalLength'
@@ -161,6 +166,23 @@ export interface SceneCommandPayloadMap {
     /** Dimensionless μ ≥ 0. */
     coefficient: number
   }
+  SetStaticFrictionCoefficient: {
+    bodyId: string
+    /** Dimensionless μs ≥ 0 — the static limit, stored beside μk. */
+    coefficient: number
+  }
+  SetSpringConstant: {
+    /** The spring constraint carrying `stiffness` in its parameters. */
+    constraintId: string
+    /** N/m, strictly positive. */
+    constant: number
+  }
+  SetPendulumLength: {
+    /** The rope constraint carrying `length` in its parameters. */
+    constraintId: string
+    /** Pivot-to-bob length in m, strictly positive. */
+    length: number
+  }
   SetAppliedForce: {
     forceId: string
     targetId: string
@@ -197,6 +219,15 @@ export interface SceneCommandPayloadMap {
     componentId: string
     /** Rheostat slider position, 0..1 inclusive. */
     position: number
+  }
+  SetComponentPlacement: {
+    circuitId: string
+    componentId: string
+    /** Schematic grid position. Presentation only — never a physical fact. */
+    x: number
+    y: number
+    /** Optional quarter-turn rotation; omitted keeps the current rotation. */
+    rotation?: 0 | 90 | 180 | 270
   }
   SetOpticalObjectPosition: {
     benchId: string
@@ -386,6 +417,9 @@ export type PhysicsEventType =
   | 'GravityAccelerationChanged'
   | 'InclineAngleChanged'
   | 'FrictionCoefficientChanged'
+  | 'StaticFrictionCoefficientChanged'
+  | 'SpringConstantChanged'
+  | 'PendulumLengthChanged'
   | 'AppliedForceChanged'
   | 'GroundLevelChanged'
   | 'ComponentResistanceChanged'
@@ -393,6 +427,7 @@ export type PhysicsEventType =
   | 'SourceInternalResistanceChanged'
   | 'SwitchStateChanged'
   | 'SliderPositionChanged'
+  | 'ComponentPlacementChanged'
   | 'OpticalObjectPositionChanged'
   | 'OpticalObjectHeightChanged'
   | 'LensFocalLengthChanged'
@@ -443,6 +478,9 @@ export interface PhysicsEventPayloadMap {
   GravityAccelerationChanged: SceneCommandPayloadMap['SetGravityAcceleration']
   InclineAngleChanged: SceneCommandPayloadMap['SetInclineAngle']
   FrictionCoefficientChanged: SceneCommandPayloadMap['SetFrictionCoefficient']
+  StaticFrictionCoefficientChanged: SceneCommandPayloadMap['SetStaticFrictionCoefficient']
+  SpringConstantChanged: SceneCommandPayloadMap['SetSpringConstant']
+  PendulumLengthChanged: SceneCommandPayloadMap['SetPendulumLength']
   AppliedForceChanged: SceneCommandPayloadMap['SetAppliedForce']
   GroundLevelChanged: SceneCommandPayloadMap['SetGroundLevel']
   ComponentResistanceChanged: SceneCommandPayloadMap['SetComponentResistance']
@@ -450,6 +488,7 @@ export interface PhysicsEventPayloadMap {
   SourceInternalResistanceChanged: SceneCommandPayloadMap['SetSourceInternalResistance']
   SwitchStateChanged: SceneCommandPayloadMap['SetSwitchState']
   SliderPositionChanged: SceneCommandPayloadMap['SetSliderPosition']
+  ComponentPlacementChanged: SceneCommandPayloadMap['SetComponentPlacement']
   OpticalObjectPositionChanged: SceneCommandPayloadMap['SetOpticalObjectPosition']
   OpticalObjectHeightChanged: SceneCommandPayloadMap['SetOpticalObjectHeight']
   LensFocalLengthChanged: SceneCommandPayloadMap['SetLensFocalLength']
@@ -565,6 +604,7 @@ const NOT_FOUND_CODES = {
   fluid_tank: 'FLUID_TANK_NOT_FOUND',
   thermal_bench: 'THERMAL_BENCH_NOT_FOUND',
   lever_bench: 'LEVER_NOT_FOUND',
+  constraint: 'CONSTRAINT_NOT_FOUND',
   lever_hanger: 'HANGER_NOT_FOUND',
   induction_bench: 'INDUCTION_BENCH_NOT_FOUND',
   wave_bench: 'WAVE_BENCH_NOT_FOUND',
@@ -1328,6 +1368,91 @@ const applyCommand = (
       }
     }
 
+    case 'SetStaticFrictionCoefficient': {
+      const coefficient = command.payload.coefficient
+      if (!Number.isFinite(coefficient) || coefficient < 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_FRICTION_COEFFICIENT',
+            'Static friction coefficient must be a non-negative finite number.',
+            { coefficient },
+          ),
+        }
+      }
+      const body = scene.bodies.find((entry) => entry.id === command.payload.bodyId)
+      if (body === undefined) {
+        return { ok: false, error: notFound('body', command.payload.bodyId) }
+      }
+      body.material = { ...body.material, staticFrictionCoefficient: coefficient }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'StaticFrictionCoefficientChanged',
+          payload: { bodyId: command.payload.bodyId, coefficient },
+        },
+      }
+    }
+
+    case 'SetSpringConstant': {
+      const constant = command.payload.constant
+      if (!Number.isFinite(constant) || constant <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_SPRING_CONSTANT',
+            'Spring constant must be a positive finite number.',
+            { constant },
+          ),
+        }
+      }
+      const spring = scene.constraints.find(
+        (entry) => entry.id === command.payload.constraintId && entry.type === 'spring',
+      )
+      if (spring === undefined) {
+        return { ok: false, error: notFound('constraint', command.payload.constraintId) }
+      }
+      spring.parameters = { ...spring.parameters, stiffness: constant }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SpringConstantChanged',
+          payload: { constraintId: command.payload.constraintId, constant },
+        },
+      }
+    }
+
+    case 'SetPendulumLength': {
+      const length = command.payload.length
+      if (!Number.isFinite(length) || length <= 0) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_PENDULUM_LENGTH',
+            'Pendulum length must be a positive finite number.',
+            { length },
+          ),
+        }
+      }
+      const rope = scene.constraints.find(
+        (entry) => entry.id === command.payload.constraintId && entry.type === 'rope',
+      )
+      if (rope === undefined) {
+        return { ok: false, error: notFound('constraint', command.payload.constraintId) }
+      }
+      rope.parameters = { ...rope.parameters, length }
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PendulumLengthChanged',
+          payload: { constraintId: command.payload.constraintId, length },
+        },
+      }
+    }
+
     case 'SetAppliedForce': {
       const body = scene.bodies.find((entry) => entry.id === command.payload.targetId)
       if (body === undefined) {
@@ -1601,6 +1726,55 @@ const applyCommand = (
         event: {
           ...eventMetadata,
           type: 'SliderPositionChanged',
+          payload: clone(command.payload),
+        },
+      }
+    }
+
+    case 'SetComponentPlacement': {
+      const lookup = findCircuitComponent(
+        scene,
+        command.payload.circuitId,
+        command.payload.componentId,
+      )
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const { x, y, rotation } = command.payload
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_COMPONENT_PLACEMENT',
+            'Component placement x and y must be finite numbers.',
+            { x: command.payload.x, y: command.payload.y },
+          ),
+        }
+      }
+      if (
+        rotation !== undefined &&
+        rotation !== 0 && rotation !== 90 && rotation !== 180 && rotation !== 270
+      ) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_COMPONENT_ROTATION',
+            'Component placement rotation must be a quarter turn: 0, 90, 180 or 270.',
+            { rotation },
+          ),
+        }
+      }
+      /* Schematic dressing: the solver reads the netlist, not the layout — but
+         the move still commits a revision so the arrangement persists and
+         replays like any authored state. */
+      circuitLayoutPlace(
+        lookup.circuit,
+        command.payload.componentId,
+        rotation === undefined ? { x, y } : { x, y, rotation },
+      )
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ComponentPlacementChanged',
           payload: clone(command.payload),
         },
       }

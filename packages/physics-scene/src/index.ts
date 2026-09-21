@@ -176,6 +176,7 @@ export {
   TWO_TERMINAL_KEYS,
   circuitComponentOf,
   circuitLayoutOf,
+  circuitLayoutPlace,
   circuitOf,
   circuitRotationVector,
   circuitTerminalId,

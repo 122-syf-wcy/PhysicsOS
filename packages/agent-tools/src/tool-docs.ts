@@ -40,9 +40,12 @@ export const PHYSICS_TOOL_DOCS: Readonly<Record<PhysicsToolName, { readonly desc
   physics_solve_question: {
     description:
       '把一道初高中物理题（中文题面）交给 PhysicsOS 题目运行时：确定性解析 → 语义校验 → 建场景 → 引擎求解 → 守恒校验。'
+      + '题面可以是学生贴的原文，也可以是你从题图或 PDF 扫描页转录出的文字——转录后先给学生确认再调用。'
+      + '已知量写成「符号 = 数值 单位」（如 q = 1.6×10^-19 C、B = 0.4 T）命中率最高；自然语句（「磁感应强度为 0.40 T」）也能识别。'
       + '返回已知量、待求量、逐步解答（每步的公式、结果与单位）、校验结果，以及题目对应场景的 sceneId（可再用 physics_scene_command 改条件、physics_simulate 重跑）。'
       + '解析失败时返回 status="rejected" 和原因，此时不要自行编数值答案——如实告诉学生哪里没看懂。'
-      + '你自己不要做任何物理计算：所有数值必须引用本工具或 physics_simulate / physics_observe 的返回。',
+      + '你自己不要做任何物理计算：所有数值必须引用本工具或 physics_simulate / physics_observe 的返回。'
+      + '练习链路会附 questionId（题库题 id）：原样转发即可，命中题库时按题库原文求解。',
   },
   physics_describe_scene: {
     description:

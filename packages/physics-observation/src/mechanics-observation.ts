@@ -173,6 +173,8 @@ export type MechanicsForceLabel =
   | 'applied'
   | 'gravity_parallel'
   | 'gravity_normal'
+  | 'spring'
+  | 'tension'
 
 const scaleVector = (vector: Vector3, factor: number): Vector3 => ({
   x: vector.x * factor,
@@ -328,10 +330,30 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
   const inclineDef = scene.observableDefinitions.find(
     (def) => def.parameters?.['kind'] === 'incline' && typeof def.parameters['angle'] === 'number',
   )
+  /* A mostly-vertical connector holds the body instead of a surface: a hanging
+     mass is pulled up by the spring/rope, not pushed up by a floor. The spring
+     and tension branches below already publish that support force, so claiming
+     an extra normal arrow here would stack two upward forces and break the
+     free-body reading. A horizontal spring cannot hold weight, so a sliding
+     oscillator still gets its normal from the track. */
+  const connectorHolds = scene.constraints.some((constraint) => {
+    if (!constraint.targets.includes(body.id)) return false
+    const anchor =
+      constraint.type === 'spring'
+        ? (constraint.parameters['anchor'] as { x?: number; y?: number } | undefined)
+        : constraint.type === 'rope'
+          ? (constraint.parameters['pivot'] as { x?: number; y?: number } | undefined)
+          : undefined
+    if (anchor === undefined || bodyState.position === undefined) return false
+    const dx = (anchor.x ?? 0) - bodyState.position.vector.x
+    const dy = (anchor.y ?? 0) - bodyState.position.vector.y
+    return Math.abs(dy) > Math.abs(dx)
+  })
   const verticalAcceleration = bodyState.acceleration?.vector.y ?? 0
   const verticalVelocity = bodyState.velocity?.vector.y ?? 0
   if (
     inclineDef === undefined &&
+    !connectorHolds &&
     gravityMagnitude !== undefined &&
     gravityMagnitude > 0 &&
     Math.abs(verticalAcceleration) < 1e-9 &&
@@ -343,6 +365,100 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
       )
     }
   }
+  /* Externally applied forces, one observation per declared custom force. A
+     free-body diagram of a pulled block must show the pull itself, not just
+     the reaction pair — and a force-composition experiment exists precisely to
+     show F₁ and F₂ combining into ΣF. Order follows scene.forces, so the
+     renderer can index them F₁, F₂, … deterministically. */
+  const appliedForces = scene.forces.filter(
+    (force) => force.targetId === body.id && force.type === 'custom' && force.vector !== undefined,
+  )
+  /* A friction-surface scene's pull ramps over time; the generic per-force
+     reading would freeze the t = 0 value, so the dedicated branch below
+     reports the engine's per-state applied_force instead. */
+  const hasFrictionSurface = scene.observableDefinitions.some(
+    (def) => def.parameters?.['kind'] === 'friction_surface',
+  )
+  if (appliedForces.length > 0 && !hasFrictionSurface) {
+    for (const def of visible(scene, 'force')) {
+      for (const force of appliedForces) {
+        const vector = force.vector?.vector
+        if (vector === undefined) continue
+        observations.push(
+          forceObservation(
+            def.id,
+            body.id,
+            state.time,
+            bodyState.position,
+            { x: vector.x, y: vector.y, z: vector.z },
+            'applied',
+          ),
+        )
+      }
+    }
+  }
+
+  /* Connector forces: a spring constraint claims a restoring pull F = −kx
+     along its axis, a rope constraint claims tension toward the pivot. The
+     magnitudes are engine per-state derived values; the directions come from
+     the connector geometry, which the scene already declares. */
+  const springConstraint = scene.constraints.find((c) => c.type === 'spring')
+  if (springConstraint !== undefined) {
+    const springForce = derivedVector(state.derived, 'spring_force')
+    if (springForce !== undefined) {
+      for (const def of visible(scene, 'force')) {
+        observations.push(
+          forceObservation(def.id, body.id, state.time, bodyState.position, springForce.vector, 'spring'),
+        )
+      }
+    }
+  }
+  const ropeConstraint = scene.constraints.find((c) => c.type === 'rope')
+  if (ropeConstraint !== undefined) {
+    const tension = (() => { try { return derivedScalar(state.derived, 'tension').value } catch { return undefined } })()
+    if (tension !== undefined) {
+      const pivot = ropeConstraint.parameters['pivot'] as { x?: number; y?: number } | undefined
+      const dx = (pivot?.x ?? 0) - (bodyState.position?.vector.x ?? 0)
+      const dy = (pivot?.y ?? 0) - (bodyState.position?.vector.y ?? 0)
+      const len = Math.hypot(dx, dy)
+      if (len > 0) {
+        for (const def of visible(scene, 'force')) {
+          observations.push(
+            forceObservation(def.id, body.id, state.time, bodyState.position, { x: (dx / len) * tension, y: (dy / len) * tension, z: 0 }, 'tension'),
+          )
+        }
+      }
+    }
+  }
+
+  /* Level-surface friction: on a horizontal_friction rig the friction arrow
+     opposes the slide (or the pull while static); its magnitude is the
+     engine's per-state derived value, so the static phase honestly reads
+     f = F and the sliding phase reads f = μkN. */
+  const frictionSurface = scene.observableDefinitions.find(
+    (def) => def.parameters?.['kind'] === 'friction_surface',
+  )
+  if (frictionSurface !== undefined && inclineDef === undefined) {
+    const friction = (() => { try { return derivedScalar(state.derived, 'friction_force').value } catch { return undefined } })()
+    const applied = (() => { try { return derivedScalar(state.derived, 'applied_force').value } catch { return undefined } })()
+    if (friction !== undefined && friction > 0) {
+      const vx = bodyState.velocity?.vector.x ?? 0
+      const direction = Math.abs(vx) > 1e-9 ? -Math.sign(vx) : -1
+      for (const def of visible(scene, 'force')) {
+        observations.push(
+          forceObservation(def.id, body.id, state.time, bodyState.position, { x: direction * friction, y: 0, z: 0 }, 'friction'),
+        )
+      }
+    }
+    if (applied !== undefined && applied > 0) {
+      for (const def of visible(scene, 'force')) {
+        observations.push(
+          forceObservation(def.id, body.id, state.time, bodyState.position, { x: applied, y: 0, z: 0 }, 'applied'),
+        )
+      }
+    }
+  }
+
   if (inclineDef !== undefined) {
     const angleDegrees = inclineDef.parameters?.['angle'] as number
     const radians = (angleDegrees * Math.PI) / 180
