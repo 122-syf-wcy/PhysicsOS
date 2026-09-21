@@ -49,54 +49,8 @@ import {
   createCollisionScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
-import type { ReactElement } from 'react'
 
 import type { PhysicsosKey } from '../locales.ts'
-import type { PhysicsIconProps } from '../icons/physics-icons.tsx'
-import {
-  IconBuoyancy,
-  IconBulb,
-  IconChart,
-  IconCircuitParallel,
-  IconCircuitSeries,
-  IconCompositeField,
-  IconConcaveMirror,
-  IconConvexLens,
-  IconConvexMirror,
-  IconCrystalMelting,
-  IconForce,
-  IconFriction,
-  IconHeatCapacity,
-  IconInductionBar,
-  IconInductionCoil,
-  IconEchoRanging,
-  IconEmfMeasure,
-  IconInclinedPlane,
-  IconKinematics,
-  IconLever,
-  IconMagneticCircle,
-  IconMassSpectrometer,
-  IconMeasurement,
-  IconNetForce,
-  IconNewtonLaw,
-  IconNormalForce,
-  IconParallelPlate,
-  IconPendulum,
-  IconPlaneMirror,
-  IconPointCharge,
-  IconProjectileHorizontal,
-  IconProjectileOblique,
-  IconRheostat,
-  IconSpring,
-  IconStandingWave,
-  IconTime,
-  IconUniformElectric,
-  IconVelocity,
-  IconVelocitySelector,
-  IconWaveInterference,
-  IconWaveRope,
-  IconCollision,
-} from '../icons/physics-icons.tsx'
 
 /** Domains a template belongs to, mirrored from the Lab runtime dispatch. */
 export type ExperimentDomain =
@@ -130,7 +84,6 @@ export interface ExperimentTemplate {
   readonly label: PhysicsosKey
   /** Locale key for the one-line description shown under the name. */
   readonly hint: PhysicsosKey
-  readonly icon: (props: PhysicsIconProps) => ReactElement
   readonly tags: readonly string[]
   /** Build the real scene for this experiment. Stamps a fresh id per call. */
   readonly createScene: (title: string) => { sceneId: string; scene: PhysicsScene }
@@ -165,7 +118,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.uniformLinear',
     hint: 'lab.template.uniformLinear.hint',
-    icon: IconVelocity,
     tags: ['运动学'],
     createScene: (title) => {
       const scene = createMechanicsScene({
@@ -185,7 +137,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.averageSpeed',
     hint: 'lab.template.averageSpeed.hint',
-    icon: IconTime,
     tags: ['运动学', '初中', '平均速度'],
     createScene: (title) => {
       /* 初中「测平均速度」：小车从静止沿缓坡滑下，全程与前后半程分别计
@@ -208,7 +159,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.uniformAcceleration',
     hint: 'lab.template.uniformAcceleration.hint',
-    icon: IconKinematics,
     tags: ['运动学'],
     createScene: (title) => {
       const scene = createMechanicsScene({
@@ -229,7 +179,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.projectileHorizontal',
     hint: 'lab.template.projectileHorizontal.hint',
-    icon: IconProjectileHorizontal,
     tags: ['抛体'],
     createScene: (title) => {
       const scene = createMechanicsScene({
@@ -252,7 +201,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.projectileOblique',
     hint: 'lab.template.projectileOblique.hint',
-    icon: IconProjectileOblique,
     tags: ['抛体'],
     createScene: (title) => {
       const scene = createMechanicsScene({
@@ -275,7 +223,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.newton',
     hint: 'lab.template.newton.hint',
-    icon: IconNewtonLaw,
     tags: ['力与运动'],
     createScene: (title) => {
       const scene = createMechanicsScene({
@@ -297,7 +244,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.incline',
     hint: 'lab.template.incline.hint',
-    icon: IconInclinedPlane,
     tags: ['力与运动'],
     createScene: (title) => {
       const scene = createMechanicsScene({
@@ -320,7 +266,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.leverBalance',
     hint: 'lab.template.leverBalance.hint',
-    icon: IconLever,
     tags: ['力学', '杠杆', '初中'],
     createScene: (title) => {
       const scene = createLeverBalanceScene({
@@ -336,7 +281,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.collisionElastic',
     hint: 'lab.template.collisionElastic.hint',
-    icon: IconCollision,
     tags: ['动量守恒', '碰撞'],
     createScene: (title) => {
       /* 弹性对心碰撞：等质量相向，交换速度；动量动能双守恒。 */
@@ -359,7 +303,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.collisionInelastic',
     hint: 'lab.template.collisionInelastic.hint',
-    icon: IconCollision,
     tags: ['动量守恒', '碰撞'],
     createScene: (title) => {
       /* 部分弹性（e = 0.5）：大球追小球，碰撞后相对速度缩小一半。 */
@@ -382,7 +325,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.collisionPerfectlyInelastic',
     hint: 'lab.template.collisionPerfectlyInelastic.hint',
-    icon: IconCollision,
     tags: ['动量守恒', '碰撞'],
     createScene: (title) => {
       /* 完全非弹性：两球粘合共速，动能损失最大。 */
@@ -405,7 +347,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.vtArea',
     hint: 'lab.template.vtArea.hint',
-    icon: IconChart,
     tags: ['运动学', '图像'],
     createScene: (title) => {
       /* v–t 图线下面积 = 位移：v₀ = 2、a = 1.5 让梯形面积在一屏内既看得出
@@ -428,7 +369,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.forceComposition',
     hint: 'lab.template.forceComposition.hint',
-    icon: IconNetForce,
     tags: ['力与运动', '力的合成'],
     createScene: (title) => {
       /* 3-4-5：F₁ = 3 N 向东、F₂ = 4 N 向北，合力恰为 5 N——平行四边形法则
@@ -454,7 +394,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.concurrentEquilibrium',
     hint: 'lab.template.concurrentEquilibrium.hint',
-    icon: IconForce,
     tags: ['力与运动', '平衡'],
     createScene: (title) => {
       /* 三力共点平衡：F₁ = 8 N 向东，F₂/F₃ 各 8 N、与 F₁ 成 ±120°，合力
@@ -483,7 +422,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.apparentWeight',
     hint: 'lab.template.apparentWeight.hint',
-    icon: IconNormalForce,
     tags: ['力与运动', '超重失重'],
     createScene: (title) => {
       /* 电梯加速上行：人随轿厢以 a = 2 m/s² 上升，支持力 N = m(g + a) 即
@@ -507,7 +445,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.chaseMeeting',
     hint: 'lab.template.chaseMeeting.hint',
-    icon: IconVelocity,
     tags: ['运动学', '追及相遇'],
     createScene: (title) => {
       /* 同向匀速追及：快者 3 m/s 落后 4 m 追 1 m/s 慢者，t = 2 s 在 x = 2 m
@@ -532,7 +469,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.hookeLaw',
     hint: 'lab.template.hookeLaw.hint',
-    icon: IconSpring,
     tags: ['力与运动', '弹簧', '初中'],
     createScene: (title) => {
       /* 竖直悬挂胡克台：m = 1 kg、k = 49 N/m → Δx = mg/k = 0.2 m，物块恰停
@@ -564,7 +500,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.springOscillator',
     hint: 'lab.template.springOscillator.hint',
-    icon: IconSpring,
     tags: ['振动', '弹簧', '简谐运动'],
     createScene: (title) => {
       /* 水平弹簧振子：墙在 x = −3，L0 = 2 → 平衡位置 x = −1；从 x = −0.5
@@ -590,7 +525,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.simplePendulum',
     hint: 'lab.template.simplePendulum.hint',
-    icon: IconPendulum,
     tags: ['振动', '单摆', '简谐运动'],
     createScene: (title) => {
       /* 摆长 2 m、悬点 (0, 3)，摆角 15° 释放——小角近似内 T = 2π√(L/g)
@@ -622,7 +556,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.frictionStatic',
     hint: 'lab.template.frictionStatic.hint',
-    icon: IconFriction,
     tags: ['力与运动', '摩擦', '初中'],
     createScene: (title) => {
       /* 弹簧测力计协议：拉力以 2 N/s 渐增，m = 2、μs = 0.5、μk = 0.3 →
@@ -651,7 +584,6 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.frictionMu',
     hint: 'lab.template.frictionMu.hint',
-    icon: IconMeasurement,
     tags: ['力与运动', '摩擦', '测量', '初中'],
     createScene: (title) => {
       /* 恒定拉力 15 N 立即起滑（μsN = 7.84 N < 15 N）：滑动后数据面板读
@@ -684,7 +616,6 @@ const electricTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.pointCharge',
     hint: 'lab.template.pointCharge.hint',
-    icon: IconPointCharge,
     tags: ['电场'],
     createScene: (title) => {
       const scene = createPointChargeScene({
@@ -702,7 +633,6 @@ const electricTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.multiPointCharge',
     hint: 'lab.template.multiPointCharge.hint',
-    icon: IconPointCharge,
     tags: ['电场', '叠加'],
     createScene: (title) => {
       const scene = createPointChargeScene({
@@ -723,7 +653,6 @@ const electricTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.uniformElectric',
     hint: 'lab.template.uniformElectric.hint',
-    icon: IconUniformElectric,
     tags: ['电场'],
     createScene: (title) => {
       /* A real uniform-field scene: the charged小球 enters horizontally and
@@ -750,7 +679,6 @@ const electricTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.parallelPlate',
     hint: 'lab.template.parallelPlate.hint',
-    icon: IconParallelPlate,
     tags: ['电场', '偏转'],
     createScene: (title) => {
       const scene = createParallelPlateScene({
@@ -771,7 +699,6 @@ const magneticTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.magnetic',
     hint: 'lab.template.magnetic.hint',
-    icon: IconMagneticCircle,
     tags: ['磁场'],
     createScene: (title) => {
       const scene = createMagneticScene({
@@ -797,7 +724,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.seriesCircuit',
     hint: 'lab.template.seriesCircuit.hint',
-    icon: IconCircuitSeries,
     tags: ['电路', '串联'],
     createScene: (title) => {
       const scene = createSeriesCircuitScene({
@@ -813,7 +739,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.parallelCircuit',
     hint: 'lab.template.parallelCircuit.hint',
-    icon: IconCircuitParallel,
     tags: ['电路', '并联'],
     createScene: (title) => {
       const scene = createParallelCircuitScene({
@@ -829,7 +754,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.mixedCircuit',
     hint: 'lab.template.mixedCircuit.hint',
-    icon: IconCircuitParallel,
     tags: ['电路', '混联'],
     createScene: (title) => {
       const scene = createMixedCircuitScene({
@@ -845,7 +769,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.rheostat',
     hint: 'lab.template.rheostat.hint',
-    icon: IconRheostat,
     tags: ['电路', '动态电路'],
     createScene: (title) => {
       const scene = createRheostatCircuitScene({
@@ -861,7 +784,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.vaResistance',
     hint: 'lab.template.vaResistance.hint',
-    icon: IconMeasurement,
     tags: ['电路', '欧姆定律', '初中', '伏安法'],
     createScene: (title) => {
       /* 伏安法测电阻：定值电阻扮演待测 Rx，滑动变阻器移动工作点，读出多组
@@ -884,7 +806,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.bulbPower',
     hint: 'lab.template.bulbPower.hint',
-    icon: IconBulb,
     tags: ['电路', '电功率', '初中'],
     createScene: (title) => {
       /* 测小灯泡电功率：灯泡按额定 2.5 V / 0.3 A 的定值电阻近似（R ≈ 8.3 Ω）。
@@ -908,7 +829,6 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.emfMeasurement',
     hint: 'lab.template.emfMeasurement.hint',
-    icon: IconEmfMeasure,
     tags: ['电路', '电动势', '内阻'],
     createScene: (title) => {
       const scene = createEmfMeasurementScene({
@@ -929,7 +849,6 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.planeMirror',
     hint: 'lab.template.planeMirror.hint',
-    icon: IconPlaneMirror,
     tags: ['光学', '初中', '平面镜'],
     createScene: (title) => {
       /* 探究平面镜成像特点：蜡烛在玻璃板前 10 cm，光屏一开始就摆在像的位置
@@ -949,7 +868,6 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.convexLens',
     hint: 'lab.template.convexLens.hint',
-    icon: IconConvexLens,
     tags: ['光学', '初中', '凸透镜', '成像规律'],
     createScene: (title) => {
       /* 凸透镜成像规律：f = 10 cm、u = 30 cm 起步（u > 2f，倒立缩小实像），
@@ -969,7 +887,6 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.concaveMirror',
     hint: 'lab.template.concaveMirror.hint',
-    icon: IconConcaveMirror,
     tags: ['光学', '初中', '凹面镜', '球面镜'],
     createScene: (title) => {
       /* 凹面镜成像：f = 10 cm、u = 30 cm 起步（u > 2f，倒立缩小实像成在镜
@@ -990,7 +907,6 @@ const opticsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.convexMirror',
     hint: 'lab.template.convexMirror.hint',
-    icon: IconConvexMirror,
     tags: ['光学', '初中', '凸面镜', '后视镜', '球面镜'],
     createScene: (title) => {
       /* 凸面镜后视镜：f = −10 cm、后车在 30 cm 外。发散镜没有分区可扫 ——
@@ -1016,7 +932,6 @@ const acousticsTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.echoRanging',
     hint: 'lab.template.echoRanging.hint',
-    icon: IconEchoRanging,
     tags: ['声学', '初中', '回声', '声速'],
     createScene: (title) => {
       /* 回声测距：峭壁在 340 m 外、15 ℃ 空气声速 340 m/s —— 往返恰好 2.0 s，
@@ -1042,7 +957,6 @@ const fluidTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.buoyancy',
     hint: 'lab.template.buoyancy.hint',
-    icon: IconBuoyancy,
     tags: ['浮力', '初中', '阿基米德原理', '称重法'],
     createScene: (title) => {
       /* 探究浮力的大小：100 cm³ / 270 g 的铝块（ρ = 2.7 g/cm³）在水里缓慢下放。
@@ -1069,7 +983,6 @@ const thermalTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.crystalMelting',
     hint: 'lab.template.crystalMelting.hint',
-    icon: IconCrystalMelting,
     tags: ['热学', '初中', '熔化', '晶体', '比热容'],
     createScene: (title) => {
       /* 探究晶体的熔化过程：100 g 冰、50 W 恒功率。升温 84 s 到 0 ℃，熔化
@@ -1090,7 +1003,6 @@ const thermalTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.heatCapacityComparison',
     hint: 'lab.template.heatCapacityComparison.hint',
-    icon: IconHeatCapacity,
     tags: ['热学', '初中', '比热容', '吸热'],
     createScene: (title) => {
       /* 比较不同物质的吸热能力：等质量的水和煤油、相同的 50 W 加热器、加热
@@ -1116,7 +1028,6 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.velocitySelector',
     hint: 'lab.template.velocitySelector.hint',
-    icon: IconVelocitySelector,
     tags: ['复合场'],
     createScene: (title) => {
       /* Defaults are chosen so v₀ = E/B exactly (E = 2.0e4 V/m, B = 0.20 T,
@@ -1145,7 +1056,6 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.massSpectrometer',
     hint: 'lab.template.massSpectrometer.hint',
-    icon: IconMassSpectrometer,
     tags: ['复合场'],
     createScene: (title) => {
       /* Field magnitudes are chosen so the apparatus is legible as well as
@@ -1176,7 +1086,6 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.compositeEB',
     hint: 'lab.template.compositeEB.hint',
-    icon: IconCompositeField,
     tags: ['复合场', 'E+B'],
     createScene: (title) => {
       /* B out of the page so qE (up) and qv×B (down) oppose at q > 0, v ∥ +x —
@@ -1201,7 +1110,6 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.compositeEBG',
     hint: 'lab.template.compositeEBG.hint',
-    icon: IconCompositeField,
     tags: ['复合场', 'E+B+g'],
     createScene: (title) => {
       const scene = createCompositeFieldScene({
@@ -1228,7 +1136,6 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.multiRegion',
     hint: 'lab.template.multiRegion.hint',
-    icon: IconCompositeField,
     tags: ['复合场', '多场区'],
     createScene: (title) => {
       const scene = createMultiRegionFieldScene({
@@ -1251,7 +1158,6 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.cyclotron',
     hint: 'lab.template.cyclotron.hint',
-    icon: IconMagneticCircle,
     tags: ['复合场'],
     /* The composite engine models static uniform regions, not a time-dependent
        alternating field. A cyclotron here would compute the wrong trajectory, so
@@ -1272,7 +1178,6 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.inductionBarMotion',
     hint: 'lab.template.inductionBarMotion.hint',
-    icon: IconInductionBar,
     tags: ['电磁感应', '高中'],
     createScene: (title) => {
       const scene = createBarMotionScene({
@@ -1288,7 +1193,6 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.inductionDoubleBarMomentum',
     hint: 'lab.template.inductionDoubleBarMomentum.hint',
-    icon: IconInductionBar,
     tags: ['电磁感应', '高中', '双棒', '动量守恒'],
     createScene: (title) => {
       /* 双棒冲量型：棒 1 在前，以 2 m/s 远离静止的棒 2 —— 磁力刹前棒、拽后棒，
@@ -1315,7 +1219,6 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.inductionDoubleBarForce',
     hint: 'lab.template.inductionDoubleBarForce.hint',
-    icon: IconInductionBar,
     tags: ['电磁感应', '高中', '双棒', '恒定外力'],
     createScene: (title) => {
       /* 双棒恒力型：0.1 N 恒定外力拉前棒 1。终态相对速度
@@ -1341,7 +1244,6 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.inductionFluxChange',
     hint: 'lab.template.inductionFluxChange.hint',
-    icon: IconInductionCoil,
     tags: ['电磁感应', '高中'],
     createScene: (title) => {
       const scene = createFluxChangeScene({
@@ -1362,7 +1264,6 @@ const waveTemplates: readonly ExperimentTemplate[] = [
     stage: 'junior',
     label: 'lab.template.waveTravelling',
     hint: 'lab.template.waveTravelling.hint',
-    icon: IconWaveRope,
     tags: ['机械波', '初中', '波速', 'v = λf'],
     createScene: (title) => {
       /* 绳上的简谐横波：A = 5 cm、λ = 0.4 m、f = 5 Hz、绳长 1.2 m —— v = λf = 2 m/s、
@@ -1377,7 +1278,6 @@ const waveTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.waveInterference',
     hint: 'lab.template.waveInterference.hint',
-    icon: IconWaveInterference,
     tags: ['机械波', '高中', '干涉', '路程差'],
     createScene: (title) => {
       /* 双源干涉：两个 3 cm 的相干波源相距 0.8 m，λ = 0.2 m、f = 10 Hz；观察点到两源
@@ -1393,7 +1293,6 @@ const waveTemplates: readonly ExperimentTemplate[] = [
     stage: 'senior',
     label: 'lab.template.waveStanding',
     hint: 'lab.template.waveStanding.hint',
-    icon: IconStandingWave,
     tags: ['机械波', '高中', '驻波', '谐波'],
     createScene: (title) => {
       /* 两端固定的弦驻波：L = 1.0 m、v = 40 m/s、二次谐波 —— λ = 2L/n = 1.0 m、

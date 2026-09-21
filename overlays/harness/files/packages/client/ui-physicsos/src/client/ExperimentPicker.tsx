@@ -9,12 +9,20 @@
  *   1. Header — the mascot, title and available-experiment count.
  *   2. Focus row — continue the active/recent scene or open a recommendation.
  *   3. Browse — one filter bar (subject chips · search · 学段), then the grid
- *      grouped by subject so 38 templates read as eleven short shelves rather
- *      than one wall. A subject chip or a search collapses it to a flat list.
+ *      grouped by subject, so the catalogue reads as a handful of short shelves
+ *      rather than one wall. A subject chip or a search collapses it to a flat
+ *      list.
+ *
+ * The number of templates is deliberately NOT written here: this comment said
+ * "38 templates" long after the catalogue had grown past fifty, and a count in
+ * prose is a fact that goes stale without anything failing.
+ * {@link SELECTABLE_TEMPLATE_COUNT} is the runtime source, and
+ * `experiment-summaries.client.spec.ts` is the parity gate.
  *
  * Every card carries scene artwork ({@link ExperimentArt}) on a consistent
- * plate; section fades respect prefers-reduced-motion. Picking one builds a real PhysicsScene via the
- * {@link ExperimentTemplateRegistry} and hands it to the Lab.
+ * plate; section fades respect prefers-reduced-motion. Picking one builds a real
+ * PhysicsScene via the {@link ExperimentTemplateRegistry} and hands it to the
+ * Lab.
  */
 
 import { useMemo, useState, type CSSProperties } from 'react'
