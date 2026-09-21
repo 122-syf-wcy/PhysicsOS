@@ -644,6 +644,8 @@ importers:
         specifier: file:../shared
         version: link:../shared
 
+  packages/question-paper: {}
+
   packages/shared: {}
 
   packages/ui:

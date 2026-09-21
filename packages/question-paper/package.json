@@ -1,0 +1,17 @@
+{
+  "name": "@physicsos/question-paper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Exam-paper domain model: real-paper intake, verified blueprints, spec tables, draft checks, version hashing, export rendering",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./difficulty": "./src/difficulty.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  }
+}
