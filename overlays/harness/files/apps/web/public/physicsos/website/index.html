@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhysicsOS — 让看不见的物理过程被看见</title>
+<meta name="description" content="PhysicsOS 是初高中物理可视化推演与 AI Agent 平台。物理引擎决定世界如何运行，观察层把力、场、轨迹变成可见的事实，Agent 带你在这个世界里做实验。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%232563eb' stroke-width='2.4'/%3E%3Cellipse cx='16' cy='16' rx='13' ry='5.4' fill='none' stroke='%232563eb' stroke-width='2.4' transform='rotate(-28 16 16)'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23d99a3a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+
+<header class="nav" id="nav" data-solid="false">
+  <a class="nav-mark" href="#top" aria-label="PhysicsOS 首页">
+    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <circle cx="16" cy="16" r="12.6" stroke="currentColor" stroke-width="1.9"/>
+      <ellipse cx="16" cy="16" rx="12.6" ry="5.2" stroke="currentColor" stroke-width="1.9" transform="rotate(-28 16 16)"/>
+      <circle cx="16" cy="16" r="3.2" fill="#d99a3a"/>
+    </svg>
+    PhysicsOS
+  </a>
+  <nav class="nav-links" aria-label="页面导航">
+    <a href="#domains">物理世界</a>
+    <a href="#engine">推演引擎</a>
+    <a href="#questions">试题空间</a>
+    <a href="#trust">可信性</a>
+  </nav>
+  <a class="nav-gh" href="https://github.com/122-syf-wcy" target="_blank" rel="noopener noreferrer"
+     aria-label="GitHub 个人主页：122-syf-wcy" title="github.com/122-syf-wcy">
+    <img src="./avatar-160.jpg" width="30" height="30" alt="">
+    <svg class="nav-gh-mark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+    </svg>
+  </a>
+  <a class="nav-launch" href="#cta">进入产品</a>
+</header>
+
+<main id="top">
+
+  <!-- ============================================================ hero -->
+  <section class="hero">
+    <div class="hero-field" aria-hidden="true">
+      <canvas id="hero-field"></canvas>
+    </div>
+    <div class="hero-grid">
+      <div>
+        <p class="hero-badge hero-enter" style="--enter-y:14px;animation-delay:.05s">初高中物理 · 可视化推演 + AI Agent 平台</p>
+        <h1 class="hero-enter" style="--enter-y:22px;animation-delay:.16s">让看不见的物理过程<br><em>被看见</em></h1>
+        <p class="hero-lede hero-enter" style="--enter-y:18px;animation-delay:.3s">
+          很多物理概念不是「不会公式」，而是根本没有看见过程。PhysicsOS 把力、场、
+          速度、能量和轨迹放进一个真正会运行的世界：可以暂停、可以改参数、
+          可以回放，也可以追问为什么。
+        </p>
+        <div class="hero-actions hero-enter" style="--enter-y:16px;animation-delay:.44s">
+          <a class="btn btn-primary" href="#cta">进入实验室</a>
+          <a class="btn btn-ghost" href="#domains">先看看能做什么</a>
+        </div>
+        <div class="hero-facts hero-enter" style="--enter-y:16px;animation-delay:.58s">
+          <span><b>43</b>个可运行实验模板</span>
+          <span><b>11</b>个物理领域</span>
+          <span><b>80</b>道内置题，可一键进场景</span>
+          <span><b>0</b>个伪造的物理量</span>
+        </div>
+      </div>
+      <figure class="hero-shot">
+        <img src="./shots/03-lab-magnetic.jpg" width="1600" height="900"
+             alt="PhysicsOS 磁场实验室：左侧场景树，中间场线与圆周轨迹画布，右侧属性与可观察量面板">
+      </figure>
+    </div>
+  </section>
+
+  <!-- ========================================================= domains -->
+  <section class="section" id="domains">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">Physics World</p>
+        <h2>一个工作台，十一个物理领域</h2>
+        <p class="section-lede">
+          力学、电路、电场、磁场、复合场、电磁感应、机械波、光学、声学、热学、流体——
+          每个领域共用同一套画布、时间轴、属性面板与验证器。切换的是世界，不变的是操作方式。
+        </p>
+      </div>
+
+      <div class="domains" role="tablist" aria-label="物理领域">
+        <button class="domain" role="tab" aria-selected="true" data-tab="mechanics">
+          <span class="domain-name"><span class="domain-swatch"></span>力学</span>
+          <span class="domain-note">匀变速、抛体、牛顿第二定律、斜面、杠杆、碰撞</span>
+        </button>
+        <button class="domain" role="tab" aria-selected="false" data-tab="circuit">
+          <span class="domain-name"><span class="domain-swatch"></span>电路</span>
+          <span class="domain-note">串联、并联、混联、变阻器、伏安法、电源电动势</span>
+        </button>
+        <button class="domain" role="tab" aria-selected="false" data-tab="field">
+          <span class="domain-name"><span class="domain-swatch"></span>电磁场</span>
+          <span class="domain-note">点电荷、匀强电场、平行板、复合场、质谱仪、回旋加速器</span>
+        </button>
+        <button class="domain" role="tab" aria-selected="false" data-tab="wave">
+          <span class="domain-name"><span class="domain-swatch"></span>波与感应</span>
+          <span class="domain-note">横波、干涉、驻波、电磁感应、楞次定律、电磁阻尼</span>
+        </button>
+      </div>
+
+      <div class="stage reveal">
+        <img id="stage-image" src="./shots/05-lab-incline.jpg" width="1600" height="900"
+             alt="力学实验室：斜面场景与受力分解">
+        <figcaption class="stage-caption">
+          <b id="stage-title">斜面 · 受力分解</b>
+          <span id="stage-note">重力沿斜面与垂直斜面的分量随倾角实时重算，合力方向由引擎解出。</span>
+          <code id="stage-tag">mechanics / incline</code>
+        </figcaption>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== engine -->
+  <section class="section section-fog" id="engine">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">Engine · Observation · Agent</p>
+        <h2>LLM 不决定物理结果，引擎决定</h2>
+        <p class="section-lede">
+          这是 PhysicsOS 的第一条架构原则。语言模型负责理解、规划与解释；
+          场景、引擎与验证器负责这个世界真实如何运行。画布上出现的每一个矢量、
+          每一条轨迹、每一个读数，都能追溯到引擎断言过的事实。
+        </p>
+      </div>
+
+      <div class="cards">
+        <article class="card reveal">
+          <span class="card-glyph" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="7.2" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M10 3.4V10l4.6 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <h3>确定性引擎</h3>
+          <p>每个领域由独立物理引擎求解：电路解 Kirchhoff 方程组，磁场解圆周运动，
+             碰撞按动量守恒推进。同一组参数，永远得到同一个世界。</p>
+        </article>
+        <article class="card reveal">
+          <span class="card-glyph" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+              <path d="M3 16.4h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M4.4 12.8 8 8.4l3 2.6 4.4-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="8" cy="8.4" r="1.5" fill="currentColor"/>
+            </svg>
+          </span>
+          <h3>观察层</h3>
+          <p>不可见的物理量变成可见信息：力矢量、场线、等势线、轨迹、关键点与标注。
+             显示什么、不显示什么由引擎数据决定，而不是由绘图代码想象。</p>
+        </article>
+        <article class="card reveal">
+          <span class="card-glyph" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+              <path d="M10 3.2 16.6 7v6L10 16.8 3.4 13V7L10 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="m7 10 2.1 2.1L13.4 7.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <h3>验证器</h3>
+          <p>守恒律、边界条件与题面约束被独立校验：KCL 逐段核账、功率守恒、
+             连接关系唯一性。验证未通过的世界不会被当成事实展示。</p>
+        </article>
+        <article class="card reveal">
+          <span class="card-glyph" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+              <path d="M10 4.2v11.6M4.2 10h11.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <circle cx="10" cy="10" r="7.2" stroke="currentColor" stroke-width="1.6"/>
+            </svg>
+          </span>
+          <h3>可推演的实验</h3>
+          <p>改一个参数，就是向世界提交一次带版本号的命令：运行、暂停、
+             单步、0.25–2 倍速、拖动时间轴回放。每一次修改都有据可查。</p>
+        </article>
+        <article class="card reveal">
+          <span class="card-glyph" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+              <path d="M4 5.6h12v8.8H9.4L6 17v-2.6H4V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M7.2 9.2h5.6M7.2 11.8h3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <h3>懂当前世界的 Agent</h3>
+          <p>AI 助手读取的是这个场景的真实状态：版本、解、验证结果、
+             当前时间与你正在看的量。它的回答会标注引用了哪条事实，
+             而不给出一条无法追溯的结论。</p>
+        </article>
+        <article class="card reveal">
+          <span class="card-glyph" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
+              <path d="M4.6 15.4 10 4.6l5.4 10.8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M6.9 11.6h6.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <h3>实验分支</h3>
+          <p>从题目进入实验室，第一次修改物理事实时自动分叉：原题永不被实验改动，
+             实验带着自己的血缘记录独立生长。改坏了，随时回到原题。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================== questions -->
+  <section class="section" id="questions">
+    <div class="wrap">
+      <div class="split">
+        <div class="reveal">
+          <p class="eyebrow">Question Space</p>
+          <h2>题目不再是纸上的示意图</h2>
+          <p class="section-lede">
+            试题空间内置 80 道题目。每道题都能一键「在物理世界中打开」——
+            题干条件变成场景事实，答案在同一个世界里被推导、被验证、被看见。
+          </p>
+          <ul class="checks">
+            <li>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3.6 9.4 3.4 3.4 7.4-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>题干即场景。</b>「带电粒子以 v₀ 垂直进入匀强磁场」不是一句话，而是一个可以运行的初始条件。</span>
+            </li>
+            <li>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3.6 9.4 3.4 3.4 7.4-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>解题即实验。</b>在实验室里继续调参、测量、回放，题目与实验共享同一个世界版本。</span>
+            </li>
+            <li>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3.6 9.4 3.4 3.4 7.4-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>步骤可核验。</b>结构化推导、数据表与图像随场景同步更新，每一步都对应引擎的真实输出。</span>
+            </li>
+          </ul>
+        </div>
+        <div class="stage reveal">
+          <img src="./shots/07-question-space.jpg" width="1600" height="900" loading="lazy"
+               alt="试题空间：左侧题目列表，中间题目与可视化，右侧 AI 解析">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ facts -->
+  <section class="section section-fog" id="facts">
+    <div class="wrap">
+      <div class="split">
+        <div class="stage reveal">
+          <img src="./shots/02-experiment-library.jpg" width="1600" height="900" loading="lazy"
+               alt="实验库：按领域分组的 44 个实验模板卡片">
+        </div>
+        <div class="reveal">
+          <p class="eyebrow">Experiment Library</p>
+          <h2>从模板开始，或者从一个念头开始</h2>
+          <p class="section-lede">
+            43 个内置可运行模板覆盖初中到高中：从匀速直线运动到回旋加速器之前的一切。
+            每个模板都是一次真实场景构建，不是一段播放的动画。
+          </p>
+          <ul class="checks">
+            <li>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3.6 9.4 3.4 3.4 7.4-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>模板即场景。</b>打开即运行，不用先搭电路、画斜面。</span>
+            </li>
+            <li>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3.6 9.4 3.4 3.4 7.4-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>电路可搭。</b>用真实的电源、开关、电表、变阻器元件自由连接，导线自动跟随排布。</span>
+            </li>
+            <li>
+              <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m3.6 9.4 3.4 3.4 7.4-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>报告可出。</b>结构与数值自动汇总成实验报告，包含验证结论。</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ trust -->
+  <section class="section" id="trust">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">Why It Can Be Trusted</p>
+        <h2>为什么这些画面可以被相信</h2>
+        <p class="section-lede">
+          物理教学工具最危险的失败不是画得不好看，而是画错了却没被发现。
+          PhysicsOS 用四道约束把「好看」和「真实」绑在一起。
+        </p>
+      </div>
+      <div class="trust-grid">
+        <div class="trust reveal">
+          <b>引擎定值，界面呈现</b>
+          <span>所有读数来自引擎解出的状态，UI 不重新计算答案，也不做「看起来差不多」的近似。</span>
+        </div>
+        <div class="trust reveal">
+          <b>每帧可回溯</b>
+          <span>场景带版本号，命令经校验后提交；拖动时间轴看到的是同一解的不同时刻，不是另一段动画。</span>
+        </div>
+        <div class="trust reveal">
+          <b>验证器把关</b>
+          <span>守恒律与边界条件在每次求解后独立运行。验证失败不会被静默忽略。</span>
+        </div>
+        <div class="trust reveal">
+          <b>诚实的功能边界</b>
+          <span>图片与 PDF 识别、整卷拆题仍在建设中，界面上如实标注为未开放，不用示意功能充数。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== cta -->
+  <section class="section" id="cta">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <h2>进入一个真正可以运行的物理世界</h2>
+          <p>从一道题、一个模板，或者一次纯粹的「如果改成这样会怎样」开始。</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-primary" href="/">打开 PhysicsOS</a>
+          <a class="btn btn-ghost" href="https://github.com/122-syf-wcy/PhysicsOS" target="_blank" rel="noopener noreferrer">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+            </svg>
+            查看源码
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <span>PhysicsOS · 初高中物理可视化推演与 Agent 平台</span>
+    <div class="footer-ghs">
+      <a class="footer-gh" href="https://github.com/122-syf-wcy" target="_blank" rel="noopener noreferrer">
+        <img class="footer-gh-avatar" src="./avatar-160.jpg" width="32" height="32" alt="">
+        <span class="footer-gh-id">
+          <b>122-syf-wcy</b>
+          <span>github.com/122-syf-wcy</span>
+        </span>
+        <svg class="footer-gh-mark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+        </svg>
+      </a>
+      <a class="footer-gh footer-gh-repo" href="https://github.com/122-syf-wcy/PhysicsOS" target="_blank" rel="noopener noreferrer">
+        <svg class="footer-gh-repo-mark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.249.249 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z"/>
+        </svg>
+        <span class="footer-gh-id">
+          <b>PhysicsOS</b>
+          <span>github.com/122-syf-wcy/PhysicsOS</span>
+        </span>
+      </a>
+    </div>
+    <div class="footer-links">
+      <a href="#domains">物理世界</a>
+      <a href="#engine">推演引擎</a>
+      <a href="#questions">试题空间</a>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+import { createFlowField } from './lib/flow-field.js'
+
+/* ------------------------------------------------------------------ field */
+const canvas = document.getElementById('hero-field')
+if (canvas) {
+  /* Mount one frame in, so the field's own fade-in and the hero copy's
+     entrance start from the same moment rather than the shader popping in
+     while the page is still parsing. */
+  requestAnimationFrame(() => createFlowField(canvas))
+}
+
+/* -------------------------------------------------------------- solid nav */
+const nav = document.getElementById('nav')
+const onScroll = () => {
+  nav.dataset.solid = String(window.scrollY > window.innerHeight * 0.72)
+}
+onScroll()
+window.addEventListener('scroll', onScroll, { passive: true })
+
+/* ---------------------------------------------------------- domain stage */
+const SCENES = {
+  mechanics: {
+    image: './shots/05-lab-incline.jpg',
+    alt: '力学实验室：斜面场景与受力分解',
+    title: '斜面 · 受力分解',
+    note: '重力沿斜面与垂直斜面的分量随倾角实时重算，合力方向由引擎解出。',
+    tag: 'mechanics / incline',
+  },
+  circuit: {
+    image: './shots/04-lab-circuit.jpg',
+    alt: '电路实验室：串联电路与电流流光、灯泡辉光',
+    title: '串联电路 · 电流与分压',
+    note: '电流沿导线流动的速率与求解出的电流成正比，方向随符号翻转；每段电压由 KCL 逐段核对。',
+    tag: 'circuit / series',
+  },
+  field: {
+    image: './shots/03-lab-magnetic.jpg',
+    alt: '磁场实验室：洛伦兹力下的圆周运动轨迹',
+    title: '磁场中的带电粒子',
+    note: '洛伦兹力只改变速度方向：轨迹圆心、半径与周期由引擎解出，矢量逐帧更新。',
+    tag: 'magnetic / circular',
+  },
+  wave: {
+    image: './shots/06-lab-wave.jpg',
+    alt: '波动实验室：横波传播与介质质点运动',
+    title: '机械波 · 横波传播',
+    note: '介质质点原地振动，波峰向前传播——这条最容易讲反的关系，在这里一眼可见。',
+    tag: 'wave / travelling',
+  },
+}
+
+const image = document.getElementById('stage-image')
+const title = document.getElementById('stage-title')
+const note = document.getElementById('stage-note')
+const tag = document.getElementById('stage-tag')
+const tabs = document.querySelectorAll('.domain')
+
+tabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    const scene = SCENES[tab.dataset.tab]
+    if (!scene) return
+    tabs.forEach((other) => { other.setAttribute('aria-selected', String(other === tab)) })
+    image.src = scene.image
+    image.alt = scene.alt
+    title.textContent = scene.title
+    note.textContent = scene.note
+    tag.textContent = scene.tag
+  })
+})
+
+/* ------------------------------------------------------- entrance reveal */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+const reveals = document.querySelectorAll('.reveal')
+if (reduceMotion || typeof IntersectionObserver === 'undefined') {
+  reveals.forEach((node) => { node.dataset.shown = 'true' })
+} else {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return
+      entry.target.dataset.shown = 'true'
+      observer.unobserve(entry.target)
+    })
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.05 })
+  reveals.forEach((node) => observer.observe(node))
+}
+</script>
+</body>
+</html>

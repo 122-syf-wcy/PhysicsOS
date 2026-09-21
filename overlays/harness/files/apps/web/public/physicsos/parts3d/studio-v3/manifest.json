@@ -1,0 +1,191 @@
+{
+  "note": "电学台器材目录。solidBox 是零件实体轮廓在图片中的归一化位置，渲染层据此把实体映射到接线端跨度；anchorSource 标注锚点来源：geometry-convention 表示几何约定，visual-measurement-source-pixels / alpha-silhouette-measurement 表示从图里量得。",
+  "solidAlphaThreshold": 200,
+  "parts": [
+    {
+      "id": "battery-pack",
+      "file": "battery-pack.png",
+      "pixels": "418x138",
+      "bytes": 58091,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.5334,
+      "solidBox": {
+        "left": 0.041,
+        "top": 0.1656,
+        "width": 0.9187,
+        "height": 0.6713
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "terminals": {
+        "a": {
+          "x": 0.07084,
+          "y": 0.492351
+        },
+        "b": {
+          "x": 0.928038,
+          "y": 0.493043
+        }
+      },
+      "terminalOrder": "reversed"
+    },
+    {
+      "id": "cell-aa",
+      "file": "cell-aa.png",
+      "pixels": "405x84",
+      "bytes": 24141,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.2831,
+      "solidBox": {
+        "left": 0.0264,
+        "top": 0.2733,
+        "width": 0.9481,
+        "height": 0.4571
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "terminals": {
+        "a": {
+          "x": 0.038441,
+          "y": 0.517507
+        },
+        "b": {
+          "x": 0.959392,
+          "y": 0.511692
+        }
+      },
+      "terminalOrder": "reversed"
+    },
+    {
+      "id": "resistor-5",
+      "file": "resistor-5.png",
+      "pixels": "428x148",
+      "bytes": 69986,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6292,
+      "solidBox": {
+        "left": 0.0508,
+        "top": 0.1554,
+        "width": 0.8972,
+        "height": 0.6868
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "terminals": {
+        "a": {
+          "x": 0.079174,
+          "y": 0.48491
+        },
+        "b": {
+          "x": 0.91618,
+          "y": 0.480619
+        }
+      }
+    },
+    {
+      "id": "resistor-50",
+      "file": "resistor-50.png",
+      "pixels": "430x137",
+      "bytes": 64680,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6077,
+      "solidBox": {
+        "left": 0.0531,
+        "top": 0.1667,
+        "width": 0.893,
+        "height": 0.6668
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "terminals": {
+        "a": {
+          "x": 0.067406,
+          "y": 0.458485
+        },
+        "b": {
+          "x": 0.926594,
+          "y": 0.462337
+        }
+      }
+    },
+    {
+      "id": "rheostat-50",
+      "file": "rheostat-50.png",
+      "pixels": "411x135",
+      "bytes": 51315,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.478,
+      "solidBox": {
+        "left": 0.0342,
+        "top": 0.1696,
+        "width": 0.9343,
+        "height": 0.6605
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "terminals": {
+        "a": {
+          "x": 0.04335,
+          "y": 0.529383
+        },
+        "b": {
+          "x": 0.956073,
+          "y": 0.548949
+        }
+      },
+      "sliderRail": {
+        "start": {
+          "x": 0.055961,
+          "y": 0.362963
+        },
+        "end": {
+          "x": 0.944039,
+          "y": 0.362963
+        }
+      }
+    },
+    {
+      "id": "supply-dc",
+      "file": "supply-dc.png",
+      "pixels": "429x179",
+      "bytes": 80070,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6442,
+      "solidBox": {
+        "left": 0.0528,
+        "top": 0.1265,
+        "width": 0.8951,
+        "height": 0.7494
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "terminals": {
+        "a": {
+          "x": 0.097115,
+          "y": 0.496376
+        },
+        "b": {
+          "x": 0.905684,
+          "y": 0.478298
+        }
+      },
+      "terminalOrder": "reversed"
+    },
+    {
+      "id": "switch-button",
+      "file": "switch-button.png",
+      "pixels": "429x335",
+      "bytes": 126669,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.394,
+      "solidBox": {
+        "left": 0.0531,
+        "top": 0.0679,
+        "width": 0.8951,
+        "height": 0.8632
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+[
+  {
+    "file": "library-hero.png",
+    "prompt": "Apple learning-centre aesthetic product illustration: a tidy curated shelf of middle-school physics experiment objects arranged like a catalog — a glass prism splitting a soft rainbow beam, a small copper coil, a pendulum bob, a miniature circuit board with a glowing bulb, a horseshoe magnet, a spring scale. Soft studio lighting, one continuous pastel periwinkle-blue backdrop, gentle shadows, minimal and clean, no text, no people, generous negative space at the edges",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz",
+    "requestedSize": "1536x1024",
+    "pixels": "1536x1024",
+    "bytes": 1703874,
+    "createdAt": "2026-09-18T11:45:33.863Z",
+    "elapsedMs": 222944
+  }
+]

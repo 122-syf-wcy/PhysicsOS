@@ -1,5 +1,5 @@
 {
-  "note": "电学台器材目录。solidBox 是零件实体轮廓在图片中的归一化位置，渲染层据此把实体映射到接线端跨度；anchorSource=geometry-convention 表示锚点来自几何约定而非逐件目视测量。",
+  "note": "Circuit sprite catalog. Studio-v2 terminals, dial layout and slider rails are visually measured in normalized cropped-image coordinates; legacy entries retain geometry-convention anchors.",
   "solidAlphaThreshold": 200,
   "parts": [
     {
@@ -7,12 +7,12 @@
       "file": "ammeter.png",
       "pixels": "389x414",
       "bytes": 177290,
-      "sourcePixels": "1024x1024",
+      "sourcePixels": "389x414",
       "alphaCoverage": 0.5838,
       "solidBox": {
-        "left": 0.0592,
-        "top": 0.0342,
-        "width": 0.8822,
+        "left": 0.0591,
+        "top": 0.0338,
+        "width": 0.8817,
         "height": 0.9275
       },
       "axis": "base",
@@ -20,34 +20,51 @@
     },
     {
       "id": "battery",
-      "file": "battery.png",
-      "pixels": "349x409",
-      "bytes": 184135,
+      "file": "studio-v2/battery.png",
+      "pixels": "574x203",
+      "bytes": 106845,
       "sourcePixels": "1024x1024",
-      "alphaCoverage": 0.6177,
+      "sourceFile": "battery-v2-alpha.png",
+      "terminalOrder": "reversed",
+      "sourceCrop": [
+        30,
+        326,
+        995,
+        667
+      ],
       "solidBox": {
-        "left": 0.0653,
-        "top": 0.0322,
-        "width": 0.8702,
-        "height": 0.9389
+        "left": 0.053886,
+        "top": 0.152493,
+        "width": 0.892228,
+        "height": 0.692082
       },
       "axis": "axial",
-      "anchorSource": "geometry-convention"
+      "anchorSource": "visual-measurement-source-pixels",
+      "terminals": {
+        "a": {
+          "x": 0.121244,
+          "y": 0.501466
+        },
+        "b": {
+          "x": 0.878756,
+          "y": 0.501466
+        }
+      }
     },
     {
       "id": "lamp-off",
       "file": "lamp-off.png",
       "pixels": "262x430",
       "bytes": 124618,
-      "sourcePixels": "1024x1024",
+      "sourcePixels": "262x430",
       "alphaCoverage": 0.4942,
       "solidBox": {
-        "left": 0.0872,
-        "top": 0.0531,
-        "width": 0.8271,
+        "left": 0.0878,
+        "top": 0.0535,
+        "width": 0.8244,
         "height": 0.893
       },
-      "axis": "axial",
+      "axis": "base",
       "anchorSource": "geometry-convention"
     },
     {
@@ -55,92 +72,166 @@
       "file": "lamp-on.png",
       "pixels": "269x428",
       "bytes": 126554,
-      "sourcePixels": "1024x1024",
+      "sourcePixels": "269x428",
       "alphaCoverage": 0.4795,
       "solidBox": {
-        "left": 0.0854,
-        "top": 0.0497,
-        "width": 0.8284,
+        "left": 0.0855,
+        "top": 0.0491,
+        "width": 0.829,
         "height": 0.8972
       },
-      "axis": "axial",
+      "axis": "base",
       "anchorSource": "geometry-convention"
     },
     {
       "id": "resistor",
-      "file": "resistor.png",
-      "pixels": "423x312",
-      "bytes": 37754,
+      "file": "studio-v2/resistor.png",
+      "pixels": "573x197",
+      "bytes": 102663,
       "sourcePixels": "1024x1024",
-      "alphaCoverage": 0.0755,
+      "sourceFile": "resistor-v2-alpha.png",
+      "sourceCrop": [
+        43,
+        341,
+        983,
+        665
+      ],
       "solidBox": {
-        "left": 0.0469,
-        "top": 0.0729,
-        "width": 0.9078,
-        "height": 0.8532
+        "left": 0.054255,
+        "top": 0.157407,
+        "width": 0.892553,
+        "height": 0.685185
       },
       "axis": "axial",
-      "anchorSource": "geometry-convention"
+      "anchorSource": "visual-measurement-source-pixels",
+      "terminals": {
+        "a": {
+          "x": 0.145745,
+          "y": 0.496914
+        },
+        "b": {
+          "x": 0.854255,
+          "y": 0.496914
+        }
+      }
     },
     {
       "id": "rheostat",
-      "file": "rheostat.png",
-      "pixels": "405x384",
-      "bytes": 179401,
+      "file": "studio-v2/rheostat.png",
+      "pixels": "574x210",
+      "bytes": 115165,
       "sourcePixels": "1024x1024",
-      "alphaCoverage": 0.4115,
+      "sourceFile": "rheostat-v2-alpha.png",
+      "sourceCrop": [
+        10,
+        314,
+        1016,
+        683
+      ],
       "solidBox": {
-        "left": 0.0205,
-        "top": 0.0598,
-        "width": 0.9481,
-        "height": 0.8928
+        "left": 0.054672,
+        "top": 0.146341,
+        "width": 0.890656,
+        "height": 0.704607
       },
       "axis": "axial",
-      "anchorSource": "geometry-convention"
+      "anchorSource": "visual-measurement-source-pixels",
+      "terminals": {
+        "a": {
+          "x": 0.094433,
+          "y": 0.506775
+        },
+        "b": {
+          "x": 0.904573,
+          "y": 0.506775
+        }
+      },
+      "sliderRail": {
+        "start": {
+          "x": 0.203777,
+          "y": 0.205962
+        },
+        "end": {
+          "x": 0.795229,
+          "y": 0.205962
+        }
+      }
     },
     {
       "id": "switch-closed",
-      "file": "switch-closed.png",
-      "pixels": "393x318",
-      "bytes": 122731,
+      "file": "studio-v2/switch-closed.png",
+      "pixels": "573x304",
+      "bytes": 141414,
       "sourcePixels": "1024x1024",
-      "alphaCoverage": 0.3821,
+      "sourceFile": "switch-closed-v2-alpha.png",
+      "sourceCrop": [
+        54,
+        214,
+        971,
+        701
+      ],
       "solidBox": {
-        "left": 0.0117,
-        "top": 0.0725,
-        "width": 0.9771,
-        "height": 0.8537
+        "left": 0.054526,
+        "top": 0.277207,
+        "width": 0.890949,
+        "height": 0.61807
       },
-      "axis": "base",
-      "anchorSource": "geometry-convention"
+      "axis": "axial",
+      "anchorSource": "visual-measurement-source-pixels",
+      "terminals": {
+        "a": {
+          "x": 0.114504,
+          "y": 0.587269
+        },
+        "b": {
+          "x": 0.883315,
+          "y": 0.587269
+        }
+      }
     },
     {
       "id": "switch-open",
-      "file": "switch-open.png",
-      "pixels": "409x384",
-      "bytes": 128761,
+      "file": "studio-v2/switch-open.png",
+      "pixels": "573x304",
+      "bytes": 158750,
       "sourcePixels": "1024x1024",
-      "alphaCoverage": 0.3094,
+      "sourceFile": "switch-open-v2-consistent-alpha.png",
+      "sourceCrop": [
+        54,
+        214,
+        971,
+        701
+      ],
       "solidBox": {
-        "left": 0.0361,
-        "top": 0.0593,
-        "width": 0.9389,
-        "height": 0.8824
+        "left": 0.054526,
+        "top": 0.102669,
+        "width": 0.890949,
+        "height": 0.794661
       },
-      "axis": "base",
-      "anchorSource": "geometry-convention"
+      "axis": "axial",
+      "anchorSource": "visual-measurement-source-pixels",
+      "terminals": {
+        "a": {
+          "x": 0.114504,
+          "y": 0.587269
+        },
+        "b": {
+          "x": 0.883315,
+          "y": 0.587269
+        }
+      }
     },
     {
       "id": "terminal",
       "file": "terminal.png",
       "pixels": "224x430",
       "bytes": 116782,
-      "sourcePixels": "1024x1024",
+      "sourcePixels": "224x430",
       "alphaCoverage": 0.4734,
       "solidBox": {
-        "left": 0.1019,
-        "top": 0.0531,
-        "width": 0.795,
+        "left": 0.1027,
+        "top": 0.0535,
+        "width": 0.7946,
         "height": 0.893
       },
       "axis": "base",
@@ -149,18 +240,384 @@
     {
       "id": "voltmeter",
       "file": "voltmeter.png",
-      "pixels": "402x402",
-      "bytes": 185010,
+      "pixels": "407x430",
+      "bytes": 183067,
       "sourcePixels": "1024x1024",
-      "alphaCoverage": 0.6131,
+      "alphaCoverage": 0.6068,
       "solidBox": {
-        "left": 0.0381,
-        "top": 0.0195,
-        "width": 0.9249,
-        "height": 0.9552
+        "left": 0.0565,
+        "top": 0.0535,
+        "width": 0.8858,
+        "height": 0.893
       },
       "axis": "base",
       "anchorSource": "geometry-convention"
+    },
+    {
+      "id": "meter",
+      "file": "studio-v2/meter.png",
+      "pixels": "574x282",
+      "bytes": 144207,
+      "sourcePixels": "1024x1024",
+      "sourceFile": "meter-v2-clean-alpha.png",
+      "sourceCrop": [
+        68,
+        274,
+        957,
+        711
+      ],
+      "solidBox": {
+        "left": 0.055118,
+        "top": 0.112128,
+        "width": 0.889764,
+        "height": 0.775744
+      },
+      "axis": "axial",
+      "anchorSource": "visual-measurement-source-pixels",
+      "terminals": {
+        "a": {
+          "x": 0.138358,
+          "y": 0.494279
+        },
+        "b": {
+          "x": 0.867267,
+          "y": 0.494279
+        }
+      },
+      "dial": {
+        "pivot": {
+          "x": 0.499438,
+          "y": 0.757437
+        },
+        "radius": 0.256468
+      }
+    },
+    {
+      "id": "rheostat-knob",
+      "file": "studio-v2/rheostat-knob.png",
+      "pixels": "113x215",
+      "bytes": 26970,
+      "sourcePixels": "1024x1024",
+      "sourceFile": "rheostat-knob-v2-alpha.png",
+      "sourceCrop": [
+        405,
+        294,
+        619,
+        701
+      ],
+      "solidBox": {
+        "left": 0.107477,
+        "top": 0.054054,
+        "width": 0.78972,
+        "height": 0.889435
+      },
+      "axis": "axial",
+      "anchorSource": "visual-measurement-source-pixels"
+    },
+    {
+      "id": "battery-pack",
+      "file": "studio-v3/battery-pack.png",
+      "pixels": "418x138",
+      "bytes": 58091,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.5334,
+      "solidBox": {
+        "left": 0.041,
+        "top": 0.1656,
+        "width": 0.9187,
+        "height": 0.6713
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "batch": "studio-v3",
+      "terminals": {
+        "a": {
+          "x": 0.07084,
+          "y": 0.492351
+        },
+        "b": {
+          "x": 0.928038,
+          "y": 0.493043
+        }
+      },
+      "terminalOrder": "reversed"
+    },
+    {
+      "id": "cell-aa",
+      "file": "studio-v3/cell-aa.png",
+      "pixels": "405x84",
+      "bytes": 24141,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.2831,
+      "solidBox": {
+        "left": 0.0264,
+        "top": 0.2733,
+        "width": 0.9481,
+        "height": 0.4571
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "batch": "studio-v3",
+      "terminals": {
+        "a": {
+          "x": 0.038441,
+          "y": 0.517507
+        },
+        "b": {
+          "x": 0.959392,
+          "y": 0.511692
+        }
+      },
+      "terminalOrder": "reversed"
+    },
+    {
+      "id": "resistor-5",
+      "file": "studio-v3/resistor-5.png",
+      "pixels": "428x148",
+      "bytes": 69986,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6292,
+      "solidBox": {
+        "left": 0.0508,
+        "top": 0.1554,
+        "width": 0.8972,
+        "height": 0.6868
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "batch": "studio-v3",
+      "terminals": {
+        "a": {
+          "x": 0.079174,
+          "y": 0.48491
+        },
+        "b": {
+          "x": 0.91618,
+          "y": 0.480619
+        }
+      }
+    },
+    {
+      "id": "resistor-50",
+      "file": "studio-v3/resistor-50.png",
+      "pixels": "430x137",
+      "bytes": 64680,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6077,
+      "solidBox": {
+        "left": 0.0531,
+        "top": 0.1667,
+        "width": 0.893,
+        "height": 0.6668
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "batch": "studio-v3",
+      "terminals": {
+        "a": {
+          "x": 0.067406,
+          "y": 0.458485
+        },
+        "b": {
+          "x": 0.926594,
+          "y": 0.462337
+        }
+      }
+    },
+    {
+      "id": "rheostat-50",
+      "file": "studio-v3/rheostat-50.png",
+      "pixels": "411x135",
+      "bytes": 51315,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.478,
+      "solidBox": {
+        "left": 0.0342,
+        "top": 0.1696,
+        "width": 0.9343,
+        "height": 0.6605
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "batch": "studio-v3",
+      "terminals": {
+        "a": {
+          "x": 0.04335,
+          "y": 0.529383
+        },
+        "b": {
+          "x": 0.956073,
+          "y": 0.548949
+        }
+      },
+      "sliderRail": {
+        "start": {
+          "x": 0.055961,
+          "y": 0.362963
+        },
+        "end": {
+          "x": 0.944039,
+          "y": 0.362963
+        }
+      }
+    },
+    {
+      "id": "supply-dc",
+      "file": "studio-v3/supply-dc.png",
+      "pixels": "429x179",
+      "bytes": 80070,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6442,
+      "solidBox": {
+        "left": 0.0528,
+        "top": 0.1265,
+        "width": 0.8951,
+        "height": 0.7494
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "batch": "studio-v3",
+      "terminals": {
+        "a": {
+          "x": 0.097115,
+          "y": 0.496376
+        },
+        "b": {
+          "x": 0.905684,
+          "y": 0.478298
+        }
+      },
+      "terminalOrder": "reversed"
+    },
+    {
+      "id": "switch-button",
+      "file": "studio-v3/switch-button.png",
+      "pixels": "429x335",
+      "bytes": 126669,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.394,
+      "solidBox": {
+        "left": 0.0531,
+        "top": 0.0679,
+        "width": 0.8951,
+        "height": 0.8632
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "batch": "studio-v3"
+    },
+    {
+      "id": "ball",
+      "file": "mechanics/ball.png",
+      "pixels": "421x429",
+      "bytes": 201978,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6346,
+      "solidBox": {
+        "left": 0.0532,
+        "top": 0.0523,
+        "width": 0.8932,
+        "height": 0.8951
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.497625,
+        "y": 0.5
+      },
+      "anchorKind": "point",
+      "radius": 0.445368
+    },
+    {
+      "id": "block",
+      "file": "mechanics/block.png",
+      "pixels": "430x181",
+      "bytes": 95710,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.677,
+      "solidBox": {
+        "left": 0.0532,
+        "top": 0.1263,
+        "width": 0.893,
+        "height": 0.7476
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.498837,
+        "y": 0.867403
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "cart",
+      "file": "mechanics/cart.png",
+      "pixels": "426x173",
+      "bytes": 50403,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.3782,
+      "solidBox": {
+        "left": 0.0498,
+        "top": 0.1323,
+        "width": 0.9014,
+        "height": 0.7359
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.5,
+        "y": 0.861272
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "plank",
+      "file": "mechanics/plank.png",
+      "pixels": "415x111",
+      "bytes": 25613,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.2499,
+      "solidBox": {
+        "left": 0.0371,
+        "top": 0.2044,
+        "width": 0.9253,
+        "height": 0.5912
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorLine": {
+        "a": {
+          "x": 0.038554,
+          "y": 0.405405
+        },
+        "b": {
+          "x": 0.959036,
+          "y": 0.405405
+        }
+      },
+      "anchorKind": "line",
+      "note": "上表面线贴到场景斜边；矩形正交侧视可精确旋转到任意倾角"
+    },
+    {
+      "id": "weight-hook",
+      "file": "mechanics/weight-hook.png",
+      "pixels": "171x430",
+      "bytes": 71260,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.4882,
+      "solidBox": {
+        "left": 0.1335,
+        "top": 0.0531,
+        "width": 0.731,
+        "height": 0.893
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.494152,
+        "y": 0.944186
+      },
+      "anchorKind": "point"
     }
   ]
 }

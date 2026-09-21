@@ -1,0 +1,12 @@
+{
+  "file": "library-hero-02.png",
+  "prompt": "Small catalogue illustration for a student physics resource library in the PhysicsOS learning app: an orderly shelf of a few neatly arranged physics items — an open textbook with a faint chapter diagram, a small inclined-plane block, a pendulum, a thin trajectory arc, a couple of knowledge-node dots connected by a fine line — drawn in a quiet flat vector style, pale ice-blue and off-white palette, dark slate-blue thin linework, generous spacing, calm scientific-instrument feel, white or very light background, no text, no letters, no purple, no 3D render, no cartoon, no sparkles --trp",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://imageapi.top",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1545346,
+  "createdAt": "2026-09-18T11:22:25.838Z",
+  "elapsedMs": 164385,
+  "revisedPrompt": "Small catalogue illustration for a student physics resource library in the PhysicsOS learning app: an orderly shelf of a few neatly arranged physics items — an open textbook with a faint chapter diagram, a small inclined-plane block, a pendulum, a thin trajectory arc, a couple of knowledge-node dots connected by a fine line — drawn in a quiet flat vector style, pale ice-blue and off-white palette, dark slate-blue thin linework, generous spacing, calm scientific-instrument feel, white or very light background, no text, no letters, no purple, no 3D render, no cartoon, no sparkles --trp"
+}

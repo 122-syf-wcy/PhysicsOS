@@ -1,0 +1,11 @@
+{
+  "id": "resistor-50",
+  "file": "resistor-50.png",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://new-sub2api.haqiuhaqiu.xyz",
+  "bytes": 462060,
+  "createdAt": "2026-09-14T12:36:04.134Z",
+  "elapsedMs": 43625,
+  "attempts": 1,
+  "prompt": "a laboratory fixed resistor on a small dark wooden base, a noticeably longer and thicker horizontal ceramic tube wound with resistance wire and coated in a pale beige vitreous enamel, three separate narrow painted bands (orange, orange, black) around the middle of the coating, one brass binding post at each end of the base, the two posts being the extreme left and right of the apparatus. photorealistic 3D render of a single school-laboratory physics apparatus item, strictly top-down 90 degree orthographic view seen from straight above, no perspective foreshortening, no isometric or oblique tilt, no diagonal rotation, the apparatus lying level across the frame parallel to the image edge, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite, only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop the two brass binding posts are the leftmost and rightmost points of the apparatus, their centres on one identical horizontal centre line, both fully visible and unoccluded, All items are rendered at a consistent scale relative to a 1 cm binding post."
+}

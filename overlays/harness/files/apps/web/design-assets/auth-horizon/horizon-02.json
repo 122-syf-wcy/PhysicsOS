@@ -1,0 +1,12 @@
+{
+  "file": "horizon-02.png",
+  "prompt": "Minimalist login page background for a physics learning app called PhysicsOS: pale ice-blue and off-white surface, extremely subtle faint grid lines, a few thin elegant physics trajectories (a gentle projectile parabola arc, a small circular orbit with a tiny particle dot, a couple of soft field lines), very low contrast, airy negative space concentrated at the edges, center stays calm and clean, flat vector style, no text, no logos, no purple, no 3D render, no stars or sparkles --trp",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://imageapi.top",
+  "requestedSize": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1870465,
+  "createdAt": "2026-09-18T09:49:40.052Z",
+  "elapsedMs": 55635,
+  "revisedPrompt": "Minimalist login page background for a physics learning app called PhysicsOS: pale ice-blue and off-white surface, extremely subtle faint grid lines, a few thin elegant physics trajectories (a gentle projectile parabola arc, a small circular orbit with a tiny particle dot, a couple of soft field lines), very low contrast, airy negative space concentrated at the edges, center stays calm and clean, flat vector style, no text, no logos, no purple, no 3D render, no stars or sparkles --trp"
+}

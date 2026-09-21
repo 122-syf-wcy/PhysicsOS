@@ -1,0 +1,11 @@
+{
+  "id": "cell-aa",
+  "file": "cell-aa.png",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://new-sub2api.haqiuhaqiu.xyz",
+  "bytes": 188378,
+  "createdAt": "2026-09-14T12:42:24.466Z",
+  "elapsedMs": 45801,
+  "attempts": 1,
+  "prompt": "a single AA dry cell battery lying flat on its side and extended along the horizontal, a slim cylindrical zinc-carbon cell wrapped in a plain muted grey-blue paper jacket, one short insulated lead ending in a small brass crocodile clip at each end so that the two clips are the extreme left and right of the apparatus. photorealistic 3D render of a single school-laboratory physics apparatus item, strictly top-down 90 degree orthographic view seen from straight above, no perspective foreshortening, no isometric or oblique tilt, no diagonal rotation, the apparatus lying level across the frame parallel to the image edge, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite, only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop the two brass binding posts are the leftmost and rightmost points of the apparatus, their centres on one identical horizontal centre line, both fully visible and unoccluded, one binding post at the right hand end is bright red and the one at the left hand end is black, so the positive terminal is unmistakably on the right, All items are rendered at a consistent scale relative to a 1 cm binding post."
+}

@@ -1,11 +1,11 @@
 {
   "id": "resistor",
   "file": "resistor.png",
-  "model": "gpt-image-2",
-  "endpoint": "https://zz.211b.site",
-  "bytes": 757746,
-  "createdAt": "2026-09-12T13:46:05.590Z",
-  "elapsedMs": 64044,
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://new-sub2api.haqiuhaqiu.xyz",
+  "bytes": 820531,
+  "createdAt": "2026-09-13T07:17:14.768Z",
+  "elapsedMs": 40033,
   "attempts": 1,
-  "prompt": "a cylindrical carbon-film resistor with axial wire leads, a light ceramic body painted with three coloured bands and a gold tolerance band, both straight metal leads extending left and right along the same horizontal axis. photorealistic 3D render of a single school-laboratory physics apparatus item, three-quarter view from above at roughly 45 degrees elevation, orthographic lens, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite, only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop All items are rendered at a consistent scale relative to a 1 cm binding post."
+  "prompt": "a laboratory fixed resistor mounted as a bench apparatus: a horizontal ceramic tube wound with dark resistance wire on a small dark wooden base, with one brass binding post at each end of the base, matching the knife switch and rheostat family. photorealistic 3D render of a single school-laboratory physics apparatus item, three-quarter view from above at roughly 45 degrees elevation, orthographic lens, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite, only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop All items are rendered at a consistent scale relative to a 1 cm binding post."
 }

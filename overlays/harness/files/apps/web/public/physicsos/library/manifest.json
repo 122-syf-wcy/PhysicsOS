@@ -1,0 +1,13 @@
+[
+  {
+    "file": "library-hero.png",
+    "prompt": "Soft pastel isometric illustration for a student study-library header: a neat stack of Chinese high-school physics textbooks, an open exam paper with a big red 'A+' check mark, a spiral notebook, a pencil, a small video-play button card and a pair of glasses, arranged on a light blue desk surface, clean minimal flat vector style, generous negative space, no text, no laboratory glassware",
+    "model": "gpt-image-2.5-sunburst",
+    "endpoint": "https://image.haqiuhaqiu.xyz",
+    "requestedSize": "1536x1024",
+    "pixels": "1536x1024",
+    "bytes": 1618657,
+    "createdAt": "2026-09-18T12:27:54.204Z",
+    "elapsedMs": 212723
+  }
+]

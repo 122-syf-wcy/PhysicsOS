@@ -1,0 +1,226 @@
+{
+  "note": "电学台器材目录。solidBox 是零件实体轮廓在图片中的归一化位置，渲染层据此把实体映射到接线端跨度；anchorSource 标注锚点来源：geometry-convention 表示几何约定，visual-measurement-source-pixels / alpha-silhouette-measurement 表示从图里量得。",
+  "solidAlphaThreshold": 200,
+  "parts": [
+    {
+      "id": "ball",
+      "file": "ball.png",
+      "pixels": "421x429",
+      "bytes": 201978,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.6346,
+      "solidBox": {
+        "left": 0.0532,
+        "top": 0.0523,
+        "width": 0.8932,
+        "height": 0.8951
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.497625,
+        "y": 0.5
+      },
+      "anchorKind": "point",
+      "radius": 0.445368
+    },
+    {
+      "id": "block",
+      "file": "block.png",
+      "pixels": "430x181",
+      "bytes": 95710,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.677,
+      "solidBox": {
+        "left": 0.0532,
+        "top": 0.1263,
+        "width": 0.893,
+        "height": 0.7476
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.498837,
+        "y": 0.867403
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "cart",
+      "file": "cart.png",
+      "pixels": "426x173",
+      "bytes": 50403,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.3782,
+      "solidBox": {
+        "left": 0.0498,
+        "top": 0.1323,
+        "width": 0.9014,
+        "height": 0.7359
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.5,
+        "y": 0.861272
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "plank",
+      "file": "plank.png",
+      "pixels": "415x111",
+      "bytes": 25613,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.2499,
+      "solidBox": {
+        "left": 0.0371,
+        "top": 0.2044,
+        "width": 0.9253,
+        "height": 0.5912
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorLine": {
+        "a": {
+          "x": 0.038554,
+          "y": 0.405405
+        },
+        "b": {
+          "x": 0.959036,
+          "y": 0.405405
+        }
+      },
+      "anchorKind": "line",
+      "note": "上表面线贴到场景斜边；矩形正交侧视可精确旋转到任意倾角"
+    },
+    {
+      "id": "weight-hook",
+      "file": "weight-hook.png",
+      "pixels": "171x430",
+      "bytes": 71260,
+      "sourcePixels": "1024x1024",
+      "alphaCoverage": 0.4882,
+      "solidBox": {
+        "left": 0.1335,
+        "top": 0.0531,
+        "width": 0.731,
+        "height": 0.893
+      },
+      "axis": "axial",
+      "anchorSource": "geometry-convention",
+      "anchorPoint": {
+        "x": 0.494152,
+        "y": 0.944186
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "spring-scale",
+      "file": "spring-scale.png",
+      "pixels": "413x100",
+      "bytes": 32323,
+      "sourcePixels": "1254x1254",
+      "alphaCoverage": 0.2656,
+      "solidBox": {
+        "left": 0.0335,
+        "top": 0.2272,
+        "width": 0.9298,
+        "height": 0.55
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "anchorKind": "point",
+      "anchorPoint": {
+        "x": 0.9613,
+        "y": 0.51
+      },
+      "note": "钩尖锚点：贴到物块受力面；拉力沿 -x 方向作用时水平翻转精灵"
+    },
+    {
+      "id": "support-clamp",
+      "file": "support-clamp.png",
+      "pixels": "164x407",
+      "bytes": 44707,
+      "sourcePixels": "1254x1254",
+      "alphaCoverage": 0.2656,
+      "solidBox": {
+        "left": 0.1391,
+        "top": 0.0,
+        "width": 0.7191,
+        "height": 0.9435
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "anchorKind": "point",
+      "anchorPoint": {
+        "x": 0.326,
+        "y": 0.91
+      },
+      "note": "挂环内底锚点：弹簧圈/摆线顶端挂在这里"
+    },
+    {
+      "id": "protractor",
+      "file": "protractor.png",
+      "pixels": "430x178",
+      "bytes": 81473,
+      "sourcePixels": "430x178",
+      "alphaCoverage": 0.5976,
+      "solidBox": {
+        "left": 0.0535,
+        "top": 0.1292,
+        "width": 0.8907,
+        "height": 0.8652
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "anchorPoint": {
+        "x": 0.499,
+        "y": 0.129
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "track-rail",
+      "file": "track-rail.png",
+      "pixels": "406x134",
+      "bytes": 26194,
+      "sourcePixels": "406x134",
+      "alphaCoverage": 0.2115,
+      "solidBox": {
+        "left": 0.0271,
+        "top": 0.1716,
+        "width": 0.9433,
+        "height": 0.6493
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "anchorPoint": {
+        "x": 0.5,
+        "y": 0.388
+      },
+      "anchorKind": "point"
+    },
+    {
+      "id": "ruler-vertical",
+      "file": "ruler-vertical.png",
+      "pixels": "64x424",
+      "bytes": 19765,
+      "sourcePixels": "64x424",
+      "alphaCoverage": 0.2503,
+      "solidBox": {
+        "left": 0.3594,
+        "top": 0.0472,
+        "width": 0.2656,
+        "height": 0.9033
+      },
+      "axis": "axial",
+      "anchorSource": "alpha-silhouette-measurement",
+      "anchorPoint": {
+        "x": 0.49,
+        "y": 0.047
+      },
+      "anchorKind": "point"
+    }
+  ]
+}

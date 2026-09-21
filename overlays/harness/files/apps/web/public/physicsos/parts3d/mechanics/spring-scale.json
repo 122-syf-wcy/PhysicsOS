@@ -1,0 +1,11 @@
+{
+  "id": "spring-scale",
+  "file": "spring-scale.png",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://imageapi.top",
+  "bytes": 258819,
+  "createdAt": "2026-09-17T08:18:55.252Z",
+  "elapsedMs": 47955,
+  "attempts": 1,
+  "prompt": "a school laboratory spring scale (dynamometer) lying perfectly horizontal, seen from the side: a slim cylindrical metal barrel with a narrow measurement window along its body, a small steel hook extending straight out from its RIGHT end, and a round suspension ring at its LEFT end, the whole instrument level and straight. photorealistic 3D render of a single school-laboratory mechanics apparatus item, strictly orthographic side elevation, camera level with the object and looking straight at it from the side, no perspective, no three-quarter angle, no top-down view, the apparatus standing upright on a perfectly horizontal ground line that runs straight across the frame, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, varnished wood, dark bakelite and matte plastic, absolutely no cast shadow on the ground and no reflection, only a faint ambient-occlusion darkening where the object meets the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop All items are rendered at a consistent scale relative to a 1 metre laboratory rule."
+}

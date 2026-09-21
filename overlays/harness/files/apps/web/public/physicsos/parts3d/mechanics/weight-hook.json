@@ -1,0 +1,11 @@
+{
+  "id": "weight-hook",
+  "file": "weight-hook.png",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://new-sub2api.haqiuhaqiu.xyz",
+  "bytes": 324933,
+  "createdAt": "2026-09-14T13:39:11.864Z",
+  "elapsedMs": 43256,
+  "attempts": 1,
+  "prompt": "a single slotted laboratory weight with a small hook on top: a short metal cylinder with a turned groove around it and a brass hook rising from its top face, standing perfectly upright on a flat circular base that rests flush on the ground, seen exactly from the side so that its base appears as a straight horizontal line as wide as the cylinder. photorealistic 3D render of a single school-laboratory mechanics apparatus item, strictly orthographic side elevation, camera level with the object and looking straight at it from the side, no perspective, no three-quarter angle, no top-down view, the apparatus standing upright on a perfectly horizontal ground line that runs straight across the frame, object perfectly centred and fully inside the frame with generous margin, soft studio lighting with one key light from the upper left and gentle fill, subtle specular highlights, restrained muted palette of steel, brass, varnished wood, dark bakelite and matte plastic, absolutely no cast shadow on the ground and no reflection, only a faint ambient-occlusion darkening where the object meets the ground, isolated on a fully transparent background, nothing else in frame, professional product-shot clarity, physically plausible proportions, no text, no letters, no numbers, no logo, no watermark, no border, no backdrop All items are rendered at a consistent scale relative to a 1 metre laboratory rule."
+}
