@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url'
  * response as a console error, so both gates must excuse exactly this one
  * request — and nothing else, so a genuine auth fault still fails the suite.
  */
-const isExpectedGuest401 = (url, text = '') =>
+export const isExpectedGuest401 = (url, text = '') =>
   url.includes('/physicsos/auth/me') && (url.length > 0 || text.includes('401'))
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -149,6 +149,51 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
 
   stdout.write(`  \u2139 isolated server ${base} (home ${home})\n`)
   return { base, home, stop }
+}
+
+/**
+ * Clear the auth gate by registering a fresh student.
+ *
+ * Every suite that wants to reach a surface now has to get past the login gate
+ * first, and doing that by hand in each script meant re-deriving the same
+ * React-controlled-input dance and the same button copy. One helper keeps the
+ * gate's contract in one place: free-text school name, the register form's
+ * field order, and the terms checkbox that gates submission.
+ *
+ * @returns the username that was registered.
+ */
+export const registerStudent = async (
+  page,
+  { school = '乌当中学', username, password = 'accept-pw-2026', displayName = '验收学生' } = {},
+) => {
+  const stamp = Date.now().toString(36).slice(-6)
+  const user = username ?? `stu_${stamp}`
+
+  const gate = page.locator('[data-physicsos-auth-gate]')
+  await gate.waitFor({ state: 'visible', timeout: 25_000 })
+  await page.locator('[data-physicsos-auth-view="login"]').getByRole('button', { name: '立即注册' }).click()
+
+  const form = page.locator('[data-physicsos-auth-view="register"]')
+  await form.waitFor({ state: 'visible', timeout: 10_000 })
+
+  /* React-controlled inputs need the native setter plus an `input` event. */
+  const type = (locator, value) => locator.evaluate((node, text) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    setter.call(node, text)
+    node.dispatchEvent(new Event('input', { bubbles: true }))
+  }, value)
+
+  await type(form.locator('input[autocomplete="organization"]'), school)
+  await type(form.locator('input[autocomplete="username"]'), user)
+  await type(form.locator('input[autocomplete="name"]'), displayName)
+  const passwords = form.locator('input[type="password"]')
+  await type(passwords.nth(0), password)
+  await type(passwords.nth(1), password)
+  await form.locator('input[type="checkbox"]').check()
+  await form.getByRole('button', { name: '创建 PhysicsOS 账号' }).click()
+
+  await gate.waitFor({ state: 'detached', timeout: 30_000 })
+  return user
 }
 
 /**

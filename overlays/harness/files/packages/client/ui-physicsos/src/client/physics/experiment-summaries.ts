@@ -90,7 +90,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['a 与 v₀ 方向相反时要带符号运算', '图像斜率读数受坐标比例影响'],
     },
     textbook: [hs('必修第一册', '第二章 匀变速直线运动的研究', ['匀变速直线运动的速度与时间的关系', '位移与时间的关系'])],
-    aliases: ['匀加速', '匀减速', '竖直上抛', 'v-t图', 'at'],
+    aliases: ['匀加速', '匀减速', '竖直上抛', 'v-t图', 'at', '自由落体', '自由落体运动', '重力加速度'],
     guide: ['运行实验，对比 v–t 斜率与 a 的数值', '把 a 改为负值，观察物体先减速再反向加速', '在数据页验证 v = v₀ + at 在每一时刻成立'],
   },
   'projectile-horizontal': {
@@ -363,7 +363,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['电流表内阻忽略', '导线电阻忽略'],
     },
     textbook: [js('九年级全一册', '第十五章 电流和电路', ['串联和并联']), js('九年级全一册', '第十七章 欧姆定律', ['电阻的串联'])],
-    aliases: ['串联', '电流规律', '分压'],
+    aliases: ['串联', '电流规律', '分压', '串并联'],
     guide: ['读出电流表与各电阻电压', '验证 U总 = U₁ + U₂', '拨动开关：整个电路同时断电'],
   },
   'parallel-circuit': {
@@ -374,7 +374,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['支路互不影响的前提是电源无内阻'],
     },
     textbook: [js('九年级全一册', '第十五章 电流和电路', ['串联和并联']), js('九年级全一册', '第十七章 欧姆定律', ['电阻的并联'])],
-    aliases: ['并联', '分流', '支路', '干路'],
+    aliases: ['并联', '分流', '支路', '干路', '串并联'],
     guide: ['比较各支路电流与电阻的关系', '验证 I干 = I₁ + I₂', '断开一个支路开关，看另一支路'],
   },
   'mixed-circuit': {
@@ -396,7 +396,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['滑片两端都有阻值——注意接入的是哪一段', '线性电阻网络，无接触电阻'],
     },
     textbook: [js('九年级全一册', '第十六章 电压 电阻', ['变阻器'])],
-    aliases: ['滑动变阻器', '滑片', '变阻', '限流'],
+    aliases: ['滑动变阻器', '滑片', '变阻', '限流', '滑变'],
     guide: ['直接拖动画布上的滑片，看电流表怎么变', '把滑片推到 0 和 100%，读出两个极端电流', '换用键盘方向键微调滑片（±5%）'],
   },
   'va-resistance': {
@@ -443,7 +443,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['虚像不是光实际会聚——光屏承接法可证', '玻璃板有厚度会成两个微弱像'],
     },
     textbook: [js('八年级上册', '第四章 光现象', ['平面镜成像'])],
-    aliases: ['平面镜', '虚像', '等大等距', '成像'],
+    aliases: ['平面镜', '虚像', '等大等距', '成像', '光的反射', '反射定律'],
     guide: ['移动蜡烛，看像的位置和大小怎么变', '把光屏放到像的位置：能接到吗', '量一量物距与像距'],
   },
   'convex-lens': {
@@ -454,7 +454,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['虚像要透过透镜观察，光屏接不到', 'u = f 是成像与否的分界，不是"放大"'],
     },
     textbook: [js('八年级上册', '第五章 透镜及其应用', ['凸透镜成像的规律'])],
-    aliases: ['凸透镜', '成像规律', '焦距', '实像', '虚像', '照相机', '放大镜'],
+    aliases: ['凸透镜', '成像规律', '焦距', '实像', '虚像', '照相机', '放大镜', '折射', '光的折射'],
     guide: ['把 u 从大于 2f 逐步调小，记录每个区间的像', 'u = f 时发生了什么', 'u < f 时光屏接不到像——像在哪里'],
   },
   'concave-mirror': {
@@ -465,7 +465,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['球面镜是近轴近似——边缘光线有球差'],
     },
     textbook: [js('八年级上册', '第四章 光现象', ['光的反射'])],
-    aliases: ['凹面镜', '球面镜', '会聚', '太阳灶'],
+    aliases: ['凹面镜', '球面镜', '会聚', '太阳灶', '光的反射'],
     guide: ['u > 2f 时镜前成什么像', '把 f 改成负值：成像性质变成哪种镜子', '找出使像与物等大的物距'],
   },
   'convex-mirror': {
@@ -476,7 +476,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['"物体比看起来更近"——缩小虚像让距离估计失真', '虚像位置可用 f 为负的成像公式计算'],
     },
     textbook: [js('八年级上册', '第四章 光现象', ['光的反射', '球面镜'])],
-    aliases: ['凸面镜', '后视镜', '发散', '视野'],
+    aliases: ['凸面镜', '后视镜', '发散', '视野', '光的反射'],
     guide: ['拖动物距：像的性质变过吗', '与凹面镜对比同一物距下的成像', '解释为什么汽车后视镜是凸面镜'],
   },
 
@@ -490,7 +490,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['计时误差直接翻倍进距离', '温度改变声速——15 ℃ 空气取 340 m/s'],
     },
     textbook: [js('八年级上册', '第二章 声现象', ['声音的产生与传播', '声速'])],
-    aliases: ['回声', '测距', '声速', 's=vt/2'],
+    aliases: ['回声', '测距', '声速', 's=vt/2', '声音', '声学'],
     guide: ['记录发出与听到回声的时差', '用 d = vt/2 验算峭壁距离', '换一种介质，回声时间怎么变'],
   },
 
@@ -504,7 +504,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['"越深浮力越大"是错觉——全浸后 V排 不再变', '读数差法要求物块不触底'],
     },
     textbook: [js('八年级下册', '第十章 浮力', ['浮力', '阿基米德原理'])],
-    aliases: ['浮力', '阿基米德', '称重法', '溢水法', 'F浮'],
+    aliases: ['浮力', '阿基米德', '称重法', '溢水法', 'F浮', '浮沉', '浮沉条件'],
     guide: ['把铝块缓慢下放，看测力计读数什么时候停止变化', '算 F浮 = G − F拉，再对 ρ液gV排 验算', '换成盐水：同一深度浮力怎么变'],
   },
 
@@ -518,7 +518,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['水平段不是"没吸热"，是吸热不升温', '容器吸热与散热忽略'],
     },
     textbook: [js('八年级上册', '第三章 物态变化', ['熔化和凝固'])],
-    aliases: ['熔化', '晶体', '熔点', '冰', '水平段'],
+    aliases: ['熔化', '晶体', '熔点', '冰', '水平段', '凝固', '物态变化'],
     guide: ['找出 T–t 图上的水平段：对应什么过程', '比较升温段与熔化段的时长', '把 λ 调成 0：水平段还在吗'],
   },
   'heat-capacity-comparison': {
@@ -611,7 +611,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['收尾速度条件：安培力 = 外力时才匀速', '导轨电阻与接触电阻已并入 r'],
     },
     textbook: [hs('选择性必修第二册', '第二章 电磁感应', ['法拉第电磁感应定律', '电磁感应中的动力学问题'])],
-    aliases: ['单棒', '导轨', '切割磁感线', 'BLv', '收尾速度', '安培力'],
+    aliases: ['单棒', '导轨', '切割磁感线', 'BLv', '收尾速度', '安培力', '发电机', '感应电流'],
     guide: ['给棒一个初速度，看 v–t 曲线形状', '算一算：什么时候安培力与外力平衡', '改 B 或 L，看收尾速度怎么变'],
   },
   'induction-double-bar-momentum': {
