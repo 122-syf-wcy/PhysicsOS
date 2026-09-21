@@ -639,10 +639,19 @@ HANDOVER 那条"新机器上手"走完它**根本不存在**。已补进 overlay
 （91 测试，原 20）。接线当场暴露 141 项从未检查过的 lint 错误，已全部清偿
 （含 40 处非空断言换成真实收窄、`parse<T>` 的 T 只用一次、动态 delete 等）。
 
-**D. `pnpm lint` 全绿**：ui-physicsos 171 文件 **461 项报错 → 0**。
-逐条看过去全部落在本周新增的面上（PaperWorkspace 225、fluid-renderer 121、
-LearningRecordWorkspace 65、AdminWorkspace 18、AuthGate 14），并非 HANDOVER
-所记的"上游既有问题"。清偿过程修掉 autofix 自身造成的 47 处格式损伤。
+**D. `pnpm lint` 全绿**（三条门禁首次同时为 0）。四处红分别清偿：
+
+- **ui-physicsos 171 文件 461 项报错 → 0**。逐条看过去全部落在本周新增的面上
+  （PaperWorkspace 225、fluid-renderer 121、LearningRecordWorkspace 65、
+  AdminWorkspace 18、AuthGate 14），并非 HANDOVER 所记的"上游既有问题"。
+  清偿过程修掉 autofix 自身造成的 47 处格式损伤（`e =>{  setX(); }` 形状）
+- **`packages/question-paper` 4 项**：试卷 markdown 模板里 7 个 `U+3000`
+  （全角空格，中文排版分隔用）触发 `no-irregular-whitespace`，改用 `\u3000`
+  转义——输出字节不变、意图可见
+- **`packages/engine-composite` 3 项**：`repro-ms.test.ts` 是排查用脚手架
+  （1 个 `it`、**0 个 `expect`**、3 处 `as any`），既不会失败也证明不了什么，
+  删除；该域真实覆盖在 `composite-engine.test.ts`（26 项 / 51 断言）
+- **三个 host 插件 141 项**（见 C）
 
 **E. 浏览器验收补上身份面**：新增 `auth-acceptance.mjs`（见上）。
 顺带修好一处会让**所有**验收套件误报的门禁缺陷——应用每次启动调
@@ -655,9 +664,15 @@ support 又把它计入 `errorResponses`，于是任何套件都会在跑第一�
 "可用实验"；磁场台补 `derivation`（与验证器同名公式）与 `trajectoryTimes`
 （按画布同样的 join 规则），并新增 5 项测试钉住配对契约；`paper-host` 补 README。
 
-**验证**：`pnpm typecheck` 0 错；`pnpm lint` **0 错 0 警**；
-`pnpm test` core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **91 测试**；
-`auth-acceptance.mjs` 8 CASE 全 PASS、5 项门禁为 0。
+**验证**（三条命令实测 exit code = 0）：
+
+| 命令 | 覆盖 | 结果 |
+| --- | --- | --- |
+| `pnpm typecheck` | core + web + 三个 host 插件 | 0 错 |
+| `pnpm lint` | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件（30 文件） | **0 错 0 警** |
+| `pnpm test` | core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **91 测试** | 全绿 |
+
+`auth-acceptance.mjs` 8 CASE / 22 断言 + 5 项浏览器门禁全 PASS。
 
 **不做**：名录补全与 credentials 偏差两种都是环境/数据治理，分别登记为
 `GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP`、`DSH_CREDENTIALS_SCHEMA_SKEW`；
