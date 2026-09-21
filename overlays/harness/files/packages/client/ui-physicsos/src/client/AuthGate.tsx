@@ -50,7 +50,7 @@ const EyeIcon = ({ hidden }: { hidden: boolean }): ReactNode => (
 /** Brand chrome shared by every gate view. */
 function GateChrome({ t, children }: { t: (key: PhysicsosKey) => string; children: ReactNode }) {
   return (
-    <div className={css.gate}>
+    <div className={css.gate} data-physicsos-auth-gate="">
       <header className={css.topbar}>
         <span className={css.wordmark}>
           <PhysicsOSMark size={18} className={css.wordmarkIcon} />
@@ -214,7 +214,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
   return (
     <GateChrome t={t}>
       {view === 'login' && (
-        <form className={css.form} onSubmit={submitLogin} noValidate>
+        <form className={css.form} onSubmit={submitLogin} noValidate data-physicsos-auth-view="login">
           <Field label={t('auth.username.label')}>
             <input
               className={css.input}
@@ -271,7 +271,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
       )}
 
       {view === 'register' && (
-        <form className={css.form} onSubmit={submitRegister} noValidate>
+        <form className={css.form} onSubmit={submitRegister} noValidate data-physicsos-auth-view="register">
           <h2 className={css.formTitle}>{t('auth.register.title')}</h2>
           <Field label={t('auth.school.label')} invalid={error !== '' && schoolName.trim() === ''}>
             <input
@@ -355,7 +355,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
       {view === 'forgot' && (
         forgotSent
           ? (
-            <div className={css.form}>
+            <div className={css.form} data-physicsos-auth-view="forgot">
               <h2 className={css.formTitle}>{t('auth.forgot.title')}</h2>
               <p className={css.receipt}>{t('auth.forgot.receipt')}</p>
               <button type="button" className={css.submit} onClick={() => { switchView('login') }}>

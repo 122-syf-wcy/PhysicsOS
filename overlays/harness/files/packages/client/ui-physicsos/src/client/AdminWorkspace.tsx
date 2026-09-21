@@ -55,7 +55,7 @@ export function AdminWorkspace({ api, useAuth, t }: AdminWorkspaceProps) {
   const active = tabs.some(item => item.id === tab) ? tab : fallback.id
 
   return (
-    <div className={css.root}>
+    <div className={css.root} data-physicsos-surface="admin">
       <header className={css.header}>
         <h1 className={css.title}>{t('admin.title')}</h1>
         <nav className={css.tabs} role="tablist">

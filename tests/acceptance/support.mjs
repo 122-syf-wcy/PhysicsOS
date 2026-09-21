@@ -17,13 +17,139 @@
  */
 import { chromium } from '@playwright/test'
 import path from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import {
+  existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync,
+} from 'node:fs'
+import { createRequire } from 'node:module'
+import os, { tmpdir } from 'node:os'
 import process, { stdout } from 'node:process'
 import { fileURLToPath } from 'node:url'
+
+/**
+ * Whether a 401 is the documented answer rather than a fault.
+ *
+ * `/physicsos/auth/me` answers 401 to an anonymous visitor, and the client calls
+ * it on every boot to decide guest vs authed. The browser also logs that
+ * response as a console error, so both gates must excuse exactly this one
+ * request — and nothing else, so a genuine auth fault still fails the suite.
+ */
+const isExpectedGuest401 = (url, text = '') =>
+  url.includes('/physicsos/auth/me') && (url.length > 0 || text.includes('401'))
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const SHOTS = path.join(ROOT, 'docs', 'reports', 'screenshots')
 export const BASE = 'http://127.0.0.1:3080'
+export const HARNESS = path.join(ROOT, 'vendor', 'deepseek-harness')
+
+/** Password the isolated server bootstraps its SUPER_ADMIN with. */
+export const ACCEPTANCE_ADMIN_PASSWORD = 'acceptance-admin-pw-2026'
+export const ACCEPTANCE_ADMIN_USERNAME = 'admin'
+
+/**
+ * Whether `node` can actually compute argon2id — not merely expose the entry
+ * point. `auth-host` refuses to load without it, so a suite that boots its own
+ * server has to say so plainly instead of letting the child die opaquely.
+ */
+const argon2Works = () => {
+  try {
+    const require = createRequire(import.meta.url)
+    const { argon2Sync } = require('node:crypto')
+    if (typeof argon2Sync !== 'function') return false
+    argon2Sync('argon2id', {
+      message: 'probe', nonce: Buffer.alloc(16), parallelism: 1, memory: 8, passes: 1, tagLength: 16,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Boot a throwaway harness server for suites that need a known-good account.
+ *
+ * The developer's own home is left completely alone: a temp `DSH_HOME` is built
+ * out of symlinks to the shared `profiles/` and `settings.yaml` (the profile
+ * carries a 300 MB `node_modules`, so copying is not an option) over an EMPTY
+ * `storages/`. That gives a freshly seeded tenant roster and a SUPER_ADMIN whose
+ * password this process chose, on its own port — so an acceptance run cannot
+ * depend on, or damage, whatever state the dev server happens to be in.
+ *
+ * The one thing that is NOT shared is `.credentials.yaml`: DSH Desktop 2.x
+ * rewrites it as a nested `{version, records, refs}` document that this pinned
+ * harness cannot parse, so the flat reference map is rebuilt here.
+ *
+ * @returns the base URL, the home path, and a `stop()` that tears both down.
+ */
+export const startIsolatedServer = async ({ port = 3099 } = {}) => {
+  if (!argon2Works()) {
+    throw new Error(
+      `this suite needs a node that can compute argon2id (got ${process.version});`
+      + ' auth-host will not load without it — run with a Node >= 24.7 built against'
+      + ' an OpenSSL with argon2id (e.g. "PATH=/opt/homebrew/bin:$PATH node …")',
+    )
+  }
+
+  const home = mkdtempSync(path.join(tmpdir(), 'dsh-accept-'))
+  mkdirSync(path.join(home, 'storages'), { recursive: true })
+  for (const name of ['profiles', 'settings.yaml', '.env', '.anonymous-user-id']) {
+    const source = path.join(os.homedir(), '.dsh', name)
+    if (existsSync(source)) symlinkSync(source, path.join(home, name))
+  }
+
+  const credentials = path.join(os.homedir(), '.dsh', '.credentials.yaml')
+  if (existsSync(credentials)) {
+    const text = readFileSync(credentials, 'utf8')
+    // Nested document (DSH Desktop 2.x): the `refs:` block is the flat map.
+    const refsBlock = /^refs:\n((?:[ \t]+.*\n?)*)/m.exec(text)
+    const body = refsBlock === null
+      ? text
+      : refsBlock[1].split('\n')
+        .map(line => /^\s+([A-Za-z_][A-Za-z0-9_]*):\s*(\S+)\s*$/.exec(line))
+        .filter(match => match !== null)
+        .map(match => `${match[1]}: "${match[2]}"\n`)
+        .join('')
+    const target = path.join(home, '.credentials.yaml')
+    writeFileSync(target, body, { mode: 0o600 })
+  }
+
+  const base = `http://127.0.0.1:${port}`
+  const child = spawn(
+    process.execPath,
+    ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', '--port', String(port)],
+    {
+      cwd: HARNESS,
+      env: { ...process.env, DSH_HOME: home, PHYSICSOS_ADMIN_PASSWORD: ACCEPTANCE_ADMIN_PASSWORD },
+      stdio: ['ignore', 'ignore', 'ignore'],
+    },
+  )
+
+  const stop = () => {
+    if (child.exitCode === null) child.kill('SIGTERM')
+    rmSync(home, { recursive: true, force: true })
+  }
+
+  const deadline = Date.now() + 90_000
+  for (;;) {
+    if (child.exitCode !== null) {
+      stop()
+      throw new Error(`isolated dsh web exited with code ${child.exitCode} before becoming ready`)
+    }
+    try {
+      const response = await fetch(`${base}/physicsos/auth/me`)
+      /* 401 is the ready signal: the route is mounted and answering guests. */
+      if (response.status === 401) break
+    } catch { /* not listening yet */ }
+    if (Date.now() > deadline) {
+      stop()
+      throw new Error(`isolated dsh web on ${base} did not become ready within 90s`)
+    }
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
+  stdout.write(`  \u2139 isolated server ${base} (home ${home})\n`)
+  return { base, home, stop }
+}
 
 /**
  * Launch the browser and wire the gate.
@@ -32,7 +158,10 @@ export const BASE = 'http://127.0.0.1:3080'
  * reveals on the library home) lands before capture; suites without entrance
  * animation keep the default 0.
  */
-export const openAcceptance = async (scriptUrl, { viewport = { width: 1600, height: 900 }, settleMs = 0 } = {}) => {
+export const openAcceptance = async (
+  scriptUrl,
+  { viewport = { width: 1600, height: 900 }, settleMs = 0, base = BASE } = {},
+) => {
   mkdirSync(SHOTS, { recursive: true })
   mkdirSync(path.join(ROOT, 'tmp'), { recursive: true })
   const suite = path.basename(fileURLToPath(scriptUrl), '.mjs')
@@ -55,7 +184,9 @@ export const openAcceptance = async (scriptUrl, { viewport = { width: 1600, heig
   const page = await context.newPage()
 
   page.on('console', (message) => {
-    if (message.type() === 'error') gate.consoleErrors.push(message.text().slice(0, 300))
+    if (message.type() !== 'error') return
+    if (isExpectedGuest401(message.location()?.url ?? '', message.text())) return
+    gate.consoleErrors.push(message.text().slice(0, 300))
   })
   page.on('pageerror', (error) => { gate.pageErrors.push(error.message.slice(0, 300)) })
   page.on('requestfailed', (request) => {
@@ -65,9 +196,13 @@ export const openAcceptance = async (scriptUrl, { viewport = { width: 1600, heig
     gate.failedRequests.push(`${request.method()} ${request.url().slice(0, 160)} ${reason}`)
   })
   page.on('response', (response) => {
-    if (response.status() >= 400) {
-      gate.errorResponses.push(`${response.status()} ${response.url().slice(0, 160)}`)
-    }
+    if (response.status() < 400) return
+    /* `/physicsos/auth/me` answers 401 to an anonymous visitor on boot — that
+       is the documented contract, not an error. Every other 4xx/5xx still
+       fails the gate, so a genuine auth or API fault cannot hide here. */
+    const url = response.url()
+    if (response.status() === 401 && isExpectedGuest401(url)) return
+    gate.errorResponses.push(`${response.status()} ${url.slice(0, 160)}`)
   })
   await page.addInitScript(() => {
     window.__unhandled = []
@@ -114,5 +249,5 @@ export const openAcceptance = async (scriptUrl, { viewport = { width: 1600, heig
     if (failures.length > 0) process.exitCode = 1
   }
 
-  return { browser, context, page, gate, failures, check, shot, dismissOnboarding, finish }
+  return { browser, context, page, gate, failures, base, check, shot, dismissOnboarding, finish }
 }
