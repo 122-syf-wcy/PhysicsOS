@@ -1097,8 +1097,16 @@ function BankPanel({ items, reviewer, api, run, onError }: {
   const [ingesting, setIngesting] = useState(false)
   const [ingestResult, setIngestResult] = useState<string>()
   const [expanded, setExpanded] = useState<string | undefined>()
+  /* Batch review scope: a substring filter so a teacher can accept one import
+     (or one knowledge point) at a time instead of clicking hundreds of cards.
+     Empty means "everything pending". */
+  const [batchFilter, setBatchFilter] = useState('')
 
   const pending = items.filter(i => i.status === 'pending')
+  const batchScope = batchFilter.trim() === ''
+    ? pending
+    : pending.filter(i => `${i.stem} ${i.knowledge.join(' ')} ${i.sourceLabel ?? ''}`
+      .includes(batchFilter.trim()))
   const verified = items.filter(i => i.status === 'verified')
   const rejected = items.filter(i => i.status === 'rejected')
 
@@ -1118,6 +1126,30 @@ function BankPanel({ items, reviewer, api, run, onError }: {
       void run(() => Promise.resolve())
     }).catch((e: unknown) => { onError(err(e)) })
       .finally(() => { setIngesting(false) })
+  }
+
+  /**
+   * Batch verdict. The confirmation spells out what it does and does not
+   * attest: it accepts the *source* for this scope, it does not claim every
+   * question was proof-read, and each row keeps its own `anomalies`.
+   */
+  const reviewBatch = (status: 'verified' | 'rejected') => {
+    const ids = batchScope.map(i => i.id)
+    if (ids.length === 0) return
+    const verb = status === 'verified' ? '核验入库' : '退回'
+    const scope = batchFilter.trim() === '' ? '全部待核验' : `匹配「${batchFilter.trim()}」的`
+    const confirmed = window.confirm(
+      `将${scope} ${ids.length} 条一并${verb}（核验人：${reviewer}）。\n\n`
+      + '这表示你接受该来源/该范围的题目，不代表逐题校对过题干与答案。\n'
+      + '每题的数据疑点（anomalies）仍会逐条保留在记录里。\n\n'
+      + '确认继续？',
+    )
+    if (!confirmed) return
+    void run(async () => {
+      const result = await api.reviewBankItems(ids, status, reviewer)
+      const missing = result.missing.length === 0 ? '' : `；${result.missing.length} 条未找到`
+      onError(`已${verb} ${result.updated} 条${missing}`)
+    })
   }
 
   const toggleMode = (item: BankItemRow, mode: 'verbatim' | 'adapt') => run(async () => {
@@ -1236,7 +1268,30 @@ function BankPanel({ items, reviewer, api, run, onError }: {
           <div className={css.card}>
             <h3>待核验（{pending.length}）</h3>
             {pending.length === 0 && <p className={css.empty}>暂无待核验题目——粘贴网络题目后先在这里复核。</p>}
-            {pending.map(itemCard)}
+            {pending.length > 0 && (
+              <div className={css.batchBar} data-bank-batch="">
+                <input
+                  className={css.batchFilter}
+                  placeholder="按题干 / 考点 / 来源筛选，留空表示全部"
+                  value={batchFilter}
+                  onChange={(e) => { setBatchFilter(e.target.value) }}
+                />
+                <span className={css.batchCount}>
+                  命中 {batchScope.length} / {pending.length}
+                </span>
+                <button type="button" className={clsx(css.miniBtn, css.miniBtnPrimary)}
+                  disabled={batchScope.length === 0}
+                  onClick={() => { reviewBatch('verified') }}>
+                  批量核验入库
+                </button>
+                <button type="button" className={css.miniBtn}
+                  disabled={batchScope.length === 0}
+                  onClick={() => { reviewBatch('rejected') }}>
+                  批量退回
+                </button>
+              </div>
+            )}
+            {batchScope.map(itemCard)}
           </div>
         </div>
 

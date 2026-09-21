@@ -266,6 +266,14 @@ export interface PaperApi {
   }) => Promise<{ created: BankItemRow[]; duplicates: string[] }>
   updateBankItem: (id: string, patch: Partial<Omit<BankItemRow, 'id' | 'stemHash' | 'status' | 'enteredAt' | 'enteredBy' | 'verifiedBy'>>) => Promise<BankItemRow>
   reviewBankItem: (id: string, status: 'verified' | 'rejected' | 'pending', reviewer: string) => Promise<BankItemRow>
+  /**
+   * One verdict for many items — the bulk-import path lands hundreds of
+   * `pending` rows while only `verified` ones reach the assembler, so
+   * per-card review alone leaves imported data unused.
+   */
+  reviewBankItems: (
+    ids: readonly string[], status: 'verified' | 'rejected' | 'pending', reviewer: string,
+  ) => Promise<{ updated: number; missing: string[] }>
 }
 
 /** The real client — bound once in `apply`, injected as callbacks. */
@@ -311,5 +319,7 @@ export function createPaperApi(): PaperApi {
     ingestBank: input => post('/bank/ingest', input),
     updateBankItem: (id, patch) => put(`/bank/items/${id}`, patch),
     reviewBankItem: (id, status, reviewer) => post(`/bank/items/${id}/review`, { status, reviewer }),
+    reviewBankItems: (ids, status, reviewer) =>
+      post('/bank/items/review-batch', { ids, status, reviewer }),
   }
 }

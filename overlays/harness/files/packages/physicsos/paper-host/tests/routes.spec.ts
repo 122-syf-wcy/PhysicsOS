@@ -131,6 +131,41 @@ describe('paper routes — wire validation', () => {
     expect(res.status).toBe(400)
   })
 
+  it('batch-reviews many bank items in one request and reports unknown ids', async () => {
+    /* The bulk-import path lands hundreds of `pending` rows while the assembler
+       reads only `verified` ones, so a batch verdict is the difference between
+       imported data being usable and being inert. Unknown ids must be reported,
+       never silently dropped. */
+    const item = {
+      id: 'batch-a', level: 'zhongkao', subject: 'physics', kind: 'choice-single',
+      knowledge: ['声现象'], ability: '理解', difficulty: 'basic', score: 3,
+      stem: '批量核验用题干（声音的传播需要介质）', options: ['A. 甲', 'B. 乙'],
+      answer: { result: 'A. 甲', steps: [], gradingPoints: [] },
+      answerTier: 'web-public', anomalies: [], reuseModes: ['adapt'], enteredBy: 'spec',
+    }
+    expect((await post('/bank/items', item)).status).toBe(201)
+    expect((await post('/bank/items', { ...item, id: 'batch-b', stem: '批量核验用题干二（回声测距）' })).status).toBe(201)
+
+    const res = await post('/bank/items/review-batch', {
+      ids: ['batch-a', 'batch-b', 'does-not-exist'], status: 'verified', reviewer: '教研组',
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { updated: number; missing: string[] }
+    expect(body.updated).toBe(2)
+    expect(body.missing).toEqual(['does-not-exist'])
+
+    const listed = await (await fetch(`${base}/bank/items?status=verified`)).json() as { id: string }[]
+    expect(listed.map(i => i.id)).toEqual(expect.arrayContaining(['batch-a', 'batch-b']))
+  })
+
+  it('rejects an empty batch and one over the per-request cap', async () => {
+    expect((await post('/bank/items/review-batch', { ids: [], status: 'verified' })).status).toBe(400)
+    const tooMany = Array.from({ length: 501 }, (_, i) => `bulk-${i}`)
+    const res = await post('/bank/items/review-batch', { ids: tooMany, status: 'verified' })
+    expect(res.status).toBe(400)
+    expect((await res.json() as { error: { code: string } }).error.code).toBe('BATCH_TOO_LARGE')
+  })
+
   it('returns NO_ROUTE for unknown paths', async () => {
     const res = await post('/sources/x/review', {})
     expect(res.status).toBe(404)

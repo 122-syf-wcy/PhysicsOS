@@ -253,6 +253,33 @@ export class PaperService {
     return next
   }
 
+  /**
+   * Apply one review verdict to many items.
+   *
+   * This exists because bulk imports land hundreds of `pending` rows at once
+   * (`scripts/ingest-ceval-physics.mjs` brought in 388) while the assembler only
+   * ever reads `verified` ones — with per-card review only, imported data is
+   * inert, because clicking through hundreds of cards is not a real teacher
+   * workflow.
+   *
+   * It does NOT weaken the gate: the caller still names a reviewer, each row
+   * keeps its own `anomalies` for the record, and ids that do not exist are
+   * reported back rather than silently skipped. The UI additionally requires an
+   * explicit confirmation naming what a batch verdict does and does not attest.
+   */
+  async reviewBankItems(
+    ids: readonly string[], status: ReviewStatus, reviewer: string,
+  ): Promise<{ updated: number; missing: string[] }> {
+    const missing: string[] = []
+    let updated = 0
+    for (const id of ids) {
+      if (this.bankItemById(id) === undefined) { missing.push(id); continue }
+      await this.reviewBankItem(id, status, reviewer)
+      updated += 1
+    }
+    return { updated, missing }
+  }
+
   /** The anti-repeat ledger: every assembled placement writes one row. */
   async recordBankUsage(itemId: string, paperId: string, mode: BankUsage['mode']): Promise<void> {
     const usage: BankUsage = { itemId, paperId, usedAt: now(), mode }

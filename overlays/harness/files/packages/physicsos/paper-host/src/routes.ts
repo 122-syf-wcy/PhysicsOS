@@ -33,6 +33,9 @@ const reviewStatusOf = (value: string | null): ReviewStatus | undefined => {
   return match
 }
 
+/** Upper bound on one batch review, so a single request cannot pin the loop. */
+const BATCH_REVIEW_LIMIT = 500
+
 /** Downloadable file whitelist — nothing else under the export dir serves. */
 const FILE_NAMES = new Set(['试卷.pdf', '试卷.docx', '答案解析.pdf', '答案解析.docx'])
 
@@ -227,6 +230,18 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         const body = await readJson(req)
         send(res, 200, await service.updateBankItem(
           segment(seg, 2), parse(bankItemPatchWire, body)))
+        return
+      }
+      if (method === 'POST' && seg[0] === 'bank' && seg[1] === 'items' && seg[2] === 'review-batch') {
+        const body = await readJson(req) as Body
+        const raw = body['ids']
+        const ids = Array.isArray(raw) ? raw.filter((value): value is string => typeof value === 'string') : []
+        if (ids.length === 0) throw new PaperError(400, 'BAD_BODY', 'ids 不能为空')
+        if (ids.length > BATCH_REVIEW_LIMIT) {
+          throw new PaperError(400, 'BATCH_TOO_LARGE', `一次最多核验 ${BATCH_REVIEW_LIMIT} 条，请分批提交`)
+        }
+        const status = body['status'] === 'verified' ? 'verified' : body['status'] === 'rejected' ? 'rejected' : 'pending'
+        send(res, 200, await service.reviewBankItems(ids, status, str(body, 'reviewer') || 'reviewer'))
         return
       }
       if (method === 'POST' && seg[0] === 'bank' && seg[1] === 'items' && seg[3] === 'review') {

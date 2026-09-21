@@ -263,7 +263,14 @@ DSH_HOME="$H" pnpm -C vendor/deepseek-harness dsh web
 node scripts/ingest-ceval-physics.mjs --dry-run   # 只映射并打印样例
 node scripts/ingest-ceval-physics.mjs             # 写入 :3080
 node scripts/ingest-ceval-physics.mjs --base http://127.0.0.1:3099
+node scripts/ingest-ceval-physics.mjs --retag     # 改关键词表后重新打标
 ```
+
+**批量核验**：388 条一次落下后，逐张点不现实。出卷专区 → 真题资料库 → 待核验区
+有范围筛选 + 「批量核验入库 / 批量退回」，二次确认里明说"接受该来源不等于逐题
+校对"。接口是 `POST /physicsos/paper/bank/items/review-batch`（≤500 条/请求）。
+注意 **`verified` 的内容是冻结的**：`PUT /bank/items/:id` 会 409 `FROZEN`，
+要改先退回 pending。
 
 数据源是 **C-Eval**（`ceval/ceval-exam`，CC BY-NC-SA 4.0）的
 `middle_school_physics` + `high_school_physics`，共 401 道单选题。

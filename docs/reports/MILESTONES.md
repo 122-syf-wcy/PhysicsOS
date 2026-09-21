@@ -717,8 +717,36 @@ PolyForm Noncommercial 兼容，署名见 `NOTICE.md`）。这是本环境下唯
 因为 C-Eval 不含卷级元数据，凭空补卷名就是编。见
 `BACKLOG.md` 的 `PAPER_STUDIO_DATA_STATE`。
 
-**验证**：`GET /physicsos/paper/bank/items` 返回 392 条（388 pending）；
-`pnpm typecheck` / `pnpm lint` / `pnpm test` 全绿。
+**B. 批量核验（`POST /physicsos/paper/bank/items/review-batch`）**：批量导入一次
+落下几百条 `pending`，而组卷只读 `verified`——没有批量路径，导入的数据就是**死的**
+（388 张卡逐张点不是教师的工作流）。新增批量核验路由 + 服务方法 + 客户端 +
+出卷专区「待核验」区的批量条（带范围筛选、命中计数、以及**明说"接受该来源不
+等于逐题校对"**的二次确认）。上限 500 条/请求；不存在的 id **回报而不静默跳过**。
+
+已核验的内容**不可静默改写**：`PUT /bank/items/:id` 对 `status: 'verified'`
+返回 409 `FROZEN`。本轮实测撞到这条守卫——重新打标时 18 条已核验的被正确拒绝。
+
+**C. 考点粒度是量出来的，不是拍的**（两轮实测纠正）：
+
+1. 第一版只匹配题干 → **135/401（34%）落进"物理综合"**；改题干+选项后降到 4%
+2. 但真正致命的是**粒度**：第一版emit 13 个章节级桶（`声现象`、`光与光学`）。
+   组卷按考点**子串**匹配、权重 0.45，而细目表的考点来自**已核验标注**，是
+   教研组自己的细粒度说法（`流体压强与流速`、`凸透镜成像规律`、`安培力`）。
+   实测一份真实卷的计划：**15 行全是 generate/gap，候选 0**——数据是死的。
+   重写为**细粒度词表**（49 条规则、先具体后宽泛）后输出 **44 个不同考点**。
+
+**端到端实证**（隔离探针，事后已还原为 pending）：新建任务 →
+`Q1` 考点 `凸透镜成像规律` 与题库标签**精确匹配** → 核验该 14 条后
+**`mode=adapt`、`candidates=13`**，组卷真的用上了；而考点措辞不重合的 `Q2`
+诚实落到 `generate`。即：能对上的就选，对不上的不假装。
+
+**D. 重打标模式**：`--retag` 只 PUT `knowledge`，**不碰** `status` /
+`reuseModes` / `verifiedBy` / 审计字段——核验者的记录必须原样保留。
+
+**验证**：`GET /physicsos/paper/bank/items` 返回 392 条
+（4 verified + 388 pending，C-Eval 条目全部 pending）；
+`paper-host` 11 测试（含 2 条批量）；`pnpm typecheck` / `pnpm lint` /
+`pnpm test` 全绿（web 686 + agent 95）。
 
 ---
 

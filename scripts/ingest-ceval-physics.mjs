@@ -44,6 +44,7 @@
  *   node scripts/ingest-ceval-physics.mjs                 # ingest into :3080
  *   node scripts/ingest-ceval-physics.mjs --dry-run       # map + report only
  *   node scripts/ingest-ceval-physics.mjs --base http://127.0.0.1:3099
+ *   node scripts/ingest-ceval-physics.mjs --retag        # 改关键词表后重新打标
  */
 import process, { stdout } from 'node:process'
 
@@ -63,25 +64,80 @@ const SUBJECTS = [
 const SPLITS = ['val', 'test', 'dev']
 
 /**
- * Stem keyword → knowledge point. Deliberately shallow and readable: it is a
- * *proposal* attached to a `pending` row, and `knowledge-derived-from-stem` in
- * `anomalies` says so. Order matters — the first hit wins, so the more specific
- * topics come first.
+ * Stem+option keyword → knowledge point.
+ *
+ * Granularity matters more than it looks. The assembler scores a candidate's
+ * knowledge match at weight 0.45 against the spec row's knowledge point, and
+ * those points come from verified annotations — i.e. the teaching group's own
+ * fine-grained vocabulary (`流体压强与流速`, `凸透镜成像规律`, `安培力` …),
+ * not broad chapter names. An earlier version of this table emitted 13 chapter
+ * buckets (`声现象`, `光与光学`); measured against a real blueprint that left
+ * every candidate below the 0.55 adapt threshold, so the imported data was
+ * inert. The rows below therefore emit specific points in that same style.
+ *
+ * ORDER IS SIGNIFICANT: first match wins, so specific points precede the
+ * broader fallbacks at the end. Every entry is a *proposal* — rows land as
+ * `pending` and carry `knowledge-derived-from-stem` in `anomalies`.
  */
 const KNOWLEDGE_RULES = [
-  [/欧姆定律|电流|电压|电阻|串联|并联|电路|电源|电功率|电能表|焦耳|用电|保险丝|触电|电笔|家庭电路|短路|千瓦时/, '电路与欧姆定律'],
-  [/磁场|电磁感应|安培|洛伦兹|通电导线|楞次|磁通量|发电机|电动机|电磁铁|奥斯特|磁感线|地磁场/, '磁场与电磁感应'],
-  [/电场|电荷|库仑|电容|电势|静电|带电粒子|摩擦起电|带电小球|排斥|吸引/, '静电场'],
-  [/光的反射|光的折射|平面镜|凸透镜|凹透镜|透镜|成像|焦点|焦距|折射率|全反射|干涉|衍射|偏振|色光|色散|红外线|紫外线|望远镜|显微镜|影子|倒影/, '光与光学'],
-  [/音调|响度|音色|回声|超声波|次声波|噪声|声现象|传声/, '声现象'],
-  [/熔化|凝固|汽化|液化|升华|凝华|物态变化|温度|内能|比热容|热值|热量|热机|冲程|内燃机|分子|扩散|蒸发|沸腾|露珠|霜|雾|白气|热传递/, '热与内能'],
-  [/参照物|速度|路程|匀速|变速|静止|运动的描述|直线运动|平均速度/, '运动的描述'],
-  [/牛顿|惯性|摩擦|重力|弹力|合力|二力平衡|平衡力|质量|密度|压强|浮力|杠杆|滑轮|机械效率|做功|功率|动能|势能|机械能|大气压|弹簧测力计|连通器|运动状态|超重|失重/, '力与运动'],
-  [/波长|频率|波速|振幅|机械波|声波/, '机械波'],
-  [/能量守恒|能源|核能|太阳能|可再生|裂变|聚变|能量转化/, '能源与能量守恒'],
-  [/电磁波|通信|卫星|光纤|网络|信号|信息传递|电磁屏蔽/, '信息的传递'],
-  [/原子|质子|中子|核式结构|放射|导体|绝缘体|半导体/, '原子与电学基础'],
-  [/估测|生活实际|符合实际|物理量|单位|测量仪器|刻度尺|天平|量筒|误差/, '物理量与测量'],
+  /* 声 */
+  [/音调|响度|音色|频率决定|振幅决定/, '声音的特性'],
+  [/回声|测距|超声波|次声波/, '声的利用'],
+  [/噪声|隔声|消声|吸声/, '噪声与防治'],
+  [/传声|介质|真空不能传声|声速/, '声现象'],
+  /* 光 */
+  [/凸透镜成像|物距|像距|放大|缩小|实像|虚像|照相机|投影仪|放大镜/, '凸透镜成像规律'],
+  [/近视|远视|眼镜|焦距|度数/, '眼睛与眼镜'],
+  [/光的反射|入射角|反射角|镜面反射|漫反射/, '光的反射'],
+  [/平面镜|成像特点|对称/, '平面镜成像'],
+  [/光的折射|折射角|池水变浅|筷子|海市蜃楼/, '光的折射'],
+  [/色散|色光|三原色|红外线|紫外线/, '光的色散'],
+  [/全反射|折射率|临界角|干涉|衍射|偏振|双缝/, '光的波动性'],
+  /* 热 */
+  [/熔化|凝固|熔点|晶体|非晶体/, '熔点与凝固'],
+  [/汽化|液化|蒸发|沸腾|沸点|蒸发放热|液化放热/, '汽化与液化'],
+  [/升华|凝华|干冰|霜|雾凇/, '升华与凝华'],
+  [/比热容|热量计算|吸热|放热/, '比热容'],
+  [/热值|燃料|热机效率|内燃机|冲程|柴油机|汽油机/, '热机与热值'],
+  [/内能|热传递|做功改变内能|分子热运动|扩散/, '内能'],
+  [/电荷|摩擦起电|同种电荷|验电器/, '两种电荷'],
+  [/电流|电压|电阻|欧姆定律|伏安|变阻器/, '欧姆定律'],
+  [/串联电路|并联电路|串联|并联|干路|支路/, '串并联电路'],
+  [/电功率|额定功率|电能表|千瓦时|焦耳定律|电流热效应/, '电功率与焦耳定律'],
+  [/家庭电路|保险丝|触电|试电笔|三孔插座|短路/, '家庭电路与安全用电'],
+  [/磁场|磁感线|通电螺线管|电磁铁|安培定则|奥斯特/, '电生磁'],
+  [/电磁感应|楞次|磁通量|发电机|动生|感生/, '电磁感应现象'],
+  [/通电导线在磁场|安培力|洛伦兹|左手定则/, '安培力'],
+  [/带电粒子|电场强度|库仑|电势|电容器|偏转/, '带电粒子在电场中的运动'],
+  [/复合场|速度选择器|质谱仪|回旋加速器/, '带电粒子在复合场中的运动'],
+  [/安培力|磁通量变化|导轨|双棒/, '电磁感应中的电路与力学'],
+  /* 力 */
+  [/参照物|机械运动|运动与静止/, '运动的描述'],
+  [/速度|路程|平均速度|匀速直线/, '速度'],
+  [/自由落体|重力加速度/, '自由落体运动'],
+  [/牛顿第一|惯性/, '牛顿第一定律与惯性'],
+  [/牛顿第二|合力|加速度|受力分析|正交分解/, '牛顿第二定律'],
+  [/二力平衡|平衡力|平衡状态/, '力的平衡'],
+  [/摩擦力|滑动摩擦|静摩擦|粗糙/, '摩擦力'],
+  [/压强|受力面积|增大压强|减小压强|固体压强/, '压强'],
+  [/液体压强|深度|连通器/, '液体压强'],
+  [/大气压|托里拆利|沸点与气压/, '大气压强'],
+  [/流体|流速|升力|机翼/, '流体压强与流速'],
+  [/浮力|阿基米德|排开|漂浮|悬浮|沉底|浮沉/, '浮力'],
+  [/杠杆|力臂|平衡条件/, '杠杆平衡条件'],
+  [/滑轮|机械效率|有用功|额外功|斜面效率/, '机械效率'],
+  [/功|功率|做功/, '功与功率'],
+  [/动能|势能|机械能|能量转化|动能定理/, '机械能及其转化'],
+  [/重力|万有引力|圆周运动|向心力|卫星/, '万有引力与圆周运动'],
+  [/弹簧|弹性形变|胡克/, '弹力'],
+  [/密度|质量|天平|量筒/, '密度'],
+  [/力|运动状态|示意图/, '力与运动'],
+  /* 波 / 电与能源 / 信息 */
+  [/波长|波速|简谐|振动图像|波的形成|干涉衍射图样|驻波/, '机械波'],
+  [/能源|核能|裂变|聚变|太阳能|可再生|能量守恒/, '能源与能量守恒'],
+  [/电磁波|通信|光纤|卫星通信|信号|信息传递/, '信息的传递'],
+  [/原子|质子|中子|核式结构|放射|导体|绝缘体|半导体/, '原子与材料'],
+  [/估测|生活实际|符合实际|物理量|单位|刻度尺|误差/, '物理量与测量'],
 ]
 
 /** The four-digit answer letters C-Eval uses. */
@@ -110,6 +166,10 @@ const parseArgs = () => {
   return {
     base: baseIndex === -1 ? 'http://127.0.0.1:3080' : args[baseIndex + 1],
     dryRun: args.includes('--dry-run'),
+    /* Re-derive `knowledge` on rows that already exist. Needed whenever the
+       keyword table changes: rows are keyed by a deterministic id, so the new
+       tag can be patched in place without touching status or review history. */
+    retag: args.includes('--retag'),
   }
 }
 
@@ -190,8 +250,9 @@ const toBankItem = (row, { config, level }, split) => {
 }
 
 const main = async () => {
-  const { base, dryRun } = parseArgs()
-  stdout.write(`C-Eval → 题库${dryRun ? '（dry-run）' : ` @ ${base}`}\n\n`)
+  const { base, dryRun, retag } = parseArgs()
+  stdout.write(`C-Eval → 题库${dryRun ? '（dry-run）' : retag ? '（retag）' : ''}`
+    + `${dryRun ? '' : ` @ ${base}`}\n\n`)
 
   const collected = []
   for (const subject of SUBJECTS) {
@@ -209,6 +270,29 @@ const main = async () => {
     && /^[A-D]$/.test(item.answer.result.slice(0, 1)))
   const skipped = collected.length - usable.length
   stdout.write(`\n映射 ${collected.length} 行 → 可用 ${usable.length}（丢弃 ${skipped}：题干空/选项不足/无答案）\n`)
+
+  if (retag) {
+    /* PUT only `knowledge`: `status`, `reuseModes`, `verifiedBy` and the audit
+       trail are the reviewer's record and must survive a retag untouched. */
+    let patched = 0
+    let skipped = 0
+    const failures = []
+    for (const item of usable) {
+      const response = await fetch(`${base}/physicsos/paper/bank/items/${encodeURIComponent(item.id)}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: base },
+        body: JSON.stringify({ knowledge: item.knowledge }),
+      })
+      if (response.status === 200) { patched++; continue }
+      if (response.status === 404) { skipped++; continue }
+      const body = await response.json().catch(() => undefined)
+      failures.push(`${item.id}: ${response.status} ${body?.error?.code ?? ''}`)
+    }
+    stdout.write(`\n重新打标 ${patched}｜未入库跳过 ${skipped}｜失败 ${failures.length}\n`)
+    for (const failure of failures.slice(0, 10)) stdout.write(`  ✗ ${failure}\n`)
+    if (failures.length > 0) process.exitCode = 1
+    return
+  }
 
   if (dryRun) {
     stdout.write('\n样例：\n')

@@ -780,6 +780,40 @@
   cursor: not-allowed;
 }
 
+/* Batch review bar above the pending list: a scope filter plus two verdicts.
+   It sits inside the card, so it uses the same border/background vocabulary as
+   .miniBtn rather than introducing a second visual language. */
+.batchBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.batchFilter {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-button-elevated-fill, #fff);
+  color: inherit;
+  font-family: inherit;
+}
+
+.batchCount {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary, #64748b);
+  white-space: nowrap;
+}
+
 .miniBtn {
   font-size: 12px;
   padding: 4px 12px;
