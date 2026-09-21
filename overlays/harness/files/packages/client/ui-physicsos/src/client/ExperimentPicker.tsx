@@ -278,8 +278,11 @@ export function ExperimentPicker({
             <p className={css.body}>{t('lab.template.empty.body')}</p>
           </div>
           <span className={css.headerCount}>
+            {/* The badge numbers what a student can actually open; the grid
+                below also renders the coming-soon card, so labelling this
+                "所有实验" made 43 sit next to 44 cards. */}
             <strong className={css.headerCountValue}>{SELECTABLE_TEMPLATE_COUNT}</strong>
-            <span>{t('lab.template.picker.allTemplates')}</span>
+            <span>{t('lab.template.picker.availableTemplates')}</span>
           </span>
         </header>
 

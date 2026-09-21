@@ -195,51 +195,51 @@ export function LearningRecordWorkspace({
 
             <h2 className={css.panelTitle}>{t('record.recentAttempts')}</h2>
             <ul className={css.mistakeList}>
-                {recent.map(attempt => (
-                  <li key={attempt.id} className={css.mistakeItem} data-correct={attempt.correct}>
-                    <div className={css.mistakeHead}>
-                      <span
-                        className={css.mistakeBadge}
-                        data-mistake={attempt.mistakeType}
-                        data-result={attempt.correct ? 'correct' : 'wrong'}
-                      >
-                        {attempt.correct
-                          ? t('record.correctBadge')
-                          : attempt.mistakeType === undefined
-                            ? '错误'
-                            : MISTAKE_LABELS[attempt.mistakeType]}
-                      </span>
-                      <span className={css.mistakeQuestion}>{attempt.questionTitle}</span>
-                      <span className={css.mistakeTime}>{formatUpdatedAt(attempt.at)}</span>
-                    </div>
-                    <p className={css.mistakePrompt}>{attempt.prompt}</p>
-                    <p className={css.mistakeAnswer}>
-                      {t('record.yourAnswer')}
-                      {attempt.answerLabel}
-                    </p>
-                    {/* A lab attempt re-practises on the apparatus itself; a
+              {recent.map(attempt => (
+                <li key={attempt.id} className={css.mistakeItem} data-correct={attempt.correct}>
+                  <div className={css.mistakeHead}>
+                    <span
+                      className={css.mistakeBadge}
+                      data-mistake={attempt.mistakeType}
+                      data-result={attempt.correct ? 'correct' : 'wrong'}
+                    >
+                      {attempt.correct
+                        ? t('record.correctBadge')
+                        : attempt.mistakeType === undefined
+                          ? '错误'
+                          : MISTAKE_LABELS[attempt.mistakeType]}
+                    </span>
+                    <span className={css.mistakeQuestion}>{attempt.questionTitle}</span>
+                    <span className={css.mistakeTime}>{formatUpdatedAt(attempt.at)}</span>
+                  </div>
+                  <p className={css.mistakePrompt}>{attempt.prompt}</p>
+                  <p className={css.mistakeAnswer}>
+                    {t('record.yourAnswer')}
+                    {attempt.answerLabel}
+                  </p>
+                  {/* A lab attempt re-practises on the apparatus itself; a
                         question attempt goes back to the conversation, where
                         the tutor re-solves it into a fresh scene card. */}
-                    <button
-                      type="button"
-                      className={css.practiseButton}
-                      data-practise={attempt.experimentId === undefined ? 'question' : 'experiment'}
-                      disabled={
-                        attempt.experimentId === undefined
-                          ? (practiceQuestion === undefined || practising !== null)
-                          : false
-                      }
-                      onClick={() => {
-                        if (attempt.experimentId === undefined) practise(attempt.questionId)
-                        else openExperiment(attempt.experimentId)
-                      }}
-                    >
-                      {t(attempt.experimentId === undefined
-                        ? 'record.practiseAgain'
-                        : 'record.practiseExperiment')}
-                    </button>
-                  </li>
-                ))}
+                  <button
+                    type="button"
+                    className={css.practiseButton}
+                    data-practise={attempt.experimentId === undefined ? 'question' : 'experiment'}
+                    disabled={
+                      attempt.experimentId === undefined
+                        ? (practiceQuestion === undefined || practising !== null)
+                        : false
+                    }
+                    onClick={() => {
+                      if (attempt.experimentId === undefined) practise(attempt.questionId)
+                      else openExperiment(attempt.experimentId)
+                    }}
+                  >
+                    {t(attempt.experimentId === undefined
+                      ? 'record.practiseAgain'
+                      : 'record.practiseExperiment')}
+                  </button>
+                </li>
+              ))}
             </ul>
           </section>
 
@@ -248,28 +248,28 @@ export function LearningRecordWorkspace({
             {practisedNodes.length === 0 ? (
               <p className={css.muted}>{t('record.knowledgeEmpty')}</p>
             ) : (
-            <ul className={css.knowledgeList}>
-              {practisedNodes.map((node) => {
-                const entry = masteryByNode.get(node.id)
-                if (entry === undefined) return null
-                const parent = node.parentId === undefined ? undefined : knowledgeNodeOf(node.parentId)
-                const rate = entry.total === 0 ? 0 : Math.round((entry.correct / entry.total) * 100)
-                return (
-                  <li key={node.id} className={css.knowledgeItem} data-node={node.id}>
-                    <div className={css.knowledgeHead}>
-                      <span className={css.knowledgeDomain}>{parent?.label ?? ''}</span>
-                      <span className={css.knowledgeName}>{node.label}</span>
-                      <span className={css.knowledgeRate}>
-                        {entry.correct}/{entry.total}
-                      </span>
-                    </div>
-                    <div className={css.knowledgeBar} role="img" aria-label={`${node.label} ${rate}%`}>
-                      <div className={css.knowledgeFill} style={{ transform: `scaleX(${rate / 100})` }} />
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+              <ul className={css.knowledgeList}>
+                {practisedNodes.map((node) => {
+                  const entry = masteryByNode.get(node.id)
+                  if (entry === undefined) return null
+                  const parent = node.parentId === undefined ? undefined : knowledgeNodeOf(node.parentId)
+                  const rate = entry.total === 0 ? 0 : Math.round((entry.correct / entry.total) * 100)
+                  return (
+                    <li key={node.id} className={css.knowledgeItem} data-node={node.id}>
+                      <div className={css.knowledgeHead}>
+                        <span className={css.knowledgeDomain}>{parent?.label ?? ''}</span>
+                        <span className={css.knowledgeName}>{node.label}</span>
+                        <span className={css.knowledgeRate}>
+                          {entry.correct}/{entry.total}
+                        </span>
+                      </div>
+                      <div className={css.knowledgeBar} role="img" aria-label={`${node.label} ${rate}%`}>
+                        <div className={css.knowledgeFill} style={{ transform: `scaleX(${rate / 100})` }} />
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </section>
         </div>

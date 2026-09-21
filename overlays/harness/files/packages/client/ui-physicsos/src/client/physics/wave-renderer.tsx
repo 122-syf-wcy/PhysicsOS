@@ -289,7 +289,7 @@ export function WaveRenderer({ view, projection }: RendererProps) {
           `waveform` toggle; a rig with no profile (interference) draws none. */}
       {profile === undefined || !showWaveform || profile.points.length < 2 ? null : (
         <g aria-hidden="true">
-          {mediumBeadsOf(profile, nodes).map(bead => {
+          {mediumBeadsOf(profile, nodes).map((bead) => {
             const cx = projection.px(bead)
             const cy = projection.py(bead)
             return (

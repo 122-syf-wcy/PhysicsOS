@@ -575,6 +575,10 @@ const viewOf = (
           points: trajectoryObservation.points.map(point =>
             mapPoint(point.position.vector, center, vp),
           ),
+          /* The observer already stamps each point with its simulation time;
+             carrying it through is what lets the canvas offer hover/seek on the
+             orbit instead of a purely decorative polyline. */
+          times: trajectoryObservation.points.map(point => point.time.value),
         },
       ]
   const guides: LabGuideView[] =

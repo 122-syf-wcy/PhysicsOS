@@ -50,7 +50,9 @@ export function AdminWorkspace({ api, useAuth, t }: AdminWorkspaceProps) {
     { id: 'users' as const, label: t('admin.tab.users') },
     { id: 'audit' as const, label: t('admin.tab.audit') },
   ]
-  const active = tabs.some(item => item.id === tab) ? tab : tabs[0]!.id
+  const fallback = tabs[0]
+  if (fallback === undefined) throw new Error('AdminWorkspace: no tab is visible for this role')
+  const active = tabs.some(item => item.id === tab) ? tab : fallback.id
 
   return (
     <div className={css.root}>
@@ -89,7 +91,8 @@ const useLoad = <T,>(load: () => Promise<T>, deps: readonly unknown[]) => {
     load().then(setData).catch((reason: unknown) => {
       setError(reason instanceof Error ? reason.message : String(reason))
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    /* The dep array is the caller's: `load` closes over the tab's query
+       state and is expected to be recreated. */
   }, deps)
   useEffect(() => { reload() }, [reload])
   return { data, error, reload }
@@ -158,23 +161,23 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
             <div className={css.form}>
               <Field label={t('admin.requests.field.schoolId')}>
                 <input className={css.input} value={form.schoolId ?? ''} placeholder="GUIZHOU-XX"
-                  onChange={e => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
+                  onChange={(e) => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
               </Field>
               <Field label={t('admin.requests.field.shortName')}>
                 <input className={css.input} value={form.shortName ?? ''}
-                  onChange={e => { setForm(f => ({ ...f, shortName: e.target.value })) }} />
+                  onChange={(e) => { setForm(f => ({ ...f, shortName: e.target.value })) }} />
               </Field>
               <Field label={t('admin.requests.field.adminUsername')}>
                 <input className={css.input} value={form.adminUsername ?? ''}
-                  onChange={e => { setForm(f => ({ ...f, adminUsername: e.target.value })) }} />
+                  onChange={(e) => { setForm(f => ({ ...f, adminUsername: e.target.value })) }} />
               </Field>
               <Field label={t('admin.requests.field.adminDisplayName')}>
                 <input className={css.input} value={form.adminDisplayName ?? ''}
-                  onChange={e => { setForm(f => ({ ...f, adminDisplayName: e.target.value })) }} />
+                  onChange={(e) => { setForm(f => ({ ...f, adminDisplayName: e.target.value })) }} />
               </Field>
               <Field label={t('admin.requests.field.adminPassword')}>
                 <input className={css.input} type="password" value={form.adminPassword ?? ''}
-                  onChange={e => { setForm(f => ({ ...f, adminPassword: e.target.value })) }} />
+                  onChange={(e) => { setForm(f => ({ ...f, adminPassword: e.target.value })) }} />
               </Field>
               <button
                 type="button" className={css.primary}
@@ -225,11 +228,11 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
         <h3 className={css.cardTitle}>{t('admin.schools.create')}</h3>
         <div className={css.formRow}>
           <input className={css.input} placeholder={t('admin.schools.field.id')}
-            value={form.id} onChange={e => { setForm(f => ({ ...f, id: e.target.value })) }} />
+            value={form.id} onChange={(e) => { setForm(f => ({ ...f, id: e.target.value })) }} />
           <input className={css.input} placeholder={t('admin.schools.field.name')}
-            value={form.name} onChange={e => { setForm(f => ({ ...f, name: e.target.value })) }} />
+            value={form.name} onChange={(e) => { setForm(f => ({ ...f, name: e.target.value })) }} />
           <input className={css.input} placeholder={t('admin.requests.field.shortName')}
-            value={form.shortName} onChange={e => { setForm(f => ({ ...f, shortName: e.target.value })) }} />
+            value={form.shortName} onChange={(e) => { setForm(f => ({ ...f, shortName: e.target.value })) }} />
           <button
             type="button" className={css.primary} disabled={creating}
             onClick={() => {
@@ -304,17 +307,17 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
         <div className={css.formRow}>
           {isSuper && (
             <input className={css.input} placeholder={t('admin.schools.field.id')}
-              value={form.schoolId} onChange={e => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
+              value={form.schoolId} onChange={(e) => { setForm(f => ({ ...f, schoolId: e.target.value })) }} />
           )}
           <input className={css.input} placeholder={t('admin.users.field.username')}
-            value={form.username} onChange={e => { setForm(f => ({ ...f, username: e.target.value })) }} />
+            value={form.username} onChange={(e) => { setForm(f => ({ ...f, username: e.target.value })) }} />
           <input className={css.input} placeholder={t('admin.users.field.displayName')}
-            value={form.displayName} onChange={e => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
+            value={form.displayName} onChange={(e) => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
           <input className={css.input} type="password" placeholder={t('admin.users.field.password')}
-            value={form.password} onChange={e => { setForm(f => ({ ...f, password: e.target.value })) }} />
+            value={form.password} onChange={(e) => { setForm(f => ({ ...f, password: e.target.value })) }} />
           <select
             className={css.select} value={form.role}
-            onChange={e => { setForm(f => ({ ...f, role: e.target.value })) }}
+            onChange={(e) => { setForm(f => ({ ...f, role: e.target.value })) }}
           >
             <option value="STUDENT">{t('role.STUDENT')}</option>
             <option value="TEACHER">{t('role.TEACHER')}</option>
@@ -341,8 +344,8 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
 
       <div className={css.toolbar}>
         <input className={css.input} placeholder={t('admin.users.search')}
-          value={q} onChange={e => { setQ(e.target.value) }} />
-        <select className={css.select} value={roleFilter} onChange={e => { setRoleFilter(e.target.value) }}>
+          value={q} onChange={(e) => { setQ(e.target.value) }} />
+        <select className={css.select} value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value) }}>
           <option value="">{t('admin.users.role.all')}</option>
           <option value="STUDENT">{t('role.STUDENT')}</option>
           <option value="TEACHER">{t('role.TEACHER')}</option>
@@ -365,7 +368,7 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
                       {user.displayName} <span className={css.dim}>@{user.username}</span>
                     </h3>
                     <p className={css.cardMeta}>
-                      {user.schoolName} · {t(`role.${user.role}` as PhysicsosKey)}
+                      {user.schoolName} · {t(`role.${user.role}`)}
                       {' · '}{user.status === 'active' ? t('admin.schools.status.active') : t('admin.schools.status.disabled')}
                     </p>
                   </div>
@@ -400,7 +403,7 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
                   <div className={css.formRow}>
                     <input
                       className={css.input} type="password" placeholder={t('admin.users.field.newPassword')}
-                      value={newPassword} onChange={e => { setNewPassword(e.target.value) }}
+                      value={newPassword} onChange={(e) => { setNewPassword(e.target.value) }}
                     />
                     <button
                       type="button" className={css.primary}

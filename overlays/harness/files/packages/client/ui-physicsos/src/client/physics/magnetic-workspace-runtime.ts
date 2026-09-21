@@ -26,6 +26,7 @@ import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts
 import { emptyVisualModel } from './scene-visual-model.ts'
 import type {
   ChartSeries,
+  DerivationStepView,
   InspectorSection,
   ObservableKey,
   SceneTreeNode,
@@ -154,6 +155,50 @@ const verificationOf = (snapshot: MagneticRuntimeSnapshot): readonly Verificatio
   }))
 }
 
+/* The uniform-field slice is closed-form, so each derived quantity has one
+   exact expression. Keys are the ids the magnetic bridge emits; the formulas
+   mirror the verifier's own consistency-check names so the derivation panel and
+   the verification panel can never disagree about what law is in play. */
+const DERIVED_EXPRESSIONS: Record<string, string> = {
+  R: 'R = \\frac{mv}{qB}',
+  T: 'T = \\frac{2\\pi m}{qB}',
+  omega: '\\omega = \\frac{qB}{m} = \\frac{2\\pi}{T}',
+  F: 'F = qvB \\quad (v \\perp B)',
+}
+
+/**
+ * Derived quantities as derivation steps. Reads only what the bridge already
+ * published — no physics is recomputed here.
+ */
+const derivationOf = (snapshot: MagneticRuntimeSnapshot): readonly DerivationStepView[] =>
+  snapshot.derived.items.map(item => ({
+    id: item.id,
+    title: item.label,
+    expression: DERIVED_EXPRESSIONS[item.id] ?? '',
+    result: { symbol: item.symbol, value: item.value, unit: item.unit },
+  }))
+
+/**
+ * Simulation times of the orbit samples, index-parallel with the polyline
+ * `PhysicsCanvas` builds.
+ *
+ * The canvas joins every trajectory sharing the first id — history pieces
+ * first, then predicted — and enables hover/seek/strobe only when the lengths
+ * match exactly. This repeats that same join so the pairing cannot drift;
+ * returning `[]` (the previous behaviour) disabled all three interactions for
+ * the one domain that animates a periodic orbit.
+ */
+const trajectoryTimesOf = (snapshot: MagneticRuntimeSnapshot): readonly number[] | undefined => {
+  const first = snapshot.view.trajectories[0]
+  if (first === undefined) return undefined
+  const parts = snapshot.view.trajectories.filter(entry => entry.id === first.id)
+  const times = [
+    ...parts.filter(entry => entry.kind === 'history').flatMap(entry => entry.times ?? []),
+    ...parts.filter(entry => entry.kind === 'predicted').flatMap(entry => entry.times ?? []),
+  ]
+  return times.length === 0 ? undefined : times
+}
+
 export class MagneticWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: MagneticRuntimeBridge
   private highlighted: readonly string[] = []
@@ -238,11 +283,17 @@ export class MagneticWorkspaceRuntime implements WorkspaceRuntime {
           values: [String(sample.step), sample.t, sample.theta, sample.speed, sample.force, sample.radius],
         })),
       },
-      derivation: [],
+      derivation: derivationOf(snapshot),
       verification: verificationOf(snapshot),
+      /* Uniform-field circular motion has no discrete events: the particle
+         enters once and never leaves, hits nothing, and the orbit closes on
+         itself. The panel therefore stays empty here by physics, not by an
+         unfinished mapping. */
       events: [],
       clock: snapshot.clock,
-      trajectoryTimes: [],
+      /* Required by the contract, so an unavailable pairing degrades to the
+         empty array — which the canvas already treats as "no seek data". */
+      trajectoryTimes: trajectoryTimesOf(snapshot) ?? [],
       ...(snapshot.error === undefined
         ? {}
         : {

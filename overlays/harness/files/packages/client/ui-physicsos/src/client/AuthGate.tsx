@@ -124,9 +124,11 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
   }
 
   const showCandidates = (cause: AuthApiError, code: string): void => {
-    if (cause.code !== code || cause.candidates === undefined || cause.candidates.length === 0) return
+    if (cause.code !== code || cause.candidates === undefined) return
+    const first = cause.candidates[0]
+    if (first === undefined) return
     setCandidates(cause.candidates)
-    setSchoolPick(cause.candidates[0]!.id)
+    setSchoolPick(first.id)
   }
 
   /* Same-name schools only differ by region — the picker's label carries it. */
@@ -145,7 +147,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
         rememberDevice: remember,
         ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
       }),
-      cause => { showCandidates(cause, 'SCHOOL_REQUIRED') },
+      (cause) => { showCandidates(cause, 'SCHOOL_REQUIRED') },
     )
   }
 
@@ -165,7 +167,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
         displayName: displayName.trim(),
         password,
       }),
-      cause => { showCandidates(cause, 'SCHOOL_AMBIGUOUS') },
+      (cause) => { showCandidates(cause, 'SCHOOL_AMBIGUOUS') },
     )
   }
 
@@ -196,7 +198,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
         type={showPassword ? 'text' : 'password'}
         autoComplete={view === 'register' ? 'new-password' : 'current-password'}
         value={password}
-        onChange={event => { setPassword(event.target.value) }}
+        onChange={(event) => { setPassword(event.target.value) }}
       />
       <button
         type="button"
@@ -219,7 +221,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               type="text"
               autoComplete="username"
               value={username}
-              onChange={event => {
+              onChange={(event) => {
                 setUsername(event.target.value)
                 setCandidates(undefined)
                 setSchoolPick('')
@@ -231,7 +233,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               <select
                 className={css.input}
                 value={schoolPick}
-                onChange={event => { setSchoolPick(event.target.value) }}
+                onChange={(event) => { setSchoolPick(event.target.value) }}
               >
                 {candidates.map(school => (
                   <option key={school.id} value={school.id}>{candidateLabel(school)}</option>
@@ -247,7 +249,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               <input
                 type="checkbox"
                 checked={remember}
-                onChange={event => { setRemember(event.target.checked) }}
+                onChange={(event) => { setRemember(event.target.checked) }}
               />
               <span>{t('auth.remember')}</span>
             </label>
@@ -278,7 +280,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               autoComplete="organization"
               placeholder={t('auth.school.registerPlaceholder')}
               value={schoolName}
-              onChange={event => {
+              onChange={(event) => {
                 setSchoolName(event.target.value)
                 setCandidates(undefined)
                 setSchoolPick('')
@@ -290,7 +292,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               <select
                 className={css.input}
                 value={schoolPick}
-                onChange={event => { setSchoolPick(event.target.value) }}
+                onChange={(event) => { setSchoolPick(event.target.value) }}
               >
                 {candidates.map(school => (
                   <option key={school.id} value={school.id}>{candidateLabel(school)}</option>
@@ -305,7 +307,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               autoComplete="username"
               placeholder={t('auth.username.registerPlaceholder')}
               value={username}
-              onChange={event => { setUsername(event.target.value) }}
+              onChange={(event) => { setUsername(event.target.value) }}
             />
           </Field>
           <Field label={t('auth.displayName.label')}>
@@ -314,7 +316,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               type="text"
               autoComplete="name"
               value={displayName}
-              onChange={event => { setDisplayName(event.target.value) }}
+              onChange={(event) => { setDisplayName(event.target.value) }}
             />
           </Field>
           <Field label={t('auth.password.label')}>
@@ -326,14 +328,14 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
               type="password"
               autoComplete="new-password"
               value={confirm}
-              onChange={event => { setConfirm(event.target.value) }}
+              onChange={(event) => { setConfirm(event.target.value) }}
             />
           </Field>
           <label className={clsx(css.checkbox, css.terms)}>
             <input
               type="checkbox"
               checked={terms}
-              onChange={event => { setTerms(event.target.checked) }}
+              onChange={(event) => { setTerms(event.target.checked) }}
             />
             <span>{t('auth.terms')}</span>
           </label>
@@ -371,7 +373,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
                   type="text"
                   autoComplete="username"
                   value={username}
-                  onChange={event => { setUsername(event.target.value) }}
+                  onChange={(event) => { setUsername(event.target.value) }}
                 />
               </Field>
               {error !== '' && <p className={css.error} role="alert">{error}</p>}

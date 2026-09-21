@@ -97,7 +97,7 @@ describe('auth controller', () => {
 
   it('login persists the identity hint and hands off to a reload', async () => {
     const reload = vi.fn()
-    vi.stubGlobal('location', { ...window.location, reload })
+    vi.stubGlobal('location', { reload })
     const controller = createAuthController(stubApi(), globalThis.localStorage)
     await controller.login({ username: 'u1', password: 'p', rememberDevice: false })
     expect(JSON.parse(globalThis.localStorage.getItem('physicsos.auth.user') ?? '{}')).toMatchObject({ id: 'u_test1' })
@@ -107,7 +107,7 @@ describe('auth controller', () => {
 
   it('logout clears the hint even when the API call fails', async () => {
     const reload = vi.fn()
-    vi.stubGlobal('location', { ...window.location, reload })
+    vi.stubGlobal('location', { reload })
     globalThis.localStorage.setItem('physicsos.auth.user', JSON.stringify({ id: 'u_test1', schoolId: 'GZU' }))
     const controller = createAuthController(
       stubApi({ logout: async () => { throw new Error('network down') } }),

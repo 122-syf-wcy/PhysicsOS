@@ -391,7 +391,9 @@ describe('readout card', () => {
   const mountCanvasProbe = () => {
     mountLab('projectile-horizontal')
     const svg = document.querySelector<SVGSVGElement>('svg[role="img"]')!
-    const [, , vbW, vbH] = svg.getAttribute('viewBox')!.split(' ').map(Number)
+    const viewBox = svg.getAttribute('viewBox')?.split(' ').map(Number) ?? []
+    const vbW = viewBox[2] ?? 0
+    const vbH = viewBox[3] ?? 0
     Object.defineProperty(svg, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: vbW, height: vbH, right: vbW, bottom: vbH, x: 0, y: 0, toJSON: () => ({}) }),
     })
@@ -452,7 +454,9 @@ describe('readout card', () => {
 
     /* Pointer moves without an active drag, or from another pointer, pass. */
     const svg = document.querySelector<SVGSVGElement>('svg[role="img"]')!
-    const [, , vbW, vbH] = svg.getAttribute('viewBox')!.split(' ').map(Number)
+    const viewBox = svg.getAttribute('viewBox')?.split(' ').map(Number) ?? []
+    const vbW = viewBox[2] ?? 0
+    const vbH = viewBox[3] ?? 0
     Object.defineProperty(svg, 'getBoundingClientRect', {
       value: () => ({ left: 0, top: 0, width: vbW, height: vbH, right: vbW, bottom: vbH, x: 0, y: 0, toJSON: () => ({}) }),
     })

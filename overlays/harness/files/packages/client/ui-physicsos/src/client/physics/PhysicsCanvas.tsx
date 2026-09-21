@@ -384,9 +384,9 @@ export function PhysicsCanvas({
     readoutPos === undefined
       ? { x: PAD.left + 8, y: PAD.top + 8 }
       : {
-          x: Math.min(Math.max(readoutPos.x, 4), width - readoutWidth - 4),
-          y: Math.min(Math.max(readoutPos.y, 4), height - readoutHeight - 4),
-        }
+        x: Math.min(Math.max(readoutPos.x, 4), width - readoutWidth - 4),
+        y: Math.min(Math.max(readoutPos.y, 4), height - readoutHeight - 4),
+      }
 
   const viewPoint = (event: { clientX: number; clientY: number }) => {
     const box = svgRef.current?.getBoundingClientRect()

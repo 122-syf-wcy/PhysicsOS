@@ -48,54 +48,54 @@ const ScaleGlyph = ({
     y: pivotY + size * 0.3 * Math.sin(needleAngle),
   }
   return (
-  <g className={highlighted ? css.highlightGroup : undefined}>
-    {/* Suspension ring the instrument hangs from; its bottom edge touches the
+    <g className={highlighted ? css.highlightGroup : undefined}>
+      {/* Suspension ring the instrument hangs from; its bottom edge touches the
         barrel top. */}
-    <circle
-      className={css.fluidScaleRing}
-      cx={x}
-      cy={y - size * 0.86}
-      r={size * 0.24}
-    />
-    {/* Barrel */}
-    <rect
-      className={css.fluidScaleBody}
-      x={x - size * 0.9}
-      y={y - size * 0.62}
-      width={size * 1.8}
-      height={size * 1.24}
-      rx={size * 0.26}
-    />
-    {/* Dial window with the live reading */}
-    <rect
-      className={css.fluidScaleDial}
-      x={x - size * 0.68}
-      y={y - size * 0.4}
-      width={size * 1.36}
-      height={size * 0.8}
-      rx={size * 0.14}
-    />
-    {dialFraction === undefined ? null : (
-      <g data-testid="scale-needle">
-        <line
-          className={css.fluidScaleNeedle}
-          x1={x}
-          y1={pivotY}
-          x2={tip.x}
-          y2={tip.y}
-        />
-        <circle className={css.fluidScalePivot} cx={x} cy={pivotY} r={size * 0.045} />
-      </g>
-    )}
-    <text className={css.fluidScaleReading} x={x} y={y + size * 0.16} textAnchor="middle">
-      {reading}
-    </text>
-    {/* Bottom hook the wire attaches to */}
-    <path
-      className={css.fluidScaleRing}
-      d={`M${x} ${y + size * 0.62} v${size * 0.1} a${size * 0.16} ${size * 0.16} 0 1 0 ${size * 0.02} ${size * 0.24}`}
-    />
-  </g>
+      <circle
+        className={css.fluidScaleRing}
+        cx={x}
+        cy={y - size * 0.86}
+        r={size * 0.24}
+      />
+      {/* Barrel */}
+      <rect
+        className={css.fluidScaleBody}
+        x={x - size * 0.9}
+        y={y - size * 0.62}
+        width={size * 1.8}
+        height={size * 1.24}
+        rx={size * 0.26}
+      />
+      {/* Dial window with the live reading */}
+      <rect
+        className={css.fluidScaleDial}
+        x={x - size * 0.68}
+        y={y - size * 0.4}
+        width={size * 1.36}
+        height={size * 0.8}
+        rx={size * 0.14}
+      />
+      {dialFraction === undefined ? null : (
+        <g data-testid="scale-needle">
+          <line
+            className={css.fluidScaleNeedle}
+            x1={x}
+            y1={pivotY}
+            x2={tip.x}
+            y2={tip.y}
+          />
+          <circle className={css.fluidScalePivot} cx={x} cy={pivotY} r={size * 0.045} />
+        </g>
+      )}
+      <text className={css.fluidScaleReading} x={x} y={y + size * 0.16} textAnchor="middle">
+        {reading}
+      </text>
+      {/* Bottom hook the wire attaches to */}
+      <path
+        className={css.fluidScaleRing}
+        d={`M${x} ${y + size * 0.62} v${size * 0.1} a${size * 0.16} ${size * 0.16} 0 1 0 ${size * 0.02} ${size * 0.24}`}
+      />
+    </g>
   )
 }
 
@@ -186,53 +186,53 @@ export function FluidRenderer({ view, projection, componentDrag }: RendererProps
         const floorY = projection.py({ x: 0, y: liquid.floor })
         const lipY = projection.py({ x: 0, y: liquid.surface + (liquid.surface - liquid.floor) * 0.18 })
         return (
-        <g className={projection.highlighted(liquid.id) ? css.highlightGroup : undefined}>
-          <defs>
-            <linearGradient id={`fluid-liquid-${projection.uid}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#dcedf9" />
-              <stop offset="1" stopColor="#a8cbe8" />
-            </linearGradient>
-          </defs>
-          <rect
-            className={css.fluidLiquidBody}
-            x={left}
-            y={surfaceY}
-            width={right - left}
-            height={floorY - surfaceY}
-            style={{ fill: `url(#fluid-liquid-${projection.uid})` }}
-          />
-          {/* Meniscus: the surface line across the whole tank */}
-          <line
-            className={css.fluidSurface}
-            x1={left}
-            y1={surfaceY}
-            x2={right}
-            y2={surfaceY}
-          />
-          <path
-            className={css.fluidTankWall}
-            d={[
-              `M${left - 4} ${lipY - 3}`,
-              `L${left} ${lipY}`,
-              `V${floorY - 6}`,
-              `Q${left} ${floorY} ${left + 6} ${floorY}`,
-              `H${right - 6}`,
-              `Q${right} ${floorY} ${right} ${floorY - 6}`,
-              `V${lipY}`,
-              `L${right + 4} ${lipY - 3}`,
-            ].join(' ')}
-          />
-          {liquid.label === undefined ? null : (
-            <text
-              className={css.annotation}
-              x={projection.px({ x: liquid.right, y: 0 }) - 8}
-              y={projection.py({ x: 0, y: liquid.floor }) - 8}
-              textAnchor="end"
-            >
-              {liquid.label}
-            </text>
-          )}
-        </g>
+          <g className={projection.highlighted(liquid.id) ? css.highlightGroup : undefined}>
+            <defs>
+              <linearGradient id={`fluid-liquid-${projection.uid}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#dcedf9" />
+                <stop offset="1" stopColor="#a8cbe8" />
+              </linearGradient>
+            </defs>
+            <rect
+              className={css.fluidLiquidBody}
+              x={left}
+              y={surfaceY}
+              width={right - left}
+              height={floorY - surfaceY}
+              style={{ fill: `url(#fluid-liquid-${projection.uid})` }}
+            />
+            {/* Meniscus: the surface line across the whole tank */}
+            <line
+              className={css.fluidSurface}
+              x1={left}
+              y1={surfaceY}
+              x2={right}
+              y2={surfaceY}
+            />
+            <path
+              className={css.fluidTankWall}
+              d={[
+                `M${left - 4} ${lipY - 3}`,
+                `L${left} ${lipY}`,
+                `V${floorY - 6}`,
+                `Q${left} ${floorY} ${left + 6} ${floorY}`,
+                `H${right - 6}`,
+                `Q${right} ${floorY} ${right} ${floorY - 6}`,
+                `V${lipY}`,
+                `L${right + 4} ${lipY - 3}`,
+              ].join(' ')}
+            />
+            {liquid.label === undefined ? null : (
+              <text
+                className={css.annotation}
+                x={projection.px({ x: liquid.right, y: 0 }) - 8}
+                y={projection.py({ x: 0, y: liquid.floor }) - 8}
+                textAnchor="end"
+              >
+                {liquid.label}
+              </text>
+            )}
+          </g>
         )
       })()}
 
@@ -271,33 +271,33 @@ export function FluidRenderer({ view, projection, componentDrag }: RendererProps
       {scale === undefined || block === undefined ? null : (() => {
         const size = Math.max(16, Math.min(38, block.halfHeight * projection.scale * 0.9))
         return (
-        <g>
-          <line
-            className={css.fluidWire}
-            x1={projection.px(scale.at)}
-            y1={projection.py(scale.at) + size * 0.72}
-            x2={projection.px(block.at)}
-            y2={projection.py({ x: block.at.x, y: block.at.y + block.halfHeight })}
-          />
-          <ScaleGlyph
-            x={projection.px(scale.at)}
-            y={projection.py(scale.at)}
-            size={size}
-            reading={scale.reading}
-            dialFraction={scale.dialFraction}
-            highlighted={projection.highlighted(scale.id)}
-          />
-          {scale.label === undefined ? null : (
-            <text
-              className={css.annotation}
+          <g>
+            <line
+              className={css.fluidWire}
+              x1={projection.px(scale.at)}
+              y1={projection.py(scale.at) + size * 0.72}
+              x2={projection.px(block.at)}
+              y2={projection.py({ x: block.at.x, y: block.at.y + block.halfHeight })}
+            />
+            <ScaleGlyph
               x={projection.px(scale.at)}
-              y={projection.py(scale.at) - Math.max(16, block.halfHeight * projection.scale) - 6}
-              textAnchor="middle"
-            >
-              {scale.label}
-            </text>
-          )}
-        </g>
+              y={projection.py(scale.at)}
+              size={size}
+              reading={scale.reading}
+              dialFraction={scale.dialFraction}
+              highlighted={projection.highlighted(scale.id)}
+            />
+            {scale.label === undefined ? null : (
+              <text
+                className={css.annotation}
+                x={projection.px(scale.at)}
+                y={projection.py(scale.at) - Math.max(16, block.halfHeight * projection.scale) - 6}
+                textAnchor="middle"
+              >
+                {scale.label}
+              </text>
+            )}
+          </g>
         )
       })()}
 

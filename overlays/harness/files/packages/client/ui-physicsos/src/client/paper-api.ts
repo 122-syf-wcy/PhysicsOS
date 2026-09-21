@@ -17,7 +17,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const body = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } }
   if (!response.ok) {
     const error = new Error(body.error?.message ?? `${response.status}`) as PaperApiError
-    Object.defineProperty(error, 'code', { value: body.error?.code ?? 'HTTP_' + response.status })
+    Object.defineProperty(error, 'code', { value: body.error?.code ?? `HTTP_${response.status}` })
     throw error
   }
   return body as T
@@ -142,7 +142,14 @@ export interface PaperJobWire {
     id: string
     title: string
     policyLabel?: string
-    header: { examName: string; grade: string; subjectLine: string; totalScore: number; minutes: number; candidateFields: readonly string[] }
+    header: {
+      examName: string
+      grade: string
+      subjectLine: string
+      totalScore: number
+      minutes: number
+      candidateFields: readonly string[]
+    }
     sections: readonly { title: string; note?: string; items: readonly PaperQuestionWire[] }[]
   }
   readonly versions: readonly { version: number; hash: string; at: string; summary: string }[]
@@ -153,7 +160,13 @@ export interface PaperJobWire {
   readonly bankPlan?: readonly { questionNo: number; mode: 'verbatim' | 'adapt' | 'generate' | 'gap'; bankItemId?: string; candidates: number }[]
   readonly repairRounds: number
   readonly lastError?: string
-  readonly approval?: { versionHash: string; reviewer: string; at: string; physics?: { reviewer: string; at: string }; chemistry?: { reviewer: string; at: string } }
+  readonly approval?: {
+    versionHash: string
+    reviewer: string
+    at: string
+    physics?: { reviewer: string; at: string }
+    chemistry?: { reviewer: string; at: string }
+  }
   readonly status: 'spec' | 'drafting' | 'checking' | 'review' | 'approved' | 'exported' | 'failed'
   readonly createdAt: string
   readonly updatedAt: string
@@ -287,7 +300,7 @@ export function createPaperApi(): PaperApi {
     runExport: id => post(`/jobs/${id}/export`, {}),
     listExports: () => request('/exports'),
     fileUrl: (jobId, name) => `/physicsos/paper/jobs/${jobId}/files/${encodeURIComponent(name)}`,
-    listBankItems: filter => {
+    listBankItems: (filter) => {
       const params = new URLSearchParams()
       if (filter?.status !== undefined) params.set('status', filter.status)
       if (filter?.level !== undefined) params.set('level', filter.level)

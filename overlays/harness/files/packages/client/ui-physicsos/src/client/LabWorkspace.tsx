@@ -162,9 +162,10 @@ export function PhysicsSurface({
      SCHOOL_ADMIN/SUPER_ADMIN and the host re-checks every admin call, so a
      missing role or api simply renders nothing actionable. */
   if (surface === 'admin') {
-    return adminApi === undefined || useAuth === undefined
-      ? null
-      : <AdminWorkspace api={adminApi} useAuth={useAuth} t={t} />
+    if (adminApi === undefined) return null
+    /* `useAuth` is a required prop — the old `useAuth === undefined` branch
+       was unreachable, which the compiler flagged as a dead condition. */
+    return <AdminWorkspace api={adminApi} useAuth={useAuth} t={t} />
   }
   if (surface === 'record') {
     return (

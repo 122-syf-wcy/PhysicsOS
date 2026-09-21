@@ -67,7 +67,7 @@ const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
 const jobRating = (job: PaperJobWire): string =>
   coefficientLabel(job.specTable.length > 0
     ? specCoefficient(job.specTable as readonly { score: number; difficulty: Difficulty }[])
-    : mixCoefficient(job.request.difficulty as DifficultyMix))
+    : mixCoefficient(job.request.difficulty))
 
 /** Model-authored prose with inline `$...$` math — KaTeX renders the spans. */
 const Rich = ({ text }: { readonly text: string }) => (
@@ -215,7 +215,7 @@ export function PaperWorkspace({ api }: PaperWorkspaceProps) {
         </div>
         <label className={css.reviewer}>
           复核人
-          <input value={reviewer} onChange={e => setReviewer(e.target.value)} />
+          <input value={reviewer} onChange={(e) => { setReviewer(e.target.value) }} />
         </label>
       </header>
 
@@ -225,7 +225,7 @@ export function PaperWorkspace({ api }: PaperWorkspaceProps) {
             {i > 0 && <span className={css.stepLine} aria-hidden="true" />}
             <button type="button"
               className={clsx(css.step, tab === s.id && css.stepActive)}
-              onClick={() => setTab(s.id)}>
+              onClick={() => { setTab(s.id) }}>
               <span className={css.stepNo}>{s.step}</span>
               <span className={css.stepLabel}>{s.label}</span>
               {s.count !== undefined && s.count > 0 && (
@@ -236,13 +236,13 @@ export function PaperWorkspace({ api }: PaperWorkspaceProps) {
         ))}
         <button type="button"
           className={clsx(css.step, css.stepSource, tab === 'bank' && css.stepActive)}
-          onClick={() => setTab('bank')}>
+          onClick={() => { setTab('bank') }}>
           <span className={css.stepLabel}>题库</span>
           {bankItems.length > 0 && <span className={css.tabCount}>{bankItems.length}</span>}
         </button>
         <button type="button"
           className={clsx(css.step, css.stepSource, tab === 'sources' && css.stepActive)}
-          onClick={() => setTab('sources')}>
+          onClick={() => { setTab('sources') }}>
           <span className={css.stepLabel}>真题资料库</span>
           {sources.length > 0 && <span className={css.tabCount}>{sources.length}</span>}
         </button>
@@ -251,7 +251,7 @@ export function PaperWorkspace({ api }: PaperWorkspaceProps) {
       {notice !== undefined && (
         <p className={css.notice} role="alert">
           {notice}
-          <button type="button" onClick={() => setNotice(undefined)}>×</button>
+          <button type="button" onClick={() => { setNotice(undefined) }}>×</button>
         </p>
       )}
 
@@ -259,7 +259,7 @@ export function PaperWorkspace({ api }: PaperWorkspaceProps) {
         <NewPaperPanel
           blueprints={verifiedBlueprints}
           api={api}
-          onCreated={job => { setActiveJob(job); setTab('jobs'); void refresh() }}
+          onCreated={(job) => { setActiveJob(job); setTab('jobs'); void refresh() }}
           onError={setNotice}
         />
       )}
@@ -316,7 +316,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
       const job = await api.createJob(blueprintId, {
         level: blueprint.level,
         subjects: [blueprint.subject],
-        kind: kind as PaperJobWire['request']['kind'],
+        kind: kind,
         totalScore: blueprint.totalScore,
         minutes: blueprint.minutes,
         chapters: chapters.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
@@ -341,7 +341,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
           <div className={css.stepCard}>
             <h3 className={css.stepCardTitle}><span className={css.stepBadge}>1</span>选择试卷结构</h3>
             <label className={css.field}>结构模板（已核验）
-              <select value={blueprintId} onChange={e => setBlueprintId(e.target.value)}>
+              <select value={blueprintId} onChange={(e) => { setBlueprintId(e.target.value) }}>
                 <option value="">— 选择 —</option>
                 {blueprints.map(b => (
                   <option key={b.id} value={b.id}>{b.title}（{b.totalScore} 分 / {b.minutes} 分钟）</option>
@@ -363,17 +363,17 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
             <h3 className={css.stepCardTitle}><span className={css.stepBadge}>2</span>划定考试范围</h3>
             <div className={css.fieldRow}>
               <label className={css.field}>卷型
-                <select value={kind} onChange={e => setKind(e.target.value)}>
+                <select value={kind} onChange={(e) => { setKind(e.target.value) }}>
                   {KINDS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
                 </select>
               </label>
             </div>
             <label className={css.field}>已教章节（分号或换行分隔）
-              <textarea value={chapters} onChange={e => setChapters(e.target.value)}
+              <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
                 placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={2} />
             </label>
             <label className={css.field}>排除内容
-              <textarea value={exclude} onChange={e => setExclude(e.target.value)}
+              <textarea value={exclude} onChange={(e) => { setExclude(e.target.value) }}
                 placeholder="如：电功率综合计算" rows={2} />
             </label>
           </div>
@@ -381,7 +381,7 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
           <div className={css.stepCard}>
             <h3 className={css.stepCardTitle}><span className={css.stepBadge}>3</span>设定难度配比</h3>
             <label className={css.field}>难度系数（贵州中高考标准档）
-              <select value={presetKey} onChange={e => setPresetKey(e.target.value)}>
+              <select value={presetKey} onChange={(e) => { setPresetKey(e.target.value) }}>
                 {DIFFICULTY_PRESETS.map(p => (
                   <option key={p.key} value={p.key}>
                     {p.label} — 系数 ≈{mixCoefficient(p.mix).toFixed(2)}
@@ -451,7 +451,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }
       <div className={css.split}>
         <aside className={css.jobList}>
           {jobs.length === 0 && <Empty text="暂无进行中的试卷任务" />}
-          {jobs.map(job => {
+          {jobs.map((job) => {
             const items = job.document?.sections.flatMap(s => s.items) ?? []
             const approved = items.filter(q => q.status === 'approved').length
             return (
@@ -482,7 +482,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
             : <JobDetail job={activeJob} reviewer={reviewer} api={api}
-                run={run} onJobUpdate={onJobUpdate} />}
+              run={run} onJobUpdate={onJobUpdate} />}
         </div>
       </div>
     </section>
@@ -505,7 +505,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
   useEffect(() => {
     if (repairPending === null) return
     const timer = setInterval(() => {
-      void api.getJob(job.id).then(latest => {
+      void api.getJob(job.id).then((latest) => {
         onJobUpdate(latest)
         const landed = (latest.versions.at(-1)?.version ?? 0) > repairPending.version
         if (landed || Date.now() - repairPending.since > 180_000) setRepairPending(null)
@@ -518,7 +518,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
   useEffect(() => {
     if (replacePending === null) return
     const timer = setInterval(() => {
-      void api.getJob(job.id).then(latest => {
+      void api.getJob(job.id).then((latest) => {
         onJobUpdate(latest)
         const landed = (latest.versions.at(-1)?.version ?? 0) > replacePending.version
         if (landed || Date.now() - replacePending.since > 180_000) setReplacePending(null)
@@ -533,7 +533,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
     if (job.specTable.length === 0) { setBankPlan(null); return }
     let live = true
     void api.bankPlan(job.id)
-      .then(plan => { if (live) setBankPlan(plan) })
+      .then((plan) => { if (live) setBankPlan(plan) })
       .catch(() => { if (live) setBankPlan(null) })
     return () => { live = false }
   }, [api, job.id, job.specTable.length, job.status])
@@ -570,7 +570,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
           <table className={css.table}>
             <thead><tr><th>题号</th><th>板块</th><th>题型</th><th>分值</th><th>考点</th><th>能力</th><th>题库供给</th></tr></thead>
             <tbody>
-              {job.specTable.map(row => {
+              {job.specTable.map((row) => {
                 const plan = planByNo.get(row.questionNo)
                 return (
                   <tr key={row.questionNo}>
@@ -580,9 +580,9 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
                       {plan === undefined
                         ? <span className={css.jobMeta}>…</span>
                         : <span className={clsx(css.chip, css[`plan-${plan.mode}`])}
-                            title={plan.item === undefined ? `候选 ${plan.candidates} 道` : `${plan.item.sourceLabel ?? plan.item.id} · 候选 ${plan.candidates} 道`}>
-                            {PLAN_LABEL[plan.mode] ?? plan.mode}·{plan.candidates}
-                          </span>}
+                          title={plan.item === undefined ? `候选 ${plan.candidates} 道` : `${plan.item.sourceLabel ?? plan.item.id} · 候选 ${plan.candidates} 道`}>
+                          {PLAN_LABEL[plan.mode] ?? plan.mode}·{plan.candidates}
+                        </span>}
                     </td>
                   </tr>
                 )
@@ -607,7 +607,13 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
         )}
         {job.status === 'spec' && job.specTable.length > 0 && (
           <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { await api.confirmSpec(job.id, job.specTable); await api.runDraft(job.id); await api.runChecks(job.id) }) }}>
+            onClick={() => {
+              void run(async () => {
+                await api.confirmSpec(job.id, job.specTable)
+                await api.runDraft(job.id)
+                await api.runChecks(job.id)
+              })
+            }}>
             确认细目表并开始起草
           </button>
         )}
@@ -741,17 +747,17 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
       {/* Portal to <body>: a fixed overlay inside the surface would anchor to
           any transformed ancestor instead of the viewport. */}
       {repairTarget !== null ? createPortal(
-        <div className={css.modalOverlay} onClick={() => setRepairTarget(null)}>
-          <div className={css.modal} onClick={e => e.stopPropagation()}>
+        <div className={css.modalOverlay} onClick={() => { setRepairTarget(null) }}>
+          <div className={css.modal} onClick={(e) => { e.stopPropagation() }}>
             <h3>退回修改 · 第 {repairTarget} 题</h3>
             <p className={css.jobMeta}>写下修改建议，AI 会在原题基础上修订（题型/分值/考点不变），修订后需重新审核。</p>
             <textarea
               autoFocus rows={4} value={repairText}
-              onChange={e => setRepairText(e.target.value)}
+              onChange={(e) => { setRepairText(e.target.value) }}
               placeholder="例如：数据改为更真实的量级；把第（2）问改为求电功率；情境换成贵州天眼…"
             />
             <div className={css.qActions}>
-              <button type="button" onClick={() => setRepairTarget(null)}>取消</button>
+              <button type="button" onClick={() => { setRepairTarget(null) }}>取消</button>
               <button type="button" className={css.primary}
                 disabled={repairText.trim() === ''}
                 onClick={() => {
@@ -786,18 +792,23 @@ function FinalPanel({ jobs, exports_, api }: {
       {jobs.length === 0 && <Empty text="暂无已定稿的试卷 — 批准并导出的试卷会出现在这里" />}
       <div className={css.split}>
         <aside className={css.jobList}>
-          {jobs.map(job => {
+          {jobs.map((job) => {
             const bundle = exports_.find(e => e.paperId === job.id)
+            /* Bind the download names to consts: the `!== undefined` checks
+               below sit inside JSX closures, where narrowing on a property
+               access does not survive — on a const it does. */
+            const paperPdf = bundle?.files.paperPdf
+            const answerPdf = bundle?.files.answerPdf
             return (
               <div key={job.id} className={css.jobRow}>
                 <span className={css.jobTitle}>{job.document?.title ?? job.id}</span>
                 <span className={css.jobMeta}><StatusChip status={job.status} /> v{job.versions.at(-1)?.version ?? '-'} · {jobRating(job)}</span>
                 <div className={css.fileLinks}>
-                  {bundle?.files.paperPdf !== undefined && (
-                    <button type="button" onClick={() => setPreview({ jobId: job.id, name: bundle.files.paperPdf! })}>试卷.pdf</button>
+                  {paperPdf !== undefined && (
+                    <button type="button" onClick={() => { setPreview({ jobId: job.id, name: paperPdf }) }}>试卷.pdf</button>
                   )}
-                  {bundle?.files.answerPdf !== undefined && (
-                    <button type="button" onClick={() => setPreview({ jobId: job.id, name: bundle.files.answerPdf! })}>答案解析.pdf</button>
+                  {answerPdf !== undefined && (
+                    <button type="button" onClick={() => { setPreview({ jobId: job.id, name: answerPdf }) }}>答案解析.pdf</button>
                   )}
                   {bundle?.files.paperDocx !== undefined && (
                     <a href={api.fileUrl(job.id, bundle.files.paperDocx)} download>试卷.docx</a>
@@ -814,7 +825,7 @@ function FinalPanel({ jobs, exports_, api }: {
           {preview === undefined
             ? <p className={css.empty}>选择一份 PDF 在此预览（即最终打印版式）。</p>
             : <iframe className={css.preview} title="试卷 PDF 预览"
-                src={api.fileUrl(preview.jobId, preview.name)} />}
+              src={api.fileUrl(preview.jobId, preview.name)} />}
         </div>
       </div>
     </section>
@@ -853,7 +864,7 @@ function SourcesPanel({ sources, annotations, stats, blueprints, reviewer, api, 
       ...(form.featured ? { featured: true } : {}),
     })
     setForm(f => ({ ...f, id: '', examName: '', sourceRef: '' }))
-  }).catch(e => onError(err(e)))
+  }).catch((e: unknown) => { onError(err(e)) })
 
   const addAnnotation = () => run(async () => {
     if (annoSource.length === 0) throw new Error('请先选择原卷')
@@ -868,196 +879,200 @@ function SourcesPanel({ sources, annotations, stats, blueprints, reviewer, api, 
       answerSource: 'manual-transcript', reviewer,
     } as Omit<AnnotationRow, 'status'>)
     setAnno(a => ({ ...a, questionNo: '', knowledgePrimary: '', stem: '' }))
-  }).catch(e => onError(err(e)))
+  }).catch((e: unknown) => { onError(err(e)) })
 
   const importCsv = () => run(async () => {
     if (csvSource.length === 0) throw new Error('请先选择原卷')
     const result = await api.importCsv(csvSource, csvText, reviewer)
     onError(`已导入 ${result.created} 条考点记录（待复核）`)
     setCsvText('')
-  }).catch(e => onError(err(e)))
+  }).catch((e: unknown) => { onError(err(e)) })
 
   return (
     <section className={css.panel}>
       <div className={css.splitWide}>
         <div className={css.jobDetail}>
           <div className={css.card}>
-          <h2>原卷台账</h2>
-          <table className={css.table}>
-            <thead><tr><th>编号</th><th>年份</th><th>学段</th><th>科目</th><th>名称</th><th>证据</th><th>状态</th><th /></tr></thead>
-            <tbody>
-              {sources.map(s => (
-                <tr key={s.id}>
-                  <td>{s.id}</td><td>{s.year}</td><td>{s.level === 'zhongkao' ? '中考' : '高考'}</td>
-                  <td>{SUBJECT_LABEL[s.subject] ?? s.subject}</td><td className={css.cellText}>{s.examName}</td><td>{EVIDENCE_LABEL[s.evidenceTier] ?? s.evidenceTier}</td>
-                  <td>{ANNOTATION_STATUS[s.status] ?? s.status}</td>
-                  <td>{s.status === 'pending' && (
-                    <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.verifySource(s.id, reviewer)) }}>核验</button>
-                  )}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            <h2>原卷台账</h2>
+            <table className={css.table}>
+              <thead><tr><th>编号</th><th>年份</th><th>学段</th><th>科目</th><th>名称</th><th>证据</th><th>状态</th><th /></tr></thead>
+              <tbody>
+                {sources.map(s => (
+                  <tr key={s.id}>
+                    <td>{s.id}</td><td>{s.year}</td><td>{s.level === 'zhongkao' ? '中考' : '高考'}</td>
+                    <td>{SUBJECT_LABEL[s.subject] ?? s.subject}</td>
+                    <td className={css.cellText}>{s.examName}</td>
+                    <td>{EVIDENCE_LABEL[s.evidenceTier] ?? s.evidenceTier}</td>
+                    <td>{ANNOTATION_STATUS[s.status] ?? s.status}</td>
+                    <td>{s.status === 'pending' && (
+                      <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.verifySource(s.id, reviewer)) }}>核验</button>
+                    )}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div className={css.card}>
-          <h3>录入原卷</h3>
-          <div className={css.formGrid}>
-            <label className={css.fld}><span>编号</span>
-              <input placeholder="如 2025-gz-jh-lz" value={form.id}
-                onChange={e => setForm(f => ({ ...f, id: e.target.value }))} /></label>
-            <label className={css.fld}><span>年份</span>
-              <input value={form.year}
-                onChange={e => setForm(f => ({ ...f, year: e.target.value }))} /></label>
-            <label className={css.fld}><span>学段</span>
-              <select value={form.level} onChange={e => setForm(f => ({ ...f, level: e.target.value }))}>
-                <option value="zhongkao">中考（理综）</option>
-                <option value="gaokao">高考（选择性考试物理）</option>
-              </select></label>
-            <label className={css.fld}><span>科目</span>
-              <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}>
-                <option value="combined">理综（物理+化学）</option>
-                <option value="physics">物理</option>
-                <option value="chemistry">化学</option>
-              </select></label>
-            <label className={clsx(css.fld, css.fldWide)}><span>原卷名称</span>
-              <input placeholder="如 2025 年贵州省中考理综卷" value={form.examName}
-                onChange={e => setForm(f => ({ ...f, examName: e.target.value }))} /></label>
-            <label className={clsx(css.fld, css.fldWide)}><span>出处 / 存档位置</span>
-              <input value={form.sourceRef}
-                onChange={e => setForm(f => ({ ...f, sourceRef: e.target.value }))} /></label>
-            <label className={css.fld}><span>证据等级</span>
-              <select value={form.evidenceTier} onChange={e => setForm(f => ({ ...f, evidenceTier: e.target.value }))}>
-                <option value="policy">政策文件</option>
-                <option value="original-scan">原卷扫描</option>
-                <option value="manual-transcript">人工转录</option>
-                <option value="institution-analysis">机构解析</option>
-                <option value="recalled">回忆版（不进正式统计）</option>
-              </select></label>
-            <label className={css.fld}><span>地区</span>
-              <input placeholder="如 贵州·贵阳（省级留空）" value={form.region}
-                onChange={e => setForm(f => ({ ...f, region: e.target.value }))} /></label>
-            <label className={css.fld}><span>出题学校</span>
-              <input placeholder="如 贵阳一中（统考留空）" value={form.school}
-                onChange={e => setForm(f => ({ ...f, school: e.target.value }))} /></label>
-            <label className={css.fld}><span>卷类型</span>
-              <select value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
-                <option value="real">真题</option>
-                <option value="mock">模拟预测</option>
-                <option value="monthly">月考</option>
-                <option value="midterm">期中</option>
-                <option value="final">期末</option>
-                <option value="joint">联考/统考</option>
-              </select></label>
-            <label className={clsx(css.fld, css.fldCheck)}><span>含金量</span>
-              <span className={css.checkRow}>
-                <input type="checkbox" checked={form.featured}
-                  onChange={e => setForm(f => ({ ...f, featured: e.target.checked }))} />
-                名校卷 / 教研推荐（卷库置顶徽标）
-              </span></label>
-            <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void addSource() }}>保存原卷</button>
-          </div>
-          </div>
-
-          <div className={css.card}>
-          <h3>逐题考点录入</h3>
-          <div className={css.formGrid}>
-            <label className={clsx(css.fld, css.fldWide)}><span>原卷</span>
-              <select value={annoSource} onChange={e => setAnnoSource(e.target.value)}>
-                <option value="">— 选择原卷 —</option>
-                {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
-              </select></label>
-            <label className={css.fld}><span>题号</span>
-              <input value={anno.questionNo}
-                onChange={e => setAnno(a => ({ ...a, questionNo: e.target.value }))} /></label>
-            <label className={css.fld}><span>科目</span>
-              <select value={anno.subject} onChange={e => setAnno(a => ({ ...a, subject: e.target.value }))}>
-                <option value="physics">物理</option>
-                <option value="chemistry">化学</option>
-              </select></label>
-            <label className={css.fld}><span>题型</span>
-              <select value={anno.kind} onChange={e => setAnno(a => ({ ...a, kind: e.target.value }))}>
-                <option value="choice-single">单选</option>
-                <option value="choice-multi">多选</option>
-                <option value="blank">填空</option>
-                <option value="drawing">作图</option>
-                <option value="short-answer">简答</option>
-                <option value="experiment">实验探究</option>
-                <option value="calculation">综合计算</option>
-              </select></label>
-            <label className={css.fld}><span>分值</span>
-              <input value={anno.score}
-                onChange={e => setAnno(a => ({ ...a, score: e.target.value }))} /></label>
-            <label className={css.fld}><span>主考点</span>
-              <input value={anno.knowledgePrimary}
-                onChange={e => setAnno(a => ({ ...a, knowledgePrimary: e.target.value }))} /></label>
-            <label className={css.fld}><span>页码</span>
-              <input value={anno.pageNo}
-                onChange={e => setAnno(a => ({ ...a, pageNo: e.target.value }))} /></label>
-            <label className={clsx(css.fld, css.fldWide)}><span>题干（真题板块按题展示）</span>
-              <textarea value={anno.stem} rows={3}
-                placeholder="逐字转录题干，如：如图所示，质量为 2kg 的物块……"
-                onChange={e => setAnno(a => ({ ...a, stem: e.target.value }))} /></label>
-            <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void addAnnotation() }}>保存考点</button>
-          </div>
+            <h3>录入原卷</h3>
+            <div className={css.formGrid}>
+              <label className={css.fld}><span>编号</span>
+                <input placeholder="如 2025-gz-jh-lz" value={form.id}
+                  onChange={(e) => { setForm(f => ({ ...f, id: e.target.value })) }} /></label>
+              <label className={css.fld}><span>年份</span>
+                <input value={form.year}
+                  onChange={(e) => { setForm(f => ({ ...f, year: e.target.value })) }} /></label>
+              <label className={css.fld}><span>学段</span>
+                <select value={form.level} onChange={(e) => { setForm(f => ({ ...f, level: e.target.value })) }}>
+                  <option value="zhongkao">中考（理综）</option>
+                  <option value="gaokao">高考（选择性考试物理）</option>
+                </select></label>
+              <label className={css.fld}><span>科目</span>
+                <select value={form.subject} onChange={(e) => { setForm(f => ({ ...f, subject: e.target.value })) }}>
+                  <option value="combined">理综（物理+化学）</option>
+                  <option value="physics">物理</option>
+                  <option value="chemistry">化学</option>
+                </select></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>原卷名称</span>
+                <input placeholder="如 2025 年贵州省中考理综卷" value={form.examName}
+                  onChange={(e) => { setForm(f => ({ ...f, examName: e.target.value })) }} /></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>出处 / 存档位置</span>
+                <input value={form.sourceRef}
+                  onChange={(e) => { setForm(f => ({ ...f, sourceRef: e.target.value })) }} /></label>
+              <label className={css.fld}><span>证据等级</span>
+                <select value={form.evidenceTier} onChange={(e) => { setForm(f => ({ ...f, evidenceTier: e.target.value })) }}>
+                  <option value="policy">政策文件</option>
+                  <option value="original-scan">原卷扫描</option>
+                  <option value="manual-transcript">人工转录</option>
+                  <option value="institution-analysis">机构解析</option>
+                  <option value="recalled">回忆版（不进正式统计）</option>
+                </select></label>
+              <label className={css.fld}><span>地区</span>
+                <input placeholder="如 贵州·贵阳（省级留空）" value={form.region}
+                  onChange={(e) => { setForm(f => ({ ...f, region: e.target.value })) }} /></label>
+              <label className={css.fld}><span>出题学校</span>
+                <input placeholder="如 贵阳一中（统考留空）" value={form.school}
+                  onChange={(e) => { setForm(f => ({ ...f, school: e.target.value })) }} /></label>
+              <label className={css.fld}><span>卷类型</span>
+                <select value={form.kind} onChange={(e) => { setForm(f => ({ ...f, kind: e.target.value })) }}>
+                  <option value="real">真题</option>
+                  <option value="mock">模拟预测</option>
+                  <option value="monthly">月考</option>
+                  <option value="midterm">期中</option>
+                  <option value="final">期末</option>
+                  <option value="joint">联考/统考</option>
+                </select></label>
+              <label className={clsx(css.fld, css.fldCheck)}><span>含金量</span>
+                <span className={css.checkRow}>
+                  <input
+                    type="checkbox"
+                    checked={form.featured}
+                    onChange={(e) => { setForm(f => ({ ...f, featured: e.target.checked })) }} />
+                  名校卷 / 教研推荐（卷库置顶徽标）
+                </span></label>
+              <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void addSource() }}>保存原卷</button>
+            </div>
           </div>
 
           <div className={css.card}>
-          <h3>CSV 批量导入</h3>
-          <div className={css.formGrid}>
-            <label className={css.fld}><span>原卷</span>
-              <select value={csvSource} onChange={e => setCsvSource(e.target.value)}>
-                <option value="">— 选择原卷 —</option>
-                {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
-              </select></label>
-            <label className={clsx(css.fld, css.fldWide)}><span>CSV 内容</span>
-              <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={5}
-                placeholder={'题号,科目,题型,分值,主考点,次考点,能力,页码\n1,物理,choice-single,3,参照物,,理解,1'} /></label>
-            <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void importCsv() }}>导入</button>
+            <h3>逐题考点录入</h3>
+            <div className={css.formGrid}>
+              <label className={clsx(css.fld, css.fldWide)}><span>原卷</span>
+                <select value={annoSource} onChange={(e) => { setAnnoSource(e.target.value) }}>
+                  <option value="">— 选择原卷 —</option>
+                  {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
+                </select></label>
+              <label className={css.fld}><span>题号</span>
+                <input value={anno.questionNo}
+                  onChange={(e) => { setAnno(a => ({ ...a, questionNo: e.target.value })) }} /></label>
+              <label className={css.fld}><span>科目</span>
+                <select value={anno.subject} onChange={(e) => { setAnno(a => ({ ...a, subject: e.target.value })) }}>
+                  <option value="physics">物理</option>
+                  <option value="chemistry">化学</option>
+                </select></label>
+              <label className={css.fld}><span>题型</span>
+                <select value={anno.kind} onChange={(e) => { setAnno(a => ({ ...a, kind: e.target.value })) }}>
+                  <option value="choice-single">单选</option>
+                  <option value="choice-multi">多选</option>
+                  <option value="blank">填空</option>
+                  <option value="drawing">作图</option>
+                  <option value="short-answer">简答</option>
+                  <option value="experiment">实验探究</option>
+                  <option value="calculation">综合计算</option>
+                </select></label>
+              <label className={css.fld}><span>分值</span>
+                <input value={anno.score}
+                  onChange={(e) => { setAnno(a => ({ ...a, score: e.target.value })) }} /></label>
+              <label className={css.fld}><span>主考点</span>
+                <input value={anno.knowledgePrimary}
+                  onChange={(e) => { setAnno(a => ({ ...a, knowledgePrimary: e.target.value })) }} /></label>
+              <label className={css.fld}><span>页码</span>
+                <input value={anno.pageNo}
+                  onChange={(e) => { setAnno(a => ({ ...a, pageNo: e.target.value })) }} /></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>题干（真题板块按题展示）</span>
+                <textarea value={anno.stem} rows={3}
+                  placeholder="逐字转录题干，如：如图所示，质量为 2kg 的物块……"
+                  onChange={(e) => { setAnno(a => ({ ...a, stem: e.target.value })) }} /></label>
+              <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void addAnnotation() }}>保存考点</button>
+            </div>
           </div>
+
+          <div className={css.card}>
+            <h3>CSV 批量导入</h3>
+            <div className={css.formGrid}>
+              <label className={css.fld}><span>原卷</span>
+                <select value={csvSource} onChange={(e) => { setCsvSource(e.target.value) }}>
+                  <option value="">— 选择原卷 —</option>
+                  {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
+                </select></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>CSV 内容</span>
+                <textarea value={csvText} onChange={(e) => { setCsvText(e.target.value) }} rows={5}
+                  placeholder={'题号,科目,题型,分值,主考点,次考点,能力,页码\n1,物理,choice-single,3,参照物,,理解,1'} /></label>
+              <button type="button" className={clsx(css.primary, css.fldBtn)} onClick={() => { void importCsv() }}>导入</button>
+            </div>
           </div>
         </div>
 
         <aside className={css.jobList}>
           <div className={css.card}>
-          <h3>考点频次（已核验）</h3>
-          {Object.keys(stats).length === 0 && <p className={css.empty}>暂无已核验考点数据。</p>}
-          <table className={css.table}>
-            <thead><tr><th>考点</th><th>题次</th><th>分值</th><th>覆盖卷数</th></tr></thead>
-            <tbody>
-              {Object.entries(stats).sort((a, b) => b[1].score - a[1].score).map(([k, v]) => (
-                <tr key={k}><td className={css.cellText}>{k}</td><td>{v.count}</td><td>{v.score}</td><td>{v.papers}</td></tr>
-              ))}
-            </tbody>
-          </table>
+            <h3>考点频次（已核验）</h3>
+            {Object.keys(stats).length === 0 && <p className={css.empty}>暂无已核验考点数据。</p>}
+            <table className={css.table}>
+              <thead><tr><th>考点</th><th>题次</th><th>分值</th><th>覆盖卷数</th></tr></thead>
+              <tbody>
+                {Object.entries(stats).sort((a, b) => b[1].score - a[1].score).map(([k, v]) => (
+                  <tr key={k}><td className={css.cellText}>{k}</td><td>{v.count}</td><td>{v.score}</td><td>{v.papers}</td></tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div className={css.card}>
-          <h3>结构模板</h3>
-          {blueprints.map(b => (
-            <div key={b.id} className={css.jobRow}>
-              <span className={css.jobTitle}>{b.title}</span>
-              <span className={css.jobMeta}>{b.totalScore}分 · {ANNOTATION_STATUS[b.status] ?? b.status}</span>
-              {b.status === 'pending' && (
-                <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.verifyBlueprint(b.id)) }}>核验结构</button>
-              )}
-            </div>
-          ))}
-          </div>
-
-          <div className={css.card}>
-          <h3>考点记录（{annotations.length}）</h3>
-          <div className={css.annoList}>
-            {annotations.slice(0, 100).map(a => (
-              <div key={a.id} className={css.annoRow}>
-                <span>{a.questionNo} 题 · {a.knowledgePrimary} · {a.score}分</span>
-                <span className={css.jobMeta}>{ANNOTATION_STATUS[a.status] ?? a.status}</span>
-                {a.status === 'pending' && (
-                  <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.reviewAnnotation(a.id, 'verified')) }}>核验</button>
+            <h3>结构模板</h3>
+            {blueprints.map(b => (
+              <div key={b.id} className={css.jobRow}>
+                <span className={css.jobTitle}>{b.title}</span>
+                <span className={css.jobMeta}>{b.totalScore}分 · {ANNOTATION_STATUS[b.status] ?? b.status}</span>
+                {b.status === 'pending' && (
+                  <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.verifyBlueprint(b.id)) }}>核验结构</button>
                 )}
               </div>
             ))}
           </div>
+
+          <div className={css.card}>
+            <h3>考点记录（{annotations.length}）</h3>
+            <div className={css.annoList}>
+              {annotations.slice(0, 100).map(a => (
+                <div key={a.id} className={css.annoRow}>
+                  <span>{a.questionNo} 题 · {a.knowledgePrimary} · {a.score}分</span>
+                  <span className={css.jobMeta}>{ANNOTATION_STATUS[a.status] ?? a.status}</span>
+                  {a.status === 'pending' && (
+                    <button type="button" className={css.miniBtn} onClick={() => { void run(() => api.reviewAnnotation(a.id, 'verified')) }}>核验</button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </aside>
       </div>
@@ -1095,14 +1110,14 @@ function BankPanel({ items, reviewer, api, run, onError }: {
       text: paste, level, subject,
       ...(sourceUrl.trim() === '' ? {} : { sourceUrl: sourceUrl.trim() }),
       enteredBy: reviewer,
-    }).then(result => {
+    }).then((result) => {
       const dupNote = result.duplicates.length === 0 ? ''
         : `；重复跳过 ${result.duplicates.length} 题：${result.duplicates.join('；')}`
       setIngestResult(`入库 ${result.created.length} 题（待核验）${dupNote}`)
       if (result.created.length > 0) setPaste('')
       void run(() => Promise.resolve())
-    }).catch(e => onError(err(e)))
-      .finally(() => setIngesting(false))
+    }).catch((e: unknown) => { onError(err(e)) })
+      .finally(() => { setIngesting(false) })
   }
 
   const toggleMode = (item: BankItemRow, mode: 'verbatim' | 'adapt') => run(async () => {
@@ -1152,7 +1167,7 @@ function BankPanel({ items, reviewer, api, run, onError }: {
         )}
         <div className={css.bankActions}>
           <button type="button" className={css.miniBtn}
-            onClick={() => setExpanded(open ? undefined : item.id)}>
+            onClick={() => { setExpanded(open ? undefined : item.id) }}>
             {open ? '收起' : '展开全文'}
           </button>
           {item.status === 'pending' && (
@@ -1194,22 +1209,22 @@ function BankPanel({ items, reviewer, api, run, onError }: {
             <h3>粘贴导入（网络题源）</h3>
             <div className={css.formGrid}>
               <label className={css.fld}><span>学段</span>
-                <select value={level} onChange={e => setLevel(e.target.value as 'zhongkao' | 'gaokao')}>
+                <select value={level} onChange={(e) => { setLevel(e.target.value as 'zhongkao' | 'gaokao') }}>
                   <option value="gaokao">高中（高考）</option>
                   <option value="zhongkao">初中（中考）</option>
                 </select></label>
               <label className={css.fld}><span>科目</span>
-                <select value={subject} onChange={e => setSubject(e.target.value as 'physics' | 'chemistry')}>
+                <select value={subject} onChange={(e) => { setSubject(e.target.value as 'physics' | 'chemistry') }}>
                   <option value="physics">物理</option>
                   <option value="chemistry">化学</option>
                 </select></label>
               <label className={clsx(css.fld, css.fldWide)}><span>来源链接（可选）</span>
                 <input value={sourceUrl} placeholder="题目出处页面 URL"
-                  onChange={e => setSourceUrl(e.target.value)} /></label>
+                  onChange={(e) => { setSourceUrl(e.target.value) }} /></label>
               <label className={clsx(css.fld, css.fldWide)}><span>题目文本（可含多题，带【答案】【解析】最佳）</span>
                 <textarea value={paste} rows={10}
                   placeholder={'从网页/资料粘贴题目原文，例如：\n5．（2024·贵阳一中高三月考）如图所示，质量为 m=2kg 的物块……\n【答案】C\n【解析】物块沿斜面向上匀速运动……'}
-                  onChange={e => setPaste(e.target.value)} /></label>
+                  onChange={(e) => { setPaste(e.target.value) }} /></label>
               <button type="button" className={clsx(css.primary, css.fldBtn)}
                 disabled={ingesting} onClick={ingest}>
                 {ingesting ? '结构化中…' : '结构化入库'}

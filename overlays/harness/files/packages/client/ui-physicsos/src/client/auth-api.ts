@@ -24,7 +24,7 @@ const request = async <T>(base: string, path: string, init?: RequestInit): Promi
   }
   if (!response.ok) {
     const error = new Error(body.error?.message ?? `${response.status}`) as AuthApiError
-    Object.defineProperty(error, 'code', { value: body.error?.code ?? 'HTTP_' + response.status })
+    Object.defineProperty(error, 'code', { value: body.error?.code ?? `HTTP_${response.status}` })
     if (body.error?.candidates !== undefined) {
       Object.defineProperty(error, 'candidates', { value: body.error.candidates })
     }
@@ -180,7 +180,7 @@ export function createAdminApi(): AdminApi {
     listSchools: () => request(ADMIN_BASE, '/schools'),
     createSchool: input => adminPost('/schools', input),
     setSchoolStatus: (id, status) => adminPost(`/schools/${id}/status`, { status }),
-    listUsers: filter => {
+    listUsers: (filter) => {
       const params = new URLSearchParams()
       if (filter?.schoolId !== undefined) params.set('schoolId', filter.schoolId)
       if (filter?.role !== undefined) params.set('role', filter.role)
@@ -195,7 +195,7 @@ export function createAdminApi(): AdminApi {
       adminPost(userPath(schoolId, username, 'reset-password'), { newPassword }),
     revokeUserSessions: (schoolId, username) =>
       adminPost(userPath(schoolId, username, 'revoke-sessions'), {}),
-    listAudit: filter => {
+    listAudit: (filter) => {
       const params = new URLSearchParams()
       if (filter?.schoolId !== undefined) params.set('schoolId', filter.schoolId)
       if (filter?.limit !== undefined) params.set('limit', String(filter.limit))

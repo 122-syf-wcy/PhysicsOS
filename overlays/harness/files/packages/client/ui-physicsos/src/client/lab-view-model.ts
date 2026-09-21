@@ -54,6 +54,14 @@ export interface LabTrajectoryView {
   kind: 'history' | 'predicted'
   direction: 'clockwise' | 'counterclockwise'
   points: readonly LabPoint[]
+  /**
+   * Simulation time of each point, index-parallel with {@link points}.
+   *
+   * Optional because a bridge may not observe time at all; the canvas only
+   * offers hover/seek/strobe when the lengths match exactly, so a partial or
+   * misaligned array is simply ignored rather than mis-indexed.
+   */
+  times?: readonly number[]
 }
 
 /** Straight construction line (radius, guides). */

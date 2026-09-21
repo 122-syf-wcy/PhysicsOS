@@ -39,7 +39,10 @@ export type RecentSpacesProps =
  */
 const HISTORY_LIMIT = 8
 
-export function RecentSpaces({ wide, useRecentExperiments, useSessions, useWorkspaces, openSurface, removeRecent, openSession, archiveSession, t }: RecentSpacesProps) {
+export function RecentSpaces({
+  wide, useRecentExperiments, useSessions, useWorkspaces, openSurface,
+  removeRecent, openSession, archiveSession, t,
+}: RecentSpacesProps) {
   const items = useRecentExperiments(s => s.items)
   const sessions = useSessions(s => s)
   const archivedSessionIds = useWorkspaces(s => s.archivedSessionIds)

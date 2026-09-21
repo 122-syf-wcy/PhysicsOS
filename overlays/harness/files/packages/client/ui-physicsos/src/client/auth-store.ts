@@ -146,7 +146,7 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
   return {
     store,
     userStorage,
-    migrate: user => { migrateAnonymousProgress(base, user.id) },
+    migrate: (user) => { migrateAnonymousProgress(base, user.id) },
     boot: async () => {
       try {
         const { user } = await api.me()
