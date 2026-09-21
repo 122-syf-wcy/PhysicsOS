@@ -132,9 +132,16 @@ workspace 与根 lint/typecheck 里对它的引用。
 2. 阳光高考（`gaokao.chsi.com.cn`）院校库的中学检索接口 —— 本轮实测 412 拒绝
 3. 各市州教育局官网的招生计划/学校名录（黔南、黔东南两州此前已用此法）
 
-补齐后需要同步做的两件事：把 `schools-data.spec.ts` 的断言从"少于 N 条"改成
-按市州的下限断言；并用 `auth-acceptance.mjs` 的 CASE B 换一所**高中**校名做
-注册回归，确保高中侧真的可用。
+补齐后需要同步做的三件事：把 `schools-data.spec.ts` 的断言从"少于 N 条"改成
+按市州的下限断言；用 `auth-acceptance.mjs` 的 CASE B 换一所**高中**校名做
+注册回归，确保高中侧真的可用；以及把生成用的**源 TSV 一并入库**（见下）。
+
+**附：名录目前不可复现。** `schools-data.ts` 头部写着
+"Generated — do not hand-edit rows; regenerate from the source TSV"，
+但**那份源 TSV 不在仓库里**（全仓无 `*.tsv`）。也就是说这 1566 行现在是
+"只读不可重建"状态：想改一行只能手改，而这正是头部明确禁止的。
+补名录时把源表按 `name<TAB>city<TAB>county` 落进 `packages/.../data/` 或
+`scripts/data/`，再写一个生成脚本，让头部那句话变成真的。
 
 ---
 
