@@ -127,9 +127,14 @@ try {
   const dismissed = await gate().waitFor({ state: 'detached', timeout: 30_000 }).then(() => true).catch(() => false)
   if (!dismissed) check('register with a roster school name enters the app', false, await gateError())
   {
-    const identity = await page.evaluate(() => document.body.textContent ?? '')
-    check('sidebar carries the resolved school identity', identity.includes('乌当中学'),
-      identity.includes('乌当中学') ? '' : identity.slice(0, 120))
+    /* Await the shell paint: the gate detaches before the sidebar mounts, so a
+       bare read here races the render and flakes. */
+    const shown = await page
+      .waitForFunction(() => (document.body.textContent ?? '').includes('乌当中学'), undefined, { timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false)
+    check('sidebar carries the resolved school identity', shown,
+      shown ? '' : (await page.evaluate(() => (document.body.textContent ?? '').slice(0, 200))))
   }
   await shot('auth-student-shell-1600x900')
 
