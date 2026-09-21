@@ -68,7 +68,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['匀速直线运动是理想模型，实际运动总有微小阻力', '打点间隔受采样精度限制'],
     },
     textbook: [js('八年级上册', '第一章 机械运动', ['运动的快慢', '速度'])],
-    aliases: ['匀速', 'v=s/t', '速度', 's-t图', '平衡状态'],
+    aliases: ['匀速', 'v=s/t', '速度', 's-t图', '平衡状态', '运动的描述'],
     guide: ['运行实验，观察 x–t 图线的形状', '增大初速度 v₀，比较两条 x–t 图线的斜率', '查看数据页：任意相等时间内的位移是否相等'],
   },
   'average-speed': {
@@ -79,7 +79,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['全程平均速度必须用总路程除以总时间，不能对分段值再平均', '停表反应时间是主要测量误差'],
     },
     textbook: [js('八年级上册', '第一章 机械运动', ['测量平均速度'])],
-    aliases: ['平均速度', '测速', '斜面小车', '停表', 'v=s/t'],
+    aliases: ['平均速度', '测速', '斜面小车', '停表', 'v=s/t', '速度的计算'],
     guide: ['运行实验，记下全程的 s 与 t，算 v̄全', '用单步把时间停在中点，再算前半程 v̄上', '比较 v̄全 与 (v̄上 + v̄下)/2，说明为什么不等'],
   },
   'uniform-acceleration': {
@@ -123,7 +123,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['a 由合外力决定——水平方向拉力即合力时才等于 F/m', '本场景忽略摩擦力'],
     },
     textbook: [hs('必修第一册', '第四章 运动和力的关系', ['牛顿第二定律'])],
-    aliases: ['牛二', 'F=ma', '加速度', '合外力'],
+    aliases: ['牛二', 'F=ma', '加速度', '合外力', '二力平衡', '平衡力', '受力分析', '惯性', '牛顿第一定律与惯性', '牛顿运动定律', '运动状态'],
     guide: ['固定 F 改 m：a 如何变化？', '固定 m 改 F：验证 a ∝ F', '查看受力标注，确认竖直方向平衡'],
   },
   incline: {
@@ -134,7 +134,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['μ ≥ tanθ 时滑不下来——静摩擦会取所需值而非最大值', '支持力 N = mgcosθ 不是 mg'],
     },
     textbook: [hs('必修第一册', '第四章 运动和力的关系', ['牛顿运动定律的应用', '受力分析'])],
-    aliases: ['斜面', '受力分解', '摩擦力', '倾角', '下滑'],
+    aliases: ['斜面', '受力分解', '摩擦力', '倾角', '下滑', '斜面上的受力分析'],
     guide: ['运行并观察受力分解标注', '增大 θ：什么时候 a 变为正？验证 tanθ > μ', '增大 μ 到 0.6 以上，物块还下滑吗'],
   },
   'lever-balance': {
@@ -145,7 +145,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['力臂不是支点到悬挂点的杆长——斜拉时要取垂直距离', '杠杆自重忽略'],
     },
     textbook: [js('八年级下册', '第十二章 简单机械', ['杠杆'])],
-    aliases: ['杠杆', '力臂', '力矩', '平衡条件', 'F1L1=F2L2'],
+    aliases: ['杠杆', '力臂', '力矩', '平衡条件', 'F1L1=F2L2', '杠杆平衡条件'],
     guide: ['移动一侧钩码位置直到杠杆平衡', '读出两侧 F×L，验证相等', '一侧加倍力，力臂减半，还平衡吗'],
   },
   'collision-elastic': {
@@ -277,7 +277,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['本模型 μs 是精确阈值；真实接触面有 creep 与速度依赖', '拉力线性增长是实验协议假设'],
     },
     textbook: [js('八年级下册', '第八章 运动和力', ['摩擦力']), hs('必修第一册', '第三章 相互作用——力', ['摩擦力'])],
-    aliases: ['静摩擦', '滑动摩擦', '摩擦力', '最大静摩擦', 'μs', 'μk', '测力计'],
+    aliases: ['静摩擦', '滑动摩擦', '摩擦力', '最大静摩擦', 'μs', 'μk', '测力计', '滑动摩擦力'],
     guide: ['运行实验，找到 f 突降的时刻——此时拉力多大？', '验证最大静摩擦 = μsN', '把 μs 调大：起滑时刻如何变化？'],
   },
   'friction-mu': {
@@ -288,7 +288,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['μk 假设与速度无关', '读数取滑动段的 f——静止段的 f = F 不能用'],
     },
     textbook: [js('八年级下册', '第八章 运动和力', ['摩擦力'])],
-    aliases: ['动摩擦因数', '测摩擦', 'μk', '摩擦系数测量'],
+    aliases: ['动摩擦因数', '测摩擦', 'μk', '摩擦系数测量', '滑动摩擦力', '增大减小摩擦'],
     guide: ['运行实验，在派生量读 f 与 N', '用 μk = f/N 算出动摩擦因数，与设定值比较', '改 F：f 变吗？体会 f 与拉力无关'],
   },
 
@@ -324,7 +324,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['只计电场力，忽略重力（粒子尺度成立）', '匀强场限定了极板间区域'],
     },
     textbook: [hs('必修第三册', '第十章 静电场中的能量', ['带电粒子在电场中的运动'])],
-    aliases: ['匀强电场', '类平抛', '偏转', 'qE'],
+    aliases: ['匀强电场', '类平抛', '偏转', 'qE', '电场强度'],
     guide: ['对比本实验与平抛运动的轨迹形状', 'E 加倍：偏转量如何变', '把 q 改负：抛物线朝哪边弯'],
   },
   'parallel-plate': {
@@ -335,7 +335,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['偏转量以引擎发布的 deflection 为准', '边缘场忽略'],
     },
     textbook: [hs('必修第三册', '第十章 静电场中的能量', ['带电粒子在电场中的运动', '示波管原理'])],
-    aliases: ['平行板', '电容器', '偏转', '示波管', 'U/d'],
+    aliases: ['平行板', '电容器', '偏转', '示波管', 'U/d', '带电粒子偏转', '带电粒子在电场中的运动'],
     guide: ['调 U：屏上偏移量与 U 成正比吗', '调 d：E = U/d 怎么变', '增大 v₀：偏转为什么变小'],
   },
 
@@ -363,7 +363,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['电流表内阻忽略', '导线电阻忽略'],
     },
     textbook: [js('九年级全一册', '第十五章 电流和电路', ['串联和并联']), js('九年级全一册', '第十七章 欧姆定律', ['电阻的串联'])],
-    aliases: ['串联', '电流规律', '分压', '串并联'],
+    aliases: ['串联', '电流规律', '分压', '串并联', '串联电路分压', '串联电路计算', '实物电路连接'],
     guide: ['读出电流表与各电阻电压', '验证 U总 = U₁ + U₂', '拨动开关：整个电路同时断电'],
   },
   'parallel-circuit': {
@@ -396,7 +396,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['滑片两端都有阻值——注意接入的是哪一段', '线性电阻网络，无接触电阻'],
     },
     textbook: [js('九年级全一册', '第十六章 电压 电阻', ['变阻器'])],
-    aliases: ['滑动变阻器', '滑片', '变阻', '限流', '滑变'],
+    aliases: ['滑动变阻器', '滑片', '变阻', '限流', '滑变', '动态电路分析'],
     guide: ['直接拖动画布上的滑片，看电流表怎么变', '把滑片推到 0 和 100%，读出两个极端电流', '换用键盘方向键微调滑片（±5%）'],
   },
   'va-resistance': {
@@ -418,7 +418,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['本模型把灯泡当定值电阻——真实灯丝电阻随温度变化', '额定功率只在额定电压下成立'],
     },
     textbook: [js('九年级全一册', '第十八章 电功率', ['测量小灯泡的电功率'])],
-    aliases: ['电功率', '额定功率', '小灯泡', 'P=UI'],
+    aliases: ['电功率', '额定功率', '小灯泡', 'P=UI', '焦耳定律', '电功率与焦耳定律'],
     guide: ['把滑片调到电压表读数为额定值，读 I 算 P', '电压低于额定值时，实际功率偏大还是偏小', '为什么真实灯泡的电阻不是定值'],
   },
   'emf-measurement': {
@@ -429,7 +429,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['电压表分流带来系统误差——测的 E、r 都偏小', '数据点太少拟合不稳'],
     },
     textbook: [hs('必修第三册', '第十二章 电能 能量守恒定律', ['实验：电池电动势和内阻的测量'])],
-    aliases: ['电动势', '内阻', '闭合电路', '路端电压', 'U-I图'],
+    aliases: ['电动势', '内阻', '闭合电路', '路端电压', 'U-I图', '测电源电动势和内阻', '闭合电路欧姆定律'],
     guide: ['改变 R 记录几组 (I, U)', '在图像页看 U–I 直线的截距与斜率', 'R = r 时输出功率最大——找一找'],
   },
 
@@ -443,7 +443,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['虚像不是光实际会聚——光屏承接法可证', '玻璃板有厚度会成两个微弱像'],
     },
     textbook: [js('八年级上册', '第四章 光现象', ['平面镜成像'])],
-    aliases: ['平面镜', '虚像', '等大等距', '成像', '光的反射', '反射定律'],
+    aliases: ['平面镜', '虚像', '等大等距', '成像', '光的反射', '反射定律', '光的反射定律', '平面镜成像特点'],
     guide: ['移动蜡烛，看像的位置和大小怎么变', '把光屏放到像的位置：能接到吗', '量一量物距与像距'],
   },
   'convex-lens': {
@@ -454,7 +454,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['虚像要透过透镜观察，光屏接不到', 'u = f 是成像与否的分界，不是"放大"'],
     },
     textbook: [js('八年级上册', '第五章 透镜及其应用', ['凸透镜成像的规律'])],
-    aliases: ['凸透镜', '成像规律', '焦距', '实像', '虚像', '照相机', '放大镜', '折射', '光的折射'],
+    aliases: ['凸透镜', '成像规律', '焦距', '实像', '虚像', '照相机', '放大镜', '折射', '光的折射', '光的折射规律', '探究凸透镜成像', '透镜及其应用'],
     guide: ['把 u 从大于 2f 逐步调小，记录每个区间的像', 'u = f 时发生了什么', 'u < f 时光屏接不到像——像在哪里'],
   },
   'concave-mirror': {
@@ -490,7 +490,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['计时误差直接翻倍进距离', '温度改变声速——15 ℃ 空气取 340 m/s'],
     },
     textbook: [js('八年级上册', '第二章 声现象', ['声音的产生与传播', '声速'])],
-    aliases: ['回声', '测距', '声速', 's=vt/2', '声音', '声学'],
+    aliases: ['回声', '测距', '声速', 's=vt/2', '声音', '声学', '声现象', '声的利用', '声音的产生与传播', '超声波与次声波'],
     guide: ['记录发出与听到回声的时差', '用 d = vt/2 验算峭壁距离', '换一种介质，回声时间怎么变'],
   },
 
@@ -518,7 +518,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['水平段不是"没吸热"，是吸热不升温', '容器吸热与散热忽略'],
     },
     textbook: [js('八年级上册', '第三章 物态变化', ['熔化和凝固'])],
-    aliases: ['熔化', '晶体', '熔点', '冰', '水平段', '凝固', '物态变化'],
+    aliases: ['熔化', '晶体', '熔点', '冰', '水平段', '凝固', '物态变化', '熔化与凝固', '熔点与凝固'],
     guide: ['找出 T–t 图上的水平段：对应什么过程', '比较升温段与熔化段的时长', '把 λ 调成 0：水平段还在吗'],
   },
   'heat-capacity-comparison': {
@@ -529,7 +529,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['散热损失使实际 ΔT 略低于理想值', '搅拌不均匀带来局部温差'],
     },
     textbook: [js('九年级全一册', '第十三章 内能', ['比热容'])],
-    aliases: ['比热容', '吸热能力', '水和煤油', 'Q=cmΔT'],
+    aliases: ['比热容', '吸热能力', '水和煤油', 'Q=cmΔT', '热量的计算'],
     guide: ['同时加热等质量的水和煤油，比较 ΔT', '验证 ΔT水/ΔT煤油 ≈ c煤油/c水', '解释为什么海边昼夜温差小'],
   },
 
@@ -543,7 +543,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['电场力与磁场力必须真的反向——B 的方向决定能否抵消', '选择性与电荷、质量无关是结论不是近似'],
     },
     textbook: [hs('选择性必修第二册', '第一章 磁场对运动电荷的作用力', ['质谱仪与回旋加速器'])],
-    aliases: ['速度选择器', '正交场', 'v=E/B', '滤速器'],
+    aliases: ['速度选择器', '正交场', 'v=E/B', '滤速器', '带电粒子在复合场中的运动'],
     guide: ['默认参数下粒子直线通过——验证 v₀ = E/B', '把 v₀ 调大：向哪边偏？哪份力赢了', '换 B 的方向：还能直线吗'],
   },
   'mass-spectrometer': {
@@ -554,7 +554,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['落点测的是直径 2r 不是 r', '边缘进入角差会散焦'],
     },
     textbook: [hs('选择性必修第二册', '第一章 磁场对运动电荷的作用力', ['质谱仪与回旋加速器'])],
-    aliases: ['质谱仪', '同位素', '半圆偏转', '荷质比'],
+    aliases: ['质谱仪', '同位素', '半圆偏转', '荷质比', '带电粒子在复合场中的运动'],
     guide: ['认出轨迹哪段在选择区、哪段在偏转区', '把 m 加倍：落点怎么移', '由落点直径反推 m'],
   },
   'composite-eb': {
@@ -611,7 +611,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['收尾速度条件：安培力 = 外力时才匀速', '导轨电阻与接触电阻已并入 r'],
     },
     textbook: [hs('选择性必修第二册', '第二章 电磁感应', ['法拉第电磁感应定律', '电磁感应中的动力学问题'])],
-    aliases: ['单棒', '导轨', '切割磁感线', 'BLv', '收尾速度', '安培力', '发电机', '感应电流'],
+    aliases: ['单棒', '导轨', '切割磁感线', 'BLv', '收尾速度', '安培力', '发电机', '感应电流', '电磁感应现象'],
     guide: ['给棒一个初速度，看 v–t 曲线形状', '算一算：什么时候安培力与外力平衡', '改 B 或 L，看收尾速度怎么变'],
   },
   'induction-double-bar-momentum': {
@@ -658,7 +658,7 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
       errors: ['波速由介质决定——不是"波源推多快就走多快"', '相邻同相点间距才是 λ'],
     },
     textbook: [hs('选择性必修第一册', '第三章 机械波', ['波的形成', '波的描述'])],
-    aliases: ['横波', '波长', '波速', 'v=λf', '绳波'],
+    aliases: ['横波', '波长', '波速', 'v=λf', '绳波', '波长与频率'],
     guide: ['盯住一个标记质点：它随波走了吗', '改 f 看 λ 怎么变（v 不变）', '用标尺量一个波长的距离'],
   },
   'wave-interference': {
