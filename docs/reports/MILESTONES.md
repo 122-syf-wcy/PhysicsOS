@@ -686,6 +686,42 @@ support 又把它计入 `errorResponses`，于是任何套件都会在跑第一�
 
 ---
 
+### QUESTION_BANK_DATA_V1
+
+**日期**：2026-09-21
+
+**范围**：题库从"机制验证用样本"变成"有真实可用数据"。
+
+此前 `bank_items` 只有 4 条（前几轮为验证组卷链路手工录入的样本），
+组卷算法实际上无米下锅。本轮灌入 **388 条真实公开题目**（4 → 392）。
+
+**数据源**：C-Eval `ceval/ceval-exam` 的 `middle_school_physics` 与
+`high_school_physics` 全部 401 道单选题（CC BY-NC-SA 4.0，与本仓库
+PolyForm Noncommercial 兼容，署名见 `NOTICE.md`）。这是本环境下唯一
+**有明确许可、且机器可读**的中国中学物理题源——商业题库（学科网/百度文库/
+道客巴巴）都付费且有版权，省级考试院不公开整卷。
+
+**映射**（`scripts/ingest-ceval-physics.mjs`，可重复执行、幂等去重）：
+
+- 逐条落 `sourceLabel` / `sourceUrl` / `answerTier: web-public`
+- **`reuseModes: ['adapt']`，不含 `verbatim`** —— 组卷只能当改写骨架，
+  不会把未经核验的题原样印成试卷
+- 全部 `status: pending`，需教师逐条核验后才参与组卷
+- 考点由题干+选项按脚本内**公开的关键词表**机器推得，标记
+  `knowledge-derived-from-stem`；难度/能力/分值该源没有，用具名默认值，
+  一并登记进 `anomalies`（审核界面直接可见）
+- 13 条因题干重复被服务端 `DUPLICATE_ITEM` 挡下——去重是有效的
+
+**如实说明**：这批题**不是贵州真题**，也未与任何试卷核对过。它们解决的是
+"组卷算法没有真实题目可跑"，不是"卷库有内容了"——**卷库仍是 4 张卷**，
+因为 C-Eval 不含卷级元数据，凭空补卷名就是编。见
+`BACKLOG.md` 的 `PAPER_STUDIO_DATA_STATE`。
+
+**验证**：`GET /physicsos/paper/bank/items` 返回 392 条（388 pending）；
+`pnpm typecheck` / `pnpm lint` / `pnpm test` 全绿。
+
+---
+
 ## 明确延后
 
 见 `docs/reports/BACKLOG.md`：

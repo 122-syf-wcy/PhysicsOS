@@ -202,6 +202,59 @@ https://www.qdn.gov.cn/zwgk_5871642/zdlyxxgk/ggqsy_5872177/202408/t20240820_8540
 
 ---
 
+## PAPER_STUDIO_DATA_STATE
+
+**状态**：题库已灌入真实公开数据（2026-09-21）；**卷库仍只有 4 张卷**。
+
+`scripts/ingest-ceval-physics.mjs` 把 C-Eval 的 `middle_school_physics` 与
+`high_school_physics` 两个学科全部 401 道单选题映射进题库：
+
+```
+题库   4 → 392 条   （195 中考 / 197 高考；388 待核验 + 4 原有已核验）
+卷库   4 张卷        （未变）
+```
+
+**这批数据的性质必须说清楚**（NOTICE 与每条 `anomalies` 里都记了）：
+
+- **不是贵州真题**，也未与任何试卷核对过。C-Eval 是公开评测集，不是卷源。
+- 全部 `status: pending` → 需教师在出卷专区逐条核验后才参与组卷
+- `reuseModes: ['adapt']`，**不含 `verbatim`** → 组卷算法只能拿它当改写骨架，
+  不会原样印成试卷
+- `answerTier: web-public`（最弱的、但仍具名的层级）
+- 考点标签是**机器从题干+选项推得**的，标记 `knowledge-derived-from-stem`；
+  难度/能力/分值该数据源没有，用了具名默认值并如实登记在 `anomalies`
+- 许可：CC BY-NC-SA 4.0，与本仓库的 PolyForm Noncommercial 兼容，署名见
+  `NOTICE.md`
+
+**卷库为什么没动**：C-Eval 提供的是题目集合，**不含卷级元数据**（哪一年、哪个
+地区、哪所学校），凭空补卷名就是编。要扩卷库仍需真实卷源。
+
+**开始条件**（扩卷库）：拿到可核验的卷源（考试院发布、学校授权、或用户提供
+扫描件/转录）。届时用同一套 `POST /physicsos/paper/sources` +
+`.../annotations` 录入，`evidenceTier` 按实际来源选 `original-scan` /
+`manual-transcript`，不要一律填 `web-public`。
+
+---
+
+## PNPM_FORMAT_IS_RED
+
+**状态**：登记。`pnpm format`（`prettier --check .`）**全仓 751 个文件不通过**，
+包括 3 个早于本轮就存在的 `scripts/*.mjs`。
+
+它不是 `pnpm lint` / `pnpm test` 门禁的一部分，所以一直没暴露；但它写在
+`package.json` 里、看起来像一条应当可用的命令。
+
+**为什么现在不做**：一次性 `prettier --write` 会产出 751 个文件的格式 diff，
+把真实改动淹没，且 `.prettierignore` 目前没有排除 `vendor/`、
+`overlays/.../public/` 等生成物目录——先修 ignore 再格式化，否则会把第三方
+代码一起改写。
+
+**开始条件**：先补 `.prettierignore`（`vendor/`、`UI/generated/`、
+`overlays/harness/files/apps/web/public/`、`docs/reports/screenshots/`），
+再单独一个提交跑 `prettier --write`，之后把 `format` 接进 `lint` 链。
+
+---
+
 ## PAPER_HOST_COMPOSITION_TEST_GAP
 
 **状态**：登记。`paper-host` 只有 `routes.spec.ts`（9 项，Map-backed domain），

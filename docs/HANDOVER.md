@@ -255,6 +255,43 @@ DSH_HOME="$H" pnpm -C vendor/deepseek-harness dsh web
 
 ---
 
+### 2.6 题库数据从哪来（`scripts/ingest-ceval-physics.mjs`）
+
+题库（`bank_items`）的真实数据由一条可重复执行的脚本灌入：
+
+```bash
+node scripts/ingest-ceval-physics.mjs --dry-run   # 只映射并打印样例
+node scripts/ingest-ceval-physics.mjs             # 写入 :3080
+node scripts/ingest-ceval-physics.mjs --base http://127.0.0.1:3099
+```
+
+数据源是 **C-Eval**（`ceval/ceval-exam`，CC BY-NC-SA 4.0）的
+`middle_school_physics` + `high_school_physics`，共 401 道单选题。
+选它是因为它是本环境下唯一**有明确许可、且机器可读**的中国中学物理题源；
+商业题库付费且有版权，省级考试院不公开整卷。
+
+脚本是幂等的（服务端按题干指纹去重，重复跑只会得到"已存在"）。默认
+**先起服务**——它就是个 HTTP 客户端，不直接写存储文件。
+
+> **这批数据不是贵州真题**，也没与任何试卷核对过。因此每条都是
+> `status: pending`（待教师核验）、`reuseModes: ['adapt']`（只能当改写骨架，
+> 不会原样印成试卷）、`answerTier: web-public`，并且把数据源**没有提供**的
+> 字段（官方考点/难度/能力/分值）逐条登记在 `anomalies` 里——审核界面直接
+> 可见。考点标签是机器从题干+选项推的，标了 `knowledge-derived-from-stem`。
+>
+> 详细取舍见 `docs/reports/MILESTONES.md` 的 `QUESTION_BANK_DATA_V1` 与
+> `docs/reports/BACKLOG.md` 的 `PAPER_STUDIO_DATA_STATE`。
+
+**卷库（`source_papers`）仍是 4 张卷**：C-Eval 提供题目集合，不含卷级元数据
+（年份/地区/学校），凭空补卷名就是编。扩卷库需要真实卷源。
+
+> ⚠️ `pnpm format`（`prettier --check .`）**全仓 751 个文件不通过**，包括几个
+> 早于本轮就存在的脚本。它不在 `lint`/`test` 门禁里，所以一直没暴露。别被它
+> 的红吓到，也别顺手 `--write`——先补 `.prettierignore` 排除 `vendor/` 与
+> 生成物，见 `BACKLOG.md` 的 `PNPM_FORMAT_IS_RED`。
+
+---
+
 ## 3. 常用命令
 
 ```bash
