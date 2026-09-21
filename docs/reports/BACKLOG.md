@@ -88,3 +88,94 @@ verification / observations / time / question context）、工具契约
 
 **开始条件**：确认旧页面参考不再需要，即可整目录删除并同步收掉
 workspace 与根 lint/typecheck 里对它的引用。
+
+## GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP
+
+**状态**：登记。**高中生源的学校名录严重不全** —— 这直接卡住产品主链路。
+
+`auth-host/src/schools-data.ts` 有 1566 条贵州中学名录，但结构是失衡的：
+
+| 口径 | 数量 |
+| --- | --- |
+| 名称以「中学」结尾 | 1430 |
+| 名称以「高级中学」结尾 | 2 |
+| 名称以「高中」结尾 | 2（含上） |
+
+抽查 20 所公认的省市重点 / 各市州旗舰校，**15 所不在名录里**：
+
+```
+缺失：贵阳一中  贵阳实验三中  贵阳六中  贵阳九中  清华中学
+      遵义四中  遵义南白中学  凯里一中  都匀一中  安顺一中
+      安顺二中  铜仁一中  毕节一中  兴义一中  兴义八中  贵阳民族中学
+在册：遵义航天中学  六盘水市第一实验中学  贵州大学附属中学  贵州省实验中学
+```
+
+**为什么这是 P0 级数据问题**：产品定位是中考/高考（出卷专区就是高考导向），
+但名录主体是**县域义务教育阶段初中**；高中、尤其是各市州的一中/实验中学几乎
+缺席。后果是**一名贵阳一中的学生用自己的真实校名根本注册不了**——
+而"学校是一级租户"正是账户体系的立身之本。
+
+**为什么现在不做**（本轮没做）：需要权威名录来源，而本轮三条路都被挡：
+
+- `web_search` 工具未配置（HTTP 401，端点未设）
+- 维基百科被解析到非公网 IP，拒绝抓取
+- 搜索引擎（Bing / DuckDuckGo / Baidu）返回挑战页或 0 结果；
+  贵州省教育厅站内搜索是纯 JS 驱动、静态 HTML 里没有端点
+
+**在这三条路里任一条打通前，不添任何校名。** 凭空补 100 所学校的名字会直接
+污染租户表——那正是 `schools-data.ts` 头部注释所强调的"如实标注来源"要防的
+事。名录宁可诚实地不全，也不能编。
+
+**开始条件**：拿到以下任一权威源后按市州补齐，并在文件头注明来源与抓取日期：
+
+1. 贵州省教育厅年度《普通高中招生计划》或省级示范性普通高中评估名单
+2. 阳光高考（`gaokao.chsi.com.cn`）院校库的中学检索接口 —— 本轮实测 412 拒绝
+3. 各市州教育局官网的招生计划/学校名录（黔南、黔东南两州此前已用此法）
+
+补齐后需要同步做的两件事：把 `schools-data.spec.ts` 的断言从"少于 N 条"改成
+按市州的下限断言；并用 `auth-acceptance.mjs` 的 CASE B 换一所**高中**校名做
+注册回归，确保高中侧真的可用。
+
+---
+
+## DSH_CREDENTIALS_SCHEMA_SKEW
+
+**状态**：登记。宿主与 vendored harness 对 `~/.dsh/.credentials.yaml` 的格式
+理解不一致，**会让 `pnpm dev` 完全起不来**。
+
+- 本仓库 pin 的 `credentials-local` 把 YAML 根节点当扁平映射（键 → 字符串），
+  逐条校验键名是 POSIX 标识符
+- DSH Desktop 2.0.13 会把它改写成嵌套文档
+  `{version: 1, records: {client-connection/browser-session: …}, refs: {…}}`
+
+于是解析器读到 `version: 1`（数字，不是字符串）就抛
+`the value for "version" … must be a string`，插件树加载失败。
+
+**为什么现在不做**：修它要么升 pinned harness、要么让宿主与仓库共用同一份实现，
+两条都要动 submodule pin 或宿主，属于环境治理而非产品能力；而且**改错方向会
+弄坏 DSH Desktop 自己**（它可能正依赖新格式）。
+
+**已提供的绕开手段**：`DSH_HOME` 指向镜像目录（symlink `profiles/` +
+`settings.yaml`，空 `storages/`，只重建扁平 `refs`），
+见 `docs/HANDOVER.md` §2.5 与 `tests/acceptance/support.mjs` 的
+`startIsolatedServer()`。
+
+**开始条件**：确认宿主版本与 harness 的 credentials 契约应当以哪一侧为准
+（建议以新版为准，因为它已经落盘了），再统一。
+
+---
+
+## PAPER_HOST_COMPOSITION_TEST_GAP
+
+**状态**：登记。`paper-host` 只有 `routes.spec.ts`（9 项，Map-backed domain），
+**没有** `auth-host` 那样的 REAL-composition 测试（真实插件链 + 真 http 服务）。
+
+`auth-host/tests/composition.spec.ts` 的 2 项正是抓出"插件在真实组合里能否
+激活 + 路由是否真的挂上"的那一层——`paper-host` 缺这一层，意味着
+`cordis.patch.yml` 里 paper-host 的接线错误只会在浏览器验收或手工 e2e 里暴露。
+
+**开始条件**：把 `composition.spec.ts` 的 boot 链扩到同时挂 paper-host，
+断言 `/physicsos/paper/blueprints` 在真实组合下 200。
+
+---
+

@@ -10,20 +10,40 @@
 | 项 | 值 |
 | --- | --- |
 | 仓库 | `https://github.com/122-syf-wcy/PhysicsOS.git` |
-| 分支 | `feat/circuit-living-effects`（提交 `794b9d0`） |
-| 内容 | 电学台活体化：电流流光 / 灯泡分层辉光 / 电缆导线 + 器材精灵生成流水线 |
+| 分支 | `codex/experiment-studio-polish`（与 `main` 同一提交） |
+| 分支头 | `fc2ec69`（2026-09-21） |
+| 内容 | 实验工作室打磨 → 账户体系 → 管理后台 → 资源库 → 出卷专区/题库 |
 
-`main` 上还没有这次的工作。要在新机器上拿到它，二选一：
+> **本节此前写的是 `feat/circuit-living-effects` / `794b9d0`，已过期。**
+> 那条分支早已 fast-forward 进 `main`（`git branch --contains 794b9d0` 可见），
+> 现状是 `main` 与 `codex/experiment-studio-polish` 指向同一个提交。
+
+`main` 已包含全部历史，直接：
 
 ```bash
-git clone https://github.com/122-syf-wcy/PhysicsOS.git && git checkout feat/circuit-living-effects
+git clone https://github.com/122-syf-wcy/PhysicsOS.git
 ```
 
-或者把 `main` 快进过去（仓库历史全在 `main`，这是 fast-forward，没有分叉）：
+---
 
-```bash
-git checkout main && git merge --ff-only feat/circuit-living-effects && git push
-```
+## 1.1 一周的工作面（2026-09-12 → 09-21）
+
+这段工作**曾经整整一周没有提交**（335 个文件、+16724/−5747 行只存在于工作区，
+一次 `apply` 误操作或磁盘故障就全没了）。09-21 已按主题补成交付：
+
+| 主题 | 代表内容 |
+| --- | --- |
+| `fix(packages)` | 09-14 审计的 5 条 P0 物理正确性缺陷全修（题给时长 / 斜抛发射条件 / 平行板偏转 / 牛二水平合力 / 比较类题诚实拒识） |
+| `feat(question-paper)` | 出卷域模型新包：细目表 / 组卷算法 / 检查 / 版本哈希 / markdown 导出 |
+| `feat(auth-host)` | 学校一级租户账户体系：argon2id、HttpOnly 会话、限流、CSRF、`/physicsos/auth` |
+| 管理后台 | 申请审批 / 学校 / 用户 / 审计四 tab，`/physicsos/admin`，路由级角色 + 租户收窄 |
+| `feat(ui)` | 登录注册门、侧栏学校身份、资源库（926 项配套资源）、出卷专区、题库录入 |
+| 实验台 | 器材精灵接入、自由拖动 + 导线自动重排、开关/滑变画布直接操作 |
+| 资产 | 器材精灵（电路 + 力学）、资源库/登录页素材、KaTeX、官网静态站 |
+| 门禁 | `auth-host`/`paper-host` 接入 `pnpm typecheck/lint/test`；`lint` 与 `test` 全绿 |
+
+**未做**：见 `docs/reports/BACKLOG.md`（`GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP`、
+`DSH_CREDENTIALS_SCHEMA_SKEW` 等）。
 
 ---
 
@@ -36,6 +56,31 @@ git checkout main && git merge --ff-only feat/circuit-living-effects && git push
 ```bash
 git submodule update --init --recursive
 pnpm install
+```
+
+### 2.1.1 Node 版本：**必须 ≥ 24.7，且 OpenSSL 带 argon2id**
+
+`auth-host` 用 `node:crypto` 的 argon2id 做口令哈希，没有它插件**拒绝加载**，
+整个 web 服务起不来。这不是"建议版本"——它是硬门槛，故根 `engines.node`
+已从 `>=20.19.0` 提到 `>=24.7.0`。
+
+两个坑：
+
+- **"有函数"不等于"能算"**。有的构建暴露了 `crypto.argon2Sync`，但底层
+  OpenSSL 没有 argon2id，调用时抛 `ERR_CRYPTO_ARGON2_NOT_SUPPORTED`。
+  本机就撞上过一个 vendored Node 24.18.1 属于这种情况。
+  `passwords.ts` 现在用最低合法参数真跑一次来判定能力，报错是单行的：
+  `auth-host requires a working argon2id: … (Node v24.18.1; needs >= 24.7 built
+  against an OpenSSL with argon2id)`。裸 `typeof … === 'function'` 判据已废弃。
+- **`pnpm exec` 会继承调用方的 PATH**，所以从某个自带 Node 的宿主里跑
+  `pnpm …`，脚本里的 `node` 可能是那个宿主版本而非你的 `node -v`。
+  症状是测试在 auth-host 上批量失败。核对：
+  `pnpm -C vendor/deepseek-harness exec node -v` 不适用时，直接在脚本里
+  `node -v` 打印一次；必要时 `PATH="/opt/homebrew/bin:$PATH" pnpm test`。
+
+```bash
+node -v                                   # 期望 v24.7+ 且 argon2 可用
+node -e "console.log(typeof require('node:crypto').argon2Sync)"   # function
 ```
 
 ### 2.2 把 overlay 铺进 vendor（关键步骤）
@@ -57,11 +102,33 @@ node scripts/overlay/harness-overlay.mjs capture
 
 **这是最容易踩的坑**：不要只改 vendor 就以为改完了。
 
+> ⚠️ **`OVERLAY_PATHS` 漏一个包 = 那个包只活在 vendor 里 = 会被静默丢掉。**
+> `paper-host`（出卷专区整个后端，13 个文件）就曾经如此：它在 submodule 里是
+> 未跟踪状态（`?? packages/physicsos/`），不在 overlay、父仓库也看不到它
+> （`git ls-files | grep paper-host` 为空）。于是 HANDOVER 里那条"新机器上手"
+> 流程走完，出卷专区后端**根本不存在**，`git clean -fdx` 或任何一次 submodule
+> 重建都会删掉它。09-21 已补进 overlay 并验证 `apply` 能逐字节重建。
+>
+> **加新 host 插件时的检查清单**（三步都要做，缺一不可）：
+> 1. `overlays/harness/files/...` 下建目录（排除 `node_modules` / `lib`）
+> 2. `scripts/overlay/harness-overlay.mjs` 的 `OVERLAY_PATHS` 加路径
+> 3. `cordis.patch.yml` 挂载 + `package.json` 加依赖 + 重建
+>
+> 自查：`git -C vendor/deepseek-harness status --short | grep '^??'` 列出的每条
+> 未跟踪路径都应该能在 `OVERLAY_PATHS` 里找到对应项。
+
 > ⚠️ `overlays/harness/upstream-changes.patch` 必须是**完整版**（约 43 个上游
 > 文件、1860+ 行，声明并渲染 `sidebar.brand/nav/new`、`conversation.hero.*`、
 > `conversation.surface` 等 PhysicsOS 自定义槽位）。`ecc7286` 曾误把它削到
 > 14 行，已恢复为 `8c50de7` 版——若新机器上 `typecheck:web` 报
 > `"sidebar.nav" not in SlotMap` 之类错误，先检查这个 patch 是否完整。
+
+> ⚠️ **`apply` 不会恢复 `lib/` 与 `node_modules/`。**（`node_modules` 是
+> pnpm 的 workspace link，`lib` 是构建产物。）如果你把整个包目录挪走再
+> `apply` 回来，拿到的只有源码——必须重跑 `pnpm install` 与包内
+> `pnpm run bundle`，否则类型解析会退化成 `any`，`oxlint` 的 type-aware
+> 规则会从几十条暴涨到上千条 `no-unsafe-*`。这个症状很好认：
+> 报错数量突然一个数量级变化，就是类型解析断了，不是代码坏了。
 
 ### 2.4 新机器首次构建顺序（实测）
 
@@ -138,6 +205,56 @@ agent-default-model:
 
 ---
 
+### 2.5 `~/.dsh/.credentials.yaml` 的 schema 偏差（会挡住启动）
+
+**症状**：`pnpm dev` 起不来，报
+
+```
+credentials-local: the value for "version" in ~/.dsh/.credentials.yaml must be a string
+```
+
+**原因**：这个文件有两个不兼容的写法。
+
+- 本仓库 pin 的 harness 里，`credentials-local` 把 YAML **根节点**当成一张扁平表
+  （键 → 字符串密钥），逐条 `credentialRef()` 校验键名是不是 POSIX 标识符。
+- DSH Desktop 2.x 会把它改写成**嵌套文档**：
+
+```yaml
+version: 1                                     # ← 数字，不是字符串
+records:
+  client-connection/browser-session: { … }     # ← 键名不是 POSIX 标识符
+refs:
+  LUCK_API_KEY: sk-…
+  CLINE_API_KEY: sk_…
+```
+
+于是旧解析器读到根键 `version: 1` 就抛错，服务**完全起不来**。这不是代码缺陷，
+是**宿主版本与 vendored harness 的偏差**——文件被谁改写过，重启就会踩到。
+
+**临时绕开**（不要动 DSH Desktop 的那个文件，它可能是新版格式）：
+
+```bash
+H=/tmp/dsh-physicsos-home
+mkdir -p "$H/storages"
+for f in profiles settings.yaml .env .anonymous-user-id; do
+  ln -s "$HOME/.dsh/$f" "$H/$f"
+done
+# 只把 refs 那段重建成扁平映射（注意 0600 权限）
+DSH_HOME="$H" pnpm -C vendor/deepseek-harness dsh web
+```
+
+`DSH_HOME` 是官方支持的覆盖点（`packages/util/home-paths`）。注意 `profiles/`
+要用 symlink——它带约 300MB `node_modules`，拷不动。
+
+`tests/acceptance/support.mjs` 的 `startIsolatedServer()` 做的就是这件事，
+可以直接抄。
+
+**根治方向**（未做）：把 pin 的 harness 升到能读嵌套文档的版本，或让宿主与
+仓库共用同一份 credentials 实现。见 `docs/reports/BACKLOG.md` 的
+`DSH_CREDENTIALS_SCHEMA_SKEW`。
+
+---
+
 ## 3. 常用命令
 
 ```bash
@@ -149,6 +266,34 @@ pnpm test:web         # vitest（client 侧测试）
 
 `typecheck` / `lint` / `test` 都有 `:core` / `:web` / `:agent` 三个分片，裸命令是
 串行跑全部。
+
+**2026-09-21 起三条门禁全绿**（此前 `lint` 与 `test` 都有既存红）：
+
+| 命令 | 覆盖 | 结果 |
+| --- | --- | --- |
+| `pnpm typecheck` | core + web + **tool-physicsos / auth-host / paper-host** | 0 错 |
+| `pnpm lint` | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件 | 0 错 0 警 |
+| `pnpm test` | core + web（44 文件 686 测试）+ 三个 host 插件（7 文件 91 测试） | 全绿 |
+
+> `test:agent` 此前**只跑 `tool-physicsos`**，`auth-host` 的 4 个 spec 与
+> `paper-host` 的 1 个 spec 不在任何日常门禁里——只有跑 harness 自己的 vitest
+> 才会被 `packages/*/*/tests/**` 命中。现改为 `vitest run packages/physicsos`。
+> `typecheck:agent` / `lint:agent` 同步覆盖三个包。接线当场暴露出 141 项从未
+> 检查过的 lint 错误（已清偿）。
+
+### 3.0 浏览器验收（`tests/acceptance/*.mjs`）
+
+```bash
+node tests/acceptance/auth-acceptance.mjs        # 账户体系 + 管理后台（自带隔离服务）
+node tests/acceptance/library-home-acceptance.mjs  # 需要先 pnpm dev（连 3080）
+```
+
+`auth-acceptance.mjs` **自带服务**：临时 `DSH_HOME` + 独立端口 3099 +
+由它自己决定密码的 `SUPER_ADMIN`，跑完什么都不留下，因此可重复执行、
+不依赖也不破坏你本机的 dev 数据。它要求运行它的 `node` 能算 argon2id，
+否则一行报错说清原因。
+
+其余套件连 `http://127.0.0.1:3080`，所以要先把 `pnpm dev` 起着。
 
 ### 3.1 改了前端源码，界面不会自己变（必读）
 
@@ -467,7 +612,7 @@ hero 背景是 `lib/flow-field.js` 里的 WebGL2 流场着色器，做法与 Dee
 
 ---
 
-## 8. 自由搭建电路（新增，未提交）
+## 8. 自由搭建电路（已提交）
 
 学生可以自己选器材、自己接线，电路由现有 DC 引擎真实求解。入口两处：
 实验中心「自由搭建电路」卡片，以及电学台（`surface.openBuilder`）。
@@ -506,7 +651,7 @@ hero 背景是 `lib/flow-field.js` 里的 WebGL2 流场着色器，做法与 Dee
 
 ---
 
-## 10. 解题入口收口：试题空间下线，解题卡进会话（新增，未提交）
+## 10. 解题入口收口：试题空间下线，解题卡进会话（已提交）
 
 试题空间（QuestionWorkspace，~1900 行）整体下线，能力并入会话与学习记录，
 **流水线自始至终只有一条**：`processQuestion`（question-core 确定性解析 →
@@ -542,7 +687,7 @@ LearningRecordWorkspace）全部改成 `min(…, 220px)` 封顶，只清停靠�
 
 ---
 
-## 11. 弹簧/单摆/摩擦模型 + 力学器材精灵（新增，未提交）
+## 11. 弹簧/单摆/摩擦模型 + 力学器材精灵（已提交）
 
 对标 liziwuli 后按"单位引擎解锁实验数"排的第一批：四个新解析模型
 （`spring_statics`/`spring_oscillator`/`simple_pendulum`/`horizontal_friction`）

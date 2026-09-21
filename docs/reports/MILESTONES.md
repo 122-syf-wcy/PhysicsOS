@@ -510,6 +510,161 @@ overlay 已回写。
 
 ---
 
+
+### AUTH_TENANT_V1_COMPLETE / ADMIN_CONSOLE_V1_COMPLETE
+
+**日期**：2026-09-18 → 09-21
+
+**范围**：账户体系与管理后台。产品从"实验工具"进入"学生学习平台"——
+学校成为身份体系里的一级租户，而非登录后的普通资料字段。
+
+**A. 账户体系**（`@deepseek-ai/dsh-auth-host`）：复用 paper-host 已验证的模式
+（cordis host 插件 + `ctx.webServer` 前缀路由 + `ctx.storageDomain` KV 域），
+同源同端口使 HttpOnly cookie 天然生效，不新开进程、不接 Supabase。
+
+- `users` key = `schoolId:username` → 跨校同号结构性共存
+- `sessions` key = `sha256(token)` → token 不落盘、可吊销
+- argon2id（`node:crypto`，PHC 自描述串，零新依赖）；不存在账号走 dummy verify
+  拉平计时
+- IP + 账号双桶限流；CSRF（json content-type + Origin/Sec-Fetch-Site）；
+  body ≤ 16KB；注册强制 `role:'STUDENT'`
+- 注册接受**自由文本校名**，按 name/shortName 解析到活跃租户；同名多校返回
+  `SCHOOL_AMBIGUOUS` + 带地区标签的候选；未命中即 `SCHOOL_NOT_FOUND`——
+  **不静默建租户、不伪造学校**
+
+**B. 管理后台**（`/physicsos/admin`，路由级 `requireRole` + `requireSchoolScope`）：
+学校申请审批/驳回、建校、启停校、用户列表/建教师/禁用/重置密码/吊销会话、
+审计日志。`SCHOOL_ADMIN` 的 schoolId 强制取自 session（请求体同名字段忽略）；
+写操作进 append-only `admin_audit`；用户响应 zod 白名单**绝不含 `passwordHash`**；
+API 面**永远无法**创建或修改 `SUPER_ADMIN`（仅来自部署种子 `bootstrapAdmins`）。
+
+**C. 期间修掉的一个真 bug（假阳性门禁）**：`ARGON2_AVAILABLE` 原判据是
+`typeof argon2Sync === 'function'`，而**有的构建暴露入口但底层 OpenSSL 没有
+argon2id**（本机一个 vendored Node 24.18.1 即如此）。后果是插件照常激活、
+然后在 bootstrap 种子里炸出 `ERR_CRYPTO_ARGON2_NOT_SUPPORTED` 堆栈。现改为
+模块加载时用最低合法参数真跑一次 argon2id，`apply()` 报错带上原因与实际
+`process.version`。
+
+**D. 数据**：贵州 9 市州 1566 所中学名录（官方招生计划/教育局名录汇编，
+按市州标注，来源与缺口在文件头如实声明）。**高中侧仍有大缺口**，
+见 `GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP`。
+
+依据：`docs/HANDOVER.md` §2.1.1 / §2.5、`tests/acceptance/auth-acceptance.mjs`。
+
+验收数据（2026-09-21 复跑）：`auth-acceptance.mjs` **8 CASE / 22 断言 +
+5 项浏览器门禁全 PASS**——含未登录门（两个文本框实测同列 610/380）、自由文本
+校名注册进入应用、STUDENT 无管理后台入口、登出后旧会话 401、同名多校消歧候选
+带地区标签、SUPER_ADMIN 控制台 tab、以及**申请→审批→建校→建教师→教师登录→
+禁用→401** 全链（另加 TEACHER 打管理 API 403、审计台账落行）。
+`test:agent` 7 文件 91 测试全绿；`typecheck` / `lint` 全绿。
+
+---
+
+### RESOURCE_LIBRARY_V1_COMPLETE
+
+**日期**：2026-09-18 → 09-19
+
+**范围**：资源库从"重复的实验入口"改成真正的学习资料面。产品边界由用户明确
+划定：**实验室拥有实验，资源库只放真题、练习题、书籍与视频**。
+
+- 章节面板按人教版教材章节挂载国家课/精品课/知识点微课/课件/配套练习卷五类，
+  kind chip 分区渲染，链接全部真实 ID —— 从 281 课时扩到 **926 项**官方配套
+  资源（国家中小学智慧教育平台 `prepare_lesson` 目录）
+- 真题卷库：学段/卷类型/地区筛选、含金量置顶排序、展开题清单（题号/题型/
+  分值/完整题干/考点/能力）
+- `scripts/refresh-smartedu-catalog.mjs --check` 与平台一致（926 条）
+
+**如实说明**：高中 6 册平台确无课件条目，如实为空；`knowledge_micro_lesson_package`
+与 `examinationpapers` 走官方 SPA 路由（SPA 对 curl 403 是 WAF，浏览器点击实测可开）。
+
+依据：会话 `discovered-pirate` 收口报告；`library-home-acceptance.mjs`、
+`library-curriculum.client.spec.ts`（17 项）。
+
+---
+
+### PAPER_STUDIO_BANK_V1_COMPLETE
+
+**日期**：2026-09-14 → 09-20
+
+**范围**：贵州本土出卷专区 —— 只出卷 + 答案解析，交付标准可打印 A4。
+
+流程：真题考点表 → 双向细目表 → AI 起草 → 自动检查 + 独立解题 → 教师逐题审核
+→ 锁版本 → DOCX/PDF 四件套。
+
+- 新包 `@physicsos/question-paper`（纯域模型 + 纯函数，零 cordis 依赖）与
+  host 插件 `paper-host`（`/physicsos/paper`，全路由见其 README）
+- 组卷四级供给：`verbatim`（≥0.85 原题直落）/ `adapt`（0.55–0.85 骨架改写）/
+  `generate`（无候选过线）/ `gap`（诚实留空）；打分 =
+  知识点 0.45 + 难度 0.25 + 能力 0.15 + 来源 0.15，含新鲜度闸
+- **provenance 不可伪造**：`generated` 题统一盖 `{mode:'generated'}` 刷掉模型
+  可能注入的假 `bankItemId`；台账按**实际上卷题目的 provenance** 记账，
+  降级不误记
+- 批准绑定内容哈希，任何 `commitDocument` 都作废 approval——换题无法绕过
+
+**真实缺陷修复（本轮审计发现）**：
+- `PATCH /bank/items/:id` 可注入 `id` / `enteredBy` → `bankItemPatchWire.omit`
+- PATCH 改 stem 不查重 → 补 `DUPLICATE_ITEM`
+- `GET /bank/items?status=` 用 `as never ?? undefined` 硬转，**任何拼错的状态都
+  静默返回未过滤全集** → 改白名单校验，非法值 400
+- `recordCheckResults` 里 `status: hasErrors ? 'review' : 'review'`（两支相同的
+  死三元，`sonarjs` 抓到）→ 删除死变量并注明"检查后一律进教师审核"的物理理由
+
+依据：`overlays/harness/files/packages/physicsos/paper-host/README.md`、
+`paper-host/tests/routes.spec.ts`、`question-paper` 42 项测试。
+
+---
+
+### GATES_ALL_GREEN_AND_OVERLAY_RECOVERY
+
+**日期**：2026-09-21
+
+**范围**：工程收口。本轮不新增产品能力，把"代码是健康的、但工程状态不可交付"
+这件事修掉。
+
+**A. 一周成果零提交（最严重的风险）**：09-12 之后的全部工作只存在于工作区
+（335 个文件、+16724/−5747 行）。已按主题补成 13 个提交：
+引擎/域修正 → `question-paper` → `auth-host` → `tool-physicsos` →
+ui-physicsos → 资产 → 脚本与验收 → 文档 → 仓库卫生 → 门禁 → overlay 修复 →
+lint 清偿 → 浏览器验收。
+
+**B. `paper-host` 只活在 vendor 里（数据丢失风险）**：出卷专区整个后端
+（13 个文件）在 submodule 里是未跟踪状态、不在 overlay、父仓库也看不到。
+HANDOVER 那条"新机器上手"走完它**根本不存在**。已补进 overlay 并验证
+`apply` 能逐字节重建。同时核对 submodule 内全部 6 条未跟踪路径，其余 5 条
+均已覆盖——`paper-host` 是唯一缺口。
+
+**C. 门禁断档**：根 `pnpm test` 的 `test:agent` **只跑 `tool-physicsos`**，
+`auth-host`（4 spec）与 `paper-host`（1 spec）不在任何日常门禁里。
+现 `typecheck:agent` / `lint:agent` / `test:agent` 覆盖三个包
+（91 测试，原 20）。接线当场暴露 141 项从未检查过的 lint 错误，已全部清偿
+（含 40 处非空断言换成真实收窄、`parse<T>` 的 T 只用一次、动态 delete 等）。
+
+**D. `pnpm lint` 全绿**：ui-physicsos 171 文件 **461 项报错 → 0**。
+逐条看过去全部落在本周新增的面上（PaperWorkspace 225、fluid-renderer 121、
+LearningRecordWorkspace 65、AdminWorkspace 18、AuthGate 14），并非 HANDOVER
+所记的"上游既有问题"。清偿过程修掉 autofix 自身造成的 47 处格式损伤。
+
+**E. 浏览器验收补上身份面**：新增 `auth-acceptance.mjs`（见上）。
+顺带修好一处会让**所有**验收套件误报的门禁缺陷——应用每次启动调
+`/physicsos/auth/me`，游客拿 401 是契约，但浏览器把它记为 console error、
+support 又把它计入 `errorResponses`，于是任何套件都会在跑第一个 CASE 前挂掉。
+现两个闸共用同一判据，只放过这一个端点。
+
+**F. 审计遗留清除**：`mechanics-templates.ts` 死文件删除（核实其引用的 locale
+键均被活文件使用，不产生孤儿文案）；实验中心徽标 43 vs 网格 44 的口径改为
+"可用实验"；磁场台补 `derivation`（与验证器同名公式）与 `trajectoryTimes`
+（按画布同样的 join 规则），并新增 5 项测试钉住配对契约；`paper-host` 补 README。
+
+**验证**：`pnpm typecheck` 0 错；`pnpm lint` **0 错 0 警**；
+`pnpm test` core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **91 测试**；
+`auth-acceptance.mjs` 8 CASE 全 PASS、5 项门禁为 0。
+
+**不做**：名录补全与 credentials 偏差两种都是环境/数据治理，分别登记为
+`GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP`、`DSH_CREDENTIALS_SCHEMA_SKEW`；
+`paper-host` 的 REAL-composition 测试登记为 `PAPER_HOST_COMPOSITION_TEST_GAP`。
+
+---
+
 ## 明确延后
 
 见 `docs/reports/BACKLOG.md`：
