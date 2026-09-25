@@ -29,3 +29,28 @@ export {
   createAcousticsSimulationRequest,
   resolveEchoRanging,
 } from './acoustics-engine.ts'
+
+export {
+  resolveNoiseModel,
+  type ResolvedNoiseModel,
+} from './noise-model.ts'
+export {
+  POINT_SOURCE_SPREADING,
+  REFERENCE_INTENSITY,
+  intensityFromSoundLevel,
+  intensityRatioOf,
+  levelDifference,
+  noiseReadingOf,
+  soundLevelAt,
+  soundLevelFromIntensity,
+  type NoiseReading,
+} from './noise.ts'
+export {
+  NOISE_ENGINE_ID,
+  NOISE_ENGINE_VERSION,
+  POINT_SOURCE_NOISE_MODEL,
+  NoiseEngine,
+  createNoiseSimulationRequest,
+  noiseEngine,
+  resolveNoise,
+} from './noise-engine.ts'

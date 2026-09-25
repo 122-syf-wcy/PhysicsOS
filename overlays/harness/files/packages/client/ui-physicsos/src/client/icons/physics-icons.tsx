@@ -71,6 +71,15 @@ export const IconQuestionSheet = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Announcement: a megaphone with two sound arcs. */
+export const IconAnnouncement = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M4 10v3a1.5 1.5 0 0 0 1.5 1.5H7l7 4V5.5l-7 4H5.5A1.5 1.5 0 0 0 4 10z" />
+    <path d="M17.5 9.5a3.5 3.5 0 0 1 0 5" />
+    <path d="M19.8 7.2a6.8 6.8 0 0 1 0 9.6" />
+  </Glyph>
+)
+
 /** Conversation: a speech bubble with two text lines. */
 export const IconChatBubble = (props: PhysicsIconProps) => (
   <Glyph {...props}>

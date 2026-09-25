@@ -92,12 +92,29 @@ const auditEvent = z.object({
   createdAt: z.string(),
 })
 
+/* 学习上报的聚合计数 —— 一行就是一个小格子:(学校, 日期, 知识点) → 对/错次数。
+
+   有意为之的四列,别的一律没有:没有 userId、没有账号、没有答题原文、没有自
+   由文本。一行回答的是「某校某天某知识点答对/答错多少次」,不是「谁答了
+   什么」。日期由服务端时钟决定而不是客户端传,所以改本机时间改不动台账。 */
+const learningCount = z.object({
+  id: z.string().min(1),
+  schoolId: z.string().min(1),
+  /** 宿主本地日期 `YYYY-MM-DD`,由服务端时钟写入,不来自请求体。 */
+  date: z.string().min(1),
+  knowledgeId: z.string().min(1),
+  correct: z.number().int().min(0),
+  wrong: z.number().int().min(0),
+  updatedAt: z.string(),
+})
+
 export type School = z.infer<typeof school>
 export type UserRecord = z.infer<typeof user>
 export type SessionRecord = z.infer<typeof session>
 export type ResetRequest = z.infer<typeof resetRequest>
 export type SchoolRequestRecord = z.infer<typeof schoolRequest>
 export type AuditEvent = z.infer<typeof auditEvent>
+export type LearningCount = z.infer<typeof learningCount>
 
 /**
  * Registration accepts exactly these fields; `role` is never client input.
@@ -183,6 +200,28 @@ export const resetPasswordWire = z.object({
   newPassword: registerWire.shape.password,
 })
 
+/**
+ * 学习上报的请求体 —— 只有两个字段,且都不是身份。
+ *
+ * `knowledgeId` 必须是课标知识点 id 的形状(小写字母/数字/连字符),所以客户端
+ * 塞不进「学生写了什么」;`correct` 是这一次自测的对错。学校取会话、日期取服务
+ * 端时钟,两者都不在请求体里。
+ */
+export const learningReportWire = z.object({
+  knowledgeId: z.string().regex(/^[a-z0-9-]{2,40}$/),
+  correct: z.boolean(),
+})
+
+/**
+ * 聚合计数的键 — `schoolId|date|knowledgeId`。
+ *
+ * `|` 是安全的分隔符而非随手选的:`schoolId` 的字母表是 `[A-Za-z0-9_-]`、
+ * 日期是 `YYYY-MM-DD`、知识点 id 是 `[a-z0-9-]`,三段都不含 `|`,所以这个键
+ * 不会被拼歧义。反过来,无论谁调 `reportLearning`,同一格永远落在同一行。
+ */
+export const learningKey = (schoolId: string, date: string, knowledgeId: string): string =>
+  `${schoolId}|${date}|${knowledgeId}`
+
 /** The users-table key — the durable form of UNIQUE(school_id, username). */
 export const userKey = (schoolId: string, username: string): string =>
   `${schoolId}:${username.toLowerCase()}`
@@ -201,6 +240,7 @@ export const authDomain = defineDomain({
     reset_requests: domainTable<string, ResetRequest>(resetRequest),
     school_requests: domainTable<string, SchoolRequestRecord>(schoolRequest),
     admin_audit: domainTable<string, AuditEvent>(auditEvent),
+    learning_counts: domainTable<string, LearningCount>(learningCount),
   },
 })
 

@@ -18,8 +18,17 @@ const DOMAIN = 'physicsos_paper'
 
 /** Cordis companion plugin name. */
 export const name = 'paper-host-invariant'
-/** Service required before the companion can reserve package ownership. */
-export const inject = ['invariants', 'storageDomain']
+/**
+ * Service required before the companion can reserve package ownership.
+ *
+ * `invariants` ONLY, matching every other package's companion. Listing
+ * `storageDomain` here reads like rigour and is actually a deadlock: the
+ * companion is mounted inside the invariant startup barrier, so a companion
+ * that waits for a Loader-managed service waits for a row that is itself
+ * held at that barrier. The domain is reached lazily inside {@link check}
+ * instead — by the time a `domain/changed` event fires, the service exists.
+ */
+export const inject = ['invariants']
 
 /** Re-check the durable relations after each change lands. */
 const check = (ctx: Context, change: DomainChanged, fail: InvariantFailure): void => {

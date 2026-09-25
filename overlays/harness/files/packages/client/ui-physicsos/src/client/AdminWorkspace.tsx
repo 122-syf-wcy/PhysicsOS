@@ -11,32 +11,59 @@ import clsx from 'clsx'
 import type {
   AdminApi, AdminUserRow, AuditEventRow, SchoolRequestRow,
 } from './auth-api.ts'
-import type { AuthState } from './auth-store.ts'
+import type { PaperApi } from './paper-api.ts'
+import type { NoticeApi } from './notice-api.ts'
+import { AdminContentTab } from './AdminContentTab.tsx'
+import { AdminDashboardTab } from './AdminDashboardTab.tsx'
+import { AdminOpsTab } from './AdminOpsTab.tsx'
+import { AdminNoticeTab } from './AdminNoticeTab.tsx'
+import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import css from './AdminWorkspace.module.css'
 
-type Tab = 'requests' | 'schools' | 'users' | 'audit'
-type Role = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
+type Tab = 'requests' | 'schools' | 'dashboard' | 'users' | 'content' | 'notice' | 'ops' | 'audit'
 
 export interface AdminWorkspaceProps {
   api: AdminApi
+  /**
+   * 内容管理 drives the 出卷专区's own API rather than a parallel admin one.
+   *
+   * The operations an operator needs on the bank — filter, verify in bulk,
+   * reject, inspect anomalies — are exactly the ones that API already serves,
+   * and the guard on those routes already admits SCHOOL_ADMIN and SUPER_ADMIN.
+   * A second, admin-shaped copy of twelve endpoints would be a second thing to
+   * keep in step for no gain.
+   *
+   * Optional because a stripped composition may not mount the paper host; the
+   * tab is then simply not offered.
+   */
+  paperApi?: PaperApi
+  /**
+   * 反馈与公告 client. Optional for the same reason paperApi is: a stripped
+   * composition may not mount the notice host, and the tab is then not offered
+   * rather than offered and broken.
+   */
+  noticeApi?: NoticeApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
   t: (key: PhysicsosKey) => string
 }
-
-const isAdminRole = (role: Role | undefined): role is 'SCHOOL_ADMIN' | 'SUPER_ADMIN' =>
-  role === 'SCHOOL_ADMIN' || role === 'SUPER_ADMIN'
 
 const fmtTime = (iso: string): string => {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('zh-CN', { hour12: false })
 }
 
-export function AdminWorkspace({ api, useAuth, t }: AdminWorkspaceProps) {
+export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWorkspaceProps) {
   const role = useAuth(state => state.user?.role)
+  /* The judging account, attributed on every review — the same identity the
+     server files the ledger row under. */
+  const username = useAuth(state => state.user?.username) ?? 'admin'
   const [tab, setTab] = useState<Tab>('users')
   const isSuper = role === 'SUPER_ADMIN'
+  /* Publishing needs SCHOOL_ADMIN; replying needs only TEACHER. The tab is
+     reached through the admin surface, so anyone here can already reply. */
+  const isSchoolAdmin = role === 'SCHOOL_ADMIN' || isSuper
 
   if (!isAdminRole(role)) {
     return <div className={css.root}><p className={css.empty}>{t('admin.forbidden')}</p></div>
@@ -47,7 +74,11 @@ export function AdminWorkspace({ api, useAuth, t }: AdminWorkspaceProps) {
       { id: 'requests' as const, label: t('admin.tab.requests') },
       { id: 'schools' as const, label: t('admin.tab.schools') },
     ] : []),
+    { id: 'dashboard' as const, label: t('admin.tab.dashboard') },
     { id: 'users' as const, label: t('admin.tab.users') },
+    ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content') }]),
+    ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice') }]),
+    { id: 'ops' as const, label: t('admin.tab.ops') },
     { id: 'audit' as const, label: t('admin.tab.audit') },
   ]
   const fallback = tabs[0]
@@ -75,7 +106,15 @@ export function AdminWorkspace({ api, useAuth, t }: AdminWorkspaceProps) {
       </header>
       {active === 'requests' && isSuper && <RequestsTab api={api} t={t} />}
       {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}
+      {active === 'dashboard' && <AdminDashboardTab api={api} t={t} />}
       {active === 'users' && <UsersTab api={api} t={t} isSuper={isSuper} />}
+      {active === 'content' && paperApi !== undefined && (
+        <AdminContentTab api={paperApi} reviewer={username} t={t} />
+      )}
+      {active === 'notice' && noticeApi !== undefined && (
+        <AdminNoticeTab api={noticeApi} canPublish={isSchoolAdmin} t={t} />
+      )}
+      {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
       {active === 'audit' && <AuditTab api={api} t={t} />}
     </div>
   )

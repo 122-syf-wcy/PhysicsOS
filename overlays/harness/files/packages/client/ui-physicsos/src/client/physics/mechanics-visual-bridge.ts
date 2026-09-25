@@ -45,6 +45,7 @@ const MODEL_LABELS: Readonly<Record<MechanicsModelId, string>> = {
   simple_pendulum: '单摆',
   horizontal_friction: '静摩擦与滑动摩擦',
   spring_statics: '胡克定律',
+  circular_orbit: '万有引力与向心力',
 }
 
 const MECHANICS_OBSERVATION_TYPES: readonly MechanicsObservation['type'][] = [

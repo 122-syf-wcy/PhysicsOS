@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { PaperError, type PaperService } from './service.ts'
+import { auditWrites, guard, type PhysicsosIdentity } from './identity.ts'
 import type { ExportFileSet } from './export.ts'
 import {
   annotationWire, bankItemPatchWire, bankItemWire, blueprintWire, jobCreateWire, paperDocumentWire,
@@ -95,6 +96,20 @@ export interface RouteDeps {
   readonly runIngest: (input: IngestInput) => Promise<{ created: unknown[]; duplicates: string[] }>
   /** Resolved selection policy for the assembly-plan preview. */
   readonly bankPolicy: BankSelectionPolicy
+  /**
+   * Resolver for the 账户体系's identity service.
+   *
+   * A GETTER rather than the service itself, because this host is declared
+   * BEFORE auth-host in the bundle and would look it up before it exists. Asking
+   * per request costs one property read and removes the load-order coupling
+   * entirely.
+   *
+   * It may still answer `undefined` — a stripped composition, a test harness,
+   * a half-configured deployment. That is not an error at load: the host mounts,
+   * and every request is refused with a message naming what is missing, which is
+   * far better than the alternative of quietly serving the question bank.
+   */
+  readonly identity: () => PhysicsosIdentity | undefined
 }
 
 type Body = Record<string, unknown>
@@ -119,13 +134,31 @@ const parse = <T>(schema: WireSchema<T>, data: unknown): T => {
  * @returns the webServer route handler.
  */
 export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const { service } = deps
+  const { service, identity: identityOf } = deps
   return async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://x')
       const path = url.pathname.replace(/^\/physicsos\/paper/, '') || '/'
       const method = req.method ?? 'GET'
       const seg = path.split('/').filter(Boolean)
+
+      /* THE gate, in front of every route below it: reads need a session,
+         writes need a teacher. It sits here rather than in each branch so a
+         route added tomorrow is guarded by construction — the failure mode this
+         replaces is thirty routes each remembering, and the thirty-first. */
+      const identity = identityOf()
+      const { actor, writes } = guard(identity, req, method)
+      if (writes && identity !== undefined) {
+        /* Captured in a local so the ledger write does not need an assertion:
+           `guard` has already refused the request if the service is missing, and
+           narrowing here says so in the type system too. */
+        const ledger = identity
+        res.on('finish', () => {
+          /* Fire-and-forget: the response is already out, and a ledger write
+             that failed must not retroactively fail the action it recorded. */
+          void auditWrites(ledger, actor, req, res, path).catch(() => undefined)
+        })
+      }
 
       /* --- 原卷与考点录入 --- */
       if (method === 'GET' && path === '/sources') {

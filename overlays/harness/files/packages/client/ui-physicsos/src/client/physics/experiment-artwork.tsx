@@ -708,6 +708,70 @@ const BuoyancyArt = () => (
   </>
 )
 
+/** 压强: the SAME block twice — lying flat, then standing on its narrow face —
+    under two arrows of identical length, because the force never changed. */
+const SolidPressureArt = () => (
+  <>
+    <Stroke d="M8 58 H112" width={1.6} opacity={0.35} />
+    <rect
+      x={18}
+      y={46}
+      width={44}
+      height={12}
+      rx={2}
+      fill="currentColor"
+      fillOpacity={0.14}
+      stroke="currentColor"
+      strokeWidth={2.2}
+    />
+    <rect
+      x={82}
+      y={22}
+      width={12}
+      height={36}
+      rx={2}
+      fill="currentColor"
+      fillOpacity={0.14}
+      stroke="currentColor"
+      strokeWidth={2.2}
+    />
+    <Arrow x1={40} y1={22} x2={40} y2={44} width={2.4} />
+    <Arrow x1={88} y1={2} x2={88} y2={18} width={2.4} />
+    <Stroke d="M22 61 H58" width={1.4} opacity={0.4} dash="3 3" />
+    <Stroke d="M84 61 H92" width={1.4} opacity={0.4} dash="3 3" />
+  </>
+)
+
+/** 液体压强: one probe shallow, one deep, each with its own depth guide from
+    the surface — the deeper dot is heavier because it reads the larger pressure. */
+const LiquidPressureArt = () => (
+  <>
+    <Stroke d="M18 14 V58 H102 V14" width={2.2} />
+    <Stroke d="M20 26 H100" width={1.5} opacity={0.5} dash="4 3" />
+    <Stroke d="M44 26 V37" width={1.3} opacity={0.4} dash="3 3" />
+    <Stroke d="M76 26 V51" width={1.3} opacity={0.4} dash="3 3" />
+    <Dot x={44} y={38.5} r={2.8} opacity={0.5} />
+    <Dot x={76} y={52.5} r={3.6} opacity={0.95} />
+    <Dot x={60} y={34} r={1.3} opacity={0.3} />
+    <Dot x={88} y={44} r={1.3} opacity={0.3} />
+  </>
+)
+
+/** 大气压: the Torricelli tube with its vacuum and mercury column, beside the
+    Magdeburg pair that the same pressure holds shut. */
+const AtmosphericPressureArt = () => (
+  <>
+    <Stroke d="M12 44 V51 H48 V44" width={2.2} />
+    <Stroke d="M24 51 V10 H36 V51" width={2.2} />
+    <rect x={25.4} y={18} width={9.2} height={33} fill="currentColor" fillOpacity={0.22} />
+    <rect x={15} y={45.6} width={30} height={4.4} fill="currentColor" fillOpacity={0.22} />
+    <Stroke d="M82 25 a13 13 0 0 1 0 26" width={2.2} />
+    <Stroke d="M82 25 a13 13 0 0 0 0 26" width={2.2} />
+    <Arrow x1={96} y1={38} x2={112} y2={38} width={2.2} />
+    <Arrow x1={68} y1={38} x2={52} y2={38} width={2.2} />
+  </>
+)
+
 /* -------------------------------------------------------------------- optics -- */
 
 /** 平面镜成像: candle before the glass plate, mirrored dashes behind it. */
@@ -955,6 +1019,317 @@ const WaveStandingArt = () => (
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
+/* -------------------------------------------------------- current-magnetic -- */
+
+/**
+ * 通电直导线周围的磁场: the conductor end-on inside the rings it makes.
+ *
+ * End-on because that is the only way a flat glyph can show a field that
+ * circles the wire — the ⊙ at the centre is the current coming out of the page,
+ * and the arrowheads all run the same way round, which is 安培定则 drawn.
+ */
+const StraightWireFieldArt = () => (
+  <>
+    {[11, 21, 31].map((radius, index) => (
+      <g key={radius}>
+        <Stroke
+          d={`M${60 - radius} 34 a${radius} ${radius} 0 1 0 ${2 * radius} 0 a${radius} ${radius} 0 1 0 ${-2 * radius} 0`}
+          width={index === 1 ? 1.9 : 1.5}
+          opacity={index === 1 ? 0.9 : 0.5}
+        />
+        {/* Counter-clockwise on the page: at the top of a ring that runs left. */}
+        <Arrow
+          x1={60 + radius * 0.34}
+          y1={34 - radius * 0.94}
+          x2={60 - radius * 0.34}
+          y2={34 - radius * 0.94}
+          width={1.3}
+          opacity={0.8}
+          head={3.8}
+        />
+      </g>
+    ))}
+    {/* The conductor, and the probe the reading is taken at, on its ray. */}
+    <Stroke d="M54 34 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0" width={2.2} />
+    <Dot x={60} y={34} r={2.3} />
+    <Stroke d="M60 34 L75 19" width={1.3} opacity={0.55} dash="3 3" />
+    <Dot x={75} y={19} r={2.2} opacity={0.9} />
+  </>
+)
+
+/**
+ * 通电螺线管内部的磁场: a coil with the field straight through it and the same
+ * field closing outside — the two dashed curves are the return path, which is
+ * what makes it one field rather than two.
+ */
+const SolenoidFieldArt = () => (
+  <>
+    {Array.from({ length: 9 }, (_, index) => 21 + index * 9.5).map(x => (
+      <Stroke
+        key={x}
+        d={`M${x - 3.2} 34 a3.2 12.5 0 1 0 6.4 0 a3.2 12.5 0 1 0 -6.4 0`}
+        width={1.9}
+        opacity={0.9}
+      />
+    ))}
+    <Stroke d="M6 34 H114" width={1.7} opacity={0.85} />
+    <Arrow x1={62} y1={34} x2={98} y2={34} width={1.7} opacity={0.95} head={4.6} />
+    <Stroke d="M28 30 C28 12 92 12 92 30" width={1.4} opacity={0.5} dash="4 3" />
+    <Stroke d="M28 38 C28 56 92 56 92 38" width={1.4} opacity={0.5} dash="4 3" />
+  </>
+)
+
+/**
+ * 电磁铁：a coil with an iron bar through it and the block it holds.
+ *
+ * The bar protrudes past the winding and the block sits against the pole it
+ * makes — the two things that tell this rig apart from the bare coil beside it
+ * on the shelf.
+ */
+const ElectromagnetArt = () => (
+  <>
+    {Array.from({ length: 8 }, (_, index) => 22 + index * 8.6).map(x => (
+      <Stroke
+        key={x}
+        d={`M${x - 2.8} 34 a2.8 11 0 1 0 5.6 0 a2.8 11 0 1 0 -5.6 0`}
+        width={1.8}
+        opacity={0.85}
+      />
+    ))}
+    {/* The core, drawn as a bar through the winding and out both ends. */}
+    <Stroke d="M8 34 H104" width={6} opacity={0.32} />
+    {/* The armature, held on the north pole, with the pull drawn across it. */}
+    <Stroke d="M104 26 h9 v16 h-9 z" width={2.2} />
+    <Arrow x1={116} y1={34} x2={104} y2={34} width={1.8} opacity={0.95} head={4.6} />
+  </>
+)
+
+/**
+ * 电动机：a coil hanging in a field, with the couple drawn on its two sides.
+ *
+ * The field runs across the frame and the two force arrows run the other way —
+ * equal, opposite, and one on each side of the axis, which is what a couple is.
+ */
+const MotorArt = () => (
+  <>
+    {[18, 34, 50].map(y => (
+      <g key={y}>
+        <Stroke d={`M6 ${y} H114`} width={1.4} opacity={0.4} dash="5 4" />
+        <Arrow x1={96} y1={y} x2={110} y2={y} width={1.5} opacity={0.7} head={4} />
+      </g>
+    ))}
+    <Stroke d="M40 22 H84 V50 H40 Z" width={2.4} opacity={0.95} />
+    <Arrow x1={40} y1={22} x2={40} y2={8} width={1.8} opacity={0.9} head={4.4} />
+    <Arrow x1={84} y1={50} x2={84} y2={64} width={1.8} opacity={0.9} head={4.4} />
+    <Dot x={62} y={36} r={2.4} opacity={0.8} />
+  </>
+)
+
+/**
+ * 机械能：a cart at the top of a ramp, with the height it will fall drawn as a
+ * dotted drop, and the ledger bar it feeds.
+ */
+const MechanicalEnergyArt = () => (
+  <>
+    <Stroke d="M12 56 H108 L108 20 Z" width={2} opacity={0.6} />
+    <rect
+      x={78}
+      y={17}
+      width={15}
+      height={15}
+      rx={2.4}
+      transform="rotate(-27 85.5 24.5)"
+      fill="currentColor"
+      fillOpacity={0.14}
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    {/* The drop: what mgh is measured against. */}
+    <Stroke d="M92 26 V56" dash="1 5" width={1.6} opacity={0.5} />
+    {/* The ledger: one bar, still full. */}
+    <Stroke d="M14 62 H46 V68 H14 Z" width={1.4} opacity={0.45} />
+  </>
+)
+
+/**
+ * 机械能的损失：the same rig on a rough surface, with the heat rising off it.
+ */
+const RampFrictionArt = () => (
+  <>
+    <Stroke d="M12 56 H108 L108 20 Z" width={2} opacity={0.6} />
+    {[30, 44, 58, 72, 86].map(x => (
+      <Stroke key={x} d={`M${x} 60 l5 -6`} width={1.3} opacity={0.25} />
+    ))}
+    <rect
+      x={70}
+      y={22}
+      width={15}
+      height={15}
+      rx={2.4}
+      transform="rotate(-27 77.5 29.5)"
+      fill="currentColor"
+      fillOpacity={0.14}
+      stroke="currentColor"
+      strokeWidth={2}
+    />
+    {/* The heat the friction made, rising behind the cart. */}
+    <Stroke d="M52 40 c3 -5 -3 -8 0 -13" width={1.6} opacity={0.5} />
+    <Stroke d="M62 44 c3 -5 -3 -8 0 -13" width={1.6} opacity={0.38} />
+    <Stroke d="M92 30 V56" dash="1 5" width={1.6} opacity={0.5} />
+  </>
+)
+
+/**
+ * 小孔成像：the object, the card with its hole, and the inverted image — with the
+ * two rays crossing AT the hole, which is the whole reason the image is upside
+ * down.
+ */
+const PinholeArt = () => (
+  <>
+    {/* The object: an arrow standing up. */}
+    <Stroke d="M14 56 V26" width={2.6} />
+    <Stroke d="M9 32 L14 25 L19 32" width={2.2} />
+    {/* The card, with the hole as the gap in it. */}
+    <Stroke d="M46 14 V30 M46 38 V54" width={3.4} />
+    {/* The two rays, crossing at the hole. */}
+    <Stroke d="M14 26 L46 34 L78 46" width={1.3} opacity={0.65} />
+    <Stroke d="M14 56 L46 34 L78 22" width={1.3} opacity={0.65} />
+    {/* The image: the same arrow, upside down, on the screen. */}
+    <Stroke d="M78 22 V46" width={2.6} />
+    <Stroke d="M73 40 L78 47 L83 40" width={2.2} />
+    <Stroke d="M88 14 V54" width={2.2} opacity={0.5} />
+  </>
+)
+
+/**
+ * 全反射：a ray arriving at a boundary and going back — with the refracted branch
+ * drawn faintly where it would have been, because its absence is the point.
+ */
+const TotalReflectionArt = () => (
+  <>
+    <Stroke d="M6 34 H114" width={2.6} />
+    <Stroke d="M60 8 V60" dash="4 4" width={1.3} opacity={0.45} />
+    {/* The incoming ray, and the ray that comes back. */}
+    <Stroke d="M28 12 L60 34" width={2} />
+    <Stroke d="M60 34 L92 12" width={2} />
+    {/* Where refraction would have gone, faint: the thing that is not there. */}
+    <Stroke d="M60 34 L78 58" dash="2 5" width={1.4} opacity={0.35} />
+  </>
+)
+
+/**
+ * 短路：the loop with the load taken out — battery, switch, meter, and nothing
+ * between them.
+ */
+const ShortCircuitArt = () => (
+  <>
+    <Stroke d="M22 22 H98 V52 H22 Z" width={2.2} />
+    {/* The battery, and the switch that closes the loop with no load in it. */}
+    <Stroke d="M42 22 V16 M46 22 V12 M50 22 V16" width={2.6} />
+    <Stroke d="M74 22 L84 14" width={2.2} />
+    {/* The meter, pinned. */}
+    <Stroke d="M46 52 a7 7 0 1 0 14 0 a7 7 0 1 0 -14 0" width={2} />
+    <Stroke d="M53 52 L58 46" width={2} />
+  </>
+)
+
+/**
+ * 水的沸腾：a beaker on a heat source with steam coming off it — the flat part of
+ * the curve is the steam, not the thermometer.
+ */
+const BoilingWaterArt = () => (
+  <>
+    <Stroke d="M34 22 V50 H86 V22" width={2.6} />
+    <Stroke d="M34 30 H86" width={2.6} opacity={0.55} />
+    {/* The water, and the steam rising off it. */}
+    <Stroke d="M36 40 H84 V50 H36 Z" width={1.6} opacity={0.45} />
+    <Stroke d="M46 34 c3 -5 -3 -8 0 -13" width={1.6} opacity={0.5} />
+    <Stroke d="M60 30 c3 -5 -3 -8 0 -13" width={1.6} opacity={0.42} />
+    <Stroke d="M74 34 c3 -5 -3 -8 0 -13" width={1.6} opacity={0.34} />
+    {/* The heat source under it. */}
+    <Stroke d="M40 56 H80" width={2.4} opacity={0.7} />
+  </>
+)
+
+/**
+ * 万有引力与向心力：a body on a circular orbit, with the two vectors that make it
+ * one — the velocity along the tangent and the force straight at the centre.
+ */
+const CircularOrbitArt = () => (
+  <>
+    <circle cx={60} cy={34} r={21} fill="none" stroke="currentColor" strokeWidth={1.4} strokeDasharray="1 5" opacity={0.5} />
+    <Dot x={60} y={34} r={6} opacity={0.9} />
+    {/* The satellite, and the two vectors that keep it there. */}
+    <Dot x={81} y={34} r={3.4} />
+    <Arrow x1={81} y1={34} x2={81} y2={14} width={2} opacity={0.85} head={4.4} />
+    <Stroke d="M60 34 H81" width={1.3} opacity={0.4} />
+    <Arrow x1={81} y1={34} x2={62} y2={34} width={1.6} opacity={0.6} head={4} />
+  </>
+)
+
+/**
+ * 变压器：two windings on one core — the core is the whole point, since it is
+ * what makes the two coils one machine.
+ */
+const TransformerArt = () => (
+  <>
+    {/* The core, and the two windings sitting on it. */}
+    <Stroke d="M14 34 H106" width={5} opacity={0.3} />
+    {Array.from({ length: 7 }, (_, index) => 24 + index * 6).map(x => (
+      <Stroke key={`p${x}`} d={`M${x} 22 a3 12 0 1 0 6 0 a3 12 0 1 0 -6 0`} width={2} opacity={0.9} />
+    ))}
+    {Array.from({ length: 4 }, (_, index) => 76 + index * 6).map(x => (
+      <Stroke key={`s${x}`} d={`M${x} 22 a3 12 0 1 0 6 0 a3 12 0 1 0 -6 0`} width={2} opacity={0.9} />
+    ))}
+  </>
+)
+
+/**
+ * 温度计：a tube with a bulb and a column, and the two fixed points marked on the
+ * glass — which is where the scale comes from.
+ */
+const ThermometerArt = () => (
+  <>
+    {/* The tube, closed at the top, and the bulb below it. */}
+    <Stroke d="M54 12 V52" width={2.4} />
+    <Stroke d="M66 12 V52" width={2.4} />
+    <Stroke d="M54 12 a6 6 0 0 1 12 0" width={2.4} />
+    <Dot x={60} y={56} r={7} opacity={0.85} />
+    {/* The column standing in it. */}
+    <Stroke d="M60 30 V50" width={3.4} />
+    {/* The two fixed points, ruled across the glass. */}
+    <Stroke d="M66 34 H88" width={1.6} opacity={0.7} />
+    <Stroke d="M66 22 H88" width={1.6} opacity={0.7} />
+  </>
+)
+
+/**
+ * 噪声：a source, its spreading wavefronts, and a barrier standing in the way —
+ * two different ways of getting quieter, on one figure.
+ */
+const NoiseArt = () => (
+  <>
+    {/* The source and its wavefronts. */}
+    <Dot x={22} y={34} r={4} />
+    {[10, 17, 24].map(radius => (
+      <circle
+        key={radius}
+        cx={22}
+        cy={34}
+        r={radius}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.4}
+        opacity={0.55 - radius * 0.008}
+      />
+    ))}
+    {/* The barrier, between the source and the listener. */}
+    <Stroke d="M64 18 V50" width={3.6} />
+    {/* The listener, past it. */}
+    <Dot x={98} y={34} r={3.4} opacity={0.85} />
+  </>
+)
+
 const LabSceneArt = () => (  <>
   <Stroke d="M52 14 h16 M55 14 v10 L41 47 a5 5 0 0 0 4.6 7 h28.8 a5 5 0 0 0 4.6 -7 L65 24 v-10" width={2.2} />
   <Stroke d="M46 40 h28" width={1.7} opacity={0.5} />
@@ -1007,6 +1382,23 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'collision-inelastic': CollisionInelasticArt,
   'collision-perfectly-inelastic': CollisionPerfectlyInelasticArt,
   buoyancy: BuoyancyArt,
+  'solid-pressure': SolidPressureArt,
+  'liquid-pressure': LiquidPressureArt,
+  'atmospheric-pressure': AtmosphericPressureArt,
+  'straight-wire-field': StraightWireFieldArt,
+  'solenoid-field': SolenoidFieldArt,
+  electromagnet: ElectromagnetArt,
+  motor: MotorArt,
+  'mechanical-energy': MechanicalEnergyArt,
+  pinhole: PinholeArt,
+  'short-circuit': ShortCircuitArt,
+  'boiling-water': BoilingWaterArt,
+  'circular-orbit': CircularOrbitArt,
+  transformer: TransformerArt,
+  thermometer: ThermometerArt,
+  noise: NoiseArt,
+  'total-reflection': TotalReflectionArt,
+  'ramp-friction': RampFrictionArt,
   'plane-mirror': PlaneMirrorArt,
   'convex-lens': ConvexLensArt,
   'concave-mirror': ConcaveMirrorArt,
@@ -1070,6 +1462,23 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['convex-mirror', 'optics-convex-mirror'],
   ['echo-ranging', 'acoustics-echo-ranging'],
   ['buoyancy', 'fluid-buoyancy'],
+  ['solid-pressure', 'fluid-solid-pressure'],
+  ['liquid-pressure', 'fluid-liquid-pressure'],
+  ['atmospheric-pressure', 'fluid-atmospheric-pressure'],
+  ['straight-wire-field', 'magnetic-straight-wire'],
+  ['solenoid-field', 'magnetic-solenoid'],
+  ['electromagnet', 'magnetic-electromagnet'],
+  ['motor', 'magnetic-motor'],
+  ['mechanical-energy', 'mechanics-energy'],
+  ['pinhole', 'optics-pinhole'],
+  ['short-circuit', 'circuit-short'],
+  ['boiling-water', 'thermal-boiling'],
+  ['circular-orbit', 'mechanics-circular-orbit'],
+  ['transformer', 'induction-transformer'],
+  ['thermometer', 'thermal-thermometer'],
+  ['noise', 'acoustics-noise'],
+  ['total-reflection', 'optics-total-reflection'],
+  ['ramp-friction', 'mechanics-ramp-friction'],
   ['crystal-melting', 'thermal-crystal-melting'],
   ['heat-capacity-comparison', 'thermal-heat-capacity'],
   ['induction-bar-motion', 'induction-bar-motion'],
@@ -1124,6 +1533,16 @@ const RASTER_ART: ReadonlySet<string> = new Set([
   'projectile-oblique',
   'newton-second-law',
   'incline',
+  'vt-area',
+  'force-composition',
+  'concurrent-equilibrium',
+  'apparent-weight',
+  'chase-meeting',
+  'hooke-law',
+  'spring-oscillator',
+  'simple-pendulum',
+  'friction-static',
+  'friction-mu',
   'point-charge',
   'multi-point-charge',
   'uniform-electric',
@@ -1149,6 +1568,26 @@ const RASTER_ART: ReadonlySet<string> = new Set([
   'crystal-melting',
   'heat-capacity-comparison',
   'buoyancy',
+  'solid-pressure',
+  'liquid-pressure',
+  'atmospheric-pressure',
+  'straight-wire-field',
+  'solenoid-field',
+  'electromagnet',
+  'motor',
+  'mechanical-energy',
+  'ramp-friction',
+  'pinhole',
+  /* The five covers the image host was unreachable for, published 2026-09-22 —
+     listed here only once the files exist, because RASTER_ART tells the card to
+     fetch them and a missing file would be a broken image, not a fallback. */
+  'total-reflection',
+  'short-circuit',
+  'boiling-water',
+  'circular-orbit',
+  'transformer',
+  'thermometer',
+  'noise',
   'wave-travelling',
   'wave-interference',
   'wave-standing',

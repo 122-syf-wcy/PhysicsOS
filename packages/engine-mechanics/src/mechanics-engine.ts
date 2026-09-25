@@ -35,6 +35,11 @@ import {
 import type { MechanicsModel } from './models/types.ts'
 import { resolveMechanicsModel, detectMechanicsModel } from './mechanics-model-selector.ts'
 import { kinematicsAt } from './solvers/analytical-kinematics.ts'
+import {
+  centripetalAcceleration,
+  circularOrbitPeriod,
+  gravitationalAcceleration,
+} from './orbit.ts'
 
 export const MECHANICS_ENGINE_ID = 'engine-mechanics'
 export const MECHANICS_ENGINE_VERSION = '1.0.0'
@@ -158,6 +163,32 @@ const frictionStateAt = (
   }
 }
 
+/**
+ * The satellite's state on its circle at time t.
+ *
+ * Started at angle 0 with the velocity along +y, so the motion is
+ * counter-clockwise and the acceleration — gravity — points straight back at
+ * the centre at every instant. Those three are one rotation of the same vector,
+ * which is what makes the orbit's shape hold instead of drifting.
+ */
+const orbitStateAt = (
+  model: Extract<MechanicsModel, { modelId: 'circular_orbit' }>,
+  t: number,
+): { position: Vector3; velocity: Vector3; acceleration: Vector3 } => {
+  const angle = model.angularRate * t
+  const cosine = Math.cos(angle)
+  const sine = Math.sin(angle)
+  return {
+    position: vec3(model.radius * cosine, model.radius * sine, 0),
+    velocity: vec3(-model.speed * sine, model.speed * cosine, 0),
+    acceleration: vec3(
+      -model.angularRate * model.angularRate * model.radius * cosine,
+      -model.angularRate * model.angularRate * model.radius * sine,
+      0,
+    ),
+  }
+}
+
 function stateAtForModel(model: MechanicsModel, t: number): SimulationState {
   const ks =
     model.modelId === 'spring_oscillator'
@@ -168,7 +199,9 @@ function stateAtForModel(model: MechanicsModel, t: number): SimulationState {
           ? frictionStateAt(model, t)
           : model.modelId === 'spring_statics'
             ? { position: model.position, velocity: vec3(0, 0, 0), acceleration: vec3(0, 0, 0) }
-            : kinematicsAt(model.position, model.velocity, model.acceleration, t)
+            : model.modelId === 'circular_orbit'
+              ? orbitStateAt(model, t)
+              : kinematicsAt(model.position, model.velocity, model.acceleration, t)
   return {
     time: quantity(t, 's', 'time'),
     objects: [
@@ -223,6 +256,48 @@ function computeDerivedAtTime(model: MechanicsModel, t: number): DerivedQuantity
     formula: { expression: '|v(t)|' },
     assumptions,
   })
+
+  if (model.modelId === 'circular_orbit') {
+    const assumptions = ['the central body is a point mass', 'the orbit is circular and the satellite is a point']
+    const state = orbitStateAt(model, t)
+    derived.push(
+      {
+        key: 'orbit_radius',
+        targetId: model.bodyId,
+        value: quantity(model.radius, 'm', 'length'),
+        formula: { expression: 'r' },
+        assumptions,
+      },
+      {
+        key: 'orbital_speed',
+        targetId: model.bodyId,
+        value: quantity(model.speed, 'm/s', 'velocity'),
+        formula: { expression: 'v = √(GM/r)' },
+        assumptions,
+      },
+      {
+        key: 'orbital_period',
+        targetId: model.bodyId,
+        value: quantity(model.period, 's', 'time'),
+        formula: { expression: 'T = 2πr/v' },
+        assumptions,
+      },
+      {
+        key: 'required_centripetal_acceleration',
+        targetId: model.bodyId,
+        value: quantityVector(state.acceleration, 'm/s^2', 'acceleration'),
+        formula: { expression: 'a = v²/r' },
+        assumptions,
+      },
+      {
+        key: 'gravitational_force',
+        targetId: model.bodyId,
+        value: quantity(model.force, 'N', 'force'),
+        formula: { expression: 'F = GMm/r²' },
+        assumptions,
+      },
+    )
+  }
 
   if (model.modelId === 'uniform_linear_motion') {
     derived.push({
@@ -485,6 +560,11 @@ function computeSimulationDuration(model: MechanicsModel): number {
   if (model.modelId === 'projectile_motion') {
     return model.flightTime > 0 ? model.flightTime : 10
   }
+  /* One orbit IS the natural run: after T the satellite is back where it
+     started, so a longer window would draw the same circle again. */
+  if (model.modelId === 'circular_orbit') {
+    return model.period
+  }
   if (model.modelId === 'uniform_linear_motion') {
     return 10
   }
@@ -521,6 +601,45 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
   const checks: import('@physicsos/physics-core').VerificationCheck[] = [
     ...sceneVerification.checks,
   ]
+
+  /* A circular orbit is DEFINED by two accelerations agreeing: the one the
+     speed demands (v²/r, computed from the speed) and the one gravity supplies
+     (GM/r², computed from the masses). Nothing else has to be assumed — if they
+     disagree the body is not on a circle, whatever the drawing shows. */
+  if (model.modelId === 'circular_orbit') {
+    const demanded = centripetalAcceleration(model.speed, model.radius)
+    const supplied = gravitationalAcceleration(model.gravitationalParameter, model.radius)
+    checks.push(
+      check(
+        'gravity_supplies_the_centripetal_force',
+        'constraint',
+        Math.abs(demanded - supplied) <= DEFAULT_TOLERANCE.relative * Math.max(supplied, 1),
+        {
+          message:
+            '万有引力提供向心力：v²/r 与 GM/r² 必须是同一个数 —— 这就是「卫星为什么既不掉下来也不飞走」。',
+          targetId: model.bodyId,
+          details: { required: demanded, supplied, radius: model.radius },
+        },
+      ),
+    )
+
+    /* Kepler's third law as a RATIO, not as a formula: at four times the radius
+       the period must be eight times longer. Computed at a second radius, it is
+       a route to the answer that never reuses the first one. */
+    const far = circularOrbitPeriod(model.gravitationalParameter, 4 * model.radius)
+    checks.push(
+      check(
+        'period_follows_keplers_third_law',
+        'constraint',
+        Math.abs(far / model.period - 8) <= DEFAULT_TOLERANCE.relative * 8,
+        {
+          message: '开普勒第三定律：r 变成 4 倍，周期变成 8 倍（T ∝ r^1.5，由 v = √(GM/r) 推得）。',
+          targetId: model.bodyId,
+          details: { period: model.period, periodAtFourRadii: far },
+        },
+      ),
+    )
+  }
 
   if (model.modelId === 'uniform_linear_motion') {
     checks.push(check('zero_acceleration', 'constraint', magnitude(model.acceleration) < 1e-10, {

@@ -540,6 +540,292 @@ export interface FluidTank extends PhysicsObjectBase {
   gravity: Quantity<'acceleration'>
 }
 
+/* -------------------------------------------------------- pressure bench -- */
+
+/**
+ * Which closed-form pressure sub-model the bench describes.
+ *
+ * - `solid`: a force pressing perpendicularly on a contact area, p = F/S. A
+ *   second contact area carries the same force, so the bench shows the area
+ *   dependence without the force changing — the misconception it exists for is
+ *   that pressure is not the same thing as force.
+ * - `liquid`: a probe held below a liquid surface, p = ρgh. The same liquid is
+ *   also probed at a second depth and a second liquid at the first depth, so
+ *   both dependences are visible on one rig.
+ * - `atmospheric`: the atmosphere acting on a barometer and on a pair of
+ *   Magdeburg hemispheres. The two instruments read the same p₀ by different
+ *   routes — the column h = p₀/(ρ_Hg·g) and the separating pull F = p₀·πr².
+ */
+export type PressureBenchType = 'solid' | 'liquid' | 'atmospheric'
+
+/**
+ * Pressure bench (junior pressure slice). One bench carries one rig: a block on
+ * a contact face, a probe in a tank, or the atmosphere on a pair of instruments.
+ *
+ * The scene does NOT store the pressure, the barometer column height or the
+ * hemisphere pull. Force, area, liquid density, depth and the instrument
+ * geometry are the editable facts, so every reading is derived by the engine
+ * from those rather than persisted and left to go stale on the next edit.
+ *
+ * Which optional fields carry meaning depends on `type` — the engine's
+ * `canHandle` rejects a bench whose sub-model fields are missing rather than
+ * silently substituting a default.
+ *
+ * Authoring units follow the junior lab: newtons for force, cm² for contact
+ * area, cm for depth, kg/m³ for density, Pa for atmospheric pressure.
+ */
+export interface PressureBench extends PhysicsObjectBase {
+  type: PressureBenchType
+  /* ------------------------------------------------------------ solid -- */
+  /** Perpendicular force on the contact area; finite and ≥ 0 (solid only). */
+  force?: Quantity<'force'>
+  /** Contact area the force presses on; finite and > 0 (solid only). */
+  area?: Quantity<'area'>
+  /**
+   * Second contact area carrying the SAME force; finite and > 0 (solid only).
+   * This is the block tipped onto another face or a narrower foot.
+   */
+  comparisonArea?: Quantity<'area'>
+  /* ----------------------------------------------------------- liquid -- */
+  /** Gravitational field strength; finite and > 0 (liquid, atmospheric). */
+  gravity?: Quantity<'acceleration'>
+  /** Density of the probed liquid; finite and > 0 (liquid only). */
+  liquidDensity?: Quantity<'density'>
+  /** Depth of the probe below the surface; finite and ≥ 0 (liquid only). */
+  depth?: Quantity<'length'>
+  /** Second probe depth in the same liquid; finite and ≥ 0 (liquid only). */
+  comparisonDepth?: Quantity<'length'>
+  /** A second liquid probed at `depth`; finite and > 0 (liquid only). */
+  comparisonLiquidDensity?: Quantity<'density'>
+  /* ------------------------------------------------------ atmospheric -- */
+  /** Atmospheric pressure the instruments are reading; finite and > 0. */
+  atmosphericPressure?: Quantity<'pressure'>
+  /** Density of the barometer fluid; finite and > 0 (atmospheric only). */
+  barometerFluidDensity?: Quantity<'density'>
+  /** Radius of each Magdeburg hemisphere; finite and > 0 (atmospheric only). */
+  hemisphereRadius?: Quantity<'length'>
+}
+
+/* ------------------------------------------------------- current-magnetic -- */
+
+/**
+ * Which current-magnetic rig a bench is: a straight conductor, a coil, the coil
+ * with its core, or a coil hung in a field so the field turns it.
+ */
+export type CurrentBenchType = 'straight_wire' | 'solenoid' | 'electromagnet' | 'motor'
+
+/**
+ * Current-magnetic bench (junior 电生磁 slice): the magnetic field a current
+ * makes. The straight-wire rig probes the field at a distance from the
+ * conductor; the solenoid rig reads the uniform field along its axis; the
+ * electromagnet rig threads a core through the same coil and reads the pull its
+ * pole face can hold.
+ *
+ * The scene does NOT store the field. Current, probe distance, turns, coil
+ * length and the core are the editable facts, so B = μ₀I/(2πr), B = μ₀(N/L)I and
+ * B = μ_r·μ₀(N/L)I are derived by the engine rather than persisted numbers that
+ * go stale on the next edit.
+ */
+export interface CurrentBench extends PhysicsObjectBase {
+  type: CurrentBenchType
+  /**
+   * Current in the conductor; finite and non-zero (both rigs).
+   *
+   * Signed on purpose: the sign is the direction along the axis (into or out of
+   * the page for the wire, one way or the other for the coil), and it is what
+   * flips the field's circulation — the one thing 安培定则 is about.
+   */
+  current?: Quantity<'electric_current'>
+  /* ------------------------------------------------------- straight wire -- */
+  /** Distance from the conductor to the probe; finite and > 0 (straight_wire only). */
+  probeDistance?: Quantity<'length'>
+  /** A second probe distance in the same field; finite and > 0 (straight_wire only). */
+  comparisonDistance?: Quantity<'length'>
+  /* ------------------------------------------------------------ solenoid -- */
+  /** Turns wound on the former; finite and > 0 (solenoid, electromagnet). */
+  turns?: Quantity<'dimensionless'>
+  /** A second winding on the same former, same length; finite and > 0 (solenoid only). */
+  comparisonTurns?: Quantity<'dimensionless'>
+  /** Length of the coil along its axis; finite and > 0 (solenoid, electromagnet). */
+  coilLength?: Quantity<'length'>
+  /* ------------------------------------------------------ electromagnet -- */
+  /**
+   * Relative permeability of the core threaded through the coil; finite and
+   * > 0 (electromagnet only). 1 IS a core — it is the air-cored coil the iron
+   * one is compared against, so the value that means "no core" is a rig rather
+   * than a missing one, and only zero is refused.
+   */
+  coreRelativePermeability?: Quantity<'dimensionless'>
+  /** A second core on the same coil, same current; finite and > 0 (electromagnet only). */
+  comparisonCoreRelativePermeability?: Quantity<'dimensionless'>
+  /** Area of the pole face the core presents; finite and > 0 (electromagnet only). */
+  coreArea?: Quantity<'area'>
+  /** Gravitational field strength, for the mass the rig can hold; > 0 (electromagnet only). */
+  gravity?: Quantity<'acceleration'>
+  /* ---------------------------------------------------------------- motor -- */
+  /** Stator field the rotor turns in; finite and > 0 (motor only). */
+  magneticFluxDensity?: Quantity<'magnetic_flux_density'>
+  /** Length of each side that carries the force; finite and > 0 (motor only). */
+  sideLength?: Quantity<'length'>
+  /** Length of the other pair of sides — the lever arm; finite and > 0 (motor only). */
+  coilWidth?: Quantity<'length'>
+  /**
+   * Angle between the coil's PLANE and the field; finite (motor only, degrees).
+   *
+   * Measured from the plane rather than from the normal because that is the
+   * angle the drawing shows and the one the rig is turned by: 0° is the coil
+   * lying along B with the couple at full strength, 90° is the 平衡位置 where
+   * the torque vanishes and a commutator earns its place.
+   */
+  coilAngle?: Quantity<'angle'>
+}
+
+/* ---------------------------------------------------------- energy bench -- */
+
+/**
+ * Mechanical-energy bench (junior 机械能 slice): a cart released from a height
+ * on a ramp, with the ledger of what the energy becomes.
+ *
+ * The scene does NOT store the energies. Mass, release height, ramp angle and
+ * the friction along it are the editable facts, so Ep = mgh, Ek = ½mv² and the
+ * work friction takes out are derived by the engine rather than persisted
+ * numbers that go stale on the next edit — and the ledger is checked by adding
+ * it back up, not by asserting the formula twice.
+ */
+export interface EnergyBench extends PhysicsObjectBase {
+  type: 'energy_bench'
+  /** Mass of the cart that carries the energy; finite and > 0. */
+  mass: Quantity<'mass'>
+  /** Gravitational field strength; finite and > 0. */
+  gravity: Quantity<'acceleration'>
+  /** Height above the bottom of the ramp the cart is released from; finite and > 0. */
+  releaseHeight: Quantity<'length'>
+  /**
+   * Incline angle of the ramp; finite and strictly between 0° and 90°.
+   *
+   * Zero would be a level track with no height to fall, and ninety a vertical
+   * drop with no ramp — the work friction does is μ·m·g·cosθ·L, so both ends
+   * make the ledger degenerate rather than merely extreme.
+   */
+  inclineAngle: Quantity<'angle'>
+  /** Kinetic friction coefficient along the ramp; finite and ≥ 0. */
+  frictionCoefficient: Quantity<'dimensionless'>
+}
+
+/* ---------------------------------------------------------- noise bench -- */
+
+/**
+ * Noise bench (junior 噪声 slice): a source, a listener at a distance, and
+ * whatever stands between them.
+ *
+ * The scene does NOT store the level at the listener. The source's sound POWER
+ * level, the distance and the barrier's stated attenuation are the editable
+ * facts, so L = Lw − 20·lg r − 10·lg(4π) − A is derived by the engine rather
+ * than persisted — and the three terms stay separate, because "quieter because
+ * it is farther" and "quieter because of the wall" are different things.
+ */
+export interface NoiseBench extends PhysicsObjectBase {
+  type: 'noise'
+  /** Sound power level of the source (dB); finite. */
+  soundPowerLevel: Quantity<'dimensionless'>
+  /** Distance from the source to the listener (m); finite and > 0. */
+  distance: Quantity<'length'>
+  /**
+   * Insertion loss of whatever stands between them (dB); finite and ≥ 0.
+   *
+   * A MEASURED property of the barrier rather than something this model
+   * derives: how much a wall actually takes out depends on its mass, its
+   * frequency response and the geometry, none of which a level calculation can
+   * conjure. Zero is no barrier at all, which is the control case.
+   */
+  barrierAttenuation: Quantity<'dimensionless'>
+}
+
+/* ----------------------------------------------------- thermometer bench -- */
+
+/**
+ * Liquid-in-glass thermometer bench (junior 温度计 slice): the instrument
+ * itself, not the thing being measured.
+ *
+ * The scene does NOT store where the column stands. The bulb's volume, the
+ * bore's diameter, the filling liquid's expansion coefficient and the
+ * temperature the bulb sits in are the editable facts, so the column length —
+ * and the fixed points that turn it into a scale — are derived by the engine.
+ */
+export interface ThermometerBench extends PhysicsObjectBase {
+  type: 'liquid_in_glass'
+  /** Volume of the bulb at the lower fixed point (m³); finite and > 0. */
+  bulbVolume: Quantity<'volume'>
+  /** Diameter of the capillary bore (m); finite and > 0. */
+  boreDiameter: Quantity<'length'>
+  /**
+   * Volumetric expansion coefficient of the filling liquid (1/K); finite and > 0.
+   *
+   * Dimensionless in the schema the way a relative permeability is: the unit is
+   * 1/K, which the engine's reading multiplies by a temperature difference.
+   */
+  expansionCoefficient: Quantity<'dimensionless'>
+  /** Temperature the bulb is sitting in (K); finite. */
+  temperature: Quantity<'temperature'>
+  /** Column length at the lower fixed point (m); finite and > 0. */
+  icePointLength: Quantity<'length'>
+}
+
+/* ----------------------------------------------------- transformer bench -- */
+
+/**
+ * Ideal-transformer bench (senior 变压器 slice): two coils on one core.
+ *
+ * The scene does NOT store the secondary voltage or current. The primary
+ * voltage, the primary current and the two turn counts are the editable facts,
+ * so U₂ = U₁·N₂/N₁ and I₂ = I₁·N₁/N₂ are derived — and the power balance that
+ * makes the machine ideal is what the engine checks.
+ */
+export interface TransformerBench extends PhysicsObjectBase {
+  type: 'transformer'
+  /** Voltage across the primary winding (V); finite and > 0. */
+  primaryVoltage: Quantity<'electric_potential'>
+  /** Current drawn by the primary (A); finite and ≥ 0. */
+  primaryCurrent: Quantity<'electric_current'>
+  /** Turns on the driven winding; finite and > 0. */
+  primaryTurns: Quantity<'dimensionless'>
+  /** Turns on the output winding; finite and > 0. */
+  secondaryTurns: Quantity<'dimensionless'>
+}
+
+/* ----------------------------------------------------------- light bench -- */
+
+/**
+ * Rectilinear-propagation bench (junior 光的直线传播 slice): a small hole in an
+ * opaque screen, with an object in front of it and a receiving screen behind.
+ *
+ * The scene does NOT store the image. The object's height, its distance to the
+ * hole and the hole's distance to the screen are the editable facts, so
+ * h' = h·v/u is derived by the engine rather than persisted — and the image is
+ * INVERTED, which is not a stored flag either: it is the sign the ray geometry
+ * gives, and the check re-derives it from the triangles.
+ */
+/** Which light rig a bench is: a hole in a card, or a boundary light strikes. */
+export type LightBenchType = 'pinhole' | 'total_reflection'
+
+export interface LightBench extends PhysicsObjectBase {
+  type: LightBenchType
+  /* ------------------------------------------------------------- pinhole -- */
+  /** Height of the object (the arrow standing in front of the hole); finite and > 0. */
+  objectHeight?: Quantity<'length'>
+  /** Distance from the object to the hole; finite and > 0. */
+  objectDistance?: Quantity<'length'>
+  /** Distance from the hole to the receiving screen; finite and > 0. */
+  screenDistance?: Quantity<'length'>
+  /* ---------------------------------------------------- total reflection -- */
+  /** Refractive index the light comes FROM; finite and ≥ 1. */
+  incidentIndex?: Quantity<'dimensionless'>
+  /** Refractive index the light meets; finite and > 0. */
+  refractedIndex?: Quantity<'dimensionless'>
+  /** Angle of incidence from the normal; finite and in [0°, 90°) (total reflection). */
+  incidentAngle?: Quantity<'angle'>
+}
+
 /* --------------------------------------------------------- thermal bench -- */
 
 /**
@@ -563,6 +849,17 @@ export interface ThermalSample {
   latentHeat: Quantity<'specific_latent_heat'>
   /** Melting point; only meaningful when `latentHeat` is > 0. */
   meltingPoint: Quantity<'temperature'>
+  /**
+   * Boiling point, and the latent heat of vaporization that goes with it.
+   *
+   * A SECOND plateau, not a variant of the first: water melts at 0 °C and boils
+   * at 100 °C, and the experiment the curriculum asks for is the flat part at
+   * the second one. Both are optional so a melting bench is unchanged — a rig
+   * that never boils is not missing a value, it is a different rig.
+   */
+  boilingPoint?: Quantity<'temperature'>
+  /** Specific latent heat of vaporization; finite and > 0 when `boilingPoint` is set. */
+  vaporizationHeat?: Quantity<'specific_latent_heat'>
   /**
    * Temperature at t = 0. A sample starting at or above its melting point is
    * already molten — the run is then a single warming segment, which is what a
@@ -824,6 +1121,48 @@ export interface PhysicsScene {
    * to `[]` rather than the schema demanding an empty array everywhere.
    */
   waveBenches?: WaveBench[]
+  /**
+   * Pressure benches. Optional for the same reason as `inductionBenches`:
+   * scenes persisted before the pressure slice must stay readable, so accessors
+   * fall back to `[]` rather than the schema demanding an empty array everywhere.
+   */
+  pressureBenches?: PressureBench[]
+  /**
+   * Current-magnetic benches. Optional for the same reason as the benches above:
+   * scenes persisted before this slice must stay readable, so accessors fall
+   * back to `[]` rather than the schema demanding an empty array everywhere.
+   */
+  currentBenches?: CurrentBench[]
+  /**
+   * Mechanical-energy benches. Optional for the same reason as the benches
+   * above: scenes persisted before this slice must stay readable, so accessors
+   * fall back to `[]` rather than the schema demanding an empty array.
+   */
+  energyBenches?: EnergyBench[]
+  /**
+   * Rectilinear-propagation benches. Optional for the same reason as the
+   * benches above: scenes persisted before this slice must stay readable, so
+   * accessors fall back to `[]` rather than the schema demanding an empty array.
+   */
+  lightBenches?: LightBench[]
+  /**
+   * Transformer benches. Optional for the same reason as the benches above:
+   * scenes persisted before this slice must stay readable, so accessors fall
+   * back to `[]` rather than the schema demanding an empty array.
+   */
+  transformerBenches?: TransformerBench[]
+  /**
+   * Thermometer benches. Optional for the same reason as the benches above:
+   * scenes persisted before this slice must stay readable, so accessors fall
+   * back to `[]` rather than the schema demanding an empty array.
+   */
+  thermometerBenches?: ThermometerBench[]
+  /**
+   * Noise benches. Optional for the same reason as the benches above: scenes
+   * persisted before this slice must stay readable, so accessors fall back to
+   * `[]` rather than the schema demanding an empty array.
+   */
+  noiseBenches?: NoiseBench[]
   measurementDefinitions: MeasurementDefinition[]
   observableDefinitions: ObservableDefinition[]
   annotations: SceneAnnotation[]

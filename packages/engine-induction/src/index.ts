@@ -30,3 +30,25 @@ export {
   type InductionSubModel,
   type ResolvedInductionModel,
 } from './induction-model.ts'
+
+export {
+  resolveTransformerModel,
+  type ResolvedTransformerModel,
+} from './transformer-model.ts'
+export {
+  TRANSFORMER_RELATIVE_TOLERANCE,
+  secondaryCurrent,
+  secondaryVoltage,
+  throughPower,
+  transformerReadingOf,
+  type TransformerReading,
+} from './transformer.ts'
+export {
+  IDEAL_TRANSFORMER_MODEL,
+  TRANSFORMER_ENGINE_ID,
+  TRANSFORMER_ENGINE_VERSION,
+  TransformerEngine,
+  createTransformerSimulationRequest,
+  resolveTransformer,
+  transformerEngine,
+} from './transformer-engine.ts'

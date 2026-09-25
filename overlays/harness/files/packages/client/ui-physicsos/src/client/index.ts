@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
+import { createNoticeApi } from './notice-api.ts'
 import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
 import { HomeActions } from './HomeActions.tsx'
@@ -34,8 +35,10 @@ import { createPhysicsSurfaceController, type PhysicsSceneRef } from './surface-
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { en, zh, type PhysicsosKey } from './locales.ts'
 
+export { PHYSICSOS_BUILT_AT, PHYSICSOS_BUILT_DAY, PHYSICSOS_VERSION, buildStamp } from './build-stamp.ts'
 export type { PhysicsosKey } from './locales.ts'
 export type { AuthApi, AuthUser, SchoolRow } from './auth-api.ts'
+export type { NoticeApi, FeedbackRow, AnnouncementRow } from './notice-api.ts'
 export type { AuthState } from './auth-store.ts'
 export type { AuthGateInjected, AuthGateProps } from './AuthGate.tsx'
 export type { HomeActionsInjected, HomeActionsProps } from './HomeActions.tsx'
@@ -96,6 +99,21 @@ export function apply(ctx: ClientContext): void {
   const auth = createAuthController(authApi, globalThis.localStorage)
   void auth.boot()
 
+  /* 学习上报:每一次自测对错,按知识点各报一格。
+     只发知识点 id 与对错 —— 答案原文、题干、账号都不出这台机器;学校与日期
+     由服务端决定。尽力而为:上报失败不回滚本地记录,调用方也拿不到异常,
+     因为「记下我这次错了」是本地的事,上报只是让学校看到哪个知识点普遍难。 */
+  const reportLearning = (attempt: {
+    readonly correct: boolean
+    readonly knowledge: readonly string[]
+  }): void => {
+    for (const knowledgeId of attempt.knowledge) {
+      void authApi.reportLearning({ knowledgeId, correct: attempt.correct }).catch(() => {
+        /* 离线或会话过期:本地记录已经写好,不做补偿也不打扰学生。 */
+      })
+    }
+  }
+
   /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
      under an account it lands in that user's namespace. */
   const surface = createPhysicsSurfaceController(auth.userStorage)
@@ -103,6 +121,8 @@ export function apply(ctx: ClientContext): void {
   /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
      reads the role from the auth store; the host enforces it on every call. */
   const adminApi = createAdminApi()
+  /* 反馈与公告: one client for both directions (`/physicsos/notice`). */
+  const noticeApi = createNoticeApi()
 
   /* The student's attempt history: written by self-checks (the Lab's 自测 tab
      and golden-question cards), read by the 学习记录 surface. Persisted so the
@@ -130,6 +150,7 @@ export function apply(ctx: ClientContext): void {
       openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
       recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
         learningRecord.record(attempt)
+        reportLearning(attempt)
       },
     }),
   }, SceneChatCard))
@@ -181,7 +202,7 @@ export function apply(ctx: ClientContext): void {
     id: 'physicsos-nav',
     locale: NS,
     inject: () => ({
-      hooks: { physicsSurface: surface.store },
+      hooks: { physicsSurface: surface.store, auth: auth.store },
       openSurface: (id: Parameters<typeof surface.open>[0], drawerOpen: boolean) => {
         surface.open(id)
         /* Below the layout shell's 1024px auto-collapse breakpoint the sidebar
@@ -392,6 +413,10 @@ export function apply(ctx: ClientContext): void {
            client is one injected callback bag, built once in apply. */
         paperApi,
         adminApi,
+        noticeApi,
+        /* 公告离线缓存落在账户命名空间里(方案 2.3 的「缓存上一条」)——
+           本校公告不该跟着另一个账号登录出现在下一块屏幕上。 */
+        noticeStorage: auth.userStorage,
         openSurface: (
           id: Parameters<typeof surface.open>[0],
           sceneRef?: Parameters<typeof surface.open>[1],
@@ -411,6 +436,7 @@ export function apply(ctx: ClientContext): void {
            学习记录 → 重新练习 → tutor prompt in the conversation. */
         recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
           learningRecord.record(attempt)
+          reportLearning(attempt)
         },
         practiceQuestion,
       }),

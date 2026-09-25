@@ -1,6 +1,7 @@
 /**
  * Fluid statics renderer. Registered for `domain: 'fluid'` in the renderer
- * registry.
+ * registry, and the branch point for the two apparatuses that shelf holds: the
+ * buoyancy tank and the pressure rigs (`pressure-renderer.tsx`).
  *
  * Draws the textbook buoyancy rig: the tank with its liquid body, the surface
  * line, the spring scale with its live dial reading, the block hanging on the
@@ -19,6 +20,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { RendererProps } from './renderer-registry.tsx'
 import type { ScenePoint } from './scene-visual-model.ts'
 import { ArrowMarkers, Dimension, Vectors, clsxJoin } from './primitives.tsx'
+import { PressureRenderer } from './pressure-renderer.tsx'
 import css from './renderers.module.css'
 
 /** The spring scale: a hanging dynamometer — barrel, dial window with a
@@ -99,7 +101,20 @@ const ScaleGlyph = ({
   )
 }
 
-export function FluidRenderer({ view, projection, componentDrag }: RendererProps) {
+/**
+ * The fluid domain's entry point: the buoyancy tank and the three pressure rigs
+ * share this shelf and this canvas, so the dispatch lives here, above any hook,
+ * the way `MechanicsRenderer` dispatches to the lever. Everything below this
+ * point is the buoyancy rig.
+ */
+export function FluidRenderer(props: RendererProps) {
+  if (props.view.pressureRig !== undefined) {
+    return <PressureRenderer view={props.view} projection={props.projection} />
+  }
+  return <BuoyancyRenderer {...props} />
+}
+
+function BuoyancyRenderer({ view, projection, componentDrag }: RendererProps) {
   const showForces = view.visible.forces === true
   const showDisplaced = view.visible.displaced === true
   const liquid = view.fluidLiquid

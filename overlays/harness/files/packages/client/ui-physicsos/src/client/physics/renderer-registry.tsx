@@ -14,9 +14,15 @@ import type { TerminalRef } from './circuit-builder.ts'
 import { AcousticsRenderer } from './acoustics-renderer.tsx'
 import { CircuitRenderer } from './circuit-renderer.tsx'
 import { FluidRenderer } from './fluid-renderer.tsx'
+import { CurrentRenderer } from './current-renderer.tsx'
+import { EnergyRenderer } from './energy-renderer.tsx'
+import { LightRenderer } from './light-renderer.tsx'
+import { TransformerRenderer } from './transformer-renderer.tsx'
 import { InductionRenderer } from './induction-renderer.tsx'
 import { OpticsRenderer } from './optics-renderer.tsx'
 import { ThermalRenderer } from './thermal-renderer.tsx'
+import { ThermometerRenderer } from './thermometer-renderer.tsx'
+import { NoiseRenderer } from './noise-renderer.tsx'
 import { LeverRenderer } from './lever-renderer.tsx'
 import { WaveRenderer } from './wave-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
@@ -119,6 +125,19 @@ export interface RendererProps {
 }
 
 /* ---------------------------------------------------------------- magnetic -- */
+
+/**
+ * The magnetic domain's entry point: the Lorentz particle scene and the
+ * current-magnetic benches share this shelf and this canvas, so the dispatch
+ * lives here, above any hook, the way `FluidRenderer` dispatches to the
+ * pressure rigs and `MechanicsRenderer` to the lever.
+ */
+function MagneticDomainRenderer(props: RendererProps) {
+  if (props.view.currentRig !== undefined) {
+    return <CurrentRenderer view={props.view} projection={props.projection} />
+  }
+  return <MagneticRenderer {...props} />
+}
 
 /**
  * Magnetic renderer: uniform field lattice, charged particle, orbit.
@@ -1070,6 +1089,12 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
   if (view.leverBeam !== undefined) {
     return <LeverRenderer view={view} projection={projection} />
   }
+  /* The energy rig is the mechanics domain's third bench, and it is dispatched
+     here, above any hook, the way the lever above it and the pressure rigs in
+     the fluid renderer are. */
+  if (view.energyRamp !== undefined) {
+    return <EnergyRenderer view={view} projection={projection} />
+  }
   return (
     <>
       <defs>
@@ -1171,17 +1196,54 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
 }
 
 /** Domain → renderer. Extend here to add a physics domain. */
+/** The optics domain's entry point: the imaging bench and the pinhole rig. */
+function OpticsDomainRenderer(props: RendererProps) {
+  /* BOTH light benches dispatch here: the pinhole rig and the refraction rig are
+     two different pictures and only one of them carries `lightRig`, so a
+     dispatcher that knew only that one would silently draw the imaging bench for
+     a total-reflection scene — the readout would be right and the figure
+     missing. */
+  if (props.view.lightRig !== undefined || props.view.lightRefraction !== undefined) {
+    return <LightRenderer view={props.view} projection={props.projection} />
+  }
+  return <OpticsRenderer {...props} />
+}
+
+/** The induction domain's entry point: the EMF rigs and the transformer. */
+function InductionDomainRenderer(props: RendererProps) {
+  if (props.view.transformerCoils !== undefined) {
+    return <TransformerRenderer view={props.view} projection={props.projection} />
+  }
+  return <InductionRenderer {...props} />
+}
+
+/** The thermal domain's entry point: the heating benches and the thermometer. */
+function ThermalDomainRenderer(props: RendererProps) {
+  if (props.view.thermometer !== undefined) {
+    return <ThermometerRenderer view={props.view} projection={props.projection} />
+  }
+  return <ThermalRenderer {...props} />
+}
+
+/** The acoustics domain's entry point: the echo range and the noise rig. */
+function AcousticsDomainRenderer(props: RendererProps) {
+  if (props.view.noiseRig !== undefined) {
+    return <NoiseRenderer view={props.view} projection={props.projection} />
+  }
+  return <AcousticsRenderer {...props} />
+}
+
 export const RENDERERS = {
-  magnetic: MagneticRenderer,
+  magnetic: MagneticDomainRenderer,
   mechanics: MechanicsRenderer,
   electric: ElectricRenderer,
   circuit: CircuitRenderer,
   composite: CompositeRenderer,
-  optics: OpticsRenderer,
-  acoustics: AcousticsRenderer,
+  optics: OpticsDomainRenderer,
+  acoustics: AcousticsDomainRenderer,
   fluid: FluidRenderer,
-  thermal: ThermalRenderer,
-  induction: InductionRenderer,
+  thermal: ThermalDomainRenderer,
+  induction: InductionDomainRenderer,
   wave: WaveRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 

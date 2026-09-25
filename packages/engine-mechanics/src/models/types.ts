@@ -129,3 +129,30 @@ export type MechanicsModel =
   | SimplePendulumModel
   | HorizontalFrictionModel
   | SpringStaticsModel
+  | CircularOrbitModel
+
+/**
+ * A satellite on a circular orbit about a central body.
+ *
+ * GM and r fix everything: the speed is √(GM/r), the period 2πr/v, and the
+ * acceleration the motion demands (v²/r) has to be what gravity supplies
+ * (GM/r²). The engine checks those against each other rather than restating the
+ * formulas that produced them.
+ */
+export interface CircularOrbitModel extends MechanicsModelBase {
+  readonly modelId: 'circular_orbit'
+  /** Central body's gravitational parameter GM (m³/s²). */
+  readonly gravitationalParameter: number
+  /** Orbit radius (m). */
+  readonly radius: number
+  /** Orbital speed (m/s) = √(GM/r). */
+  readonly speed: number
+  /** Period (s). */
+  readonly period: number
+  /** Angular rate (rad/s). */
+  readonly angularRate: number
+  /** Force gravity supplies at this radius (N). */
+  readonly force: number
+  /** Centre of the orbit, in scene coordinates. */
+  readonly centre: Vector3
+}

@@ -29,6 +29,7 @@ const MODEL_TITLES: Record<MechanicsModelId, string> = {
   simple_pendulum: '单摆',
   horizontal_friction: '水平面摩擦',
   spring_statics: '胡克定律',
+  circular_orbit: '万有引力与向心力',
 }
 
 export function buildMechanicsSceneFromIR(

@@ -56,10 +56,19 @@ export {
   type SubmergedBlock,
   type TankLiquid,
   type ThermalBench,
+  type TransformerBench,
+  type ThermometerBench,
+  type NoiseBench,
   type ThermalSample,
   type LeverBench,
+  type LightBench,
   type LeverHanger,
   type LeverHangerSide,
+  type PressureBench,
+  type PressureBenchType,
+  type CurrentBench,
+  type CurrentBenchType,
+  type EnergyBench,
   type WaveBench,
   type WaveBenchType,
   type Timeline,
@@ -197,7 +206,9 @@ export {
   createParallelCircuitScene,
   createRheostatCircuitScene,
   createSeriesCircuitScene,
+  createShortCircuitScene,
   type EmfMeasurementInput,
+  type ShortCircuitInput,
   type MixedCircuitInput,
   type ParallelCircuitInput,
   type RheostatCircuitInput,
@@ -256,6 +267,109 @@ export {
   type ArchimedesSceneInput,
 } from './fluid/fluid-templates.ts'
 export {
+  createPressureBenchScene,
+  isPressureScene,
+  pressureBenchOf,
+  pressureBenchesOf,
+  type AtmosphericPressureSpec,
+  type LiquidPressureSpec,
+  type PressureBenchSceneInput,
+  type PressureBenchSpec,
+  type PressureObservableKey,
+  type SolidPressureSpec,
+} from './fluid/pressure-scene.ts'
+export {
+  createAtmosphericPressureScene,
+  createLiquidPressureScene,
+  createSolidPressureScene,
+  type AtmosphericPressureSceneInput,
+  type LiquidPressureSceneInput,
+  type SolidPressureSceneInput,
+} from './fluid/pressure-templates.ts'
+export {
+  createLightBenchScene,
+  isLightScene,
+  lightBenchOf,
+  lightBenchesOf,
+  type LightBenchSceneInput,
+  type LightObservableKey,
+} from './optics/light-scene.ts'
+export {
+  createPinholeScene,
+  createTotalReflectionScene,
+  type PinholeSceneInput,
+  type TotalReflectionSceneInput,
+} from './optics/light-templates.ts'
+export {
+  createNoiseBenchScene,
+  isNoiseScene,
+  noiseBenchOf,
+  noiseBenchesOf,
+  type NoiseBenchSceneInput,
+  type NoiseObservableKey,
+} from './acoustics/noise-scene.ts'
+export {
+  createNoiseBarrierScene,
+  type NoiseBarrierSceneInput,
+} from './acoustics/noise-templates.ts'
+export {
+  createThermometerBenchScene,
+  isThermometerScene,
+  thermometerBenchOf,
+  thermometerBenchesOf,
+  type ThermometerBenchSceneInput,
+  type ThermometerObservableKey,
+} from './thermal/thermometer-scene.ts'
+export {
+  createThermometerCalibrationScene,
+  type ThermometerCalibrationSceneInput,
+} from './thermal/thermometer-templates.ts'
+export {
+  createTransformerBenchScene,
+  isTransformerScene,
+  transformerBenchOf,
+  transformerBenchesOf,
+  type TransformerBenchSceneInput,
+  type TransformerObservableKey,
+} from './transformer/transformer-scene.ts'
+export {
+  createEnergyBenchScene,
+  energyBenchOf,
+  energyBenchesOf,
+  isEnergyScene,
+  type EnergyBenchSceneInput,
+  type EnergyObservableKey,
+} from './energy/energy-scene.ts'
+export {
+  createMechanicalEnergyScene,
+  createRampFrictionScene,
+  type MechanicalEnergySceneInput,
+  type RampFrictionSceneInput,
+} from './energy/energy-templates.ts'
+export {
+  createCurrentBenchScene,
+  currentBenchOf,
+  currentBenchesOf,
+  isCurrentScene,
+  type CurrentBenchSceneInput,
+  type CurrentBenchSpec,
+  type CurrentObservableKey,
+  type ElectromagnetSpec,
+  type MotorSpec,
+  type SolenoidFieldSpec,
+  type StraightWireFieldSpec,
+} from './magnetic/current-scene.ts'
+export {
+  createElectromagnetScene,
+  createMotorScene,
+  createSolenoidFieldScene,
+  createStraightWireFieldScene,
+  type ElectromagnetSceneInput,
+  type MotorSceneInput,
+  type SolenoidFieldSceneInput,
+  type StraightWireFieldSceneInput,
+} from './magnetic/current-templates.ts'
+export {
   CELSIUS_ZERO_IN_KELVIN,
   createThermalBenchScene,
   isThermalScene,
@@ -266,8 +380,10 @@ export {
   type ThermalSampleSpec,
 } from './thermal/thermal-scene.ts'
 export {
+  createBoilingWaterScene,
   createCrystalMeltingScene,
   createHeatCapacityComparisonScene,
+  type BoilingWaterSceneInput,
   type CrystalMeltingSceneInput,
   type HeatCapacityComparisonSceneInput,
 } from './thermal/thermal-templates.ts'

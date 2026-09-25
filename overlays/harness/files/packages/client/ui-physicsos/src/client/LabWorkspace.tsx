@@ -11,10 +11,23 @@ import { useMemo } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { isLeverScene, type PhysicsScene } from '@physicsos/physics-scene'
+import {
+  isCurrentScene,
+  isEnergyScene,
+  isLeverScene,
+  isNoiseScene,
+  isLightScene,
+  isPressureScene,
+  isThermometerScene,
+  isTransformerScene,
+  type PhysicsScene,
+} from '@physicsos/physics-scene'
 
 import { AdminWorkspace } from './AdminWorkspace.tsx'
 import type { AdminApi } from './auth-api.ts'
+import type { NoticeApi } from './notice-api.ts'
+import type { NoticeCacheStorage } from './notice-cache.ts'
+import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { LearningRecordWorkspace } from './LearningRecordWorkspace.tsx'
@@ -31,6 +44,13 @@ import { artTemplateIdOfSceneId } from './physics/experiment-artwork.tsx'
 import { createAcousticsWorkspaceRuntime } from './physics/acoustics-workspace-runtime.ts'
 import { createCircuitWorkspaceRuntime } from './physics/circuit-workspace-runtime.ts'
 import { createFluidWorkspaceRuntime } from './physics/fluid-workspace-runtime.ts'
+import { createPressureWorkspaceRuntime } from './physics/pressure-workspace-runtime.ts'
+import { createCurrentWorkspaceRuntime } from './physics/current-workspace-runtime.ts'
+import { createEnergyWorkspaceRuntime } from './physics/energy-workspace-runtime.ts'
+import { createLightWorkspaceRuntime } from './physics/light-workspace-runtime.ts'
+import { createTransformerWorkspaceRuntime } from './physics/transformer-workspace-runtime.ts'
+import { createThermometerWorkspaceRuntime } from './physics/thermometer-workspace-runtime.ts'
+import { createNoiseWorkspaceRuntime } from './physics/noise-workspace-runtime.ts'
 import { createThermalWorkspaceRuntime } from './physics/thermal-workspace-runtime.ts'
 import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-runtime.ts'
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
@@ -67,6 +87,14 @@ export interface PhysicsSurfaceInjected {
   paperApi?: PaperApi
   /** `/physicsos/admin` client — absent in stripped test compositions. */
   adminApi?: AdminApi
+  /** `/physicsos/notice` client — absent in stripped test compositions. */
+  noticeApi?: NoticeApi
+  /**
+   * Account-namespaced storage for the 公告 offline cache (方案 2.3).
+   * Per-account, not per-machine: a campus notice must not follow a
+   * different login onto the next screen.
+   */
+  noticeStorage?: NoticeCacheStorage
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Open the Lab assembling a circuit from scratch (实验中心 → 自由搭建). */
   openBuilder?: (sceneRef: PhysicsSceneRef) => void
@@ -104,6 +132,8 @@ export function PhysicsSurface({
   useWorkspaces,
   paperApi,
   adminApi,
+  noticeApi,
+  noticeStorage,
   useAuth,
 }: PhysicsSurfaceProps) {
   const surfaceState = usePhysicsSurface(snapshot => snapshot)
@@ -139,9 +169,20 @@ export function PhysicsSurface({
   /* 出卷专区 is a teacher workflow over the host REST surface, not a lab
      scene: it renders without the physics runtime and covers the composer. */
   if (surface === 'paper') {
+    /* `useAuth` goes in so the surface can refuse itself to a student rather
+       than mounting a studio whose every button would 403. The host refuses
+       them anyway — this is about not offering a room they cannot use. */
     return paperApi === undefined
       ? null
-      : <PaperWorkspace api={paperApi} t={t} useSessions={useSessions} useWorkspaces={useWorkspaces} />
+      : (
+        <PaperWorkspace
+          api={paperApi}
+          t={t}
+          useAuth={useAuth}
+          useSessions={useSessions}
+          useWorkspaces={useWorkspaces}
+        />
+      )
   }
   /* 资源库 is a catalog surface like 学习记录: no physics runtime, it reads
      the curriculum catalog and hands actions off to the Lab / the tutor. */
@@ -161,11 +202,30 @@ export function PhysicsSurface({
   /* 管理后台 is role-gated twice: the sidebar only offers the entry to
      SCHOOL_ADMIN/SUPER_ADMIN and the host re-checks every admin call, so a
      missing role or api simply renders nothing actionable. */
+  if (surface === 'notice') {
+    if (noticeApi === undefined) return null
+    return (
+      <NoticeBoard
+        api={noticeApi}
+        context="/notice"
+        {...(noticeStorage === undefined ? {} : { storage: noticeStorage })}
+        t={t}
+      />
+    )
+  }
   if (surface === 'admin') {
     if (adminApi === undefined) return null
     /* `useAuth` is a required prop — the old `useAuth === undefined` branch
        was unreachable, which the compiler flagged as a dead condition. */
-    return <AdminWorkspace api={adminApi} useAuth={useAuth} t={t} />
+    return (
+      <AdminWorkspace
+        api={adminApi}
+        {...(paperApi === undefined ? {} : { paperApi })}
+        {...(noticeApi === undefined ? {} : { noticeApi })}
+        useAuth={useAuth}
+        t={t}
+      />
+    )
   }
   if (surface === 'record') {
     return (
@@ -287,6 +347,9 @@ export const buildWorkspaceRuntime = (
       return null
     case 'mechanics':
       if (scene !== undefined && isLeverScene(scene)) return createLeverWorkspaceRuntime(scene)
+      /* The energy rig is the mechanics domain's third bench — a ramp with no
+         bodies — so the bench picks the adapter here too. */
+      if (scene !== undefined && isEnergyScene(scene)) return createEnergyWorkspaceRuntime(scene)
       if (scene !== undefined && isCollisionSceneInput(scene))
         return createCollisionWorkspaceRuntime(scene)
       return scene === undefined ? null : createMechanicsWorkspaceRuntime(scene)
@@ -295,20 +358,53 @@ export const buildWorkspaceRuntime = (
     case 'circuit':
       return scene === undefined ? null : createCircuitWorkspaceRuntime(scene)
     case 'optics':
-      return scene === undefined ? null : createOpticsWorkspaceRuntime(scene)
+      /* The optics domain carries two benches — the imaging bench and the
+         pinhole rig — and the bench picks the adapter. */
+      if (scene === undefined) return null
+      return isLightScene(scene)
+        ? createLightWorkspaceRuntime(scene)
+        : createOpticsWorkspaceRuntime(scene)
     case 'acoustics':
-      return scene === undefined ? null : createAcousticsWorkspaceRuntime(scene)
+      /* The acoustics domain carries two benches — the echo range and the noise
+         rig — and the bench picks the adapter. */
+      if (scene === undefined) return null
+      return isNoiseScene(scene)
+        ? createNoiseWorkspaceRuntime(scene)
+        : createAcousticsWorkspaceRuntime(scene)
     case 'fluid':
-      return scene === undefined ? null : createFluidWorkspaceRuntime(scene)
+      /* The fluid domain carries two benches — the buoyancy tank and the three
+         pressure rigs — and they share a canvas but not a runtime, so the bench
+         picks the adapter the same way the lever branch above picks its own. */
+      if (scene === undefined) return null
+      return isPressureScene(scene)
+        ? createPressureWorkspaceRuntime(scene)
+        : createFluidWorkspaceRuntime(scene)
     case 'thermal':
-      return scene === undefined ? null : createThermalWorkspaceRuntime(scene)
+      /* The thermal domain carries two benches — the heating benches and the
+         thermometer — and the bench picks the adapter. */
+      if (scene === undefined) return null
+      return isThermometerScene(scene)
+        ? createThermometerWorkspaceRuntime(scene)
+        : createThermalWorkspaceRuntime(scene)
     case 'induction':
-      return scene === undefined ? null : createInductionWorkspaceRuntime(scene)
+      /* The induction domain carries two benches — the EMF rigs and the
+         transformer — and the bench picks the adapter. */
+      if (scene === undefined) return null
+      return isTransformerScene(scene)
+        ? createTransformerWorkspaceRuntime(scene)
+        : createInductionWorkspaceRuntime(scene)
     case 'wave':
       return scene === undefined ? null : createWaveWorkspaceRuntime(scene)
     case 'composite':
       return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
     case 'magnetic':
-      return createMagneticWorkspaceRuntime(scene)
+      /* The magnetic domain carries two benches — the Lorentz particle scene and
+         the current-magnetic rigs — and they share a canvas but not a runtime,
+         so the bench picks the adapter here the same way the fluid branch above
+         picks between the tank and the pressure rigs. */
+      if (scene === undefined) return null
+      return isCurrentScene(scene)
+        ? createCurrentWorkspaceRuntime(scene)
+        : createMagneticWorkspaceRuntime(scene)
   }
 }

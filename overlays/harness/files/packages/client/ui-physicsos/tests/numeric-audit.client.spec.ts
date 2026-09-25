@@ -10,51 +10,34 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { isLeverScene, type PhysicsScene } from '@physicsos/physics-scene'
+import type { PhysicsScene } from '@physicsos/physics-scene'
 
 import {
   EXPERIMENT_TEMPLATES,
   createExperimentSceneRef,
 } from '../src/client/physics/experiment-templates.ts'
+import { buildWorkspaceRuntime } from '../src/client/LabWorkspace.tsx'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { zh } from '../src/client/locales.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from '../src/client/physics/workspace-runtime.ts'
-import { createAcousticsWorkspaceRuntime } from '../src/client/physics/acoustics-workspace-runtime.ts'
-import { createCircuitWorkspaceRuntime } from '../src/client/physics/circuit-workspace-runtime.ts'
-import { createCollisionWorkspaceRuntime, isCollisionSceneInput } from '../src/client/physics/collision-workspace-runtime.ts'
-import { createCompositeWorkspaceRuntime } from '../src/client/physics/composite-workspace-runtime.ts'
-import { createElectricWorkspaceRuntime } from '../src/client/physics/electric-workspace-runtime.ts'
-import { createFluidWorkspaceRuntime } from '../src/client/physics/fluid-workspace-runtime.ts'
-import { createInductionWorkspaceRuntime } from '../src/client/physics/induction-workspace-runtime.ts'
-import { createLeverWorkspaceRuntime } from '../src/client/physics/lever-workspace-runtime.ts'
-import { createMagneticWorkspaceRuntime } from '../src/client/physics/magnetic-workspace-runtime.ts'
-import { createMechanicsWorkspaceRuntime } from '../src/client/physics/mechanics-workspace-runtime.ts'
-import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
-import { createThermalWorkspaceRuntime } from '../src/client/physics/thermal-workspace-runtime.ts'
-import { createWaveWorkspaceRuntime } from '../src/client/physics/wave-workspace-runtime.ts'
 
 const t = (key: string): string => (zh as Record<string, string>)[key] ?? key
 
-/* Mirror of LabWorkspace.buildRuntime — the same dispatch the Lab performs. */
+/**
+ * The Lab's own dispatch, called rather than copied.
+ *
+ * This file used to carry a hand-maintained mirror of `buildWorkspaceRuntime`,
+ * and it rotted the moment a domain gained a second bench: the new rigs fell
+ * through to the other bench's adapter, which rejected them, and every audit
+ * row for them read `failed`. Calling the real dispatch is what makes "every
+ * picker template reaches engine-verified" true for a bench nobody remembered
+ * to add here.
+ */
 const runtimeFor = (scene: PhysicsScene): WorkspaceRuntime => {
   const domain = domainOfScene(scene)
-  switch (domain) {
-    case 'mechanics':
-      if (isLeverScene(scene)) return createLeverWorkspaceRuntime(scene)
-      if (isCollisionSceneInput(scene)) return createCollisionWorkspaceRuntime(scene)
-      return createMechanicsWorkspaceRuntime(scene)
-    case 'electric': return createElectricWorkspaceRuntime(scene)
-    case 'circuit': return createCircuitWorkspaceRuntime(scene)
-    case 'optics': return createOpticsWorkspaceRuntime(scene)
-    case 'acoustics': return createAcousticsWorkspaceRuntime(scene)
-    case 'fluid': return createFluidWorkspaceRuntime(scene)
-    case 'thermal': return createThermalWorkspaceRuntime(scene)
-    case 'induction': return createInductionWorkspaceRuntime(scene)
-    case 'wave': return createWaveWorkspaceRuntime(scene)
-    case 'composite': return createCompositeWorkspaceRuntime(scene)
-    case 'magnetic': return createMagneticWorkspaceRuntime(scene)
-    default: throw new Error(`no runtime for domain ${domain}`)
-  }
+  const runtime = buildWorkspaceRuntime(domain, scene)
+  if (runtime === null) throw new Error(`no runtime for domain ${domain}`)
+  return runtime
 }
 
 const snapshotOf = (templateId: string): WorkspaceSnapshot => {

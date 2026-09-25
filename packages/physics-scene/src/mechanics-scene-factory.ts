@@ -16,6 +16,7 @@ export type MechanicsModelId =
   | 'simple_pendulum'
   | 'horizontal_friction'
   | 'spring_statics'
+  | 'circular_orbit'
 
 export interface MechanicsSceneInput {
   readonly sceneId?: string
@@ -33,6 +34,15 @@ export interface MechanicsSceneInput {
   readonly inclineAngle?: number
   readonly frictionCoefficient?: number
   readonly appliedForce?: Vector3
+  /**
+   * Central body's gravitational parameter GM (m³/s²) and the orbit radius (m).
+   *
+   * A circular orbit is fixed by these two and nothing else: the speed follows
+   * as √(GM/r), so a scene that stated the speed as well would be stating the
+   * same fact twice and could state it inconsistently.
+   */
+  readonly gravitationalParameter?: number
+  readonly orbitRadius?: number
   /**
    * Additional applied forces beyond {@link appliedForce} — a force-
    * composition experiment declares F₂ (and F₃) here so every pull is a
@@ -128,8 +138,19 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
   const bodyId = input.bodyId ?? 'body-1'
   const fieldId = input.fieldId ?? 'gravity-1'
   const mass = input.mass ?? 1
-  const position = input.position ?? vec3(0, 0, 0)
-  const velocity = input.velocity ?? vec3(0, 0, 0)
+  /* A circular orbit places its own body: at (r, 0) with the speed √(GM/r) that
+     keeps it there. That is the scene stating its geometry in the units the rest
+     of the scene uses — the engine derives both again from GM and r, so it is
+     not a second source of truth for the physics. */
+  const orbitGm = input.gravitationalParameter ?? 3.986004418e14
+  const orbitRadius = input.orbitRadius ?? 6.8e6
+  const position =
+    input.position ?? (input.model === 'circular_orbit' ? vec3(orbitRadius, 0, 0) : vec3(0, 0, 0))
+  const velocity =
+    input.velocity ??
+    (input.model === 'circular_orbit'
+      ? vec3(0, Math.sqrt(orbitGm / orbitRadius), 0)
+      : vec3(0, 0, 0))
   const acceleration = input.acceleration
   const gravity = input.gravity ?? DEFAULT_GRAVITY
   const groundY = input.groundY ?? 0
@@ -260,6 +281,23 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
      protocol) and the surface declares μs alongside the body's μk. Ramp and
      cap ride on a geometry observable — the established place for model
      parameters the inspector can name. */
+  if (model === 'circular_orbit') {
+    /* The orbit is declared as one observable carrying GM and r: the solver
+       reads it, the canvas draws the circle from it, and the inspector edits it.
+       No force is declared, because gravity IS the central force here — adding a
+       `gravity` force object would be a second statement of the same thing. */
+    observableDefs.push({
+      id: asObservableId('obs-orbit'),
+      type: 'geometry' as const,
+      visible: true,
+      parameters: {
+        kind: 'orbit',
+        gravitationalParameter: input.gravitationalParameter ?? 3.986004418e14,
+        radius: input.orbitRadius ?? 6.8e6,
+      },
+    })
+  }
+
   if (model === 'horizontal_friction') {
     observableDefs.push({
       id: asObservableId('obs-friction-surface'),

@@ -18,6 +18,40 @@ export interface AuthState {
   user?: AuthUser
 }
 
+/** The roles a session can carry, as the SERVER reports them. */
+export type UserRole = AuthUser['role']
+
+/**
+ * Who may use a surface that WRITES.
+ *
+ * The one client-side definition, because the alternative is what this codebase
+ * had: `AdminWorkspace` deciding admin-ness, the sidebar deciding who sees the
+ * nav entry, and the paper surface deciding who may open it — three
+ * independent answers to the same question, which is how "the sidebar offers it
+ * and the page says forbidden" happens.
+ *
+ * It mirrors the server's set in `paper-host/src/identity.ts` (`WRITERS`), and
+ * the mirror is held by convention rather than by an import: the host and the
+ * client are separate deployables and neither should depend on the other for a
+ * four-element list. Client and server are allowed to disagree about the
+ * GREETING — but a `403` from a button the UI offered is a bug this predicate
+ * is here to prevent.
+ */
+export const isTeachingRole = (
+  role: UserRole | undefined,
+): role is 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN' =>
+  role === 'TEACHER' || role === 'SCHOOL_ADMIN' || role === 'SUPER_ADMIN'
+
+/**
+ * Who may open the 管理后台. Narrower than {@link isTeachingRole} by exactly one
+ * member — a teacher may author papers but may not administer a school — and
+ * the host enforces the same boundary again on every admin route.
+ */
+export const isAdminRole = (
+  role: UserRole | undefined,
+): role is 'SCHOOL_ADMIN' | 'SUPER_ADMIN' =>
+  role === 'SCHOOL_ADMIN' || role === 'SUPER_ADMIN'
+
 const AUTH_USER_KEY = 'physicsos.auth.user'
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>

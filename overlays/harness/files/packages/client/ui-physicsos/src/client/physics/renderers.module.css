@@ -811,6 +811,529 @@
   stroke: none;
 }
 
+/* ----------------------------------------------------------------- pressure -- */
+
+/* The three pressure rigs share one apparatus language: a solid body outlined in
+   the usual deep blue, mercury in the instrument slate, and every reading set in
+   the same tabular face the buoyancy dial uses. */
+
+.pressureBlock {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.2;
+}
+
+/* The plate IS the contact face whose area the reading is divided by, so it is
+   drawn in the measurement slate rather than the object's own blue. */
+.pressurePlate {
+  fill: var(--physics-measurement-soft);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
+.pressureVesselWall {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pressureLiquidBody {
+  fill: var(--physics-fluid-liquid-soft);
+  stroke: none;
+}
+
+.pressureVesselLabel,
+.pressureGuideLabel {
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  user-select: none;
+}
+
+.pressureProbeBody {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
+.pressureProbeDot {
+  fill: var(--physics-measurement);
+  stroke: none;
+}
+
+.pressureTube {
+  fill: color-mix(in srgb, var(--physics-canvas-bg) 70%, transparent);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Mercury is dense and opaque: the column takes the solid slate, the pool the
+   paler one, so the standing height is never confused with the reservoir. */
+.pressureMercury {
+  fill: var(--physics-measurement);
+  stroke: none;
+}
+
+.pressureMercuryPool {
+  fill: var(--physics-measurement-soft);
+  stroke: none;
+}
+
+.pressureDish {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The vacuum end of the tube: apparatus, so it stays legible at any zoom and
+   never competes with the reading below it. */
+.pressureVacuum {
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11px;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  user-select: none;
+}
+
+/* The hemispheres are glass: filled just enough to read as a body, outlined so
+   the joint between them stays the thing the eye lands on. */
+.pressureHemisphere {
+  fill: color-mix(in srgb, var(--physics-body-fill) 55%, transparent);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.2;
+}
+
+.pressureHemisphereJoint {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 3;
+}
+
+.pressureGuide {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.3;
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
+
+/* Every pressure reading — the face's Pa, the probe's Pa, the column's p₀ — is
+   typeset as a measurement, the way the buoyancy dial and the thermometer are. */
+.pressureReading {
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  user-select: none;
+}
+
+/* -------------------------------------------------------- current-magnetic -- */
+
+/* The field rings. The ones nobody measured are drawn faint: they say the field
+   is there, not that it was read. */
+.currentFieldRing {
+  fill: none;
+  stroke: var(--physics-field);
+  stroke-width: 1.1;
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
+/* The ring a probe sits on: solid, because this is the radius the reading and
+   its dimension are taken at. */
+.currentProbeRing {
+  fill: none;
+  stroke: var(--physics-field);
+  stroke-width: 1.6;
+}
+
+/* Ink for the sense of the circulation — the drawn content of 安培定则. */
+.currentFieldArrow {
+  fill: var(--physics-field);
+  stroke: none;
+}
+
+/* The same arrowhead, laid down first in the canvas colour with a round join:
+   a field line inside a coil runs through the copper, so the arrow needs to
+   punch a hole in it rather than disappear into it. */
+.currentFieldArrowHalo {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* The conductor end-on. The ring is the wire's own ink; the dot or the cross is
+   the current, which is why it takes the current colour and not the metal one. */
+.currentWireSymbol {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.4;
+}
+
+.currentWireDot {
+  fill: var(--physics-induction-current);
+  stroke: none;
+}
+
+.currentWireCross {
+  stroke: var(--physics-induction-current);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.currentProbeBody {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
+.currentProbeDot {
+  fill: var(--physics-measurement);
+  stroke: none;
+}
+
+/* The copper. Loops are drawn as ellipses round the axis, which is how a coil
+   looks from the side in every textbook this rig is drawn from. */
+.currentCoilLoop {
+  fill: none;
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.2;
+}
+
+/* A field line's halo: the same path laid down wider in the canvas colour
+   first, so the line stays a LINE where it crosses the iron block. */
+.currentFieldLineHalo {
+  fill: none;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 4.5;
+  stroke-linejoin: round;
+}
+
+/* The line the reading is taken on: solid, because the field inside a long coil
+   is uniform along it. The lines that close outside are dashed. */
+.currentAxisLine {
+  fill: none;
+  stroke: var(--physics-field);
+  stroke-width: 1.8;
+}
+
+.currentFieldLine {
+  fill: none;
+  stroke: var(--physics-field);
+  stroke-width: 1.2;
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+  stroke-linejoin: round;
+}
+
+/* The iron. A bar the winding wraps, so it is drawn under the copper — and
+   under the field lines too, which is why the axial line carries a halo. */
+.currentCoreBar {
+  fill: var(--physics-magnetic-core);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+}
+
+/* The armature the pole holds: the same iron, lighter, so the contact between
+   two pieces of the same material still reads as a joint. */
+.currentArmature {
+  fill: color-mix(in srgb, var(--physics-magnetic-core) 55%, var(--physics-canvas-bg));
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+}
+
+/* --------------------------------------------------------- transformer -- */
+
+/* The core: a bar both windings sit on, which is what makes them one machine. */
+.transformerCore {
+  fill: var(--physics-magnetic-core);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.4;
+  opacity: 0.7;
+}
+
+/* The driven winding takes the source's ink... */
+.transformerPrimaryLoop {
+  fill: none;
+  stroke: var(--physics-induction-current);
+  stroke-width: 2;
+}
+
+/* ...and the output winding the measurement ink, so which side is driving is
+   visible without reading a label. */
+.transformerSecondaryLoop {
+  fill: none;
+  stroke: var(--physics-induction-rod);
+  stroke-width: 2;
+}
+
+/* --------------------------------------------------- rectilinear light -- */
+
+/* The card the hole is punched in: opaque, so the one open path is obvious. */
+.holeCard {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 4;
+  stroke-linecap: butt;
+}
+
+/* The rays: the figure's whole content, so they are solid and thin — two
+   straight lines that cross at the hole and keep going. */
+.lightRay {
+  fill: none;
+  stroke: var(--physics-optics-ray);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+/* The object and its image share one ink and one shape, because they ARE the
+   same arrow: the picture's claim is the ratio between them. */
+.lightObject {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.lightImage {
+  stroke: var(--physics-optics-ray);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* The screen the image lands on. */
+.lightScreen {
+  stroke: var(--physics-measurement);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+/* The boundary between two media, and the normal light is measured against. */
+.lightBoundary {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.lightNormal {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 4;
+}
+
+/* Where the critical angle would send a ray: the threshold, drawn dashed. */
+.lightCriticalRay {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.3;
+  stroke-dasharray: 3 4;
+  opacity: 0.8;
+}
+
+/* The ray that goes through the boundary — present only below θ_c. */
+.lightRefractedRay {
+  stroke: var(--physics-optics-ray);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* ----------------------------------------------------------------- noise -- */
+
+/* The wavefronts: the same sound, further out and thinner as it goes. */
+.noiseWavefront {
+  fill: none;
+  stroke: var(--physics-acoustics-wave);
+  stroke-width: 1.4;
+}
+
+/* The source and the listener. */
+.noiseSource {
+  fill: var(--physics-acoustics-wave);
+  stroke: none;
+}
+
+.noiseListener {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2;
+}
+
+/* The barrier: solid, because it is a thing rather than a field. */
+.noiseBarrier {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+/* The distance rule under the axis. */
+.noiseDistance {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+/* ------------------------------------------------------- thermometer -- */
+
+/* The liquid: warm ink, because that is what it is responding to. */
+.thermometerColumn {
+  fill: var(--physics-thermal-heat);
+  stroke: none;
+}
+
+/* The glass around it: open, so the tube reads as a tube. */
+.thermometerGlass {
+  fill: color-mix(in srgb, var(--physics-canvas-bg) 65%, transparent);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+/* The two fixed points: heavier than the graduation, because they are not two
+   more marks among many — they are what the scale is DEFINED against. */
+.thermometerTick {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.thermometerTickLabel {
+  fill: var(--physics-canvas-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  user-select: none;
+}
+
+/* The span between them, drawn as a dimension alongside the glass. */
+.thermometerSpan {
+  stroke: var(--physics-measurement);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+/* ------------------------------------------------------ mechanical energy -- */
+
+/* The ramp: a wedge with a surface line, so the slope the cart slides on is the
+   thing the eye lands on rather than the fill. */
+.energyRampBody {
+  fill: var(--physics-incline-fill);
+  stroke: none;
+  opacity: 0.7;
+}
+
+.energyRampSurface {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.energyCart {
+  fill: var(--physics-body-fill);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.2;
+}
+
+/* The ledger bar's frame: the total the cart started with. */
+.energyBarFrame {
+  fill: none;
+  stroke: var(--physics-measurement);
+  stroke-width: 1.4;
+}
+
+/* Three inks, because the bar's argument is that the energy MOVED between them:
+   height (slate), motion (velocity blue), heat (warm). */
+.energySegmentPotential {
+  fill: var(--physics-measurement);
+}
+
+.energySegmentKinetic {
+  fill: var(--physics-vector-velocity);
+}
+
+.energySegmentThermal {
+  fill: var(--physics-thermal-heat);
+}
+
+/* ------------------------------------------------------------- motor -- */
+
+/* The rotor seen end-on: the line joining the two sides that carry the force. */
+.motorCoil {
+  stroke: var(--physics-body-stroke);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+/* Each of those sides IS a conductor, so it is drawn as one — the same ring the
+   straight-wire rig pierces the page with. */
+.motorSide {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 2.4;
+}
+
+/* The axis, where the commutator sits. */
+.motorAxis {
+  fill: var(--physics-measurement);
+  stroke: none;
+}
+
+/* The sense of rotation: a curved arrow, haloed so it reads over the copper. */
+.motorSpin {
+  fill: none;
+  stroke: var(--physics-field);
+  stroke-width: 1.8;
+}
+
+.motorSpinHalo {
+  fill: var(--physics-canvas-bg);
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.motorSpinArrow {
+  fill: var(--physics-field);
+  stroke: none;
+}
+
+/* N and S: apparatus lettering, not a measurement, so it is not tabular. */
+.currentPoleLabel {
+  fill: var(--physics-body-stroke);
+  font-size: 13px;
+  font-weight: 700;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  user-select: none;
+}
+
+/* Every field reading — the probe's µT, the coil's mT, the current — is typeset
+   as a measurement, the way the pressure dial and the buoyancy scale are. */
+.currentReading {
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
+  user-select: none;
+}
+
 /* ------------------------------------------------------------------- thermal -- */
 
 .thermalBeakerWall {

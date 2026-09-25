@@ -104,6 +104,60 @@ export interface AdminUserRow extends AuthUser {
 }
 
 /** An append-only admin action row. */
+/**
+ * The `/physicsos/admin/dashboard` payload.
+ *
+ * Every field is a count of rows the SERVER holds. 学习记录 is not here on
+ * purpose: it lives in the browser's localStorage, so a "correct rate" shown
+ * next to these numbers would be a fabrication. Experiment usage needs a new
+ * opt-in reporting endpoint and is deliberately absent until its collected
+ * fields are agreed.
+ */
+export interface DashboardRow {
+  readonly schools: { readonly total: number; readonly active: number; readonly disabled: number }
+  readonly users: {
+    readonly total: number
+    readonly byRole: Readonly<Record<string, number>>
+    readonly disabled: number
+  }
+  /** Live = not revoked, not expired, account still active — i.e. resolvable. */
+  readonly sessions: { readonly live: number; readonly distinctUsers: number }
+  /** 14 days, oldest first. */
+  readonly activity: readonly {
+    readonly date: string
+    readonly logins: number
+    readonly created: number
+  }[]
+  /**
+   * Abuse posture. Counts only — no IPs, no usernames: an operator reads "how
+   * close is this deployment to its limiter", not "who is throttled".
+   */
+  readonly limiters: Readonly<Record<'login' | 'ip' | 'apply', {
+    readonly tracked: number
+    readonly saturated: number
+    readonly limit: number
+    readonly windowMs: number
+  }>>
+  /**
+   * 第二层:学生自测的聚合计数,来自带会话的学习上报。
+   *
+   * 行里没有账号、没有答案原文 —— 这层回答「哪个知识点错得多」,回答不了
+   * 「谁错了」。`available: false` 是「还没有人上报」,不是「正确率 0」。
+   */
+  readonly learning: {
+    readonly available: boolean
+    readonly attempts: number
+    readonly correct: number
+    readonly wrong: number
+    readonly nodes: readonly {
+      readonly knowledgeId: string
+      readonly correct: number
+      readonly wrong: number
+    }[]
+    readonly days: number
+  }
+}
+
 export interface AuditEventRow {
   readonly id: string
   readonly actorKey: string
@@ -145,6 +199,8 @@ export interface AdminApi {
   resetUserPassword: (schoolId: string, username: string, newPassword: string) => Promise<{ ok: boolean }>
   revokeUserSessions: (schoolId: string, username: string) => Promise<{ ok: boolean }>
   listAudit: (filter?: { schoolId?: string; limit?: number }) => Promise<{ events: AuditEventRow[] }>
+  /** Server-known platform/tenant figures. Never inferred, never client-side. */
+  dashboard: () => Promise<DashboardRow>
 }
 
 /** The injected surface: plain callbacks returning wire data. */
@@ -154,6 +210,11 @@ export interface AuthApi {
   logout: () => Promise<{ ok: boolean }>
   me: () => Promise<{ user: AuthUser }>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
+  /**
+   * 上报一次自测对错。只发知识点 id 与对错 —— 没有账号、没有答案、没有自由
+   * 文本;学校与日期都由服务端决定。记录学习历史是本地的事,上报是尽力而为。
+   */
+  reportLearning: (input: { knowledgeId: string; correct: boolean }) => Promise<{ ok: boolean }>
 }
 
 /** The real client — bound once in `apply`, injected as callbacks. */
@@ -164,6 +225,10 @@ export function createAuthApi(): AuthApi {
     logout: () => post('/logout'),
     me: () => request(AUTH_BASE, '/me'),
     forgotPassword: input => post('/password/forgot', input),
+    reportLearning: async (input) => {
+      await post('/usage/learning', input)
+      return { ok: true }
+    },
   }
 }
 
@@ -202,5 +267,9 @@ export function createAdminApi(): AdminApi {
       const qs = params.toString()
       return request(ADMIN_BASE, `/audit${qs === '' ? '' : `?${qs}`}`)
     },
+    /* 看板是活数据:同一次会话里先看过一次,再点回来看的必须是新数字。
+       没有这个 header 时,浏览器把 GET 缓存住,上报进来的新增量看不见 ——
+       运维会照着过期数字做决定。 */
+    dashboard: () => request(ADMIN_BASE, '/dashboard', { cache: 'no-store' }),
   }
 }

@@ -31,6 +31,9 @@ const OVERLAY_PATHS = [
      tables, drafts, review, approval, export) and the /physicsos/paper REST
      surface the 真题卷库 browses. */
   'packages/physicsos/paper-host',
+  /* PhysicsOS 反馈与公告 host plugin — student bug/idea intake plus the
+     admin announcement surface, over the shared identity service. */
+  'packages/physicsos/notice-host',
   'apps/cli/config/agent-presets/physics-student',
 ]
 
@@ -43,7 +46,9 @@ function isExcluded(absolutePath) {
 }
 
 function git(args, options = {}) {
-  const result = spawnSync('git', args, { encoding: 'utf8', ...options })
+  /* The upstream patch is well past the 1 MiB default `maxBuffer` once
+     untracked files ride along; without this the capture dies with ENOBUFS. */
+  const result = spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...options })
   if (result.error) throw result.error
   return result
 }
@@ -73,8 +78,34 @@ async function capture() {
     console.log(`captured ${relativePath}`)
   }
 
-  const diff = git(['-C', vendorRoot, 'diff', '--', '.', ':(exclude)**/AGENTS.md'])
-  if (diff.status !== 0) throw new Error(`git diff failed: ${diff.stderr}`)
+  /* `git diff` never shows UNTRACKED files, so a brand-new test or module in
+     the vendor tree would be silently dropped from the patch and vanish on the
+     next clean clone. Marking them intent-to-add puts their whole content into
+     the diff; the marker is removed again so the submodule's status is left
+     exactly as we found it. */
+  const untracked = git(['-C', vendorRoot, 'ls-files', '--others', '--exclude-standard'])
+  if (untracked.status !== 0) throw new Error(`git ls-files failed: ${untracked.stderr}`)
+  const added = untracked.stdout.split('\n').filter((line) => {
+    if (line === '' || line.endsWith('AGENTS.md')) return false
+    /* Paths already carried wholesale by OVERLAY_PATHS are copied as files;
+       inlining them here too would duplicate every line and balloon the patch. */
+    return !OVERLAY_PATHS.some((root) => line === root || line.startsWith(`${root}/`))
+  })
+  if (added.length > 0) {
+    const mark = git(['-C', vendorRoot, 'add', '--intent-to-add', '--', ...added])
+    if (mark.status !== 0) throw new Error(`git add --intent-to-add failed: ${mark.stderr}`)
+  }
+
+  let diff
+  try {
+    diff = git(['-C', vendorRoot, 'diff', '--', '.', ':(exclude)**/AGENTS.md'])
+    if (diff.status !== 0) throw new Error(`git diff failed: ${diff.stderr}`)
+  } finally {
+    if (added.length > 0) {
+      /* Undo only the index marker we added; the files themselves are untouched. */
+      git(['-C', vendorRoot, 'reset', '--quiet', '--', ...added])
+    }
+  }
   await mkdir(overlayRoot, { recursive: true })
   await writeFile(patchFile, diff.stdout, 'utf8')
   console.log(`captured upstream-changes.patch (${diff.stdout.length} bytes)`)

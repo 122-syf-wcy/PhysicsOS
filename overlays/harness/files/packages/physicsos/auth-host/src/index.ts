@@ -22,6 +22,7 @@ import { AuthService, DEFAULT_AUTH_CONFIG, type AuthServiceConfig } from './serv
 import { seedBootstrapAdmins, type BootstrapAdmin } from './bootstrap.ts'
 import { seedSchools } from './schools.ts'
 import { adminRoutes, authRoutes } from './routes.ts'
+import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
 
 export const name = 'auth-host'
 export const inject = ['webServer', 'storageDomain']
@@ -78,6 +79,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       async (id, school) => { await domain.table('schools').put(id, school) },
     )
     if (seeded > 0) ctx.logger.info(`auth-host: seeded ${seeded} schools`)
+
+    /* Published before the routes register, so a consumer that loads after
+       this plugin always finds it. */
+    ctx.provide(IDENTITY_SERVICE, createIdentityService(service))
 
     const seededAdmins = await seedBootstrapAdmins(domain, config.bootstrapAdmins ?? [])
     if (seededAdmins > 0) ctx.logger.info(`auth-host: seeded ${seededAdmins} bootstrap admins`)

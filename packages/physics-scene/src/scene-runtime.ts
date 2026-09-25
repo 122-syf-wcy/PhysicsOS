@@ -14,6 +14,7 @@ import {
   canonicalValue,
   quantity,
   validateQuantity,
+  type PhysicalDimension,
   type Quantity,
 } from '@physicsos/physics-units'
 import {
@@ -39,6 +40,13 @@ import type {
   LeverBench,
   OpticalBench,
   PhysicsScene,
+  PressureBench,
+  CurrentBench,
+  EnergyBench,
+  LightBench,
+  TransformerBench,
+  ThermometerBench,
+  NoiseBench,
   ThermalBench,
   UniformElectricField,
   UniformMagneticField,
@@ -105,6 +113,50 @@ export type SceneCommandType =
   | 'SetWavePathDifference'
   | 'SetWaveStringLength'
   | 'SetWaveHarmonic'
+  | 'SetPressureForce'
+  | 'SetPressureContactArea'
+  | 'SetPressureComparisonArea'
+  | 'SetPressureLiquidDensity'
+  | 'SetPressureProbeDepth'
+  | 'SetPressureComparisonDepth'
+  | 'SetPressureComparisonLiquidDensity'
+  | 'SetPressureAtmospheric'
+  | 'SetPressureBarometerFluidDensity'
+  | 'SetPressureHemisphereRadius'
+  | 'SetCurrent'
+  | 'SetProbeDistance'
+  | 'SetComparisonProbeDistance'
+  | 'SetSolenoidTurns'
+  | 'SetSolenoidComparisonTurns'
+  | 'SetSolenoidLength'
+  | 'SetCorePermeability'
+  | 'SetComparisonCorePermeability'
+  | 'SetCoreArea'
+  | 'SetRotorField'
+  | 'SetRotorSideLength'
+  | 'SetRotorCoilWidth'
+  | 'SetRotorAngle'
+  | 'SetEnergyMass'
+  | 'SetReleaseHeight'
+  | 'SetRampAngle'
+  | 'SetRampFriction'
+  | 'SetObjectHeight'
+  | 'SetObjectDistance'
+  | 'SetScreenDistance'
+  | 'SetIncidentIndex'
+  | 'SetRefractedIndex'
+  | 'SetIncidentAngle'
+  | 'SetTransformerVoltage'
+  | 'SetTransformerCurrent'
+  | 'SetPrimaryTurns'
+  | 'SetSecondaryTurns'
+  | 'SetThermometerTemperature'
+  | 'SetThermometerBore'
+  | 'SetFillingLiquid'
+  | 'SetThermometerBulb'
+  | 'SetNoiseSourceLevel'
+  | 'SetListenerDistance'
+  | 'SetBarrierAttenuation'
 
 /** docs/03 §69 — each discriminant has exactly one payload shape. */
 export interface SceneCommandPayloadMap {
@@ -372,6 +424,242 @@ export interface SceneCommandPayloadMap {
     /** Harmonic number n; integer and >= 1 (standing wave). */
     harmonic: number
   }
+  SetPressureForce: {
+    benchId: string
+    /** Perpendicular force on the contact face; finite and >= 0 (solid). */
+    force: Quantity<'force'>
+  }
+  SetPressureContactArea: {
+    benchId: string
+    /** Loaded contact area; finite and > 0 (solid). */
+    area: Quantity<'area'>
+  }
+  SetPressureComparisonArea: {
+    benchId: string
+    /** The same force on another face; finite and > 0 (solid). */
+    area: Quantity<'area'>
+  }
+  SetPressureLiquidDensity: {
+    benchId: string
+    /** Density of the probed liquid; finite and > 0 (liquid). */
+    density: Quantity<'density'>
+  }
+  SetPressureProbeDepth: {
+    benchId: string
+    /** Probe depth below the surface; finite and >= 0 (liquid). */
+    depth: Quantity<'length'>
+  }
+  SetPressureComparisonDepth: {
+    benchId: string
+    /** Second probe depth in the same liquid; finite and >= 0 (liquid). */
+    depth: Quantity<'length'>
+  }
+  SetPressureComparisonLiquidDensity: {
+    benchId: string
+    /** A second liquid probed at the same depth; finite and > 0 (liquid). */
+    density: Quantity<'density'>
+  }
+  SetPressureAtmospheric: {
+    benchId: string
+    /** Atmospheric pressure both instruments read; finite and > 0. */
+    pressure: Quantity<'pressure'>
+  }
+  SetPressureBarometerFluidDensity: {
+    benchId: string
+    /** Density of the barometer filling fluid; finite and > 0 (atmospheric). */
+    density: Quantity<'density'>
+  }
+  SetPressureHemisphereRadius: {
+    benchId: string
+    /** Radius of each Magdeburg hemisphere; finite and > 0 (atmospheric). */
+    radius: Quantity<'length'>
+  }
+  SetCurrent: {
+    benchId: string
+    /**
+     * Current through the conductor; finite and non-zero. Signed on purpose:
+     * the sign is the direction, and it is what flips the field's circulation,
+     * so a command that dropped it could not express 安培定则.
+     */
+    current: Quantity<'electric_current'>
+  }
+  SetProbeDistance: {
+    benchId: string
+    /** Distance from the conductor to the probe; finite and > 0 (straight_wire). */
+    distance: Quantity<'length'>
+  }
+  SetComparisonProbeDistance: {
+    benchId: string
+    /** Second probe distance in the same field; finite and > 0 (straight_wire). */
+    distance: Quantity<'length'>
+  }
+  SetSolenoidTurns: {
+    benchId: string
+    /** Turns on the former; finite and > 0 (solenoid). */
+    turns: Quantity<'dimensionless'>
+  }
+  SetSolenoidComparisonTurns: {
+    benchId: string
+    /** Turns on the second winding, same former and length; finite and > 0 (solenoid). */
+    turns: Quantity<'dimensionless'>
+  }
+  SetSolenoidLength: {
+    benchId: string
+    /** Coil length along the axis; finite and > 0 (solenoid). */
+    length: Quantity<'length'>
+  }
+  SetCorePermeability: {
+    benchId: string
+    /**
+     * Relative permeability of the core; finite and > 0 (electromagnet). 1 is
+     * the air-cored coil — a real rig this one is measured against — so only
+     * zero is refused.
+     */
+    relativePermeability: Quantity<'dimensionless'>
+  }
+  SetComparisonCorePermeability: {
+    benchId: string
+    /** Second core on the same coil; finite and > 0 (electromagnet). */
+    relativePermeability: Quantity<'dimensionless'>
+  }
+  SetCoreArea: {
+    benchId: string
+    /** Area of the pole face; finite and > 0 (electromagnet). */
+    area: Quantity<'area'>
+  }
+  SetRotorField: {
+    benchId: string
+    /** Stator field the rotor turns in; finite and > 0 (motor). */
+    field: Quantity<'magnetic_flux_density'>
+  }
+  SetRotorSideLength: {
+    benchId: string
+    /** Length of the sides that carry the force; finite and > 0 (motor). */
+    length: Quantity<'length'>
+  }
+  SetRotorCoilWidth: {
+    benchId: string
+    /** Length of the other pair of sides — the lever arm; finite and > 0 (motor). */
+    width: Quantity<'length'>
+  }
+  SetRotorAngle: {
+    benchId: string
+    /**
+     * Angle from the coil's plane to the field (motor). Any angle is a rig:
+     * 0° lies along the field, 90° is the 平衡位置, and past it the bare coil's
+     * torque has reversed — which is the state the commutator exists for.
+     */
+    angle: Quantity<'angle'>
+  }
+  SetEnergyMass: {
+    benchId: string
+    /** Mass of the cart that carries the energy; finite and > 0 (energy bench). */
+    mass: Quantity<'mass'>
+  }
+  SetReleaseHeight: {
+    benchId: string
+    /** Height the cart is released from; finite and > 0 (energy bench). */
+    height: Quantity<'length'>
+  }
+  SetRampAngle: {
+    benchId: string
+    /**
+     * Incline angle of the ramp; finite and strictly between 0° and 90° (energy
+     * bench). Both ends are refused because both make the ledger degenerate:
+     * a level track has no height to fall and a vertical drop has no ramp.
+     */
+    angle: Quantity<'angle'>
+  }
+  SetRampFriction: {
+    benchId: string
+    /** Kinetic friction coefficient along the ramp; finite and ≥ 0 (energy bench). */
+    coefficient: Quantity<'dimensionless'>
+  }
+  SetObjectHeight: {
+    benchId: string
+    /** Height of the object in front of the hole; finite and > 0 (light bench). */
+    height: Quantity<'length'>
+  }
+  SetObjectDistance: {
+    benchId: string
+    /** Distance from the object to the hole; finite and > 0 (light bench). */
+    distance: Quantity<'length'>
+  }
+  SetScreenDistance: {
+    benchId: string
+    /** Distance from the hole to the receiving screen; finite and > 0 (light bench). */
+    distance: Quantity<'length'>
+  }
+  SetIncidentIndex: {
+    benchId: string
+    /** Refractive index the light comes from; finite and >= 1 (total reflection). */
+    index: Quantity<'dimensionless'>
+  }
+  SetRefractedIndex: {
+    benchId: string
+    /** Refractive index the light meets; finite and > 0 (total reflection). */
+    index: Quantity<'dimensionless'>
+  }
+  SetIncidentAngle: {
+    benchId: string
+    /** Angle of incidence from the normal; finite and in [0, 90) degrees. */
+    angle: Quantity<'angle'>
+  }
+  SetTransformerVoltage: {
+    benchId: string
+    /** Voltage across the driven winding; finite and > 0 (transformer). */
+    voltage: Quantity<'electric_potential'>
+  }
+  SetTransformerCurrent: {
+    benchId: string
+    /** Current into the driven winding; finite and >= 0 (transformer). */
+    current: Quantity<'electric_current'>
+  }
+  SetPrimaryTurns: {
+    benchId: string
+    /** Turns on the driven winding; finite and > 0 (transformer). */
+    turns: Quantity<'dimensionless'>
+  }
+  SetSecondaryTurns: {
+    benchId: string
+    /** Turns on the output winding; finite and > 0 (transformer). */
+    turns: Quantity<'dimensionless'>
+  }
+  SetThermometerTemperature: {
+    benchId: string
+    /** Temperature the bulb sits in; finite (thermometer). */
+    temperature: Quantity<'temperature'>
+  }
+  SetThermometerBore: {
+    benchId: string
+    /** Diameter of the capillary bore; finite and > 0 (thermometer). */
+    diameter: Quantity<'length'>
+  }
+  SetFillingLiquid: {
+    benchId: string
+    /** Volumetric expansion coefficient of the filling liquid; finite and > 0 (thermometer). */
+    coefficient: Quantity<'dimensionless'>
+  }
+  SetThermometerBulb: {
+    benchId: string
+    /** Volume of the bulb; finite and > 0 (thermometer). */
+    volume: Quantity<'volume'>
+  }
+  SetNoiseSourceLevel: {
+    benchId: string
+    /** Sound power level of the source; finite (noise bench). */
+    level: Quantity<'dimensionless'>
+  }
+  SetListenerDistance: {
+    benchId: string
+    /** Distance from the source to the listener; finite and > 0 (noise bench). */
+    distance: Quantity<'length'>
+  }
+  SetBarrierAttenuation: {
+    benchId: string
+    /** Insertion loss of the barrier; finite and >= 0 (noise bench). */
+    attenuation: Quantity<'dimensionless'>
+  }
 }
 
 export type SceneCommandPayload<TType extends SceneCommandType> = SceneCommandPayloadMap[TType]
@@ -455,6 +743,50 @@ export type PhysicsEventType =
   | 'WavePathDifferenceChanged'
   | 'WaveStringLengthChanged'
   | 'WaveHarmonicChanged'
+  | 'PressureForceChanged'
+  | 'PressureContactAreaChanged'
+  | 'PressureComparisonAreaChanged'
+  | 'PressureLiquidDensityChanged'
+  | 'PressureProbeDepthChanged'
+  | 'PressureComparisonDepthChanged'
+  | 'PressureComparisonLiquidDensityChanged'
+  | 'PressureAtmosphericChanged'
+  | 'PressureBarometerFluidDensityChanged'
+  | 'PressureHemisphereRadiusChanged'
+  | 'CurrentFieldChanged'
+  | 'ProbeDistanceChanged'
+  | 'ComparisonProbeDistanceChanged'
+  | 'SolenoidTurnsChanged'
+  | 'SolenoidComparisonTurnsChanged'
+  | 'SolenoidLengthChanged'
+  | 'CorePermeabilityChanged'
+  | 'ComparisonCorePermeabilityChanged'
+  | 'CoreAreaChanged'
+  | 'RotorFieldChanged'
+  | 'RotorSideLengthChanged'
+  | 'RotorCoilWidthChanged'
+  | 'RotorAngleChanged'
+  | 'EnergyMassChanged'
+  | 'ReleaseHeightChanged'
+  | 'RampAngleChanged'
+  | 'RampFrictionChanged'
+  | 'ObjectHeightChanged'
+  | 'ObjectDistanceChanged'
+  | 'ScreenDistanceChanged'
+  | 'IncidentIndexChanged'
+  | 'RefractedIndexChanged'
+  | 'IncidentAngleChanged'
+  | 'TransformerVoltageChanged'
+  | 'TransformerCurrentChanged'
+  | 'PrimaryTurnsChanged'
+  | 'SecondaryTurnsChanged'
+  | 'ThermometerTemperatureChanged'
+  | 'ThermometerBoreChanged'
+  | 'FillingLiquidChanged'
+  | 'ThermometerBulbChanged'
+  | 'NoiseSourceLevelChanged'
+  | 'ListenerDistanceChanged'
+  | 'BarrierAttenuationChanged'
 
 export interface PhysicsEventPayloadMap {
   ParticleChargeChanged: SceneCommandPayloadMap['SetParticleCharge']
@@ -516,6 +848,50 @@ export interface PhysicsEventPayloadMap {
   WavePathDifferenceChanged: SceneCommandPayloadMap['SetWavePathDifference']
   WaveStringLengthChanged: SceneCommandPayloadMap['SetWaveStringLength']
   WaveHarmonicChanged: SceneCommandPayloadMap['SetWaveHarmonic']
+  PressureForceChanged: SceneCommandPayloadMap['SetPressureForce']
+  PressureContactAreaChanged: SceneCommandPayloadMap['SetPressureContactArea']
+  PressureComparisonAreaChanged: SceneCommandPayloadMap['SetPressureComparisonArea']
+  PressureLiquidDensityChanged: SceneCommandPayloadMap['SetPressureLiquidDensity']
+  PressureProbeDepthChanged: SceneCommandPayloadMap['SetPressureProbeDepth']
+  PressureComparisonDepthChanged: SceneCommandPayloadMap['SetPressureComparisonDepth']
+  PressureComparisonLiquidDensityChanged: SceneCommandPayloadMap['SetPressureComparisonLiquidDensity']
+  PressureAtmosphericChanged: SceneCommandPayloadMap['SetPressureAtmospheric']
+  PressureBarometerFluidDensityChanged: SceneCommandPayloadMap['SetPressureBarometerFluidDensity']
+  PressureHemisphereRadiusChanged: SceneCommandPayloadMap['SetPressureHemisphereRadius']
+  CurrentFieldChanged: SceneCommandPayloadMap['SetCurrent']
+  ProbeDistanceChanged: SceneCommandPayloadMap['SetProbeDistance']
+  ComparisonProbeDistanceChanged: SceneCommandPayloadMap['SetComparisonProbeDistance']
+  SolenoidTurnsChanged: SceneCommandPayloadMap['SetSolenoidTurns']
+  SolenoidComparisonTurnsChanged: SceneCommandPayloadMap['SetSolenoidComparisonTurns']
+  SolenoidLengthChanged: SceneCommandPayloadMap['SetSolenoidLength']
+  CorePermeabilityChanged: SceneCommandPayloadMap['SetCorePermeability']
+  ComparisonCorePermeabilityChanged: SceneCommandPayloadMap['SetComparisonCorePermeability']
+  CoreAreaChanged: SceneCommandPayloadMap['SetCoreArea']
+  RotorFieldChanged: SceneCommandPayloadMap['SetRotorField']
+  RotorSideLengthChanged: SceneCommandPayloadMap['SetRotorSideLength']
+  RotorCoilWidthChanged: SceneCommandPayloadMap['SetRotorCoilWidth']
+  RotorAngleChanged: SceneCommandPayloadMap['SetRotorAngle']
+  EnergyMassChanged: SceneCommandPayloadMap['SetEnergyMass']
+  ReleaseHeightChanged: SceneCommandPayloadMap['SetReleaseHeight']
+  RampAngleChanged: SceneCommandPayloadMap['SetRampAngle']
+  RampFrictionChanged: SceneCommandPayloadMap['SetRampFriction']
+  ObjectHeightChanged: SceneCommandPayloadMap['SetObjectHeight']
+  ObjectDistanceChanged: SceneCommandPayloadMap['SetObjectDistance']
+  ScreenDistanceChanged: SceneCommandPayloadMap['SetScreenDistance']
+  IncidentIndexChanged: SceneCommandPayloadMap['SetIncidentIndex']
+  RefractedIndexChanged: SceneCommandPayloadMap['SetRefractedIndex']
+  IncidentAngleChanged: SceneCommandPayloadMap['SetIncidentAngle']
+  TransformerVoltageChanged: SceneCommandPayloadMap['SetTransformerVoltage']
+  TransformerCurrentChanged: SceneCommandPayloadMap['SetTransformerCurrent']
+  PrimaryTurnsChanged: SceneCommandPayloadMap['SetPrimaryTurns']
+  SecondaryTurnsChanged: SceneCommandPayloadMap['SetSecondaryTurns']
+  ThermometerTemperatureChanged: SceneCommandPayloadMap['SetThermometerTemperature']
+  ThermometerBoreChanged: SceneCommandPayloadMap['SetThermometerBore']
+  FillingLiquidChanged: SceneCommandPayloadMap['SetFillingLiquid']
+  ThermometerBulbChanged: SceneCommandPayloadMap['SetThermometerBulb']
+  NoiseSourceLevelChanged: SceneCommandPayloadMap['SetNoiseSourceLevel']
+  ListenerDistanceChanged: SceneCommandPayloadMap['SetListenerDistance']
+  BarrierAttenuationChanged: SceneCommandPayloadMap['SetBarrierAttenuation']
 }
 
 export type PhysicsEventPayload<TType extends PhysicsEventType> = PhysicsEventPayloadMap[TType]
@@ -608,6 +984,13 @@ const NOT_FOUND_CODES = {
   lever_hanger: 'HANGER_NOT_FOUND',
   induction_bench: 'INDUCTION_BENCH_NOT_FOUND',
   wave_bench: 'WAVE_BENCH_NOT_FOUND',
+  pressure_bench: 'PRESSURE_BENCH_NOT_FOUND',
+  current_bench: 'CURRENT_BENCH_NOT_FOUND',
+  energy_bench: 'ENERGY_BENCH_NOT_FOUND',
+  light_bench: 'LIGHT_BENCH_NOT_FOUND',
+  transformer_bench: 'TRANSFORMER_BENCH_NOT_FOUND',
+  thermometer_bench: 'THERMOMETER_BENCH_NOT_FOUND',
+  noise_bench: 'NOISE_BENCH_NOT_FOUND',
 } as const
 
 const notFound = (targetType: keyof typeof NOT_FOUND_CODES, id: string) =>
@@ -805,6 +1188,292 @@ const findWaveBench = (scene: PhysicsScene, benchId: string): WaveBenchLookup =>
 
 const waveWrongSubmodel = (bench: WaveBench, message: string): DomainError =>
   invalidCommand('WAVE_WRONG_SUBMODEL', message, { benchId: bench.id, benchType: bench.type })
+
+type PressureBenchLookup =
+  | { ok: true; bench: PressureBench }
+  | { ok: false; error: DomainError }
+
+const findPressureBench = (scene: PhysicsScene, benchId: string): PressureBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_PRESSURE_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.pressureBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('pressure_bench', benchId) }
+  return { ok: true, bench }
+}
+
+const pressureWrongSubmodel = (bench: PressureBench, message: string): DomainError =>
+  invalidCommand('PRESSURE_WRONG_SUBMODEL', message, { benchId: bench.id, benchType: bench.type })
+
+/**
+ * Validate a pressure quantity against the sub-model and the magnitude it
+ * requires. Depth and force may be zero — a probe level with the surface and a
+ * slack contact are both real rigs — while densities, areas and pressures must
+ * be strictly positive. `validateQuantity` already rejects a non-finite value
+ * and a mismatched dimension; this adds the physical bound.
+ */
+const pressureQuantityOf = <D extends PhysicalDimension>(
+  bench: PressureBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+  allowZero: boolean,
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  if (!Number.isFinite(si) || (allowZero ? si < 0 : si <= 0)) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
+type EnergyBenchLookup =
+  | { ok: true; bench: EnergyBench }
+  | { ok: false; error: DomainError }
+
+const findEnergyBench = (scene: PhysicsScene, benchId: string): EnergyBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_ENERGY_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.energyBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('energy_bench', benchId) }
+  return { ok: true, bench }
+}
+
+/**
+ * Validate an energy-rig quantity. Mass and height must be strictly positive,
+ * friction may be zero (a smooth ramp is the idealised rig) but not negative,
+ * and the angle must be strictly inside (0°, 90°).
+ */
+const energyQuantityOf = <D extends PhysicalDimension>(
+  bench: EnergyBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+  rule: 'positive' | 'non-negative' | 'interior-angle',
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  const invalid =
+    !Number.isFinite(si) ||
+    (rule === 'positive' && si <= 0) ||
+    (rule === 'non-negative' && si < 0) ||
+    (rule === 'interior-angle' && (si <= 0 || si >= Math.PI / 2))
+  if (invalid) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
+type NoiseBenchLookup =
+  | { ok: true; bench: NoiseBench }
+  | { ok: false; error: DomainError }
+
+const findNoiseBench = (scene: PhysicsScene, benchId: string): NoiseBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_NOISE_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.noiseBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('noise_bench', benchId) }
+  return { ok: true, bench }
+}
+
+/**
+ * Validate a noise-rig quantity. A source may be quiet (a negative power level
+ * is a sound below the reference intensity) and a barrier may be absent
+ * (attenuation 0 is the control case), while the distance must be positive.
+ */
+const noiseQuantityOf = <D extends PhysicalDimension>(
+  bench: NoiseBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+  rule: 'finite' | 'positive' | 'non-negative',
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  const invalid =
+    !Number.isFinite(si) ||
+    (rule === 'positive' && si <= 0) ||
+    (rule === 'non-negative' && si < 0)
+  if (invalid) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
+type ThermometerBenchLookup =
+  | { ok: true; bench: ThermometerBench }
+  | { ok: false; error: DomainError }
+
+const findThermometerBench = (
+  scene: PhysicsScene,
+  benchId: string,
+): ThermometerBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_THERMOMETER_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.thermometerBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('thermometer_bench', benchId) }
+  return { ok: true, bench }
+}
+
+/**
+ * Validate a thermometer quantity. The bulb, the bore, the filling's expansion
+ * coefficient and the ice-point length must all be strictly positive; the
+ * TEMPERATURE may be anything finite — a thermometer below zero is still a
+ * thermometer, and that is exactly the reading it exists to take.
+ */
+const thermometerQuantityOf = <D extends PhysicalDimension>(
+  bench: ThermometerBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+  allowNegative: boolean,
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  if (!Number.isFinite(si) || (!allowNegative && si <= 0)) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
+type TransformerBenchLookup =
+  | { ok: true; bench: TransformerBench }
+  | { ok: false; error: DomainError }
+
+const findTransformerBench = (
+  scene: PhysicsScene,
+  benchId: string,
+): TransformerBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_TRANSFORMER_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.transformerBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('transformer_bench', benchId) }
+  return { ok: true, bench }
+}
+
+/**
+ * Validate a transformer quantity: both turn counts and the voltage must be
+ * strictly positive, while the current may be zero — an open secondary draws
+ * nothing, and that is a real rig rather than a missing value.
+ */
+const transformerQuantityOf = <D extends PhysicalDimension>(
+  bench: TransformerBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+  allowZero: boolean,
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  if (!Number.isFinite(si) || (allowZero ? si < 0 : si <= 0)) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
+type LightBenchLookup =
+  | { ok: true; bench: LightBench }
+  | { ok: false; error: DomainError }
+
+const findLightBench = (scene: PhysicsScene, benchId: string): LightBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_LIGHT_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.lightBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('light_bench', benchId) }
+  return { ok: true, bench }
+}
+
+/** Every length on the light rig is simply positive: a zero would be no object. */
+const lightQuantityOf = <D extends PhysicalDimension>(
+  bench: LightBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  if (!Number.isFinite(si) || si <= 0) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
+
+type CurrentBenchLookup =
+  | { ok: true; bench: CurrentBench }
+  | { ok: false; error: DomainError }
+
+const findCurrentBench = (scene: PhysicsScene, benchId: string): CurrentBenchLookup => {
+  if (typeof benchId !== 'string' || benchId.length === 0) {
+    return {
+      ok: false,
+      error: invalidCommand('INVALID_CURRENT_BENCH_ID', 'benchId must be a non-empty string.'),
+    }
+  }
+  const bench = (scene.currentBenches ?? []).find((entry) => entry.id === benchId)
+  if (bench === undefined) return { ok: false, error: notFound('current_bench', benchId) }
+  return { ok: true, bench }
+}
+
+const currentWrongSubmodel = (bench: CurrentBench, message: string): DomainError =>
+  invalidCommand('CURRENT_WRONG_SUBMODEL', message, { benchId: bench.id, benchType: bench.type })
+
+/**
+ * Validate a current-magnetic quantity against the rig and the magnitude it
+ * requires. The current is signed — its sign is the direction, and a command
+ * that rejected it could not reverse the field — while distances, turn counts
+ * and coil lengths are strictly positive. Zero is refused wherever it means a
+ * missing rig (a dead conductor, a coil of no turns), and the rotor's angle is
+ * the one value that needs no bound at all: 0° is the strongest position it
+ * has, 90° is the dead point, and past it is simply past it.
+ */
+const currentQuantityOf = <D extends PhysicalDimension>(
+  bench: CurrentBench,
+  value: Quantity,
+  dimension: D,
+  code: string,
+  message: string,
+  rule: 'signed-non-zero' | 'positive' | 'finite',
+): { ok: true; value: Quantity<D> } | { ok: false; error: DomainError } => {
+  const resolved = validateQuantity(value, dimension)
+  const si = canonicalValue(resolved)
+  const invalid =
+    !Number.isFinite(si) ||
+    (rule === 'positive' && si <= 0) ||
+    (rule === 'signed-non-zero' && si === 0)
+  if (invalid) {
+    return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
+  }
+  return { ok: true, value: resolved }
+}
 
 /**
  * A standing wave's frequency is not a free parameter: the clamped string only
@@ -2755,6 +3424,1283 @@ const applyCommand = (
           ...eventMetadata,
           type: 'WaveHarmonicChanged',
           payload: { benchId: command.payload.benchId, harmonic },
+        },
+      }
+    }
+
+    case 'SetPressureForce': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'solid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A contact force can only be set on a solid pressure bench.',
+          ),
+        }
+      }
+      const force = pressureQuantityOf(
+        lookup.bench,
+        command.payload.force,
+        'force',
+        'INVALID_PRESSURE_FORCE',
+        'Contact force must be a finite force ≥ 0.',
+        true,
+      )
+      if (!force.ok) return { ok: false, error: force.error }
+      lookup.bench.force = clone(force.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureForceChanged',
+          payload: { benchId: command.payload.benchId, force: clone(force.value) },
+        },
+      }
+    }
+
+    case 'SetPressureContactArea': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'solid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A contact area can only be set on a solid pressure bench.',
+          ),
+        }
+      }
+      const area = pressureQuantityOf(
+        lookup.bench,
+        command.payload.area,
+        'area',
+        'INVALID_PRESSURE_AREA',
+        'Contact area must be a finite area > 0.',
+        false,
+      )
+      if (!area.ok) return { ok: false, error: area.error }
+      lookup.bench.area = clone(area.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureContactAreaChanged',
+          payload: { benchId: command.payload.benchId, area: clone(area.value) },
+        },
+      }
+    }
+
+    case 'SetPressureComparisonArea': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'solid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A comparison contact area can only be set on a solid pressure bench.',
+          ),
+        }
+      }
+      const area = pressureQuantityOf(
+        lookup.bench,
+        command.payload.area,
+        'area',
+        'INVALID_PRESSURE_COMPARISON_AREA',
+        'Comparison contact area must be a finite area > 0.',
+        false,
+      )
+      if (!area.ok) return { ok: false, error: area.error }
+      lookup.bench.comparisonArea = clone(area.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureComparisonAreaChanged',
+          payload: { benchId: command.payload.benchId, area: clone(area.value) },
+        },
+      }
+    }
+
+    case 'SetPressureLiquidDensity': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'liquid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A liquid density can only be set on a liquid pressure bench.',
+          ),
+        }
+      }
+      const density = pressureQuantityOf(
+        lookup.bench,
+        command.payload.density,
+        'density',
+        'INVALID_PRESSURE_LIQUID_DENSITY',
+        'Liquid density must be a finite density > 0.',
+        false,
+      )
+      if (!density.ok) return { ok: false, error: density.error }
+      lookup.bench.liquidDensity = clone(density.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureLiquidDensityChanged',
+          payload: { benchId: command.payload.benchId, density: clone(density.value) },
+        },
+      }
+    }
+
+    case 'SetPressureProbeDepth': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'liquid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A probe depth can only be set on a liquid pressure bench.',
+          ),
+        }
+      }
+      const depth = pressureQuantityOf(
+        lookup.bench,
+        command.payload.depth,
+        'length',
+        'INVALID_PRESSURE_DEPTH',
+        'Probe depth must be a finite length ≥ 0.',
+        true,
+      )
+      if (!depth.ok) return { ok: false, error: depth.error }
+      lookup.bench.depth = clone(depth.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureProbeDepthChanged',
+          payload: { benchId: command.payload.benchId, depth: clone(depth.value) },
+        },
+      }
+    }
+
+    case 'SetPressureComparisonDepth': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'liquid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A comparison depth can only be set on a liquid pressure bench.',
+          ),
+        }
+      }
+      const depth = pressureQuantityOf(
+        lookup.bench,
+        command.payload.depth,
+        'length',
+        'INVALID_PRESSURE_COMPARISON_DEPTH',
+        'Comparison depth must be a finite length ≥ 0.',
+        true,
+      )
+      if (!depth.ok) return { ok: false, error: depth.error }
+      lookup.bench.comparisonDepth = clone(depth.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureComparisonDepthChanged',
+          payload: { benchId: command.payload.benchId, depth: clone(depth.value) },
+        },
+      }
+    }
+
+    case 'SetPressureComparisonLiquidDensity': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'liquid') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A comparison liquid density can only be set on a liquid pressure bench.',
+          ),
+        }
+      }
+      const density = pressureQuantityOf(
+        lookup.bench,
+        command.payload.density,
+        'density',
+        'INVALID_PRESSURE_COMPARISON_LIQUID_DENSITY',
+        'Comparison liquid density must be a finite density > 0.',
+        false,
+      )
+      if (!density.ok) return { ok: false, error: density.error }
+      lookup.bench.comparisonLiquidDensity = clone(density.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureComparisonLiquidDensityChanged',
+          payload: { benchId: command.payload.benchId, density: clone(density.value) },
+        },
+      }
+    }
+
+    case 'SetPressureAtmospheric': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'atmospheric') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'An atmospheric pressure can only be set on an atmospheric pressure bench.',
+          ),
+        }
+      }
+      const pressure = pressureQuantityOf(
+        lookup.bench,
+        command.payload.pressure,
+        'pressure',
+        'INVALID_PRESSURE_ATMOSPHERIC',
+        'Atmospheric pressure must be a finite pressure > 0.',
+        false,
+      )
+      if (!pressure.ok) return { ok: false, error: pressure.error }
+      lookup.bench.atmosphericPressure = clone(pressure.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureAtmosphericChanged',
+          payload: { benchId: command.payload.benchId, pressure: clone(pressure.value) },
+        },
+      }
+    }
+
+    case 'SetPressureBarometerFluidDensity': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'atmospheric') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A barometer filling can only be set on an atmospheric pressure bench.',
+          ),
+        }
+      }
+      const density = pressureQuantityOf(
+        lookup.bench,
+        command.payload.density,
+        'density',
+        'INVALID_PRESSURE_BAROMETER_FLUID_DENSITY',
+        'Barometer fluid density must be a finite density > 0.',
+        false,
+      )
+      if (!density.ok) return { ok: false, error: density.error }
+      lookup.bench.barometerFluidDensity = clone(density.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureBarometerFluidDensityChanged',
+          payload: { benchId: command.payload.benchId, density: clone(density.value) },
+        },
+      }
+    }
+
+    case 'SetPressureHemisphereRadius': {
+      const lookup = findPressureBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'atmospheric') {
+        return {
+          ok: false,
+          error: pressureWrongSubmodel(
+            lookup.bench,
+            'A hemisphere radius can only be set on an atmospheric pressure bench.',
+          ),
+        }
+      }
+      const radius = pressureQuantityOf(
+        lookup.bench,
+        command.payload.radius,
+        'length',
+        'INVALID_PRESSURE_HEMISPHERE_RADIUS',
+        'Hemisphere radius must be a finite length > 0.',
+        false,
+      )
+      if (!radius.ok) return { ok: false, error: radius.error }
+      lookup.bench.hemisphereRadius = clone(radius.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PressureHemisphereRadiusChanged',
+          payload: { benchId: command.payload.benchId, radius: clone(radius.value) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------ current-magnetic -- */
+
+    case 'SetCurrent': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const current = currentQuantityOf(
+        lookup.bench,
+        command.payload.current,
+        'electric_current',
+        'INVALID_CURRENT_VALUE',
+        'Current must be a finite current that is not zero.',
+        'signed-non-zero',
+      )
+      if (!current.ok) return { ok: false, error: current.error }
+      lookup.bench.current = clone(current.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'CurrentFieldChanged',
+          payload: { benchId: command.payload.benchId, current: clone(current.value) },
+        },
+      }
+    }
+
+    case 'SetProbeDistance': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'straight_wire') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'A probe distance can only be set on a straight-wire bench.',
+          ),
+        }
+      }
+      const distance = currentQuantityOf(
+        lookup.bench,
+        command.payload.distance,
+        'length',
+        'INVALID_PROBE_DISTANCE',
+        'Probe distance must be a finite length > 0.',
+        'positive',
+      )
+      if (!distance.ok) return { ok: false, error: distance.error }
+      lookup.bench.probeDistance = clone(distance.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ProbeDistanceChanged',
+          payload: { benchId: command.payload.benchId, distance: clone(distance.value) },
+        },
+      }
+    }
+
+    case 'SetComparisonProbeDistance': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'straight_wire') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'A comparison probe distance can only be set on a straight-wire bench.',
+          ),
+        }
+      }
+      const distance = currentQuantityOf(
+        lookup.bench,
+        command.payload.distance,
+        'length',
+        'INVALID_COMPARISON_PROBE_DISTANCE',
+        'Comparison probe distance must be a finite length > 0.',
+        'positive',
+      )
+      if (!distance.ok) return { ok: false, error: distance.error }
+      lookup.bench.comparisonDistance = clone(distance.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ComparisonProbeDistanceChanged',
+          payload: { benchId: command.payload.benchId, distance: clone(distance.value) },
+        },
+      }
+    }
+
+    case 'SetSolenoidTurns': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type === 'straight_wire') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            /* An electromagnet IS a solenoid with a core, so a turn count is one
+               of its facts too — only the bare conductor has no winding. */
+            'A turn count can only be set on a bench with a winding (solenoid or electromagnet).',
+          ),
+        }
+      }
+      const turns = currentQuantityOf(
+        lookup.bench,
+        command.payload.turns,
+        'dimensionless',
+        'INVALID_SOLENOID_TURNS',
+        'Turn count must be a finite number of turns > 0.',
+        'positive',
+      )
+      if (!turns.ok) return { ok: false, error: turns.error }
+      lookup.bench.turns = clone(turns.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SolenoidTurnsChanged',
+          payload: { benchId: command.payload.benchId, turns: clone(turns.value) },
+        },
+      }
+    }
+
+    case 'SetSolenoidComparisonTurns': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type === 'straight_wire') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'A comparison turn count can only be set on a bench with a winding (solenoid or electromagnet).',
+          ),
+        }
+      }
+      const turns = currentQuantityOf(
+        lookup.bench,
+        command.payload.turns,
+        'dimensionless',
+        'INVALID_SOLENOID_COMPARISON_TURNS',
+        'Comparison turn count must be a finite number of turns > 0.',
+        'positive',
+      )
+      if (!turns.ok) return { ok: false, error: turns.error }
+      lookup.bench.comparisonTurns = clone(turns.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SolenoidComparisonTurnsChanged',
+          payload: { benchId: command.payload.benchId, turns: clone(turns.value) },
+        },
+      }
+    }
+
+    case 'SetSolenoidLength': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type === 'straight_wire') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'A coil length can only be set on a bench with a winding (solenoid or electromagnet).',
+          ),
+        }
+      }
+      const length = currentQuantityOf(
+        lookup.bench,
+        command.payload.length,
+        'length',
+        'INVALID_SOLENOID_LENGTH',
+        'Coil length must be a finite length > 0.',
+        'positive',
+      )
+      if (!length.ok) return { ok: false, error: length.error }
+      lookup.bench.coilLength = clone(length.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SolenoidLengthChanged',
+          payload: { benchId: command.payload.benchId, length: clone(length.value) },
+        },
+      }
+    }
+
+    case 'SetCorePermeability': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'electromagnet') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only an electromagnet bench has a core to set.',
+          ),
+        }
+      }
+      const permeability = currentQuantityOf(
+        lookup.bench,
+        command.payload.relativePermeability,
+        'dimensionless',
+        'INVALID_CORE_PERMEABILITY',
+        'Core permeability must be a finite number > 0 (1 is the air-cored coil).',
+        'positive',
+      )
+      if (!permeability.ok) return { ok: false, error: permeability.error }
+      lookup.bench.coreRelativePermeability = clone(permeability.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'CorePermeabilityChanged',
+          payload: {
+            benchId: command.payload.benchId,
+            relativePermeability: clone(permeability.value),
+          },
+        },
+      }
+    }
+
+    case 'SetComparisonCorePermeability': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'electromagnet') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only an electromagnet bench has a second core to set.',
+          ),
+        }
+      }
+      const permeability = currentQuantityOf(
+        lookup.bench,
+        command.payload.relativePermeability,
+        'dimensionless',
+        'INVALID_COMPARISON_CORE_PERMEABILITY',
+        'Comparison core permeability must be a finite number > 0.',
+        'positive',
+      )
+      if (!permeability.ok) return { ok: false, error: permeability.error }
+      lookup.bench.comparisonCoreRelativePermeability = clone(permeability.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ComparisonCorePermeabilityChanged',
+          payload: {
+            benchId: command.payload.benchId,
+            relativePermeability: clone(permeability.value),
+          },
+        },
+      }
+    }
+
+    case 'SetCoreArea': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'electromagnet') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only an electromagnet bench has a pole face to measure.',
+          ),
+        }
+      }
+      const area = currentQuantityOf(
+        lookup.bench,
+        command.payload.area,
+        'area',
+        'INVALID_CORE_AREA',
+        'Pole-face area must be a finite area > 0.',
+        'positive',
+      )
+      if (!area.ok) return { ok: false, error: area.error }
+      lookup.bench.coreArea = clone(area.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'CoreAreaChanged',
+          payload: { benchId: command.payload.benchId, area: clone(area.value) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------------------- motor -- */
+
+    case 'SetRotorField': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'motor') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only a motor bench has a stator field to set.',
+          ),
+        }
+      }
+      const field = currentQuantityOf(
+        lookup.bench,
+        command.payload.field,
+        'magnetic_flux_density',
+        'INVALID_ROTOR_FIELD',
+        'Stator field must be a finite flux density > 0.',
+        'positive',
+      )
+      if (!field.ok) return { ok: false, error: field.error }
+      lookup.bench.magneticFluxDensity = clone(field.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RotorFieldChanged',
+          payload: { benchId: command.payload.benchId, field: clone(field.value) },
+        },
+      }
+    }
+
+    case 'SetRotorSideLength': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'motor') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only a motor bench has rotor sides to measure.',
+          ),
+        }
+      }
+      const length = currentQuantityOf(
+        lookup.bench,
+        command.payload.length,
+        'length',
+        'INVALID_ROTOR_SIDE',
+        'Rotor side length must be a finite length > 0.',
+        'positive',
+      )
+      if (!length.ok) return { ok: false, error: length.error }
+      lookup.bench.sideLength = clone(length.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RotorSideLengthChanged',
+          payload: { benchId: command.payload.benchId, length: clone(length.value) },
+        },
+      }
+    }
+
+    case 'SetRotorCoilWidth': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'motor') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only a motor bench has a rotor width to measure.',
+          ),
+        }
+      }
+      const width = currentQuantityOf(
+        lookup.bench,
+        command.payload.width,
+        'length',
+        'INVALID_ROTOR_WIDTH',
+        'Rotor width must be a finite length > 0.',
+        'positive',
+      )
+      if (!width.ok) return { ok: false, error: width.error }
+      lookup.bench.coilWidth = clone(width.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RotorCoilWidthChanged',
+          payload: { benchId: command.payload.benchId, width: clone(width.value) },
+        },
+      }
+    }
+
+    case 'SetRotorAngle': {
+      const lookup = findCurrentBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'motor') {
+        return {
+          ok: false,
+          error: currentWrongSubmodel(
+            lookup.bench,
+            'Only a motor bench has a rotor angle to set.',
+          ),
+        }
+      }
+      /* `signed-non-zero` would be wrong here: 0° is the coil lying along the
+         field, which is the strongest position the rig has. */
+      const angle = currentQuantityOf(
+        lookup.bench,
+        command.payload.angle,
+        'angle',
+        'INVALID_ROTOR_ANGLE',
+        'Rotor angle must be a finite angle.',
+        'finite',
+      )
+      if (!angle.ok) return { ok: false, error: angle.error }
+      lookup.bench.coilAngle = clone(angle.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RotorAngleChanged',
+          payload: { benchId: command.payload.benchId, angle: clone(angle.value) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------- mechanical energy -- */
+
+    case 'SetEnergyMass': {
+      const lookup = findEnergyBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const mass = energyQuantityOf(
+        lookup.bench,
+        command.payload.mass,
+        'mass',
+        'INVALID_ENERGY_MASS',
+        'Cart mass must be a finite mass > 0.',
+        'positive',
+      )
+      if (!mass.ok) return { ok: false, error: mass.error }
+      lookup.bench.mass = clone(mass.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'EnergyMassChanged',
+          payload: { benchId: command.payload.benchId, mass: clone(mass.value) },
+        },
+      }
+    }
+
+    case 'SetReleaseHeight': {
+      const lookup = findEnergyBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const height = energyQuantityOf(
+        lookup.bench,
+        command.payload.height,
+        'length',
+        'INVALID_RELEASE_HEIGHT',
+        'Release height must be a finite length > 0.',
+        'positive',
+      )
+      if (!height.ok) return { ok: false, error: height.error }
+      lookup.bench.releaseHeight = clone(height.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ReleaseHeightChanged',
+          payload: { benchId: command.payload.benchId, height: clone(height.value) },
+        },
+      }
+    }
+
+    case 'SetRampAngle': {
+      const lookup = findEnergyBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const angle = energyQuantityOf(
+        lookup.bench,
+        command.payload.angle,
+        'angle',
+        'INVALID_RAMP_ANGLE',
+        'Ramp angle must be strictly between 0° and 90°.',
+        'interior-angle',
+      )
+      if (!angle.ok) return { ok: false, error: angle.error }
+      lookup.bench.inclineAngle = clone(angle.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RampAngleChanged',
+          payload: { benchId: command.payload.benchId, angle: clone(angle.value) },
+        },
+      }
+    }
+
+    case 'SetRampFriction': {
+      const lookup = findEnergyBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      /* Zero is the idealised ramp — the rig 机械能守恒 is stated about — so it is
+         accepted; a negative coefficient is not a surface. */
+      const coefficient = energyQuantityOf(
+        lookup.bench,
+        command.payload.coefficient,
+        'dimensionless',
+        'INVALID_RAMP_FRICTION',
+        'Friction coefficient must be a finite number ≥ 0.',
+        'non-negative',
+      )
+      if (!coefficient.ok) return { ok: false, error: coefficient.error }
+      lookup.bench.frictionCoefficient = clone(coefficient.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RampFrictionChanged',
+          payload: { benchId: command.payload.benchId, coefficient: clone(coefficient.value) },
+        },
+      }
+    }
+
+    /* ---------------------------------------------------- light on a hole -- */
+
+    case 'SetObjectHeight': {
+      const lookup = findLightBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const height = lightQuantityOf(
+        lookup.bench,
+        command.payload.height,
+        'length',
+        'INVALID_OBJECT_HEIGHT',
+        'Object height must be a finite length > 0.',
+      )
+      if (!height.ok) return { ok: false, error: height.error }
+      lookup.bench.objectHeight = clone(height.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ObjectHeightChanged',
+          payload: { benchId: command.payload.benchId, height: clone(height.value) },
+        },
+      }
+    }
+
+    case 'SetObjectDistance': {
+      const lookup = findLightBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const distance = lightQuantityOf(
+        lookup.bench,
+        command.payload.distance,
+        'length',
+        'INVALID_OBJECT_DISTANCE',
+        'Object distance must be a finite length > 0.',
+      )
+      if (!distance.ok) return { ok: false, error: distance.error }
+      lookup.bench.objectDistance = clone(distance.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ObjectDistanceChanged',
+          payload: { benchId: command.payload.benchId, distance: clone(distance.value) },
+        },
+      }
+    }
+
+    case 'SetScreenDistance': {
+      const lookup = findLightBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const distance = lightQuantityOf(
+        lookup.bench,
+        command.payload.distance,
+        'length',
+        'INVALID_SCREEN_DISTANCE',
+        'Screen distance must be a finite length > 0.',
+      )
+      if (!distance.ok) return { ok: false, error: distance.error }
+      lookup.bench.screenDistance = clone(distance.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ScreenDistanceChanged',
+          payload: { benchId: command.payload.benchId, distance: clone(distance.value) },
+        },
+      }
+    }
+
+    /* ---------------------------------------------------------- refraction -- */
+
+    case 'SetIncidentIndex': {
+      const lookup = findLightBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'total_reflection') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'LIGHT_WRONG_SUBMODEL',
+            'Only a refraction bench has a pair of refractive indices.',
+            { benchId: lookup.bench.id, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const index = lightQuantityOf(
+        lookup.bench,
+        command.payload.index,
+        'dimensionless',
+        'INVALID_INCIDENT_INDEX',
+        'Incident refractive index must be finite and >= 1.',
+      )
+      if (!index.ok) return { ok: false, error: index.error }
+      lookup.bench.incidentIndex = clone(index.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'IncidentIndexChanged',
+          payload: { benchId: command.payload.benchId, index: clone(index.value) },
+        },
+      }
+    }
+
+    case 'SetRefractedIndex': {
+      const lookup = findLightBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'total_reflection') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'LIGHT_WRONG_SUBMODEL',
+            'Only a refraction bench has a pair of refractive indices.',
+            { benchId: lookup.bench.id, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      const index = lightQuantityOf(
+        lookup.bench,
+        command.payload.index,
+        'dimensionless',
+        'INVALID_REFRACTED_INDEX',
+        'Refracted refractive index must be finite and > 0.',
+      )
+      if (!index.ok) return { ok: false, error: index.error }
+      lookup.bench.refractedIndex = clone(index.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'RefractedIndexChanged',
+          payload: { benchId: command.payload.benchId, index: clone(index.value) },
+        },
+      }
+    }
+
+    case 'SetIncidentAngle': {
+      const lookup = findLightBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      if (lookup.bench.type !== 'total_reflection') {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'LIGHT_WRONG_SUBMODEL',
+            'Only a refraction bench has an angle of incidence.',
+            { benchId: lookup.bench.id, benchType: lookup.bench.type },
+          ),
+        }
+      }
+      /* 90° is refused: grazing incidence has no refracted branch to speak of,
+         and the model's own domain is [0, 90). */
+      const angle = lightQuantityOf(
+        lookup.bench,
+        command.payload.angle,
+        'angle',
+        'INVALID_INCIDENT_ANGLE',
+        'Angle of incidence must be a finite angle in [0, 90) degrees.',
+      )
+      if (!angle.ok) return { ok: false, error: angle.error }
+      if (canonicalValue(angle.value) >= Math.PI / 2) {
+        return {
+          ok: false,
+          error: invalidCommand(
+            'INVALID_INCIDENT_ANGLE',
+            'Angle of incidence must be strictly below 90 degrees.',
+            { benchId: lookup.bench.id, value: command.payload.angle },
+          ),
+        }
+      }
+      lookup.bench.incidentAngle = clone(angle.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'IncidentAngleChanged',
+          payload: { benchId: command.payload.benchId, angle: clone(angle.value) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------------- transformer -- */
+
+    case 'SetTransformerVoltage': {
+      const lookup = findTransformerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const voltage = transformerQuantityOf(
+        lookup.bench,
+        command.payload.voltage,
+        'electric_potential',
+        'INVALID_TRANSFORMER_VOLTAGE',
+        'Primary voltage must be a finite voltage > 0.',
+        false,
+      )
+      if (!voltage.ok) return { ok: false, error: voltage.error }
+      lookup.bench.primaryVoltage = clone(voltage.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'TransformerVoltageChanged',
+          payload: { benchId: command.payload.benchId, voltage: clone(voltage.value) },
+        },
+      }
+    }
+
+    case 'SetTransformerCurrent': {
+      const lookup = findTransformerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      /* Zero is the open secondary: a real rig with nothing plugged in. */
+      const current = transformerQuantityOf(
+        lookup.bench,
+        command.payload.current,
+        'electric_current',
+        'INVALID_TRANSFORMER_CURRENT',
+        'Primary current must be a finite current >= 0.',
+        true,
+      )
+      if (!current.ok) return { ok: false, error: current.error }
+      lookup.bench.primaryCurrent = clone(current.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'TransformerCurrentChanged',
+          payload: { benchId: command.payload.benchId, current: clone(current.value) },
+        },
+      }
+    }
+
+    case 'SetPrimaryTurns': {
+      const lookup = findTransformerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const turns = transformerQuantityOf(
+        lookup.bench,
+        command.payload.turns,
+        'dimensionless',
+        'INVALID_PRIMARY_TURNS',
+        'Primary turns must be a finite count > 0.',
+        false,
+      )
+      if (!turns.ok) return { ok: false, error: turns.error }
+      lookup.bench.primaryTurns = clone(turns.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'PrimaryTurnsChanged',
+          payload: { benchId: command.payload.benchId, turns: clone(turns.value) },
+        },
+      }
+    }
+
+    case 'SetSecondaryTurns': {
+      const lookup = findTransformerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const turns = transformerQuantityOf(
+        lookup.bench,
+        command.payload.turns,
+        'dimensionless',
+        'INVALID_SECONDARY_TURNS',
+        'Secondary turns must be a finite count > 0.',
+        false,
+      )
+      if (!turns.ok) return { ok: false, error: turns.error }
+      lookup.bench.secondaryTurns = clone(turns.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'SecondaryTurnsChanged',
+          payload: { benchId: command.payload.benchId, turns: clone(turns.value) },
+        },
+      }
+    }
+
+    /* ------------------------------------------------------- thermometer -- */
+
+    case 'SetThermometerTemperature': {
+      const lookup = findThermometerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      /* Negative is fine: below zero is a temperature, not a missing value. */
+      const temperature = thermometerQuantityOf(
+        lookup.bench,
+        command.payload.temperature,
+        'temperature',
+        'INVALID_THERMOMETER_TEMPERATURE',
+        'Temperature must be a finite temperature.',
+        true,
+      )
+      if (!temperature.ok) return { ok: false, error: temperature.error }
+      lookup.bench.temperature = clone(temperature.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ThermometerTemperatureChanged',
+          payload: { benchId: command.payload.benchId, temperature: clone(temperature.value) },
+        },
+      }
+    }
+
+    case 'SetThermometerBore': {
+      const lookup = findThermometerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const diameter = thermometerQuantityOf(
+        lookup.bench,
+        command.payload.diameter,
+        'length',
+        'INVALID_THERMOMETER_BORE',
+        'Bore diameter must be a finite length > 0.',
+        false,
+      )
+      if (!diameter.ok) return { ok: false, error: diameter.error }
+      lookup.bench.boreDiameter = clone(diameter.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ThermometerBoreChanged',
+          payload: { benchId: command.payload.benchId, diameter: clone(diameter.value) },
+        },
+      }
+    }
+
+    case 'SetFillingLiquid': {
+      const lookup = findThermometerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const coefficient = thermometerQuantityOf(
+        lookup.bench,
+        command.payload.coefficient,
+        'dimensionless',
+        'INVALID_FILLING_LIQUID',
+        'Expansion coefficient must be finite and > 0 (units: 1/K).',
+        false,
+      )
+      if (!coefficient.ok) return { ok: false, error: coefficient.error }
+      lookup.bench.expansionCoefficient = clone(coefficient.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'FillingLiquidChanged',
+          payload: { benchId: command.payload.benchId, coefficient: clone(coefficient.value) },
+        },
+      }
+    }
+
+    case 'SetThermometerBulb': {
+      const lookup = findThermometerBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const volume = thermometerQuantityOf(
+        lookup.bench,
+        command.payload.volume,
+        'volume',
+        'INVALID_THERMOMETER_BULB',
+        'Bulb volume must be a finite volume > 0.',
+        false,
+      )
+      if (!volume.ok) return { ok: false, error: volume.error }
+      lookup.bench.bulbVolume = clone(volume.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ThermometerBulbChanged',
+          payload: { benchId: command.payload.benchId, volume: clone(volume.value) },
+        },
+      }
+    }
+
+    /* -------------------------------------------------------------- noise -- */
+
+    case 'SetNoiseSourceLevel': {
+      const lookup = findNoiseBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const level = noiseQuantityOf(
+        lookup.bench,
+        command.payload.level,
+        'dimensionless',
+        'INVALID_NOISE_SOURCE_LEVEL',
+        'Sound power level must be a finite number of decibels.',
+        'finite',
+      )
+      if (!level.ok) return { ok: false, error: level.error }
+      lookup.bench.soundPowerLevel = clone(level.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'NoiseSourceLevelChanged',
+          payload: { benchId: command.payload.benchId, level: clone(level.value) },
+        },
+      }
+    }
+
+    case 'SetListenerDistance': {
+      const lookup = findNoiseBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      const distance = noiseQuantityOf(
+        lookup.bench,
+        command.payload.distance,
+        'length',
+        'INVALID_LISTENER_DISTANCE',
+        'Listener distance must be a finite length > 0.',
+        'positive',
+      )
+      if (!distance.ok) return { ok: false, error: distance.error }
+      lookup.bench.distance = clone(distance.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'ListenerDistanceChanged',
+          payload: { benchId: command.payload.benchId, distance: clone(distance.value) },
+        },
+      }
+    }
+
+    case 'SetBarrierAttenuation': {
+      const lookup = findNoiseBench(scene, command.payload.benchId)
+      if (!lookup.ok) return { ok: false, error: lookup.error }
+      /* Zero is no barrier at all — the control the barrier is measured against. */
+      const attenuation = noiseQuantityOf(
+        lookup.bench,
+        command.payload.attenuation,
+        'dimensionless',
+        'INVALID_BARRIER_ATTENUATION',
+        'Barrier attenuation must be a finite number of decibels >= 0.',
+        'non-negative',
+      )
+      if (!attenuation.ok) return { ok: false, error: attenuation.error }
+      lookup.bench.barrierAttenuation = clone(attenuation.value)
+      return {
+        ok: true,
+        event: {
+          ...eventMetadata,
+          type: 'BarrierAttenuationChanged',
+          payload: { benchId: command.payload.benchId, attenuation: clone(attenuation.value) },
         },
       }
     }

@@ -116,3 +116,48 @@ export const createHeatCapacityComparisonScene = (
       '控制变量：等质量的水和煤油、相同的加热器、相同的加热时间，吸收的热量完全相同。水的比热容是煤油的两倍，升温就只有煤油的一半 —— 比热容正是「吸热能力」的量度。',
   })
 }
+
+export interface BoilingWaterSceneInput {
+  readonly sceneId?: string
+  /** Water mass in grams (> 0). */
+  readonly mass?: number
+  /** Heater power in watts (> 0). */
+  readonly heaterPower?: number
+  /** Starting temperature in °C. */
+  readonly initialTemperature?: number
+  readonly now?: IsoDateTime
+}
+
+/**
+ * 水的沸腾 — the flat part at 100 °C, watched while the heater keeps running.
+ *
+ * 500 g of water from 20 °C at 500 W: c = 4200 J/(kg·K) takes it to the boiling
+ * point in 336 s, and then the thermometer STOPS — for the next 2260 s the
+ * heater is still delivering 500 W and every joule of it goes into turning
+ * water into steam. That plateau is the experiment: the temperature rise stops
+ * while the heat does not, which is what "沸腾要吸热" means when you watch it
+ * rather than say it.
+ */
+export const createBoilingWaterScene = (input: BoilingWaterSceneInput = {}): PhysicsScene =>
+  createThermalBenchScene({
+    sceneId: input.sceneId ?? 'lab-boiling-water',
+    ...(input.now === undefined ? {} : { now: input.now }),
+    sample: {
+      id: 'water',
+      name: '水',
+      mass: input.mass ?? 500,
+      solidSpecificHeat: 2100,
+      liquidSpecificHeat: 4200,
+      /* Ice's latent heat, kept so the same sample could also be frozen; the
+         water starts at 20 °C, so the melting plateau never appears on this run. */
+      latentHeat: 334_000,
+      meltingPoint: 0,
+      boilingPoint: 100,
+      vaporizationHeat: 2_260_000,
+      initialTemperature: input.initialTemperature ?? 20,
+    },
+    heaterPower: input.heaterPower ?? 500,
+    title: '水的沸腾',
+    description:
+      '探究水沸腾时温度变化的特点：500 g 水从 20 °C 起被 500 W 的电热器加热，336 s 后到 100 °C，之后温度计**停住不动**，而加热器仍在供 500 W —— 接下来的 2260 s 里，每一焦耳都进了汽化（水的汽化热 2.26×10⁶ J/kg）。温度不变而持续吸热，这就是「沸腾要吸热」的读法。',
+  })

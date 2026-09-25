@@ -76,6 +76,8 @@ export const thermalPhaseText = (
       return '正在熔化（吸热但温度不变）'
     case 'liquid':
       return crystalline ? '已全部熔化，液态升温中' : '软化后继续升温（非晶体无熔点）'
+    case 'boiling':
+      return '正在沸腾（吸热但温度不变）'
   }
 }
 

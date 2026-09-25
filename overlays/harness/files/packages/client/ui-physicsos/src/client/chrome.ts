@@ -107,6 +107,10 @@ const PHYSICS_TOKENS = `
   --physics-induction-field: #8b9dc9;
   --physics-induction-rod: #4338ca;
   --physics-induction-current: #d97706;
+  /* The core of an electromagnet is neither the winding nor the field: iron has
+     to read as a third material on the same bench, between the copper it is
+     threaded through and the field lines that pass across it. */
+  --physics-magnetic-core: #94a3b8;
 
   /* ---------- wave ----------
      Wave ink is rose — no other domain uses it, so a rope profile is never

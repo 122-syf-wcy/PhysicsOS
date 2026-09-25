@@ -37,6 +37,18 @@ import { fileURLToPath } from 'node:url'
 export const isExpectedGuest401 = (url, text = '') =>
   url.includes('/physicsos/auth/me') && (url.length > 0 || text.includes('401'))
 
+/**
+ * Whether a 4xx belongs to an error a suite PROVOKED on purpose.
+ *
+ * The gate exists so a genuine fault cannot hide behind a green run. One suite
+ * deliberately asks the host for something it must refuse — 运维's per-row
+ * batch report is only meaningful if a bad row is refused and NAMED — and the
+ * refusal is a real 4xx. Rather than loosen the gate for everyone, a suite
+ * declares the exact paths it provokes, so every other 4xx still fails.
+ */
+export const provokedBy = (allow = []) =>
+  (url) => allow.some(part => part !== '' && url.includes(part))
+
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const SHOTS = path.join(ROOT, 'docs', 'reports', 'screenshots')
 export const BASE = 'http://127.0.0.1:3080'
@@ -152,6 +164,22 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
 }
 
 /**
+ * Wait for the real product shell — specifically its navigation rail.
+ *
+ * `registerStudent` and `loginUser` finish when the auth gate DETACHES, which
+ * is the reload firing. The product nav mounts a tick after that, so a
+ * `.count()` taken straight after those helpers races: it can read zero and
+ * intermittently fail a check about which entries a role is offered, even
+ * though the entry is there a moment later. Every assertion about the rail
+ * goes through this first, so "offered to this role" is answered about a
+ * mounted nav rather than about a half-painted one.
+ */
+export const waitForShell = async (page) => {
+  await page.getByRole('navigation', { name: 'PhysicsOS' })
+    .waitFor({ state: 'visible', timeout: 30_000 })
+}
+
+/**
  * Clear the auth gate by registering a fresh student.
  *
  * Every suite that wants to reach a surface now has to get past the login gate
@@ -193,7 +221,58 @@ export const registerStudent = async (
   await form.getByRole('button', { name: '创建 PhysicsOS 账号' }).click()
 
   await gate.waitFor({ state: 'detached', timeout: 30_000 })
+  await waitForShell(page)
   return user
+}
+
+/**
+ * Sign an EXISTING account in through the real login form.
+ *
+ * The counterpart of {@link registerStudent} for accounts the suite created
+ * some other way — a teacher minted through the admin API, say. Same
+ * React-controlled-input dance, because the form is the thing under test.
+ */
+export const loginUser = async (
+  page,
+  { username, password, remember = true },
+) => {
+  const gate = page.locator('[data-physicsos-auth-gate]')
+  await gate.waitFor({ state: 'visible', timeout: 25_000 })
+
+  const form = page.locator('[data-physicsos-auth-view="login"]')
+  await form.waitFor({ state: 'visible', timeout: 10_000 })
+
+  /* React-controlled inputs need the native setter plus an `input` event. */
+  const type = (locator, value) => locator.evaluate((node, text) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    setter.call(node, text)
+    node.dispatchEvent(new Event('input', { bubbles: true }))
+  }, value)
+
+  await type(form.locator('input[autocomplete="username"]'), username)
+  await type(form.locator('input[type="password"]'), password)
+  if (remember) await form.locator('input[type="checkbox"]').check()
+  await form.getByRole('button', { name: '登录 PhysicsOS' }).click()
+
+  await gate.waitFor({ state: 'detached', timeout: 30_000 })
+  await waitForShell(page)
+}
+
+/**
+ * Forget the current session and land back on the gate.
+ *
+ * Not a test of sign-out (which has its own affordance in the profile menu):
+ * suites that need two principals in one browser use this to swap between them,
+ * so it clears exactly what carries the session — the cookie and the cached
+ * identity hint — and reloads, which is how the app itself re-reads both.
+ */
+export const resetSession = async (page, base) => {
+  await page.context().clearCookies()
+  /* Navigate BEFORE touching storage: a fresh page sits on about:blank, where
+     `localStorage` is a SecurityError rather than an empty store. */
+  await page.goto(`${base}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await page.evaluate(() => { window.localStorage.clear() })
+  await page.reload({ waitUntil: 'networkidle', timeout: 60_000 })
 }
 
 /**
@@ -205,7 +284,11 @@ export const registerStudent = async (
  */
 export const openAcceptance = async (
   scriptUrl,
-  { viewport = { width: 1600, height: 900 }, settleMs = 0, base = BASE } = {},
+  {
+    viewport = { width: 1600, height: 900 }, settleMs = 0, base = BASE,
+    /** 4xx paths this suite asks the host for ON PURPOSE (see `provokedBy`). */
+    expectErrorPaths = [],
+  } = {},
 ) => {
   mkdirSync(SHOTS, { recursive: true })
   mkdirSync(path.join(ROOT, 'tmp'), { recursive: true })
@@ -228,9 +311,12 @@ export const openAcceptance = async (
   const context = await browser.newContext({ viewport })
   const page = await context.newPage()
 
+  const provoked = provokedBy(expectErrorPaths)
   page.on('console', (message) => {
     if (message.type() !== 'error') return
-    if (isExpectedGuest401(message.location()?.url ?? '', message.text())) return
+    const where = message.location()?.url ?? ''
+    if (isExpectedGuest401(where, message.text())) return
+    if (provoked(where)) return
     gate.consoleErrors.push(message.text().slice(0, 300))
   })
   page.on('pageerror', (error) => { gate.pageErrors.push(error.message.slice(0, 300)) })
@@ -247,6 +333,7 @@ export const openAcceptance = async (
        fails the gate, so a genuine auth or API fault cannot hide here. */
     const url = response.url()
     if (response.status() === 401 && isExpectedGuest401(url)) return
+    if (provoked(url)) return
     gate.errorResponses.push(`${response.status()} ${url.slice(0, 160)}`)
   })
   await page.addInitScript(() => {

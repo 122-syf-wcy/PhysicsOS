@@ -100,7 +100,10 @@ const BeakerGlyph = ({
           <rect
             className={clsxJoin(
               css.thermalSampleLiquid,
-              sample.phase === 'melting' && css.thermalSampleMelting,
+              /* Both plateaus are the same kind of moment — heat going in,
+                 temperature standing still — so they share one ink. */
+              (sample.phase === 'melting' || sample.phase === 'boiling') &&
+                css.thermalSampleMelting,
             )}
             x={left}
             y={liquidTop}

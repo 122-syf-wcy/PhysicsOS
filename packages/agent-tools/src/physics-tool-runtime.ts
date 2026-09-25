@@ -271,6 +271,7 @@ const objectsOf = (scene: PhysicsScene): SceneObjectSummary[] => {
   }
   for (const bench of scene.inductionBenches ?? []) add(bench.id, `induction_bench:${bench.type}`, bench.name)
   for (const bench of scene.waveBenches ?? []) add(bench.id, `wave_bench:${bench.type}`, bench.name)
+  for (const bench of scene.pressureBenches ?? []) add(bench.id, `pressure_bench:${bench.type}`, bench.name)
   return objects
 }
 

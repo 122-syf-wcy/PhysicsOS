@@ -17,6 +17,7 @@ import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import type { AuthApiError, LoginInput, RegisterInput, SchoolRow } from './auth-api.ts'
 import type { AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { buildStamp } from './build-stamp.ts'
 import css from './AuthGate.module.css'
 
 /** Registration-side face for {@link AuthGate}. */
@@ -64,7 +65,12 @@ function GateChrome({ t, children }: { t: (key: PhysicsosKey) => string; childre
         <p className={css.support}>{t('auth.support')}</p>
         {children}
       </main>
-      <footer className={css.footer}>{t('auth.footerLinks')}</footer>
+      <footer className={css.footer}>
+        {t('auth.footerLinks')}
+        {/* 登录页也要有版本戳:没登进来的用户同样会报障,而这是他们唯一能看
+            到的地方。 */}
+        <span className={css.buildStamp} data-build-stamp>{buildStamp()}</span>
+      </footer>
     </div>
   )
 }

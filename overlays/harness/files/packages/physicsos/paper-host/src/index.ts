@@ -29,6 +29,7 @@ import { independentSolve } from './solve.ts'
 import { ingestBankText, type IngestInput } from './ingest.ts'
 import { exportPaper } from './export.ts'
 import { paperRoutes } from './routes.ts'
+import { identityOf } from './identity.ts'
 import { access } from 'node:fs/promises'
 
 export const name = 'paper-host'
@@ -71,12 +72,17 @@ export const Config: z<Config> = z.object({
   exportDir: z.string().default(dshHomePath('papers')),
   pandoc: z.string().default('pandoc'),
   soffice: z.string(),
+  /* `.default(undefined)` — NOT bare `z.object`. Every inner field here is
+     `.required()`, which makes schemastery treat the WHOLE object as required
+     too, so a deployment with no image endpoint would fail to boot instead of
+     printing caption placeholders. That contradicts this field's own contract
+     above and `export.ts`, which guards on `undefined`. */
   imageApi: z.object({
     baseURL: z.string().required(),
     model: z.string().required(),
     apiKeyEnv: z.string().required(),
     size: z.string(),
-  }),
+  }).default(undefined as unknown as { baseURL: string; model: string; apiKeyEnv: string; size: string }),
   solveDelayMs: z.number(),
   solveTimeoutMs: z.number(),
   bankPolicy: z.object({
@@ -389,6 +395,9 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       path: '/physicsos/paper',
       handler: paperRoutes({
         service, exportDir: config.exportDir, bankPolicy,
+        /* Resolved per request: this host is declared before auth-host, so the
+           service does not exist yet when this line runs. */
+        identity: () => identityOf(ctx),
         runDraft, runChecks, runRepair, runReplace, planReplace, runExport, runIngest,
       }),
     })

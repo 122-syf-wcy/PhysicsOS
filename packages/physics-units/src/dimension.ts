@@ -30,6 +30,9 @@ export type PhysicalDimension =
   | 'specific_heat'
   | 'specific_latent_heat'
   | 'torque'
+  /* Power arriving per unit area — the quantity a sound level is the logarithm
+     of, and the one that makes "6 dB is a quarter" checkable. */
+  | 'intensity'
 
 const ALL_DIMENSIONS: readonly PhysicalDimension[] = [
   'dimensionless',
@@ -63,6 +66,7 @@ const ALL_DIMENSIONS: readonly PhysicalDimension[] = [
   'specific_heat',
   'specific_latent_heat',
   'torque',
+  'intensity',
 ]
 
 const DIMENSION_SET: ReadonlySet<string> = new Set(ALL_DIMENSIONS)

@@ -55,3 +55,29 @@ export {
   type PrincipalRayOptions,
   type RayPoint,
 } from './principal-rays.ts'
+
+export {
+  resolveLightModel,
+  type ResolvedLightModel,
+} from './light-model.ts'
+export {
+  LIGHT_RELATIVE_TOLERANCE,
+  imagePointOf,
+  pinholeImageHeight,
+  pinholeMagnification,
+  pinholeReadingOf,
+  refractedAngleOf,
+  refractionReadingOf,
+  criticalAngleOf,
+  type PinholeReading,
+  type RefractionReading,
+} from './light.ts'
+export {
+  LIGHT_ENGINE_ID,
+  LIGHT_ENGINE_VERSION,
+  LightEngine,
+  PINHOLE_MODEL,
+  createLightSimulationRequest,
+  lightEngine,
+  resolveLight,
+} from './light-engine.ts'

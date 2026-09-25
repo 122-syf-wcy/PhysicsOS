@@ -36,6 +36,10 @@ export interface ThermalSampleSpec {
   readonly latentHeat: number
   /** Melting point in °C. */
   readonly meltingPoint: number
+  /** Boiling point in K, when the rig is run far enough to boil (> melting point). */
+  readonly boilingPoint?: number
+  /** Specific latent heat of vaporization in J/kg (> 0 when `boilingPoint` is set). */
+  readonly vaporizationHeat?: number
   /**
    * Starting temperature in °C. At or above the melting point the sample is
    * already liquid and the run is a single warming segment.
@@ -79,6 +83,12 @@ export const createThermalBenchScene = (input: ThermalBenchSceneInput): PhysicsS
     liquidSpecificHeat: quantity(spec.liquidSpecificHeat, 'J/(kg*K)', 'specific_heat'),
     latentHeat: quantity(spec.latentHeat, 'J/kg', 'specific_latent_heat'),
     meltingPoint: kelvin(spec.meltingPoint),
+    ...(spec.boilingPoint === undefined
+      ? {}
+      : {
+        boilingPoint: kelvin(spec.boilingPoint),
+        vaporizationHeat: quantity(spec.vaporizationHeat ?? 0, 'J/kg', 'specific_latent_heat'),
+      }),
     initialTemperature: kelvin(spec.initialTemperature),
   })
 

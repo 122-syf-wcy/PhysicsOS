@@ -225,7 +225,11 @@ const buildVerification = (
 
   const energyResidualOf = (sample: ResolvedThermalSample): number =>
     Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) => {
-      const time = (index / TRAJECTORY_SEGMENTS) * totalTime
+      /* Sampled over the length the PHYSICS has, not the length the timeline
+         stamps: a rig whose water boils away ends there, and comparing P·t for a
+         t past that would charge the heater for heat nothing absorbed. */
+      const span = Math.min(totalTime, heatingTimingOf({ ...model, ...sample }).totalTime)
+      const time = (index / TRAJECTORY_SEGMENTS) * span
       return Math.abs(
         sampleHeatFromSegments(sample, model.heaterPower, time, model.runDuration) -
           model.heaterPower * time,

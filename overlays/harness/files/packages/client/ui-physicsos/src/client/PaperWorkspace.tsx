@@ -19,6 +19,7 @@ import {
   DIFFICULTY_PRESETS, coefficientLabel, mixCoefficient, specCoefficient,
   type Difficulty, type DifficultyMix,
 } from '@physicsos/question-paper/difficulty'
+import { isTeachingRole, type AuthState } from './auth-store.ts'
 import { MathText } from './physics/MathText.tsx'
 import css from './PaperWorkspace.module.css'
 
@@ -26,6 +27,8 @@ type Tab = 'new' | 'jobs' | 'final' | 'bank' | 'sources'
 
 export interface PaperWorkspaceInjected {
   readonly api: PaperApi
+  /** Bound auth store — the role comes from the session, never the wire. */
+  useAuth: <T>(selector: (state: AuthState) => T) => T
 }
 
 export type PaperWorkspaceProps =
@@ -117,7 +120,36 @@ function Empty({ text }: { text: string }) {
   )
 }
 
-export function PaperWorkspace({ api }: PaperWorkspaceProps) {
+/**
+ * 出卷专区, behind a role gate.
+ *
+ * The gate is a component rather than an early return inside the studio because
+ * the studio calls a dozen hooks: returning before them would make the hook
+ * order depend on the session, which is the one thing React forbids. Splitting
+ * it also means a student never mounts the studio at all — its effects are what
+ * fetch the source papers and the bank, and running them for someone who is
+ * about to be told "no" would leak more of the question bank than the page
+ * shows, and cost a round trip to say nothing.
+ *
+ * The host enforces the same boundary on every route (`paper-host/src/identity.ts`),
+ * so this is about what the surface OFFERS, not about what is permitted.
+ */
+export function PaperWorkspace(props: PaperWorkspaceProps) {
+  const role = props.useAuth(state => state.user?.role)
+  if (!isTeachingRole(role)) {
+    return (
+      <div className={css.root} data-physicsos-surface="paper-forbidden">
+        {/* Not localised, like the rest of this surface: the whole studio is
+            Chinese-only (49 hardcoded strings), and routing one sentence
+            through `t` would suggest a translation that is not there. */}
+        <p className={css.empty}>出卷专区面向教师账号：只有教师及以上角色可以创建与审核试卷。</p>
+      </div>
+    )
+  }
+  return <PaperStudio {...props} />
+}
+
+function PaperStudio({ api }: PaperWorkspaceProps) {
   const [tab, setTab] = useState<Tab>('new')
   const [sources, setSources] = useState<SourcePaperRow[]>([])
   const [annotations, setAnnotations] = useState<AnnotationRow[]>([])

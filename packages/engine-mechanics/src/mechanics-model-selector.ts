@@ -10,6 +10,7 @@ import {
   resolveSpringOscillatorModel,
   resolveSimplePendulumModel,
   resolveHorizontalFrictionModel,
+  resolveCircularOrbitModel,
   resolveSpringStaticsModel,
 } from './models/model-resolvers.ts'
 
@@ -44,6 +45,10 @@ export function detectMechanicsModel(scene: PhysicsScene): MechanicsModelId | nu
   if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'friction_surface'))
     return 'horizontal_friction'
 
+  /* The orbit observable IS the model: it carries GM and r, and nothing else in
+     the scene could mean a circular orbit. */
+  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'orbit'))
+    return 'circular_orbit'
   if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'ground')) return 'projectile_motion'
   if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'incline')) return 'inclined_plane'
   if (scene.forces.some((f) => f.type === 'friction')) return 'inclined_plane'
@@ -85,6 +90,8 @@ export function resolveMechanicsModel(scene: PhysicsScene): MechanicsModel {
       return resolveSimplePendulumModel(scene)
     case 'horizontal_friction':
       return resolveHorizontalFrictionModel(scene)
+    case 'circular_orbit':
+      return resolveCircularOrbitModel(scene)
     case 'spring_statics':
       return resolveSpringStaticsModel(scene)
     default:

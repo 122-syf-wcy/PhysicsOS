@@ -100,6 +100,11 @@ export type ObservableKey =
   | 'path'
   // fluid statics
   | 'displaced'
+  // pressure rigs (fluid domain): the primary reading and the comparison
+  // reading. Which apparatus each key shows is the sub-model's business — the
+  // bench factory stamps the same two ids for all three rigs.
+  | 'pressure'
+  | 'pressureComparison'
   // thermal
   | 'thermometer'
   | 'phase'
@@ -116,6 +121,19 @@ export type ObservableKey =
   | 'waveSpeed'
   | 'superposition'
   | 'nodes'
+  // current-magnetic rigs (magnetic domain): the field the bench's current
+  // makes, and the second measurement beside it. Named for the field rather
+  // than for the current, because `current` already means the arrows on a
+  // circuit schematic — a different drawing of a different thing.
+  | 'fieldLines'
+  | 'fieldComparison'
+  // mechanical-energy rig (mechanics domain): the ledger bar, and the ramp the
+  // cart slides down. `energy` is reused from the electric group — it means the
+  // same thing there: a layer that shows energy rather than forces.
+  | 'energyConversion'
+  // light-propagation rig (optics domain): the rays through the hole, and the
+  // image they build on the screen.
+  | 'lightRays'
 
 export type ObservableVisibility = Readonly<Partial<Record<ObservableKey, boolean>>>
 
@@ -699,6 +717,545 @@ export interface FluidScaleVisual {
   label?: string
 }
 
+/* ----------------------------------------------------------------- pressure -- */
+
+/**
+ * Which pressure rig a frame is showing. Carried explicitly rather than inferred
+ * from which picture fields are present, so the renderer picks a drawing without
+ * probing the frame — and so a frame that lost its picture still knows what it
+ * was.
+ */
+export type PressureRigKind = 'solid' | 'liquid' | 'atmospheric'
+
+/**
+ * One contact face of a solid-pressure rig: the plate the force presses on, with
+ * the pressure it reads there. The widths are the SQUARE ROOTS of the authored
+ * areas, so two faces drawn 2:1 are 4:1 in area — the ratio the lesson is about.
+ */
+export interface PressureFaceVisual {
+  id: string
+  /** Centre of the face, on the table line. */
+  at: ScenePoint
+  halfWidth: number
+  /** Formatted pressure under the face, e.g. `1000 Pa`. */
+  pressureText: string
+  /** The face the rig is loaded on; the others are comparisons. */
+  loaded: boolean
+}
+
+/**
+ * The press block on a solid-pressure rig. `faces` holds the contact faces the
+ * single force is shared between: the loaded one and, when authored and asked
+ * for, the tipped one — the same F over a smaller area, which is the whole point
+ * of separating 压力 from 压强.
+ */
+export interface PressureSolidVisual {
+  id: string
+  /** Centre of the block sitting on its loaded face. */
+  at: ScenePoint
+  halfWidth: number
+  halfHeight: number
+  /** Slab the block presses on, drawn below the contact plane at `at.y`. */
+  plateDepth: number
+  /** Formatted force carried by every face, e.g. `20 N`. */
+  forceText: string
+  faces: readonly PressureFaceVisual[]
+  label?: string
+}
+
+/** The liquid column a pressure probe sits in. */
+export interface PressureLiquidVisual {
+  id: string
+  left: number
+  right: number
+  /** Liquid surface level; the vessel floor is `floor`. */
+  surface: number
+  floor: number
+  /** Glass drawn above the surface, so the vessel reads as an open vessel. */
+  rim: number
+  /** Formatted density, e.g. `1000 kg/m³`. */
+  densityText: string
+  label?: string
+}
+
+/**
+ * One probe under the surface. `depth` is drawn as a dimension from `surface`
+ * down to `at`, so the number in the label is the length on screen.
+ */
+export interface PressureProbeVisual {
+  id: string
+  /** Centre of the probe's sensing disc. */
+  at: ScenePoint
+  /** Formatted reading at the probe, e.g. `1960 Pa`. */
+  readingText: string
+  /** Depth below the surface in scene units. */
+  depth: number
+  /** Surface level the depth is measured from. */
+  surface: number
+  /** The rig's own probe (the one its density and depth parameters drive). */
+  primary: boolean
+}
+
+/** The Torricelli tube standing in its mercury dish. */
+export interface PressureBarometerVisual {
+  id: string
+  /** Centre of the tube bore. */
+  at: ScenePoint
+  halfWidth: number
+  /** Half width of the dish the tube stands in. */
+  dishHalfWidth: number
+  /** Depth of the dish's mercury pool below the open surface. */
+  dishDepth: number
+  /** Mercury level in the open dish. */
+  surface: number
+  /** Top of the standing column — the height the balance fixes. */
+  columnTop: number
+  /** Top of the sealed glass tube, always above `columnTop`. */
+  tubeTop: number
+  /** Formatted column height, e.g. `760 mm`. */
+  columnText: string
+  /** Formatted pressure the column is holding up, e.g. `101300 Pa`. */
+  pressureText: string
+  label?: string
+}
+
+/** The Magdeburg hemisphere pair and the pull that separates it. */
+export interface PressureHemisphereVisual {
+  id: string
+  at: ScenePoint
+  radius: number
+  /** Formatted pull on each side, e.g. `796 N`. */
+  forceText: string
+  label?: string
+}
+
+/* ------------------------------------------------------ current-magnetic -- */
+
+/** Which current-magnetic rig this frame is. */
+export type CurrentRigKind = 'straight_wire' | 'solenoid' | 'electromagnet' | 'motor'
+
+/**
+ * The conductor of a straight-wire rig, drawn END-ON: the wire pierces the page
+ * at `at`, which is the only way a 2D figure can show the field circling it.
+ * 安培定则 then reads off the drawing — thumb out of the page, fingers curl
+ * counter-clockwise — so `direction` is what the symbol and the arrows follow.
+ */
+export interface CurrentWireVisual {
+  id: string
+  /** Where the conductor pierces the page. */
+  at: ScenePoint
+  /** Formatted current, e.g. `I = 10 A`. */
+  currentText: string
+  /** +1 = current out of the page (drawn ⊙), −1 = into the page (drawn ⊗). */
+  direction: 1 | -1
+  label?: string
+}
+
+/** One concentric field circle around the conductor. */
+export interface CurrentFieldCircleVisual {
+  id: string
+  center: ScenePoint
+  radius: number
+  /** +1 = counter-clockwise (current out of the page), −1 = clockwise. */
+  circulation: 1 | -1
+  /** True for the circle the headline reading is taken on. */
+  probe: boolean
+}
+
+/** A probe sitting on a field circle, reading the field there. */
+export interface CurrentProbeVisual {
+  id: string
+  at: ScenePoint
+  /** Formatted field at the probe, e.g. `40 µT`. */
+  readingText: string
+  /** The rig's own probe (the one its distance parameter drives). */
+  primary: boolean
+}
+
+/**
+ * The coil of a solenoid rig, drawn as a row of turn loops around the axis.
+ * `northPole` is which end 安培定则 puts N on, and it is drawn as a letter at
+ * that end so the rule is readable without the paragraph that explains it.
+ */
+export interface CurrentCoilVisual {
+  id: string
+  /** Centre of the coil axis. */
+  at: ScenePoint
+  /** Half the coil length along the axis — the `L` of B = μ₀(N/L)I. */
+  halfLength: number
+  /** Drawn radius of a turn loop. */
+  radius: number
+  /** Turn loops drawn (ink, not the electrical turn count). */
+  loopCount: number
+  /** Formatted current, e.g. `I = 5 A`. */
+  currentText: string
+  /** Formatted interior field, e.g. `B = 12.57 mT`. */
+  fieldText: string
+  /** +1 = N pole at the +axis end, −1 = at the −axis end. */
+  northPole: 1 | -1
+  /** Formatted turn counts of the two windings, e.g. `N = 400` / `N₂ = 800`. */
+  turnsText: string
+  comparisonTurnsText?: string
+  label?: string
+}
+
+/**
+ * The core threaded through a coil, with the armature its pole face holds.
+ *
+ * The core is drawn as a bar through the winding because that is the whole
+ * difference between this rig and the solenoid beside it on the shelf — and the
+ * armature is drawn as a fixed-size block, because the size of a drawn object
+ * is not a measurement. What the rig HOLDS is the formatted mass, which is
+ * text: an armature whose height scaled with the mass would be a second,
+ * unstated claim about the physics.
+ */
+export interface CurrentCoreVisual {
+  id: string
+  /** Centre of the core bar. */
+  at: ScenePoint
+  /** Half length along the axis; the bar protrudes past the winding. */
+  halfLength: number
+  /** Drawn half-height of the bar. */
+  halfHeight: number
+  /** The end the right-hand rule points at, where the armature is held. */
+  northPole: 1 | -1
+  /**
+   * Drawn size of the armature the pole holds. It travels in the visual rather
+   * than living in the renderer because the FRAME has to leave room for it and
+   * for the labels beside it — a size only the renderer knew would be a size the
+   * layout could not account for.
+   */
+  armatureHalfWidth: number
+  armatureHalfHeight: number
+  /** Formatted relative permeability of the core, e.g. `μ_r = 200`. */
+  coreText: string
+  /** Formatted field the SAME coil would make air-cored, e.g. `B₀ = 1.257 mT`. */
+  airFieldText: string
+  /** Formatted pull the pole face holds, e.g. `F = 10.05 N`. */
+  pullText: string
+  /** Formatted mass that pull balances, e.g. `m = 1.026 kg`. */
+  heldMassText: string
+  comparisonCoreText?: string
+  comparisonPullText?: string
+  label?: string
+}
+
+/**
+ * The rotor of a motor, seen END-ON down its own axis.
+ *
+ * Along the axis the two sides that carry the force are two POINTS, and that is
+ * the view in which the couple is legible: the forces on them are equal,
+ * opposite and vertical (perpendicular to B, which is horizontal), so the torque
+ * is whatever leverage the coil's own angle gives them. At θ = 0 the two points
+ * are level with each other and the couple is at full strength; at θ = 90° they
+ * are one above the other, the two forces pull along the same line, and the coil
+ * tears rather than turns — the 平衡位置, drawn instead of described.
+ */
+export interface MotorRotorVisual {
+  id: string
+  /** The axis the rotor turns about, where the commutator sits. */
+  at: ScenePoint
+  /** The two force-carrying sides, seen end-on. */
+  sides: readonly ScenePoint[]
+  /** The couple: one arrow per side, equal and opposite. */
+  forces: readonly { readonly id: string; readonly from: ScenePoint; readonly to: ScenePoint }[]
+  /** Half the coil's width — the lever arm the couple acts across (cm). */
+  halfWidth: number
+  /** Angle from the coil's plane to the field (rad), for the label. */
+  angle: number
+  /** +1 = the rotor turns counter-clockwise on the page. */
+  sense: 1 | -1
+  /** Formatted torque, e.g. `τ = 0.24 N·m`. */
+  torqueText: string
+  /** Formatted force on each side, e.g. `F = BIL = 0.06 N`. */
+  forceText: string
+  currentText: string
+  turnsText: string
+  angleText: string
+  fieldText: string
+  label?: string
+}
+
+/** One drawn field line of a coil rig: axial inside, looping back outside. */export interface CurrentFieldLineVisual {
+  id: string
+  /**
+   * Points along the line, in scene coordinates, ordered ALONG THE FIELD. The
+   * order is the direction: a line drawn from the south end to the north end
+   * carries its arrows that way, so reversing the current reverses the line
+   * rather than needing a second direction field.
+   */
+  points: readonly ScenePoint[]
+  /** True for the axial line the headline reading is taken on. */
+  probe: boolean
+  /**
+   * Where the direction arrows go, as fractions along the polyline. A long
+   * uniform field needs more than one to read as uniform; a closed loop needs
+   * one on each side to read as a loop.
+   */
+  arrowAt?: readonly number[]
+}
+
+/* ------------------------------------------------------- mechanical energy -- */
+
+/** Where a slice of the energy ledger came from — it decides the ink. */
+export type EnergyRole = 'potential' | 'kinetic' | 'thermal'
+
+/**
+ * One segment of the energy bar.
+ *
+ * `fraction` is the segment's share of the total the cart started with, so the
+ * bar always adds up to the same 100%: the picture's whole claim is that the
+ * segments REDISTRIBUTE and the bar does not change length.
+ */
+export interface EnergySegmentVisual {
+  id: string
+  role: EnergyRole
+  /** Formatted energy, e.g. `Ep = 17.64 J`. */
+  text: string
+  /** Share of the release-time total, 0..1. */
+  fraction: number
+}
+
+/**
+ * The ledger drawn as one stacked bar: potential on the left, kinetic in the
+ * middle, the heat friction made on the right. A rig whose ledger did not
+ * balance would draw a bar of the wrong length, which is a fault the eye
+ * catches before any number is read.
+ */
+export interface EnergyBarVisual {
+  id: string
+  /** Bottom-left corner of the bar, in scene units. */
+  at: ScenePoint
+  width: number
+  height: number
+  segments: readonly EnergySegmentVisual[]
+  /** Formatted total under the bar, e.g. `E = 17.64 J`. */
+  totalText: string
+  label?: string
+}
+
+/** The cart, the ramp it slides down, and the ledger it feeds. */
+export interface EnergyRampVisual {
+  id: string
+  /** Bottom corner of the ramp — where the cart ends up. */
+  base: ScenePoint
+  /** Top corner of the ramp — where the cart is released. */
+  peak: ScenePoint
+  /** Height of the release point above the base (scene units, = cm). */
+  height: number
+  /** Drawn length of the cart along the slope, in scene units. */
+  cartLength: number
+  /** Drawn half-height of the cart, in scene units. */
+  cartHalfHeight: number
+  /** Formatted release height, e.g. `h = 90 cm`. */
+  heightText: string
+  /** Formatted ramp length, e.g. `L = 127.3 cm`. */
+  rampText: string
+  /** Formatted potential energy at the release point, e.g. `Ep = 17.64 J`. */
+  potentialText: string
+  /** Formatted kinetic energy at the bottom. */
+  kineticText: string
+  /** Formatted heat friction made on the way, e.g. `Q = 0` / `Q = 3.528 J`. */
+  thermalText: string
+  /** Formatted speed at the bottom, e.g. `v = 4.2 m/s`. */
+  speedText: string
+  label?: string
+}
+
+/* --------------------------------------------------- rectilinear light -- */
+
+/**
+ * The pinhole rig, drawn the way the textbook draws it: the object standing on
+ * the axis at −u, the card with its hole at the origin, the screen at +v, and
+ * two rays that cross AT the hole and keep going.
+ *
+ * Both arrows are drawn at their TRUE scene size — the object at h, the image at
+ * h′ — because the figure's whole claim is the ratio between them. A drawing
+ * that rescaled either one would be the one place the experiment could lie.
+ */
+export interface LightRigVisual {
+  id: string
+  /** The hole, which is also the frame's origin of rays. */
+  at: ScenePoint
+  /** The object: where it stands and how tall it is (scene units = cm). */
+  objectAt: ScenePoint
+  objectHalfHeight: number
+  /** The receiving screen, and how tall it is drawn (ink, not a measurement). */
+  screenAt: ScenePoint
+  screenHalfHeight: number
+  /** The hole's card: how far it is drawn above and below the hole. */
+  cardHalfHeight: number
+  /** The image: bottom and top of the arrow the screen shows, at true size. */
+  imageFrom: ScenePoint
+  imageTo: ScenePoint
+  /** The two rays, each a polyline object-point → hole → image-point. */
+  rays: readonly { readonly id: string; readonly points: readonly ScenePoint[] }[]
+  /** Formatted object height, e.g. `h = 6 cm`. */
+  objectText: string
+  /** Formatted image height, e.g. `h′ = 3 cm`. */
+  imageText: string
+  /** Formatted magnification, e.g. `v/u = 0.5`. */
+  magnificationText: string
+  /** Formatted object distance, e.g. `u = 30 cm`. */
+  distanceText: string
+  /** Formatted screen distance, e.g. `v = 15 cm`. */
+  screenText: string
+  label?: string
+}
+
+/**
+ * The refraction rig: a boundary between two media, the normal, and the three
+ * rays light can take at it.
+ *
+ * `refractedTo` is ABSENT rather than drawn grazing along the boundary when the
+ * light is past the critical angle: 全反射 is the disappearance of that ray, so
+ * a figure that drew it skimmed along the surface would be showing the one
+ * thing that is not happening. `total` is what that absence means.
+ */
+export interface LightRefractionVisual {
+  id: string
+  /** Where the ray meets the boundary. */
+  at: ScenePoint
+  boundaryFrom: ScenePoint
+  boundaryTo: ScenePoint
+  /** The normal, drawn dashed through the point of incidence. */
+  normalFrom: ScenePoint
+  normalTo: ScenePoint
+  /** The incoming ray, ending at the point of incidence. */
+  incidentFrom: ScenePoint
+  /** The ray sent back into the first medium. */
+  reflectedTo: ScenePoint
+  /** The ray through the boundary — absent past the critical angle. */
+  refractedTo?: ScenePoint
+  /** Where the critical angle's own ray would go, dashed: the threshold. */
+  criticalTo?: ScenePoint
+  /** True when nothing refracts. */
+  total: boolean
+  incidentText: string
+  refractedText: string
+  criticalText: string
+  indicesText: string
+  label?: string
+}
+
+/* --------------------------------------------------------------- noise -- */
+
+/**
+ * The noise rig, drawn TO SCALE in metres: the source, the listener where it
+ * actually stands, and the barrier between them. The arc radii are the
+ * wavefronts the source has sent out, drawn where they would be at that
+ * distance — so walking the listener back visibly moves it beyond the near
+ * fronts and nearer the far ones, which is the whole of −6 dB.
+ */
+export interface NoiseRigVisual {
+  id: string
+  /** The source, at the origin. */
+  sourceAt: ScenePoint
+  /** Where the listener stands, in scene metres. */
+  listenerAt: ScenePoint
+  /** Source-to-listener distance (m) — the drawn distance, to scale. */
+  distance: number
+  /** Where the barrier stands, when there is one. */
+  barrierAt?: ScenePoint
+  /** Radii of the drawn wavefronts (m), nearer first. */
+  wavefronts: readonly number[]
+  /** Formatted level at the listener, e.g. `L = 83.0 dB`. */
+  levelText: string
+  /** Formatted source rating, e.g. `Lw = 100 dB`. */
+  sourceText: string
+  /** Formatted distance. */
+  distanceText: string
+  /** Formatted barrier, e.g. `隔声量 15 dB`. */
+  barrierText: string
+  /** The control: what it would read with no barrier. */
+  comparisonText: string
+  label?: string
+}
+
+/* --------------------------------------------------------- thermometer -- */
+
+/**
+ * A liquid-in-glass thermometer, drawn TO SCALE: the distances on the glass are
+ * the distances the engine computed, in centimetres. That is the whole point of
+ * the figure — 0 °C and 100 °C are marked where they actually are, so the span
+ * between them is the instrument's real span rather than a drawn symbol of one.
+ */
+export interface ThermometerVisual {
+  id: string
+  /** Foot of the tube, in scene centimetres from the bulb. */
+  at: ScenePoint
+  /** Half-width of the tube (ink, not a measurement). */
+  halfWidth: number
+  /** Drawn radius of the bulb (ink). */
+  bulbRadius: number
+  /** Top of the liquid column (cm) — where the temperature puts it. */
+  columnTop: number
+  /** Where the lower fixed point is marked (cm). */
+  icePoint: number
+  /** Where the upper fixed point is marked (cm). */
+  steamPoint: number
+  /** Length of the whole graduated span (cm). */
+  span: number
+  /** Formatted temperature the bulb sits in, e.g. `t = 25 °C`. */
+  temperatureText: string
+  /** Formatted sensitivity, e.g. `k = 0.9947 mm/°C`. */
+  scaleText: string
+  /** Formatted fixed points, e.g. `0 °C → 2 cm · 100 °C → 11.95 cm`. */
+  fixedPointsText: string
+  /** Formatted span, e.g. `0–100 °C 之间 9.947 cm`. */
+  spanText: string
+  /** Formatted column, e.g. `液柱 4.49 cm`. */
+  columnText: string
+  label?: string
+}
+
+/* --------------------------------------------------------- transformer -- */
+
+/**
+ * The transformer, drawn the way the schematic does: one core, two windings,
+ * and the readings written beside each.
+ *
+ * `turnsLoops` is INK — how many loops are drawn to suggest a winding — while
+ * `primaryTurns`/`secondaryTurns` are the machine. They are separate on purpose:
+ * a drawing that showed one loop per turn would need a thousand loops, and a
+ * reader who counted them would be reading the ink rather than the rig.
+ */
+export interface TransformerCoilVisual {
+  id: string
+  /** Centre of the winding. */
+  at: ScenePoint
+  /** Half-width of the coil body. */
+  halfWidth: number
+  halfHeight: number
+  /** Loops drawn, and the loop spacing. */
+  turnsLoops: number
+  spacing: number
+  /** Formatted voltage across this winding, e.g. `U₁ = 220 V`. */
+  voltageText: string
+  /** Formatted current through it. */
+  currentText: string
+  /** Formatted turn count. */
+  turnsText: string
+  /** The driven winding, drawn with the source's ink. */
+  primary: boolean
+}
+
+/** The core both windings share, and what the machine does as a whole. */
+export interface TransformerCoreVisual {
+  id: string
+  /** Left and right ends of the core bar. */
+  from: ScenePoint
+  to: ScenePoint
+  /** Drawn half-height of the bar. */
+  halfHeight: number
+  /** Formatted readings: the ratio and the power. */
+  ratioText: string
+  powerText: string
+  /** True when the rig steps the voltage UP. */
+  stepsUp: boolean
+  label?: string
+}
+
 /* ------------------------------------------------------------------ thermal -- */
 
 /**
@@ -714,7 +1271,12 @@ export interface ThermalSampleVisual {
   halfHeight: number
   /** Fraction of the sample that has melted, 0…1. */
   meltedFraction: number
-  phase: 'solid' | 'melting' | 'liquid'
+  /**
+   * Which segment of the curve the sample is on. `boiling` is the second
+   * plateau: the same "changing phase, absorbing heat, temperature flat" as
+   * melting, at a different temperature.
+   */
+  phase: 'solid' | 'melting' | 'liquid' | 'boiling'
   label?: string
 }
 
@@ -1037,6 +1599,52 @@ export interface SceneVisualModel {
   fluidBlock?: FluidBlockVisual
   /** The spring scale the block hangs from. */
   fluidScale?: FluidScaleVisual
+  /** Which pressure rig this frame is; absent on every non-pressure scene. */
+  pressureRig?: PressureRigKind
+  /** Press block of a solid rig. */
+  pressureSolid?: PressureSolidVisual
+  /** The liquid column of a liquid rig. */
+  pressureLiquid?: PressureLiquidVisual
+  /** A second vessel holding the comparison liquid, drawn beside the first. */
+  pressureComparisonLiquid?: PressureLiquidVisual
+  /** Probes under those surfaces, primary first. */
+  pressureProbes?: readonly PressureProbeVisual[]
+  /** Torricelli tube of an atmospheric rig. */
+  pressureBarometer?: PressureBarometerVisual
+  /** Magdeburg hemispheres of an atmospheric rig. */
+  pressureHemispheres?: PressureHemisphereVisual
+  /** Which current-magnetic rig this frame is; absent on every other scene. */
+  currentRig?: CurrentRigKind
+  /** Conductor of a straight-wire rig, drawn end-on. */
+  currentWire?: CurrentWireVisual
+  /** Concentric field circles around that conductor, innermost first. */
+  currentFieldCircles?: readonly CurrentFieldCircleVisual[]
+  /** Probes on those circles, primary first. */
+  currentProbes?: readonly CurrentProbeVisual[]
+  /** Coil of a solenoid rig. */
+  currentCoil?: CurrentCoilVisual
+  /** Core and armature of an electromagnet rig. */
+  currentCore?: CurrentCoreVisual
+  /** Rotor of a motor rig, seen end-on down its axis. */
+  currentRotor?: MotorRotorVisual
+  /** The ramp of a mechanical-energy rig. */
+  energyRamp?: EnergyRampVisual
+  /** The energy bar those energies stack into. */
+  energyBar?: EnergyBarVisual
+  /** The pinhole rig of a light-propagation scene. */
+  lightRig?: LightRigVisual
+  /** The refraction rig of a light-propagation scene. */
+  lightRefraction?: LightRefractionVisual
+  /** The two windings of a transformer scene. */
+  transformerCoils?: readonly TransformerCoilVisual[]
+  /** The core they share. */
+  transformerCore?: TransformerCoreVisual
+  /** The thermometer of a thermometer scene. */
+  thermometer?: ThermometerVisual
+  /** The source, listener and barrier of a noise scene. */
+  noiseRig?: NoiseRigVisual
+  /** Field lines of a solenoid rig: axial inside, looping outside. */
+  currentFieldLines?: readonly CurrentFieldLineVisual[]
   /** The heated sample in its beaker (thermal domain). */
   thermalSample?: ThermalSampleVisual
   /** The thermometer reading the sample; gated by the `thermometer` observable. */

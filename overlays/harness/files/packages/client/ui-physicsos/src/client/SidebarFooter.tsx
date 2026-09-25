@@ -7,6 +7,7 @@ import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarFooterActionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import { buildStamp } from './build-stamp.ts'
 import type { AuthState } from './auth-store.ts'
 import css from './SidebarFooter.module.css'
 
@@ -50,6 +51,10 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
       : []),
     { type: 'separator', id: 'sep-2' },
     { id: 'logout', label: t('auth.menu.logout'), danger: true },
+    /* 版本戳放在菜单最下面:用户报障时被问的就是「你用的是哪个版本」,而这里
+       是他已经知道要打开的地方。它是 label 而不是可点项 —— 没有可做的动作。 */
+    { type: 'separator', id: 'sep-3' },
+    { type: 'label', id: 'version', text: `${t('auth.menu.version')} ${buildStamp()}` },
   ]
 
   const onAccountSelect = (id: string): void => {

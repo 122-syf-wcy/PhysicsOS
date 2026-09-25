@@ -223,3 +223,193 @@
   font-size: 13px;
   color: var(--dsw-color-error, #dc2626);
 }
+
+/* ---- 内容管理 ---- */
+
+/* The collection's own numbers, above the toolbar: they describe the bank, not
+   the filtered view, so they are deliberately NOT part of the toolbar. */
+.stats {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--dsw-color-text-secondary, #475569);
+}
+
+.stat strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-color-text-primary, #0f172a);
+  margin-right: 2px;
+}
+
+/* Anything wrong gets the warning colour and nothing else does — a count the
+   operator can ignore is a count they will ignore. */
+.statWarn strong {
+  color: var(--dsw-color-error, #dc2626);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dsw-color-text-secondary, #475569);
+  white-space: nowrap;
+}
+
+.checkbox input {
+  margin: 0;
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The question itself, given a line of its own so a list of them can be
+   scanned — the meta line and the tags sit above and below it. */
+.stem {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-color-text-primary, #0f172a);
+}
+
+.actionOk {
+  color: var(--dsw-color-success, #16a34a);
+  background: color-mix(in srgb, var(--dsw-color-success, #16a34a) 10%, transparent);
+}
+
+.actionBad {
+  color: var(--dsw-color-error, #dc2626);
+  background: color-mix(in srgb, var(--dsw-color-error, #dc2626) 10%, transparent);
+}
+
+.anomaly {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--dsw-color-error, #dc2626);
+}
+
+.note {
+  max-width: 720px;
+  margin: 8px auto;
+  font-size: 12px;
+  color: var(--dsw-color-text-secondary, #475569);
+}
+
+
+/* ── 数据看板 ──────────────────────────────────────────────────────────────
+   The trend strip is drawn with divs rather than a chart library: fourteen
+   bars is not a dependency, and the two series stay legible as a stacked
+   height where the login share is the darker portion. */
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 84px;
+  margin-top: 10px;
+}
+
+.trendCol {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trendBar {
+  width: 100%;
+  min-height: 2px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 3px 3px 0 0;
+  background: var(--dsw-color-border-secondary, #e2e8f0);
+  overflow: hidden;
+}
+
+/* The login portion sits at the BOTTOM of the stack: reading order is
+   baseline-up, so the series an operator scans first is the one on the axis. */
+.trendLogins {
+  width: 100%;
+  background: var(--dsw-color-brand-primary, #2563eb);
+}
+
+.trendDay {
+  font-size: 9px;
+  color: var(--dsw-color-text-secondary, #475569);
+  white-space: nowrap;
+}
+
+/* The dashboard's own column, matching the console's other tabs. */
+.dashboard {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+
+/* A CSV paste needs room and a monospace-ish feel; `.input` is single-line. */
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-color-border-secondary, #e2e8f0);
+  border-radius: 8px;
+  background: var(--dsw-color-bg-primary, #f8fafc);
+  color: var(--dsw-color-text-primary, #0f172a);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* ---- 看板第二层:知识点聚合 ---- */
+
+/* 知识点 id 是机器名字(opt-lens-imaging),计数是给人的。等宽字体让 id 对齐,
+   计数靠右,扫一眼就能看出哪一行错得最多。 */
+.learningNodes {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.learningNodes li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--dsw-color-fill-secondary, #f1f5f9);
+}
+
+.learningId {
+  font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--dsw-color-text-primary, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.learningCounts {
+  flex: none;
+  font-size: 12px;
+  color: var(--dsw-color-text-secondary, #475569);
+}

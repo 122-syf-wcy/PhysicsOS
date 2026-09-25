@@ -14,6 +14,8 @@ import { RecentSpaces, type RecentSpacesProps } from '../src/client/RecentSpaces
 import { SidebarBrand } from '../src/client/SidebarBrand.tsx'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import { SidebarNav } from '../src/client/SidebarNav.tsx'
+import type { AuthUser } from '../src/client/auth-api.ts'
+import type { AuthState } from '../src/client/auth-store.ts'
 import { fillComposerDraft } from '../src/client/fill-draft.ts'
 import { createPhysicsSurfaceController, type PhysicsSceneRef } from '../src/client/surface-store.ts'
 import {
@@ -31,6 +33,20 @@ const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
+
+/** A bound auth store for one role, for the surfaces that gate on it. */
+const useAuthAs = (role?: AuthUser['role']) => {
+  const state: AuthState = role === undefined
+    ? { status: 'guest' }
+    : {
+      status: 'authed',
+      user: {
+        id: 'u-spec', schoolId: 'sch-spec', schoolName: '规格中学',
+        username: 'spec', displayName: '规格用户', role,
+      },
+    }
+  return function boundAuth<T>(selector: (snapshot: AuthState) => T): T { return selector(state) }
+}
 
 /* Live hooks for tests that render the experiment picker: the library home
    reads both stores (继续上次实验 / 为你推荐). Workspace-only renders keep
@@ -156,6 +172,7 @@ describe('PhysicsOS overlay presentation', () => {
         wide
         openSurface={openSurface}
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        useAuth={useAuthAs('TEACHER')}
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}
@@ -172,6 +189,40 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.queryByRole('button', { name: '试题空间' })).toBeNull()
   })
 
+  it('offers 出卷专区 to teaching roles only', () => {
+    /* The rail is where the invitation lives. A student who can see the entry
+       can open a surface whose every button would be refused by the host, which
+       is a worse answer than not offering it — so the entry follows the role,
+       and only a teacher-or-above sees it. */
+    const renderNav = (role?: Parameters<typeof useAuthAs>[0]) => render(
+      <SidebarNav
+        wide
+        openSurface={vi.fn()}
+        usePhysicsSurface={selector => selector({ surface: 'home' })}
+        useAuth={useAuthAs(role)}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
+
+    for (const role of ['TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'] as const) {
+      const view = renderNav(role)
+      expect(screen.getByRole('button', { name: '出卷专区' }), role).toBeTruthy()
+      view.unmount()
+    }
+
+    /* A student, and a visitor whose session has not resolved yet, get the rest
+       of the rail and no door they cannot open. */
+    for (const role of ['STUDENT', undefined] as const) {
+      const view = renderNav(role)
+      expect(screen.queryByRole('button', { name: '出卷专区' }), String(role)).toBeNull()
+      expect(screen.getByRole('button', { name: '物理实验室' }), String(role)).toBeTruthy()
+      expect(screen.getByRole('button', { name: '资源库' }), String(role)).toBeTruthy()
+      view.unmount()
+    }
+  })
+
   it('renders rail navigation without labels', () => {
     const openSurface = vi.fn()
     render(
@@ -179,6 +230,7 @@ describe('PhysicsOS overlay presentation', () => {
         wide={false}
         openSurface={openSurface}
         usePhysicsSurface={selector => selector({ surface: 'home' })}
+        useAuth={useAuthAs('TEACHER')}
         t={t}
         useSessions={neverHook}
         useWorkspaces={neverHook}

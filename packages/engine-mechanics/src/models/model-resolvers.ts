@@ -2,7 +2,13 @@ import type { PhysicsScene, Body } from '@physicsos/physics-scene'
 import { toCanonicalVector } from '@physicsos/physics-core'
 import { canonicalValue } from '@physicsos/physics-units'
 import { vec3, scale, magnitude, type Vector3 } from '@physicsos/physics-math'
-import type { MechanicsModel } from './types.ts'
+import { PhysicsOSError } from '@physicsos/shared'
+import type { CircularOrbitModel, MechanicsModel } from './types.ts'
+import {
+  circularOrbitPeriod,
+  circularOrbitSpeed,
+  gravitationalAcceleration,
+} from '../orbit.ts'
 import { newtonSecondLaw, inclineAcceleration } from '../solvers/force-dynamics.ts'
 
 export function resolveBody(scene: PhysicsScene): { body: Body; mass: number; position: Vector3; velocity: Vector3 } {
@@ -359,5 +365,46 @@ export function resolveInclinedPlaneModel(scene: PhysicsScene): MechanicsModel {
     frictionCoefficient,
     frictionForce: result.frictionForce,
     netForce: result.netForce,
+  }
+}
+
+/**
+ * Resolve a circular-orbit scene.
+ *
+ * The orbit observable carries GM and r; the body's own position and velocity
+ * are then DERIVED from them rather than read — a scene that stated both would
+ * be stating the same fact twice, and this is the one place that decides which
+ * of the two wins.
+ */
+export const resolveCircularOrbitModel = (scene: PhysicsScene): CircularOrbitModel => {
+  const body = scene.bodies[0]
+  if (body === undefined) {
+    throw new PhysicsOSError('ORBIT_BODY', 'A circular orbit needs exactly one satellite body.')
+  }
+  const orbit = scene.observableDefinitions.find((o) => o.parameters?.['kind'] === 'orbit')
+  const gravitationalParameter = Number(orbit?.parameters?.['gravitationalParameter'] ?? NaN)
+  const radius = Number(orbit?.parameters?.['radius'] ?? NaN)
+  if (!Number.isFinite(gravitationalParameter) || gravitationalParameter <= 0) {
+    throw new PhysicsOSError('ORBIT_GM', 'The central body must have a finite, positive GM.')
+  }
+  if (!Number.isFinite(radius) || radius <= 0) {
+    throw new PhysicsOSError('ORBIT_RADIUS', 'The orbit radius must be finite and > 0.')
+  }
+  const mass = canonicalValue(body.mass)
+  const speed = circularOrbitSpeed(gravitationalParameter, radius)
+  return {
+    modelId: 'circular_orbit',
+    bodyId: body.id,
+    mass,
+    position: toCanonicalVector(body.position).vectorSI,
+    velocity: toCanonicalVector(body.velocity).vectorSI,
+    acceleration: { x: 0, y: 0, z: 0 },
+    gravitationalParameter,
+    radius,
+    speed,
+    period: circularOrbitPeriod(gravitationalParameter, radius),
+    angularRate: speed / radius,
+    force: mass * gravitationalAcceleration(gravitationalParameter, radius),
+    centre: { x: 0, y: 0, z: 0 },
   }
 }

@@ -140,6 +140,28 @@ export function authRoutes(service: AuthService):
         return
       }
 
+      /* ---- 学习上报(匿名聚合)-----------------------------------------
+         任何已登录账号都可以上报一次自测的对错 —— 学生就是上报的人,所以门槛
+         是「有会话」而不是「是老师」。落库的行里没有账号:学校从会话取,日期
+         从服务端时钟取,请求体只有知识点 id(课标闭集形状)与这一次对错。 */
+      if (method === 'POST' && path === '/usage/learning') {
+        checkCsrf(req)
+        const token = readSessionCookie(req)
+        const resolved = token === null ? null : service.resolveSession(token)
+        if (resolved === null) {
+          throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        }
+        const { user } = resolved
+        const cell = await service.reportLearning({
+          userKey: userKey(user.schoolId, user.username),
+          schoolId: user.schoolId,
+          username: user.username,
+          role: user.role,
+        }, await readJson(req))
+        send(res, 201, { cell })
+        return
+      }
+
       if (method === 'POST' && path === '/password/forgot') {
         checkCsrf(req)
         await service.requestPasswordReset(await readJson(req), ip)
@@ -289,6 +311,11 @@ export function adminRoutes(service: AuthService):
             return
           }
         }
+      }
+
+      if (method === 'GET' && path === '/dashboard') {
+        send(res, 200, service.dashboard(actor))
+        return
       }
 
       if (method === 'GET' && path === '/audit') {

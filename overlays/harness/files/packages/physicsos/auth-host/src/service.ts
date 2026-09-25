@@ -8,12 +8,12 @@
 
 import crypto from 'node:crypto'
 import type {
-  AuditEvent, AuthDomain, School, SchoolRequestRecord, SessionRecord, UserRecord,
+  AuditEvent, AuthDomain, LearningCount, School, SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
 import {
-  approveRequestWire, createSchoolWire, createUserWire, forgotWire, loginWire,
-  registerWire, rejectRequestWire, resetPasswordWire, schoolRequestWire,
-  schoolStatusWire, userKey, userStatusWire,
+  approveRequestWire, createSchoolWire, createUserWire, forgotWire, learningKey,
+  learningReportWire, loginWire, registerWire, rejectRequestWire, resetPasswordWire,
+  schoolRequestWire, schoolStatusWire, userKey, userStatusWire,
 } from './domain'
 import { hashPassword, verifyPassword } from './passwords'
 import { newSessionToken, sessionTokenHash } from './cookies'
@@ -129,6 +129,20 @@ const MAX_LOGIN_CANDIDATES = 16
     user refines the typed name instead. Shortest names sort first. */
 const MAX_SCHOOL_CANDIDATES = 16
 
+/**
+ * 宿主本地时区的 `YYYY-MM-DD`。
+ *
+ * 不用 `toISOString().slice(0,10)`:那是 UTC 日界,对东八区的学校意味着「今天」
+ * 从早上 8 点才开始,晚自习的自测会掉进前一天。聚合粒度是「学校 × 日期」,日期
+ * 必须是学校说的那一天。
+ */
+const localDate = (at: Date): string => {
+  const year = String(at.getFullYear()).padStart(4, '0')
+  const month = String(at.getMonth() + 1).padStart(2, '0')
+  const day = String(at.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 /** Fixed-window attempt counters, keyed per bucket; process-local by design. */
 class AttemptLimiter {
   private readonly buckets = new Map<string, { count: number; resetAt: number }>()
@@ -137,6 +151,24 @@ class AttemptLimiter {
     private readonly limit: number,
     private readonly windowMs: number,
   ) {}
+
+  /**
+   * Read-only view for the ops console.
+   *
+   * The keys are IPs and usernames, so they are NOT returned: the console needs
+   * "how close is this deployment to its limiter", not a list of who is
+   * currently throttled. Reported as aggregate counts.
+   */
+  snapshot(now = Date.now()): { tracked: number; saturated: number; limit: number; windowMs: number } {
+    let tracked = 0
+    let saturated = 0
+    for (const bucket of this.buckets.values()) {
+      if (now >= bucket.resetAt) continue
+      tracked += 1
+      if (bucket.count >= this.limit) saturated += 1
+    }
+    return { tracked, saturated, limit: this.limit, windowMs: this.windowMs }
+  }
 
   /** True when the bucket has room; consumes one slot when it does. */
   consume(key: string, now = Date.now()): boolean {
@@ -701,6 +733,135 @@ export class AuthService {
    * Audit ledger — append-only on the write side; school admins read only
    * their own tenant's rows, supers may narrow with `schoolId`.
    */
+  /**
+   * The dashboard's data — and ONLY the part the server actually knows.
+   *
+   * The first layer is derived from rows that exist here: schools, users, live
+   * sessions, and the ledger. The SECOND layer — 实验与自测成效 — is NOT derived
+   * from the student's 学习记录, which lives in their browser's localStorage
+   * (`learning-record-store.ts`) and which this server cannot read. It comes from
+   * a separate opt-in channel instead: {@link reportLearning} accumulates one
+   * right/wrong per knowledge tag per self-check into (school, day, knowledge
+   * tag) cells that carry no account and no answer text. A deployment nobody has
+   * used yet reports `available: false` — the panel says so rather than printing
+   * a fabricated zero.
+   *
+   * Counts are scoped exactly like every other admin read: a SUPER_ADMIN sees
+   * the platform, anyone else sees their own tenant.
+   */
+  dashboard(actor: AdminActor): {
+    schools: { total: number; active: number; disabled: number }
+    users: { total: number; byRole: Record<string, number>; disabled: number }
+    sessions: { live: number; distinctUsers: number }
+    activity: { date: string; logins: number; created: number }[]
+    limiters: Record<'login' | 'ip' | 'apply', { tracked: number; saturated: number; limit: number; windowMs: number }>
+    /**
+     * 第二层:来自 {@link reportLearning} 的聚合计数。`available` 为 false 时
+     * 是「这台部署还没有人上报过」,不是「零正确率」——界面据此说人话,而不是
+     * 画一根 0% 的柱子。
+     */
+    learning: {
+      available: boolean
+      attempts: number
+      correct: number
+      wrong: number
+      nodes: { knowledgeId: string; correct: number; wrong: number }[]
+      days: number
+    }
+  } {
+    this.requireAdmin(actor)
+    const scope = actor.role === 'SUPER_ADMIN' ? undefined : actor.schoolId
+    const now = Date.now()
+
+    const schools = [...this.schools.entries()]
+      .map(([, school]) => school)
+      .filter(school => scope === undefined || school.id === scope)
+
+    const users = [...this.users.entries()]
+      .map(([, user]) => user)
+      .filter(user => scope === undefined || user.schoolId === scope)
+
+    /* A session is "live" under the same three conditions resolution checks:
+       not revoked, not expired, and its account still active. A dashboard that
+       counted rows instead of resolvable sessions would report logins that the
+       next request answers 401 to. */
+    const activeKeys = new Set(users.filter(u => u.status === 'active')
+      .map(u => userKey(u.schoolId, u.username)))
+    const sessions = [...this.sessions.entries()]
+      .map(([, session]) => session)
+      .filter(session => scope === undefined || session.schoolId === scope)
+      .filter(session => session.revokedAt === undefined)
+      .filter(session => Date.parse(session.expiresAt) > now)
+      .filter(session => activeKeys.has(userKey(session.schoolId, session.username)))
+
+    const byRole: Record<string, number> = {
+      STUDENT: 0, TEACHER: 0, SCHOOL_ADMIN: 0, SUPER_ADMIN: 0,
+    }
+    for (const user of users) byRole[user.role] = (byRole[user.role] ?? 0) + 1
+
+    /* Fourteen days, oldest first: a trend line people read left to right. */
+    const dayOf = (iso: string): string => iso.slice(0, 10)
+    const activity: { date: string; logins: number; created: number }[] = []
+    for (let back = 13; back >= 0; back -= 1) {
+      const date = new Date(now - back * 86_400_000).toISOString().slice(0, 10)
+      activity.push({
+        date,
+        logins: users.filter(user => user.lastLoginAt !== undefined && dayOf(user.lastLoginAt) === date).length,
+        created: users.filter(user => dayOf(user.createdAt) === date).length,
+      })
+    }
+
+    /* 第二层:聚合计数。`scope` 与上面一致 —— 校管理员只看到自己学校。行里
+       本来就没有账号,所以这里连「去标识」都不用做,直接求和即可。 */
+    const learningRows = [...this.learningCounts.entries()]
+      .map(([, row]) => row)
+      .filter(row => scope === undefined || row.schoolId === scope)
+    const nodeTotals = new Map<string, { correct: number; wrong: number }>()
+    for (const row of learningRows) {
+      const entry = nodeTotals.get(row.knowledgeId) ?? { correct: 0, wrong: 0 }
+      entry.correct += row.correct
+      entry.wrong += row.wrong
+      nodeTotals.set(row.knowledgeId, entry)
+    }
+    const learning = {
+      available: learningRows.length > 0,
+      attempts: learningRows.reduce((sum, row) => sum + row.correct + row.wrong, 0),
+      correct: learningRows.reduce((sum, row) => sum + row.correct, 0),
+      wrong: learningRows.reduce((sum, row) => sum + row.wrong, 0),
+      /* 错得多的排在前面 —— 看板是拿来决定「下一节课讲什么」的。 */
+      nodes: [...nodeTotals.entries()]
+        .map(([knowledgeId, totals]) => ({ knowledgeId, ...totals }))
+        .sort((l, r) => (r.wrong - r.correct) - (l.wrong - l.correct)),
+      days: new Set(learningRows.map(row => row.date)).size,
+    }
+
+    return {
+      schools: {
+        total: schools.length,
+        active: schools.filter(school => school.status === 'active').length,
+        disabled: schools.filter(school => school.status === 'disabled').length,
+      },
+      users: {
+        total: users.length,
+        byRole,
+        disabled: users.filter(user => user.status === 'disabled').length,
+      },
+      sessions: {
+        live: sessions.length,
+        distinctUsers: new Set(sessions.map(s => userKey(s.schoolId, s.username))).size,
+      },
+      activity,
+      /* Abuse posture, not a guest list: counts of in-flight buckets and how
+         many are at the ceiling, with no IPs and no usernames. */
+      limiters: {
+        login: this.accountLimiter.snapshot(now),
+        ip: this.ipLimiter.snapshot(now),
+        apply: this.applyLimiter.snapshot(now),
+      },
+      learning,
+    }
+  }
+
   listAudit(
     actor: AdminActor, filter: { schoolId?: string; limit?: number },
   ): AuditEvent[] {
@@ -729,6 +890,46 @@ export class AuthService {
       throw new AuthError(403, 'FORBIDDEN', '无权管理该账号')
     }
     return { userKey: key, record }
+  }
+
+  /**
+   * 收一条学习上报 —— 聚合,且只聚合。
+   *
+   * 这个方法的形状就是它对未成年人数据的全部承诺,所以逐条写清:
+   *
+   *   - 收:学校(取会话,不信请求体)、日期(取服务端 UTC 时钟)、知识点 id
+   *     (必须是课标知识点 id 的形状)、这一次对错。
+   *   - 不收:账号 / userId、学生答案原文、题目原文、自由文本、IP、设备指纹。
+   *     落库的行里没有 `userKey`,所以事后无法从这张表反查「谁答错了什么」。
+   *   - 不写审计:审计是「谁改了什么」,而这里刻意没有「谁」。
+   *
+   * 键是 `schoolId|date|knowledgeId`,所以一行就是一个小格子 —— 这也是为什么
+   * 它答不了「个体学情」:那需要账号,而账号正是我们决定不收的东西。
+   * @param actor - 服务端解析出的账号(只取它的学校)。
+   * @param body - 上报体,只有 `knowledgeId` 与 `correct`。
+   * @returns 更新后的格子。
+   */
+  async reportLearning(actor: AdminActor, body: unknown): Promise<LearningCount> {
+    const input = learningReportWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查上报内容')
+    const now = new Date()
+    /* 日期取宿主本地时间,不是 UTC。对一所贵州的学校来说,UTC 的日界落在当地
+       早上 8 点 —— 晚自习做的那批自测会被算进「昨天」,而这正是看板要回答的
+       「今天这个知识点错得多不多」。所以这里是 local date,不是 toISOString。 */
+    const date = localDate(now)
+    const key = learningKey(actor.schoolId, date, input.data.knowledgeId)
+    const existing = this.learningCounts.get(key)
+    const record: LearningCount = {
+      id: key,
+      schoolId: actor.schoolId,
+      date,
+      knowledgeId: input.data.knowledgeId,
+      correct: (existing?.correct ?? 0) + (input.data.correct ? 1 : 0),
+      wrong: (existing?.wrong ?? 0) + (input.data.correct ? 0 : 1),
+      updatedAt: now.toISOString(),
+    }
+    await this.learningCounts.put(key, record)
+    return record
   }
 
   private requireAdmin(actor: AdminActor): void {
@@ -784,6 +985,30 @@ export class AuthService {
     }
   }
 
+  /**
+   * Public door onto the same ledger {@link audit} writes.
+   *
+   * Another host that guards its own routes appends here through the identity
+   * service, so "a teacher published a paper" and "an admin disabled a school"
+   * end up in ONE trail with one shape — rather than a second audit log nobody
+   * remembers to read. The school comes from the actor, so a caller cannot file
+   * an action under a tenant it is not acting in.
+   */
+  async auditAs(
+    actor: Pick<AdminActor, 'userKey' | 'schoolId'>,
+    action: string,
+    target: string,
+    detail?: Record<string, unknown>,
+  ): Promise<void> {
+    return this.audit(
+      { ...actor, username: '', role: 'STUDENT' },
+      action,
+      target,
+      actor.schoolId,
+      detail,
+    )
+  }
+
   private async audit(
     actor: AdminActor, action: string, target: string, schoolId: string,
     detail?: Record<string, unknown>,
@@ -802,6 +1027,8 @@ export class AuthService {
 
   private get requests() { return this.domain.table('school_requests') }
   private get audits() { return this.domain.table('admin_audit') }
+  /** 匿名聚合计数,键 `schoolId|date|knowledgeId`。 */
+  private get learningCounts() { return this.domain.table('learning_counts') }
 
   private toAdminRow(user: UserRecord, school: School | undefined): AdminUserRow {
     return {

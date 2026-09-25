@@ -2,7 +2,10 @@ import clsx from 'clsx'
 import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconLibrary, IconPhysicsLab, IconQuestionSheet } from './icons/physics-icons.tsx'
+import {
+  IconAnnouncement, IconLibrary, IconPhysicsLab, IconQuestionSheet,
+} from './icons/physics-icons.tsx'
+import { isTeachingRole, type AuthState } from './auth-store.ts'
 import type { PhysicsSurfaceId, PhysicsSurfaceState } from './surface-store.ts'
 import css from './SidebarNav.module.css'
 
@@ -10,6 +13,8 @@ import css from './SidebarNav.module.css'
 export interface SidebarNavInjected {
   hooks: {
     physicsSurface: SnapshotStore<PhysicsSurfaceState>
+    /** Session principal — decides which entries this account is offered. */
+    auth: SnapshotStore<AuthState>
   }
   /**
    * Open a product surface. `drawerOpen` reports whether the click came from
@@ -30,8 +35,13 @@ export type SidebarNavProps =
   & InjectFace<SidebarNavInjected>
 
 /** PhysicsOS product navigation. */
-export function SidebarNav({ wide, openSurface, usePhysicsSurface, t }: SidebarNavProps) {
+export function SidebarNav({ wide, openSurface, usePhysicsSurface, useAuth, t }: SidebarNavProps) {
   const surface = usePhysicsSurface(snapshot => snapshot.surface)
+  const role = useAuth(state => state.user?.role)
+  /* 出卷专区 is a teacher surface — the host refuses a student's writes and the
+     page refuses itself — so offering the entry would be an invitation to a
+     door that does not open. Everything else on this rail is for everyone. */
+  const teaching = isTeachingRole(role)
   return (
     <nav className={clsx(css.root, !wide && css.rail)} aria-label={t('brand.name')}>
       {wide && <p className={css.group}>{t('nav.group.home')}</p>}
@@ -58,16 +68,29 @@ export function SidebarNav({ wide, openSurface, usePhysicsSurface, t }: SidebarN
         <IconPhysicsLab size={wide ? 16 : 18} />
         {wide && <span>{t('nav.lab')}</span>}
       </button>
+      {teaching && (
+        <button
+          type="button"
+          className={clsx(css.item, surface === 'paper' && css.active)}
+          aria-label={t('nav.paper')}
+          aria-current={surface === 'paper' ? 'page' : undefined}
+          title={wide ? undefined : t('nav.paper')}
+          onClick={() => { openSurface('paper', wide) }}
+        >
+          <IconQuestionSheet size={wide ? 16 : 18} />
+          {wide && <span>{t('nav.paper')}</span>}
+        </button>
+      )}
       <button
         type="button"
-        className={clsx(css.item, surface === 'paper' && css.active)}
-        aria-label={t('nav.paper')}
-        aria-current={surface === 'paper' ? 'page' : undefined}
-        title={wide ? undefined : t('nav.paper')}
-        onClick={() => { openSurface('paper', wide) }}
+        className={clsx(css.item, surface === 'notice' && css.active)}
+        aria-label={t('nav.notice')}
+        aria-current={surface === 'notice' ? 'page' : undefined}
+        title={wide ? undefined : t('nav.notice')}
+        onClick={() => { openSurface('notice', wide) }}
       >
-        <IconQuestionSheet size={wide ? 16 : 18} />
-        {wide && <span>{t('nav.paper')}</span>}
+        <IconAnnouncement size={wide ? 16 : 18} />
+        {wide && <span>{t('nav.notice')}</span>}
       </button>
       <button
         type="button"

@@ -240,6 +240,283 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
     summary: '改物块质量（> 0）',
     fields: { tankId: id('水槽 id'), mass: quantity('mass', '如 {value:0.27, unit:"kg"}') },
   },
+  /* The pressure rigs. Each command names the sub-model it belongs to, because
+     the bench carries all three rigs' fields and only one set is meaningful. */
+  SetPressureForce: {
+    domain: 'fluid（压强·固体）',
+    summary: '改压在接触面上的压力（>= 0）',
+    fields: { benchId: id('压强台 id'), force: quantity('force', '如 {value:20, unit:"N"}') },
+  },
+  SetPressureContactArea: {
+    domain: 'fluid（压强·固体）',
+    summary: '改受力面积（> 0），压力不变时压强随之改变',
+    fields: { benchId: id('压强台 id'), area: quantity('area', '如 {value:200, unit:"cm^2"}') },
+  },
+  SetPressureComparisonArea: {
+    domain: 'fluid（压强·固体）',
+    summary: '改对比面的受力面积（> 0），同一压力下的第二个读数',
+    fields: { benchId: id('压强台 id'), area: quantity('area', '如 {value:50, unit:"cm^2"}') },
+  },
+  SetPressureLiquidDensity: {
+    domain: 'fluid（压强·液体）',
+    summary: '改被探究液体的密度（> 0）',
+    fields: { benchId: id('压强台 id'), density: quantity('density', '如 {value:1000, unit:"kg/m^3"}') },
+  },
+  SetPressureProbeDepth: {
+    domain: 'fluid（压强·液体）',
+    summary: '改探头在液面下的深度（>= 0）',
+    fields: { benchId: id('压强台 id'), depth: quantity('length', '如 {value:20, unit:"cm"}') },
+  },
+  SetPressureComparisonDepth: {
+    domain: 'fluid（压强·液体）',
+    summary: '改同一液体中第二个探头的深度（>= 0）',
+    fields: { benchId: id('压强台 id'), depth: quantity('length', '如 {value:40, unit:"cm"}') },
+  },
+  SetPressureComparisonLiquidDensity: {
+    domain: 'fluid（压强·液体）',
+    summary: '改同深度下另一种液体的密度（> 0）',
+    fields: { benchId: id('压强台 id'), density: quantity('density', '如 {value:1100, unit:"kg/m^3"}') },
+  },
+  SetPressureAtmospheric: {
+    domain: 'fluid（压强·大气）',
+    summary: '改大气压（> 0），汞柱高度与半球拉力随之改变',
+    fields: { benchId: id('压强台 id'), pressure: quantity('pressure', '如 {value:101300, unit:"Pa"}') },
+  },
+  SetPressureBarometerFluidDensity: {
+    domain: 'fluid（压强·大气）',
+    summary: '改气压计所用液体密度（> 0），同一大气压下的液柱高度随之改变',
+    fields: { benchId: id('压强台 id'), density: quantity('density', '如 {value:13600, unit:"kg/m^3"}') },
+  },
+  SetPressureHemisphereRadius: {
+    domain: 'fluid（压强·大气）',
+    summary: '改马德堡半球的半径（> 0），拉开所需的力按 r² 变化',
+    fields: { benchId: id('压强台 id'), radius: quantity('length', '如 {value:5, unit:"cm"}') },
+  },
+  SetCurrent: {
+    domain: 'magnetic（电生磁）',
+    summary:
+      '改导体中的电流（非零）。**带符号**：符号就是电流方向，方向反过来磁场也跟着反过来，而强弱不变 —— 这正是安培定则',
+    fields: {
+      benchId: id('电流磁场台 id'),
+      current: quantity('electric_current', '如 {value:10, unit:"A"}；反向给负数'),
+    },
+  },
+  SetProbeDistance: {
+    domain: 'magnetic（电生磁·直导线）',
+    summary: '改探测点到直导线的距离（> 0），磁场按 B = μ₀I/(2πr) 反比变化',
+    fields: { benchId: id('电流磁场台 id'), distance: quantity('length', '如 {value:5, unit:"cm"}') },
+  },
+  SetComparisonProbeDistance: {
+    domain: 'magnetic（电生磁·直导线）',
+    summary: '改第二个探测点的距离（> 0），用来把「距离加倍、磁场减半」摆在同一张图上',
+    fields: { benchId: id('电流磁场台 id'), distance: quantity('length', '如 {value:10, unit:"cm"}') },
+  },
+  SetSolenoidTurns: {
+    domain: 'magnetic（电生磁·螺线管）',
+    summary: '改线圈匝数（> 0），长度不变时磁场按 B = μ₀(N/L)I 成正比变化',
+    fields: {
+      benchId: id('电流磁场台 id'),
+      turns: quantity('dimensionless', '如 {value:400, unit:""}'),
+    },
+  },
+  SetSolenoidComparisonTurns: {
+    domain: 'magnetic（电生磁·螺线管）',
+    summary: '改第二个绕组的匝数（> 0），同一骨架上对照「匝数越多磁场越强」',
+    fields: {
+      benchId: id('电流磁场台 id'),
+      turns: quantity('dimensionless', '如 {value:800, unit:""}'),
+    },
+  },
+  SetSolenoidLength: {
+    domain: 'magnetic（电生磁·螺线管）',
+    summary: '改螺线管长度（> 0），匝数不变时长度减半则单位长度匝数翻倍、磁场也翻倍',
+    fields: { benchId: id('电流磁场台 id'), length: quantity('length', '如 {value:20, unit:"cm"}') },
+  },
+  SetCorePermeability: {
+    domain: 'magnetic（电生磁·电磁铁）',
+    summary:
+      '改铁芯的相对磁导率 μ_r（> 0）。**1 就是空气芯**（那一台真实存在的对照台），所以只有 0 会被拒。B 乘 μ_r，而吸力 F ∝ B² 乘 μ_r²',
+    fields: {
+      benchId: id('电流磁场台 id'),
+      relativePermeability: quantity('dimensionless', '如 {value:200, unit:""}'),
+    },
+  },
+  SetComparisonCorePermeability: {
+    domain: 'magnetic（电生磁·电磁铁）',
+    summary: '改第二个铁芯的 μ_r（> 0），用来对照「换更好的铁芯，吸力按 μ_r 的平方变化」',
+    fields: {
+      benchId: id('电流磁场台 id'),
+      relativePermeability: quantity('dimensionless', '如 {value:800, unit:""}'),
+    },
+  },
+  SetCoreArea: {
+    domain: 'magnetic（电生磁·电磁铁）',
+    summary: '改铁芯极面面积（> 0），吸力 F = B²A/(2μ₀) 与极面面积成正比',
+    fields: { benchId: id('电流磁场台 id'), area: quantity('area', '如 {value:4, unit:"cm^2"}') },
+  },
+  SetRotorField: {
+    domain: 'magnetic（电生磁·电动机）',
+    summary: '改定子磁场 B（> 0），力矩 τ = n·B·I·A·cosθ 与 B 成正比',
+    fields: {
+      benchId: id('电流磁场台 id'),
+      field: quantity('magnetic_flux_density', '如 {value:0.5, unit:"T"}'),
+    },
+  },
+  SetRotorSideLength: {
+    domain: 'magnetic（电生磁·电动机）',
+    summary: '改受力边长 L（> 0），每条边受的安培力 F = B·I·L 随之变化',
+    fields: { benchId: id('电流磁场台 id'), length: quantity('length', '如 {value:6, unit:"cm"}') },
+  },
+  SetRotorCoilWidth: {
+    domain: 'magnetic（电生磁·电动机）',
+    summary: '改线圈宽度 W（> 0），力臂随之变化，力矩按 F·W 与面积 A = L·W 双重变化',
+    fields: { benchId: id('电流磁场台 id'), width: quantity('length', '如 {value:4, unit:"cm"}') },
+  },
+  SetEnergyMass: {
+    domain: 'mechanics（机械能）',
+    summary: '改小车质量（> 0），势能 Ep = mgh 与动能 Ek = ½mv² 都按它成正比例变化',
+    fields: { benchId: id('机械能台 id'), mass: quantity('mass', '如 {value:2, unit:"kg"}') },
+  },
+  SetReleaseHeight: {
+    domain: 'mechanics（机械能）',
+    summary: '改释放高度（> 0），势能 mgh 与到底端的速度 √(2gh) 都随之变化',
+    fields: { benchId: id('机械能台 id'), height: quantity('length', '如 {value:90, unit:"cm"}') },
+  },
+  SetRampAngle: {
+    domain: 'mechanics（机械能）',
+    summary:
+      '改斜面倾角（严格在 0° 与 90° 之间）。注意摩擦做功 μmg·cosθ·L 化简后是 μmg·h·cotθ —— **斜面越缓摩擦带走的热越多**（路程变长而正压力几乎没减），90° 竖直下落反而一点不损',
+    fields: { benchId: id('机械能台 id'), angle: quantity('angle', '如 {value:45, unit:"deg"}') },
+  },
+  SetRampFriction: {
+    domain: 'mechanics（机械能）',
+    summary:
+      '改斜面摩擦系数（≥ 0）。**0 就是光滑斜面**（机械能守恒那一台），大于 0 时到底端的动能少掉 μmg·h，少掉的部分变成了热',
+    fields: {
+      benchId: id('机械能台 id'),
+      coefficient: quantity('dimensionless', '如 {value:0.2, unit:""}'),
+    },
+  },
+  SetNoiseSourceLevel: {
+    domain: 'acoustics（噪声）',
+    summary: '改声源的声功率级 Lw（dB，可为负）。它减去距离衰减与屏障隔声量就是听者处的声级',
+    fields: {
+      benchId: id('噪声台 id'),
+      level: quantity('dimensionless', '如 {value:100, unit:""}（单位 dB）'),
+    },
+  },
+  SetListenerDistance: {
+    domain: 'acoustics（噪声）',
+    summary:
+      '改听者到声源的距离（> 0）。**距离加倍声级降 6 dB**（声强只剩四分之一），距离变为 10 倍降 20 dB',
+    fields: { benchId: id('噪声台 id'), distance: quantity('length', '如 {value:2, unit:"m"}') },
+  },
+  SetBarrierAttenuation: {
+    domain: 'acoustics（噪声）',
+    summary:
+      '改屏障的隔声量（≥ 0 dB；0 就是没有屏障）。它与距离衰减互不影响，是两个独立相减的项 —— 这就是「在传播过程中减弱」',
+    fields: {
+      benchId: id('噪声台 id'),
+      attenuation: quantity('dimensionless', '如 {value:15, unit:""}（单位 dB）'),
+    },
+  },
+  SetThermometerTemperature: {
+    domain: 'thermal（温度计）',
+    summary: '改温度计所测的温度。液柱高度 h = h₀ + k·t 随之线性变化 —— 均匀的刻度就是这么来的',
+    fields: { benchId: id('温度计台 id'), temperature: quantity('temperature', '如 {value:25, unit:"degC"}') },
+  },
+  SetThermometerBore: {
+    domain: 'thermal（温度计）',
+    summary:
+      '改细管直径（> 0）。管越粗，同样的体积膨胀摊在更大的截面上，**液柱反而升得越少** —— 温度计越不灵敏',
+    fields: { benchId: id('温度计台 id'), diameter: quantity('length', '如 {value:0.16, unit:"mm"}') },
+  },
+  SetFillingLiquid: {
+    domain: 'thermal（温度计）',
+    summary:
+      '改测温液体的体积膨胀系数 β（> 0，单位 1/K）。β 越大，每一度液柱升得越高、刻度越细；灵敏度 k = V₀β/A',
+    fields: {
+      benchId: id('温度计台 id'),
+      coefficient: quantity('dimensionless', '如 {value:0.0002, unit:""}（单位 1/K）'),
+    },
+  },
+  SetThermometerBulb: {
+    domain: 'thermal（温度计）',
+    summary: '改玻璃泡体积（> 0）。泡越大，同样的温升挤出更多的液体，液柱升得越高',
+    fields: { benchId: id('温度计台 id'), volume: quantity('volume', '如 {value:0.1, unit:"cm^3"}') },
+  },
+  SetTransformerVoltage: {
+    domain: 'induction（变压器）',
+    summary: '改一次绕组电压（> 0）。副绕组电压 U₂ = U₁·N₂/N₁ 按匝比变化，电流反向变化，功率不变',
+    fields: {
+      benchId: id('变压器台 id'),
+      voltage: quantity('electric_potential', '如 {value:220, unit:"V"}'),
+    },
+  },
+  SetTransformerCurrent: {
+    domain: 'induction（变压器）',
+    summary: '改一次绕组电流（≥ 0；0 就是副绕组开路），副绕组电流 I₂ = I₁·N₁/N₂',
+    fields: { benchId: id('变压器台 id'), current: quantity('electric_current', '如 {value:0.1, unit:"A"}') },
+  },
+  SetPrimaryTurns: {
+    domain: 'induction（变压器）',
+    summary: '改一次绕组匝数（> 0）。**只有匝比 N₁/N₂ 是一台机器** —— 两个绕组同时翻倍，输出电压一点不变',
+    fields: {
+      benchId: id('变压器台 id'),
+      turns: quantity('dimensionless', '如 {value:1000, unit:""}'),
+    },
+  },
+  SetSecondaryTurns: {
+    domain: 'induction（变压器）',
+    summary: '改副绕组匝数（> 0）。N₂ > N₁ 升压、N₂ < N₁ 降压，而 U₁I₁ = U₂I₂ 始终成立',
+    fields: {
+      benchId: id('变压器台 id'),
+      turns: quantity('dimensionless', '如 {value:200, unit:""}'),
+    },
+  },
+  SetObjectHeight: {
+    domain: 'optics（光的直线传播）',
+    summary: '改小孔前面物体的高度（> 0），像高 h′ = h·v/u 按同样比例变化',
+    fields: { benchId: id('光具台 id'), height: quantity('length', '如 {value:6, unit:"cm"}') },
+  },
+  SetObjectDistance: {
+    domain: 'optics（光的直线传播）',
+    summary: '改物体到小孔的距离 u（> 0），物离孔越远像越小（放大率 v/u）',
+    fields: { benchId: id('光具台 id'), distance: quantity('length', '如 {value:30, unit:"cm"}') },
+  },
+  SetScreenDistance: {
+    domain: 'optics（光的直线传播）',
+    summary: '改小孔到光屏的距离 v（> 0），屏越远像越大；像始终是倒立的',
+    fields: { benchId: id('光具台 id'), distance: quantity('length', '如 {value:15, unit:"cm"}') },
+  },
+  SetIncidentIndex: {
+    domain: 'optics（全反射）',
+    summary: '改光所来自介质的折射率 n₁（≥ 1），临界角 θ_c = arcsin(n₂/n₁) 随之变化',
+    fields: {
+      benchId: id('光具台 id'),
+      index: quantity('dimensionless', '如 {value:1.5, unit:""}（玻璃）'),
+    },
+  },
+  SetRefractedIndex: {
+    domain: 'optics（全反射）',
+    summary: '改光所射向介质的折射率 n₂（> 0），n₂ 越小临界角越小、越容易全反射',
+    fields: {
+      benchId: id('光具台 id'),
+      index: quantity('dimensionless', '如 {value:1, unit:""}（空气）'),
+    },
+  },
+  SetIncidentAngle: {
+    domain: 'optics（全反射）',
+    summary:
+      '改入射角 θ₁（[0°, 90°)）。超过临界角 θ_c 后折射光线**不复存在**（光被全部反射回来）；低于它则有折射光线，角度由 n₁sinθ₁ = n₂sinθ₂ 给出',
+    fields: { benchId: id('光具台 id'), angle: quantity('angle', '如 {value:45, unit:"deg"}') },
+  },
+  SetRotorAngle: {
+    domain: 'magnetic（电生磁·电动机）',
+    summary:
+      '改线圈平面与磁场 B 的夹角 θ。θ = 0 时力矩最大、θ = 90° 是平衡位置（力矩为零而每边的力不变），过平衡位置后裸线圈力矩反向 —— 这正是换向器存在的理由',
+    fields: { benchId: id('电流磁场台 id'), angle: quantity('angle', '如 {value:0, unit:"deg"}') },
+  },
   SetHeaterPower: {
     domain: 'thermal',
     summary: '改加热功率（> 0）',

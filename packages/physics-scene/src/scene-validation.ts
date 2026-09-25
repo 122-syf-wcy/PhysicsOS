@@ -80,6 +80,13 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ...(scene.leverBenches ?? []).flatMap((entry) => entry.hangers.map((hanger) => hanger.id)),
     ...(scene.inductionBenches ?? []).map((entry) => entry.id),
     ...(scene.waveBenches ?? []).map((entry) => entry.id),
+    ...(scene.pressureBenches ?? []).map((entry) => entry.id),
+    ...(scene.currentBenches ?? []).map((entry) => entry.id),
+    ...(scene.energyBenches ?? []).map((entry) => entry.id),
+    ...(scene.lightBenches ?? []).map((entry) => entry.id),
+    ...(scene.transformerBenches ?? []).map((entry) => entry.id),
+    ...(scene.thermometerBenches ?? []).map((entry) => entry.id),
+    ...(scene.noiseBenches ?? []).map((entry) => entry.id),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -773,6 +780,420 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         message: `Wave bench "${bench.id}" needs a positive amplitude and frequency, positive lengths, and an integral harmonic n ≥ 1.`,
         targetId: bench.id,
       }),
+    )
+  }
+
+  for (const bench of scene.pressureBenches ?? []) {
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    const nonNegative = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value >= 0
+    }
+    const optional = (
+      quantity: Parameters<typeof canonicalValue>[0] | undefined,
+      dimension: Parameters<typeof hasExpectedDimension>[1],
+    ): boolean => quantity === undefined || hasExpectedDimension(quantity, dimension)
+    const optionalPositive = (
+      quantity: Parameters<typeof canonicalValue>[0] | undefined,
+    ): boolean => quantity === undefined || positive(quantity)
+
+    let subDimensions: boolean
+    let subValues: boolean
+    if (bench.type === 'solid') {
+      /* A solid-pressure rig is only complete with both the force and the face
+         it presses on; the comparison face may be absent (no tipped view). Both
+         areas are magnitudes, and a zero area is not a contact. */
+      subDimensions =
+        optional(bench.force, 'force') &&
+        optional(bench.area, 'area') &&
+        optional(bench.comparisonArea, 'area')
+      subValues =
+        bench.force !== undefined &&
+        nonNegative(bench.force) &&
+        bench.area !== undefined &&
+        positive(bench.area) &&
+        optionalPositive(bench.comparisonArea)
+    } else if (bench.type === 'liquid') {
+      /* Depth is measured DOWN from the surface, so a probe level with the
+         surface (0) is a real configuration — h = 0 is the one depth that must
+         read zero pressure, not a missing value. */
+      subDimensions =
+        optional(bench.gravity, 'acceleration') &&
+        optional(bench.liquidDensity, 'density') &&
+        optional(bench.depth, 'length') &&
+        optional(bench.comparisonDepth, 'length') &&
+        optional(bench.comparisonLiquidDensity, 'density')
+      subValues =
+        bench.gravity !== undefined &&
+        positive(bench.gravity) &&
+        bench.liquidDensity !== undefined &&
+        positive(bench.liquidDensity) &&
+        bench.depth !== undefined &&
+        nonNegative(bench.depth) &&
+        (bench.comparisonDepth === undefined || nonNegative(bench.comparisonDepth)) &&
+        optionalPositive(bench.comparisonLiquidDensity)
+    } else {
+      /* atmospheric */
+      subDimensions =
+        optional(bench.gravity, 'acceleration') &&
+        optional(bench.atmosphericPressure, 'pressure') &&
+        optional(bench.barometerFluidDensity, 'density') &&
+        optional(bench.hemisphereRadius, 'length')
+      subValues =
+        bench.gravity !== undefined &&
+        positive(bench.gravity) &&
+        bench.atmosphericPressure !== undefined &&
+        positive(bench.atmosphericPressure) &&
+        bench.barometerFluidDensity !== undefined &&
+        positive(bench.barometerFluidDensity) &&
+        bench.hemisphereRadius !== undefined &&
+        positive(bench.hemisphereRadius)
+    }
+
+    const dimensionsValid = subDimensions
+    checks.push(
+      check(`pressure_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Pressure bench "${bench.id}" quantities must use the sub-model's dimensions (force / area, density / length / acceleration, pressure / density / length).`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(`pressure_bench_values:${bench.id}`, 'constraint', dimensionsValid && subValues, {
+        message: `Pressure bench "${bench.id}" is missing a required ${bench.type} quantity, or carries a non-positive one.`,
+        targetId: bench.id,
+      }),
+    )
+  }
+
+  for (const bench of scene.currentBenches ?? []) {
+    const finite = (quantity: Parameters<typeof canonicalValue>[0]): boolean =>
+      Number.isFinite(canonicalValue(quantity))
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    /* A conductor with no current makes no field, so zero is not a weaker
+       version of a valid rig — it is a missing one. The sign IS meaningful:
+       it is the direction, and it is what flips the circulation. */
+    const nonZero = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value !== 0
+    }
+    const optional = (
+      quantity: Parameters<typeof canonicalValue>[0] | undefined,
+      dimension: Parameters<typeof hasExpectedDimension>[1],
+    ): boolean => quantity === undefined || hasExpectedDimension(quantity, dimension)
+    const optionalPositive = (
+      quantity: Parameters<typeof canonicalValue>[0] | undefined,
+    ): boolean => quantity === undefined || positive(quantity)
+
+    let subDimensions: boolean
+    let subValues: boolean
+    if (bench.type === 'straight_wire') {
+      subDimensions =
+        optional(bench.current, 'electric_current') &&
+        optional(bench.probeDistance, 'length') &&
+        optional(bench.comparisonDistance, 'length')
+      subValues =
+        bench.current !== undefined &&
+        nonZero(bench.current) &&
+        bench.probeDistance !== undefined &&
+        positive(bench.probeDistance) &&
+        optionalPositive(bench.comparisonDistance)
+    } else if (bench.type === 'motor') {
+      subDimensions =
+        optional(bench.current, 'electric_current') &&
+        optional(bench.turns, 'dimensionless') &&
+        optional(bench.magneticFluxDensity, 'magnetic_flux_density') &&
+        optional(bench.sideLength, 'length') &&
+        optional(bench.coilWidth, 'length') &&
+        optional(bench.coilAngle, 'angle')
+      subValues =
+        bench.current !== undefined &&
+        nonZero(bench.current) &&
+        bench.turns !== undefined &&
+        positive(bench.turns) &&
+        finite(bench.turns) &&
+        bench.magneticFluxDensity !== undefined &&
+        positive(bench.magneticFluxDensity) &&
+        bench.sideLength !== undefined &&
+        positive(bench.sideLength) &&
+        bench.coilWidth !== undefined &&
+        positive(bench.coilWidth) &&
+        /* Any angle is a rig — 0° lies along the field and 90° is the dead
+           point — so only a non-number is refused. */
+        bench.coilAngle !== undefined &&
+        finite(bench.coilAngle)
+    } else if (bench.type === 'electromagnet') {
+      subDimensions =
+        optional(bench.current, 'electric_current') &&
+        optional(bench.turns, 'dimensionless') &&
+        optional(bench.coilLength, 'length') &&
+        optional(bench.coreRelativePermeability, 'dimensionless') &&
+        optional(bench.comparisonCoreRelativePermeability, 'dimensionless') &&
+        optional(bench.coreArea, 'area') &&
+        optional(bench.gravity, 'acceleration')
+      subValues =
+        bench.current !== undefined &&
+        nonZero(bench.current) &&
+        bench.turns !== undefined &&
+        positive(bench.turns) &&
+        finite(bench.turns) &&
+        bench.coilLength !== undefined &&
+        positive(bench.coilLength) &&
+        /* μ_r = 1 is the AIR-CORED coil — a real rig this bench is measured
+           against — so only zero is refused here. */
+        bench.coreRelativePermeability !== undefined &&
+        positive(bench.coreRelativePermeability) &&
+        optionalPositive(bench.comparisonCoreRelativePermeability) &&
+        bench.coreArea !== undefined &&
+        positive(bench.coreArea) &&
+        bench.gravity !== undefined &&
+        positive(bench.gravity)
+    } else {
+      /* solenoid */
+      subDimensions =
+        optional(bench.current, 'electric_current') &&
+        optional(bench.turns, 'dimensionless') &&
+        optional(bench.comparisonTurns, 'dimensionless') &&
+        optional(bench.coilLength, 'length')
+      subValues =
+        bench.current !== undefined &&
+        nonZero(bench.current) &&
+        bench.turns !== undefined &&
+        positive(bench.turns) &&
+        finite(bench.turns) &&
+        optionalPositive(bench.comparisonTurns) &&
+        bench.coilLength !== undefined &&
+        positive(bench.coilLength)
+    }
+
+    checks.push(
+      check(`current_bench_dimensions:${bench.id}`, 'dimension', subDimensions, {
+        message: `Current bench "${bench.id}" quantities must use the rig's dimensions (current / length, current / turns / length).`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(
+        `current_bench_values:${bench.id}`,
+        'constraint',
+        subDimensions && subValues,
+        {
+          message: `Current bench "${bench.id}" is missing a required ${bench.type} quantity, or carries a non-physical one (a zero current makes no field).`,
+          targetId: bench.id,
+        },
+      ),
+    )
+  }
+
+  for (const bench of scene.energyBenches ?? []) {
+    const positive = (value: Parameters<typeof canonicalValue>[0]): boolean => {
+      const si = canonicalValue(value)
+      return Number.isFinite(si) && si > 0
+    }
+    const angleValid = (): boolean => {
+      const radians = canonicalValue(bench.inclineAngle)
+      return Number.isFinite(radians) && radians > 0 && radians < Math.PI / 2
+    }
+    const dimensionsValid =
+      hasExpectedDimension(bench.mass, 'mass') &&
+      hasExpectedDimension(bench.gravity, 'acceleration') &&
+      hasExpectedDimension(bench.releaseHeight, 'length') &&
+      hasExpectedDimension(bench.inclineAngle, 'angle') &&
+      hasExpectedDimension(bench.frictionCoefficient, 'dimensionless')
+    checks.push(
+      check(`energy_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Energy bench "${bench.id}" quantities must use the rig's dimensions (mass / acceleration / length / angle / dimensionless).`,
+        targetId: bench.id,
+      }),
+    )
+    const frictionValid = (() => {
+      const mu = canonicalValue(bench.frictionCoefficient)
+      return Number.isFinite(mu) && mu >= 0
+    })()
+    checks.push(
+      check(
+        `energy_bench_values:${bench.id}`,
+        'constraint',
+        dimensionsValid &&
+          positive(bench.mass) &&
+          positive(bench.gravity) &&
+          positive(bench.releaseHeight) &&
+          angleValid() &&
+          frictionValid,
+        {
+          message: `Energy bench "${bench.id}" needs a positive mass, gravity and height, an angle strictly between 0° and 90°, and a friction coefficient ≥ 0.`,
+          targetId: bench.id,
+        },
+      ),
+    )
+  }
+
+  for (const bench of scene.lightBenches ?? []) {
+    const positive = (value: Parameters<typeof canonicalValue>[0]): boolean => {
+      const si = canonicalValue(value)
+      return Number.isFinite(si) && si > 0
+    }
+    const optional = (
+      value: Parameters<typeof hasExpectedDimension>[0] | undefined,
+      dimension: Parameters<typeof hasExpectedDimension>[1],
+    ): boolean => value === undefined || hasExpectedDimension(value, dimension)
+    const dimensionsValid =
+      optional(bench.objectHeight, 'length') &&
+      optional(bench.objectDistance, 'length') &&
+      optional(bench.screenDistance, 'length') &&
+      optional(bench.incidentIndex, 'dimensionless') &&
+      optional(bench.refractedIndex, 'dimensionless') &&
+      optional(bench.incidentAngle, 'angle')
+    checks.push(
+      check(`light_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Light bench "${bench.id}" quantities must all be lengths.`,
+        targetId: bench.id,
+      }),
+    )
+    const subValues =
+      bench.type === 'pinhole'
+        ? bench.objectHeight !== undefined &&
+          bench.objectDistance !== undefined &&
+          bench.screenDistance !== undefined &&
+          positive(bench.objectHeight) &&
+          positive(bench.objectDistance) &&
+          positive(bench.screenDistance)
+        : (() => {
+          const index = (value?: Parameters<typeof canonicalValue>[0]) =>
+            value === undefined ? Number.NaN : canonicalValue(value)
+          const angle = index(bench.incidentAngle)
+          return (
+            bench.incidentIndex !== undefined &&
+            bench.refractedIndex !== undefined &&
+            bench.incidentAngle !== undefined &&
+            index(bench.incidentIndex) >= 1 &&
+            positive(bench.refractedIndex) &&
+            Number.isFinite(angle) &&
+            angle >= 0 &&
+            angle < Math.PI / 2
+          )
+        })()
+    checks.push(
+      check(`light_bench_values:${bench.id}`, 'constraint', dimensionsValid && subValues, {
+        message:
+          bench.type === 'pinhole'
+            ? `Light bench "${bench.id}" needs a positive object height and two positive distances.`
+            : `Light bench "${bench.id}" needs n₁ ≥ 1, n₂ > 0 and an angle of incidence in [0°, 90°).`,
+        targetId: bench.id,
+      }),
+    )
+  }
+
+  for (const bench of scene.transformerBenches ?? []) {
+    const positive = (value: Parameters<typeof canonicalValue>[0]): boolean => {
+      const si = canonicalValue(value)
+      return Number.isFinite(si) && si > 0
+    }
+    const nonNegative = (value: Parameters<typeof canonicalValue>[0]): boolean => {
+      const si = canonicalValue(value)
+      return Number.isFinite(si) && si >= 0
+    }
+    const dimensionsValid =
+      hasExpectedDimension(bench.primaryVoltage, 'electric_potential') &&
+      hasExpectedDimension(bench.primaryCurrent, 'electric_current') &&
+      hasExpectedDimension(bench.primaryTurns, 'dimensionless') &&
+      hasExpectedDimension(bench.secondaryTurns, 'dimensionless')
+    checks.push(
+      check(`transformer_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Transformer bench "${bench.id}" quantities must use their contract dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(
+        `transformer_bench_values:${bench.id}`,
+        'constraint',
+        dimensionsValid &&
+          positive(bench.primaryVoltage) &&
+          nonNegative(bench.primaryCurrent) &&
+          positive(bench.primaryTurns) &&
+          positive(bench.secondaryTurns),
+        {
+          message: `Transformer bench "${bench.id}" needs a positive voltage and both windings, with a current >= 0.`,
+          targetId: bench.id,
+        },
+      ),
+    )
+  }
+
+  for (const bench of scene.thermometerBenches ?? []) {
+    const positive = (value: Parameters<typeof canonicalValue>[0]): boolean => {
+      const si = canonicalValue(value)
+      return Number.isFinite(si) && si > 0
+    }
+    const finite = (value: Parameters<typeof canonicalValue>[0]): boolean =>
+      Number.isFinite(canonicalValue(value))
+    const dimensionsValid =
+      hasExpectedDimension(bench.bulbVolume, 'volume') &&
+      hasExpectedDimension(bench.boreDiameter, 'length') &&
+      hasExpectedDimension(bench.expansionCoefficient, 'dimensionless') &&
+      hasExpectedDimension(bench.temperature, 'temperature') &&
+      hasExpectedDimension(bench.icePointLength, 'length')
+    checks.push(
+      check(`thermometer_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Thermometer bench "${bench.id}" quantities must use their contract dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(
+        `thermometer_bench_values:${bench.id}`,
+        'constraint',
+        dimensionsValid &&
+          positive(bench.bulbVolume) &&
+          positive(bench.boreDiameter) &&
+          positive(bench.expansionCoefficient) &&
+          /* Any temperature is a rig — a thermometer below zero is still a
+             thermometer — so only a non-number is refused. */
+          finite(bench.temperature) &&
+          positive(bench.icePointLength),
+        {
+          message: `Thermometer bench "${bench.id}" needs a positive bulb, bore, expansion coefficient and ice-point length, with a finite temperature.`,
+          targetId: bench.id,
+        },
+      ),
+    )
+  }
+
+  for (const bench of scene.noiseBenches ?? []) {
+    const si = (value: Parameters<typeof canonicalValue>[0]) => canonicalValue(value)
+    const dimensionsValid =
+      hasExpectedDimension(bench.soundPowerLevel, 'dimensionless') &&
+      hasExpectedDimension(bench.distance, 'length') &&
+      hasExpectedDimension(bench.barrierAttenuation, 'dimensionless')
+    checks.push(
+      check(`noise_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Noise bench "${bench.id}" quantities must use their contract dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(
+        `noise_bench_values:${bench.id}`,
+        'constraint',
+        dimensionsValid &&
+          /* A source can be quiet: a negative power level is a sound below the
+             reference intensity, not a missing value. */
+          Number.isFinite(si(bench.soundPowerLevel)) &&
+          Number.isFinite(si(bench.distance)) &&
+          si(bench.distance) > 0 &&
+          Number.isFinite(si(bench.barrierAttenuation)) &&
+          si(bench.barrierAttenuation) >= 0,
+        {
+          message: `Noise bench "${bench.id}" needs a finite power level, a positive distance and a barrier attenuation >= 0.`,
+          targetId: bench.id,
+        },
+      ),
     )
   }
 

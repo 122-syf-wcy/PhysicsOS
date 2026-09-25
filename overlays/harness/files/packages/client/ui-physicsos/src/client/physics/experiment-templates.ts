@@ -18,14 +18,18 @@
 
 import {
   createArchimedesScene,
+  createAtmosphericPressureScene,
   createCompositeFieldScene,
   createConcaveMirrorScene,
   createConvexLensScene,
   createConvexMirrorScene,
+  createBoilingWaterScene,
+  createThermometerCalibrationScene,
   createCrystalMeltingScene,
   createHeatCapacityComparisonScene,
   createLeverBalanceScene,
   createEchoRangingScene,
+  createNoiseBarrierScene,
   createEmfMeasurementScene,
   createMassSpectrometerScene,
   createMechanicsScene,
@@ -39,14 +43,26 @@ import {
   createPointChargeScene,
   createRheostatCircuitScene,
   createSeriesCircuitScene,
+  createShortCircuitScene,
   createVelocitySelectorScene,
   createBarMotionScene,
   createDoubleBarRailScene,
+  createTransformerBenchScene,
   createFluxChangeScene,
+  createLiquidPressureScene,
+  createSolidPressureScene,
   createStandingWaveScene,
   createTravellingWaveScene,
   createWaveInterferenceScene,
   createCollisionScene,
+  createElectromagnetScene,
+  createMechanicalEnergyScene,
+  createMotorScene,
+  createPinholeScene,
+  createTotalReflectionScene,
+  createRampFrictionScene,
+  createSolenoidFieldScene,
+  createStraightWireFieldScene,
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
@@ -258,6 +274,40 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
         title,
       })
       return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'mechanical-energy',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.mechanicalEnergy',
+    hint: 'lab.template.mechanicalEnergy.hint',
+    tags: ['机械能', '动能', '势能', '能量守恒', '初中', '能量转化', '斜面'],
+    createScene: (title) => {
+      /* 机械能守恒：2 kg 的小车从 90 cm 高处沿光滑斜面滑下，Ep = mgh = 17.64 J
+         全部变成动能，到底端 v = √(2gh) = 4.2 m/s —— 两个数都落在整数上。 */
+      const scene = createMechanicalEnergyScene({ sceneId: stampId('mechanics-energy') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'ramp-friction',
+    domain: 'mechanics',
+    stage: 'junior',
+    label: 'lab.template.rampFriction',
+    hint: 'lab.template.rampFriction.hint',
+    tags: ['机械能', '能量守恒', '摩擦生热', '初中', '动能', '势能', '能量损失'],
+    createScene: (title) => {
+      /* 同样的车与斜面，只把表面换成粗糙的（μ = 0.2）：到底端的动能少掉
+         μmg·cosθ·L = 3.53 J，那部分变成了热。把斜面调缓一些，摩擦反而拿走得更多。 */
+      const scene = createRampFrictionScene({ sceneId: stampId('mechanics-ramp-friction') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
     },
   },
   {
@@ -520,6 +570,27 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
     },
   },
   {
+    id: 'circular-orbit',
+    domain: 'mechanics',
+    stage: 'senior',
+    label: 'lab.template.circularOrbit',
+    hint: 'lab.template.circularOrbit.hint',
+    tags: ['万有引力', '向心力', '圆轨道', '卫星', '高中', '天体', '开普勒'],
+    createScene: (title) => {
+      /* 万有引力与向心力：地球 GM = 3.986×10¹⁴ m³/s²，轨道的半径 6.8×10⁶ m
+         （地面以上约 420 km）—— v = √(GM/r) = 7.656 km/s、T = 93.0 min。 */
+      const scene = createMechanicsScene({
+        sceneId: stampId('mechanics-circular-orbit'),
+        model: 'circular_orbit',
+        mass: 420_000,
+        gravitationalParameter: 3.986004418e14,
+        orbitRadius: 6.8e6,
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
     id: 'simple-pendulum',
     domain: 'mechanics',
     stage: 'senior',
@@ -694,6 +765,78 @@ const electricTemplates: readonly ExperimentTemplate[] = [
 
 const magneticTemplates: readonly ExperimentTemplate[] = [
   {
+    id: 'straight-wire-field',
+    domain: 'magnetic',
+    stage: 'junior',
+    label: 'lab.template.straightWireField',
+    hint: 'lab.template.straightWireField.hint',
+    tags: ['电生磁', '安培定则', '通电直导线', '磁场', '初中', '右手螺旋'],
+    createScene: (title) => {
+      /* 通电直导线周围的磁场：10 A 的电流在 5 cm 处产生 40 µT，10 cm 处正好
+         20 µT —— μ₀ 里的 π 与 2πr 抵消，两个读数都是整数。导线画成垂直纸面
+         （⊙ 出纸面），磁场就是一圈圈同心圆，安培定则直接读得出来。 */
+      const scene = createStraightWireFieldScene({ sceneId: stampId('magnetic-straight-wire') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'solenoid-field',
+    domain: 'magnetic',
+    stage: 'junior',
+    label: 'lab.template.solenoidField',
+    hint: 'lab.template.solenoidField.hint',
+    tags: ['电生磁', '通电螺线管', '安培定则', '磁场', '初中', '匝数', '右手螺旋定则'],
+    createScene: (title) => {
+      /* 通电螺线管内部的磁场：n = N/L = 2000 匝/米、I = 5 A → B = μ₀nI =
+         4π×10⁻³ T ≈ 12.57 mT，匝数翻到 800 磁场正好翻倍；管口处恰好是管内的
+         一半。N 极所在端由安培定则给出，电流反向南北极互换。 */
+      const scene = createSolenoidFieldScene({ sceneId: stampId('magnetic-solenoid') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'electromagnet',
+    domain: 'magnetic',
+    stage: 'junior',
+    label: 'lab.template.electromagnet',
+    hint: 'lab.template.electromagnet.hint',
+    tags: ['电磁铁', '电生磁', '铁芯', '安培定则', '磁场', '初中', '磁性强弱'],
+    createScene: (title) => {
+      /* 电磁铁：N = 200 匝绕在 20 cm 上、I = 1 A。空气芯只有 1.257 mT，插上
+         μ_r = 200 的铁芯变成 0.2513 T；吸力按 B² 走，于是 4 cm² 的极面从
+         0.25 mN 变成 10.05 N —— 一句话：铁芯把吸力抬高了四万倍。 */
+      const scene = createElectromagnetScene({ sceneId: stampId('magnetic-electromagnet') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'motor',
+    domain: 'magnetic',
+    stage: 'junior',
+    label: 'lab.template.motor',
+    hint: 'lab.template.motor.hint',
+    tags: ['电动机', '安培力', '磁场对电流的作用', '左手定则', '初中', '换向器', '力矩'],
+    createScene: (title) => {
+      /* 电动机：0.5 T 的磁场里，100 匝、6 cm × 4 cm 的线圈通 2 A 电流。两条边
+         各受 F = BIL = 0.06 N，方向相反相距 4 cm，力矩 τ = nBIA·cosθ 最大
+         0.24 N·m；转过 90° 力矩恰好为零 —— 那就是换向器要跨过去的平衡位置。 */
+      const scene = createMotorScene({ sceneId: stampId('magnetic-motor') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
     id: 'magnetic-circular',
     domain: 'magnetic',
     stage: 'senior',
@@ -761,6 +904,23 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
         title,
       })
       return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'short-circuit',
+    domain: 'circuit',
+    stage: 'junior',
+    label: 'lab.template.shortCircuit',
+    hint: 'lab.template.shortCircuit.hint',
+    tags: ['短路', '电路', '安全用电', '初中', '内阻', '欧姆定律', '故障'],
+    createScene: (title) => {
+      /* 短路：负载整个拿掉，只剩电源、开关、电流表。E = 6 V、内阻 0.5 Ω →
+         I = E/r = 12 A，路端电压 0 V —— 限制电流的只有电源内阻。 */
+      const scene = createShortCircuitScene({ sceneId: stampId('circuit-short') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
     },
   },
   {
@@ -843,6 +1003,40 @@ const circuitTemplates: readonly ExperimentTemplate[] = [
 /* -------------------------------------------------------------------- optics -- */
 
 const opticsTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'pinhole',
+    domain: 'optics',
+    stage: 'junior',
+    label: 'lab.template.pinhole',
+    hint: 'lab.template.pinhole.hint',
+    tags: ['小孔成像', '光的直线传播', '初中', '倒立的像', '光学', '影'],
+    createScene: (title) => {
+      /* 小孔成像：6 cm 的箭头在孔前 30 cm，孔后 15 cm 的屏上得到 3 cm 的倒像
+         —— v/u = 1/2，两个数都是整数，因为 6 的一半就是 3。 */
+      const scene = createPinholeScene({ sceneId: stampId('optics-pinhole') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'total-reflection',
+    domain: 'optics',
+    stage: 'junior',
+    label: 'lab.template.totalReflection',
+    hint: 'lab.template.totalReflection.hint',
+    tags: ['全反射', '折射', '临界角', '初中', '光学', '光纤', 'Snell'],
+    createScene: (title) => {
+      /* 全反射：玻璃（n = 1.5）→ 空气（n = 1），临界角 arcsin(1/1.5) = 41.8°。
+         45° 入射已过临界角，折射光线不复存在 —— 光被全部反射回去。 */
+      const scene = createTotalReflectionScene({ sceneId: stampId('optics-total-reflection') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
   {
     id: 'plane-mirror',
     domain: 'optics',
@@ -972,11 +1166,102 @@ const fluidTemplates: readonly ExperimentTemplate[] = [
       }
     },
   },
+  {
+    id: 'solid-pressure',
+    domain: 'fluid',
+    stage: 'junior',
+    label: 'lab.template.solidPressure',
+    hint: 'lab.template.solidPressure.hint',
+    tags: ['压强', '压力', '初中', '受力面积', '压力的作用效果'],
+    createScene: (title) => {
+      /* 探究压力的作用效果：同一个 20 N 的压力，先压 200 cm² 的面（1000 Pa），
+         再压 50 cm² 的面（4000 Pa）。压力一动不动，压强翻四倍 —— 这正是
+         「压力不是压强」最干净的一次演示，两个数都是整数倍关系。 */
+      const scene = createSolidPressureScene({ sceneId: stampId('fluid-solid-pressure') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'liquid-pressure',
+    domain: 'fluid',
+    stage: 'junior',
+    label: 'lab.template.liquidPressure',
+    hint: 'lab.template.liquidPressure.hint',
+    tags: ['压强', '液体压强', '初中', '深度', '密度'],
+    createScene: (title) => {
+      /* 探究液体内部的压强：水（1000 kg/m³）中 20 cm 深处 1960 Pa、40 cm 深处
+         3920 Pa —— 深度加倍压强加倍；同样 20 cm 换成盐水（1100 kg/m³）是 2156 Pa。
+         两次比较各只动一个量，ρgh 的两条正比关系一次都不用讲。 */
+      const scene = createLiquidPressureScene({ sceneId: stampId('fluid-liquid-pressure') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'atmospheric-pressure',
+    domain: 'fluid',
+    stage: 'junior',
+    label: 'lab.template.atmosphericPressure',
+    hint: 'lab.template.atmosphericPressure.hint',
+    tags: ['大气压', '大气压强', '初中', '托里拆利', '马德堡半球'],
+    createScene: (title) => {
+      /* 大气压的测量：p₀ = 101300 Pa 让汞柱停在 760 mm —— 课本上的 760 mmHg
+         的来历；同一个 p₀ 压在半径 5 cm 的马德堡半球上要 796 N 才能拉开，
+         相当于提起一个 81 kg 的人。这两个数场景里一个都没写，全是算出来的。 */
+      const scene = createAtmosphericPressureScene({
+        sceneId: stampId('fluid-atmospheric-pressure'),
+      })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
 ]
 
 /* ------------------------------------------------------------------- thermal -- */
 
 const thermalTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'thermometer',
+    domain: 'thermal',
+    stage: 'junior',
+    label: 'lab.template.thermometer',
+    hint: 'lab.template.thermometer.hint',
+    tags: ['温度计', '刻度', '量程', '分度值', '初中', '热学', '固定点', '膨胀'],
+    createScene: (title) => {
+      /* 温度计的刻度：0.1 cm³ 的泡 + 0.16 mm 的细管 + β = 2×10⁻⁴ 的液体 →
+         每摄氏度液柱升 0.9947 mm。冰水 0 °C 与沸水 100 °C 是这把尺子的两个
+         固定点，它们之间的距离被分成 100 等份。 */
+      const scene = createThermometerCalibrationScene({ sceneId: stampId('thermal-thermometer') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'noise',
+    domain: 'acoustics',
+    stage: 'junior',
+    label: 'lab.template.noise',
+    hint: 'lab.template.noise.hint',
+    tags: ['噪声', '声级', '分贝', '初中', '声学', '隔声', '噪声控制'],
+    createScene: (title) => {
+      /* 噪声：声源功率级 100 dB 的机器，1 m 处读 89.0 dB、2 m 处 83.0 dB ——
+         距离加倍少 6 dB（声强只剩四分之一）；再加一道 15 dB 的屏障再减 15。 */
+      const scene = createNoiseBarrierScene({ sceneId: stampId('acoustics-noise') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
   {
     id: 'crystal-melting',
     domain: 'thermal',
@@ -991,6 +1276,23 @@ const thermalTemplates: readonly ExperimentTemplate[] = [
       const scene = createCrystalMeltingScene({
         sceneId: stampId('thermal-crystal-melting'),
       })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
+    },
+  },
+  {
+    id: 'boiling-water',
+    domain: 'thermal',
+    stage: 'junior',
+    label: 'lab.template.boilingWater',
+    hint: 'lab.template.boilingWater.hint',
+    tags: ['沸腾', '水的沸腾', '汽化', '初中', '热学', '温度不变', '物态变化'],
+    createScene: (title) => {
+      /* 水的沸腾：500 g 水从 20 °C 起、500 W 加热，336 s 到 100 °C 后温度停住，
+         接下来 2260 s 的热全部用于汽化 —— 温度不变而持续吸热。 */
+      const scene = createBoilingWaterScene({ sceneId: stampId('thermal-boiling') })
       return {
         sceneId: String(scene.id),
         scene: { ...scene, metadata: { ...scene.metadata, title } },
@@ -1185,6 +1487,23 @@ const inductionTemplates: readonly ExperimentTemplate[] = [
         title,
       })
       return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'transformer',
+    domain: 'induction',
+    stage: 'senior',
+    label: 'lab.template.transformer',
+    hint: 'lab.template.transformer.hint',
+    tags: ['变压器', '理想变压器', '匝数比', '高中', '电磁感应', '升压', '降压'],
+    createScene: (title) => {
+      /* 理想变压器：1000 匝进 200 匝出，220 V / 0.1 A —— 电压降到 44 V，
+         电流升到 0.5 A，而功率始终 22 W。 */
+      const scene = createTransformerBenchScene({ sceneId: stampId('induction-transformer') })
+      return {
+        sceneId: String(scene.id),
+        scene: { ...scene, metadata: { ...scene.metadata, title } },
+      }
     },
   },
   {

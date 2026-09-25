@@ -379,3 +379,63 @@ export const createEmfMeasurementScene = (input: EmfMeasurementInput = {}): Phys
       : { observableVisibility: input.observableVisibility }),
   })
 }
+
+export interface ShortCircuitInput extends TemplateBaseInput {
+  /** Source EMF in volts (> 0). */
+  readonly emf?: number
+  /** Source internal resistance in ohms (> 0) — the ONLY thing limiting the current. */
+  readonly internalResistance?: number
+  readonly switchClosed?: boolean
+}
+
+/**
+ * 短路 — what happens when the load is taken out of the circuit.
+ *
+ * The loop here has no resistor in it at all: source, switch, ammeter, and back.
+ * That is the whole rig, and the reading is the point — with E = 6 V and an
+ * internal resistance of only 0.5 Ω the current is **12 A**, and the terminal
+ * voltage collapses to **zero** because there is nothing left for the source to
+ * drive it across. Nothing in the lab limits that current except the source's
+ * own resistance, which is why a short is a fault and not a setting.
+ */
+export const createShortCircuitScene = (input: ShortCircuitInput = {}): PhysicsScene => {
+  const emf = input.emf ?? 6
+  const internalResistance = input.internalResistance ?? 0.5
+  const components: CircuitComponentSpec[] = [
+    {
+      id: 'bat',
+      type: 'voltage_source',
+      name: 'E',
+      voltage: emf,
+      internalResistance,
+      terminals: { positive: 'n1', negative: 'n4' },
+      layout: { x: -4, y: -3, rotation: 0 },
+    },
+    {
+      id: 'sw',
+      type: 'switch',
+      name: 'S',
+      state: (input.switchClosed ?? true) ? 'closed' : 'open',
+      terminals: { a: 'n1', b: 'n2' },
+      layout: { x: 4, y: -3, rotation: 0 },
+    },
+    {
+      id: 'am',
+      type: 'ammeter',
+      name: 'A',
+      terminals: { a: 'n2', b: 'n4' },
+      layout: { x: 0, y: 3, rotation: 180 },
+    },
+  ]
+  return {
+    ...createCircuitScene({
+      sceneId: input.sceneId ?? 'lab-short-circuit',
+      ...(input.now === undefined ? {} : { now: input.now }),
+      components,
+      title: input.title ?? '短路',
+      description:
+        input.description ??
+        '短路：把负载整个拿掉，回路里只剩电源、开关和电流表。E = 6 V、内阻 r = 0.5 Ω 时电流直接冲到 I = E/r = 12 A，路端电压掉到 0 —— 此时限制电流的只有电源自己的内阻，所以短路是故障而不是一种设置。',
+    }),
+  }
+}

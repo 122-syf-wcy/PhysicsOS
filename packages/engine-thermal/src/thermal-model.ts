@@ -23,6 +23,14 @@ export interface ResolvedThermalSample {
   readonly latentHeat: number
   /** Melting point (K). */
   readonly meltingPoint: number
+  /**
+   * Boiling point (K), when the rig is run far enough to reach it. Absent on a
+   * bench that only melts: boiling is a SECOND plateau, and a rig without one
+   * is the two-phase rig it always was.
+   */
+  readonly boilingPoint: number | undefined
+  /** Specific latent heat of vaporization (J/kg); > 0 when `boilingPoint` is set. */
+  readonly vaporizationHeat: number | undefined
   /** Temperature at t = 0 (K). */
   readonly initialTemperature: number
   /** True when the sample has a fixed melting point (latent heat > 0). */
@@ -98,6 +106,33 @@ const resolveSample = (sample: ThermalSample): ResolvedThermalSample => {
     latentHeat,
     meltingPoint,
     initialTemperature,
+    ...(sample.boilingPoint === undefined
+      ? { boilingPoint: undefined, vaporizationHeat: undefined }
+      : {
+        boilingPoint: (() => {
+          const value = canonicalValue(sample.boilingPoint)
+          if (!Number.isFinite(value)) {
+            throw new PhysicsOSError('THERMAL_BOILING_POINT', 'Boiling point must be finite.')
+          }
+          return value
+        })(),
+        vaporizationHeat: (() => {
+          if (sample.vaporizationHeat === undefined) {
+            throw new PhysicsOSError(
+              'THERMAL_VAPORIZATION_HEAT',
+              'A bench that boils must state the latent heat of vaporization.',
+            )
+          }
+          const value = canonicalValue(sample.vaporizationHeat)
+          if (!Number.isFinite(value) || value <= 0) {
+            throw new PhysicsOSError(
+              'THERMAL_VAPORIZATION_HEAT',
+              'Latent heat of vaporization must be finite and > 0.',
+            )
+          }
+          return value
+        })(),
+      }),
     crystalline: latentHeat > 0,
     startsMolten: initialTemperature >= meltingPoint,
   }
@@ -134,11 +169,16 @@ export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel =
     ? undefined
     : resolveSample(bench.comparisonSample)
 
-  const needsDuration = sample.startsMolten || comparisonSample?.startsMolten === true
-  if (needsDuration && runDuration === undefined) {
+  /* A liquid that never boils has no landmark to stop at, so the bench has to
+     say how long to heat it. One that DOES boil has a second landmark — the
+     water runs out — and the run can end there, exactly as a melting run ends
+     at the end of its plateau. */
+  const needsDuration = (started: ResolvedThermalSample | undefined): boolean =>
+    started !== undefined && started.startsMolten && started.boilingPoint === undefined
+  if ((needsDuration(sample) || needsDuration(comparisonSample)) && runDuration === undefined) {
     throw modelError(
       'THERMAL_RUN_DURATION',
-      'An already-liquid sample needs a run duration; there is no melting plateau to stop at.',
+      'An already-liquid sample that never boils needs a run duration; there is no plateau to stop at.',
     )
   }
 

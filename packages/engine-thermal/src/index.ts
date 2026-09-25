@@ -35,3 +35,26 @@ export {
   resolveHeatingCurve,
   thermalEngine,
 } from './thermal-engine.ts'
+
+export {
+  resolveThermometerModel,
+  type ResolvedThermometerModel,
+} from './thermometer-model.ts'
+export {
+  THERMOMETER_RELATIVE_TOLERANCE,
+  boreArea,
+  columnLengthAt,
+  expansionVolume,
+  scaleFactor,
+  thermometerReadingOf,
+  type ThermometerReading,
+} from './thermometer.ts'
+export {
+  LIQUID_IN_GLASS_MODEL,
+  THERMOMETER_ENGINE_ID,
+  THERMOMETER_ENGINE_VERSION,
+  ThermometerEngine,
+  createThermometerSimulationRequest,
+  resolveThermometer,
+  thermometerEngine,
+} from './thermometer-engine.ts'

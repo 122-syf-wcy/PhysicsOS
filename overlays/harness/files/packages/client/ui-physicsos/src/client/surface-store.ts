@@ -4,7 +4,7 @@ import type { PhysicsScene } from '@physicsos/physics-scene'
 import { domainOfScene } from './physics/domain-of-scene.ts'
 
 /** Student-visible PhysicsOS surface; `admin` is the role-gated console. */
-export type PhysicsSurfaceId = 'home' | 'lab' | 'record' | 'paper' | 'library' | 'admin'
+export type PhysicsSurfaceId = 'home' | 'lab' | 'record' | 'paper' | 'library' | 'notice' | 'admin'
 
 /** Scene handover every entry point exchanges with the Lab. */
 export interface PhysicsSceneRef {

@@ -34,6 +34,8 @@ export type UnitKey =
   | 'volt'
   | 'tesla'
   | 'millitesla'
+  | 'microtesla'
+  | 'watt_per_square_meter'
   | 'weber'
   | 'weber_per_second'
   | 'ohm'
@@ -126,10 +128,15 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('newton', 'force', 'N', 1, true),
   define('joule', 'energy', 'J', 1, true),
   define('watt', 'power', 'W', 1, true),
+  define('watt_per_square_meter', 'intensity', 'W/m^2', 1, true, ['W/m²', 'W*m^-2']),
   define('volt_per_meter', 'electric_field', 'V/m', 1, true, ['N/C']),
   define('volt', 'electric_potential', 'V', 1, true),
   define('tesla', 'magnetic_flux_density', 'T', 1, true),
   define('millitesla', 'magnetic_flux_density', 'mT', 1e-3, false),
+  /* A straight laboratory conductor makes a field of tens of microtesla — the
+     same order as the Earth's — so the junior rig reads in µT rather than in a
+     tesla column padded with powers of ten. */
+  define('microtesla', 'magnetic_flux_density', 'µT', 1e-6, false, ['μT', 'uT']),
   define('weber', 'magnetic_flux', 'Wb', 1, true),
   /* Rate of change of magnetic flux. Faraday's law E = -d\u03a6/dt is in volts, and
      1 V = 1 Wb/s by definition, but flux rate is kept as its own dimension so an
