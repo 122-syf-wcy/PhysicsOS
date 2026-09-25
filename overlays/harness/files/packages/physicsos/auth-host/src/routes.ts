@@ -162,6 +162,28 @@ export function authRoutes(service: AuthService):
         return
       }
 
+      /* ---- 设备登记 -----------------------------------------------------
+         已登录账号登记 / 刷新「这台机器」。deviceId 必须是哈希形状(由 wire 的
+         正则钉住),账号与学校都取自会话 —— 请求体说不上话。幂等:再见只刷新
+         最近活跃时间与次数。被注销的设备在这里返回 403,不悄悄复活。 */
+      if (method === 'POST' && path === '/devices') {
+        checkCsrf(req)
+        const token = readSessionCookie(req)
+        const resolved = token === null ? null : service.resolveSession(token)
+        if (resolved === null) {
+          throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        }
+        const { user } = resolved
+        const device = await service.registerOwnDevice({
+          userKey: userKey(user.schoolId, user.username),
+          schoolId: user.schoolId,
+          username: user.username,
+          role: user.role,
+        }, await readJson(req))
+        send(res, 200, { device })
+        return
+      }
+
       if (method === 'POST' && path === '/password/forgot') {
         checkCsrf(req)
         await service.requestPasswordReset(await readJson(req), ip)
@@ -311,6 +333,32 @@ export function adminRoutes(service: AuthService):
             return
           }
         }
+      }
+
+      if (method === 'GET' && path === '/devices') {
+        const filters: { schoolId?: string; q?: string } = {}
+        const schoolId = url.searchParams.get('schoolId')
+        if (schoolId !== null) filters.schoolId = schoolId
+        const q = url.searchParams.get('q')
+        if (q !== null) filters.q = q
+        send(res, 200, service.listDevices(actor, filters))
+        return
+      }
+
+      /* 注销 / 恢复。设备哈希是**物理机器**的身份,所以路径里就是它自己,不是
+         某一行;租户隔离与审计都在 service 里。 */
+      if (method === 'POST' && segments[0] === 'devices' && segments.length === 3
+        && segments[2] === 'revoked') {
+        checkCsrf(req)
+        const body = await readJson(req)
+        const revoked = (body as { revoked?: unknown }).revoked
+        if (typeof revoked !== 'boolean') {
+          throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
+        }
+        send(res, 200, await service.setDeviceRevoked(
+          actor, decodeURIComponent(segment(segments, 1)), revoked,
+        ))
+        return
       }
 
       if (method === 'GET' && path === '/dashboard') {

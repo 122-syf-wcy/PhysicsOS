@@ -8,12 +8,14 @@
 
 import crypto from 'node:crypto'
 import type {
-  AuditEvent, AuthDomain, LearningCount, School, SchoolRequestRecord, SessionRecord, UserRecord,
+  AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, LearningCount, School,
+  SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
 import {
-  approveRequestWire, createSchoolWire, createUserWire, forgotWire, learningKey,
-  learningReportWire, loginWire, registerWire, rejectRequestWire, resetPasswordWire,
-  schoolRequestWire, schoolStatusWire, userKey, userStatusWire,
+  approveRequestWire, createSchoolWire, createUserWire, deviceIdWire, deviceKey,
+  deviceRevocationKey, forgotWire, GLOBAL_DEVICE_SCOPE, learningKey,
+  learningReportWire, loginWire, registerDeviceWire, registerWire, rejectRequestWire,
+  resetPasswordWire, schoolRequestWire, schoolStatusWire, userKey, userStatusWire,
 } from './domain'
 import { hashPassword, verifyPassword } from './passwords'
 import { newSessionToken, sessionTokenHash } from './cookies'
@@ -23,7 +25,7 @@ export type AuthErrorCode =
   | 'BAD_REQUEST' | 'SCHOOL_NOT_FOUND' | 'USERNAME_TAKEN' | 'SCHOOL_TAKEN'
   | 'SCHOOL_REQUIRED' | 'SCHOOL_AMBIGUOUS'
   | 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'UNAUTHENTICATED'
-  | 'FORBIDDEN' | 'NOT_FOUND'
+  | 'FORBIDDEN' | 'NOT_FOUND' | 'DEVICE_REVOKED'
 
 export class AuthError extends Error {
   constructor(
@@ -62,6 +64,28 @@ export interface ResolvedSession {
   user: PublicUser
   session: SessionRecord
 }
+
+/**
+ * 一条风控信号 —— 只说明「哪个主体、在多大窗口里、出现了多少次」。
+ *
+ * 有意不携带 IP:地址只在计数时用过,出了这个函数就没了。`subject` 要么是
+ * 账号键、要么是设备哈希,两者都不是自然人的身份。
+ */
+export interface RiskSignal {
+  kind: 'account-multi-device' | 'device-multi-ip'
+  subject: string
+  count: number
+  windowMs: number
+}
+
+/** 风控观察窗 —— 24 小时,够覆盖一个寄宿学校的作息。 */
+const RISK_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 达到几条才值得看一眼。3 是「记录与展示」的阈值,不是封禁线 —— 同一个学生
+ * 换台电脑、教职工在家和办公室各登录一次,都不该报警。
+ */
+const RISK_THRESHOLD = 3
 
 /**
  * The acting admin, built by the route layer from the resolved session —
@@ -306,7 +330,10 @@ export class AuthService {
       updatedAt: now,
     }
     await this.users.put(key, record)
-    return this.issueSession(record, school, false, ip, userAgent)
+    if (input.data.deviceId !== undefined) {
+      await this.touchDevice(record, input.data.deviceId)
+    }
+    return this.issueSession(record, school, false, ip, userAgent, input.data.deviceId)
   }
 
   /**
@@ -362,17 +389,27 @@ export class AuthService {
       throw new AuthError(401, 'INVALID_CREDENTIALS', '账号或密码错误')
     }
     const { record, school } = match
-    const result = await this.issueSession(record, school, remember, sourceIp, userAgent)
+    /* 设备闸门在签发会话之前:被注销的机器不该拿到一张新 cookie,否则「远程
+       注销」只能等下一条路由自己再判一次,漏一处就是一个缺口。 */
+    if (input.data.deviceId !== undefined) {
+      this.assertDeviceUsable(record, input.data.deviceId)
+    }
+    const result = await this.issueSession(
+      record, school, remember, sourceIp, userAgent, input.data.deviceId,
+    )
     await this.users.put(userKey(school.id, record.username), {
       ...record, lastLoginAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     })
+    if (input.data.deviceId !== undefined) {
+      await this.touchDevice(record, input.data.deviceId)
+    }
     return result
   }
 
   /** Mint an opaque token and persist only its hash as a session row. */
   private async issueSession(
     record: UserRecord, school: School, remember: boolean,
-    ip?: string, userAgent?: string,
+    ip?: string, userAgent?: string, deviceId?: string,
   ): Promise<LoginResult> {
     const now = Date.now()
     const token = newSessionToken()
@@ -386,6 +423,7 @@ export class AuthService {
       expiresAt: new Date(now + (remember ? this.config.rememberTtlMs : this.config.sessionTtlMs)).toISOString(),
       ip: ip ?? 'unknown',
       ...(userAgent !== undefined ? { userAgent: userAgent.slice(0, 256) } : {}),
+      ...(deviceId !== undefined ? { deviceId } : {}),
     }
     await this.sessions.put(session.id, session)
     return {
@@ -421,6 +459,12 @@ export class AuthService {
 
     const user = this.users.get(userKey(session.schoolId, session.username))
     if (user === undefined || user.id !== session.userId || user.status !== 'active') return null
+    /* 远程注销在这里生效:会话记住了它来自哪台设备,而设备一旦被注销(平台级
+       或本校),这条会话下一次解析就是 null —— 不用等 cookie 过期。 */
+    if (session.deviceId !== undefined
+      && this.isDeviceRevoked(session.deviceId, session.schoolId)) {
+      return null
+    }
     return { user: this.toPublic(user, school), session }
   }
 
@@ -932,6 +976,230 @@ export class AuthService {
     return record
   }
 
+  /* ---- 设备登记与远程注销(方案第 4 期的服务端半) ----
+     用户定过的用途是「设备登记 / 远程注销 / 异常风控」,**不是**一机一码锁死。
+     所以这里没有任何一处会拦住一台没登记过的机器的正常使用:没带 deviceId 的
+     登录照常签发会话;带了但还没登记过的,登记一下即可。被注销的设备才是例外,
+     而那是管理员显式做的动作。 */
+
+  /**
+   * 设备列表 —— 校管理员只看自己学校,超管看全部。
+   *
+   * 每行都带有效注销状态与最近活跃时间;设备**哈希**原样展示(它本来就是哈希,
+   * 不是序列号),暴露不了硬件身份。
+   */
+  listDevices(
+    actor: AdminActor, filter: { schoolId?: string; q?: string } = {},
+  ): {
+    devices: (DeviceRecord & { revoked: boolean; revokedGlobally: boolean })[]
+    risk: RiskSignal[]
+  } {
+    this.requireAdmin(actor)
+    const schoolId: string | undefined =
+      actor.role === 'SUPER_ADMIN' ? filter.schoolId : actor.schoolId
+    const needle = filter.q?.trim().toLowerCase()
+    const devices = [...this.devices.entries()]
+      .map(([, row]) => row)
+      .filter(row => schoolId === undefined || row.schoolId === schoolId)
+      .filter(row => needle === undefined || needle === ''
+        || row.deviceId.includes(needle)
+        || row.username.includes(needle))
+      .sort((l, r) => r.lastSeenAt.localeCompare(l.lastSeenAt))
+      .map(row => ({
+        ...row,
+        /* 有效注销 = 平台级 或 本校。展开成两个布尔,界面不必自己重算 scope。 */
+        revoked: this.isDeviceRevoked(row.deviceId, row.schoolId),
+        revokedGlobally:
+          this.revocations.get(deviceRevocationKey(GLOBAL_DEVICE_SCOPE, row.deviceId)) !== undefined,
+      }))
+    return { devices, risk: this.riskSignals(schoolId) }
+  }
+
+  /**
+   * 远程注销 / 恢复一台设备 —— 按**物理机器**记账,不是按某一行。
+   *
+   * 这一条是本轮改出来的:注销最初记在 `(账号, 设备)` 行上,于是同一台机器换一
+   * 个账号登录就是一行干净的新记录,注销被绕过。远程注销必须是这台机器的事,
+   * 所以它落在自己的表里,键是 `scope|deviceId`。
+   *
+   * `scope` 由发起人决定:超管是 `'*'`(对所有学校生效),校管理员是本校本设备。
+   * 恢复只删自己那一把 scope 的锁 —— 一个学校管理员不该把平台级注销解开。
+   *
+   * 注销时同一台设备**已经在线的会话一并失效**:否则被注销的机器只要不退出就能
+   * 继续用,「远程注销」就成了摆设。
+   */
+  async setDeviceRevoked(
+    actor: AdminActor, deviceId: string, revoked: boolean,
+  ): Promise<{ deviceId: string; scope: string; revocation?: DeviceRevocation }> {
+    this.requireAdmin(actor)
+    const parsed = deviceIdWire.safeParse(deviceId)
+    if (!parsed.success) throw new AuthError(400, 'BAD_REQUEST', '设备标识形状不正确')
+    const scope = actor.role === 'SUPER_ADMIN' ? GLOBAL_DEVICE_SCOPE : actor.schoolId
+
+    const seen = [...this.devices.entries()]
+      .filter(([, row]) => row.deviceId === deviceId
+        && (scope === GLOBAL_DEVICE_SCOPE || row.schoolId === scope))
+    const key = deviceRevocationKey(scope, deviceId)
+    const existing = this.revocations.get(key)
+    if (revoked && seen.length === 0 && existing === undefined
+      && this.revocations.get(deviceRevocationKey(GLOBAL_DEVICE_SCOPE, deviceId)) === undefined) {
+      throw new AuthError(404, 'NOT_FOUND', '没有这台设备')
+    }
+
+    if (!revoked) {
+      if (existing === undefined) return { deviceId, scope }
+      await this.revocations.delete(key)
+      /* 每个受影响租户各写一行 —— 别把「发起人的学校」当成所有学校的审计归属。 */
+      const schools = existing.affectedSchools.length > 0 ? existing.affectedSchools : [actor.schoolId]
+      for (const schoolId of schools) {
+        await this.audit(actor, 'device.restore', deviceId, schoolId, { scope })
+      }
+      return { deviceId, scope }
+    }
+
+    /* 受影响租户在注销那一刻定下来:平台级是「见过这台机器的所有学校」,校级
+       就是本校。恢复时设备行可能已经不在了,所以这份名单必须当场存进锁里。 */
+    const affectedSchools: string[] = scope === GLOBAL_DEVICE_SCOPE
+      ? [...new Set(seen.map(([, row]) => row.schoolId))].sort()
+      : [scope]
+    const revocation: DeviceRevocation = existing ?? {
+      id: key,
+      scope,
+      deviceId,
+      revokedBy: actor.userKey,
+      revokedAt: new Date().toISOString(),
+      affectedSchools,
+    }
+    await this.revocations.put(key, revocation)
+
+    /* 踢掉这台设备上所有受影响租户的在线会话。平台级注销影响全部学校,校级只
+       影响本校 —— 断线范围与注销范围必须一致。 */
+    for (const [id, session] of this.sessions.entries()) {
+      if (session.deviceId !== deviceId || session.revokedAt !== undefined) continue
+      if (scope !== GLOBAL_DEVICE_SCOPE && session.schoolId !== scope) continue
+      await this.sessions.put(id, { ...session, revokedAt: revocation.revokedAt })
+    }
+    /* 台账按受影响租户各写一行:一所学校有权在自己的审计里看到「我们学校有台
+       设备被平台注销了」,而不是只有发起人那所学校看得见。 */
+    for (const schoolId of affectedSchools) {
+      await this.audit(actor, 'device.revoke', deviceId, schoolId, { scope })
+    }
+    return { deviceId, scope, revocation }
+  }
+
+  /**
+   * 异常风控信号 —— **只记录与展示,不自动封禁**(用户明确要求)。
+   *
+   * 两个问题都从**已经存在的行**里推导,不新增任何采集:
+   *   - 同账号短时间内在多台设备出现过:`devices.lastSeenAt` 落在窗口内的不同
+   *     `deviceId` 计数。
+   *   - 同一台设备短时间内在多个 IP 出现过:`sessions` 里带该 `deviceId` 的行按
+   *     `ip` 去重计数。IP 只在计数里用,**不出现在返回结构里**。
+   * 所以看板能说「这条账号 24 小时内从 5 台设备登录过」,但看不到任何地址。
+   */
+  private riskSignals(schoolId: string | undefined): RiskSignal[] {
+    const windowMs = RISK_WINDOW_MS
+    const since = Date.now() - windowMs
+    const inScope = (value: string): boolean => schoolId === undefined || value === schoolId
+
+    const byAccount = new Map<string, Set<string>>()
+    const byDevice = new Map<string, Set<string>>()
+    for (const [, row] of this.devices.entries()) {
+      if (!inScope(row.schoolId)) continue
+      if (Date.parse(row.lastSeenAt) < since) continue
+      const found = byAccount.get(row.primaryUserKey) ?? new Set<string>()
+      found.add(row.deviceId)
+      byAccount.set(row.primaryUserKey, found)
+    }
+    for (const [, session] of this.sessions.entries()) {
+      if (!inScope(session.schoolId)) continue
+      if (session.deviceId === undefined) continue
+      if (Date.parse(session.createdAt) < since) continue
+      const found = byDevice.get(session.deviceId) ?? new Set<string>()
+      found.add(session.ip ?? 'unknown')
+      byDevice.set(session.deviceId, found)
+    }
+
+    const out: RiskSignal[] = []
+    for (const [subject, found] of byAccount) {
+      if (found.size >= RISK_THRESHOLD) {
+        out.push({ kind: 'account-multi-device', subject, count: found.size, windowMs })
+      }
+    }
+    for (const [subject, found] of byDevice) {
+      if (found.size >= RISK_THRESHOLD) {
+        out.push({ kind: 'device-multi-ip', subject, count: found.size, windowMs })
+      }
+    }
+    return out.sort((l, r) => r.count - l.count)
+  }
+
+  /**
+   * 这台设备对这个租户是不是被注销的。
+   *
+   * 两个 scope 任一命中即算被注销:平台级(`'*'`,超管做的,对所有学校生效)
+   * 或本校(该校管理员做的)。反过来,一所学校注销不了另一所学校的设备。
+   */
+  private isDeviceRevoked(deviceId: string, schoolId: string): boolean {
+    return this.revocations.get(deviceRevocationKey(GLOBAL_DEVICE_SCOPE, deviceId)) !== undefined
+      || this.revocations.get(deviceRevocationKey(schoolId, deviceId)) !== undefined
+  }
+
+  /** 被注销的设备不能换一张新会话 —— 拦在登录这一步,别指望每个下游自己判。 */
+  private assertDeviceUsable(record: UserRecord, deviceId: string): void {
+    if (this.isDeviceRevoked(deviceId, record.schoolId)) {
+      throw new AuthError(403, 'DEVICE_REVOKED', '这台设备已被注销,请联系学校管理员')
+    }
+  }
+
+  /**
+   * 登记 / 刷新一台设备 —— 幂等。
+   *
+   * 键是 `userKey|deviceId`,所以「这台机器这个账号见过」就是一行;再见只累加
+   * `seenCount` 与 `lastSeenAt`。注销状态**不在这一行上**,由
+   * `device_revocations` 单独记账 —— 那是按机器算的,这是按(账号,机器)算的。
+   */
+  private async touchDevice(record: UserRecord, deviceId: string): Promise<DeviceRecord> {
+    const key = deviceKey(userKey(record.schoolId, record.username), deviceId)
+    const now = new Date().toISOString()
+    const existing = this.devices.get(key)
+    const next: DeviceRecord = existing === undefined
+      ? {
+        id: key,
+        deviceId,
+        primaryUserKey: userKey(record.schoolId, record.username),
+        schoolId: record.schoolId,
+        username: record.username,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        seenCount: 1,
+      }
+      : { ...existing, lastSeenAt: now, seenCount: existing.seenCount + 1 }
+    await this.devices.put(key, next)
+    return next
+  }
+
+  /**
+   * 会话主人登记自己的设备 —— `/physicsos/auth/devices` 的落地。
+   *
+   * 与 `touchDevice` 分开是有意的:`touchDevice` 是登录路径上的副产物(拿的是
+   * `UserRecord`),这里是**显式**登记(拿的是 actor),而且它必须拒绝一台正在
+   * 被注销的机器 —— 否则「远程注销」会被机器自己的下一次心跳抹掉。
+   */
+  async registerOwnDevice(actor: AdminActor, body: unknown): Promise<DeviceRecord> {
+    const input = registerDeviceWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查设备信息')
+    const record = this.users.get(userKey(actor.schoolId, actor.username))
+    if (record === undefined) throw new AuthError(401, 'UNAUTHENTICATED', '账号不存在')
+    this.assertDeviceUsable(record, input.data.deviceId)
+    const device = await this.touchDevice(record, input.data.deviceId)
+    const shaped: DeviceRecord = { ...device }
+    if (input.data.platform !== undefined) shaped.platform = input.data.platform
+    if (input.data.appVersion !== undefined) shaped.appVersion = input.data.appVersion
+    await this.devices.put(deviceKey(device.primaryUserKey, device.deviceId), shaped)
+    return shaped
+  }
+
   private requireAdmin(actor: AdminActor): void {
     if (actor.role !== 'SCHOOL_ADMIN' && actor.role !== 'SUPER_ADMIN') {
       throw new AuthError(403, 'FORBIDDEN', '需要管理员权限')
@@ -1029,6 +1297,10 @@ export class AuthService {
   private get audits() { return this.domain.table('admin_audit') }
   /** 匿名聚合计数,键 `schoolId|date|knowledgeId`。 */
   private get learningCounts() { return this.domain.table('learning_counts') }
+  /** 设备登记,键 `userKey|deviceId`。 */
+  private get devices() { return this.domain.table('devices') }
+  /** 设备注销,键 `scope|deviceId`。 */
+  private get revocations() { return this.domain.table('device_revocations') }
 
   private toAdminRow(user: UserRecord, school: School | undefined): AdminUserRow {
     return {

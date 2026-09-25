@@ -15,13 +15,14 @@ import type { PaperApi } from './paper-api.ts'
 import type { NoticeApi } from './notice-api.ts'
 import { AdminContentTab } from './AdminContentTab.tsx'
 import { AdminDashboardTab } from './AdminDashboardTab.tsx'
+import { AdminDeviceTab } from './AdminDeviceTab.tsx'
 import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import css from './AdminWorkspace.module.css'
 
-type Tab = 'requests' | 'schools' | 'dashboard' | 'users' | 'content' | 'notice' | 'ops' | 'audit'
+type Tab = 'requests' | 'schools' | 'dashboard' | 'users' | 'content' | 'notice' | 'ops' | 'devices' | 'audit'
 
 export interface AdminWorkspaceProps {
   api: AdminApi
@@ -79,6 +80,7 @@ export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWo
     ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content') }]),
     ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice') }]),
     { id: 'ops' as const, label: t('admin.tab.ops') },
+    { id: 'devices' as const, label: t('admin.tab.devices') },
     { id: 'audit' as const, label: t('admin.tab.audit') },
   ]
   const fallback = tabs[0]
@@ -115,6 +117,7 @@ export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWo
         <AdminNoticeTab api={noticeApi} canPublish={isSchoolAdmin} t={t} />
       )}
       {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
+      {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
       {active === 'audit' && <AuditTab api={api} t={t} />}
     </div>
   )

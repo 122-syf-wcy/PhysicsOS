@@ -168,6 +168,41 @@ export interface AuditEventRow {
   readonly createdAt: string
 }
 
+/**
+ * 一台登记过的设备。
+ *
+ * `deviceId` 是**哈希**,不是硬件序列号 —— 客户端只上传哈希,所以这一列即便
+ * 原样展示也不泄露机器身份。`revoked` 是这个租户下**有效**的注销状态(平台级
+ * 或本校任一命中),`revokedGlobally` 说明它是平台级的那把锁。
+ */
+export interface DeviceRow {
+  readonly id: string
+  readonly deviceId: string
+  readonly primaryUserKey: string
+  readonly schoolId: string
+  readonly username: string
+  readonly platform?: string
+  readonly appVersion?: string
+  readonly firstSeenAt: string
+  readonly lastSeenAt: string
+  readonly seenCount: number
+  readonly revoked: boolean
+  readonly revokedGlobally: boolean
+}
+
+/**
+ * 一条风控信号 —— 只有计数,没有 IP。
+ *
+ * `subject` 要么是账号键、要么是设备哈希;IP 只在服务端计数时用过,出了那个
+ * 函数就没了。这是「记录与展示,不自动封禁」的可观测形式。
+ */
+export interface RiskSignalRow {
+  readonly kind: 'account-multi-device' | 'device-multi-ip'
+  readonly subject: string
+  readonly count: number
+  readonly windowMs: number
+}
+
 export interface ApproveInput {
   readonly schoolId: string
   readonly shortName?: string
@@ -201,6 +236,12 @@ export interface AdminApi {
   listAudit: (filter?: { schoolId?: string; limit?: number }) => Promise<{ events: AuditEventRow[] }>
   /** Server-known platform/tenant figures. Never inferred, never client-side. */
   dashboard: () => Promise<DashboardRow>
+  /** 登记过的设备 + 风控信号(第 4 期服务端半)。 */
+  listDevices: (filter?: { schoolId?: string; q?: string }) =>
+  Promise<{ devices: DeviceRow[]; risk: RiskSignalRow[] }>
+  /** 远程注销 / 恢复一台设备。scope 由发起人的角色决定(超管 = 全局)。 */
+  setDeviceRevoked: (deviceId: string, revoked: boolean) =>
+  Promise<{ deviceId: string; scope: string }>
 }
 
 /** The injected surface: plain callbacks returning wire data. */
@@ -271,5 +312,16 @@ export function createAdminApi(): AdminApi {
        没有这个 header 时,浏览器把 GET 缓存住,上报进来的新增量看不见 ——
        运维会照着过期数字做决定。 */
     dashboard: () => request(ADMIN_BASE, '/dashboard', { cache: 'no-store' }),
+    listDevices: (filter) => {
+      const params = new URLSearchParams()
+      if (filter?.schoolId !== undefined) params.set('schoolId', filter.schoolId)
+      if (filter?.q !== undefined) params.set('q', filter.q)
+      const qs = params.toString()
+      return request(ADMIN_BASE, `/devices${qs === '' ? '' : `?${qs}`}`, { cache: 'no-store' })
+    },
+    /* deviceId 是哈希,只含 [a-f0-9],放进路径无需转义;仍然编码一道,免得将来
+       闸门放宽时这里悄悄变成路径拼接问题。 */
+    setDeviceRevoked: (deviceId, revoked) =>
+      adminPost(`/devices/${encodeURIComponent(deviceId)}/revoked`, { revoked }),
   }
 }

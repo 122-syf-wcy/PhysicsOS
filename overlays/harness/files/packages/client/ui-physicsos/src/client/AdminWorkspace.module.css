@@ -413,3 +413,46 @@
   font-size: 12px;
   color: var(--dsw-color-text-secondary, #475569);
 }
+
+/* ---- 设备 tab(第 4 期服务端半)----------------------------------------- */
+
+.deviceTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.deviceTable th,
+.deviceTable td {
+  padding: 6px 10px;
+  text-align: start;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.deviceTable th {
+  color: rgb(255 255 255 / 55%);
+  font-weight: 500;
+}
+
+.deviceTable code {
+  font-size: 12px;
+}
+
+/* 状态是**文字**而不是只有颜色:色盲用户与黑白打印稿都要能读。 */
+.badgeActive,
+.badgeRevoked {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.badgeActive {
+  background: rgb(46 160 67 / 18%);
+  color: rgb(126 217 143);
+}
+
+.badgeRevoked {
+  background: rgb(209 100 89 / 18%);
+  color: rgb(240 156 148);
+}
