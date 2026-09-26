@@ -72,12 +72,26 @@ void fakeDomain.table('users').put(userKey(school.id, teacher.username), teacher
 const service = new AuthService(fakeDomain)
 const identity = createIdentityService(service)
 
-/** A request carrying whatever cookie the case wants to test. */
-const requestWith = (cookie: string | undefined): IncomingMessage =>
-  ({ headers: cookie === undefined ? {} : { cookie } }) as IncomingMessage
+/** A request carrying whichever credential the case wants to test. */
+const requestWith = (
+  cookie: string | undefined,
+  authorization?: string,
+): IncomingMessage => ({
+  headers: {
+    ...(cookie === undefined ? {} : { cookie }),
+    ...(authorization === undefined ? {} : { authorization }),
+  },
+}) as IncomingMessage
 
-const logIn = async (): Promise<string> =>
-  (await service.login({ username: teacher.username, password: 'correct-horse', schoolId: school.id })).token
+const logIn = async (): Promise<string> => {
+  const result = await service.login({
+    username: teacher.username,
+    password: 'correct-horse',
+    schoolId: school.id,
+  })
+  if (!('token' in result)) throw new Error('expected password login without TOTP')
+  return result.token
+}
 
 describe('identity service', () => {
   it('is published under the name the paper host looks up', () => {
@@ -97,6 +111,23 @@ describe('identity service', () => {
       username: teacher.username,
       role: 'TEACHER',
     })
+  })
+
+  it('resolves a personal Bearer token through the same identity seam and honors revocation', async () => {
+    const actor = {
+      userKey: userKey(school.id, teacher.username),
+      schoolId: school.id,
+      username: teacher.username,
+      role: teacher.role,
+    }
+    const created = await service.createApiToken(actor, {
+      name: 'identity-seam',
+      scope: 'read',
+    })
+    expect(identity.actorOf(requestWith(undefined, `Bearer ${created.secret}`))).toEqual(actor)
+
+    await service.revokeApiToken(actor, created.token.id)
+    expect(identity.actorOf(requestWith(undefined, `Bearer ${created.secret}`))).toBeNull()
   })
 
   it('resolves nobody for no cookie, an unknown token, or a revoked session', async () => {

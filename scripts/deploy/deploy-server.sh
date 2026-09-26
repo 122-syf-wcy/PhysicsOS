@@ -26,7 +26,13 @@ mkdir -p "$DIR" && cd "$DIR"
 if [ -d .git ]; then
   git pull --ff-only || true
 else
-  git clone --recursive "$REPO" .
+  # 目录可能已经存在（例如 secret 先放好了）：就地初始化，不要 `git clone .`
+  # —— 后者要求目标目录为空，会把"预置 secret"这条路直接堵死。
+  git init -q
+  git remote remove origin 2>/dev/null || true
+  git remote add origin "$REPO"
+  git fetch -q --depth 1 origin main
+  git checkout -q -B main origin/main
 fi
 git submodule update --init --recursive
 
@@ -59,6 +65,10 @@ curl -fsS --max-time 10 http://127.0.0.1:3080/healthz || true
 echo
 curl -fsS --max-time 10 http://127.0.0.1:3080/readyz || true
 echo
+
+say "运维加固与定时备份"
+"$DIR/scripts/deploy/install-operations.sh"
+"$DIR/scripts/deploy/backup-postgres.sh"
 
 say "完成"
 cat <<EOF

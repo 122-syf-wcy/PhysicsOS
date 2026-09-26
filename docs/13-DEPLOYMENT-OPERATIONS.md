@@ -121,12 +121,33 @@ attribution.
 
 Optional knobs, all plain environment variables:
 
-| Variable                   | Default               | Purpose                                                       |
-| -------------------------- | --------------------- | ------------------------------------------------------------- |
-| `PHYSICOS_TRUSTED_PROXIES` | empty (trust nothing) | Exact proxy IP literals for forwarded headers                 |
-| `PHYSICSOS_SESSIONS_ROOT`  | `DSH_HOME/sessions`   | Shared session root; required before scaling past one replica |
-| `PHYSICSOS_PANDOC`         | `/usr/bin/pandoc`     | Pandoc binary used for A4 export                              |
-| `PHYSICSOS_SOFFICE`        | `/usr/bin/soffice`    | LibreOffice binary; macOS dev can point at the app bundle     |
+| Variable                   | Default                       | Purpose                                                       |
+| -------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `PHYSICOS_TRUSTED_PROXIES` | empty (trust nothing)         | Exact proxy IP literals for forwarded headers                 |
+| `PHYSICSOS_SESSIONS_ROOT`  | `/var/lib/physicsos/sessions` | Shared session root; required before scaling past one replica |
+| `PHYSICSOS_PANDOC`         | `/usr/bin/pandoc`             | Pandoc binary used for A4 export                              |
+| `PHYSICSOS_SOFFICE`        | `/usr/bin/soffice`            | LibreOffice binary; macOS dev can point at the app bundle     |
+| `PHYSICSOS_DATABASE_SSL`   | `false`                       | Enable TLS for the PostgreSQL connection                      |
+
+### 3.2 Runtime environment contract
+
+`Dockerfile` declares the image defaults, `compose.yml` provides the same
+defaults while mapping the host-side overrides, and `.env.example` lists every
+override an operator may need. The production storage and shared-state
+backends are intentionally fixed in both the image and Compose to
+`postgres`/`redis`; they are not optional `.env` switches.
+
+| Runtime variable                 | Source in Compose                 | Purpose                                    |
+| -------------------------------- | --------------------------------- | ------------------------------------------ |
+| `PHYSICSOS_STORAGE_BACKEND`      | fixed `postgres`                  | Prevents JSON storage fallback             |
+| `PHYSICSOS_STORAGE_SCHEMA`       | `PHYSICSOS_STORAGE_SCHEMA`        | PostgreSQL schema, default `physicsos`     |
+| `PHYSICSOS_SHARED_STATE_BACKEND` | fixed `redis`                     | Prevents in-memory rate-limit fallback     |
+| `DATABASE_URL_FILE`              | `PHYSICSOS_DATABASE_URL_FILE`     | Materialized to `DATABASE_URL`             |
+| `REDIS_URL_FILE`                 | `PHYSICSOS_REDIS_URL_FILE`        | Materialized to `REDIS_URL`                |
+| `DEEPSEEK_API_KEY_FILE`          | `PHYSICSOS_DEEPSEEK_API_KEY_FILE` | Materialized to `DEEPSEEK_API_KEY`         |
+| `PHYSICSOS_ADMIN_PASSWORD_FILE`  | `PHYSICSOS_ADMIN_PASSWORD_FILE`   | Materialized to `PHYSICSOS_ADMIN_PASSWORD` |
+| `PHYSICOS_IMAGE_API_KEY_FILE`    | `PHYSICOS_IMAGE_API_KEY_FILE`     | Materialized to `PHYSICOS_IMAGE_API_KEY`   |
+| `PHYSICOS_TRUSTED_PROXIES`       | `PHYSICOS_TRUSTED_PROXIES`        | Forwarded-header trust list                |
 
 Validate the composed configuration without starting containers:
 
@@ -225,6 +246,65 @@ docker compose logs --since=10m app
 Back up PostgreSQL, Redis, and the `app_data` volume together. A database dump
 without the session/replay volume is not a complete PhysicsOS backup.
 
+### 7.1 Scheduled PostgreSQL backup
+
+On a hardened host, install the maintenance jobs with:
+
+```sh
+sudo PHYSICSOS_DIR=/opt/physicsos \
+  /opt/physicsos/scripts/deploy/install-operations.sh
+```
+
+This installs `/etc/cron.d/physicsos-postgres-backup`; it runs daily at
+`02:15` host time (the current production host uses UTC):
+
+```text
+15 2 * * * root PHYSICSOS_DIR=/opt/physicsos \
+  /opt/physicsos/scripts/deploy/backup-postgres.sh \
+  >>/var/log/physicsos-postgres-backup.log 2>&1
+```
+
+Run one backup immediately and print its verified artifact path:
+
+```sh
+sudo PHYSICSOS_DIR=/opt/physicsos \
+  /opt/physicsos/scripts/deploy/backup-postgres.sh
+```
+
+The default output root is `/opt/physicsos/backups/postgres`, with one private
+timestamp directory per run:
+
+```text
+/opt/physicsos/backups/postgres/YYYYMMDDTHHMMSSZ/
+├── manifest.txt
+├── postgres.dump
+├── postgres.dump.sha256
+└── postgres.list
+```
+
+`postgres.list` is the successful `pg_restore --list` output. Re-verify a
+specific archive without touching the database, then check its checksum:
+
+```sh
+backup=/opt/physicsos/backups/postgres/RECOVERY_POINT
+docker run --rm --network none \
+  -v "$backup:/backup:ro" \
+  --entrypoint pg_restore postgres:17-bookworm \
+  --list /backup/postgres.dump >/dev/null
+(cd "$backup" && sha256sum -c postgres.dump.sha256)
+```
+
+The production verification on 2026-09-26 created
+`/opt/physicsos/backups/postgres/20260926T112730Z`: the 161,176-byte archive
+contained 119 `pg_restore --list` entries and passed its SHA-256 check.
+
+Retention defaults to 14 days and can be changed with
+`PHYSICSOS_BACKUP_RETENTION_DAYS`. Scheduled dumps cover PostgreSQL only;
+Redis and `app_data` still require the coordinated full backup below and must
+be copied to encrypted off-host storage.
+
+### 7.2 Coordinated full backup
+
 Set a UTC timestamp and create a private backup directory:
 
 ```sh
@@ -302,7 +382,8 @@ docker run --rm \
   alpine:3.21 sh -c 'rm -rf /target/* && tar -C /target -xzf /backup/app-data.tgz'
 ```
 
-3. Recreate PostgreSQL and restore the dump:
+3. Recreate PostgreSQL and restore the dump. `RECOVERY_POINT` is the timestamp
+   directory under `/opt/physicsos/backups/postgres`:
 
 ```sh
 docker compose up -d postgres
@@ -314,8 +395,9 @@ docker compose exec -T postgres sh -c \
     --username="$POSTGRES_USER" "$POSTGRES_DB"'
 docker compose exec -T postgres sh -c \
   'PGPASSWORD="$(cat /run/secrets/postgres_password)" pg_restore \
-    --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists' \
-  < backups/RECOVERY_POINT/postgres.dump
+    --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" \
+    --clean --if-exists --no-owner --no-acl' \
+  < /opt/physicsos/backups/postgres/RECOVERY_POINT/postgres.dump
 ```
 
 4. Recreate Redis and restore its snapshot:
@@ -373,7 +455,75 @@ After rollback:
 4. Do not redeploy the failed digest until a regression test reproduces the
    failure and the fix passes root CI.
 
-## 10. Operational checks
+## 10. Server hardening
+
+### 10.1 Verified production baseline
+
+On 2026-09-26 the production host was checked with the effective OpenSSH
+configuration, not only the visible drop-in files:
+
+```text
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+PermitRootLogin without-password
+```
+
+`fail2ban` is installed and enabled with the `sshd` jail using the systemd
+backend (`maxretry=5`, `findtime=10m`, `bantime=1h`). Verify it with:
+
+```sh
+systemctl is-enabled fail2ban
+systemctl is-active fail2ban
+fail2ban-client status sshd
+sshd -T | grep -E '^(passwordauthentication|kbdinteractiveauthentication|pubkeyauthentication) '
+```
+
+Every PhysicsOS container is configured with restart policy
+`unless-stopped` and `json-file` logging limited to `max-size=20m` and
+`max-file=5`. Verify the effective container settings rather than trusting the
+Compose source alone:
+
+```sh
+cd /opt/physicsos
+docker compose ps -q | xargs docker inspect --format \
+  '{{.Name}} Restart={{.HostConfig.RestartPolicy.Name}} LogDriver={{.HostConfig.LogConfig.Type}} MaxSize={{index .HostConfig.LogConfig.Config "max-size"}} MaxFile={{index .HostConfig.LogConfig.Config "max-file"}}'
+```
+
+The host SSH configuration is already compliant, so do not rewrite
+`sshd_config` during routine deployment. If a future host is missing these
+settings, add a validated drop-in, run `sshd -t`, reload SSH, and keep the
+existing key-based session open until a second key login succeeds.
+
+### 10.2 Production self-check evidence
+
+The 2026-09-26 check returned:
+
+```text
+GET /healthz -> 200 {"status":"ok"}
+GET /readyz  -> 200 {"status":"ready","checks":{"postgres":{"status":"ok"},"redis":{"status":"ok"}}}
+```
+
+The app container had `PHYSICSOS_STORAGE_BACKEND=postgres`,
+`PHYSICSOS_SHARED_STATE_BACKEND=redis`, and both the `*_FILE` source paths and
+their materialized plain environment names in the running app process.
+PostgreSQL contained 34 tables in schema `physicsos`, including
+`dsh_storage_units` and `dsh_storage_globals`, with nine live connections
+identified as `physicsos-storage-postgres`. Redis reported
+`total_connections_received=280` and `total_commands_processed=428` at the
+time of final inspection. No JSON or memory fallback was configured or
+observed. These are non-secret operational identifiers only; no production
+records or secret values were read out.
+
+Before traffic is enabled on a new release, repeat:
+
+```sh
+docker compose exec -T app node scripts/healthcheck.mjs http://127.0.0.1:3080/readyz
+curl --fail --show-error http://127.0.0.1:3080/healthz
+curl --fail --show-error http://127.0.0.1:3080/readyz
+```
+
+## 11. Operational checks
 
 Daily:
 
@@ -402,7 +552,7 @@ Incident response:
 Production is ready only when health, logs, metrics, alerts, backup, restore,
 rollback, resource limits, and ownership are all defined and tested.
 
-## 11. 公测前检查清单
+## 12. 公测前检查清单
 
 - [ ] `.env.admin_password` 已设置为随机强密码，且首启日志确认 `PHYSICSOS-OPEN:admin`
       已种为 `SUPER_ADMIN`；公测期间不自助注册管理员。
@@ -411,7 +561,7 @@ rollback, resource limits, and ownership are all defined and tested.
 - [ ] `.env.image_api_key` 已设置；若有意关闭题图生成，已在 `compose.yml` 移除
       `image_api_key` secret 并记录该决定。
 - [ ] `docker compose up -d postgres redis` 后两者 healthy，`/readyz` 返回成功。
-- [ ] 最近一次备份已完成并做过一次恢复演练（PostgreSQL + Redis + `app_data`
-      三件套齐全，manifest 校验通过）。
+- [ ] PostgreSQL 定时备份已启用且最近一次运行成功；完整恢复演练覆盖
+      PostgreSQL + Redis + `app_data` 三件套并校验 manifest。
 - [ ] 仍是单副本；若已多副本，`PHYSICSOS_SESSIONS_ROOT` 指向共享文件系统并验证过
       跨副本会话可见。

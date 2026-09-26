@@ -1,0 +1,49 @@
+name: 使用提问
+description: 询问用法、部署或开发方式（Bug 请用 Bug 报告模板）
+title: '[Question] '
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        一般性问题也可以在 GitHub Discussions 里提问；如果你希望在 issue 里留下可检索的记录，用这个模板即可。
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: 问题类型
+      options:
+        - 本地运行 / 安装
+        - 部署与配置
+        - 教学使用方式
+        - 二次开发 / 架构理解
+        - 桌面端打包
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题
+      description: 请写清你正在做什么、期望得到什么结论。
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: 已经尝试过什么
+      description: 贴出相关命令、报错或文档位置；这能显著缩短回答时间。
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过已有 issue 与文档（README / docs/DEVELOPMENT.md / docs/13-DEPLOYMENT-OPERATIONS.md）
+          required: true

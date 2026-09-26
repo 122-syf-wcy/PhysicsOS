@@ -32,6 +32,33 @@ environment and invokes `tauri build --debug --no-bundle`. On macOS it emits:
 apps/desktop/src-tauri/target/debug/physicsos-desktop
 ```
 
+## macOS installer
+
+Build a real release frontend, bundled Node sidecar, and unsigned DMG on macOS:
+
+```sh
+pnpm --dir apps/desktop run build:release -- --unsigned --bundles app,dmg
+```
+
+The installer is written under:
+
+```text
+apps/desktop/src-tauri/target/<rust-target>/release/bundle/dmg/
+```
+
+`--unsigned` disables updater artifacts and passes `--no-sign` to Tauri. The
+result is not Developer ID signed or notarized. On first launch, macOS
+Gatekeeper may block it. Either Control-click the app and choose **Open**, then
+confirm through **System Settings > Privacy & Security > Open Anyway**, or
+remove the quarantine attribute after copying it to Applications:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/PhysicsOS.app
+```
+
+Verify the downloaded checksum before using this workaround for a distributed
+unsigned build.
+
 ## Release package
 
 Release builds use the shared Harness frontend, not `web/`. The packaging script
@@ -71,8 +98,23 @@ non-HTTPS endpoints, and a release build that still points at `web/`.
 Bundles are written under:
 
 ```text
-apps/desktop/src-tauri/target/release/bundle/
+apps/desktop/src-tauri/target/<rust-target>/release/bundle/
 ```
+
+The bundler can be narrowed explicitly:
+
+```sh
+# macOS
+pnpm --dir apps/desktop run build:release -- --target aarch64-apple-darwin --bundles app,dmg
+
+# Windows (run on Windows)
+pnpm --dir apps/desktop run build:release -- --target x86_64-pc-windows-msvc --bundles nsis,msi
+```
+
+Without updater or code-signing secrets, prepend `--unsigned`. The release
+script disables updater artifacts and does not require production updater
+credentials. With all production updater secrets present, it creates signed
+updater artifacts and keeps the normal strict release validation.
 
 ## Application icon
 
@@ -110,10 +152,11 @@ bridge entry, and writes:
 apps/desktop/src-tauri/resources/agent-sidecar/sidecar.json
 apps/desktop/src-tauri/resources/agent-sidecar/runtime/lib/bin.js
 apps/desktop/src-tauri/resources/agent-sidecar/runtime/sidecar/bridge.mjs
+apps/desktop/src-tauri/resources/agent-sidecar/runtime/node
 ```
 
-The generated runtime is approximately 490 MB and is intentionally ignored by
-git. Tauri bundles the directory as `agent-sidecar/`. The Rust shell resolves
+The generated runtime is several hundred megabytes and is intentionally ignored
+by git. Tauri bundles the directory as `agent-sidecar/`. The Rust shell resolves
 `sidecar.json` from Tauri's resource directory first, falls back to the source
 resource directory during development, and retains
 `PHYSICSOS_AGENT_SIDECAR` as an explicit executable override.
@@ -122,15 +165,49 @@ The manifest's main `args` still launch the Harness `web` host. `sidecarArgs`
 launches the bridge as the agent process:
 
 ```sh
-node <resource-dir>/agent-sidecar/runtime/lib/bin.js
-node <resource-dir>/agent-sidecar/runtime/sidecar/bridge.mjs
+<resource-dir>/agent-sidecar/runtime/node <resource-dir>/agent-sidecar/runtime/lib/bin.js
+<resource-dir>/agent-sidecar/runtime/node <resource-dir>/agent-sidecar/runtime/sidecar/bridge.mjs
 ```
 
-`node` must be on `PATH` when the application starts. The current packaging step
-does not bundle a portable Node runtime; the development machine's Homebrew Node
-links against a Homebrew dylib graph and is not suitable for redistribution.
-Before public release, either ship an official standalone Node runtime with the
-sidecar or replace the launcher with a native sidecar executable.
+Packaging downloads the checksum-pinned official Node 24.21.0 runtime for the
+target platform and places it at `runtime/node` or `runtime/node.exe`. The
+manifest invokes that relative executable, so the app does not depend on Node
+being installed or on `PATH`. The archive URL, platform, version, and SHA-256
+are recorded at `runtime/node-runtime.json`.
+
+Windows packaging must run on Windows so pnpm deploys the target-specific
+native optional dependencies. The workflow builds NSIS and MSI installers on
+the Windows runner and exercises the bundled `node.exe` smoke path. The bundled
+Node runtime, signing, installation, and first-launch behavior still require
+validation on a real Windows host; macOS cannot execute `node.exe`.
+
+## CI installers
+
+`.github/workflows/desktop-release.yml` runs for `v*` tags and manual
+dispatches. It builds macOS arm64, macOS x86_64, and Windows x86_64 NSIS/MSI
+installers, then uploads the packages and any updater `.sig` files as workflow
+artifacts. Missing signing secrets select an unsigned build rather than failing.
+
+| Secret                               | Purpose                                         |
+| ------------------------------------ | ----------------------------------------------- |
+| `PHYSICSOS_DESKTOP_UPDATE_PUBKEY`    | Tauri updater public key trusted by the app     |
+| `PHYSICSOS_DESKTOP_UPDATE_ENDPOINT`  | HTTPS `latest.json` endpoint                    |
+| `TAURI_SIGNING_PRIVATE_KEY`          | Tauri updater private key                       |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Updater key password, if encrypted              |
+| `APPLE_CERTIFICATE`                  | Base64-encoded Developer ID Application `.p12`  |
+| `APPLE_CERTIFICATE_PASSWORD`         | `.p12` password                                 |
+| `APPLE_SIGNING_IDENTITY`             | Developer ID Application identity               |
+| `APPLE_ID`                           | Apple notarization account                      |
+| `APPLE_PASSWORD`                     | Apple app-specific password                     |
+| `APPLE_TEAM_ID`                      | Apple team ID                                   |
+| `WINDOWS_CERTIFICATE`                | Base64-encoded Windows code-signing certificate |
+| `WINDOWS_CERTIFICATE_PASSWORD`       | Windows certificate password                    |
+| `WINDOWS_CERTIFICATE_THUMBPRINT`     | Optional certificate thumbprint                 |
+
+The updater public key, endpoint, and private key must all be present to enable
+signed updater artifacts. macOS still requires the Apple certificate and
+identity for code signing; Windows requires either the encoded certificate or
+a certificate thumbprint.
 
 ### Agent bridge protocol
 

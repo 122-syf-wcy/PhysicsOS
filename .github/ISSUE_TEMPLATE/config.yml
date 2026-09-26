@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用讨论（GitHub Discussions）
+    url: https://github.com/122-syf-wcy/PhysicsOS/discussions
+    about: 用法提问、想法交流与教学经验分享，请到这里。
+  - name: 私密上报安全漏洞（GitHub Security Advisory）
+    url: https://github.com/122-syf-wcy/PhysicsOS/security/advisories/new
+    about: 安全问题不要开公开 issue，请通过 Security 私密上报，见 SECURITY.md。

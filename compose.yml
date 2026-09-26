@@ -19,7 +19,7 @@ services:
       NODE_ENV: production
       DSH_HOME: /var/lib/physicsos
       PHYSICSOS_STORAGE_BACKEND: postgres
-      PHYSICSOS_STORAGE_SCHEMA: physicsos
+      PHYSICSOS_STORAGE_SCHEMA: ${PHYSICSOS_STORAGE_SCHEMA:-physicsos}
       PHYSICSOS_SHARED_STATE_BACKEND: redis
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
@@ -33,6 +33,15 @@ services:
       # TLS 反代后的真实客户端 IP / Secure cookie 判断。非 secret：Compose 里
       # 显式给出默认空串，未配置时一律不信任转发头。
       PHYSICOS_TRUSTED_PROXIES: ${PHYSICOS_TRUSTED_PROXIES:-}
+      # Comma-separated public authorities (host[:port]) this deployment serves.
+      # Without it the connection layer treats the domain as untrusted and 403s
+      # every privileged method (settings.*, host.*, credentials.*).
+      PHYSICOS_TRUSTED_HOSTS: ${PHYSICOS_TRUSTED_HOSTS:-}
+      # 以下值与 Dockerfile 的镜像默认值、.env.example 的运维变量保持一致。
+      PHYSICSOS_SESSIONS_ROOT: ${PHYSICSOS_SESSIONS_ROOT:-/var/lib/physicsos/sessions}
+      PHYSICSOS_PANDOC: ${PHYSICSOS_PANDOC:-/usr/bin/pandoc}
+      PHYSICSOS_SOFFICE: ${PHYSICSOS_SOFFICE:-/usr/bin/soffice}
+      PHYSICSOS_DATABASE_SSL: ${PHYSICSOS_DATABASE_SSL:-false}
     secrets:
       - database_url
       - redis_url

@@ -30,6 +30,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
+          run_install: false
           version: 11.9.0
 
       - name: Set up Node.js
@@ -38,6 +39,25 @@ jobs:
           node-version: 24.7.0
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify pinned pnpm versions
+        run: |
+          root_pnpm="$(pnpm --version)"
+          vendor_pnpm="$(pnpm -C vendor/deepseek-harness --version)"
+          test "$root_pnpm" = "11.9.0"
+          test "$vendor_pnpm" = "11.7.0"
+          echo "root pnpm: $root_pnpm"
+          echo "vendor pnpm: $vendor_pnpm"
+
+      - name: Self-test commit message policy
+        run: node scripts/ci/check-commit-message.mjs --self-test
+
+      - name: Check pull request title
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: pnpm run ci:commit-message
 
       - name: Apply Harness overlay
         run: node scripts/overlay/harness-overlay.mjs apply
@@ -62,9 +82,14 @@ jobs:
       - name: Format
         run: >-
           pnpm exec prettier --check
+          .github/dependabot.yml
           .github/workflows/ci.yml
+          .github/workflows/codeql.yml
+          .github/workflows/dependency-review.yml
+          .github/workflows/release.yml
           compose.yml
           docs/13-DEPLOYMENT-OPERATIONS.md
+          scripts/ci
           scripts/healthcheck.mjs
           overlays/harness/files/packages/physicsos/health-host
 
@@ -81,14 +106,8 @@ jobs:
           overlays/harness/files/packages/physicsos/health-host/tests
           scripts/healthcheck.mjs
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: pnpm test
+      - name: Typecheck, lint, and test
+        run: pnpm run test:ci
 
       - name: Build
         run: pnpm build

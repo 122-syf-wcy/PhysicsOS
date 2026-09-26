@@ -29,6 +29,10 @@ export interface ApiPolicyActor {
   readonly schoolId: string
   readonly username: string
   readonly role: 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
+  /** Present for personal-token requests; absent actors are treated as sessions. */
+  readonly credential?:
+    | { readonly kind: 'session' }
+    | { readonly kind: 'api-token'; readonly tokenId: string; readonly scope: 'read' | 'write' }
 }
 
 /** Resource kinds whose ownership is persisted by the auth domain. */
@@ -93,7 +97,7 @@ export interface ApiPolicyModelBudget {
 
 /** Host seams the pure policy needs. */
 export interface ApiPolicyDeps {
-  actorFromCookie(cookie: string | undefined): ApiPolicyActor | null
+  actorFromCookie(cookie: string | undefined, authorization?: string): ApiPolicyActor | null
   actorFromRequest(req: IncomingMessage): ApiPolicyActor | null
   readonly store: ApiPolicyStore
   ensureWorkspace(actor: ApiPolicyActor): Promise<ApiPolicyWorkspace>
@@ -171,6 +175,18 @@ const ADMIN_ONLY_METHODS = new Set([
   'credentials.set',
   'credentials.unset',
   'llm.discoverModels',
+])
+
+/** Methods a read-scoped personal token may call. */
+const READ_ONLY_METHODS = new Set([
+  'agentPreset.list',
+  'credentials.describe',
+  'host.describe',
+  'session.export',
+  'session.list',
+  'session.search',
+  'settings.describe',
+  'workspace.list',
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -661,7 +677,8 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   return {
     wrapFetch: next => async (request) => {
       const cookie = request.headers.get('cookie') ?? undefined
-      const actor = deps.actorFromCookie(cookie)
+      const authorization = request.headers.get('authorization') ?? undefined
+      const actor = deps.actorFromCookie(cookie, authorization)
       if (actor === null) {
         return Response.json({ error: 'unauthenticated' }, { status: 401 })
       }
@@ -715,6 +732,17 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       if (body === undefined) return next(request)
       const rpcId = rpcIdOf(body)
       const payload = isRecord(body.payload) ? body.payload : {}
+      if (actor.credential?.kind === 'api-token'
+        && actor.credential.scope === 'read'
+        && !READ_ONLY_METHODS.has(method)) {
+        return rpcError(
+          rpcId,
+          'TOKEN_SCOPE_REQUIRED',
+          '该令牌只有只读权限',
+          { requiredScope: 'write' },
+          403,
+        )
+      }
 
       const denied = authorizeMethod(actor, method, payload, rpcId)
       if (denied !== undefined) return denied

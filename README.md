@@ -1,6 +1,6 @@
 # PhysicsOS
 
-> **开源公益项目**：面向初高中物理教学，免费、非商业。授权见 [`LICENSE`](./LICENSE)（PolyForm Noncommercial 1.0.0），仅限个人学习、学校与公益机构等非商业用途使用。
+> **开源公益项目**：面向初高中物理教学，公益定位。授权见 [`LICENSE`](./LICENSE)（Apache License 2.0，OSI 认证的开源许可，允许修改、分发与商业使用）。项目欢迎外部开发者共同维护，参与方式见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 >
 > **状态：公测准备中（public beta）**。账户体系、班级作业、出卷专区、学习记录同步、生产部署与桌面壳均已落地；接口与界面仍可能调整，请勿视作功能已完备。已完成与未完成范围见下文，界面会明确标记尚未接通的能力。
 
@@ -166,6 +166,7 @@ node scripts/overlay/harness-overlay.mjs capture   # vendor/deepseek-harness →
 
 ## 许可与用途
 
-- 自有代码与文档：[`LICENSE`](./LICENSE)，PolyForm Noncommercial 1.0.0，**禁止商业使用**。个人学习、学校教学、公益与公共研究机构使用均属许可范围。
-- 第三方组件与上游归属：见 [`NOTICE.md`](./NOTICE.md)。DeepSeek Harness 为上游 MIT 项目，本仓库只分发自有插件与改动补丁。
-- 该许可证不是 OSI 认证的开源许可证（因为限制商用），项目定位是“公益、源码公开、非商业授权”。
+- 自有代码与文档：[`LICENSE`](./LICENSE)，**Apache License 2.0**（OSI 认证的开源许可），允许使用、修改、分发与商业使用，需保留版权、许可与 NOTICE 声明。
+- 项目定位仍是面向初高中物理教学的公益项目；许可放开不等于承诺提供商业支持或 SLA，安全问题上报渠道见 [`SECURITY.md`](./SECURITY.md)。
+- 第三方组件与上游归属：见 [`NOTICE.md`](./NOTICE.md)。DeepSeek Harness 为上游 MIT 项目，本仓库只分发自有插件与改动补丁；其中的 C-Eval 题库数据仍为 CC BY-NC-SA 4.0（非商业），不随本仓库 Apache-2.0 授权。
+- 视觉资产 `UI/generated/**` 由图像生成模型产出，随仓库按 Apache-2.0 授权；如需商用请自行核对生成模型服务方的条款。

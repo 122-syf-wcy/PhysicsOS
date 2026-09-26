@@ -41,8 +41,68 @@ const user = z.object({
   role,
   status: z.enum(['active', 'disabled']),
   lastLoginAt: z.string().optional(),
+  /** Enabled RFC 6238 secret; the pending field exists only between setup and verify. */
+  totp: z.object({
+    secret: z.string().min(16).max(128),
+    enabledAt: z.string(),
+  }).optional(),
+  totpPendingSecret: z.string().min(16).max(128).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+})
+
+const invite = z.object({
+  id: z.string().min(1),
+  /** SHA-256 of the raw invite code; the raw value is never durable. */
+  codeHash: z.string().length(64),
+  schoolId: z.string().min(1),
+  maxUses: z.number().int().min(1).max(1_000),
+  usedCount: z.number().int().min(0),
+  createdBy: z.string().min(1),
+  createdAt: z.string(),
+  expiresAt: z.string().optional(),
+  disabledAt: z.string().optional(),
+  disabledBy: z.string().optional(),
+})
+
+const apiToken = z.object({
+  id: z.string().min(1),
+  tokenHash: z.string().length(64),
+  userId: z.string().min(1),
+  userKey: z.string().min(1),
+  schoolId: z.string().min(1),
+  username: z.string().min(1),
+  name: z.string().min(1).max(64),
+  scope: z.enum(['read', 'write']),
+  createdAt: z.string(),
+  expiresAt: z.string().optional(),
+  revokedAt: z.string().optional(),
+})
+
+const loginChallenge = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  userKey: z.string().min(1),
+  schoolId: z.string().min(1),
+  username: z.string().min(1),
+  remember: z.boolean(),
+  ip: z.string(),
+  userAgent: z.string().optional(),
+  deviceId: z.string().optional(),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  usedAt: z.string().optional(),
+})
+
+const totpRecoveryCode = z.object({
+  id: z.string().min(1),
+  codeHash: z.string().length(64),
+  userId: z.string().min(1),
+  userKey: z.string().min(1),
+  schoolId: z.string().min(1),
+  username: z.string().min(1),
+  createdAt: z.string(),
+  usedAt: z.string().optional(),
 })
 
 const session = z.object({
@@ -251,6 +311,14 @@ const apiResourceOwner = z.object({
 export type School = z.infer<typeof school>
 /** One account row, keyed `schoolId:username`. */
 export type UserRecord = z.infer<typeof user>
+/** One hashed invite row. */
+export type InviteRecord = z.infer<typeof invite>
+/** One hashed personal API token row. */
+export type ApiTokenRecord = z.infer<typeof apiToken>
+/** One pending TOTP login challenge row. */
+export type LoginChallengeRecord = z.infer<typeof loginChallenge>
+/** One single-use hashed recovery code. */
+export type TotpRecoveryCode = z.infer<typeof totpRecoveryCode>
 /** One session row, keyed by the token's sha256 — the raw token never persists. */
 export type SessionRecord = z.infer<typeof session>
 /** One recorded password-recovery request (the V1 audit-only trail). */
@@ -286,6 +354,7 @@ export const registerWire = z.object({
   password: z.string().min(8).max(128),
   /** 首启登记的那台设备(哈希形状同上),注册即绑定。 */
   deviceId: deviceIdWire.optional(),
+  inviteCode: z.string().regex(/^inv_[A-Za-z0-9_-]{20,128}$/).optional(),
 }).refine(data => data.schoolId !== undefined || data.schoolName !== undefined, {
   message: 'schoolName or schoolId required',
 })
@@ -302,6 +371,48 @@ export const loginWire = z.object({
   rememberDevice: z.boolean().optional(),
   /** 登录时带上设备哈希,会话行就记住了这台机器 —— 远程注销据此定点失效。 */
   deviceId: deviceIdWire.optional(),
+})
+
+/** Second login step: a one-time password challenge plus TOTP or recovery code. */
+export const loginTwoFactorWire = z.object({
+  challengeToken: z.string().regex(/^[A-Za-z0-9_-]{32,160}$/),
+  code: z.string().min(6).max(64),
+})
+
+const sixDigitCode = z.string().regex(/^\d{6}$/)
+const recoveryCodeWire = z.string().regex(/^[A-Za-z2-7-]{10,32}$/)
+
+export const totpSetupWire = z.object({})
+export const totpVerifyWire = z.object({ code: sixDigitCode })
+export const totpDisableWire = z.object({
+  password: z.string().min(1).max(128),
+  code: z.union([sixDigitCode, recoveryCodeWire]),
+})
+
+export const createApiTokenWire = z.object({
+  name: z.string().trim().min(1).max(64),
+  scope: z.enum(['read', 'write']).default('read'),
+  expiresAt: z.string().max(64).optional(),
+})
+
+export const createInvitesWire = z.object({
+  schoolId: z.string().regex(/^[A-Za-z0-9_-]{2,64}$/),
+  count: z.number().int().min(1).max(100),
+  maxUses: z.number().int().min(1).max(1_000),
+  expiresAt: z.string().max(64).optional(),
+})
+
+const auditTimeWire = z.string().max(64).refine(
+  value => Number.isFinite(Date.parse(value)),
+  { message: 'invalid timestamp' },
+)
+
+export const auditExportWire = z.object({
+  format: z.enum(['csv', 'jsonl']),
+  schoolId: z.string().min(1).max(64).optional(),
+  from: auditTimeWire.optional(),
+  to: auditTimeWire.optional(),
+  limit: z.number().int().min(1).max(50_000).optional(),
 })
 
 /** Password-recovery request — resolves the account, never discloses whether it existed. */
@@ -458,6 +569,10 @@ export const authDomain = defineDomain({
   tables: {
     schools: domainTable<string, School>(school),
     users: domainTable<string, UserRecord>(user),
+    invites: domainTable<string, InviteRecord>(invite),
+    api_tokens: domainTable<string, ApiTokenRecord>(apiToken),
+    login_challenges: domainTable<string, LoginChallengeRecord>(loginChallenge),
+    totp_recovery_codes: domainTable<string, TotpRecoveryCode>(totpRecoveryCode),
     sessions: domainTable<string, SessionRecord>(session),
     reset_requests: domainTable<string, ResetRequest>(resetRequest),
     password_reset_tokens: domainTable<string, PasswordResetToken>(passwordResetToken),

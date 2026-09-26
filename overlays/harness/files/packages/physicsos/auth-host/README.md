@@ -1,6 +1,6 @@
 # @deepseek-ai/dsh-auth-host
 
-PhysicsOS 账户体系 host plugin — school-tenant registration and login, argon2id passwords, opaque cookie sessions, attempt rate limiting, the `/physicsos/auth` REST surface, and the shared `/api` account policy over the `webServer` service and a `physicsos_auth` storage-domain unit.
+PhysicsOS 账户体系 host plugin — school-tenant registration and login, argon2id passwords, opaque cookie sessions, invite-code admission, TOTP two-factor login, personal API tokens, attempt rate limiting, the `/physicsos/auth` REST surface, and the shared `/api` account policy over the `webServer` service and a `physicsos_auth` storage-domain unit.
 
 ## Model
 
@@ -17,6 +17,10 @@ be pending, active, used, cancelled, expired, superseded, or failed delivery.
 `password_reset_tokens` is keyed by the SHA-256 of the raw token; the raw value
 exists only in the delivery message or the one-time admin issue response.
 
+`invites`, `api_tokens`, `login_challenges`, and `totp_recovery_codes` also keep
+only SHA-256 digests. Invite and API-token secrets cross the wire once at
+creation; TOTP login challenges and recovery codes are single-use.
+
 `api_resources` is the durable ownership ledger for Harness sessions and
 workspaces. A non-admin account owns every session it creates and exactly one
 host-created private workspace under `workspaceRoot`; legacy/unowned resources
@@ -26,7 +30,8 @@ remain visible only to a `SUPER_ADMIN`.
 
 The generic Harness API is a first-class authenticated surface when this host is mounted:
 
-- every `/api` request needs a live `physicsos_session` cookie;
+- every `/api` request needs a live `physicsos_session` cookie or a live personal Bearer token;
+- `read` tokens may call only read-only methods; mutating methods require `write`;
 - `session.*`, `subagent.*`, goal, skill, and nested Typert payloads are checked against `api_resources`;
 - `session.list`, `session.search`, workspace lists, archive state, and WebSocket mux/host frames are filtered to owned resources;
 - `/api/respond` accepts a pending approval/question response only after the same account received that `rpcId`; the pending map is process-local with a 15-minute TTL;
@@ -42,12 +47,20 @@ and legacy API Proxy methods pass the same gate.
 
 | Method | Path | Body | Result |
 | --- | --- | --- | --- |
-| POST | `/register` | `{schoolName, schoolId?, username, displayName, password, deviceId?}` | `201 {user}` + `Set-Cookie` (session issued on success) |
+| POST | `/register` | `{schoolName, schoolId?, username, displayName, password, deviceId?, inviteCode?}` | `201 {user}` + `Set-Cookie` when admission policy allows |
 | POST | `/login` | `{username, password, rememberDevice?, schoolId?, deviceId?}` | `200 {user}` + `Set-Cookie` |
+| POST | `/login/2fa` | `{challengeToken, code}` | completes a TOTP login and emits `Set-Cookie`; `code` may be a one-time recovery code |
 | POST | `/logout` | — | `200 {ok}` + expired cookie; session row revoked |
-| GET | `/me` | — | `200 {user}` or `401 UNAUTHENTICATED` |
+| GET | `/me` | — | `200 {user}` or `401 UNAUTHENTICATED`; accepts cookie or `Authorization: Bearer <token>` |
 | POST | `/usage/learning` | `{knowledgeId, correct}` | `201 {cell}` signed-in only; folds the report into one `learning_counts` cell keyed `schoolId|date|knowledgeId` — school from the session, date from the server clock, no account on the row |
 | POST | `/devices` | `{deviceId}` (hash-shaped hex) | `200 {device}` signed-in only; idempotent re-seen, `403 DEVICE_REVOKED` on a revoked machine |
+| POST | `/2fa/setup` | — | `200 {secret, uri}` for `TEACHER`/administrator enrollment |
+| POST | `/2fa/enable` | `{code}` | enables TOTP and returns ten one-time recovery codes exactly once |
+| POST | `/2fa/verify` | `{code}` | validates a current TOTP for the signed-in account |
+| POST | `/2fa/disable` | `{password, code}` | disables TOTP and deletes every recovery-code row |
+| GET | `/api-tokens` | — | lists the acting account's tokens with masks only |
+| POST | `/api-tokens` | `{name, scope?: "read"\|"write", expiresAt?}` | creates a token; returns `secret` exactly once |
+| POST | `/api-tokens/:id/revoke` | — | revokes an owned token immediately |
 | POST | `/password/forgot` | `{username, schoolId?}` | `200 {ok}` uniform receipt; queues or directly delivers a one-time reset when the account resolves uniquely |
 | POST | `/password/reset` | `{token, newPassword}` | `200 {ok}`; password changed, every session and sibling token revoked |
 | POST | `/school-requests` | `{schoolName, contact}` | `201 {request}` anonymous school application, IP-rate-limited |
@@ -61,6 +74,9 @@ Admin surface (`/physicsos/auth` continued; `SCHOOL_ADMIN` scoped to their own t
 | GET | `/schools` | tenant list |
 | POST | `/schools` | create a tenant (super admin) |
 | POST | `/schools/:id/status` | suspend/reactivate a tenant |
+| GET | `/invites` | tenant-scoped invite list (`?schoolId&limit`), masked and with used counts |
+| POST | `/invites` | mint 1–100 hashed codes for `{schoolId, count, maxUses, expiresAt?}` |
+| POST | `/invites/:id/disable` | stop a code without deleting its usage history |
 | GET | `/users` | account list (`?schoolId&role&q`), tenant-scoped for school admins |
 | POST | `/users` | create an account (CSV import's per-row call) |
 | POST | `/users/:key/(status\|reset-password\|revoke-sessions)` | suspend/reactivate, reset password, kill all sessions |
@@ -70,9 +86,10 @@ Admin surface (`/physicsos/auth` continued; `SCHOOL_ADMIN` scoped to their own t
 | POST | `/password-resets/:id/issue` | mint and return a one-time link; invalidates every older token |
 | POST | `/password-resets/:id/cancel` | cancel the request and revoke its current token |
 | GET | `/dashboard` | aggregate counts + learning-analytics cells for the admin console |
-| GET | `/audit` | tenant-scoped audit events |
+| GET | `/audit` | tenant-scoped audit events, including first-device/first-IP `auth.new_login` rows |
+| POST | `/audit/export` | CSV or JSONL stream filtered by `{format, schoolId?, from?, to?, limit?}`; maximum 50,000 rows |
 
-Failures answer `{error:{code,message,...details}}` with `BAD_REQUEST`, `SCHOOL_NOT_FOUND`, `SCHOOL_AMBIGUOUS`, `SCHOOL_REQUIRED`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_RESET_TOKEN`, `RATE_LIMITED`, `DEPENDENCY_UNAVAILABLE`, `DEVICE_REVOKED`, `UNAUTHENTICATED`, `FORBIDDEN`.
+Failures answer `{error:{code,message,...details}}` with `BAD_REQUEST`, `SCHOOL_NOT_FOUND`, `SCHOOL_AMBIGUOUS`, `SCHOOL_REQUIRED`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_RESET_TOKEN`, `RATE_LIMITED`, `DEPENDENCY_UNAVAILABLE`, `DEVICE_REVOKED`, `UNAUTHENTICATED`, `FORBIDDEN`, `REGISTRATION_CLOSED`, `INVITE_REQUIRED`, `INVALID_INVITE_CODE`, `TWO_FACTOR_REQUIRED`, `INVALID_TWO_FACTOR_CHALLENGE`, `INVALID_TWO_FACTOR_CODE`, `TOKEN_SCOPE_REQUIRED`.
 
 ### Tenant resolution
 
@@ -86,6 +103,10 @@ The school stays a first-class tenant internally, but the public wire never carr
 
 - Passwords hash to self-describing argon2id PHC strings (`node:crypto.argon2`, Node ≥ 24.7); the plugin refuses to load on older runtimes.
 - The session cookie (`physicsos_session`) is `HttpOnly; SameSite=Lax; Path=/`, `Secure` over https; `rememberDevice` turns it into a 30-day persistent cookie, otherwise a browser-session cookie with a 12h server-side expiry.
+- `registrationMode` is `open` by default. `invite` requires a valid bound code and fails closed when it is absent; `closed` rejects every new account. Invite uses are atomically incremented on the storage-domain write chain; when `physicsosOnceLedger` is mounted, a short-lived lock extends the same serialization across instances.
+- TOTP is RFC 6238 SHA-1/6-digit/30-second with ±1 step drift; the login challenge expires after 5 minutes and is consumed once. Recovery codes are single-use and stored only as hashes.
+- Personal tokens use `Authorization: Bearer <token>`. `read` permits read-only `/api` methods, `write` permits mutating methods, revocation is effective on the next request, and all token calls reuse the account's existing model budget bucket.
+- New-device and new-IP first logins append an `auth.new_login` audit row; audit exports stream rows and never load the full table.
 - Login rejects collapse to `INVALID_CREDENTIALS`; a missing account still pays the argon2 cost through a dummy verify so timing does not enumerate users.
 - Fixed-window attempt buckets cap failures per account (5/10min), per source IP (20/10min), registration (60/10min), learning reports (120/10min per account), and forgot/reset attempts (10/10min by IP and subject).
 - Reset tokens are hashed with SHA-256 at rest, expire after 30 minutes, are single-use, and are invalidated by a newer issue, cancellation, account disable, admin reset, or successful redemption.
@@ -99,7 +120,8 @@ The school stays a first-class tenant internally, but the public wire never carr
 All `AuthServiceConfig` fields (`sessionTtlMs`, `rememberTtlMs`,
 `accountAttemptLimit`, `ipAttemptLimit`, `applyAttemptLimit`,
 `registrationAttemptLimit`, `learningAttemptLimit`, `passwordResetAttemptLimit`,
-`passwordResetTtlMs`, `attemptWindowMs`, `attemptBucketLimit`,
+`passwordResetTtlMs`, `registrationMode`, `totpAttemptLimit`,
+`totpChallengeTtlMs`, `apiTokenLimit`, `attemptWindowMs`, `attemptBucketLimit`,
 `trustedProxies`) are cordis.yml-configurable with secure defaults.
 `workspaceRoot` controls where account-private Harness workspaces are created
 (default `dshHomePath('physicsos-users')`).

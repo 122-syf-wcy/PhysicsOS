@@ -8,17 +8,19 @@
 
 import crypto from 'node:crypto'
 import type {
-  AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, LearningCount, School,
-  ResetRequest, SchoolRequestRecord, SessionRecord, UserRecord,
+  ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
+  LearningCount, School, ResetRequest, SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
 import {
-  approveRequestWire, createSchoolWire, createUserWire, deviceIdWire, deviceKey,
-  deviceRevocationKey, forgotWire, GLOBAL_DEVICE_SCOPE, learningKey,
-  learningReportWire, loginWire, passwordResetWire, registerDeviceWire, registerWire, rejectRequestWire,
-  resetPasswordWire, schoolRequestWire, schoolStatusWire, userKey, userStatusWire,
+  approveRequestWire, auditExportWire, createApiTokenWire, createInvitesWire,
+  createSchoolWire, createUserWire, deviceIdWire, deviceKey, deviceRevocationKey,
+  forgotWire, GLOBAL_DEVICE_SCOPE, learningKey, learningReportWire, loginTwoFactorWire,
+  loginWire, passwordResetWire, registerDeviceWire, registerWire, rejectRequestWire,
+  resetPasswordWire, schoolRequestWire, schoolStatusWire, totpDisableWire,
+  totpVerifyWire, userKey, userStatusWire,
 } from './domain'
 import { hashPassword, verifyPassword } from './passwords'
-import { newSessionToken, sessionTokenHash } from './cookies'
+import { newSessionToken, readSessionCookieHeader, sessionTokenHash } from './cookies'
 import type { IdentityActor } from './identity'
 import {
   InMemoryLimiterBackend, type LimiterBackend, type LimiterName,
@@ -28,6 +30,13 @@ import { newPasswordResetToken, passwordResetPath, passwordResetTokenHash } from
 import {
   QUEUE_PASSWORD_RESET_DELIVERY, type PasswordResetDelivery,
 } from './reset-delivery'
+import {
+  generateRecoveryCode, generateTotpSecret, recoveryCodeHash, verifyTotpCode,
+} from './totp'
+import {
+  hashOpaqueCredential, newApiToken, newInviteCode, newLoginChallengeToken,
+  readBearerToken,
+} from './tokens'
 
 /** Public error codes — the only failure vocabulary the wire exposes. */
 export type AuthErrorCode =
@@ -36,6 +45,9 @@ export type AuthErrorCode =
   | 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'UNAUTHENTICATED'
   | 'FORBIDDEN' | 'NOT_FOUND' | 'DEVICE_REVOKED'
   | 'INVALID_RESET_TOKEN' | 'DEPENDENCY_UNAVAILABLE'
+  | 'REGISTRATION_CLOSED' | 'INVITE_REQUIRED' | 'INVALID_INVITE_CODE'
+  | 'TWO_FACTOR_REQUIRED' | 'INVALID_TWO_FACTOR_CHALLENGE' | 'INVALID_TWO_FACTOR_CODE'
+  | 'TWO_FACTOR_ALREADY_ENABLED' | 'TOKEN_SCOPE_REQUIRED'
 
 /** The only failure shape the wire exposes — `{error:{code,message,...details}}`. */
 export class AuthError extends Error {
@@ -70,6 +82,31 @@ export interface LoginResult {
   /** Seconds the cookie should live when `rememberDevice` was set; else 0 → session cookie. */
   cookieMaxAge: number
   user: PublicUser
+}
+
+/** Password succeeded, but this account still needs a TOTP or recovery code. */
+export interface TwoFactorChallenge {
+  twoFactorRequired: true
+  challengeToken: string
+  expiresAt: string
+}
+
+/** Registration policy; invite is intentionally fail-closed. */
+export type RegistrationMode = 'open' | 'invite' | 'closed'
+
+/** Personal-token authority. Read tokens cannot call mutating API methods. */
+export type ApiTokenScope = 'read' | 'write'
+
+/** The credential that authenticated one request. */
+export type AuthCredential =
+  | { kind: 'session'; session: SessionRecord }
+  | { kind: 'api-token'; token: ApiTokenRecord; scope: ApiTokenScope }
+
+/** One resolved request principal plus the credential authorizing it. */
+export interface ResolvedCredential {
+  user: PublicUser
+  actor: AdminActor
+  credential: AuthCredential
 }
 
 /** A live session's principal — the public user plus the session row that resolved it. */
@@ -135,6 +172,44 @@ export interface PasswordResetQueueRow {
   deliveryError?: string
 }
 
+/** Shared one-time ledger subset used to serialize invite consumption. */
+export interface InviteClaimLedger {
+  readonly kind: string
+  claim(
+    key: string,
+    ttlSeconds: number,
+    now?: number,
+  ): { status: 'claimed' | 'already-claimed'; expiresAt: number } | Promise<{
+    status: 'claimed' | 'already-claimed'
+    expiresAt: number
+  }>
+  release(key: string, now?: number): void | Promise<void>
+}
+
+/** One admin-facing invite row; raw codes never appear after creation. */
+export interface InviteRow {
+  id: string
+  codeMasked: string
+  schoolId: string
+  schoolName: string
+  maxUses: number
+  usedCount: number
+  createdAt: string
+  expiresAt?: string
+  disabledAt?: string
+}
+
+/** One admin-facing personal-token row; only a display mask is returned. */
+export interface ApiTokenRow {
+  id: string
+  name: string
+  scope: ApiTokenScope
+  tokenMasked: string
+  createdAt: string
+  expiresAt?: string
+  revokedAt?: string
+}
+
 /** Optional runtime seams; absent values use safe process-local defaults. */
 export interface AuthServiceDeps {
   /** Atomic shared limiter. Defaults to {@link InMemoryLimiterBackend}. */
@@ -143,6 +218,8 @@ export interface AuthServiceDeps {
   resetDelivery?: PasswordResetDelivery
   /** Injectable clock for expiry tests and deterministic deployments. */
   now?: () => Date
+  /** Optional shared lock for invite consumption across app instances. */
+  onceLedger?: InviteClaimLedger
   /** Client handoff path; defaults to `/?reset_token=<token>`. */
   resetPath?: (token: string) => string
 }
@@ -175,6 +252,14 @@ export interface AuthServiceConfig {
   passwordResetAttemptLimit?: number
   /** Password-reset token lifetime. Default 30min. */
   passwordResetTtlMs?: number
+  /** Registration admission policy. Default `open` for backward compatibility. */
+  registrationMode?: RegistrationMode
+  /** TOTP/recovery-code attempts per account within the window. Default 5. */
+  totpAttemptLimit?: number
+  /** TOTP challenge lifetime. Default 5min. */
+  totpChallengeTtlMs?: number
+  /** Maximum live personal tokens per account. Default 50. */
+  apiTokenLimit?: number
   /** Exact IP literals of proxies allowed to supply forwarded client metadata. */
   trustedProxies?: string[]
   /** Maximum live buckets per limiter. Default 10000. */
@@ -194,6 +279,10 @@ export const DEFAULT_AUTH_CONFIG: Required<AuthServiceConfig> = {
   learningAttemptLimit: 120,
   passwordResetAttemptLimit: 10,
   passwordResetTtlMs: 30 * 60 * 1000,
+  registrationMode: 'open',
+  totpAttemptLimit: 5,
+  totpChallengeTtlMs: 5 * 60 * 1000,
+  apiTokenLimit: 50,
   trustedProxies: [],
   attemptBucketLimit: 10_000,
   attemptWindowMs: 10 * 60 * 1000,
@@ -236,6 +325,7 @@ export class AuthService {
   private readonly resetDelivery: PasswordResetDelivery
   private readonly now: () => Date
   private readonly resetPath: (token: string) => string
+  private readonly onceLedger: InviteClaimLedger | undefined
 
   constructor(
     private readonly domain: AuthDomain,
@@ -265,15 +355,24 @@ export class AuthService {
         'passwordReset',
         config.passwordResetAttemptLimit ?? DEFAULT_AUTH_CONFIG.passwordResetAttemptLimit,
       ),
+      totp: policy(
+        'totp',
+        config.totpAttemptLimit ?? DEFAULT_AUTH_CONFIG.totpAttemptLimit,
+      ),
     }
     this.limiter = deps.limiter ?? new InMemoryLimiterBackend()
     this.resetDelivery = deps.resetDelivery ?? QUEUE_PASSWORD_RESET_DELIVERY
     this.now = deps.now ?? (() => new Date())
     this.resetPath = deps.resetPath ?? passwordResetPath
+    this.onceLedger = deps.onceLedger
   }
 
   private get schools() { return this.domain.table('schools') }
   private get users() { return this.domain.table('users') }
+  private get invites() { return this.domain.table('invites') }
+  private get apiTokens() { return this.domain.table('api_tokens') }
+  private get loginChallenges() { return this.domain.table('login_challenges') }
+  private get recoveryCodes() { return this.domain.table('totp_recovery_codes') }
   private get sessions() { return this.domain.table('sessions') }
   private get resets() { return this.domain.table('reset_requests') }
   private get resetTokens() { return this.domain.table('password_reset_tokens') }
@@ -453,6 +552,50 @@ export class AuthService {
   }
 
   /**
+   * Atomically increment one invite use before the account write. The domain
+   * write chain makes the read-modify-write operation non-interleaving; a
+   * rollback restores the exact prior count if the account write fails.
+   */
+  private async consumeInvite(rawCode: string, schoolId: string): Promise<InviteRecord> {
+    const codeHash = hashOpaqueCredential(rawCode)
+    const lockKey = `invite-consume:${codeHash}`
+    let locked = false
+    if (this.onceLedger !== undefined) {
+      try {
+        const claim = await this.onceLedger.claim(lockKey, 15)
+        if (claim.status !== 'claimed') {
+          throw new AuthError(429, 'RATE_LIMITED', '邀请码正在被使用，请稍后重试')
+        }
+        locked = true
+      } catch (error) {
+        if (error instanceof AuthError) throw error
+        throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '邀请码服务暂时不可用，请稍后再试')
+      }
+    }
+    try {
+      return await this.invites.update(codeHash, (row) => {
+        const unusable = row.schoolId !== schoolId
+          || row.disabledAt !== undefined
+          || row.usedCount >= row.maxUses
+          || (row.expiresAt !== undefined && Date.parse(row.expiresAt) <= this.now().getTime())
+        if (unusable) throw new AuthError(400, 'INVALID_INVITE_CODE', '邀请码无效或已失效')
+        return { ...row, usedCount: row.usedCount + 1 }
+      })
+    } catch (error) {
+      if (error instanceof AuthError) throw error
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '邀请码服务暂时不可用，请稍后再试')
+    } finally {
+      if (locked && this.onceLedger !== undefined) {
+        try {
+          await this.onceLedger.release(lockKey)
+        } catch {
+          /* The short lock TTL is the recovery path; the invite write is done. */
+        }
+      }
+    }
+  }
+
+  /**
    * Register a student account under a school tenant, then issue its first
    * session — the caller just proved the password, so a second verify would
    * only spend argon2 for nothing. The tenant list is fixed by the roster
@@ -471,6 +614,13 @@ export class AuthService {
     const { username, displayName, password } = input.data
     const sourceIp = ip ?? 'unknown'
     await this.allow('registration', `ip:${sourceIp}`, '注册请求过于频繁，请稍后再试')
+    const registrationMode = this.config.registrationMode ?? DEFAULT_AUTH_CONFIG.registrationMode
+    if (registrationMode === 'closed') {
+      throw new AuthError(403, 'REGISTRATION_CLOSED', '当前未开放注册')
+    }
+    if (registrationMode === 'invite' && input.data.inviteCode === undefined) {
+      throw new AuthError(403, 'INVITE_REQUIRED', '当前仅限邀请注册')
+    }
 
     let school: School | undefined
     if (input.data.schoolId !== undefined) {
@@ -497,6 +647,9 @@ export class AuthService {
     }
 
     const now = new Date().toISOString()
+    const invite = input.data.inviteCode === undefined
+      ? undefined
+      : await this.consumeInvite(input.data.inviteCode, school.id)
     const record: UserRecord = {
       id: `u_${crypto.randomBytes(9).toString('base64url')}`,
       schoolId: school.id,
@@ -508,7 +661,21 @@ export class AuthService {
       createdAt: now,
       updatedAt: now,
     }
-    await this.users.put(key, record)
+    try {
+      await this.users.put(key, record)
+    } catch (error) {
+      if (invite !== undefined) await this.invites.put(invite.id, invite)
+      throw error
+    }
+    if (invite !== undefined) {
+      await this.audit(
+        { userKey: key, schoolId: school.id, username: record.username, role: record.role },
+        'invite.use',
+        invite.id,
+        school.id,
+        { usedCount: invite.usedCount + 1 },
+      )
+    }
     if (input.data.deviceId !== undefined) {
       await this.touchDevice(record, input.data.deviceId)
     }
@@ -526,9 +693,13 @@ export class AuthService {
    * @param body - the wire body (`loginWire`): `username`, `password`, `rememberDevice`, `deviceId`.
    * @param ip - the source IP, shared into the IP attempt bucket and stored on the session.
    * @param userAgent - the client UA stored on the session row.
-   * @returns the minted session token, its expiry, the cookie Max-Age, and the public principal.
+   * @returns a session result, or a short-lived TOTP challenge when enabled.
    */
-  async login(body: unknown, ip?: string, userAgent?: string): Promise<LoginResult> {
+  async login(
+    body: unknown,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<LoginResult | TwoFactorChallenge> {
     const input = loginWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     const { username, password } = input.data
@@ -573,16 +744,404 @@ export class AuthService {
     if (input.data.deviceId !== undefined) {
       this.assertDeviceUsable(record, input.data.deviceId)
     }
-    const result = await this.issueSession(
-      record, school, remember, sourceIp, userAgent, input.data.deviceId,
+    if (record.totp !== undefined) {
+      return this.issueLoginChallenge(
+        record,
+        school,
+        remember,
+        sourceIp,
+        userAgent,
+        input.data.deviceId,
+      )
+    }
+    return this.completeLogin(
+      record,
+      school,
+      remember,
+      sourceIp,
+      userAgent,
+      input.data.deviceId,
     )
-    await this.users.put(userKey(school.id, record.username), {
-      ...record, lastLoginAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  }
+
+  /**
+   * Complete the second login step. The challenge is single-use, short-lived,
+   * and bound to the user, remembered-device choice, IP, and optional device.
+   */
+  async loginTwoFactor(
+    body: unknown,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<LoginResult> {
+    const input = loginTwoFactorWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查验证码')
+    const challengeHash = hashOpaqueCredential(input.data.challengeToken)
+    await this.allow('totp', `challenge:${challengeHash}`, '验证码尝试过于频繁，请稍后再试')
+    const challenge = this.loginChallenges.get(challengeHash)
+    if (challenge === undefined || challenge.usedAt !== undefined
+      || Date.parse(challenge.expiresAt) <= this.now().getTime()
+      || this.claimedLoginChallenges.has(challengeHash)) {
+      throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
+    }
+    await this.allow('totp', `acct:${challenge.userKey}`, '验证码尝试过于频繁，请稍后再试')
+
+    const record = this.users.get(challenge.userKey)
+    const school = this.schools.get(challenge.schoolId)
+    if (record === undefined || school === undefined || record.totp === undefined
+      || record.status !== 'active' || school.status !== 'active'
+      || record.id !== challenge.userId) {
+      throw new AuthError(401, 'INVALID_TWO_FACTOR_CHALLENGE', '二次验证已失效，请重新登录')
+    }
+
+    this.claimedLoginChallenges.add(challengeHash)
+    const totpValid = verifyTotpCode(record.totp.secret, input.data.code, this.now().getTime())
+    const recoveryUsed = totpValid
+      ? false
+      : await this.consumeRecoveryCode(record, input.data.code)
+    if (!totpValid && !recoveryUsed) {
+      this.claimedLoginChallenges.delete(challengeHash)
+      throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
+    }
+
+    const usedAt = this.now().toISOString()
+    await this.loginChallenges.put(challengeHash, { ...challenge, usedAt })
+    this.claimedLoginChallenges.delete(challengeHash)
+    const resumedIp = ip ?? challenge.ip
+    const resumedUserAgent = userAgent ?? challenge.userAgent
+    if (challenge.deviceId !== undefined) this.assertDeviceUsable(record, challenge.deviceId)
+    if (recoveryUsed) {
+      await this.audit(
+        { userKey: challenge.userKey, schoolId: challenge.schoolId, username: challenge.username, role: record.role },
+        'totp.recovery_code_use',
+        challenge.userKey,
+        challenge.schoolId,
+      )
+    }
+    return this.completeLogin(
+      record,
+      school,
+      challenge.remember,
+      resumedIp,
+      resumedUserAgent,
+      challenge.deviceId,
+    )
+  }
+
+  private readonly claimedLoginChallenges = new Set<string>()
+  private readonly claimedRecoveryCodeHashes = new Set<string>()
+
+  private async issueLoginChallenge(
+    record: UserRecord,
+    school: School,
+    remember: boolean,
+    ip: string,
+    userAgent?: string,
+    deviceId?: string,
+  ): Promise<TwoFactorChallenge> {
+    const raw = newLoginChallengeToken()
+    const id = hashOpaqueCredential(raw)
+    const now = this.now()
+    const expiresAt = new Date(
+      now.getTime() + (this.config.totpChallengeTtlMs ?? DEFAULT_AUTH_CONFIG.totpChallengeTtlMs),
+    ).toISOString()
+    await this.loginChallenges.put(id, {
+      id,
+      userId: record.id,
+      userKey: userKey(school.id, record.username),
+      schoolId: school.id,
+      username: record.username,
+      remember,
+      ip,
+      ...(userAgent !== undefined ? { userAgent: userAgent.slice(0, 256) } : {}),
+      ...(deviceId !== undefined ? { deviceId } : {}),
+      createdAt: now.toISOString(),
+      expiresAt,
     })
-    if (input.data.deviceId !== undefined) {
-      await this.touchDevice(record, input.data.deviceId)
+    return { twoFactorRequired: true, challengeToken: raw, expiresAt }
+  }
+
+  private async consumeRecoveryCode(record: UserRecord, rawCode: string): Promise<boolean> {
+    const codeHash = recoveryCodeHash(rawCode)
+    const row = this.recoveryCodes.get(codeHash)
+    if (row === undefined || row.usedAt !== undefined || row.userId !== record.id
+      || row.userKey !== userKey(record.schoolId, record.username)
+      || this.claimedRecoveryCodeHashes.has(codeHash)) {
+      return false
+    }
+    this.claimedRecoveryCodeHashes.add(codeHash)
+    try {
+      await this.recoveryCodes.put(codeHash, { ...row, usedAt: this.now().toISOString() })
+      return true
+    } catch {
+      this.claimedRecoveryCodeHashes.delete(codeHash)
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '二次验证服务暂时不可用，请稍后再试')
+    } finally {
+      this.claimedRecoveryCodeHashes.delete(codeHash)
+    }
+  }
+
+  private async completeLogin(
+    record: UserRecord,
+    school: School,
+    remember: boolean,
+    ip?: string,
+    userAgent?: string,
+    deviceId?: string,
+  ): Promise<LoginResult> {
+    const sourceIp = ip ?? 'unknown'
+    const firstDevice = deviceId !== undefined
+      && this.devices.get(deviceKey(userKey(record.schoolId, record.username), deviceId)) === undefined
+    const firstIp = ![...this.sessions.entries()].some(([, session]) =>
+      session.userId === record.id
+      && session.schoolId === record.schoolId
+      && session.username === record.username
+      && session.ip === sourceIp)
+    const result = await this.issueSession(
+      record,
+      school,
+      remember,
+      sourceIp,
+      userAgent,
+      deviceId,
+    )
+    const now = this.now().toISOString()
+    await this.users.put(userKey(school.id, record.username), {
+      ...record,
+      lastLoginAt: now,
+      updatedAt: now,
+    })
+    if (deviceId !== undefined) await this.touchDevice(record, deviceId)
+    if (firstDevice || firstIp) {
+      await this.audit(
+        { userKey: userKey(record.schoolId, record.username), schoolId: school.id, username: record.username, role: record.role },
+        'auth.new_login',
+        userKey(record.schoolId, record.username),
+        school.id,
+        {
+          newDevice: firstDevice,
+          newIp: firstIp,
+          ip: sourceIp,
+          ...(deviceId !== undefined ? { deviceId } : {}),
+        },
+      )
     }
     return result
+  }
+
+  /**
+   * Start TOTP enrollment for an administrator/teacher. The pending secret is
+   * durable so the next request only needs the six-digit confirmation.
+   */
+  async startTotpSetup(actor: AdminActor): Promise<{
+    secret: string
+    uri: string
+  }> {
+    this.requireTwoFactorRole(actor)
+    const record = this.loadActorRecord(actor)
+    if (record.totp !== undefined) {
+      throw new AuthError(400, 'TWO_FACTOR_ALREADY_ENABLED', '该账号已开启二次验证')
+    }
+    const secret = generateTotpSecret()
+    const now = this.now()
+    await this.users.put(userKey(record.schoolId, record.username), {
+      ...record,
+      totpPendingSecret: secret,
+      updatedAt: now.toISOString(),
+    })
+    const label = encodeURIComponent(`PhysicsOS:${record.schoolId}:${record.username}`)
+    return {
+      secret,
+      uri: `otpauth://totp/${label}?issuer=PhysicsOS&secret=${secret}&algorithm=SHA1&digits=6&period=30`,
+    }
+  }
+
+  /**
+   * Confirm enrollment and return recovery codes exactly once. Only hashes of
+   * those codes are written to the domain.
+   */
+  async enableTotp(
+    actor: AdminActor,
+    body: unknown,
+  ): Promise<{ recoveryCodes: string[] }> {
+    this.requireTwoFactorRole(actor)
+    const input = totpVerifyWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请输入 6 位验证码')
+    await this.allow('totp', `enroll:${actor.userKey}`, '验证码尝试过于频繁，请稍后再试')
+    const record = this.loadActorRecord(actor)
+    const secret = record.totpPendingSecret
+    if (record.totp !== undefined) {
+      throw new AuthError(400, 'TWO_FACTOR_ALREADY_ENABLED', '该账号已开启二次验证')
+    }
+    if (secret === undefined) {
+      throw new AuthError(400, 'BAD_REQUEST', '请先开始绑定二次验证')
+    }
+    if (!verifyTotpCode(secret, input.data.code, this.now().getTime())) {
+      throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
+    }
+
+    const recoveryCodes = Array.from({ length: 10 }, () => generateRecoveryCode())
+    const now = this.now().toISOString()
+    for (const code of recoveryCodes) {
+      const codeHash = recoveryCodeHash(code)
+      await this.recoveryCodes.put(codeHash, {
+        id: codeHash,
+        codeHash,
+        userId: record.id,
+        userKey: actor.userKey,
+        schoolId: record.schoolId,
+        username: record.username,
+        createdAt: now,
+      })
+    }
+    delete record.totpPendingSecret
+    await this.users.put(actor.userKey, {
+      ...record,
+      totp: { secret, enabledAt: now },
+      updatedAt: now,
+    })
+    await this.audit(actor, 'totp.enable', actor.userKey, actor.schoolId)
+    return { recoveryCodes }
+  }
+
+  /** Verify one current TOTP for an already-authenticated session. */
+  async verifyTotpForActor(actor: AdminActor, body: unknown): Promise<void> {
+    this.requireTwoFactorRole(actor)
+    const input = totpVerifyWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请输入 6 位验证码')
+    await this.allow('totp', `verify:${actor.userKey}`, '验证码尝试过于频繁，请稍后再试')
+    const record = this.loadActorRecord(actor)
+    if (record.totp === undefined) throw new AuthError(400, 'BAD_REQUEST', '该账号尚未开启二次验证')
+    if (!verifyTotpCode(record.totp.secret, input.data.code, this.now().getTime())) {
+      throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
+    }
+  }
+
+  /** Disable TOTP after proving both the account password and a second factor. */
+  async disableTotp(actor: AdminActor, body: unknown): Promise<void> {
+    this.requireTwoFactorRole(actor)
+    const input = totpDisableWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查密码和验证码')
+    const record = this.loadActorRecord(actor)
+    if (record.totp === undefined) throw new AuthError(400, 'BAD_REQUEST', '该账号尚未开启二次验证')
+    if (!verifyPassword(input.data.password, record.passwordHash)) {
+      throw new AuthError(401, 'INVALID_CREDENTIALS', '密码不正确')
+    }
+    await this.allow('totp', `disable:${actor.userKey}`, '验证码尝试过于频繁，请稍后再试')
+    const totpValid = verifyTotpCode(record.totp.secret, input.data.code, this.now().getTime())
+    const recoveryValid = totpValid
+      ? false
+      : await this.consumeRecoveryCode(record, input.data.code)
+    if (!totpValid && !recoveryValid) {
+      throw new AuthError(401, 'INVALID_TWO_FACTOR_CODE', '验证码不正确')
+    }
+
+    const updated: UserRecord = { ...record, updatedAt: this.now().toISOString() }
+    delete updated.totp
+    delete updated.totpPendingSecret
+    await this.users.put(actor.userKey, updated)
+    for (const [id, row] of [...this.recoveryCodes.entries()]) {
+      if (row.userKey === actor.userKey) await this.recoveryCodes.delete(id)
+    }
+    await this.audit(actor, 'totp.disable', actor.userKey, actor.schoolId)
+  }
+
+  private requireTwoFactorRole(actor: AdminActor): void {
+    if (!['TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(actor.role)) {
+      throw new AuthError(403, 'FORBIDDEN', '仅管理员和教师可开启二次验证')
+    }
+  }
+
+  private loadActorRecord(actor: AdminActor): UserRecord {
+    const record = this.users.get(actor.userKey)
+    if (record === undefined || record.status !== 'active') {
+      throw new AuthError(401, 'UNAUTHENTICATED', '账号不存在或已停用')
+    }
+    return record
+  }
+
+  /** Create a named personal token; the raw secret is returned exactly once. */
+  async createApiToken(
+    actor: AdminActor,
+    body: unknown,
+  ): Promise<{ token: ApiTokenRow; secret: string }> {
+    const input = createApiTokenWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查令牌名称和有效期')
+    const record = this.loadActorRecord(actor)
+    const now = this.now()
+    let expiresAt: string | undefined
+    if (input.data.expiresAt !== undefined) {
+      const parsed = Date.parse(input.data.expiresAt)
+      if (!Number.isFinite(parsed) || parsed <= now.getTime()) {
+        throw new AuthError(400, 'BAD_REQUEST', '令牌过期时间必须晚于当前时间')
+      }
+      expiresAt = new Date(parsed).toISOString()
+    }
+    const activeCount = [...this.apiTokens.entries()]
+      .filter(([, row]) => row.userKey === actor.userKey && row.revokedAt === undefined)
+      .filter(([, row]) => row.expiresAt === undefined || Date.parse(row.expiresAt) > now.getTime())
+      .length
+    if (activeCount >= (this.config.apiTokenLimit ?? DEFAULT_AUTH_CONFIG.apiTokenLimit)) {
+      throw new AuthError(429, 'RATE_LIMITED', '个人令牌数量已达上限')
+    }
+
+    const generated = newApiToken()
+    const id = `pat_${crypto.randomBytes(9).toString('base64url')}`
+    const row: ApiTokenRecord = {
+      id,
+      tokenHash: generated.hash,
+      userId: record.id,
+      userKey: actor.userKey,
+      schoolId: actor.schoolId,
+      username: record.username,
+      name: input.data.name,
+      scope: input.data.scope,
+      createdAt: now.toISOString(),
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
+    }
+    await this.apiTokens.put(generated.hash, row)
+    await this.audit(actor, 'api_token.create', id, actor.schoolId, {
+      name: row.name,
+      scope: row.scope,
+    })
+    return { token: this.toApiTokenRow(row), secret: generated.raw }
+  }
+
+  /** List the acting account's tokens without hashes or raw secrets. */
+  listApiTokens(actor: AdminActor): { tokens: ApiTokenRow[] } {
+    const tokens = [...this.apiTokens.entries()]
+      .map(([, row]) => row)
+      .filter(row => row.userKey === actor.userKey)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map(row => this.toApiTokenRow(row))
+    return { tokens }
+  }
+
+  /** Revoke one owned token; the next request fails immediately. */
+  async revokeApiToken(actor: AdminActor, tokenId: string): Promise<ApiTokenRow> {
+    const found = [...this.apiTokens.entries()]
+      .find(([, row]) => row.id === tokenId && row.userKey === actor.userKey)
+    if (found === undefined) throw new AuthError(404, 'NOT_FOUND', '令牌不存在')
+    const [key, row] = found
+    const revoked = row.revokedAt === undefined
+      ? { ...row, revokedAt: this.now().toISOString() }
+      : row
+    if (row.revokedAt === undefined) {
+      await this.apiTokens.put(key, revoked)
+      await this.audit(actor, 'api_token.revoke', row.id, actor.schoolId, { name: row.name })
+    }
+    return this.toApiTokenRow(revoked)
+  }
+
+  private toApiTokenRow(row: ApiTokenRecord): ApiTokenRow {
+    return {
+      id: row.id,
+      name: row.name,
+      scope: row.scope,
+      tokenMasked: `pso_${'*'.repeat(8)}${row.id.slice(-6)}`,
+      createdAt: row.createdAt,
+      ...(row.expiresAt !== undefined ? { expiresAt: row.expiresAt } : {}),
+      ...(row.revokedAt !== undefined ? { revokedAt: row.revokedAt } : {}),
+    }
   }
 
   /** Mint an opaque token and persist only its hash as a session row. */
@@ -636,7 +1195,7 @@ export class AuthService {
   resolveSession(token: string): ResolvedSession | null {
     const session = this.sessions.get(sessionTokenHash(token))
     if (session === undefined || session.revokedAt !== undefined) return null
-    if (Date.parse(session.expiresAt) <= Date.now()) return null
+    if (Date.parse(session.expiresAt) <= this.now().getTime()) return null
 
     const school = this.schools.get(session.schoolId)
     if (school === undefined || school.status !== 'active') return null
@@ -650,6 +1209,62 @@ export class AuthService {
       return null
     }
     return { user: this.toPublic(user, school), session }
+  }
+
+  /**
+   * Resolve a personal API token. Revocation and expiry are checked on every
+   * request, so a revoked credential stops working immediately.
+   */
+  resolveApiToken(token: string): ResolvedCredential | null {
+    const row = this.apiTokens.get(hashOpaqueCredential(token))
+    if (row === undefined || row.revokedAt !== undefined) return null
+    if (row.expiresAt !== undefined && Date.parse(row.expiresAt) <= this.now().getTime()) return null
+    const school = this.schools.get(row.schoolId)
+    const user = this.users.get(row.userKey)
+    if (school === undefined || school.status !== 'active'
+      || user === undefined || user.status !== 'active'
+      || user.id !== row.userId || userKey(user.schoolId, user.username) !== row.userKey) {
+      return null
+    }
+    return {
+      user: this.toPublic(user, school),
+      actor: {
+        userKey: row.userKey,
+        schoolId: row.schoolId,
+        username: row.username,
+        role: user.role,
+      },
+      credential: { kind: 'api-token', token: row, scope: row.scope },
+    }
+  }
+
+  /**
+   * Resolve the request credential. A present Authorization header is
+   * authoritative: a malformed or unknown bearer never falls back to a cookie.
+   * Sessions keep precedence only when no Authorization header was supplied.
+   */
+  resolveCredential(
+    cookieHeader: string | undefined,
+    authorizationHeader: string | undefined,
+  ): ResolvedCredential | null {
+    if (authorizationHeader !== undefined) {
+      const token = readBearerToken(authorizationHeader)
+      return token === null ? null : this.resolveApiToken(token)
+    }
+    const sessionToken = readSessionCookieHeader(cookieHeader)
+    if (sessionToken === null) return null
+    const resolved = this.resolveSession(sessionToken)
+    if (resolved === null) return null
+    return {
+      user: resolved.user,
+      actor: {
+        userKey: userKey(resolved.user.schoolId, resolved.user.username),
+        schoolId: resolved.user.schoolId,
+        username: resolved.user.username,
+        role: resolved.user.role,
+      },
+      credential: { kind: 'session', session: resolved.session },
+    }
   }
 
   /**
@@ -1334,6 +1949,163 @@ export class AuthService {
     const target = this.loadManagedTarget(actor, schoolId, username)
     await this.revokeUserSessions(target.record)
     await this.audit(actor, 'user.revoke_sessions', target.userKey, schoolId)
+  }
+
+  /**
+   * Mint a bounded batch of invite codes. A school admin can only target its
+   * own tenant; only hashes are persisted and only this response carries raw
+   * values.
+   */
+  async createInvites(
+    actor: AdminActor,
+    body: unknown,
+  ): Promise<{ invites: (InviteRow & { code: string })[] }> {
+    this.requireAdmin(actor)
+    const input = createInvitesWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查邀请码参数')
+    if (actor.role !== 'SUPER_ADMIN' && input.data.schoolId !== actor.schoolId) {
+      throw new AuthError(403, 'FORBIDDEN', '无权管理其他学校')
+    }
+    const school = this.schools.get(input.data.schoolId)
+    if (school === undefined || school.status !== 'active') {
+      throw new AuthError(400, 'SCHOOL_NOT_FOUND', '学校不存在或未开放')
+    }
+    let expiresAt: string | undefined
+    if (input.data.expiresAt !== undefined) {
+      const parsed = Date.parse(input.data.expiresAt)
+      if (!Number.isFinite(parsed) || parsed <= this.now().getTime()) {
+        throw new AuthError(400, 'BAD_REQUEST', '邀请码过期时间必须晚于当前时间')
+      }
+      expiresAt = new Date(parsed).toISOString()
+    }
+
+    const invites: (InviteRow & { code: string })[] = []
+    for (let index = 0; index < input.data.count; index += 1) {
+      const generated = newInviteCode()
+      const row: InviteRecord = {
+        id: `inv_${crypto.randomBytes(9).toString('base64url')}`,
+        codeHash: generated.hash,
+        schoolId: input.data.schoolId,
+        maxUses: input.data.maxUses,
+        usedCount: 0,
+        createdBy: actor.userKey,
+        createdAt: this.now().toISOString(),
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
+      }
+      await this.invites.put(generated.hash, row)
+      await this.audit(actor, 'invite.create', row.id, row.schoolId, {
+        maxUses: row.maxUses,
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
+      })
+      invites.push({ ...this.toInviteRow(row, school.name), code: generated.raw })
+    }
+    return { invites }
+  }
+
+  /** Tenant-scoped invite list; never returns a raw value or hash. */
+  listInvites(
+    actor: AdminActor,
+    filter: { schoolId?: string; limit?: number } = {},
+  ): { invites: InviteRow[] } {
+    this.requireAdmin(actor)
+    const schoolId = actor.role === 'SUPER_ADMIN' ? filter.schoolId : actor.schoolId
+    const requestedLimit = filter.limit !== undefined && Number.isFinite(filter.limit)
+      ? Math.trunc(filter.limit)
+      : 200
+    const limit = Math.min(Math.max(requestedLimit, 1), 500)
+    const invites = [...this.invites.entries()]
+      .map(([, row]) => row)
+      .filter(row => schoolId === undefined || row.schoolId === schoolId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, limit)
+      .map(row => this.toInviteRow(row, this.schools.get(row.schoolId)?.name ?? row.schoolId))
+    return { invites }
+  }
+
+  /** Disable one invite without ever exposing its hash or raw code. */
+  async disableInvite(actor: AdminActor, inviteId: string): Promise<InviteRow> {
+    this.requireAdmin(actor)
+    const found = [...this.invites.entries()].find(([, row]) => row.id === inviteId)
+    if (found === undefined) throw new AuthError(404, 'NOT_FOUND', '邀请码不存在')
+    const [key, row] = found
+    if (actor.role !== 'SUPER_ADMIN' && row.schoolId !== actor.schoolId) {
+      throw new AuthError(403, 'FORBIDDEN', '无权管理其他学校')
+    }
+    const disabled = row.disabledAt === undefined
+      ? {
+        ...row,
+        disabledAt: this.now().toISOString(),
+        disabledBy: actor.userKey,
+      }
+      : row
+    if (row.disabledAt === undefined) {
+      await this.invites.put(key, disabled)
+      await this.audit(actor, 'invite.disable', row.id, row.schoolId)
+    }
+    return this.toInviteRow(
+      disabled,
+      this.schools.get(disabled.schoolId)?.name ?? disabled.schoolId,
+    )
+  }
+
+  private toInviteRow(row: InviteRecord, schoolName: string): InviteRow {
+    return {
+      id: row.id,
+      codeMasked: `inv_${'*'.repeat(8)}${row.id.slice(-6)}`,
+      schoolId: row.schoolId,
+      schoolName,
+      maxUses: row.maxUses,
+      usedCount: row.usedCount,
+      createdAt: row.createdAt,
+      ...(row.expiresAt !== undefined ? { expiresAt: row.expiresAt } : {}),
+      ...(row.disabledAt !== undefined ? { disabledAt: row.disabledAt } : {}),
+    }
+  }
+
+  /**
+   * Validate an export request before headers are written, then expose it as a
+   * bounded async stream. Rows are filtered as they are visited, so the full
+   * audit table is never materialized in memory.
+   */
+  prepareAuditExport(
+    actor: AdminActor,
+    body: unknown,
+  ): {
+    format: 'csv' | 'jsonl'
+    stream: Iterable<AuditEvent>
+  } {
+    this.requireAdmin(actor)
+    const input = auditExportWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查导出参数')
+    const from = input.data.from === undefined ? undefined : Date.parse(input.data.from)
+    const to = input.data.to === undefined ? undefined : Date.parse(input.data.to)
+    if (from !== undefined && to !== undefined && from >= to) {
+      throw new AuthError(400, 'BAD_REQUEST', '导出开始时间必须早于结束时间')
+    }
+    const schoolId = actor.role === 'SUPER_ADMIN' ? input.data.schoolId : actor.schoolId
+    const limit = input.data.limit ?? 10_000
+    return {
+      format: input.data.format,
+      stream: this.streamAudit(schoolId, from, to, limit),
+    }
+  }
+
+  private *streamAudit(
+    schoolId: string | undefined,
+    from: number | undefined,
+    to: number | undefined,
+    limit: number,
+  ): Iterable<AuditEvent> {
+    let emitted = 0
+    for (const [, event] of this.audits.entries()) {
+      if (schoolId !== undefined && event.schoolId !== schoolId) continue
+      const createdAt = Date.parse(event.createdAt)
+      if (from !== undefined && createdAt < from) continue
+      if (to !== undefined && createdAt >= to) continue
+      yield event
+      emitted += 1
+      if (emitted >= limit) break
+    }
   }
 
   /**

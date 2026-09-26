@@ -61,6 +61,10 @@ const KNOWN_TABLES: Readonly<Record<
   physicsos_auth: new Set([
     'schools',
     'users',
+    'invites',
+    'api_tokens',
+    'login_challenges',
+    'totp_recovery_codes',
     'sessions',
     'reset_requests',
     'password_reset_tokens',

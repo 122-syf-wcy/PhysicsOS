@@ -1,0 +1,65 @@
+name: 功能建议
+description: 提出新的教学能力、引擎扩展或工程改进
+title: '[Feature] '
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先描述**教学或使用场景**，再描述你期望的能力。范围较大的建议请说明最小可用切片，便于拆成可评审的 PR。
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: 主要受益者
+      options:
+        - 学生
+        - 教师
+        - 学校 / 机构管理员
+        - 部署与运维
+        - 二次开发者 / 贡献者
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 现在遇到的具体困难是什么？在什么教学或使用场景下发生？
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的方案
+      description: 你希望产品/引擎怎么做？如果涉及物理模型，请写出涉及的公式或现象。
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+      description: 现有功能能否部分满足？为什么不满足？
+    validations:
+      required: false
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 最小可用切片
+      description: 如果完整方案很大，第一步可以做的最小闭环是什么？
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过已有 issue，没有发现重复
+          required: true
+        - label: 我愿意参与实现或协助验证
+          required: false

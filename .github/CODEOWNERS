@@ -1,0 +1,28 @@
+# PhysicsOS 代码所有者
+# 语法：<匹配路径>  <GitHub 账号或团队>
+# 说明：owner 需要仓库写权限；新增维护者时请在 PR 中同时更新本文件。
+
+# 兜底：未被下面规则覆盖的所有路径
+*                   @122-syf-wcy
+
+# Harness overlay 源真值与上游补丁
+/overlays/          @122-syf-wcy
+
+# 领域包（引擎、场景、题库、适配器）
+/packages/          @122-syf-wcy
+
+# 桌面壳与打包脚本
+/apps/desktop/      @122-syf-wcy
+
+# 文档、部署脚本与验收
+/docs/              @122-syf-wcy
+/scripts/           @122-syf-wcy
+/tests/             @122-syf-wcy
+
+# 仓库治理文件
+/LICENSE            @122-syf-wcy
+/NOTICE.md          @122-syf-wcy
+/SECURITY.md        @122-syf-wcy
+/CONTRIBUTING.md    @122-syf-wcy
+/CODE_OF_CONDUCT.md @122-syf-wcy
+/.github/           @122-syf-wcy

@@ -14,8 +14,6 @@
  */
 
 import type { IncomingMessage } from 'node:http'
-import { readSessionCookie } from './cookies.ts'
-import { userKey } from './domain.ts'
 import type { AuthService } from './service.ts'
 
 /**
@@ -71,16 +69,9 @@ export interface PhysicsosIdentity {
  */
 export const createIdentityService = (service: AuthService): PhysicsosIdentity => ({
   actorOf: (req) => {
-    const token = readSessionCookie(req)
-    if (token === null) return null
-    const resolved = service.resolveSession(token)
+    const resolved = service.resolveCredential(req.headers.cookie, req.headers.authorization)
     if (resolved === null) return null
-    return {
-      userKey: userKey(resolved.user.schoolId, resolved.user.username),
-      schoolId: resolved.user.schoolId,
-      username: resolved.user.username,
-      role: resolved.user.role,
-    }
+    return resolved.actor
   },
   record: (actor, action, target, detail) => service.auditAs(actor, action, target, detail),
 })

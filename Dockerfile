@@ -54,7 +54,20 @@ RUN pnpm -C vendor/deepseek-harness run build:lib \
 FROM ${NODE_IMAGE} AS runtime
 
 ENV NODE_ENV=production \
-    DSH_HOME=/var/lib/physicsos
+    DSH_HOME=/var/lib/physicsos \
+    PHYSICSOS_STORAGE_BACKEND=postgres \
+    PHYSICSOS_STORAGE_SCHEMA=physicsos \
+    PHYSICSOS_SHARED_STATE_BACKEND=redis \
+    DATABASE_URL_FILE=/run/secrets/database_url \
+    REDIS_URL_FILE=/run/secrets/redis_url \
+    DEEPSEEK_API_KEY_FILE=/run/secrets/deepseek_api_key \
+    PHYSICSOS_ADMIN_PASSWORD_FILE=/run/secrets/admin_password \
+    PHYSICOS_IMAGE_API_KEY_FILE=/run/secrets/image_api_key \
+    PHYSICOS_TRUSTED_PROXIES="" \
+    PHYSICSOS_SESSIONS_ROOT=/var/lib/physicsos/sessions \
+    PHYSICSOS_PANDOC=/usr/bin/pandoc \
+    PHYSICSOS_SOFFICE=/usr/bin/soffice \
+    PHYSICSOS_DATABASE_SSL=false
 
 # pandoc + LibreOffice 只在 runtime 安装：builder 阶段不需要它们，A4 导出也
 # 不再是 docx 降级。fonts-noto-cjk 保证中文 PDF 不出现豆腐块。

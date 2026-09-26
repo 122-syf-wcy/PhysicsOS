@@ -234,6 +234,10 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
   const { auth, classroom, learning } = stores
   const users = asMergeTable(auth.table('users'))
   const sessions = asMergeTable(auth.table('sessions'))
+  const invites = asMergeTable(auth.table('invites'))
+  const apiTokens = asMergeTable(auth.table('api_tokens'))
+  const loginChallenges = asMergeTable(auth.table('login_challenges'))
+  const recoveryCodes = asMergeTable(auth.table('totp_recovery_codes'))
   const resetRequests = asMergeTable(auth.table('reset_requests'))
   const resetTokens = asMergeTable(auth.table('password_reset_tokens'))
   const learningCounts = asMergeTable(auth.table('learning_counts'))
@@ -312,6 +316,66 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
       if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined
       assertSchoolId(row, source, 'auth.sessions')
       return { key, record: { ...row, schoolId: target } }
+    }),
+    contextual('auth.invites', invites, (key, row, source, target) => {
+      if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      assertSchoolId(row, source, 'auth.invites')
+      return {
+        key,
+        record: {
+          ...row,
+          schoolId: target,
+          createdBy: rewriteOptionalUserKeyField(
+            row,
+            'createdBy',
+            source,
+            target,
+            'auth.invites',
+          ),
+        },
+      }
+    }),
+    contextual('auth.api_tokens', apiTokens, (key, row, source, target) => {
+      if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      assertSchoolId(row, source, 'auth.api_tokens')
+      return {
+        key,
+        record: {
+          ...row,
+          schoolId: target,
+          userKey: rewriteUserKeyField(row, 'userKey', source, target, 'auth.api_tokens'),
+        },
+      }
+    }),
+    contextual('auth.login_challenges', loginChallenges, (key, row, source, target) => {
+      if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      assertSchoolId(row, source, 'auth.login_challenges')
+      return {
+        key,
+        record: {
+          ...row,
+          schoolId: target,
+          userKey: rewriteUserKeyField(row, 'userKey', source, target, 'auth.login_challenges'),
+        },
+      }
+    }),
+    contextual('auth.totp_recovery_codes', recoveryCodes, (key, row, source, target) => {
+      if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined
+      assertSchoolId(row, source, 'auth.totp_recovery_codes')
+      return {
+        key,
+        record: {
+          ...row,
+          schoolId: target,
+          userKey: rewriteUserKeyField(
+            row,
+            'userKey',
+            source,
+            target,
+            'auth.totp_recovery_codes',
+          ),
+        },
+      }
     }),
     contextual('auth.reset_requests', resetRequests, (key, row, source, target) => {
       if (row.schoolId !== source && !containsSourceToken(row, source)) return undefined

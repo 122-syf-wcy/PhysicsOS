@@ -80,6 +80,24 @@ export function platformKey(platform = process.platform, architecture = process.
   throw new Error(`No Tauri update target for ${platform}/${architecture}.`)
 }
 
+export function rustTargetTriple(platform = process.platform, architecture = process.arch) {
+  if (platform === 'darwin' && architecture === 'arm64') return 'aarch64-apple-darwin'
+  if (platform === 'darwin' && architecture === 'x64') return 'x86_64-apple-darwin'
+  if (platform === 'win32' && architecture === 'x64') return 'x86_64-pc-windows-msvc'
+  if (platform === 'linux' && architecture === 'x64') return 'x86_64-unknown-linux-gnu'
+  throw new Error(`No Rust target triple for ${platform}/${architecture}.`)
+}
+
+export function parseRustTargetTriple(target) {
+  if (target === 'aarch64-apple-darwin') return { platform: 'darwin', architecture: 'arm64' }
+  if (target === 'x86_64-apple-darwin') return { platform: 'darwin', architecture: 'x64' }
+  if (target === 'x86_64-pc-windows-msvc') return { platform: 'win32', architecture: 'x64' }
+  if (target === 'x86_64-unknown-linux-gnu') {
+    return { platform: 'linux', architecture: 'x64' }
+  }
+  throw new Error(`Unsupported desktop target triple: ${target}`)
+}
+
 function assertSignature(signature) {
   const value = typeof signature === 'string' ? signature.trim() : ''
   if (value.length < 40 || PLACEHOLDER_RE.test(value) || new Set(value).size < 8) {
@@ -215,6 +233,7 @@ export function resolveReleaseConfig(baseConfig, releaseConfig = {}, environment
 
 export function validateReleaseConfig(config, options = {}) {
   const mode = options.mode ?? 'release'
+  const requiresUpdaterArtifacts = options.requiresUpdaterArtifacts ?? true
   if (mode !== 'development' && mode !== 'release') {
     throw new TypeError(`Unknown desktop config mode: ${mode}`)
   }
@@ -222,8 +241,11 @@ export function validateReleaseConfig(config, options = {}) {
     throw new TypeError('Tauri release config must be an object.')
   }
   parseVersion(config.version)
-  if (config.bundle?.createUpdaterArtifacts !== true) {
+  if (requiresUpdaterArtifacts && config.bundle?.createUpdaterArtifacts !== true) {
     throw new Error('Tauri updater must create signed updater artifacts.')
+  }
+  if (!requiresUpdaterArtifacts && config.bundle?.createUpdaterArtifacts !== false) {
+    throw new Error('Unsigned desktop builds must disable updater artifacts.')
   }
   if (mode === 'release' && config.build?.frontendDist !== RELEASE_FRONTEND_DIST) {
     throw new Error(
@@ -240,6 +262,8 @@ export function validateReleaseConfig(config, options = {}) {
       throw new Error('Tauri release build must bundle the agent sidecar resource directory.')
     }
   }
+  if (!requiresUpdaterArtifacts) return config
+
   const updater = config.plugins?.updater
   if (typeof updater !== 'object' || updater === null) {
     throw new Error('Tauri updater configuration is missing.')

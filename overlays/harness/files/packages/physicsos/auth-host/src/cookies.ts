@@ -77,7 +77,15 @@ function appendSetCookie(res: http.ServerResponse, value: string): void {
  * @returns the raw token, or `null` when the cookie is absent or empty.
  */
 export function readSessionCookie(req: http.IncomingMessage): string | null {
-  const header = req.headers.cookie
+  return readSessionCookieHeader(req.headers.cookie)
+}
+
+/**
+ * Read the session token directly from a Cookie header.
+ * @param header - the raw request header, or undefined.
+ * @returns the raw token, or null.
+ */
+export function readSessionCookieHeader(header: string | undefined): string | null {
   if (header === undefined) return null
   for (const pair of header.split(';')) {
     const eq = pair.indexOf('=')

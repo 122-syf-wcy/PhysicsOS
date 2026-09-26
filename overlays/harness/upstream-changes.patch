@@ -1256,7 +1256,7 @@ index f8bacb1553..d680e1090e 100644
    const location = (globalThis as { location?: { origin?: string } }).location
    return location?.origin !== undefined && location.origin !== 'null' ? location.origin : INTERNAL_BASE
 diff --git a/packages/client/connection/src/index.ts b/packages/client/connection/src/index.ts
-index 35084918e8..bcab5f1a2c 100644
+index 35084918e8..a839a8bb5d 100644
 --- a/packages/client/connection/src/index.ts
 +++ b/packages/client/connection/src/index.ts
 @@ -10,6 +10,7 @@ import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
@@ -1275,7 +1275,31 @@ index 35084918e8..bcab5f1a2c 100644
  export { HostConnectionService } from './rpc-host.ts'
  
  export { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
-@@ -157,7 +159,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+@@ -142,11 +144,18 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+       const method = pathname.startsWith(`${API_PATH}/`)
+         ? pathname.slice(API_PATH.length + 1)
+         : undefined
+-      if (method !== undefined
+-        && PRIVILEGED_METHODS.has(method)
+-        && !isTrustedApiRequest(request, [])) {
+-        return new Response('forbidden', { status: 403 })
+-      }
++    if (method !== undefined
++      && PRIVILEGED_METHODS.has(method)
++      /* PhysicsOS runs the same bundle as a hosted server, not only as a local
++         desktop: with the loopback-only check, every privileged method (settings,
++         credentials, host directory picking, preset roster) is 403 for a domain
++         deployment — including the onboarding acknowledgement a student needs to
++         dismiss. The fence is therefore "loopback OR an authority this deployment
++         explicitly trusts"; the DNS-rebinding defence is unchanged, and each of
++         these methods is still gated by the API policy on top. */
++      && !isTrustedApiRequest(request, trustedHosts)) {
++      return new Response('forbidden', { status: 403 })
++    }
+       if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
+         return new Response('upgrade required', {
+           status: 426,
+@@ -157,7 +166,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
        if (apiProxy === undefined) return new Response('not found', { status: 404 })
        return toFetchHandler(apiProxy).fetch(request)
      },
@@ -1284,7 +1308,7 @@ index 35084918e8..bcab5f1a2c 100644
    const route: WebRoute = {
      kind: 'prefix',
      path: API_PATH,
-@@ -190,7 +192,27 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+@@ -190,7 +199,27 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
        }), `client-connection: ${path} WebSocket`)
      }
      apiCtx.effect(() => () => downlinks.close(), 'client-connection: WebSocket downlinks')

@@ -7,7 +7,12 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { AuthError, type AdminActor, type AuthService } from './service.ts'
+import {
+  AuthError,
+  type AdminActor,
+  type AuthService,
+  type ResolvedCredential,
+} from './service.ts'
 import { readSessionCookie, writeSessionCookie } from './cookies.ts'
 import { userKey } from './domain.ts'
 import { clientAddress, requestScheme } from './proxy.ts'
@@ -20,6 +25,10 @@ const send = (res: ServerResponse, status: number, body: unknown): void => {
 }
 
 const sendError = (res: ServerResponse, error: unknown): void => {
+  if (res.headersSent) {
+    res.end()
+    return
+  }
   if (error instanceof AuthError) {
     send(res, error.status, {
       error: { code: error.code, message: error.message, ...error.details },
@@ -27,6 +36,33 @@ const sendError = (res: ServerResponse, error: unknown): void => {
     return
   }
   send(res, 500, { error: { code: 'INTERNAL', message: 'internal error' } })
+}
+
+const credentialOf = (
+  service: AuthService,
+  req: IncomingMessage,
+): ResolvedCredential | null => service.resolveCredential(
+  req.headers.cookie,
+  req.headers.authorization,
+)
+
+const sessionCredentialOf = (
+  service: AuthService,
+  req: IncomingMessage,
+): ResolvedCredential | null => service.resolveCredential(req.headers.cookie, undefined)
+
+const actorOf = (resolved: ResolvedCredential): AdminActor => resolved.actor
+
+const requireWriteCredential = (resolved: ResolvedCredential): void => {
+  if (resolved.credential.kind === 'api-token' && resolved.credential.scope !== 'write') {
+    throw new AuthError(403, 'TOKEN_SCOPE_REQUIRED', '该令牌只有只读权限')
+  }
+}
+
+const requireSessionCredential = (resolved: ResolvedCredential): void => {
+  if (resolved.credential.kind !== 'session') {
+    throw new AuthError(403, 'FORBIDDEN', '该操作需要登录会话')
+  }
 }
 
 /** Path segment `index`; a shorter path than the route matched answers 400. */
@@ -86,6 +122,13 @@ const checkCsrf = (req: IncomingMessage, trustedProxies: readonly string[]): voi
   }
 }
 
+/** RFC 4180 cell plus a spreadsheet-formula guard for exported text fields. */
+const csvCell = (value: string | undefined): string => {
+  let text = value ?? ''
+  if (/^[=+\-@]/.test(text)) text = `'${text}`
+  return `"${text.replaceAll('"', '""')}"`
+}
+
 /** Best-effort client address for rate-limit buckets. */
 const clientIp = (req: IncomingMessage, trustedProxies: readonly string[]): string =>
   clientAddress(req, trustedProxies)
@@ -118,9 +161,20 @@ export function authRoutes(service: AuthService):
       if (method === 'POST' && path === '/login') {
         checkCsrf(req, trustedProxies)
         const result = await service.login(await readJson(req), ip, userAgent)
+        if ('twoFactorRequired' in result) {
+          send(res, 200, result)
+          return
+        }
         writeSessionCookie(req, res, result.token, result.cookieMaxAge, trustedProxies)
-        const { user } = result
-        send(res, 200, { user })
+        send(res, 200, { user: result.user })
+        return
+      }
+
+      if (method === 'POST' && path === '/login/2fa') {
+        checkCsrf(req, trustedProxies)
+        const result = await service.loginTwoFactor(await readJson(req), ip, userAgent)
+        writeSessionCookie(req, res, result.token, result.cookieMaxAge, trustedProxies)
+        send(res, 200, { user: result.user })
         return
       }
 
@@ -133,13 +187,84 @@ export function authRoutes(service: AuthService):
       }
 
       if (method === 'GET' && path === '/me') {
-        const token = readSessionCookie(req)
-        const resolved = token === null ? null : service.resolveSession(token)
+        const resolved = credentialOf(service, req)
         if (resolved === null) {
           throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
         }
         send(res, 200, { user: resolved.user })
         return
+      }
+
+      if (method === 'POST' && path === '/2fa/setup') {
+        checkCsrf(req, trustedProxies)
+        const resolved = sessionCredentialOf(service, req)
+        if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        requireSessionCredential(resolved)
+        send(res, 200, await service.startTotpSetup(actorOf(resolved)))
+        return
+      }
+
+      if (method === 'POST' && path === '/2fa/enable') {
+        checkCsrf(req, trustedProxies)
+        const resolved = sessionCredentialOf(service, req)
+        if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        requireSessionCredential(resolved)
+        send(res, 200, await service.enableTotp(actorOf(resolved), await readJson(req)))
+        return
+      }
+
+      if (method === 'POST' && path === '/2fa/verify') {
+        checkCsrf(req, trustedProxies)
+        const resolved = sessionCredentialOf(service, req)
+        if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        requireSessionCredential(resolved)
+        await service.verifyTotpForActor(actorOf(resolved), await readJson(req))
+        send(res, 200, { ok: true })
+        return
+      }
+
+      if (method === 'POST' && path === '/2fa/disable') {
+        checkCsrf(req, trustedProxies)
+        const resolved = sessionCredentialOf(service, req)
+        if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        requireSessionCredential(resolved)
+        await service.disableTotp(actorOf(resolved), await readJson(req))
+        send(res, 200, { ok: true })
+        return
+      }
+
+      if (method === 'GET' && path === '/api-tokens') {
+        const resolved = sessionCredentialOf(service, req)
+        if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        requireSessionCredential(resolved)
+        send(res, 200, service.listApiTokens(actorOf(resolved)))
+        return
+      }
+
+      if (method === 'POST' && path === '/api-tokens') {
+        checkCsrf(req, trustedProxies)
+        const resolved = sessionCredentialOf(service, req)
+        if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+        requireSessionCredential(resolved)
+        send(res, 201, await service.createApiToken(actorOf(resolved), await readJson(req)))
+        return
+      }
+
+      if (method === 'POST' && path.split('/').filter(Boolean)[0] === 'api-tokens') {
+        const segments = path.split('/').filter(Boolean)
+        if (segments.length === 3 && segments[2] === 'revoke') {
+          checkCsrf(req, trustedProxies)
+          const resolved = sessionCredentialOf(service, req)
+          if (resolved === null) throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
+          requireSessionCredential(resolved)
+          send(res, 200, {
+            token: await service.revokeApiToken(
+              actorOf(resolved),
+              decodeURIComponent(segment(segments, 1)),
+            ),
+          })
+          return
+        }
       }
 
       /* ---- 学习上报(匿名聚合)-----------------------------------------
@@ -148,18 +273,12 @@ export function authRoutes(service: AuthService):
          从服务端时钟取,请求体只有知识点 id(课标闭集形状)与这一次对错。 */
       if (method === 'POST' && path === '/usage/learning') {
         checkCsrf(req, trustedProxies)
-        const token = readSessionCookie(req)
-        const resolved = token === null ? null : service.resolveSession(token)
+        const resolved = credentialOf(service, req)
         if (resolved === null) {
           throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
         }
-        const { user } = resolved
-        const cell = await service.reportLearning({
-          userKey: userKey(user.schoolId, user.username),
-          schoolId: user.schoolId,
-          username: user.username,
-          role: user.role,
-        }, await readJson(req))
+        requireWriteCredential(resolved)
+        const cell = await service.reportLearning(actorOf(resolved), await readJson(req))
         send(res, 201, { cell })
         return
       }
@@ -170,18 +289,12 @@ export function authRoutes(service: AuthService):
          最近活跃时间与次数。被注销的设备在这里返回 403,不悄悄复活。 */
       if (method === 'POST' && path === '/devices') {
         checkCsrf(req, trustedProxies)
-        const token = readSessionCookie(req)
-        const resolved = token === null ? null : service.resolveSession(token)
+        const resolved = credentialOf(service, req)
         if (resolved === null) {
           throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
         }
-        const { user } = resolved
-        const device = await service.registerOwnDevice({
-          userKey: userKey(user.schoolId, user.username),
-          schoolId: user.schoolId,
-          username: user.username,
-          role: user.role,
-        }, await readJson(req))
+        requireWriteCredential(resolved)
+        const device = await service.registerOwnDevice(actorOf(resolved), await readJson(req))
         send(res, 200, { device })
         return
       }
@@ -205,8 +318,7 @@ export function authRoutes(service: AuthService):
          live session — when one exists — only attributes the request. */
       if (method === 'POST' && path === '/school-requests') {
         checkCsrf(req, trustedProxies)
-        const token = readSessionCookie(req)
-        const resolved = token === null ? null : service.resolveSession(token)
+        const resolved = credentialOf(service, req)
         const requestedBy = resolved === null
           ? null
           : userKey(resolved.user.schoolId, resolved.user.username)
@@ -241,17 +353,12 @@ export function adminRoutes(service: AuthService):
       const method = req.method ?? 'GET'
       const segments = path.split('/').filter(Boolean)
 
-      const token = readSessionCookie(req)
-      const resolved = token === null ? null : service.resolveSession(token)
+      const resolved = credentialOf(service, req)
       if (resolved === null) {
         throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
       }
-      const actor: AdminActor = {
-        userKey: userKey(resolved.user.schoolId, resolved.user.username),
-        schoolId: resolved.user.schoolId,
-        username: resolved.user.username,
-        role: resolved.user.role,
-      }
+      if (method === 'POST') requireWriteCredential(resolved)
+      const actor: AdminActor = actorOf(resolved)
 
       if (method === 'GET' && path === '/school-requests') {
         send(res, 200, {
@@ -292,6 +399,32 @@ export function adminRoutes(service: AuthService):
         checkCsrf(req, trustedProxies)
         send(res, 200, {
           school: await service.setSchoolStatus(actor, segment(segments, 1), await readJson(req)),
+        })
+        return
+      }
+
+      if (method === 'GET' && path === '/invites') {
+        const scope: { schoolId?: string; limit?: number } = {}
+        const schoolId = url.searchParams.get('schoolId')
+        if (schoolId !== null) scope.schoolId = schoolId
+        const limit = url.searchParams.get('limit')
+        if (limit !== null) scope.limit = Number(limit)
+        send(res, 200, service.listInvites(actor, scope))
+        return
+      }
+
+      if (method === 'POST' && path === '/invites') {
+        checkCsrf(req, trustedProxies)
+        send(res, 201, await service.createInvites(actor, await readJson(req)))
+        return
+      }
+
+      if (method === 'POST' && segments[0] === 'invites' && segments.length === 3
+        && segments[2] === 'disable') {
+        checkCsrf(req, trustedProxies)
+        await readJson(req)
+        send(res, 200, {
+          invite: await service.disableInvite(actor, decodeURIComponent(segment(segments, 1))),
         })
         return
       }
@@ -410,6 +543,38 @@ export function adminRoutes(service: AuthService):
         if (schoolId !== null) scope.schoolId = schoolId
         if (limitParam !== null) scope.limit = Number(limitParam)
         send(res, 200, { events: service.listAudit(actor, scope) })
+        return
+      }
+
+      if (method === 'POST' && path === '/audit/export') {
+        checkCsrf(req, trustedProxies)
+        const prepared = service.prepareAuditExport(actor, await readJson(req))
+        const extension = prepared.format
+        res.writeHead(200, {
+          'content-type': prepared.format === 'csv'
+            ? 'text/csv; charset=utf-8'
+            : 'application/x-ndjson; charset=utf-8',
+          'content-disposition': `attachment; filename="physicsos-audit.${extension}"`,
+          'cache-control': 'no-store',
+        })
+        if (prepared.format === 'csv') {
+          res.write('actorKey,schoolId,action,target,detail,createdAt\n')
+        }
+        for (const event of prepared.stream) {
+          if (prepared.format === 'csv') {
+            res.write([
+              csvCell(event.actorKey),
+              csvCell(event.schoolId),
+              csvCell(event.action),
+              csvCell(event.target),
+              csvCell(event.detail === undefined ? '' : JSON.stringify(event.detail)),
+              csvCell(event.createdAt),
+            ].join(',') + '\n')
+          } else {
+            res.write(`${JSON.stringify(event)}\n`)
+          }
+        }
+        res.end()
         return
       }
 

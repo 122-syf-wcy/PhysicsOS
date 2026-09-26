@@ -4,8 +4,10 @@ import {
   compareVersions,
   DEVELOPMENT_UPDATE_PUBKEY,
   localUnsignedEnvironment,
+  parseRustTargetTriple,
   platformKey,
   resolveReleaseConfig,
+  rustTargetTriple,
   selectUpdate,
   validateReleaseConfig,
 } from './release-lib.mjs'
@@ -37,6 +39,17 @@ describe('desktop release helpers', () => {
     assert.equal(platformKey('win32', 'x64'), 'windows-x86_64')
     assert.equal(platformKey('linux', 'x64'), 'linux-x86_64')
     assert.throws(() => platformKey('linux', 'arm64'), /no Tauri update target/i)
+  })
+
+  it('maps host and requested platforms to Rust target triples', () => {
+    assert.equal(rustTargetTriple('darwin', 'arm64'), 'aarch64-apple-darwin')
+    assert.equal(rustTargetTriple('darwin', 'x64'), 'x86_64-apple-darwin')
+    assert.equal(rustTargetTriple('win32', 'x64'), 'x86_64-pc-windows-msvc')
+    assert.deepEqual(parseRustTargetTriple('x86_64-pc-windows-msvc'), {
+      platform: 'win32',
+      architecture: 'x64',
+    })
+    assert.throws(() => parseRustTargetTriple('universal-apple-darwin'), /Unsupported/)
   })
 
   it('selects only a signed newer artifact for this platform', () => {
@@ -298,5 +311,34 @@ describe('desktop release helpers', () => {
     })
 
     assert.deepEqual(environment, { PATH: '/usr/bin' })
+  })
+
+  it('allows a release package when updater artifacts are explicitly disabled', () => {
+    const config = resolveReleaseConfig({
+      version: '0.1.0',
+      build: { frontendDist: '../web' },
+      bundle: { active: true, createUpdaterArtifacts: true },
+      plugins: {
+        updater: {
+          pubkey: DEVELOPMENT_UPDATE_PUBKEY,
+          endpoints: ['https://physicsos.dev/physicsos/update/latest.json?channel=stable'],
+        },
+      },
+    })
+    config.bundle.createUpdaterArtifacts = false
+    assert.doesNotThrow(() =>
+      validateReleaseConfig(config, {
+        mode: 'release',
+        requiresUpdaterArtifacts: false,
+      }),
+    )
+    assert.throws(
+      () =>
+        validateReleaseConfig(config, {
+          mode: 'release',
+          requiresUpdaterArtifacts: true,
+        }),
+      /updater must create signed/i,
+    )
   })
 })

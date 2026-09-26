@@ -25,6 +25,7 @@ export type LimiterName =
   | 'registration'
   | 'learning'
   | 'passwordReset'
+  | 'totp'
 
 /** One fixed-window policy, named so shared backends can isolate keys. */
 export interface LimiterPolicy {

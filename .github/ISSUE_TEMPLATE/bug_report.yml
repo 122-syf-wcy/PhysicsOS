@@ -1,0 +1,95 @@
+name: Bug 报告
+description: 报告可复现的功能异常、界面问题或回归
+title: '[Bug] '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量给出可复现的步骤与真实结果，这比结论本身更有帮助。
+
+        - 安全问题不要走公开 issue，请按 [SECURITY.md](../../SECURITY.md) 私密上报。
+        - 提交前请先搜索已有 issue，避免重复。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      description: 这个问题主要出现在哪一部分？
+      options:
+        - Web 界面 / 交互
+        - 物理引擎 / 计算结果
+        - 题库 / 出卷 / 录题
+        - 账户 / 登录 / 权限
+        - 班级 / 作业 / 学习记录
+        - 桌面端（macOS / Windows）
+        - 部署 / Docker / 服务器
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / 提交
+      description: 界面底部显示的版本号，或你部署的 git commit。
+      placeholder: 0.1.0 / 93c23e5
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 操作系统、浏览器或桌面端版本；自部署请说明部署方式。
+      placeholder: macOS 26 / Chrome 141 / Docker Compose 自部署
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开哪个页面开始，一步步写清操作顺序。
+      placeholder: |
+        1. 以学生账号登录
+        2. 进入「我的班级」
+        3. 点击……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 有报错信息、控制台日志或截图时请一并附上（注意打码个人信息）。
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 出现频率、是否可以稳定复现、是否与特定题目或场景相关等。
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过已有 issue，没有发现重复
+          required: true
+        - label: 我没有在内容中暴露真实密钥、密码或他人隐私信息
+          required: true

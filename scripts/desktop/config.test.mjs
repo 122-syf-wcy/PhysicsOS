@@ -24,7 +24,8 @@ describe('Tauri desktop configuration', () => {
       'icons/icon.ico',
     ])
     assert.equal(config.build.frontendDist, '../web')
-    assert.deepEqual(config.bundle.resources, { 'resources/agent-sidecar/': 'agent-sidecar/' })
+    assert.equal(config.bundle.targets, 'all')
+    assert.equal(config.bundle.resources, undefined)
     assert.match(config.build.beforeDevCommand, /\bpnpm\b/)
     assert.equal(config.build.devUrl, 'http://127.0.0.1:3080')
     assert.equal(config.app.withGlobalTauri, true)
@@ -64,10 +65,18 @@ describe('Tauri desktop configuration', () => {
       new URL('../../scripts/desktop/package-sidecar.mjs', import.meta.url),
       'utf8',
     )
+    const sidecarLib = readFileSync(
+      new URL('../../scripts/desktop/sidecar-lib.mjs', import.meta.url),
+      'utf8',
+    )
     assert.equal(packageRelease.includes('vendor/deepseek-harness/apps/web/dist'), true)
     assert.match(packageRelease, /pnpm_config_verify_deps_before_run/)
+    assert.match(packageRelease, /skip-sidecar-build/)
+    assert.match(packageRelease, /resources: \{ 'resources\/agent-sidecar\/': 'agent-sidecar\/' \}/)
     assert.match(packageSidecar, /pnpm_config_verify_deps_before_run/)
     assert.equal(packageSidecar.includes('collectHarnessCliSidecar'), true)
+    assert.equal(sidecarLib.includes('https://nodejs.org/dist'), true)
+    assert.match(sidecarLib, /node-v\$\{PINNED_NODE_VERSION\}-win-x64\.zip/)
     const sidecar = read('src-tauri/src/sidecar.rs')
     assert.match(sidecar, /resource_dir/)
     assert.match(sidecar, /agent-sidecar\/sidecar\.json/)

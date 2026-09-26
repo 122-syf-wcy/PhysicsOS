@@ -484,7 +484,7 @@ mod tests {
             Path::new("/app/resources/agent-sidecar/sidecar.json"),
             r#"{
               "version": 1,
-              "command": "node",
+              "command": "./runtime/node",
               "args": ["./runtime/lib/bin.js"],
               "sidecarArgs": ["./runtime/sidecar/bridge.mjs"],
               "workingDirectory": "./runtime"
@@ -492,7 +492,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(spec.command, PathBuf::from("node"));
+        assert_eq!(
+            spec.command,
+            PathBuf::from("/app/resources/agent-sidecar/runtime/node")
+        );
         assert_eq!(
             spec.args,
             vec![PathBuf::from(
@@ -511,9 +514,29 @@ mod tests {
         );
         assert!(parse_launch_manifest(
             Path::new("/app/resources/agent-sidecar/sidecar.json"),
-            r#"{"version":1,"command":"node","args":["../../escape.js"]}"#,
+            r#"{"version":1,"command":"./runtime/node","args":["../../escape.js"]}"#,
         )
         .is_err());
+    }
+
+    #[test]
+    fn parses_windows_node_executable_from_the_bundled_runtime() {
+        let spec = parse_launch_manifest(
+            Path::new("/app/resources/agent-sidecar/sidecar.json"),
+            r#"{
+              "version": 1,
+              "command": "./runtime/node.exe",
+              "args": ["./runtime/lib/bin.js"],
+              "sidecarArgs": ["./runtime/sidecar/bridge.mjs"],
+              "workingDirectory": "./runtime"
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            spec.command,
+            PathBuf::from("/app/resources/agent-sidecar/runtime/node.exe")
+        );
     }
 
     #[test]

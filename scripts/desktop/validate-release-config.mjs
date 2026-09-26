@@ -9,6 +9,7 @@ import {
 
 const desktop = fileURLToPath(new URL('../../apps/desktop/', import.meta.url))
 const mode = process.argv.includes('--release') ? 'release' : 'development'
+const unsigned = process.argv.includes('--unsigned')
 const baseConfig = JSON.parse(
   readFileSync(new URL('src-tauri/tauri.conf.json', `file://${desktop}`)),
 )
@@ -21,10 +22,13 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') throw error
 }
-const config = validateReleaseConfig(
-  mode === 'release' ? resolveReleaseConfig(baseConfig, fileConfig, process.env) : baseConfig,
-  { mode },
-)
+const config =
+  mode === 'release' ? resolveReleaseConfig(baseConfig, fileConfig, process.env) : baseConfig
+if (unsigned) config.bundle.createUpdaterArtifacts = false
+validateReleaseConfig(config, {
+  mode,
+  requiresUpdaterArtifacts: !unsigned,
+})
 
 const manifestPath = process.argv.slice(2).find((argument) => !argument.startsWith('--'))
 if (manifestPath !== undefined) {

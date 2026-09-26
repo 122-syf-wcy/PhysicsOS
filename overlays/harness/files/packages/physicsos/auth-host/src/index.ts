@@ -21,14 +21,13 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import z from '@deepseek-ai/schemastery'
-import { openAuthDomain, userKey } from './domain.ts'
+import { openAuthDomain } from './domain.ts'
 import { ARGON2_AVAILABLE, ARGON2_UNAVAILABLE_REASON } from './passwords.ts'
 import { AuthService, DEFAULT_AUTH_CONFIG, type AuthServiceConfig } from './service.ts'
 import { seedBootstrapAdmins, type BootstrapAdmin } from './bootstrap.ts'
 import { seedSchools } from './schools.ts'
 import { adminRoutes, authRoutes } from './routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
-import { readSessionCookie } from './cookies.ts'
 import {
   DEFAULT_MODEL_ATTEMPT_LIMIT,
   DEFAULT_MODEL_ATTEMPT_WINDOW_MS,
@@ -99,6 +98,10 @@ export const Config: z<Config> = z.object({
   learningAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.learningAttemptLimit),
   passwordResetAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.passwordResetAttemptLimit),
   passwordResetTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.passwordResetTtlMs),
+  registrationMode: z.union(['open', 'invite', 'closed']).default(DEFAULT_AUTH_CONFIG.registrationMode),
+  totpAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.totpAttemptLimit),
+  totpChallengeTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.totpChallengeTtlMs),
+  apiTokenLimit: z.number().default(DEFAULT_AUTH_CONFIG.apiTokenLimit),
   trustedProxies: z.array(z.string()).default([]),
   attemptBucketLimit: z.number().default(DEFAULT_AUTH_CONFIG.attemptBucketLimit),
   attemptWindowMs: z.number().default(DEFAULT_AUTH_CONFIG.attemptWindowMs),
@@ -140,6 +143,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const service = new AuthService(domain, config as AuthServiceConfig, {
       ...(limiter === undefined ? {} : { limiter }),
       ...(resetDelivery === undefined ? {} : { resetDelivery }),
+      ...(onceLedger === undefined ? {} : { onceLedger }),
     })
 
     const seeded = await seedSchools(
@@ -153,16 +157,35 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const identity = createIdentityService(service)
     ctx.provide(IDENTITY_SERVICE, identity)
 
-    const actorFromCookie = (cookie: string | undefined): ApiPolicyActor | null => {
-      const token = readSessionCookie({ headers: cookie === undefined ? {} : { cookie } } as IncomingMessage)
-      if (token === null) return null
-      const resolved = service.resolveSession(token)
+    const actorFromCookie = (
+      cookie: string | undefined,
+      authorization?: string,
+    ): ApiPolicyActor | null => {
+      const resolved = service.resolveCredential(cookie, authorization)
       if (resolved === null) return null
       return {
-        userKey: userKey(resolved.user.schoolId, resolved.user.username),
-        schoolId: resolved.user.schoolId,
-        username: resolved.user.username,
-        role: resolved.user.role,
+        ...resolved.actor,
+        credential: resolved.credential.kind === 'session'
+          ? { kind: 'session' }
+          : {
+            kind: 'api-token',
+            tokenId: resolved.credential.token.id,
+            scope: resolved.credential.scope,
+          },
+      }
+    }
+    const actorFromRequest = (req: IncomingMessage): ApiPolicyActor | null => {
+      const resolved = service.resolveCredential(req.headers.cookie, req.headers.authorization)
+      if (resolved === null) return null
+      return {
+        ...resolved.actor,
+        credential: resolved.credential.kind === 'session'
+          ? { kind: 'session' }
+          : {
+            kind: 'api-token',
+            tokenId: resolved.credential.token.id,
+            scope: resolved.credential.scope,
+          },
       }
     }
 
@@ -195,7 +218,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
     ctx.provide(API_POLICY_SERVICE, createApiPolicy({
       actorFromCookie,
-      actorFromRequest: req => identity.actorOf(req),
+      actorFromRequest,
       store: {
         owns: (actor, kind, id) => service.ownsApiResource(actor, kind, id),
         ownedIds: (actor, kind) => service.ownedApiResources(actor, kind),
