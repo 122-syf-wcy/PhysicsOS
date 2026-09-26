@@ -89,7 +89,8 @@ const call = (
   init: RequestInit = {},
   schoolId = 'GZU',
 ) => {
-  const headers = new Headers({ 'content-type': 'application/json' })
+  const headers = new Headers(init.headers)
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json')
   if (role !== null) headers.set('cookie', `physicsos_session=${role}:${schoolId}`)
   return fetch(`${base}/physicsos/class${path}`, { ...init, headers })
 }
@@ -503,6 +504,90 @@ describe('class workflow — the gate', () => {
       actor: 'GZU:teacher',
       action: 'class.post',
       target: '/classes',
+    })
+  })
+
+  describe('same-origin JSON write fence', () => {
+    const cookie = 'physicsos_session=TEACHER:GZU'
+
+    const postRaw = (headers: HeadersInit, body: RequestInit['body']) =>
+      fetch(`${base}/physicsos/class/classes`, {
+        method: 'POST',
+        headers: { cookie, ...Object.fromEntries(new Headers(headers)) },
+        body,
+      })
+
+    it('rejects a write without a JSON content-type', async () => {
+      const missing = await postRaw({}, Buffer.from(JSON.stringify({ name: '缺少类型' })))
+      expect(missing.status).toBe(400)
+      const missingBody = (await missing.json()) as { error: { code: string } }
+      expect(missingBody.error.code).toBe('BAD_REQUEST')
+
+      const bad = await postRaw(
+        { 'content-type': 'application/x-www-form-urlencoded' },
+        'name=bad',
+      )
+      expect(bad.status).toBe(400)
+      expect(((await bad.json()) as { error: { code: string } }).error.code).toBe('BAD_REQUEST')
+    })
+
+    it('rejects a mismatched Origin before the class is written', async () => {
+      const refused = await call('/classes', 'TEACHER', {
+        method: 'POST',
+        headers: { origin: 'https://evil.example' },
+        body: JSON.stringify({ name: '跨站班级' }),
+      })
+      expect(refused.status).toBe(403)
+      expect(((await refused.json()) as { error: { code: string } }).error.code).toBe('BAD_REQUEST')
+
+      const listed = await call('/classes', 'TEACHER')
+      const items = ((await listed.json()) as { items: { name: string }[] }).items
+      expect(items.some(item => item.name === '跨站班级')).toBe(false)
+    })
+
+    it('rejects Sec-Fetch-Site: cross-site on PUT and DELETE', async () => {
+      const created = await json('TEACHER', '/classes', { name: '跨站方法测试班' })
+      const classId = ((await created.json()) as { item: { id: string } }).item.id
+      await json('TEACHER', `/classes/${classId}/members`, { userKey: 'GZU:student' })
+      const assignment = await json('TEACHER', `/classes/${classId}/assignments`, {
+        title: '跨站提交测试',
+        target: { kind: 'paper', id: 'paper-csrf' },
+        dueAt: '2026-10-01T12:00:00.000Z',
+      })
+      const assignmentId = ((await assignment.json()) as { item: { id: string } }).item.id
+
+      const put = await call(
+        `/classes/${classId}/assignments/${assignmentId}/submission`,
+        'STUDENT',
+        {
+          method: 'PUT',
+          headers: { 'sec-fetch-site': 'cross-site' },
+          body: JSON.stringify({ content: 'cross-site' }),
+        },
+      )
+      expect(put.status).toBe(403)
+      expect(((await put.json()) as { error: { code: string } }).error.code).toBe('BAD_REQUEST')
+
+      const remove = await call(
+        `/classes/${classId}/members/${encodeURIComponent('GZU:student')}`,
+        'TEACHER',
+        {
+          method: 'DELETE',
+          headers: { 'sec-fetch-site': 'cross-site' },
+        },
+      )
+      expect(remove.status).toBe(403)
+      expect(((await remove.json()) as { error: { code: string } }).error.code).toBe(
+        'BAD_REQUEST',
+      )
+
+      const receipt = await call(
+        `/classes/${classId}/assignments/${assignmentId}/submission`,
+        'STUDENT',
+      )
+      expect(((await receipt.json()) as { item: unknown }).item).toBeNull()
+      const members = await call(`/classes/${classId}/members`, 'TEACHER')
+      expect(((await members.json()) as { items: { userKey: string }[] }).items).toHaveLength(1)
     })
   })
 })

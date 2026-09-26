@@ -7,6 +7,8 @@ import { ClassError, auditWrites, guard, type PhysicsosIdentity } from './identi
 import type { ClassService } from './service.ts'
 
 const MAX_BODY_BYTES = 32 * 1024
+const JSON_MEDIA_TYPE = 'application/json'
+const SAFE_FETCH_SITES = new Set(['same-origin', 'same-site', 'none'])
 
 export interface RouteDeps {
   readonly service: ClassService
@@ -63,6 +65,45 @@ const boundedLimit = (url: URL, fallback: number, max: number): number => {
   return value
 }
 
+/**
+ * Same-origin JSON fence for every mutating request.
+ *
+ * A cookie-backed API cannot rely on the browser to withhold a cross-site
+ * form POST. Requiring a JSON media type blocks simple HTML forms, while the
+ * Origin and Fetch Metadata checks reject scripted cross-site calls that can
+ * set that media type. This runs before identity resolution or body parsing,
+ * so no refused request reaches a service mutation.
+ */
+const checkJsonWriteFence = (req: IncomingMessage): void => {
+  const contentType = req.headers['content-type']
+  const mediaType = typeof contentType === 'string'
+    ? contentType.split(';', 1)[0]?.trim().toLowerCase()
+    : undefined
+  if (mediaType !== JSON_MEDIA_TYPE) {
+    throw new ClassError(400, 'BAD_REQUEST', 'content-type 必须为 application/json')
+  }
+
+  const origin = req.headers.origin
+  if (origin !== undefined) {
+    try {
+      if (new URL(origin).host.toLowerCase() !== req.headers.host?.toLowerCase()) {
+        throw new ClassError(403, 'BAD_REQUEST', '跨站请求被拒绝')
+      }
+    } catch (error) {
+      if (error instanceof ClassError) throw error
+      throw new ClassError(403, 'BAD_REQUEST', '跨站请求被拒绝')
+    }
+  }
+
+  const fetchSite = req.headers['sec-fetch-site']
+  if (
+    typeof fetchSite === 'string'
+    && !SAFE_FETCH_SITES.has(fetchSite.toLowerCase())
+  ) {
+    throw new ClassError(403, 'BAD_REQUEST', '跨站请求被拒绝')
+  }
+}
+
 export function classRoutes(
   deps: RouteDeps,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
@@ -73,6 +114,8 @@ export function classRoutes(
       const path = url.pathname.replace(/^\/physicsos\/class/, '') || '/'
       const method = req.method ?? 'GET'
       const seg = path.split('/').filter(Boolean)
+
+      if (method !== 'GET') checkJsonWriteFence(req)
 
       const identity = identityOf()
       const { actor, writes } = guard(identity, req, writeFloor(path, seg, method))
