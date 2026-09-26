@@ -1,726 +1,338 @@
-# PhysicsOS Deployment & Operations
+# PhysicsOS Deployment and Operations
 
-> 文件：`docs/13-DEPLOYMENT-OPERATIONS.md`  
-> 文档定位：PhysicsOS 本地开发、环境、CI/CD、监控、备份、恢复与未来 Desktop 发布规范
+This runbook covers the production container foundation: CI gates, immutable
+image builds, Compose startup, health verification, backups, restore drills,
+and rollback. It does not authorize a push or deployment by itself.
 
----
+## 1. Production topology
 
-# 1. 目标
+The Compose stack runs three stateful roles:
 
-定义：
+| Service    | Responsibility                                           | Persistent data         |
+| ---------- | -------------------------------------------------------- | ----------------------- |
+| `app`      | Harness Web/API host plus PhysicsOS host plugins         | `app_data` (`DSH_HOME`) |
+| `postgres` | Relational account, learning, class, and event storage   | `postgres_data`         |
+| `redis`    | Shared rate limits, queues, and short-lived coordination | `redis_data`            |
 
-```text
-Local Development
-Dev
-Staging
-Production
-CI/CD
-Observability
-Backup
-Restore
-Rollback
-Scaling
-Desktop Release
-```
-
----
-
-# 2. 环境
-
-统一：
+The app publishes only to host loopback by default:
 
 ```text
-local
-development
-staging
-production
+127.0.0.1:${PHYSICSOS_HTTP_PORT:-3080} -> app:3080
 ```
 
-禁止大量：
+Put an authenticated TLS reverse proxy on the host for remote access. Do not
+bind the raw Harness Web port to a public interface.
 
-```text
-prod2
-test-final
-staging-new
+Every service has a Docker healthcheck. The app's `/healthz` route is process
+liveness; `/readyz` is fail-closed readiness for PostgreSQL and Redis. Docker
+starts the app only after both dependencies are healthy.
+
+## 2. Prerequisites
+
+- Docker Engine with Compose v2
+- An initialized repository, including `vendor/deepseek-harness`
+- A deployment host with enough disk for three named volumes and local backups
+- A reverse proxy, TLS certificate, DNS name, and network allowlist for the
+  deployment environment
+
+The local `.env.*` secret paths are ignored by Git. Never place secrets in the
+image, Compose environment values, source files, or frontend bundles.
+
+## 3. Configure secrets
+
+Create the five secret files once per environment:
+
+```sh
+umask 077
+openssl rand -hex 32 > .env.postgres_password
+openssl rand -hex 32 > .env.redis_password
+
+postgres_password="$(cat .env.postgres_password)"
+redis_password="$(cat .env.redis_password)"
+
+printf 'postgresql://physicsos:%s@postgres:5432/physicsos\n' "$postgres_password" \
+  > .env.database_url
+printf 'redis://:%s@redis:6379/0\n' "$redis_password" \
+  > .env.redis_url
+printf '%s\n' 'replace-with-the-model-provider-key' > .env.deepseek_api_key
 ```
 
-无规范环境。
+Percent-encode characters before inserting credentials into URLs. Production
+secret managers may provide the same files at another path with
+`PHYSICSOS_POSTGRES_PASSWORD_FILE`, `PHYSICSOS_REDIS_PASSWORD_FILE`,
+`PHYSICSOS_DATABASE_URL_FILE`, `PHYSICSOS_REDIS_URL_FILE`, and
+`PHYSICSOS_DEEPSEEK_API_KEY_FILE`.
 
----
+Validate the composed configuration without starting containers:
 
-# 3. Web 部署
-
-学生 Web / Teacher Web / Admin Web：
-
-```text
-Static / Edge Hosting
-+
-CDN
+```sh
+docker compose config --quiet
 ```
 
-构建产物 immutable。
+## 4. Continuous integration
 
----
+`.github/workflows/ci.yml` runs on `main` pushes, pull requests, and manual
+dispatch. The job initializes the pinned Harness submodule, applies the overlay,
+installs both lockfiles, and runs:
 
-# 4. API
-
-部署为容器服务。
-
----
-
-# 5. Agent Service
-
-独立容器。
-
-需要：
-
-```text
-model credential
-session store
-streaming
-tool runtime
+```sh
+docker compose config --quiet
+pnpm -C vendor/deepseek-harness exec vitest run \
+  --config ../../overlays/harness/files/packages/physicsos/health-host/vitest.config.ts
+pnpm -C vendor/deepseek-harness run build:lib
+pnpm exec prettier --check <deployment-owned paths>
+pnpm exec tsc -p overlays/harness/files/packages/physicsos/health-host/tsconfig.json
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 ```
 
----
+A release is eligible only when every gate is green on the exact commit being
+deployed. Preserve the image digest and commit SHA together in the release
+record. The format gate is intentionally scoped to the deployment-owned paths
+until the repository-wide Prettier baseline is reconciled.
 
-# 6. Simulation Service
+## 5. Build and release
 
-使用 Worker 模式时可水平扩展。
+Build locally:
 
----
-
-# 7. Math Service
-
-Python 独立容器。
-
----
-
-# 8. Document Service
-
-长任务建议：
-
-```text
-API
-+
-Job Worker
+```sh
+export PHYSICSOS_APP_IMAGE="registry.example/physicsos-app:$(git rev-parse --short=12 HEAD)"
+docker compose build --pull app
+docker image inspect "$PHYSICSOS_APP_IMAGE" \
+  --format '{{index .RepoDigests 0}}'
 ```
 
-分离。
+For a registry release, tag with the full commit SHA and, after push, deploy the
+resulting digest rather than a movable tag:
 
----
-
-# 9. Docker
-
-每个服务：
-
-```text
-Dockerfile
-.dockerignore
-healthcheck
+```sh
+docker push "$PHYSICSOS_APP_IMAGE"
+docker image inspect "$PHYSICSOS_APP_IMAGE" \
+  --format '{{index .RepoDigests 0}}'
 ```
 
----
+Record:
 
-# 10. Docker Compose
+- commit SHA
+- image digest
+- Compose revision
+- database migration revision, when the release has one
+- operator and UTC start/end time
 
-本地开发提供：
+## 6. Deploy
 
-```text
-PostgreSQL
-Redis
-Object Storage
-Vector Store
+1. Verify the candidate digest and CI result for the same commit.
+2. Verify a successful backup before any schema migration.
+3. Start the dependencies and wait for healthy state:
+
+```sh
+docker compose up -d postgres redis
+docker compose ps
 ```
 
----
+4. Run the release migration step before starting the new app. Migrations must
+   be backward-compatible with the currently running app. If the migration
+   fails, stop the release, keep the old app running, and do not retry blindly.
 
-# 11. Config
+5. Start the app:
 
-按：
-
-```text
-environment variables
-config files
-secret manager
+```sh
+docker compose up -d --no-build app
+docker compose ps app
 ```
 
-分层。
+6. Smoke test readiness and the Web entry point:
 
----
-
-# 12. Secret
-
-生产 Secret：
-
-```text
-不进入镜像
-不进入 Git
-不进入前端
+```sh
+curl --fail --show-error http://127.0.0.1:3080/healthz
+curl --fail --show-error http://127.0.0.1:3080/readyz
+curl --fail --show-error --head http://127.0.0.1:3080/
+docker compose logs --since=10m app
 ```
 
----
+7. Verify one authenticated read and one bounded write through the external
+   reverse proxy. Confirm the resulting account/tenant scope and audit event.
 
-# 13. CI Pipeline
+## 7. Backup
 
-至少：
+Back up PostgreSQL, Redis, and the `app_data` volume together. A database dump
+without the session/replay volume is not a complete PhysicsOS backup.
 
-```text
-install
-format check
-typecheck
-lint
-unit
-contract
-physics golden
-build
+Set a UTC timestamp and create a private backup directory:
+
+```sh
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_dir="backups/$stamp"
+install -d -m 0700 "$backup_dir"
 ```
 
-核心分支增加：
+PostgreSQL custom-format dump:
 
-```text
-integration
-agent regression
-e2e
+```sh
+docker compose exec -T postgres sh -c \
+  'PGPASSWORD="$(cat /run/secrets/postgres_password)" pg_dump \
+    --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --format=custom' \
+  > "$backup_dir/postgres.dump"
 ```
 
----
+Redis append-only snapshot:
 
-# 14. Artifact
+```sh
+docker compose exec -T redis sh -c \
+  'REDISCLI_AUTH="$(cat /run/secrets/redis_password)" \
+    redis-cli --no-auth-warning BGSAVE'
 
-构建产物：
-
-```text
-versioned
-immutable
-traceable to commit
+docker compose stop redis
+docker run --rm \
+  -v physicsos_redis_data:/source:ro \
+  -v "$PWD/$backup_dir:/backup" \
+  alpine:3.21 tar -C /source -czf /backup/redis.tgz .
+docker compose start redis
 ```
 
----
+Application/session volume:
 
-# 15. CD
-
-推荐：
-
-```text
-Build Once
-↓
-Deploy Staging
-↓
-Migration
-↓
-Smoke
-↓
-Promote
-↓
-Production Verification
+```sh
+docker compose stop app
+docker run --rm \
+  -v physicsos_app_data:/source:ro \
+  -v "$PWD/$backup_dir:/backup" \
+  alpine:3.21 tar -C /source -czf /backup/app-data.tgz .
+docker compose start app
 ```
 
----
+Write a manifest with the release identity and checksums:
 
-# 16. Database Migration
-
-部署前检查。
-
-失败：
-
-```text
-停止发布
+```sh
+{
+  printf 'commit=%s\n' "$(git rev-parse HEAD)"
+  docker compose images
+  sha256sum "$backup_dir"/*
+} > "$backup_dir/manifest.txt"
 ```
 
----
+Copy the directory to encrypted off-host storage. Test restoration monthly and
+before every risky migration. Define and record RPO/RTO per environment; do not
+claim a recovery target that has not been measured in a restore drill.
 
-# 17. Rolling Compatibility
+## 8. Restore
 
-滚动部署期间：
+Restore is destructive. Announce a maintenance window, stop writes, and
+explicitly approve the recovery point before proceeding.
 
-```text
-新旧服务短时间共存
+1. Preserve the failed volumes for investigation:
+
+```sh
+docker compose stop app redis postgres
 ```
 
-API / DB 变更需兼容。
+2. Restore the application volume:
 
----
-
-# 18. Health
-
-每个服务：
-
-```text
-liveness
-readiness
+```sh
+docker run --rm \
+  -v physicsos_app_data:/target \
+  -v "$PWD/backups/RECOVERY_POINT:/backup:ro" \
+  alpine:3.21 sh -c 'rm -rf /target/* && tar -C /target -xzf /backup/app-data.tgz'
 ```
 
----
+3. Recreate PostgreSQL and restore the dump:
 
-# 19. Metrics
-
-应用：
-
-```text
-request count
-latency
-error rate
-CPU
-memory
+```sh
+docker compose up -d postgres
+docker compose exec -T postgres sh -c \
+  'PGPASSWORD="$(cat /run/secrets/postgres_password)" dropdb \
+    --username="$POSTGRES_USER" --if-exists "$POSTGRES_DB"'
+docker compose exec -T postgres sh -c \
+  'PGPASSWORD="$(cat /run/secrets/postgres_password)" createdb \
+    --username="$POSTGRES_USER" "$POSTGRES_DB"'
+docker compose exec -T postgres sh -c \
+  'PGPASSWORD="$(cat /run/secrets/postgres_password)" pg_restore \
+    --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists' \
+  < backups/RECOVERY_POINT/postgres.dump
 ```
 
-依赖：
+4. Recreate Redis and restore its snapshot:
 
-```text
-DB
-Redis
-Object Storage
-Queue
+```sh
+docker compose stop redis
+docker run --rm \
+  -v physicsos_redis_data:/target \
+  -v "$PWD/backups/RECOVERY_POINT:/backup:ro" \
+  alpine:3.21 sh -c 'rm -rf /target/* && tar -C /target -xzf /backup/redis.tgz'
+docker compose start redis
 ```
 
----
+5. Start the app and validate:
 
-# 20. Agent Metrics
-
-```text
-run count
-run duration
-model latency
-tool latency
-tool error
-compaction
-token usage
-cost
+```sh
+docker compose up -d app
+docker compose ps
+curl --fail --show-error http://127.0.0.1:3080/readyz
 ```
 
----
+Validate account/session counts against the backup manifest, open a restored
+session, replay one saved PhysicsOS scene, and confirm new writes persist after
+a `docker compose restart app`.
 
-# 21. Physics Metrics
+If any validation fails, stop the app, preserve logs and restored volumes, and
+choose a later recovery point or repeat the restore. Do not reopen traffic on a
+partially restored database.
 
-```text
-simulation count
-simulation duration
-engine usage
-verification failure
-solver failure
-cache hit
+## 9. Rollback
+
+Rollback is application-first. Database down-migrations are prohibited unless
+they are proven lossless and have their own tested procedure.
+
+To deploy the previous image digest:
+
+```sh
+export PHYSICSOS_APP_IMAGE='registry.example/physicsos-app@sha256:PREVIOUS_DIGEST'
+docker compose pull app
+docker compose up -d --no-build app
+docker compose ps app
+curl --fail --show-error http://127.0.0.1:3080/readyz
 ```
 
----
-
-# 22. Document Metrics
-
-```text
-parse jobs
-page throughput
-OCR latency
-failure rate
-needs_review rate
-```
-
----
-
-# 23. Alert
-
-重点：
-
-```text
-5xx spike
-DB unavailable
-Queue backlog
-Model provider unavailable
-Simulation failure spike
-Storage failure
-```
-
----
-
-# 24. Logs
-
-集中式结构化日志。
-
-必须含：
-
-```text
-service
-traceId
-event
-level
-timestamp
-```
-
----
-
-# 25. Distributed Trace
-
-打通：
-
-```text
-Web Request
-API
-Agent
-Tool
-Physics
-Math
-Document
-```
-
----
-
-# 26. Error Tracking
-
-前端与服务端统一收集异常。
-
----
-
-# 27. Backup
-
-PostgreSQL：
-
-```text
-regular full backup
-+
-point-in-time recovery where possible
-```
-
----
-
-# 28. Physics Event Backup
-
-必须包含。
-
----
-
-# 29. Harness Session Backup
-
-如果产品承诺历史 Agent 会话可恢复，则纳入备份。
-
----
-
-# 30. Object Storage
-
-重要 Bucket：
-
-```text
-versioning / lifecycle
-```
-
----
-
-# 31. Restore Drill
-
-备份不是“有文件就行”。
-
-必须定期：
-
-```text
-真正恢复
-验证数据
-验证 Scene Replay
-```
-
----
-
-# 32. Retention
-
-明确：
-
-```text
-application logs
-temporary OCR
-temporary simulation
-old jobs
-old exports
-```
-
-生命周期。
-
----
-
-# 33. Cost
-
-主要成本：
-
-```text
-LLM
-VLM
-OCR
-Storage
-Egress
-Heavy Simulation
-```
-
----
-
-# 34. Cost Attribution
-
-按：
-
-```text
-user
-session
-question
-model
-service
-```
-
-记录。
-
----
-
-# 35. Scaling
-
-API：
-
-```text
-stateless horizontal scale
-```
-
-Agent：
-
-```text
-stateless runtime workers + persistent session
-```
-
-Simulation：
-
-```text
-job workers
-```
-
-Document：
-
-```text
-queue workers
-```
-
----
-
-# 36. Concurrency Limit
-
-单用户限制同时：
-
-```text
-Agent Runs
-Document Jobs
-Heavy Simulations
-```
-
----
-
-# 37. Graceful Shutdown
-
-Worker：
-
-```text
-停止接新任务
-完成或安全取消当前任务
-写回状态
-```
-
----
-
-# 38. Release Strategy
-
-优先：
-
-```text
-small release
-canary
-feature flag
-rollback
-```
-
----
-
-# 39. Feature Flag
-
-未完全开放能力：
-
-```text
-Flag
-```
-
-管理。
-
----
-
-# 40. Rollback
-
-必须支持快速回滚：
-
-```text
-Web
-API
-Agent
-Simulation
-Config
-```
-
----
-
-# 41. DB Rollback
-
-数据库 Breaking Migration 需要：
-
-```text
-expand
-migrate
-contract
-```
-
-而不是简单 down migration 赌数据。
-
----
-
-# 42. Engine Version
-
-发布时保留：
-
-```text
-engineVersion
-```
-
-旧结果仍可追踪。
-
----
-
-# 43. Harness Upgrade
-
-必须单独执行：
-
-```text
-Upgrade Branch
-↓
-Read Changelog
-↓
-Adapter Test
-↓
-Session Resume Test
-↓
-Tool Test
-↓
-Compaction Test
-↓
-Agent Golden
-```
-
----
-
-# 44. Desktop Build
-
-未来：
-
-```text
-Tauri
-Windows x64
-```
-
-可以后续增加 ARM64。
-
----
-
-# 45. Desktop Signing
-
-正式发布：
-
-```text
-签名
-```
-
----
-
-# 46. Auto Update
-
-更新包：
-
-```text
-signed
-versioned
-rollback-aware
-```
-
----
-
-# 47. Sidecar
-
-本地 Agent / Math / Physics Sidecar：
-
-```text
-版本必须与 App Compatible
-```
-
----
-
-# 48. Offline Capability
-
-明确矩阵：
-
-```text
-Physics Lab 基础仿真：可离线
-本地 Scene：可离线
-Cloud Agent：不可离线
-Cloud OCR：不可离线
-```
-
-未来可逐步扩展。
-
----
-
-# 49. Status
-
-生产可以提供：
-
-```text
-Service Status Page
-```
-
----
-
-# 50. Runbook
-
-至少写：
-
-```text
-DB Down
-Redis Down
-Model Provider Down
-Object Storage Down
-Queue Stuck
-Document Worker Down
-Simulation Failure Spike
-```
-
-处理步骤。
-
----
-
-# 51. Disaster Recovery
-
-定义：
-
-```text
-RPO
-RTO
-```
-
-正式商用前根据业务要求设定。
-
----
-
-# 52. Operations Definition of Done
-
-新服务上线前必须有：
-
-```text
-Docker
-health
-metrics
-logs
-alerts
-backup strategy
-restore strategy
-runbook
-resource limit
-```
-
----
-
-# 53. 一句话运维原则
-
-> **PhysicsOS 的每一次发布、每一个 Agent Run、每一次 Simulation 和每一份用户数据都应该能够被观察、追踪、恢复和安全升级，而不是只有“服务现在能启动”。**
+Use expand/migrate/contract for schema changes so the previous app remains
+compatible during rollback. If the new release wrote non-backward-compatible
+data, stop writes and choose explicitly between forward repair and destructive
+restore.
+
+After rollback:
+
+1. Verify `/healthz`, `/readyz`, login, one replay, and one bounded write.
+2. Keep the failed image digest and logs for diagnosis.
+3. Record the rollback reason, timestamp, impact window, and data decision.
+4. Do not redeploy the failed digest until a regression test reproduces the
+   failure and the fix passes root CI.
+
+## 10. Operational checks
+
+Daily:
+
+- all Compose services healthy
+- `/readyz` success and PostgreSQL/Redis disk headroom
+- 5xx, latency, process restarts, queue backlog, and model-provider errors
+- backup completion and off-host checksum
+
+Weekly:
+
+- restore one backup into an isolated environment
+- verify session replay and one PhysicsOS scene
+- confirm secret-file permissions and rotation status
+- review image digests against the release record
+
+Incident response:
+
+| symptom                                      | first action                                                                                  |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| app unhealthy while dependencies are healthy | inspect app logs and `/readyz`; roll back if the prior digest passes                          |
+| PostgreSQL unavailable                       | stop app writes, inspect `docker compose logs postgres`, restore service or recovery point    |
+| Redis unavailable                            | expect fail-closed readiness; restore Redis before reopening traffic                          |
+| migration failed                             | keep the old app, do not start the new app, fix forward only with a reviewed migration        |
+| rollback needed                              | deploy the prior digest, verify health/login/replay, and preserve the failed release evidence |
+
+Production is ready only when health, logs, metrics, alerts, backup, restore,
+rollback, resource limits, and ownership are all defined and tested.

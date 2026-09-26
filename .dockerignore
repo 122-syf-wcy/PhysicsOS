@@ -1,0 +1,37 @@
+# VCS and local process metadata
+.git
+**/.git
+**/.git/**
+.DS_Store
+
+# Dependencies and build caches are rebuilt in the image
+**/node_modules
+**/.pnpm-store
+**/.turbo
+**/dist
+**/lib
+**/build
+**/coverage
+**/*.tsbuildinfo
+**/playwright-report
+**/test-results
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Desktop-only and generated source material
+apps/desktop
+UI/
+docs/
+backups/
+*.log
+*.pid
+
+# Local agent scratch
+.superpowers
+.claude
+.cursor
+.playwright-mcp
+tmp/
