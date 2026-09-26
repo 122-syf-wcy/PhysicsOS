@@ -10,11 +10,14 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
 import { createClassApi } from './class-api.ts'
 import { createLearningApi } from './learning-api.ts'
+import { createModelPoolApi } from './model-pool-api.ts'
 import { createNoticeApi } from './notice-api.ts'
+import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
 import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
 import { HomeActions } from './HomeActions.tsx'
@@ -34,15 +37,29 @@ import { SidebarNav } from './SidebarNav.tsx'
 import { SidebarNew } from './SidebarNew.tsx'
 import { createPaperApi } from './paper-api.ts'
 import { createPhysicsSurfaceController, type PhysicsSceneRef } from './surface-store.ts'
+import {
+  WorkspacePanel, WorkspacePickerTrigger, createWorkspacePanelController,
+  type AccountWorkspaceRow,
+} from './WorkspacePanel.tsx'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { en, zh, type PhysicsosKey } from './locales.ts'
 
 export { PHYSICSOS_BUILT_AT, PHYSICSOS_BUILT_DAY, PHYSICSOS_VERSION, buildStamp } from './build-stamp.ts'
 export type { PhysicsosKey } from './locales.ts'
 export type { AuthApi, AuthUser, SchoolRow } from './auth-api.ts'
-export type { NoticeApi, FeedbackRow, AnnouncementRow } from './notice-api.ts'
+export type {
+  NoticeApi, FeedbackRow, AnnouncementRow, PlatformNoticeRow,
+} from './notice-api.ts'
 export type { AuthState } from './auth-store.ts'
+export type {
+  ModelPoolApi, ModelPoolAuditRecord, ModelPoolChannelView, ModelPoolKeyView,
+  ModelPoolProbeResult, ModelPoolState,
+} from './model-pool-api.ts'
 export type { AuthGateInjected, AuthGateProps } from './AuthGate.tsx'
+export type {
+  AdminPlatformNoticeTabProps,
+} from './AdminPlatformNoticeTab.tsx'
+export type { PlatformNoticeDialogInjected, PlatformNoticeDialogProps } from './PlatformNoticeDialog.tsx'
 export type { HomeActionsInjected, HomeActionsProps } from './HomeActions.tsx'
 export type { HomeBrandProps } from './HomeBrand.tsx'
 export type { PhysicsProfileLabelInjected, PhysicsProfileLabelProps } from './PhysicsProfileLabel.tsx'
@@ -55,6 +72,12 @@ export type { RecentSpacesInjected, RecentSpacesProps } from './RecentSpaces.tsx
 export type { PhysicsSurfaceInjected, PhysicsSurfaceProps } from './LabWorkspace.tsx'
 export type { PhysicsProfileId } from './profiles.ts'
 export type { PhysicsSurfaceId } from './surface-store.ts'
+export type {
+  AccountWorkspaceRow, WorkspacePanelController, WorkspacePanelInjected,
+  WorkspacePanelProps, WorkspacePanelState, WorkspacePickerTriggerInjected,
+  WorkspacePickerTriggerProps,
+} from './WorkspacePanel.tsx'
+export { createWorkspacePanelController } from './WorkspacePanel.tsx'
 export {
   STUDENT_PROFILES, TEACHER_PROFILES, isStudentProfile, runtimePresetOf,
 } from './profiles.ts'
@@ -99,18 +122,14 @@ export function apply(ctx: ClientContext): void {
    * 是幂等的（存在即返回，不会新建）。所以这里先确保它存在，再开会话，
    * 全程不碰本机目录选择器；失败时退回原行为，不影响单机版。
    */
+  const workspacePanel = createWorkspacePanelController()
+
   const startSession = (workspaceId?: WorkspaceId): void => {
     if (workspaceId !== undefined) {
       ctx.workspaces.startSession(workspaceId)
       return
     }
-    void ctx.workspaces
-      .create({ path: '' })
-      .then((workspace) => { ctx.workspaces.startSession(workspace.workspaceId) })
-      .catch((reason: unknown) => {
-        console.warn('workspace auto-provision failed, falling back:', reason)
-        ctx.workspaces.startSession()
-      })
+    workspacePanel.open()
   }
 
   /* 账户体系 Auth V1: the cookie session resolves through /me; every per-user
@@ -151,6 +170,22 @@ export function apply(ctx: ClientContext): void {
   const adminApi = createAdminApi()
   /* 反馈与公告: one client for both directions (`/physicsos/notice`). */
   const noticeApi = createNoticeApi()
+  /* 模型通道: platform-wide pool and its encrypted upstream credentials. */
+  const modelPoolApi = createModelPoolApi()
+
+  const createAccountWorkspace = async (name: string): Promise<AccountWorkspaceRow> => {
+    /* The host accepts only this virtual path: the title crosses the seam,
+       while auth-host chooses and creates the real per-account directory. */
+    const workspace = await ctx.workspaces.create({
+      path: `physicsos-workspace://${encodeURIComponent(name)}`,
+    })
+    return { id: workspace.workspaceId, name }
+  }
+
+  const openAccountWorkspace = async (id: string): Promise<void> => {
+    const sessionId = await ctx.workspaces.connectWorkspace(id as WorkspaceId)
+    ctx.sessions.open(sessionId)
+  }
 
   /* The student's attempt history: written by self-checks (the Lab's 自测 tab
      and golden-question cards), read by the 学习记录 surface. Persisted so the
@@ -200,6 +235,43 @@ export function apply(ctx: ClientContext): void {
     }),
   }, SceneChatCard))
 
+  /* Account workspace manager: every normal entry that needs a workspace
+     opens this panel. The panel reads the auth-host-filtered feed and never
+     renders a host path, so the directory browser is not a product surface. */
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'physicsos-workspace-panel',
+    locale: NS,
+    inject: () => ({
+      hooks: {
+        panel: workspacePanel.store,
+        workspaces: ctx.workspaces.list,
+      },
+      createWorkspace: createAccountWorkspace,
+      renameWorkspace: async (id: string, name: string) => {
+        await ctx.workspaces.rename(id as WorkspaceId, name)
+      },
+      openWorkspace: openAccountWorkspace,
+      close: workspacePanel.close,
+    }),
+  }, WorkspacePanel))
+
+  /* Replace the upstream composer workspace picker. That picker's add action
+     is the route into `host.listDirectory`; this occupant keeps the same slot
+     but opens the account-scoped panel instead. */
+  ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register({
+    name: 'conversation.hero.workspace',
+    priority: -1,
+    locale: NS,
+    inject: () => ({
+      hooks: {
+        panel: workspacePanel.store,
+        workspaces: ctx.workspaces.list,
+      },
+      openPanel: workspacePanel.open,
+    }),
+  }, WorkspacePickerTrigger))
+
   /* The auth gate: one root-scoped overlay entry that covers the shell while
      the session is unresolved, and holds the login/register/forgot flow for
      guests. Authed renders nothing — the shell underneath is the real app. */
@@ -214,6 +286,25 @@ export function apply(ctx: ClientContext): void {
       forgotPassword: authApi.forgotPassword,
     }),
   }, AuthGate))
+
+  /* Platform notice: versioned and account-scoped through notice-host. The
+     settings.onboarding sink sits ahead of the upstream welcome + API-key
+     steps and deliberately never completes, keeping Harness onboarding copy
+     out of the PhysicsOS product. */
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'physicsos-platform-notice',
+    locale: NS,
+    inject: () => ({
+      api: noticeApi,
+      hooks: { auth: auth.store },
+    }),
+  }, PlatformNoticeDialog))
+  ctx.slots.inject('settings.onboarding', () => ctx.slots.register({
+    name: 'settings.onboarding',
+    id: 'physicsos-upstream-onboarding-sink',
+    order: -200,
+  }, UpstreamOnboardingSink))
 
   ctx.slots.inject('sidebar.brand', () => ctx.slots.register({
     name: 'sidebar.brand',
@@ -460,6 +551,7 @@ export function apply(ctx: ClientContext): void {
         adminApi,
         noticeApi,
         classApi,
+        modelPoolApi,
         /* 公告离线缓存落在账户命名空间里(方案 2.3 的「缓存上一条」)——
            本校公告不该跟着另一个账号登录出现在下一块屏幕上。 */
         noticeStorage: auth.userStorage,

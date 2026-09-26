@@ -113,6 +113,16 @@
   color: var(--dsw-static-blue-600);
 }
 
+:global(body[data-ds-dark-theme]) .portalIcon {
+  background: color-mix(in srgb, var(--dsw-static-blue-500) 18%, transparent);
+  color: var(--dsw-static-blue-300, #93c5fd);
+}
+
+:global(body[data-ds-dark-theme]) .portalImage,
+:global(body[data-ds-dark-theme]) .emptyImage {
+  filter: brightness(0.58) saturate(0.84) contrast(0.94);
+}
+
 .portalDescription {
   min-height: 36px;
   color: var(--dsw-alias-label-secondary);

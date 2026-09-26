@@ -157,16 +157,19 @@ docker compose config --quiet
 
 ### 3.3 模型链路（provider / base URL / key）
 
-生产组合的默认模型走 `llm-deepseek` 的 `deepseek-official` 路由：适配器把
-`DEEPSEEK_BASE_URL` 当端点、把 secret `deepseek_api_key` 展开成 `DEEPSEEK_API_KEY`
-当凭据，两者必须指向同一个供应商。
+生产组合的默认模型走 `llm-deepseek` 的 `deepseek-official` 路由，但
+`DEEPSEEK_BASE_URL` 不再直接指向第三方网关，而是指向容器内的
+`model-pool-host` 回环代理。代理再按通道优先级与 key 权重选择上游，因此单个
+key 失效时不需要重启 Harness。
 
-| 项       | 生产取值                                   | 说明                                                                             |
-| -------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
-| base URL | `https://api.fengshao1227.com/v1`          | compose 透传 `DEEPSEEK_BASE_URL`；换网关只改这个变量与 secret                    |
-| key      | `.env.deepseek_api_key`（OpenAI 兼容 key） | 必须对该 base URL 有效；`deploy-server.sh` 只检查文件非空，不校验有效性          |
-| 模型名   | `deepseek-v4.1-flash`                      | base 组合默认 `deepseek-v4-flash`，多数中转网关没有，会回 `model_not_found`      |
-| 输出上限 | `maxTokens: 32768`                         | 推理模型先花 reasoning token；上限太小会 `content:null` + `finish_reason:length` |
+| 项               | 生产取值                                                                    | 说明                                                                             |
+| ---------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Harness base URL | `http://127.0.0.1:${PHYSICSOS_MODEL_POOL_PORT:-38972}/v1`                   | 只在 app 容器内监听；公网端口不会暴露代理                                        |
+| 兜底上游         | `PHYSICSOS_MODEL_FALLBACK_BASE_URL`，默认 `https://api.fengshao1227.com/v1` | 只用于空池播种；后台新增任意通道后不再自动重加                                   |
+| key              | `.env.deepseek_api_key`（OpenAI 兼容 key）                                  | 仅作为空池兜底种子，由 `model-pool-host` 加密存入 `physicsos_model_pool`         |
+| 加密主密钥       | `.env.model_pool_secret`                                                    | 派生 AES-256-GCM 密钥；必须长期稳定，换掉后旧 key 会 `KEY_DECRYPT_FAILED`        |
+| 模型名           | `deepseek-v4.1-flash`                                                       | base 组合默认 `deepseek-v4-flash`，多数中转网关没有，会回 `model_not_found`      |
+| 输出上限         | `maxTokens: 32768`                                                          | 推理模型先花 reasoning token；上限太小会 `content:null` + `finish_reason:length` |
 
 模型名与输出上限写在 `$DSH_HOME/settings.yaml`（容器内
 `/var/lib/physicsos/settings.yaml`，缺失时回落到 base 组合默认值）：
@@ -207,7 +210,52 @@ agent-default-model:
 cd /opt/physicsos && K=$(cat .env.deepseek_api_key)
 curl -sS -o /dev/null -w '%{http_code}\n' https://api.fengshao1227.com/v1/models \
   -H "Authorization: Bearer $K"
+docker compose exec -T app node -e "fetch('http://127.0.0.1:38972/v1/models').then(async r => { console.log(r.status, await r.text()) })"
 docker compose exec -T app cat /var/lib/physicsos/settings.yaml
+```
+
+### 3.4 平台模型号池（model-pool）
+
+管理员在「管理后台 → 模型通道」维护通道和 key；页签只显示 key 尾 4 位。
+`model-pool-host` 同时暴露：
+
+- app 容器内的 OpenAI 兼容代理：`http://127.0.0.1:38972/v1`
+- 同源管理接口：`/physicsos/model-pool/*`，只接受 `SUPER_ADMIN`
+
+#### 策略语义
+
+| 行为     | 生产语义                                                                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 轮询     | 先按 `priority` 从小到大的通道分档，档内按 key 权重轮询；单次请求仍返回完整候选链用于故障转移                                               |
+| 重试     | `retryCount` 默认 2，最多尝试候选 key 数量个；400/404/422 等客户端错误不换 key                                                              |
+| 冷却     | 401/403 认证失败立即冷却；429/5xx/传输失败达到 `failureThreshold` 后冷却                                                                    |
+| 退避     | `cooldownBaseMs` 起指数增长，受 `cooldownMaxMs` 限制；`autoRecover=true` 时到期自动恢复                                                     |
+| 流式     | 只会在上游响应头返回前重试；流已经开始后不重放，避免重复内容                                                                                |
+| 全不可用 | 明确返回 HTTP 503 与 `MODEL_POOL_EXHAUSTED`、`MODEL_POOL_EMPTY`、`MODEL_POOL_MODEL_UNAVAILABLE` 或 `MODEL_POOL_ALL_COOLING`，不伪造模型回复 |
+
+#### 日常操作
+
+1. **换 key**：在「模型通道」找到 key，点「编辑」后粘贴新 key；请求成功后旧的
+   密文会被覆盖，失败计数清零。只在创建/替换的请求体内出现明文 key，列表和审计
+   永远只记尾号。
+2. **临时停用 key**：把 key 的「启用」取消后保存；代理下一请求立即跳过它。
+3. **停用整条通道**：编辑通道并把「通道启用」取消；该通道下所有 key 一起退出候选。
+4. **全部停用**：模型请求会返回上述 503；这是可恢复的配置状态，不会退回到未加密的
+   单 key 直连。
+5. **手动恢复**：对冷却中的 key 点「重置失败」，或按策略等待自动恢复。
+6. **单 key 探测**：点「测试此 key」，页面显示上游状态、延迟和脱敏错误。
+
+#### 加密与备份
+
+`model_pool_secret` 必须与 `postgres_data` 一起备份；只有数据库而没有主密钥时，
+通道记录仍可读，但 key 无法解密，模型请求会 fail-closed。不要把 secret 写进
+`docs/`、issue、日志或 shell 历史。
+
+```sh
+openssl rand -hex 32 > .env.model_pool_secret
+chmod 0400 .env.model_pool_secret
+docker compose config --quiet
+docker compose up -d app
 ```
 
 ## 4. Continuous integration

@@ -7,6 +7,7 @@
  * announcements are written by admins.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import crypto from 'node:crypto'
 
 import { NoticeError, auditWrites, guard, type PhysicsosIdentity } from './identity.ts'
 import type { NoticeService } from './service.ts'
@@ -126,6 +127,34 @@ export function noticeRoutes(deps: RouteDeps): (req: IncomingMessage, res: Serve
         })
       }
 
+      /* ---- 平台内测声明 ---- */
+      if (method === 'GET' && path === '/platform-notice') {
+        send(res, 200, service.getPlatformNotice(actor))
+        return
+      }
+      if (method === 'PUT' && path === '/platform-notice') {
+        const { previous, notice } = await service.updatePlatformNotice(actor, await readJson(req))
+        /* The generic audit below records that a write happened; this row
+           carries the detail an operator needs to reconstruct WHICH version
+           changed and from what. Best-effort like every other ledger hop: the
+           already-durable notice must not become a 500 because logging failed. */
+        if (identity !== undefined) {
+          void identity.record(actor, 'notice.platform-notice.update', path, {
+            previousVersion: previous.version,
+            nextVersion: notice.version,
+            previousTitle: previous.title,
+            previousBodyHash: crypto.createHash('sha256').update(previous.body).digest('hex'),
+            enabled: notice.enabled,
+          }).catch(() => { console.error('[notice-host] platform notice audit failed') })
+        }
+        send(res, 200, { notice })
+        return
+      }
+      if (method === 'POST' && path === '/platform-notice/ack') {
+        send(res, 200, await service.acknowledgePlatformNotice(actor, await readJson(req)))
+        return
+      }
+
       /* ---- 反馈 ---- */
       if (method === 'GET' && path === '/feedback') {
         send(res, 200, { items: service.listFeedback(actor, {
@@ -179,8 +208,14 @@ export function noticeRoutes(deps: RouteDeps): (req: IncomingMessage, res: Serve
  * @param method - the request method.
  * @returns the role floor the guard enforces for mutating calls.
  */
-const writeFloor = (path: string, seg: readonly string[], method: string): 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' => {
+const writeFloor = (
+  path: string,
+  seg: readonly string[],
+  method: string,
+): 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN' => {
   if (method === 'GET') return 'STUDENT'
+  if (path === '/platform-notice/ack') return 'STUDENT'
+  if (path === '/platform-notice') return 'SUPER_ADMIN'
   /* Reports may be filed by any account — that is who has them. Everything
      else that is not a read belongs to an admin surface. */
   if (path === '/feedback') return 'STUDENT'

@@ -26,6 +26,7 @@ import {
 import { AdminWorkspace } from './AdminWorkspace.tsx'
 import type { AdminApi } from './auth-api.ts'
 import type { NoticeApi } from './notice-api.ts'
+import type { ModelPoolApi } from './model-pool-api.ts'
 import type { NoticeCacheStorage } from './notice-cache.ts'
 import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
@@ -94,6 +95,8 @@ export interface PhysicsSurfaceInjected {
   noticeApi?: NoticeApi
   /** `/physicsos/class` client — absent in stripped test compositions. */
   classApi?: ClassApi
+  /** `/physicsos/model-pool` client — absent in stripped test compositions. */
+  modelPoolApi?: ModelPoolApi
   /**
    * Account-namespaced storage for the 公告 offline cache (方案 2.3).
    * Per-account, not per-machine: a campus notice must not follow a
@@ -139,6 +142,7 @@ export function PhysicsSurface({
   adminApi,
   noticeApi,
   classApi,
+  modelPoolApi,
   noticeStorage,
   useAuth,
 }: PhysicsSurfaceProps) {
@@ -228,6 +232,7 @@ export function PhysicsSurface({
         api={adminApi}
         {...(paperApi === undefined ? {} : { paperApi })}
         {...(noticeApi === undefined ? {} : { noticeApi })}
+        {...(modelPoolApi === undefined ? {} : { modelPoolApi })}
         useAuth={useAuth}
         t={t}
       />

@@ -64,6 +64,31 @@ await resetSession(page, base)
 await loginUser(page, { username: ACCEPTANCE_ADMIN_USERNAME, password: ACCEPTANCE_ADMIN_PASSWORD })
 await page.waitForTimeout(1200)
 
+/* ---- PhysicsOS 平台声明 ---- */
+const platformNotice = page.locator('[data-physicsos-platform-notice]')
+check('平台声明使用 PhysicsOS 公测文案', await visible(platformNotice, 15_000))
+if (await platformNotice.isVisible().catch(() => false)) {
+  await shot('01b-platform-notice')
+  await platformNotice.getByRole('button', { name: '继续', exact: true }).click()
+  await platformNotice.waitFor({ state: 'detached', timeout: 10_000 })
+}
+
+/* ---- 我的工作区：新建不得再进入服务器目录浏览器 ---- */
+const newButton = page.getByRole('button', { name: '新建', exact: true }).first()
+if ((await newButton.count()) > 0) {
+  await newButton.click()
+  const newChat = page.getByRole('menuitem', { name: '新建对话' }).first()
+  if ((await newChat.count()) > 0) await newChat.click()
+  const workspacePanel = page.locator('[data-physicsos-workspace-panel]')
+  check('新建打开我的工作区面板', await visible(workspacePanel, 10_000))
+  const directoryDialog = page.getByRole('dialog', { name: '选择工作区目录' })
+  check('新建不再显示服务器目录浏览器', (await directoryDialog.count()) === 0)
+  await shot('01c-workspace-panel')
+  if (await workspacePanel.isVisible().catch(() => false)) {
+    await workspacePanel.getByRole('button', { name: '关闭' }).click()
+  }
+}
+
 /* ---- 出卷专区 ---- */
 await page.getByRole('button', { name: '出卷专区' }).first().click()
 await page.waitForTimeout(900)
@@ -133,6 +158,16 @@ if ((await menu.count()) > 0) {
         await noticeTab.click().catch(() => {})
         await page.waitForTimeout(700)
         await shot('11-admin-notice')
+      }
+
+      /* 平台声明编辑器：只有 SUPER_ADMIN 能看到。 */
+      const platformTab = page.getByRole('tab', { name: '平台声明' }).first()
+      check('平台管理员可编辑平台声明', (await platformTab.count()) > 0)
+      if ((await platformTab.count()) > 0) {
+        await platformTab.click().catch(() => {})
+        const editor = page.locator('[data-admin-platform-notice]')
+        check('平台声明编辑器打开', await visible(editor))
+        await shot('11b-admin-platform-notice')
       }
 
       /* 密码重置队列是本次新增的管理员页签；空队列也必须是可渲染的正常状态。 */

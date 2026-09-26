@@ -54,6 +54,16 @@ interface Palette {
   ring: string
 }
 
+const readPalette = (host: Element): Palette => ({
+  fill: readToken(host, '--physics-body-fill', '#dce7f7'),
+  stroke: readToken(host, '--physics-body-stroke', '#33507f'),
+  live: readToken(host, '--physics-body-live', '#2563eb'),
+  trajectory: readToken(host, '--physics-trajectory', '#2563eb'),
+  velocity: readToken(host, '--physics-vector-velocity', '#2f9e5a'),
+  grid: readToken(host, '--physics-grid-major', '#d3e0f2'),
+  ring: readToken(host, '--physics-highlight', '#f5a524'),
+})
+
 /**
  * Where the mascot figure sits on the stage, in units of the stage HEIGHT —
  * mirrors the CSS placement in HomeBrand.module.css (.mascot): the cut-out is
@@ -186,15 +196,13 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
     const context = canvas.getContext('2d')
     if (context === null) return
 
-    const palette: Palette = {
-      fill: readToken(host, '--physics-body-fill', '#dce7f7'),
-      stroke: readToken(host, '--physics-body-stroke', '#33507f'),
-      live: readToken(host, '--physics-body-live', '#2563eb'),
-      trajectory: readToken(host, '--physics-trajectory', '#2563eb'),
-      velocity: readToken(host, '--physics-vector-velocity', '#2f9e5a'),
-      grid: readToken(host, '--physics-grid-major', '#d3e0f2'),
-      ring: readToken(host, '--physics-highlight', '#f5a524'),
-    }
+    let palette = readPalette(host)
+    const refreshPalette = () => { palette = readPalette(host) }
+    const themeObserver = new MutationObserver(refreshPalette)
+    themeObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-ds-dark-theme', 'class', 'style'],
+    })
 
     const reduceMotion = typeof matchMedia === 'function'
       && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -683,6 +691,7 @@ export function HomePlayground({ className }: HomePlaygroundProps) {
 
     return () => {
       stop()
+      themeObserver.disconnect()
       resize?.disconnect()
       intersection?.disconnect()
       document.removeEventListener('visibilitychange', onVisibility)

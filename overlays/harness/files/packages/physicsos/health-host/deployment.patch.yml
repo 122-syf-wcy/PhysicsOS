@@ -6,3 +6,37 @@
   config:
     host: '0.0.0.0'
     port: 3080
+
+# Read-containment fallback (best effort; see docs/reports/ISOLATION-AUDIT.md).
+# The shipped sandbox confines file WRITES only — `fs-sandbox` fences
+# write/edit while reads pass through, and the bash runner grants `/`
+# read-only — so an agent can still read whatever the container user can read
+# (`/run/secrets/*`, other accounts' session logs). Until the harness grows a
+# per-session READ allow-list, pin both fallback roots to the per-account
+# workspace parent, so a session without an explicit cwd can never fall back to
+# process.cwd() (`/app`, the whole source tree) or `/etc`. auth-host creates the
+# per-account directories under the same `dshHomePath('physicsos-users')` root.
+# Row patches are shallow: `sandbox-policy` must repeat every composed key.
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js dshHomePath('physicsos-users')
+
+- id: fs-sandbox
+  config:
+    cwd: !!js dshHomePath('physicsos-users')
+
+# Public authorities for the browser transport. Upstream declares them with
+# `dsh web --trusted-host`, but the production CMD carries no flag, so every
+# request on `Host: <the deployment's domain>` was refused by the /api
+# DNS-rebinding fence with 403 — the domain deployment's web client could not
+# reach the agent at all. The connection row's own comment invites a deployment
+# to concatenate its literals here; PHYSICOS_TRUSTED_HOSTS is the same list the
+# auth-host uses for proxy and Secure-cookie decisions, and an empty value
+# leaves the bind-derived LAN literals untouched.
+- id: connection
+  config:
+    trustedHosts: !!js >-
+      [...ctx.webRuntime.trustedHosts,
+      ...(process.env.PHYSICOS_TRUSTED_HOSTS ?? '').split(',')
+      .map(value => value.trim()).filter(Boolean)]

@@ -164,6 +164,103 @@ export interface DashboardRow {
   }
 }
 
+/** Read-only operational metrics returned by `/physicsos/ops/metrics`. */
+export interface OpsDiskUsage {
+  readonly path: string
+  readonly totalBytes: number
+  readonly freeBytes: number
+  readonly availableBytes: number
+  readonly usedBytes: number
+  readonly usedPercent: number
+  readonly available: boolean
+}
+
+export interface OpsDirectoryUsage {
+  readonly path: string
+  readonly bytes: number
+  readonly entries: number
+  readonly partial: boolean
+}
+
+export interface OpsBytesUsage {
+  readonly bytes: number
+  readonly available: boolean
+  readonly partial: boolean
+}
+
+export interface OpsProbe {
+  readonly ok: boolean
+  readonly latencyMs?: number
+  readonly code?: string
+}
+
+export interface OpsPostgresProbe extends OpsProbe {
+  readonly sizeBytes?: number
+  readonly sessions?: {
+    readonly live: number
+    readonly distinctUsers: number
+  }
+  readonly accounts?: {
+    readonly total: number
+    readonly active: number
+    readonly disabled: number
+  }
+}
+
+export interface OpsRedisProbe extends OpsProbe {
+  readonly usedMemoryBytes?: number
+}
+
+export interface OpsMetrics {
+  readonly cache: {
+    readonly ttlMs: number
+    readonly hit: boolean
+    readonly collectedAt: string
+    readonly partial: boolean
+  }
+  readonly disk: {
+    readonly thresholds: {
+      readonly warningPercent: number
+      readonly criticalPercent: number
+    }
+    readonly root: OpsDiskUsage
+    readonly data: OpsDiskUsage
+    readonly breakdown: {
+      readonly sessions: OpsDirectoryUsage
+      readonly workspaces: OpsDirectoryUsage
+      readonly postgres: OpsBytesUsage
+      readonly redis: OpsBytesUsage
+    }
+    readonly partial: boolean
+  }
+  readonly health: {
+    readonly status: 'ok' | 'warning' | 'critical'
+    readonly uptimeSeconds: number
+    readonly node: {
+      readonly version: string
+      readonly platform: string
+      readonly arch: string
+    }
+    readonly postgres: OpsPostgresProbe
+    readonly redis: OpsRedisProbe
+    readonly sessions: {
+      readonly live: number
+      readonly distinctUsers: number
+    }
+    readonly accounts: {
+      readonly total: number
+      readonly active: number
+      readonly disabled: number
+    }
+  }
+  readonly alerts: readonly {
+    readonly severity: 'warning' | 'critical'
+    readonly code: string
+    readonly message: string
+  }[]
+  readonly partial: boolean
+}
+
 /** One admin-readable audit-ledger row. */
 export interface AuditEventRow {
   readonly id: string
@@ -296,6 +393,8 @@ export interface AdminApi {
   cancelPasswordReset: (id: string) => Promise<{ request: PasswordResetQueueRow }>
   /** Server-known platform/tenant figures. Never inferred, never client-side. */
   dashboard: () => Promise<DashboardRow>
+  /** Read-only host, dependency, disk, and cache metrics for platform admins. */
+  opsMetrics: (force?: boolean) => Promise<OpsMetrics>
   /** 登记过的设备 + 风控信号(第 4 期服务端半)。 */
   listDevices: (filter?: { schoolId?: string; q?: string }) =>
   Promise<{ devices: DeviceRow[]; risk: RiskSignalRow[] }>
@@ -392,6 +491,9 @@ export function createAdminApi(): AdminApi {
        没有这个 header 时,浏览器把 GET 缓存住,上报进来的新增量看不见 ——
        运维会照着过期数字做决定。 */
     dashboard: () => request(ADMIN_BASE, '/dashboard', { cache: 'no-store' }),
+    opsMetrics: force => request('/physicsos/ops', `/metrics${force === true ? '?force=1' : ''}`, {
+      cache: 'no-store',
+    }),
     listDevices: (filter) => {
       const params = new URLSearchParams()
       if (filter?.schoolId !== undefined) params.set('schoolId', filter.schoolId)

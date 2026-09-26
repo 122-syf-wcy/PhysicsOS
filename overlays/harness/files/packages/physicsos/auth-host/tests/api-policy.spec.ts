@@ -48,6 +48,7 @@ const otherStudent: ApiPolicyActor = {
 const workspace: ApiPolicyWorkspace = {
   id: 'workspace-student',
   path: '/srv/physicsos-users/student',
+  title: '我的工作区',
 }
 
 const request = (method: string, payload: Record<string, unknown> = {}, cookie = 'student'): Request =>
@@ -100,7 +101,8 @@ const makeStore = (
 const makePolicy = (options: {
   actor?: ApiPolicyActor | null
   store?: ApiPolicyStore & { claims: string[] }
-  ensureWorkspace?: () => Promise<ApiPolicyWorkspace>
+  ensureWorkspace?: (actor: ApiPolicyActor, title?: string) => Promise<ApiPolicyWorkspace>
+  hostFilesystemAccess?: 'deny' | 'admin'
 } = {}) => {
   const store = options.store ?? makeStore()
   return {
@@ -110,6 +112,9 @@ const makePolicy = (options: {
       actorFromRequest: () => options.actor === undefined ? student : options.actor,
       store,
       ensureWorkspace: options.ensureWorkspace ?? (async () => workspace),
+      ...(options.hostFilesystemAccess === undefined
+        ? {}
+        : { hostFilesystemAccess: options.hostFilesystemAccess }),
     }),
   }
 }
@@ -346,8 +351,13 @@ describe('PhysicsOS shared /api policy', () => {
       })
       return rpc({ sessionId: 'new-session', agentPreset: 'physics-student' })
     })
+    // A caller-supplied cwd, workspaceId, agentPreset and sessionId are all
+    // rewritten: the account workspace and the PhysicsOS student preset are
+    // server-side facts, never request parameters.
     const response = await policy.wrapFetch(next)(request('session.create', {
       agentPreset: 'standard',
+      workspaceId: 'foreign-workspace',
+      sessionId: 'client-chosen-session',
       cwd: '/etc',
     }))
     expect(await response.json()).toMatchObject({
@@ -355,6 +365,29 @@ describe('PhysicsOS shared /api policy', () => {
     })
     expect(next).toHaveBeenCalledTimes(1)
     expect(store.claims).toEqual(['workspace:workspace-student', 'session:new-session'])
+  })
+
+  it('refuses the response when the enforced preset did not survive the rewrite', async () => {
+    const { policy } = makePolicy()
+    // The host answers with the deployment default: the rewritten request never
+    // reached it. Accepting this would claim a standard-preset session as the
+    // student's own, so the policy answers with a stable code instead.
+    const next = vi.fn(async () => rpc({ sessionId: 'raw-session', agentPreset: 'standard' }))
+    const response = await policy.wrapFetch(next)(request('session.create', {
+      agentPreset: 'standard',
+      cwd: '/etc',
+    }))
+    const body: unknown = await response.json()
+    expect(body).toMatchObject({
+      result: {
+        ok: false,
+        error: {
+          code: 'session-scope-mismatch',
+          details: { expectedPreset: 'physics-student', actualPreset: 'standard' },
+        },
+      },
+    })
+    expect(JSON.stringify(body)).toContain('会话未按账号隔离创建')
   })
 
   it('returns the account workspace instead of accepting a caller path', async () => {
@@ -365,10 +398,237 @@ describe('PhysicsOS shared /api policy', () => {
     expect(await response.json()).toMatchObject({
       result: {
         ok: true,
-        value: { created: false, workspace: { workspaceId: 'workspace-student', path: workspace.path } },
+        value: {
+          created: false,
+          workspace: {
+            workspaceId: 'workspace-student',
+            path: workspace.path,
+            title: '我的工作区',
+          },
+        },
       },
     })
     expect(store.claims).toEqual(['workspace:workspace-student'])
+  })
+
+  it('creates a separately named account workspace from the product virtual path', async () => {
+    const next = vi.fn(async () => rpc({ created: true, workspace: {} }))
+    const ensureWorkspace = vi.fn(async (_actor: ApiPolicyActor, title?: string) => ({
+      id: 'workspace-mechanics',
+      path: '/srv/physicsos-users/student-mechanics',
+      title: title ?? '我的工作区',
+    }))
+    const { policy, store } = makePolicy({ ensureWorkspace })
+    const title = '高一物理 · 力学'
+    const response = await policy.wrapFetch(next)(request('workspace.create', {
+      path: `physicsos-workspace://${encodeURIComponent(title)}`,
+    }))
+
+    expect(next).not.toHaveBeenCalled()
+    expect(ensureWorkspace).toHaveBeenCalledWith(student, title)
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: true,
+        value: {
+          workspace: {
+            workspaceId: 'workspace-mechanics',
+            title,
+          },
+        },
+      },
+    })
+    expect(store.claims).toEqual(['workspace:workspace-mechanics'])
+  })
+
+  it('refuses a malformed virtual workspace title before creating anything', async () => {
+    const next = vi.fn(async () => rpc({}))
+    const ensureWorkspace = vi.fn(async () => workspace)
+    const { policy } = makePolicy({ ensureWorkspace })
+    const response = await policy.wrapFetch(next)(request('workspace.create', {
+      path: 'physicsos-workspace://%00',
+    }))
+
+    expect(next).not.toHaveBeenCalled()
+    expect(ensureWorkspace).not.toHaveBeenCalled()
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: false,
+        error: { code: 'workspace-title-invalid' },
+      },
+    })
+  })
+
+  it('refuses all server filesystem browsing methods for a student with 403', async () => {
+    const next = vi.fn(async () => rpc({}))
+    const { policy } = makePolicy()
+    for (const method of ['host.listDirectory', 'host.pickDirectory', 'host.createDirectory']) {
+      const response = await policy.wrapFetch(next)(request(method, { path: '/etc' }))
+      expect(response.status).toBe(403)
+      expect(await response.json()).toMatchObject({
+        result: {
+          ok: false,
+          error: { code: 'HOST_FILESYSTEM_DENIED', details: { method } },
+        },
+      })
+    }
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('refuses all server filesystem browsing methods for an admin unless the deployment opts in', async () => {
+    const next = vi.fn(async () => rpc({ entries: [] }))
+    const { policy } = makePolicy({ actor: admin })
+    for (const method of ['host.listDirectory', 'host.pickDirectory', 'host.createDirectory']) {
+      const denied = await policy.wrapFetch(next)(request(method, {}, 'admin'))
+      expect(denied.status).toBe(403)
+    }
+    expect(next).not.toHaveBeenCalled()
+
+    const optedIn = makePolicy({ actor: admin, hostFilesystemAccess: 'admin' })
+    const allowed = await optedIn.policy.wrapFetch(next)(request('host.pickDirectory', {}, 'admin'))
+    expect(allowed.status).toBe(200)
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a workspace rename that targets another account', async () => {
+    const next = vi.fn(async () => rpc({ workspace: {} }))
+    const { policy } = makePolicy({ store: makeStore({ workspace: ['workspace-student'] }) })
+    const response = await policy.wrapFetch(next)(request('workspace.rename', {
+      workspaceId: 'workspace-other',
+      title: '别人的工作区',
+    }))
+    expect(await response.json()).toMatchObject({
+      result: { ok: false, error: { code: 'workspace-not-found' } },
+    })
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('refuses an admin workspace rename that targets another account', async () => {
+    const next = vi.fn(async () => rpc({ workspace: {} }))
+    const { policy } = makePolicy({
+      actor: admin,
+      store: makeStore({ workspace: ['workspace-admin'] }),
+    })
+    const response = await policy.wrapFetch(next)(request('workspace.rename', {
+      workspaceId: 'workspace-student',
+      title: '越权改名',
+    }, 'admin'))
+    expect(await response.json()).toMatchObject({
+      result: { ok: false, error: { code: 'workspace-not-found' } },
+    })
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('forwards an owner workspace rename unchanged', async () => {
+    const next = vi.fn(async (forwarded: Request) => {
+      const body = await forwarded.clone().json() as { payload: Record<string, unknown> }
+      expect(body.payload).toEqual({ workspaceId: 'workspace-student', title: '力学实验室' })
+      return rpc({ workspace: { workspaceId: 'workspace-student', title: '力学实验室' } })
+    })
+    const { policy } = makePolicy({ store: makeStore({ workspace: ['workspace-student'] }) })
+    const response = await policy.wrapFetch(next)(request('workspace.rename', {
+      workspaceId: 'workspace-student',
+      title: '力学实验室',
+    }))
+    expect(response.status).toBe(200)
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets an admin rename their own workspace and read the new title back', async () => {
+    let title = '我的工作区'
+    const adminWorkspace = {
+      id: 'workspace-admin',
+      path: '/srv/physicsos-users/admin',
+      get title() {
+        return title
+      },
+    }
+    const next = vi.fn(async (forwarded: Request) => {
+      const body = await forwarded.clone().json() as {
+        method: string
+        payload: { workspaceId?: string; title?: string }
+      }
+      if (body.method === 'workspace.rename') {
+        expect(body.payload).toEqual({ workspaceId: adminWorkspace.id, title: '力学实验室' })
+        title = body.payload.title ?? title
+        return rpc({ workspace: { workspaceId: adminWorkspace.id, path: adminWorkspace.path, title } })
+      }
+      expect(body.method).toBe('workspace.list')
+      return rpc({ items: [{ workspaceId: adminWorkspace.id, path: adminWorkspace.path, title }] })
+    })
+    const { policy } = makePolicy({
+      actor: admin,
+      store: makeStore({ workspace: [adminWorkspace.id] }),
+      ensureWorkspace: async () => adminWorkspace,
+    })
+    const renamed = await policy.wrapFetch(next)(request('workspace.rename', {
+      workspaceId: adminWorkspace.id,
+      title: '力学实验室',
+    }, 'admin'))
+    expect(renamed.status).toBe(200)
+
+    const listed = await policy.wrapFetch(next)(request('workspace.list', {}, 'admin'))
+    expect(await listed.json()).toMatchObject({
+      result: {
+        ok: true,
+        value: { items: [{ workspaceId: adminWorkspace.id, title: '力学实验室' }] },
+      },
+    })
+  })
+
+  it('creates an admin workspace through the server-managed path too', async () => {
+    const next = vi.fn(async () => rpc({ workspace: {} }))
+    const ensureWorkspace = vi.fn(async (_actor: ApiPolicyActor, title?: string) => ({
+      id: 'workspace-admin-mechanics',
+      path: '/srv/physicsos-users/admin-mechanics',
+      title: title ?? '我的工作区',
+    }))
+    const { policy, store } = makePolicy({
+      actor: admin,
+      store: makeStore({ workspace: [] }),
+      ensureWorkspace,
+    })
+    const response = await policy.wrapFetch(next)(request('workspace.create', {
+      path: 'physicsos-workspace://%E5%8A%9B%E5%AD%A6',
+    }, 'admin'))
+    expect(next).not.toHaveBeenCalled()
+    expect(ensureWorkspace).toHaveBeenCalledWith(admin, '力学')
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: true,
+        value: { workspace: { workspaceId: 'workspace-admin-mechanics', title: '力学' } },
+      },
+    })
+    expect(store.claims).toEqual(['workspace:workspace-admin-mechanics'])
+  })
+
+  it('gives an admin their own titled workspace while keeping the registry visible', async () => {
+    const next = vi.fn(async () => rpc({
+      items: [
+        { workspaceId: 'workspace-student', path: '/srv/physicsos-users/student', title: '力学实验室' },
+        { workspaceId: 'workspace-admin', path: '/srv/physicsos-users/deadbeef', title: 'deadbeef' },
+      ],
+      archivedSessionIds: ['foreign-session'],
+    }))
+    const { policy } = makePolicy({
+      actor: admin,
+      ensureWorkspace: async () => ({
+        id: 'workspace-admin',
+        path: '/srv/physicsos-users/deadbeef',
+        title: '我的工作区',
+      }),
+    })
+    const response = await policy.wrapFetch(next)(request('workspace.list', {}, 'admin'))
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: true,
+        value: {
+          items: [
+            { workspaceId: 'workspace-student', title: '力学实验室' },
+            { workspaceId: 'workspace-admin', title: '我的工作区' },
+          ],
+        },
+      },
+    })
   })
 
   it('refuses a non-admin agent preset switch', async () => {

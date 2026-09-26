@@ -136,7 +136,7 @@ describe('personal API tokens', () => {
         claim: async () => {},
         release: async () => {},
       },
-      ensureWorkspace: async () => ({ id: 'ws', path: '/tmp/ws' }),
+      ensureWorkspace: async () => ({ id: 'ws', path: '/tmp/ws', title: '我的工作区' }),
       limiter: { kind: 'test', consume },
       modelPolicy: { limit: 1, windowMs: 60_000, maxBuckets: 10 },
     })
@@ -199,7 +199,7 @@ describe('personal API tokens', () => {
         claim: async () => {},
         release: async () => {},
       },
-      ensureWorkspace: async () => ({ id: 'ws', path: '/tmp/ws' }),
+      ensureWorkspace: async () => ({ id: 'ws', path: '/tmp/ws', title: '我的工作区' }),
       limiter: { kind: 'test', consume: async () => true },
     })
     const request = new Request('http://dsh.internal/api/session.prompt', {

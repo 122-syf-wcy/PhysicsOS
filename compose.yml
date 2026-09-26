@@ -1,5 +1,13 @@
 name: physicsos
 
+# Docker Compose applies uid/gid/mode to managed secrets. File-backed secrets
+# are bind-mounted from these files; the host-side `secure-secrets.sh` is the
+# authoritative enforcement layer and mirrors this 999:999/0400 declaration.
+x-secret-mount: &secret-mount
+  uid: '999'
+  gid: '999'
+  mode: '0400'
+
 services:
   app:
     image: ${PHYSICSOS_APP_IMAGE:-physicsos-app:local}
@@ -38,12 +46,19 @@ services:
       PHYSICSOS_SHARED_STATE_BACKEND: redis
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
-      # 模型链路：base 组合的 agent-default-model 是 deepseek-official，
-      # 适配器默认打 https://api.deepseek.com，这里把它指向实际可用的
-      # OpenAI 兼容网关。只允许通过本变量覆盖端点，key 仍然只经 secret 文件注入。
-      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.fengshao1227.com/v1}
-      # 该 key 必须对上面的 DEEPSEEK_BASE_URL 有效；部署脚本只检查文件非空，
-      # 所以换网关时必须同步换这个 secret，否则真实回合会以 AUTH 401 失败。
+      # 模型链路：Harness 的 DeepSeek 适配器指向容器内的平台模型池代理
+      # （model-pool-host，默认 127.0.0.1:38972）。通道与 key 在后台「模型通道」
+      # 维护，key 失效自动切下一个；下面两个变量只负责「池子为空时」播种的兜底
+      # 通道，即使后台从没配置过，模型回合也不会断。
+      DEEPSEEK_BASE_URL: http://127.0.0.1:${PHYSICSOS_MODEL_POOL_PORT:-38972}/v1
+      PHYSICSOS_MODEL_POOL_PORT: ${PHYSICSOS_MODEL_POOL_PORT:-38972}
+      PHYSICSOS_MODEL_FALLBACK_BASE_URL: ${PHYSICSOS_MODEL_FALLBACK_BASE_URL:-https://api.fengshao1227.com/v1}
+      PHYSICSOS_MODEL_FALLBACK_API_KEY_FILE: /run/secrets/deepseek_api_key
+      # 加密主密钥：模型通道里的 key 只用它的派生密钥加密落库。它必须长期稳定，
+      # 换掉等于所有已存 key 都要重新录入（解密失败 fail-closed，不会静默用错 key）。
+      PHYSICSOS_MODEL_POOL_SECRET_FILE: /run/secrets/model_pool_secret
+      # Harness 连接校验仍要求这个非空；代理不再直接使用它，但池子为空时它会
+      # 被播种成平台兜底通道的第一个 key。
       DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
       # auth-host 只从 PHYSICSOS_ADMIN_PASSWORD 种 SUPER_ADMIN；自注册只能得到
       # STUDENT。entrypoint 把 *_FILE materialize 成同名明文变量，文件缺失或为空
@@ -67,11 +82,24 @@ services:
       PHYSICSOS_SOFFICE: ${PHYSICSOS_SOFFICE:-/usr/bin/soffice}
       PHYSICSOS_DATABASE_SSL: ${PHYSICSOS_DATABASE_SSL:-false}
     secrets:
-      - database_url
-      - redis_url
-      - deepseek_api_key
-      - admin_password
-      - image_api_key
+      - source: database_url
+        target: database_url
+        <<: *secret-mount
+      - source: redis_url
+        target: redis_url
+        <<: *secret-mount
+      - source: deepseek_api_key
+        target: deepseek_api_key
+        <<: *secret-mount
+      - source: model_pool_secret
+        target: model_pool_secret
+        <<: *secret-mount
+      - source: admin_password
+        target: admin_password
+        <<: *secret-mount
+      - source: image_api_key
+        target: image_api_key
+        <<: *secret-mount
     volumes:
       - app_data:/var/lib/physicsos
     ports:
@@ -103,7 +131,9 @@ services:
       POSTGRES_USER: physicsos
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
-      - postgres_password
+      - source: postgres_password
+        target: postgres_password
+        <<: *secret-mount
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -130,7 +160,9 @@ services:
       - -c
       - exec redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"
     secrets:
-      - redis_password
+      - source: redis_password
+        target: redis_password
+        <<: *secret-mount
     volumes:
       - redis_data:/data
     healthcheck:
@@ -156,14 +188,12 @@ volumes:
   postgres_data:
   redis_data:
 
-# File-based secrets are bind-mounted as-is: Docker Compose accepts
-# `uid`/`gid`/`mode` on a service secret but ignores them for `file:` secrets
-# (it warns "secrets `uid`, `gid` and `mode` are not supported, they will be
-# ignored"), so those keys would document a guarantee that does not exist.
-# The invariant lives on the host files instead, enforced by
-# `scripts/deploy/secure-secrets.sh` on every deploy:
-#   root:<physicsos gid> 0440  — readable by the app user (uid/gid 999) and by
-#   root, unreadable by every other identity (e.g. `exec -u 1000`).
+# File-backed secrets are bind-mounted from the source files. Docker Compose may
+# ignore uid/gid/mode for `file:` secrets, so `scripts/deploy/secure-secrets.sh`
+# enforces the same invariant directly on the host on every deploy:
+#   physicsos:physicsos 0400 — readable by the app, Postgres and Redis
+#   entrypoints (all run as uid/gid 999), and by root; unreadable by every other
+#   identity (for example `docker compose exec -u 1000:1000 app`).
 # Never relax these files back to 0644/0444: a world-readable admin password or
 # model key is readable by any process in the container, not just the agent.
 secrets:
@@ -177,6 +207,8 @@ secrets:
     file: ${PHYSICSOS_REDIS_URL_FILE:-./.env.redis_url}
   deepseek_api_key:
     file: ${PHYSICSOS_DEEPSEEK_API_KEY_FILE:-./.env.deepseek_api_key}
+  model_pool_secret:
+    file: ${PHYSICSOS_MODEL_POOL_SECRET_FILE:-./.env.model_pool_secret}
   admin_password:
     file: ${PHYSICSOS_ADMIN_PASSWORD_FILE:-./.env.admin_password}
   image_api_key:

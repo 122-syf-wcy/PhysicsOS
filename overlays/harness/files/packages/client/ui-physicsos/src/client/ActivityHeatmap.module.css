@@ -1,0 +1,206 @@
+/* Activity card: a compact calendar between the record header and the ledger. */
+
+.root {
+  flex: none;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 14px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim);
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+
+  --activity-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover-solid) 72%, var(--dsw-alias-bg-base));
+  --activity-accent: var(--dsw-alias-button-info-fill);
+  --activity-level-0: var(--activity-empty);
+  --activity-level-1: color-mix(in srgb, var(--activity-accent) 18%, var(--dsw-alias-bg-base));
+  --activity-level-2: color-mix(in srgb, var(--activity-accent) 38%, var(--dsw-alias-bg-base));
+  --activity-level-3: color-mix(in srgb, var(--activity-accent) 64%, var(--dsw-alias-bg-base));
+  --activity-level-4: var(--activity-accent);
+}
+
+:global(body[data-ds-dark-theme]) .root {
+  --activity-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover-solid) 82%, var(--dsw-alias-bg-base));
+  --activity-accent: var(--dsw-static-blue-400);
+  --activity-level-1: color-mix(in srgb, var(--activity-accent) 22%, var(--dsw-alias-bg-base));
+  --activity-level-2: color-mix(in srgb, var(--activity-accent) 44%, var(--dsw-alias-bg-base));
+  --activity-level-3: color-mix(in srgb, var(--activity-accent) 72%, var(--dsw-alias-bg-base));
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.heading {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.count {
+  color: var(--dsw-alias-button-info-fill);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.subheading {
+  margin: 2px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.yearSwitch {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.yearButton {
+  min-width: 52px;
+  padding: 3px 9px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 7px;
+  background: var(--physics-glass-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.yearButton:hover {
+  border-color: var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-primary);
+}
+
+.yearButton[data-active='true'] {
+  border-color: var(--dsw-alias-button-info-fill);
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+
+.calendar {
+  min-width: max-content;
+  padding-right: 4px;
+}
+
+.monthRow {
+  position: relative;
+  height: 16px;
+  margin-left: 30px;
+}
+
+.monthLabel {
+  position: absolute;
+  top: 0;
+  width: 38px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.gridRow {
+  display: flex;
+  gap: 8px;
+}
+
+.weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, 11px);
+  gap: 2px;
+  width: 22px;
+  flex: none;
+}
+
+.weekdayLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+  line-height: 11px;
+  white-space: nowrap;
+}
+
+.grid {
+  display: flex;
+  gap: 2px;
+}
+
+.weekColumn {
+  display: grid;
+  grid-template-rows: repeat(7, 11px);
+  gap: 2px;
+}
+
+.cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  box-sizing: border-box;
+  background: var(--activity-level-0);
+  cursor: default;
+  transition: transform 120ms var(--physics-ease);
+}
+
+.cell[data-level='1'] { background: var(--activity-level-1); }
+.cell[data-level='2'] { background: var(--activity-level-2); }
+.cell[data-level='3'] { background: var(--activity-level-3); }
+.cell[data-level='4'] { background: var(--activity-level-4); }
+
+.cell:hover {
+  transform: scale(1.18);
+}
+
+.cell:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid var(--physicsos-focus);
+  outline-offset: 1px;
+}
+
+.cell[data-future='true'] {
+  opacity: 0.46;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.legendCell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--activity-level-0);
+}
+
+.legendCell[data-level='1'] { background: var(--activity-level-1); }
+.legendCell[data-level='2'] { background: var(--activity-level-2); }
+.legendCell[data-level='3'] { background: var(--activity-level-3); }
+.legendCell[data-level='4'] { background: var(--activity-level-4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell {
+    transition: none;
+  }
+}

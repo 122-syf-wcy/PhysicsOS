@@ -97,6 +97,52 @@ export const IconArchive = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Disk capacity: stacked platters inside a compact drive outline. */
+export const IconDisk = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <ellipse cx="12" cy="6.2" rx="7.2" ry="2.8" />
+    <path d="M4.8 6.2v8.9c0 1.5 3.2 2.7 7.2 2.7s7.2-1.2 7.2-2.7V6.2" />
+    <path d="M4.8 10.6c0 1.5 3.2 2.7 7.2 2.7s7.2-1.2 7.2-2.7" />
+    <path d="M18.4 15.1v2.3h2.4v2.8" />
+    <path d="M20.8 20.2h2" />
+  </Glyph>
+)
+
+/** Health: a heartbeat trace inside a status ring. */
+export const IconHealth = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+    <path d="M6.5 12h3l1.4-3.2 2.1 6.4 1.4-3.2h3.1" />
+  </Glyph>
+)
+
+/** Cache: layered memory with a small status node. */
+export const IconCache = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="m12 3.5 7 3.5-7 3.5-7-3.5z" />
+    <path d="m5 11 7 3.5 7-3.5" />
+    <path d="m5 15 7 3.5 7-3.5" />
+  </Glyph>
+)
+
+/** Refresh: one clockwise cycle with a clear direction mark. */
+export const IconRefresh = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M20 7v5h-5" />
+    <path d="M19.1 12A7.2 7.2 0 1 0 17 17.7" />
+  </Glyph>
+)
+
+/** Database: a small stacked store used by dependency cards. */
+export const IconDatabase = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <ellipse cx="12" cy="5.7" rx="7" ry="2.7" />
+    <path d="M5 5.7v6.5c0 1.5 3.1 2.7 7 2.7s7-1.2 7-2.7V5.7" />
+    <path d="M5 12.2v6.1c0 1.5 3.1 2.7 7 2.7s7-1.2 7-2.7v-6.1" />
+    <path d="M5 15.3c0 1.5 3.1 2.7 7 2.7s7-1.2 7-2.7" />
+  </Glyph>
+)
+
 /* -------------------------------------------------------------- kinematics -- */
 
 /** Kinematics: stroboscopic samples with widening spacing. */

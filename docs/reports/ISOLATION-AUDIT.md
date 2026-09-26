@@ -252,6 +252,257 @@ Stage 2 修复后，至少应满足：
 当前状态：**数据面 HTTP 隔离基本通过；agent 文件读取、会话工作区分区、公网 API
 信任边界三处未通过，不能把当前实例视为已满足多用户 agent 隔离。**
 
+## 7. 修复记录（Stage 2，2026-09-26）
+
+改动范围（工作区改动，未提交）：`compose.yml`、`scripts/deploy/secure-secrets.sh`（新增，
+由 `deploy-server.sh` 与 `install-operations.sh` 调用）、
+`overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml`、
+`overlays/harness/files/packages/physicsos/auth-host/{src,tests}`、
+`overlays/harness/upstream-changes.patch`（`packages/client/connection` 的分发修复）。
+
+### 7.1 secret 读取权限（原 P0 第 1 条的“其他身份可读”路径）
+
+> 历史记录：本节记录当时先落地的 `root:999 0440`。最终不变量已在
+> §7.6 收紧为 `999:999 0400`，并写入 Compose long syntax；下面保留原始
+> 复现过程，便于确认为什么不能只依赖 Compose 的 file-secret 元数据。
+
+Compose 对 `file:` secret 根本不支持 `uid`/`gid`/`mode`——写上去只会得到一条 warning，
+容器里看到的就是宿主文件本身（bind mount）。最小复现：
+
+```text
+$ docker compose version
+Docker Compose version v5.5.1
+
+$ docker compose up --abort-on-container-exit     # 最小工程：user "999:999"，secret 标 uid/gid/mode
+time="2026-09-26T13:36:32Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+uid=999 gid=999 groups=999
+-rw-------    1 root     root            13 /run/secrets/s.txt
+cat: can't open '/run/secrets/s.txt': Permission denied
+```
+
+所以不变量改放在宿主文件上（`root:<physicsos gid> 0440`），并固化成每次部署/运维加固
+都会执行的脚本 + 自检：
+
+```text
+$ bash scripts/deploy/secure-secrets.sh
+secure-secrets: /opt/physicsos/.env.admin_password -> 0:999 440
+secure-secrets: /opt/physicsos/.env.database_url -> 0:999 440
+secure-secrets: /opt/physicsos/.env.deepseek_api_key -> 0:999 440
+secure-secrets: /opt/physicsos/.env.image_api_key -> 0:999 440
+secure-secrets: /opt/physicsos/.env.postgres_password -> 0:999 440
+secure-secrets: /opt/physicsos/.env.redis_password -> 0:999 440
+secure-secrets: /opt/physicsos/.env.redis_url -> 0:999 440
+secure-secrets: verified app-readable and uid-1000-denied for 5 secrets
+```
+
+容器内实测（app 身份可读；同容器、非 999 的身份被拒）：
+
+```text
+$ docker compose exec -T app sh -c 'ls -l /run/secrets; printf "admin_password head="; head -c 4 /run/secrets/admin_password; echo'
+total 20
+-r--r----- 1 root physicsos  10 ... admin_password
+-r--r----- 1 root physicsos 112 ... database_url
+-r--r----- 1 root physicsos  52 ... deepseek_api_key
+-r--r----- 1 root physicsos  68 ... image_api_key
+-r--r----- 1 root physicsos  87 ... redis_url
+admin_password head=syf1
+
+$ docker compose exec -T -u 1000:1000 app sh -c 'cat /run/secrets/admin_password'; echo "uid1000-exit=$?"
+cat: /run/secrets/admin_password: Permission denied
+uid1000-exit=1
+```
+
+这条只关闭“其他身份”的读取路径。agent 进程与 app **同 UID**，单独看 7.2。
+
+### 7.2 agent 读取隔离：已做的收紧与残余风险
+
+上游的读模型（源码原文）：
+
+- `packages/fs/fs-sandbox/src/index.ts`：`Reads pass through untouched: every mode permits
+reading.`——只在 write/edit 上做 fence；
+- `packages/sandbox/sandbox-local/src/profiles.ts`：bwrap 用 `--ro-bind / /`，Landlock 用
+  `readOnly: ['/']`——读全盘，只限写。
+
+生产镜像里目前**没有任何可用的 bash runner**，所以 shell 读路径是 fail-closed：
+
+```text
+$ docker compose exec -T app sh -lc 'command -v bwrap || echo no-bwrap-in-container'
+no-bwrap-in-container
+
+$ docker compose exec -T app node /tmp/sandbox-probe.cjs
+{
+  "launcherPath": "/app/vendor/deepseek-harness/native/landlock-run/packages/linux-x64/bin/landlock-run",
+  "launcherExists": false,
+  "probe": "unusable",
+  "prebuilds": "{ \"platform\": \"linux-x64\", \"binaries\": [ { \"tool\": \"landlock-run\", \"kind\": \"static-musl\", \"path\": \"bin/landlock-run\" } ] }"
+}
+```
+
+（`prebuilds.json` 声明了二进制，但镜像里 `bin/landlock-run` 不存在，`probe()` 返回
+`unusable`，`bash`/`terminal` 因此以 `SANDBOX_UNAVAILABLE` 失败关闭。）
+
+已做的收紧：部署 patch 把 fallback 根钉到账号工作区父目录，未显式携带 cwd 的会话不再
+回落到 `process.cwd()`（镜像里是 `/app`，整个源码树）或 `/etc`：
+
+```yaml
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js dshHomePath('physicsos-users')
+- id: fs-sandbox
+  config:
+    cwd: !!js dshHomePath('physicsos-users')
+```
+
+**残余风险（Stage 2 未解决，需要 harness 侧改动）**：
+
+1. fs 工具（`read`/`list`/`stat`）没有任何读 allow-list，agent 仍能读同 UID 可读的一切
+   ——`/run/secrets/*`、其他账号的 session 日志、`/proc/1/environ` 都在内。彻底关闭需要给
+   `fs-sandbox` 增加 per-session READ fence，或让 agent 以独立 UID / 用户命名空间运行。
+2. 不要把 landlock/bwrap runner 单独装回镜像：那会把 shell 读路径一起打开。要装就和读
+   allow-list 一起做。
+
+### 7.3 会话绑定账号工作区（原 P0 第 2 条）
+
+根因不在 auth-host。`packages/client/connection/src/rpc-host.ts` 的共享 `/api` 分发把
+`dispatch` 写成无参闭包并直接 `fallback.fetch(request)`，**忽略了 `wrapFetch(next)` 交给它的
+request**。后果是：response 改写生效（列表过滤看起来正常），而 request body 改写被静默丢弃。
+在线上产物里加临时探针可见分支确实进入了，但宿主收到的 payload 仍是原样：
+
+```text
+app-1  | DIAG rewriteRequest session.create
+app-1  | DIAG session-create-branch {"agentPreset":"standard","cwd":"/etc"}
+# POST /api/session.create -> 200 {"result":{"ok":true,"value":{"sessionId":"session-...","agentPreset":"standard"}}}
+```
+
+修复（`overlays/harness/upstream-changes.patch`）：
+
+```ts
+const dispatch = (outbound: Request): Promise<Response> => {
+  const endpoint = endpointFromPath(channel, new URL(outbound.url).pathname)
+  …
+  return fallback.fetch(outbound)
+}
+…
+return active?.wrapFetch === undefined ? dispatch(request) : active.wrapFetch(dispatch)(request)
+```
+
+auth-host 侧保持“非管理员 `session.create` 一律改写为账号 workspace + `physics-student`”，
+并新增两条 fail-closed 断言：
+
+- 客户端传 `cwd: '/etc'`（连同 `workspaceId`/`sessionId`）时，到达宿主的是账号
+  workspace + 学生预设；
+- 宿主返回的 preset 若不是 `physics-student`，策略回 `session-scope-mismatch`（中文消息），
+  而不是把一个越界会话认领成该账号的资源。
+
+### 7.4 账号工作区标题与服务器文件系统暴露
+
+1. **人类可读的工作区名**：harness 的 workspace registry 用目录 basename 命名记录，账号
+   工作区因此显示成 `sha256(userKey)`。auth-host 在首次建立/接管工作区时把它
+   durable 重命名为「我的工作区」（`workspace.rename`，用户已改过的标题不会被覆盖），
+   并在账号自己的 `workspace.list` / `workspace.create` 视图里只暴露这个标题。每个账号
+   （含管理员）都有自己的那一份：非管理员的 `workspace.list` 只列自己的工作区，管理员
+   仍能看到完整 registry，但自己那条也带可读标题。`workspace.rename` 只允许改自己名下的
+   workspace（跨账号是 `workspace-not-found`），路径始终由服务端决定、请求里不接受路径。
+2. **服务器文件系统浏览**：`host.listDirectory` / `host.pickDirectory` /
+   `host.createDirectory` 现在对所有角色默认 **403**（新增
+   `hostFilesystemAccess: 'deny' | 'admin'`，默认 `deny`，错误码
+   `HOST_FILESYSTEM_DENIED`，中文消息）。hosted 部署就是默认值：向导不需要目录选择器
+   ——`session.create` 的 cwd 由服务端绑定到账号工作区。只有显式把
+   `hostFilesystemAccess` 设为 `admin` 的单用户/自托管部署才保留该能力；那时管理员能
+   看到的是 harness 进程所在的整台机器（容器内 `/app`、`/var/lib/physicsos`，包括
+   `physicsos-users/<sha256>` 目录），仅建议在“运行者即机器所有者”的场景开启。
+
+### 7.5 验证
+
+本地（vendor 工作区，改动经 overlay 镜像）：
+
+```text
+$ tsc -b packages/physicsos/auth-host/tsconfig.json packages/client/connection/tsconfig.host.json --pretty false
+TSC OK
+
+$ vitest run packages/client/connection/tests packages/physicsos/auth-host/tests
+Test Files  33 passed (33)
+Tests       310 passed (310)
+
+$ oxlint packages/physicsos/auth-host/src packages/physicsos/auth-host/tests \
+    packages/client/connection/src packages/client/connection/tests
+exit 0
+```
+
+补丁本身在干净 worktree 上的可应用性（等价于镜像构建路径）：
+
+```text
+$ git worktree add --detach /tmp/phy-vendor-verify HEAD
+$ git apply --3way --whitespace=nowarn overlays/harness/upstream-changes.patch
+apply exit=0
+$ diff <working tree> <clean+patched tree>      # packages/client/connection/{src/index.ts,src/rpc-host.ts,tests/node-half.host.spec.ts}
+MATCH
+```
+
+服务器侧（`root@38.76.190.3:/opt/physicsos`）：`docker compose config --quiet` 通过；secret
+权限与 uid-1000 拒绝见 7.1；部署后 `session.create` 的 cwd/preset、`workspace.list` 标题与
+公网 `/api` 授权边界的原始输出见下方。
+
+**仍未验证**：真实模型回合。线上 DeepSeek key 返回 `AUTH 401`，因此“模型驱动 `read`/`bash`
+去读 `/run/secrets/*` 是否被沙箱拒绝”无法端到端重测；7.2 的结论来自 runner 探测与源码
+语义，不是模型行为。
+
+### 7.6 secret 权限最终收紧（2026-09-27）
+
+Compose 现在对 app、Postgres、Redis 的 file secret 都写显式 long syntax
+`uid: '999'` / `gid: '999'` / `mode: '0400'`。Compose v5.5.1 对 `file:` secret
+仍会提示 `secrets uid, gid and mode are not supported, they will be ignored`，
+所以真正的不变量继续由宿主机上的 `scripts/deploy/secure-secrets.sh` 强制：
+
+- secret 文件所有权改为 `999:999`；
+- mode 改为 `0400`；
+- 每次执行都验证 app 身份可读，且 `uid 1000` 身份不可读。
+
+本轮已在服务器执行并取得下面这组只读证据（没有在服务器重建镜像）：
+
+```text
+$ cd /opt/physicsos
+$ docker compose exec -T app id
+uid=999(physicsos) gid=999(physicsos) groups=999(physicsos)
+
+$ docker compose exec -T app sh -c \
+    'ls -ln /run/secrets; for f in /run/secrets/*; do test -r "$f" || exit 1; done; echo app_read_all=yes'
+total 24
+-r-------- 1 999 999  10 ... admin_password
+-r-------- 1 999 999 112 ... database_url
+-r-------- 1 999 999  52 ... deepseek_api_key
+-r-------- 1 999 999  68 ... image_api_key
+-r-------- 1 999 999  65 ... model_pool_secret
+-r-------- 1 999 999  87 ... redis_url
+app_read_all=yes
+
+$ docker compose exec -T -u 1000:1000 app sh -c \
+    'if cat /run/secrets/model_pool_secret >/dev/null 2>&1; then echo uid1000_read=yes; exit 1; else echo uid1000_read=no; fi'
+uid1000_read=no
+```
+
+`secure-secrets.sh` 的部署日志同时给出了 8 个宿主 secret 的 `999:999 400`
+结果，并对 app 实际挂载的 6 个 secret 输出
+`verified app-readable and uid-1000-denied for 6 secrets`。
+
+### 7.7 账号工作区、rename 与服务器文件系统浏览
+
+以下行为已经由本地 auth-host 单元/真实 Loader 组合测试覆盖：
+
+- 客户端对非管理员 `session.create` 传 `cwd=/etc`、伪造
+  `workspaceId`/`agentPreset` 时，宿主实际收到账号 workspace +
+  `physics-student`；
+- 普通角色与默认管理员调用 `host.listDirectory` / `pickDirectory` /
+  `createDirectory` 全部返回 `403 HOST_FILESYSTEM_DENIED`；
+- 学生和管理员跨账号 `workspace.rename` 都返回 `workspace-not-found`；
+- 管理员重命名自己 workspace 后，再从 `workspace.list` 读回新 title；
+- `workspace.create` 只接受 `physicsos-workspace://<title>` 产品虚拟路径，
+  真实目录名仍由服务端生成，管理员也不能指定宿主路径。
+
+**待集成阶段验证**：线上镜像尚未重建，因此会话 `cwd`/preset、rename
+read-back、目录浏览 403 的公网原始响应需要在统一 overlay capture 后补测。
+
 ## 7. 模型链路修复记录（2026-09-26）
 
 ### 7.1 症状与根因

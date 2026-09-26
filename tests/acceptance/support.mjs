@@ -410,8 +410,15 @@ export const openAcceptance = async (
     stdout.write(`  \ud83d\udcf7 ${name}\n`)
   }
 
-  /** Skip the DeepSeek onboarding dialog and wait for the home hero. */
+  /** Acknowledge the PhysicsOS notice, or fall back to the upstream onboarding. */
   const dismissOnboarding = async () => {
+    const platform = page.locator('[data-physicsos-platform-notice]')
+      .getByRole('button', { name: '\u7ee7\u7eed', exact: true })
+    if (await platform.isVisible().catch(() => false)) {
+      await platform.click()
+      await page.locator('[data-physicsos-platform-notice]')
+        .waitFor({ state: 'detached', timeout: 8_000 })
+    }
     const welcome = page
       .getByRole('dialog', { name: '\u5185\u6d4b\u58f0\u660e' })
       .getByRole('button', { name: '\u7ee7\u7eed', exact: true })

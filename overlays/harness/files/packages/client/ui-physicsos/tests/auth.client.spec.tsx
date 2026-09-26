@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminApi, AuthApi, AuthUser } from '../src/client/auth-api.ts'
+import type { NoticeApi } from '../src/client/notice-api.ts'
 import {
   createAuthController, migrateAnonymousProgress, namespacedStorage,
 } from '../src/client/auth-store.ts'
@@ -393,6 +394,7 @@ describe('sidebar identity', () => {
 
 describe('AdminWorkspace', () => {
   const adminApi = (): AdminApi => ({
+    opsMetrics: async () => { throw new Error('unused') },
     listSchoolRequests: async () => ({ requests: [] }),
     approveSchoolRequest: async () => { throw new Error('unused') },
     rejectSchoolRequest: async () => { throw new Error('unused') },
@@ -443,5 +445,29 @@ describe('AdminWorkspace', () => {
     )
     expect(getByText('当前账号没有管理权限')).toBeTruthy()
     expect(queryByRole('tab')).toBeNull()
+  })
+
+  it('offers the platform notice editor only to SUPER_ADMIN', () => {
+    const noticeApi = {} as NoticeApi
+    const superAdmin = render(
+      <AdminWorkspace
+        api={adminApi()}
+        noticeApi={noticeApi}
+        useAuth={authedAs('SUPER_ADMIN')}
+        t={t}
+      />,
+    )
+    expect(superAdmin.getByRole('tab', { name: '平台声明' })).toBeTruthy()
+    superAdmin.unmount()
+
+    const schoolAdmin = render(
+      <AdminWorkspace
+        api={adminApi()}
+        noticeApi={noticeApi}
+        useAuth={authedAs('SCHOOL_ADMIN')}
+        t={t}
+      />,
+    )
+    expect(schoolAdmin.queryByRole('tab', { name: '平台声明' })).toBeNull()
   })
 })

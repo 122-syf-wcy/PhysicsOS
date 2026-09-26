@@ -72,6 +72,15 @@ chmod 0644 "$LOGROTATE_FILE.tmp"
 mv "$LOGROTATE_FILE.tmp" "$LOGROTATE_FILE"
 
 install -d -m 0700 "$PROJECT_DIR/backups/postgres"
+
+# Re-assert the secret ownership invariant on every operations pass: the files
+# are the only place it can live (Compose ignores uid/gid/mode for `file:`
+# secrets), and a re-created secret would otherwise come back 0600 root and
+# either break the app's boot or be world-readable.
+if [[ -x "$PROJECT_DIR/scripts/deploy/secure-secrets.sh" ]]; then
+  "$PROJECT_DIR/scripts/deploy/secure-secrets.sh"
+fi
+
 systemctl enable --now cron fail2ban
 systemctl restart cron fail2ban
 for attempt in {1..30}; do

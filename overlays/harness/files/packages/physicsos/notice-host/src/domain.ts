@@ -54,10 +54,36 @@ const announcement = z.object({
   createdAt: z.string(),
 })
 
+/** The platform-wide, versioned internal-testing notice. */
+const platformNotice = z.object({
+  /** Stable singleton id; one row exists only after the first admin edit. */
+  id: z.literal('platform-notice'),
+  title: z.string().min(1).max(80),
+  body: z.string().min(1).max(2000),
+  /** Monotonic; every accepted save advances it by exactly one. */
+  version: z.number().min(1),
+  enabled: z.boolean(),
+  updatedAt: z.string(),
+  /** `schoolId:username` of the SUPER_ADMIN who saved the version. */
+  updatedBy: z.string().min(1),
+})
+
+/** One account's acknowledgement of a platform-notice version. */
+const platformNoticeAck = z.object({
+  /** `schoolId:username`, resolved by the identity gate. */
+  userKey: z.string().min(1),
+  version: z.number().min(1),
+  acknowledgedAt: z.string(),
+})
+
 /** One feedback row in `feedback` — author key resolved server-side, reply attributed to the operator. */
 export type FeedbackRecord = z.infer<typeof feedback>
 /** One announcement row in `announcements`; `schoolId: null` is platform-wide. */
 export type AnnouncementRecord = z.infer<typeof announcement>
+/** The singleton, versioned platform internal-testing notice. */
+export type PlatformNoticeRecord = z.infer<typeof platformNotice>
+/** One account's acknowledgement row. */
+export type PlatformNoticeAckRecord = z.infer<typeof platformNoticeAck>
 
 /** The `physicsos_notice` domain: the feedback queue plus tenant/platform announcements. */
 export const noticeDomain = defineDomain({
@@ -66,6 +92,8 @@ export const noticeDomain = defineDomain({
   tables: {
     feedback: domainTable<string, FeedbackRecord>(feedback),
     announcements: domainTable<string, AnnouncementRecord>(announcement),
+    platform_notice: domainTable<string, PlatformNoticeRecord>(platformNotice),
+    platform_notice_acks: domainTable<string, PlatformNoticeAckRecord>(platformNoticeAck),
   },
 })
 

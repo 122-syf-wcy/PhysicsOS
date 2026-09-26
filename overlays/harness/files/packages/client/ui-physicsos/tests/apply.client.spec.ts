@@ -43,6 +43,8 @@ async function bench() {
     children: {
       sidebar: { kind: 'single', scope: 'root' },
       conversation: { kind: 'single', scope: 'session-maybe' },
+      'settings.onboarding': { kind: 'list', scope: 'root' },
+      'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   slots.register({
@@ -61,6 +63,7 @@ async function bench() {
       'conversation.hero.brand': { kind: 'single', scope: 'root' },
       'conversation.hero.actions': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
+      'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.surface': { kind: 'single', scope: 'root' },
       /* Declared by the chat view in the real tree; the bench declares it so
          the deferred keyed registration fires and can be counted. */
@@ -130,6 +133,18 @@ describe('ui-physicsos apply', () => {
     expect(b.slots.entries('conversation.hero.actions')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')[0]!.options.priority).toBe(-1)
+    expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(1)
+    expect(b.slots.entries('conversation.hero.workspace')[0]!.options.priority).toBe(-1)
+    expect(b.slots.entries('settings.onboarding')[0]!.options).toMatchObject({
+      id: 'physicsos-upstream-onboarding-sink',
+      order: -200,
+    })
+    expect(b.slots.entries('shell.overlay').map(entry => entry.options.id))
+      .toEqual(expect.arrayContaining([
+        'physicsos-auth-gate',
+        'physicsos-workspace-panel',
+        'physicsos-platform-notice',
+      ]))
     /* The scene card: definition on the conversation registry, keyed renderer
        on the chat node slot. */
     expect(b.conversationEvents.register).toHaveBeenCalledWith(
@@ -161,6 +176,14 @@ describe('ui-physicsos apply', () => {
     }
     actions().startSession('ws-1')
     expect(b.workspaces.startSession).toHaveBeenLastCalledWith('ws-1')
+    actions().startSession()
+    expect(b.workspaces.startSession).toHaveBeenCalledTimes(1)
+    const panelEntry = b.slots.entries('shell.overlay')
+      .find(entry => entry.options.id === 'physicsos-workspace-panel')!
+    const panelInjected = (panelEntry.inject as () => {
+      hooks: { panel: { getSnapshot: () => { open: boolean } } }
+    })()
+    expect(panelInjected.hooks.panel.getSnapshot().open).toBe(true)
     await fiber.dispose()
     expect(document.title).toBe('DeepSeek Harness')
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeNull()

@@ -13,7 +13,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import { join } from 'node:path'
@@ -29,6 +29,7 @@ import { seedSchools } from './schools.ts'
 import { adminRoutes, authRoutes } from './routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
 import {
+  DEFAULT_WORKSPACE_TITLE,
   DEFAULT_MODEL_ATTEMPT_LIMIT,
   DEFAULT_MODEL_ATTEMPT_WINDOW_MS,
   ONCE_LEDGER_SERVICE,
@@ -57,7 +58,15 @@ interface ApiProxyWorkspaceSeam {
       payload: { path: string }
     }): Promise<{
       result:
-        | { ok: true; value: { workspace: { workspaceId: string; path: string } } }
+        | { ok: true; value: { workspace: { workspaceId: string; path: string; title?: string } } }
+        | { ok: false; error: { code: string; message: string } }
+    }>
+    rename(request: {
+      rpcId: string
+      payload: { workspaceId: string; title: string }
+    }): Promise<{
+      result:
+        | { ok: true; value: { workspace: { workspaceId: string; path: string; title?: string } } }
         | { ok: false; error: { code: string; message: string } }
     }>
   }
@@ -74,6 +83,15 @@ export interface Config extends Partial<AuthServiceConfig> {
   bootstrapAdmins?: BootstrapAdmin[]
   /** Root for account-private Harness workspaces. */
   workspaceRoot?: string
+  /** Maximum live workspaces one account may own. */
+  workspaceLimit?: number
+  /**
+   * Server-filesystem browsing for `host.listDirectory` / `pickDirectory` /
+   * `createDirectory`. `deny` (default) refuses every role: the hosted
+   * deployment's host is the server, account workspaces are assigned
+   * server-side, and the picker would expose the per-account hash layout.
+   */
+  hostFilesystemAccess?: 'deny' | 'admin'
   /** Per-account model-call budget for the beta. Super admins are exempt. */
   modelAttemptLimit?: number
   /** Fixed window for {@link modelAttemptLimit}. */
@@ -107,6 +125,8 @@ export const Config: z<Config> = z.object({
   attemptWindowMs: z.number().default(DEFAULT_AUTH_CONFIG.attemptWindowMs),
   bootstrapAdmins: z.array(bootstrapAdmin).default([]),
   workspaceRoot: z.string().default(dshHomePath('physicsos-users')),
+  workspaceLimit: z.number().min(1).step(1).default(20),
+  hostFilesystemAccess: z.union(['deny', 'admin']).default('deny'),
   modelAttemptLimit: z.number().min(1).step(1).default(DEFAULT_MODEL_ATTEMPT_LIMIT),
   modelAttemptWindowMs: z.number().min(1).step(1).default(DEFAULT_MODEL_ATTEMPT_WINDOW_MS),
 })
@@ -190,28 +210,68 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
 
     const workspacePromises = new Map<string, Promise<ApiPolicyWorkspace>>()
-    const ensureWorkspace = (actor: ApiPolicyActor): Promise<ApiPolicyWorkspace> => {
-      const existing = workspacePromises.get(actor.userKey)
+    /**
+     * The harness names a workspace record after its directory basename — for
+     * an account workspace that is the opaque `sha256(userKey)` digest. Rename
+     * it once, durably, to the human-readable default; a title the user already
+     * chose is never overwritten. A registry that refuses the rename still
+     * answers with the readable title for this account's own views.
+     */
+    const adoptWorkspaceTitle = async (
+      apiProxy: ApiProxyWorkspaceSeam,
+      workspace: { workspaceId: string; path: string; title?: string },
+      digest: string,
+      title: string,
+    ): Promise<string> => {
+      if (workspace.title === title) return title
+      try {
+        const renamed = await apiProxy.workspace.rename({
+          rpcId: `physicsos-title-${digest}`,
+          payload: { workspaceId: workspace.workspaceId, title },
+        })
+        if (renamed.result.ok) return renamed.result.value.workspace.title ?? title
+      } catch {
+        // A registry that refuses the rename keeps the digest; the account's own
+        // views fall back to the readable default below.
+      }
+      return title
+    }
+    const ensureWorkspace = (
+      actor: ApiPolicyActor,
+      requestedTitle?: string,
+    ): Promise<ApiPolicyWorkspace> => {
+      const own = service.ownedApiResources(actor, 'workspace')
+      const limit = config.workspaceLimit ?? 20
+      const title = requestedTitle === undefined ? DEFAULT_WORKSPACE_TITLE : requestedTitle
+      const key = requestedTitle === undefined
+        ? actor.userKey
+        : `${actor.userKey}\u0000${requestedTitle}`
+      const existing = workspacePromises.get(key)
       if (existing !== undefined) return existing
       const pending = (async (): Promise<ApiPolicyWorkspace> => {
+        if (own.size >= limit) {
+          throw new Error(`workspace limit reached (${String(limit)})`)
+        }
         const apiProxy = ctx.get('apiProxy') as ApiProxyWorkspaceSeam | undefined
         if (apiProxy === undefined) throw new Error('apiProxy is not mounted')
         const digest = createHash('sha256').update(actor.userKey).digest('hex').slice(0, 32)
-        const path = join(config.workspaceRoot ?? dshHomePath('physicsos-users'), digest)
+        const directory = requestedTitle === undefined ? digest : `${digest}-${randomUUID()}`
+        const path = join(config.workspaceRoot ?? dshHomePath('physicsos-users'), directory)
         await mkdir(path, { recursive: true })
         const response = await apiProxy.workspace.create({
-          rpcId: `physicsos-scope-${digest}`,
+          rpcId: `physicsos-scope-${digest}-${randomUUID()}`,
           payload: { path },
         })
         if (!response.result.ok) {
           throw new Error(`private workspace failed: ${response.result.error.code} ${response.result.error.message}`)
         }
         const workspace = response.result.value.workspace
-        return { id: workspace.workspaceId, path: workspace.path }
+        const displayTitle = await adoptWorkspaceTitle(apiProxy, workspace, digest, title)
+        return { id: workspace.workspaceId, path: workspace.path, title: displayTitle }
       })()
-      workspacePromises.set(actor.userKey, pending)
+      workspacePromises.set(key, pending)
       void pending.catch(() => {
-        if (workspacePromises.get(actor.userKey) === pending) workspacePromises.delete(actor.userKey)
+        if (workspacePromises.get(key) === pending) workspacePromises.delete(key)
       })
       return pending
     }
@@ -226,6 +286,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         release: (actor, kind, id) => service.releaseApiResource(actor, kind, id),
       },
       ensureWorkspace,
+      hostFilesystemAccess: config.hostFilesystemAccess ?? 'deny',
       ...(apiPolicyLimiter === undefined ? {} : { limiter: apiPolicyLimiter }),
       ...(onceLedger === undefined ? {} : { onceLedger }),
       modelPolicy: {

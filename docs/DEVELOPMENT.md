@@ -77,7 +77,31 @@ node scripts/overlay/harness-overlay.mjs capture
 | `pnpm run desktop:release`         | 正式发布构建（需要签名与 updater 配置）                       |
 | `pnpm run format` / `format:write` | Prettier 检查 / 写入                                          |
 
-## 6. 只跑一个包或一个 spec
+## 6. 账户会话存储与迁移
+
+JSONL 会话在启用 `physicsosSessionOwnership` 解析服务后写入
+`<root>/<schoolId>/<encoded-userKey>/<encoded-sessionId>/`。解析服务的权威数据源是
+`physicsos_auth` 存储域的 `api_resources`；工作区路径的哈希摘要不能反推账号，不能拿它当 owner。
+
+旧 `<root>/<project>/<sessionId>/` 布局仍可读取。新布局和旧布局同时存在同一 session 时，backend 会拒绝
+加载并报告 layout conflict，不会替调用方选择一份。
+
+迁移脚本默认只做 dry-run：
+
+```sh
+node scripts/migrate/sessions-to-account-layout.mjs --root "$DSH_HOME/sessions"
+
+# 核对 plans / skipped 后执行：
+node scripts/migrate/sessions-to-account-layout.mjs --root "$DSH_HOME/sessions" --apply
+
+node --test scripts/migrate/sessions-to-account-layout.test.mjs
+```
+
+归属来源可用 `--ownership <physicsos_auth.json-or-manifest>` 覆盖；默认读取
+`<sessions-root>/../storages/physicsos_auth.json`。没有归属、归属冲突、非法 header 或目标文件已存在的条目只进入
+`skipped`，脚本不会猜测归属。PostgreSQL 存储部署需要由后续 composition 提供同等的 ownership provider。
+
+## 7. 只跑一个包或一个 spec
 
 领域包各自带脚本，可以直接定点执行：
 
@@ -102,7 +126,7 @@ pnpm_config_verify_deps_before_run=false pnpm -C vendor/deepseek-harness --filte
 
 这是排查用的旁路，不是常态；如果它成为常态，说明依赖状态需要重新 `pnpm install`。
 
-## 7. 桌面端
+## 8. 桌面端
 
 ```sh
 pnpm run desktop:dev        # 本地开发
@@ -114,7 +138,7 @@ pnpm run test:desktop       # 打包脚本 + bridge 测试
 
 正式发布前需要提供 updater 公钥与 endpoint、`TAURI_SIGNING_PRIVATE_KEY` 及 Apple / Windows 签名材料；`desktop:config` 与 `desktop:release-config` 会校验配置文件，发布配置会拒绝开发 key、`example.invalid` 之类的占位 endpoint，以及仍指向占位页的构建。桌面端细节见 [`../apps/desktop/README.md`](../apps/desktop/README.md)。
 
-## 8. 用 Docker Compose 起本地服务器
+## 9. 用 Docker Compose 起本地服务器
 
 Compose 需要 7 个 secret 文件，默认路径都在仓库根（`.gitignore` 已忽略）：
 
@@ -134,7 +158,7 @@ docker compose up --build         # 起 app + postgres + redis
 
 app 默认只监听 `127.0.0.1:3080`（可用 `PHYSICSOS_HTTP_PORT` 改端口），健康检查走 `/readyz`。TLS 反代后需要把 `PHYSICOS_TRUSTED_PROXIES` 设为反代的**精确 IP 字面量**（CIDR 与主机名会被拒绝）。
 
-## 9. 故障排查
+## 10. 故障排查
 
 ### pnpm 版本冲突
 

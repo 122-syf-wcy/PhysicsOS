@@ -1004,7 +1004,7 @@ index 81cedbbb42..426452f2ff 100644
      "@vitest/coverage-v8": "^4.1.8",
      "@yarnpkg/cli-dist": "4.17.1",
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index b06e63b54f..b7091ead4e 100644
+index b06e63b54f..76c6f8fde3 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -32,6 +32,13 @@
@@ -1021,7 +1021,7 @@ index b06e63b54f..b7091ead4e 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|code|both) opts a whole dsh
-@@ -56,16 +63,104 @@
+@@ -56,16 +63,133 @@
        config:
          root: !!js dshHomePath('storages')
  
@@ -1107,9 +1107,38 @@ index b06e63b54f..b7091ead4e 100644
 +    - id: class-host
 +      name: '@deepseek-ai/dsh-class-host'
 +
++    # 系统管理员的只读运维面板：磁盘/数据卷容量、目录分项、PostgreSQL/Redis
++    # 连通性、账号会话聚合与 15 秒指标缓存。端点只接受 SUPER_ADMIN 会话；
++    # 它按请求解析 auth-host 身份，因此行序可以放在 auth-host 之前。
++    - id: ops-host
++      name: '@deepseek-ai/dsh-ops-host'
++      config:
++        dataRoot: !!js dshHomePath()
++        sessionsRoot: !!js process.env.PHYSICSOS_SESSIONS_ROOT ?? dshHomePath('sessions')
++        workspacesRoot: !!js dshHomePath('physicsos-users')
++        cacheTtlMs: 15000
++
 +    # 生产探针 host 面:/healthz 与 /readyz。
 +    - id: health-host
 +      name: '@deepseek-ai/dsh-health-host'
++
++    # 平台模型兜底 + 号池:本机 OpenAI 兼容代理(/v1/chat/completions、/v1/models)
++    # 把 Harness 的 DEEPSEEK_BASE_URL 收进一个可维护的池子。通道按 priority 分档,
++    # 档内平滑加权轮训;401/5xx/429 自动换下一个 key,连续失败进入指数冷却。
++    # key 只用 AES-GCM 密文落库(密钥由 PHYSICSOS_MODEL_POOL_SECRET 经 HKDF 派生),
++    # 列表只回显尾 4 位。/physicsos/model-pool 是 SUPER_ADMIN 的后台接口。
++    - id: model-pool-host
++      name: '@deepseek-ai/dsh-model-pool-host'
++      config:
++        host: 127.0.0.1
++        port: !!js Number(process.env.PHYSICSOS_MODEL_POOL_PORT ?? 38972)
++        retryCount: 2
++        failureThreshold: 3
++        cooldownBaseMs: 30000
++        cooldownMaxMs: 1800000
++        autoRecover: true
++        fallbackBaseURL: !!js process.env.PHYSICSOS_MODEL_FALLBACK_BASE_URL ?? 'https://api.deepseek.com/v1'
++        fallbackApiKey: !!js process.env.PHYSICSOS_MODEL_FALLBACK_API_KEY
 +
 +    # 账户体系 host 面：学校租户 + 账号密码注册/登录、argon2id、
 +    # HttpOnly 会话、IP/账号限流；全默认安全配置，无需模型路由。
@@ -1127,7 +1156,7 @@ index b06e63b54f..b7091ead4e 100644
      # Browser Session export: `/export` command plus the shared download dialog.
      - id: session-log-download
        name: '@deepseek-ai/dsh-session-log-export'
-@@ -198,6 +293,9 @@
+@@ -198,6 +322,9 @@
      - id: ui-conversation
        name: '@deepseek-ai/dsh-client-ui-conversation'
  
@@ -1138,7 +1167,7 @@ index b06e63b54f..b7091ead4e 100644
      - id: ui-tool
        name: '@deepseek-ai/dsh-client-ui-tool'
 diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
-index ca4709a2a9..40a7c24927 100644
+index ca4709a2a9..a34a8c1da4 100644
 --- a/packages/bundle/web-app/package.json
 +++ b/packages/bundle/web-app/package.json
 @@ -47,6 +47,7 @@
@@ -1157,10 +1186,11 @@ index ca4709a2a9..40a7c24927 100644
      "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
      "@deepseek-ai/dsh-client-ui-skill": "workspace:^",
      "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:^",
-@@ -94,6 +96,14 @@
+@@ -94,6 +96,16 @@
      "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",
      "@deepseek-ai/dsh-host-webserver": "workspace:^",
      "@deepseek-ai/dsh-message-feedback": "workspace:^",
++    "@deepseek-ai/dsh-model-pool-host": "workspace:^",
 +    "@deepseek-ai/dsh-paper-host": "workspace:^",
 +    "@deepseek-ai/dsh-notice-host": "workspace:^",
 +    "@deepseek-ai/dsh-update-host": "workspace:^",
@@ -1169,6 +1199,7 @@ index ca4709a2a9..40a7c24927 100644
 +    "@deepseek-ai/dsh-class-host": "workspace:^",
 +    "@deepseek-ai/dsh-storage-postgres": "workspace:^",
 +    "@deepseek-ai/dsh-shared-state-host": "workspace:^",
++    "@deepseek-ai/dsh-ops-host": "workspace:^",
      "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
      "@deepseek-ai/dsh-session-log-export": "workspace:^",
      "@deepseek-ai/dsh-session-stats": "workspace:^",
@@ -1259,7 +1290,7 @@ index f8bacb1553..d680e1090e 100644
    const location = (globalThis as { location?: { origin?: string } }).location
    return location?.origin !== undefined && location.origin !== 'null' ? location.origin : INTERNAL_BASE
 diff --git a/packages/client/connection/src/index.ts b/packages/client/connection/src/index.ts
-index 35084918e8..a839a8bb5d 100644
+index 35084918e8..7777fca62e 100644
 --- a/packages/client/connection/src/index.ts
 +++ b/packages/client/connection/src/index.ts
 @@ -10,6 +10,7 @@ import { bridge, DEFAULT_MAX_REQUEST_BODY_BYTES } from './http-bridge.ts'
@@ -1278,30 +1309,22 @@ index 35084918e8..a839a8bb5d 100644
  export { HostConnectionService } from './rpc-host.ts'
  
  export { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH } from './api-path.ts'
-@@ -142,11 +144,18 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
-       const method = pathname.startsWith(`${API_PATH}/`)
-         ? pathname.slice(API_PATH.length + 1)
+@@ -144,7 +146,14 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
          : undefined
--      if (method !== undefined
--        && PRIVILEGED_METHODS.has(method)
+       if (method !== undefined
+         && PRIVILEGED_METHODS.has(method)
 -        && !isTrustedApiRequest(request, [])) {
--        return new Response('forbidden', { status: 403 })
--      }
-+    if (method !== undefined
-+      && PRIVILEGED_METHODS.has(method)
-+      /* PhysicsOS runs the same bundle as a hosted server, not only as a local
-+         desktop: with the loopback-only check, every privileged method (settings,
-+         credentials, host directory picking, preset roster) is 403 for a domain
-+         deployment — including the onboarding acknowledgement a student needs to
-+         dismiss. The fence is therefore "loopback OR an authority this deployment
-+         explicitly trusts"; the DNS-rebinding defence is unchanged, and each of
-+         these methods is still gated by the API policy on top. */
-+      && !isTrustedApiRequest(request, trustedHosts)) {
-+      return new Response('forbidden', { status: 403 })
-+    }
++        /* PhysicsOS runs the same bundle as a hosted server, not only as a local
++           desktop: with the loopback-only check, every privileged method (settings,
++           credentials, host directory picking, preset roster) is 403 for a domain
++           deployment — including the onboarding acknowledgement a student needs to
++           dismiss. The fence is therefore "loopback OR an authority this deployment
++           explicitly trusts"; the DNS-rebinding defence is unchanged, and each of
++           these methods is still gated by the API policy on top. */
++        && !isTrustedApiRequest(request, trustedHosts)) {
+         return new Response('forbidden', { status: 403 })
+       }
        if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
-         return new Response('upgrade required', {
-           status: 426,
 @@ -157,7 +166,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
        if (apiProxy === undefined) return new Response('not found', { status: 404 })
        return toFetchHandler(apiProxy).fetch(request)
@@ -1342,7 +1365,7 @@ index 35084918e8..a839a8bb5d 100644
    })
  }
 diff --git a/packages/client/connection/src/rpc-host.ts b/packages/client/connection/src/rpc-host.ts
-index 0da66c85a7..de55891053 100644
+index 0da66c85a7..569ae6e5c5 100644
 --- a/packages/client/connection/src/rpc-host.ts
 +++ b/packages/client/connection/src/rpc-host.ts
 @@ -21,6 +21,7 @@ import type {
@@ -1353,7 +1376,7 @@ index 0da66c85a7..de55891053 100644
  
  const INVALID_REQUEST_RPC_ID = RpcId('invalid-request')
  const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
-@@ -66,23 +67,29 @@ export class HostConnectionService extends Service implements HostConnectionHand
+@@ -66,23 +67,35 @@ export class HostConnectionService extends Service implements HostConnectionHand
     * Compose one shared-channel Fetch handler from its interceptor and fallback.
     * @param channel - shared channel mounted by Connection.
     * @param fallback - handler for endpoints not claimed by the interceptor.
@@ -1371,23 +1394,29 @@ index 0da66c85a7..de55891053 100644
 -        const interceptor = this.interceptors.get(channel)
 -        if (endpoint === undefined || interceptor === undefined || !interceptor.matches(endpoint)) {
 -          return fallback.fetch(request)
-+        const dispatch = (): Promise<Response> => {
-+          const endpoint = endpointFromPath(channel, new URL(request.url).pathname)
++        /* The policy seam is a fetch-handler wrapper: `wrapFetch(next)` may hand
++           `next` a REBUILT request (a rewritten JSON body, say). `dispatch` must
++           therefore route the request it is called with — capturing the outer
++           `request` here silently drops every request-body rewrite while still
++           honouring response rewrites, which is exactly the failure the
++           PhysicsOS session-scope policy hit in production. */
++        const dispatch = (outbound: Request): Promise<Response> => {
++          const endpoint = endpointFromPath(channel, new URL(outbound.url).pathname)
 +          const interceptor = this.interceptors.get(channel)
 +          if (endpoint === undefined || interceptor === undefined || !interceptor.matches(endpoint)) {
-+            return fallback.fetch(request)
++            return fallback.fetch(outbound)
 +          }
-+          if (interceptor.options.authority === 'loopback' && !isTrustedApiRequest(request, [])) {
++          if (interceptor.options.authority === 'loopback' && !isTrustedApiRequest(outbound, [])) {
 +            return Promise.resolve(new Response('forbidden', { status: 403 }))
 +          }
-+          return interceptor.fetchHandler.fetch(request)
++          return interceptor.fetchHandler.fetch(outbound)
          }
 -        if (interceptor.options.authority === 'loopback' && !isTrustedApiRequest(request, [])) {
 -          return Promise.resolve(new Response('forbidden', { status: 403 }))
 -        }
 -        return interceptor.fetchHandler.fetch(request)
 +        const active = policy?.()
-+        return active?.wrapFetch === undefined ? dispatch() : active.wrapFetch(dispatch)(request)
++        return active?.wrapFetch === undefined ? dispatch(request) : active.wrapFetch(dispatch)(request)
        },
      }
    }
@@ -1434,10 +1463,27 @@ index 72ae5e94ef..7335410503 100644
        payload: {},
      }, signal))
 diff --git a/packages/client/connection/tests/node-half.host.spec.ts b/packages/client/connection/tests/node-half.host.spec.ts
-index 0b30ce6520..79072ff2bb 100644
+index 0b30ce6520..f309ee7388 100644
 --- a/packages/client/connection/tests/node-half.host.spec.ts
 +++ b/packages/client/connection/tests/node-half.host.spec.ts
-@@ -125,6 +125,50 @@ describe('connection node half', () => {
+@@ -10,7 +10,15 @@ import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy/api'
+ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+ import { RpcId, type ClientRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
+ import type { WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
+-import { API_PATH, apply, HOST_EVENTS_PATH, inject, MUX_EVENTS_PATH, type HostConnectionHandle } from '../src/index.ts'
++import {
++  API_PATH,
++  apply,
++  HostConnectionService,
++  HOST_EVENTS_PATH,
++  inject,
++  MUX_EVENTS_PATH,
++  type HostConnectionHandle,
++} from '../src/index.ts'
+ 
+ /** Structural webServer fake recording both route registries. */
+ function fakeHttpServer(
+@@ -125,6 +133,103 @@ describe('connection node half', () => {
      expect(upgrades).toHaveLength(0)
    })
  
@@ -1485,9 +1531,125 @@ index 0b30ce6520..79072ff2bb 100644
 +    await fiber.dispose()
 +  })
 +
++  it('routes a request a policy rewrites, not the outer request object', async () => {
++    // The policy seam is a fetch-handler wrapper: `next` may be handed a
++    // REBUILT request (a rewritten JSON body, say). Capturing the outer request
++    // in the dispatch closure instead silently dropped every request-body
++    // rewrite while response rewrites still worked — exactly the failure the
++    // PhysicsOS account-scope policy hit in production.
++    type Envelope = {
++      type: string
++      rpcId: string
++      method: string
++      payload: Record<string, unknown>
++    }
++    const ctx = new Context()
++    const received: unknown[] = []
++    const service = new HostConnectionService(ctx, [])
++    const handler = service.createSharedFetchHandler(API_PATH, {
++      async fetch(request) {
++        received.push(await request.json())
++        return Response.json({ ok: true })
++      },
++    }, () => ({
++      wrapFetch: next => async (request) => {
++        const body = await request.clone().json() as Envelope
++        const payload = { ...body.payload }
++        delete payload['cwd']
++        payload['agentPreset'] = 'physics-student'
++        return next(new Request(request.url, {
++          method: request.method,
++          headers: request.headers,
++          body: JSON.stringify({ ...body, payload }),
++        }))
++      },
++    }))
++    const envelope: Envelope = {
++      type: 'client-request',
++      rpcId: 'create',
++      method: 'session.create',
++      payload: { agentPreset: 'standard', cwd: '/etc' },
++    }
++
++    const response = await handler.fetch(new Request(`http://dsh.internal${API_PATH}/session.create`, {
++      method: 'POST',
++      headers: { 'content-type': 'application/json' },
++      body: JSON.stringify(envelope),
++    }))
++
++    expect(response.status).toBe(200)
++    expect(received).toEqual([{
++      ...envelope,
++      payload: { agentPreset: 'physics-student' },
++    }])
++  })
++
    it('requires WebSocket upgrade for network GETs to either event path', async () => {
      const { routes, dispose } = await mounted()
      for (const path of [MUX_EVENTS_PATH, HOST_EVENTS_PATH]) {
+@@ -161,13 +266,14 @@ describe('connection node half', () => {
+     await dispose()
+   })
+ 
+-  it('pins privileged methods to loopback even for a declared trusted authority', async () => {
++  it('lets a declared authority reach privileged methods and 403s an undeclared one', async () => {
+     const { routes, dispose } = await mounted({ trustedHosts: ['harness.example'] })
+     // The privileged set: native dialogs plus the whole settings/credential
+     // configuration plane, reads included, plus the one method that makes the
+-    // host fetch a caller-chosen URL. The same declared authority reaches
+-    // ordinary reads (carrier-level 404 from the empty proxy proves the fence
+-    // passed), but each privileged method stays loopback-only and 403s.
++    // host fetch a caller-chosen URL. PhysicsOS hosts this same bundle, so the
++    // deployment's own authority reaches them (the API policy still gates each
++    // method on the account role); an authority nobody declared is the
++    // DNS-rebinding case and 403s before the handler.
+     for (const method of [
+       'host.pickDirectory', 'host.openPath',
+       'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
+@@ -180,11 +286,20 @@ describe('connection node half', () => {
+     ]) {
+       const denied = fakeResponse()
+       await routes[0]!.handler(
+-        fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
++        fakeRequest({ host: 'rebind.example' }, `${API_PATH}/${method}`),
+         denied.response,
+       )
+       expect(denied.state.status).toBe(403)
+       expect(denied.state.body).toBe('forbidden')
++
++      // Declared authority: the fence passes and the empty proxy answers its
++      // carrier-level 404 — proof the request was not refused here.
++      const declared = fakeResponse()
++      await routes[0]!.handler(
++        fakeRequest({ host: 'harness.example' }, `${API_PATH}/${method}`),
++        declared.response,
++      )
++      expect(declared.state.status).not.toBe(403)
+     }
+     const read = fakeResponse()
+     await routes[0]!.handler(fakeRequest({ host: 'harness.example' }), read.response)
+@@ -453,7 +568,7 @@ describe('connection node half over a real HTTP server', () => {
+     })
+   }
+ 
+-  it('answers a declared LAN authority with 403 on every configuration method, over real HTTP', async () => {
++  it('answers an undeclared LAN authority with 403 on every configuration method, over real HTTP', async () => {
+     // The fence's input is a real IncomingMessage parsed by Node from the
+     // wire, not a hand-assembled object: the Host header a LAN browser sends
+     // is exactly what decides loopback-only here, so the boundary is asserted
+@@ -472,8 +587,11 @@ describe('connection node half over a real HTTP server', () => {
+         'llm.discoverModels',
+         'agentPreset.read', 'agentPreset.copy', 'agentPreset.openDocument', 'agentPreset.remove',
+       ]) {
+-        expect([method, await call(port, method, 'harness.example')]).toEqual([method, 403])
++        expect([method, await call(port, method, 'rebind.example')]).toEqual([method, 403])
+       }
++      // The deployment's own authority passes the fence instead: the empty
++      // proxy's carrier-level 404 proves the privileged method reached it.
++      expect(await call(port, 'settings.describe', 'harness.example')).toBe(404)
+       // The model catalog stays reachable for the same authority: a LAN
+       // client's model picker needs it, and it carries no key or endpoint
+       // state (404 is the empty proxy's carrier answer — the fence passed).
 diff --git a/packages/client/connection/tests/rpc-status.client.spec.ts b/packages/client/connection/tests/rpc-status.client.spec.ts
 new file mode 100644
 index 0000000000..e1ced8660d
@@ -3891,8 +4053,1002 @@ index 0000000000..09837051aa
 @@ -0,0 +1 @@
 +{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,OAAO,EAAW,OAAO,EAAE,MAAM,qBAAqB,CAAA;AAEtD,OAAO,CAAC,MAAM,0BAA0B,CAAA;AAsCxC,iEAAiE;AACjE,MAAM,OAAO,cAAe,SAAQ,KAAK;IACvC,sDAAsD;IAC7C,IAAI,GAAG,WAAoB,CAAA;IACpC,8DAA8D;IACrD,WAAW,CAAQ;IAE5B;;;;OAIG;IACH,YAAY,WAAmB,EAAE,OAAe;QAC9C,KAAK,CAAC,0BAA0B,WAAW,MAAM,OAAO,EAAE,CAAC,CAAA;QAC3D,IAAI,CAAC,IAAI,GAAG,gBAAgB,CAAA;QAC5B,IAAI,CAAC,WAAW,GAAG,WAAW,CAAA;IAChC,CAAC;CACF;AAQD,oDAAoD;AACpD,SAAS,eAAe,CAAC,KAAgD,EAAE,MAAyB;IAClG,MAAM,IAAI,GAAG,IAAI,GAAG,EAAU,CAAA;IAC9B,OAAO,MAAM,CAAC,GAAG,CAAC,CAAC,KAAK,EAAE,EAAE;QAC1B,IAAI,KAAK,CAAC,MAAM,KAAK,CAAC,IAAI,KAAK,CAAC,IAAI,EAAE,KAAK,KAAK,EAAE,CAAC;YACjD,MAAM,IAAI,KAAK,CAAC,eAAe,KAAK,+DAA+D,CAAC,CAAA;QACtG,CAAC;QACD,IAAI,IAAI,CAAC,GAAG,CAAC,KAAK,CAAC,EAAE,CAAC;YACpB,MAAM,IAAI,KAAK,CAAC,eAAe,KAAK,6BAA6B,IAAI,CAAC,SAAS,CAAC,KAAK,CAAC,EAAE,CAAC,CAAA;QAC3F,CAAC;QACD,IAAI,CAAC,GAAG,CAAC,KAAK,CAAC,CAAA;QACf,IAAI,CAAC;YACH,OAAO,IAAI,MAAM,CAAC,KAAK,CAAC,CAAA;QAC1B,CAAC;QAAC,OAAO,KAAK,EAAE,CAAC;YACf,MAAM,IAAI,KAAK,CAAC,eAAe,KAAK,2BAA2B,IAAI,CAAC,SAAS,CAAC,KAAK,CAAC,EAAE,EAAE,EAAE,KAAK,EAAE,CAAC,CAAA;QACpG,CAAC;IACH,CAAC,CAAC,CAAA;AACJ,CAAC;AAED,8EAA8E;AAC9E,MAAM,OAAO,iBAAkB,SAAQ,OAAO;IAC5C,MAAM,CAAC,MAAM,GAAmB,CAAC,CAAC,MAAM,CAAC;QACvC,OAAO,EAAE,CAAC,CAAC,OAAO,EAAE,CAAC,OAAO,CAAC,IAAI,CAAC;QAClC,iBAAiB,EAAE,CAAC,CAAC,KAAK,CAAC,CAAC,CAAC,MAAM,EAAE,CAAC,CAAC,OAAO,CAAC,EAAE,CAAC;QAClD,iBAAiB,EAAE,CAAC,CAAC,KAAK,CAAC,CAAC,CAAC,MAAM,EAAE,CAAC,CAAC,OAAO,CAAC,EAAE,CAAC;KACnD,CAAC,CAAA;IAEe,OAAO,CAAS;IAChB,QAAQ,CAAS;IACjB,gBAAgB,CAAmB;IACnC,gBAAgB,CAAmB;IACnC,aAAa,GAAG,IAAI,GAAG,EAAU,CAAA;IAElD;;;;OAIG;IACH,YAAY,GAAY,EAAE,SAAiB,EAAE;QAC3C,KAAK,CAAC,GAAG,EAAE,YAAY,CAAC,CAAA;QACxB,IAAI,CAAC,QAAQ,GAAG,GAAG,CAAA;QACnB,IAAI,CAAC,OAAO,GAAG,MAAM,CAAC,OAAO,IAAI,IAAI,CAAA;QACrC,IAAI,CAAC,gBAAgB,GAAG,eAAe,CAAC,mBAAmB,EAAE,MAAM,CAAC,iBAAiB,IAAI,EAAE,CAAC,CAAA;QAC5F,IAAI,CAAC,gBAAgB,GAAG,eAAe,CAAC,mBAAmB,EAAE,MAAM,CAAC,iBAAiB,IAAI,EAAE,CAAC,CAAA;IAC9F,CAAC;IAED,0EAA0E;IAClE,QAAQ,CAAC,WAAmB;QAClC,IAAI,CAAC,IAAI,CAAC,OAAO;YAAE,OAAO,KAAK,CAAA;QAC/B,IAAI,IAAI,CAAC,gBAAgB,CAAC,MAAM,GAAG,CAAC;eAC/B,CAAC,IAAI,CAAC,gBAAgB,CAAC,IAAI,CAAC,OAAO,CAAC,EAAE,CAAC,OAAO,CAAC,IAAI,CAAC,WAAW,CAAC,CAAC;YAAE,OAAO,KAAK,CAAA;QACpF,OAAO,CAAC,IAAI,CAAC,gBAAgB,CAAC,IAAI,CAAC,OAAO,CAAC,EAAE,CAAC,OAAO,CAAC,IAAI,CAAC,WAAW,CAAC,CAAC,CAAA;IAC1E,CAAC;IAED;;;;;;;OAOG;IACH,QAAQ,CAAC,WAAmB,EAAE,SAA6B;QACzD,IAAI,WAAW,CAAC,MAAM,KAAK,CAAC,IAAI,WAAW,CAAC,IAAI,EAAE,KAAK,WAAW,IAAI,IAAI,CAAC,IAAI,CAAC,WAAW,CAAC,EAAE,CAAC;YAC7F,MAAM,IAAI,KAAK,CAAC,qEAAqE,CAAC,CAAA;QACxF,CAAC;QACD,IAAI,IAAI,CAAC,aAAa,CAAC,GAAG,CAAC,WAAW,CAAC,EAAE,CAAC;YACxC,MAAM,IAAI,KAAK,CAAC,wBAAwB,WAAW,yBAAyB,CAAC,CAAA;QAC/E,CAAC;QAED,uEAAuE;QACvE,0EAA0E;QAC1E,wEAAwE;QACxE,MAAM,GAAG,GAAG,IAAI,CAAC,QAAQ,CAAA;QACzB,MAAM,aAAa,GAAG,IAAI,CAAC,aAAa,CAAA;QACxC,aAAa,CAAC,GAAG,CAAC,WAAW,CAAC,CAAA;QAE9B,IAAI,YAA0C,CAAA;QAC9C,IAAI,CAAC;YACH,YAAY,GAAG,GAAG,CAAC,MAAM,CAAC,KAAK,IAAI,EAAE;gBACnC,IAAI,CAAC,IAAI,CAAC,QAAQ,CAAC,WAAW,CAAC,EAAE,CAAC;oBAChC,OAAO,GAAG,EAAE;wBACV,aAAa,CAAC,MAAM,CAAC,WAAW,CAAC,CAAA;oBACnC,CAAC,CAAA;gBACH,CAAC;gBAED,MAAM,gBAAgB,GAAG,CAAC,QAAiB,EAAE,EAAE,CAAC,CAC9C,SAAS,CAAC,QAAQ,EAAE,CAAC,OAAO,EAAS,EAAE;oBACrC,MAAM,IAAI,cAAc,CAAC,WAAW,EAAE,OAAO,CAAC,CAAA;gBAChD,CAAC,CAAC,CACH,CAAA;gBACD,IAAI,CAAC;oBACH,MAAM,KAAK,GAAG,GAAG,CAAC,MAAM,CAAC,SAAS,CAAC,MAAM,KAAK,SAAS;wBACrD,CAAC,CAAC,gBAAgB;wBAClB,CAAC,CAAC,MAAM,CAAC,MAAM,CAAC,gBAAgB,EAAE,EAAE,MAAM,EAAE,SAAS,CAAC,MAAM,EAAE,CAAC,CAAC,CAAA;oBAElE,IAAI,CAAC;wBACH,MAAM,KAAK,CAAA;oBACb,CAAC;oBAAC,OAAO,KAAK,EAAE,CAAC;wBACf,MAAM,KAAK,CAAC,OAAO,EAAE,CAAA;wBACrB,MAAM,KAAK,CAAA;oBACb,CAAC;oBAED,OAAO,KAAK,IAAI,EAAE;wBAChB,IAAI,CAAC;4BACH,MAAM,KAAK,CAAC,OAAO,EAAE,CAAA;wBACvB,CAAC;gCAAS,CAAC;4BACT,aAAa,CAAC,MAAM,CAAC,WAAW,CAAC,CAAA;wBACnC,CAAC;oBACH,CAAC,CAAA;gBACH,CAAC;gBAAC,OAAO,KAAK,EAAE,CAAC;oBACf,aAAa,CAAC,MAAM,CAAC,WAAW,CAAC,CAAA;oBACjC,MAAM,KAAK,CAAA;gBACb,CAAC;YACH,CAAC,EAAE,uBAAuB,IAAI,CAAC,SAAS,CAAC,WAAW,CAAC,GAAG,CAAC,CAAA;QAC3D,CAAC;QAAC,OAAO,KAAK,EAAE,CAAC;YACf,aAAa,CAAC,MAAM,CAAC,WAAW,CAAC,CAAA;YACjC,MAAM,KAAK,CAAA;QACb,CAAC;QACD,yEAAyE;QACzE,6EAA6E;QAC7E,oGAAoG;QACpG,OAAO,YAAY,CAAA;IACrB,CAAC;;AAGH,eAAe,iBAAiB,CAAA"}
 \ No newline at end of file
+diff --git a/packages/session/session-persistence-jsonl/src/format.ts b/packages/session/session-persistence-jsonl/src/format.ts
+index 2923b9e09b..3779e196f6 100644
+--- a/packages/session/session-persistence-jsonl/src/format.ts
++++ b/packages/session/session-persistence-jsonl/src/format.ts
+@@ -12,6 +12,7 @@ import { join } from 'node:path'
+ import { decodeStorageRecord, packChunkRuns, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+ import type { SessionEvent, SessionHeader, SessionId, StorageRecord } from '@deepseek-ai/dsh-session'
+ import { SessionFormatUnsupportedError, sessionFormatVersionRefusal } from '@deepseek-ai/dsh-session-persistence'
++import { validateSessionOwner, type SessionOwner } from './ownership.ts'
+ 
+ /** Physical encoding selected for JSONL session artifacts. */
+ export type JsonlCompression = 'zstd' | 'none'
+@@ -135,6 +136,33 @@ export function encodeSegment(raw: string): string {
+   return out
+ }
+ 
++/**
++ * Decode one {@link encodeSegment} result back to its exact UTF-16 string.
++ * Rejects non-canonical spellings so a directory cannot pretend to be an
++ * encoded account identity by using an alternate escape.
++ * @param raw - one encoded path segment.
++ * @returns the original string.
++ */
++export function decodeSegment(raw: string): string {
++  if (raw.length === 0) throw new Error('cannot decode an empty path segment')
++  let out = ''
++  for (let i = 0; i < raw.length;) {
++    if (raw[i] === '~') {
++      const hex = raw.slice(i + 1, i + 5)
++      if (!/^[0-9A-F]{4}$/.test(hex)) throw new Error(`invalid encoded path segment ${JSON.stringify(raw)}`)
++      out += String.fromCharCode(Number.parseInt(hex, 16))
++      i += 5
++      continue
++    }
++    const ch = raw[i] as string
++    if (!/^[A-Za-z0-9._-]$/.test(ch)) throw new Error(`invalid encoded path segment ${JSON.stringify(raw)}`)
++    out += ch
++    i += 1
++  }
++  if (encodeSegment(out) !== raw) throw new Error(`non-canonical encoded path segment ${JSON.stringify(raw)}`)
++  return out
++}
++
+ /**
+  * Build the readable directory key for a project path.
+  * Filesystem separators and drive separators become `-`; unsafe code units use
+@@ -178,6 +206,48 @@ export function projectDir(root: string, cwd: string | undefined): string {
+   return join(root, projectKey(cwd))
+ }
+ 
++/**
++ * Account-scoped owner directory: `<root>/<schoolId>/<encoded-userKey>`.
++ * The encoded form keeps the human-readable school and user key while
++ * remaining one safe path component on POSIX and Windows.
++ * @param root - configured session root.
++ * @param owner - validated account owner.
++ * @returns the owner directory.
++ */
++export function accountOwnerDir(root: string, owner: SessionOwner): string {
++  const safe = validateSessionOwner(owner)
++  return join(root, safe.schoolId, encodeSegment(safe.userKey))
++}
++
++/**
++ * Account-scoped session directory:
++ * `<root>/<schoolId>/<encoded-userKey>/<encoded-sessionId>`.
++ * @param root - configured session root.
++ * @param owner - validated account owner.
++ * @param id - session id to encode.
++ * @returns the session-owned directory.
++ */
++export function accountSessionDir(root: string, owner: SessionOwner, id: SessionId): string {
++  return join(accountOwnerDir(root, owner), encodeSegment(id))
++}
++
++/**
++ * Account-scoped append-only log path.
++ * @param root - configured session root.
++ * @param owner - validated account owner.
++ * @param id - session id to encode.
++ * @param compression - physical artifact encoding.
++ * @returns the session's configured JSONL artifact path.
++ */
++export function accountLogPath(
++  root: string,
++  owner: SessionOwner,
++  id: SessionId,
++  compression: JsonlCompression,
++): string {
++  return join(accountSessionDir(root, owner, id), `session${logSuffix(compression)}`)
++}
++
+ /**
+  * The directory owned by one session and available for future session-local
+  * artifacts.
+diff --git a/packages/session/session-persistence-jsonl/src/index.ts b/packages/session/session-persistence-jsonl/src/index.ts
+index 5113746fec..6fbf932b0f 100644
+--- a/packages/session/session-persistence-jsonl/src/index.ts
++++ b/packages/session/session-persistence-jsonl/src/index.ts
+@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
+ import z from '@deepseek-ai/schemastery'
+ import { readdirSync } from 'node:fs'
+ import { open, mkdir, readFile, readdir, realpath, link, rm, stat, truncate } from 'node:fs/promises'
+-import { dirname, join, resolve } from 'node:path'
++import { dirname, join, relative, resolve, sep } from 'node:path'
+ import { performance } from 'node:perf_hooks'
+ import { scheduler } from 'node:timers/promises'
+ import { randomBytes } from 'node:crypto'
+@@ -23,10 +23,17 @@ import {
+ } from '@deepseek-ai/dsh-session-persistence'
+ import type { SessionEvent, SessionId, SessionHeader, SessionPreparation } from '@deepseek-ai/dsh-session'
+ import {
+-  encodeSegment, eventLines, logPath, logSuffix, parseHeaderMeta, projectDir, scanLog, sessionDir,
+-  SessionLogScanner, toHeaderLine,
++  accountLogPath, accountOwnerDir, accountSessionDir, decodeSegment, encodeSegment, eventLines, logPath,
++  logSuffix, parseHeaderMeta, scanLog, sessionDir, SessionLogScanner, toHeaderLine,
+   type JsonlCompression,
+ } from './format.ts'
++import {
++  SESSION_OWNERSHIP_SERVICE,
++  asSessionOwnershipResolver,
++  validateSessionOwner,
++  type SessionOwner,
++  type SessionOwnershipResolver,
++} from './ownership.ts'
+ import {
+   compressZstdFrame, createZstdFrameDecoder, decompressZstdFrame, decompressZstdPrefix, scanZstdFrames,
+ } from './zstd.ts'
+@@ -96,6 +103,27 @@ interface FileRevisionIdentity {
+   readonly ctimeNs: bigint
+ }
+ 
++type StoredLayout = 'legacy' | 'account'
++
++/** One resolved physical location, including the layout that owns its identity. */
++interface StoredLogLocation {
++  readonly path: string
++  readonly layout: StoredLayout
++  readonly owner?: SessionOwner
++  readonly sessionDir: string
++}
++
++/** One materialized artifact discovered under the configured root. */
++interface StoredArtifact extends StoredLogLocation {
++  readonly header: SessionHeader
++}
++
++/** One physical directory that contains (or is reserved by) a session artifact. */
++interface SessionDirectoryCandidate extends StoredLogLocation {
++  readonly pathExists: boolean
++  readonly oppositeExists: boolean
++}
++
+ /** Build the source-qualified revision shared by full and lightweight reads. */
+ function fileRevision(identity: FileRevisionIdentity): PersistenceRevision {
+   return SessionPersistenceRevision([
+@@ -163,6 +191,34 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     })
+   }
+ 
++  /** Resolve the optional ownership provider at the point of use so load order is irrelevant. */
++  private ownershipResolver(): SessionOwnershipResolver | undefined {
++    return asSessionOwnershipResolver(this.ctx.get(SESSION_OWNERSHIP_SERVICE))
++  }
++
++  /** Resolve one session's account owner, validating provider output before path use. */
++  private ownerFor(meta: SessionHeader): SessionOwner | undefined {
++    return this.ownershipResolver()?.resolve(meta)
++  }
++
++  /** Prefer the account layout when ownership is known; otherwise keep the legacy layout. */
++  private preferredLocation(meta: SessionHeader): StoredLogLocation {
++    const owner = this.ownerFor(meta)
++    if (owner !== undefined) {
++      return {
++        layout: 'account',
++        owner,
++        sessionDir: accountSessionDir(this.root, owner, meta.id),
++        path: accountLogPath(this.root, owner, meta.id, this.compression),
++      }
++    }
++    return {
++      layout: 'legacy',
++      sessionDir: sessionDir(this.root, meta.cwd, meta.id),
++      path: logPath(this.root, meta.cwd, meta.id, this.compression),
++    }
++  }
++
+   // Each backend keeps the typed service API beside its storage hooks;
+   // extracting these trivial forwards would add an inheritance layer.
+   /* jscpd:ignore-start */
+@@ -170,7 +226,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+ 
+   /** Resolve the absolute target path without touching the filesystem. */
+   locate(meta: SessionHeader): SessionLocation {
+-    return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
++    return { kind: 'jsonl', path: this.preferredLocation(meta).path }
+   }
+ 
+   create(meta: SessionHeader): Promise<void> {
+@@ -210,9 +266,9 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     signal?.throwIfAborted()
+     await this.ensureRootEncoding()
+     signal?.throwIfAborted()
+-    const path = await this.findLog(id, signal)
+-    if (path === undefined) return undefined
+-    return this.readPrefix(path, id, signal)
++    const location = await this.findLocation(id, signal)
++    if (location === undefined) return undefined
++    return this.readPrefix(location.path, id, signal, location)
+   }
+ 
+   /**
+@@ -253,9 +309,9 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     signal?.throwIfAborted()
+     await this.ensureRootEncoding()
+     signal?.throwIfAborted()
+-    const path = await this.findLog(id, signal)
+-    if (path === undefined) return undefined
+-    const { buffer } = await this.readStableFile(path, signal)
++    const location = await this.findLocation(id, signal)
++    if (location === undefined) return undefined
++    const { buffer } = await this.readStableFile(location.path, signal)
+     let content: string
+     if (this.compression === 'zstd') {
+       const { frames } = scanZstdFrames(buffer)
+@@ -274,8 +330,9 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     }
+     const meta = parseHeaderMeta(content.split('\n', 1)[0] as string)
+     if (meta === undefined || meta.id !== id) {
+-      throw new Error(`corrupt session log: invalid header line in "${path}"`)
++      throw new Error(`corrupt session log: invalid header line in "${location.path}"`)
+     }
++    await this.assertStoredIdentity(location.path, meta, id, signal, location)
+     // The logical artifact name is `session.jsonl` regardless of the physical
+     // encoding suffix (`.jsonl.zstd` marks compression only).
+     return { meta, filename: 'session.jsonl', content }
+@@ -311,6 +368,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     path: string,
+     expectedId?: SessionId,
+     signal?: AbortSignal,
++    location?: StoredLogLocation,
+   ): Promise<StoredPrefix<JsonlTornMarker>> {
+     const { buffer, revision } = await this.readStableFile(path, signal)
+     let prefix: Omit<StoredPrefix<JsonlTornMarker>, 'revision'>
+@@ -339,7 +397,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+       throw error
+     }
+     signal?.throwIfAborted()
+-    await this.assertStoredIdentity(path, prefix.meta, expectedId, signal)
++    await this.assertStoredIdentity(path, prefix.meta, expectedId, signal, location)
+     signal?.throwIfAborted()
+     return { ...prefix, revision }
+   }
+@@ -422,7 +480,11 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+   async appendBatch(meta: SessionHeader, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void> {
+     await this.ensureRootEncoding()
+     if (isMaterialized) {
+-      await this.appendLines(meta, events)
++      const location = await this.findLocation(meta.id)
++      if (location === undefined) {
++        throw new Error(`cannot append session "${meta.id}": its materialized log is missing`)
++      }
++      await this.appendLines(location.path, events)
+     } else {
+       await this.materialize(meta, events)
+     }
+@@ -438,9 +500,13 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     tornMarker: JsonlTornMarker | undefined,
+     closers: readonly SessionEvent[],
+   ): Promise<void> {
+-    if (tornMarker !== undefined) await this.repair(meta, tornMarker.truncateTo)
++    const location = await this.findLocation(meta.id)
++    if (location === undefined) {
++      throw new Error(`cannot repair session "${meta.id}": its materialized log is missing`)
++    }
++    if (tornMarker !== undefined) await this.repair(location.path, tornMarker.truncateTo)
+     const repairedEvents = [...(tornMarker?.recoveredEvents ?? []), ...closers]
+-    if (repairedEvents.length > 0) await this.appendLines(meta, repairedEvents)
++    if (repairedEvents.length > 0) await this.appendLines(location.path, repairedEvents)
+   }
+ 
+   /** List valid unique stored sessions' metadata (header line only — no full-log parse). */
+@@ -469,76 +535,74 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     return snapshots
+   }
+ 
+-  private async listArtifacts(signal?: AbortSignal): Promise<Array<{ header: SessionHeader; path: string }>> {
++  private async listArtifacts(signal?: AbortSignal): Promise<StoredArtifact[]> {
+     signal?.throwIfAborted()
+-    await this.ensureRootEncoding()
+-    signal?.throwIfAborted()
+-    const artifacts: Array<{ header: SessionHeader; path: string }> = []
+-    const ids = new Set<SessionId>()
+-    for (const project of await this.listProjectDirs(signal)) {
++    const artifacts: StoredArtifact[] = []
++    const ids = new Map<SessionId, StoredLogLocation>()
++    for (const candidate of await this.listSessionDirectoryCandidates(signal)) {
+       signal?.throwIfAborted()
+-      for (const dir of await this.listSessionDirs(project, signal)) {
+-        signal?.throwIfAborted()
+-        const opposite = join(dir, `session${logSuffix(this.oppositeCompression())}`)
+-        const oppositeExists = await this.exists(opposite)
+-        signal?.throwIfAborted()
+-        if (oppositeExists) throw this.encodingMismatch(opposite)
+-        const path = join(dir, `session${logSuffix(this.compression)}`)
+-        const pathExists = await this.exists(path)
+-        signal?.throwIfAborted()
+-        if (!pathExists) continue
+-        // Read only headers so listing scales with session count, not log size.
+-        const first = this.compression === 'zstd'
+-          ? await this.readFirstZstdLine(path, signal)
+-          : await this.readFirstLine(path, signal)
+-        signal?.throwIfAborted()
+-        if (first === undefined) continue // empty/half-written file
+-        const meta = parseHeaderMeta(first)
+-        if (meta === undefined) continue // not a session header
+-        await this.assertStoredIdentity(path, meta, undefined, signal)
+-        signal?.throwIfAborted()
+-        if (ids.has(meta.id)) {
+-          throw new Error(`duplicate JSONL session id "${meta.id}" appears in multiple project directories`)
+-        }
+-        ids.add(meta.id)
+-        artifacts.push({ header: meta, path })
+-      }
++      if (candidate.oppositeExists) throw this.encodingMismatch(this.oppositePath(candidate))
++      if (!candidate.pathExists) continue
++      await this.pushArtifact(artifacts, ids, candidate, signal)
+     }
+     signal?.throwIfAborted()
+     return artifacts
+   }
+ 
++  private async pushArtifact(
++    artifacts: StoredArtifact[],
++    ids: Map<SessionId, StoredLogLocation>,
++    location: StoredLogLocation,
++    signal?: AbortSignal,
++  ): Promise<void> {
++    const first = this.compression === 'zstd'
++      ? await this.readFirstZstdLine(location.path, signal)
++      : await this.readFirstLine(location.path, signal)
++    signal?.throwIfAborted()
++    if (first === undefined) return // empty/half-written file
++    const meta = parseHeaderMeta(first)
++    if (meta === undefined) return // not a session header
++    await this.assertStoredIdentity(location.path, meta, undefined, signal, location)
++    signal?.throwIfAborted()
++    const previous = ids.get(meta.id)
++    if (previous !== undefined) {
++      throw this.layoutConflict(meta.id, previous, location)
++    }
++    ids.set(meta.id, location)
++    artifacts.push({ ...location, header: meta })
++  }
++
+   // --- materialization / append / repair (file mechanics) ---
+ 
+   /** Atomically write the header line + first batch (temp-write, fsync, publish). */
+   private async materialize(meta: SessionHeader, events: readonly SessionEvent[]): Promise<void> {
+-    const project = projectDir(this.root, meta.cwd)
+-    const dir = sessionDir(this.root, meta.cwd, meta.id)
+-    const finalPath = logPath(this.root, meta.cwd, meta.id, this.compression)
+-    await this.rejectOppositeArtifact(meta.cwd, meta.id)
++    const location = this.preferredLocation(meta)
++    const parents = this.parentDirectories(location)
++    const finalPath = location.path
++    await this.rejectOppositeArtifact(meta)
+     const content = await this.encodeMaterialization(meta, events)
+     /* v8 ignore next -- native Windows coverage exercises this platform dispatch; Linux covers the POSIX peer */
+     if (process.platform === 'win32') {
+-      await this.materializeWin32(project, dir, finalPath, meta.id, content)
++      await this.materializeWin32(parents, finalPath, meta.id, content)
+     } else {
+-      await this.materializePosix(project, dir, finalPath, meta.id, content)
++      await this.materializePosix(parents, finalPath, meta.id, content)
+     }
+   }
+ 
+   /* v8 ignore start -- Windows uses the Win32 durable-publish path; POSIX coverage exercises this peer. */
+   private async materializePosix(
+-    project: string,
+-    dir: string,
++    parents: readonly string[],
+     finalPath: string,
+     id: SessionId,
+     content: Buffer | string,
+   ): Promise<void> {
+     await mkdir(this.root, { recursive: true, mode: 0o700 })
+     await this.syncDirPosix(dirname(this.root))
+-    await mkdir(project, { recursive: true, mode: 0o700 })
+-    await this.syncDirPosix(this.root)
+-    await mkdir(dir, { recursive: true, mode: 0o700 })
+-    await this.syncDirPosix(project)
++    for (const [index, parent] of parents.entries()) {
++      if (index === 0) continue
++      await mkdir(parent, { recursive: true, mode: 0o700 })
++      await this.syncDirPosix(parents[index - 1] as string)
++    }
+     await this.rejectExistingLog(finalPath, id)
+     const tmp = await this.writeSyncedTempFile(finalPath, content)
+     // Publish via link()+unlink(), NOT rename(): link fails with EEXIST if the
+@@ -557,7 +621,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     // link() succeeded — the log is published. fsync the directory so the new
+     // entry survives a power loss: the new link is not crash-durable until the
+     // parent directory's metadata is synced.
+-    await this.syncDirPosix(dir)
++    await this.syncDirPosix(dirname(finalPath))
+     // Best-effort temp cleanup: the log is already published and durable, so a
+     // failure to remove the (now-redundant) temp hard link must NOT reject the
+     // append. Swallow only the rm failure; nothing else of consequence runs here.
+@@ -571,15 +635,12 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+ 
+   /* v8 ignore start -- native Windows coverage exercises this integration path */
+   private async materializeWin32(
+-    project: string,
+-    dir: string,
++    parents: readonly string[],
+     finalPath: string,
+     id: SessionId,
+     content: Buffer | string,
+   ): Promise<void> {
+-    await ensureDurableDirectoryWin32(this.root)
+-    await ensureDurableDirectoryWin32(project)
+-    await ensureDurableDirectoryWin32(dir)
++    for (const parent of parents) await ensureDurableDirectoryWin32(parent)
+     await this.rejectExistingLog(finalPath, id)
+     const tmp = await this.writeSyncedTempFile(finalPath, content)
+     try {
+@@ -648,9 +709,8 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+    * previous size before rethrowing because the unchanged cursor will retry the
+    * batch; leaving partial bytes would create duplicate sequence numbers.
+    */
+-  private async appendLines(meta: SessionHeader, events: readonly SessionEvent[]): Promise<void> {
++  private async appendLines(path: string, events: readonly SessionEvent[]): Promise<void> {
+     const content = await this.encodeEventBatch(events)
+-    const path = logPath(this.root, meta.cwd, meta.id, this.compression)
+     const handle = await open(path, 'a')
+     let closed = false
+     const closeAppendHandle = async (): Promise<void> => {
+@@ -689,8 +749,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+   }
+ 
+   /** Truncate the log file to `offset` bytes and fsync (discard the crash tail). */
+-  private async repair(meta: SessionHeader, offset: number): Promise<void> {
+-    const path = logPath(this.root, meta.cwd, meta.id, this.compression)
++  private async repair(path: string, offset: number): Promise<void> {
+     await truncate(path, offset)
+     const handle = await open(path, 'r+')
+     try {
+@@ -770,30 +829,49 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     }
+   }
+ 
+-  /** Find the unique physical log for an id across every project directory. */
+-  private async findLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined> {
+-    const matches: string[] = []
+-    for (const project of await this.listProjectDirs(signal)) {
++  /**
++   * Find the unique physical location for an id across legacy and account
++   * layouts. The string-only wrapper below is retained for the existing
++   * discovery diagnostics and private test seams.
++   */
++  private async findLocation(id: SessionId, signal?: AbortSignal): Promise<StoredLogLocation | undefined> {
++    const matches: StoredLogLocation[] = []
++    const encoded = encodeSegment(id)
++    for (const project of await this.listRootDirs(signal)) {
+       signal?.throwIfAborted()
+       await this.rejectLegacyFlatArtifact(project, id, signal)
+       signal?.throwIfAborted()
+-      const dir = join(project, encodeSegment(id))
+-      const path = join(dir, `session${logSuffix(this.compression)}`)
+-      const opposite = join(dir, `session${logSuffix(this.oppositeCompression())}`)
+-      const oppositeExists = await this.exists(opposite)
+-      signal?.throwIfAborted()
+-      if (oppositeExists) throw this.encodingMismatch(opposite)
+-      const pathExists = await this.exists(path)
+-      signal?.throwIfAborted()
+-      if (pathExists) matches.push(path)
++      const legacyDir = join(project, encoded)
++      const legacy = await this.sessionDirectoryCandidate(legacyDir, 'legacy', signal)
++      if (legacy.oppositeExists) throw this.encodingMismatch(this.oppositePath(legacy))
++      if (legacy.pathExists) matches.push(legacy)
++      for (const ownerDir of await this.listChildDirs(project, signal)) {
++        signal?.throwIfAborted()
++        const session = join(ownerDir, encoded)
++        const account = await this.sessionDirectoryCandidate(session, 'account', signal)
++        if (!account.pathExists && !account.oppositeExists) continue
++        if (account.oppositeExists) throw this.encodingMismatch(this.oppositePath(account))
++        const owner = this.parseAccountOwnerDir(ownerDir)
++        if (owner === undefined) {
++          throw new Error(
++            `invalid account-scoped owner path ${JSON.stringify(ownerDir)}; `
++            + 'expected <root>/<schoolId>/<encoded-userKey>',
++          )
++        }
++        matches.push({ ...account, owner })
++      }
+     }
+     if (matches.length > 1) {
+-      throw new Error(`duplicate JSONL session id "${id}" appears in multiple project directories`)
++      throw this.layoutConflict(id, matches[0] as StoredLogLocation, matches[1] as StoredLogLocation)
+     }
+     signal?.throwIfAborted()
+     return matches[0]
+   }
+ 
++  private async findLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined> {
++    return (await this.findLocation(id, signal))?.path
++  }
++
+   /** Require an existing configured root to be a readable directory. */
+   private assertUsableRoot(): void {
+     try {
+@@ -810,19 +888,35 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     meta: SessionHeader,
+     expectedId?: SessionId,
+     signal?: AbortSignal,
++    location?: StoredLogLocation,
+   ): Promise<void> {
+     signal?.throwIfAborted()
+     if (expectedId !== undefined && meta.id !== expectedId) {
+       throw new Error(`corrupt session log "${path}": requested id "${expectedId}" does not match header id "${meta.id}"`)
+     }
+-    let expectedPath: string
++    const expectedPaths: string[] = []
+     try {
+-      expectedPath = logPath(this.root, meta.cwd, meta.id, this.compression)
++      expectedPaths.push(logPath(this.root, meta.cwd, meta.id, this.compression))
+     } catch (error) {
+       throw new Error(`corrupt session log "${path}": header id cannot name a storage path`, { cause: error })
+     }
+-    if (path !== expectedPath && !await this.sameFile(path, expectedPath, signal)) {
+-      throw new Error(`corrupt session log "${path}": header id "${meta.id}" and cwd identify "${expectedPath}"`)
++    const resolvedOwner = this.ownerFor(meta)
++    if (resolvedOwner !== undefined) {
++      expectedPaths.push(accountLogPath(this.root, resolvedOwner, meta.id, this.compression))
++    }
++    if (location?.layout === 'account' && location.owner !== undefined) {
++      expectedPaths.push(accountLogPath(this.root, location.owner, meta.id, this.compression))
++    }
++    if (!expectedPaths.includes(path)) {
++      const matchesExpectedPath = await Promise.all(
++        expectedPaths.map(expected => this.sameFile(path, expected, signal)),
++      )
++      if (!matchesExpectedPath.some(Boolean)) {
++        throw new Error(
++          `corrupt session log "${path}": header id "${meta.id}" and cwd identify `
++          + expectedPaths.map(value => `"${value}"`).join(' or '),
++        )
++      }
+     }
+     signal?.throwIfAborted()
+   }
+@@ -847,8 +941,8 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     }
+   }
+ 
+-  /** The human-readable project directories under the configured root. */
+-  private async listProjectDirs(signal?: AbortSignal): Promise<string[]> {
++  /** The tenant/project directories directly under the configured root. */
++  private async listRootDirs(signal?: AbortSignal): Promise<string[]> {
+     try {
+       signal?.throwIfAborted()
+       const entries = await readdir(this.root, { withFileTypes: true })
+@@ -861,15 +955,121 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     }
+   }
+ 
+-  /** List session-owned directories and reject the obsolete flat-file layout. */
+-  private async listSessionDirs(project: string, signal?: AbortSignal): Promise<string[]> {
++  /** Direct child directories, treating an absent directory as empty. */
++  private async listChildDirs(parent: string, signal?: AbortSignal): Promise<string[]> {
++    try {
++      signal?.throwIfAborted()
++      const entries = await readdir(parent, { withFileTypes: true })
++      signal?.throwIfAborted()
++      return entries.filter(entry => entry.isDirectory()).map(entry => join(parent, entry.name))
++    } catch (error) {
++      if (isENOENT(error)) return []
++      throw error
++    }
++  }
++
++  /** Enumerate legacy and account session directories without decoding any log bytes. */
++  private async listSessionDirectoryCandidates(signal?: AbortSignal): Promise<SessionDirectoryCandidate[]> {
++    const candidates: SessionDirectoryCandidate[] = []
++    for (const project of await this.listRootDirs(signal)) {
++      signal?.throwIfAborted()
++      await this.rejectFlatArtifacts(project, signal)
++      for (const child of await this.listChildDirs(project, signal)) {
++        signal?.throwIfAborted()
++        const legacy = await this.sessionDirectoryCandidate(child, 'legacy', signal)
++        if (legacy.pathExists || legacy.oppositeExists) candidates.push(legacy)
++
++        for (const accountSession of await this.listChildDirs(child, signal)) {
++          signal?.throwIfAborted()
++          const account = await this.sessionDirectoryCandidate(accountSession, 'account', signal)
++          if (!account.pathExists && !account.oppositeExists) continue
++          const owner = this.parseAccountOwnerDir(child)
++          const id = this.parseAccountSessionDir(accountSession)
++          if (owner === undefined || id === undefined) {
++            throw new Error(
++              `invalid account-scoped session layout at ${JSON.stringify(accountSession)}; `
++              + 'expected <root>/<schoolId>/<encoded-userKey>/<encoded-sessionId>/session.jsonl',
++            )
++          }
++          candidates.push({ ...account, owner })
++        }
++      }
++    }
++    return candidates
++  }
++
++  /** Resolve one directory's current and opposite encoding artifacts without parsing. */
++  private async sessionDirectoryCandidate(
++    dir: string,
++    layout: StoredLayout,
++    signal?: AbortSignal,
++  ): Promise<SessionDirectoryCandidate> {
++    const path = join(dir, `session${logSuffix(this.compression)}`)
++    const opposite = join(dir, `session${logSuffix(this.oppositeCompression())}`)
++    const [pathExists, oppositeExists] = await Promise.all([
++      this.exists(path),
++      this.exists(opposite),
++    ])
++    signal?.throwIfAborted()
++    return { layout, sessionDir: dir, path, pathExists, oppositeExists }
++  }
++
++  private oppositePath(location: StoredLogLocation): string {
++    return join(location.sessionDir, `session${logSuffix(this.oppositeCompression())}`)
++  }
++
++  /** Reject obsolete flat `<project>/<id>.jsonl*` artifacts in one project directory. */
++  private async rejectFlatArtifacts(project: string, signal?: AbortSignal): Promise<void> {
+     signal?.throwIfAborted()
+     const entries = await readdir(project, { withFileTypes: true })
+     signal?.throwIfAborted()
+     const legacy = entries.find(entry =>
+       entry.isFile() && (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.zstd')))
+     if (legacy !== undefined) throw this.legacyLayout(join(project, legacy.name))
+-    return entries.filter(entry => entry.isDirectory()).map(entry => join(project, entry.name))
++  }
++
++  /** Parse `<root>/<schoolId>/<encoded-userKey>` into a validated owner. */
++  private parseAccountOwnerDir(dir: string): SessionOwner | undefined {
++    const parts = relative(this.root, dir).split(sep)
++    if (parts.length !== 2 || parts[0] === '..' || parts[1] === '..') return undefined
++    try {
++      return validateSessionOwner({
++        schoolId: parts[0] as string,
++        userKey: decodeSegment(parts[1] as string),
++      })
++    } catch {
++      return undefined
++    }
++  }
++
++  /** Parse `<root>/<schoolId>/<encoded-userKey>/<encoded-sessionId>` to its id. */
++  private parseAccountSessionDir(dir: string): SessionId | undefined {
++    const parts = relative(this.root, dir).split(sep)
++    if (parts.length !== 3 || parts.some(part => part === '..')) return undefined
++    try {
++      return decodeSegment(parts[2] as string) as SessionId
++    } catch {
++      return undefined
++    }
++  }
++
++  /** Root-to-session parent directories used by both durable materializers. */
++  private parentDirectories(location: StoredLogLocation): string[] {
++    if (location.layout === 'account') {
++      const owner = location.owner
++      if (owner === undefined) throw new Error('account-scoped session location has no owner')
++      return [
++        this.root,
++        join(this.root, owner.schoolId),
++        accountOwnerDir(this.root, owner),
++        location.sessionDir,
++      ]
++    }
++    return [
++      this.root,
++      dirname(dirname(location.path)),
++      location.sessionDir,
++    ]
+   }
+ 
+   /** Reject a root that already belongs to the other physical encoding. */
+@@ -879,11 +1079,8 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+   }
+ 
+   private async checkRootEncoding(): Promise<void> {
+-    for (const project of await this.listProjectDirs()) {
+-      for (const dir of await this.listSessionDirs(project)) {
+-        const incompatible = join(dir, `session${logSuffix(this.oppositeCompression())}`)
+-        if (await this.exists(incompatible)) throw this.encodingMismatch(incompatible)
+-      }
++    for (const candidate of await this.listSessionDirectoryCandidates()) {
++      if (candidate.oppositeExists) throw this.encodingMismatch(this.oppositePath(candidate))
+     }
+   }
+ 
+@@ -902,9 +1099,15 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     }
+   }
+ 
+-  private async rejectOppositeArtifact(cwd: string | undefined, id: SessionId): Promise<void> {
+-    const path = logPath(this.root, cwd, id, this.oppositeCompression())
+-    if (await this.exists(path)) throw this.encodingMismatch(path)
++  private async rejectOppositeArtifact(meta: SessionHeader): Promise<void> {
++    const paths = [logPath(this.root, meta.cwd, meta.id, this.oppositeCompression())]
++    const owner = this.ownerFor(meta)
++    if (owner !== undefined) {
++      paths.push(accountLogPath(this.root, owner, meta.id, this.oppositeCompression()))
++    }
++    for (const path of paths) {
++      if (await this.exists(path)) throw this.encodingMismatch(path)
++    }
+   }
+ 
+   private oppositeCompression(): JsonlCompression {
+@@ -926,6 +1129,19 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
+     )
+   }
+ 
++  private layoutConflict(
++    id: SessionId | string,
++    first: StoredLogLocation,
++    second: StoredLogLocation,
++  ): Error {
++    return new Error(
++      `duplicate JSONL session id "${id}" appears in multiple project directories (layout conflict): both `
++      + `${JSON.stringify(first.path)} (${first.layout}) and `
++      + `${JSON.stringify(second.path)} (${second.layout}) exist; `
++      + 'migrate or remove one copy explicitly before loading',
++    )
++  }
++
+   private async exists(path: string): Promise<boolean> {
+     try {
+       const handle = await open(path, 'r')
+diff --git a/packages/session/session-persistence-jsonl/src/ownership.ts b/packages/session/session-persistence-jsonl/src/ownership.ts
+new file mode 100644
+index 0000000000..49d3300eb5
+--- /dev/null
++++ b/packages/session/session-persistence-jsonl/src/ownership.ts
+@@ -0,0 +1,87 @@
++/**
++ * Optional account-ownership seam for the JSONL backend.
++ *
++ * The immutable {@link SessionHeader} intentionally carries no account identity:
++ * PhysicsOS keeps the authoritative `session -> schoolId:userKey` ledger in its
++ * account domain. This service lets that domain expose a synchronous lookup to
++ * the storage backend without turning the session-persistence package into an
++ * authentication dependency.
++ *
++ * @module @deepseek-ai/dsh-session-persistence-jsonl/ownership
++ */
++
++import type { SessionHeader } from '@deepseek-ai/dsh-session'
++
++/** Cordis service key for the optional account-ownership resolver. */
++export const SESSION_OWNERSHIP_SERVICE = 'physicsosSessionOwnership'
++
++/** One account owner, using the same durable vocabulary as the PhysicsOS auth domain. */
++export interface SessionOwner {
++  /** School tenant id. */
++  readonly schoolId: string
++  /** `schoolId:username`, lower-cased by the account domain. */
++  readonly userKey: string
++}
++
++/**
++ * Resolve the account that owns a session.
++ *
++ * Resolution is synchronous because {@link SessionPersistence.locate} is a
++ * side-effect-free synchronous contract. Providers may keep an in-memory index
++ * refreshed from their durable ownership table.
++ */
++export interface SessionOwnershipResolver {
++  /** Return the owner, or `undefined` when the session is legacy/unowned. */
++  resolve(meta: SessionHeader): SessionOwner | undefined
++}
++
++const SCHOOL_ID_RE = /^[A-Za-z0-9_-]{2,64}$/
++const USERNAME_RE = /^[a-z0-9][a-z0-9_.-]{2,31}$/
++
++/**
++ * Validate an owner before it can become path components. This is intentionally
++ * stricter than "no slash": it pins the durable PhysicsOS account alphabet and
++ * rejects traversal, NUL, separators, empty segments, and case ambiguity before
++ * any filesystem operation.
++ * @param value - untrusted owner value.
++ * @returns the validated owner.
++ */
++export function validateSessionOwner(value: unknown): SessionOwner {
++  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
++    throw new Error('session owner must be an object')
++  }
++  const { schoolId, userKey } = value as { schoolId?: unknown; userKey?: unknown }
++  if (typeof schoolId !== 'string' || !SCHOOL_ID_RE.test(schoolId)) {
++    throw new Error('session owner schoolId is not a valid tenant id')
++  }
++  if (typeof userKey !== 'string' || userKey.length > 97 || !userKey.startsWith(`${schoolId}:`)) {
++    throw new Error('session owner userKey must start with its schoolId')
++  }
++  const username = userKey.slice(schoolId.length + 1)
++  if (!USERNAME_RE.test(username)) {
++    throw new Error('session owner userKey has an invalid username')
++  }
++  return { schoolId, userKey }
++}
++
++/**
++ * Validate an optional resolver service.
++ * @param value - value returned by `ctx.get(SESSION_OWNERSHIP_SERVICE)`.
++ * @returns a resolver whose result is validated on every call, or `undefined`.
++ */
++export function asSessionOwnershipResolver(value: unknown): SessionOwnershipResolver | undefined {
++  if (value === undefined) return undefined
++  if (typeof value !== 'object' || value === null) {
++    throw new Error(`${SESSION_OWNERSHIP_SERVICE} must be an object`)
++  }
++  const resolve = (value as { resolve?: unknown }).resolve
++  if (typeof resolve !== 'function') {
++    throw new Error(`${SESSION_OWNERSHIP_SERVICE}.resolve must be a function`)
++  }
++  return {
++    resolve: (meta) => {
++      const owner = (resolve as (header: SessionHeader) => unknown).call(value, meta)
++      return owner === undefined ? undefined : validateSessionOwner(owner)
++    },
++  }
++}
+diff --git a/packages/session/session-persistence-jsonl/tests/account-layout.spec.ts b/packages/session/session-persistence-jsonl/tests/account-layout.spec.ts
+new file mode 100644
+index 0000000000..218a7b6847
+--- /dev/null
++++ b/packages/session/session-persistence-jsonl/tests/account-layout.spec.ts
+@@ -0,0 +1,152 @@
++import { Context } from '@deepseek-ai/cordis'
++import SessionStore, {
++  type SessionEvent, type SessionHeader, type SessionId,
++} from '@deepseek-ai/dsh-session'
++import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import { afterEach, describe, expect, it } from 'vitest'
++import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { dirname, join } from 'node:path'
++import { meta, oneTurnLog } from '../../session-persistence/tests/contract.ts'
++import { accountLogPath, decodeSegment, logPath } from '../src/format.ts'
++import {
++  SESSION_OWNERSHIP_SERVICE,
++  validateSessionOwner,
++  type SessionOwner,
++  type SessionOwnershipResolver,
++} from '../src/ownership.ts'
++
++const roots: string[] = []
++const disposers: Array<() => Promise<void>> = []
++
++async function freshRoot(): Promise<string> {
++  const root = await mkdtemp(join(tmpdir(), 'dsh-jsonl-account-'))
++  roots.push(root)
++  return root
++}
++
++async function mount(
++  root: string,
++  resolver?: SessionOwnershipResolver,
++): Promise<{ ctx: Context; dispose: () => Promise<void> }> {
++  const ctx = new Context()
++  await ctx.plugin(SessionStore)
++  if (resolver !== undefined) ctx.provide(SESSION_OWNERSHIP_SERVICE, resolver)
++  const fiber = await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
++  const dispose = async (): Promise<void> => {
++    await fiber.dispose()
++  }
++  disposers.push(dispose)
++  return { ctx, dispose }
++}
++
++function resolverFor(id: string, owner: SessionOwner): SessionOwnershipResolver {
++  return {
++    resolve: (meta: SessionHeader) => meta.id === id ? owner : undefined,
++  }
++}
++
++afterEach(async () => {
++  for (const dispose of disposers.splice(0).reverse()) await dispose()
++  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
++})
++
++describe('account-scoped JSONL layout', () => {
++  it('encodes and decodes account path segments unchanged', () => {
++    const owner = { schoolId: 'GZU', userKey: 'GZU:student.01' }
++    expect(accountLogPath('/sessions', owner, 's-1' as SessionId, 'none'))
++      .toBe('/sessions/GZU/GZU~003Astudent.01/s-1/session.jsonl')
++    expect(decodeSegment('GZU~003Astudent.01')).toBe('GZU:student.01')
++    expect(decodeSegment('~002E~002E')).toBe('..')
++  })
++
++  it('rejects unsafe or non-canonical owners before any filesystem use', () => {
++    expect(() => validateSessionOwner({ schoolId: '..', userKey: '../x' })).toThrow()
++    expect(() => validateSessionOwner({ schoolId: 'GZU', userKey: 'GZU:../x' })).toThrow()
++    expect(() => validateSessionOwner({ schoolId: 'GZU/OTHER', userKey: 'GZU:student' })).toThrow()
++    expect(() => validateSessionOwner({ schoolId: 'GZU', userKey: 'OTHER:student' })).toThrow()
++  })
++
++  it('materializes a resolved owner beneath the account-scoped directory', async () => {
++    const root = await freshRoot()
++    const owner = { schoolId: 'GZU', userKey: 'GZU:student.01' }
++    const { ctx } = await mount(root, resolverFor('account-owned', owner))
++    const header = meta('account-owned', '/private/work')
++
++    await ctx.sessionPersistence.create(header)
++    await ctx.sessionPersistence.append(header.id, oneTurnLog())
++
++    const expected = accountLogPath(root, owner, header.id, 'none')
++    expect(ctx.sessionPersistence.locate(header)).toEqual({ kind: 'jsonl', path: expected })
++    expect(await readFile(expected, 'utf8')).toContain('"id":"account-owned"')
++    expect((await ctx.sessionPersistence.load(header.id)).meta).toEqual({
++      ...header,
++      delegationDepth: 0,
++    })
++  })
++
++  it('falls back to a legacy artifact and keeps appending there after ownership appears', async () => {
++    const root = await freshRoot()
++    const header = meta('legacy-owned', '/private/work')
++    const first = await mount(root)
++    await first.ctx.sessionPersistence.create(header)
++    await first.ctx.sessionPersistence.append(header.id, oneTurnLog())
++    await first.dispose()
++
++    const legacyPath = logPath(root, header.cwd, header.id, 'none')
++    const owner = { schoolId: 'GZU', userKey: 'GZU:student.01' }
++    const second = await mount(root, resolverFor(header.id, owner))
++    expect((await second.ctx.sessionPersistence.load(header.id)).events).toHaveLength(oneTurnLog().length)
++    await second.ctx.sessionPersistence.append(header.id, [
++      { type: 'turn/start', seq: oneTurnLog().length, time: 20, data: { turn: 2 } } satisfies SessionEvent,
++    ])
++    expect(await readFile(legacyPath, 'utf8')).toContain('"turn":2')
++    await expect(readFile(accountLogPath(root, owner, header.id, 'none'), 'utf8')).rejects.toThrow()
++  })
++
++  it('reads an account artifact after a restart even when no resolver is mounted', async () => {
++    const root = await freshRoot()
++    const owner = { schoolId: 'GZU', userKey: 'GZU:student.01' }
++    const header = meta('account-restart', '/private/work')
++    const first = await mount(root, resolverFor(header.id, owner))
++    await first.ctx.sessionPersistence.create(header)
++    await first.ctx.sessionPersistence.append(header.id, oneTurnLog())
++    await first.dispose()
++
++    const second = await mount(root)
++    expect((await second.ctx.sessionPersistence.load(header.id)).events).toHaveLength(oneTurnLog().length)
++    expect((await second.ctx.sessionPersistence.list()).map(item => item.id)).toEqual([header.id])
++  })
++
++  it('rejects an unsafe resolver result instead of using it as a path', async () => {
++    const root = await freshRoot()
++    const header = meta('unsafe-owner', '/private/work')
++    const invalid = {
++      resolve: () => ({ schoolId: '..', userKey: '../student' }),
++    } as unknown as SessionOwnershipResolver
++    const { ctx } = await mount(root, invalid)
++    await ctx.sessionPersistence.create(header)
++
++    await expect(ctx.sessionPersistence.append(header.id, oneTurnLog()))
++      .rejects.toThrow(/schoolId/)
++  })
++
++  it('reports a layout conflict instead of silently choosing a copy', async () => {
++    const root = await freshRoot()
++    const header = meta('layout-conflict', '/private/work')
++    const owner = { schoolId: 'GZU', userKey: 'GZU:student.01' }
++
++    const legacy = await mount(root)
++    await legacy.ctx.sessionPersistence.create(header)
++    await legacy.ctx.sessionPersistence.append(header.id, oneTurnLog())
++    await legacy.dispose()
++
++    const accountPath = accountLogPath(root, owner, header.id, 'none')
++    await mkdir(dirname(accountPath), { recursive: true })
++    await writeFile(accountPath, await readFile(logPath(root, header.cwd, header.id, 'none')))
++
++    const reader = await mount(root)
++    await expect(reader.ctx.sessionPersistence.load(header.id))
++      .rejects.toThrow(/layout conflict/i)
++  })
++})
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..15fcc35094 100644
+index 1490a0f9f7..7f636cba75 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -7,6 +7,21 @@ settings:
@@ -4057,7 +5213,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@deepseek-ai/dsh-host-apiproxy':
          specifier: workspace:^
          version: link:../../host/apiproxy
-@@ -1402,9 +1435,18 @@ importers:
+@@ -1402,9 +1435,24 @@ importers:
        '@deepseek-ai/dsh-host-webserver':
          specifier: workspace:^
          version: link:../../host/webserver
@@ -4067,16 +5223,22 @@ index 1490a0f9f7..15fcc35094 100644
        '@deepseek-ai/dsh-message-feedback':
          specifier: workspace:^
          version: link:../../feedback/message-feedback
++      '@deepseek-ai/dsh-model-pool-host':
++        specifier: workspace:^
++        version: link:../../physicsos/model-pool-host
 +      '@deepseek-ai/dsh-notice-host':
 +        specifier: workspace:^
 +        version: link:../../physicsos/notice-host
++      '@deepseek-ai/dsh-ops-host':
++        specifier: workspace:^
++        version: link:../../physicsos/ops-host
 +      '@deepseek-ai/dsh-paper-host':
 +        specifier: workspace:^
 +        version: link:../../physicsos/paper-host
        '@deepseek-ai/dsh-session-log-export':
          specifier: workspace:^
          version: link:../../session-query/session-log-export
-@@ -1414,6 +1456,9 @@ importers:
+@@ -1414,6 +1462,9 @@ importers:
        '@deepseek-ai/dsh-session-stats':
          specifier: workspace:^
          version: link:../../session/session-stats
@@ -4086,7 +5248,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@deepseek-ai/dsh-storage':
          specifier: workspace:^
          version: link:../../storage/storage
-@@ -1423,6 +1468,12 @@ importers:
+@@ -1423,6 +1474,12 @@ importers:
        '@deepseek-ai/dsh-storage-json':
          specifier: workspace:^
          version: link:../../storage/storage-json
@@ -4099,7 +5261,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@deepseek-ai/dsh-web-frontend':
          specifier: workspace:^
          version: link:../../../apps/web
-@@ -1946,7 +1997,7 @@ importers:
+@@ -1946,7 +2003,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4108,7 +5270,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -1976,7 +2027,7 @@ importers:
+@@ -1976,7 +2033,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4117,7 +5279,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2024,7 +2075,7 @@ importers:
+@@ -2024,7 +2081,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4126,7 +5288,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2170,7 +2221,7 @@ importers:
+@@ -2170,7 +2227,7 @@ importers:
          version: link:../../typert/protocol
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4135,7 +5297,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2283,6 +2334,136 @@ importers:
+@@ -2283,6 +2340,139 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
@@ -4244,6 +5406,9 @@ index 1490a0f9f7..15fcc35094 100644
 +      '@deepseek-ai/dsh-client-ui-primitives':
 +        specifier: workspace:^
 +        version: link:../ui-primitives
++      '@deepseek-ai/dsh-client-ui-settings':
++        specifier: workspace:^
++        version: link:../ui-settings
 +      '@deepseek-ai/dsh-client-ui-sidebar':
 +        specifier: workspace:^
 +        version: link:../ui-sidebar
@@ -4272,7 +5437,7 @@ index 1490a0f9f7..15fcc35094 100644
    packages/client/ui-plan:
      devDependencies:
        '@deepseek-ai/cordis':
-@@ -2569,7 +2750,7 @@ importers:
+@@ -2569,7 +2759,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4281,7 +5446,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2700,7 +2881,7 @@ importers:
+@@ -2700,7 +2890,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4290,7 +5455,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2859,7 +3040,7 @@ importers:
+@@ -2859,7 +3049,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -4299,10 +5464,108 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -5507,6 +5688,280 @@ importers:
-         specifier: ^2026.7.4
-         version: 2026.7.10(zod@4.4.3)
- 
+@@ -5416,68 +5606,386 @@ importers:
+         version: link:../../subprocess/subprocess-local
+       '@deepseek-ai/dsh-timeout':
+         specifier: workspace:^
+-        version: link:../../util/timeout
+-      typescript:
+-        specifier: ^6.0.3
+-        version: 6.0.3
+-      typescript-language-server:
+-        specifier: ^5.0.0
+-        version: 5.3.0
++        version: link:../../util/timeout
++      typescript:
++        specifier: ^6.0.3
++        version: 6.0.3
++      typescript-language-server:
++        specifier: ^5.0.0
++        version: 5.3.0
++
++  packages/lsp/tool-lsp:
++    dependencies:
++      '@deepseek-ai/schemastery':
++        specifier: link:../../../vendor/schemastery
++        version: link:../../../vendor/schemastery
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++      '@deepseek-ai/dsh-agent':
++        specifier: workspace:^
++        version: link:../../core/agent
++      '@deepseek-ai/dsh-fs-local':
++        specifier: workspace:^
++        version: link:../../fs/fs-local
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
++      '@deepseek-ai/dsh-llm':
++        specifier: workspace:^
++        version: link:../../llm/llm
++      '@deepseek-ai/dsh-lsp':
++        specifier: workspace:^
++        version: link:../lsp
++      '@deepseek-ai/dsh-lsp-stdio':
++        specifier: workspace:^
++        version: link:../lsp-stdio
++      '@deepseek-ai/dsh-session':
++        specifier: workspace:^
++        version: link:../../core/session
++      '@deepseek-ai/dsh-subprocess-local':
++        specifier: workspace:^
++        version: link:../../subprocess/subprocess-local
++      '@deepseek-ai/dsh-system-prompt':
++        specifier: workspace:^
++        version: link:../../core/system-prompt
++      '@deepseek-ai/dsh-timeout':
++        specifier: workspace:^
++        version: link:../../util/timeout
++      '@deepseek-ai/dsh-tool-call-timeout-policy':
++        specifier: workspace:^
++        version: link:../../guard/timeout-policy
++      '@deepseek-ai/dsh-tools':
++        specifier: workspace:^
++        version: link:../../core/tools
++
++  packages/mcp/mcp-client:
++    dependencies:
++      '@deepseek-ai/schemastery':
++        specifier: link:../../../vendor/schemastery
++        version: link:../../../vendor/schemastery
++      '@modelcontextprotocol/sdk':
++        specifier: ^1.12.0
++        version: 1.29.0(zod@4.4.3)
++      zod:
++        specifier: ^4.4.3
++        version: 4.4.3
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
++      '@deepseek-ai/dsh-llm':
++        specifier: workspace:^
++        version: link:../../llm/llm
++      '@deepseek-ai/dsh-subprocess':
++        specifier: workspace:^
++        version: link:../../subprocess/subprocess
++      '@deepseek-ai/dsh-timeout':
++        specifier: workspace:^
++        version: link:../../util/timeout
++      '@deepseek-ai/dsh-tools':
++        specifier: workspace:^
++        version: link:../../core/tools
++      '@modelcontextprotocol/server-everything':
++        specifier: ^2026.7.4
++        version: 2026.7.4
++      '@modelcontextprotocol/server-filesystem':
++        specifier: ^2026.7.4
++        version: 2026.7.10(zod@4.4.3)
++
 +  packages/physicsos/auth-host:
 +    dependencies:
 +      '@deepseek-ai/dsh-home-paths':
@@ -4407,6 +5670,25 @@ index 1490a0f9f7..15fcc35094 100644
 +        specifier: workspace:^
 +        version: link:../../storage/storage-json
 +
++  packages/physicsos/model-pool-host:
++    dependencies:
++      '@deepseek-ai/dsh-host-webserver':
++        specifier: workspace:^
++        version: link:../../host/webserver
++      '@deepseek-ai/dsh-storage':
++        specifier: workspace:^
++        version: link:../../storage/storage
++      '@deepseek-ai/dsh-storage-domain':
++        specifier: workspace:^
++        version: link:../../storage/storage-domain
++      zod:
++        specifier: ^4.4.3
++        version: 4.4.3
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++
 +  packages/physicsos/notice-host:
 +    dependencies:
 +      '@deepseek-ai/dsh-host-webserver':
@@ -4440,6 +5722,22 @@ index 1490a0f9f7..15fcc35094 100644
 +      '@deepseek-ai/dsh-storage-json':
 +        specifier: workspace:^
 +        version: link:../../storage/storage-json
++
++  packages/physicsos/ops-host:
++    dependencies:
++      pg:
++        specifier: ^8.23.0
++        version: 8.23.0
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
++      '@types/pg':
++        specifier: ^8.23.1
++        version: 8.23.1
 +
 +  packages/physicsos/paper-host:
 +    dependencies:
@@ -4487,64 +5785,81 @@ index 1490a0f9f7..15fcc35094 100644
 +      '@deepseek-ai/cordis':
 +        specifier: workspace:^
 +        version: link:../../../vendor/cordis
-+
+ 
+-  packages/lsp/tool-lsp:
 +  packages/physicsos/tool-physicsos:
-+    dependencies:
-+      '@deepseek-ai/schemastery':
-+        specifier: link:../../../vendor/schemastery
-+        version: link:../../../vendor/schemastery
+     dependencies:
+       '@deepseek-ai/schemastery':
+         specifier: link:../../../vendor/schemastery
+         version: link:../../../vendor/schemastery
 +      '@physicsos/agent-tools':
 +        specifier: link:../../../../../packages/agent-tools
 +        version: link:../../../../../packages/agent-tools
 +      zod:
 +        specifier: ^4.4.3
 +        version: 4.4.3
-+    devDependencies:
-+      '@deepseek-ai/cordis':
-+        specifier: workspace:^
-+        version: link:../../../vendor/cordis
+     devDependencies:
+       '@deepseek-ai/cordis':
+         specifier: workspace:^
+         version: link:../../../vendor/cordis
 +      '@deepseek-ai/cordis-plugin-include':
 +        specifier: workspace:^
 +        version: link:../../../vendor/include
 +      '@deepseek-ai/cordis-plugin-loader':
 +        specifier: workspace:^
 +        version: link:../../../vendor/loader
-+      '@deepseek-ai/dsh-agent':
-+        specifier: workspace:^
-+        version: link:../../core/agent
-+      '@deepseek-ai/dsh-invariants':
-+        specifier: workspace:^
-+        version: link:../../runtime-diagnostics/invariants
-+      '@deepseek-ai/dsh-llm':
-+        specifier: workspace:^
-+        version: link:../../llm/llm
+       '@deepseek-ai/dsh-agent':
+         specifier: workspace:^
+         version: link:../../core/agent
+-      '@deepseek-ai/dsh-fs-local':
+-        specifier: workspace:^
+-        version: link:../../fs/fs-local
+       '@deepseek-ai/dsh-invariants':
+         specifier: workspace:^
+         version: link:../../runtime-diagnostics/invariants
+       '@deepseek-ai/dsh-llm':
+         specifier: workspace:^
+         version: link:../../llm/llm
+-      '@deepseek-ai/dsh-lsp':
 +      '@deepseek-ai/dsh-persona':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../lsp
+-      '@deepseek-ai/dsh-lsp-stdio':
 +        version: link:../../preset/persona
 +      '@deepseek-ai/dsh-scope':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../lsp-stdio
 +        version: link:../../core/scope
-+      '@deepseek-ai/dsh-session':
-+        specifier: workspace:^
-+        version: link:../../core/session
+       '@deepseek-ai/dsh-session':
+         specifier: workspace:^
+         version: link:../../core/session
+-      '@deepseek-ai/dsh-subprocess-local':
 +      '@deepseek-ai/dsh-session-projection':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../../subprocess/subprocess-local
 +        version: link:../../session/session-projection
-+      '@deepseek-ai/dsh-system-prompt':
-+        specifier: workspace:^
-+        version: link:../../core/system-prompt
-+      '@deepseek-ai/dsh-tools':
-+        specifier: workspace:^
-+        version: link:../../core/tools
+       '@deepseek-ai/dsh-system-prompt':
+         specifier: workspace:^
+         version: link:../../core/system-prompt
+-      '@deepseek-ai/dsh-timeout':
+-        specifier: workspace:^
+-        version: link:../../util/timeout
+-      '@deepseek-ai/dsh-tool-call-timeout-policy':
+-        specifier: workspace:^
+-        version: link:../../guard/timeout-policy
+       '@deepseek-ai/dsh-tools':
+         specifier: workspace:^
+         version: link:../../core/tools
 +      '@types/js-yaml':
 +        specifier: ^4.0.9
 +        version: 4.0.9
 +      js-yaml:
 +        specifier: 4.3.2
 +        version: 4.3.2
-+
+ 
+-  packages/mcp/mcp-client:
 +  packages/physicsos/update-host:
-+    dependencies:
+     dependencies:
 +      '@deepseek-ai/dsh-host-webserver':
 +        specifier: workspace:^
 +        version: link:../../host/webserver
@@ -4554,33 +5869,52 @@ index 1490a0f9f7..15fcc35094 100644
 +      '@deepseek-ai/dsh-storage-domain':
 +        specifier: workspace:^
 +        version: link:../../storage/storage-domain
-+      '@deepseek-ai/schemastery':
-+        specifier: link:../../../vendor/schemastery
-+        version: link:../../../vendor/schemastery
-+      zod:
-+        specifier: ^4.4.3
-+        version: 4.4.3
-+    devDependencies:
-+      '@deepseek-ai/cordis':
-+        specifier: workspace:^
-+        version: link:../../../vendor/cordis
+       '@deepseek-ai/schemastery':
+         specifier: link:../../../vendor/schemastery
+         version: link:../../../vendor/schemastery
+-      '@modelcontextprotocol/sdk':
+-        specifier: ^1.12.0
+-        version: 1.29.0(zod@4.4.3)
+       zod:
+         specifier: ^4.4.3
+         version: 4.4.3
+@@ -5485,27 +5993,18 @@ importers:
+       '@deepseek-ai/cordis':
+         specifier: workspace:^
+         version: link:../../../vendor/cordis
+-      '@deepseek-ai/dsh-invariants':
+-        specifier: workspace:^
+-        version: link:../../runtime-diagnostics/invariants
+-      '@deepseek-ai/dsh-llm':
 +      '@deepseek-ai/cordis-plugin-include':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../../llm/llm
+-      '@deepseek-ai/dsh-subprocess':
 +        version: link:../../../vendor/include
 +      '@deepseek-ai/cordis-plugin-loader':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../../subprocess/subprocess
+-      '@deepseek-ai/dsh-timeout':
 +        version: link:../../../vendor/loader
 +      '@deepseek-ai/dsh-invariants':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../../util/timeout
+-      '@deepseek-ai/dsh-tools':
 +        version: link:../../runtime-diagnostics/invariants
 +      '@deepseek-ai/dsh-storage-json':
-+        specifier: workspace:^
+         specifier: workspace:^
+-        version: link:../../core/tools
+-      '@modelcontextprotocol/server-everything':
+-        specifier: ^2026.7.4
+-        version: 2026.7.4
+-      '@modelcontextprotocol/server-filesystem':
+-        specifier: ^2026.7.4
+-        version: 2026.7.10(zod@4.4.3)
 +        version: link:../../storage/storage-json
-+
+ 
    packages/plan/plan-mode:
      dependencies:
-       zod:
-@@ -5556,8 +6011,8 @@ importers:
+@@ -5556,8 +6055,8 @@ importers:
          specifier: link:../../../vendor/schemastery
          version: link:../../../vendor/schemastery
        js-yaml:
@@ -4591,7 +5925,7 @@ index 1490a0f9f7..15fcc35094 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -6943,6 +7398,28 @@ importers:
+@@ -6943,6 +7442,28 @@ importers:
          specifier: workspace:^
          version: link:../storage
  
@@ -4620,7 +5954,7 @@ index 1490a0f9f7..15fcc35094 100644
    packages/storage/storage-sqlite:
      dependencies:
        '@deepseek-ai/schemastery':
-@@ -7634,8 +8111,8 @@ importers:
+@@ -7634,8 +8155,8 @@ importers:
          specifier: workspace:*
          version: link:../loader-smoke
        vitest:
@@ -4631,7 +5965,7 @@ index 1490a0f9f7..15fcc35094 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -7678,13 +8155,13 @@ importers:
+@@ -7678,13 +8199,13 @@ importers:
      dependencies:
        '@testing-library/dom':
          specifier: ^10.4.1
@@ -4649,7 +5983,7 @@ index 1490a0f9f7..15fcc35094 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -8704,8 +9181,8 @@ importers:
+@@ -8704,8 +9225,8 @@ importers:
          specifier: link:../cosmokit
          version: link:../cosmokit
        js-yaml:
@@ -4660,7 +5994,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    vendor/loader:
      dependencies:
-@@ -8777,10 +9254,10 @@ importers:
+@@ -8777,10 +9298,10 @@ importers:
          version: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vitepress:
          specifier: ^1.6.4
@@ -4673,7 +6007,7 @@ index 1490a0f9f7..15fcc35094 100644
  
  packages:
  
-@@ -9776,11 +10253,11 @@ packages:
+@@ -9776,11 +10297,11 @@ packages:
        '@modelcontextprotocol/sdk':
          optional: true
  
@@ -4688,7 +6022,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    '@humanfs/core@0.19.2':
      resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
-@@ -9815,160 +10292,160 @@ packages:
+@@ -9815,160 +10336,160 @@ packages:
      resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
      engines: {node: '>=18'}
  
@@ -4901,7 +6235,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=20.9.0'}
      cpu: [x64]
      os: [win32]
-@@ -10114,6 +10591,81 @@ packages:
+@@ -10114,6 +10635,81 @@ packages:
      resolution: {integrity: sha512-Mmjg4anFBD5OzbPnGJOA0jPPN8645ERhQk38HQLpSenx1ox9bfdPkmAzUnNjeQtqQGFLtKe13J20RtLBmUKMZA==}
      hasBin: true
  
@@ -4983,7 +6317,7 @@ index 1490a0f9f7..15fcc35094 100644
    '@napi-rs/wasm-runtime@1.1.5':
      resolution: {integrity: sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q==}
      peerDependencies:
-@@ -11117,8 +11669,8 @@ packages:
+@@ -11117,8 +11713,8 @@ packages:
    '@tanstack/virtual-core@3.17.7':
      resolution: {integrity: sha512-bp+v10y65sp2H7WpWfIMyxTNfl8ZVfxFTLRjPIFRryi6FV/J33z4IS53WO4pTk36KlvJ4iLiQz+oaydDC1xbcA==}
  
@@ -4994,7 +6328,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=18'}
  
    '@testing-library/react@16.3.2':
-@@ -11310,6 +11862,9 @@ packages:
+@@ -11310,6 +11906,9 @@ packages:
    '@types/node@26.1.2':
      resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
  
@@ -5004,7 +6338,7 @@ index 1490a0f9f7..15fcc35094 100644
    '@types/picomatch@3.0.2':
      resolution: {integrity: sha512-n0i8TD3UDB7paoMMxA3Y65vUncFJXjcUf7lQY7YyKGl6031FNjfsLs6pdLFCy2GNFxItPJG8GvvpbZc2skH7WA==}
  
-@@ -11371,20 +11926,20 @@ packages:
+@@ -11371,20 +11970,20 @@ packages:
        vite: ^5.0.0 || ^6.0.0
        vue: ^3.2.25
  
@@ -5033,7 +6367,7 @@ index 1490a0f9f7..15fcc35094 100644
      peerDependencies:
        msw: ^2.4.9
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -11394,20 +11949,20 @@ packages:
+@@ -11394,20 +11993,20 @@ packages:
        vite:
          optional: true
  
@@ -5064,7 +6398,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    '@vscode/ripgrep-darwin-arm64@1.18.0':
      resolution: {integrity: sha512-r3ktHSvbFycQNF6sl7sNDPocpsI7J+mEzh1IaZFkY0spm3k2Z9t8hPAeOK7+p0l6p6/swkQC14XWX01low+94Q==}
-@@ -11685,9 +12240,9 @@ packages:
+@@ -11685,9 +12284,9 @@ packages:
    brace-expansion@2.1.2:
      resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
  
@@ -5077,7 +6411,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    browserslist@4.28.6:
      resolution: {integrity: sha512-FQBYNK15VMslhLHpA7+n+n1GOlF1kId2xcCg7/j95f24AOF6VDYMNH4mFxF7KuaTdv627faazpOAjFzMrfJOUw==}
-@@ -11789,8 +12344,8 @@ packages:
+@@ -11789,8 +12388,8 @@ packages:
      resolution: {integrity: sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA==}
      engines: {node: '>= 0.6'}
  
@@ -5088,7 +6422,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=18'}
  
    convert-source-map@2.0.0:
-@@ -12264,8 +12819,8 @@ packages:
+@@ -12264,8 +12863,8 @@ packages:
    fast-levenshtein@2.0.6:
      resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
  
@@ -5099,7 +6433,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    fast-xml-builder@1.2.0:
      resolution: {integrity: sha512-00aAWieqff+ZJhsXA4g1g7M8k+7AYoMUUHF+/zFb5U6Uv/P0Vl4QZo84/IcufzYalLuEj9928bXN9PbbFzMF0Q==}
-@@ -12442,8 +12997,8 @@ packages:
+@@ -12442,8 +13041,8 @@ packages:
    hast-util-whitespace@3.0.0:
      resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
  
@@ -5110,7 +6444,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=16.9.0'}
  
    hookable@5.5.3:
-@@ -12517,8 +13072,8 @@ packages:
+@@ -12517,8 +13116,8 @@ packages:
      resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
      engines: {node: '>=12'}
  
@@ -5121,7 +6455,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>= 12'}
  
    ipaddr.js@1.9.1:
-@@ -12597,8 +13152,8 @@ packages:
+@@ -12597,8 +13196,8 @@ packages:
    js-tokens@4.0.0:
      resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
  
@@ -5132,7 +6466,7 @@ index 1490a0f9f7..15fcc35094 100644
      hasBin: true
  
    jscpd-darwin-arm64@5.0.12:
-@@ -12953,8 +13508,8 @@ packages:
+@@ -12953,8 +13552,8 @@ packages:
    mdn-data@2.27.1:
      resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
  
@@ -5143,7 +6477,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>= 0.8'}
  
    merge-descriptors@2.0.0:
-@@ -13088,17 +13643,17 @@ packages:
+@@ -13088,17 +13687,17 @@ packages:
    ms@2.1.3:
      resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
  
@@ -5166,7 +6500,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    node-addon-api@7.1.1:
      resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
-@@ -13320,9 +13875,47 @@ packages:
+@@ -13320,9 +13919,47 @@ packages:
    pathe@2.0.3:
      resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
  
@@ -5214,7 +6548,7 @@ index 1490a0f9f7..15fcc35094 100644
    picocolors@1.1.1:
      resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
  
-@@ -13353,10 +13946,26 @@ packages:
+@@ -13353,10 +13990,26 @@ packages:
    points-on-path@0.2.1:
      resolution: {integrity: sha512-25ClnWWuw7JbWZcgqY/gJ4FQWadKxGWk+3kR/7kD0tCaDtPPMj7oHu2ToLaVhfpnHrZzYby2w6tUA0eOIuUg8g==}
  
@@ -5243,7 +6577,7 @@ index 1490a0f9f7..15fcc35094 100644
    preact@10.29.7:
      resolution: {integrity: sha512-DCHYrK/B10yUD3ZjLfhZ3WIE/9Vf9VFUODcRE2dRomTYDpJk6z6L9wecSfhfE6M9ZTHUdyQkoC46arIDhEV84Q==}
      peerDependencies:
-@@ -13383,12 +13992,12 @@ packages:
+@@ -13383,12 +14036,12 @@ packages:
    property-information@7.2.0:
      resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
  
@@ -5260,7 +6594,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>= 0.10'}
  
    publint@0.3.21:
-@@ -13403,8 +14012,8 @@ packages:
+@@ -13403,8 +14056,8 @@ packages:
    pure-rand@8.4.0:
      resolution: {integrity: sha512-IoM8YF/jY0hiugFo/wOWqfmarlE6J0wc6fDK1PhftMk7MGhVZl88sZimmqBBFomLOCSmcCCpsfj7wXASCpvK9A==}
  
@@ -5271,7 +6605,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=0.6'}
  
    quansync@1.0.0:
-@@ -13578,8 +14187,8 @@ packages:
+@@ -13578,8 +14231,8 @@ packages:
    setprototypeof@1.2.0:
      resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
  
@@ -5282,7 +6616,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=20.9.0'}
      peerDependencies:
        '@types/node': '*'
-@@ -13653,6 +14262,10 @@ packages:
+@@ -13653,6 +14306,10 @@ packages:
      resolution: {integrity: sha512-1POYv7uv2gXoyGFpBCmpDVSNV74IfsWlDW216UPjbWufNf+bSU6GdbDsxdcxtfwb4xlI3yxzOTKClUosxARYrQ==}
      engines: {node: '>=0.10.0'}
  
@@ -5293,7 +6627,7 @@ index 1490a0f9f7..15fcc35094 100644
    stackback@0.0.2:
      resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
  
-@@ -13869,8 +14482,8 @@ packages:
+@@ -13869,8 +14526,8 @@ packages:
    undici-types@8.3.0:
      resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
  
@@ -5304,7 +6638,7 @@ index 1490a0f9f7..15fcc35094 100644
      engines: {node: '>=20.18.1'}
  
    unicorn-magic@0.3.0:
-@@ -14060,27 +14673,27 @@ packages:
+@@ -14060,27 +14717,27 @@ packages:
      hasBin: true
      peerDependencies:
        markdown-it-mathjax3: ^4
@@ -5341,7 +6675,7 @@ index 1490a0f9f7..15fcc35094 100644
        happy-dom: '*'
        jsdom: '*'
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -14210,6 +14823,10 @@ packages:
+@@ -14210,6 +14867,10 @@ packages:
    xmlchars@2.2.0:
      resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
  
@@ -5352,7 +6686,7 @@ index 1490a0f9f7..15fcc35094 100644
    yallist@3.1.1:
      resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
  
-@@ -15204,7 +15821,7 @@ snapshots:
+@@ -15204,7 +15865,7 @@ snapshots:
      dependencies:
        google-auth-library: 10.7.0
        p-retry: 4.6.2
@@ -5361,7 +6695,7 @@ index 1490a0f9f7..15fcc35094 100644
        ws: 8.21.0
      optionalDependencies:
        '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-@@ -15213,9 +15830,9 @@ snapshots:
+@@ -15213,9 +15874,9 @@ snapshots:
        - supports-color
        - utf-8-validate
  
@@ -5373,7 +6707,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    '@humanfs/core@0.19.2':
      dependencies:
-@@ -15247,108 +15864,108 @@ snapshots:
+@@ -15247,108 +15908,108 @@ snapshots:
  
    '@img/colour@1.1.0': {}
  
@@ -5520,7 +6854,7 @@ index 1490a0f9f7..15fcc35094 100644
      optional: true
  
    '@isaacs/cliui@8.0.2':
-@@ -15463,7 +16080,7 @@ snapshots:
+@@ -15463,7 +16124,7 @@ snapshots:
  
    '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
      dependencies:
@@ -5529,7 +6863,7 @@ index 1490a0f9f7..15fcc35094 100644
        ajv: 8.20.0
        ajv-formats: 3.0.1(ajv@8.20.0)
        content-type: 1.0.5
-@@ -15473,7 +16090,7 @@ snapshots:
+@@ -15473,7 +16134,7 @@ snapshots:
        eventsource-parser: 3.1.0
        express: 5.2.1
        express-rate-limit: 8.5.2(express@5.2.1)
@@ -5538,7 +6872,7 @@ index 1490a0f9f7..15fcc35094 100644
        jose: 6.2.3
        json-schema-typed: 8.0.2
        pkce-challenge: 5.0.1
-@@ -15505,6 +16122,54 @@ snapshots:
+@@ -15505,6 +16166,54 @@ snapshots:
        - supports-color
        - zod
  
@@ -5593,7 +6927,7 @@ index 1490a0f9f7..15fcc35094 100644
    '@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
      dependencies:
        '@emnapi/core': 1.10.0
-@@ -16192,7 +16857,7 @@ snapshots:
+@@ -16192,7 +16901,7 @@ snapshots:
  
    '@tanstack/virtual-core@3.17.7': {}
  
@@ -5602,7 +6936,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        '@babel/code-frame': 7.29.7
        '@babel/runtime': 7.29.7
-@@ -16203,10 +16868,10 @@ snapshots:
+@@ -16203,10 +16912,10 @@ snapshots:
        picocolors: 1.1.1
        pretty-format: 27.5.1
  
@@ -5615,7 +6949,7 @@ index 1490a0f9f7..15fcc35094 100644
        react: 18.3.1
        react-dom: 18.3.1(react@18.3.1)
      optionalDependencies:
-@@ -16423,6 +17088,12 @@ snapshots:
+@@ -16423,6 +17132,12 @@ snapshots:
      dependencies:
        undici-types: 8.3.0
  
@@ -5628,7 +6962,7 @@ index 1490a0f9f7..15fcc35094 100644
    '@types/picomatch@3.0.2': {}
  
    '@types/prop-types@15.7.15': {}
-@@ -16481,10 +17152,10 @@ snapshots:
+@@ -16481,10 +17196,10 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
  
@@ -5641,7 +6975,7 @@ index 1490a0f9f7..15fcc35094 100644
        ast-v8-to-istanbul: 1.0.4
        istanbul-lib-coverage: 3.2.2
        istanbul-lib-report: 3.0.1
-@@ -16493,62 +17164,62 @@ snapshots:
+@@ -16493,62 +17208,62 @@ snapshots:
        obug: 2.1.3
        std-env: 4.1.0
        tinyrainbow: 3.1.0
@@ -5723,7 +7057,7 @@ index 1490a0f9f7..15fcc35094 100644
        convert-source-map: 2.0.0
        tinyrainbow: 3.1.0
  
-@@ -16625,7 +17296,7 @@ snapshots:
+@@ -16625,7 +17340,7 @@ snapshots:
        '@vue/shared': 3.5.39
        estree-walker: 2.0.2
        magic-string: 0.30.21
@@ -5732,7 +7066,7 @@ index 1490a0f9f7..15fcc35094 100644
        source-map-js: 1.2.1
  
    '@vue/compiler-ssr@3.5.39':
-@@ -16707,7 +17378,7 @@ snapshots:
+@@ -16707,7 +17422,7 @@ snapshots:
    accepts@2.0.0:
      dependencies:
        mime-types: 3.0.2
@@ -5741,7 +7075,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    acorn-jsx@5.3.2(acorn@8.17.0):
      dependencies:
-@@ -16731,7 +17402,7 @@ snapshots:
+@@ -16731,7 +17446,7 @@ snapshots:
    ajv@8.20.0:
      dependencies:
        fast-deep-equal: 3.1.3
@@ -5750,7 +7084,7 @@ index 1490a0f9f7..15fcc35094 100644
        json-schema-traverse: 1.0.0
        require-from-string: 2.0.2
  
-@@ -16811,12 +17482,12 @@ snapshots:
+@@ -16811,12 +17526,12 @@ snapshots:
    body-parser@2.3.0:
      dependencies:
        bytes: 3.1.2
@@ -5765,7 +7099,7 @@ index 1490a0f9f7..15fcc35094 100644
        raw-body: 3.0.2
        type-is: 2.1.0
      transitivePeerDependencies:
-@@ -16828,7 +17499,7 @@ snapshots:
+@@ -16828,7 +17543,7 @@ snapshots:
      dependencies:
        balanced-match: 1.0.2
  
@@ -5774,7 +7108,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        balanced-match: 4.0.4
  
-@@ -16904,7 +17575,7 @@ snapshots:
+@@ -16904,7 +17619,7 @@ snapshots:
  
    content-type@1.0.5: {}
  
@@ -5783,7 +7117,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    convert-source-map@2.0.0: {}
  
-@@ -17204,7 +17875,7 @@ snapshots:
+@@ -17204,7 +17919,7 @@ snapshots:
        openapi-fetch: 0.14.1
        platform: 1.3.6
        tar: 7.5.22
@@ -5792,7 +7126,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    eastasianwidth@0.2.0: {}
  
-@@ -17460,7 +18131,7 @@ snapshots:
+@@ -17460,7 +18175,7 @@ snapshots:
    express-rate-limit@8.5.2(express@5.2.1):
      dependencies:
        express: 5.2.1
@@ -5801,7 +7135,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    express@5.2.1:
      dependencies:
-@@ -17483,8 +18154,8 @@ snapshots:
+@@ -17483,8 +18198,8 @@ snapshots:
        on-finished: 2.4.1
        once: 1.4.0
        parseurl: 1.3.3
@@ -5812,7 +7146,7 @@ index 1490a0f9f7..15fcc35094 100644
        range-parser: 1.3.0
        router: 2.2.0
        send: 1.2.1
-@@ -17507,7 +18178,7 @@ snapshots:
+@@ -17507,7 +18222,7 @@ snapshots:
  
    fast-levenshtein@2.0.6: {}
  
@@ -5821,7 +7155,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    fast-xml-builder@1.2.0:
      dependencies:
-@@ -17716,7 +18387,7 @@ snapshots:
+@@ -17716,7 +18431,7 @@ snapshots:
      dependencies:
        '@types/hast': 3.0.5
  
@@ -5830,7 +7164,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    hookable@5.5.3: {}
  
-@@ -17782,7 +18453,7 @@ snapshots:
+@@ -17782,7 +18497,7 @@ snapshots:
  
    internmap@2.0.3: {}
  
@@ -5839,7 +7173,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    ipaddr.js@1.9.1: {}
  
-@@ -17841,7 +18512,7 @@ snapshots:
+@@ -17841,7 +18556,7 @@ snapshots:
  
    js-tokens@4.0.0: {}
  
@@ -5848,7 +7182,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        argparse: 2.0.1
  
-@@ -17889,7 +18560,7 @@ snapshots:
+@@ -17889,7 +18604,7 @@ snapshots:
        saxes: 6.0.0
        symbol-tree: 3.2.4
        tough-cookie: 6.0.1
@@ -5857,7 +7191,7 @@ index 1490a0f9f7..15fcc35094 100644
        w3c-xmlserializer: 5.0.0
        webidl-conversions: 8.0.1
        whatwg-mimetype: 5.0.0
-@@ -18266,7 +18937,7 @@ snapshots:
+@@ -18266,7 +18981,7 @@ snapshots:
  
    mdn-data@2.27.1: {}
  
@@ -5866,7 +7200,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    merge-descriptors@2.0.0: {}
  
-@@ -18503,7 +19174,7 @@ snapshots:
+@@ -18503,7 +19218,7 @@ snapshots:
  
    minimatch@10.2.5:
      dependencies:
@@ -5875,7 +7209,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    minimatch@9.0.9:
      dependencies:
-@@ -18523,11 +19194,13 @@ snapshots:
+@@ -18523,11 +19238,13 @@ snapshots:
  
    ms@2.1.3: {}
  
@@ -5891,7 +7225,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    node-addon-api@7.1.1: {}
  
-@@ -18782,8 +19455,47 @@ snapshots:
+@@ -18782,8 +19499,47 @@ snapshots:
  
    pathe@2.0.3: {}
  
@@ -5939,7 +7273,7 @@ index 1490a0f9f7..15fcc35094 100644
    picocolors@1.1.1: {}
  
    picomatch@4.0.4: {}
-@@ -18807,12 +19519,22 @@ snapshots:
+@@ -18807,12 +19563,22 @@ snapshots:
        path-data-parser: 0.1.0
        points-on-curve: 0.2.0
  
@@ -5964,7 +7298,7 @@ index 1490a0f9f7..15fcc35094 100644
    preact@10.29.7: {}
  
    prelude-ls@1.2.1: {}
-@@ -18831,7 +19553,7 @@ snapshots:
+@@ -18831,7 +19597,7 @@ snapshots:
  
    property-information@7.2.0: {}
  
@@ -5973,7 +7307,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        '@protobufjs/aspromise': 1.1.2
        '@protobufjs/base64': 1.1.2
-@@ -18845,7 +19567,7 @@ snapshots:
+@@ -18845,7 +19611,7 @@ snapshots:
        '@types/node': 22.20.0
        long: 5.3.2
  
@@ -5982,7 +7316,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        forwarded: 0.2.0
        ipaddr.js: 1.9.1
-@@ -18861,7 +19583,7 @@ snapshots:
+@@ -18861,7 +19627,7 @@ snapshots:
  
    pure-rand@8.4.0: {}
  
@@ -5991,7 +7325,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        es-define-property: 1.0.1
        side-channel: 1.1.1
-@@ -19103,37 +19825,37 @@ snapshots:
+@@ -19103,37 +19869,37 @@ snapshots:
  
    setprototypeof@1.2.0: {}
  
@@ -6055,7 +7389,7 @@ index 1490a0f9f7..15fcc35094 100644
        '@types/node': 22.20.0
  
    shebang-command@2.0.0:
-@@ -19215,6 +19937,8 @@ snapshots:
+@@ -19215,6 +19981,8 @@ snapshots:
  
    speakingurl@14.0.1: {}
  
@@ -6064,7 +7398,7 @@ index 1490a0f9f7..15fcc35094 100644
    stackback@0.0.2: {}
  
    statuses@2.0.2: {}
-@@ -19370,8 +20094,8 @@ snapshots:
+@@ -19370,8 +20138,8 @@ snapshots:
  
    type-is@2.1.0:
      dependencies:
@@ -6075,7 +7409,7 @@ index 1490a0f9f7..15fcc35094 100644
        mime-types: 3.0.2
  
    typebox@1.1.38: {}
-@@ -19396,7 +20120,7 @@ snapshots:
+@@ -19396,7 +20164,7 @@ snapshots:
  
    undici-types@8.3.0: {}
  
@@ -6084,7 +7418,7 @@ index 1490a0f9f7..15fcc35094 100644
  
    unicorn-magic@0.3.0: {}
  
-@@ -19473,7 +20197,7 @@ snapshots:
+@@ -19473,7 +20241,7 @@ snapshots:
    vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0):
      dependencies:
        esbuild: 0.21.5
@@ -6093,7 +7427,7 @@ index 1490a0f9f7..15fcc35094 100644
        rollup: 4.62.2
      optionalDependencies:
        '@types/node': 25.9.3
-@@ -19485,7 +20209,7 @@ snapshots:
+@@ -19485,7 +20253,7 @@ snapshots:
        esbuild: 0.25.12
        fdir: 6.5.0(picomatch@4.0.4)
        picomatch: 4.0.4
@@ -6102,7 +7436,7 @@ index 1490a0f9f7..15fcc35094 100644
        rollup: 4.62.2
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -19500,7 +20224,7 @@ snapshots:
+@@ -19500,7 +20268,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -6111,7 +7445,7 @@ index 1490a0f9f7..15fcc35094 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -19515,7 +20239,7 @@ snapshots:
+@@ -19515,7 +20283,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -6120,7 +7454,7 @@ index 1490a0f9f7..15fcc35094 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -19526,14 +20250,14 @@ snapshots:
+@@ -19526,14 +20294,14 @@ snapshots:
        tsx: 4.22.4
        yaml: 2.9.0
  
@@ -6138,7 +7472,7 @@ index 1490a0f9f7..15fcc35094 100644
      dependencies:
        '@docsearch/css': 3.8.2
        '@docsearch/js': 3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
-@@ -19554,7 +20278,7 @@ snapshots:
+@@ -19554,7 +20322,7 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
      optionalDependencies:
@@ -6147,7 +7481,7 @@ index 1490a0f9f7..15fcc35094 100644
      transitivePeerDependencies:
        - '@algolia/client-search'
        - '@types/node'
-@@ -19583,15 +20307,15 @@ snapshots:
+@@ -19583,15 +20351,15 @@ snapshots:
        - typescript
        - universal-cookie
  
@@ -6171,7 +7505,7 @@ index 1490a0f9f7..15fcc35094 100644
        es-module-lexer: 2.1.0
        expect-type: 1.3.0
        magic-string: 0.30.21
-@@ -19606,52 +20330,22 @@ snapshots:
+@@ -19606,52 +20374,22 @@ snapshots:
        vite: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
        why-is-node-running: 2.3.0
      optionalDependencies:
@@ -6234,7 +7568,7 @@ index 1490a0f9f7..15fcc35094 100644
        es-module-lexer: 2.1.0
        expect-type: 1.3.0
        magic-string: 0.30.21
-@@ -19668,20 +20362,20 @@ snapshots:
+@@ -19668,20 +20406,20 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -6264,7 +7598,7 @@ index 1490a0f9f7..15fcc35094 100644
        es-module-lexer: 2.1.0
        expect-type: 1.3.0
        magic-string: 0.30.21
-@@ -19697,8 +20391,8 @@ snapshots:
+@@ -19697,8 +20435,8 @@ snapshots:
        why-is-node-running: 2.3.0
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
@@ -6275,7 +7609,7 @@ index 1490a0f9f7..15fcc35094 100644
        jsdom: 29.1.1
      transitivePeerDependencies:
        - msw
-@@ -19781,6 +20475,8 @@ snapshots:
+@@ -19781,6 +20519,8 @@ snapshots:
  
    xmlchars@2.2.0: {}
  
@@ -6433,10 +7767,10 @@ index e599f76f1b..5bb16f47c1 100644
      { "path": "./packages/client/ui-tool" },
      { "path": "./packages/client/ui-deliverables" },
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 459036247a..d79b7eee1a 100644
+index 459036247a..e3d7fc0bef 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -270,6 +270,16 @@
+@@ -270,6 +270,18 @@
      { "path": "./packages/workflow/tool-workflow" },
      { "path": "./packages/workflow/tool-ralph" },
      { "path": "./packages/todo/tool-todo" },
@@ -6450,6 +7784,8 @@ index 459036247a..d79b7eee1a 100644
 +    { "path": "./packages/physicsos/class-host" },
 +    { "path": "./packages/storage/storage-postgres" },
 +    { "path": "./packages/physicsos/shared-state-host" },
++    { "path": "./packages/physicsos/ops-host" },
++    { "path": "./packages/physicsos/model-pool-host" },
      { "path": "./packages/plan/plan-mode" },
      { "path": "./packages/preset/agent-presets" },
      { "path": "./packages/preset/persona" },

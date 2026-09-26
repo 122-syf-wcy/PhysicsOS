@@ -12,6 +12,8 @@ class FakeHarness {
 
   async call(method, payload, context = {}) {
     this.calls.push({ method, payload, context })
+    if (method === 'workspace.create')
+      return { created: false, workspace: { workspaceId: 'workspace-1' } }
     if (method === 'session.create')
       return { sessionId: 'session-1', agentPreset: 'physics-student' }
     if (method === 'session.prompt') return this.promptResponse
@@ -101,7 +103,11 @@ describe('desktop sidecar bridge protocol', () => {
     const { server, frames, harness } = createServer()
     await request(server, 1, 'session/create', { userId: 'user-1', mode: 'experiment' })
 
-    assert.equal(harness.calls[0].method, 'session.create')
+    assert.deepEqual(
+      harness.calls.map((call) => call.method),
+      ['workspace.create', 'session.create'],
+    )
+    assert.deepEqual(harness.calls[1].payload, { workspaceId: 'workspace-1' })
     assert.deepEqual(frameFor(frames, 1).result, {
       id: 'session-1',
       userId: 'user-1',

@@ -1,0 +1,306 @@
+/* Shared PhysicsOS modal material for platform notices and account workspaces. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 42%, transparent);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.dialog {
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 18px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  color: var(--physics-ink);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-button-info-fill);
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--physics-ink-strong);
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--physics-ink-muted);
+}
+
+.copy {
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 1.85;
+  color: var(--physics-ink);
+}
+
+.copy p {
+  margin: 0 0 12px;
+}
+
+.copy p:last-child {
+  margin-bottom: 0;
+}
+
+.form {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--physics-ink-muted);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-specific-input-major);
+  font: inherit;
+  color: var(--dsw-alias-label-primary);
+  transition: border-color var(--physics-motion-fast) var(--physics-ease),
+    box-shadow var(--physics-motion-fast) var(--physics-ease);
+}
+
+.input {
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.textarea {
+  min-height: 180px;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.75;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--dsw-alias-button-info-fill);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-button-info-fill) 14%, transparent);
+}
+
+.actions {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.primary,
+.ghost,
+.iconButton {
+  appearance: none;
+  border-radius: 10px;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--physics-motion-fast) var(--physics-ease),
+    border-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.primary {
+  height: 38px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  background: var(--dsw-alias-button-info-fill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover);
+}
+
+.ghost {
+  height: 38px;
+  padding: 0 15px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-button-elevated-fill);
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.ghost:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+.iconButton {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--physics-ink-muted);
+}
+
+.iconButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--physics-ink-strong);
+}
+
+.primary:disabled,
+.ghost:disabled,
+.iconButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-inline-start: 3px solid var(--dsw-alias-state-error-primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+  color: var(--physics-ink-muted);
+}
+
+.list {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background-color: var(--physics-glass-fill);
+  box-shadow: var(--physics-glass-rim);
+}
+
+.rowBody {
+  min-width: 0;
+}
+
+.rowTitle {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--physics-ink-strong);
+}
+
+.rowMeta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--physics-ink-muted);
+}
+
+.rowActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 7px;
+}
+
+.empty {
+  margin: 18px 0 0;
+  padding: 26px 20px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--physics-ink-muted);
+}
+
+/* The compact hero picker trigger. It names the account workspace and never
+   exposes a host path. */
+.pick {
+  appearance: none;
+  height: 32px;
+  max-width: 220px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-button-elevated-fill);
+  font: inherit;
+  font-size: 12px;
+  color: var(--physics-ink-muted);
+  cursor: pointer;
+}
+
+.pick:hover {
+  border-color: var(--dsw-alias-border-l3);
+  color: var(--physics-ink-strong);
+}
+
+.pickName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

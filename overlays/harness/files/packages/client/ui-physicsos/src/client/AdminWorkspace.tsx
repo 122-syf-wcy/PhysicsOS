@@ -16,11 +16,14 @@ import type { NoticeApi } from './notice-api.ts'
 import { AdminContentTab } from './AdminContentTab.tsx'
 import { AdminDashboardTab } from './AdminDashboardTab.tsx'
 import { AdminDeviceTab } from './AdminDeviceTab.tsx'
+import { AdminModelPoolTab } from './AdminModelPoolTab.tsx'
 import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
+import { AdminPlatformNoticeTab } from './AdminPlatformNoticeTab.tsx'
 import { PasswordResetQueue } from './AuthGate.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
+import type { ModelPoolApi } from './model-pool-api.ts'
 import { GlassSelect } from './GlassSelect.tsx'
 import css from './AdminWorkspace.module.css'
 
@@ -32,6 +35,8 @@ type Tab =
   | 'resets'
   | 'content'
   | 'notice'
+  | 'platformNotice'
+  | 'modelPool'
   | 'ops'
   | 'devices'
   | 'audit'
@@ -57,6 +62,8 @@ export interface AdminWorkspaceProps {
    * rather than offered and broken.
    */
   noticeApi?: NoticeApi
+  /** `/physicsos/model-pool` client — absent in stripped test compositions. */
+  modelPoolApi?: ModelPoolApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
   t: (key: PhysicsosKey) => string
@@ -67,7 +74,9 @@ const fmtTime = (iso: string): string => {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('zh-CN', { hour12: false })
 }
 
-export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWorkspaceProps) {
+export function AdminWorkspace({
+  api, paperApi, noticeApi, modelPoolApi, useAuth, t,
+}: AdminWorkspaceProps) {
   const role = useAuth(state => state.user?.role)
   /* The judging account, attributed on every review — the same identity the
      server files the ledger row under. */
@@ -95,6 +104,12 @@ export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWo
     { id: 'resets' as const, label: t('admin.tab.resets') },
     ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content') }]),
     ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice') }]),
+    ...(noticeApi === undefined || !isSuper
+      ? []
+      : [{ id: 'platformNotice' as const, label: t('admin.tab.platformNotice') }]),
+    ...(modelPoolApi === undefined || !isSuper
+      ? []
+      : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool') }]),
     { id: 'ops' as const, label: t('admin.tab.ops') },
     { id: 'devices' as const, label: t('admin.tab.devices') },
     { id: 'audit' as const, label: t('admin.tab.audit') },
@@ -132,6 +147,12 @@ export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWo
       )}
       {active === 'notice' && noticeApi !== undefined && (
         <AdminNoticeTab api={noticeApi} canPublish={isSchoolAdmin} t={t} />
+      )}
+      {active === 'platformNotice' && noticeApi !== undefined && isSuper && (
+        <AdminPlatformNoticeTab api={noticeApi} t={t} />
+      )}
+      {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
+        <AdminModelPoolTab api={modelPoolApi} t={t} />
       )}
       {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
       {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}

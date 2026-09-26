@@ -28,6 +28,7 @@ import {
   mistakeCountsOf,
   type LearningRecordState,
 } from './learning-record-store.ts'
+import { ActivityHeatmap } from './ActivityHeatmap.tsx'
 import { Mascot } from './Mascot.tsx'
 import { formatUpdatedAt } from './workspaceMeta.ts'
 import css from './LearningRecordWorkspace.module.css'
@@ -143,6 +144,8 @@ export function LearningRecordWorkspace({
           </div>
         </div>
       </header>
+
+      <ActivityHeatmap attempts={attempts} />
 
       {practiceQuestion === undefined ? null : (
         <section className={css.panel} aria-label={t('record.practiceBank')}>

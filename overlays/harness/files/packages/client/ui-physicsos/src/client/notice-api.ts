@@ -43,6 +43,17 @@ export interface AnnouncementRow {
   readonly createdAt: string
 }
 
+/** The platform-wide, versioned internal-testing notice. */
+export interface PlatformNoticeRow {
+  readonly title: string
+  readonly body: string
+  readonly version: number
+  readonly enabled: boolean
+  /** Empty until a SUPER_ADMIN saves the first edited version. */
+  readonly updatedAt: string
+  readonly updatedBy: string
+}
+
 /** A failed call, carrying the host's code so the UI can say something exact. */
 export class NoticeApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
@@ -93,6 +104,19 @@ export interface NoticeApi {
     input: { title: string; body: string; schoolId?: string | null },
   ) => Promise<{ item: AnnouncementRow }>
   retireAnnouncement: (id: string) => Promise<{ item: AnnouncementRow }>
+  /** Read the platform notice plus THIS account's acknowledged version. */
+  getPlatformNotice: () => Promise<{
+    notice: PlatformNoticeRow
+    acknowledgedVersion: number | null
+  }>
+  /** Persist the current version as read by this account. */
+  ackPlatformNotice: (version: number) => Promise<{ acknowledgedVersion: number }>
+  /** SUPER_ADMIN only: create the next monotonic notice version. */
+  updatePlatformNotice: (input: {
+    title: string
+    body: string
+    enabled: boolean
+  }) => Promise<{ notice: PlatformNoticeRow }>
 }
 
 /** The real client — bound once in `apply`, injected as callbacks.
@@ -120,6 +144,13 @@ export function createNoticeApi(): NoticeApi {
     }),
     retireAnnouncement: id => request(`/announcements/${id}/retire`, {
       method: 'POST', body: '{}',
+    }),
+    getPlatformNotice: () => request('/platform-notice'),
+    ackPlatformNotice: version => request('/platform-notice/ack', {
+      method: 'POST', body: JSON.stringify({ version }),
+    }),
+    updatePlatformNotice: input => request('/platform-notice', {
+      method: 'PUT', body: JSON.stringify(input),
     }),
   }
 }

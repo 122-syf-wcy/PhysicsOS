@@ -565,9 +565,30 @@ export class SidecarBridge {
     if (!SESSION_MODES.has(mode)) {
       throw new BridgeError('BAD_REQUEST', `unsupported PhysicsOS session mode: ${mode}`)
     }
+    /* 服务端自 2026-09 起强制"会话必须落在该账号的私有工作区"：直接建会话会被
+       拒绝（session-scope-mismatch）。先取一次账号工作区——服务端会把 path 改写成
+       该账号自己的那一个，并且重复调用是幂等的——再带着它建会话。 */
+    const created = await this.harness.call(
+      'workspace.create',
+      { path: '' },
+      { cookie, signal: this.lifecycle.signal },
+    )
+    const workspaceId = isRecord(created)
+      ? isRecord(created.workspace) && typeof created.workspace.workspaceId === 'string'
+        ? created.workspace.workspaceId
+        : typeof created.workspaceId === 'string'
+          ? created.workspaceId
+          : undefined
+      : undefined
+    if (workspaceId === undefined) {
+      throw new BridgeError(
+        'HARNESS_INVALID_RESPONSE',
+        'Harness workspace.create returned no workspaceId',
+      )
+    }
     const response = await this.harness.call(
       'session.create',
-      {},
+      { workspaceId },
       {
         cookie,
         signal: this.lifecycle.signal,

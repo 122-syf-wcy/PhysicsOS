@@ -16,10 +16,24 @@ import * as authHost from '../src/index.ts'
 
 let root: string | undefined
 let context: Context | undefined
+/** Payloads the composed host actually received — the seam under test. */
+let apiCalls: { method: string; payload: Record<string, unknown> }[] = []
+/** The fake registry's single workspace record, with its durable title. */
+let workspaceTitle: string | undefined
+let workspaceView: {
+  workspaceId: string
+  path: string
+  sessionIds: unknown[]
+  createdAt: string
+  updatedAt: string
+} | undefined
 
 afterEach(async () => {
   await context?.fiber.dispose()
   context = undefined
+  apiCalls = []
+  workspaceTitle = undefined
+  workspaceView = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
   root = undefined
 })
@@ -45,13 +59,16 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
       apply(ctx: Context) {
         ctx.provide('apiProxy', {
           sessions: {
-            create: async (request: { rpcId: string }) => ({
-              rpcId: request.rpcId,
-              result: {
-                ok: true,
-                value: { sessionId: 'owned-session', agentPreset: 'physics-student' },
-              },
-            }),
+            create: async (request: { rpcId: string; payload: Record<string, unknown> }) => {
+              apiCalls.push({ method: 'session.create', payload: { ...request.payload } })
+              return {
+                rpcId: request.rpcId,
+                result: {
+                  ok: true,
+                  value: { sessionId: 'owned-session', agentPreset: 'physics-student' },
+                },
+              }
+            },
             list: async (request: { rpcId: string }) => ({
               rpcId: request.rpcId,
               result: {
@@ -69,20 +86,57 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
             create: async (request: {
               rpcId: string
               payload: { path: string }
-            }) => ({
+            }) => {
+              // The real registry names a record after its directory basename
+              // (the account digest); the account's first adoption renames it.
+              workspaceTitle = request.payload.path.split('/').filter(Boolean).at(-1) ?? 'private-workspace'
+              workspaceView = {
+                workspaceId: 'private-workspace',
+                path: request.payload.path,
+                sessionIds: [],
+                createdAt: new Date(0).toISOString(),
+                updatedAt: new Date(0).toISOString(),
+              }
+              return {
+                rpcId: request.rpcId,
+                result: {
+                  ok: true,
+                  value: { created: true, workspace: { ...workspaceView, title: workspaceTitle } },
+                },
+              }
+            },
+            rename: async (request: {
+              rpcId: string
+              payload: { workspaceId: string; title: string }
+            }) => {
+              apiCalls.push({ method: 'workspace.rename', payload: { ...request.payload } })
+              workspaceTitle = request.payload.title
+              return {
+                rpcId: request.rpcId,
+                result: {
+                  ok: true,
+                  value: {
+                    workspace: {
+                      workspaceId: request.payload.workspaceId,
+                      path: workspaceView?.path ?? '',
+                      title: workspaceTitle,
+                      sessionIds: [],
+                      createdAt: new Date(0).toISOString(),
+                      updatedAt: new Date(0).toISOString(),
+                    },
+                  },
+                },
+              }
+            },
+            list: async (request: { rpcId: string }) => ({
               rpcId: request.rpcId,
               result: {
                 ok: true,
                 value: {
-                  created: true,
-                  workspace: {
-                    workspaceId: 'private-workspace',
-                    path: request.payload.path,
-                    title: 'PhysicsOS',
-                    sessionIds: [],
-                    createdAt: new Date(0).toISOString(),
-                    updatedAt: new Date(0).toISOString(),
-                  },
+                  items: workspaceView === undefined
+                    ? []
+                    : [{ ...workspaceView, title: workspaceTitle }],
+                  archivedSessionIds: [],
                 },
               },
             }),
@@ -174,6 +228,40 @@ describe('real Loader composition', () => {
     expect(await created.json()).toMatchObject({
       result: { ok: true, value: { sessionId: 'owned-session', agentPreset: 'physics-student' } },
     })
+    /* The policy's request rewrite has to reach the host, not just the
+       policy's own unit-test double: production dropped it silently while the
+       connection dispatch closure kept the outer request. */
+    expect(apiCalls).toEqual([
+      {
+        method: 'workspace.rename',
+        payload: { workspaceId: 'private-workspace', title: '我的工作区' },
+      },
+      {
+        method: 'session.create',
+        payload: { workspaceId: 'private-workspace', agentPreset: 'physics-student' },
+      },
+    ])
+
+    // The account's own workspace answers with the readable title, not the
+    // sha256(userKey) directory name the registry stores it under.
+    const listedWorkspaces = await post('/api/workspace.list', rpc('workspaces', 'workspace.list', {}), cookie)
+    expect(await listedWorkspaces.json()).toMatchObject({
+      result: {
+        ok: true,
+        value: { items: [{ workspaceId: 'private-workspace', title: '我的工作区' }] },
+      },
+    })
+
+    // The owner may rename it; the new title comes back from the same surface.
+    const renamed = await post('/api/workspace.rename', rpc('rename', 'workspace.rename', {
+      workspaceId: 'private-workspace',
+      title: '力学实验室',
+    }), cookie)
+    expect(renamed.status).toBe(200)
+    const afterRename = await post('/api/workspace.list', rpc('workspaces-2', 'workspace.list', {}), cookie)
+    expect(await afterRename.json()).toMatchObject({
+      result: { ok: true, value: { items: [{ title: '力学实验室' }] } },
+    })
 
     const listed = await post('/api/session.list', rpc('list', 'session.list', {}), cookie)
     expect(listed.status).toBe(200)
@@ -196,6 +284,24 @@ describe('real Loader composition', () => {
     const otherList = await post('/api/session.list', rpc('other-list', 'session.list', {}), otherCookie)
     expect(await otherList.json()).toMatchObject({
       result: { ok: true, value: { items: [] } },
+    })
+
+    // Cross-account rename is a not-found, never a write: ownership is decided
+    // by the account ledger, not by the id the caller supplies.
+    const foreignRename = await post('/api/workspace.rename', rpc('rename-foreign', 'workspace.rename', {
+      workspaceId: 'private-workspace',
+      title: '抢过来的工作区',
+    }), otherCookie)
+    expect(await foreignRename.json()).toMatchObject({
+      result: { ok: false, error: { code: 'workspace-not-found' } },
+    })
+
+    // The hosted surface never browses the server filesystem, for any role,
+    // unless the deployment opts in — the workspace is assigned server-side.
+    const browse = await post('/api/host.listDirectory', rpc('browse', 'host.listDirectory', { path: '/' }), cookie)
+    expect(browse.status).toBe(403)
+    expect(await browse.json()).toMatchObject({
+      result: { ok: false, error: { code: 'HOST_FILESYSTEM_DENIED' } },
     })
   })
 

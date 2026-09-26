@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { AdminApi, DashboardRow } from './auth-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { AdminOpsPanel } from './AdminOpsPanel.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminOpsTabProps {
@@ -198,6 +199,7 @@ export function AdminOpsTab({ api, isSuper, t }: AdminOpsTabProps) {
   return (
     <div className={css.list}>
       {error !== undefined && <p className={css.error}>{error}</p>}
+      {isSuper && <AdminOpsPanel api={api} t={t} />}
 
       <section className={css.card}>
         <h3 className={css.cardTitle}>{t('admin.ops.import')}</h3>

@@ -45,12 +45,17 @@ printf 'postgresql://physicsos:%s@postgres:5432/physicsos\n' "$(cat .env.postgre
 printf 'redis://:%s@redis:6379/0\n' "$(cat .env.redis_password)" > .env.redis_url
 [ -s .env.admin_password ] || openssl rand -hex 16 > .env.admin_password
 [ -s .env.image_api_key ] || printf 'placeholder-set-later\n' > .env.image_api_key
+# 模型池加密主密钥：一旦生成就不能再换（换了后台已存的通道 key 全部要重录）。
+[ -s .env.model_pool_secret ] || openssl rand -hex 32 > .env.model_pool_secret
 
 if [ ! -s .env.deepseek_api_key ] || grep -q '^replace-with' .env.deepseek_api_key 2>/dev/null; then
   printf '\n\033[1;31m缺模型 key\033[0m：请把 key 写进 %s/.env.deepseek_api_key ，然后重跑本脚本。\n' "$DIR"
   printf '  例：  printf %%s "sk-xxxx" > %s/.env.deepseek_api_key && chmod 600 %s/.env.deepseek_api_key\n' "$DIR" "$DIR"
   exit 1
 fi
+
+say "加固 secret 文件权限（999:999 0400，非 app 身份不可读）"
+"$DIR/scripts/deploy/secure-secrets.sh"
 
 say "构建镜像（首次约 10-15 分钟）"
 docker compose build

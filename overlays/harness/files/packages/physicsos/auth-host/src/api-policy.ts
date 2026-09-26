@@ -50,6 +50,8 @@ export interface ApiPolicyStore {
 export interface ApiPolicyWorkspace {
   readonly id: string
   readonly path: string
+  /** Human-readable display title; defaults to {@link DEFAULT_WORKSPACE_TITLE}. */
+  readonly title: string
 }
 
 /** Fixed-window policy passed through the existing auth limiter seam. */
@@ -100,7 +102,15 @@ export interface ApiPolicyDeps {
   actorFromCookie(cookie: string | undefined, authorization?: string): ApiPolicyActor | null
   actorFromRequest(req: IncomingMessage): ApiPolicyActor | null
   readonly store: ApiPolicyStore
-  ensureWorkspace(actor: ApiPolicyActor): Promise<ApiPolicyWorkspace>
+  ensureWorkspace(actor: ApiPolicyActor, title?: string): Promise<ApiPolicyWorkspace>
+  /**
+   * Server-filesystem browsing (`host.listDirectory` / `pickDirectory` /
+   * `createDirectory`). `deny` (the default) refuses every role — a hosted
+   * deployment must not expose the container's filesystem, and account
+   * workspaces are assigned by the server, so no client needs to browse.
+   * `admin` keeps the capability for trusted single-user installations.
+   */
+  readonly hostFilesystemAccess?: 'deny' | 'admin'
   readonly limiter?: ApiPolicyLimiterBackend
   readonly onceLedger?: ApiPolicyOnceLedger
   readonly modelPolicy?: Partial<ApiPolicyModelBudget>
@@ -132,6 +142,49 @@ interface JsonResponseBody {
 }
 
 const STUDENT_PRESET = 'physics-student'
+
+/** Default display title for an account's private workspace. */
+export const DEFAULT_WORKSPACE_TITLE = '我的工作区'
+/** Maximum length of an account-owned workspace title. */
+export const MAX_WORKSPACE_TITLE_LENGTH = 80
+const WORKSPACE_PATH_PREFIX = 'physicsos-workspace://'
+
+/**
+ * Decode the virtual path the client uses to ask for a NAMED account
+ * workspace. The browser never gets to name a filesystem path: only the title
+ * crosses this seam, and auth-host chooses and creates the directory itself.
+ * `undefined` means "the default managed workspace", `null` means a malformed
+ * title that must be refused.
+ */
+export const workspaceTitleFromPath = (value: unknown): string | null | undefined => {
+  if (typeof value !== 'string' || !value.startsWith(WORKSPACE_PATH_PREFIX)) return undefined
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(value.slice(WORKSPACE_PATH_PREFIX.length))
+  } catch {
+    return null
+  }
+  const title = decoded.trim()
+  if (
+    title === ''
+    || title.length > MAX_WORKSPACE_TITLE_LENGTH
+    || /[\u0000-\u001f\u007f]/.test(title)
+  ) {
+    return null
+  }
+  return title
+}
+
+/**
+ * Methods that browse or create directories on the HOST the harness runs in.
+ * They are refused for every role unless the deployment opts in, because a
+ * hosted deployment's host is the server, not the user's machine.
+ */
+const HOST_FILESYSTEM_METHODS = new Set([
+  'host.listDirectory',
+  'host.pickDirectory',
+  'host.createDirectory',
+])
 
 /** Cordis service key for the shared one-time response ledger, when composed. */
 export const ONCE_LEDGER_SERVICE = 'physicsosOnceLedger'
@@ -289,7 +342,7 @@ const resourceIdsIn = (
 const privateWorkspaceView = (workspace: ApiPolicyWorkspace): Record<string, unknown> => ({
   workspaceId: workspace.id,
   path: workspace.path,
-  title: workspace.path.split('/').filter(Boolean).at(-1) ?? 'PhysicsOS',
+  title: workspace.title,
   sessionIds: [],
   createdAt: new Date(0).toISOString(),
   updatedAt: new Date(0).toISOString(),
@@ -453,6 +506,17 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     payload: Record<string, unknown>,
     rpcId: string,
   ): Response | undefined => {
+    if (HOST_FILESYSTEM_METHODS.has(method)
+      && (deps.hostFilesystemAccess !== 'admin' || !admin(actor))) {
+      return rpcError(
+        rpcId,
+        'HOST_FILESYSTEM_DENIED',
+        '该部署不允许浏览服务器文件系统；工作区由账号自动分配',
+        { method },
+        403,
+      )
+    }
+
     const allowedNonAdminSettingsMethod =
       method === 'settings.describe' ||
       (method === 'settings.mutate' && isOnboardingMutation(payload))
@@ -495,7 +559,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
     if (method === 'workspace.rename' || method === 'workspace.delete' || method === 'workspace.insertBefore') {
       const workspaceId = workspaceIdOf(payload)
-      if (workspaceId === undefined || (!admin(actor) && !deps.store.owns(actor, 'workspace', workspaceId))) {
+      if (workspaceId === undefined || !deps.store.owns(actor, 'workspace', workspaceId)) {
         return denyNotFound(rpcId, 'workspace', workspaceId ?? '')
       }
     }
@@ -541,8 +605,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     const payload = isRecord(body.payload) ? { ...body.payload } : {}
     const rpcId = rpcIdOf(body)
 
-    if (method === 'workspace.create' && !admin(actor)) {
-      const workspace = await deps.ensureWorkspace(actor)
+    if (method === 'workspace.create') {
+      const requestedTitle = workspaceTitleFromPath(payload['path'])
+      if (requestedTitle === null) {
+        return {
+          request,
+          response: rpcError(
+            rpcId,
+            'workspace-title-invalid',
+            `workspace title must be 1-${String(MAX_WORKSPACE_TITLE_LENGTH)} printable characters`,
+            {},
+          ),
+        }
+      }
+      const workspace = await deps.ensureWorkspace(actor, requestedTitle)
       await deps.store.claim(actor, 'workspace', workspace.id)
       return {
         request,
@@ -612,23 +688,36 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     }
 
     if (method === 'workspace.list') {
-      const workspace = admin(actor) ? undefined : await deps.ensureWorkspace(actor)
-      if (workspace !== undefined) {
-        await deps.store.claim(actor, 'workspace', workspace.id)
-        const items = Array.isArray(value['items']) ? value['items'] : []
-        const owned = items.filter(item =>
+      /* Every account owns at least one private workspace; named workspaces
+         created through the product virtual path are already in the registry
+         and remain visible only to their owner. The platform operator sees
+         the full registry for troubleshooting. */
+      const workspace = await deps.ensureWorkspace(actor)
+      await deps.store.claim(actor, 'workspace', workspace.id)
+      const items = Array.isArray(value['items']) ? value['items'] : []
+      const visible = admin(actor)
+        ? items.filter(item => isRecord(item))
+        : items.filter(item =>
           isRecord(item) && typeof item['workspaceId'] === 'string'
           && deps.store.owns(actor, 'workspace', item['workspaceId']))
-        if (!owned.some(item => isRecord(item) && item['workspaceId'] === workspace.id)) {
-          owned.push(privateWorkspaceView(workspace))
+      /* The registry names a record after its directory basename; the account
+         digest must never surface as the workspace's display title. */
+      const digest = workspace.path.split('/').filter(Boolean).at(-1)
+      for (const item of visible) {
+        if (isRecord(item) && item['workspaceId'] === workspace.id
+          && (typeof item['title'] !== 'string' || item['title'] === digest)) {
+          item['title'] = workspace.title
         }
-        value['items'] = owned
-        if (Array.isArray(value['archivedSessionIds'])) {
-          value['archivedSessionIds'] = value['archivedSessionIds'].filter(id =>
-            typeof id === 'string' && deps.store.owns(actor, 'session', id))
-        }
-        changed = true
       }
+      if (!visible.some(item => isRecord(item) && item['workspaceId'] === workspace.id)) {
+        visible.push(privateWorkspaceView(workspace))
+      }
+      value['items'] = visible
+      if (!admin(actor) && Array.isArray(value['archivedSessionIds'])) {
+        value['archivedSessionIds'] = value['archivedSessionIds'].filter(id =>
+          typeof id === 'string' && deps.store.owns(actor, 'session', id))
+      }
+      changed = true
     }
 
     if (method === 'agentPreset.list' && Array.isArray(value['presets']) && !admin(actor)) {
@@ -646,6 +735,25 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     }
 
     if (method === 'session.create' || method === 'session.fork') {
+      /* Fail closed if the enforced preset did not survive the request
+         rewrite: a student session that came back composed as the deployment
+         default means the rewritten request never reached the host. The
+         session was already created upstream, so refusing the response is the
+         only honest answer — claiming it for the account would hide a scope
+         breach behind an apparently successful call. */
+      const createdPreset = value['agentPreset']
+      if (method === 'session.create' && !admin(actor)
+        && createdPreset !== undefined && createdPreset !== STUDENT_PRESET) {
+        const actualPreset = typeof createdPreset === 'string'
+          ? createdPreset
+          : JSON.stringify(createdPreset)
+        return rpcError(
+          rpcIdOf(body),
+          'session-scope-mismatch',
+          '会话未按账号隔离创建，已拒绝该响应，请稍后重试或联系管理员',
+          { expectedPreset: STUDENT_PRESET, actualPreset },
+        )
+      }
       const sessionId = typeof value['sessionId'] === 'string' ? value['sessionId'] : undefined
       if (sessionId !== undefined) await deps.store.claim(actor, 'session', sessionId)
     }

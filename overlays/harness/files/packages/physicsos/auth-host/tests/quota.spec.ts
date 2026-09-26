@@ -57,6 +57,7 @@ const admin: ApiPolicyActor = {
 const workspace: ApiPolicyWorkspace = {
   id: 'workspace-student',
   path: '/srv/physicsos-users/student',
+  title: '我的工作区',
 }
 
 const request = (method: string, payload: Record<string, unknown> = {}, cookie = 'student'): Request =>
