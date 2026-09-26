@@ -16,8 +16,8 @@
 
 预判也成立 —— **UI 侧零改动**。`TimelineMarkers` 的 class 是动态拼的
 （`css[\`eventMark_${event.kind}\`]`），新增三种 kind 自动生效；只加了
-`.eventMark_enter` / `.eventMark_exit` / `.eventMark_plate-impact` 三条样式，
-以及 runtime 侧把 `SimulationResult.events` 映射成 `TimelineEvent` 的 `eventsOf`。
+`.eventMark_enter`/`.eventMark_exit`/`.eventMark_plate-impact`三条样式，
+以及 runtime 侧把`SimulationResult.events`映射成`TimelineEvent`的`eventsOf`。
 
 浏览器验收：`electric-region-acceptance.mjs` Case D —— 标记数 ≥ 2（进入 + 离开）、
 点击标记 seek 时钟生效、5 项门禁为 0。无界匀强场与点电荷场景仍为空数组
@@ -50,44 +50,50 @@
 
 ## QUESTION_IMAGE_PDF_INGEST_BACKLOG
 
-**状态**：登记。UI 已明确显示「图片和 PDF 输入会在接入识别服务后开放」。
+**状态**：**已关闭（2026-09-25）**。视觉模型转录、文本层 PDF 本地抽文、扫描页逐页渲染、
+图片录入 API、教师核对 UI 与 pending 入库链路均已落地并通过测试。仍待扩充的是可授权
+的真实卷源，不是识别能力本身。
 
-**为什么现在不做**：需要 OCR / VLM 服务与整卷拆题流水线，属于
+**关闭前记录**：当时判断需要 OCR / VLM 服务与整卷拆题流水线，属于
 Question Pipeline 的独立阶段，不是 Mechanics UI 的一部分。
+
+### 后续真实缺口
+
+- 真实卷源获取仍受版权、登录和官方发布方式限制。
+- 整卷自动拆题已可用，但复杂双栏、跨页题和手写批注仍需教师确认。
 
 ---
 
 ## AGENT_MODEL_BACKED_ANSWERS_BACKLOG
 
-**状态**：登记。当前 Agent 答案是确定性意图匹配（`physics-agent-answers.ts`）。
+**状态**：登记（2026-09-25 复核）。当前实验室抽屉内问答仍是确定性意图匹配
+（`physics-agent-answers.ts` → `AgentDrawer`）。**但"模型答案"路径事实上已
+存在**:`physics-student` preset 挂了 `tool-physicsos` + persona,学生经会话
+主链路拿到的就是模型驱动答案 —— 本项剩下的问题收窄为「抽屉内嵌的快速问答
+要不要花 token 升级为模型应答」,是产品决策而非阻塞工程。确定性层本身是
+特性（即时、离线、零成本）,不是过渡残留。
 
 **已经就位的部分**：Agent Context Adapter（读 scene / revision / simulation /
 verification / observations / time / question context）、工具契约
 （`physics.ui.highlight` 为纯视图，`physics.scene.setParameter` 走 SceneCommand）、
 以及「答案必须引用 runtime 已产出的事实」的 source chip 机制。
 
-**为什么现在不做**：接入真实模型只需替换 `matchIntent`，
-上述契约与测试保持不变；而模型接入涉及 Agent Service 与配额，
-属于 Agent 阶段而非 Mechanics UI 阶段。
-
-**开始条件**：Agent Service 可用，并且能把 tool call 以结构化输出返回。
+**开始条件（已变化）**：Agent Service 已可用（dsh agent + tool-physicsos）；
+真正待定的是产品面——抽屉内嵌问答升级模型应答意味着每次提问一次 LLM
+往返与配额消耗，需要与「确定性即时层」定位拍板后再动。
 
 ---
 
 ## APPS_WEB_STANDALONE_RETIREMENT_BACKLOG
 
-**状态**：登记。根目录 `apps/web` 是废弃的过渡 SPA，未随本轮 UI 演进。
+**状态**：**已关闭**(2026-09-25)。整目录删除(25 个文件,git 历史可查);
+`pnpm-workspace.yaml` 去掉 `apps/*` glob,`boundary.ts` 注释指向
+harness 客户端包,README/01 开发指南两处文字改为「已删除,正式入口是
+`dsh-client-ui-physicsos`」。无代码 import 引用它——`boundary.ts` 里
+只是注释。
 
-**进展（2026-08-25）**：前置工程已完成 —— e2e 验收脚本整体迁入独立的
-`tests/acceptance` 包（浏览器门禁、检查台账与截图设施收敛进共享
-`support.mjs`），`apps/web` 的 playwright 设施（唯一的 spec、配置与依赖）
-已随之移除，现在它只剩旧页面参考实现。
-
-**为什么现在不做**：删除整个 `apps/web` 是一次不可逆清理，需要先确认
-旧页面实现没有仍要保留的参考价值，属于工程整理而非产品能力。
-
-**开始条件**：确认旧页面参考不再需要，即可整目录删除并同步收掉
-workspace 与根 lint/typecheck 里对它的引用。
+**遗留**:pnpm-lock.yaml 还残留 `apps/web` 的 importer 段,下一次能跑
+`pnpm install` 时会自动清掉(当前 worktree 配置使 install 不可跑)。
 
 ## GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP
 
@@ -100,19 +106,19 @@ workspace 与根 lint/typecheck 里对它的引用。
 "20 所里 15 所不在册"。这个结论**不成立**：名录用的是**官方全称**，短名当然
 grep 不到。逐条复核后：
 
-| 口语名 | 名录里的实际条目 | 状态 |
-| --- | --- | --- |
-| 贵阳一中 | `贵阳市第一中学` | 在册 |
-| 贵阳实验三中 | `贵阳市第三实验中学` | 在册 |
-| 贵阳六中 / 九中 | `贵阳市第六中学` / `贵阳市第九中学` | 在册 |
-| 清华中学 | `贵阳市清华中学` | 在册 |
-| 安顺一中 | `安顺市第一高级中学` | 在册 |
-| 铜仁一中 | `铜仁第一中学` | 在册 |
-| 毕节一中 | `毕节市第一中学` | 在册 |
-| 凯里一中 | `贵州省凯里市第一中学` | 在册 |
-| 都匀一中 | `黔南州都匀第一中学` | 在册 |
-| 兴义一中 / 兴义八中 | — | **缺失** |
-| 遵义四中 | — | **缺失** |
+| 口语名              | 名录里的实际条目                    | 状态     |
+| ------------------- | ----------------------------------- | -------- |
+| 贵阳一中            | `贵阳市第一中学`                    | 在册     |
+| 贵阳实验三中        | `贵阳市第三实验中学`                | 在册     |
+| 贵阳六中 / 九中     | `贵阳市第六中学` / `贵阳市第九中学` | 在册     |
+| 清华中学            | `贵阳市清华中学`                    | 在册     |
+| 安顺一中            | `安顺市第一高级中学`                | 在册     |
+| 铜仁一中            | `铜仁第一中学`                      | 在册     |
+| 毕节一中            | `毕节市第一中学`                    | 在册     |
+| 凯里一中            | `贵州省凯里市第一中学`              | 在册     |
+| 都匀一中            | `黔南州都匀第一中学`                | 在册     |
+| 兴义一中 / 兴义八中 | —                                   | **缺失** |
+| 遵义四中            | —                                   | **缺失** |
 
 **方法论的教训**：核对名录必须用官方全称或做归一化匹配（去掉"省/市/州"、
 "第…中学"↔"…中"等变体），否则会得出完全相反的结论。这正是
@@ -133,10 +139,10 @@ https://www.qdn.gov.cn/zwgk_5871642/zdlyxxgk/ggqsy_5872177/202408/t20240820_8540
 
 ### 真实缺口（本轮已补 15 所）
 
-| 来源 | 抓到 | 在册 | 补入 |
-| --- | --- | --- | --- |
-| 黔东南州教育局《2025年全州高中教育学校名录》 | 48 普高 | 46 | 2 |
-| 黔西南州教育局《2025年高中阶段民办学校年检结果公示》+ 基础教育栏目 | 13 | 0 | 13 |
+| 来源                                                               | 抓到    | 在册 | 补入 |
+| ------------------------------------------------------------------ | ------- | ---- | ---- |
+| 黔东南州教育局《2025年全州高中教育学校名录》                       | 48 普高 | 46   | 2    |
+| 黔西南州教育局《2025年高中阶段民办学校年检结果公示》+ 基础教育栏目 | 13      | 0    | 13   |
 
 **根因很清楚**：黔西南州那批数据当初来自《黔西南州义务教育统计表》——
 **义务教育**，所以兴义市在册的几乎全是镇/街道初中（七舍镇中学、万屯镇中学、
@@ -196,21 +202,21 @@ https://www.qdn.gov.cn/zwgk_5871642/zdlyxxgk/ggqsy_5872177/202408/t20240820_8540
 **B. 真模板缺口（本文档条目）** —— 引擎里没有对应物理，**没有诚实的别名可指**
 （硬指过去会把学生送到错的实验室）：
 
-| 缺失课题 | 所属 | 备注 |
-| --- | --- | --- |
-| ~~压强 / 大气压~~ | 力学·流体 | ✅ **批次①已补**（2026-09-22，见下） |
-| ~~机械能 / 势能~~ | 力学·能量 | ✅ **批次③已补**（2026-09-22，见下） |
-| ~~向心力~~ | 力学·天体 | ✅ **已补**（2026-09-22）：挂在 `magnetic-circular` 上的**有据别名** —— `qvB = mv²/r` 与 `r = mv/(qB)` 是**同一个方程的两种写法**，洛伦兹力就是那个指向圆心的合力 |
-| 万有引力 | 力学·天体 | 🟡 **物理层已落地并验证**（`engine-mechanics/src/orbit.ts`，5 条金子测试：空间站 7656 m/s / 93 min、同步轨道 42164 km、开普勒第三定律作为推论、质量从轨道里约掉）；**尚未接成实验**——缺 `circular_orbit` 模型接线 + 场景工厂 + 模板 + 客户端 |
-| ~~通电螺线管 / 安培定则 / 电磁铁 / 电动机~~ | 电磁 | ✅ **批次②（a + b）已补**（2026-09-22，见下） |
-| ~~小孔成像 / 光的直线传播~~ | 光学 | ✅ **批次④已补**（2026-09-22，见下） |
-| ~~全反射~~ | 光学 | ✅ **批次⑤已补**（2026-09-22，见下） |
-| ~~音调 / 响度~~ | 声学 | ✅ **已补**（2026-09-22）：挂在横波台面上的**有据别名** —— 音调是频率、响度是振幅，两者在那台实验里都是可读可调的旋钮 |
-| 噪声 | 声学 | ❌ **判定为不该补（2026-09-22）**：噪声控制（隔声 / 吸声 / 消声）是工程问题，没有诚实的台面可指 |
-| ~~沸腾（水的沸腾）~~ | 热学 | ✅ **批次⑤已补**（2026-09-22，见下）：heating-curve 加了**第二个平台**（等温汽化） |
-| 温度计 | 热学 | ❌ **判定为不该补（2026-09-22）**：课标那节讲的是**仪器**（量程 / 分度值 / 读数 / 体温计的特殊结构），热学台面只是**用到**温度计而不是在教它 —— 判据同「噪声」：实验真的覆盖该概念才挂别名 |
-| ~~变压器~~ | 电磁感应 | ✅ **批次⑤已补**（2026-09-22，见下）：`ideal_transformer` 模型 + 模板 `transformer` |
-| ~~短路~~ | 电路 | ✅ **批次⑤已补**（2026-09-22，见下）——回路里没有负载，`I = E/r`，路端电压 0 |
+| 缺失课题                                    | 所属      | 备注                                                                                                                                                                                                                                         |
+| ------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~压强 / 大气压~~                           | 力学·流体 | ✅ **批次①已补**（2026-09-22，见下）                                                                                                                                                                                                         |
+| ~~机械能 / 势能~~                           | 力学·能量 | ✅ **批次③已补**（2026-09-22，见下）                                                                                                                                                                                                         |
+| ~~向心力~~                                  | 力学·天体 | ✅ **已补**（2026-09-22）：挂在 `magnetic-circular` 上的**有据别名** —— `qvB = mv²/r` 与 `r = mv/(qB)` 是**同一个方程的两种写法**，洛伦兹力就是那个指向圆心的合力                                                                            |
+| 万有引力                                    | 力学·天体 | 🟡 **物理层已落地并验证**（`engine-mechanics/src/orbit.ts`，5 条金子测试：空间站 7656 m/s / 93 min、同步轨道 42164 km、开普勒第三定律作为推论、质量从轨道里约掉）；**尚未接成实验**——缺 `circular_orbit` 模型接线 + 场景工厂 + 模板 + 客户端 |
+| ~~通电螺线管 / 安培定则 / 电磁铁 / 电动机~~ | 电磁      | ✅ **批次②（a + b）已补**（2026-09-22，见下）                                                                                                                                                                                                |
+| ~~小孔成像 / 光的直线传播~~                 | 光学      | ✅ **批次④已补**（2026-09-22，见下）                                                                                                                                                                                                         |
+| ~~全反射~~                                  | 光学      | ✅ **批次⑤已补**（2026-09-22，见下）                                                                                                                                                                                                         |
+| ~~音调 / 响度~~                             | 声学      | ✅ **已补**（2026-09-22）：挂在横波台面上的**有据别名** —— 音调是频率、响度是振幅，两者在那台实验里都是可读可调的旋钮                                                                                                                        |
+| 噪声                                        | 声学      | ❌ **判定为不该补（2026-09-22）**：噪声控制（隔声 / 吸声 / 消声）是工程问题，没有诚实的台面可指                                                                                                                                              |
+| ~~沸腾（水的沸腾）~~                        | 热学      | ✅ **批次⑤已补**（2026-09-22，见下）：heating-curve 加了**第二个平台**（等温汽化）                                                                                                                                                           |
+| 温度计                                      | 热学      | ❌ **判定为不该补（2026-09-22）**：课标那节讲的是**仪器**（量程 / 分度值 / 读数 / 体温计的特殊结构），热学台面只是**用到**温度计而不是在教它 —— 判据同「噪声」：实验真的覆盖该概念才挂别名                                                   |
+| ~~变压器~~                                  | 电磁感应  | ✅ **批次⑤已补**（2026-09-22，见下）：`ideal_transformer` 模型 + 模板 `transformer`                                                                                                                                                          |
+| ~~短路~~                                    | 电路      | ✅ **批次⑤已补**（2026-09-22，见下）——回路里没有负载，`I = E/r`，路端电压 0                                                                                                                                                                  |
 
 **批次①（2026-09-22）：流体压强三台** —— 引擎**本来就够**
 （`packages/engine-fluid/src/pressure-engine.ts` 早就在，带派生量与 6 条校验），
@@ -298,6 +304,7 @@ B = 0.5 T、n = 100、I = 2 A、6 cm × 4 cm 的线圈：两条边各受 F = B·
 在同一条直线上拉，那就是平衡位置，画出来比讲一遍清楚。
 
 **这一批的教训**（门禁自己抓出来的，三次都不是我"看"出来的）：
+
 1. **符号不能取绝对值**：力矩写成 `n·B·|I|·A·cosθ` 时，电流反向力矩不变 —— 于是
    换向器那条校验永远算不出"反向一次就回到原方向"。金子测试直接把它照出来了：
    `afterCommutated` 与 `before` 反号。
@@ -403,6 +410,7 @@ carry 的是 `lightRefraction` —— 于是全反射场景静默落到了成像
   温度纹丝不动**（Q = mL_v = 0.5 × 2.26×10⁶ = 1.13 MJ）
 
 **三个被引擎自己的校验逼出来的真问题**（都不是看出来的）：
+
 1. **液相从哪开始升温**：沸腾计时原来从**熔点**算，于是 20 °C 的水被算成从 0 °C 升上来
    （420 s 而不是 336 s）——测试在 336 上把它照出来
 2. **运行该在哪结束**：`runDuration` 写到 3600 s，可水在 2596 s 就烧干；账本拿 `P·3600`
@@ -509,6 +517,7 @@ node tests/acceptance/lab-search-recall.mjs
 `the value for "version" … must be a string`),再修。
 
 **修法**(`credentials-local/src/index.ts`,经 overlay 携带):
+
 - 读出时先判形状:根节点带**映射**型 `refs` 即版本化文档(扁平文档的值全是
   字符串,不可能撞上这个判据),凭据从 `refs` 取;否则仍按根节点扁平映射读。
 - `version` / `records` **不再被误当凭据引用** —— 否则会多出两个假键。
@@ -556,6 +565,12 @@ node tests/acceptance/lab-search-recall.mjs
 ## PAPER_STUDIO_DATA_STATE
 
 **状态**：题库已灌入真实公开数据（2026-09-21）；**卷库仍只有 4 张卷**。
+**引擎初筛已上线（2026-09-25）**:`POST /physicsos/paper/bank/items/triage`
+对 pending 条目逐条盲解（复用 `independentSolve` 独立解题链）,把
+`engine-check:agreed|mismatch(<engine答案>)|unresolved` 写进 `anomalies`,
+**status 不动** —— 核验仍是人的判决。教师端「引擎初筛」按钮 +
+「选中引擎一致」一键勾出盲解一致项,配合既有批量核验把 388 条的人工
+过一遍压成一次确认。`review-batch` 的逐条审计语义不变。
 
 `scripts/ingest-ceval-physics.mjs` 把 C-Eval 的 `middle_school_physics` 与
 `high_school_physics` 两个学科全部 401 道单选题映射进题库：
@@ -605,22 +620,10 @@ node tests/acceptance/lab-search-recall.mjs
 
 ## PNPM_FORMAT_IS_RED
 
-**状态**:登记。`pnpm format`(`prettier --check .`)**全仓 854 个文件不通过**
-(2026-09-25 实测;文档上一版记的 751 早已过期,而本项登记期间这个数字还在继续
-漂 —— 说明它不是一个「等有空再跑一次就干净」的项),
-包括 3 个早于本轮就存在的 `scripts/*.mjs`。
-
-它不是 `pnpm lint` / `pnpm test` 门禁的一部分，所以一直没暴露；但它写在
-`package.json` 里、看起来像一条应当可用的命令。
-
-**为什么现在不做**：一次性 `prettier --write` 会产出 854 个文件的格式 diff，
-把真实改动淹没，且 `.prettierignore` 目前没有排除 `vendor/`、
-`overlays/.../public/` 等生成物目录——先修 ignore 再格式化，否则会把第三方
-代码一起改写。
-
-**开始条件**：先补 `.prettierignore`（`vendor/`、`UI/generated/`、
-`overlays/harness/files/apps/web/public/`、`docs/reports/screenshots/`），
-再单独一个提交跑 `prettier --write`，之后把 `format` 接进 `lint` 链。
+**状态**:**已关闭**(2026-09-25)。`prettier --write` 全仓收口,
+`.prettierignore` 新增 `overlays` —— overlay 文件必须与应用进 vendor 的
+字节一致,不该被 prettier 改写(本轮它已把 `pdf.worker.min.js` 等 vendored
+资产重排过,已从 vendor 逐字回拷复位)。`pnpm format` 现全绿。
 
 ---
 
@@ -698,12 +701,12 @@ node tests/acceptance/lab-search-recall.mjs
 
 ### 第 2 期:后台四项
 
-| 项 | 状态 | 落点 |
-| --- | --- | --- |
-| 2.1 内容管理 | 已完成 | `AdminContentTab.tsx`;暴露 paper-host 的 list/filter/上下架/异常清理 |
-| 2.2 数据看板 | 已完成(两层) | `AdminDashboardTab.tsx` + `auth-host/src/service.ts` 的 `dashboard(actor)`;第二层来自 `reportLearning()` 的匿名聚合 |
-| 2.3 反馈与公告 | 已完成 | **新包** `packages/physicsos/notice-host/`;`NoticeBoard.tsx` + `AdminNoticeTab.tsx` |
-| 2.4 批量运维 | 已完成 | `AdminOpsTab.tsx`(CSV 建号 / 批量停用 / 限流只读) |
+| 项             | 状态         | 落点                                                                                                                |
+| -------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| 2.1 内容管理   | 已完成       | `AdminContentTab.tsx`;暴露 paper-host 的 list/filter/上下架/异常清理                                                |
+| 2.2 数据看板   | 已完成(两层) | `AdminDashboardTab.tsx` + `auth-host/src/service.ts` 的 `dashboard(actor)`;第二层来自 `reportLearning()` 的匿名聚合 |
+| 2.3 反馈与公告 | 已完成       | **新包** `packages/physicsos/notice-host/`;`NoticeBoard.tsx` + `AdminNoticeTab.tsx`                                 |
+| 2.4 批量运维   | 已完成       | `AdminOpsTab.tsx`(CSV 建号 / 批量停用 / 限流只读)                                                                   |
 
 #### 2.2 的两层,以及第二层的隐私约束(实现即承诺)
 
@@ -758,7 +761,7 @@ core 1379)。
 
 > 那 5 条面板用例里有一条**反向验证过**:把旧的单 `Promise.all` 形状塞回去重跑,
 > 它**确实失败**(`keeps the feedback form when only the announcements fetch
-> fails`,exit 1)—— 不是一条只会跟着代码变绿的橡皮图章。
+fails`,exit 1)—— 不是一条只会跟着代码变绿的橡皮图章。
 
 #### 2.3 的一个语义决定(容易被误读成漏洞)
 
@@ -817,6 +820,7 @@ core 1379)。
 
 **验证**:`packages/platform-bridge` **6/6**(原 2 + 新增 4);
 `tsc --noEmit` 与 `eslint` 全干净。
+
 - 第 4 期宽限期授权有两处**必须在实现里明确处理、而不是假装不存在**:
   1 签名只能提高门槛,**不能杜绝破解**;2 宽限期依赖系统时间,改时间可绕,
   需要单调时钟或服务器时间校正。
@@ -906,3 +910,165 @@ paper-host + auth-host`)、真 http 服务、真会话(经真实端点签发,不
 `lab-search-recall` 仍 **132/132|缺口 0/0**。
 ---
 
+## DOC_SYNC_CLEANUP
+
+**状态**:**部分关闭**(2026-09-25 收口轮)。doc-sync 下属于本轮改动范围的
+门禁全部绿;一条存量债务仍在账上。
+
+**本轮修复(证据均为实跑)**:
+
+- README 门禁:`verify-package-readme-model-experience` / `-limitations`
+  **225/225 包通过**。4 个 physicsos host 包注册进 `SENTENCE_MODEL_EXPERIENCE`
+  (`kind: 'none'`,理由:纯服务端宿主,不经模型);`ui-physicsos` 等包补齐
+  `## Model Experience` / `## Known Limitations and Deferred Work` 规范段。
+- `update-host/README.md` 整段重写 —— 原版是从 notice-host 复制的错版
+  (写的是 `/physicsos/notice`、反馈与公告)。
+- `verify-md-wrap`(一段一行)、`verify-md-links`、`verify-doc-refs`、
+  `verify-public-repository-links`、`verify-package-paths`、
+  `verify-config-source-ownership` **全绿**。两处 `docs/...` 引用原来指向
+  外层仓文档(vendor 内不存在),改为不带 `docs/` 前缀的可定位文字。
+- `verify-export-jsdoc`:**服务端三包 + 边界全部清零**
+  (auth-host / paper-host / notice-host / update-host / ui-settings-models
+  / ui-physicsos 非 `physics/` 目录)。`listExports` 顺带补了显式返回类型。
+- 生成目录:`gen-tool-catalog`(`tool-physicsos` 注册进 `TOOL_PACKAGES` +
+  tsconfig paths 映射)、`gen-config-catalog`(physicsos 的 Config 字段
+  prose 已入册,124 行新增)、`gen-cordis-catalog`、`gen-client-catalog`、
+  `gen-persistence-catalog`、`gen-scoped-events`、doc-graphs **全部
+  up to date**。
+- `upstream-changes.patch` 已用 `capture` 重新生成 —— 旧 patch 因
+  `pnpm install` 改写覆盖文件而过期,属索引漂移不是代码损坏。
+
+**`physics/` 449 处已全部清零(同日第二轮)**:codemod 批量补齐 `@param`/`@returns`
+与缺失块,15 个 scene-visual 工厂的解构参数按 gate 要求改为
+`(input: XxxVisualInput)` 具名入参 + 体内解构(调用方零改动);
+`verify-export-jsdoc` 全绿。个别 `@returns` 措辞偏机械,后续可在触及
+对应文件时顺手润色,不再是门禁债务。
+
+**验证**:`tsc -b`(5 个 physicsos/客户端包)+ `tsc -p ui-physicsos`、
+oxlint(web 213 文件 / agent 45 文件)**0 错**;ui-physicsos 测试
+**828/828**;`git diff --check` 干净。除 15 处签名形参改写外均为
+注释级,JSDoc 无行为面。
+
+---
+
+## V1_PRODUCT_GAP_SWEEP
+
+**状态**:**已完成**(2026-09-25 第三轮)。上线前产品面收口,部署打包未动。
+
+- **题库引擎初筛**:`POST /physicsos/paper/bank/items/triage` ——
+  `planBankTriage` 同步挑 pending(指定的非 pending id 报 skipped/不存在报
+  missing),`runTriage` 异步串行盲解(`independentSolve` 复用,per-item 隔离
+  失败),结果写 `anomalies` 的 `engine-check:agreed|mismatch(...)|unresolved`
+  (重跑替换不堆叠),**status 永远不动**。`triageBusy` 409 防并发重复烧钱。
+  教师端加「引擎初筛」「选中引擎一致」两个操作 + 中英词条。
+- **门禁面补齐 update-host**:`lint:agent`/`typecheck:agent`/`build:hosts`
+  三个根脚本此前都漏它 —— 现已全部覆盖,顺手清掉它从未被 lint 过的 5 处存量
+  (arrow-parens、member-delimiter、no-unnecessary-condition、测试里两个
+  重复 jsonCall 助手合并为共享 `postJson`)。
+- **`apps/web` 退役**:见上文 APPS_WEB_STANDALONE_RETIREMENT。
+- **`pnpm format` 收口**:见上文 PNPM_FORMAT_IS_RED。
+- **physics-agent-answers 定性**:确定性应答层保留(即时/零成本/离线),
+  模型路径已由 dsh agent 覆盖,剩余是产品决策 —— 见上文。
+
+**验证**:`tsc -b` 六个包(新增 update-host)0 错;oxlint 266 文件 0 错;
+physicsos 测试 **195/195**(含 paper-host 新 triage 用例 21 条、update-host
+composition 重构后 2 条真链);ui-physicsos 828/828;`verify-export-jsdoc` 全绿;
+overlay/vendor `physics/` 与改动文件逐字节一致,`apply` 幂等。
+
+---
+
+## V1_PRODUCT_GAP_SWEEP_2
+
+**状态**:**已完成**(2026-09-25 第四轮)。三个"外部依赖"项各自找到了真实路径,新页面完成液态玻璃改造。
+
+### 图片/PDF 题目录入(原登记"等 OCR/VLM 服务")
+
+**不需要新服务**:部署自己的模型路由(luckyg 的 deepseek-v4.1-flash)实测**接受图片输入**且中文题目转录准确 —— 已用真实图片验证(含单位、上标、选项字母)。实现:
+
+- `paper-host/src/transcribe.ts`:图片经 `ctx.attachments` 落盘为内容寻址附件,再以 `ImageBlock` 走 `ctx.llm.stream` 转录;系统提示词要求逐字转录、不解题、图示文字化、模糊处用「□」占位。
+- `POST /physicsos/paper/bank/ingest-image`:base64 图片(≤8 张)→ 转录 → 复用既有 `ingestBankText` 结构化管线 → pending 条目;转录原文随响应返回,教师对照原图核对。
+- 客户端 `question-upload.ts`(从 lib/ 编译产物恢复的丢失源文件,含 CJK cmaps 等关键细节):图片 → dataURL;**文本层 PDF 本地 pdf.js 抽文**(不花模型调用,抽出原文填进编辑框);扫描版 PDF → 逐页 canvas 渲染 PNG → 走视觉转录。PaperWorkspace 录入卡升级为「粘贴 / 图片 / PDF」三入口。
+
+### 校名录补全(原登记"数据源不可得")
+
+找到**州政府门户公开名录页**(2024 年全州高中/初中/小学教育学校名录,州教育局 2025-03-28 发布)与**州教育局 2026 年高中招生计划全表**(经黔东南信息港转载,计划表为官方图片)。逐校比对后补 6 所真缺口:凯里市华鑫高级中学、三穗县第三中学、天柱县综合高中、天柱县恒成高级中学、岑巩县综合高级中学、台江县第一中学。另有 8 处「官方全称 vs 在册简称」写法差异未补(避免按名哈希的租户表出现同校双租户),来源与判断写在 `schools-data.ts` 注释里。初中名录页在抓取时 404(站点改版),仍不全。
+
+### 卷库扩充(原登记"需要可核验的真实卷源")
+
+**2024 年贵州省中考物理卷**(省级统一命题首年,90 分,22 题)已录入:`scripts/ingest-gz-2024-physics.mjs` 登录后登记原卷 + 22 条考点标注 + 8 道选择题(含官方答案与解析);题干与答案取自两处独立公开转录页并交叉核对(唯一差异是第 12 题 `8:2` 与 `4:1`,同一比值)。全部落 **pending**,由教师在出卷专区核验后进入组卷池。已在隔离服务器上端到端验证(sources=1 / annotations=22 / bank=8)。
+对真实实例执行:`node scripts/ingest-gz-2024-physics.mjs --username <教师账号> --password <密码>`。
+
+### 液态玻璃 + GlassSelect
+
+- `chrome.ts` 新增 liquid glass 材质 token:模糊(`--physics-glass-blur`)、镜面高光(带 sheen 渐变)、亮边 rim、抬升阴影、弹层密度、**环境光**(没有可折射的底色,玻璃只会是灰盒子 —— 这正是四个新页面此前"没质感"的原因)。
+- 四个新页面(登录门 / 出卷专区 / 管理后台 / 学习记录)全部玻璃化;登录门露出地平线图做折射底衬。
+- **`GlassSelect` 替换全部原生下拉**(AuthGate 2 + AdminWorkspace 2 + AdminContentTab 3 + PaperWorkspace 13):combobox + portal 弹层(卡片 overflow 裁切问题)、方向键/Home/End/Enter/Esc 键盘导航、外点关闭、滚动跟随、禁用项跳过、aria 完整。
+- 验收:`tests/acceptance/glass-surfaces.mjs` 真服务器 + 真浏览器截图 10 张,console/pageerror/rejection/failed-request 全零;截图在 `/tmp/physicsos-glass`(可用 `GLASS_SHOTS` 改路径)。
+
+**验证**:typecheck 三线(core/web/agent 含 update-host)全绿;oxlint 54+216 文件 0 错;physicsos 测试 **197/197**;ui-physicsos **834/834**(含 GlassSelect 6 条);`verify-export-jsdoc` 全绿;`pnpm format` 全绿;overlay ↔ vendor 逐字节一致,`apply` 幂等,patch 已重新 capture。
+
+---
+
+## P0_P2_COMPLETION_PROGRAM
+
+**状态**:**已完成**(2026-09-26)。计划与任务边界见
+[`docs/superpowers/plans/2026-09-26-p0-p2-program.md`](../superpowers/plans/2026-09-26-p0-p2-program.md)。
+七个任务各自在隔离 worktree 实现,由控制器统一接线、capture 与验收。
+
+### 落地内容
+
+- **生产部署与根 CI**(Task 1):多阶段 `Dockerfile`、`compose.yml`(app /
+  PostgreSQL / Redis,healthcheck、命名卷、secret 文件)、`/healthz` 与
+  `/readyz` health-host、`scripts/healthcheck.mjs`、根 CI 工作流。
+- **容器密钥入口**(控制器补):`scripts/docker-entrypoint.mjs` 把
+  `<NAME>_FILE` 秘密物化成环境变量后再启动 CLI;缺文件/空文件直接失败,
+  不做静默回退。
+- **账户生命周期**(Task 2):一次性密码重置(哈希存储、过期、单次使用、
+  替代与作废、管理员队列与 UI 面板)、交付适配器 seam、限流 seam
+  (内存参考实现 + Redis 边界)、legacy 会话/工作区归属迁移 CLI。
+- **个人学习同步**(Task 3):`/physicsos/learning` 按账号与租户隔离地存
+  个人作答与已保存场景(分页、幂等写、跨设备),客户端本地优先并做
+  localStorage 迁移。
+- **班级教学**(Task 4):`/physicsos/class` 班级、成员(userKey)、作业
+  (试卷/实验)、截止时间、学生提交与回执、教师批改、班级完成率;写路径有
+  同源 + JSON 内容类型栅栏;客户端一个表面两种角色面 + 侧栏入口。
+- **物理内容扩展**(Task 5):时变场回旋加速器、纵波 / 反射折射 / 衍射 /
+  多普勒、近代物理(光电效应)全链路(引擎 → 场景 → 题目 → 可视化 →
+  实验模板);不支持的情形返回 `UNSUPPORTED_MODEL` 而不是套用别的模型。
+- **桌面壳**(Task 6):Tauri 2 壳、平台桥、本地 sidecar 传输、签名更新
+  校验路径、发布校验与本地打包脚本;应用图标改由生图模型
+  (`gpt-image-2.5-sunburst`)产出再经 `tauri icon` 生成全套尺寸。
+- **生产运行时**(Task 7/8):`packages/storage/storage-postgres` 实现存储
+  hub 的 KV 合同;`packages/physicsos/shared-state-host` 提供跨副本限流与
+  一次性账本(memory + Redis,原子 Lua)。生产 compose 切 postgres/redis,
+  开发保持 json/memory 默认。
+
+### 验收证据
+
+- `pnpm run typecheck` / `pnpm run lint` / `pnpm run test` /
+  `pnpm run build` 四条根门禁**全部 exit 0**。
+- 测试计数:web `60` 文件 `850` 例、agent `36` 文件 `302` 例、
+  deploy `3` 例、desktop `10` 例;core 各包全绿(question-core `445`、
+  agent-tools `32` 等)。新存储/共享状态包 `6` 文件 `41` 例(真 Redis +
+  真 PostgreSQL 均实际执行)。
+- 生产形态自检:以 `PHYSICSOS_STORAGE_BACKEND=postgres` +
+  `PHYSICSOS_SHARED_STATE_BACKEND=redis` 启动真实实例 →
+  `/healthz` `200`、`/readyz` `200`(postgres/redis 两项 ok);
+  PostgreSQL 建出 `33` 张领域表;三次错误登录后 Redis 出现
+  `physicsos:limiter:login:<sha256>` 与 `physicsos:limiter:ip:<sha256>`
+  (键名只含哈希,不含账号/IP 原文)。
+- overlay:`apply` 幂等(输出 `upstream-changes.patch already applied`)、
+  `git apply --reverse --check` 通过、无 `.rej`/`.orig` 残留。
+
+### 仍然存在的边界(如实登记)
+
+- `/api/respond` 的一次性回执账本仍是 auth-host 进程内的 Map。共享实现已
+  作为 `physicsosOnceLedger` 服务就绪,但 apiproxy 那条路径尚未接上;多副本
+  部署下这一项仍退化为单副本语义。
+- 桌面签名 / 公证 / 发布需要证书与密钥,属发布环境配置,未在本地执行。
+- 本机无 Docker daemon,镜像未实际构建;`docker compose config` 与 compose
+  文件已校验。
+- 浏览器端到端验收脚本 `tests/acceptance/glass-surfaces.mjs` 本轮未重跑
+  (此前基线全零错误),接口级验证已由 composition 测试覆盖。
+- `packages/ui` 在 `apps/web` 退役后暂无仓内消费者;仍是带测试的真实组件
+  库,保留待产品决策。

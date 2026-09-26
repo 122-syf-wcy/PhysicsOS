@@ -93,7 +93,7 @@ export function createUploadedQuestionDocument(input: {
       extractedText: input.extractedText,
       status: 'EXTRACTED',
       ...(input.source === 'pdf' && provenance?.pages !== undefined
-        ? { pdfRefs: provenance.pages.map(page => `page-${page}`) }
+        ? { pdfRefs: provenance.pages.map((page) => `page-${page}`) }
         : {}),
       ...(input.source === 'image' && provenance?.fileName !== undefined
         ? { imageRefs: [provenance.fileName] }

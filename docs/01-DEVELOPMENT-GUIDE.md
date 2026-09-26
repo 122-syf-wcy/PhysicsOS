@@ -335,7 +335,7 @@ vendor/deepseek-harness/apps/web
 vendor/deepseek-harness/packages/client/ui-physicsos
 ```
 
-根目录 `apps/web` 是已废弃的独立原型，只保留作迁移参考，不再承载新功能、Runtime 接入或正式验收。
+旧版独立原型 `apps/web` 已删除（git 历史可查）；浏览器端正式入口是 vendor harness 的 `dsh-client-ui-physicsos`。
 
 主要页面：
 
@@ -595,22 +595,13 @@ Streaming
 interface PlatformBridge {
   getPlatform(): 'web' | 'windows'
 
-  openFile(
-    options?: OpenFileOptions
-  ): Promise<FileRef | null>
+  openFile(options?: OpenFileOptions): Promise<FileRef | null>
 
-  saveFile(
-    file: BinaryFile,
-    options?: SaveFileOptions
-  ): Promise<void>
+  saveFile(file: BinaryFile, options?: SaveFileOptions): Promise<void>
 
-  notify(
-    message: NotificationMessage
-  ): Promise<void>
+  notify(message: NotificationMessage): Promise<void>
 
-  supports(
-    capability: PlatformCapability
-  ): boolean
+  supports(capability: PlatformCapability): boolean
 }
 ```
 
@@ -624,7 +615,8 @@ TauriPlatformBridge
 业务代码禁止到处判断：
 
 ```ts
-if (window.__TAURI__) {}
+if (window.__TAURI__) {
+}
 ```
 
 ---
@@ -907,18 +899,12 @@ Spring Boot
 统一注册不同物理领域。
 
 ```ts
-interface PhysicsEngine<
-  TScene = PhysicsScene,
-  TResult = SimulationResult
-> {
+interface PhysicsEngine<TScene = PhysicsScene, TResult = SimulationResult> {
   readonly domain: PhysicsDomain
 
   supports(scene: TScene): boolean
 
-  simulate(
-    scene: TScene,
-    options: SimulationOptions
-  ): Promise<TResult>
+  simulate(scene: TScene, options: SimulationOptions): Promise<TResult>
 }
 ```
 
@@ -1593,22 +1579,13 @@ Workflow
 
 ```ts
 interface AgentRuntime {
-  createSession(
-    input: CreateSessionInput
-  ): Promise<AgentSession>
+  createSession(input: CreateSessionInput): Promise<AgentSession>
 
-  send(
-    sessionId: string,
-    message: AgentInput
-  ): Promise<AgentRun>
+  send(sessionId: string, message: AgentInput): Promise<AgentRun>
 
-  resume(
-    runId: string
-  ): Promise<AgentRun>
+  resume(runId: string): Promise<AgentRun>
 
-  cancel(
-    runId: string
-  ): Promise<void>
+  cancel(runId: string): Promise<void>
 }
 ```
 
@@ -2956,7 +2933,7 @@ Physics Runtime
 Question Runtime
 ```
 
-根目录 `apps/web` 不在正式开发链路中。
+浏览器端正式入口是 vendor harness 的 `dsh-client-ui-physicsos`（旧版独立原型 `apps/web` 已删除）。
 
 Desktop 只做架构预留，暂不复制开发。
 

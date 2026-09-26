@@ -158,6 +158,9 @@ interface Computed {
   readonly endTime: number
 }
 
+/**
+ * The circuit workspace runtime — see the module doc for its role.
+ */
 export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new CircuitEngine()
@@ -834,7 +837,11 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     return this.getSnapshot()
   }
 
-  /** Terminal a half-finished wire started from, for the canvas/panel readout. */
+  /**
+   * Terminal a half-finished wire started from, for the canvas/panel readout.
+   * @returns the terminal ref.
+   * @returns the terminal ref.
+   */
   pendingWireFrom(): TerminalRef | undefined {
     return this.pendingWire
   }
@@ -1001,5 +1008,10 @@ const unpoweredOperatingPoint = (scene: PhysicsScene, time: number): CircuitOper
   }
 }
 
+/**
+ * The circuit workspace runtime helper `createCircuitWorkspaceRuntime`.
+ * @returns the circuit workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createCircuitWorkspaceRuntime = (scene: PhysicsScene): CircuitWorkspaceRuntime =>
   new CircuitWorkspaceRuntime(scene)

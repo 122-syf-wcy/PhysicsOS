@@ -8,9 +8,12 @@
  */
 const BASE = '/physicsos/notice'
 
+/** The category a report lands in — drives the admin queue's triage columns. */
 export type FeedbackKind = 'bug' | 'content' | 'idea' | 'other'
+/** A report's lifecycle: teacher replies move `open` to `answered`/`closed`. */
 export type FeedbackStatus = 'open' | 'answered' | 'closed'
 
+/** One feedback report as the host returns it. */
 export interface FeedbackRow {
   readonly id: string
   readonly schoolId: string
@@ -27,6 +30,7 @@ export interface FeedbackRow {
   readonly createdAt: string
 }
 
+/** One announcement as the host returns it. */
 export interface AnnouncementRow {
   readonly id: string
   /** null = platform-wide. */
@@ -65,6 +69,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return body as T
 }
 
+/** The `/physicsos/notice` surface — feedback intake plus the announcement board. */
 export interface NoticeApi {
   /** File a report. Any signed-in account; the author comes from the session. */
   submitFeedback: (input: {
@@ -90,7 +95,9 @@ export interface NoticeApi {
   retireAnnouncement: (id: string) => Promise<{ item: AnnouncementRow }>
 }
 
-/** The real client — bound once in `apply`, injected as callbacks. */
+/** The real client — bound once in `apply`, injected as callbacks.
+ * @returns the `NoticeApi` callback surface over `fetch`.
+ */
 export function createNoticeApi(): NoticeApi {
   return {
     submitFeedback: input => request('/feedback', {

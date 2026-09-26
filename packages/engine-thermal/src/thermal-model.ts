@@ -1,9 +1,5 @@
 import { canonicalValue } from '@physicsos/physics-units'
-import {
-  thermalBenchesOf,
-  type PhysicsScene,
-  type ThermalSample,
-} from '@physicsos/physics-scene'
+import { thermalBenchesOf, type PhysicsScene, type ThermalSample } from '@physicsos/physics-scene'
 import { PhysicsOSError } from '@physicsos/shared'
 
 /**
@@ -109,30 +105,30 @@ const resolveSample = (sample: ThermalSample): ResolvedThermalSample => {
     ...(sample.boilingPoint === undefined
       ? { boilingPoint: undefined, vaporizationHeat: undefined }
       : {
-        boilingPoint: (() => {
-          const value = canonicalValue(sample.boilingPoint)
-          if (!Number.isFinite(value)) {
-            throw new PhysicsOSError('THERMAL_BOILING_POINT', 'Boiling point must be finite.')
-          }
-          return value
-        })(),
-        vaporizationHeat: (() => {
-          if (sample.vaporizationHeat === undefined) {
-            throw new PhysicsOSError(
-              'THERMAL_VAPORIZATION_HEAT',
-              'A bench that boils must state the latent heat of vaporization.',
-            )
-          }
-          const value = canonicalValue(sample.vaporizationHeat)
-          if (!Number.isFinite(value) || value <= 0) {
-            throw new PhysicsOSError(
-              'THERMAL_VAPORIZATION_HEAT',
-              'Latent heat of vaporization must be finite and > 0.',
-            )
-          }
-          return value
-        })(),
-      }),
+          boilingPoint: (() => {
+            const value = canonicalValue(sample.boilingPoint)
+            if (!Number.isFinite(value)) {
+              throw new PhysicsOSError('THERMAL_BOILING_POINT', 'Boiling point must be finite.')
+            }
+            return value
+          })(),
+          vaporizationHeat: (() => {
+            if (sample.vaporizationHeat === undefined) {
+              throw new PhysicsOSError(
+                'THERMAL_VAPORIZATION_HEAT',
+                'A bench that boils must state the latent heat of vaporization.',
+              )
+            }
+            const value = canonicalValue(sample.vaporizationHeat)
+            if (!Number.isFinite(value) || value <= 0) {
+              throw new PhysicsOSError(
+                'THERMAL_VAPORIZATION_HEAT',
+                'Latent heat of vaporization must be finite and > 0.',
+              )
+            }
+            return value
+          })(),
+        }),
     crystalline: latentHeat > 0,
     startsMolten: initialTemperature >= meltingPoint,
   }
@@ -156,18 +152,18 @@ export const resolveThermalModel = (scene: PhysicsScene): ResolvedThermalModel =
     'Heater power must be finite and > 0.',
   )
 
-  const runDuration = bench.runDuration === undefined
-    ? undefined
-    : positiveOrThrow(
-      canonicalValue(bench.runDuration),
-      'THERMAL_RUN_DURATION',
-      'Run duration must be finite and > 0.',
-    )
+  const runDuration =
+    bench.runDuration === undefined
+      ? undefined
+      : positiveOrThrow(
+          canonicalValue(bench.runDuration),
+          'THERMAL_RUN_DURATION',
+          'Run duration must be finite and > 0.',
+        )
 
   const sample = resolveSample(bench.sample)
-  const comparisonSample = bench.comparisonSample === undefined
-    ? undefined
-    : resolveSample(bench.comparisonSample)
+  const comparisonSample =
+    bench.comparisonSample === undefined ? undefined : resolveSample(bench.comparisonSample)
 
   /* A liquid that never boils has no landmark to stop at, so the bench has to
      say how long to heat it. One that DOES boil has a second landmark — the

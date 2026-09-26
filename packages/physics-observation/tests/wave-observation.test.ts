@@ -22,7 +22,8 @@ const simulate = (scene: PhysicsScene) =>
 
 const observe = (scene: PhysicsScene, time?: number) => {
   const simulation = simulate(scene)
-  const state = time === undefined ? undefined : waveEngine.stateAt(scene, quantity(time, 's', 'time'))
+  const state =
+    time === undefined ? undefined : waveEngine.stateAt(scene, quantity(time, 's', 'time'))
   return observeWaveScene({ scene, simulation, ...(state === undefined ? {} : { state }) })
 }
 
@@ -92,9 +93,10 @@ describe('Wave Observation · interference', () => {
   })
 
   it('reports destructive with zero displacement when Δ = λ/2', () => {
-    const superposition = observe(createWaveInterferenceScene({ pathTwo: 1.1 }), 0.037).observations.find(
-      isWaveSuperpositionObservation,
-    )
+    const superposition = observe(
+      createWaveInterferenceScene({ pathTwo: 1.1 }),
+      0.037,
+    ).observations.find(isWaveSuperpositionObservation)
     expect(superposition?.verdict).toBe('destructive')
     expect(superposition?.resultantAmplitude.value).toBeCloseTo(0, 12)
     expect(Math.abs(superposition?.displacement.value ?? 1)).toBeLessThan(1e-12)
@@ -117,7 +119,11 @@ describe('Wave Observation · standing wave', () => {
     const waveform = observations.find(isWaveformObservation)
     expect(waveform?.marker).toBeUndefined()
     expect(waveform?.points).toHaveLength(49)
-    expect(observations.map((entry) => entry.type)).toEqual(['waveform', 'wave_speed', 'wave_nodes'])
+    expect(observations.map((entry) => entry.type)).toEqual([
+      'waveform',
+      'wave_speed',
+      'wave_nodes',
+    ])
   })
 })
 
@@ -133,6 +139,8 @@ describe('Wave Observation · guards', () => {
     const scene = createTravellingWaveScene()
     const simulation = simulate(scene)
     const stripped = { ...scene, waveBenches: [] }
-    expect(() => observeWaveScene({ scene: stripped, simulation })).toThrow(/exactly one wave bench/)
+    expect(() => observeWaveScene({ scene: stripped, simulation })).toThrow(
+      /exactly one wave bench/,
+    )
   })
 })

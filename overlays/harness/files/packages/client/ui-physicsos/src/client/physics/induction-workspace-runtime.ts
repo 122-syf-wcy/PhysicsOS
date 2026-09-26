@@ -134,6 +134,9 @@ const lenzReadoutOf = (simulation: SimulationResult, model: ResolvedInductionMod
   return entry === undefined || !isScalarQuantity(entry.value) ? Number.NaN : entry.value.value
 }
 
+/**
+ * The induction workspace runtime — see the module doc for its role.
+ */
 export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new InductionEngine()
@@ -814,5 +817,10 @@ const tableOf = (model: ResolvedInductionModel, simulation: SimulationResult): D
   }
 }
 
+/**
+ * The induction workspace runtime helper `createInductionWorkspaceRuntime`.
+ * @returns the induction workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createInductionWorkspaceRuntime = (scene: PhysicsScene): InductionWorkspaceRuntime =>
   new InductionWorkspaceRuntime(scene)

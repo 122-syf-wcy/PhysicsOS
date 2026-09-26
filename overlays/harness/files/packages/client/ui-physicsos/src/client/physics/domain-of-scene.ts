@@ -2,12 +2,14 @@ import {
   isAcousticsScene,
   isCircuitScene,
   isCompositeFieldScene,
+  isCyclotronScene,
   isCurrentScene,
   isEnergyScene,
   isFluidScene,
   isInductionScene,
   isLeverScene,
   isLightScene,
+  isModernPhysicsScene,
   isNoiseScene,
   isOpticsScene,
   isPressureScene,
@@ -18,6 +20,9 @@ import {
   type PhysicsScene,
 } from '@physicsos/physics-scene'
 
+/**
+ * The supported scene domain shape used by the domain of scene module.
+ */
 export type SupportedSceneDomain =
   | 'magnetic'
   | 'mechanics'
@@ -30,8 +35,17 @@ export type SupportedSceneDomain =
   | 'thermal'
   | 'induction'
   | 'wave'
+  | 'modern'
+/**
+ * The scene domain shape used by the domain of scene module.
+ */
 export type SceneDomain = SupportedSceneDomain | 'unsupported'
 
+/**
+ * The domain of scene helper `domainOfScene`.
+ * @returns the scene domain.
+ * @param scene - the physics scene.
+ */
 export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
   /* Circuit, optics, acoustics, fluid, thermal, induction, wave and lever scenes
      carry no motion objects at all, so they must be classified before the
@@ -39,6 +53,9 @@ export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
      blank surface rather than an error). The accessors are mutually exclusive:
      each one requires the other apparatus collections to be empty. */
   if (isCircuitScene(scene)) return 'circuit'
+  /* The photoelectric bench carries no motion objects either: photons and
+     emitted electrons live in its own `modernBenches` collection. */
+  if (isModernPhysicsScene(scene)) return 'modern'
   if (isOpticsScene(scene)) return 'optics'
   /* The pinhole rig shares the optics shelf but has no bench of the imaging
      kind at all, so it would fall through to 'unsupported' — a blank surface. */
@@ -93,6 +110,10 @@ export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
      fall past all of them to 'unsupported' — and an unsupported domain does not
      mount a workspace at all, which is a blank surface rather than an error. */
   if (isCompositeFieldScene(scene)) return 'composite'
+  /* The cyclotron carries a single static B field plus an explicitly typed
+     time-varying bench, so the single-field branch below would misroute it to
+     the magnetic runtime and drop the gap acceleration entirely. */
+  if (isCyclotronScene(scene)) return 'composite'
   /* A point-charge scene: particles with point-charge fields, no bodies, no
      other field type. Classified as electric so the Lab mounts it. */
   if (

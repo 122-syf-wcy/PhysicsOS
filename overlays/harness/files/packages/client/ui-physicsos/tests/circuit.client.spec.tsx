@@ -437,8 +437,9 @@ describe('circuit Lab surface', () => {
     const { container } = mountLab('series-circuit')
 
     fireEvent.click(screen.getByRole('button', { name: '检查器' }))
-    const switchSelect = screen.getByRole('combobox', { name: 'S' })
-    fireEvent.change(switchSelect, { target: { value: 'open' } })
+    /* The inspector choice is a GlassSelect: open it, then click the row. */
+    fireEvent.click(screen.getByRole('combobox', { name: 'S' }))
+    fireEvent.click(screen.getByRole('option', { name: '断开' }))
 
     expect(container.querySelector('[data-scene-revision="1"]')).toBeTruthy()
     expect(

@@ -12,7 +12,12 @@
  */
 
 import type {
-  ExamBlueprint, PaperKind, PaperLevel, PaperRequest, SpecRow, Subject,
+  ExamBlueprint,
+  PaperKind,
+  PaperLevel,
+  PaperRequest,
+  SpecRow,
+  Subject,
 } from './paper.ts'
 
 /* 中考·物理 90 分（物化合卷 150 分 / 150 分钟，2023 起省级统一命题）。 */
@@ -55,11 +60,14 @@ const ZK_PHYSICS: ExamBlueprint = {
         { kind: 'drawing', score: 2 },
       ],
     },
-    { title: '四、简答题', slots: [
-      { kind: 'short-answer', score: 3 },
-      { kind: 'short-answer', score: 3 },
-      { kind: 'short-answer', score: 3 },
-    ] },
+    {
+      title: '四、简答题',
+      slots: [
+        { kind: 'short-answer', score: 3 },
+        { kind: 'short-answer', score: 3 },
+        { kind: 'short-answer', score: 3 },
+      ],
+    },
     {
       title: '五、实验与科学探究题',
       slots: [
@@ -122,7 +130,7 @@ export const EXAM_BLUEPRINTS: readonly ExamBlueprint[] = [ZK_PHYSICS, GK_PHYSICS
 
 /** Look up a structure template by id. */
 export function blueprintById(id: string): ExamBlueprint | undefined {
-  return EXAM_BLUEPRINTS.find(blueprint => blueprint.id === id)
+  return EXAM_BLUEPRINTS.find((blueprint) => blueprint.id === id)
 }
 
 /**
@@ -136,7 +144,11 @@ export function blueprintById(id: string): ExamBlueprint | undefined {
 export function kindScale(level: PaperLevel, kind: PaperKind): number {
   if (kind === 'mock') return 1
   const scale: Record<Exclude<PaperKind, 'mock'>, number> = {
-    unit: 0.4, weekly: 0.45, monthly: 0.65, midterm: 0.85, final: 1,
+    unit: 0.4,
+    weekly: 0.45,
+    monthly: 0.65,
+    midterm: 0.85,
+    final: 1,
   }
   return level === 'zhongkao' ? scale[kind] : Math.min(1, scale[kind] + 0.1)
 }
@@ -192,7 +204,8 @@ export function proposeSpecTable(
   const medium = Math.round(total * request.difficulty.medium)
   return rows.map((row, index) => ({
     ...row,
-    difficulty: index >= total - hard ? 'hard' : index >= total - hard - medium ? 'medium' : 'basic',
+    difficulty:
+      index >= total - hard ? 'hard' : index >= total - hard - medium ? 'medium' : 'basic',
   }))
 }
 

@@ -6,3 +6,4 @@ test-results
 playwright-report
 coverage
 UI
+overlays

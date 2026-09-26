@@ -1,6 +1,10 @@
 import { vec3 } from '@physicsos/physics-math'
 import type { IsoDateTime } from '@physicsos/shared'
-import { createMechanicsScene, type MechanicsSceneInput, type MechanicsModelId } from '@physicsos/physics-scene'
+import {
+  createMechanicsScene,
+  type MechanicsSceneInput,
+  type MechanicsModelId,
+} from '@physicsos/physics-scene'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { PhysicsSemanticIR } from './semantic-ir.ts'
 

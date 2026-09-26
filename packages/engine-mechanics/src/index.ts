@@ -5,10 +5,7 @@ export {
   createMechanicsSimulationRequest,
   mechanicsEngine,
 } from './mechanics-engine.ts'
-export {
-  resolveEnergyModel,
-  type ResolvedEnergyModel,
-} from './energy-model.ts'
+export { resolveEnergyModel, type ResolvedEnergyModel } from './energy-model.ts'
 export {
   ENERGY_RELATIVE_TOLERANCE,
   energyLedgerOf,
@@ -28,10 +25,7 @@ export {
   energyEngine,
   resolveEnergy,
 } from './energy-engine.ts'
-export {
-  detectMechanicsModel,
-  resolveMechanicsModel,
-} from './mechanics-model-selector.ts'
+export { detectMechanicsModel, resolveMechanicsModel } from './mechanics-model-selector.ts'
 export type {
   MechanicsModel,
   UniformLinearModel,
@@ -40,10 +34,7 @@ export type {
   NewtonSecondLawModel,
   InclinedPlaneModel,
 } from './models/types.ts'
-export {
-  kinematicsAt,
-  displacementAt,
-} from './solvers/analytical-kinematics.ts'
+export { kinematicsAt, displacementAt } from './solvers/analytical-kinematics.ts'
 export {
   newtonSecondLaw,
   inclineForceDecomposition,

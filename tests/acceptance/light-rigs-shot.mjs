@@ -37,7 +37,7 @@ const geometry = () =>
       return (node.getAttribute('points') ?? '')
         .trim()
         .split(/\s+/)
-        .map(pair => pair.split(',').map(Number))
+        .map((pair) => pair.split(',').map(Number))
         .map(([x, y]) => ({ x: Math.round(x), y: Math.round(y) }))
     }
     return {
@@ -58,9 +58,17 @@ const labelBoxes = () =>
       const rect = node.getBoundingClientRect()
       return {
         text: (node.textContent ?? '').trim(),
-        outside: rect.left < box.left - 1 || rect.right > box.right + 1 ||
-          rect.top < box.top - 1 || rect.bottom > box.bottom + 1,
-        box: [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)],
+        outside:
+          rect.left < box.left - 1 ||
+          rect.right > box.right + 1 ||
+          rect.top < box.top - 1 ||
+          rect.bottom > box.bottom + 1,
+        box: [
+          Math.round(rect.left),
+          Math.round(rect.top),
+          Math.round(rect.width),
+          Math.round(rect.height),
+        ],
         x: rect.left - box.left,
         y: rect.top - box.top,
         w: rect.width,
@@ -75,7 +83,9 @@ try {
   await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60_000 })
   await registerStudent(page)
   await page.getByRole('button', { name: '物理实验室' }).click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
 
   await page.locator('[data-physicsos-shelf] button[data-template-id="pinhole"]').first().click()
   await page
@@ -89,7 +99,10 @@ try {
   await canvas.screenshot({ path: file })
   shot.push(file)
 
-  for (const [label, width] of [['1600', 1600], ['1280', 1280]]) {
+  for (const [label, width] of [
+    ['1600', 1600],
+    ['1280', 1280],
+  ]) {
     if (width !== 1600) {
       await page.setViewportSize({ width, height: 900 })
       await page.waitForTimeout(320)
@@ -98,9 +111,12 @@ try {
       shot.push(narrow)
     }
     const boxes = await labelBoxes()
-    const outside = (boxes?.labels ?? []).filter(item => item.outside)
-    check(`pinhole@${width} 的标注都在画布内`, outside.length === 0,
-      outside.map(item => `${item.text}@${item.box.join(',')}`).join(' | '))
+    const outside = (boxes?.labels ?? []).filter((item) => item.outside)
+    check(
+      `pinhole@${width} 的标注都在画布内`,
+      outside.length === 0,
+      outside.map((item) => `${item.text}@${item.box.join(',')}`).join(' | '),
+    )
 
     const geometryNow = await geometry()
     const tip = geometryNow?.tipRay ?? []
@@ -108,8 +124,10 @@ try {
     /* Both rays pass through the hole: the middle vertex is the same point. */
     check(
       `pinhole@${width} 两条光线都过小孔`,
-      tip.length === 3 && tail.length === 3 &&
-        Math.abs(tip[1].x - tail[1].x) <= 1 && Math.abs(tip[1].y - tail[1].y) <= 1,
+      tip.length === 3 &&
+        tail.length === 3 &&
+        Math.abs(tip[1].x - tail[1].x) <= 1 &&
+        Math.abs(tip[1].y - tail[1].y) <= 1,
       `típ ${JSON.stringify(tip[1] ?? null)}｜尾 ${JSON.stringify(tail[1] ?? null)}`,
     )
     /* The inversion, measured: the tip's ray lands below the hole's level and
@@ -123,7 +141,8 @@ try {
     /* And the image is drawn on the far side of the card from the object. */
     check(
       `pinhole@${width} 物与像分居小孔两侧`,
-      geometryNow?.object !== null && geometryNow?.image !== null &&
+      geometryNow?.object !== null &&
+        geometryNow?.image !== null &&
         geometryNow.object.x < (geometryNow.card?.x ?? 0) &&
         geometryNow.image.x > (geometryNow.card?.x ?? 0),
       `物 ${JSON.stringify(geometryNow?.object)}｜像 ${JSON.stringify(geometryNow?.image)}`,
@@ -131,8 +150,13 @@ try {
   }
   /* ---- 全反射 ---- */
   await page.getByTitle('切换实验').click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 })
-  await page.locator('[data-physicsos-shelf] button[data-template-id="total-reflection"]').first().click()
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 15_000 })
+  await page
+    .locator('[data-physicsos-shelf] button[data-template-id="total-reflection"]')
+    .first()
+    .click()
   await page
     .locator('[data-physicsos-surface="lab"][data-verification-status="verified"]')
     .waitFor({ state: 'visible', timeout: 20_000 })
@@ -145,7 +169,7 @@ try {
   const rays = await page.evaluate(() => {
     const svg = document.querySelector('[data-physicsos-surface="lab"] svg[role="img"]')
     if (svg === null) return null
-    const has = id => svg.querySelector(`[data-testid="${id}"]`) !== null
+    const has = (id) => svg.querySelector(`[data-testid="${id}"]`) !== null
     const boundary = svg.querySelector('[data-testid="light-boundary"]')
     return {
       boundary: boundary !== null,
@@ -153,22 +177,33 @@ try {
       reflected: has('light-reflected'),
       refracted: has('light-refracted'),
       critical: has('light-critical'),
-      texts: [...svg.querySelectorAll('text')].map(node => (node.textContent ?? '').trim()),
+      texts: [...svg.querySelectorAll('text')].map((node) => (node.textContent ?? '').trim()),
     }
   })
   /* At the template's 45° the critical angle is 41.8°, so the refracted ray must
      NOT be drawn: 全反射 is its absence, and a figure that drew it would be
      contradicting the readout beside it. */
-  check('全反射@1600 两条光线出射图中没有折射光线', rays !== null && rays.refracted === false,
-    JSON.stringify(rays?.refracted))
-  check('全反射@1600 入射、反射与临界角虚线都在',
-    rays !== null && rays.boundary && rays.incident && rays.reflected && rays.critical === false ||
+  check(
+    '全反射@1600 两条光线出射图中没有折射光线',
+    rays !== null && rays.refracted === false,
+    JSON.stringify(rays?.refracted),
+  )
+  check(
+    '全反射@1600 入射、反射与临界角虚线都在',
+    (rays !== null &&
+      rays.boundary &&
+      rays.incident &&
+      rays.reflected &&
+      rays.critical === false) ||
       (rays !== null && rays.boundary && rays.incident && rays.reflected),
-    JSON.stringify(rays))
-  check('全反射@1600 标注里有临界角与"全反射"结论',
-    (rays?.texts ?? []).some(t => t.includes('θ_c')) &&
-      (rays?.texts ?? []).some(t => t.includes('全反射')),
-    JSON.stringify((rays?.texts ?? []).filter(t => t.includes('θ'))))
+    JSON.stringify(rays),
+  )
+  check(
+    '全反射@1600 标注里有临界角与"全反射"结论',
+    (rays?.texts ?? []).some((t) => t.includes('θ_c')) &&
+      (rays?.texts ?? []).some((t) => t.includes('全反射')),
+    JSON.stringify((rays?.texts ?? []).filter((t) => t.includes('θ'))),
+  )
 
   /* Dropping below the critical angle must make the refracted ray appear. */
   await page.getByRole('button', { name: '检查器' }).click()
@@ -176,15 +211,22 @@ try {
   await angleField.fill('30')
   await angleField.blur()
   await page.waitForTimeout(500)
-  const under = await page.evaluate(() =>
-    document.querySelector('[data-physicsos-surface="lab"] [data-testid="light-refracted"]') !== null,
+  const under = await page.evaluate(
+    () =>
+      document.querySelector('[data-physicsos-surface="lab"] [data-testid="light-refracted"]') !==
+      null,
   )
   check('全反射@1600 入射角降到 30° 后折射光线出现', under)
 
   const final = await labelBoxes()
-  stdout.write(`  pinhole 画布 ${JSON.stringify(final?.canvas)}｜标注 ${JSON.stringify((final?.labels ?? []).map(l => l.text))}\n`)
+  stdout.write(
+    `  pinhole 画布 ${JSON.stringify(final?.canvas)}｜标注 ${JSON.stringify((final?.labels ?? []).map((l) => l.text))}\n`,
+  )
 } finally {
-  writeFileSync(path.join(process.cwd(), 'tmp', 'light-rigs-shots.json'), `${JSON.stringify(shot, null, 2)}\n`)
+  writeFileSync(
+    path.join(process.cwd(), 'tmp', 'light-rigs-shots.json'),
+    `${JSON.stringify(shot, null, 2)}\n`,
+  )
   await finish()
   server.stop()
 }

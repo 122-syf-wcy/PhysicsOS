@@ -191,6 +191,9 @@ const isPointChargeScene = (scene: PhysicsScene): boolean =>
    Electric Region Engine instead of the unbounded ElectricEngine. */
 const isRegionScene = (scene: PhysicsScene): boolean => isParallelPlateScene(scene)
 
+/**
+ * The electric workspace runtime — see the module doc for its role.
+ */
 export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new ElectricEngine()
@@ -1528,5 +1531,10 @@ const regionEventsOf = (
   return events
 }
 
+/**
+ * The electric workspace runtime helper `createElectricWorkspaceRuntime`.
+ * @returns the electric workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createElectricWorkspaceRuntime = (scene: PhysicsScene): ElectricWorkspaceRuntime =>
   new ElectricWorkspaceRuntime(scene)

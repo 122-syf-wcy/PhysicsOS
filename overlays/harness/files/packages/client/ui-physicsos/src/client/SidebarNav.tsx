@@ -3,7 +3,7 @@ import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  IconAnnouncement, IconLibrary, IconPhysicsLab, IconQuestionSheet,
+  IconAnnouncement, IconClassUsers, IconLibrary, IconPhysicsLab, IconQuestionSheet,
 } from './icons/physics-icons.tsx'
 import { isTeachingRole, type AuthState } from './auth-store.ts'
 import type { PhysicsSurfaceId, PhysicsSurfaceState } from './surface-store.ts'
@@ -42,6 +42,9 @@ export function SidebarNav({ wide, openSurface, usePhysicsSurface, useAuth, t }:
      page refuses itself — so offering the entry would be an invitation to a
      door that does not open. Everything else on this rail is for everyone. */
   const teaching = isTeachingRole(role)
+  /* One surface, two greetings: the same room is 班级教学 to a teacher and
+     我的班级 to a student. The host re-checks the role on every call. */
+  const classLabel = teaching ? t('nav.class') : t('nav.class.mine')
   return (
     <nav className={clsx(css.root, !wide && css.rail)} aria-label={t('brand.name')}>
       {wide && <p className={css.group}>{t('nav.group.home')}</p>}
@@ -81,6 +84,17 @@ export function SidebarNav({ wide, openSurface, usePhysicsSurface, useAuth, t }:
           {wide && <span>{t('nav.paper')}</span>}
         </button>
       )}
+      <button
+        type="button"
+        className={clsx(css.item, surface === 'class' && css.active)}
+        aria-label={classLabel}
+        aria-current={surface === 'class' ? 'page' : undefined}
+        title={wide ? undefined : classLabel}
+        onClick={() => { openSurface('class', wide) }}
+      >
+        <IconClassUsers size={wide ? 16 : 18} />
+        {wide && <span>{classLabel}</span>}
+      </button>
       <button
         type="button"
         className={clsx(css.item, surface === 'notice' && css.active)}

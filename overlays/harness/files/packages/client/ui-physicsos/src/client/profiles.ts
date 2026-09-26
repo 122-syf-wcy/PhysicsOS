@@ -34,6 +34,7 @@ const STUDENT_IDS = new Set<string>(STUDENT_PROFILES.map(profile => profile.id))
 /**
  * Whether a stored id is a student-visible PhysicsOS profile.
  * @param id - candidate id from storage or a control.
+ * @returns true when `id` names a student profile.
  */
 export function isStudentProfile(id: string): id is PhysicsProfileId {
   return STUDENT_IDS.has(id)
@@ -42,6 +43,7 @@ export function isStudentProfile(id: string): id is PhysicsProfileId {
 /**
  * Harness preset the product profile selects.
  * @param id - student PhysicsOS profile.
+ * @returns the cordis preset name; unknown ids fall back to `'standard'`.
  */
 export function runtimePresetOf(id: PhysicsProfileId): string {
   const profile = STUDENT_PROFILES.find(entry => entry.id === id)

@@ -20,10 +20,7 @@ import { transformerBenchesOf, validateScene, type PhysicsScene } from '@physics
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import { resolveTransformerModel, type ResolvedTransformerModel } from './transformer-model.ts'
-import {
-  TRANSFORMER_RELATIVE_TOLERANCE,
-  transformerReadingOf,
-} from './transformer.ts'
+import { TRANSFORMER_RELATIVE_TOLERANCE, transformerReadingOf } from './transformer.ts'
 
 export const TRANSFORMER_ENGINE_ID = 'engine-transformer'
 export const TRANSFORMER_ENGINE_VERSION = '1.0.0'
@@ -194,12 +191,19 @@ const buildVerification = (
     check(
       'output_scales_with_the_turns_ratio',
       'constraint',
-      within(doubled.secondaryVoltage, 2 * reading.secondaryVoltage, 2 * reading.secondaryVoltage) &&
-        within(doubled.secondaryCurrent, reading.secondaryCurrent / 2, reading.secondaryCurrent / 2) &&
+      within(
+        doubled.secondaryVoltage,
+        2 * reading.secondaryVoltage,
+        2 * reading.secondaryVoltage,
+      ) &&
+        within(
+          doubled.secondaryCurrent,
+          reading.secondaryCurrent / 2,
+          reading.secondaryCurrent / 2,
+        ) &&
         within(doubled.secondaryPower, reading.primaryPower, reading.primaryPower),
       {
-        message:
-          '匝比就是这台机器：副绕组匝数加倍，电压加倍、电流减半，而功率一动不动。',
+        message: '匝比就是这台机器：副绕组匝数加倍，电压加倍、电流减半，而功率一动不动。',
         targetId: model.benchId,
         details: {
           secondaryVoltage: reading.secondaryVoltage,

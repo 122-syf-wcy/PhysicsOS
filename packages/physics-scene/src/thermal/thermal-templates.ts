@@ -32,9 +32,7 @@ export interface CrystalMeltingSceneInput {
  * 84 s climb, a 668 s plateau and a shallower climb after — the plateau
  * dominates the graph, which is exactly the point: 熔化过程吸热但温度不变.
  */
-export const createCrystalMeltingScene = (
-  input: CrystalMeltingSceneInput = {},
-): PhysicsScene => {
+export const createCrystalMeltingScene = (input: CrystalMeltingSceneInput = {}): PhysicsScene => {
   const latentHeat = input.latentHeat ?? 3.34e5
   const amorphous = latentHeat === 0
   return createThermalBenchScene({

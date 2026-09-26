@@ -23,7 +23,7 @@ import { WaveRenderer } from '../src/client/physics/wave-renderer.tsx'
 import { verticalGainOf } from '../src/client/physics/wave-visual-bridge.ts'
 import { createWaveWorkspaceRuntime } from '../src/client/physics/wave-workspace-runtime.ts'
 import { zh } from '../src/client/locales.ts'
-import { cardSession, solvedCardData } from './solved-card-fixture.ts'
+import { cardSession, solvedCardData } from './solved-card-fixture.client.ts'
 
 const translations: Readonly<Record<string, string>> = zh
 const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key

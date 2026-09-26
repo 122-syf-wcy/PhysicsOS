@@ -30,6 +30,7 @@ export const PHYSICSOS_BUILT_DAY: string =
 /**
  * 报障用的单行版本串 —— 「版本 · 构建日」。只到日:秒级精度对排障没有额外
  * 价值,却会让人误以为那是发布时间。
+ * @returns `版本 · 构建日`,如 `0.1.0 · 2026-09-25`;未注入时构建日为「未注入」。
  */
 export const buildStamp = (): string => {
   const day = PHYSICSOS_BUILT_DAY === 'unknown' ? '未注入' : PHYSICSOS_BUILT_DAY

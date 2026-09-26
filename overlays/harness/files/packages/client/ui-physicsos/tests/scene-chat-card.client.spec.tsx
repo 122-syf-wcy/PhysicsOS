@@ -19,7 +19,7 @@ import {
 import type { PhysicsSceneRef } from '../src/client/surface-store.ts'
 import { zh } from '../src/client/locales.ts'
 import type { SelfCheckAttemptInput } from '../src/client/learning-record-store.ts'
-import { solvedCardData } from './solved-card-fixture.ts'
+import { solvedCardData } from './solved-card-fixture.client.ts'
 
 afterEach(cleanup)
 

@@ -54,6 +54,7 @@ export const sourcePaperWire = z.object(sourcePaperInput)
 
 const sourcePaper = z.object({
   ...sourcePaperInput,
+  schoolId: z.string().nullable().optional(),
   status: reviewStatus,
   enteredAt: z.string().min(1),
 }) satisfies z.ZodType<SourcePaper>
@@ -82,11 +83,13 @@ export const annotationWire = z.object(annotationInput)
 
 const annotation = z.object({
   ...annotationInput,
+  schoolId: z.string().nullable().optional(),
   status: reviewStatus,
 }) satisfies z.ZodType<KnowledgeAnnotation>
 
 const blueprint = z.object({
   id: z.string().min(1),
+  schoolId: z.string().nullable().optional(),
   level,
   subject,
   title: z.string().min(1),
@@ -107,7 +110,7 @@ const blueprint = z.object({
 }) satisfies z.ZodType<ExamBlueprint>
 
 /** Wire validator for `POST /blueprints` — `status` starts `pending`. */
-export const blueprintWire = blueprint.omit({ status: true })
+export const blueprintWire = blueprint.omit({ status: true, schoolId: true })
 
 /** Wire validator for `PUT /jobs/:id/spec` — the confirmed 双向细目表. */
 const specRow = z.object({
@@ -202,8 +205,11 @@ const paperDocument = z.object({
 
 /* Wire validators — the REST boundary validates before the service writes:
    unvalidated durable rows fail domain-open schema checks on the next boot. */
+/** Wire body for confirming/replacing a job's spec table. */
 export const specTableWire = z.array(specRow)
+/** Wire body for creating a generation job. */
 export const jobCreateWire = z.object({ blueprintId: z.string().min(1), request: paperRequest })
+/** Wire body for committing a generated paper document. */
 export const paperDocumentWire = paperDocument
 
 const paperVersion = z.object({
@@ -250,6 +256,7 @@ const solveResult = z.object({
 
 const paperJob = z.object({
   id: z.string().min(1),
+  schoolId: z.string().nullable().optional(),
   blueprintId: z.string().min(1),
   request: paperRequest,
   specTable: z.array(specRow),
@@ -329,6 +336,7 @@ export const bankItemPatchWire = bankItemWire.partial().omit({ id: true, entered
 
 const bankItem = z.object({
   ...bankItemInput,
+  schoolId: z.string().nullable().optional(),
   /* Service-owned: the fingerprint is computed from the stored stem, never
      trusted from the wire — a caller-supplied hash could dodge dedupe. */
   stemHash: z.string().min(1),

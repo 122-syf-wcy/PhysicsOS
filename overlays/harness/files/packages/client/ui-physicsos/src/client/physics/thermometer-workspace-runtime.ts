@@ -101,6 +101,9 @@ interface Computed {
   readonly model: ResolvedThermometerModel
 }
 
+/**
+ * The thermometer workspace runtime — see the module doc for its role.
+ */
 export class ThermometerWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new ThermometerEngine()
@@ -573,5 +576,10 @@ const tableOf = (model: ResolvedThermometerModel): DataTableView => {
   }
 }
 
+/**
+ * The thermometer workspace runtime helper `createThermometerWorkspaceRuntime`.
+ * @returns the workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createThermometerWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
   new ThermometerWorkspaceRuntime(scene)

@@ -119,6 +119,9 @@ interface Computed {
   readonly model: ResolvedAcousticModel
 }
 
+/**
+ * The acoustics workspace runtime — see the module doc for its role.
+ */
 export class AcousticsWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new AcousticsEngine()
@@ -576,5 +579,10 @@ const tableOf = (
   return { columns: ['t / s', 'x / m', '路程 / m', '阶段'], rows }
 }
 
+/**
+ * The acoustics workspace runtime helper `createAcousticsWorkspaceRuntime`.
+ * @returns the acoustics workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createAcousticsWorkspaceRuntime = (scene: PhysicsScene): AcousticsWorkspaceRuntime =>
   new AcousticsWorkspaceRuntime(scene)

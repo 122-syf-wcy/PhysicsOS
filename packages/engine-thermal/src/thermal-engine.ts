@@ -190,9 +190,10 @@ const derivedOf = (model: ResolvedThermalModel): DerivedQuantity[] => {
 const stateOf = (model: ResolvedThermalModel, timeSeconds: number): SimulationState => {
   const state = thermalStateAt(model, timeSeconds)
   const comparison = model.comparisonSample
-  const comparisonState = comparison === undefined
-    ? undefined
-    : sampleStateAt(comparison, model.heaterPower, timeSeconds, model.runDuration)
+  const comparisonState =
+    comparison === undefined
+      ? undefined
+      : sampleStateAt(comparison, model.heaterPower, timeSeconds, model.runDuration)
   return {
     time: seconds(timeSeconds),
     objects: [
@@ -207,7 +208,12 @@ const stateOf = (model: ResolvedThermalModel, timeSeconds: number): SimulationSt
       { id: model.sampleId, values: { temperature: kelvin(state.temperature) } },
       ...(comparison === undefined || comparisonState === undefined
         ? []
-        : [{ id: comparison.sampleId, values: { temperature: kelvin(comparisonState.temperature) } }]),
+        : [
+            {
+              id: comparison.sampleId,
+              values: { temperature: kelvin(comparisonState.temperature) },
+            },
+          ]),
     ],
     derived: derivedOf(model),
   }
@@ -258,20 +264,14 @@ const buildVerification = (
   if (comparison !== undefined) {
     const comparisonResidual = energyResidualOf(comparison)
     const primaryEnd = thermalStateAt(model, totalTime)
-    const comparisonEnd = sampleStateAt(
-      comparison,
-      model.heaterPower,
-      totalTime,
-      model.runDuration,
-    )
+    const comparisonEnd = sampleStateAt(comparison, model.heaterPower, totalTime, model.runDuration)
     const primaryRise = primaryEnd.temperature - model.initialTemperature
     const comparisonRise = comparisonEnd.temperature - comparison.initialTemperature
     const primaryC = activeSpecificHeatOf(model)
     const comparisonC = activeSpecificHeatOf(comparison)
     const expectedRiseRatio = comparisonC / primaryC
-    const measuredRiseRatio = comparisonRise === 0
-      ? Number.POSITIVE_INFINITY
-      : primaryRise / comparisonRise
+    const measuredRiseRatio =
+      comparisonRise === 0 ? Number.POSITIVE_INFINITY : primaryRise / comparisonRise
 
     checks.push(
       check(
@@ -306,78 +306,77 @@ const buildVerification = (
   }
 
   if (!model.startsMolten) {
-  /* Slopes are P/(mc): the ratio of the two sloped segments is exactly the
+    /* Slopes are P/(mc): the ratio of the two sloped segments is exactly the
      inverse ratio of the specific heats, which is how the graph is read. */
-  const solidSlope = model.heaterPower / (model.mass * model.solidSpecificHeat)
-  const liquidSlope = model.heaterPower / (model.mass * model.liquidSpecificHeat)
-  const expectedRatio = model.liquidSpecificHeat / model.solidSpecificHeat
-  checks.push(
-    check(
-      'heating_rate_ratio',
-      'constraint',
-      Math.abs(solidSlope / liquidSlope - expectedRatio) <=
-        THERMAL_RELATIVE_TOLERANCE * expectedRatio,
-      {
-        message: '升温快慢由比热容决定：两段斜率之比等于比热容的反比。',
-        targetId: model.sampleId,
-        details: { solidSlope, liquidSlope, expectedRatio },
-      },
-    ),
-  )
+    const solidSlope = model.heaterPower / (model.mass * model.solidSpecificHeat)
+    const liquidSlope = model.heaterPower / (model.mass * model.liquidSpecificHeat)
+    const expectedRatio = model.liquidSpecificHeat / model.solidSpecificHeat
+    checks.push(
+      check(
+        'heating_rate_ratio',
+        'constraint',
+        Math.abs(solidSlope / liquidSlope - expectedRatio) <=
+          THERMAL_RELATIVE_TOLERANCE * expectedRatio,
+        {
+          message: '升温快慢由比热容决定：两段斜率之比等于比热容的反比。',
+          targetId: model.sampleId,
+          details: { solidSlope, liquidSlope, expectedRatio },
+        },
+      ),
+    )
 
-  if (model.crystalline) {
-    /* The headline fact: the thermometer does not move for the whole mL/P, even
+    if (model.crystalline) {
+      /* The headline fact: the thermometer does not move for the whole mL/P, even
        though the heater never stops. Sampled across the plateau, not just at
        its ends. */
-    const plateauResidual = Array.from({ length: 17 }, (_, index) => {
-      const time = warmUpTime + (index / 16) * meltingDuration
-      return Math.abs(thermalStateAt(model, time).temperature - model.meltingPoint)
-    }).reduce((worst, value) => Math.max(worst, value), 0)
-    checks.push(
-      check(
-        'melting_plateau',
-        'constraint',
-        meltingDuration > 0 &&
-          plateauResidual <= THERMAL_RELATIVE_TOLERANCE * model.meltingPoint,
-        {
-          message: '晶体熔化时持续吸热但温度不变，图像上是一段水平线。',
-          targetId: model.sampleId,
-          details: { meltingDuration, plateauTemperature: model.meltingPoint, plateauResidual },
-        },
-      ),
-    )
-    /* And it is not a rounding artefact: the plateau lasts exactly mL/P. */
-    const expectedDuration = (model.mass * model.latentHeat) / model.heaterPower
-    checks.push(
-      check(
-        'plateau_duration',
-        'constraint',
-        Math.abs(meltingEndTime - warmUpTime - expectedDuration) <=
-          THERMAL_RELATIVE_TOLERANCE * expectedDuration,
-        {
-          message: '熔化耗时 t = mL/P：熔化热全部由加热器在这段时间里供给。',
-          targetId: model.sampleId,
-          details: { measured: meltingEndTime - warmUpTime, expected: expectedDuration },
-        },
-      ),
-    )
-  } else {
-    /* Amorphous: no fixed melting point, so the curve never stops rising. */
-    const beforeSoftening = thermalStateAt(model, warmUpTime * 0.99).temperature
-    const afterSoftening = thermalStateAt(model, warmUpTime * 1.01).temperature
-    checks.push(
-      check(
-        'amorphous_no_plateau',
-        'constraint',
-        meltingDuration === 0 && afterSoftening > beforeSoftening,
-        {
-          message: '非晶体没有固定熔点：整个加热过程温度持续上升，图像上没有水平段。',
-          targetId: model.sampleId,
-          details: { beforeSoftening, afterSoftening },
-        },
-      ),
-    )
-  }
+      const plateauResidual = Array.from({ length: 17 }, (_, index) => {
+        const time = warmUpTime + (index / 16) * meltingDuration
+        return Math.abs(thermalStateAt(model, time).temperature - model.meltingPoint)
+      }).reduce((worst, value) => Math.max(worst, value), 0)
+      checks.push(
+        check(
+          'melting_plateau',
+          'constraint',
+          meltingDuration > 0 && plateauResidual <= THERMAL_RELATIVE_TOLERANCE * model.meltingPoint,
+          {
+            message: '晶体熔化时持续吸热但温度不变，图像上是一段水平线。',
+            targetId: model.sampleId,
+            details: { meltingDuration, plateauTemperature: model.meltingPoint, plateauResidual },
+          },
+        ),
+      )
+      /* And it is not a rounding artefact: the plateau lasts exactly mL/P. */
+      const expectedDuration = (model.mass * model.latentHeat) / model.heaterPower
+      checks.push(
+        check(
+          'plateau_duration',
+          'constraint',
+          Math.abs(meltingEndTime - warmUpTime - expectedDuration) <=
+            THERMAL_RELATIVE_TOLERANCE * expectedDuration,
+          {
+            message: '熔化耗时 t = mL/P：熔化热全部由加热器在这段时间里供给。',
+            targetId: model.sampleId,
+            details: { measured: meltingEndTime - warmUpTime, expected: expectedDuration },
+          },
+        ),
+      )
+    } else {
+      /* Amorphous: no fixed melting point, so the curve never stops rising. */
+      const beforeSoftening = thermalStateAt(model, warmUpTime * 0.99).temperature
+      const afterSoftening = thermalStateAt(model, warmUpTime * 1.01).temperature
+      checks.push(
+        check(
+          'amorphous_no_plateau',
+          'constraint',
+          meltingDuration === 0 && afterSoftening > beforeSoftening,
+          {
+            message: '非晶体没有固定熔点：整个加热过程温度持续上升，图像上没有水平段。',
+            targetId: model.sampleId,
+            details: { beforeSoftening, afterSoftening },
+          },
+        ),
+      )
+    }
   }
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)

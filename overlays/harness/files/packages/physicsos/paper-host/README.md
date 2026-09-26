@@ -110,10 +110,17 @@ spec → drafting → checking → review → approved → exported
 
 `tsdown` 的入口是 `lib/types/index.js`（`tsc` 产物），**必须先 `tsc -b` 再 `tsdown`**——直接跑 `tsdown` 打的是上一次的旧产物，表现是「路由在源码里却 404」。用包内的 `pnpm run bundle`，它按正确顺序跑两步。
 
-## 已知边界
+## Model Experience
+
+None, as the package serves browser REST surfaces for papers and the question bank and registers nothing model-facing.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
+## Known Limitations and Deferred Work
 
 - CSV 导入是朴素逗号/制表符切分，含逗号的题面装不下——题干走逐题表单录入
 - 浏览端只显示 `verified` 的原卷与考点
 - 题目题型列显示原始枚举（如 `choice-single`），要中文标签属后续小改
-- 无 REAL-composition 测试（`routes.spec.ts` 走 Map-backed domain），真实链路由
-  `auth-host` 之外的手工 e2e 与浏览器验收承载
+- 无 REAL-composition 测试（`routes.spec.ts` 走 Map-backed domain），真实链路由 `auth-host` 之外的手工 e2e 与浏览器验收承载

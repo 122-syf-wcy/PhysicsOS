@@ -113,9 +113,7 @@ const supportFailure = (condition: string, message: string) => ({ condition, mes
 const vectorsWithinTolerance = (actual: Vector3, expected: Vector3): boolean => {
   const error = magnitude(subtract(actual, expected))
   const reference = Math.max(magnitude(actual), magnitude(expected))
-  return (
-    error <= DEFAULT_TOLERANCE.absolute || error <= DEFAULT_TOLERANCE.relative * reference
-  )
+  return error <= DEFAULT_TOLERANCE.absolute || error <= DEFAULT_TOLERANCE.relative * reference
 }
 
 /** Analytical solver for the deliberately frozen magnetic circular-motion model. */
@@ -451,12 +449,10 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     states: readonly SimulationState[],
   ): VerificationResult {
     const particleId = model.particle.id
-    const requireVector = (
-      state: SimulationState,
-      kind: 'position' | 'velocity',
-    ): Vector3 => {
+    const requireVector = (state: SimulationState, kind: 'position' | 'velocity'): Vector3 => {
       const object = state.objects.find((entry) => entry.id === particleId)
-      if (object === undefined) throw new PhysicsOSError('MAGNETIC_MODEL_INVARIANT', 'Sample state lost its particle.')
+      if (object === undefined)
+        throw new PhysicsOSError('MAGNETIC_MODEL_INVARIANT', 'Sample state lost its particle.')
       const vector = kind === 'position' ? object.position?.vector : object.velocity?.vector
       if (vector === undefined)
         throw new PhysicsOSError('MAGNETIC_MODEL_INVARIANT', `Sample state missing ${kind} vector.`)
@@ -514,8 +510,7 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
         },
       }),
       check('period_closes', 'conservation', periodCloses, {
-        message:
-          'At t = T the position and velocity must return to their initial vectors.',
+        message: 'At t = T the position and velocity must return to their initial vectors.',
         targetId: particleId,
         details: {
           period: model.period,
@@ -526,12 +521,12 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
         },
       }),
       check('force_perpendicular_velocity', 'conservation', forcePerpendicular, {
-        message:
-          'The Lorentz force must satisfy F · v ≈ 0 at every sampled state.',
+        message: 'The Lorentz force must satisfy F · v ≈ 0 at every sampled state.',
         targetId: particleId,
         details: {
           angularTolerance: DEFAULT_TOLERANCE.angular,
-          maxNormalizedDot: orthogonalityActuals.length === 0 ? 0 : Math.max(...orthogonalityActuals),
+          maxNormalizedDot:
+            orthogonalityActuals.length === 0 ? 0 : Math.max(...orthogonalityActuals),
           sampleCount: states.length,
         },
       }),

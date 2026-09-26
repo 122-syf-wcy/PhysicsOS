@@ -151,7 +151,11 @@ const parseParts = (src: string): MathPart[] => {
   return parts
 }
 
-/** Split a light TeX subset into runs with optional script level. */
+/**
+ * Split a light TeX subset into runs with optional script level.
+ * @returns the parse math symbol list.
+ * @param input - the caller-supplied fields.
+ */
 export const parseMathSymbol = (input: string): readonly MathPart[] => {
   const expanded = input
     .replace(/\\(theta|mu|alpha|beta|omega|Delta|Sigma|pi)\b/g, (_, name: string) => GREEK[name] ?? name)
@@ -244,6 +248,8 @@ const radicand = (src: string, at: number): { body: string; next: number } => {
  * radicand, CJK runs are wrapped in `\text`, and long Latin word runs
  * (`constant`, `inside`, `enter`) become `\mathrm` so they do not render as a
  * row of italic variables. TeX commands already in the string pass through.
+ * @returns the formatted string.
+ * @param input - the caller-supplied fields.
  */
 export const toTexExpression = (input: string): string => {
   const src = input.replace(/([A-Za-zΑ-Ωα-ω])̂/g, '\\hat{$1}')

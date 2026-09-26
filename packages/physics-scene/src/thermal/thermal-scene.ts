@@ -86,9 +86,9 @@ export const createThermalBenchScene = (input: ThermalBenchSceneInput): PhysicsS
     ...(spec.boilingPoint === undefined
       ? {}
       : {
-        boilingPoint: kelvin(spec.boilingPoint),
-        vaporizationHeat: quantity(spec.vaporizationHeat ?? 0, 'J/kg', 'specific_latent_heat'),
-      }),
+          boilingPoint: kelvin(spec.boilingPoint),
+          vaporizationHeat: quantity(spec.vaporizationHeat ?? 0, 'J/kg', 'specific_latent_heat'),
+        }),
     initialTemperature: kelvin(spec.initialTemperature),
   })
 
@@ -161,8 +161,7 @@ export const createThermalBenchScene = (input: ThermalBenchSceneInput): PhysicsS
  * Thermal benches of a scene. Legacy-safe: scenes persisted before the thermal
  * slice have no `thermalBenches` collection, so readers fall back to `[]`.
  */
-export const thermalBenchesOf = (scene: PhysicsScene): ThermalBench[] =>
-  scene.thermalBenches ?? []
+export const thermalBenchesOf = (scene: PhysicsScene): ThermalBench[] => scene.thermalBenches ?? []
 
 /** The single bench of a thermal scene, if present. */
 export const thermalBenchOf = (scene: PhysicsScene): ThermalBench | undefined =>

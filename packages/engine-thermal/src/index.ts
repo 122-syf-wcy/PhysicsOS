@@ -36,10 +36,7 @@ export {
   thermalEngine,
 } from './thermal-engine.ts'
 
-export {
-  resolveThermometerModel,
-  type ResolvedThermometerModel,
-} from './thermometer-model.ts'
+export { resolveThermometerModel, type ResolvedThermometerModel } from './thermometer-model.ts'
 export {
   THERMOMETER_RELATIVE_TOLERANCE,
   boreArea,

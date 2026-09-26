@@ -1,6 +1,19 @@
 
 /* 反馈与公告 — two independent panes: the two directions do not share a reading
-   order, and a long notice must not push the form away. */
+   order, and a long notice must not push the form away.
+
+   Materials come from the shared PhysicsOS chrome (`chrome.ts`): the glass fill
+   / border / shadow trio for panels, the three-step physics ink ladder for
+   words, and the motion tokens for interaction. Two rules that are easy to get
+   wrong and are written down here so the next edit does not undo them:
+
+   - Every colour is a THEME token. The first version of this file referenced
+     `--dsw-color-*`, a family that is defined NOWHERE in the product, so all
+     thirty-odd declarations silently fell back to the light hex in their
+     parentheses — a light-only surface that ignored the host palette. That is
+     what "flat and grey" looked like: not a design, a fallback.
+   - A pane is a RAISED material (fill + edge + shadow + top highlight), not a
+     1px outline on white. The depth is what reads as quality at a glance. */
 .root {
   width: 100%;
   height: 100%;
@@ -10,117 +23,188 @@
 }
 
 .header {
-  max-width: 960px;
-  margin: 0 auto 16px;
+  max-width: 1040px;
+  margin: 0 auto 18px;
 }
 
 .title {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  color: var(--dsw-color-text-primary, #0f172a);
+  line-height: 28px;
+  letter-spacing: 0.01em;
+  color: var(--physics-ink-strong);
 }
 
 .columns {
-  max-width: 960px;
+  max-width: 1040px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 18px;
   align-items: start;
 }
 
-@media (max-width: 900px) {
+/* Two columns keep the form beside the notices at any width that can actually
+   hold them; below this the panes stack, because a 300px textarea is worse
+   than a scroll. The file's own rule is that a long notice must not push the
+   form away — stacking at 900px pushed it away on an ordinary laptop. */
+@media (max-width: 780px) {
   .columns { grid-template-columns: minmax(0, 1fr); }
 }
 
 .pane {
-  background: var(--dsw-color-bg-elevated, #ffffff);
-  border: 1px solid var(--dsw-color-border-secondary, #e2e8f0);
-  border-radius: 12px;
-  padding: 14px 16px;
+  position: relative;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 16px;
+  background: var(--physics-glass-fill-strong);
+  box-shadow: var(--physics-glass-shadow), var(--physics-glass-inset);
+  backdrop-filter: blur(18px) saturate(120%);
 }
 
+/* The pane title is an editorial label, not just bold text: an accent rule
+   anchors it so the two panes read as distinct sections at a glance. */
 .paneTitle {
-  margin: 0 0 10px;
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--dsw-color-text-primary, #0f172a);
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  color: var(--physics-ink-strong);
 }
 
+.paneTitle::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--dsw-alias-button-info-fill);
+}
+
+/* Each notice/report sits on its own plane inside the pane rather than being
+   separated by a hairline: a list of flat rows is where "no texture" starts. */
 .notice, .mine {
-  border-top: 1px solid var(--dsw-color-border-secondary, #e2e8f0);
-  padding: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 52%, transparent);
 }
 
-.notice:first-of-type { border-top: none; }
+.notice + .notice, .mine + .mine {
+  margin-top: 10px;
+}
 
 .noticeTitle {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--dsw-color-text-primary, #0f172a);
+  line-height: 20px;
+  color: var(--physics-ink-strong);
 }
 
 .meta {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   font-size: 11px;
-  color: var(--dsw-color-text-secondary, #475569);
+  line-height: 16px;
+  /* Timestamps line up column-wise instead of jittering per digit. */
+  font-variant-numeric: tabular-nums;
+  color: var(--physics-ink-muted);
 }
 
 .body {
-  margin: 6px 0 0;
+  margin: 7px 0 0;
   font-size: 13px;
-  line-height: 1.6;
-  color: var(--dsw-color-text-primary, #0f172a);
+  line-height: 1.7;
+  color: var(--physics-ink);
   white-space: pre-wrap;
 }
 
+/* An operator's answer is quoted evidence, so it gets a cited-block treatment:
+   a verified-tinted plate with a solid rule on the reading edge. */
 .reply {
-  margin: 8px 0 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--dsw-color-bg-primary, #f8fafc);
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-inline-start: 3px solid var(--physics-verification-ok);
+  background: var(--physics-tint-verified);
   font-size: 12px;
-  line-height: 1.6;
-  color: var(--dsw-color-text-primary, #0f172a);
+  line-height: 1.65;
+  color: var(--physics-ink);
+}
+
+.reply strong {
+  color: var(--physics-ink-ok);
 }
 
 .kinds {
   display: flex;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
 }
 
 .kind, .kindActive {
-  border: 1px solid var(--dsw-color-border-secondary, #e2e8f0);
-  background: transparent;
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 5px 14px;
+  background: var(--dsw-alias-bg-base);
+  font: inherit;
   font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
-  color: var(--dsw-color-text-secondary, #475569);
+  transition: background-color var(--physics-motion-fast) var(--physics-ease),
+    border-color var(--physics-motion-fast) var(--physics-ease),
+    color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.kind:hover {
+  border-color: var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-primary);
 }
 
 .kindActive {
-  border-color: var(--dsw-color-brand-primary, #2563eb);
-  background: var(--dsw-color-brand-primary, #2563eb);
-  color: #ffffff;
+  border-color: var(--dsw-alias-button-info-fill);
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-weight: 500;
 }
 
 .textarea, .input {
   width: 100%;
   box-sizing: border-box;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--dsw-color-border-secondary, #e2e8f0);
-  border-radius: 8px;
-  background: var(--dsw-color-bg-primary, #f8fafc);
-  color: var(--dsw-color-text-primary, #0f172a);
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-specific-input-major);
+  font: inherit;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-primary);
   resize: vertical;
+  transition: border-color var(--physics-motion-fast) var(--physics-ease),
+    box-shadow var(--physics-motion-fast) var(--physics-ease);
+}
+
+.textarea::placeholder, .input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.textarea:hover, .input:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.textarea:focus, .input:focus {
+  outline: none;
+  border-color: var(--dsw-alias-button-info-fill);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-button-info-fill) 14%, transparent);
 }
 
 .actions {
@@ -128,29 +212,74 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-height: 34px;
 }
 
 .primary {
-  border: none;
-  border-radius: 8px;
-  padding: 7px 16px;
-  background: var(--dsw-color-brand-primary, #2563eb);
-  color: #ffffff;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 20px;
+  background: var(--dsw-alias-button-info-fill);
+  font: inherit;
   font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--dsw-alias-label-primary-foreground);
   cursor: pointer;
+  transition: background-color var(--physics-motion-fast) var(--physics-ease),
+    transform var(--physics-motion-fast) var(--physics-ease);
 }
 
-.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.primary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-info-hover);
+}
 
-.ok { font-size: 12px; color: var(--dsw-color-success, #16a34a); }
-.error { font-size: 12px; color: var(--dsw-color-error, #dc2626); }
-.empty { font-size: 12px; color: var(--dsw-color-text-secondary, #475569); }
-/* Says the notices below came from the cache, not from this session. */
-.stale { font-size: 12px; margin: 0 0 8px; color: var(--dsw-color-warning, #b45309); }
+.primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ok { font-size: 12px; color: var(--physics-ink-ok); }
+.error { font-size: 12px; color: var(--dsw-alias-state-error-primary); }
+
+/* "This is the last notice we got" is a warning, not body copy — a plain grey
+   sentence let stale content read as current. */
+.stale {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-state-warn-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--physics-ink-warn);
+}
+
+/* An empty pane is a designed placeholder, not a lone grey sentence floating
+   in a white box. */
+.empty {
+  margin: 2px 0 0;
+  padding: 30px 16px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 40%, transparent);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--physics-ink-muted);
+}
 
 .historyTitle {
-  margin: 16px 0 4px;
+  margin: 20px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
   font-size: 12px;
   font-weight: 600;
-  color: var(--dsw-color-text-secondary, #475569);
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  color: var(--physics-ink-muted);
 }

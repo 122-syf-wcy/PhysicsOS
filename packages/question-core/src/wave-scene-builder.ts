@@ -15,6 +15,10 @@
  */
 
 import {
+  createDiffractionScene,
+  createDopplerScene,
+  createLongitudinalWaveScene,
+  createReflectionRefractionScene,
   createStandingWaveScene,
   createTravellingWaveScene,
   createWaveInterferenceScene,
@@ -65,7 +69,15 @@ export function buildWaveSceneFromIR(
       ? '试题场景：绳上的简谐横波'
       : ir.model === 'wave_interference'
         ? '试题场景：双源干涉'
-        : '试题场景：弦驻波'
+        : ir.model === 'standing_wave'
+          ? '试题场景：弦驻波'
+          : ir.model === 'longitudinal_wave'
+            ? '试题场景：纵波'
+            : ir.model === 'reflection_refraction'
+              ? '试题场景：波的反射与折射'
+              : ir.model === 'wave_diffraction'
+                ? '试题场景：单缝衍射'
+                : '试题场景：多普勒效应'
   const description =
     options.questionId === undefined
       ? '由 Wave Question IR 生成'
@@ -81,11 +93,7 @@ export function buildWaveSceneFromIR(
   /* Prefer the stated wavelength; a stated speed is the alternative the
      template resolves through its own λ = v/f contract. */
   const medium =
-    wavelength !== undefined
-      ? { wavelength }
-      : waveSpeed !== undefined
-        ? { waveSpeed }
-        : {}
+    wavelength !== undefined ? { wavelength } : waveSpeed !== undefined ? { waveSpeed } : {}
 
   let scene: PhysicsScene
   let mapping: Record<string, string>
@@ -115,7 +123,8 @@ export function buildWaveSceneFromIR(
     const resolvedPathTwo = pathTwo ?? resolvedPathOne + pathDifference
     scene = createWaveInterferenceScene({
       ...common,
-      amplitude: (amplitudeMetres ?? DEFAULT_INTERFERENCE_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
+      amplitude:
+        (amplitudeMetres ?? DEFAULT_INTERFERENCE_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
       ...medium,
       frequency: frequency ?? DEFAULT_INTERFERENCE_FREQUENCY_HZ,
       sourceSeparation: separation,
@@ -126,7 +135,7 @@ export function buildWaveSceneFromIR(
       wave_source: 'wave-bench-1.source-1',
       observation_point: 'wave-bench-1.point',
     }
-  } else {
+  } else if (ir.model === 'standing_wave') {
     const stringLength = ir.waveStringLength ?? knownValue(ir, 'string_length') ?? 1
     const harmonic = ir.waveHarmonic ?? knownValue(ir, 'harmonic') ?? 1
     scene = createStandingWaveScene({
@@ -134,13 +143,52 @@ export function buildWaveSceneFromIR(
       amplitude: (amplitudeMetres ?? DEFAULT_STANDING_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
       stringLength,
       harmonic,
-      ...(waveSpeed !== undefined
-        ? { waveSpeed }
-        : frequency !== undefined
-          ? { frequency }
-          : {}),
+      ...(waveSpeed !== undefined ? { waveSpeed } : frequency !== undefined ? { frequency } : {}),
     })
     mapping = { string: 'wave-bench-1' }
+  } else if (ir.model === 'longitudinal_wave') {
+    scene = createLongitudinalWaveScene({
+      ...common,
+      amplitude: (amplitudeMetres ?? DEFAULT_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
+      ...medium,
+      ...(frequency === undefined ? {} : { frequency }),
+      ...(ir.waveMediumLength === undefined ? {} : { mediumLength: ir.waveMediumLength }),
+    })
+    mapping = { rope: 'wave-bench-1', wave_source: 'wave-bench-1' }
+  } else if (ir.model === 'reflection_refraction') {
+    scene = createReflectionRefractionScene({
+      ...common,
+      amplitude: (amplitudeMetres ?? DEFAULT_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
+      frequency: frequency ?? DEFAULT_INTERFERENCE_FREQUENCY_HZ,
+      incidentSpeed: ir.waveIncidentSpeed ?? knownValue(ir, 'incident_speed') ?? waveSpeed ?? 4,
+      transmittedSpeed: ir.waveTransmittedSpeed ?? knownValue(ir, 'transmitted_speed') ?? 2,
+      incidentAngle:
+        ((ir.waveIncidentAngle ?? knownValue(ir, 'incident_angle') ?? Math.PI / 6) * 180) / Math.PI,
+    })
+    mapping = { wave_source: 'wave-bench-1', boundary: 'wave-bench-1.boundary' }
+  } else if (ir.model === 'wave_diffraction') {
+    scene = createDiffractionScene({
+      ...common,
+      amplitude: (amplitudeMetres ?? DEFAULT_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
+      ...medium,
+      frequency: frequency ?? DEFAULT_INTERFERENCE_FREQUENCY_HZ,
+      slitWidth: ir.waveSlitWidth ?? knownValue(ir, 'slit_width') ?? 1,
+      screenDistance: ir.waveScreenDistance ?? knownValue(ir, 'screen_distance') ?? 2,
+      order: ir.waveDiffractionOrder ?? 1,
+    })
+    mapping = { slit: 'wave-bench-1.slit', screen: 'wave-bench-1.screen' }
+  } else {
+    scene = createDopplerScene({
+      ...common,
+      amplitude: (amplitudeMetres ?? DEFAULT_AMPLITUDE_CM / CM_PER_METRE) * CM_PER_METRE,
+      sourceFrequency: frequency ?? 500,
+      waveSpeed: waveSpeed ?? knownValue(ir, 'wave_speed') ?? 340,
+      sourceSpeed: ir.waveSourceSpeed ?? knownValue(ir, 'source_speed') ?? 0,
+      observerSpeed: ir.waveObserverSpeed ?? knownValue(ir, 'observer_speed') ?? 0,
+      sourceDirection: ir.waveSourceDirection ?? 'approaching',
+      observerDirection: ir.waveObserverDirection ?? 'stationary',
+    })
+    mapping = { wave_source: 'wave-bench-1.source', observer: 'wave-bench-1.observer' }
   }
 
   if (options.questionId !== undefined) {

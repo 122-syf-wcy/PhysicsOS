@@ -21,10 +21,13 @@
  */
 import type { IncomingMessage } from 'node:http'
 
+/** Service key `auth-host` publishes the session identity seam under. */
 export const IDENTITY_SERVICE = 'physicsosIdentity'
 
+/** Account roles in ascending privilege order. */
 export type IdentityRole = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
 
+/** The signed-in account resolved from a session cookie. */
 export interface IdentityActor {
   readonly userKey: string
   readonly schoolId: string
@@ -32,6 +35,10 @@ export interface IdentityActor {
   readonly role: IdentityRole
 }
 
+/**
+ * The seam auth-host exposes to sibling hosts: resolve the acting account from
+ * a request, and file an attributed audit row for a write.
+ */
 export interface PhysicsosIdentity {
   actorOf(req: IncomingMessage): IdentityActor | null
   record(
@@ -58,10 +65,16 @@ const RANK: Record<IdentityRole, number> = {
   STUDENT: 0, TEACHER: 1, SCHOOL_ADMIN: 2, SUPER_ADMIN: 3,
 }
 
-/** True when `role` is at least `floor`. */
+/**
+ * True when `role` is at least `floor`.
+ * @param role - the actor's role.
+ * @param floor - the minimum role that still passes.
+ * @returns whether `role` ranks at or above `floor`.
+ */
 export const atLeast = (role: IdentityRole, floor: IdentityRole): boolean =>
   RANK[role] >= RANK[floor]
 
+/** The outcome of resolving and checking a request's actor. */
 export interface GuardResult {
   readonly actor: IdentityActor
   /** Whether this request mutates state — the caller audits those only. */
@@ -101,6 +114,11 @@ export const guard = (
  * ledger write that failed must not retroactively fail the action it recorded.
  * Refused requests (>= 400) are not events — a trail that logged attempts
  * would make "who changed the bank" unreadable.
+ * @param ledger - the identity seam, which files the audit row.
+ * @param actor - the account that performed the write.
+ * @param req - the request, read for its method.
+ * @param statusCode - the response status; refused requests (`>= 400`) file nothing.
+ * @param path - the request path, recorded as the audit target.
  */
 export const auditWrites = async (
   ledger: PhysicsosIdentity,
@@ -114,7 +132,11 @@ export const auditWrites = async (
   await ledger.record(actor, `notice.${req.method.toLowerCase()}`, path, { status: statusCode })
 }
 
-/** Lazily look up the identity service: called per request to break load-order ties. */
+/**
+ * Lazily look up the identity service: called per request to break load-order ties.
+ * @param ctx - the registrant context's service store.
+ * @returns the seam when auth-host has published it, else `undefined`.
+ */
 export const identityOf = (
   ctx: { get: (name: string) => unknown },
 ): PhysicsosIdentity | undefined => {

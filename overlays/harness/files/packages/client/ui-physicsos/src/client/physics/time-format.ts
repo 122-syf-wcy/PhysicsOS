@@ -44,6 +44,8 @@ const UNIT_ARIA: Readonly<Record<TimeScale['unit'], string>> = {
  * Windows of 0.1 s and above stay in seconds — students think of a projectile
  * flight as `0.45 s`, not `450 ms`. Below that, the largest unit on which the
  * window reads ≥ 1 wins; a zero or non-finite window falls back to seconds.
+ * @returns the time scale.
+ * @param windowSeconds - physical seconds covered by the window.
  */
 export const timeScaleOf = (windowSeconds: number): TimeScale => {
   const magnitude = Math.abs(windowSeconds)
@@ -51,7 +53,12 @@ export const timeScaleOf = (windowSeconds: number): TimeScale => {
   return SCALES.find(scale => magnitude * scale.factor >= 1) ?? PICOSECONDS
 }
 
-/** `3.75 µs` — an instant expressed on an already-chosen scale. */
+/**
+ * `3.75 µs` — an instant expressed on an already-chosen scale
+ * @returns the formatted string.
+ * @param scale - the display scale.
+ * @param seconds - the time in seconds.
+ */
 export const formatTimeIn = (seconds: number, scale: TimeScale): string => {
   const value = Number.isFinite(seconds) ? seconds * scale.factor : 0
   /* Two decimals up to 100, one above — `328.0 ns` instead of `328.00 ns`. */
@@ -70,13 +77,21 @@ const scaleFor = (seconds: number, windowSeconds: number): TimeScale => {
     : scale
 }
 
-/** An instant expressed on the scale of its own run window. */
+/**
+ * An instant expressed on the scale of its own run window.
+ * @returns the formatted string.
+ * @param windowSeconds - physical seconds covered by the window.
+ * @param seconds - the time in seconds.
+ */
 export const formatTimeAt = (seconds: number, windowSeconds: number): string =>
   formatTimeIn(seconds, scaleFor(seconds, windowSeconds))
 
 /**
  * Screen-reader text for an instant: same number, Chinese unit name, so an
  * assistive announcement says 「1.20 微秒」 rather than spelling out "µs".
+ * @returns the formatted string.
+ * @param windowSeconds - physical seconds covered by the window.
+ * @param seconds - the time in seconds.
  */
 export const timeAriaText = (seconds: number, windowSeconds: number): string => {
   const scale = scaleFor(seconds, windowSeconds)

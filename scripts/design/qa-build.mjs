@@ -12,7 +12,9 @@ const { chromium } = await import(
 )
 
 const out = process.argv[2] ?? 'tmp/qa/builder-wired.png'
-const browser = await chromium.launch({ executablePath: process.env.PHYSICSOS_CHROMIUM || undefined })
+const browser = await chromium.launch({
+  executablePath: process.env.PHYSICSOS_CHROMIUM || undefined,
+})
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 })
 const problems = []
 page.on('console', (m) => {
@@ -21,7 +23,10 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message.slice(0, 200)}`))
 
 const step = async (label) => {
-  const target = page.getByRole('button', { name: label }).or(page.getByRole('link', { name: label })).first()
+  const target = page
+    .getByRole('button', { name: label })
+    .or(page.getByRole('link', { name: label }))
+    .first()
   await target.waitFor({ state: 'visible', timeout: 10000 })
   await target.click()
   await page.waitForTimeout(1200)
@@ -40,8 +45,9 @@ await step('开始搭建')
 
 const reading = async (id) => page.locator(`[data-component-id="${id}"] text`).allTextContents()
 /* The readout block carries the run-level summary the engine produced. */
-const mainCurrent = async () => (await page.locator('svg text').allTextContents())
-  .find(text => text.startsWith('I =')) ?? '(none)'
+const mainCurrent = async () =>
+  (await page.locator('svg text').allTextContents()).find((text) => text.startsWith('I =')) ??
+  '(none)'
 console.log('before:', await mainCurrent())
 
 /* Place a second resistor and wire it in parallel with the first: 6 V across
@@ -56,7 +62,8 @@ const drag = async (fromSelector, toSelector) => {
   await from.scrollIntoViewIfNeeded()
   const a = await from.boundingBox()
   const b = await to.boundingBox()
-  if (a === null || b === null) throw new Error(`terminal not laid out: ${fromSelector} -> ${toSelector}`)
+  if (a === null || b === null)
+    throw new Error(`terminal not laid out: ${fromSelector} -> ${toSelector}`)
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
   await page.mouse.down()
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 })

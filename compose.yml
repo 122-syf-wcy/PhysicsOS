@@ -18,13 +18,27 @@ services:
     environment:
       NODE_ENV: production
       DSH_HOME: /var/lib/physicsos
+      PHYSICSOS_STORAGE_BACKEND: postgres
+      PHYSICSOS_STORAGE_SCHEMA: physicsos
+      PHYSICSOS_SHARED_STATE_BACKEND: redis
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
       DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
+      # auth-host 只从 PHYSICSOS_ADMIN_PASSWORD 种 SUPER_ADMIN；自注册只能得到
+      # STUDENT。entrypoint 把 *_FILE materialize 成同名明文变量，文件缺失或为空
+      # 直接拒绝启动，因此这里不会出现"没有管理员"的半配置生产实例。
+      PHYSICSOS_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      # 题图生成 key；缺失时 paper-host 静默退化为占位说明，所以按 secret 强校验。
+      PHYSICOS_IMAGE_API_KEY_FILE: /run/secrets/image_api_key
+      # TLS 反代后的真实客户端 IP / Secure cookie 判断。非 secret：Compose 里
+      # 显式给出默认空串，未配置时一律不信任转发头。
+      PHYSICOS_TRUSTED_PROXIES: ${PHYSICOS_TRUSTED_PROXIES:-}
     secrets:
       - database_url
       - redis_url
       - deepseek_api_key
+      - admin_password
+      - image_api_key
     volumes:
       - app_data:/var/lib/physicsos
     ports:
@@ -120,3 +134,7 @@ secrets:
     file: ${PHYSICSOS_REDIS_URL_FILE:-./.env.redis_url}
   deepseek_api_key:
     file: ${PHYSICSOS_DEEPSEEK_API_KEY_FILE:-./.env.deepseek_api_key}
+  admin_password:
+    file: ${PHYSICSOS_ADMIN_PASSWORD_FILE:-./.env.admin_password}
+  image_api_key:
+    file: ${PHYSICOS_IMAGE_API_KEY_FILE:-./.env.image_api_key}

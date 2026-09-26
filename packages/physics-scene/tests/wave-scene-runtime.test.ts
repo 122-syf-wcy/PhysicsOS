@@ -261,8 +261,8 @@ describe('wave scene commands', () => {
 
     const before = runtime.getScene()
     expect(
-      rejected(execute(runtime, 'SetWaveHarmonic', { benchId: 'wave-bench-1', harmonic: 0 }))
-        .error.code,
+      rejected(execute(runtime, 'SetWaveHarmonic', { benchId: 'wave-bench-1', harmonic: 0 })).error
+        .code,
     ).toBe('INVALID_WAVE_HARMONIC')
     expect(
       rejected(execute(runtime, 'SetWaveHarmonic', { benchId: 'wave-bench-1', harmonic: 1.5 }))
@@ -310,7 +310,10 @@ describe('wave scene commands', () => {
     /* Δ > d = 0.8 m: no point in the plane is that much farther from S₁ than S₂. */
     const before = runtime.getScene()
     const unreachable = rejected(
-      execute(runtime, 'SetWavePathDifference', { benchId: 'wave-bench-1', pathDifference: m(1.5) }),
+      execute(runtime, 'SetWavePathDifference', {
+        benchId: 'wave-bench-1',
+        pathDifference: m(1.5),
+      }),
     )
     expect(unreachable.error.code).toBe('WAVE_PATH_DIFFERENCE_UNREACHABLE')
     expect(runtime.getScene()).toEqual(before)

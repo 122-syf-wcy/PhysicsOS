@@ -56,17 +56,25 @@ const BAR_HEIGHT = 5
 /** Gap between the ramp's foot and the bar, and above the ramp's peak. */
 const BAR_OFFSET = 10
 
+/**
+ * The energy visual input shape used by the energy scene visuals module.
+ */
 export interface EnergyVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedEnergyModel
 }
 
-/** Student-facing name of the rig. */
+/**
+ * Student-facing name of the rig.
+ * @returns the formatted string.
+ */
 export const energyRigText = (): string => '动能与势能的转化'
 
 /**
  * Scene observable definition → canvas toggle key. The bench factory stamps
  * `observable-energy-ledger` / `observable-energy-conversion`.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const energyObservableKeyOf = (
   definition: ObservableDefinition,
@@ -91,8 +99,15 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
  * the ledger bar sits under the foot, where the cart arrives. A ramp drawn the
  * other way would put the release point on the left and read backwards against
  * every other left-to-right figure in the app.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
  */
-export const energySceneVisual = ({ scene, model }: EnergyVisualInput): SceneVisualModel => {
+export const energySceneVisual = (input: EnergyVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const ledger = energyLedgerOf(model)
   const visible = visibilityOf(scene)
 

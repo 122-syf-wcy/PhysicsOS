@@ -65,7 +65,15 @@ describe('the second plateau', () => {
       createThermalSimulationRequest(waterScene(), 'sim-boil', 'trace-boil'),
     )
     if (simulation.verification.status !== 'passed') {
-      console.log(JSON.stringify(simulation.verification.checks.filter(c => !c.passed).map(c => ({ id: c.id, message: c.message, details: c.details })), null, 1))
+      console.log(
+        JSON.stringify(
+          simulation.verification.checks
+            .filter((c) => !c.passed)
+            .map((c) => ({ id: c.id, message: c.message, details: c.details })),
+          null,
+          1,
+        ),
+      )
     }
     expect(simulation.verification.status).toBe('passed')
     /* 336 s of warming plus 2260 s of boiling: the physics decides where the run

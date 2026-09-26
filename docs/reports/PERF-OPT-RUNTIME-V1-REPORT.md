@@ -11,36 +11,36 @@
 
 四条性能约束对应的现状缺口：
 
-| 约束 | 现状 | 缺口 |
-| --- | --- | --- |
-| #123 Canvas 性能（禁止每帧 React 全树更新） | 动画时钟每帧 `setSnapshot` | 每帧触发整棵 React 树重渲染 |
-| #85 / #124 采样率分离 + 大数据轨迹有界 | 引擎硬编码轨迹分段，`SimulationOptions.outputSampleRate` 声明但零消费 | 存储随仿真无限增长、渲染点数无上界 |
-| #150 / #26 主线程长任务与 O(n²) | 部分路径线性/二次扫描 | `phaseAt` 线性扫描、验证汇总 O(E×C)、场采样反复分配 |
-| #125 Worker 消息必须明确 Contract | 无可 Worker 化的消息信封 | 未来 Worker 化无契约可依 |
+| 约束                                        | 现状                                                                  | 缺口                                                |
+| ------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+| #123 Canvas 性能（禁止每帧 React 全树更新） | 动画时钟每帧 `setSnapshot`                                            | 每帧触发整棵 React 树重渲染                         |
+| #85 / #124 采样率分离 + 大数据轨迹有界      | 引擎硬编码轨迹分段，`SimulationOptions.outputSampleRate` 声明但零消费 | 存储随仿真无限增长、渲染点数无上界                  |
+| #150 / #26 主线程长任务与 O(n²)             | 部分路径线性/二次扫描                                                 | `phaseAt` 线性扫描、验证汇总 O(E×C)、场采样反复分配 |
+| #125 Worker 消息必须明确 Contract           | 无可 Worker 化的消息信封                                              | 未来 Worker 化无契约可依                            |
 
 本轮不引入 Worker 生产实现、不触发懒加载改造（§86 属 web 层后续事项），只把「契约、上界、解耦、复杂度」四件事落地并用既有门禁证明数值未变。
 
 ## 2. 交付物
 
-| 路径 | 内容 |
-| --- | --- |
-| `packages/physics-scene/src/trajectory-sampling.ts`（新） | 采样/抽稀/分块契约：#124 有界存储 `MAX_TRAJECTORY_STORAGE_SAMPLES = 1024`、渲染预算 `MAX_TRAJECTORY_RENDER_POINTS = 512`；`trajectoryStorageSampleCount`（读 `outputSampleRate`，钳制 [2,1024]）、`trajectorySampleTimes`（等距含端点）、`decimateTrajectoryPoints`（保首尾 + `protect` 索引集）、`chunkTrajectoryPoints` |
-| `packages/physics-scene/tests/trajectory-sampling.test.ts`（新） | 14 个用例：钳制 / 等距 / 抽稀保首尾 / protect / 分块 |
-| 6 个引擎（mechanics / magnetic / electric / wave / induction / composite） | `simulate()` 尊重 `request.options.outputSampleRate`；缺省 fallback 与原分段常量完全一致（默认行为零变化） |
-| 4 个观察层轨迹构建器（magnetic / electric / mechanics / composite） | 以 512 点为界抽稀；composite 额外把 phase 边界时刻收集进 `protect`，抽稀后区域穿越拐点不丢 |
-| `packages/physics-core/src/simulation.ts` | 新增 Worker 消息契约：`SimulationProgress` / `SimulationError` / `SimulationWorkerMessage` 判别联合 + `parseSimulationWorkerMessage` 结构校验器（schema `simulation-worker/1.0`） |
-| `packages/physics-core/src/verification.ts` | `summarizeVerification` O(E×C) → O(E+C)（error-code Set 去重） |
-| `packages/engine-composite/src/composite-engine.ts` | `phaseAt` 线性扫描 → 二分查找，语义与原实现逐分支等价（注释保留原「首个 endTime ≥ time」判定） |
-| `packages/physics-electric-core/src/field.ts` | `fieldAt` 融合单遍累加，消除每次采样 n 次中间分配与双遍历 |
-| `packages/physics-verifier/src/electric-verifier.ts` | 每状态派生量一次 Map 索引替代多次线性扫描（文件同时被 prettier 重排，语义 diff 为该项） |
-| `packages/physics-verifier/src/magnetic-verifier.ts` | `assumptionsFromResult` O(A²) → O(A) |
-| `overlays/.../ui-physicsos/src/client/physics/frame-source.ts`（新） | #123 渲染通道：`createFrameSource` / `useFrameSource`（`useSyncExternalStore`），画布专属订阅 |
-| `overlays/.../ui-physicsos/src/client/PhysicsWorkspace.tsx` | 动画时钟每帧发布到 FrameSource（画布独立更新）；React 壳按 250ms 摘要节流刷新，Status / revision / running 变化即时刷新 |
-| `overlays/.../ui-physicsos/src/client/QuestionWorkspace.tsx` | 播放时钟与逐帧视觉计算下沉到画布子树；drawn-id Selection 以 set 相等守卫向上汇报，父级 rails 不随帧重渲染 |
-| `overlays/.../ui-physicsos/tests/frame-source.client.spec.ts`（新） | FrameSource 语义 4 用例 |
-| `overlays/.../ui-physicsos/tests/renderer-decoupling.client.spec.tsx`（新） | #123 浏览器级验证 2 用例：逐帧只更新画布读数、React 壳停留在节流摘要，250ms 后追平；离散交互即时 |
-| `packages/physics-core/tests/contracts.test.ts` | +5 Worker 契约用例（round-trip / 拒非 schema / 未知 kind / 非对象 / progress 越界） |
-| `packages/physics-core/src/index.ts`、`packages/physics-scene/src/index.ts` | 新导出 |
+| 路径                                                                        | 内容                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/physics-scene/src/trajectory-sampling.ts`（新）                   | 采样/抽稀/分块契约：#124 有界存储 `MAX_TRAJECTORY_STORAGE_SAMPLES = 1024`、渲染预算 `MAX_TRAJECTORY_RENDER_POINTS = 512`；`trajectoryStorageSampleCount`（读 `outputSampleRate`，钳制 [2,1024]）、`trajectorySampleTimes`（等距含端点）、`decimateTrajectoryPoints`（保首尾 + `protect` 索引集）、`chunkTrajectoryPoints` |
+| `packages/physics-scene/tests/trajectory-sampling.test.ts`（新）            | 14 个用例：钳制 / 等距 / 抽稀保首尾 / protect / 分块                                                                                                                                                                                                                                                                      |
+| 6 个引擎（mechanics / magnetic / electric / wave / induction / composite）  | `simulate()` 尊重 `request.options.outputSampleRate`；缺省 fallback 与原分段常量完全一致（默认行为零变化）                                                                                                                                                                                                                |
+| 4 个观察层轨迹构建器（magnetic / electric / mechanics / composite）         | 以 512 点为界抽稀；composite 额外把 phase 边界时刻收集进 `protect`，抽稀后区域穿越拐点不丢                                                                                                                                                                                                                                |
+| `packages/physics-core/src/simulation.ts`                                   | 新增 Worker 消息契约：`SimulationProgress` / `SimulationError` / `SimulationWorkerMessage` 判别联合 + `parseSimulationWorkerMessage` 结构校验器（schema `simulation-worker/1.0`）                                                                                                                                         |
+| `packages/physics-core/src/verification.ts`                                 | `summarizeVerification` O(E×C) → O(E+C)（error-code Set 去重）                                                                                                                                                                                                                                                            |
+| `packages/engine-composite/src/composite-engine.ts`                         | `phaseAt` 线性扫描 → 二分查找，语义与原实现逐分支等价（注释保留原「首个 endTime ≥ time」判定）                                                                                                                                                                                                                            |
+| `packages/physics-electric-core/src/field.ts`                               | `fieldAt` 融合单遍累加，消除每次采样 n 次中间分配与双遍历                                                                                                                                                                                                                                                                 |
+| `packages/physics-verifier/src/electric-verifier.ts`                        | 每状态派生量一次 Map 索引替代多次线性扫描（文件同时被 prettier 重排，语义 diff 为该项）                                                                                                                                                                                                                                   |
+| `packages/physics-verifier/src/magnetic-verifier.ts`                        | `assumptionsFromResult` O(A²) → O(A)                                                                                                                                                                                                                                                                                      |
+| `overlays/.../ui-physicsos/src/client/physics/frame-source.ts`（新）        | #123 渲染通道：`createFrameSource` / `useFrameSource`（`useSyncExternalStore`），画布专属订阅                                                                                                                                                                                                                             |
+| `overlays/.../ui-physicsos/src/client/PhysicsWorkspace.tsx`                 | 动画时钟每帧发布到 FrameSource（画布独立更新）；React 壳按 250ms 摘要节流刷新，Status / revision / running 变化即时刷新                                                                                                                                                                                                   |
+| `overlays/.../ui-physicsos/src/client/QuestionWorkspace.tsx`                | 播放时钟与逐帧视觉计算下沉到画布子树；drawn-id Selection 以 set 相等守卫向上汇报，父级 rails 不随帧重渲染                                                                                                                                                                                                                 |
+| `overlays/.../ui-physicsos/tests/frame-source.client.spec.ts`（新）         | FrameSource 语义 4 用例                                                                                                                                                                                                                                                                                                   |
+| `overlays/.../ui-physicsos/tests/renderer-decoupling.client.spec.tsx`（新） | #123 浏览器级验证 2 用例：逐帧只更新画布读数、React 壳停留在节流摘要，250ms 后追平；离散交互即时                                                                                                                                                                                                                          |
+| `packages/physics-core/tests/contracts.test.ts`                             | +5 Worker 契约用例（round-trip / 拒非 schema / 未知 kind / 非对象 / progress 越界）                                                                                                                                                                                                                                       |
+| `packages/physics-core/src/index.ts`、`packages/physics-scene/src/index.ts` | 新导出                                                                                                                                                                                                                                                                                                                    |
 
 改动合计：20 个源文件改 + 5 个文件新增（989 插入 / 256 删除，不含 vendor 子模块指针），全部在 `packages/` 与 `overlays/`（不触 `apps/`、`vendor/` 上游历史、`services/`）。
 
@@ -72,18 +72,18 @@
 
 ## 6. 评审 findings 处置
 
-| ID | 严重度 | 内容 | 处置 |
-| --- | --- | --- | --- |
-| F1 | low | 无独立 chart 采样率预算 | 记录：chart 消费者出现时实现独立预算（§7） |
-| F2 | medium | composite 索引式抽稀可能丢 phase-boundary | **已落实**：观察层把边界时刻索引收集进 `protect` 再抽稀 |
-| F3 | low | `chunkTrajectoryPoints` 无生产消费者 | 记录：1024/512 上界下分块原语备懒加载轨迹消费者使用 |
-| F4 | low | `outputSampleRate` 语义缺文档 | **已落实**：`trajectory-sampling.ts` 头部契约注释说明为「存储采样总数，钳制 [2,1024]」 |
-| F5 | low | magnetic 合并 verification times 后 states 可略超 1024 | 记录：上界为近似；verification times 从 states 分离属后续 |
-| F6 | low | 部分有界引擎未接 `outputSampleRate` 钩子 | 记录：electric-region / fluid / thermal / acoustics / lever 均为有界分段，非无限增长 |
-| F1 (t9) | low | `parseSimulationWorkerMessage` 浅层校验、doc 措辞过强 | 记录：Worker 实现落地时补深度校验或收敛 doc |
-| F2 (t9) | medium | composite phase 分解极端场景为有界长任务，未 Worker 化 | 记录：`simulation-worker/1.0` 契约已备，生产 Worker 为登记跟进项（§7） |
-| F3 (t9) | low | electric-verifier diff 混入 prettier 重排噪音 | 已接受：重排随本轮提交，语义 diff 为 Map 索引一项 |
-| F1 (t5) | low | WeakMap 缓存数组无防御性拷贝 | 记录：当前无写消费者，出现时改 frozen/拷贝并注明只读契约 |
+| ID      | 严重度 | 内容                                                   | 处置                                                                                   |
+| ------- | ------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| F1      | low    | 无独立 chart 采样率预算                                | 记录：chart 消费者出现时实现独立预算（§7）                                             |
+| F2      | medium | composite 索引式抽稀可能丢 phase-boundary              | **已落实**：观察层把边界时刻索引收集进 `protect` 再抽稀                                |
+| F3      | low    | `chunkTrajectoryPoints` 无生产消费者                   | 记录：1024/512 上界下分块原语备懒加载轨迹消费者使用                                    |
+| F4      | low    | `outputSampleRate` 语义缺文档                          | **已落实**：`trajectory-sampling.ts` 头部契约注释说明为「存储采样总数，钳制 [2,1024]」 |
+| F5      | low    | magnetic 合并 verification times 后 states 可略超 1024 | 记录：上界为近似；verification times 从 states 分离属后续                              |
+| F6      | low    | 部分有界引擎未接 `outputSampleRate` 钩子               | 记录：electric-region / fluid / thermal / acoustics / lever 均为有界分段，非无限增长   |
+| F1 (t9) | low    | `parseSimulationWorkerMessage` 浅层校验、doc 措辞过强  | 记录：Worker 实现落地时补深度校验或收敛 doc                                            |
+| F2 (t9) | medium | composite phase 分解极端场景为有界长任务，未 Worker 化 | 记录：`simulation-worker/1.0` 契约已备，生产 Worker 为登记跟进项（§7）                 |
+| F3 (t9) | low    | electric-verifier diff 混入 prettier 重排噪音          | 已接受：重排随本轮提交，语义 diff 为 Map 索引一项                                      |
+| F1 (t5) | low    | WeakMap 缓存数组无防御性拷贝                           | 记录：当前无写消费者，出现时改 frozen/拷贝并注明只读契约                               |
 
 ## 7. 明确不做 / 后续
 

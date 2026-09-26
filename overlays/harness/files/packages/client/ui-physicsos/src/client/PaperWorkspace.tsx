@@ -21,6 +21,10 @@ import {
 } from '@physicsos/question-paper/difficulty'
 import { isTeachingRole, type AuthState } from './auth-store.ts'
 import { MathText } from './physics/MathText.tsx'
+import { GlassSelect } from './GlassSelect.tsx'
+import {
+  QuestionUploadError, readQuestionUpload, type UploadedImage,
+} from './question-upload.ts'
 import css from './PaperWorkspace.module.css'
 
 type Tab = 'new' | 'jobs' | 'final' | 'bank' | 'sources'
@@ -372,14 +376,18 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
         <div className={css.wizardMain}>
           <div className={css.stepCard}>
             <h3 className={css.stepCardTitle}><span className={css.stepBadge}>1</span>选择试卷结构</h3>
-            <label className={css.field}>结构模板（已核验）
-              <select value={blueprintId} onChange={(e) => { setBlueprintId(e.target.value) }}>
-                <option value="">— 选择 —</option>
-                {blueprints.map(b => (
-                  <option key={b.id} value={b.id}>{b.title}（{b.totalScore} 分 / {b.minutes} 分钟）</option>
-                ))}
-              </select>
-            </label>
+            <div className={css.field}><span>结构模板（已核验）</span>
+              <GlassSelect
+                value={blueprintId}
+                ariaLabel="结构模板"
+                testId="blueprint"
+                placeholder="— 选择 —"
+                options={blueprints.map(b => ({
+                  value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
+                }))}
+                onChange={setBlueprintId}
+              />
+            </div>
             {blueprint !== undefined && (
               <div className={css.bpInfo}>
                 {blueprint.sections.map((s, i) => (
@@ -394,11 +402,15 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
           <div className={css.stepCard}>
             <h3 className={css.stepCardTitle}><span className={css.stepBadge}>2</span>划定考试范围</h3>
             <div className={css.fieldRow}>
-              <label className={css.field}>卷型
-                <select value={kind} onChange={(e) => { setKind(e.target.value) }}>
-                  {KINDS.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-                </select>
-              </label>
+              <div className={css.field}><span>卷型</span>
+                <GlassSelect
+                  value={kind}
+                  ariaLabel="卷型"
+                  testId="paper-kind"
+                  options={KINDS.map(k => ({ value: k, label: KIND_LABEL[k] ?? k }))}
+                  onChange={setKind}
+                />
+              </div>
             </div>
             <label className={css.field}>已教章节（分号或换行分隔）
               <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
@@ -412,15 +424,17 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
 
           <div className={css.stepCard}>
             <h3 className={css.stepCardTitle}><span className={css.stepBadge}>3</span>设定难度配比</h3>
-            <label className={css.field}>难度系数（贵州中高考标准档）
-              <select value={presetKey} onChange={(e) => { setPresetKey(e.target.value) }}>
-                {DIFFICULTY_PRESETS.map(p => (
-                  <option key={p.key} value={p.key}>
-                    {p.label} — 系数 ≈{mixCoefficient(p.mix).toFixed(2)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className={css.field}><span>难度系数（贵州中高考标准档）</span>
+              <GlassSelect
+                value={presetKey}
+                ariaLabel="难度系数"
+                testId="difficulty-preset"
+                options={DIFFICULTY_PRESETS.map(p => ({
+                  value: p.key, label: `${p.label} — 系数 ≈${mixCoefficient(p.mix).toFixed(2)}`,
+                }))}
+                onChange={setPresetKey}
+              />
+            </div>
             <MixBar mix={preset.mix} />
           </div>
         </div>
@@ -954,46 +968,70 @@ function SourcesPanel({ sources, annotations, stats, blueprints, reviewer, api, 
               <label className={css.fld}><span>年份</span>
                 <input value={form.year}
                   onChange={(e) => { setForm(f => ({ ...f, year: e.target.value })) }} /></label>
-              <label className={css.fld}><span>学段</span>
-                <select value={form.level} onChange={(e) => { setForm(f => ({ ...f, level: e.target.value })) }}>
-                  <option value="zhongkao">中考（理综）</option>
-                  <option value="gaokao">高考（选择性考试物理）</option>
-                </select></label>
-              <label className={css.fld}><span>科目</span>
-                <select value={form.subject} onChange={(e) => { setForm(f => ({ ...f, subject: e.target.value })) }}>
-                  <option value="combined">理综（物理+化学）</option>
-                  <option value="physics">物理</option>
-                  <option value="chemistry">化学</option>
-                </select></label>
+              <div className={css.fld}><span>学段</span>
+                <GlassSelect
+                  value={form.level}
+                  ariaLabel="原卷学段"
+                  options={[
+                    { value: 'zhongkao', label: '中考（理综）' },
+                    { value: 'gaokao', label: '高考（选择性考试物理）' },
+                  ]}
+                  onChange={(value) => { setForm(f => ({ ...f, level: value })) }}
+                />
+              </div>
+              <div className={css.fld}><span>科目</span>
+                <GlassSelect
+                  value={form.subject}
+                  ariaLabel="原卷科目"
+                  options={[
+                    { value: 'combined', label: '理综（物理+化学）' },
+                    { value: 'physics', label: '物理' },
+                    { value: 'chemistry', label: '化学' },
+                  ]}
+                  onChange={(value) => { setForm(f => ({ ...f, subject: value })) }}
+                />
+              </div>
               <label className={clsx(css.fld, css.fldWide)}><span>原卷名称</span>
                 <input placeholder="如 2025 年贵州省中考理综卷" value={form.examName}
                   onChange={(e) => { setForm(f => ({ ...f, examName: e.target.value })) }} /></label>
               <label className={clsx(css.fld, css.fldWide)}><span>出处 / 存档位置</span>
                 <input value={form.sourceRef}
                   onChange={(e) => { setForm(f => ({ ...f, sourceRef: e.target.value })) }} /></label>
-              <label className={css.fld}><span>证据等级</span>
-                <select value={form.evidenceTier} onChange={(e) => { setForm(f => ({ ...f, evidenceTier: e.target.value })) }}>
-                  <option value="policy">政策文件</option>
-                  <option value="original-scan">原卷扫描</option>
-                  <option value="manual-transcript">人工转录</option>
-                  <option value="institution-analysis">机构解析</option>
-                  <option value="recalled">回忆版（不进正式统计）</option>
-                </select></label>
+              <div className={css.fld}><span>证据等级</span>
+                <GlassSelect
+                  value={form.evidenceTier}
+                  ariaLabel="证据等级"
+                  options={[
+                    { value: 'policy', label: '政策文件' },
+                    { value: 'original-scan', label: '原卷扫描' },
+                    { value: 'manual-transcript', label: '人工转录' },
+                    { value: 'institution-analysis', label: '机构解析' },
+                    { value: 'recalled', label: '回忆版（不进正式统计）' },
+                  ]}
+                  onChange={(value) => { setForm(f => ({ ...f, evidenceTier: value })) }}
+                />
+              </div>
               <label className={css.fld}><span>地区</span>
                 <input placeholder="如 贵州·贵阳（省级留空）" value={form.region}
                   onChange={(e) => { setForm(f => ({ ...f, region: e.target.value })) }} /></label>
               <label className={css.fld}><span>出题学校</span>
                 <input placeholder="如 贵阳一中（统考留空）" value={form.school}
                   onChange={(e) => { setForm(f => ({ ...f, school: e.target.value })) }} /></label>
-              <label className={css.fld}><span>卷类型</span>
-                <select value={form.kind} onChange={(e) => { setForm(f => ({ ...f, kind: e.target.value })) }}>
-                  <option value="real">真题</option>
-                  <option value="mock">模拟预测</option>
-                  <option value="monthly">月考</option>
-                  <option value="midterm">期中</option>
-                  <option value="final">期末</option>
-                  <option value="joint">联考/统考</option>
-                </select></label>
+              <div className={css.fld}><span>卷类型</span>
+                <GlassSelect
+                  value={form.kind}
+                  ariaLabel="卷类型"
+                  options={[
+                    { value: 'real', label: '真题' },
+                    { value: 'mock', label: '模拟预测' },
+                    { value: 'monthly', label: '月考' },
+                    { value: 'midterm', label: '期中' },
+                    { value: 'final', label: '期末' },
+                    { value: 'joint', label: '联考/统考' },
+                  ]}
+                  onChange={(value) => { setForm(f => ({ ...f, kind: value })) }}
+                />
+              </div>
               <label className={clsx(css.fld, css.fldCheck)}><span>含金量</span>
                 <span className={css.checkRow}>
                   <input
@@ -1009,29 +1047,45 @@ function SourcesPanel({ sources, annotations, stats, blueprints, reviewer, api, 
           <div className={css.card}>
             <h3>逐题考点录入</h3>
             <div className={css.formGrid}>
-              <label className={clsx(css.fld, css.fldWide)}><span>原卷</span>
-                <select value={annoSource} onChange={(e) => { setAnnoSource(e.target.value) }}>
-                  <option value="">— 选择原卷 —</option>
-                  {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
-                </select></label>
+              <div className={clsx(css.fld, css.fldWide)}><span>原卷</span>
+                <GlassSelect
+                  value={annoSource}
+                  ariaLabel="标注原卷"
+                  placeholder="— 选择原卷 —"
+                  options={sources.map(s => ({ value: s.id, label: s.examName }))}
+                  onChange={setAnnoSource}
+                />
+              </div>
               <label className={css.fld}><span>题号</span>
                 <input value={anno.questionNo}
                   onChange={(e) => { setAnno(a => ({ ...a, questionNo: e.target.value })) }} /></label>
-              <label className={css.fld}><span>科目</span>
-                <select value={anno.subject} onChange={(e) => { setAnno(a => ({ ...a, subject: e.target.value })) }}>
-                  <option value="physics">物理</option>
-                  <option value="chemistry">化学</option>
-                </select></label>
-              <label className={css.fld}><span>题型</span>
-                <select value={anno.kind} onChange={(e) => { setAnno(a => ({ ...a, kind: e.target.value })) }}>
-                  <option value="choice-single">单选</option>
-                  <option value="choice-multi">多选</option>
-                  <option value="blank">填空</option>
-                  <option value="drawing">作图</option>
-                  <option value="short-answer">简答</option>
-                  <option value="experiment">实验探究</option>
-                  <option value="calculation">综合计算</option>
-                </select></label>
+              <div className={css.fld}><span>科目</span>
+                <GlassSelect
+                  value={anno.subject}
+                  ariaLabel="标注科目"
+                  options={[
+                    { value: 'physics', label: '物理' },
+                    { value: 'chemistry', label: '化学' },
+                  ]}
+                  onChange={(value) => { setAnno(a => ({ ...a, subject: value })) }}
+                />
+              </div>
+              <div className={css.fld}><span>题型</span>
+                <GlassSelect
+                  value={anno.kind}
+                  ariaLabel="标注题型"
+                  options={[
+                    { value: 'choice-single', label: '单选' },
+                    { value: 'choice-multi', label: '多选' },
+                    { value: 'blank', label: '填空' },
+                    { value: 'drawing', label: '作图' },
+                    { value: 'short-answer', label: '简答' },
+                    { value: 'experiment', label: '实验探究' },
+                    { value: 'calculation', label: '综合计算' },
+                  ]}
+                  onChange={(value) => { setAnno(a => ({ ...a, kind: value })) }}
+                />
+              </div>
               <label className={css.fld}><span>分值</span>
                 <input value={anno.score}
                   onChange={(e) => { setAnno(a => ({ ...a, score: e.target.value })) }} /></label>
@@ -1052,11 +1106,15 @@ function SourcesPanel({ sources, annotations, stats, blueprints, reviewer, api, 
           <div className={css.card}>
             <h3>CSV 批量导入</h3>
             <div className={css.formGrid}>
-              <label className={css.fld}><span>原卷</span>
-                <select value={csvSource} onChange={(e) => { setCsvSource(e.target.value) }}>
-                  <option value="">— 选择原卷 —</option>
-                  {sources.map(s => <option key={s.id} value={s.id}>{s.examName}</option>)}
-                </select></label>
+              <div className={css.fld}><span>原卷</span>
+                <GlassSelect
+                  value={csvSource}
+                  ariaLabel="CSV 原卷"
+                  placeholder="— 选择原卷 —"
+                  options={sources.map(s => ({ value: s.id, label: s.examName }))}
+                  onChange={setCsvSource}
+                />
+              </div>
               <label className={clsx(css.fld, css.fldWide)}><span>CSV 内容</span>
                 <textarea value={csvText} onChange={(e) => { setCsvText(e.target.value) }} rows={5}
                   placeholder={'题号,科目,题型,分值,主考点,次考点,能力,页码\n1,物理,choice-single,3,参照物,,理解,1'} /></label>
@@ -1127,6 +1185,9 @@ function BankPanel({ items, reviewer, api, run, onError }: {
   const [subject, setSubject] = useState<'physics' | 'chemistry'>('physics')
   const [sourceUrl, setSourceUrl] = useState('')
   const [ingesting, setIngesting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importingLabel, setImportingLabel] = useState<string>()
+  const [transcription, setTranscription] = useState<string>()
   const [ingestResult, setIngestResult] = useState<string>()
   const [expanded, setExpanded] = useState<string | undefined>()
   /* Batch review scope: a substring filter so a teacher can accept one import
@@ -1158,6 +1219,55 @@ function BankPanel({ items, reviewer, api, run, onError }: {
       void run(() => Promise.resolve())
     }).catch((e: unknown) => { onError(err(e)) })
       .finally(() => { setIngesting(false) })
+  }
+
+  /**
+   * 图片/扫描件导入。图片与扫描版 PDF 走视觉转录（服务端识别后再结构化），
+   * 文本层完整的 PDF 直接本地抽文——pdf.js 在浏览器里读，不花一次模型调用，
+   * 学生/教师确认过原文再入库。
+   */
+  const importFiles = (files: readonly File[]) => {
+    if (files.length === 0 || importing) return
+    setImporting(true)
+    setIngestResult(undefined)
+    void (async () => {
+      try {
+        const collected: UploadedImage[] = []
+        const texts: string[] = []
+        for (const file of files) {
+          const read = await readQuestionUpload(file)
+          if (read.kind === 'image') collected.push(read.image)
+          else if (read.kind === 'pdf-text') texts.push(read.text)
+          else collected.push(...read.images)
+        }
+        if (texts.length > 0) {
+          /* 文本层 PDF 不烧模型:抽出的原文落到编辑框,教师确认后点结构化入库。 */
+          setPaste(current => [current, ...texts].filter(part => part.trim() !== '').join('\n\n'))
+          setIngestResult(`已从 PDF 提取文本层（${texts.length} 份）——请核对后点「结构化入库」。`)
+        }
+        if (collected.length > 0) {
+          setImportingLabel(`识别中（${collected.length} 张）…`)
+          const result = await api.ingestBankImages({
+            images: collected.map(image => ({
+              data: image.dataBase64, mediaType: image.mediaType, name: image.name,
+            })),
+            level, subject,
+            ...(sourceUrl.trim() === '' ? {} : { sourceUrl: sourceUrl.trim() }),
+            enteredBy: reviewer,
+          })
+          const dupNote = result.duplicates.length === 0 ? ''
+            : `；重复跳过 ${result.duplicates.length} 题：${result.duplicates.join('；')}`
+          setIngestResult(`识别并入库 ${result.created.length} 题（待核验）${dupNote}`)
+          setTranscription(result.transcription)
+          void run(() => Promise.resolve())
+        }
+      } catch (e: unknown) {
+        onError(e instanceof QuestionUploadError || e instanceof Error ? e.message : String(e))
+      } finally {
+        setImporting(false)
+        setImportingLabel(undefined)
+      }
+    })()
   }
 
   /**
@@ -1270,18 +1380,32 @@ function BankPanel({ items, reviewer, api, run, onError }: {
       <div className={css.splitWide}>
         <div className={css.jobDetail}>
           <div className={css.card}>
-            <h3>粘贴导入（网络题源）</h3>
+            <h3>题目导入（粘贴 / 图片 / PDF）</h3>
             <div className={css.formGrid}>
-              <label className={css.fld}><span>学段</span>
-                <select value={level} onChange={(e) => { setLevel(e.target.value as 'zhongkao' | 'gaokao') }}>
-                  <option value="gaokao">高中（高考）</option>
-                  <option value="zhongkao">初中（中考）</option>
-                </select></label>
-              <label className={css.fld}><span>科目</span>
-                <select value={subject} onChange={(e) => { setSubject(e.target.value as 'physics' | 'chemistry') }}>
-                  <option value="physics">物理</option>
-                  <option value="chemistry">化学</option>
-                </select></label>
+              <div className={css.fld}><span>学段</span>
+                <GlassSelect
+                  value={level}
+                  ariaLabel="导入学段"
+                  testId="bank-import-level"
+                  options={[
+                    { value: 'gaokao', label: '高中（高考）' },
+                    { value: 'zhongkao', label: '初中（中考）' },
+                  ]}
+                  onChange={(value) => { setLevel(value as 'zhongkao' | 'gaokao') }}
+                />
+              </div>
+              <div className={css.fld}><span>科目</span>
+                <GlassSelect
+                  value={subject}
+                  ariaLabel="导入科目"
+                  testId="bank-import-subject"
+                  options={[
+                    { value: 'physics', label: '物理' },
+                    { value: 'chemistry', label: '化学' },
+                  ]}
+                  onChange={(value) => { setSubject(value as 'physics' | 'chemistry') }}
+                />
+              </div>
               <label className={clsx(css.fld, css.fldWide)}><span>来源链接（可选）</span>
                 <input value={sourceUrl} placeholder="题目出处页面 URL"
                   onChange={(e) => { setSourceUrl(e.target.value) }} /></label>
@@ -1289,12 +1413,33 @@ function BankPanel({ items, reviewer, api, run, onError }: {
                 <textarea value={paste} rows={10}
                   placeholder={'从网页/资料粘贴题目原文，例如：\n5．（2024·贵阳一中高三月考）如图所示，质量为 m=2kg 的物块……\n【答案】C\n【解析】物块沿斜面向上匀速运动……'}
                   onChange={(e) => { setPaste(e.target.value) }} /></label>
+              <label className={clsx(css.fld, css.fldWide)}><span>图片 / PDF（题图、扫描卷、文本层 PDF）</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                  multiple
+                  disabled={importing}
+                  data-bank-import=""
+                  onChange={(event) => {
+                    const files = [...(event.target.files ?? [])]
+                    event.target.value = ''
+                    importFiles(files)
+                  }}
+                />
+              </label>
               <button type="button" className={clsx(css.primary, css.fldBtn)}
-                disabled={ingesting} onClick={ingest}>
+                disabled={ingesting || importing} onClick={ingest}>
                 {ingesting ? '结构化中…' : '结构化入库'}
               </button>
             </div>
+            {importing && <p className={css.ingestResult}>{importingLabel ?? '读取文件中…'}</p>}
             {ingestResult !== undefined && <p className={css.ingestResult}>{ingestResult}</p>}
+            {transcription !== undefined && (
+              <details className={css.transcription} data-bank-transcription="">
+                <summary>查看识别原文（对照原图核对后批量核验）</summary>
+                <pre>{transcription}</pre>
+              </details>
+            )}
           </div>
 
           <div className={css.card}>

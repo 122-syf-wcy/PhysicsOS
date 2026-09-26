@@ -12,7 +12,7 @@ const servers: Server[] = []
 afterEach(async () => {
   await Promise.all(
     servers.splice(0).map(
-      (server) =>
+      server =>
         new Promise<void>((resolve) => {
           server.close(() => {
             resolve()
@@ -20,7 +20,7 @@ afterEach(async () => {
         }),
     ),
   )
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
 async function secretFile(contents: string): Promise<string> {
@@ -93,7 +93,7 @@ describe('readiness aggregation', () => {
       [
         {
           name: 'redis',
-          run: (signal) =>
+          run: signal =>
             new Promise((_resolve, reject) => {
               signal.addEventListener(
                 'abort',

@@ -82,6 +82,11 @@ const derivedValue = (
   return row.value
 }
 
+const restoreOrigin = (runtime: ReturnType<typeof createCurrentWorkspaceRuntime>) => {
+  if (runtime.restoreOrigin === undefined) throw new Error('runtime cannot restore its origin')
+  return runtime.restoreOrigin()
+}
+
 const checkStatusOf = (
   snapshot: ReturnType<ReturnType<typeof createCurrentWorkspaceRuntime>['getSnapshot']>,
   id: string,
@@ -272,7 +277,7 @@ describe('solenoid rig', () => {
     const flipped = runtime.setChoice('current-direction', 'in')
     expect(flipped.sceneRevision).toBe(2)
 
-    const restored = runtime.restoreOrigin()
+    const restored = restoreOrigin(runtime)
     expect(restored.branch).toBeUndefined()
     expect(restored.sceneRevision).toBe(3)
     expect(derivedValue(restored, '磁感应强度 B')).toBe('0.012566')
@@ -403,7 +408,7 @@ describe('electromagnet rig', () => {
     expect(steel.sceneRevision).toBe(1)
     expect(derivedValue(steel, '极面吸力 F')).toBe('160.85')
 
-    const restored = runtime.restoreOrigin()
+    const restored = restoreOrigin(runtime)
     expect(restored.branch).toBeUndefined()
     expect(restored.sceneRevision).toBe(2)
     expect(derivedValue(restored, '极面吸力 F')).toBe('10.053')
@@ -524,7 +529,7 @@ describe('motor rig', () => {
     expect(turned.sceneRevision).toBe(1)
     expect(derivedValue(turned, '力矩 τ')).toBe('0.12')
 
-    const restored = runtime.restoreOrigin()
+    const restored = restoreOrigin(runtime)
     expect(restored.sceneRevision).toBe(2)
     expect(derivedValue(restored, '力矩 τ')).toBe('0.24')
   })

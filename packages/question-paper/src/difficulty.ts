@@ -12,7 +12,9 @@ export type { Difficulty } from './paper.ts'
 
 /** Expected score-rate per difficulty tier (教研估计). */
 export const DIFFICULTY_COEFFICIENT: Record<Difficulty, number> = {
-  basic: 0.85, medium: 0.60, hard: 0.35,
+  basic: 0.85,
+  medium: 0.6,
+  hard: 0.35,
 }
 
 /** Difficulty mix a paper request carries. */
@@ -29,22 +31,22 @@ export interface DifficultyMix {
  */
 export const DIFFICULTY_PRESETS = [
   { key: 'easy', label: '偏易（巩固检测）', mix: { basic: 0.85, medium: 0.12, hard: 0.03 } },
-  { key: 'standard', label: '标准（贵州中考常态）', mix: { basic: 0.55, medium: 0.35, hard: 0.10 } },
-  { key: 'hard', label: '偏难（模拟选拔）', mix: { basic: 0.30, medium: 0.45, hard: 0.25 } },
-  { key: 'selective', label: '选拔（压轴导向）', mix: { basic: 0.10, medium: 0.35, hard: 0.55 } },
+  { key: 'standard', label: '标准（贵州中考常态）', mix: { basic: 0.55, medium: 0.35, hard: 0.1 } },
+  { key: 'hard', label: '偏难（模拟选拔）', mix: { basic: 0.3, medium: 0.45, hard: 0.25 } },
+  { key: 'selective', label: '选拔（压轴导向）', mix: { basic: 0.1, medium: 0.35, hard: 0.55 } },
 ] as const
 
 /** Coefficient a difficulty mix implies — the request's stated target. */
 export const mixCoefficient = (mix: DifficultyMix): number =>
-  mix.basic * DIFFICULTY_COEFFICIENT.basic
-  + mix.medium * DIFFICULTY_COEFFICIENT.medium
-  + mix.hard * DIFFICULTY_COEFFICIENT.hard
+  mix.basic * DIFFICULTY_COEFFICIENT.basic +
+  mix.medium * DIFFICULTY_COEFFICIENT.medium +
+  mix.hard * DIFFICULTY_COEFFICIENT.hard
 
 /** Band label for a coefficient, on the Guizhou zhongkao reference frame. */
 export const coefficientLevel = (coefficient: number): string => {
   if (coefficient >= 0.72) return '偏易'
   if (coefficient >= 0.62) return '标准'
-  if (coefficient >= 0.50) return '偏难'
+  if (coefficient >= 0.5) return '偏难'
   return '选拔'
 }
 
@@ -62,7 +64,9 @@ export const paperCoefficient = (doc: PaperDocument): number => {
 }
 
 /** Same weighting over spec rows — usable before drafting produces items. */
-export const specCoefficient = (rows: readonly { score: number; difficulty: Difficulty }[]): number => {
+export const specCoefficient = (
+  rows: readonly { score: number; difficulty: Difficulty }[],
+): number => {
   const total = rows.reduce((n, r) => n + r.score, 0)
   if (total === 0) return 0
   return rows.reduce((n, r) => n + r.score * DIFFICULTY_COEFFICIENT[r.difficulty], 0) / total

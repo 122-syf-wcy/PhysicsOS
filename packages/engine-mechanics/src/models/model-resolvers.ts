@@ -4,14 +4,15 @@ import { canonicalValue } from '@physicsos/physics-units'
 import { vec3, scale, magnitude, type Vector3 } from '@physicsos/physics-math'
 import { PhysicsOSError } from '@physicsos/shared'
 import type { CircularOrbitModel, MechanicsModel } from './types.ts'
-import {
-  circularOrbitPeriod,
-  circularOrbitSpeed,
-  gravitationalAcceleration,
-} from '../orbit.ts'
+import { circularOrbitPeriod, circularOrbitSpeed, gravitationalAcceleration } from '../orbit.ts'
 import { newtonSecondLaw, inclineAcceleration } from '../solvers/force-dynamics.ts'
 
-export function resolveBody(scene: PhysicsScene): { body: Body; mass: number; position: Vector3; velocity: Vector3 } {
+export function resolveBody(scene: PhysicsScene): {
+  body: Body
+  mass: number
+  position: Vector3
+  velocity: Vector3
+} {
   const body = scene.bodies[0]
   if (!body) throw new Error('No body in scene')
   const mass = canonicalValue(body.mass)
@@ -56,8 +57,7 @@ export function resolveInclineAngle(scene: PhysicsScene): number {
 }
 
 /** Spring connector facts — resolved from the scene's `spring` constraint. */
-const springConstraint = (scene: PhysicsScene) =>
-  scene.constraints.find((c) => c.type === 'spring')
+const springConstraint = (scene: PhysicsScene) => scene.constraints.find((c) => c.type === 'spring')
 
 export function resolveSpringOscillatorModel(scene: PhysicsScene): MechanicsModel {
   const { body, mass, position, velocity } = resolveBody(scene)
@@ -258,17 +258,17 @@ export function resolveProjectileModel(scene: PhysicsScene): MechanicsModel {
   const { body, mass, position, velocity } = resolveBody(scene)
   const gravity = resolveGravity(scene)
   const groundY = resolveGroundY(scene)
-  
+
   const g = Math.abs(gravity.y)
   const y0 = position.y - groundY
   const vy0 = velocity.y
   const vx = velocity.x
-  
+
   let flightTime: number
   if (g === 0) {
     flightTime = 10
   } else if (Math.abs(vy0) < 1e-12) {
-    flightTime = Math.sqrt(2 * Math.abs(y0) / g)
+    flightTime = Math.sqrt((2 * Math.abs(y0)) / g)
   } else {
     const disc = vy0 * vy0 + 2 * g * Math.abs(y0)
     if (vy0 > 0) {
@@ -282,9 +282,16 @@ export function resolveProjectileModel(scene: PhysicsScene): MechanicsModel {
   if (flightTime < 0) flightTime = 0
   if (!Number.isFinite(flightTime)) flightTime = 0
 
-  const maxHeight = g > 0
-    ? (y0 > 0 ? (vy0 > 0 ? y0 + (vy0 * vy0) / (2 * g) : y0) : (vy0 > 0 ? (vy0 * vy0) / (2 * g) : 0))
-    : 0
+  const maxHeight =
+    g > 0
+      ? y0 > 0
+        ? vy0 > 0
+          ? y0 + (vy0 * vy0) / (2 * g)
+          : y0
+        : vy0 > 0
+          ? (vy0 * vy0) / (2 * g)
+          : 0
+      : 0
   const range = vx * flightTime
 
   const impactVy = vy0 - g * flightTime
@@ -316,7 +323,7 @@ export function resolveNewtonSecondLawModel(scene: PhysicsScene): MechanicsModel
   const appliedForces = resolveAppliedForces(scene, body.id)
   const gravity = resolveGravity(scene)
   const gravityForce = scale(gravity, mass)
-  
+
   const allForces = [...appliedForces]
   if (scene.forces.some((f) => f.type === 'gravity' && f.targetId === body.id)) {
     allForces.push(gravityForce)
@@ -328,9 +335,9 @@ export function resolveNewtonSecondLawModel(scene: PhysicsScene): MechanicsModel
   if (scene.forces.some((f) => f.type === 'normal' && f.targetId === body.id)) {
     allForces.push(scale(gravityForce, -1))
   }
-  
+
   const { netForce, acceleration } = newtonSecondLaw(mass, allForces)
-  
+
   return {
     modelId: 'newton_second_law',
     bodyId: body.id,
@@ -347,9 +354,9 @@ export function resolveInclinedPlaneModel(scene: PhysicsScene): MechanicsModel {
   const gravity = resolveGravity(scene)
   const inclineAngle = resolveInclineAngle(scene)
   const frictionCoefficient = resolveFrictionCoefficient(scene)
-  
+
   const result = inclineAcceleration(mass, gravity, inclineAngle, frictionCoefficient)
-  
+
   return {
     modelId: 'inclined_plane',
     bodyId: body.id,

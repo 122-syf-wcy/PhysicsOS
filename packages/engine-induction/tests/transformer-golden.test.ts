@@ -32,7 +32,9 @@ describe('the ideal transformer', () => {
       R.primaryPower * (R.secondaryTurns / R.primaryTurns) * (R.primaryTurns / R.secondaryTurns),
       12,
     )
-    expect(throughPower(secondaryVoltage(220, 1000, 200), secondaryCurrent(0.1, 1000, 200))).toBeCloseTo(22, 12)
+    expect(
+      throughPower(secondaryVoltage(220, 1000, 200), secondaryCurrent(0.1, 1000, 200)),
+    ).toBeCloseTo(22, 12)
   })
 
   it('steps UP when the secondary has more turns, and the ratios invert', () => {

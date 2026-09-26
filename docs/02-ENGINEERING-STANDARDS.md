@@ -159,7 +159,7 @@ LLM 自行决定 Scene 的最终状态
 例如以下做法禁止：
 
 ```ts
-const trajectory = await llm.generate("生成一条圆周运动轨迹")
+const trajectory = await llm.generate('生成一条圆周运动轨迹')
 ```
 
 作为真实 Scene 结果。
@@ -422,7 +422,7 @@ Redis Client
 禁止在 React：
 
 ```tsx
-const radius = m * v / (q * B)
+const radius = (m * v) / (q * B)
 ```
 
 直接作为正式结果。
@@ -674,7 +674,7 @@ domainTolerance
 ```ts
 isClose(actual, expected, {
   absolute: 1e-9,
-  relative: 1e-6
+  relative: 1e-6,
 })
 ```
 
@@ -1000,10 +1000,7 @@ type ToolCallId = Brand<string, 'ToolCallId'>
 领域对象优先使用：
 
 ```ts
-type Field =
-  | UniformElectricField
-  | UniformMagneticField
-  | GravityField
+type Field = UniformElectricField | UniformMagneticField | GravityField
 ```
 
 以 `type` 作为 discriminator。
@@ -1063,7 +1060,8 @@ Verifier
 禁止：
 
 ```ts
-if (speed > 999999) {}
+if (speed > 999999) {
+}
 ```
 
 没有解释。

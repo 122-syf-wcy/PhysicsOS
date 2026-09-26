@@ -40,12 +40,14 @@ const benchOf = (bench: NoiseBench): ResolvedNoiseModel => {
   }
   const distance = canonicalValue(bench.distance)
   if (!Number.isFinite(distance) || distance <= 0) {
-    throw modelError(
-      'NOISE_DISTANCE',
-      `Noise bench "${bench.id}" distance must be finite and > 0.`,
-    )
+    throw modelError('NOISE_DISTANCE', `Noise bench "${bench.id}" distance must be finite and > 0.`)
   }
-  return { benchId: bench.id, soundPowerLevel: powerLevel, distance, barrierAttenuation: attenuation }
+  return {
+    benchId: bench.id,
+    soundPowerLevel: powerLevel,
+    distance,
+    barrierAttenuation: attenuation,
+  }
 }
 
 /**

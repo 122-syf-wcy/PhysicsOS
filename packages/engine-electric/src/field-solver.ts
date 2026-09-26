@@ -45,10 +45,7 @@ export const solveFieldAt = (
 ): ElectricFieldSample => fieldAt(charges, at)
 
 /** Superposed potential at one point. */
-export const solvePotentialAt = (
-  charges: readonly ResolvedSourceCharge[],
-  at: Vector3,
-): number =>
+export const solvePotentialAt = (charges: readonly ResolvedSourceCharge[], at: Vector3): number =>
   charges.reduce(
     (total, charge) => total + pointChargePotential(charge.charge, charge.position, at),
     0,
@@ -83,11 +80,12 @@ export const sampleFieldLattice = (
         z: 0,
       }
       const tooClose = charges.some(
-        (charge) => magnitude({
-          x: at.x - charge.position.x,
-          y: at.y - charge.position.y,
-          z: at.z - charge.position.z,
-        }) < options.minRadius,
+        (charge) =>
+          magnitude({
+            x: at.x - charge.position.x,
+            y: at.y - charge.position.y,
+            z: at.z - charge.position.z,
+          }) < options.minRadius,
       )
       if (tooClose) continue
       samples.push(fieldAt(charges, at))
@@ -135,11 +133,12 @@ export const samplePotentialGrid = (
         z: 0,
       }
       const tooClose = charges.some(
-        (charge) => magnitude({
-          x: at.x - charge.position.x,
-          y: at.y - charge.position.y,
-          z: at.z - charge.position.z,
-        }) < options.minRadius,
+        (charge) =>
+          magnitude({
+            x: at.x - charge.position.x,
+            y: at.y - charge.position.y,
+            z: at.z - charge.position.z,
+          }) < options.minRadius,
       )
       const index = row * options.columns + column
       values[index] = tooClose ? Number.NaN : solvePotentialAt(charges, at)

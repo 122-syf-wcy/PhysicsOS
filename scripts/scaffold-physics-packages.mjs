@@ -15,7 +15,8 @@ const specs = [
   {
     dir: 'physics-units',
     name: UNITS,
-    description: 'Physics units runtime: dimensions, SI unit registry, quantities, canonical conversion',
+    description:
+      'Physics units runtime: dimensions, SI unit registry, quantities, canonical conversion',
     deps: [SHARED],
   },
   {
@@ -27,19 +28,22 @@ const specs = [
   {
     dir: 'physics-core',
     name: CORE,
-    description: 'Physics engine contracts: SimulationRequest/State/Result, DerivedQuantity, FormulaRef, tolerance',
+    description:
+      'Physics engine contracts: SimulationRequest/State/Result, DerivedQuantity, FormulaRef, tolerance',
     deps: [SHARED, UNITS, MATH],
   },
   {
     dir: 'physics-scene',
     name: SCENE,
-    description: 'PhysicsScene contract, scene commands, physics events, reducer and revision guard',
+    description:
+      'PhysicsScene contract, scene commands, physics events, reducer and revision guard',
     deps: [SHARED, UNITS, MATH, CORE],
   },
   {
     dir: 'engine-magnetic',
     name: '@physicsos/engine-magnetic',
-    description: 'Magnetic physics engine: uniform magnetic field charged particle analytical solver',
+    description:
+      'Magnetic physics engine: uniform magnetic field charged particle analytical solver',
     deps: [SHARED, UNITS, MATH, CORE, SCENE],
   },
   {
@@ -51,7 +55,8 @@ const specs = [
   {
     dir: 'physics-observation',
     name: '@physicsos/physics-observation',
-    description: 'Observation runtime: turns simulation results into velocity/force/trajectory observations',
+    description:
+      'Observation runtime: turns simulation results into velocity/force/trajectory observations',
     deps: [SHARED, UNITS, MATH, CORE, SCENE],
   },
 ]

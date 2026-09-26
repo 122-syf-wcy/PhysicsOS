@@ -1034,8 +1034,7 @@ const findElectricField = (
   )
 
 type CircuitComponentLookup =
-  | { ok: true; circuit: Circuit; component: CircuitComponent }
-  | { ok: false; error: DomainError }
+  { ok: true; circuit: Circuit; component: CircuitComponent } | { ok: false; error: DomainError }
 
 const findCircuitComponent = (
   scene: PhysicsScene,
@@ -1066,9 +1065,7 @@ const findCircuitComponent = (
   return { ok: true, circuit, component }
 }
 
-type OpticalBenchLookup =
-  | { ok: true; bench: OpticalBench }
-  | { ok: false; error: DomainError }
+type OpticalBenchLookup = { ok: true; bench: OpticalBench } | { ok: false; error: DomainError }
 
 const findOpticalBench = (scene: PhysicsScene, benchId: string): OpticalBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1082,9 +1079,7 @@ const findOpticalBench = (scene: PhysicsScene, benchId: string): OpticalBenchLoo
   return { ok: true, bench }
 }
 
-type AcousticBenchLookup =
-  | { ok: true; bench: AcousticBench }
-  | { ok: false; error: DomainError }
+type AcousticBenchLookup = { ok: true; bench: AcousticBench } | { ok: false; error: DomainError }
 
 const findAcousticBench = (scene: PhysicsScene, benchId: string): AcousticBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1098,9 +1093,7 @@ const findAcousticBench = (scene: PhysicsScene, benchId: string): AcousticBenchL
   return { ok: true, bench }
 }
 
-type FluidTankLookup =
-  | { ok: true; tank: FluidTank }
-  | { ok: false; error: DomainError }
+type FluidTankLookup = { ok: true; tank: FluidTank } | { ok: false; error: DomainError }
 
 const findFluidTank = (scene: PhysicsScene, tankId: string): FluidTankLookup => {
   if (typeof tankId !== 'string' || tankId.length === 0) {
@@ -1114,9 +1107,7 @@ const findFluidTank = (scene: PhysicsScene, tankId: string): FluidTankLookup => 
   return { ok: true, tank }
 }
 
-type ThermalBenchLookup =
-  | { ok: true; bench: ThermalBench }
-  | { ok: false; error: DomainError }
+type ThermalBenchLookup = { ok: true; bench: ThermalBench } | { ok: false; error: DomainError }
 
 const findThermalBench = (scene: PhysicsScene, benchId: string): ThermalBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1130,9 +1121,7 @@ const findThermalBench = (scene: PhysicsScene, benchId: string): ThermalBenchLoo
   return { ok: true, bench }
 }
 
-type LeverLookup =
-  | { ok: true; bench: LeverBench }
-  | { ok: false; error: DomainError }
+type LeverLookup = { ok: true; bench: LeverBench } | { ok: false; error: DomainError }
 
 const findLever = (scene: PhysicsScene, leverId: string): LeverLookup => {
   if (typeof leverId !== 'string' || leverId.length === 0) {
@@ -1170,9 +1159,7 @@ const findInductionBench = (
   return { ok: true, bench }
 }
 
-type WaveBenchLookup =
-  | { ok: true; bench: WaveBench }
-  | { ok: false; error: DomainError }
+type WaveBenchLookup = { ok: true; bench: WaveBench } | { ok: false; error: DomainError }
 
 const findWaveBench = (scene: PhysicsScene, benchId: string): WaveBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1189,9 +1176,7 @@ const findWaveBench = (scene: PhysicsScene, benchId: string): WaveBenchLookup =>
 const waveWrongSubmodel = (bench: WaveBench, message: string): DomainError =>
   invalidCommand('WAVE_WRONG_SUBMODEL', message, { benchId: bench.id, benchType: bench.type })
 
-type PressureBenchLookup =
-  | { ok: true; bench: PressureBench }
-  | { ok: false; error: DomainError }
+type PressureBenchLookup = { ok: true; bench: PressureBench } | { ok: false; error: DomainError }
 
 const findPressureBench = (scene: PhysicsScene, benchId: string): PressureBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1231,9 +1216,7 @@ const pressureQuantityOf = <D extends PhysicalDimension>(
   return { ok: true, value: resolved }
 }
 
-type EnergyBenchLookup =
-  | { ok: true; bench: EnergyBench }
-  | { ok: false; error: DomainError }
+type EnergyBenchLookup = { ok: true; bench: EnergyBench } | { ok: false; error: DomainError }
 
 const findEnergyBench = (scene: PhysicsScene, benchId: string): EnergyBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1273,9 +1256,7 @@ const energyQuantityOf = <D extends PhysicalDimension>(
   return { ok: true, value: resolved }
 }
 
-type NoiseBenchLookup =
-  | { ok: true; bench: NoiseBench }
-  | { ok: false; error: DomainError }
+type NoiseBenchLookup = { ok: true; bench: NoiseBench } | { ok: false; error: DomainError }
 
 const findNoiseBench = (scene: PhysicsScene, benchId: string): NoiseBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1305,9 +1286,7 @@ const noiseQuantityOf = <D extends PhysicalDimension>(
   const resolved = validateQuantity(value, dimension)
   const si = canonicalValue(resolved)
   const invalid =
-    !Number.isFinite(si) ||
-    (rule === 'positive' && si <= 0) ||
-    (rule === 'non-negative' && si < 0)
+    !Number.isFinite(si) || (rule === 'positive' && si <= 0) || (rule === 'non-negative' && si < 0)
   if (invalid) {
     return { ok: false, error: invalidCommand(code, message, { benchId: bench.id, value }) }
   }
@@ -1315,13 +1294,9 @@ const noiseQuantityOf = <D extends PhysicalDimension>(
 }
 
 type ThermometerBenchLookup =
-  | { ok: true; bench: ThermometerBench }
-  | { ok: false; error: DomainError }
+  { ok: true; bench: ThermometerBench } | { ok: false; error: DomainError }
 
-const findThermometerBench = (
-  scene: PhysicsScene,
-  benchId: string,
-): ThermometerBenchLookup => {
+const findThermometerBench = (scene: PhysicsScene, benchId: string): ThermometerBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
     return {
       ok: false,
@@ -1356,13 +1331,9 @@ const thermometerQuantityOf = <D extends PhysicalDimension>(
 }
 
 type TransformerBenchLookup =
-  | { ok: true; bench: TransformerBench }
-  | { ok: false; error: DomainError }
+  { ok: true; bench: TransformerBench } | { ok: false; error: DomainError }
 
-const findTransformerBench = (
-  scene: PhysicsScene,
-  benchId: string,
-): TransformerBenchLookup => {
+const findTransformerBench = (scene: PhysicsScene, benchId: string): TransformerBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
     return {
       ok: false,
@@ -1395,9 +1366,7 @@ const transformerQuantityOf = <D extends PhysicalDimension>(
   return { ok: true, value: resolved }
 }
 
-type LightBenchLookup =
-  | { ok: true; bench: LightBench }
-  | { ok: false; error: DomainError }
+type LightBenchLookup = { ok: true; bench: LightBench } | { ok: false; error: DomainError }
 
 const findLightBench = (scene: PhysicsScene, benchId: string): LightBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -1427,9 +1396,7 @@ const lightQuantityOf = <D extends PhysicalDimension>(
   return { ok: true, value: resolved }
 }
 
-type CurrentBenchLookup =
-  | { ok: true; bench: CurrentBench }
-  | { ok: false; error: DomainError }
+type CurrentBenchLookup = { ok: true; bench: CurrentBench } | { ok: false; error: DomainError }
 
 const findCurrentBench = (scene: PhysicsScene, benchId: string): CurrentBenchLookup => {
   if (typeof benchId !== 'string' || benchId.length === 0) {
@@ -2164,7 +2131,9 @@ const applyCommand = (
       if (!Number.isFinite(groundY)) {
         return {
           ok: false,
-          error: invalidCommand('INVALID_GROUND_LEVEL', 'Ground level must be finite.', { groundY }),
+          error: invalidCommand('INVALID_GROUND_LEVEL', 'Ground level must be finite.', {
+            groundY,
+          }),
         }
       }
       const observable = scene.observableDefinitions.find(
@@ -2293,10 +2262,7 @@ const applyCommand = (
           ),
         }
       }
-      const internalResistance = validateQuantity(
-        command.payload.internalResistance,
-        'resistance',
-      )
+      const internalResistance = validateQuantity(command.payload.internalResistance, 'resistance')
       if (
         !Number.isFinite(canonicalValue(internalResistance)) ||
         canonicalValue(internalResistance) < 0
@@ -2420,7 +2386,10 @@ const applyCommand = (
       }
       if (
         rotation !== undefined &&
-        rotation !== 0 && rotation !== 90 && rotation !== 180 && rotation !== 270
+        rotation !== 0 &&
+        rotation !== 90 &&
+        rotation !== 180 &&
+        rotation !== 270
       ) {
         return {
           ok: false,
@@ -2530,9 +2499,7 @@ const applyCommand = (
           ),
         }
       }
-      const element = lookup.bench.elements.find(
-        (entry) => entry.id === command.payload.elementId,
-      )
+      const element = lookup.bench.elements.find((entry) => entry.id === command.payload.elementId)
       if (element === undefined) {
         return { ok: false, error: notFound('optical_element', command.payload.elementId) }
       }
@@ -2584,9 +2551,7 @@ const applyCommand = (
           ),
         }
       }
-      const element = lookup.bench.elements.find(
-        (entry) => entry.id === command.payload.elementId,
-      )
+      const element = lookup.bench.elements.find((entry) => entry.id === command.payload.elementId)
       if (element === undefined) {
         return { ok: false, error: notFound('optical_element', command.payload.elementId) }
       }
@@ -2667,7 +2632,10 @@ const applyCommand = (
       /* The pulse travels towards +x: a reflector at or behind the source has
          no echo path, so the gate rejects it here rather than letting the
          engine report a broken scene later. */
-      if (!Number.isFinite(positionSI) || positionSI <= canonicalValue(lookup.bench.source.position)) {
+      if (
+        !Number.isFinite(positionSI) ||
+        positionSI <= canonicalValue(lookup.bench.source.position)
+      ) {
         return {
           ok: false,
           error: invalidCommand(
@@ -2968,11 +2936,10 @@ const applyCommand = (
       if (!Number.isFinite(velocitySI)) {
         return {
           ok: false,
-          error: invalidCommand(
-            'INVALID_INDUCTION_BAR_VELOCITY',
-            'Rod velocity must be finite.',
-            { benchId: command.payload.benchId, velocity: command.payload.velocity },
-          ),
+          error: invalidCommand('INVALID_INDUCTION_BAR_VELOCITY', 'Rod velocity must be finite.', {
+            benchId: command.payload.benchId,
+            velocity: command.payload.velocity,
+          }),
         }
       }
       if (lookup.bench.barVelocity !== undefined) {
@@ -3044,11 +3011,10 @@ const applyCommand = (
       if (!Number.isFinite(fluxRateSI)) {
         return {
           ok: false,
-          error: invalidCommand(
-            'INVALID_INDUCTION_FLUX_RATE',
-            'Flux rate dΦ/dt must be finite.',
-            { benchId: command.payload.benchId, fluxRate: command.payload.fluxRate },
-          ),
+          error: invalidCommand('INVALID_INDUCTION_FLUX_RATE', 'Flux rate dΦ/dt must be finite.', {
+            benchId: command.payload.benchId,
+            fluxRate: command.payload.fluxRate,
+          }),
         }
       }
       if (lookup.bench.fluxRate !== undefined) {
@@ -3082,7 +3048,12 @@ const applyCommand = (
         validateQuantity(command.payload.masses[1], 'mass'),
       ] as [Quantity<'mass'>, Quantity<'mass'>]
       const massesSI = masses.map((mass) => canonicalValue(mass))
-      if (!Number.isFinite(massesSI[0]) || !Number.isFinite(massesSI[1]) || massesSI[0]! <= 0 || massesSI[1]! <= 0) {
+      if (
+        !Number.isFinite(massesSI[0]) ||
+        !Number.isFinite(massesSI[1]) ||
+        massesSI[0]! <= 0 ||
+        massesSI[1]! <= 0
+      ) {
         return {
           ok: false,
           error: invalidCommand(
@@ -3124,7 +3095,11 @@ const applyCommand = (
           error: invalidCommand(
             'INVALID_INDUCTION_BAR_VELOCITY_ONE',
             'Bar velocity must be finite.',
-            { benchId: command.payload.benchId, barIndex: command.payload.barIndex, velocity: command.payload.velocity },
+            {
+              benchId: command.payload.benchId,
+              barIndex: command.payload.barIndex,
+              velocity: command.payload.velocity,
+            },
           ),
         }
       }
@@ -3142,7 +3117,11 @@ const applyCommand = (
         event: {
           ...eventMetadata,
           type: 'InductionBarVelocityOneChanged',
-          payload: { benchId: command.payload.benchId, barIndex: command.payload.barIndex, velocity: clone(velocity) },
+          payload: {
+            benchId: command.payload.benchId,
+            barIndex: command.payload.barIndex,
+            velocity: clone(velocity),
+          },
         },
       }
     }
@@ -4141,10 +4120,7 @@ const applyCommand = (
       if (lookup.bench.type !== 'motor') {
         return {
           ok: false,
-          error: currentWrongSubmodel(
-            lookup.bench,
-            'Only a motor bench has a rotor angle to set.',
-          ),
+          error: currentWrongSubmodel(lookup.bench, 'Only a motor bench has a rotor angle to set.'),
         }
       }
       /* `signed-non-zero` would be wrong here: 0° is the coil lying along the

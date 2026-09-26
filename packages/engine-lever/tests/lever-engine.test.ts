@@ -115,16 +115,23 @@ describe('lever verification', () => {
     const result = simulated(balancedScene())
     expect(result.verification.status).toBe('passed')
     const ids = result.verification.checks.map((check) => check.id)
-    expect(ids).toEqual(expect.arrayContaining([
-      'weight_from_mass',
-      'moment_from_force',
-      'arms_opposite',
-      'moment_balance',
-    ]))
-    expect(result.verification.checks.filter((check) =>
-      ['weight_from_mass', 'moment_from_force', 'arms_opposite', 'moment_balance']
-        .includes(check.id),
-    ).every((check) => check.passed)).toBe(true)
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'weight_from_mass',
+        'moment_from_force',
+        'arms_opposite',
+        'moment_balance',
+      ]),
+    )
+    expect(
+      result.verification.checks
+        .filter((check) =>
+          ['weight_from_mass', 'moment_from_force', 'arms_opposite', 'moment_balance'].includes(
+            check.id,
+          ),
+        )
+        .every((check) => check.passed),
+    ).toBe(true)
   })
 
   it('still verifies when unbalanced: the tilt follows the moment difference', () => {
@@ -152,8 +159,10 @@ describe('lever verification', () => {
 
   it('emits a balanced event on the textbook pair and a tip event when unbalanced', () => {
     expect(simulated(balancedScene()).events.map((event) => event.type)).toEqual(['LeverBalanced'])
-    expect(simulated(balancedScene({ leftMass: 400 })).events.map((event) => event.type))
-      .toEqual(['LeverSettling', 'LeverTipped'])
+    expect(simulated(balancedScene({ leftMass: 400 })).events.map((event) => event.type)).toEqual([
+      'LeverSettling',
+      'LeverTipped',
+    ])
   })
 })
 
@@ -192,11 +201,13 @@ describe('lever scene commands', () => {
 
   it('restores balance by shortening the heavier arm', () => {
     const runtime = new SceneRuntime(balancedScene({ leftMass: 400 }))
-    expect(execute(runtime, 'SetHangerArm', {
-      leverId: 'lever-1',
-      hangerId: 'hanger-left',
-      armLength: quantity(7.5, 'cm', 'length'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetHangerArm', {
+        leverId: 'lever-1',
+        hangerId: 'hanger-left',
+        armLength: quantity(7.5, 'cm', 'length'),
+      }).ok,
+    ).toBe(true)
     expect(momentsOf(resolveLeverModel(runtime.getScene())).balanced).toBe(true)
   })
 

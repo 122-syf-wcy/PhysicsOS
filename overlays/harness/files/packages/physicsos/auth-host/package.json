@@ -12,7 +12,8 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "bin": {
-    "physicsos-auth-migrate": "./lib/types/migrate-ownership-cli.js"
+    "physicsos-auth-migrate": "./lib/types/migrate-ownership-cli.js",
+    "physicsos-auth-merge-schools": "./lib/types/merge-schools-cli.js"
   },
   "exports": {
     ".": {
@@ -35,7 +36,8 @@
   "scripts": {
     "bundle": "tsc -b tsconfig.json && tsdown",
     "watch": "tsdown --watch",
-    "migrate:ownership": "tsc -b tsconfig.json && node ./lib/types/migrate-ownership-cli.js"
+    "migrate:ownership": "tsc -b tsconfig.json && node ./lib/types/migrate-ownership-cli.js",
+    "merge:schools": "tsc -b tsconfig.json && node ./lib/types/merge-schools-cli.js"
   },
   "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {

@@ -120,8 +120,7 @@ const thinLensRays = (
     ]
     /* Focal ray: through the near focus, exits parallel at the image-top height. */
     if (focalLength > 0) {
-      const lensHeight =
-        (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
+      const lensHeight = (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
       rays.push({
         kind: 'focal',
         points: [top, point(model.elementX, lensHeight), point(imageTop.x, lensHeight)],
@@ -152,8 +151,7 @@ const thinLensRays = (
       },
     ]
     if (focalLength > 0) {
-      const lensHeight =
-        (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
+      const lensHeight = (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
       rays.push({
         kind: 'focal',
         points: [top, point(model.elementX, lensHeight), point(endX, lensHeight)],
@@ -187,8 +185,7 @@ const curvedMirrorRays = (
   const backX = model.elementX - forwardExtent
   /* The focal ray hits the mirror plane at the signed image height and leaves
      parallel to the axis (same algebra as the thin lens, folded back). */
-  const mirrorHitHeight =
-    (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
+  const mirrorHitHeight = (model.objectHeight * focalLength) / (focalLength - model.objectDistance)
 
   if (outcome.kind === 'image' && outcome.image.nature === 'real' && imageTop !== undefined) {
     return [
@@ -266,8 +263,7 @@ export const principalRaysOf = (
   result: OpticalImagingResult,
   options: PrincipalRayOptions = {},
 ): OpticalRay[] => {
-  const forwardExtent =
-    options.forwardExtent ?? defaultForwardExtent(result.model, result.outcome)
+  const forwardExtent = options.forwardExtent ?? defaultForwardExtent(result.model, result.outcome)
   return result.model.elementType === 'thin_lens'
     ? thinLensRays(result.model, result.outcome, forwardExtent)
     : result.model.elementType === 'curved_mirror'

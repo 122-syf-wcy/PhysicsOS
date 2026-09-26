@@ -13,7 +13,10 @@ export function kinematicsAt(
   t: number,
 ): KinematicsState {
   return {
-    position: add(add(initialPosition, scale(initialVelocity, t)), scale(acceleration, 0.5 * t * t)),
+    position: add(
+      add(initialPosition, scale(initialVelocity, t)),
+      scale(acceleration, 0.5 * t * t),
+    ),
     velocity: add(initialVelocity, scale(acceleration, t)),
     acceleration,
   }

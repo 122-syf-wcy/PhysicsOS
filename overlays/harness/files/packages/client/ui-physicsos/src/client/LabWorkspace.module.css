@@ -582,15 +582,9 @@
 }
 
 .select {
+  /* Layout only — the GlassSelect button draws its own glass material. */
   width: 100%;
   height: 34px;
-  padding: 0 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  cursor: pointer;
 }
 
 /* Derived rows are read-only by construction: no input chrome, muted ink. */
@@ -763,15 +757,11 @@
 }
 
 .rate {
+  /* Layout only — GlassSelect owns the material; the compact width keeps the
+     playback row from reflowing. */
   flex: none;
+  min-width: 62px;
   height: 30px;
-  padding: 0 6px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  cursor: pointer;
 }
 
 /* ---------- Bottom data panel ---------- */

@@ -3,10 +3,6 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
-    // `@physicsos/question-paper` is compiled from source through the link: bridge
-    // and is authored under PhysicsOS' root tsconfig (exactOptionalPropertyTypes
-    // off). Relaxed here so this glue does not impose a stricter dialect on the
-    // domain model it wraps; the plugin's own source stays exact-optional clean.
     "exactOptionalPropertyTypes": false
   },
   "include": [
@@ -30,6 +26,9 @@
     },
     {
       "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../attachment/attachment"
     },
     {
       "path": "../../llm/llm"

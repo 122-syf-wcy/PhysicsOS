@@ -8,9 +8,17 @@ const outDir = path.join(root, 'docs', 'reports', 'screenshots')
 mkdirSync(outDir, { recursive: true })
 
 const forbidden = [
-  '标准模式', 'PTC 模式', '极简模式', '创造模式',
-  'Code Mode', 'str_replace_editor', 'SDK',
-  '新会话', '选择工作区', '暂无会话', '最近工作区',
+  '标准模式',
+  'PTC 模式',
+  '极简模式',
+  '创造模式',
+  'Code Mode',
+  'str_replace_editor',
+  'SDK',
+  '新会话',
+  '选择工作区',
+  '暂无会话',
+  '最近工作区',
 ]
 
 const browser = await chromium.launch()
@@ -40,9 +48,14 @@ const createText = await page.locator('body').innerText()
 await page.keyboard.press('Escape')
 
 const homeText = await page.locator('body').innerText()
-const hits = [...new Set([...forbidden.filter(token =>
-  homeText.includes(token) || profileText.includes(token) || createText.includes(token),
-)])]
+const hits = [
+  ...new Set([
+    ...forbidden.filter(
+      (token) =>
+        homeText.includes(token) || profileText.includes(token) || createText.includes(token),
+    ),
+  ]),
+]
 const required = {
   title,
   explore: profileText.includes('探索模式'),

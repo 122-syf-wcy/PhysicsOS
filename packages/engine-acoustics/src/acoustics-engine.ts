@@ -162,10 +162,7 @@ const buildVerification = (
   const speedOn = (t0: number, t1: number): number =>
     Math.abs(pulseStateAt(model, t1).x - pulseStateAt(model, t0).x) / (t1 - t0)
   const outboundSpeed = speedOn(0.1 * oneWayTime, 0.9 * oneWayTime)
-  const returnSpeed = speedOn(
-    oneWayTime + 0.1 * oneWayTime,
-    oneWayTime + 0.9 * oneWayTime,
-  )
+  const returnSpeed = speedOn(oneWayTime + 0.1 * oneWayTime, oneWayTime + 0.9 * oneWayTime)
   const speedsUniform =
     Math.abs(outboundSpeed - model.soundSpeed) <= ECHO_RELATIVE_TOLERANCE * model.soundSpeed &&
     Math.abs(returnSpeed - model.soundSpeed) <= ECHO_RELATIVE_TOLERANCE * model.soundSpeed

@@ -32,6 +32,7 @@ const put = <T>(path: string, body: unknown): Promise<T> =>
 /* Wire shapes — kept structural (no import of the host package into the
    client bundle): the fields the workspace actually reads/writes. */
 
+/** A real exam paper on file, as `/sources` returns it. */
 export interface SourcePaperRow {
   readonly id: string
   readonly year: number
@@ -53,6 +54,7 @@ export interface SourcePaperRow {
   readonly enteredAt: string
 }
 
+/** One per-question knowledge annotation on a source paper. */
 export interface AnnotationRow {
   readonly id: string
   readonly sourcePaperId: string
@@ -70,6 +72,7 @@ export interface AnnotationRow {
   readonly status: 'pending' | 'verified' | 'rejected'
 }
 
+/** A structure template (双向细目表骨架) a paper job draws from. */
 export interface BlueprintRow {
   readonly id: string
   readonly level: string
@@ -87,6 +90,7 @@ export interface BlueprintRow {
   readonly policyLabel?: string
 }
 
+/** One row of the spec table — question slot, kind, score, knowledge tags. */
 export interface SpecRowWire {
   readonly questionNo: number
   readonly sectionTitle: string
@@ -98,6 +102,7 @@ export interface SpecRowWire {
   readonly chapter?: string
 }
 
+/** One question inside a committed paper document. */
 export interface PaperQuestionWire {
   readonly number: number
   readonly subject: string
@@ -122,6 +127,7 @@ export interface PaperQuestionWire {
   reviewNote?: string
 }
 
+/** A paper-generation job and its lifecycle status. */
 export interface PaperJobWire {
   readonly id: string
   readonly blueprintId: string
@@ -172,6 +178,7 @@ export interface PaperJobWire {
   readonly updatedAt: string
 }
 
+/** One recorded export bundle bound to a version hash. */
 export interface ExportBundleRow {
   readonly paperId: string
   readonly version: number
@@ -203,15 +210,15 @@ export interface BankItemRow {
     equivalents?: readonly string[]
   }
   readonly answerTier: string
-  readonly stemHash: string
+  readonly stemHash?: string
   readonly sourceLabel?: string
   readonly sourceQuestionNo?: string
   readonly sourceUrl?: string
   readonly anomalies: readonly string[]
   readonly reuseModes: readonly ('verbatim' | 'adapt')[]
   readonly status: 'pending' | 'verified' | 'rejected'
-  readonly enteredBy: string
-  readonly enteredAt: string
+  readonly enteredBy?: string
+  readonly enteredAt?: string
   readonly verifiedBy?: string
 }
 
@@ -274,9 +281,32 @@ export interface PaperApi {
   reviewBankItems: (
     ids: readonly string[], status: 'verified' | 'rejected' | 'pending', reviewer: string,
   ) => Promise<{ updated: number; missing: string[] }>
+  /**
+   * Engine triage: blind-solve pending rows and stamp `engine-check:*`
+   * anomalies. 202 — solving runs detached; refresh the list to watch verdicts
+   * land. Review status stays a human decision.
+   */
+  triageBankItems: (
+    input: { ids?: readonly string[]; limit?: number },
+  ) => Promise<{ status: 'triaging'; accepted: number; missing: string[]; skipped: string[] }>
+  /**
+   * 图片/扫描件录入: the server transcribes the images with the vision route
+   * and structures the transcription into pending rows. Awaited in-band —
+   * the teacher is waiting on one artifact, and the transcription rides back
+   * so it can be checked against the original picture.
+   */
+  ingestBankImages: (input: {
+    images: readonly { data: string; mediaType: string; name?: string }[]
+    level: 'zhongkao' | 'gaokao'
+    subject: 'physics' | 'chemistry'
+    sourceUrl?: string
+    enteredBy: string
+  }) => Promise<{ created: BankItemRow[]; duplicates: string[]; transcription: string }>
 }
 
-/** The real client — bound once in `apply`, injected as callbacks. */
+/** The real client — bound once in `apply`, injected as callbacks.
+ * @returns the `PaperApi` callback surface over `fetch`.
+ */
 export function createPaperApi(): PaperApi {
   return {
     listSources: () => request('/sources'),
@@ -321,5 +351,7 @@ export function createPaperApi(): PaperApi {
     reviewBankItem: (id, status, reviewer) => post(`/bank/items/${id}/review`, { status, reviewer }),
     reviewBankItems: (ids, status, reviewer) =>
       post('/bank/items/review-batch', { ids, status, reviewer }),
+    triageBankItems: input => post('/bank/items/triage', input),
+    ingestBankImages: input => post('/bank/ingest-image', input),
   }
 }

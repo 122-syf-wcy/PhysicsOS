@@ -55,7 +55,7 @@ const sessionOf = async (username, password, deviceId) => {
   })
   if (res.status !== 200) return undefined
   const cookies = res.headers.getSetCookie?.() ?? [res.headers.get('set-cookie') ?? '']
-  const session = cookies.find(value => value.startsWith('physicsos_session='))
+  const session = cookies.find((value) => value.startsWith('physicsos_session='))
   return session === undefined ? undefined : session.split(';')[0]
 }
 
@@ -70,7 +70,9 @@ const openDeviceTab = async () => {
   /* 管理后台 lives behind the account menu, not the sidebar — open it first. */
   await page.getByRole('button', { name: '账户菜单' }).click()
   await page.getByRole('menuitem', { name: /管理后台/ }).click()
-  await page.locator('[data-physicsos-surface="admin"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-surface="admin"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.getByRole('tab', { name: '设备' }).click()
   await page.getByTestId('device-list').waitFor({ state: 'visible', timeout: 20_000 })
 }
@@ -79,8 +81,11 @@ try {
   const signUp = await call('/physicsos/auth/register', {
     method: 'POST',
     body: {
-      schoolName: '乌当中学', username: studentName,
-      displayName: '验收学生', password: PASSWORD, deviceId: DEVICE,
+      schoolName: '乌当中学',
+      username: studentName,
+      displayName: '验收学生',
+      password: PASSWORD,
+      deviceId: DEVICE,
     },
   })
   check('注册时带上设备哈希,登记成功', signUp.status === 201, `HTTP ${signUp.status}`)
@@ -110,8 +115,11 @@ try {
   check('没带 deviceId 的登录照常', unregistered.status === 200, `HTTP ${unregistered.status}`)
 
   const listed = await (await call('/physicsos/admin/devices', { cookie: adminCookie })).json()
-  check('后台能看到这台设备', listed.devices.some(row => row.deviceId === DEVICE),
-    `${listed.devices.length} 台`)
+  check(
+    '后台能看到这台设备',
+    listed.devices.some((row) => row.deviceId === DEVICE),
+    `${listed.devices.length} 台`,
+  )
 
   await resetSession(page, base)
   await loginUser(page, {
@@ -120,47 +128,67 @@ try {
   })
   await openDeviceTab()
 
-  check('设备 tab 里列出了这台机器',
-    await page.locator(`[data-device="${DEVICE}"]`).count() === 1)
+  check(
+    '设备 tab 里列出了这台机器',
+    (await page.locator(`[data-device="${DEVICE}"]`).count()) === 1,
+  )
 
   stdout.write('\nCASE · 在界面上远程注销这台设备 → 学生的会话当场失效\n')
   await page.getByTestId(`device-toggle-${DEVICE}`).click()
-  await page.waitForFunction(
-    device => document.querySelector(`[data-device="${device}"]`)?.getAttribute('data-revoked') === 'true',
-    DEVICE, { timeout: 20_000 },
-  ).catch(() => {})
-  check('界面把这台设备标成已注销',
-    await page.locator(`[data-device="${DEVICE}"]`).getAttribute('data-revoked') === 'true')
+  await page
+    .waitForFunction(
+      (device) =>
+        document.querySelector(`[data-device="${device}"]`)?.getAttribute('data-revoked') ===
+        'true',
+      DEVICE,
+      { timeout: 20_000 },
+    )
+    .catch(() => {})
+  check(
+    '界面把这台设备标成已注销',
+    (await page.locator(`[data-device="${DEVICE}"]`).getAttribute('data-revoked')) === 'true',
+  )
 
   const afterRevoke = await (await call('/physicsos/admin/devices', { cookie: adminCookie })).json()
-  check('服务端确实注销了它',
-    afterRevoke.devices.find(row => row.deviceId === DEVICE)?.revoked === true)
+  check(
+    '服务端确实注销了它',
+    afterRevoke.devices.find((row) => row.deviceId === DEVICE)?.revoked === true,
+  )
 
   const me = await call('/physicsos/auth/me', { cookie: studentCookie })
   check('声明了设备的那条会话立刻失效(不必等 cookie 过期)', me.status === 401, `HTTP ${me.status}`)
 
   const control = await call('/physicsos/auth/me', { cookie: unattributed })
-  check('没声明设备的那条会话不被连坐 —— 它可能在任何一台机器上', control.status === 200,
-    `HTTP ${control.status}`)
+  check(
+    '没声明设备的那条会话不被连坐 —— 它可能在任何一台机器上',
+    control.status === 200,
+    `HTTP ${control.status}`,
+  )
 
   const relogin = await call('/physicsos/auth/login', {
     method: 'POST',
     body: { username: studentName, password: PASSWORD, deviceId: DEVICE },
   })
   check('这台机器上重新登录被拒(DEVICE_REVOKED)', relogin.status === 403, `HTTP ${relogin.status}`)
-  check('拒绝码是 DEVICE_REVOKED',
-    (await relogin.json()).error?.code === 'DEVICE_REVOKED')
+  check('拒绝码是 DEVICE_REVOKED', (await relogin.json()).error?.code === 'DEVICE_REVOKED')
 
   stdout.write('\nCASE · 恢复 → 一切照旧(注销是可逆的管理动作)\n')
   await page.reload()
   await openDeviceTab()
   await page.getByTestId(`device-toggle-${DEVICE}`).click()
-  await page.waitForFunction(
-    device => document.querySelector(`[data-device="${device}"]`)?.getAttribute('data-revoked') === 'false',
-    DEVICE, { timeout: 20_000 },
-  ).catch(() => {})
-  check('界面把恢复状态画出来了',
-    await page.locator(`[data-device="${DEVICE}"]`).getAttribute('data-revoked') === 'false')
+  await page
+    .waitForFunction(
+      (device) =>
+        document.querySelector(`[data-device="${device}"]`)?.getAttribute('data-revoked') ===
+        'false',
+      DEVICE,
+      { timeout: 20_000 },
+    )
+    .catch(() => {})
+  check(
+    '界面把恢复状态画出来了',
+    (await page.locator(`[data-device="${DEVICE}"]`).getAttribute('data-revoked')) === 'false',
+  )
 
   const back = await call('/physicsos/auth/login', {
     method: 'POST',
@@ -172,8 +200,10 @@ try {
   check('设备 JSON 里没有 IP 字段', !riskRaw.includes('"ip"'))
   check('设备 JSON 里没有回环地址', !riskRaw.includes('127.0.0.1') && !riskRaw.includes('::1'))
 
-  check('另一台机器没有被误伤',
-    afterRevoke.devices.find(row => row.deviceId === OTHER_DEVICE) === undefined)
+  check(
+    '另一台机器没有被误伤',
+    afterRevoke.devices.find((row) => row.deviceId === OTHER_DEVICE) === undefined,
+  )
 } finally {
   await finish()
   server.stop()

@@ -5,7 +5,10 @@ import {
   GOLDEN_QUESTIONS,
 } from '../../question-core/src/index.ts'
 import { MechanicsEngine } from '../src/index.ts'
-import { createMechanicsScene as createScene, createMechanicsSimulationRequest as createReq } from '@physicsos/physics-scene'
+import {
+  createMechanicsScene as createScene,
+  createMechanicsSimulationRequest as createReq,
+} from '@physicsos/physics-scene'
 import { vec3 } from '@physicsos/physics-math'
 
 const mechQuestions = GOLDEN_QUESTIONS.filter((q) => q.id.startsWith('mech-'))
@@ -74,7 +77,7 @@ describe('mech-01: Uniform Acceleration', () => {
     const disp = result.simulation!.derivedQuantities.find((d) => d.key === 'displacement')
     expect(disp).toBeDefined()
     /* s = v0·t + ½at² = 10·5 + 0.5·2·25 = 75 m. */
-    expect(((disp!.value as { vector: { x: number } }).vector.x)).toBeCloseTo(75, 1)
+    expect((disp!.value as { vector: { x: number } }).vector.x).toBeCloseTo(75, 1)
   })
 })
 
@@ -140,8 +143,8 @@ describe('mech-04: Newton Second Law', () => {
     expect(acc).toBeDefined()
     /* 水平合力 10 N on 2 kg: the declared normal balances gravity, so the net
        is exactly the stated horizontal force — a = F/m = 5, not √(5²+9.8²). */
-    expect(((acc!.value as { vector: { x: number; y: number } }).vector.x)).toBeCloseTo(5, 1)
-    expect(((acc!.value as { vector: { y: number } }).vector.y)).toBeCloseTo(0, 6)
+    expect((acc!.value as { vector: { x: number; y: number } }).vector.x).toBeCloseTo(5, 1)
+    expect((acc!.value as { vector: { y: number } }).vector.y).toBeCloseTo(0, 6)
   })
 })
 
@@ -189,19 +192,36 @@ describe('Engine Direct Tests', () => {
   const engine = new MechanicsEngine()
 
   it('canHandle uniform linear scene', () => {
-    const scene = createScene({ model: 'uniform_linear_motion', mass: 1, position: vec3(0, 0, 0), velocity: vec3(5, 0, 0) })
+    const scene = createScene({
+      model: 'uniform_linear_motion',
+      mass: 1,
+      position: vec3(0, 0, 0),
+      velocity: vec3(5, 0, 0),
+    })
     const support = engine.canHandle(scene)
     expect(support.supported).toBe(true)
   })
 
   it('canHandle projectile scene', () => {
-    const scene = createScene({ model: 'projectile_motion', mass: 1, position: vec3(0, 20, 0), velocity: vec3(10, 0, 0), gravity: vec3(0, -10, 0), groundY: 0 })
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(10, 0, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
     const support = engine.canHandle(scene)
     expect(support.supported).toBe(true)
   })
 
   it('canHandle incline scene', () => {
-    const scene = createScene({ model: 'inclined_plane', mass: 2, inclineAngle: 30, gravity: vec3(0, -10, 0) })
+    const scene = createScene({
+      model: 'inclined_plane',
+      mass: 2,
+      inclineAngle: 30,
+      gravity: vec3(0, -10, 0),
+    })
     const support = engine.canHandle(scene)
     expect(support.supported).toBe(true)
   })
@@ -213,13 +233,25 @@ describe('Engine Direct Tests', () => {
   })
 
   it('stateAt returns valid state', () => {
-    const scene = createScene({ model: 'uniform_linear_motion', mass: 1, position: vec3(0, 0, 0), velocity: vec3(5, 0, 0) })
+    const scene = createScene({
+      model: 'uniform_linear_motion',
+      mass: 1,
+      position: vec3(0, 0, 0),
+      velocity: vec3(5, 0, 0),
+    })
     const state = engine.stateAt(scene, { value: 2, unit: 's', dimension: 'time' as const })
     expect(state.objects[0]?.position?.vector.x).toBeCloseTo(10, 0)
   })
 
   it('simulate produces states and derived', () => {
-    const scene = createScene({ model: 'projectile_motion', mass: 1, position: vec3(0, 20, 0), velocity: vec3(10, 0, 0), gravity: vec3(0, -10, 0), groundY: 0 })
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(10, 0, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
     const req = createReq(scene, 'test-sim', 'test-trace')
     const result = engine.simulate(scene, req)
     expect(result.states.length).toBeGreaterThan(0)
@@ -230,24 +262,52 @@ describe('Engine Direct Tests', () => {
 
 describe('Metamorphic Tests', () => {
   it('projectile: vx*2 -> range*2, same flight time', () => {
-    const scene1 = createScene({ model: 'projectile_motion', mass: 1, position: vec3(0, 20, 0), velocity: vec3(10, 0, 0), gravity: vec3(0, -10, 0), groundY: 0 })
-    const scene2 = createScene({ model: 'projectile_motion', mass: 1, position: vec3(0, 20, 0), velocity: vec3(20, 0, 0), gravity: vec3(0, -10, 0), groundY: 0 })
+    const scene1 = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(10, 0, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
+    const scene2 = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(20, 0, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
     const engine = new MechanicsEngine()
     const req1 = createReq(scene1, 'sim1', 'trace1')
     const req2 = createReq(scene2, 'sim2', 'trace2')
     const r1 = engine.simulate(scene1, req1)
     const r2 = engine.simulate(scene2, req2)
-    const ft1 = (r1.derivedQuantities.find((d) => d.key === 'flight_time')!.value as { value: number }).value
-    const ft2 = (r2.derivedQuantities.find((d) => d.key === 'flight_time')!.value as { value: number }).value
+    const ft1 = (
+      r1.derivedQuantities.find((d) => d.key === 'flight_time')!.value as { value: number }
+    ).value
+    const ft2 = (
+      r2.derivedQuantities.find((d) => d.key === 'flight_time')!.value as { value: number }
+    ).value
     expect(ft1).toBeCloseTo(ft2, 1)
-    const range1 = (r1.derivedQuantities.find((d) => d.key === 'range')!.value as { value: number }).value
-    const range2 = (r2.derivedQuantities.find((d) => d.key === 'range')!.value as { value: number }).value
+    const range1 = (r1.derivedQuantities.find((d) => d.key === 'range')!.value as { value: number })
+      .value
+    const range2 = (r2.derivedQuantities.find((d) => d.key === 'range')!.value as { value: number })
+      .value
     expect(range2).toBeCloseTo(range1 * 2, 0)
   })
 
   it('newton: F*2 -> a*2', () => {
-    const scene1 = createScene({ model: 'newton_second_law', mass: 2, appliedForce: vec3(10, 0, 0) } as never)
-    const scene2 = createScene({ model: 'newton_second_law', mass: 2, appliedForce: vec3(20, 0, 0) } as never)
+    const scene1 = createScene({
+      model: 'newton_second_law',
+      mass: 2,
+      appliedForce: vec3(10, 0, 0),
+    } as never)
+    const scene2 = createScene({
+      model: 'newton_second_law',
+      mass: 2,
+      appliedForce: vec3(20, 0, 0),
+    } as never)
     const engine = new MechanicsEngine()
     const r1 = engine.simulate(scene1, createReq(scene1, 'sim1', 'trace1'))
     const r2 = engine.simulate(scene2, createReq(scene2, 'sim2', 'trace2'))
@@ -261,13 +321,27 @@ describe('Metamorphic Tests', () => {
   })
 
   it('incline no friction: mass*2 -> acceleration unchanged', () => {
-    const scene1 = createScene({ model: 'inclined_plane', mass: 2, inclineAngle: 30, gravity: vec3(0, -10, 0) })
-    const scene2 = createScene({ model: 'inclined_plane', mass: 4, inclineAngle: 30, gravity: vec3(0, -10, 0) })
+    const scene1 = createScene({
+      model: 'inclined_plane',
+      mass: 2,
+      inclineAngle: 30,
+      gravity: vec3(0, -10, 0),
+    })
+    const scene2 = createScene({
+      model: 'inclined_plane',
+      mass: 4,
+      inclineAngle: 30,
+      gravity: vec3(0, -10, 0),
+    })
     const engine = new MechanicsEngine()
     const r1 = engine.simulate(scene1, createReq(scene1, 'sim1', 'trace1'))
     const r2 = engine.simulate(scene2, createReq(scene2, 'sim2', 'trace2'))
-    const a1 = (r1.derivedQuantities.find((d) => d.key === 'incline_acceleration')!.value as { value: number }).value
-    const a2 = (r2.derivedQuantities.find((d) => d.key === 'incline_acceleration')!.value as { value: number }).value
+    const a1 = (
+      r1.derivedQuantities.find((d) => d.key === 'incline_acceleration')!.value as { value: number }
+    ).value
+    const a2 = (
+      r2.derivedQuantities.find((d) => d.key === 'incline_acceleration')!.value as { value: number }
+    ).value
     expect(a2).toBeCloseTo(a1, 1)
   })
 })
@@ -288,7 +362,14 @@ describe('Edge Cases', () => {
   })
 
   it('g = 0 projectile -> no crash', () => {
-    const scene = createScene({ model: 'projectile_motion', mass: 1, position: vec3(0, 10, 0), velocity: vec3(10, 0, 0), gravity: vec3(0, 0, 0), groundY: 0 })
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 10, 0),
+      velocity: vec3(10, 0, 0),
+      gravity: vec3(0, 0, 0),
+      groundY: 0,
+    })
     const support = engine.canHandle(scene)
     expect(support.supported).toBe(true)
     const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
@@ -296,7 +377,14 @@ describe('Edge Cases', () => {
   })
 
   it('no NaN in simulation results', () => {
-    const scene = createScene({ model: 'projectile_motion', mass: 1, position: vec3(0, 20, 0), velocity: vec3(10, 0, 0), gravity: vec3(0, -10, 0), groundY: 0 })
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(10, 0, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
     const result = engine.simulate(scene, createReq(scene, 'sim', 'trace'))
     for (const state of result.states) {
       for (const obj of state.objects) {
@@ -398,7 +486,10 @@ describe('spring_oscillator (简谐振动)', () => {
 
   it('period equals 2π√(m/k)', () => {
     const period = result.derivedQuantities.find((d) => d.key === 'period')
-    expect((period!.value as { value: number }).value).toBeCloseTo(2 * Math.PI * Math.sqrt(0.5 / 50), 9)
+    expect((period!.value as { value: number }).value).toBeCloseTo(
+      2 * Math.PI * Math.sqrt(0.5 / 50),
+      9,
+    )
   })
 
   it('passes energy conservation and restoring-force checks', () => {
@@ -410,7 +501,9 @@ describe('spring_oscillator (简谐振动)', () => {
   })
 
   it('returns to the release point after one period', () => {
-    const model = (result.derivedQuantities.find((d) => d.key === 'period')!.value as { value: number }).value
+    const model = (
+      result.derivedQuantities.find((d) => d.key === 'period')!.value as { value: number }
+    ).value
     const state = engine.stateAt(scene, { value: model, unit: 's', dimension: 'time' })
     expect(state.objects[0]!.position!.vector.x).toBeCloseTo(-1, 6)
     expect(state.objects[0]!.velocity!.vector.x).toBeCloseTo(0, 6)
@@ -436,7 +529,10 @@ describe('simple_pendulum (单摆)', () => {
 
   it('period equals 2π√(L/g)', () => {
     const period = result.derivedQuantities.find((d) => d.key === 'period')
-    expect((period!.value as { value: number }).value).toBeCloseTo(2 * Math.PI * Math.sqrt(1 / 9.8), 9)
+    expect((period!.value as { value: number }).value).toBeCloseTo(
+      2 * Math.PI * Math.sqrt(1 / 9.8),
+      9,
+    )
   })
 
   it('keeps the bob on the rope circle', () => {
@@ -446,7 +542,8 @@ describe('simple_pendulum (单摆)', () => {
   })
 
   it('swings to the mirror side at half a period', () => {
-    const T = (result.derivedQuantities.find((d) => d.key === 'period')!.value as { value: number }).value
+    const T = (result.derivedQuantities.find((d) => d.key === 'period')!.value as { value: number })
+      .value
     const state = engine.stateAt(scene, { value: T / 2, unit: 's', dimension: 'time' })
     expect(state.objects[0]!.position!.vector.x).toBeCloseTo(-0.1, 6)
   })

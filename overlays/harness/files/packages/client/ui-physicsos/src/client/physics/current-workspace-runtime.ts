@@ -188,6 +188,9 @@ interface Computed {
   readonly model: ResolvedCurrentModel
 }
 
+/**
+ * The current workspace runtime — see the module doc for its role.
+ */
 export class CurrentWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new CurrentFieldEngine()
@@ -1119,5 +1122,10 @@ const tableOf = (model: ResolvedCurrentModel): DataTableView => {
   }
 }
 
+/**
+ * The current workspace runtime helper `createCurrentWorkspaceRuntime`.
+ * @returns the workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createCurrentWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
   new CurrentWorkspaceRuntime(scene)

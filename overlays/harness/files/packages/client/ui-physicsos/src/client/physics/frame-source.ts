@@ -23,7 +23,11 @@ export interface FrameSource<T> {
   subscribe(this: void, listener: () => void): () => void
 }
 
-/** Create an external frame store seeded with the first frame. */
+/**
+ * Create an external frame store seeded with the first frame.
+ * @returns the frame source.
+ * @param initial - the initial value.
+ */
 export const createFrameSource = <T>(initial: T): FrameSource<T> => {
   let current = initial
   const listeners = new Set<() => void>()
@@ -49,6 +53,8 @@ export const createFrameSource = <T>(initial: T): FrameSource<T> => {
  * Re-renders only when the frame value changes (React's built-in external-store
  * subscription), so a canvas fed by a frame source never re-renders on parent
  * state churn that does not touch its frame.
+ * @returns the t.
+ * @param source - the source.
  */
 export const useFrameSource = <T>(source: FrameSource<T>): T =>
   useSyncExternalStore(source.subscribe, source.get, source.get)

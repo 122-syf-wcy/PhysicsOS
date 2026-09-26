@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
-  EXAM_BLUEPRINTS, blueprintById, proposeSpecTable,
-  runChecks, solveFindings,
-  renderAnswerMarkdown, renderPaperMarkdown,
+  EXAM_BLUEPRINTS,
+  blueprintById,
+  proposeSpecTable,
+  runChecks,
+  solveFindings,
+  renderAnswerMarkdown,
+  renderPaperMarkdown,
   documentHash,
-  DIFFICULTY_PRESETS, coefficientLabel, coefficientLevel,
-  mixCoefficient, paperCoefficient, specCoefficient,
+  DIFFICULTY_PRESETS,
+  coefficientLabel,
+  coefficientLevel,
+  mixCoefficient,
+  paperCoefficient,
+  specCoefficient,
 } from '../src/index.ts'
-import type {
-  ExamBlueprint, PaperDocument, PaperJob, PaperRequest, SpecRow,
-} from '../src/index.ts'
+import type { ExamBlueprint, PaperDocument, PaperJob, PaperRequest, SpecRow } from '../src/index.ts'
 
 /* ---------------------------------------------------------- fixtures -- */
 
@@ -27,12 +33,14 @@ const zkRequest: PaperRequest = {
 }
 
 const sectionTotal = (blueprint: ExamBlueprint): number =>
-  blueprint.sections.flatMap(section => section.slots).reduce((sum, slot) => sum + slot.score, 0)
+  blueprint.sections.flatMap((section) => section.slots).reduce((sum, slot) => sum + slot.score, 0)
 
 /** Deep-mutable view of a document for breakage tests. */
 type DeepMutable<T> = T extends readonly (infer U)[]
   ? DeepMutable<U>[]
-  : T extends object ? { -readonly [K in keyof T]: DeepMutable<T[K]> } : T
+  : T extends object
+    ? { -readonly [K in keyof T]: DeepMutable<T[K]> }
+    : T
 
 /** A mutable copy of the fixture for breakage tests. */
 const mutable = (base: PaperDocument): DeepMutable<PaperDocument> =>
@@ -52,36 +60,73 @@ const doc = (overrides: Partial<PaperDocument> = {}): PaperDocument => ({
     candidateFields: ['姓名', '班级', '考号'],
   },
   specTable: [
-    { questionNo: 1, sectionTitle: '一、选择题', kind: 'choice-single', score: 3, knowledge: ['浮力'], ability: '应用', difficulty: 'basic' },
-    { questionNo: 2, sectionTitle: '六、综合应用题', kind: 'calculation', score: 87, knowledge: ['压强'], ability: '应用', difficulty: 'hard' },
+    {
+      questionNo: 1,
+      sectionTitle: '一、选择题',
+      kind: 'choice-single',
+      score: 3,
+      knowledge: ['浮力'],
+      ability: '应用',
+      difficulty: 'basic',
+    },
+    {
+      questionNo: 2,
+      sectionTitle: '六、综合应用题',
+      kind: 'calculation',
+      score: 87,
+      knowledge: ['压强'],
+      ability: '应用',
+      difficulty: 'hard',
+    },
   ],
   sections: [
     {
       title: '一、选择题',
-      items: [{
-        number: 1, subject: 'physics', kind: 'choice-single', score: 3,
-        stem: '关于浮力，下列说法正确的是（ ）',
-        options: ['A. 甲', 'B. 乙', 'C. 丙', 'D. 丁'],
-        answer: {
-          result: 'C',
-          steps: ['漂浮时 $F_{\\text{浮}}=G$。'],
-          gradingPoints: [{ text: '选对', score: 3 }],
+      items: [
+        {
+          number: 1,
+          subject: 'physics',
+          kind: 'choice-single',
+          score: 3,
+          stem: '关于浮力，下列说法正确的是（ ）',
+          options: ['A. 甲', 'B. 乙', 'C. 丙', 'D. 丁'],
+          answer: {
+            result: 'C',
+            steps: ['漂浮时 $F_{\\text{浮}}=G$。'],
+            gradingPoints: [{ text: '选对', score: 3 }],
+          },
+          knowledge: ['浮力'],
+          ability: '应用',
+          difficulty: 'basic',
+          status: 'draft',
         },
-        knowledge: ['浮力'], ability: '应用', difficulty: 'basic', status: 'draft',
-      }],
+      ],
     },
     {
       title: '六、综合应用题',
-      items: [{
-        number: 2, subject: 'physics', kind: 'calculation', score: 87,
-        stem: '一圆柱形容器装水，求水对容器底部的压强。',
-        answer: {
-          result: '$p=2\\times10^{3}\\ \\mathrm{Pa}$',
-          steps: ['$p=\\rho gh=1.0\\times10^{3}\\times10\\times0.2=2\\times10^{3}\\ \\mathrm{Pa}$'],
-          gradingPoints: [{ text: '公式正确', score: 40 }, { text: '结果正确', score: 47 }],
+      items: [
+        {
+          number: 2,
+          subject: 'physics',
+          kind: 'calculation',
+          score: 87,
+          stem: '一圆柱形容器装水，求水对容器底部的压强。',
+          answer: {
+            result: '$p=2\\times10^{3}\\ \\mathrm{Pa}$',
+            steps: [
+              '$p=\\rho gh=1.0\\times10^{3}\\times10\\times0.2=2\\times10^{3}\\ \\mathrm{Pa}$',
+            ],
+            gradingPoints: [
+              { text: '公式正确', score: 40 },
+              { text: '结果正确', score: 47 },
+            ],
+          },
+          knowledge: ['压强'],
+          ability: '应用',
+          difficulty: 'hard',
+          status: 'draft',
         },
-        knowledge: ['压强'], ability: '应用', difficulty: 'hard', status: 'draft',
-      }],
+      ],
     },
   ],
   policyLabel: '依据已核实政策编制的训练卷',
@@ -100,7 +145,7 @@ describe('exam blueprints', () => {
   it('中考 physics structure carries the real section grammar', () => {
     const zk = blueprintById('gz-zk-physics')!
     expect(zk.totalScore).toBe(90)
-    expect(zk.sections.map(section => section.slots.length)).toEqual([7, 4, 3, 3, 3, 2])
+    expect(zk.sections.map((section) => section.slots.length)).toEqual([7, 4, 3, 3, 3, 2])
     expect(zk.sections[0]?.slots.at(-1)?.kind).toBe('choice-multi')
   })
 
@@ -113,7 +158,7 @@ describe('proposeSpecTable', () => {
   it('expands every slot of a full mock paper into a numbered row', () => {
     const rows = proposeSpecTable(blueprintById('gz-zk-physics')!, zkRequest)
     expect(rows).toHaveLength(22)
-    expect(rows.map(row => row.questionNo)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1))
+    expect(rows.map((row) => row.questionNo)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1))
     expect(rows.reduce((sum, row) => sum + row.score, 0)).toBe(90)
   })
 
@@ -125,15 +170,12 @@ describe('proposeSpecTable', () => {
 
   it('marks difficulty as 教研估计 spread over the request mix', () => {
     const rows = proposeSpecTable(blueprintById('gz-zk-physics')!, zkRequest)
-    const hard = rows.filter(row => row.difficulty === 'hard').length
+    const hard = rows.filter((row) => row.difficulty === 'hard').length
     expect(hard).toBe(Math.round(22 * 0.05))
   })
 
   it('seeds knowledge + chapter from the ranked pool into hint-less slots', () => {
-    const pool = [
-      { knowledge: '欧姆定律', chapter: '第十七章 欧姆定律' },
-      { knowledge: '浮力' },
-    ]
+    const pool = [{ knowledge: '欧姆定律', chapter: '第十七章 欧姆定律' }, { knowledge: '浮力' }]
     const rows = proposeSpecTable(blueprintById('gz-zk-physics')!, zkRequest, pool)
     expect(rows[0]?.knowledge).toEqual(['欧姆定律'])
     expect(rows[0]?.chapter).toBe('第十七章 欧姆定律')
@@ -144,7 +186,12 @@ describe('proposeSpecTable', () => {
     const blueprint = blueprintById('gz-zk-physics')!
     const hinted = {
       ...blueprint,
-      sections: [{ ...blueprint.sections[0]!, slots: [{ ...blueprint.sections[0]!.slots[0]!, knowledgeHint: '声现象' }] }],
+      sections: [
+        {
+          ...blueprint.sections[0]!,
+          slots: [{ ...blueprint.sections[0]!.slots[0]!, knowledgeHint: '声现象' }],
+        },
+      ],
     }
     const hintedRows = proposeSpecTable(hinted, { ...zkRequest, kind: 'weekly' }, pool)
     expect(hintedRows[0]?.knowledge).toEqual(['声现象'])
@@ -164,14 +211,14 @@ describe('runChecks', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.score = 5
     const findings = runChecks(broken, zkRequest)
-    expect(findings.map(f => f.code)).toContain('score-mismatch')
+    expect(findings.map((f) => f.code)).toContain('score-mismatch')
   })
 
   it('flags missing answers and unreferenced figures', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.answer = undefined
     broken.sections[1]!.items[0]!.stem = '如图所示，一物块静止在斜面上'
-    const codes = runChecks(broken, zkRequest).map(f => f.code)
+    const codes = runChecks(broken, zkRequest).map((f) => f.code)
     expect(codes).toContain('missing-answer')
     expect(codes).toContain('missing-figure')
   })
@@ -182,14 +229,16 @@ describe('runChecks', () => {
       '某次实验得到的一条纸带如图所示，相邻两计数点间还有四个点未画出'
     broken.sections[0]!.items[0]!.figure = { kind: 'line-diagram', ref: 'f1', caption: '纸带' }
     const findings = runChecks(broken, zkRequest)
-    expect(findings.filter(f => f.questionNo === broken.sections[0]!.items[0]!.number)).toEqual([])
+    expect(findings.filter((f) => f.questionNo === broken.sections[0]!.items[0]!.number)).toEqual(
+      [],
+    )
   })
 
   it('flags excluded knowledge and near-duplicate stems', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.knowledge = ['超纲内容']
     broken.sections[1]!.items[0]!.stem = '关于浮力，下列说法正确的是（ ）'
-    const codes = runChecks(broken, { ...zkRequest, exclude: ['超纲内容'] }).map(f => f.code)
+    const codes = runChecks(broken, { ...zkRequest, exclude: ['超纲内容'] }).map((f) => f.code)
     expect(codes).toContain('out-of-scope')
     expect(codes).toContain('duplicate')
   })
@@ -197,40 +246,40 @@ describe('runChecks', () => {
   it('flags broken numbering', () => {
     const broken = mutable(doc())
     broken.sections[1]!.items[0]!.number = 7
-    expect(runChecks(broken, zkRequest).map(f => f.code)).toContain('numbering')
+    expect(runChecks(broken, zkRequest).map((f) => f.code)).toContain('numbering')
   })
 
   it('flags drafts that drift off the confirmed spec row', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.difficulty = 'hard'
     broken.sections[0]!.items[0]!.knowledge = ['杠杆']
-    const codes = runChecks(broken, zkRequest).map(f => f.code)
+    const codes = runChecks(broken, zkRequest).map((f) => f.code)
     expect(codes).toContain('spec-mismatch')
   })
 
   it('flags grading-point totals that do not reach the question score', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.answer!.gradingPoints = [{ text: '只对一半', score: 1 }]
-    expect(runChecks(broken, zkRequest).map(f => f.code)).toContain('score-mismatch')
+    expect(runChecks(broken, zkRequest).map((f) => f.code)).toContain('score-mismatch')
   })
 
   it('flags choice answers that are not valid option letters', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.answer!.result = 'E'
-    expect(runChecks(broken, zkRequest).map(f => f.code)).toContain('answer-format')
+    expect(runChecks(broken, zkRequest).map((f) => f.code)).toContain('answer-format')
   })
 
   it('flags questions with no stated knowledge points', () => {
     const broken = mutable(doc())
     broken.sections[0]!.items[0]!.knowledge = []
-    const codes = runChecks(broken, zkRequest).map(f => f.code)
+    const codes = runChecks(broken, zkRequest).map((f) => f.code)
     expect(codes).toContain('missing-knowledge')
     expect(codes).toContain('spec-mismatch')
   })
 
   it('warns when the drafted paper drifts from the difficulty target', () => {
     const uniform = { ...zkRequest, difficulty: { basic: 1, medium: 0, hard: 0 } }
-    const codes = runChecks(doc(), uniform).map(f => f.code)
+    const codes = runChecks(doc(), uniform).map((f) => f.code)
     expect(codes).toContain('difficulty-drift')
   })
 })
@@ -317,7 +366,9 @@ describe('PaperJob audit trail', () => {
       blueprintId: 'gz-zk-physics',
       request: zkRequest,
       specTable: [] as unknown as SpecRow[],
-      versions: [{ version: 1, hash: documentHash(doc()), at: '2026-09-17T00:00:00Z', summary: '初稿' }],
+      versions: [
+        { version: 1, hash: documentHash(doc()), at: '2026-09-17T00:00:00Z', summary: '初稿' },
+      ],
       reviews: [],
       findings: [],
       solveReport: [],
@@ -352,7 +403,7 @@ describe('difficulty coefficient', () => {
     expect(coefficientLevel(0.72)).toBe('偏易')
     expect(coefficientLevel(0.719)).toBe('标准')
     expect(coefficientLevel(0.62)).toBe('标准')
-    expect(coefficientLevel(0.50)).toBe('偏难')
+    expect(coefficientLevel(0.5)).toBe('偏难')
     expect(coefficientLevel(0.499)).toBe('选拔')
   })
 

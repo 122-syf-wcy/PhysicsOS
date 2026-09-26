@@ -2,10 +2,11 @@
 
 > 文件：`docs/04-AGENT-ARCHITECTURE.md`  
 > 文档定位：PhysicsOS Agent Runtime / Harness / Tools / Skills / Context / Memory 总体架构  
-> 上游文档：  
-> - `00-PRODUCT-OVERVIEW.md`  
-> - `01-DEVELOPMENT-GUIDE.md`  
-> - `02-ENGINEERING-STANDARDS.md`  
+> 上游文档：
+>
+> - `00-PRODUCT-OVERVIEW.md`
+> - `01-DEVELOPMENT-GUIDE.md`
+> - `02-ENGINEERING-STANDARDS.md`
 > - `03-DOMAIN-CONTRACTS.md`
 >
 > 本文档定义 PhysicsOS 中所有 Agent 相关能力的技术边界与运行方式。
@@ -327,31 +328,17 @@ physics-scene
 
 ```ts
 interface PhysicsAgentRuntime {
-  createSession(
-    input: CreatePhysicsSessionInput
-  ): Promise<PhysicsAgentSession>
+  createSession(input: CreatePhysicsSessionInput): Promise<PhysicsAgentSession>
 
-  send(
-    sessionId: SessionId,
-    input: PhysicsAgentInput
-  ): Promise<PhysicsAgentRun>
+  send(sessionId: SessionId, input: PhysicsAgentInput): Promise<PhysicsAgentRun>
 
-  resume(
-    runId: RunId
-  ): Promise<PhysicsAgentRun>
+  resume(runId: RunId): Promise<PhysicsAgentRun>
 
-  cancel(
-    runId: RunId
-  ): Promise<void>
+  cancel(runId: RunId): Promise<void>
 
-  getSession(
-    sessionId: SessionId
-  ): Promise<PhysicsAgentSession>
+  getSession(sessionId: SessionId): Promise<PhysicsAgentSession>
 
-  forkSession(
-    sessionId: SessionId,
-    options?: ForkSessionOptions
-  ): Promise<PhysicsAgentSession>
+  forkSession(sessionId: SessionId, options?: ForkSessionOptions): Promise<PhysicsAgentSession>
 }
 ```
 
@@ -363,11 +350,7 @@ interface PhysicsAgentRuntime {
 interface CreatePhysicsSessionInput {
   userId: UserId
 
-  mode:
-    | 'experiment'
-    | 'question'
-    | 'teacher'
-    | 'diagnostic'
+  mode: 'experiment' | 'question' | 'teacher' | 'diagnostic'
 
   scene?: SceneReference
 
@@ -395,10 +378,7 @@ interface PhysicsAgentSession {
 
   activeScene?: SceneReference
 
-  status:
-    | 'active'
-    | 'paused'
-    | 'closed'
+  status: 'active' | 'paused' | 'closed'
 
   createdAt: IsoDateTime
 

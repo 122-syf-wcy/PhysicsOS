@@ -1,0 +1,147 @@
+/* GlassSelect — liquid-glass combobox. The button and its popover draw the
+   same material as the console panels: blurred backdrop, specular sheen, a
+   bright rim, and a lifted shadow. No literal colors; every value rides the
+   --physics-glass-* / --physics-ink-* tokens so the dark host flips with the
+   rest of the product. */
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 10px 5px 12px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), 0 1px 2px rgba(15, 23, 42, 0.06);
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  color: var(--physics-ink, var(--dsw-alias-label-primary));
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    box-shadow var(--physics-motion-fast) var(--physics-ease),
+    border-color var(--physics-motion-fast) var(--physics-ease),
+    transform var(--physics-motion-fast) var(--physics-ease);
+}
+
+.button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--physicsos-focus) 34%, transparent);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder {
+  color: var(--physics-ink-muted, var(--dsw-alias-label-secondary));
+}
+
+/* A CSS-drawn chevron keeps the control free of icon-font or asset coupling;
+   it rotates with the popover state so the control reads as one object. */
+.chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  border-radius: 1px;
+  transform: translateY(-2px) rotate(45deg);
+  opacity: 0.62;
+  transition: transform var(--physics-motion-base) var(--physics-ease);
+}
+
+.chevronOpen {
+  transform: translateY(1px) rotate(225deg);
+}
+
+.popover {
+  position: fixed;
+  z-index: 60;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 14px;
+  background-color: var(--physics-glass-popover);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift-raised);
+  /* A denser frost than the cards: the popover floats over text, and reading
+     through it is not a feature. */
+  backdrop-filter: saturate(1.6) blur(30px);
+  -webkit-backdrop-filter: saturate(1.6) blur(30px);
+  color: var(--physics-ink, var(--dsw-alias-label-primary));
+  font-size: 12.5px;
+  animation: glass-pop var(--physics-motion-base) var(--physics-ease);
+}
+
+/* The popover grows out of the button: a small settle that reads as the lens
+   focusing, not as a menu flying in. */
+@keyframes glass-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover {
+    animation: none;
+  }
+
+  .chevron {
+    transition: none;
+  }
+}
+
+.option {
+  padding: 7px 10px;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.optionActive {
+  background-color: color-mix(in srgb, var(--physicsos-focus) 12%, transparent);
+}
+
+.optionSelected {
+  color: var(--physics-ink-link, var(--dsw-static-blue-500));
+  font-weight: 600;
+}
+
+.optionSelected.optionActive {
+  background-color: color-mix(in srgb, var(--physicsos-focus) 18%, transparent);
+}
+
+.optionDisabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

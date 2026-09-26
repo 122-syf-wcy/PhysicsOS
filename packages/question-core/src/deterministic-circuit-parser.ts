@@ -37,7 +37,8 @@ const CIRCUIT_ARCH_SIGNAL =
   /串联|并联|滑动变阻器|变阻器|电流表|电压表|欧姆定律|电路|电源|干路|支路|路端电压|电功率/
 const CIRCUIT_VALUE_SIGNAL = /电动势|内阻|功率|电功率|瓦|千瓦|\bW\b/
 
-const ELECTRIC_FIELD_SIGNAL = /匀强电场|电场强度|点电荷|电场力|电场方向|电容器|平行板|偏转|洛伦兹力|磁感应强度|匀强磁场/
+const ELECTRIC_FIELD_SIGNAL =
+  /匀强电场|电场强度|点电荷|电场力|电场方向|电容器|平行板|偏转|洛伦兹力|磁感应强度|匀强磁场/
 
 export const isCircuitQuestionText = (text: string): boolean => {
   if (ELECTRIC_FIELD_SIGNAL.test(text)) return false
@@ -111,7 +112,9 @@ const CIRCUIT_PATTERNS = {
     new RegExp(String.raw`R\s*2\s*=\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?\b`),
     new RegExp(String.raw`R\s*0\s*=\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?\b`),
     new RegExp(String.raw`R\s*=\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?\b`),
-    new RegExp(String.raw`电阻(?:器)?\s*R\s*[0-9]?(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?\b`),
+    new RegExp(
+      String.raw`电阻(?:器)?\s*R\s*[0-9]?(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?\b`,
+    ),
     new RegExp(String.raw`电阻(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?\b`),
   ],
   /** Named resistors stated together: R1 = 10 Ω，R2 = 20 Ω. Case-sensitive (see above). */
@@ -137,8 +140,14 @@ const CIRCUIT_PATTERNS = {
   ],
   /** Rheostat total resistance: 变阻器最大阻值 / 滑动变阻器最大电阻. */
   rheostatTotal: [
-    new RegExp(String.raw`(?:滑动)?变阻器最大(?:阻值|电阻)(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?`, 'i'),
-    new RegExp(String.raw`变阻器(?:总|最大)阻值(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?`, 'i'),
+    new RegExp(
+      String.raw`(?:滑动)?变阻器最大(?:阻值|电阻)(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?`,
+      'i',
+    ),
+    new RegExp(
+      String.raw`变阻器(?:总|最大)阻值(?:为|是|=)?\s*(${NUMBER})\s*(${RESISTANCE_UNIT})?`,
+      'i',
+    ),
   ],
 } as const
 
@@ -249,14 +258,20 @@ export const DeterministicCircuitQuestionParser: QuestionParserProvider = {
           seenSi.add(si)
           resistances.push(si)
         }
-      } catch { /* skip unknown unit */ }
+      } catch {
+        /* skip unknown unit */
+      }
     }
     if (resistances.length === 0) {
       /* Fall back to a single named resistor. Try the R= and 电阻= patterns,
          skipping the R1/R2/R0 list patterns already tried above. */
       const single = extractValueWithUnit(
         text,
-        [CIRCUIT_PATTERNS.resistance[3], CIRCUIT_PATTERNS.resistance[4], CIRCUIT_PATTERNS.resistance[5]],
+        [
+          CIRCUIT_PATTERNS.resistance[3],
+          CIRCUIT_PATTERNS.resistance[4],
+          CIRCUIT_PATTERNS.resistance[5],
+        ],
         'Ω',
       )
       if (single !== null) resistances.push(single.siValue)
@@ -342,7 +357,9 @@ export const DeterministicCircuitQuestionParser: QuestionParserProvider = {
     }
 
     const confidence =
-      isCircuitQuestionText(text) && (emf !== null || voltage !== null || current !== null) && targets.length > 0
+      isCircuitQuestionText(text) &&
+      (emf !== null || voltage !== null || current !== null) &&
+      targets.length > 0
         ? 0.92
         : 0.2
     return { ir, issues, confidence }

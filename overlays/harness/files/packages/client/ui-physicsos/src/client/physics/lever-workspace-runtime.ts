@@ -110,6 +110,9 @@ interface Computed {
 const cmOf = (metres: number): number => metres * 100
 const nCmOf = (newtonMetres: number): number => newtonMetres * 100
 
+/**
+ * The lever workspace runtime — see the module doc for its role.
+ */
 export class LeverWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new LeverEngine()
@@ -577,5 +580,10 @@ const tableOf = (model: ResolvedLeverModel): DataTableView => {
   }
 }
 
+/**
+ * The lever workspace runtime helper `createLeverWorkspaceRuntime`.
+ * @returns the lever workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createLeverWorkspaceRuntime = (scene: PhysicsScene): LeverWorkspaceRuntime =>
   new LeverWorkspaceRuntime(scene)

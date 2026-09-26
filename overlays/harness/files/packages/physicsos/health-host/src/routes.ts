@@ -49,7 +49,7 @@ export function healthRoutes(options: HealthRouteOptions): Handler {
       options.checks.length === 0
         ? [{ name: 'configuration', status: 'failed' as const, code: 'NO_READINESS_CHECKS' }]
         : await runReadinessChecks(options.checks, timeoutMs)
-    const ready = results.every((result) => result.status === 'ok')
+    const ready = results.every(result => result.status === 'ok')
     const checks = Object.fromEntries(results.map(({ name, ...result }) => [name, result]))
     sendJson(res, ready ? 200 : 503, {
       status: ready ? 'ready' : 'not_ready',

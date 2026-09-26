@@ -69,7 +69,10 @@ jobs:
           overlays/harness/files/packages/physicsos/health-host
 
       - name: Build health host
-        run: pnpm exec tsc -p overlays/harness/files/packages/physicsos/health-host/tsconfig.json
+        run: pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-health-host run bundle
+
+      - name: Validate desktop release config
+        run: pnpm run desktop:config
 
       - name: Lint health host
         run: >-

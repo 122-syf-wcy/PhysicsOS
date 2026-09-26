@@ -51,13 +51,7 @@ export interface DomainError {
   code: string
   message: string
   category:
-    | 'validation'
-    | 'not_found'
-    | 'conflict'
-    | 'unsupported'
-    | 'permission'
-    | 'timeout'
-    | 'internal'
+    'validation' | 'not_found' | 'conflict' | 'unsupported' | 'permission' | 'timeout' | 'internal'
   retryable: boolean
   details?: Record<string, unknown>
 }

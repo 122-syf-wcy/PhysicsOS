@@ -3,7 +3,8 @@
  *
  * The plugin is a host-plane row (it registers into `ctx.tools`), so it only
  * has a Node half. `@physicsos/*` is a `link:` bridge onto PhysicsOS' TypeScript
- * sources (see docs/HARNESS-UI-OVERLAY.md, DEV INTEGRATION BRIDGE), which the
+ * sources (see HARNESS-UI-OVERLAY.md in the PhysicsOS repo root docs directory,
+ * DEV INTEGRATION BRIDGE), which the
  * Node loader cannot import at runtime — so the whole PhysicsOS domain graph is
  * inlined into `lib/index.js`, while every `@deepseek-ai/*` package stays
  * external and is resolved from the host assembly like any other plugin.

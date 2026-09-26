@@ -154,7 +154,7 @@ describe('fluid engine', () => {
 
   it('passes every verification check on the textbook rig', () => {
     const outcome = simulated(tankScene())
-    const ids = outcome.verification.checks.map(entry => entry.id)
+    const ids = outcome.verification.checks.map((entry) => entry.id)
     expect(ids).toContain('archimedes_principle')
     expect(ids).toContain('scale_reading_balance')
     expect(ids).toContain('buoyancy_depth_independent')
@@ -163,7 +163,7 @@ describe('fluid engine', () => {
 
   it('swaps the depth-independence check for a float check when the block floats', () => {
     const outcome = simulated(tankScene({ blockMass: 60 }))
-    const ids = outcome.verification.checks.map(entry => entry.id)
+    const ids = outcome.verification.checks.map((entry) => entry.id)
     expect(ids).toContain('float_equilibrium')
     expect(ids).not.toContain('buoyancy_depth_independent')
     expect(outcome.verification.status).toBe('passed')
@@ -171,7 +171,7 @@ describe('fluid engine', () => {
 
   it('marks the entry, the covering and the end of the descent on the timeline', () => {
     const outcome = simulated(tankScene())
-    expect(outcome.events.map(event => event.type)).toEqual([
+    expect(outcome.events.map((event) => event.type)).toEqual([
       'BlockEntersLiquid',
       'BlockFullySubmerged',
       'DescentComplete',
@@ -180,7 +180,7 @@ describe('fluid engine', () => {
     expect(outcome.events[2]?.time).toBeCloseTo(5, 9)
 
     const floating = simulated(tankScene({ blockMass: 60 }))
-    expect(floating.events.map(event => event.type)).toEqual([
+    expect(floating.events.map((event) => event.type)).toEqual([
       'BlockEntersLiquid',
       'BlockFloats',
       'DescentComplete',
@@ -195,7 +195,7 @@ describe('fluid engine', () => {
     if (covering === undefined) throw new Error('Expected a state at sample 32.')
     expect(covering.time.value).toBeCloseTo(2.5, 9)
 
-    const tankValues = covering.objects.find(object => object.id === 'fluid-tank-1')?.values
+    const tankValues = covering.objects.find((object) => object.id === 'fluid-tank-1')?.values
     const reading = tankValues?.['scale_reading']
     if (reading === undefined || !isScalarQuantity(reading)) {
       throw new Error('Expected a scalar scale reading on the tank state.')
@@ -241,10 +241,12 @@ describe('fluid scene commands', () => {
 
   it('turns a sinker into a floater through a real mass edit', () => {
     const runtime = new SceneRuntime(tankScene())
-    expect(execute(runtime, 'SetBlockMass', {
-      tankId: 'fluid-tank-1',
-      mass: quantity(60, 'g', 'mass'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetBlockMass', {
+        tankId: 'fluid-tank-1',
+        mass: quantity(60, 'g', 'mass'),
+      }).ok,
+    ).toBe(true)
     expect(fluidTankOf(runtime.getScene())?.block.mass.value).toBe(60)
     expect(equilibriumOf(resolveFluidModel(runtime.getScene())).floats).toBe(true)
   })

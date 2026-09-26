@@ -25,7 +25,11 @@ const probeAt = (position: { x: number; y: number; z: number }): ProbeParticleIn
   position,
 })
 
-const run = (charges: readonly PointChargeInput[], probe?: ProbeParticleInput, now = '2026-08-22T00:00:00.000Z') => {
+const run = (
+  charges: readonly PointChargeInput[],
+  probe?: ProbeParticleInput,
+  now = '2026-08-22T00:00:00.000Z',
+) => {
   const scene = createPointChargeScene({
     sceneId: 'verifier-test',
     charges,
@@ -44,7 +48,11 @@ const failingIdsOf = (verification: VerificationResult): string[] =>
   verification.checks.filter((c) => !c.passed).map((c) => c.id)
 
 /** Tamper a derived vector on the state's derived array (where the verifier reads from). */
-const tamperVector = (result: SimulationResult, key: string, vector: { x: number; y: number; z: number }): SimulationResult => ({
+const tamperVector = (
+  result: SimulationResult,
+  key: string,
+  vector: { x: number; y: number; z: number },
+): SimulationResult => ({
   ...result,
   states: result.states.map((state) => ({
     ...state,
@@ -114,7 +122,10 @@ describe('verifyElectricSimulation — point-charge per-check coverage', () => {
       [{ id: 'q1', charge: 5e-6, position: vec3(0, 0, 0) }],
       probeAt(vec3(0.2, 0, 0)),
     )
-    const dirty = verifyElectricSimulation(scene, tamperScalar(result, 'electric_field_magnitude', 42))
+    const dirty = verifyElectricSimulation(
+      scene,
+      tamperScalar(result, 'electric_field_magnitude', 42),
+    )
     expect(dirty.status).toBe('failed')
     expect(checkIdOf(dirty, 'electric_field_1_over_r2')?.passed).toBe(false)
     expect(checkIdOf(dirty, 'electric_field_magnitude_matches')?.passed).toBe(false)
@@ -128,7 +139,10 @@ describe('verifyElectricSimulation — point-charge per-check coverage', () => {
       ],
       probeAt(vec3(0, 0.2, 0)),
     )
-    const dirty = verifyElectricSimulation(scene, tamperVector(result, 'electric_field_vector', { x: 12345, y: -999, z: 7 }))
+    const dirty = verifyElectricSimulation(
+      scene,
+      tamperVector(result, 'electric_field_vector', { x: 12345, y: -999, z: 7 }),
+    )
     expect(dirty.status).toBe('failed')
     /* Superposition only runs for ≥2 sources; this scene has two, so it must fail. */
     expect(checkIdOf(dirty, 'electric_field_superposition')?.passed).toBe(false)
@@ -141,7 +155,10 @@ describe('verifyElectricSimulation — point-charge per-check coverage', () => {
       probeAt(vec3(0.2, 0, 0)),
     )
     /* Rotate the field 90° off the radial: direction check should fail. */
-    const dirty = verifyElectricSimulation(scene, tamperVector(result, 'electric_field_vector', { x: 0, y: 1e6, z: 0 }))
+    const dirty = verifyElectricSimulation(
+      scene,
+      tamperVector(result, 'electric_field_vector', { x: 0, y: 1e6, z: 0 }),
+    )
     expect(dirty.status).toBe('failed')
     expect(checkIdOf(dirty, 'electric_field_direction')?.passed).toBe(false)
     expect(checkIdOf(dirty, 'electric_field_vector_matches')?.passed).toBe(false)
@@ -152,7 +169,10 @@ describe('verifyElectricSimulation — point-charge per-check coverage', () => {
       [{ id: 'q1', charge: 5e-6, position: vec3(0, 0, 0) }],
       probeAt(vec3(0.2, 0, 0)),
     )
-    const dirty = verifyElectricSimulation(scene, tamperVector(result, 'electric_force_vector', { x: 0, y: 999, z: 0 }))
+    const dirty = verifyElectricSimulation(
+      scene,
+      tamperVector(result, 'electric_force_vector', { x: 0, y: 999, z: 0 }),
+    )
     expect(dirty.status).toBe('failed')
     expect(checkIdOf(dirty, 'electric_force_qE')?.passed).toBe(false)
   })

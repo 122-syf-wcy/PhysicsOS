@@ -21,7 +21,11 @@ import {
   resolveWaveModel,
   type ResolvedWaveModel,
 } from '@physicsos/engine-wave'
-import { isScalarQuantity, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
+import {
+  isScalarQuantity,
+  type SimulationResult,
+  type SimulationState,
+} from '@physicsos/physics-core'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
 import {
   SceneRuntime,
@@ -82,6 +86,23 @@ const DERIVED_LABELS: Record<string, string> = {
   fundamental_frequency: '基频 f₁',
   node_count: '波节数',
   antinode_count: '波腹数',
+  medium_length: '介质长度',
+  compression_spacing: '压缩区间距',
+  incident_speed: '入射波速',
+  transmitted_speed: '折射介质波速',
+  incident_angle: '入射角',
+  reflection_angle: '反射角',
+  refracted_angle: '折射角',
+  critical_angle: '临界角',
+  total_internal_reflection: '全反射',
+  slit_width: '缝宽',
+  screen_distance: '缝到屏距离',
+  central_maximum_width: '中央明纹宽度',
+  diffraction_angle: '衍射角',
+  source_frequency: '波源频率',
+  observed_frequency: '观察频率',
+  observed_wavelength: '观察波长',
+  frequency_shift: '频率变化',
 }
 
 const VERIFICATION_LABELS: Record<string, string> = {
@@ -106,6 +127,16 @@ const VERIFICATION_LABELS: Record<string, string> = {
   timeline_dimensions_valid: '时间线量纲正确',
   wave_bench_dimensions: '实验台量纲正确',
   wave_bench_values: '振幅、频率、长度为正，谐波次数为正整数',
+  longitudinal_particle_motion: '纵波质点沿传播方向振动',
+  longitudinal_strain_pressure_relation: '压缩/稀疏与应变符号一致',
+  reflection_angle_equality: '反射角等于入射角',
+  frequency_unchanged_at_boundary: '跨界面频率不变',
+  snells_law_wave_speed: 'sinθ/v 跨界面守恒',
+  diffraction_minimum_condition: '暗纹 a·sinθ = mλ',
+  central_maximum_width: '中央明纹宽度 w₀ = 2Lλ/a',
+  diffraction_intensity_bounds: '衍射强度位于 0~1',
+  doppler_frequency_relation: '多普勒频率关系',
+  doppler_observed_wavelength: '运动波源波长 λ′ = (v−vₛ)/f',
 }
 
 const verificationLabelOf = (id: string): string =>
@@ -130,6 +161,9 @@ interface Computed {
   readonly runSeconds: number
 }
 
+/**
+ * The wave workspace runtime — see the module doc for its role.
+ */
 export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new WaveEngine()
@@ -173,7 +207,9 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       }
       const model = resolveWaveModel(scene)
       const runSeconds =
-        scene.timeline.endTime === undefined ? 1 : Math.max(0.1, canonicalValue(scene.timeline.endTime))
+        scene.timeline.endTime === undefined
+          ? 1
+          : Math.max(0.1, canonicalValue(scene.timeline.endTime))
       this.currentTime = Math.min(this.currentTime, runSeconds)
       this.failure = undefined
       this.computed = {
@@ -290,8 +326,13 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
           expression: derived.formula?.expression ?? '',
           result: {
             symbol: derivedLabelOf(derived.key),
-            value: isScalarQuantity(derived.value) ? formatDerived(derived.key, derived.value.value) : '—',
-            unit: derivedUnitOf(derived.key, isScalarQuantity(derived.value) ? derived.value.unit : ''),
+            value: isScalarQuantity(derived.value)
+              ? formatDerived(derived.key, derived.value.value)
+              : '—',
+            unit: derivedUnitOf(
+              derived.key,
+              isScalarQuantity(derived.value) ? derived.value.unit : '',
+            ),
           },
         })),
       verification: simulation.verification.checks.map(check => ({
@@ -323,7 +364,19 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   private treeOf(scene: PhysicsScene, bench: WaveBench): readonly SceneTreeNode[] {
     const model = this.computed?.model
     const rigLabel =
-      bench.type === 'travelling' ? '绳与波源' : bench.type === 'interference' ? '两个相干波源' : '两端固定的弦'
+      bench.type === 'travelling'
+        ? '绳与波源'
+        : bench.type === 'interference'
+          ? '两个相干波源'
+          : bench.type === 'standing'
+            ? '两端固定的弦'
+            : bench.type === 'longitudinal'
+              ? '弹性介质'
+              : bench.type === 'reflection_refraction'
+                ? '两种介质与界面'
+                : bench.type === 'diffraction'
+                  ? '单缝与屏'
+                  : '运动波源与观察者'
     const benchChildren: SceneTreeNode[] = [
       {
         id: bench.id,
@@ -347,8 +400,18 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     }
     if (bench.type === 'interference') {
       benchChildren.push(
-        { id: `${bench.id}.source-1`, label: '波源 S₁', icon: 'particle' as const, kind: 'object' as const },
-        { id: `${bench.id}.source-2`, label: '波源 S₂', icon: 'particle' as const, kind: 'object' as const },
+        {
+          id: `${bench.id}.source-1`,
+          label: '波源 S₁',
+          icon: 'particle' as const,
+          kind: 'object' as const,
+        },
+        {
+          id: `${bench.id}.source-2`,
+          label: '波源 S₂',
+          icon: 'particle' as const,
+          kind: 'object' as const,
+        },
         {
           id: `${bench.id}.point`,
           label: '观察点 P',
@@ -361,26 +424,51 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         },
       )
     }
-    const observableChildren: SceneTreeNode[] = scene.observableDefinitions.flatMap((definition) => {
-      const key = waveObservableKeyOf(definition)
-      if (key === undefined) return []
-      return [{
-        id: String(definition.id),
-        label: OBSERVABLE_LABELS[key] ?? key,
-        icon: 'observable' as const,
-        kind: 'observable' as const,
-        observable: key,
-      }]
-    })
+    const observableChildren: SceneTreeNode[] = scene.observableDefinitions.flatMap(
+      (definition) => {
+        const key = waveObservableKeyOf(definition)
+        if (key === undefined) return []
+        return [
+          {
+            id: String(definition.id),
+            label: OBSERVABLE_LABELS[key] ?? key,
+            icon: 'observable' as const,
+            kind: 'observable' as const,
+            observable: key,
+          },
+        ]
+      },
+    )
     const groupLabel =
-      bench.type === 'travelling' ? '绳波装置' : bench.type === 'interference' ? '双源干涉装置' : '弦驻波装置'
+      bench.type === 'travelling'
+        ? '绳波装置'
+        : bench.type === 'interference'
+          ? '双源干涉装置'
+          : bench.type === 'standing'
+            ? '弦驻波装置'
+            : bench.type === 'longitudinal'
+              ? '纵波装置'
+              : bench.type === 'reflection_refraction'
+                ? '反射/折射装置'
+                : bench.type === 'diffraction'
+                  ? '单缝衍射装置'
+                  : '多普勒装置'
     return [
       { id: 'bench', label: groupLabel, icon: 'folder', kind: 'group', children: benchChildren },
-      { id: 'observables', label: '可观察量', icon: 'folder', kind: 'group', children: observableChildren },
+      {
+        id: 'observables',
+        label: '可观察量',
+        icon: 'folder',
+        kind: 'group',
+        children: observableChildren,
+      },
     ]
   }
 
-  private inspectorOf(bench: WaveBench, model: ResolvedWaveModel | undefined): readonly InspectorSection[] {
+  private inspectorOf(
+    bench: WaveBench,
+    model: ResolvedWaveModel | undefined,
+  ): readonly InspectorSection[] {
     const sections: InspectorSection[] = []
     const rounded = (value: number | undefined, digits: number): number =>
       value === undefined ? Number.NaN : Number.parseFloat(value.toFixed(digits))
@@ -413,17 +501,19 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         highlights: bench.id,
       })
     }
-    parameters.push({
-      id: 'wave-speed',
-      label: bench.type === 'standing' ? '弦上波速（由介质决定）' : '波速（由介质决定）',
-      symbol: 'v',
-      unit: 'm/s',
-      value: rounded(model?.waveSpeed, 2),
-      min: 0.5,
-      max: 200,
-      step: 0.5,
-      highlights: bench.id,
-    })
+    if (bench.type !== 'reflection_refraction' && bench.type !== 'doppler') {
+      parameters.push({
+        id: 'wave-speed',
+        label: bench.type === 'standing' ? '弦上波速（由介质决定）' : '波速（由介质决定）',
+        symbol: 'v',
+        unit: 'm/s',
+        value: rounded(model?.waveSpeed, 2),
+        min: 0.5,
+        max: 200,
+        step: 0.5,
+        highlights: bench.id,
+      })
+    }
     if (bench.type === 'interference') {
       parameters.push({
         id: 'path-difference',
@@ -467,7 +557,19 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       )
     }
     const sectionTitle =
-      bench.type === 'travelling' ? '绳波' : bench.type === 'interference' ? '双源干涉' : '弦驻波'
+      bench.type === 'travelling'
+        ? '绳波'
+        : bench.type === 'interference'
+          ? '双源干涉'
+          : bench.type === 'standing'
+            ? '弦驻波'
+            : bench.type === 'longitudinal'
+              ? '纵波'
+              : bench.type === 'reflection_refraction'
+                ? '反射与折射'
+                : bench.type === 'diffraction'
+                  ? '单缝衍射'
+                  : '多普勒效应'
     sections.push({ id: 'bench', title: sectionTitle, parameters })
 
     if (this.computed !== undefined && model !== undefined) {
@@ -482,10 +584,16 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
           ...(entry.targetId === undefined ? {} : { highlights: entry.targetId }),
         }))
       if (model.subModel === 'wave_interference') {
-        const sign = this.computed.simulation.derivedQuantities.find(entry => entry.key === 'interference_type')
+        const sign = this.computed.simulation.derivedQuantities.find(
+          entry => entry.key === 'interference_type',
+        )
         const verdict =
           sign !== undefined && isScalarQuantity(sign.value)
-            ? sign.value.value > 0 ? 'constructive' : sign.value.value < 0 ? 'destructive' : 'partial'
+            ? sign.value.value > 0
+              ? 'constructive'
+              : sign.value.value < 0
+                ? 'destructive'
+                : 'partial'
             : 'partial'
         derived.push({
           id: 'verdict-text',
@@ -506,9 +614,15 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     if (bench === undefined) return this.getSnapshot()
 
     if (id === 'amplitude') {
-      this.command('SetWaveAmplitude', { benchId: bench.id, amplitude: quantity(value, 'cm', 'length') })
+      this.command('SetWaveAmplitude', {
+        benchId: bench.id,
+        amplitude: quantity(value, 'cm', 'length'),
+      })
     } else if (id === 'frequency') {
-      this.command('SetWaveFrequency', { benchId: bench.id, frequency: quantity(value, 'Hz', 'frequency') })
+      this.command('SetWaveFrequency', {
+        benchId: bench.id,
+        frequency: quantity(value, 'Hz', 'frequency'),
+      })
     } else if (id === 'wave-speed') {
       this.command('SetWaveSpeed', { benchId: bench.id, speed: quantity(value, 'm/s', 'velocity') })
     } else if (id === 'path-difference') {
@@ -517,7 +631,10 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         pathDifference: quantity(value, 'm', 'length'),
       })
     } else if (id === 'string-length') {
-      this.command('SetWaveStringLength', { benchId: bench.id, stringLength: quantity(value, 'm', 'length') })
+      this.command('SetWaveStringLength', {
+        benchId: bench.id,
+        stringLength: quantity(value, 'm', 'length'),
+      })
     } else if (id === 'harmonic') {
       this.command('SetWaveHarmonic', { benchId: bench.id, harmonic: Math.round(value) })
     }
@@ -588,9 +705,19 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
 }
 
 /** y–t of the one point each rig is about: the marked particle, P, or the first antinode. */
-const chartsOf = (simulation: SimulationResult, model: ResolvedWaveModel): readonly ChartSeries[] => {
+const chartsOf = (
+  simulation: SimulationResult,
+  model: ResolvedWaveModel,
+): readonly ChartSeries[] => {
+  if (
+    model.subModel === 'reflection_refraction' ||
+    model.subModel === 'wave_diffraction' ||
+    model.subModel === 'wave_doppler'
+  ) {
+    return []
+  }
   const targetId =
-    model.subModel === 'travelling_wave'
+    model.subModel === 'travelling_wave' || model.subModel === 'longitudinal_wave'
       ? `${model.benchId}.marker`
       : model.subModel === 'wave_interference'
         ? `${model.benchId}.point`
@@ -598,9 +725,11 @@ const chartsOf = (simulation: SimulationResult, model: ResolvedWaveModel): reado
   const title =
     model.subModel === 'travelling_wave'
       ? '标记质点位移 y–t（简谐振动，不随波迁移）'
-      : model.subModel === 'wave_interference'
-        ? '观察点 P 的位移 y_P–t（两波叠加）'
-        : '波腹位移 y–t（弦在两条包络线之间摆动）'
+      : model.subModel === 'longitudinal_wave'
+        ? '纵波质点沿传播方向的位移 ξ–t'
+        : model.subModel === 'wave_interference'
+          ? '观察点 P 的位移 y_P–t（两波叠加）'
+          : '波腹位移 y–t（弦在两条包络线之间摆动）'
   const points = simulation.states.map((state) => {
     const object = state.objects.find(entry => entry.id === targetId)
     const t = canonicalValue(state.time)
@@ -611,9 +740,24 @@ const chartsOf = (simulation: SimulationResult, model: ResolvedWaveModel): reado
         ? { t, value: displacement.value * 100 }
         : { t, value: Number.NaN }
     }
+    if (model.subModel === 'longitudinal_wave') {
+      const displacement = object.values?.['displacement']
+      return displacement !== undefined && isScalarQuantity(displacement)
+        ? { t, value: displacement.value * 100 }
+        : { t, value: Number.NaN }
+    }
     return { t, value: (object.position?.vector.y ?? Number.NaN) * 100 }
   })
-  return [{ id: 'wave-displacement', title, xLabel: 't / s', yLabel: 'y / cm', role: 'trajectory', points }]
+  return [
+    {
+      id: 'wave-displacement',
+      title,
+      xLabel: 't / s',
+      yLabel: 'y / cm',
+      role: 'trajectory',
+      points,
+    },
+  ]
 }
 
 /** One-row reading table: the rig's inputs and the engine's outputs. */
@@ -626,50 +770,142 @@ const tableOf = (model: ResolvedWaveModel, simulation: SimulationResult): DataTa
   if (model.subModel === 'travelling_wave') {
     return {
       columns: ['A / cm', 'λ / m', 'f / Hz', 'v / (m/s)', 'T / s'],
-      rows: [{
-        step: 0,
-        values: [scalarOf('amplitude', 100), scalarOf('wavelength'), scalarOf('frequency'), scalarOf('wave_speed'), scalarOf('period')],
-      }],
+      rows: [
+        {
+          step: 0,
+          values: [
+            scalarOf('amplitude', 100),
+            scalarOf('wavelength'),
+            scalarOf('frequency'),
+            scalarOf('wave_speed'),
+            scalarOf('period'),
+          ],
+        },
+      ],
     }
   }
   if (model.subModel === 'wave_interference') {
     const sign = simulation.derivedQuantities.find(entry => entry.key === 'interference_type')
     const verdict =
       sign !== undefined && isScalarQuantity(sign.value)
-        ? interferenceVerdictText(sign.value.value > 0 ? 'constructive' : sign.value.value < 0 ? 'destructive' : 'partial')
+        ? interferenceVerdictText(
+          sign.value.value > 0
+            ? 'constructive'
+            : sign.value.value < 0
+              ? 'destructive'
+              : 'partial',
+        )
         : '—'
     return {
       columns: ['A / cm', 'λ / m', 'd / m', 'Δ / m', 'Δ/λ', 'A_P / cm', 'P 点'],
-      rows: [{
-        step: 0,
-        values: [
-          scalarOf('amplitude', 100),
-          scalarOf('wavelength'),
-          scalarOf('source_separation'),
-          scalarOf('path_difference'),
-          scalarOf('path_difference_ratio'),
-          scalarOf('resultant_amplitude', 100),
-          verdict,
-        ],
-      }],
+      rows: [
+        {
+          step: 0,
+          values: [
+            scalarOf('amplitude', 100),
+            scalarOf('wavelength'),
+            scalarOf('source_separation'),
+            scalarOf('path_difference'),
+            scalarOf('path_difference_ratio'),
+            scalarOf('resultant_amplitude', 100),
+            verdict,
+          ],
+        },
+      ],
+    }
+  }
+  if (model.subModel === 'longitudinal_wave') {
+    return {
+      columns: ['A / cm', 'λ / m', 'f / Hz', 'v / (m/s)', 'ℓ / m'],
+      rows: [
+        {
+          step: 0,
+          values: [
+            scalarOf('amplitude', 100),
+            scalarOf('wavelength'),
+            scalarOf('frequency'),
+            scalarOf('wave_speed'),
+            scalarOf('medium_length'),
+          ],
+        },
+      ],
+    }
+  }
+  if (model.subModel === 'reflection_refraction') {
+    return {
+      columns: ['θ₁ / rad', 'θr / rad', 'θt / rad', 'θc / rad', '全反射'],
+      rows: [
+        {
+          step: 0,
+          values: [
+            scalarOf('incident_angle'),
+            scalarOf('reflection_angle'),
+            scalarOf('refracted_angle'),
+            scalarOf('critical_angle'),
+            scalarOf('total_internal_reflection') === '0' ? '否' : '是',
+          ],
+        },
+      ],
+    }
+  }
+  if (model.subModel === 'wave_diffraction') {
+    return {
+      columns: ['a / m', 'L / m', 'λ / m', 'θ₁ / rad', 'w₀ / m'],
+      rows: [
+        {
+          step: 0,
+          values: [
+            scalarOf('slit_width'),
+            scalarOf('screen_distance'),
+            scalarOf('wavelength'),
+            scalarOf('diffraction_angle'),
+            scalarOf('central_maximum_width'),
+          ],
+        },
+      ],
+    }
+  }
+  if (model.subModel === 'wave_doppler') {
+    return {
+      columns: ['f / Hz', 'vs / (m/s)', 'v₀ / (m/s)', 'f′ / Hz', 'Δf / Hz', 'λ′ / m'],
+      rows: [
+        {
+          step: 0,
+          values: [
+            scalarOf('source_frequency'),
+            scalarOf('source_speed'),
+            scalarOf('observer_speed'),
+            scalarOf('observed_frequency'),
+            scalarOf('frequency_shift'),
+            scalarOf('observed_wavelength'),
+          ],
+        },
+      ],
     }
   }
   return {
     columns: ['A / cm', 'L / m', 'n', 'v / (m/s)', 'λ / m', 'f_n / Hz', 'f₁ / Hz'],
-    rows: [{
-      step: 0,
-      values: [
-        scalarOf('amplitude', 100),
-        scalarOf('string_length'),
-        scalarOf('harmonic'),
-        scalarOf('wave_speed'),
-        scalarOf('wavelength'),
-        scalarOf('frequency'),
-        scalarOf('fundamental_frequency'),
-      ],
-    }],
+    rows: [
+      {
+        step: 0,
+        values: [
+          scalarOf('amplitude', 100),
+          scalarOf('string_length'),
+          scalarOf('harmonic'),
+          scalarOf('wave_speed'),
+          scalarOf('wavelength'),
+          scalarOf('frequency'),
+          scalarOf('fundamental_frequency'),
+        ],
+      },
+    ],
   }
 }
 
+/**
+ * The wave workspace runtime helper `createWaveWorkspaceRuntime`.
+ * @returns the wave workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createWaveWorkspaceRuntime = (scene: PhysicsScene): WaveWorkspaceRuntime =>
   new WaveWorkspaceRuntime(scene)

@@ -89,7 +89,7 @@ function resolveRun(run: string, knowns: ReadonlyMap<string, string>): readonly 
   if (exact !== undefined) return [{ text: exact, known: true }]
   if (FUNCTIONS.has(run)) return []
   if (LITERALS.has(run)) return [{ text: run, known: false }]
-  if (/[0-9_]/.test(run) || [...run].some(c => SUBSCRIPTS.includes(c))) return null
+  if (/[0-9_]/.test(run) || [...run].some((c) => SUBSCRIPTS.includes(c))) return null
   const chars = [...run]
   if (chars.length < 2) return null
   const parts: Factor[] = []
@@ -107,7 +107,10 @@ function resolveRun(run: string, knowns: ReadonlyMap<string, string>): readonly 
  * Render one step's substitution line, or undefined when the step is not a
  * clean equation or some right-hand symbol is not a stated known.
  */
-export function substitutionFor(step: QuestionSolutionStep, knowns: readonly KnownValue[]): string | undefined {
+export function substitutionFor(
+  step: QuestionSolutionStep,
+  knowns: readonly KnownValue[],
+): string | undefined {
   const expression = step.formula?.expression ?? (/[=√]/.test(step.title) ? step.title : null)
   if (expression === null) return undefined
   const eqIndex = expression.indexOf('=')
@@ -120,10 +123,23 @@ export function substitutionFor(step: QuestionSolutionStep, knowns: readonly Kno
   /* `displayValue` already carries the unit (`10 m/s`, `1.67×10⁻²⁷ kg`); the
      value+unit pair is only a fallback. `^` exponents in raw unit strings
      (`m/s^2`) normalize to superscripts for print. */
-  const superscripts: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' }
+  const superscripts: Record<string, string> = {
+    '-': '⁻',
+    '0': '⁰',
+    '1': '¹',
+    '2': '²',
+    '3': '³',
+    '4': '⁴',
+    '5': '⁵',
+    '6': '⁶',
+    '7': '⁷',
+    '8': '⁸',
+    '9': '⁹',
+  }
   const pretty = (text: string): string =>
     text.replace(/\^(\(?)(-?\d+)(\)?)/g, (_, _open, digits: string) =>
-      [...digits].map(c => superscripts[c] ?? c).join(''))
+      [...digits].map((c) => superscripts[c] ?? c).join(''),
+    )
 
   const knownsMap = new Map<string, string>()
   for (const known of knowns) {
@@ -139,7 +155,9 @@ export function substitutionFor(step: QuestionSolutionStep, knowns: readonly Kno
       continue
     }
     /* Function prefix inside the run: `sinθ` → `sin(θ)` when θ is stated. */
-    const fn = [...FUNCTIONS].find(name => token.text.startsWith(name) && token.text.length > name.length)
+    const fn = [...FUNCTIONS].find(
+      (name) => token.text.startsWith(name) && token.text.length > name.length,
+    )
     const core = fn === undefined ? token.text : token.text.slice(fn.length)
     const factors = resolveRun(core, knownsMap)
     if (factors === null) return undefined
@@ -149,9 +167,9 @@ export function substitutionFor(step: QuestionSolutionStep, knowns: readonly Kno
       rendered.push(token.text)
       continue
     }
-    substituted += factors.filter(f => f.known).length
-    const join = factors.map(f => (f.known ? `(${f.text})` : f.text)).join('×')
-    rendered.push(fn === undefined ? join : `${fn}(${factors.map(f => f.text).join('×')})`)
+    substituted += factors.filter((f) => f.known).length
+    const join = factors.map((f) => (f.known ? `(${f.text})` : f.text)).join('×')
+    rendered.push(fn === undefined ? join : `${fn}(${factors.map((f) => f.text).join('×')})`)
   }
   if (substituted === 0) return undefined
 
@@ -162,8 +180,10 @@ export function substitutionFor(step: QuestionSolutionStep, knowns: readonly Kno
   let bars = 0
   for (const part of rendered) {
     const prev = out[out.length - 1]
-    const prevCloses = prev !== undefined && (/[0-9²³)]$/.test(prev) || (prev === '|' && bars % 2 === 0))
-    const partOpensFactor = /^[0-9(]/.test(part) || GREEK.includes(part[0] ?? '') || FUNCTIONS.has(part)
+    const prevCloses =
+      prev !== undefined && (/[0-9²³)]$/.test(prev) || (prev === '|' && bars % 2 === 0))
+    const partOpensFactor =
+      /^[0-9(]/.test(part) || GREEK.includes(part[0] ?? '') || FUNCTIONS.has(part)
     if (prevCloses && partOpensFactor) out.push('×')
     out.push(part)
     if (part === '|') bars += 1
@@ -188,7 +208,10 @@ export function substitutionFor(step: QuestionSolutionStep, knowns: readonly Kno
  * Called once per solve so every domain's narrative gets the 代入 row without
  * each builder hand-writing it.
  */
-export function attachSubstitutions(steps: QuestionSolutionStep[], knowns: readonly KnownValue[]): void {
+export function attachSubstitutions(
+  steps: QuestionSolutionStep[],
+  knowns: readonly KnownValue[],
+): void {
   for (const step of steps) {
     const substitution = substitutionFor(step, knowns)
     if (substitution !== undefined) step.substitution = substitution

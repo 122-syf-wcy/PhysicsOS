@@ -40,7 +40,7 @@ const LIGHT_ASSUMPTIONS = [
   'light travels in straight lines through the hole',
   'the hole is small compared with the object, so every point of the object maps to one point of the image',
   'the object is perpendicular to the axis and the screen is parallel to it',
-  'the boundary is flat and the media are homogeneous, so Snell\'s law holds at every point of it',
+  "the boundary is flat and the media are homogeneous, so Snell's law holds at every point of it",
   'diffraction at the hole is ignored — a smaller hole sharpens the image rather than blurring it in this model',
 ] as const
 
@@ -145,7 +145,7 @@ const derivedOf = (model: ResolvedLightModel): DerivedQuantity[] => {
       key: 'image_height',
       targetId: model.benchId,
       value: metres(reading.imageHeight),
-      formula: { expression: "h′ = h·v/u" },
+      formula: { expression: 'h′ = h·v/u' },
       assumptions,
     },
     {
@@ -179,10 +179,7 @@ const within = (actual: number, expected: number, scale: number): boolean =>
   Math.abs(actual - expected) <=
   Math.max(LIGHT_RELATIVE_TOLERANCE, LIGHT_RELATIVE_TOLERANCE * Math.abs(scale))
 
-const buildVerification = (
-  scene: PhysicsScene,
-  model: ResolvedLightModel,
-): VerificationResult => {
+const buildVerification = (scene: PhysicsScene, model: ResolvedLightModel): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
 
@@ -240,12 +237,17 @@ const buildVerification = (
     const intoDenserHasNoCritical =
       model.incidentIndex >= model.refractedIndex || criticalAngleOf(1.0, 1.5) === undefined
     checks.push(
-      check('refraction_vanishes_past_the_critical_angle', 'constraint', pastCritical && intoDenserHasNoCritical, {
-        message:
-          '全反射：入射角超过临界角后折射光线不再存在（光全部返回）；而从光疏射入光密介质时不存在临界角，任何角度都能折射。',
-        targetId: model.benchId,
-        details: { incidentAngle: model.incidentAngle, criticalAngle: critical ?? null },
-      }),
+      check(
+        'refraction_vanishes_past_the_critical_angle',
+        'constraint',
+        pastCritical && intoDenserHasNoCritical,
+        {
+          message:
+            '全反射：入射角超过临界角后折射光线不再存在（光全部返回）；而从光疏射入光密介质时不存在临界角，任何角度都能折射。',
+          targetId: model.benchId,
+          details: { incidentAngle: model.incidentAngle, criticalAngle: critical ?? null },
+        },
+      ),
     )
 
     return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)

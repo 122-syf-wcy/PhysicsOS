@@ -892,12 +892,13 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
   cyclotron: {
     summary: {
       coreModel: '回旋加速器：D 盒内 r = mv/(qB) 半圆回旋、盒缝交变电场同步加速；回旋周期 T = 2πm/(qB) 与 v 无关——等时性是它能加速的根本。',
-      parameters: ['磁场 B', '交变电压频率', '粒子 q/m'],
-      feedback: ['本实验需要时变交变电场——当前引擎只支持静态匀强场，故标注"即将支持"而非给出错误轨迹'],
-      errors: ['相对论效应限制了最大能量——v 接近 c 时等时性失效'],
+      parameters: ['磁感应强度 B', '加速电压 U', 'D 形盒半径 R', '比荷 q/m'],
+      feedback: ['轨道半径逐圈变大而回旋周期不变', '交变电场频率与回旋频率一致才能持续加速', '出口动能由 R 与 B 决定：Ek = q²B²R²/(2m)'],
+      errors: ['加速靠的不是磁场做功——磁场力始终不做功', '加速电压只决定圈数，不决定最终动能'],
     },
     textbook: [hs('选择性必修第二册', '第一章 磁场对运动电荷的作用力', ['质谱仪与回旋加速器'])],
-    aliases: ['回旋加速器', 'D形盒', '等时性'],
+    aliases: ['回旋加速器', 'D形盒', '等时性', '回旋频率', '交变电场'],
+    guide: ['核对加速前后周期是否改变', '把加速电压减半：圈数与出口动能各怎么变', '把磁感应强度提高一倍：出口动能变几倍'],
   },
 
   /* ----------------------------------------------------------- induction -- */
@@ -1015,9 +1016,67 @@ export const EXPERIMENT_META: Readonly<Record<string, ExperimentMeta>> = {
     aliases: ['驻波', '波节', '波腹', '谐波', '弦'],
     guide: ['找出所有波节位置并验证间距 = λ/2', '把 n 从 1 调到 4：f 怎么变', '为什么波节处质点永远不动'],
   },
+  'wave-longitudinal': {
+    summary: {
+      coreModel: '纵波：介质质点的振动方向与波的传播方向共线，形成疏密相间的压缩区与稀疏区；v = λf 仍然成立。',
+      parameters: ['波长 λ', '频率 f', '介质长度'],
+      feedback: ['密部与疏部整体沿传播方向平移', '单个质点只在原位左右振动', '改 f 时 λ 同步变化而 v 不变'],
+      errors: ['声波是纵波——不是"声波沿空气横向摆动"', '质点不随波迁移，迁移的是振动形式与能量'],
+    },
+    textbook: [hs('选择性必修第一册', '第三章 机械波', ['波的形成', '波的描述'])],
+    aliases: ['纵波', '疏密波', '压缩', '稀疏', '声波'],
+    guide: ['盯住一个质点：它沿哪个方向动', '数出两个密部之间的距离并与 λ 对照', '把频率调高：密部间距怎么变'],
+  },
+  'wave-reflection-refraction': {
+    summary: {
+      coreModel: '界面两侧：反射角等于入射角；折射时 sin θ₁ / sin θ₂ = v₁ / v₂，频率由波源决定、界面前后不变。',
+      parameters: ['入射角 θ₁', '折射角 θ₂', '两侧波速 v₁、v₂', '频率 f'],
+      feedback: ['反射线与入射线关于法线对称', '进入波速更大的介质时折射线远离法线', '两侧频率读数相同而波长不同'],
+      errors: ['折射改变的是波速与波长，不是频率', '角度一律从法线量起，不是从界面量起'],
+    },
+    textbook: [hs('选择性必修第一册', '第三章 机械波', ['波的反射、折射和衍射'])],
+    aliases: ['反射', '折射', '界面', '波速比', '频率不变'],
+    guide: ['读出反射角并与入射角比较', '换成波速更大的介质：折射角怎么变', '核对两侧频率是否相同'],
+  },
+  'wave-diffraction': {
+    summary: {
+      coreModel: '波绕过障碍物或通过缝后向各方向传播；缝宽与波长可比时衍射最明显，缝宽远大于 λ 时近似直线传播。',
+      parameters: ['缝宽 a', '波长 λ', '缝到屏距离'],
+      feedback: ['缝越窄，出射波前越接近半圆', 'a 远大于 λ 时出射波前几乎平直', '中央亮区随 λ/a 增大而变宽'],
+      errors: ['衍射是波的本性——不需要"缝的尺寸恰好等于波长"才发生', '把衍射与干涉混为一谈：这里是同一波前的自叠加'],
+    },
+    textbook: [hs('选择性必修第一册', '第三章 机械波', ['波的反射、折射和衍射'])],
+    aliases: ['衍射', '绕射', '单缝', '缝宽', '衍射明显条件'],
+    guide: ['把缝宽调到接近 λ：出射波前是什么形状', '缝宽放大十倍：波前又变成什么', '解释为什么"能听见隔壁说话"'],
+  },
+  'wave-doppler': {
+    summary: {
+      coreModel: '波源与观察者相对运动时接收频率改变：f′ = f·v /(v ∓ v_s)；靠近时 f′ > f，远离时 f′ < f，而波源频率不变。',
+      parameters: ['波源频率 f', '波速 v', '波源速度 v_s', '观察者位置'],
+      feedback: ['波源前方波前密集、后方稀疏', '接收频率随相对速度改变', '相对速度为零时 f′ = f'],
+      errors: ['多普勒效应不改变波源本身的频率，也不改变波速', '靠近时是波长被压缩，不是"波跑得更快"'],
+    },
+    textbook: [hs('选择性必修第一册', '第三章 机械波', ['多普勒效应'])],
+    aliases: ['多普勒', '频移', '接收频率', '靠近', '远离'],
+    guide: ['比较前方与后方的波前间距', '让波源停下：接收频率与 f 的关系', '用相对速度解释救护车音调的变化'],
+  },
+  'photoelectric-effect': {
+    summary: {
+      coreModel: '爱因斯坦光电方程 hν = W + K_max；发生光电效应的条件是 hν > W（ν 高于截止频率），光强只改变光电子数目。',
+      parameters: ['入射光频率 ν', '逸出功 W', '遏止电压 U_c', '光强'],
+      feedback: ['ν 增大时 K_max 线性增大', '光强增大时光电流增大而 K_max 不变', 'ν 低于截止频率时没有光电子'],
+      errors: ['光子能量由频率决定，与光强无关', 'K_max 与光强无关——这是波动说无法解释的实验事实'],
+    },
+    textbook: [hs('选择性必修第三册', '第四章 原子结构和波粒二象性', ['光电效应', '爱因斯坦光电方程'])],
+    aliases: ['光电效应', '光子', '逸出功', '遏止电压', '截止频率'],
+    guide: ['逐档调高频率，观察遏止电压怎么变', '只调光强：光电流变而遏止电压不变', '把频率降到截止频率以下，看还有什么发生'],
+  },
 }
 
 /** Summary + metadata for a template id; `undefined` means the parity test
-   *  should have caught a missing entry. */
+ *  should have caught a missing entry.  * @returns the experiment meta.
+ * @param templateId - the experiment template id.
+ * @returns the experiment meta.
+ */
 export const experimentMetaOf = (templateId: string): ExperimentMeta | undefined =>
   EXPERIMENT_META[templateId]

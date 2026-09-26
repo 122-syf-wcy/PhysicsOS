@@ -43,8 +43,7 @@ const NOISE_ASSUMPTIONS = [
 
 const failure = (condition: string, message: string) => ({ condition, message })
 
-const decibels = (value: number): Quantity<'dimensionless'> =>
-  quantity(value, '', 'dimensionless')
+const decibels = (value: number): Quantity<'dimensionless'> => quantity(value, '', 'dimensionless')
 const metres = (value: number): Quantity<'length'> => quantity(value, 'm', 'length')
 
 /** Solve the scene's noise rig; the single entry point UI layers reuse. */
@@ -128,10 +127,7 @@ const stateOf = (model: ResolvedNoiseModel, timeSeconds: number): SimulationStat
 const within = (actual: number, expected: number): boolean =>
   Math.abs(actual - expected) <= 1e-9 * Math.max(Math.abs(expected), 1)
 
-const buildVerification = (
-  scene: PhysicsScene,
-  model: ResolvedNoiseModel,
-): VerificationResult => {
+const buildVerification = (scene: PhysicsScene, model: ResolvedNoiseModel): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const reading = noiseReadingOf(model.soundPowerLevel, model.distance, model.barrierAttenuation)
@@ -144,17 +140,12 @@ const buildVerification = (
   const intensityAtDistance = power / (4 * Math.PI * model.distance ** 2)
   const levelFromIntensity = soundLevelFromIntensity(intensityAtDistance) - model.barrierAttenuation
   checks.push(
-    check(
-      'level_from_intensity',
-      'constraint',
-      within(levelFromIntensity, reading.level),
-      {
-        message:
-          '声级的两个算法一致：由 Lw 与距离直接算出的 L，和"先算声强 I = P/(4πr²) 再取 10·lg(I/I₀)"得到的 L 必须相同。',
-        targetId: model.benchId,
-        details: { fromPowerAndDistance: reading.level, fromIntensity: levelFromIntensity },
-      },
-    ),
+    check('level_from_intensity', 'constraint', within(levelFromIntensity, reading.level), {
+      message:
+        '声级的两个算法一致：由 Lw 与距离直接算出的 L，和"先算声强 I = P/(4πr²) 再取 10·lg(I/I₀)"得到的 L 必须相同。',
+      targetId: model.benchId,
+      details: { fromPowerAndDistance: reading.level, fromIntensity: levelFromIntensity },
+    }),
   )
 
   /* Distance doubling costs 6 dB — checked as a RATIO at two distances, so it

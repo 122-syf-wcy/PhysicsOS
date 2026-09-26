@@ -8,8 +8,13 @@
  */
 
 import type {
-  BankItem, BankUsage, Difficulty, PaperQuestion, PaperRequest,
-  SourcePaper, SpecRow,
+  BankItem,
+  BankUsage,
+  Difficulty,
+  PaperQuestion,
+  PaperRequest,
+  SourcePaper,
+  SpecRow,
 } from './paper.ts'
 
 /** Deployment-tunable selection policy. */
@@ -85,7 +90,7 @@ function knowledgeScore(row: SpecRow, item: BankItem): number {
   if (row.knowledge.length === 0) return item.knowledge.length > 0 ? 0.7 : 0.3
   const wanted = new Set(row.knowledge)
   const primaryHit = item.knowledge[0] !== undefined && wanted.has(item.knowledge[0])
-  const overlap = item.knowledge.filter(k => wanted.has(k)).length
+  const overlap = item.knowledge.filter((k) => wanted.has(k)).length
   return Math.min(1, (primaryHit ? 0.6 : 0) + 0.4 * (overlap / wanted.size))
 }
 
@@ -126,16 +131,23 @@ function eligible(
      section total, so an off-score item may only serve through adaptation. */
   if (ctx.mode === 'verbatim' && Math.abs(item.score - row.score) > 0.01) return false
   if (ctx.taken.has(item.id)) return false
-  if (request.exclude.some(banned =>
-    item.knowledge.some(k => k.includes(banned) || banned.includes(k)))) return false
+  if (
+    request.exclude.some((banned) =>
+      item.knowledge.some((k) => k.includes(banned) || banned.includes(k)),
+    )
+  )
+    return false
   /* An untagged chapter stays eligible — the tag may simply be missing;
      a tagged out-of-scope one is a real mismatch. */
-  if (request.chapters.length > 0 &&
-    item.chapter !== undefined && item.chapter.length > 0 &&
-    !request.chapters.some(scope => scopeHit(item.chapter, scope))) {
+  if (
+    request.chapters.length > 0 &&
+    item.chapter !== undefined &&
+    item.chapter.length > 0 &&
+    !request.chapters.some((scope) => scopeHit(item.chapter, scope))
+  ) {
     return false
   }
-  if (ctx.usageOf(item.id).some(u => ctx.recentPaperIds.has(u.paperId))) return false
+  if (ctx.usageOf(item.id).some((u) => ctx.recentPaperIds.has(u.paperId))) return false
   return true
 }
 
@@ -174,8 +186,11 @@ export function rankCandidates(
     }
     scored.push({
       item,
-      score: 0.45 * breakdown.knowledge + 0.25 * breakdown.difficulty
-        + 0.15 * breakdown.ability + 0.15 * breakdown.source,
+      score:
+        0.45 * breakdown.knowledge +
+        0.25 * breakdown.difficulty +
+        0.15 * breakdown.ability +
+        0.15 * breakdown.source,
       breakdown,
     })
   }
@@ -201,21 +216,40 @@ export function planRow(
     policy: BankSelectionPolicy
   },
 ): RowPlan {
-  const base = { taken: ctx.taken, recentPaperIds: ctx.recentPaperIds, usageOf: ctx.usageOf, sourceOf: ctx.sourceOf }
+  const base = {
+    taken: ctx.taken,
+    recentPaperIds: ctx.recentPaperIds,
+    usageOf: ctx.usageOf,
+    sourceOf: ctx.sourceOf,
+  }
   const verbatimRanked = rankCandidates(row, request, items, { ...base, mode: 'verbatim' })
   const adaptRanked = rankCandidates(row, request, items, { ...base, mode: 'adapt' })
   /* The candidate count reports the wider pool — a row the bank can only
      adapt still counts as served. */
   const candidates = Math.max(verbatimRanked.length, adaptRanked.length)
-  const exemplars = adaptRanked.slice(0, ctx.policy.exemplarCount).map(c => c.item)
+  const exemplars = adaptRanked.slice(0, ctx.policy.exemplarCount).map((c) => c.item)
 
   const top = verbatimRanked[0]
   if (top !== undefined && top.score >= T_VERBATIM && ctx.verbatimSpent < ctx.policy.verbatimMax) {
-    return { row, mode: 'verbatim', item: top.item, candidateScore: top.score, candidates, exemplars }
+    return {
+      row,
+      mode: 'verbatim',
+      item: top.item,
+      candidateScore: top.score,
+      candidates,
+      exemplars,
+    }
   }
   const topAdapt = adaptRanked[0]
   if (topAdapt !== undefined && topAdapt.score >= T_ADAPT) {
-    return { row, mode: 'adapt', item: topAdapt.item, candidateScore: topAdapt.score, candidates, exemplars }
+    return {
+      row,
+      mode: 'adapt',
+      item: topAdapt.item,
+      candidateScore: topAdapt.score,
+      candidates,
+      exemplars,
+    }
   }
   if (candidates === 0) {
     return { row, mode: 'gap', candidates: 0, exemplars }
@@ -241,7 +275,7 @@ export function planPaper(
 ): RowPlan[] {
   const taken = new Set<string>()
   let verbatimSpent = 0
-  return specTable.map(row => {
+  return specTable.map((row) => {
     const plan = planRow(row, request, items, { ...ctx, taken, verbatimSpent })
     if (plan.mode === 'verbatim' && plan.item !== undefined) {
       taken.add(plan.item.id)

@@ -21,7 +21,7 @@
   background-image: url('/physicsos/login/horizon.png');
   background-size: cover;
   background-position: center;
-  opacity: 0.5;
+  opacity: 0.85;
   pointer-events: none;
 }
 
@@ -29,7 +29,9 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--dsw-alias-bg-base) 55%, transparent);
+  /* A lighter veil keeps the center column readable while the horizon keeps
+     enough colour for the glass form to refract. */
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 32%, transparent);
   pointer-events: none;
 }
 
@@ -119,6 +121,16 @@
   display: flex;
   flex-direction: column;
   gap: 13px;
+  /* The entrance form is the page's one glass lens: blurred backdrop, a
+     specular sheen, and a bright rim over the horizon image behind it. */
+  padding: 24px 26px;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 22px;
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift-raised);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
 }
 
 .formTitle {
@@ -149,13 +161,21 @@
   height: 46px;
   padding: 0 14px;
   border-radius: 13px;
-  border: 1px solid var(--dsw-alias-border-l);
-  background: var(--dsw-alias-bg-module-platform);
+  border: 1px solid var(--physics-glass-border-soft);
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   outline: none;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.select {
+  /* Layout only — GlassSelect draws the material; the height matches the
+     text inputs so the form keeps one rhythm. */
+  width: 100%;
+  height: 46px;
 }
 
 .input:focus-visible {

@@ -77,7 +77,9 @@ describe('AdminNoticeTab', () => {
     expect(await screen.findByText('还没处理的')).toBeTruthy()
     expect(screen.queryByText('已经回复的')).toBeNull()
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'answered' } })
+    /* The filter is a GlassSelect combobox: open it, then click the row. */
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: '已回复' }))
     expect(await screen.findByText('已经回复的')).toBeTruthy()
     expect(screen.queryByText('还没处理的')).toBeNull()
   })
@@ -88,7 +90,7 @@ describe('AdminNoticeTab', () => {
     await screen.findByText('液体压强实验里拖动液面读数不动')
 
     const box = screen.getByPlaceholderText('回复这位同学')
-    const button = screen.getByRole('button', { name: '回复' })
+    const button = screen.getByRole('button', { name: '回复' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
 
     /* Whitespace is not a reply. */
@@ -107,7 +109,7 @@ describe('AdminNoticeTab', () => {
 
     const title = screen.getByPlaceholderText('公告标题')
     const body = screen.getByTestId('notice-body')
-    const button = screen.getByRole('button', { name: '发布' })
+    const button = screen.getByRole('button', { name: '发布' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
 
     fireEvent.change(title, { target: { value: '维护通知' } })
@@ -129,7 +131,7 @@ describe('AdminNoticeTab', () => {
     mount(api, false)
     await waitFor(() => { expect(screen.getByText(/只有校管理员及以上角色可以发布公告/)).toBeTruthy() })
 
-    const button = screen.getByRole('button', { name: '发布' })
+    const button = screen.getByRole('button', { name: '发布' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
 
     fireEvent.change(screen.getByPlaceholderText('公告标题'), { target: { value: 'x' } })

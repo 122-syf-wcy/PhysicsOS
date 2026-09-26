@@ -27,6 +27,9 @@ interface VectorValue {
   readonly z: number
 }
 
+/**
+ * The mechanics visual input shape used by the mechanics scene visuals module.
+ */
 export interface MechanicsVisualInput {
   readonly scene: PhysicsScene
   readonly simulation: SimulationResult
@@ -265,13 +268,20 @@ const sceneVisibility = (
   ),
 })
 
-export const mechanicsSceneVisualAt = ({
-  scene,
-  simulation,
-  observations,
-  stateIndex,
-  state: exactState,
-}: MechanicsVisualInput): SceneVisualModel => {
+/**
+ * The mechanics scene visuals helper `mechanicsSceneVisualAt`.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    simulation,
+    observations,
+    stateIndex,
+    state: exactState,
+  } = input
+
   const model = detectMechanicsModel(scene)
   const state = exactState ?? simulation.states[
     Math.min(Math.max(0, stateIndex), simulation.states.length - 1)
@@ -880,6 +890,13 @@ export const mechanicsSceneVisualAt = ({
   }
 }
 
+/**
+ * The mechanics scene visuals helper `mechanicsSampleReadout`.
+ * @returns the mechanics sample readout list.
+ * @param index - the index.
+ * @param bodyId - the body the symbol attaches to.
+ * @param simulation - the simulation.
+ */
 export const mechanicsSampleReadout = (
   simulation: SimulationResult,
   bodyId: string,

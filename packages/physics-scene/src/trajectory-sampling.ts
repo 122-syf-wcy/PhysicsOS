@@ -133,7 +133,12 @@ export const decimateTrajectoryPoints = <T>(
     if (free.length > 0) {
       for (let i = 0; i < remaining; i += 1) {
         protectedIndices.add(
-          free[Math.min(free.length - 1, Math.round((i * (free.length - 1)) / Math.max(1, remaining - 1)))]!,
+          free[
+            Math.min(
+              free.length - 1,
+              Math.round((i * (free.length - 1)) / Math.max(1, remaining - 1)),
+            )
+          ]!,
         )
       }
     }

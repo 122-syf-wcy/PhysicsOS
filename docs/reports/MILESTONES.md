@@ -182,6 +182,7 @@ clipPath 裁剪的有界场格）→ Agent（10 个有界场教学意图）。
 CSS 与 runtime 的 `eventsOf`。
 
 **浏览器验收暴露的五个单元测试无法捕获的缺陷**（详见报告）：
+
 1. 试题空间白屏 —— `useQuestionFrames` 仍调旧引擎，render 期间抛
    `EngineUnsupportedError`，React 卸载整棵树。core/lab/bridge 三处都改对了，
    唯独试题预览漏了。
@@ -335,10 +336,11 @@ PhysicsScene 原样交还实验室（同 sceneId，整页刷新后依然可还�
 
 **D. 学科颜色**：`chrome.ts` 新增 subjects 语义组
 `--physics-subject-{mechanics,electric,magnetic,composite}`（绿/蓝/紫/橙）
-+ 同名 `-tint` 浅底色，注释明确「只着色 UI chrome，不着色画布物理」；
-CSS Modules 用 `subject-*` 修饰类注入 `--subject/--subject-tint` 两个
-自定义属性，推荐卡底色、continue 卡图标块与 CTA、分类 Tab 彩点、
-网格图标块、领域标签 chip 全部消费同一组变量。
+
+- 同名 `-tint` 浅底色，注释明确「只着色 UI chrome，不着色画布物理」；
+  CSS Modules 用 `subject-*` 修饰类注入 `--subject/--subject-tint` 两个
+  自定义属性，推荐卡底色、continue 卡图标块与 CTA、分类 Tab 彩点、
+  网格图标块、领域标签 chip 全部消费同一组变量。
 
 依据：`apps/web/e2e/library-home-acceptance.mjs`（CASE A–D + 5 门禁）、
 截图 `experiment-library-home / -continue / -weakness -1600x900.png`
@@ -454,6 +456,7 @@ overlay 已回写。
 **A. 运行时本体**：`PhysicsToolRuntime.sceneSnapshot` —— 当前修订的无损深拷贝，供宿主把场景推出进程（拷贝不能绕过 SceneRuntime 命令闸门）；顺带修掉上一半报告的严格可选属性隐患（`domain: ir?.domain` 直赋 `undefined` 改为条件展开，恢复 `exactOptionalPropertyTypes` 兼容）。
 
 **B. 场景镜像（docs/04 §92）**：三件事接成一条链。
+
 - **发布**：tool-physicsos 每次 `physics_create_experiment` / `physics_solve_question` / 被接受的 `physics_scene_command` 之后，向调用 agent 的会话日志 append 一条 `physics/scene` 快照 —— 内嵌完整 `physics-scene/1.0` 场景的无损 JSON，附 revision / cause / commandType / eventType / sourceQuestionId。被运行时拒绝的命令不发（场景未变）；无 agent 的调用方（测试、Code Mode）不发。类型与 SessionEvent 声明收敛在 `src/types.ts` 单点，`./types` 与 `./client` 两个命名空间零内容重复。
 - **折叠**：`physicsScenes` session projection（按 scene id last-wins，`latest` 跟随最新），仅在 `sessionProjections` seam 组合时注册（headless 无 seam 的装配不受影响）。
 - **镜像**：ui-physicsos `physics/agent-scene-sync.ts` 把 projection 折成 Lab 导航 —— 每个会话的首个值是基线（静默 adopt，reload / 切会话不打断学生当前面），后续修订 live 打开 Lab；shape 校验严格（表头与内嵌 scene 的 id / revision / schema 任一不符即拒挂载，挂载前再过场景校验器）。接线在 `ui-physicsos/src/client/index.ts`：订阅 session 列表行、读 `projectionValues['physicsScenes']` 喂 sync，`surface.open` 作为 adopt / show 两个面动作。另加 `tool-physicsos-invariant` 伴生不变量：到达 durable log 的每条 `physics/scene` 在写前校验表头与内嵌 scene 一致。
@@ -509,7 +512,6 @@ overlay 已回写。
 **不做**（明确边界）：Question Space 电路题本体（已交付，仅核实）；模型化 Agent 回答（`AGENT_MODEL_BACKED_ANSWERS_BACKLOG` 不变，接真实模型仍只替换 `matchIntent`）；电路引擎 / 校验 / 模板扩展（交流瞬态、电容电感、多电源仍由 `canHandle` 拒识）；不触 `packages/` 与 Harness 上游。
 
 ---
-
 
 ### AUTH_TENANT_V1_COMPLETE / ADMIN_CONSOLE_V1_COMPLETE
 
@@ -608,6 +610,7 @@ argon2id**（本机一个 vendored Node 24.18.1 即如此）。后果是插件�
 - 批准绑定内容哈希，任何 `commitDocument` 都作废 approval——换题无法绕过
 
 **真实缺陷修复（本轮审计发现）**：
+
 - `PATCH /bank/items/:id` 可注入 `id` / `enteredBy` → `bankItemPatchWire.omit`
 - PATCH 改 stem 不查重 → 补 `DUPLICATE_ITEM`
 - `GET /bank/items?status=` 用 `as never ?? undefined` 硬转，**任何拼错的状态都
@@ -672,11 +675,11 @@ support 又把它计入 `errorResponses`，于是任何套件都会在跑第一�
 
 **验证**（三条命令实测 exit code = 0）：
 
-| 命令 | 覆盖 | 结果 |
-| --- | --- | --- |
-| `pnpm typecheck` | core + web + 三个 host 插件 | 0 错 |
-| `pnpm lint` | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件（30 文件） | **0 错 0 警** |
-| `pnpm test` | core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **93 测试** | 全绿 |
+| 命令             | 覆盖                                                              | 结果          |
+| ---------------- | ----------------------------------------------------------------- | ------------- |
+| `pnpm typecheck` | core + web + 三个 host 插件                                       | 0 错          |
+| `pnpm lint`      | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件（30 文件） | **0 错 0 警** |
+| `pnpm test`      | core 全绿 + web 44 文件 **686 测试** + agent 7 文件 **93 测试**   | 全绿          |
 
 `auth-acceptance.mjs` 8 CASE / 22 断言 + 5 项浏览器门禁全 PASS。
 
@@ -743,10 +746,10 @@ PolyForm Noncommercial 兼容，署名见 `NOTICE.md`）。这是本环境下唯
 
 **端到端实测**（同一份真实细目表，隔离探针，事后已全部还原为 pending）：
 
-| | 计划结果 |
-| --- | --- |
-| C-Eval 全 pending（教师尚未核验） | **15 行全 `gap`** |
-| 388 条核验后 | **`adapt` 1 + `generate` 4 + `gap` 10**，5 行有候选 |
+|                                   | 计划结果                                            |
+| --------------------------------- | --------------------------------------------------- |
+| C-Eval 全 pending（教师尚未核验） | **15 行全 `gap`**                                   |
+| 388 条核验后                      | **`adapt` 1 + `generate` 4 + `gap` 10**，5 行有候选 |
 
 `Q1` 拿到 **195 个候选**并判 `adapt`——组卷真的用上了导入的数据；`Q2–Q5`
 各有 194 个候选但分数未过线，诚实落 `generate`；`Q6–Q15` 是填空/作图/简答/

@@ -10,7 +10,11 @@ export const MAGNETIC_CYCLE_WALL_SECONDS = 5
     drift apart. */
 export const STEP_FRACTION = 0.1
 
-/** Convert display time into the microscopic physical time consumed by the engine. */
+/** Convert display time into the microscopic physical time consumed by the engine.
+ * @param wallSeconds - elapsed wall-clock seconds from the frame clock.
+ * @param periodSeconds - physical seconds covered by one visible window.
+ * @returns physical seconds to advance; clamps negatives/non-finite to 0.
+ */
 export const magneticPhysicalDelta = (wallSeconds: number, periodSeconds: number): number =>
   periodSeconds > 0 && Number.isFinite(wallSeconds)
     ? Math.max(0, wallSeconds) * periodSeconds / MAGNETIC_CYCLE_WALL_SECONDS
@@ -23,13 +27,21 @@ export const MICRO_WINDOW_WALL_SECONDS = 8
 /** Convert a wall-clock frame delta into the microscopic physical time consumed
     by the engine, pacing the full window over MICRO_WINDOW_WALL_SECONDS. This
     scales presentation only — the scene clock still advances real physical time,
-    so raw wall seconds can never swallow the whole run in a single frame. */
+    so raw wall seconds can never swallow the whole run in a single frame.
+ * @param wallSeconds - elapsed wall-clock seconds from the frame clock.
+ * @param windowSeconds - physical seconds covered by the visible window.
+ * @returns physical seconds to advance; clamps negatives/non-finite to 0.
+ */
 export const microWindowPhysicalDelta = (wallSeconds: number, windowSeconds: number): number =>
   windowSeconds > 0 && Number.isFinite(wallSeconds)
     ? Math.max(0, wallSeconds) * windowSeconds / MICRO_WINDOW_WALL_SECONDS
     : 0
 
-/** Find the closest monotonically sampled state without scanning the whole trajectory. */
+/** Find the closest monotonically sampled state without scanning the whole trajectory.
+ * @param states - samples sorted by `time.value`.
+ * @param time - the target physical time.
+ * @returns the index of the nearest sample (0 for an empty list).
+ */
 export const nearestTimedStateIndex = (
   states: readonly { readonly time: { readonly value: number } }[],
   time: number,
@@ -50,7 +62,10 @@ export const nearestTimedStateIndex = (
     : upper
 }
 
-/** Drive one UI update per browser paint using actual elapsed wall-clock time. */
+/** Drive one UI update per browser paint using actual elapsed wall-clock time.
+ * @param running - false pauses the loop without unmounting it.
+ * @param onFrame - called each paint with the clamped frame delta in seconds.
+ */
 export function useAnimationClock(
   running: boolean,
   onFrame: (elapsedSeconds: number) => void,

@@ -89,14 +89,27 @@ export const resolveParallelPlateModel = (scene: PhysicsScene): ParallelPlateMod
   const support = engine.canHandle(scene)
   if (!support.supported) {
     throw new (class extends Error {
-      readonly domainError = { code: 'UNSUPPORTED_MODEL', message: '', category: 'unsupported' as const, retryable: false }
+      readonly domainError = {
+        code: 'UNSUPPORTED_MODEL',
+        message: '',
+        category: 'unsupported' as const,
+        retryable: false,
+      }
     })(`Engine "${ELECTRIC_REGION_ENGINE_ID}" cannot model this scene.`)
   }
 
   const particle = scene.particles[0]
   const field = uniformElectricFields(scene)[0]
-  if (particle === undefined || particle.charge === undefined || field === undefined || field.regionId === undefined) {
-    throw new PhysicsOSError('ELECTRIC_MODEL_INCOMPLETE', 'Parallel-plate model inputs are incomplete.')
+  if (
+    particle === undefined ||
+    particle.charge === undefined ||
+    field === undefined ||
+    field.regionId === undefined
+  ) {
+    throw new PhysicsOSError(
+      'ELECTRIC_MODEL_INCOMPLETE',
+      'Parallel-plate model inputs are incomplete.',
+    )
   }
 
   const mass = canonicalValue(particle.mass)
@@ -156,7 +169,9 @@ interface PhaseResult {
  *  - exits at x = xRight (phase "after"), or
  *  - strikes a plate at y = ±plateSeparation/2 (phase "hit").
  */
-const computePhases = (model: ParallelPlateModel): {
+const computePhases = (
+  model: ParallelPlateModel,
+): {
   before: PhaseResult
   inside: PhaseResult
   after: PhaseResult | null
@@ -268,7 +283,8 @@ const computePhases = (model: ParallelPlateModel): {
 
   // Position/velocity at hit or exit.
   let after: PhaseResult | null = null
-  let hit: { plate: 'top' | 'bottom'; time: number; position: Vector3; velocity: Vector3 } | null = null
+  let hit: { plate: 'top' | 'bottom'; time: number; position: Vector3; velocity: Vector3 } | null =
+    null
 
   if (hitPlate !== null && hitTime !== null) {
     const tIn = hitTimeInside
@@ -320,7 +336,10 @@ const computePhases = (model: ParallelPlateModel): {
  * Inside the field region the particle experiences constant acceleration
  * a = qE/m (along y); outside it moves with constant velocity.
  */
-const motionAt = (model: ParallelPlateModel, t: number): { position: Vector3; velocity: Vector3; acceleration: Vector3 } => {
+const motionAt = (
+  model: ParallelPlateModel,
+  t: number,
+): { position: Vector3; velocity: Vector3; acceleration: Vector3 } => {
   const phases = computePhases(model)
   const { before, inside, after, hit, enterTime, exitTime, hitTime } = phases
 
@@ -465,28 +484,22 @@ const derivedAt = (model: ParallelPlateModel, t: number): DerivedQuantity[] => {
         'V/m',
         'electric_field',
       ),
-      formula: { expression: isInField ? 'E = constant (inside region)' : 'E = 0 (outside region)' },
+      formula: {
+        expression: isInField ? 'E = constant (inside region)' : 'E = 0 (outside region)',
+      },
       assumptions: [...ASSUMPTIONS],
     },
     {
       key: 'electric_field_magnitude',
       targetId: model.fieldId,
-      value: quantity(
-        isInField ? magnitude(model.electricField) : 0,
-        'V/m',
-        'electric_field',
-      ),
+      value: quantity(isInField ? magnitude(model.electricField) : 0, 'V/m', 'electric_field'),
       formula: { expression: '|E|' },
       assumptions: [...ASSUMPTIONS],
     },
     {
       key: 'electric_force_vector',
       targetId: model.particleId,
-      value: quantityVector(
-        isInField ? model.force : { x: 0, y: 0, z: 0 },
-        'N',
-        'force',
-      ),
+      value: quantityVector(isInField ? model.force : { x: 0, y: 0, z: 0 }, 'N', 'force'),
       formula: { expression: 'F = qE' },
       assumptions: [...ASSUMPTIONS],
     },
@@ -630,7 +643,8 @@ const buildVerification = (
       'constraint',
       model.plateLength > 0 && model.plateSeparation > 0,
       {
-        message: 'Field region must have positive width (plate length) and height (plate separation).',
+        message:
+          'Field region must have positive width (plate length) and height (plate separation).',
         details: { plateLength: model.plateLength, plateSeparation: model.plateSeparation },
       },
     ),
@@ -660,7 +674,10 @@ const buildVerification = (
   if (states.length >= 2) {
     const firstState = states[0]
     const lastState = states[states.length - 1]
-    if (firstState?.objects[0]?.velocity !== undefined && lastState?.objects[0]?.velocity !== undefined) {
+    if (
+      firstState?.objects[0]?.velocity !== undefined &&
+      lastState?.objects[0]?.velocity !== undefined
+    ) {
       const v0 = toCanonicalVector(firstState.objects[0].velocity).vectorSI
       const v1 = toCanonicalVector(lastState.objects[0].velocity).vectorSI
       const k0 = 0.5 * model.mass * magnitude(v0) ** 2
@@ -715,12 +732,14 @@ const buildVerification = (
   // enters the region (or whose crossing lies outside the window, including an
   // empty window with no sampled states) produces none legitimately.
   const finalState = states.at(-1)
-  const crossedInWindow = finalState !== undefined
-    && Number.isFinite(phases.enterTime)
-    && phases.enterTime <= canonicalValue(finalState.time)
+  const crossedInWindow =
+    finalState !== undefined &&
+    Number.isFinite(phases.enterTime) &&
+    phases.enterTime <= canonicalValue(finalState.time)
   checks.push(
     check('events_present', 'trajectory', !crossedInWindow || events.length > 0, {
-      message: 'A bounded-field trajectory that crosses the region produces region-transition events.',
+      message:
+        'A bounded-field trajectory that crosses the region produces region-transition events.',
     }),
   )
 
@@ -764,7 +783,12 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
       // Not a parallel-plate scene. Could be an unbounded uniform field or a
       // point-charge scene — either way, not our model.
       return unsupportedModel(
-        [failure('parallel_plate_scene', 'Electric Region Engine requires a parallel-plate scene with a region-bound uniform electric field.')],
+        [
+          failure(
+            'parallel_plate_scene',
+            'Electric Region Engine requires a parallel-plate scene with a region-bound uniform electric field.',
+          ),
+        ],
         ELECTRIC_REGION_ENGINE_ID,
       )
     }
@@ -796,7 +820,12 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     // Exactly one particle, no rigid bodies.
     if (scene.particles.length !== 1 || scene.bodies.length > 0) {
       return unsupportedModel(
-        [failure('single_particle', 'Electric Region Engine requires exactly one particle and no rigid bodies.')],
+        [
+          failure(
+            'single_particle',
+            'Electric Region Engine requires exactly one particle and no rigid bodies.',
+          ),
+        ],
         ELECTRIC_REGION_ENGINE_ID,
       )
     }
@@ -805,7 +834,12 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     const fields = uniformElectricFields(scene)
     if (scene.fields.length !== 1 || fields.length !== 1) {
       return unsupportedModel(
-        [failure('single_region_bound_field', 'Electric Region Engine requires one uniform electric field bound to a region.')],
+        [
+          failure(
+            'single_region_bound_field',
+            'Electric Region Engine requires one uniform electric field bound to a region.',
+          ),
+        ],
         ELECTRIC_REGION_ENGINE_ID,
       )
     }
@@ -821,7 +855,10 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     const region = scene.regions.find((r) => r.id === field.regionId)
     if (region === undefined) {
       return invalidModelCondition(ELECTRIC_REGION_ENGINE_ID, [
-        failure('region_exists', `Field regionId "${field.regionId}" does not match any scene region.`),
+        failure(
+          'region_exists',
+          `Field regionId "${field.regionId}" does not match any scene region.`,
+        ),
       ])
     }
     if (region.shape.type !== 'rectangle') {
@@ -833,7 +870,12 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     // No explicit forces or constraints.
     if (scene.forces.length > 0 || scene.constraints.length > 0) {
       return unsupportedModel(
-        [failure('electric_force_only', 'Electric Region Engine does not combine explicit forces or constraints.')],
+        [
+          failure(
+            'electric_force_only',
+            'Electric Region Engine does not combine explicit forces or constraints.',
+          ),
+        ],
         ELECTRIC_REGION_ENGINE_ID,
       )
     }
@@ -856,7 +898,10 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     const fieldVector = toCanonicalVector(field.fieldStrength).vectorSI
     if (!isFiniteVector(fieldVector) || Math.abs(fieldVector.z) > 1e-10) {
       return invalidModelCondition(ELECTRIC_REGION_ENGINE_ID, [
-        failure('field_vector_2d', 'Electric Region Engine requires a finite field vector in the xy plane.'),
+        failure(
+          'field_vector_2d',
+          'Electric Region Engine requires a finite field vector in the xy plane.',
+        ),
       ])
     }
 
@@ -889,7 +934,10 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     const model = resolveParallelPlateModel(scene)
     const seconds = canonicalValue(time)
     if (!Number.isFinite(seconds) || seconds < 0) {
-      throw new PhysicsOSError('INVALID_SIMULATION_TIME', 'Simulation time must be finite and non-negative.')
+      throw new PhysicsOSError(
+        'INVALID_SIMULATION_TIME',
+        'Simulation time must be finite and non-negative.',
+      )
     }
     return stateAtForModel(model, seconds)
   }
@@ -916,13 +964,26 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     }
 
     const model = resolveParallelPlateModel(scene)
-    const startTime = request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration = scene.timeline.endTime === undefined
-      ? DEFAULT_DURATION_SECONDS
-      : canonicalValue(scene.timeline.endTime)
-    const endTime = request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
-    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime < startTime) {
-      throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'Simulation range must satisfy 0 <= startTime <= endTime.')
+    const startTime =
+      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+    const sceneDuration =
+      scene.timeline.endTime === undefined
+        ? DEFAULT_DURATION_SECONDS
+        : canonicalValue(scene.timeline.endTime)
+    const endTime =
+      request.options.endTime === undefined
+        ? sceneDuration
+        : canonicalValue(request.options.endTime)
+    if (
+      !Number.isFinite(startTime) ||
+      !Number.isFinite(endTime) ||
+      startTime < 0 ||
+      endTime < startTime
+    ) {
+      throw new PhysicsOSError(
+        'INVALID_SIMULATION_RANGE',
+        'Simulation range must satisfy 0 <= startTime <= endTime.',
+      )
     }
 
     // Sample trajectory.
@@ -957,7 +1018,12 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     }
 
     // HitPlate event.
-    if (phases.hit !== null && phases.hitTime !== null && phases.hitTime >= startTime && phases.hitTime <= endTime) {
+    if (
+      phases.hit !== null &&
+      phases.hitTime !== null &&
+      phases.hitTime >= startTime &&
+      phases.hitTime <= endTime
+    ) {
       events.push({
         eventId: asPhysicsEventId(`event-hit-plate-${phases.hit.plate}`),
         sceneId: scene.id,

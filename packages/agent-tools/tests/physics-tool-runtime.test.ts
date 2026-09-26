@@ -31,15 +31,28 @@ describe('experiment catalog', () => {
   })
 
   it('routes the lever rig to the lever engine, not the body engine', () => {
-    const scene = EXPERIMENT_CATALOG.find((entry) => entry.id === 'lever-balance')!.build('probe-lever', 'lever')
+    const scene = EXPERIMENT_CATALOG.find((entry) => entry.id === 'lever-balance')!.build(
+      'probe-lever',
+      'lever',
+    )
     expect(pickEngine(scene).entry?.engine.engineId).toBe('engine-lever')
   })
 
   it('covers every domain the Lab exposes', () => {
     const domains = new Set(EXPERIMENT_CATALOG.map((entry) => entry.domain))
-    expect([...domains].sort()).toEqual(
-      ['acoustics', 'circuit', 'composite', 'electric', 'fluid', 'induction', 'magnetic', 'mechanics', 'optics', 'thermal', 'wave'],
-    )
+    expect([...domains].sort()).toEqual([
+      'acoustics',
+      'circuit',
+      'composite',
+      'electric',
+      'fluid',
+      'induction',
+      'magnetic',
+      'mechanics',
+      'optics',
+      'thermal',
+      'wave',
+    ])
   })
 })
 
@@ -67,7 +80,10 @@ describe('PhysicsToolRuntime: experiments', () => {
       expect(description.objects.length, entry.id).toBeGreaterThan(0)
       expect(description.commands).toContain('SetObservableEnabled')
       const result = runtime.simulate(description.sceneId)
-      expect(result.verification.status, `${entry.id}: ${result.verification.errors.join(' ')}`).toBe('passed')
+      expect(
+        result.verification.status,
+        `${entry.id}: ${result.verification.errors.join(' ')}`,
+      ).toBe('passed')
       expect(result.derived.length, entry.id).toBeGreaterThan(0)
       expect(result.sampleCount, entry.id).toBeGreaterThan(0)
       roundTrips(description)
@@ -92,7 +108,10 @@ describe('PhysicsToolRuntime: experiments', () => {
     const first = runtime.createExperiment('uniform-linear')
     const second = runtime.createExperiment('series-circuit')
     const third = runtime.createExperiment('convex-lens')
-    expect(runtime.listScenes().map((scene) => scene.sceneId)).toEqual([second.sceneId, third.sceneId])
+    expect(runtime.listScenes().map((scene) => scene.sceneId)).toEqual([
+      second.sceneId,
+      third.sceneId,
+    ])
     expect(() => runtime.describeScene(first.sceneId)).toThrowError(ToolRuntimeError)
     expect(() => new PhysicsToolRuntime({ maxScenes: 0 })).toThrowError(ToolRuntimeError)
   })
@@ -102,7 +121,9 @@ describe('PhysicsToolRuntime: experiments', () => {
     const description = runtime.createExperiment('magnetic-circular', '小明的质子实验')
     expect(description.title).toBe('小明的质子实验')
     expect(description.engineId).toBe('engine-magnetic')
-    const radius = runtime.simulate(description.sceneId).derived.find((entry) => entry.key === 'cyclotron_radius')
+    const radius = runtime
+      .simulate(description.sceneId)
+      .derived.find((entry) => entry.key === 'cyclotron_radius')
     expect(radius?.value).toBeCloseTo((1.67e-27 * 2e6) / (1.6e-19 * 0.5), 6)
   })
 })
@@ -114,7 +135,8 @@ describe('PhysicsToolRuntime: scene commands', () => {
     const field = scene.objects.find((object) => object.kind === 'uniform_magnetic')
     expect(field).toBeDefined()
     const radiusOf = (): number =>
-      runtime.simulate(scene.sceneId).derived.find((entry) => entry.key === 'cyclotron_radius')!.value!
+      runtime.simulate(scene.sceneId).derived.find((entry) => entry.key === 'cyclotron_radius')!
+        .value!
     const before = radiusOf()
 
     const result = runtime.applyCommand(scene.sceneId, 'SetMagneticFieldStrength', {
@@ -158,23 +180,36 @@ describe('PhysicsToolRuntime: scene commands', () => {
 
   it('normalizes quantities, vectors and observable ids into the contract shapes', () => {
     expect(
-      normalizeCommandPayload('SetBodyVelocity', { bodyId: 'b', velocity: { x: 3, y: 4, unit: 'm/s' } }),
+      normalizeCommandPayload('SetBodyVelocity', {
+        bodyId: 'b',
+        velocity: { x: 3, y: 4, unit: 'm/s' },
+      }),
     ).toEqual({
       bodyId: 'b',
       velocity: { vector: { x: 3, y: 4, z: 0 }, unit: 'm/s', dimension: 'velocity' },
     })
     expect(
-      normalizeCommandPayload('SetParticleCharge', { particleId: 'p', charge: { value: -1.6e-19, unit: 'C' } }),
+      normalizeCommandPayload('SetParticleCharge', {
+        particleId: 'p',
+        charge: { value: -1.6e-19, unit: 'C' },
+      }),
     ).toEqual({
       particleId: 'p',
       charge: { value: -1.6e-19, unit: 'C', dimension: 'electric_charge' },
     })
-    expect(normalizeCommandPayload('SetObservableEnabled', { observableId: 'obs', enabled: false })).toEqual({
+    expect(
+      normalizeCommandPayload('SetObservableEnabled', { observableId: 'obs', enabled: false }),
+    ).toEqual({
       observableId: 'obs',
       enabled: false,
     })
-    expect(() => normalizeCommandPayload('SetSliderPosition', { circuitId: 'c', componentId: 'r', position: 'half' }))
-      .toThrowError(/position/)
+    expect(() =>
+      normalizeCommandPayload('SetSliderPosition', {
+        circuitId: 'c',
+        componentId: 'r',
+        position: 'half',
+      }),
+    ).toThrowError(/position/)
   })
 
   it('documents every frozen command type in the model-facing reference', () => {
@@ -211,7 +246,10 @@ describe('PhysicsToolRuntime: solve question', () => {
     expect(valid.length).toBeGreaterThan(50)
     for (const question of valid) {
       const result = runtime.solveQuestion(question.text)
-      expect(result.status, `${question.id}: ${result.issues.map((issue) => issue.message).join(' ')}`).toBe('solved')
+      expect(
+        result.status,
+        `${question.id}: ${result.issues.map((issue) => issue.message).join(' ')}`,
+      ).toBe('solved')
       expect(result.goldenQuestionId).toBe(question.id)
       expect(result.answers.length, question.id).toBeGreaterThan(0)
       expect(result.steps.length, question.id).toBeGreaterThan(0)

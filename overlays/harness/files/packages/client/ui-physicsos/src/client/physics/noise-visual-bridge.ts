@@ -27,17 +27,25 @@ import type {
 const WAVEFRONT_FRACTIONS = [0.35, 0.6, 0.85] as const
 const NOISE_MARGIN = 0.9
 
+/**
+ * The noise visual input shape used by the noise scene visuals module.
+ */
 export interface NoiseVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedNoiseModel
 }
 
-/** Student-facing name of the rig. */
+/**
+ * Student-facing name of the rig.
+ * @returns the formatted string.
+ */
 export const noiseRigText = (): string => '噪声的减弱'
 
 /**
  * Scene observable definition → canvas toggle key. The bench factory stamps
  * `observable-noise-level` / `observable-noise-spreading`.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const noiseObservableKeyOf = (
   definition: ObservableDefinition,
@@ -57,7 +65,17 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-export const noiseSceneVisual = ({ scene, model }: NoiseVisualInput): SceneVisualModel => {
+/**
+ * The noise scene visuals helper `noiseSceneVisual`.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const noiseSceneVisual = (input: NoiseVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const reading = noiseReadingOf(model.soundPowerLevel, model.distance, model.barrierAttenuation)
   const visible = visibilityOf(scene)
   const distance = reading.distance

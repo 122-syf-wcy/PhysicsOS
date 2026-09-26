@@ -1,0 +1,19 @@
+{
+  "name": "@physicsos/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build:local": "node ../../scripts/desktop/package-local.mjs",
+    "build:release": "node ../../scripts/desktop/package-release.mjs",
+    "package:sidecar": "node ../../scripts/desktop/package-sidecar.mjs",
+    "build:config": "node ../../scripts/desktop/validate-release-config.mjs --local",
+    "build:release-config": "node ../../scripts/desktop/validate-release-config.mjs --release",
+    "test": "node --test ../../scripts/desktop/*.test.mjs && node --test sidecar/*.test.mjs",
+    "test:sidecar": "node --test sidecar/*.test.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4"
+  }
+}

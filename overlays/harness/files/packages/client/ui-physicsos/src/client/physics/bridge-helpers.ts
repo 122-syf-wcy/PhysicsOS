@@ -26,13 +26,22 @@ export const LATTICE_DENSITY_MAX = 2.5
  *
  * The texture is a RELATIVE reading aid (see the readout line every caller
  * adds); the quantitative |E| / |B| stay in the numbers, never in the ink.
+ * @returns the computed number.
+ * @param reference - the reference.
+ * @param magnitude - the vector magnitude.
+ * @param base - the base storage.
  */
 export const latticeSpacingOf = (base: number, magnitude: number, reference: number): number => {
   if (!Number.isFinite(base) || base <= 0) return base
   return base / latticeDensityFactor(magnitude, reference)
 }
 
-/** The density factor itself, clamped into [1, LATTICE_DENSITY_MAX]. */
+/**
+ * The density factor itself, clamped into [1, LATTICE_DENSITY_MAX]
+ * @returns the computed number.
+ * @param reference - the reference.
+ * @param magnitude - the vector magnitude.
+ */
 export const latticeDensityFactor = (magnitude: number, reference: number): number => {
   const safe = Number.isFinite(magnitude) && magnitude > 0 ? magnitude : 0
   const ratio = Number.isFinite(reference) && reference > 0 ? safe / reference : 0
@@ -44,6 +53,8 @@ export const latticeDensityFactor = (magnitude: number, reference: number): numb
  * source earns the full 18-line picture, an nC source 12, anything smaller 6.
  * The banding keeps the "bigger charge, denser field lines" statement honest
  * without letting a weak source crowd the canvas.
+ * @returns the 6.
+ * @param chargeCoulombs - the charge in coulombs.
  */
 export const radialCountForCharge = (chargeCoulombs: number): 6 | 12 | 18 => {
   const magnitude = Number.isFinite(chargeCoulombs) ? Math.abs(chargeCoulombs) : 0
@@ -66,6 +77,11 @@ export const radialCountForCharge = (chargeCoulombs: number): 6 | 12 | 18 => {
  * The pieces never overlap, so concatenated they remain parallel to the
  * runtime's `trajectoryTimes` (prefix = history), which keeps hover, seek and
  * strobe sampling intact.
+ * @returns the scene visual model['trajectories'].
+ * @param now - clock injection for tests.
+ * @param times - the time points.
+ * @param points - the points.
+ * @param id - the target row id.
  */
 export const splitTrajectoryAtTime = (
   id: string,

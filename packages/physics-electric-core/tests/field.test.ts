@@ -46,9 +46,9 @@ describe('pointChargeElectricField', () => {
 
   it('refuses the singular point instead of returning a huge number', () => {
     /* An arrow of meaningless length is worse than a failure. */
-    expect(() => pointChargeElectricField(1e-6, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 })).toThrow(
-      /ELECTRIC_FIELD_SINGULARITY|undefined at the source/,
-    )
+    expect(() =>
+      pointChargeElectricField(1e-6, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }),
+    ).toThrow(/ELECTRIC_FIELD_SINGULARITY|undefined at the source/)
   })
 })
 
@@ -58,13 +58,19 @@ describe('pointChargePotential', () => {
       (COULOMB_CONSTANT * 2e-6) / 0.5,
       6,
     )
-    expect(pointChargePotential(-2e-6, { x: 0, y: 0, z: 0 }, { x: 0.5, y: 0, z: 0 })).toBeLessThan(0)
+    expect(pointChargePotential(-2e-6, { x: 0, y: 0, z: 0 }, { x: 0.5, y: 0, z: 0 })).toBeLessThan(
+      0,
+    )
   })
 })
 
 describe('superposition', () => {
   it('cancels exactly midway between equal like charges', () => {
-    const sample = fieldAt([charge('a', 1e-6, -1, 0), charge('b', 1e-6, 1, 0)], { x: 0, y: 0, z: 0 })
+    const sample = fieldAt([charge('a', 1e-6, -1, 0), charge('b', 1e-6, 1, 0)], {
+      x: 0,
+      y: 0,
+      z: 0,
+    })
     expect(sample.field.x).toBeCloseTo(0, 12)
     expect(sample.field.y).toBeCloseTo(0, 12)
     expect(sample.magnitude).toBeCloseTo(0, 12)
@@ -73,7 +79,11 @@ describe('superposition', () => {
   it('doubles midway between equal opposite charges', () => {
     /* A dipole's field on the axis between the charges adds rather than cancels. */
     const single = pointChargeElectricField(1e-6, { x: -1, y: 0, z: 0 }, { x: 0, y: 0, z: 0 })
-    const sample = fieldAt([charge('a', 1e-6, -1, 0), charge('b', -1e-6, 1, 0)], { x: 0, y: 0, z: 0 })
+    const sample = fieldAt([charge('a', 1e-6, -1, 0), charge('b', -1e-6, 1, 0)], {
+      x: 0,
+      y: 0,
+      z: 0,
+    })
     expect(sample.field.x).toBeCloseTo(single.x * 2, 12)
   })
 

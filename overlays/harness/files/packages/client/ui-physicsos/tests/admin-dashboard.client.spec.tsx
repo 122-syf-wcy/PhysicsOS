@@ -17,6 +17,13 @@ const row = (over: Partial<DashboardRow> = {}): DashboardRow => ({
     logins: index % 3,
     created: index % 2,
   })),
+  limiters: {
+    login: { tracked: 0, saturated: 0, limit: 5, windowMs: 60_000 },
+    ip: { tracked: 0, saturated: 0, limit: 20, windowMs: 60_000 },
+    apply: { tracked: 0, saturated: 0, limit: 10, windowMs: 60_000 },
+    backend: 'memory',
+    available: true,
+  },
   /* 默认「这台部署还没有人上报」——第二层据此说人话,而不是画一根 0% 的柱子。 */
   learning: { available: false, attempts: 0, correct: 0, wrong: 0, nodes: [], days: 0 },
   ...over,

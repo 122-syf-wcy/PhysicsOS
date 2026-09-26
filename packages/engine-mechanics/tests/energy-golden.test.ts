@@ -103,7 +103,9 @@ describe('mechanical energy on a smooth ramp', () => {
     expect(scalarOf(scene, 'friction_work')).toBe(0)
     expect(scalarOf(scene, 'kinetic_energy')).toBeCloseTo(17.64, 12)
     expect(scalarOf(scene, 'speed_at_bottom')).toBeCloseTo(4.2, 12)
-    const energy = simulated(scene).derivedQuantities.find((entry) => entry.key === 'kinetic_energy')
+    const energy = simulated(scene).derivedQuantities.find(
+      (entry) => entry.key === 'kinetic_energy',
+    )
     expect(energy?.formula?.expression).toBe('Ek = mgh − W_摩擦')
   })
 })
@@ -159,7 +161,10 @@ describe('energy engine support and commands', () => {
     })
     const withBench = {
       ...smoothScene(),
-      energyBenches: [...energyBenchesOf(smoothScene()), { ...energyBenchesOf(smoothScene())[0]!, id: 'second' }],
+      energyBenches: [
+        ...energyBenchesOf(smoothScene()),
+        { ...energyBenchesOf(smoothScene())[0]!, id: 'second' },
+      ],
     }
     expect(energyEngine.canHandle(withBench).supported).toBe(false)
     const noBench = { ...smoothScene(), energyBenches: [] }
@@ -167,11 +172,19 @@ describe('energy engine support and commands', () => {
   })
 
   it('refuses an angle at either end and a negative friction coefficient', () => {
-    expect(energyEngine.canHandle(createMechanicalEnergyScene({ inclineAngle: 0 })).supported).toBe(false)
-    expect(energyEngine.canHandle(createMechanicalEnergyScene({ inclineAngle: 90 })).supported).toBe(false)
-    expect(energyEngine.canHandle(createMechanicalEnergyScene({ frictionCoefficient: -0.1 })).supported).toBe(false)
+    expect(energyEngine.canHandle(createMechanicalEnergyScene({ inclineAngle: 0 })).supported).toBe(
+      false,
+    )
+    expect(
+      energyEngine.canHandle(createMechanicalEnergyScene({ inclineAngle: 90 })).supported,
+    ).toBe(false)
+    expect(
+      energyEngine.canHandle(createMechanicalEnergyScene({ frictionCoefficient: -0.1 })).supported,
+    ).toBe(false)
     /* A smooth ramp is a rig, not a missing value. */
-    expect(energyEngine.canHandle(createMechanicalEnergyScene({ frictionCoefficient: 0 })).supported).toBe(true)
+    expect(
+      energyEngine.canHandle(createMechanicalEnergyScene({ frictionCoefficient: 0 })).supported,
+    ).toBe(true)
 
     const runtime = new SceneRuntime(smoothScene())
     const zero = execute(runtime, 'SetRampAngle', {
@@ -205,7 +218,10 @@ describe('energy engine support and commands', () => {
     })
     expect(higher.ok).toBe(true)
     expect(scalarOf(runtime.getScene(), 'potential_energy')).toBeCloseTo(70.56, 9)
-    expect(scalarOf(runtime.getScene(), 'speed_at_bottom')).toBeCloseTo(speedFromHeight(9.8, 1.8), 9)
+    expect(scalarOf(runtime.getScene(), 'speed_at_bottom')).toBeCloseTo(
+      speedFromHeight(9.8, 1.8),
+      9,
+    )
 
     const rough = execute(runtime, 'SetRampFriction', {
       benchId: 'energy-bench-1',
@@ -228,10 +244,7 @@ describe('energy engine support and commands', () => {
   it('keeps the kinetic energy the speed implies, at every setting', () => {
     const scene = roughScene()
     const ledger = energyLedgerOf(resolveEnergyModel(scene))
-    expect(kineticEnergy(ledger.mass, ledger.speedAtBottom)).toBeCloseTo(
-      ledger.kineticAtBottom,
-      12,
-    )
+    expect(kineticEnergy(ledger.mass, ledger.speedAtBottom)).toBeCloseTo(ledger.kineticAtBottom, 12)
     expect(isEnergyScene(scene)).toBe(true)
   })
 })

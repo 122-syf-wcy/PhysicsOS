@@ -17,10 +17,7 @@
  * so a slipped factor cannot produce a confident wrong reading.
  */
 
-export {
-  resolveFluidModel,
-  type ResolvedFluidModel,
-} from './fluid-model.ts'
+export { resolveFluidModel, type ResolvedFluidModel } from './fluid-model.ts'
 export {
   buoyancyFromPressure,
   equilibriumOf,
@@ -38,10 +35,7 @@ export {
   fluidEngine,
   resolveBuoyancy,
 } from './fluid-engine.ts'
-export {
-  resolvePressureModel,
-  type ResolvedPressureModel,
-} from './pressure-model.ts'
+export { resolvePressureModel, type ResolvedPressureModel } from './pressure-model.ts'
 export {
   PRESSURE_RELATIVE_TOLERANCE,
   atmosphericPressureOf,

@@ -49,6 +49,7 @@ export interface PhysicsProfileController {
 /**
  * Read a stored student profile, or the Home default.
  * @param storage - web storage; omitted in non-browser tests.
+ * @returns the stored id, or `'physics-experiment'` when absent/invalid.
  */
 export function readStoredProfile(storage?: Pick<Storage, 'getItem'>): PhysicsProfileId {
   const raw = storage?.getItem(PHYSICS_PROFILE_STORAGE_KEY)
@@ -85,6 +86,7 @@ function messageOf(error: unknown): string {
  * @param api - Harness agent-preset write face; omit until the host is ready.
  * @param currentSession - blank Session that can still accept a preset.
  * @param storage - optional web storage for the product choice.
+ * @returns the controller the Home chip binds against.
  */
 export function createPhysicsProfileController(
   api?: PhysicsProfileHost,

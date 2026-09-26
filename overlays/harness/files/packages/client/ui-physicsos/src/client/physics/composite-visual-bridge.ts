@@ -14,12 +14,21 @@
  * observation — a frame with the particle outside the field region reports a
  * zero field, which would draw the lattice sideways.
  */
-import { toCanonicalVector, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
+import {
+  toCanonicalVector,
+  type SimulationResult,
+  type SimulationState,
+} from '@physicsos/physics-core'
 import type {
   CompositeObservation,
   CompositeObservationRuntimeState,
 } from '@physicsos/physics-observation'
-import { isCompositeFieldScene, type PhysicsScene, type Region } from '@physicsos/physics-scene'
+import {
+  cyclotronBenchOf,
+  isCompositeFieldScene,
+  type PhysicsScene,
+  type Region,
+} from '@physicsos/physics-scene'
 
 import {
   emptyVisualModel,
@@ -40,6 +49,9 @@ import { latticeSpacingOf, splitTrajectoryAtTime } from './bridge-helpers.ts'
 const E_REFERENCE = 100
 const B_REFERENCE = 0.5
 
+/**
+ * The composite visual input shape used by the composite scene visuals module.
+ */
 export interface CompositeVisualInput {
   readonly scene: PhysicsScene
   readonly simulation: SimulationResult
@@ -54,7 +66,11 @@ const pointOf = (vector: { readonly x: number; readonly y: number }): ScenePoint
   y: vector.y,
 })
 
-const normalized = (vector: { readonly x: number; readonly y: number; readonly z: number }): ScenePoint => {
+const normalized = (vector: {
+  readonly x: number
+  readonly y: number
+  readonly z: number
+}): ScenePoint => {
   const length = Math.hypot(vector.x, vector.y, vector.z)
   return length === 0 ? { x: 1, y: 0 } : { x: vector.x / length, y: vector.y / length }
 }
@@ -109,10 +125,7 @@ const electricFieldVisualOf = (
   }
 }
 
-const magneticFieldVisualOf = (
-  scene: PhysicsScene,
-  region: Region,
-): FieldVisual | undefined => {
+const magneticFieldVisualOf = (scene: PhysicsScene, region: Region): FieldVisual | undefined => {
   const field = scene.fields.find(
     candidate => candidate.type === 'uniform_magnetic' && candidate.regionId === region.id,
   )
@@ -165,11 +178,7 @@ const globalMagneticVisualOf = (
   if (bz === 0) return undefined
   return {
     direction: bz < 0 ? 'into-page' : 'out-of-page',
-    spacing: latticeSpacingOf(
-      Math.min(extent.width, extent.height) / 6,
-      Math.abs(bz),
-      B_REFERENCE,
-    ),
+    spacing: latticeSpacingOf(Math.min(extent.width, extent.height) / 6, Math.abs(bz), B_REFERENCE),
   }
 }
 
@@ -212,13 +221,23 @@ const compositeRegionsOf = (scene: PhysicsScene): readonly CompositeRegionVisual
        exactOptionalPropertyTypes keeps a conditional spread as `T | undefined`,
        which would widen the property. Assigning onto a typed local first, then
        returning it, lets the optional keys stay genuinely optional. */
+    const cyclotronLabel =
+      cyclotronBenchOf(scene) === undefined
+        ? undefined
+        : region.id === 'cyclotron-gap'
+          ? '加速缝隙 · E(t)'
+          : region.id === 'cyclotron-dee-left'
+            ? '左 D 形盒 · B'
+            : region.id === 'cyclotron-dee-right'
+              ? '右 D 形盒 · B'
+              : undefined
     const visual: CompositeRegionVisual = {
       id: region.id,
       at: pointOf(center),
       width: regionWidthOf(region),
       height: regionHeightOf(region),
       kind,
-      label: regionLabelOf(kind),
+      label: cyclotronLabel ?? regionLabelOf(kind),
     }
     if (electricField !== undefined) visual.electricField = electricField
     if (magneticField !== undefined) visual.magneticField = magneticField
@@ -250,8 +269,8 @@ const compositeFrame = (
   const pad = span * 0.18
   let width = contentWidth + pad * 2
   let height = contentHeight + pad * 2
-  if (width / height > 16 / 9) height = width * 9 / 16
-  else width = height * 16 / 9
+  if (width / height > 16 / 9) height = (width * 9) / 16
+  else width = (height * 16) / 9
   const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
   return {
     origin: { x: center.x - width / 2, y: center.y - height / 2 },
@@ -277,11 +296,16 @@ const niceStep = (target: number): number => {
  * engine reported a non-zero magnitude — outside a field region every
  * contribution is zero, and drawing zero-length arrows would clutter the
  * field-free approach.
+ * @returns the scene visual model.
+ * @param input - the caller-supplied fields.
  */
 export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisualModel => {
   const { scene, simulation, observations, state } = input
   const particle = scene.particles[0]
-  const object = particle === undefined ? undefined : state.objects.find(candidate => candidate.id === particle.id)
+  const object =
+    particle === undefined
+      ? undefined
+      : state.objects.find(candidate => candidate.id === particle.id)
   if (particle === undefined || object?.position === undefined) return emptyVisualModel('composite')
 
   const position = pointOf(toCanonicalVector(object.position).vectorSI)
@@ -292,14 +316,17 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
      canvas can split travelled/future at the playhead and hover/seek keep
      indexing against trajectoryTimes. The observation carries it too, but the
      simulation stream is the source of truth. */
-  const trajectorySamples = simulation.states.reduce<{ points: ScenePoint[]; times: number[] }>((acc, sample) => {
-    const sampleObject = sample.objects.find(candidate => candidate.id === particle.id)
-    if (sampleObject?.position !== undefined) {
-      acc.points.push(pointOf(toCanonicalVector(sampleObject.position).vectorSI))
-      acc.times.push(sample.time.value)
-    }
-    return acc
-  }, { points: [], times: [] })
+  const trajectorySamples = simulation.states.reduce<{ points: ScenePoint[]; times: number[] }>(
+    (acc, sample) => {
+      const sampleObject = sample.objects.find(candidate => candidate.id === particle.id)
+      if (sampleObject?.position !== undefined) {
+        acc.points.push(pointOf(toCanonicalVector(sampleObject.position).vectorSI))
+        acc.times.push(sample.time.value)
+      }
+      return acc
+    },
+    { points: [], times: [] },
+  )
   const trajectoryPoints: ScenePoint[] = trajectorySamples.points
 
   /* Frame: cover every region rectangle + the trajectory + the particle start. */
@@ -324,61 +351,146 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
 
   const vectors: VectorVisual[] = []
   if (electricField !== undefined && electricField.magnitude.value > 0) {
-    vectors.push(vectorVisual(
-      'electric-field-vector', 'field', 'electricField', 'E',
-      position, toCanonicalVector(electricField.vector).vectorSI, base * 0.18,
-    ))
+    vectors.push(
+      vectorVisual(
+        'electric-field-vector',
+        'field',
+        'electricField',
+        'E',
+        position,
+        toCanonicalVector(electricField.vector).vectorSI,
+        base * 0.18,
+      ),
+    )
   }
   if (electricForce !== undefined && electricForce.magnitude.value > 0) {
-    vectors.push(vectorVisual(
-      'electric-force-vector', 'electric-force', 'electricForce', 'F_E',
-      position, toCanonicalVector(electricForce.vector).vectorSI, base * 0.16,
-    ))
+    vectors.push(
+      vectorVisual(
+        'electric-force-vector',
+        'electric-force',
+        'electricForce',
+        'F_E',
+        position,
+        toCanonicalVector(electricForce.vector).vectorSI,
+        base * 0.16,
+      ),
+    )
   }
   if (magneticForce !== undefined && magneticForce.magnitude.value > 0) {
-    vectors.push(vectorVisual(
-      'magnetic-force-vector', 'magnetic-force', 'magneticForce', 'F_B',
-      position, toCanonicalVector(magneticForce.vector).vectorSI, base * 0.16,
-    ))
+    vectors.push(
+      vectorVisual(
+        'magnetic-force-vector',
+        'magnetic-force',
+        'magneticForce',
+        'F_B',
+        position,
+        toCanonicalVector(magneticForce.vector).vectorSI,
+        base * 0.16,
+      ),
+    )
   }
   if (gravityForce !== undefined && gravityForce.magnitude.value > 0) {
-    vectors.push(vectorVisual(
-      'gravity-force-vector', 'gravity', 'gravityForce', 'mg',
-      position, toCanonicalVector(gravityForce.vector).vectorSI, base * 0.14,
-    ))
+    vectors.push(
+      vectorVisual(
+        'gravity-force-vector',
+        'gravity',
+        'gravityForce',
+        'mg',
+        position,
+        toCanonicalVector(gravityForce.vector).vectorSI,
+        base * 0.14,
+      ),
+    )
   }
   if (netForce !== undefined && netForce.magnitude.value > 0) {
-    vectors.push(vectorVisual(
-      'net-force-vector', 'net-force', 'netForce', 'F_net',
-      position, toCanonicalVector(netForce.vector).vectorSI, base * 0.18,
-    ))
+    vectors.push(
+      vectorVisual(
+        'net-force-vector',
+        'net-force',
+        'netForce',
+        'F_net',
+        position,
+        toCanonicalVector(netForce.vector).vectorSI,
+        base * 0.18,
+      ),
+    )
   }
   if (velocity !== undefined && velocity.magnitude.value > 0) {
-    vectors.push(vectorVisual(
-      'velocity-vector', 'velocity', 'velocity', 'v',
-      position, toCanonicalVector(velocity.vector).vectorSI, base * 0.2,
-    ))
+    vectors.push(
+      vectorVisual(
+        'velocity-vector',
+        'velocity',
+        'velocity',
+        'v',
+        position,
+        toCanonicalVector(velocity.vector).vectorSI,
+        base * 0.2,
+      ),
+    )
   }
 
   const charge = particle.charge?.value ?? 0
   const runWindow = simulation.states.at(-1)?.time.value ?? 0
+  const cyclotron = cyclotronBenchOf(scene)
+  const scalarStateValue = (key: string): number | undefined => {
+    const value = object.values?.[key]
+    return value !== undefined && 'value' in value ? value.value : undefined
+  }
+  const cyclotronSpeed = scalarStateValue('speed')
+  const cyclotronRadius = scalarStateValue('gyro_radius')
+  const cyclotronEnergy = scalarStateValue('kinetic_energy')
+  const cyclotronCrossings = scalarStateValue('crossings_completed')
+  const cyclotronGapField = scalarStateValue('gap_electric_field')
+  const cyclotronReadout =
+    cyclotron === undefined
+      ? []
+      : [
+        `B = ${formatNumber(cyclotron.magneticFluxDensity.value)} T · U = ${formatNumber(cyclotron.gapVoltage.value)} V · R = ${formatNumber(cyclotron.deeRadius.value)} m`,
+        ...(cyclotronSpeed === undefined
+          ? []
+          : [
+            `|v| = ${formatNumber(cyclotronSpeed)} m/s · r = ${formatNumber(cyclotronRadius ?? 0)} m`,
+          ]),
+        ...(cyclotronEnergy === undefined
+          ? []
+          : [
+            `K = ${formatNumber(cyclotronEnergy)} J · 穿越次数 = ${formatNumber(cyclotronCrossings ?? 0)}`,
+          ]),
+        ...(cyclotronGapField === undefined
+          ? []
+          : [`缝隙电场 E(t) = ${formatNumber(cyclotronGapField)} V/m（每半周期反向）`]),
+      ]
   const readout = [
     `t = ${formatTimeAt(state.time.value, runWindow)}`,
-    ...(velocity === undefined ? [] : [`|v| = ${formatNumber(velocity.magnitude.value)} ${velocity.magnitude.unit}`]),
-    ...(electricField === undefined ? [] : [`|E| = ${formatNumber(electricField.magnitude.value)} ${electricField.magnitude.unit}`]),
-    ...(magneticField === undefined ? [] : [`|B| = ${formatNumber(magneticField.magnitude.value)} ${magneticField.magnitude.unit}`]),
-    ...(electricForce === undefined ? [] : [`|F_E| = ${formatNumber(electricForce.magnitude.value)} ${electricForce.magnitude.unit}`]),
-    ...(magneticForce === undefined ? [] : [`|F_B| = ${formatNumber(magneticForce.magnitude.value)} ${magneticForce.magnitude.unit}`]),
-    ...(netForce === undefined ? [] : [`|F_net| = ${formatNumber(netForce.magnitude.value)} ${netForce.magnitude.unit}`]),
+    ...cyclotronReadout,
+    ...(velocity === undefined
+      ? []
+      : [`|v| = ${formatNumber(velocity.magnitude.value)} ${velocity.magnitude.unit}`]),
+    ...(electricField === undefined
+      ? []
+      : [`|E| = ${formatNumber(electricField.magnitude.value)} ${electricField.magnitude.unit}`]),
+    ...(magneticField === undefined
+      ? []
+      : [`|B| = ${formatNumber(magneticField.magnitude.value)} ${magneticField.magnitude.unit}`]),
+    ...(electricForce === undefined
+      ? []
+      : [`|F_E| = ${formatNumber(electricForce.magnitude.value)} ${electricForce.magnitude.unit}`]),
+    ...(magneticForce === undefined
+      ? []
+      : [`|F_B| = ${formatNumber(magneticForce.magnitude.value)} ${magneticForce.magnitude.unit}`]),
+    ...(netForce === undefined
+      ? []
+      : [`|F_net| = ${formatNumber(netForce.magnitude.value)} ${netForce.magnitude.unit}`]),
   ]
 
   const tickStep = niceStep(frame.extent.width / 6)
   const scaleLength = niceStep(frame.extent.width / 5)
-  const scaleLabel = scaleLength >= 1
-    ? `${formatNumber(scaleLength)} m`
-    : scaleLength >= 0.01
-      ? `${formatNumber(scaleLength * 100)} cm`
-      : `${formatNumber(scaleLength * 1000)} mm`
+  const scaleLabel =
+    scaleLength >= 1
+      ? `${formatNumber(scaleLength)} m`
+      : scaleLength >= 0.01
+        ? `${formatNumber(scaleLength * 100)} cm`
+        : `${formatNumber(scaleLength * 1000)} mm`
 
   const globalElectric = globalElectricVisualOf(scene, frame.extent.width)
   const globalMagnetic = globalMagneticVisualOf(scene, frame.extent)
@@ -389,13 +501,15 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
     grid: { minor: frame.extent.width / 24, major: frame.extent.width / 6 },
     axes: { x: 'x / m', y: 'y / m' },
     tickStep,
-    particles: [{
-      id: particle.id,
-      at: position,
-      sign: charge < 0 ? 'negative' : 'positive',
-      radius: frame.extent.width * 0.014,
-      symbol: charge < 0 ? 'q⁻' : 'q⁺',
-    }],
+    particles: [
+      {
+        id: particle.id,
+        at: position,
+        sign: charge < 0 ? 'negative' : 'positive',
+        radius: frame.extent.width * 0.014,
+        symbol: charge < 0 ? 'q⁻' : 'q⁺',
+      },
+    ],
     vectors,
     trajectories: splitTrajectoryAtTime(
       'composite-trajectory',
@@ -428,13 +542,24 @@ const visibilityOf = (scene: PhysicsScene): SceneVisualModel['visible'] => {
     magneticForce: isForceVisible('magnetic'),
     gravityForce: isForceVisible('gravity'),
     netForce: isForceVisible('net'),
-    electricField: scene.observableDefinitions.some(d => d.type === 'electric_field' && d.visible),
-    magneticField: scene.observableDefinitions.some(d => d.type === 'magnetic_field' && d.visible),
+    electricField: scene.observableDefinitions.some(
+      d => d.type === 'electric_field' && d.visible,
+    ),
+    magneticField: scene.observableDefinitions.some(
+      d => d.type === 'magnetic_field' && d.visible,
+    ),
     trajectory: scene.observableDefinitions.some(d => d.type === 'trajectory' && d.visible),
     regions: true,
   }
 }
 
+/**
+ * The composite scene visuals helper `compositeSampleReadout`.
+ * @returns the composite sample readout list.
+ * @param index - the index.
+ * @param particleId - the particle id.
+ * @param simulation - the simulation.
+ */
 export const compositeSampleReadout = (
   simulation: SimulationResult,
   particleId: string,
@@ -442,7 +567,8 @@ export const compositeSampleReadout = (
 ): readonly { label: string; value: string }[] => {
   const state = simulation.states[index]
   const object = state?.objects.find(candidate => candidate.id === particleId)
-  if (state === undefined || object?.position === undefined || object.velocity === undefined) return []
+  if (state === undefined || object?.position === undefined || object.velocity === undefined)
+    return []
   const position = toCanonicalVector(object.position).vectorSI
   const speed = Math.hypot(
     object.velocity.vector.x,
@@ -450,7 +576,10 @@ export const compositeSampleReadout = (
     object.velocity.vector.z,
   )
   return [
-    { label: 't', value: formatTimeAt(state.time.value, simulation.states.at(-1)?.time.value ?? 0) },
+    {
+      label: 't',
+      value: formatTimeAt(state.time.value, simulation.states.at(-1)?.time.value ?? 0),
+    },
     { label: 'r', value: `(${formatNumber(position.x)}, ${formatNumber(position.y)}) m` },
     { label: '|v|', value: `${formatNumber(speed)} m/s` },
   ]

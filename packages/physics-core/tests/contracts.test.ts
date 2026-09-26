@@ -302,7 +302,11 @@ describe('simulation worker message contract', () => {
       parseSimulationWorkerMessage({
         schemaVersion: SIMULATION_WORKER_SCHEMA,
         kind: 'simulation-result',
-        payload: { schemaVersion: 'simulation-result/1.0', simulationId: 'sim-1', sceneId: 'scene-1' },
+        payload: {
+          schemaVersion: 'simulation-result/1.0',
+          simulationId: 'sim-1',
+          sceneId: 'scene-1',
+        },
       }),
     ).toBeUndefined()
   })
@@ -312,14 +316,26 @@ describe('simulation worker message contract', () => {
       parseSimulationWorkerMessage({
         schemaVersion: SIMULATION_WORKER_SCHEMA,
         kind: 'simulation-request',
-        payload: { schemaVersion: 'simulation-request/1.0', simulationId: 'sim-1', sceneId: 'scene-1', sceneRevision: 0 },
+        payload: {
+          schemaVersion: 'simulation-request/1.0',
+          simulationId: 'sim-1',
+          sceneId: 'scene-1',
+          sceneRevision: 0,
+        },
       }),
     ).toBeUndefined()
     expect(
       parseSimulationWorkerMessage({
         schemaVersion: SIMULATION_WORKER_SCHEMA,
         kind: 'simulation-request',
-        payload: { schemaVersion: 'simulation-request/1.0', simulationId: 'sim-1', sceneId: 'scene-1', sceneRevision: '0', options: {}, trace: {} },
+        payload: {
+          schemaVersion: 'simulation-request/1.0',
+          simulationId: 'sim-1',
+          sceneId: 'scene-1',
+          sceneRevision: '0',
+          options: {},
+          trace: {},
+        },
       }),
     ).toBeUndefined()
   })

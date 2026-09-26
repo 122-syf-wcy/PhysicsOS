@@ -111,9 +111,7 @@ describe('convex lens imaging across the five zones', () => {
     const request = createOpticsSimulationRequest(scene, 'sim-at-f', 'trace-at-f')
     const outcome = opticsEngine.simulate(scene, request)
     expect(outcome.verification.status).toBe('passed')
-    expect(outcome.verification.checks.map((entry) => entry.id)).toContain(
-      'rays_parallel_at_focus',
-    )
+    expect(outcome.verification.checks.map((entry) => entry.id)).toContain('rays_parallel_at_focus')
     const rays = principalRaysOf(result)
     expect(rays).toHaveLength(2)
     expect(rays.every((ray) => ray.extension === undefined)).toBe(true)
@@ -201,9 +199,7 @@ describe('curved mirror imaging', () => {
     const request = createOpticsSimulationRequest(scene, 'sim-cm-f', 'trace-cm-f')
     const outcome = opticsEngine.simulate(scene, request)
     expect(outcome.verification.status).toBe('passed')
-    expect(outcome.verification.checks.map((entry) => entry.id)).toContain(
-      'rays_parallel_at_focus',
-    )
+    expect(outcome.verification.checks.map((entry) => entry.id)).toContain('rays_parallel_at_focus')
     const rays = principalRaysOf(result)
     expect(rays).toHaveLength(2)
     expect(rays.every((ray) => ray.extension === undefined)).toBe(true)

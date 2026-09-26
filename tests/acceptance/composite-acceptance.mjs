@@ -29,59 +29,69 @@ const questions = () => page.locator('[data-physicsos-surface="questions"]')
 const picker = () => page.locator('[data-physicsos-state="picker"]')
 
 /** Geometry + canvas facts the visual gate depends on. */
-const geometry = () => page.evaluate(() => {
-  const cover = document.querySelector('[data-physicsos-surface="lab"]')
-  const canvas = cover?.querySelector('svg[role="img"]')
-  const body = cover?.querySelector('[class*="body"]')
-  const doc = document.documentElement
-  return {
-    domain: cover?.getAttribute('data-physicsos-domain'),
-    revision: cover?.getAttribute('data-scene-revision'),
-    status: cover?.getAttribute('data-verification-status'),
-    canvasShare: canvas && body
-      ? +(canvas.getBoundingClientRect().width / body.getBoundingClientRect().width).toFixed(3)
-      : 0,
-    pageScrolls: doc.scrollHeight > doc.clientHeight + 1,
-    regionCount: canvas?.querySelectorAll('rect[class*="boundedFieldRegion"]').length ?? 0,
-    trajectoryD: canvas?.querySelector('path[class*="trajectory"]')?.getAttribute('d') ?? '',
-    particleDrawn: (canvas?.querySelectorAll('circle[fill^="url("]').length ?? 0) > 0,
-    paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter((node) => {
-      const stroke = getComputedStyle(node).stroke
-      return stroke !== 'none' && stroke !== ''
-    }).length,
-    vectorLabels: [...(canvas?.querySelectorAll('text') ?? [])]
-      .map((node) => node.textContent?.trim())
-      .filter((text) => text !== undefined && text.length > 0 && text.length <= 12),
-    displayScale: (() => {
-      const box = canvas?.getBoundingClientRect()
-      const viewBox = canvas?.getAttribute('viewBox')?.split(' ').map(Number)
-      if (box === undefined || viewBox === undefined || viewBox.length !== 4) return 0
-      const [, , vw, vh] = viewBox
-      return +Math.min(box.width / vw, box.height / vh).toFixed(3)
-    })(),
-  }
-})
+const geometry = () =>
+  page.evaluate(() => {
+    const cover = document.querySelector('[data-physicsos-surface="lab"]')
+    const canvas = cover?.querySelector('svg[role="img"]')
+    const body = cover?.querySelector('[class*="body"]')
+    const doc = document.documentElement
+    return {
+      domain: cover?.getAttribute('data-physicsos-domain'),
+      revision: cover?.getAttribute('data-scene-revision'),
+      status: cover?.getAttribute('data-verification-status'),
+      canvasShare:
+        canvas && body
+          ? +(canvas.getBoundingClientRect().width / body.getBoundingClientRect().width).toFixed(3)
+          : 0,
+      pageScrolls: doc.scrollHeight > doc.clientHeight + 1,
+      regionCount: canvas?.querySelectorAll('rect[class*="boundedFieldRegion"]').length ?? 0,
+      trajectoryD: canvas?.querySelector('path[class*="trajectory"]')?.getAttribute('d') ?? '',
+      particleDrawn: (canvas?.querySelectorAll('circle[fill^="url("]').length ?? 0) > 0,
+      paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter(
+        (node) => {
+          const stroke = getComputedStyle(node).stroke
+          return stroke !== 'none' && stroke !== ''
+        },
+      ).length,
+      vectorLabels: [...(canvas?.querySelectorAll('text') ?? [])]
+        .map((node) => node.textContent?.trim())
+        .filter((text) => text !== undefined && text.length > 0 && text.length <= 12),
+      displayScale: (() => {
+        const box = canvas?.getBoundingClientRect()
+        const viewBox = canvas?.getAttribute('viewBox')?.split(' ').map(Number)
+        if (box === undefined || viewBox === undefined || viewBox.length !== 4) return 0
+        const [, , vw, vh] = viewBox
+        return +Math.min(box.width / vw, box.height / vh).toFixed(3)
+      })(),
+    }
+  })
 
 /** Inspector derived rows, keyed by their physical name. */
-const derivedRows = () => page.evaluate(() => {
-  const rows = {}
-  for (const row of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="derived"]')) {
-    const name = row.querySelector('[class*="derivedName"]')?.textContent?.trim()
-    const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
-    if (name !== undefined && value !== undefined) rows[name] = value
-  }
-  return rows
-})
+const derivedRows = () =>
+  page.evaluate(() => {
+    const rows = {}
+    for (const row of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="derived"]',
+    )) {
+      const name = row.querySelector('[class*="derivedName"]')?.textContent?.trim()
+      const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
+      if (name !== undefined && value !== undefined) rows[name] = value
+    }
+    return rows
+  })
 
 /** Verification rows: label → passed/failed, from the inspector list. */
-const verificationRows = () => page.evaluate(() => {
-  const rows = {}
-  for (const item of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="verificationItem"]')) {
-    const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
-    if (label !== undefined) rows[label] = item.getAttribute('data-status')
-  }
-  return rows
-})
+const verificationRows = () =>
+  page.evaluate(() => {
+    const rows = {}
+    for (const item of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="verificationItem"]',
+    )) {
+      const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
+      if (label !== undefined) rows[label] = item.getAttribute('data-status')
+    }
+    return rows
+  })
 
 /** Create an experiment through the shared picker (must already be visible). */
 const pickTemplate = async (namePattern) => {
@@ -106,16 +116,25 @@ await page.getByRole('button', { name: '物理实验室' }).click()
   const state = await page.evaluate(() => ({
     pickerUp: document.querySelector('[data-physicsos-state="picker"]') !== null,
     magneticMounted: document.querySelector('[data-physicsos-domain="magnetic"]') !== null,
-    templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button').length,
-    tabs: [...document.querySelectorAll('[data-physicsos-state="picker"] [role="tab"]')]
-      .map((node) => node.textContent?.trim()),
+    templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button')
+      .length,
+    tabs: [...document.querySelectorAll('[data-physicsos-state="picker"] [role="tab"]')].map(
+      (node) => node.textContent?.trim(),
+    ),
     recommendRail: document.querySelector('[data-physicsos-recommend]') !== null,
     scrolls: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
   }))
   check('experiment picker replaces the auto demo', state.pickerUp && !state.magneticMounted)
-  check('at least 16 creatable templates listed', state.templates >= 16, `${state.templates} entries`)
-  check('domain tabs 全部/力学/电场/磁场/复合场', ['全部', '力学', '电场', '磁场', '复合场']
-    .every((tab) => state.tabs.includes(tab)), state.tabs.join(','))
+  check(
+    'at least 16 creatable templates listed',
+    state.templates >= 16,
+    `${state.templates} entries`,
+  )
+  check(
+    'domain tabs 全部/力学/电场/磁场/复合场',
+    ['全部', '力学', '电场', '磁场', '复合场'].every((tab) => state.tabs.includes(tab)),
+    state.tabs.join(','),
+  )
   check('recommendation rail on first use', state.recommendRail)
   check('no page scroll on the library', state.scrolls === false)
 
@@ -135,7 +154,9 @@ await page.getByRole('button', { name: '物理实验室' }).click()
 /* ---------------------------------------------------------------- CASE B -- */
 stdout.write('\nCASE B · 创建速度选择器 → E/B/粒子/轨迹真实可见\n')
 await pickTemplate(/^速度选择器/)
-await page.locator('[data-physicsos-domain="composite"]').waitFor({ state: 'visible', timeout: 20_000 })
+await page
+  .locator('[data-physicsos-domain="composite"]')
+  .waitFor({ state: 'visible', timeout: 20_000 })
 await page.waitForTimeout(600)
 let velocitySelectorTrajectory = ''
 {
@@ -147,16 +168,21 @@ let velocitySelectorTrajectory = ''
   check('particle drawn', g.particleDrawn)
   check('trajectory drawn', g.trajectoryD.length > 20, `d length ${g.trajectoryD.length}`)
   /* MathText renders F_E as F + subscript tspan, so textContent reads "FE". */
-  check('E field + electric force + Lorentz force + velocity labelled',
+  check(
+    'E field + electric force + Lorentz force + velocity labelled',
     ['E', 'FE', 'FB', 'v'].every((symbol) => g.vectorLabels.includes(symbol)),
-    g.vectorLabels.join(','))
+    g.vectorLabels.join(','),
+  )
   check('canvas keeps ≥55% of the workspace', g.canvasShare >= 0.55, String(g.canvasShare))
   check('no page scroll', g.pageScrolls === false)
   check('canvas actually paints', g.paintedStrokes > 20, `${g.paintedStrokes} stroked nodes`)
 
   const verification = await verificationRows()
-  check('selection condition PASS at v = E/B', verification['速度选择条件'] === 'passed',
-    JSON.stringify(verification))
+  check(
+    'selection condition PASS at v = E/B',
+    verification['速度选择条件'] === 'passed',
+    JSON.stringify(verification),
+  )
   await shot('velocity-selector-lab-1600x900')
 }
 
@@ -169,23 +195,39 @@ stdout.write('\nCASE C/D · 改 v₀ → 偏转 + FAIL；恢复 v₀ = E/B → P
   await v0.blur()
   await page.waitForTimeout(500)
   const after = await geometry()
-  check('v₀ edit bumps the scene revision', Number(after.revision) === Number(before.revision) + 1,
-    `${before.revision} → ${after.revision}`)
+  check(
+    'v₀ edit bumps the scene revision',
+    Number(after.revision) === Number(before.revision) + 1,
+    `${before.revision} → ${after.revision}`,
+  )
   check('trajectory changes when v₀ ≠ E/B', after.trajectoryD !== before.trajectoryD)
-  check('still verified physics (deflection is not an error)', after.status === 'verified', after.status)
+  check(
+    'still verified physics (deflection is not an error)',
+    after.status === 'verified',
+    after.status,
+  )
   const brokenVerification = await verificationRows()
-  check('selection condition FAIL at v ≠ E/B', brokenVerification['速度选择条件'] === 'failed',
-    JSON.stringify(brokenVerification))
+  check(
+    'selection condition FAIL at v ≠ E/B',
+    brokenVerification['速度选择条件'] === 'failed',
+    JSON.stringify(brokenVerification),
+  )
 
   await v0.fill('100000')
   await v0.blur()
   await page.waitForTimeout(500)
   const restored = await geometry()
   const restoredVerification = await verificationRows()
-  check('restore v = E/B → selection condition PASS', restoredVerification['速度选择条件'] === 'passed',
-    JSON.stringify(restoredVerification))
-  check('revision advances again on restore', Number(restored.revision) === Number(after.revision) + 1,
-    `${after.revision} → ${restored.revision}`)
+  check(
+    'restore v = E/B → selection condition PASS',
+    restoredVerification['速度选择条件'] === 'passed',
+    JSON.stringify(restoredVerification),
+  )
+  check(
+    'revision advances again on restore',
+    Number(restored.revision) === Number(after.revision) + 1,
+    `${after.revision} → ${restored.revision}`,
+  )
   check('straight-line trajectory returns', restored.trajectoryD !== after.trajectoryD)
 }
 
@@ -193,18 +235,35 @@ stdout.write('\nCASE C/D · 改 v₀ → 偏转 + FAIL；恢复 v₀ = E/B → P
 stdout.write('\nCASE E · 质谱仪：3 场区 + 磁偏转圆弧\n')
 await openPickerFromToolbar()
 await pickTemplate(/^质谱仪基础模型/)
-await page.locator('[data-physicsos-domain="composite"]').waitFor({ state: 'visible', timeout: 20_000 })
+await page
+  .locator('[data-physicsos-domain="composite"]')
+  .waitFor({ state: 'visible', timeout: 20_000 })
 await page.waitForTimeout(600)
 {
   const g = await geometry()
   check('mass spectrometer is verified', g.status === 'verified', g.status)
-  check('three field regions drawn (selector / drift / deflection)', g.regionCount === 3, `${g.regionCount} regions`)
-  check('trajectory spans the apparatus', g.trajectoryD.length > 40, `d length ${g.trajectoryD.length}`)
-  const tree = await page.evaluate(() => [...document.querySelectorAll('[data-physicsos-surface="lab"] [class*="treeRow"]')]
-    .map((node) => node.textContent?.replace(/\s+/g, ' ').trim() ?? ''))
-  check('scene tree names the three regions',
-    ['选择器区 E+B', '无场过渡区', '磁偏转区 B'].every((label) => tree.some((row) => row.includes(label))),
-    tree.join(' | '))
+  check(
+    'three field regions drawn (selector / drift / deflection)',
+    g.regionCount === 3,
+    `${g.regionCount} regions`,
+  )
+  check(
+    'trajectory spans the apparatus',
+    g.trajectoryD.length > 40,
+    `d length ${g.trajectoryD.length}`,
+  )
+  const tree = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-physicsos-surface="lab"] [class*="treeRow"]')].map(
+      (node) => node.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    ),
+  )
+  check(
+    'scene tree names the three regions',
+    ['选择器区 E+B', '无场过渡区', '磁偏转区 B'].every((label) =>
+      tree.some((row) => row.includes(label)),
+    ),
+    tree.join(' | '),
+  )
   const derived = await derivedRows()
   const radius = Object.entries(derived).find(([key]) => key.includes('回旋半径'))
   check('gyro radius published by the engine', radius !== undefined, JSON.stringify(derived))
@@ -217,19 +276,30 @@ stdout.write('\nCASE F · Timeline Enter/Exit markers → seek，工程单位时
   const markers = page.locator('[data-physicsos-surface="lab"] button[class*="marker"]')
   const count = await markers.count()
   check('region markers on the timeline', count >= 4, `${count} markers`)
-  const labels = await markers.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''))
-  check('markers include 进入 and 离开', labels.some((l) => l.includes('进入')) && labels.some((l) => l.includes('离开')),
-    labels.join(' | '))
-  check('microsecond times read in engineering units, never a rounded 0.00',
-    labels.every((l) => / \d+\.\d+ (秒|毫秒|微秒|纳秒|皮秒)$/.test(l))
-      && labels.every((l) => !/ 0\.00 (秒|毫秒|微秒|纳秒|皮秒)$/.test(l)),
-    labels.join(' | '))
+  const labels = await markers.evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('aria-label') ?? ''),
+  )
+  check(
+    'markers include 进入 and 离开',
+    labels.some((l) => l.includes('进入')) && labels.some((l) => l.includes('离开')),
+    labels.join(' | '),
+  )
+  check(
+    'microsecond times read in engineering units, never a rounded 0.00',
+    labels.every((l) => / \d+\.\d+ (秒|毫秒|微秒|纳秒|皮秒)$/.test(l)) &&
+      labels.every((l) => !/ 0\.00 (秒|毫秒|微秒|纳秒|皮秒)$/.test(l)),
+    labels.join(' | '),
+  )
 
   const clockBefore = await page.locator('[class*="clock"]').first().innerText()
   await markers.first().click()
   await page.waitForTimeout(400)
   const clockAfter = await page.locator('[class*="clock"]').first().innerText()
-  check('clicking a marker seeks the clock', clockAfter !== clockBefore, `${clockBefore} → ${clockAfter}`)
+  check(
+    'clicking a marker seeks the clock',
+    clockAfter !== clockBefore,
+    `${clockBefore} → ${clockAfter}`,
+  )
 
   await page.getByRole('button', { name: '事件', exact: true }).click()
   await page.waitForTimeout(300)
@@ -249,15 +319,22 @@ stdout.write('\nCASE F2 · 播放节奏：微观运行按 8 秒展示窗推进�
   await page.getByRole('button', { name: '重置', exact: true }).click()
   await page.waitForTimeout(300)
   const total = Number(await scrubber.getAttribute('max'))
-  check('timeline publishes the physical window', Number.isFinite(total) && total > 0, `max ${total}`)
+  check(
+    'timeline publishes the physical window',
+    Number.isFinite(total) && total > 0,
+    `max ${total}`,
+  )
 
   await page.getByRole('button', { name: '运行', exact: true }).click()
   await page.waitForTimeout(2000)
   await page.getByRole('button', { name: '暂停', exact: true }).click()
   const paused = Number(await scrubber.inputValue())
   const share = paused / total
-  check('2s of playback covers a proportional slice of the window, not the whole run',
-    share > 0.1 && share < 0.75, `${(share * 100).toFixed(1)}% of the window`)
+  check(
+    '2s of playback covers a proportional slice of the window, not the whole run',
+    share > 0.1 && share < 0.75,
+    `${(share * 100).toFixed(1)}% of the window`,
+  )
 
   await page.waitForTimeout(400)
   const held = Number(await scrubber.inputValue())
@@ -271,14 +348,20 @@ stdout.write('\nCASE G · 速度选择器 Golden Question → Solution → Lab �
 await page.getByRole('button', { name: '试题空间' }).click()
 await questions().waitFor({ state: 'visible', timeout: 20_000 })
 {
-  await questions().getByRole('button', { name: /速度选择器：恰好通过/ }).first().click()
+  await questions()
+    .getByRole('button', { name: /速度选择器：恰好通过/ })
+    .first()
+    .click()
   await page.waitForTimeout(900)
   check('selector question solves', (await questions().getAttribute('data-workflow')) === 'READY')
   const steps = await page.locator('[data-physicsos-surface="questions"] ol li').count()
   check('structured solution steps', steps >= 3, `${steps} steps`)
   const text = await questions().innerText()
-  check('solution states the balance, engine result and verifier',
-    text.includes('电场力') && text.includes('洛伦兹力') && text.includes('验证'), undefined)
+  check(
+    'solution states the balance, engine result and verifier',
+    text.includes('电场力') && text.includes('洛伦兹力') && text.includes('验证'),
+    undefined,
+  )
   await shot('velocity-selector-question-1600x900')
 
   await page.getByRole('button', { name: '在物理世界中打开' }).click()
@@ -307,15 +390,25 @@ stdout.write('\nCASE H · 质谱仪 Golden Question → Lab\n')
 await page.getByRole('button', { name: '试题空间' }).click()
 await questions().waitFor({ state: 'visible', timeout: 20_000 })
 {
-  await questions().getByRole('button', { name: /质谱仪：偏转半径/ }).first().click()
+  await questions()
+    .getByRole('button', { name: /质谱仪：偏转半径/ })
+    .first()
+    .click()
   await page.waitForTimeout(900)
-  check('spectrometer question solves', (await questions().getAttribute('data-workflow')) === 'READY')
+  check(
+    'spectrometer question solves',
+    (await questions().getAttribute('data-workflow')) === 'READY',
+  )
   await shot('mass-spectrometer-question-1600x900')
   await page.getByRole('button', { name: '在物理世界中打开' }).click()
   await lab().waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(600)
   const g = await geometry()
-  check('spectrometer question opens in the composite lab', g.domain === 'composite', String(g.domain))
+  check(
+    'spectrometer question opens in the composite lab',
+    g.domain === 'composite',
+    String(g.domain),
+  )
   check('the apparatus keeps its three regions', g.regionCount === 3, `${g.regionCount} regions`)
 }
 
@@ -323,7 +416,9 @@ await questions().waitFor({ state: 'visible', timeout: 20_000 })
 stdout.write('\nCASE I · Agent：为什么不偏转 → Verifier 依据 + 双力高亮\n')
 await openPickerFromToolbar()
 await pickTemplate(/^速度选择器/)
-await page.locator('[data-physicsos-domain="composite"]').waitFor({ state: 'visible', timeout: 20_000 })
+await page
+  .locator('[data-physicsos-domain="composite"]')
+  .waitFor({ state: 'visible', timeout: 20_000 })
 await page.waitForTimeout(600)
 {
   const before = await geometry()
@@ -331,17 +426,29 @@ await page.waitForTimeout(600)
   await page.getByRole('button', { name: /为什么这个粒子没有偏转/ }).click()
   await page.waitForTimeout(500)
   const drawer = await page.evaluate(() => {
-    const highlighted = document.querySelectorAll('[data-physicsos-surface="lab"] svg [class*="highlightGroup"]').length
+    const highlighted = document.querySelectorAll(
+      '[data-physicsos-surface="lab"] svg [class*="highlightGroup"]',
+    ).length
     const text = document.querySelector('[data-physicsos-surface="lab"]')?.textContent ?? ''
     return { highlighted, text }
   })
   const after = await geometry()
   check('agent cites 依据', drawer.text.includes('依据'))
   check('agent cites the selection-condition check', drawer.text.includes('速度选择条件'))
-  check('agent quotes runtime force magnitudes', drawer.text.includes('F_E') && drawer.text.includes('F_B'))
-  check('agent highlights at least the two forces', drawer.highlighted >= 2, `${drawer.highlighted} highlighted groups`)
-  check('agent explanation does not change the revision', after.revision === before.revision,
-    `${before.revision} → ${after.revision}`)
+  check(
+    'agent quotes runtime force magnitudes',
+    drawer.text.includes('F_E') && drawer.text.includes('F_B'),
+  )
+  check(
+    'agent highlights at least the two forces',
+    drawer.highlighted >= 2,
+    `${drawer.highlighted} highlighted groups`,
+  )
+  check(
+    'agent explanation does not change the revision',
+    after.revision === before.revision,
+    `${before.revision} → ${after.revision}`,
+  )
   await shot('composite-agent-1600x900')
 }
 
@@ -349,7 +456,9 @@ await page.waitForTimeout(600)
 stdout.write('\nE+B+g · 三场叠加实验\n')
 await openPickerFromToolbar()
 await pickTemplate(/电场 \+ 磁场 \+ 重力/)
-await page.locator('[data-physicsos-domain="composite"]').waitFor({ state: 'visible', timeout: 20_000 })
+await page
+  .locator('[data-physicsos-domain="composite"]')
+  .waitFor({ state: 'visible', timeout: 20_000 })
 await page.waitForTimeout(600)
 {
   const g = await geometry()
@@ -363,7 +472,9 @@ await page.waitForTimeout(600)
 stdout.write('\nResponsive: velocity selector at 1440 / 1920\n')
 await openPickerFromToolbar()
 await pickTemplate(/^速度选择器/)
-await page.locator('[data-physicsos-domain="composite"]').waitFor({ state: 'visible', timeout: 20_000 })
+await page
+  .locator('[data-physicsos-domain="composite"]')
+  .waitFor({ state: 'visible', timeout: 20_000 })
 await page.waitForTimeout(500)
 for (const [label, size] of [
   ['1440x900', { width: 1440, height: 900 }],
@@ -373,7 +484,11 @@ for (const [label, size] of [
   const g = await geometry()
   check(`${label}: canvas keeps ≥55%`, g.canvasShare >= 0.55, String(g.canvasShare))
   check(`${label}: no page scroll`, g.pageScrolls === false)
-  check(`${label}: canvas is never magnified`, g.displayScale > 0 && g.displayScale <= 1, `scale ${g.displayScale}`)
+  check(
+    `${label}: canvas is never magnified`,
+    g.displayScale > 0 && g.displayScale <= 1,
+    `scale ${g.displayScale}`,
+  )
 }
 await page.setViewportSize({ width: 1600, height: 900 })
 

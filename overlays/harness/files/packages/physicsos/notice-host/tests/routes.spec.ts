@@ -127,6 +127,24 @@ describe('反馈与公告 — the gate', () => {
     expect(res.status).toBe(403)
   })
 
+  it('rejects cross-origin writes and oversized JSON before business handling', async () => {
+    const crossSite = await fetch(`${base}/physicsos/notice/announcements`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://evil.example',
+        cookie: 'physicsos_session=SCHOOL_ADMIN:GZU',
+      },
+      body: JSON.stringify({ title: '跨站', body: '不应发布' }),
+    })
+    expect(crossSite.status).toBe(403)
+
+    const oversized = await json('STUDENT', '/feedback', {
+      kind: 'bug', body: '测'.repeat(50_000),
+    })
+    expect(oversized.status).toBe(413)
+  })
+
   it('lets a school admin publish to their own tenant', async () => {
     const res = await json('SCHOOL_ADMIN', '/announcements', { title: '开学通知', body: '本周一起' })
     expect(res.status).toBe(201)

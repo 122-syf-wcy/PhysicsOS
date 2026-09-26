@@ -93,8 +93,7 @@ export const finiteSegmentFieldMagnitude = (
 export const circulationOf = (current: number): Circulation => (current > 0 ? 1 : -1)
 
 /** Turns per metre along the axis, n = N/L. */
-export const turnDensityOf = (turns: number, coilLength: number): number =>
-  turns / coilLength
+export const turnDensityOf = (turns: number, coilLength: number): number => turns / coilLength
 
 /**
  * Uniform field inside a long solenoid, B = μ₀nI = μ₀(N/L)I.
@@ -106,8 +105,7 @@ export const solenoidFieldMagnitude = (
   current: number,
   turns: number,
   coilLength: number,
-): number =>
-  VACUUM_PERMEABILITY * turnDensityOf(turns, coilLength) * Math.abs(current)
+): number => VACUUM_PERMEABILITY * turnDensityOf(turns, coilLength) * Math.abs(current)
 
 /**
  * Field at the mouth of a long solenoid: half the interior value.
@@ -131,8 +129,7 @@ export const northPoleOf = (current: number): Circulation => (current > 0 ? 1 : 
 /* ----------------------------------------------------------------- motor -- */
 
 /** Area of the rotor coil (m²). */
-export const coilAreaOf = (sideLength: number, coilWidth: number): number =>
-  sideLength * coilWidth
+export const coilAreaOf = (sideLength: number, coilWidth: number): number => sideLength * coilWidth
 
 /**
  * Force on each side of the coil that lies ACROSS the field: F = B·I·L.
@@ -219,13 +216,7 @@ export const motorReadingOf = (model: ResolvedMotor): MotorReading => {
     angle: model.coilAngle,
     sideForce: ampereForceOnSide(model.magneticFluxDensity, model.current, model.sideLength),
     torque: snapToZero(
-      motorTorqueAt(
-        model.magneticFluxDensity,
-        model.current,
-        model.turns,
-        area,
-        model.coilAngle,
-      ),
+      motorTorqueAt(model.magneticFluxDensity, model.current, model.turns, area, model.coilAngle),
     ),
     peakTorque: motorTorqueAt(model.magneticFluxDensity, model.current, model.turns, area, 0),
     sense: model.current > 0 ? 1 : -1,
@@ -247,8 +238,7 @@ export const coreFieldMagnitude = (
   turns: number,
   coilLength: number,
   relativePermeability: number,
-): number =>
-  relativePermeability * solenoidFieldMagnitude(current, turns, coilLength)
+): number => relativePermeability * solenoidFieldMagnitude(current, turns, coilLength)
 
 /**
  * Pull a pole face of area A holds: F = B²A/(2μ₀), the Maxwell stress.
@@ -310,7 +300,8 @@ export const electromagnetFieldOf = (model: ResolvedElectromagnet): Electromagne
     airField,
     comparisonCoreRelativePermeability: model.comparisonCoreRelativePermeability,
     comparisonField,
-    comparisonPull: comparisonField === undefined ? undefined : poleFacePull(comparisonField, model.coreArea),
+    comparisonPull:
+      comparisonField === undefined ? undefined : poleFacePull(comparisonField, model.coreArea),
     coreArea: model.coreArea,
     pull,
     airPull,
@@ -320,9 +311,7 @@ export const electromagnetFieldOf = (model: ResolvedElectromagnet): Electromagne
   }
 }
 
-export const straightWireFieldOf = (
-  model: ResolvedStraightWire,
-): StraightWireFieldReading => {
+export const straightWireFieldOf = (model: ResolvedStraightWire): StraightWireFieldReading => {
   const field = straightWireFieldMagnitude(model.current, model.probeDistance)
   return {
     current: model.current,

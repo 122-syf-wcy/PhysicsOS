@@ -1,10 +1,5 @@
 import { quantity } from '@physicsos/physics-units'
-import {
-  asComponentId,
-  asObservableId,
-  asSceneId,
-  type IsoDateTime,
-} from '@physicsos/shared'
+import { asComponentId, asObservableId, asSceneId, type IsoDateTime } from '@physicsos/shared'
 
 import { defaultCoordinateSystem } from '../scene-validation.ts'
 import type {
@@ -478,18 +473,14 @@ const rerouteWire = (input: {
        y=head.y, vertical means the column x=head.x. Bridge the new terminal
        onto that same spine, then keep every surviving bend. */
     const horizontal = Math.abs(oldFrom.y - head.y) < POINT_EPSILON
-    const bridge = horizontal
-      ? { x: newFrom.x, y: head.y }
-      : { x: head.x, y: newFrom.y }
+    const bridge = horizontal ? { x: newFrom.x, y: head.y } : { x: head.x, y: newFrom.y }
     if (samePoint(newFrom, head) || samePoint(bridge, newFrom) || samePoint(bridge, head)) {
       return [...waypoints]
     }
     return [bridge, ...waypoints]
   }
   const horizontal = Math.abs(tail.y - oldTo.y) < POINT_EPSILON
-  const bridge = horizontal
-    ? { x: newTo.x, y: tail.y }
-    : { x: tail.x, y: newTo.y }
+  const bridge = horizontal ? { x: newTo.x, y: tail.y } : { x: tail.x, y: newTo.y }
   if (samePoint(newTo, tail) || samePoint(bridge, newTo) || samePoint(bridge, tail)) {
     return [...waypoints]
   }
@@ -567,4 +558,6 @@ export const circuitComponentOf = (
 
 /** All variable resistors of a circuit, in authoring order. */
 export const variableResistorsOf = (circuit: Circuit): VariableResistor[] =>
-  circuit.components.filter((entry): entry is VariableResistor => entry.type === 'variable_resistor')
+  circuit.components.filter(
+    (entry): entry is VariableResistor => entry.type === 'variable_resistor',
+  )

@@ -18,8 +18,12 @@ mkdirSync(SHOTS, { recursive: true })
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
 const problems = []
-page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text().slice(0, 200)) })
-page.on('pageerror', (e) => { problems.push(e.message.slice(0, 200)) })
+page.on('console', (m) => {
+  if (m.type() === 'error') problems.push(m.text().slice(0, 200))
+})
+page.on('pageerror', (e) => {
+  problems.push(e.message.slice(0, 200))
+})
 
 const shot = async (name, size) => {
   if (size !== undefined) {
@@ -34,15 +38,25 @@ await page.goto('http://127.0.0.1:3080/', { waitUntil: 'networkidle', timeout: 6
 const later = page.getByRole('button', { name: '稍后配置' })
 await later.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {})
 if (await later.isVisible().catch(() => false)) await later.click()
-await page.locator('[class*="mask"]').waitFor({ state: 'detached', timeout: 15_000 }).catch(() => {})
+await page
+  .locator('[class*="mask"]')
+  .waitFor({ state: 'detached', timeout: 15_000 })
+  .catch(() => {})
 await page.getByText('探索一个物理世界').waitFor({ state: 'visible', timeout: 20_000 })
 await shot('home-final-1600x900')
 
 /* 物理实验室 lands on the experiment library; scenes are created through it. */
 const pickFromLibrary = async (name, domain) => {
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 20_000 })
-  await page.locator('[class*="grid"] button', { hasText: new RegExp(name) }).first().click()
-  await page.locator(`[data-physicsos-domain="${domain}"]`).waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[class*="grid"] button', { hasText: new RegExp(name) })
+    .first()
+    .click()
+  await page
+    .locator(`[data-physicsos-domain="${domain}"]`)
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(600)
 }
 
@@ -88,11 +102,16 @@ const questionsSurface = page.locator('[data-physicsos-surface="questions"]')
 
 await page.getByRole('button', { name: '试题空间' }).click()
 await questionsSurface.waitFor({ state: 'visible', timeout: 20_000 })
-for (const [name, label] of [[/平抛运动/, 'projectile'], [/无摩擦斜面/, 'incline']]) {
+for (const [name, label] of [
+  [/平抛运动/, 'projectile'],
+  [/无摩擦斜面/, 'incline'],
+]) {
   await questionsSurface.getByRole('button', { name }).first().click()
   await page.waitForTimeout(800)
-  const known = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]').first()
-  if (await known.count() > 0) {
+  const known = page
+    .locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
+    .first()
+  if ((await known.count()) > 0) {
     await known.click()
     await page.waitForTimeout(300)
   }
@@ -106,8 +125,10 @@ await questionsSurface.waitFor({ state: 'visible', timeout: 20_000 })
 
 await questionsSurface.getByRole('button', { name: '点电荷的电场强度' }).first().click()
 await page.waitForTimeout(900)
-const eKnown = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]').first()
-if (await eKnown.count() > 0) {
+const eKnown = page
+  .locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
+  .first()
+if ((await eKnown.count()) > 0) {
   await eKnown.click()
   await page.waitForTimeout(300)
 }
@@ -116,13 +137,15 @@ await shot('question-electric-field-final-1600x900')
 const openLab = page.getByRole('button', { name: '在物理世界中打开' })
 if (await openLab.isEnabled().catch(() => false)) {
   await openLab.click()
-  await page.locator('[data-physicsos-surface="lab"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-surface="lab"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(700)
   await shot('electric-lab-point-charge-final-1600x900')
 
   await page.getByRole('button', { name: /AI 助教/ }).click()
   const suggest = page.getByRole('button', { name: /电场强度是怎么来的|这个电场强度/ })
-  if (await suggest.count() > 0) {
+  if ((await suggest.count()) > 0) {
     await suggest.first().click()
     await page.waitForTimeout(500)
   }
@@ -137,8 +160,10 @@ await questionsSurface.waitFor({ state: 'visible', timeout: 20_000 })
 
 await questionsSurface.getByRole('button', { name: '等量异种点电荷中点的电场强度' }).first().click()
 await page.waitForTimeout(900)
-const dipoleKnown = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]').first()
-if (await dipoleKnown.count() > 0) {
+const dipoleKnown = page
+  .locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
+  .first()
+if ((await dipoleKnown.count()) > 0) {
   await dipoleKnown.click()
   await page.waitForTimeout(300)
 }
@@ -147,13 +172,15 @@ await shot('question-dipole-field-final-1600x900')
 const dipoleOpen = page.getByRole('button', { name: '在物理世界中打开' })
 if (await dipoleOpen.isEnabled().catch(() => false)) {
   await dipoleOpen.click()
-  await page.locator('[data-physicsos-surface="lab"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-surface="lab"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(700)
   await shot('electric-equipotential-final-1600x900')
 
   await page.getByRole('button', { name: /AI 助教/ }).click()
   const superpositionSuggest = page.getByRole('button', { name: /合场是怎么来的|叠加|合场/ })
-  if (await superpositionSuggest.count() > 0) {
+  if ((await superpositionSuggest.count()) > 0) {
     await superpositionSuggest.first().click()
     await page.waitForTimeout(500)
   }
@@ -168,8 +195,10 @@ await questionsSurface.waitFor({ state: 'visible', timeout: 20_000 })
 
 await questionsSurface.getByRole('button', { name: '正电荷在匀强电场中偏转' }).first().click()
 await page.waitForTimeout(900)
-const deflectionKnown = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]').first()
-if (await deflectionKnown.count() > 0) {
+const deflectionKnown = page
+  .locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
+  .first()
+if ((await deflectionKnown.count()) > 0) {
   await deflectionKnown.click()
   await page.waitForTimeout(300)
 }
@@ -178,18 +207,24 @@ await shot('question-electric-dynamics-final-1600x900')
 const deflectionOpen = page.getByRole('button', { name: '在物理世界中打开' })
 if (await deflectionOpen.isEnabled().catch(() => false)) {
   await deflectionOpen.click()
-  await page.locator('[data-physicsos-surface="lab"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-surface="lab"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(700)
   await shot('electric-dynamics-trajectory-final-1600x900')
 
   await page.getByRole('button', { name: /AI 助教/ }).click()
-  const trajectorySuggest = page.getByRole('button', { name: /轨迹.*为什么|为什么.*抛物线|运动轨迹/ })
-  if (await trajectorySuggest.count() > 0) {
+  const trajectorySuggest = page.getByRole('button', {
+    name: /轨迹.*为什么|为什么.*抛物线|运动轨迹/,
+  })
+  if ((await trajectorySuggest.count()) > 0) {
     await trajectorySuggest.first().click()
     await page.waitForTimeout(500)
   }
   await shot('agent-trajectory-shape-final-1600x900')
 }
 
-stdout.write(problems.length === 0 ? '\nno console/page errors\n' : `\nPROBLEMS: ${problems.join(' | ')}\n`)
+stdout.write(
+  problems.length === 0 ? '\nno console/page errors\n' : `\nPROBLEMS: ${problems.join(' | ')}\n`,
+)
 await browser.close()

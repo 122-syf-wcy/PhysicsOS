@@ -7,12 +7,16 @@
 
 ## 1. 当前分支与这次的工作
 
-| 项 | 值 |
-| --- | --- |
-| 仓库 | `https://github.com/122-syf-wcy/PhysicsOS.git` |
-| 分支 | `codex/experiment-studio-polish`（与 `main` 同一提交） |
-| 分支头 | `fc2ec69`（2026-09-21） |
-| 内容 | 实验工作室打磨 → 账户体系 → 管理后台 → 资源库 → 出卷专区/题库 |
+| 项     | 值                                                            |
+| ------ | ------------------------------------------------------------- |
+| 仓库   | `https://github.com/122-syf-wcy/PhysicsOS.git`                |
+| 分支   | `codex/experiment-studio-polish`（与 `main` 同一提交）        |
+| 分支头 | `1f41b3a`（2026-09-26，P0-P2 收口工作在工作区，尚未提交）      |
+| 内容   | 实验工作室 → 账户体系 → 管理后台 → 资源库 → 出卷专区 → 全校共享 `/api` 账号隔离 → P0-P2 收口 |
+
+当前 P0-P2 收口计划见
+[`docs/superpowers/plans/2026-09-26-p0-p2-program.md`](superpowers/plans/2026-09-26-p0-p2-program.md)。
+计划覆盖生产部署、密码恢复、跨设备学习记录、班级作业、物理内容扩展、桌面壳和工程门禁。
 
 > **本节此前写的是 `feat/circuit-living-effects` / `794b9d0`，已过期。**
 > 那条分支早已 fast-forward 进 `main`（`git branch --contains 794b9d0` 可见），
@@ -31,16 +35,16 @@ git clone https://github.com/122-syf-wcy/PhysicsOS.git
 这段工作**曾经整整一周没有提交**（335 个文件、+16724/−5747 行只存在于工作区，
 一次 `apply` 误操作或磁盘故障就全没了）。09-21 已按主题补成交付：
 
-| 主题 | 代表内容 |
-| --- | --- |
-| `fix(packages)` | 09-14 审计的 5 条 P0 物理正确性缺陷全修（题给时长 / 斜抛发射条件 / 平行板偏转 / 牛二水平合力 / 比较类题诚实拒识） |
-| `feat(question-paper)` | 出卷域模型新包：细目表 / 组卷算法 / 检查 / 版本哈希 / markdown 导出 |
-| `feat(auth-host)` | 学校一级租户账户体系：argon2id、HttpOnly 会话、限流、CSRF、`/physicsos/auth` |
-| 管理后台 | 申请审批 / 学校 / 用户 / 审计四 tab，`/physicsos/admin`，路由级角色 + 租户收窄 |
-| `feat(ui)` | 登录注册门、侧栏学校身份、资源库（926 项配套资源）、出卷专区、题库录入 |
-| 实验台 | 器材精灵接入、自由拖动 + 导线自动重排、开关/滑变画布直接操作 |
-| 资产 | 器材精灵（电路 + 力学）、资源库/登录页素材、KaTeX、官网静态站 |
-| 门禁 | `auth-host`/`paper-host` 接入 `pnpm typecheck/lint/test`；`lint` 与 `test` 全绿 |
+| 主题                   | 代表内容                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `fix(packages)`        | 09-14 审计的 5 条 P0 物理正确性缺陷全修（题给时长 / 斜抛发射条件 / 平行板偏转 / 牛二水平合力 / 比较类题诚实拒识） |
+| `feat(question-paper)` | 出卷域模型新包：细目表 / 组卷算法 / 检查 / 版本哈希 / markdown 导出                                               |
+| `feat(auth-host)`      | 学校一级租户账户体系：argon2id、HttpOnly 会话、限流、CSRF、`/physicsos/auth`                                      |
+| 管理后台               | 申请审批 / 学校 / 用户 / 审计四 tab，`/physicsos/admin`，路由级角色 + 租户收窄                                    |
+| `feat(ui)`             | 登录注册门、侧栏学校身份、资源库（926 项配套资源）、出卷专区、题库录入                                            |
+| 实验台                 | 器材精灵接入、自由拖动 + 导线自动重排、开关/滑变画布直接操作                                                      |
+| 资产                   | 器材精灵（电路 + 力学）、资源库/登录页素材、KaTeX、官网静态站                                                     |
+| 门禁                   | `auth-host`/`paper-host` 接入 `pnpm typecheck/lint/test`；`lint` 与 `test` 全绿                                   |
 
 **未做**：见 `docs/reports/BACKLOG.md`（`GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP`、
 `DSH_CREDENTIALS_SCHEMA_SKEW` 等）。
@@ -71,7 +75,7 @@ pnpm install
   本机就撞上过一个 vendored Node 24.18.1 属于这种情况。
   `passwords.ts` 现在用最低合法参数真跑一次来判定能力，报错是单行的：
   `auth-host requires a working argon2id: … (Node v24.18.1; needs >= 24.7 built
-  against an OpenSSL with argon2id)`。裸 `typeof … === 'function'` 判据已废弃。
+against an OpenSSL with argon2id)`。裸 `typeof … === 'function'` 判据已废弃。
 - **`pnpm exec` 会继承调用方的 PATH**，所以从某个自带 Node 的宿主里跑
   `pnpm …`，脚本里的 `node` 可能是那个宿主版本而非你的 `node -v`。
   症状是测试在 auth-host 上批量失败。核对：
@@ -110,6 +114,7 @@ node scripts/overlay/harness-overlay.mjs capture
 > 重建都会删掉它。09-21 已补进 overlay 并验证 `apply` 能逐字节重建。
 >
 > **加新 host 插件时的检查清单**（三步都要做，缺一不可）：
+>
 > 1. `overlays/harness/files/...` 下建目录（排除 `node_modules` / `lib`）
 > 2. `scripts/overlay/harness-overlay.mjs` 的 `OVERLAY_PATHS` 加路径
 > 3. `cordis.patch.yml` 挂载 + `package.json` 加依赖 + 重建
@@ -190,7 +195,7 @@ llm-pi-ai:
         thinkingFormat: deepseek
       defaultInput: [text, image]
       models:
-        - id: DeepSeek V4.1 Flash      # 必须用这个确切 id（区分大小写）
+        - id: DeepSeek V4.1 Flash # 必须用这个确切 id（区分大小写）
           name: DeepSeek V4.1 Flash
           contextWindow: 1000000
           maxTokens: 8192
@@ -220,9 +225,9 @@ credentials-local: the value for "version" in ~/.dsh/.credentials.yaml must be a
 - DSH Desktop 2.x 会把它改写成**嵌套文档**：
 
 ```yaml
-version: 1                                     # ← 数字，不是字符串
+version: 1 # ← 数字，不是字符串
 records:
-  client-connection/browser-session: { … }     # ← 键名不是 POSIX 标识符
+  client-connection/browser-session: { … } # ← 键名不是 POSIX 标识符
 refs:
   LUCK_API_KEY: sk-…
   CLINE_API_KEY: sk_…
@@ -313,11 +318,11 @@ pnpm test:web         # vitest（client 侧测试）
 
 **2026-09-21 起三条门禁全绿**（此前 `lint` 与 `test` 都有既存红）：
 
-| 命令 | 覆盖 | 结果 |
-| --- | --- | --- |
-| `pnpm typecheck` | core + web + **tool-physicsos / auth-host / paper-host** | 0 错 |
-| `pnpm lint` | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件 | 0 错 0 警 |
-| `pnpm test` | core + web（44 文件 686 测试）+ 三个 host 插件（7 文件 91 测试） | 全绿 |
+| 命令             | 覆盖                                                             | 结果      |
+| ---------------- | ---------------------------------------------------------------- | --------- |
+| `pnpm typecheck` | core + web + **tool-physicsos / auth-host / paper-host**         | 0 错      |
+| `pnpm lint`      | core（eslint）+ web（oxlint 171 文件）+ 三个 host 插件           | 0 错 0 警 |
+| `pnpm test`      | core + web（44 文件 686 测试）+ 三个 host 插件（7 文件 91 测试） | 全绿      |
 
 > `test:agent` 此前**只跑 `tool-physicsos`**，`auth-host` 的 4 个 spec 与
 > `paper-host` 的 1 个 spec 不在任何日常门禁里——只有跑 harness 自己的 vitest
@@ -410,13 +415,13 @@ console.log(m.sourcesContent[i])' | diff - overlays/harness/files/packages/clien
 overlays/harness/files/packages/client/ui-physicsos/src/client/physics/
 ```
 
-| 文件 | 作用 |
-| --- | --- |
-| `*-renderer.tsx` | 各领域 SVG 渲染器（`circuit-renderer.tsx` 是电学台） |
-| `renderers.module.css` | 渲染器样式（导线、电流、灯光都在这里） |
-| `scene-visual-model.ts` | 渲染层消费的视觉模型契约 |
-| `*-visual-bridge.ts` | 引擎结果 → 视觉模型的桥（数值诚实性的关键层） |
-| `tests/circuit.client.spec.tsx` | 电学台测试 |
+| 文件                            | 作用                                                 |
+| ------------------------------- | ---------------------------------------------------- |
+| `*-renderer.tsx`                | 各领域 SVG 渲染器（`circuit-renderer.tsx` 是电学台） |
+| `renderers.module.css`          | 渲染器样式（导线、电流、灯光都在这里）               |
+| `scene-visual-model.ts`         | 渲染层消费的视觉模型契约                             |
+| `*-visual-bridge.ts`            | 引擎结果 → 视觉模型的桥（数值诚实性的关键层）        |
+| `tests/circuit.client.spec.tsx` | 电学台测试                                           |
 
 设计 token（`--physics-*`）**不在 CSS 文件里**，而是以字符串形式注入 DOM，位于：
 
@@ -521,11 +526,11 @@ overlays/harness/files/apps/web/public/physicsos/parts3d/
   同步按前缀识别力学条目。
 - **实验结构化元数据**（P0，本轮）：新增 `physics/experiment-summaries.ts`——
   44 个模板逐个声明 `coreModel/parameters/feedback/errors` + 人教版教材映射
-  + 搜索别名 + 分步指南，与 `experiment-templates.ts` 分离映射（照
-  `experiment-artwork.tsx` 先例，模板文件零侵入）。parity 测试
-  `experiment-summaries.client.spec.ts`（7 用例）看守：每模板必有且四条非空，
-  已实现模板必有教材映射与指南，别名非空且条内唯一。工作台数据面板新增
-  「要点」页签渲染四件套卡片 + 教材映射；实验中心搜索纳入别名。
+  - 搜索别名 + 分步指南，与 `experiment-templates.ts` 分离映射（照
+    `experiment-artwork.tsx` 先例，模板文件零侵入）。parity 测试
+    `experiment-summaries.client.spec.ts`（7 用例）看守：每模板必有且四条非空，
+    已实现模板必有教材映射与指南，别名非空且条内唯一。工作台数据面板新增
+    「要点」页签渲染四件套卡片 + 教材映射；实验中心搜索纳入别名。
 - **实验工具**（P1，本轮）：工具栏「实验指南」模态
   （`ExperimentGuidePanel.tsx`，分步 + 预期现象 + 教材映射）；数据面板头
   「数据导出」按钮把当前数据表写成 CSV 下载。
@@ -614,7 +619,7 @@ overlays/harness/files/apps/web/public/physicsos/parts3d/
   `apps/web/dist`，改其导出后必须 `vite build` 重建 web 壳并重载页面。
 - **工作台布局塌陷已修**（本轮）：根因是并行会话把 `conversation.surface`
   移入 `scrollBody` 并加 `position:relative`——`.cover`（`absolute;
-  inset:0`）改为相对 scrollBody 定位后，`[data-conversation-scroll] .cover`
+inset:0`）改为相对 scrollBody 定位后，`[data-conversation-scroll] .cover`
   的 `padding-bottom: calc(--dsh-composer-height + 12px)` 生效；无会话
   直接开实验室时 composer seat 装的是 ~956px 居中 hero，padding 把
   cover 内容盒吃到 ~10px。修复：`min(--dsh-composer-height, 220px)` 封顶，
@@ -709,7 +714,6 @@ hero 背景是 `lib/flow-field.js` 里的 WebGL2 流场着色器，做法与 Dee
 
 ## 9. 下一步建议顺序
 
-
 1. 用真实截图逐件校准非轴向器材的接线锚点，把 `anchorSource` 从几何约定换成
    实测值（当前电池/电表/开关的视觉锚点已是 `base` 语义，精度可再提）。
 2. 视需要给场景增加灯泡类型，启用 `lamp-off` / `lamp-on`。
@@ -737,9 +741,9 @@ hero 背景是 `lib/flow-field.js` 里的 WebGL2 流场着色器，做法与 Dee
   原样交接——模型转述题干不等于逐字命中，`questionId` 命中即按题库原文求解，
   `goldenQuestionId` 才不断链（runtime `solveQuestion(text, questionId?)`）。
 - **练习闭环迁移**：`practiceQuestion(questionId)`（`index.ts`）把题库题干
-  + questionId 提示词塞进当前会话（`submitToTutor`），成功即回对话面等卡片
-  流入；学习记录页顶置「题库练习」列表；错题行分流：实验 attempt →
-  `重做实验` 深链回同模板 Lab；题目 attempt → `重新练习` 走 practiceQuestion。
+  - questionId 提示词塞进当前会话（`submitToTutor`），成功即回对话面等卡片
+    流入；学习记录页顶置「题库练习」列表；错题行分流：实验 attempt →
+    `重做实验` 深链回同模板 Lab；题目 attempt → `重新练习` 走 practiceQuestion。
 - **面收敛**：`openSurface` 只剩 `home | lab | record`；侧栏剩 首页/物理实验室；
   学习记录入口在 sidebar footer；首页「输入试题」门户卡指向 record。
 - **验收**：`tests/acceptance/learning-acceptance.mjs` CASE C-G 全绿——
@@ -757,23 +761,24 @@ LearningRecordWorkspace）全部改成 `min(…, 220px)` 封顶，只清停靠�
 
 对标 liziwuli 后按"单位引擎解锁实验数"排的第一批：四个新解析模型
 （`spring_statics`/`spring_oscillator`/`simple_pendulum`/`horizontal_friction`）
-+ 5 个模板（hooke-law、friction-static 由占位做实；spring-oscillator、
-simple-pendulum、friction-mu 新增），全链走
-`PhysicsScene → Engine → Verifier → Observation → PhysicsCanvas`。
 
-- **场景事实走约束/观察量**：弹簧 k/L₀/anchor/axis 挂在 `spring` 约束
+- 5 个模板（hooke-law、friction-static 由占位做实；spring-oscillator、
+  simple-pendulum、friction-mu 新增），全链走
+  `PhysicsScene → Engine → Verifier → Observation → PhysicsCanvas`。
+
+* **场景事实走约束/观察量**：弹簧 k/L₀/anchor/axis 挂在 `spring` 约束
   （`spring-1`），摆长/pivot 挂在 `rope` 约束（`rope-1`），摩擦台 μs 在
   body 材质、ramp/cap 在 `obs-friction-surface` 几何观察量。新场景命令
   `SetSpringConstant`/`SetPendulumLength`/`SetStaticFrictionCoefficient`
   （`agent-tools/scene-commands.ts` 同步登记）。
-- **观察层修正**：竖直悬挂体不再发幻影 `normal` 箭头（仅竖向 connector
+* **观察层修正**：竖直悬挂体不再发幻影 `normal` 箭头（仅竖向 connector
   时抑制；水平振子的滑轨支持力保留）。`spring_force` 是矢量——
   inspector 派生行取模长显示。
-- **读数跟播放头**：`buildSnapshot` 优先取当前帧 `state.derived`，仿真级
+* **读数跟播放头**：`buildSnapshot` 优先取当前帧 `state.derived`，仿真级
   聚合兜底——拉力/摩擦力这类随时间量不再钉死在末态。
-- **高亮接真实元素 id**：`spring`/`pendulum` 视觉带场景约束 id，
+* **高亮接真实元素 id**：`spring`/`pendulum` 视觉带场景约束 id，
   inspector 的 highlights 全部指向渲染出的元素。
-- **statics 回稳**：改 k/m/g 时除参数命令外再发一次 `SetBodyPosition`
+* **statics 回稳**：改 k/m/g 时除参数命令外再发一次 `SetBodyPosition`
   把物块落回新平衡点——静止模型描述的是稳定后的状态，两条命令两个事件，
   审计链诚实。
 
@@ -782,10 +787,10 @@ simple-pendulum、friction-mu 新增），全链走
 走既有 `generate-mechanics-parts.mjs` 管线（侧视正交 + 透明底 + 1m 基准）。
 本批新增两件**静态器材**：
 
-| id | 用途 | 锚点（实测 alpha 轮廓） |
-|---|---|---|
-| `spring-scale` | 摩擦台拉力仪器本体 | 钩尖 (0.9613, 0.51)，`flip` 镜像后贴物块受力面，逐帧跟随 |
-| `support-clamp` | hooke-law/单摆悬挂点 | 挂环内底 (0.326, 0.91)，杆部伸出画外 |
+| id              | 用途                 | 锚点（实测 alpha 轮廓）                                  |
+| --------------- | -------------------- | -------------------------------------------------------- |
+| `spring-scale`  | 摩擦台拉力仪器本体   | 钩尖 (0.9613, 0.51)，`flip` 镜像后贴物块受力面，逐帧跟随 |
+| `support-clamp` | hooke-law/单摆悬挂点 | 挂环内底 (0.326, 0.91)，杆部伸出画外                     |
 
 - **渲染路径**：`SceneVisualModel.apparatus` 通用精灵槽 +
   `Apparatus` 原语（加载失败静默退回参数化台架）。动态几何
@@ -807,11 +812,11 @@ simple-pendulum、friction-mu 新增），全链走
 
 ### 第二批器材（量角器 / 导轨 / 刻度尺）+ 物块换装
 
-| id | 用途 | 锚点 |
-|---|---|---|
-| `protractor` | 单摆悬点后方量角盘（摆角可读） | 直径边中点 (0.499, 0.129)，正对盘心轴钉；生成图带底座，已裁只留盘 |
-| `track-rail` | 一切水平一维场景的承载导轨 | 轨顶面中点 (0.5, 0.388)；`width` 字段按轨道跨度拉伸 |
-| `ruler-vertical` | 胡克台伸长量读数尺 | 尺顶铜箍中点 (0.49, 0.047) |
+| id               | 用途                           | 锚点                                                              |
+| ---------------- | ------------------------------ | ----------------------------------------------------------------- |
+| `protractor`     | 单摆悬点后方量角盘（摆角可读） | 直径边中点 (0.499, 0.129)，正对盘心轴钉；生成图带底座，已裁只留盘 |
+| `track-rail`     | 一切水平一维场景的承载导轨     | 轨顶面中点 (0.5, 0.388)；`width` 字段按轨道跨度拉伸               |
+| `ruler-vertical` | 胡克台伸长量读数尺             | 尺顶铜箍中点 (0.49, 0.047)                                        |
 
 - `ApparatusSpriteVisual.width`：显式场景宽度（拉伸用），缺省仍按
   aspect 自适应；`track-rail` 靠它铺满 `trackGround` 跨度。
@@ -836,7 +841,7 @@ simple-pendulum、friction-mu 新增），全链走
   （`WIRE_BEND_PX` 上限，两侧线段各截半取最小），导体线缆化；
   预览导线、电荷珠路径同走此函数，电气端点不变。
 - **`SpringCoil` 双股螺旋**：L 折线锯齿 → 正反相位双正弦股（前股实线
-  + 背股透明感），螺旋景深；长度仍随场景坐标逐帧参数化。
+  - 背股透明感），螺旋景深；长度仍随场景坐标逐帧参数化。
 - **力箭头加重**：stroke 加宽 + drop-shadow，与线缆同族质感。
 - **实验选择器 hover**：卡片描边着色/抬升/阴影过渡，播放键实心化；
   `focus-visible` 描边保留；`prefers-reduced-motion` 下全部过渡关闭。
@@ -1174,7 +1179,7 @@ featured 置顶。
   ——本日被批量回退 3 次（含 IDE 陈旧缓冲区同步）。规则：
   **改 overlay 副本 → apply 推 vendor → 立刻 diff 核对**。
 - `dsh web` 多实例共存会共享 `~/.dsh/storages/
-  physicsos_paper.json` 但各自冻结启动时的代码——旧实例会
+physicsos_paper.json` 但各自冻结启动时的代码——旧实例会
   静默丢新字段（wire schema 不认识的键直接剥掉，POST 返回
   201 但没存）。排障顺序：lsof 看全部监听端口 → 拿真实 PID
   （nohup 包一层 shell，$! 不是 node PID）→ kill → 重启。
@@ -1238,7 +1243,7 @@ physicsos_auth.json`——清数据必须重启实例（内存态回写覆盖文
 - `AuthApi.submitSchoolRequest` 删除（无调用方）；
   `SchoolRequestRow` 保留（AdminApi/AdminWorkspace 仍在用——
   `/school-requests` 端点与审批流不动，是机构正式开通路径）。
-- locales 删 7 键×2（auth.apply.*、auth.school.apply*）；
+- locales 删 7 键×2（auth.apply._、auth.school.apply_）；
   AuthGate.module.css 删 applyToggle/applyPanel/applyHint。
 - 歧义保护不变：`SCHOOL_AMBIGUOUS`+candidates 仍在（多校同名）；
   `SCHOOL_REQUIRED`+candidates 仍在（跨校同名同密登录）。

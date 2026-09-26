@@ -77,7 +77,10 @@ const probe = async () =>
         const owner = el.closest('[data-component-id]')
         return {
           kind: el.tagName.toLowerCase(),
-          text: el.tagName.toLowerCase() === 'text' ? el.textContent : (el.getAttribute('href') ?? '').split('/').pop(),
+          text:
+            el.tagName.toLowerCase() === 'text'
+              ? el.textContent
+              : (el.getAttribute('href') ?? '').split('/').pop(),
           cls: (el.getAttribute('class') ?? '').replace(/^[^_]*_/, ''),
           component: owner?.getAttribute('data-component-id') ?? '',
           x: Math.round(r.x),
@@ -99,14 +102,19 @@ const probe = async () =>
       }
     }
     const offscreen = nodes
-      .filter((b) => b.x < 0 || b.y < 0 || b.x + b.w > window.innerWidth || b.y + b.h > window.innerHeight)
+      .filter(
+        (b) =>
+          b.x < 0 || b.y < 0 || b.x + b.w > window.innerWidth || b.y + b.h > window.innerHeight,
+      )
       .map((b) => b.text)
     return { boxes: nodes.length, overlaps, offscreen: [...new Set(offscreen)] }
   })
 
 await toCentre()
 const all = await listCards()
-const cards = all.filter((c) => (only === '' ? true : c.subject === only)).slice(0, limit || undefined)
+const cards = all
+  .filter((c) => (only === '' ? true : c.subject === only))
+  .slice(0, limit || undefined)
 console.log(`${all.length} cards total; testing ${cards.length}`)
 const subjects = [...new Set(all.map((c) => c.subject))]
 console.log(`subjects: ${subjects.join(', ')}`)
@@ -116,15 +124,21 @@ for (const [n, card] of cards.entries()) {
   const errMark = errors.length
   try {
     await toCentre()
-    await page.locator('button[class*="entry"][class*="card"]').nth(card.index).click({ timeout: 8000 })
+    await page
+      .locator('button[class*="entry"][class*="card"]')
+      .nth(card.index)
+      .click({ timeout: 8000 })
     await page.waitForTimeout(3400)
     const { boxes, overlaps, offscreen } = await probe()
     const slug = `${String(n).padStart(2, '0')}-${card.name.replace(/[^\p{Script=Han}\w-]/gu, '_')}`
     if (shots) await page.screenshot({ path: `${outdir}/${slug}.png` })
     results.push({ ...card, boxes, overlaps, offscreen, errors: errors.slice(errMark) })
     const tag = overlaps.length === 0 && offscreen.length === 0 ? 'OK ' : 'HIT'
-    console.log(`${tag} [${card.subject}] ${card.name}  boxes=${boxes} overlaps=${overlaps.length} offscreen=${offscreen.length}`)
-    for (const o of overlaps.slice(0, 8)) console.log(`      ${JSON.stringify(o.a)} x ${JSON.stringify(o.b)} (${o.ox}x${o.oy})`)
+    console.log(
+      `${tag} [${card.subject}] ${card.name}  boxes=${boxes} overlaps=${overlaps.length} offscreen=${offscreen.length}`,
+    )
+    for (const o of overlaps.slice(0, 8))
+      console.log(`      ${JSON.stringify(o.a)} x ${JSON.stringify(o.b)} (${o.ox}x${o.oy})`)
     if (offscreen.length) console.log(`      offscreen: ${JSON.stringify(offscreen.slice(0, 6))}`)
   } catch (error) {
     results.push({ ...card, error: String(error).slice(0, 200) })

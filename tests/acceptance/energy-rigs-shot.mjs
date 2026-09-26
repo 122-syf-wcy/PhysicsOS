@@ -40,7 +40,12 @@ const labelBoxes = () =>
           rect.right > box.right + 1 ||
           rect.top < box.top - 1 ||
           rect.bottom > box.bottom + 1,
-        box: [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)],
+        box: [
+          Math.round(rect.left),
+          Math.round(rect.top),
+          Math.round(rect.width),
+          Math.round(rect.height),
+        ],
       }
     })
     return { canvas: [Math.round(box.width), Math.round(box.height)], labels }
@@ -65,16 +70,18 @@ const barBoxes = () =>
     if (group === null) return null
     return {
       frame: rel(group.querySelector('rect')),
-      segments: [...group.querySelectorAll('rect[data-testid^="energy-segment-"]')].map(node => ({
+      segments: [...group.querySelectorAll('rect[data-testid^="energy-segment-"]')].map((node) => ({
         id: node.getAttribute('data-testid') ?? '',
         ...rel(node),
       })),
-      cart: svg.querySelector('[data-testid="energy-cart"]') === null
-        ? null
-        : rel(svg.querySelector('[data-testid="energy-cart"]')),
-      ramp: svg.querySelector('[data-testid="energy-ramp"]') === null
-        ? null
-        : rel(svg.querySelector('[data-testid="energy-ramp"]')),
+      cart:
+        svg.querySelector('[data-testid="energy-cart"]') === null
+          ? null
+          : rel(svg.querySelector('[data-testid="energy-cart"]')),
+      ramp:
+        svg.querySelector('[data-testid="energy-ramp"]') === null
+          ? null
+          : rel(svg.querySelector('[data-testid="energy-ramp"]')),
     }
   })
 
@@ -118,12 +125,15 @@ const openRig = async (rig) => {
 
 const backToPicker = async () => {
   await page.getByTitle('切换实验').click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 15_000 })
 }
 
 const checkRig = async (rig, width) => {
   const bar = await barBoxes()
-  const show = box => (box === null || box === undefined ? 'none' : `${box.x},${box.y},${box.w},${box.h}`)
+  const show = (box) =>
+    box === null || box === undefined ? 'none' : `${box.x},${box.y},${box.w},${box.h}`
 
   /* The segments have to add up to the frame they sit in. That IS the
      conservation claim drawn: 势能出发、动能与热收尾，两段之和正好铺满出发时那一整条。 */
@@ -133,15 +143,20 @@ const checkRig = async (rig, width) => {
       : bar.segments.reduce((sum, segment) => sum + segment.w, 0)
   check(
     `${rig.id}@${width} 能量条的两段正好铺满整条`,
-    bar?.frame !== null && bar?.frame !== undefined && bar.segments.length >= 1 &&
+    bar?.frame !== null &&
+      bar?.frame !== undefined &&
+      bar.segments.length >= 1 &&
       Math.abs(filled - bar.frame.w) <= 2,
-    `框宽 ${bar?.frame?.w ?? '—'}｜两段合计 ${filled}｜${(bar?.segments ?? []).map(segment => `${segment.id}=${segment.w}`).join(' ')}`,
+    `框宽 ${bar?.frame?.w ?? '—'}｜两段合计 ${filled}｜${(bar?.segments ?? []).map((segment) => `${segment.id}=${segment.w}`).join(' ')}`,
   )
 
   /* The cart rides ON the ramp: its box has to sit inside the wedge's. */
   check(
     `${rig.id}@${width} 小车画在斜面之内`,
-    bar?.cart !== null && bar?.cart !== undefined && bar?.ramp !== null && bar?.ramp !== undefined &&
+    bar?.cart !== null &&
+      bar?.cart !== undefined &&
+      bar?.ramp !== null &&
+      bar?.ramp !== undefined &&
       bar.cart.x >= bar.ramp.x - 1 &&
       bar.cart.x + bar.cart.w <= bar.ramp.x + bar.ramp.w + 1 &&
       bar.cart.y >= bar.ramp.y - 1,
@@ -156,7 +171,9 @@ const checkRig = async (rig, width) => {
   )
 
   if (width === 1600) {
-    stdout.write(`  ${rig.id} 能量条 框 ${show(bar?.frame)}｜段 ${(bar?.segments ?? []).map(segment => segment.id).join(',')}\n`)
+    stdout.write(
+      `  ${rig.id} 能量条 框 ${show(bar?.frame)}｜段 ${(bar?.segments ?? []).map((segment) => segment.id).join(',')}\n`,
+    )
   }
 }
 
@@ -165,7 +182,9 @@ try {
   await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60_000 })
   await registerStudent(page)
   await page.getByRole('button', { name: '物理实验室' }).click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
 
   for (const [index, rig] of RIGS.entries()) {
     if (index > 0) await backToPicker()
@@ -178,13 +197,17 @@ try {
     await canvas.screenshot({ path: wide })
     shots.push(wide)
     const boxes = await labelBoxes()
-    const outside = (boxes?.labels ?? []).filter(label => label.outside)
+    const outside = (boxes?.labels ?? []).filter((label) => label.outside)
     check(
       `${rig.id} 的标注都在画布内`,
       outside.length === 0,
-      outside.map(label => `${label.text}@${label.box.join(',')}`).join(' | '),
+      outside.map((label) => `${label.text}@${label.box.join(',')}`).join(' | '),
     )
-    check(`${rig.id} 画出了标注`, (boxes?.labels.length ?? 0) >= 3, `${boxes?.labels.length ?? 0} 个`)
+    check(
+      `${rig.id} 画出了标注`,
+      (boxes?.labels.length ?? 0) >= 3,
+      `${boxes?.labels.length ?? 0} 个`,
+    )
     await checkRig(rig, 1600)
 
     await page.setViewportSize({ width: 1280, height: 900 })
@@ -193,18 +216,18 @@ try {
     await page.screenshot({ path: narrow })
     shots.push(narrow)
     const narrowBoxes = await labelBoxes()
-    const narrowOutside = (narrowBoxes?.labels ?? []).filter(label => label.outside)
+    const narrowOutside = (narrowBoxes?.labels ?? []).filter((label) => label.outside)
     check(
       `${rig.id} 在 1280 宽下标注仍在画布内`,
       narrowOutside.length === 0,
-      narrowOutside.map(label => `${label.text}@${label.box.join(',')}`).join(' | '),
+      narrowOutside.map((label) => `${label.text}@${label.box.join(',')}`).join(' | '),
     )
     await checkRig(rig, 1280)
     await page.setViewportSize({ width: 1600, height: 900 })
     await page.waitForTimeout(320)
 
     stdout.write(
-      `  ${rig.id} 画布 ${JSON.stringify(boxes?.canvas)}｜标注 ${JSON.stringify((boxes?.labels ?? []).map(l => l.text))}\n`,
+      `  ${rig.id} 画布 ${JSON.stringify(boxes?.canvas)}｜标注 ${JSON.stringify((boxes?.labels ?? []).map((l) => l.text))}\n`,
     )
   }
 } finally {

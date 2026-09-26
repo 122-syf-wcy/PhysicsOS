@@ -206,6 +206,15 @@ async function generateFigures(tools: ExportTools, doc: PaperDocument, dir: stri
   return files
 }
 
+/**
+ * Write the job's export set — markdown paper, answers, docx copies — under
+ * `exportDir/<jobId>` and return the produced file names for `recordExport`.
+ * @param tools - the host-provided export dependencies (dirs, renderers, figure generation).
+ * @param jobId - the job these files belong to; also the output subdirectory.
+ * @param doc - the approved paper document being exported.
+ * @param solves - optional independent-solve results folded into the answer doc.
+ * @returns the set of produced files keyed by kind.
+ */
 export async function exportPaper(
   tools: ExportTools, jobId: string, doc: PaperDocument, solves?: readonly SolveResult[],
 ): Promise<ExportFileSet> {

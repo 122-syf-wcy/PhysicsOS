@@ -39,6 +39,10 @@ const announcementWire = z.object({
 
 const id = (prefix: string): string => `${prefix}_${crypto.randomBytes(9).toString('base64url')}`
 
+/**
+ * The notice rules over the `physicsos_notice` domain: the feedback queue
+ * (row-filtered by tenant) and announcements (tenant + platform scope).
+ */
 export class NoticeService {
   constructor(private readonly domain: Domain<typeof noticeDomain>) {}
 
@@ -194,7 +198,11 @@ export class NoticeService {
     return updated
   }
 
-  /** Counts for the console: how much of the queue is still open. */
+  /**
+   * Counts for the console: how much of the queue is still open.
+   * @param actor - the operator reading the counts (tenant-scoped like `listFeedback`).
+   * @returns per-status totals over the rows this actor may see.
+   */
   stats(actor: IdentityActor): { open: number; answered: number; closed: number } {
     const rows = this.listFeedback(actor)
     return {

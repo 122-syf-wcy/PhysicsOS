@@ -27,7 +27,10 @@ const runPointCharge = (charges: readonly PointChargeInput[], probe?: ProbeParti
   })
   const engine = new ElectricEngine()
   const support = engine.canHandle(scene)
-  const result = engine.simulate(scene, createElectricSimulationRequest(scene, 'sim-pc', 'trace-pc'))
+  const result = engine.simulate(
+    scene,
+    createElectricSimulationRequest(scene, 'sim-pc', 'trace-pc'),
+  )
   return { scene, support, result, engine }
 }
 
@@ -79,7 +82,10 @@ describe('Electric Engine point-charge runtime', () => {
     const magnitude = result.derivedQuantities.find((d) => d.key === 'electric_field_magnitude')
     /* E = kq/r² = 8.9876e9 × 5e-6 / 0.04 ≈ 1.1234e6 V/m. The textbook value
        1.125e6 is a rounded form; assert against the computed value, not the round number. */
-    expect(magnitude && 'value' in magnitude.value && magnitude.value.value).toBeCloseTo(1_123_443.974, -2)
+    expect(magnitude && 'value' in magnitude.value && magnitude.value.value).toBeCloseTo(
+      1_123_443.974,
+      -2,
+    )
   })
 
   it('detects a tampered point-charge field magnitude', () => {
@@ -90,16 +96,29 @@ describe('Electric Engine point-charge runtime', () => {
     /* The verifier reads field magnitude from the state's derived array, not the
        result's derivedQuantities, so tampering must hit the state. */
     const field = result.states[0]?.derived.find((d) => d.key === 'electric_field_magnitude')
-    if (field === undefined || !('value' in field.value)) throw new Error('Expected field magnitude.')
+    if (field === undefined || !('value' in field.value))
+      throw new Error('Expected field magnitude.')
     field.value.value += 1e6
     const indep = verifyElectricSimulation(scene, result)
     expect(indep.status).toBe('failed')
   })
 
   it('does not regress the uniform-field path', () => {
-    const scene = createElectricScene({ charge: 2, mass: 4, position: vec3(0, 0, 0), velocity: vec3(1, 0, 0), electricFieldStrength: 6, electricFieldDirection: 'up', duration: 2, now: '2026-08-19T00:00:00.000Z' })
+    const scene = createElectricScene({
+      charge: 2,
+      mass: 4,
+      position: vec3(0, 0, 0),
+      velocity: vec3(1, 0, 0),
+      electricFieldStrength: 6,
+      electricFieldDirection: 'up',
+      duration: 2,
+      now: '2026-08-19T00:00:00.000Z',
+    })
     const engine = new ElectricEngine()
-    const result = engine.simulate(scene, createElectricSimulationRequest(scene, 'sim-uniform', 'trace-uniform'))
+    const result = engine.simulate(
+      scene,
+      createElectricSimulationRequest(scene, 'sim-uniform', 'trace-uniform'),
+    )
     expect(result.verification.status).toBe('passed')
   })
 

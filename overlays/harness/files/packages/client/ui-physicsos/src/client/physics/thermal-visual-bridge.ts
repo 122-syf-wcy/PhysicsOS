@@ -32,9 +32,19 @@ import type {
   ThermalThermometerVisual,
 } from './scene-visual-model.ts'
 
-/** Kelvin → °C, the unit every reading in this domain is shown in. */
+/**
+ * Kelvin → °C, the unit every reading in this domain is shown in.
+ * @returns the computed number.
+ * @param kelvin - the temperature in kelvin.
+ */
 export const celsiusOf = (kelvin: number): number => kelvin - CELSIUS_ZERO_IN_KELVIN
 
+/**
+ * The thermal scene visuals helper `fmtThermalValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtThermalValue = (value: number, digits = 4): string => {
   if (!Number.isFinite(value)) return '—'
   if (Math.abs(value) < 1e-9) return '0'
@@ -45,6 +55,8 @@ export const fmtThermalValue = (value: number, digits = 4): string => {
  * Scene observable definition → canvas toggle key. The thermal factory stamps
  * `observable-thermal-thermometer` / `observable-thermal-phase`, so the key is
  * carried by the id rather than inferred from the observable type.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const thermalObservableKeyOf = (
   definition: ObservableDefinition,
@@ -64,7 +76,12 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-/** Student-facing one-liner for the current segment of the heating curve. */
+/**
+ * Student-facing one-liner for the current segment of the heating curve.
+ * @returns the formatted string.
+ * @param crystalline - whether the lattice is crystalline.
+ * @param phase - the wave phase.
+ */
 export const thermalPhaseText = (
   phase: ThermalState['phase'],
   crystalline: boolean,
@@ -81,6 +98,9 @@ export const thermalPhaseText = (
   }
 }
 
+/**
+ * The thermal visual input shape used by the thermal scene visuals module.
+ */
 export interface ThermalVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedThermalModel
@@ -137,16 +157,22 @@ const heaterVisual = (
   label: '加热器',
 })
 
-/** Build one heating frame from the verified thermal state. */
-export const thermalSceneVisual = ({
-  scene,
-  model,
-  state,
-  comparisonState,
-  time,
-  floorTemperature,
-  peakTemperature,
-}: ThermalVisualInput): SceneVisualModel => {
+/**
+ * Build one heating frame from the verified thermal state.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const thermalSceneVisual = (input: ThermalVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+    state,
+    comparisonState,
+    time,
+    floorTemperature,
+    peakTemperature,
+  } = input
+
   const bench = thermalBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('thermal')
 

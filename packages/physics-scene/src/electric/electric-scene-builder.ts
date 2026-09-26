@@ -58,25 +58,25 @@ const observables = (hasProbe: boolean): ObservableDefinition[] => [
   },
   ...(hasProbe
     ? [
-      {
-        id: asObservableId('obs-electric-force'),
-        type: 'force' as const,
-        targetId: 'probe-1',
-        visible: true,
-      },
-      {
-        id: asObservableId('obs-electric-velocity'),
-        type: 'velocity' as const,
-        targetId: 'probe-1',
-        visible: true,
-      },
-      {
-        id: asObservableId('obs-electric-trajectory'),
-        type: 'trajectory' as const,
-        targetId: 'probe-1',
-        visible: true,
-      },
-    ]
+        {
+          id: asObservableId('obs-electric-force'),
+          type: 'force' as const,
+          targetId: 'probe-1',
+          visible: true,
+        },
+        {
+          id: asObservableId('obs-electric-velocity'),
+          type: 'velocity' as const,
+          targetId: 'probe-1',
+          visible: true,
+        },
+        {
+          id: asObservableId('obs-electric-trajectory'),
+          type: 'trajectory' as const,
+          targetId: 'probe-1',
+          visible: true,
+        },
+      ]
     : []),
 ]
 
@@ -129,12 +129,14 @@ export const createPointChargeScene = (input: PointChargeSceneInput): PhysicsSce
          present for two or more sources. The renderer reads this to toggle the
          contour layer; it is never a verified numerical assertion. */
       ...(input.charges.length >= 2
-        ? [{
-            id: asObservableId('obs-equipotential'),
-            type: 'annotation' as const,
-            visible: true,
-            parameters: { kind: 'equipotential' },
-          }]
+        ? [
+            {
+              id: asObservableId('obs-equipotential'),
+              type: 'annotation' as const,
+              visible: true,
+              parameters: { kind: 'equipotential' },
+            },
+          ]
         : []),
     ],
     annotations: [],

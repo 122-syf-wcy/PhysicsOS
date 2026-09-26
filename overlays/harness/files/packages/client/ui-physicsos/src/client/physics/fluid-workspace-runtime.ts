@@ -122,6 +122,9 @@ interface Computed {
   readonly model: ResolvedFluidModel
 }
 
+/**
+ * The fluid workspace runtime — see the module doc for its role.
+ */
 export class FluidWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new FluidEngine()
@@ -641,5 +644,10 @@ const tableOf = (
   }
 }
 
+/**
+ * The fluid workspace runtime helper `createFluidWorkspaceRuntime`.
+ * @returns the fluid workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createFluidWorkspaceRuntime = (scene: PhysicsScene): FluidWorkspaceRuntime =>
   new FluidWorkspaceRuntime(scene)

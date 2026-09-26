@@ -29,7 +29,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../..')
 const SRC_DIR = path.join(ROOT, 'UI', 'generated', 'experiment-art')
 const OUT_DIR = path.join(
-  ROOT, 'overlays', 'harness', 'files', 'apps', 'web', 'public', 'physicsos', 'experiment-art',
+  ROOT,
+  'overlays',
+  'harness',
+  'files',
+  'apps',
+  'web',
+  'public',
+  'physicsos',
+  'experiment-art',
 )
 
 /** The size the cards request; matches the existing published covers. */
@@ -37,15 +45,22 @@ const EDGE = 512
 
 const argv = process.argv.slice(2)
 const checkOnly = argv.includes('--check')
-const wanted = argv.filter(arg => !arg.startsWith('--'))
+const wanted = argv.filter((arg) => !arg.startsWith('--'))
 
 if (!existsSync(SRC_DIR)) {
-  process.stderr.write(`no generated art at ${path.relative(ROOT, SRC_DIR)} — run generate-experiment-art.mjs first\n`)
+  process.stderr.write(
+    `no generated art at ${path.relative(ROOT, SRC_DIR)} — run generate-experiment-art.mjs first\n`,
+  )
   process.exit(1)
 }
 mkdirSync(OUT_DIR, { recursive: true })
 
-const ids = (wanted.length > 0 ? wanted : readdirSync(SRC_DIR).filter(f => f.endsWith('.png')).map(f => f.slice(0, -4)))
+const ids =
+  wanted.length > 0
+    ? wanted
+    : readdirSync(SRC_DIR)
+        .filter((f) => f.endsWith('.png'))
+        .map((f) => f.slice(0, -4))
 if (ids.length === 0) {
   process.stderr.write('no source PNGs to publish\n')
   process.exit(1)
@@ -76,9 +91,25 @@ for (const id of ids) {
     continue
   }
   /* sips ships with macOS; it is the only image tool this repo can assume. */
-  execFileSync('sips', ['-Z', String(EDGE), '-s', 'format', 'jpeg', '-s', 'formatOptions', '82', source, '--out', target], {
-    stdio: ['ignore', 'ignore', 'pipe'],
-  })
+  execFileSync(
+    'sips',
+    [
+      '-Z',
+      String(EDGE),
+      '-s',
+      'format',
+      'jpeg',
+      '-s',
+      'formatOptions',
+      '82',
+      source,
+      '--out',
+      target,
+    ],
+    {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    },
+  )
   stdout.write(`  \u2713 ${id}.jpg  ${(statSync(target).size / 1024).toFixed(0)} KiB\n`)
   published++
 }

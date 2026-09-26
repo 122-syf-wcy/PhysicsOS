@@ -1,8 +1,4 @@
-import {
-  derivedScalar,
-  type SimulationResult,
-  type SimulationState,
-} from '@physicsos/physics-core'
+import { derivedScalar, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
 import { PhysicsOSError } from '@physicsos/shared'
 import { waveBenchOf, type ObservableDefinition, type PhysicsScene } from '@physicsos/physics-scene'
 import type { PhysicalDimension, Quantity } from '@physicsos/physics-units'
@@ -79,10 +75,7 @@ export interface WaveNodesObservation extends WaveObservationBase {
 }
 
 export type WaveObservation =
-  | WaveformObservation
-  | WaveSpeedObservation
-  | WaveSuperpositionObservation
-  | WaveNodesObservation
+  WaveformObservation | WaveSpeedObservation | WaveSuperpositionObservation | WaveNodesObservation
 
 export interface WaveObservationRuntimeState {
   readonly sceneRevision: number
@@ -109,7 +102,10 @@ const scalarOrUndefined = (
 const selectState = (scene: PhysicsScene, simulation: SimulationResult): SimulationState => {
   const first = simulation.states[0]
   if (first === undefined) {
-    throw new PhysicsOSError('OBSERVATION_STATE_MISSING', 'Wave SimulationResult contains no states.')
+    throw new PhysicsOSError(
+      'OBSERVATION_STATE_MISSING',
+      'Wave SimulationResult contains no states.',
+    )
   }
   const targetTime = scene.timeline.currentTime.value
   return simulation.states.reduce((closest, candidate) =>

@@ -26,7 +26,7 @@ import {
 import { formatUpdatedAt, workspaceKnowledge } from '../src/client/workspaceMeta.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { processQuestion } from '@physicsos/question-core'
-import { cardSession, solvedCardData } from './solved-card-fixture.ts'
+import { cardSession, solvedCardData } from './solved-card-fixture.client.ts'
 
 const translations: Readonly<Record<string, string>> = zh
 const t: PhysicsSurfaceProps['t'] = key => translations[key] ?? key
@@ -262,12 +262,11 @@ describe('PhysicsOS overlay presentation', () => {
         useWorkspaces={neverHook}
       />,
     )
-    /* 学习记录 is a live destination now (the learning-record surface);
-       资源库 stays a disabled placeholder. */
+    /* 学习记录 is a live destination (the learning-record surface); the footer
+       carries no 资源库 row at all — the live entry lives in the nav rail. */
     fireEvent.click(screen.getByRole('button', { name: '学习记录' }))
-    fireEvent.click(screen.getByRole('button', { name: '资源库' }))
     expect(screen.getByRole('button', { name: '学习记录' }).getAttribute('disabled')).toBeNull()
-    expect(screen.getByRole('button', { name: '资源库' }).getAttribute('disabled')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: '资源库' })).toBeNull()
     expect(startSession).not.toHaveBeenCalled()
   })
 
@@ -918,9 +917,10 @@ describe('PhysicsOS overlay presentation', () => {
     for (const name of [/匀速直线运动/, /单点电荷电场/, /磁场中的带电粒子运动/, /速度选择器/, /质谱仪基础模型/]) {
       expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0)
     }
-    /* Cyclotron is surfaced as coming-soon, never as a creatable experiment. */
+    /* The cyclotron became creatable when the composite engine learned the
+       time-varying gap; the picker offers it like any other experiment. */
     const cyclotron = screen.getByRole('button', { name: /回旋加速器/ })
-    expect(cyclotron.getAttribute('disabled')).not.toBeNull()
+    expect(cyclotron.getAttribute('disabled')).toBeNull()
   })
 
   it('declares a 学段 on every template and fills both partitions', () => {

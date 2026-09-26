@@ -67,10 +67,7 @@ export interface AtmosphericPressureSpec {
 }
 
 /** Discriminated authoring input: one sub-model per bench. */
-export type PressureBenchSpec =
-  | SolidPressureSpec
-  | LiquidPressureSpec
-  | AtmosphericPressureSpec
+export type PressureBenchSpec = SolidPressureSpec | LiquidPressureSpec | AtmosphericPressureSpec
 
 export interface PressureBenchSceneInput {
   readonly sceneId?: string
@@ -84,8 +81,7 @@ export interface PressureBenchSceneInput {
   readonly description?: string
 }
 
-const observableId = (key: PressureObservableKey) =>
-  asObservableId(`observable-pressure-${key}`)
+const observableId = (key: PressureObservableKey) => asObservableId(`observable-pressure-${key}`)
 
 const benchTypeOf = (spec: PressureBenchSpec): PressureBenchType => spec.type
 
@@ -106,28 +102,16 @@ const toBench = (spec: PressureBenchSpec, gravity: number): PressureBench => {
       ...(spec.comparisonLiquidDensity === undefined
         ? {}
         : {
-          comparisonLiquidDensity: quantity(
-            spec.comparisonLiquidDensity,
-            'kg/m^3',
-            'density',
-          ),
-        }),
+            comparisonLiquidDensity: quantity(spec.comparisonLiquidDensity, 'kg/m^3', 'density'),
+          }),
     }
   }
   if (spec.type === 'atmospheric') {
     return {
       ...common,
       type: 'atmospheric',
-      atmosphericPressure: quantity(
-        spec.atmosphericPressure ?? 101_300,
-        'Pa',
-        'pressure',
-      ),
-      barometerFluidDensity: quantity(
-        spec.barometerFluidDensity ?? 13_600,
-        'kg/m^3',
-        'density',
-      ),
+      atmosphericPressure: quantity(spec.atmosphericPressure ?? 101_300, 'Pa', 'pressure'),
+      barometerFluidDensity: quantity(spec.barometerFluidDensity ?? 13_600, 'kg/m^3', 'density'),
       hemisphereRadius: quantity((spec.hemisphereRadius ?? 5) / 100, 'm', 'length'),
     }
   }

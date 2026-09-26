@@ -105,8 +105,7 @@ export const createEnergyBenchScene = (input: EnergyBenchSceneInput = {}): Physi
       createdAt: now,
       updatedAt: now,
       title: input.title ?? '机械能实验台',
-      description:
-        input.description ?? 'Mechanical Energy · 动能 Ek = ½mv² · 势能 Ep = mgh',
+      description: input.description ?? 'Mechanical Energy · 动能 Ek = ½mv² · 势能 Ep = mgh',
     },
   }
 }
@@ -117,8 +116,7 @@ export const createEnergyBenchScene = (input: EnergyBenchSceneInput = {}): Physi
  * Mechanical-energy benches of a scene. Legacy-safe: scenes persisted before
  * this slice have no `energyBenches` collection, so readers fall back to `[]`.
  */
-export const energyBenchesOf = (scene: PhysicsScene): EnergyBench[] =>
-  scene.energyBenches ?? []
+export const energyBenchesOf = (scene: PhysicsScene): EnergyBench[] => scene.energyBenches ?? []
 
 /** The single bench of a mechanical-energy scene, if present. */
 export const energyBenchOf = (scene: PhysicsScene): EnergyBench | undefined =>

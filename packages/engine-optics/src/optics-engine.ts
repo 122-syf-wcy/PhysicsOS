@@ -57,8 +57,7 @@ export const resolveOpticalImaging = (scene: PhysicsScene): OpticalImagingResult
 
 /* ------------------------------------------------------------- state/dqs -- */
 
-const centimetres = (metres: number): Quantity<'length'> =>
-  quantity(metres * 100, 'cm', 'length')
+const centimetres = (metres: number): Quantity<'length'> => quantity(metres * 100, 'cm', 'length')
 
 const assumptionsOf = (result: OpticalImagingResult): string[] =>
   result.model.elementType === 'thin_lens'
@@ -216,13 +215,18 @@ const buildVerification = (
         )
       const lens = model.elementType === 'thin_lens'
       checks.push(
-        check(lens ? 'thin_lens_equation' : 'curved_mirror_equation', 'constraint', residual <= tolerance, {
-          message: lens
-            ? '成像满足薄透镜公式 1/u + 1/v = 1/f。'
-            : '成像满足球面镜公式 1/u + 1/v = 1/f（f = R/2）。',
-          targetId: model.elementId,
-          details: { residual, objectDistance: model.objectDistance, signedImageDistance },
-        }),
+        check(
+          lens ? 'thin_lens_equation' : 'curved_mirror_equation',
+          'constraint',
+          residual <= tolerance,
+          {
+            message: lens
+              ? '成像满足薄透镜公式 1/u + 1/v = 1/f。'
+              : '成像满足球面镜公式 1/u + 1/v = 1/f（f = R/2）。',
+            targetId: model.elementId,
+            details: { residual, objectDistance: model.objectDistance, signedImageDistance },
+          },
+        ),
       )
     }
 
@@ -247,8 +251,7 @@ const buildVerification = (
 
     /* Independent geometry: two principal-ray lines built from the lens rule /
        law of reflection must intersect exactly at the formula's image top. */
-    const expectedTopY =
-      (outcome.image.orientation === 'inverted' ? -1 : 1) * outcome.image.height
+    const expectedTopY = (outcome.image.orientation === 'inverted' ? -1 : 1) * outcome.image.height
     const raysConverge =
       constructedTop !== undefined &&
       Math.hypot(constructedTop.x - outcome.image.x, constructedTop.y - expectedTopY) <=

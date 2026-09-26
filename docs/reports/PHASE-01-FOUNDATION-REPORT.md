@@ -14,16 +14,16 @@
 
 开工时事实：
 
-| 项 | 结果 |
-| --- | --- |
-| Git | 不是 repository |
-| 根目录 | 仅 `docs/`、`UI/` |
-| 源码 / package.json / pnpm workspace | 无 |
-| Harness | 无 |
-| Node | `v24.18.0` |
-| pnpm | `11.9.0` |
-| 重复文件 | `01-DEVELOPMENT-GUIDE.md` 与 `01-DEVELOPMENT_GUIDE.md` 并存 |
-| `00-PRODUCT-OVERVIEW.md` | 缺失 |
+| 项                                   | 结果                                                        |
+| ------------------------------------ | ----------------------------------------------------------- |
+| Git                                  | 不是 repository                                             |
+| 根目录                               | 仅 `docs/`、`UI/`                                           |
+| 源码 / package.json / pnpm workspace | 无                                                          |
+| Harness                              | 无                                                          |
+| Node                                 | `v24.18.0`                                                  |
+| pnpm                                 | `11.9.0`                                                    |
+| 重复文件                             | `01-DEVELOPMENT-GUIDE.md` 与 `01-DEVELOPMENT_GUIDE.md` 并存 |
+| `00-PRODUCT-OVERVIEW.md`             | 缺失                                                        |
 
 两份 `01` **不是同一文档**：
 
@@ -34,12 +34,12 @@
 
 ## 2. docs 修复情况
 
-| 动作 | 结果 |
-| --- | --- |
-| 连字符 `01-DEVELOPMENT-GUIDE.md` → `00-PRODUCT-OVERVIEW.md` | 已重命名，保留全部原文并补文件头 |
-| 下划线 `01-DEVELOPMENT_GUIDE.md` → `01-DEVELOPMENT-GUIDE.md` | 已重命名 |
-| 交叉引用 `00-PRODUCT_OVERVIEW` / `01-DEVELOPMENT_GUIDE` | 已统一为连字符规范 |
-| 合并 | 无需合并：两份内容职责不同 |
+| 动作                                                         | 结果                             |
+| ------------------------------------------------------------ | -------------------------------- |
+| 连字符 `01-DEVELOPMENT-GUIDE.md` → `00-PRODUCT-OVERVIEW.md`  | 已重命名，保留全部原文并补文件头 |
+| 下划线 `01-DEVELOPMENT_GUIDE.md` → `01-DEVELOPMENT-GUIDE.md` | 已重命名                         |
+| 交叉引用 `00-PRODUCT_OVERVIEW` / `01-DEVELOPMENT_GUIDE`      | 已统一为连字符规范               |
+| 合并                                                         | 无需合并：两份内容职责不同       |
 
 当前 docs 命名：`数字-大写英文-连字符.md`。
 
@@ -118,27 +118,27 @@ UI/
 
 ## 8. 已创建 packages
 
-| Package | 职责 | PHASE-01 状态 |
-| --- | --- | --- |
-| `@physicsos/shared` | Brand ID / 错误 | 完成 |
-| `@physicsos/platform-bridge` | Browser bridge；Tauri 预留抛 UnimplementedError | 完成 |
-| `@physicsos/agent-runtime` | PhysicsAgentRuntime / Transport / Event Contract | 仅类型 + contract test |
-| `@physicsos/agent-dsh-adapter` | 唯一 Harness 边界；方法拒绝假成功 | 骨架 |
-| `@physicsos/ui` | tokens / primitives / domain components | 完成 |
-| `@physicsos/web` | 产品 UI | UI + fixture |
+| Package                        | 职责                                             | PHASE-01 状态          |
+| ------------------------------ | ------------------------------------------------ | ---------------------- |
+| `@physicsos/shared`            | Brand ID / 错误                                  | 完成                   |
+| `@physicsos/platform-bridge`   | Browser bridge；Tauri 预留抛 UnimplementedError  | 完成                   |
+| `@physicsos/agent-runtime`     | PhysicsAgentRuntime / Transport / Event Contract | 仅类型 + contract test |
+| `@physicsos/agent-dsh-adapter` | 唯一 Harness 边界；方法拒绝假成功                | 骨架                   |
+| `@physicsos/ui`                | tokens / primitives / domain components          | 完成                   |
+| `@physicsos/web`               | 产品 UI                                          | UI + fixture           |
 
 业务组件未出现 `window.__TAURI__`。  
 `apps/web` 未 import `@deepseek-ai/*`。
 
 ## 9. UI 页面完成度
 
-| 页面 | 路由 | 完成度 | 说明 |
-| --- | --- | --- | --- |
-| 首页 | `/` | 高 | Hero、双入口、最近继续 / 专题 / 文件、学习路径、学科 |
-| Physics Workspace | `/lab` | 高 | Scene Tree、Canvas 壳、Inspector、Observables、Timeline、Charts、Data、Agent |
-| Question Space | `/questions` | 高 | 三栏、题目、可视化、AI 解析、在物理世界中打开 |
-| Desktop Workspace | `/desktop` | 中高 | Sidebar + Canvas + 参数 + Timeline；非 Web 主产品 |
-| 学习记录 / 资源库 / 我的 | `/history` `/resources` `/profile` | 壳 | 明确写未实现，无假 API |
+| 页面                     | 路由                               | 完成度 | 说明                                                                         |
+| ------------------------ | ---------------------------------- | ------ | ---------------------------------------------------------------------------- |
+| 首页                     | `/`                                | 高     | Hero、双入口、最近继续 / 专题 / 文件、学习路径、学科                         |
+| Physics Workspace        | `/lab`                             | 高     | Scene Tree、Canvas 壳、Inspector、Observables、Timeline、Charts、Data、Agent |
+| Question Space           | `/questions`                       | 高     | 三栏、题目、可视化、AI 解析、在物理世界中打开                                |
+| Desktop Workspace        | `/desktop`                         | 中高   | Sidebar + Canvas + 参数 + Timeline；非 Web 主产品                            |
+| 学习记录 / 资源库 / 我的 | `/history` `/resources` `/profile` | 壳     | 明确写未实现，无假 API                                                       |
 
 Canvas：grid / 坐标轴 / × 场符 / 粒子 / 轨迹 / 矢量 / viewport / toolbar / timeline。  
 数据来自 `apps/web/src/fixtures/prototype/`（文件头 PROTOTYPE ONLY）。  
@@ -146,16 +146,16 @@ Canvas：grid / 坐标轴 / × 场符 / 粒子 / 轨迹 / 矢量 / viewport / to
 
 ## 10. 原型对应关系
 
-| 语义文件 | 原文件 | 页面 |
-| --- | --- | --- |
-| `UI/原型图/01-home.png` | `11_49_34 (1)` | 首页 |
-| `UI/原型图/02-physics-lab-workspace.png` | `11_49_35 (2)` | 物理实验室 |
-| `UI/原型图/03-question-space.png` | `11_49_35 (3)` | 试题空间 |
-| `UI/原型图/04-desktop-workspace.png` | `11_49_35 (4)` | Desktop |
-| `UI/组件图/01-navigation-components.png` | `12_32_45 (4)` | 导航 |
-| `UI/组件图/02-workspace-components.png` | `12_32_45 (2)` | 工作区 |
-| `UI/组件图/03-question-components.png` | `12_32_45 (3)` | 试题 |
-| `UI/组件图/04-content-components.png` | `12_32_44 (1)` | 首页内容模块 |
+| 语义文件                                 | 原文件         | 页面         |
+| ---------------------------------------- | -------------- | ------------ |
+| `UI/原型图/01-home.png`                  | `11_49_34 (1)` | 首页         |
+| `UI/原型图/02-physics-lab-workspace.png` | `11_49_35 (2)` | 物理实验室   |
+| `UI/原型图/03-question-space.png`        | `11_49_35 (3)` | 试题空间     |
+| `UI/原型图/04-desktop-workspace.png`     | `11_49_35 (4)` | Desktop      |
+| `UI/组件图/01-navigation-components.png` | `12_32_45 (4)` | 导航         |
+| `UI/组件图/02-workspace-components.png`  | `12_32_45 (2)` | 工作区       |
+| `UI/组件图/03-question-components.png`   | `12_32_45 (3)` | 试题         |
+| `UI/组件图/04-content-components.png`    | `12_32_44 (1)` | 首页内容模块 |
 
 原图全部保留。映射见 `UI/README.md`。
 
@@ -182,14 +182,14 @@ e2e 路径已改为相对仓库根的绝对解析（`apps/web/e2e` → `docs/rep
 
 与 `UI/原型图` 人工对比（主基准 1600×900；Workspace 另核 1920×1080）：
 
-| 维度 | 首页 | Workspace | Question | Desktop |
-| --- | --- | --- | --- | --- |
-| 顶栏 / 搜索 / Ctrl K / 铃铛 / 李明同学 | 对齐 | 对齐 | 对齐 | Desktop 为侧栏壳，不是 Web 顶栏 |
-| 主布局 | Hero + 双入口 + 三列内容 + 路径/学科 | 左树 + Canvas 核心 + Inspector + 底图表/表 | 左历史/题集 + 中题目 + 右 AI | 侧栏 + 对象树 + Canvas + 参数 |
-| Canvas 占比 | n/a | 保持视觉核心；1920 出现独立 AI 第五列 | 中栏可视化存在 | 中栏核心 |
-| 色板 | 雾白 + 自然蓝，无大面积紫 / 赛博黑 | 同左 | 同左 | 同左 |
-| 文案/数据 | Hero 与统计卡对齐（`8,600+`） | 场景名、q/m/B、轨迹/矢量语义对齐 | 题干、已知条件、求解目标、绿 CTA 对齐 | 约束通过文案对齐 |
-| 明显差距 | 缺原型 3D 资产（玻璃球/轨道/题卡）；专题是色块不是实拍；最近继续无缩略图 | 1600 下 AI 与 Observables 同列堆叠（符合 07 规格，原型更像独立列）；图层开关密度低于原型 | 可视化是 2D SVG，不是原型 3D 视口；缺题干几何附图 | 缺完整 Windows chrome、完整工具条、3D 视口控件、轨迹图 |
+| 维度                                   | 首页                                                                     | Workspace                                                                                | Question                                          | Desktop                                                |
+| -------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| 顶栏 / 搜索 / Ctrl K / 铃铛 / 李明同学 | 对齐                                                                     | 对齐                                                                                     | 对齐                                              | Desktop 为侧栏壳，不是 Web 顶栏                        |
+| 主布局                                 | Hero + 双入口 + 三列内容 + 路径/学科                                     | 左树 + Canvas 核心 + Inspector + 底图表/表                                               | 左历史/题集 + 中题目 + 右 AI                      | 侧栏 + 对象树 + Canvas + 参数                          |
+| Canvas 占比                            | n/a                                                                      | 保持视觉核心；1920 出现独立 AI 第五列                                                    | 中栏可视化存在                                    | 中栏核心                                               |
+| 色板                                   | 雾白 + 自然蓝，无大面积紫 / 赛博黑                                       | 同左                                                                                     | 同左                                              | 同左                                                   |
+| 文案/数据                              | Hero 与统计卡对齐（`8,600+`）                                            | 场景名、q/m/B、轨迹/矢量语义对齐                                                         | 题干、已知条件、求解目标、绿 CTA 对齐             | 约束通过文案对齐                                       |
+| 明显差距                               | 缺原型 3D 资产（玻璃球/轨道/题卡）；专题是色块不是实拍；最近继续无缩略图 | 1600 下 AI 与 Observables 同列堆叠（符合 07 规格，原型更像独立列）；图层开关密度低于原型 | 可视化是 2D SVG，不是原型 3D 视口；缺题干几何附图 | 缺完整 Windows chrome、完整工具条、3D 视口控件、轨迹图 |
 
 **不能写成「已经高度还原」。** 信息架构、分栏、色板、关键文案已按原型落地；3D/实拍资产与 Desktop chrome 仍有像素级差距。
 
@@ -245,13 +245,13 @@ pnpm build
 
 ## 17. 风险
 
-| 风险 | 等级 | 说明 |
-| --- | --- | --- |
-| Harness 快速演进 | 高 | 已 pin SHA；升级必须走 Adapter + 本文档流程 |
-| submodule + lefthook | 中 | Windows 下默认 postinstall 失败；不要为此改 upstream |
-| UI 资产缺口 | 中 | 无 3D/摄影素材时无法像素级对齐 Hero/入口卡 |
-| Fixture 被误当成 Engine | 中 | 已集中存放并标注 PROTOTYPE ONLY |
-| KaTeX HTML | 低 | 当前 tex 来自仓库 fixture，不是用户输入 |
+| 风险                    | 等级 | 说明                                                 |
+| ----------------------- | ---- | ---------------------------------------------------- |
+| Harness 快速演进        | 高   | 已 pin SHA；升级必须走 Adapter + 本文档流程          |
+| submodule + lefthook    | 中   | Windows 下默认 postinstall 失败；不要为此改 upstream |
+| UI 资产缺口             | 中   | 无 3D/摄影素材时无法像素级对齐 Hero/入口卡           |
+| Fixture 被误当成 Engine | 中   | 已集中存放并标注 PROTOTYPE ONLY                      |
+| KaTeX HTML              | 低   | 当前 tex 来自仓库 fixture，不是用户输入              |
 
 code-audit 结论：**无架构阻断**。未宣称可上线。未 mock Physics Engine。
 

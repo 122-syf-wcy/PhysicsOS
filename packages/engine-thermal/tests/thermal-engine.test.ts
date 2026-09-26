@@ -36,10 +36,7 @@ const meltingScene = (
 const KELVIN_AT_ZERO_CELSIUS = 273.15
 
 const simulated = (scene: PhysicsScene) =>
-  thermalEngine.simulate(
-    scene,
-    createThermalSimulationRequest(scene, 'sim-heat', 'trace-heat'),
-  )
+  thermalEngine.simulate(scene, createThermalSimulationRequest(scene, 'sim-heat', 'trace-heat'))
 
 const execute = <T extends SceneCommandType>(
   runtime: SceneRuntime,
@@ -111,8 +108,9 @@ describe('heating curve timing', () => {
     expect(timing.meltingDuration).toBe(0)
     expect(timing.totalTime).toBeCloseTo(168, 9)
     /* No stretch where the temperature stands still. */
-    expect(thermalStateAt(model, 83).temperature)
-      .toBeLessThan(thermalStateAt(model, 85).temperature)
+    expect(thermalStateAt(model, 83).temperature).toBeLessThan(
+      thermalStateAt(model, 85).temperature,
+    )
     expect(thermalStateAt(model, 168).temperature).toBeCloseTo(KELVIN_AT_ZERO_CELSIUS + 10, 9)
   })
 
@@ -147,10 +145,12 @@ describe('thermal engine', () => {
     const bench = thermalBenchOf(scene)!
     const melted: PhysicsScene = {
       ...scene,
-      thermalBenches: [{
-        ...bench,
-        sample: { ...bench.sample, initialTemperature: quantity(400, 'K', 'temperature') },
-      }],
+      thermalBenches: [
+        {
+          ...bench,
+          sample: { ...bench.sample, initialTemperature: quantity(400, 'K', 'temperature') },
+        },
+      ],
     }
     expect(thermalEngine.canHandle(melted).supported).toBe(false)
   })
@@ -160,11 +160,13 @@ describe('thermal engine', () => {
     const bench = thermalBenchOf(scene)!
     const liquid: PhysicsScene = {
       ...scene,
-      thermalBenches: [{
-        ...bench,
-        sample: { ...bench.sample, initialTemperature: quantity(293.15, 'K', 'temperature') },
-        runDuration: quantity(420, 's', 'time'),
-      }],
+      thermalBenches: [
+        {
+          ...bench,
+          sample: { ...bench.sample, initialTemperature: quantity(293.15, 'K', 'temperature') },
+          runDuration: quantity(420, 's', 'time'),
+        },
+      ],
     }
     expect(thermalEngine.canHandle(liquid)).toMatchObject({ supported: true })
     const model = resolveThermalModel(liquid)
@@ -188,7 +190,7 @@ describe('thermal engine', () => {
 
   it('passes every verification check on the textbook crystal', () => {
     const outcome = simulated(meltingScene())
-    const ids = outcome.verification.checks.map(entry => entry.id)
+    const ids = outcome.verification.checks.map((entry) => entry.id)
     expect(ids).toContain('energy_conservation')
     expect(ids).toContain('heating_rate_ratio')
     expect(ids).toContain('melting_plateau')
@@ -198,7 +200,7 @@ describe('thermal engine', () => {
 
   it('swaps the plateau checks for the amorphous check when there is no melting point', () => {
     const outcome = simulated(meltingScene({ latentHeat: 0 }))
-    const ids = outcome.verification.checks.map(entry => entry.id)
+    const ids = outcome.verification.checks.map((entry) => entry.id)
     expect(ids).toContain('amorphous_no_plateau')
     expect(ids).not.toContain('melting_plateau')
     expect(ids).not.toContain('plateau_duration')
@@ -207,7 +209,7 @@ describe('thermal engine', () => {
 
   it('marks the start of heating, of melting and of the finished melt', () => {
     const outcome = simulated(meltingScene())
-    expect(outcome.events.map(event => event.type)).toEqual([
+    expect(outcome.events.map((event) => event.type)).toEqual([
       'HeatingStarted',
       'MeltingStarted',
       'MeltingComplete',
@@ -216,7 +218,7 @@ describe('thermal engine', () => {
     expect(outcome.events[2]?.time).toBeCloseTo(752, 9)
 
     const amorphous = simulated(meltingScene({ latentHeat: 0 }))
-    expect(amorphous.events.map(event => event.type)).toEqual([
+    expect(amorphous.events.map((event) => event.type)).toEqual([
       'HeatingStarted',
       'SofteningStarted',
     ])
@@ -226,11 +228,13 @@ describe('thermal engine', () => {
     const outcome = simulated(meltingScene())
     expect(outcome.states).toHaveLength(97)
     const plateau = outcome.states.filter((state) => {
-      const values = state.objects.find(object => object.id === 'thermal-bench-1')?.values
+      const values = state.objects.find((object) => object.id === 'thermal-bench-1')?.values
       const temperature = values?.['temperature']
-      return temperature !== undefined &&
+      return (
+        temperature !== undefined &&
         isScalarQuantity(temperature) &&
         Math.abs(temperature.value - KELVIN_AT_ZERO_CELSIUS) < 1e-9
+      )
     })
     /* 668 s of a 836 s run is four fifths of the graph. */
     expect(plateau.length).toBeGreaterThan(60)
@@ -265,19 +269,25 @@ describe('thermal scene commands', () => {
     })
     expect(result.ok).toBe(true)
     expect(runtime.getEvents().at(-1)?.type).toBe('HeaterPowerChanged')
-    expect(heatingTimingOf(resolveThermalModel(runtime.getScene())).meltingDuration)
-      .toBeCloseTo(334, 9)
+    expect(heatingTimingOf(resolveThermalModel(runtime.getScene())).meltingDuration).toBeCloseTo(
+      334,
+      9,
+    )
   })
 
   it('scales the plateau with the sample mass', () => {
     const runtime = new SceneRuntime(meltingScene())
-    expect(execute(runtime, 'SetSampleMass', {
-      benchId: 'thermal-bench-1',
-      mass: quantity(200, 'g', 'mass'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetSampleMass', {
+        benchId: 'thermal-bench-1',
+        mass: quantity(200, 'g', 'mass'),
+      }).ok,
+    ).toBe(true)
     expect(thermalBenchOf(runtime.getScene())?.sample.mass.value).toBe(200)
-    expect(heatingTimingOf(resolveThermalModel(runtime.getScene())).meltingDuration)
-      .toBeCloseTo(1336, 9)
+    expect(heatingTimingOf(resolveThermalModel(runtime.getScene())).meltingDuration).toBeCloseTo(
+      1336,
+      9,
+    )
   })
 
   it('rejects a non-positive power or mass instead of solving a broken bench', () => {
@@ -341,30 +351,32 @@ describe('heat-capacity comparison', () => {
 
   it('passes the equal-heat and inverse-ratio checks', () => {
     const outcome = simulated(comparisonScene())
-    const ids = outcome.verification.checks.map(entry => entry.id)
+    const ids = outcome.verification.checks.map((entry) => entry.id)
     expect(ids).toContain('energy_conservation')
     expect(ids).toContain('equal_heat_absorbed')
     expect(ids).toContain('specific_heat_ratio')
     expect(ids).not.toContain('melting_plateau')
     expect(outcome.verification.status).toBe('passed')
     expect(derivedScalar(outcome.derivedQuantities, 'temperature_rise').value).toBeCloseTo(50, 9)
-    expect(derivedScalar(outcome.derivedQuantities, 'comparison_temperature_rise').value)
-      .toBeCloseTo(100, 9)
-    expect(outcome.events.map(event => event.type)).toEqual(['HeatingStarted'])
+    expect(
+      derivedScalar(outcome.derivedQuantities, 'comparison_temperature_rise').value,
+    ).toBeCloseTo(100, 9)
+    expect(outcome.events.map((event) => event.type)).toEqual(['HeatingStarted'])
   })
 
   it('keeps the two samples on the same clock after a mass edit', () => {
     const runtime = new SceneRuntime(comparisonScene())
-    expect(execute(runtime, 'SetSampleMass', {
-      benchId: 'thermal-bench-1',
-      mass: quantity(200, 'g', 'mass'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetSampleMass', {
+        benchId: 'thermal-bench-1',
+        mass: quantity(200, 'g', 'mass'),
+      }).ok,
+    ).toBe(true)
     const bench = thermalBenchOf(runtime.getScene())
     expect(bench?.sample.mass.value).toBe(200)
     expect(bench?.comparisonSample?.mass.value).toBe(200)
     const model = resolveThermalModel(runtime.getScene())
     /* Twice the mass, same Q budget per second, half the temperature rise. */
-    expect(thermalStateAt(model, 420).temperature)
-      .toBeCloseTo(KELVIN_AT_ZERO_CELSIUS + 20 + 25, 9)
+    expect(thermalStateAt(model, 420).temperature).toBeCloseTo(KELVIN_AT_ZERO_CELSIUS + 20 + 25, 9)
   })
 })

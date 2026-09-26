@@ -260,7 +260,10 @@ describe('current engine support', () => {
   })
 
   it('rejects a zero current at both gates — a dead conductor is not a rig', () => {
-    const scene = { ...wireScene(), currentBenches: [{ ...currentBenchesOf(wireScene())[0]!, current: undefined }] }
+    const scene = {
+      ...wireScene(),
+      currentBenches: [{ ...currentBenchesOf(wireScene())[0]!, current: undefined }],
+    }
     expect(currentFieldEngine.canHandle(scene).supported).toBe(false)
 
     const zero = createStraightWireFieldScene({ current: 0 })
@@ -276,7 +279,10 @@ describe('current engine support', () => {
     const solenoid = currentBenchesOf(solenoidScene())[0]!
     const noTurns = { ...solenoidScene(), currentBenches: [{ ...solenoid, turns: undefined }] }
     expect(currentFieldEngine.canHandle(noTurns).supported).toBe(false)
-    const noLength = { ...solenoidScene(), currentBenches: [{ ...solenoid, coilLength: undefined }] }
+    const noLength = {
+      ...solenoidScene(),
+      currentBenches: [{ ...solenoid, coilLength: undefined }],
+    }
     expect(currentFieldEngine.canHandle(noLength).supported).toBe(false)
   })
 
@@ -372,7 +378,7 @@ describe('electromagnet rig', () => {
     /* B²A/(2μ₀) = (8π×10⁻²)²·4×10⁻⁴/(8π×10⁻⁷) = 3.2π N exactly. */
     expect(reading.pull).toBeCloseTo(3.2 * Math.PI, 12)
     expect(reading.pull).toBeCloseTo(10.053096491487338, 12)
-    expect(reading.heldMass).toBeCloseTo(3.2 * Math.PI / 9.8, 12)
+    expect(reading.heldMass).toBeCloseTo((3.2 * Math.PI) / 9.8, 12)
     /* The air-cored coil of the same winding holds a quarter of a millinewton:
        the core is the whole reason the rig lifts anything. */
     expect(reading.airHeldMass).toBeCloseTo(reading.heldMass / 40000, 12)
@@ -383,7 +389,10 @@ describe('electromagnet rig', () => {
     const twice = poleFacePull(coreFieldMagnitude(2, 200, 0.2, 200), 4e-4)
     expect(twice / once).toBeCloseTo(4, 12)
     /* B itself only doubles — the square is the pull's, not the field's. */
-    expect(coreFieldMagnitude(2, 200, 0.2, 200) / coreFieldMagnitude(1, 200, 0.2, 200)).toBeCloseTo(2, 12)
+    expect(coreFieldMagnitude(2, 200, 0.2, 200) / coreFieldMagnitude(1, 200, 0.2, 200)).toBeCloseTo(
+      2,
+      12,
+    )
   })
 
   it('multiplies the pull by 16 when the core’s μ_r is multiplied by 4', () => {
@@ -419,7 +428,7 @@ describe('electromagnet rig', () => {
     expect(scalarOf(scene, 'pole_face_pull')).toBeCloseTo(3.2 * Math.PI, 12)
     expect(scalarOf(scene, 'held_mass')).toBeCloseTo((3.2 * Math.PI) / 9.8, 12)
     expect(scalarOf(scene, 'comparison_pull')).toBeCloseTo(51.2 * Math.PI, 12)
-    const pull = simulated(scene).derivedQuantities.find(entry => entry.key === 'pole_face_pull')
+    const pull = simulated(scene).derivedQuantities.find((entry) => entry.key === 'pole_face_pull')
     expect(pull?.formula?.expression).toBe('F = B²A/(2μ₀)')
   })
 
@@ -436,13 +445,24 @@ describe('electromagnet rig', () => {
     }
     expect(currentFieldEngine.canHandle(coreless).supported).toBe(false)
 
-    const pointless = { ...electromagnetScene(), currentBenches: [{ ...bench, coreArea: undefined }] }
+    const pointless = {
+      ...electromagnetScene(),
+      currentBenches: [{ ...bench, coreArea: undefined }],
+    }
     expect(currentFieldEngine.canHandle(pointless).supported).toBe(false)
 
     /* μ_r = 1 is the air-cored coil — a legitimate rig — but zero is not a core. */
-    expect(currentFieldEngine.canHandle(createElectromagnetScene({ coreRelativePermeability: 1 })).supported).toBe(true)
-    expect(currentFieldEngine.canHandle(createElectromagnetScene({ coreRelativePermeability: 0 })).supported).toBe(false)
-    expect(currentFieldEngine.validate(createElectromagnetScene({ coreRelativePermeability: 0 })).status).toBe('failed')
+    expect(
+      currentFieldEngine.canHandle(createElectromagnetScene({ coreRelativePermeability: 1 }))
+        .supported,
+    ).toBe(true)
+    expect(
+      currentFieldEngine.canHandle(createElectromagnetScene({ coreRelativePermeability: 0 }))
+        .supported,
+    ).toBe(false)
+    expect(
+      currentFieldEngine.validate(createElectromagnetScene({ coreRelativePermeability: 0 })).status,
+    ).toBe('failed')
   })
 
   it('takes the coil commands as well as the core ones', () => {
@@ -565,7 +585,10 @@ describe('motor rig', () => {
 
   it('doubles the torque when the current doubles — linear, unlike the electromagnet', () => {
     const area = coilAreaOf(0.06, 0.04)
-    expect(motorTorqueAt(0.5, 4, 100, area, 0) / motorTorqueAt(0.5, 2, 100, area, 0)).toBeCloseTo(2, 12)
+    expect(motorTorqueAt(0.5, 4, 100, area, 0) / motorTorqueAt(0.5, 2, 100, area, 0)).toBeCloseTo(
+      2,
+      12,
+    )
   })
 
   it('verifies the ampere couple, the dead point, the commutator and the linearity', () => {
@@ -591,7 +614,7 @@ describe('motor rig', () => {
     expect(scalarOf(scene, 'motor_torque')).toBeCloseTo(0.24, 15)
     expect(scalarOf(scene, 'peak_torque')).toBeCloseTo(0.24, 15)
     expect(scalarOf(scene, 'rotation_sense')).toBe(1)
-    const torque = simulated(scene).derivedQuantities.find(entry => entry.key === 'motor_torque')
+    const torque = simulated(scene).derivedQuantities.find((entry) => entry.key === 'motor_torque')
     expect(torque?.formula?.expression).toBe('τ = n·B·I·A·cosθ')
   })
 

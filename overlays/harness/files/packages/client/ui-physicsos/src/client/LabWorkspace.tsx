@@ -29,6 +29,8 @@ import type { NoticeApi } from './notice-api.ts'
 import type { NoticeCacheStorage } from './notice-cache.ts'
 import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
+import { ClassSurface } from './ClassSurface.tsx'
+import type { ClassApi } from './class-api.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { LearningRecordWorkspace } from './LearningRecordWorkspace.tsx'
 import { LibraryWorkspace } from './LibraryWorkspace.tsx'
@@ -56,6 +58,7 @@ import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-r
 import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
 import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
 import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
+import { createModernPhysicsWorkspaceRuntime } from './physics/modern-workspace-runtime.ts'
 import {
   createCollisionWorkspaceRuntime,
   isCollisionSceneInput,
@@ -89,6 +92,8 @@ export interface PhysicsSurfaceInjected {
   adminApi?: AdminApi
   /** `/physicsos/notice` client — absent in stripped test compositions. */
   noticeApi?: NoticeApi
+  /** `/physicsos/class` client — absent in stripped test compositions. */
+  classApi?: ClassApi
   /**
    * Account-namespaced storage for the 公告 offline cache (方案 2.3).
    * Per-account, not per-machine: a campus notice must not follow a
@@ -133,6 +138,7 @@ export function PhysicsSurface({
   paperApi,
   adminApi,
   noticeApi,
+  classApi,
   noticeStorage,
   useAuth,
 }: PhysicsSurfaceProps) {
@@ -244,6 +250,13 @@ export function PhysicsSurface({
         useWorkspaces={useWorkspaces}
       />
     )
+  }
+  /* 班级教学 is one surface with two faces: a teacher gets roster + assignment
+     publishing + review, a student gets their classes, due work, and receipts.
+     The host decides what each role may actually read or write. */
+  if (surface === 'class') {
+    if (classApi === undefined) return null
+    return <ClassSurface api={classApi} useAuth={useAuth} />
   }
   if (choosing) {
     /* A resumable scene means the chooser was opened OVER a running experiment
@@ -397,6 +410,8 @@ export const buildWorkspaceRuntime = (
       return scene === undefined ? null : createWaveWorkspaceRuntime(scene)
     case 'composite':
       return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
+    case 'modern':
+      return scene === undefined ? null : createModernPhysicsWorkspaceRuntime(scene)
     case 'magnetic':
       /* The magnetic domain carries two benches — the Lorentz particle scene and
          the current-magnetic rigs — and they share a canvas but not a runtime,

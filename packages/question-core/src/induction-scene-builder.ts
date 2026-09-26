@@ -84,8 +84,7 @@ export function buildInductionSceneFromIR(
 
   /* flux_change_emf */
   const areaSI = ir.inductionCoilArea ?? knownValue(ir, 'coil_area') ?? 5e-3
-  const angleRad =
-    ir.inductionCoilAngle ?? knownValue(ir, 'coil_angle') ?? 0
+  const angleRad = ir.inductionCoilAngle ?? knownValue(ir, 'coil_angle') ?? 0
   const fluxRate = ir.inductionFluxRate ?? knownValue(ir, 'flux_rate') ?? 0.05
   const scene = createFluxChangeScene({
     ...(sceneId === undefined ? {} : { sceneId }),

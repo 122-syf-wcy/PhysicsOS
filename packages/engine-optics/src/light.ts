@@ -71,11 +71,7 @@ export const pinholeReadingOf = (model: ResolvedPinholeModel): PinholeReading =>
     objectDistance: model.objectDistance,
     screenDistance: model.screenDistance,
     magnification: pinholeMagnification(model.objectDistance, model.screenDistance),
-    imageHeight: pinholeImageHeight(
-      model.objectHeight,
-      model.objectDistance,
-      model.screenDistance,
-    ),
+    imageHeight: pinholeImageHeight(model.objectHeight, model.objectDistance, model.screenDistance),
     tipAt: points.tip,
     tailAt: points.tail,
     inverted: points.tip < 0 && points.tail > 0,

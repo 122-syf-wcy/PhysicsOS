@@ -109,10 +109,7 @@ export interface MotorSpec {
 
 /** Discriminated authoring input: one rig per bench. */
 export type CurrentBenchSpec =
-  | StraightWireFieldSpec
-  | SolenoidFieldSpec
-  | ElectromagnetSpec
-  | MotorSpec
+  StraightWireFieldSpec | SolenoidFieldSpec | ElectromagnetSpec | MotorSpec
 
 export interface CurrentBenchSceneInput {
   readonly sceneId?: string
@@ -150,22 +147,18 @@ const toBench = (spec: CurrentBenchSpec): CurrentBench => {
       type: 'electromagnet',
       turns: quantity(spec.turns, '', 'dimensionless'),
       coilLength: quantity(spec.coilLength / 100, 'm', 'length'),
-      coreRelativePermeability: quantity(
-        spec.coreRelativePermeability ?? 1,
-        '',
-        'dimensionless',
-      ),
+      coreRelativePermeability: quantity(spec.coreRelativePermeability ?? 1, '', 'dimensionless'),
       coreArea: quantity((spec.coreArea ?? 4) / 1e4, 'm^2', 'area'),
       gravity: quantity(spec.gravity ?? 9.8, 'm/s^2', 'acceleration'),
       ...(spec.comparisonCoreRelativePermeability === undefined
         ? {}
         : {
-          comparisonCoreRelativePermeability: quantity(
-            spec.comparisonCoreRelativePermeability,
-            '',
-            'dimensionless',
-          ),
-        }),
+            comparisonCoreRelativePermeability: quantity(
+              spec.comparisonCoreRelativePermeability,
+              '',
+              'dimensionless',
+            ),
+          }),
     }
   }
   if (spec.type === 'solenoid') {
@@ -272,8 +265,7 @@ export const createCurrentBenchScene = (input: CurrentBenchSceneInput): PhysicsS
  * Current-magnetic benches of a scene. Legacy-safe: scenes persisted before
  * this slice have no `currentBenches` collection, so readers fall back to `[]`.
  */
-export const currentBenchesOf = (scene: PhysicsScene): CurrentBench[] =>
-  scene.currentBenches ?? []
+export const currentBenchesOf = (scene: PhysicsScene): CurrentBench[] => scene.currentBenches ?? []
 
 /** The single bench of a current-magnetic scene, if present. */
 export const currentBenchOf = (scene: PhysicsScene): CurrentBench | undefined =>

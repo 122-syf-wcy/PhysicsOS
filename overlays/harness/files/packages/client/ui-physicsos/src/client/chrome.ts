@@ -215,14 +215,49 @@ const PHYSICSOS_CHROME_CSS = `${PHYSICS_TOKENS}
      source token lives there. The canvas tokens above stay fixed-light on
      purpose: the physics inks are tuned against a white sheet, so a dark host
      keeps the sheet and darkens only the desk and the panels around it. */
-  --physics-glass-fill: rgba(255, 255, 255, 0.68);
-  --physics-glass-fill-strong: rgba(255, 255, 255, 0.82);
+  --physics-glass-fill: rgba(255, 255, 255, 0.55);
+  --physics-glass-fill-strong: rgba(255, 255, 255, 0.7);
   --physics-glass-border: rgba(255, 255, 255, 0.84);
   --physics-glass-border-soft: rgba(148, 173, 199, 0.34);
   --physics-glass-shadow: 0 16px 36px rgba(65, 93, 122, 0.1);
   --physics-glass-shadow-raised: 0 18px 42px rgba(65, 93, 122, 0.14);
   --physics-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --physics-glass-plate: #f7f9fc;
+
+  /* ---------- liquid glass ----------
+     The floating material for the console surfaces (出卷专区 / 管理后台 / 学习记录 /
+     登录门). A lens reads as glass only when three ingredients stack: a blurred
+     backdrop that actually refracts what is behind it, a specular sheen across
+     the top edge where light enters, and a bright 1px rim that follows the
+     curve. A flat translucent fill without them is just a grey box — which is
+     exactly what these pages looked like before. */
+  --physics-glass-blur: saturate(1.7) blur(22px);
+  --physics-glass-blur-soft: saturate(1.4) blur(12px);
+  --physics-glass-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(255, 255, 255, 0.22) 38%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  --physics-glass-rim:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.26);
+  --physics-glass-lift:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 14px 34px -10px rgba(30, 58, 95, 0.22);
+  --physics-glass-lift-raised:
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    0 26px 54px -14px rgba(30, 58, 95, 0.3);
+  --physics-glass-popover: rgba(255, 255, 255, 0.94);
+  /* Ambient light behind the panels. Without something coloured to blur, every
+     glass surface above resolves to the page's own flat fill. */
+  --physics-glass-ambient:
+    radial-gradient(46% 58% at 10% 6%, rgba(37, 99, 235, 0.26), transparent 66%),
+    radial-gradient(40% 50% at 90% 4%, rgba(13, 148, 136, 0.22), transparent 68%),
+    radial-gradient(50% 62% at 82% 94%, rgba(124, 58, 237, 0.2), transparent 70%),
+    radial-gradient(40% 50% at 18% 92%, rgba(217, 119, 6, 0.16), transparent 68%),
+    radial-gradient(70% 90% at 50% 50%, rgba(255, 255, 255, 0.5), transparent 76%);
 
   /* Interaction tint: a pale wash of the meaning colour over the host's base
      surface. Written as a mix rather than a fixed pale hex so a dark host gets
@@ -268,6 +303,28 @@ body[data-ds-dark-theme] {
   --physics-glass-shadow-raised: 0 18px 42px rgba(0, 0, 0, 0.6);
   --physics-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --physics-glass-plate: var(--dsw-alias-bg-layer-2, #2c2c2e);
+  --physics-glass-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.03) 42%,
+    rgba(255, 255, 255, 0) 72%
+  );
+  --physics-glass-rim:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --physics-glass-lift:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 16px 38px -12px rgba(0, 0, 0, 0.62);
+  --physics-glass-lift-raised:
+    0 2px 6px rgba(0, 0, 0, 0.44),
+    0 28px 58px -16px rgba(0, 0, 0, 0.72);
+  --physics-glass-popover: rgba(38, 38, 41, 0.96);
+  --physics-glass-ambient:
+    radial-gradient(46% 58% at 10% 6%, rgba(59, 130, 246, 0.28), transparent 66%),
+    radial-gradient(40% 50% at 90% 4%, rgba(13, 148, 136, 0.22), transparent 68%),
+    radial-gradient(50% 62% at 82% 94%, rgba(139, 92, 246, 0.26), transparent 70%),
+    radial-gradient(40% 50% at 18% 92%, rgba(245, 158, 11, 0.16), transparent 68%);
   --physics-tint-accent-ink: var(--dsw-static-blue-300, #93c5fd);
 
   /* Ink flips to the light end of each hue: the same words sit on a near-black
@@ -324,7 +381,9 @@ body[data-ds-dark-theme] {
 }
 `
 
-/** Install PhysicsOS focus / scrollbar overrides for the Web Client lifetime. */
+/** Install PhysicsOS focus / scrollbar overrides for the Web Client lifetime.
+ * @returns a disposer that removes the injected style element.
+ */
 export function mountPhysicsOSChrome(): () => void {
   const previous = document.head.querySelector('style[data-physicsos-chrome]')
   previous?.remove()

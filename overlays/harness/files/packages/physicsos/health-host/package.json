@@ -5,23 +5,29 @@
   "private": true,
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
+      "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/**/*.js",
-    "lib/**/*.d.ts",
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
     "deployment.patch.yml",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "bundle": "tsc -b tsconfig.json && tsdown"
   },
   "license": "PolyForm-Noncommercial-1.0.0"
 }

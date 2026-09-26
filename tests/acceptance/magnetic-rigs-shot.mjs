@@ -43,7 +43,12 @@ const labelBoxes = () =>
           rect.right > box.right + 1 ||
           rect.top < box.top - 1 ||
           rect.bottom > box.bottom + 1,
-        box: [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)],
+        box: [
+          Math.round(rect.left),
+          Math.round(rect.top),
+          Math.round(rect.width),
+          Math.round(rect.height),
+        ],
       }
     })
     return { canvas: [Math.round(box.width), Math.round(box.height)], labels }
@@ -96,7 +101,9 @@ const apparatus = () =>
       spin: one('motor-spin'),
       north: one('current-pole-north'),
       south: one('current-pole-south'),
-      testIds: [...svg.querySelectorAll('[data-testid]')].map(node => node.getAttribute('data-testid')),
+      testIds: [...svg.querySelectorAll('[data-testid]')].map((node) =>
+        node.getAttribute('data-testid'),
+      ),
     }
   })
 
@@ -132,8 +139,8 @@ const inkCollisions = () =>
         const className = node.getAttribute('class') ?? ''
         return className.includes('currentReading') || className.includes('currentPoleLabel')
       })
-      .map(node => ({ text: (node.textContent ?? '').trim(), ...rectOf(node) }))
-    const rings = [...svg.querySelectorAll('[data-testid^="current-ring-"] circle')].map(node => {
+      .map((node) => ({ text: (node.textContent ?? '').trim(), ...rectOf(node) }))
+    const rings = [...svg.querySelectorAll('[data-testid^="current-ring-"] circle')].map((node) => {
       const rect = rectOf(node)
       return {
         cx: rect.x + rect.w / 2,
@@ -141,7 +148,7 @@ const inkCollisions = () =>
         r: rect.w / 2 - 0.8,
       }
     })
-    const loops = [...svg.querySelectorAll('[data-testid="current-coil"] ellipse')].map(node => {
+    const loops = [...svg.querySelectorAll('[data-testid="current-coil"] ellipse')].map((node) => {
       const rect = rectOf(node)
       return {
         cx: rect.x + rect.w / 2,
@@ -175,7 +182,12 @@ const inkCollisions = () =>
           const angle = (2 * Math.PI * step) / 96
           const x = loop.cx + loop.rx * Math.cos(angle)
           const y = loop.cy + loop.ry * Math.sin(angle)
-          if (x >= label.x - 1 && x <= label.x + label.w + 1 && y >= label.y - 1 && y <= label.y + label.h + 1) {
+          if (
+            x >= label.x - 1 &&
+            x <= label.x + label.w + 1 &&
+            y >= label.y - 1 &&
+            y <= label.y + label.h + 1
+          ) {
             violations.push(`${label.text} 压在匝上`)
             break
           }
@@ -184,7 +196,11 @@ const inkCollisions = () =>
     }
     return {
       labels,
-      rings: rings.map(ring => ({ cx: Math.round(ring.cx), cy: Math.round(ring.cy), r: Math.round(ring.r) })),
+      rings: rings.map((ring) => ({
+        cx: Math.round(ring.cx),
+        cy: Math.round(ring.cy),
+        r: Math.round(ring.r),
+      })),
       violations: [...new Set(violations)],
     }
   })
@@ -238,7 +254,9 @@ const openRig = async (rig) => {
 
 const backToPicker = async () => {
   await page.getByTitle('切换实验').click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 15_000 })
 }
 
 /** How far apart two points are, in canvas pixels. */
@@ -246,7 +264,8 @@ const gap = (a, b) => Math.round(Math.hypot(a.cx - b.cx, a.cy - b.cy))
 
 const checkRig = async (rig, width) => {
   const parts = await apparatus()
-  const show = box => (box === null || box === undefined ? 'none' : `${box.x},${box.y},${box.w},${box.h}`)
+  const show = (box) =>
+    box === null || box === undefined ? 'none' : `${box.x},${box.y},${box.w},${box.h}`
 
   if (rig.id === 'straight-wire-field') {
     /* The field is a set of rings AROUND the conductor, so the conductor's
@@ -288,12 +307,20 @@ const checkRig = async (rig, width) => {
     const south = parts?.south
     const coil = parts?.coil
     const opposite =
-      north !== null && north !== undefined && south !== null && south !== undefined && coil !== null &&
+      north !== null &&
+      north !== undefined &&
+      south !== null &&
+      south !== undefined &&
+      coil !== null &&
       coil !== undefined
         ? (north.cx - coil.cx) * (south.cx - coil.cx) < 0
         : false
     const outside =
-      north !== null && north !== undefined && coil !== null && coil !== undefined && south !== null &&
+      north !== null &&
+      north !== undefined &&
+      coil !== null &&
+      coil !== undefined &&
+      south !== null &&
       south !== undefined
         ? north.cx > coil.x + coil.w && south.cx < coil.x
         : false
@@ -326,7 +353,8 @@ const checkRig = async (rig, width) => {
         armature !== undefined &&
         parts?.north !== null &&
         parts?.north !== undefined &&
-        ((armature.x > (parts.north.x ?? 0)) === (parts.north.x > (parts?.core?.x ?? 0) + (parts?.core?.w ?? 0) / 2)),
+        armature.x > (parts.north.x ?? 0) ===
+          parts.north.x > (parts?.core?.x ?? 0) + (parts?.core?.w ?? 0) / 2,
       `衔铁 ${show(armature)}｜N ${show(parts?.north)}`,
     )
   }
@@ -374,7 +402,7 @@ const checkRig = async (rig, width) => {
   )
   if (width === 1600) {
     stdout.write(
-      `  ${rig.id} 读数标注 ${JSON.stringify((ink?.labels ?? []).map(label => [label.text, Math.round(label.x), Math.round(label.y), Math.round(label.w), Math.round(label.h)]))}\n`,
+      `  ${rig.id} 读数标注 ${JSON.stringify((ink?.labels ?? []).map((label) => [label.text, Math.round(label.x), Math.round(label.y), Math.round(label.w), Math.round(label.h)]))}\n`,
     )
     stdout.write(`  ${rig.id} 圈 ${JSON.stringify(ink?.rings ?? [])}\n`)
   }
@@ -385,7 +413,9 @@ try {
   await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60_000 })
   await registerStudent(page)
   await page.getByRole('button', { name: '物理实验室' }).click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
 
   for (const [index, rig] of RIGS.entries()) {
     if (index > 0) await backToPicker()
@@ -398,15 +428,19 @@ try {
     await canvas.screenshot({ path: wide })
     shots.push(wide)
     const boxes = await labelBoxes()
-    const outside = (boxes?.labels ?? []).filter(label => label.outside)
+    const outside = (boxes?.labels ?? []).filter((label) => label.outside)
     check(
       `${rig.id} 的标注都在画布内`,
       outside.length === 0,
-      outside.map(label => `${label.text}@${label.box.join(',')}`).join(' | '),
+      outside.map((label) => `${label.text}@${label.box.join(',')}`).join(' | '),
     )
     /* The rig has to actually say something — an empty canvas would pass the
        containment check for the wrong reason. */
-    check(`${rig.id} 画出了标注`, (boxes?.labels.length ?? 0) >= 3, `${boxes?.labels.length ?? 0} 个`)
+    check(
+      `${rig.id} 画出了标注`,
+      (boxes?.labels.length ?? 0) >= 3,
+      `${boxes?.labels.length ?? 0} 个`,
+    )
     await checkRig(rig, 1600)
 
     /* Narrower viewport: the layout has less room, which is where a long label
@@ -417,18 +451,18 @@ try {
     await page.screenshot({ path: narrow })
     shots.push(narrow)
     const narrowBoxes = await labelBoxes()
-    const narrowOutside = (narrowBoxes?.labels ?? []).filter(label => label.outside)
+    const narrowOutside = (narrowBoxes?.labels ?? []).filter((label) => label.outside)
     check(
       `${rig.id} 在 1280 宽下标注仍在画布内`,
       narrowOutside.length === 0,
-      narrowOutside.map(label => `${label.text}@${label.box.join(',')}`).join(' | '),
+      narrowOutside.map((label) => `${label.text}@${label.box.join(',')}`).join(' | '),
     )
     await checkRig(rig, 1280)
     await page.setViewportSize({ width: 1600, height: 900 })
     await page.waitForTimeout(320)
 
     stdout.write(
-      `  ${rig.id} 画布 ${JSON.stringify(boxes?.canvas)}｜标注 ${JSON.stringify((boxes?.labels ?? []).map(l => l.text))}\n`,
+      `  ${rig.id} 画布 ${JSON.stringify(boxes?.canvas)}｜标注 ${JSON.stringify((boxes?.labels ?? []).map((l) => l.text))}\n`,
     )
   }
 } finally {

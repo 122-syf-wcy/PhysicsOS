@@ -79,7 +79,10 @@ export const isPointChargeScene = (scene: PhysicsScene): boolean =>
 export const canHandlePointCharge = (scene: PhysicsScene): ModelSupport => {
   const fields = pointChargeFields(scene)
   if (scene.dimension !== '2d') {
-    return unsupportedModel([failure('scene_is_2d', 'Electric V1 supports 2D scenes only.')], 'engine-electric')
+    return unsupportedModel(
+      [failure('scene_is_2d', 'Electric V1 supports 2D scenes only.')],
+      'engine-electric',
+    )
   }
   if (fields.length === 0) {
     return unsupportedModel(
@@ -89,7 +92,12 @@ export const canHandlePointCharge = (scene: PhysicsScene): ModelSupport => {
   }
   if (scene.fields.length !== fields.length) {
     return unsupportedModel(
-      [failure('point_charge_fields_only', 'Mixing a point-charge field with another field type is not supported yet.')],
+      [
+        failure(
+          'point_charge_fields_only',
+          'Mixing a point-charge field with another field type is not supported yet.',
+        ),
+      ],
       'engine-electric',
     )
   }
@@ -101,7 +109,12 @@ export const canHandlePointCharge = (scene: PhysicsScene): ModelSupport => {
   }
   if (scene.boundaries.length > 0 || scene.constraints.length > 0 || scene.forces.length > 0) {
     return unsupportedModel(
-      [failure('electric_force_only', 'Electric V1 does not combine explicit forces, boundaries or constraints.')],
+      [
+        failure(
+          'electric_force_only',
+          'Electric V1 does not combine explicit forces, boundaries or constraints.',
+        ),
+      ],
       'engine-electric',
     )
   }
@@ -109,7 +122,10 @@ export const canHandlePointCharge = (scene: PhysicsScene): ModelSupport => {
   const sources = sourceChargesOf(scene.particles, scene.fields)
   if (sources.length !== fields.length) {
     return invalidModelCondition('engine-electric', [
-      failure('field_source_exists', 'Every point-charge field must name a particle that exists in the scene.'),
+      failure(
+        'field_source_exists',
+        'Every point-charge field must name a particle that exists in the scene.',
+      ),
     ])
   }
   for (const source of sources) {
@@ -127,7 +143,12 @@ export const canHandlePointCharge = (scene: PhysicsScene): ModelSupport => {
        retarded potentials rather than Coulomb's law. */
     if (magnitude(toCanonicalVector(source.velocity).vectorSI) > 1e-12) {
       return unsupportedModel(
-        [failure('static_sources', 'A moving source charge produces a time-varying field, which Electric V1 does not model.')],
+        [
+          failure(
+            'static_sources',
+            'A moving source charge produces a time-varying field, which Electric V1 does not model.',
+          ),
+        ],
         'engine-electric',
       )
     }
@@ -141,20 +162,27 @@ export const canHandlePointCharge = (scene: PhysicsScene): ModelSupport => {
       ])
     }
     const onSource = resolveSourceCharges(scene).some(
-      (charge) => magnitude({
-        x: probe.position.x - charge.position.x,
-        y: probe.position.y - charge.position.y,
-        z: probe.position.z - charge.position.z,
-      }) <= 0,
+      (charge) =>
+        magnitude({
+          x: probe.position.x - charge.position.x,
+          y: probe.position.y - charge.position.y,
+          z: probe.position.z - charge.position.z,
+        }) <= 0,
     )
     if (onSource) {
       return invalidModelCondition('engine-electric', [
-        failure('probe_not_on_source', 'The field is undefined at a source position; move the probe off the charge.'),
+        failure(
+          'probe_not_on_source',
+          'The field is undefined at a source position; move the probe off the charge.',
+        ),
       ])
     }
   } else if (fieldSamplePointOf(scene) === undefined) {
     return invalidModelCondition('engine-electric', [
-      failure('sample_point_declared', 'A scene without a probe must declare where the field is sampled.'),
+      failure(
+        'sample_point_declared',
+        'A scene without a probe must declare where the field is sampled.',
+      ),
     ])
   }
 
@@ -211,7 +239,11 @@ export const pointChargeDerived = (model: PointChargeModel): DerivedQuantity[] =
     },
   ]
 
-  if (model.probe !== undefined && model.force !== undefined && model.forceMagnitude !== undefined) {
+  if (
+    model.probe !== undefined &&
+    model.force !== undefined &&
+    model.forceMagnitude !== undefined
+  ) {
     derived.push(
       {
         key: 'electric_force_vector',

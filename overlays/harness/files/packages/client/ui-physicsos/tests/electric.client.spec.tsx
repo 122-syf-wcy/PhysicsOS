@@ -9,7 +9,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
-import { cardSession, solvedCardData } from './solved-card-fixture.ts'
+import { cardSession, solvedCardData } from './solved-card-fixture.client.ts'
 import type { PhysicsSceneRef } from '../src/client/surface-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { TimelineScrubber } from '../src/client/TimelineScrubber.tsx'

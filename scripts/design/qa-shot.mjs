@@ -19,7 +19,8 @@ const flag = (name, fallback) => {
   const i = argv.indexOf(`--${name}`)
   return i === -1 ? fallback : argv[i + 1]
 }
-const all = (name) => argv.reduce((acc, a, i) => (a === `--${name}` ? [...acc, argv[i + 1]] : acc), [])
+const all = (name) =>
+  argv.reduce((acc, a, i) => (a === `--${name}` ? [...acc, argv[i + 1]] : acc), [])
 
 const width = Number(flag('w', 1600))
 const height = Number(flag('h', 900))
@@ -51,7 +52,10 @@ if (await later.count()) {
 }
 
 const clickText = async (label) => {
-  const target = page.getByRole('button', { name: label }).or(page.getByRole('link', { name: label })).first()
+  const target = page
+    .getByRole('button', { name: label })
+    .or(page.getByRole('link', { name: label }))
+    .first()
   await target.waitFor({ state: 'visible', timeout: 10000 })
   await target.click()
   await page.waitForTimeout(1200)

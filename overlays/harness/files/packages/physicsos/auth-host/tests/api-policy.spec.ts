@@ -8,6 +8,22 @@ import {
   type ApiPolicyWorkspace,
 } from '../src/api-policy.ts'
 
+/**
+ * The scoped-events surface this file drives. The production type brands rpc
+ * ids and unions the frame payloads; the fakes below stay structural, so the
+ * test names the two iterator entry points it actually calls.
+ */
+interface ScopedEvents {
+  mux: (
+    frame: { rpcId: string; payload: unknown },
+    signal: AbortSignal,
+  ) => AsyncIterable<{ rpcId: string }>
+  host: (
+    frame: { rpcId: string; payload: unknown },
+    signal: AbortSignal,
+  ) => AsyncIterable<{ rpcId: string }>
+}
+
 const student: ApiPolicyActor = {
   userKey: 'school:student',
   schoolId: 'school',
@@ -103,6 +119,182 @@ describe('PhysicsOS shared /api policy', () => {
     const next = vi.fn(async () => rpc({}))
     const { policy } = makePolicy({ actor: null })
     const response = await policy.wrapFetch(next)(request('session.list', {}, ''))
+    expect(response.status).toBe(401)
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('allows a student to mutate the onboarding acknowledgement', async () => {
+    const next = vi.fn(async (forwarded: Request) => {
+      const body = await forwarded.clone().json() as { payload: unknown }
+      expect(body.payload).toEqual({
+        ns: 'ui-onboarding',
+        ops: [{
+          op: 'set',
+          path: ['welcomeNoticeVersion'],
+          value: '2026-08-13.1',
+        }],
+      })
+      return rpc({
+        ns: 'ui-onboarding',
+        schema: {},
+        value: { welcomeNoticeVersion: '2026-08-13.1' },
+        applies: 'live',
+        secrets: [],
+        revision: 1,
+      })
+    })
+    const { policy } = makePolicy()
+    const response = await policy.wrapFetch(next)(request('settings.mutate', {
+      ns: 'ui-onboarding',
+      ops: [{
+        op: 'set',
+        path: ['welcomeNoticeVersion'],
+        value: '2026-08-13.1',
+      }],
+    }))
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: true,
+        value: {
+          ns: 'ui-onboarding',
+          value: { welcomeNoticeVersion: '2026-08-13.1' },
+        },
+      },
+    })
+  })
+
+  it('refuses a student mutation of another settings namespace', async () => {
+    const next = vi.fn(async () => rpc({}))
+    const { policy } = makePolicy()
+    const response = await policy.wrapFetch(next)(request('settings.mutate', {
+      ns: 'llm-deepseek',
+      ops: [{ op: 'set', path: ['baseURL'], value: 'https://attacker.invalid' }],
+    }))
+    expect(next).not.toHaveBeenCalled()
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: false,
+        error: {
+          code: 'internal',
+          message: 'this method is available only to platform administrators',
+        },
+      },
+    })
+  })
+
+  it('refuses a student mutation outside the onboarding acknowledgement path', async () => {
+    const next = vi.fn(async () => rpc({}))
+    const { policy } = makePolicy()
+    const response = await policy.wrapFetch(next)(request('settings.mutate', {
+      ns: 'ui-onboarding',
+      ops: [{ op: 'set', path: ['welcomeNoticeVersion', 'nested'], value: 'x' }],
+    }))
+    expect(next).not.toHaveBeenCalled()
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: false,
+        error: {
+          code: 'internal',
+          message: 'this method is available only to platform administrators',
+        },
+      },
+    })
+  })
+
+  it('refuses a student mutation with a forbidden settings operation', async () => {
+    const next = vi.fn(async () => rpc({}))
+    const { policy } = makePolicy()
+    const response = await policy.wrapFetch(next)(request('settings.mutate', {
+      ns: 'ui-onboarding',
+      ops: [{ op: 'remove', path: ['welcomeNoticeVersion'] }],
+    }))
+    expect(next).not.toHaveBeenCalled()
+    expect(await response.json()).toMatchObject({
+      result: {
+        ok: false,
+        error: {
+          code: 'internal',
+          message: 'this method is available only to platform administrators',
+        },
+      },
+    })
+  })
+
+  it('returns only the onboarding namespace when a student describes settings', async () => {
+    const response = await makePolicy().policy.wrapFetch(async () => rpc({
+      writable: true,
+      hasDocument: true,
+      namespaces: [
+        {
+          ns: 'llm-deepseek',
+          schema: { secret: true },
+          value: { apiKey: 'stored' },
+          applies: 'live',
+          secrets: [{ path: ['apiKey'], set: true }],
+          revision: 7,
+        },
+        {
+          ns: 'ui-onboarding',
+          schema: { type: 'object' },
+          value: { welcomeNoticeVersion: '2026-08-13.1' },
+          applies: 'live',
+          secrets: [],
+          revision: 2,
+        },
+      ],
+    }))(request('settings.describe'))
+    expect(await response.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'policy-test',
+      result: {
+        ok: true,
+        value: {
+          writable: true,
+          hasDocument: true,
+          namespaces: [{
+            ns: 'ui-onboarding',
+            schema: { type: 'object' },
+            value: { welcomeNoticeVersion: '2026-08-13.1' },
+            applies: 'live',
+            secrets: [],
+            revision: 2,
+          }],
+        },
+      },
+    })
+  })
+
+  it('keeps the full settings description for an admin', async () => {
+    const value = {
+      writable: true,
+      hasDocument: true,
+      namespaces: [{
+        ns: 'llm-deepseek',
+        schema: { secret: true },
+        value: { apiKey: 'stored' },
+        applies: 'live' as const,
+        secrets: [{ path: ['apiKey'], set: true }],
+        revision: 7,
+      }],
+    }
+    const response = await makePolicy({ actor: admin }).policy.wrapFetch(async () => rpc(value))(
+      request('settings.describe', {}, 'admin'),
+    )
+    expect(await response.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'policy-test',
+      result: { ok: true, value },
+    })
+  })
+
+  it('refuses an anonymous onboarding mutation before dispatch', async () => {
+    const next = vi.fn(async () => rpc({}))
+    const { policy } = makePolicy({ actor: null })
+    const response = await policy.wrapFetch(next)(request('settings.mutate', {
+      ns: 'ui-onboarding',
+      ops: [{ op: 'set', path: ['welcomeNoticeVersion'], value: '2026-08-13.1' }],
+    }, 'student'))
     expect(response.status).toBe(401)
     expect(next).not.toHaveBeenCalled()
   })
@@ -232,8 +424,11 @@ describe('PhysicsOS shared /api policy', () => {
       host: async function * () {},
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await delivered.policy.scopeEvents(request, events) as typeof events
-    await collect(scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal))
+    const scoped =
+      await delivered.policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+    const source = scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)
+    const iterator = source[Symbol.asyncIterator]()
+    expect(await iterator.next()).toMatchObject({ value: { rpcId: 'question-rpc' } })
 
     const responseRequest = (): Request => new Request('http://dsh.internal/api/respond', {
       method: 'POST',
@@ -270,6 +465,7 @@ describe('PhysicsOS shared /api policy', () => {
     })
     expect((await delivered.policy.wrapFetch(foreignResponse)(forged)).status).toBe(403)
     expect(foreignResponse).not.toHaveBeenCalled()
+    await iterator.return?.()
   })
 
   it('lets a platform admin use the unscoped API surface', async () => {
@@ -321,7 +517,7 @@ describe('PhysicsOS shared /api policy', () => {
       },
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events) as typeof events
+    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
 
     expect((await collect(scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))
       .map(frame => frame.rpcId))

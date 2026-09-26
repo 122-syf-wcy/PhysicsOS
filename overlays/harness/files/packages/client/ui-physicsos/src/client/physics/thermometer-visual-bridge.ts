@@ -31,17 +31,25 @@ const TUBE_HALF_WIDTH = 0.35
 const BULB_RADIUS = 0.9
 const THERMOMETER_MARGIN = 1.6
 
+/**
+ * The thermometer visual input shape used by the thermometer scene visuals module.
+ */
 export interface ThermometerVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedThermometerModel
 }
 
-/** Student-facing name of the rig. */
+/**
+ * Student-facing name of the rig.
+ * @returns the formatted string.
+ */
 export const thermometerRigText = (): string => '液体温度计'
 
 /**
  * Scene observable definition → canvas toggle key. The bench factory stamps
  * `observable-thermometer-scale` / `observable-thermometer-column`.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const thermometerObservableKeyOf = (
   definition: ObservableDefinition,
@@ -61,10 +69,17 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-export const thermometerSceneVisual = ({
-  scene,
-  model,
-}: ThermometerVisualInput): SceneVisualModel => {
+/**
+ * The thermometer scene visuals helper `thermometerSceneVisual`.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const thermometerSceneVisual = (input: ThermometerVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const celsius = model.temperature - CELSIUS_ZERO_IN_KELVIN
   const reading = thermometerReadingOf(
     model.bulbVolume,

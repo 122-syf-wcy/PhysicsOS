@@ -66,7 +66,8 @@ export interface ResolvedInductionModel {
   readonly centreOfMassVelocity?: number
 }
 
-const modelError = (code: string, message: string): PhysicsOSError => new PhysicsOSError(code, message)
+const modelError = (code: string, message: string): PhysicsOSError =>
+  new PhysicsOSError(code, message)
 
 const positiveOrThrow = (value: number, code: string, message: string): number => {
   if (!Number.isFinite(value) || value <= 0) throw modelError(code, message)
@@ -87,7 +88,10 @@ export const resolveInductionModel = (scene: PhysicsScene): ResolvedInductionMod
   const benches = inductionBenchesOf(scene)
   const bench = benches[0]
   if (bench === undefined || benches.length !== 1) {
-    throw modelError('INDUCTION_SINGLE_BENCH', 'Induction Engine requires exactly one induction bench.')
+    throw modelError(
+      'INDUCTION_SINGLE_BENCH',
+      'Induction Engine requires exactly one induction bench.',
+    )
   }
 
   const magneticFluxDensity = positiveOrThrow(
@@ -106,7 +110,10 @@ export const resolveInductionModel = (scene: PhysicsScene): ResolvedInductionMod
       throw modelError('INDUCTION_BAR_LENGTH', 'Rod length must be defined for a bar_motion bench.')
     }
     if (bench.barVelocity === undefined) {
-      throw modelError('INDUCTION_BAR_VELOCITY', 'Rod velocity must be defined for a bar_motion bench.')
+      throw modelError(
+        'INDUCTION_BAR_VELOCITY',
+        'Rod velocity must be defined for a bar_motion bench.',
+      )
     }
     const barLength = positiveOrThrow(
       canonicalValue(bench.barLength),
@@ -130,16 +137,28 @@ export const resolveInductionModel = (scene: PhysicsScene): ResolvedInductionMod
 
   if (bench.type === 'double_bar_rail') {
     if (bench.barLength === undefined) {
-      throw modelError('INDUCTION_BAR_LENGTH', 'Rail spacing (bar length) must be defined for a double_bar_rail bench.')
+      throw modelError(
+        'INDUCTION_BAR_LENGTH',
+        'Rail spacing (bar length) must be defined for a double_bar_rail bench.',
+      )
     }
     if (bench.barMasses === undefined) {
-      throw modelError('INDUCTION_BAR_MASSES', 'Both bar masses must be defined for a double_bar_rail bench.')
+      throw modelError(
+        'INDUCTION_BAR_MASSES',
+        'Both bar masses must be defined for a double_bar_rail bench.',
+      )
     }
     if (bench.barVelocities === undefined) {
-      throw modelError('INDUCTION_BAR_VELOCITIES', 'Both initial bar velocities must be defined for a double_bar_rail bench.')
+      throw modelError(
+        'INDUCTION_BAR_VELOCITIES',
+        'Both initial bar velocities must be defined for a double_bar_rail bench.',
+      )
     }
     if (bench.barPositions === undefined) {
-      throw modelError('INDUCTION_BAR_POSITIONS', 'Both initial bar positions must be defined for a double_bar_rail bench.')
+      throw modelError(
+        'INDUCTION_BAR_POSITIONS',
+        'Both initial bar positions must be defined for a double_bar_rail bench.',
+      )
     }
     const barLength = positiveOrThrow(
       canonicalValue(bench.barLength),
@@ -150,7 +169,12 @@ export const resolveInductionModel = (scene: PhysicsScene): ResolvedInductionMod
       canonicalValue(bench.barMasses[0]),
       canonicalValue(bench.barMasses[1]),
     ] as const
-    if (!Number.isFinite(massesSI[0]) || !Number.isFinite(massesSI[1]) || massesSI[0] <= 0 || massesSI[1] <= 0) {
+    if (
+      !Number.isFinite(massesSI[0]) ||
+      !Number.isFinite(massesSI[1]) ||
+      massesSI[0] <= 0 ||
+      massesSI[1] <= 0
+    ) {
       throw modelError('INDUCTION_BAR_MASSES', 'Each bar mass must be finite and > 0.')
     }
     const velocitiesSI = [
@@ -167,7 +191,8 @@ export const resolveInductionModel = (scene: PhysicsScene): ResolvedInductionMod
     if (!Number.isFinite(positionsSI[0]) || !Number.isFinite(positionsSI[1])) {
       throw modelError('INDUCTION_BAR_POSITIONS', 'Each initial bar position must be finite.')
     }
-    const externalForceRaw = bench.externalForce === undefined ? 0 : canonicalValue(bench.externalForce)
+    const externalForceRaw =
+      bench.externalForce === undefined ? 0 : canonicalValue(bench.externalForce)
     if (!Number.isFinite(externalForceRaw) || externalForceRaw < 0) {
       throw modelError('INDUCTION_EXTERNAL_FORCE', 'The external force must be finite and ≥ 0.')
     }

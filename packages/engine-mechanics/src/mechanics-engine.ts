@@ -1,10 +1,4 @@
-import {
-  add,
-  scale,
-  magnitude,
-  vec3,
-  type Vector3,
-} from '@physicsos/physics-math'
+import { add, scale, magnitude, vec3, type Vector3 } from '@physicsos/physics-math'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, asPhysicsEventId, PhysicsOSError } from '@physicsos/shared'
 import {
@@ -35,11 +29,7 @@ import {
 import type { MechanicsModel } from './models/types.ts'
 import { resolveMechanicsModel, detectMechanicsModel } from './mechanics-model-selector.ts'
 import { kinematicsAt } from './solvers/analytical-kinematics.ts'
-import {
-  centripetalAcceleration,
-  circularOrbitPeriod,
-  gravitationalAcceleration,
-} from './orbit.ts'
+import { centripetalAcceleration, circularOrbitPeriod, gravitationalAcceleration } from './orbit.ts'
 
 export const MECHANICS_ENGINE_ID = 'engine-mechanics'
 export const MECHANICS_ENGINE_VERSION = '1.0.0'
@@ -103,11 +93,7 @@ const pendulumStateAt = (
     model.pivot.y - model.length * cos,
     model.position.z,
   )
-  const velocity = vec3(
-    model.length * thetaDot * cos,
-    model.length * thetaDot * sin,
-    0,
-  )
+  const velocity = vec3(model.length * thetaDot * cos, model.length * thetaDot * sin, 0)
   const acceleration = vec3(
     model.length * thetaDotDot * cos - model.length * thetaDot * thetaDot * sin,
     model.length * thetaDotDot * sin + model.length * thetaDot * thetaDot * cos,
@@ -146,7 +132,10 @@ const frictionStateAt = (
   const rampAccel = model.forceRamp / model.mass // m/s³ — da/dt while ramping
   const v0 = Math.max(0, model.velocity.x)
   let velocity = v0 + (netAtSlip / model.mass) * rampTau + 0.5 * rampAccel * rampTau * rampTau
-  let displacement = v0 * rampTau + (netAtSlip / (2 * model.mass)) * rampTau * rampTau + (rampAccel / 6) * rampTau ** 3
+  let displacement =
+    v0 * rampTau +
+    (netAtSlip / (2 * model.mass)) * rampTau * rampTau +
+    (rampAccel / 6) * rampTau ** 3
   if (holdTau > 0) {
     const holdAccel = (model.maxForce - kineticFriction) / model.mass
     displacement += velocity * holdTau + 0.5 * holdAccel * holdTau * holdTau
@@ -258,7 +247,10 @@ function computeDerivedAtTime(model: MechanicsModel, t: number): DerivedQuantity
   })
 
   if (model.modelId === 'circular_orbit') {
-    const assumptions = ['the central body is a point mass', 'the orbit is circular and the satellite is a point']
+    const assumptions = [
+      'the central body is a point mass',
+      'the orbit is circular and the satellite is a point',
+    ]
     const state = orbitStateAt(model, t)
     derived.push(
       {
@@ -586,9 +578,7 @@ function computeSimulationDuration(model: MechanicsModel): number {
     if (Number.isFinite(model.slipTime)) return model.slipTime + 3
     /* Never slips: show the ramp until the cap, or a fixed 6 s for a constant
        pull that never reaches μsN. */
-    return model.forceRamp > 0
-      ? (model.maxForce - model.initialForce) / model.forceRamp + 1
-      : 6
+    return model.forceRamp > 0 ? (model.maxForce - model.initialForce) / model.forceRamp + 1 : 6
   }
   if (model.modelId === 'spring_statics') {
     return 4
@@ -596,7 +586,11 @@ function computeSimulationDuration(model: MechanicsModel): number {
   return 10
 }
 
-function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: SimulationState[]): VerificationResult {
+function buildVerification(
+  model: MechanicsModel,
+  scene: PhysicsScene,
+  states: SimulationState[],
+): VerificationResult {
   const sceneVerification = validateScene(scene)
   const checks: import('@physicsos/physics-core').VerificationCheck[] = [
     ...sceneVerification.checks,
@@ -642,9 +636,11 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
   }
 
   if (model.modelId === 'uniform_linear_motion') {
-    checks.push(check('zero_acceleration', 'constraint', magnitude(model.acceleration) < 1e-10, {
-      message: 'Uniform linear motion requires zero acceleration.',
-    }))
+    checks.push(
+      check('zero_acceleration', 'constraint', magnitude(model.acceleration) < 1e-10, {
+        message: 'Uniform linear motion requires zero acceleration.',
+      }),
+    )
     // Velocity is conserved: every sampled state's velocity must equal the
     // first frame's velocity within tolerance. Analytical solver keeps v
     // exactly constant, so DEFAULT_TOLERANCE (rel 1e-9) is appropriate.
@@ -671,9 +667,11 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
         velocityConserved = false
       }
     }
-    checks.push(check('velocity_conservation', 'conservation', velocityConserved, {
-      message: 'Velocity is constant across all sampled states.',
-    }))
+    checks.push(
+      check('velocity_conservation', 'conservation', velocityConserved, {
+        message: 'Velocity is constant across all sampled states.',
+      }),
+    )
   }
 
   if (model.modelId === 'uniformly_accelerated_motion') {
@@ -685,9 +683,11 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
         const v1 = toCanonicalVector(last.objects[0].velocity).vectorSI
         const dv = magnitude(add(v1, scale(v0, -1)))
         const expectedDv = magnitude(scale(model.acceleration, last.time.value))
-        checks.push(check('velocity_change', 'numerical', Math.abs(dv - expectedDv) < 0.1, {
-          message: `Velocity change matches a*t.`,
-        }))
+        checks.push(
+          check('velocity_change', 'numerical', Math.abs(dv - expectedDv) < 0.1, {
+            message: `Velocity change matches a*t.`,
+          }),
+        )
       }
     }
   }
@@ -716,19 +716,30 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
         vxConstant = false
       }
     }
-    checks.push(check('horizontal_velocity_constant', 'conservation', vxConstant, {
-      message: 'Horizontal velocity is constant (no air resistance).',
-    }))
-    checks.push(check('vertical_acceleration', 'constraint', Math.abs(model.acceleration.y + magnitude(model.gravity)) < 1e-10, {
-      message: 'Vertical acceleration equals -g.',
-    }))
+    checks.push(
+      check('horizontal_velocity_constant', 'conservation', vxConstant, {
+        message: 'Horizontal velocity is constant (no air resistance).',
+      }),
+    )
+    checks.push(
+      check(
+        'vertical_acceleration',
+        'constraint',
+        Math.abs(model.acceleration.y + magnitude(model.gravity)) < 1e-10,
+        {
+          message: 'Vertical acceleration equals -g.',
+        },
+      ),
+    )
     if (states.length > 0) {
       const last = states[states.length - 1]
       if (last?.objects[0]?.position) {
         const y = toCanonicalVector(last.objects[0].position).vectorSI.y
-        checks.push(check('impact_y', 'boundary', Math.abs(y - model.groundY) < 0.5, {
-          message: `Impact y ≈ groundY (${y} vs ${model.groundY}).`,
-        }))
+        checks.push(
+          check('impact_y', 'boundary', Math.abs(y - model.groundY) < 0.5, {
+            message: `Impact y ≈ groundY (${y} vs ${model.groundY}).`,
+          }),
+        )
       }
     }
   }
@@ -736,9 +747,11 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
   if (model.modelId === 'newton_second_law') {
     const computedNetForce = scale(model.acceleration, model.mass)
     const forceDiff = magnitude(add(computedNetForce, scale(model.netForce, -1)))
-    checks.push(check('newton_second_law', 'numerical', forceDiff < 1e-6, {
-      message: 'ΣF = ma verified.',
-    }))
+    checks.push(
+      check('newton_second_law', 'numerical', forceDiff < 1e-6, {
+        message: 'ΣF = ma verified.',
+      }),
+    )
   }
 
   if (model.modelId === 'inclined_plane') {
@@ -746,15 +759,31 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
     const angleRad = (model.inclineAngle * Math.PI) / 180
     const expectedParallel = g * Math.sin(angleRad)
     const expectedNormal = g * Math.cos(angleRad)
-    checks.push(check('gravity_parallel', 'numerical', Math.abs(model.gravityParallel - expectedParallel) < 1e-6, {
-      message: 'mg*sin(θ) verified.',
-    }))
-    checks.push(check('gravity_normal', 'numerical', Math.abs(model.gravityNormal - expectedNormal) < 1e-6, {
-      message: 'mg*cos(θ) verified.',
-    }))
-    checks.push(check('normal_force', 'numerical', Math.abs(model.normalForce - model.mass * expectedNormal) < 1e-6, {
-      message: 'N = mg*cos(θ) verified.',
-    }))
+    checks.push(
+      check(
+        'gravity_parallel',
+        'numerical',
+        Math.abs(model.gravityParallel - expectedParallel) < 1e-6,
+        {
+          message: 'mg*sin(θ) verified.',
+        },
+      ),
+    )
+    checks.push(
+      check('gravity_normal', 'numerical', Math.abs(model.gravityNormal - expectedNormal) < 1e-6, {
+        message: 'mg*cos(θ) verified.',
+      }),
+    )
+    checks.push(
+      check(
+        'normal_force',
+        'numerical',
+        Math.abs(model.normalForce - model.mass * expectedNormal) < 1e-6,
+        {
+          message: 'N = mg*cos(θ) verified.',
+        },
+      ),
+    )
   }
 
   if (model.modelId === 'spring_oscillator') {
@@ -776,13 +805,21 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
         energyConserved = false
       }
     }
-    checks.push(check('energy_conservation', 'conservation', energyConserved, {
-      message: 'E = ½kx² + ½mv² is constant across the swing.',
-    }))
-    checks.push(check('period_consistency', 'numerical',
-      Math.abs(model.period - 2 * Math.PI * Math.sqrt(model.mass / model.stiffness)) < 1e-9, {
-        message: 'T = 2π√(m/k) verified.',
-      }))
+    checks.push(
+      check('energy_conservation', 'conservation', energyConserved, {
+        message: 'E = ½kx² + ½mv² is constant across the swing.',
+      }),
+    )
+    checks.push(
+      check(
+        'period_consistency',
+        'numerical',
+        Math.abs(model.period - 2 * Math.PI * Math.sqrt(model.mass / model.stiffness)) < 1e-9,
+        {
+          message: 'T = 2π√(m/k) verified.',
+        },
+      ),
+    )
     /* Restoring law: at every sample a = −(k/m)·(x − x_eq). */
     const restoringHolds = states.every((state) => {
       const obj = state.objects[0]
@@ -790,17 +827,25 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
       const offset = obj.position.vector.x - model.equilibriumX
       return Math.abs(obj.acceleration.vector.x + (model.stiffness / model.mass) * offset) < 1e-9
     })
-    checks.push(check('restoring_force', 'constraint', restoringHolds, {
-      message: 'a = −(k/m)·x holds at every sampled state.',
-    }))
+    checks.push(
+      check('restoring_force', 'constraint', restoringHolds, {
+        message: 'a = −(k/m)·x holds at every sampled state.',
+      }),
+    )
   }
 
   if (model.modelId === 'simple_pendulum') {
     const g = magnitude(model.gravity)
-    checks.push(check('period_consistency', 'numerical',
-      Math.abs(model.period - 2 * Math.PI * Math.sqrt(model.length / g)) < 1e-9, {
-        message: 'T = 2π√(L/g) verified.',
-      }))
+    checks.push(
+      check(
+        'period_consistency',
+        'numerical',
+        Math.abs(model.period - 2 * Math.PI * Math.sqrt(model.length / g)) < 1e-9,
+        {
+          message: 'T = 2π√(L/g) verified.',
+        },
+      ),
+    )
     /* The bob stays on the string: distance to the pivot equals L at every
        sampled instant. */
     const onArc = states.every((state) => {
@@ -810,9 +855,11 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
       const dy = obj.position.vector.y - model.pivot.y
       return Math.abs(Math.hypot(dx, dy) - model.length) < 1e-9
     })
-    checks.push(check('rope_length', 'constraint', onArc, {
-      message: 'Bob stays on the rope circle (r = L) at every state.',
-    }))
+    checks.push(
+      check('rope_length', 'constraint', onArc, {
+        message: 'Bob stays on the rope circle (r = L) at every state.',
+      }),
+    )
   }
 
   if (model.modelId === 'horizontal_friction') {
@@ -824,9 +871,11 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
       const obj = s.objects[0]
       return Math.abs(obj?.velocity?.vector.x ?? 1) < 1e-9
     })
-    checks.push(check('static_friction_balance', 'constraint', staticHolds, {
-      message: 'Before slip the body stays at rest (f = F ≤ μsN).',
-    }))
+    checks.push(
+      check('static_friction_balance', 'constraint', staticHolds, {
+        message: 'Before slip the body stays at rest (f = F ≤ μsN).',
+      }),
+    )
     /* Sliding phase: friction is exactly μkN and a = (F − f)/m. */
     const slidingStates = states.filter((s) => s.time.value > model.slipTime)
     const kineticHolds = slidingStates.every((s) => {
@@ -836,30 +885,45 @@ function buildVerification(model: MechanicsModel, scene: PhysicsScene, states: S
       const expected = (applied - kineticFriction) / model.mass
       return Math.abs(obj.acceleration.vector.x - expected) < 1e-6
     })
-    checks.push(check('kinetic_friction', 'numerical', kineticHolds, {
-      message: 'While sliding a = (F − μkN)/m at every state.',
-    }))
-    checks.push(check('static_limit', 'numerical',
-      staticLimit >= kineticFriction - 1e-12, {
+    checks.push(
+      check('kinetic_friction', 'numerical', kineticHolds, {
+        message: 'While sliding a = (F − μkN)/m at every state.',
+      }),
+    )
+    checks.push(
+      check('static_limit', 'numerical', staticLimit >= kineticFriction - 1e-12, {
         message: 'μs ≥ μk physically required.',
-      }))
+      }),
+    )
   }
 
   if (model.modelId === 'spring_statics') {
-    checks.push(check('hooke_equilibrium', 'numerical',
-      Math.abs(model.stiffness * model.extension - model.springForce) < 1e-9, {
-        message: 'k·Δx = mg verified.',
-      }))
+    checks.push(
+      check(
+        'hooke_equilibrium',
+        'numerical',
+        Math.abs(model.stiffness * model.extension - model.springForce) < 1e-9,
+        {
+          message: 'k·Δx = mg verified.',
+        },
+      ),
+    )
     /* The authored scene must actually hang the body at the computed
        equilibrium — a scene that disagrees is a wrong setup, not a wrong
        solver. */
     const body = scene.bodies[0]
     const expectedY = model.anchor.y - model.naturalLength - model.extension
     const actualY = body === undefined ? Number.NaN : body.position.vector.y
-    checks.push(check('equilibrium_position', 'constraint',
-      Number.isFinite(actualY) && Math.abs(actualY - expectedY) < 1e-6, {
-        message: `Body hangs at equilibrium y = ${expectedY.toFixed(3)} m (anchor − L0 − mg/k).`,
-      }))
+    checks.push(
+      check(
+        'equilibrium_position',
+        'constraint',
+        Number.isFinite(actualY) && Math.abs(actualY - expectedY) < 1e-6,
+        {
+          message: `Body hangs at equilibrium y = ${expectedY.toFixed(3)} m (anchor − L0 − mg/k).`,
+        },
+      ),
+    )
   }
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
@@ -876,14 +940,20 @@ export class MechanicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       sceneVerification = validateScene(scene)
     } catch (error: unknown) {
       return invalidModelCondition(MECHANICS_ENGINE_ID, [
-        { condition: 'scene_valid', message: error instanceof Error ? error.message : 'Scene validation failed.' },
+        {
+          condition: 'scene_valid',
+          message: error instanceof Error ? error.message : 'Scene validation failed.',
+        },
       ])
     }
 
     if (sceneVerification.status === 'failed') {
       return invalidModelCondition(
         MECHANICS_ENGINE_ID,
-        sceneVerification.errors.map((issue) => ({ condition: issue.code, message: issue.message })),
+        sceneVerification.errors.map((issue) => ({
+          condition: issue.code,
+          message: issue.message,
+        })),
       )
     }
 
@@ -896,7 +966,12 @@ export class MechanicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
 
     if (scene.bodies.length !== 1 || scene.particles.length > 0) {
       return unsupportedModel(
-        [{ condition: 'single_body', message: 'Exactly one rigid body is required for mechanics V1.' }],
+        [
+          {
+            condition: 'single_body',
+            message: 'Exactly one rigid body is required for mechanics V1.',
+          },
+        ],
         MECHANICS_ENGINE_ID,
       )
     }

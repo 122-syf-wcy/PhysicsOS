@@ -105,8 +105,7 @@ export const createTransformerBenchScene = (
       createdAt: now,
       updatedAt: now,
       title: input.title ?? '变压器实验台',
-      description:
-        input.description ?? 'Transformer · U₁/U₂ = N₁/N₂ · U₁I₁ = U₂I₂',
+      description: input.description ?? 'Transformer · U₁/U₂ = N₁/N₂ · U₁I₁ = U₂I₂',
     },
   }
 }

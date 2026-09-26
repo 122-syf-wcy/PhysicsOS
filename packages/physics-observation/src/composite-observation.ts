@@ -147,7 +147,11 @@ const trajectoryCache = new WeakMap<SimulationResult, Map<string, CompositeTraje
 const boundaryEventTimes = (simulation: SimulationResult): readonly number[] => {
   const times: number[] = []
   for (const event of simulation.events) {
-    if (event.type !== 'EnterRegion' && event.type !== 'ExitRegion' && event.type !== 'SwitchField') {
+    if (
+      event.type !== 'EnterRegion' &&
+      event.type !== 'ExitRegion' &&
+      event.type !== 'SwitchField'
+    ) {
       continue
     }
     if (event.time !== undefined) times.push(event.time)
@@ -155,7 +159,10 @@ const boundaryEventTimes = (simulation: SimulationResult): readonly number[] => 
   return times
 }
 
-const trajectoryPoints = (simulation: SimulationResult, particleId: string): CompositeTrajectoryPoints => {
+const trajectoryPoints = (
+  simulation: SimulationResult,
+  particleId: string,
+): CompositeTrajectoryPoints => {
   const cachedByParticle = trajectoryCache.get(simulation)
   const cached = cachedByParticle?.get(particleId)
   if (cached !== undefined) return cached
@@ -204,7 +211,9 @@ const trajectoryPoints = (simulation: SimulationResult, particleId: string): Com
  * contribution independently — the engine separated them precisely so the agent
  * and the inspector can cite each on its own.
  */
-export const observeCompositeScene = (input: CompositeObservationInput): CompositeObservationRuntimeState => {
+export const observeCompositeScene = (
+  input: CompositeObservationInput,
+): CompositeObservationRuntimeState => {
   const { scene, simulation } = input
   if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
     throw new PhysicsOSError(
@@ -223,7 +232,10 @@ export const observeCompositeScene = (input: CompositeObservationInput): Composi
 
   const particle = scene.particles[0]
   if (particle === undefined) {
-    throw new PhysicsOSError('OBSERVATION_PARTICLE_MISSING', 'Composite observations require a particle.')
+    throw new PhysicsOSError(
+      'OBSERVATION_PARTICLE_MISSING',
+      'Composite observations require a particle.',
+    )
   }
   const state = input.state ?? selectState(scene, simulation)
   const particleState = findParticleState(state, particle.id)
@@ -254,20 +266,22 @@ export const observeCompositeScene = (input: CompositeObservationInput): Composi
 
   for (const definition of visible(scene, 'force')) {
     const kind = definition.parameters?.['kind']
-    const key = kind === 'electric'
-      ? 'electric_force_vector'
-      : kind === 'magnetic'
-        ? 'magnetic_force_vector'
-        : kind === 'gravity'
-          ? 'gravity_force_vector'
-          : 'net_force_vector'
-    const type = kind === 'electric'
-      ? 'composite_electric_force'
-      : kind === 'magnetic'
-        ? 'composite_magnetic_force'
-        : kind === 'gravity'
-          ? 'composite_gravity_force'
-          : 'composite_net_force'
+    const key =
+      kind === 'electric'
+        ? 'electric_force_vector'
+        : kind === 'magnetic'
+          ? 'magnetic_force_vector'
+          : kind === 'gravity'
+            ? 'gravity_force_vector'
+            : 'net_force_vector'
+    const type =
+      kind === 'electric'
+        ? 'composite_electric_force'
+        : kind === 'magnetic'
+          ? 'composite_magnetic_force'
+          : kind === 'gravity'
+            ? 'composite_gravity_force'
+            : 'composite_net_force'
     let vector: QuantityVector<'force'>
     try {
       vector = vectorOf(state.derived, key, 'force')

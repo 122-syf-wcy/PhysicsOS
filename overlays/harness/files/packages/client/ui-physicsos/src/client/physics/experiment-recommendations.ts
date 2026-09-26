@@ -18,6 +18,9 @@ import {
 /** Why a template is on the recommendation rail. */
 export type RecommendationReason = 'weakness' | 'classic'
 
+/**
+ * The experiment recommendation shape used by the experiment recommendations module.
+ */
 export interface ExperimentRecommendation {
   readonly template: ExperimentTemplate
   readonly reason: RecommendationReason
@@ -95,6 +98,9 @@ export const CLASSIC_EXPERIMENT_IDS: readonly string[] = [
   'velocity-selector',
 ]
 
+/**
+ * The recommendation input shape used by the experiment recommendations module.
+ */
 export interface RecommendationInput {
   /** The student's self-check history (newest first, as the record stores it). */
   readonly attempts: readonly Pick<StudentAttempt, 'correct' | 'knowledge'>[]
@@ -112,12 +118,16 @@ export interface RecommendationInput {
  * wrong answers, then lowest accuracy), classics filling the rest. Duplicates,
  * unknown mappings and 即将支持 templates are dropped, so the result is always
  * directly creatable.
+ * @returns the recommend experiments list.
+ * @param input - the visual input for this frame.
  */
-export function recommendExperiments({
-  attempts,
-  excludeClassicIds = [],
-  limit = 3,
-}: RecommendationInput): readonly ExperimentRecommendation[] {
+export function recommendExperiments(input: RecommendationInput): readonly ExperimentRecommendation[] {
+  const {
+    attempts,
+    excludeClassicIds = [],
+    limit = 3,
+  } = input
+
   const picks: ExperimentRecommendation[] = []
   const taken = new Set<string>()
 

@@ -12,11 +12,17 @@
 
 import type { PhysicsAgentContext, PhysicsAgentToolCall } from './physics-agent.ts'
 
+/**
+ * The agent source chip shape used by the physics agent answers module.
+ */
 export interface AgentSourceChip {
   readonly kind: 'scene' | 'simulation' | 'verification' | 'question'
   readonly label: string
 }
 
+/**
+ * The agent answer shape used by the physics agent answers module.
+ */
 export interface AgentAnswer {
   readonly question: string
   readonly paragraphs: readonly string[]
@@ -1512,7 +1518,11 @@ const INTENTS: readonly Intent[] = [
   },
 ]
 
-/** Prompts this scene can actually answer. */
+/**
+ * Prompts this scene can actually answer.
+ * @returns the agent suggestions list.
+ * @param context - the agent context.
+ */
 export const agentSuggestions = (context: PhysicsAgentContext): readonly AgentSuggestion[] =>
   INTENTS.filter(intent => intent.available(context)).map(intent => ({
     id: intent.id,
@@ -1525,6 +1535,9 @@ export const agentSuggestions = (context: PhysicsAgentContext): readonly AgentSu
  * Keyword matching is honest about being V1: an unmatched question returns
  * `undefined` so the Drawer says it cannot answer yet, rather than inventing一个
  * plausible-sounding physics explanation.
+ * @returns the agent answer.
+ * @param context - the agent context.
+ * @param input - the caller-supplied fields.
  */
 export const matchIntent = (
   input: string,

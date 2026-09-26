@@ -18,10 +18,7 @@ import type {
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import { verifyMagneticScene } from '@physicsos/physics-verifier'
 import { MagneticEngine, createMagneticSimulationRequest } from '@physicsos/engine-magnetic'
-import {
-  CurrentFieldEngine,
-  createCurrentSimulationRequest,
-} from '@physicsos/engine-magnetic'
+import { CurrentFieldEngine, createCurrentSimulationRequest } from '@physicsos/engine-magnetic'
 import { MechanicsEngine, createMechanicsSimulationRequest } from '@physicsos/engine-mechanics'
 import { EnergyEngine, createEnergySimulationRequest } from '@physicsos/engine-mechanics'
 import { CollisionEngine, createCollisionSimulationRequest } from '@physicsos/engine-collision'
@@ -43,20 +40,18 @@ import {
   createPressureSimulationRequest,
 } from '@physicsos/engine-fluid'
 import { ThermalEngine, createThermalSimulationRequest } from '@physicsos/engine-thermal'
-import {
-  ThermometerEngine,
-  createThermometerSimulationRequest,
-} from '@physicsos/engine-thermal'
+import { ThermometerEngine, createThermometerSimulationRequest } from '@physicsos/engine-thermal'
 import { LeverEngine, createLeverSimulationRequest } from '@physicsos/engine-lever'
 import { InductionEngine, createInductionSimulationRequest } from '@physicsos/engine-induction'
-import {
-  TransformerEngine,
-  createTransformerSimulationRequest,
-} from '@physicsos/engine-induction'
+import { TransformerEngine, createTransformerSimulationRequest } from '@physicsos/engine-induction'
 import { WaveEngine, createWaveSimulationRequest } from '@physicsos/engine-wave'
 
 type AnyEngine = PhysicsEngine<PhysicsScene, PhysicsEventLike>
-type RequestBuilder = (scene: PhysicsScene, simulationId: string, traceId: string) => SimulationRequest
+type RequestBuilder = (
+  scene: PhysicsScene,
+  simulationId: string,
+  traceId: string,
+) => SimulationRequest
 
 export interface EngineEntry {
   readonly engine: AnyEngine

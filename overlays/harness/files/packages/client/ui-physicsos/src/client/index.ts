@@ -12,6 +12,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
+import { createClassApi } from './class-api.ts'
+import { createLearningApi } from './learning-api.ts'
 import { createNoticeApi } from './notice-api.ts'
 import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
@@ -96,6 +98,12 @@ export function apply(ctx: ClientContext): void {
      owned by the account, not the browser. boot() runs alongside registration —
      the gate covers the shell until the first answer lands. */
   const authApi = createAuthApi()
+  /* 账号同步通路: `/physicsos/learning` holds the signed-in student's own
+     attempts and saved scenes, so two devices see the same record. */
+  const learningApi = createLearningApi()
+  /* `/physicsos/class` serves both faces of the class surface; the host decides
+     what each role may read or write on every call. */
+  const classApi = createClassApi()
   const auth = createAuthController(authApi, globalThis.localStorage)
   void auth.boot()
 
@@ -116,7 +124,7 @@ export function apply(ctx: ClientContext): void {
 
   /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
      under an account it lands in that user's namespace. */
-  const surface = createPhysicsSurfaceController(auth.userStorage)
+  const surface = createPhysicsSurfaceController(auth.userStorage, learningApi)
   const paperApi = createPaperApi()
   /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
      reads the role from the auth store; the host enforces it on every call. */
@@ -128,7 +136,24 @@ export function apply(ctx: ClientContext): void {
      and golden-question cards), read by the 学习记录 surface. Persisted so the
      record survives a reload. Created before the scene card registers because
      the card's recordAttempt closure writes to it. */
-  const learningRecord = createLearningRecordController(auth.userStorage)
+  const learningRecord = createLearningRecordController(auth.userStorage, learningApi)
+
+  /* 登录后对账一次:本地作答与最近场景先落盘,再把账号维度的那一份并回来。
+     尽力而为 —— 离线或会话过期时本地记录照常可用,下一次登录再补一次。 */
+  const syncLearning = (): void => {
+    void learningRecord.sync().catch(() => {})
+    void surface.sync().catch(() => {})
+  }
+  let syncedUserId = auth.store.getSnapshot().user?.id
+  ctx.effect(() => {
+    if (auth.store.getSnapshot().status === 'authed') syncLearning()
+    return auth.store.subscribe(() => {
+      const userId = auth.store.getSnapshot().user?.id
+      if (userId === undefined || userId === syncedUserId) return
+      syncedUserId = userId
+      syncLearning()
+    })
+  }, 'ui-physicsos: learning sync')
 
   /* The inline scene card: every physics/scene snapshot the agent publishes
      materializes one chat node where the tool call left it (docs/04 §92). The
@@ -414,6 +439,7 @@ export function apply(ctx: ClientContext): void {
         paperApi,
         adminApi,
         noticeApi,
+        classApi,
         /* 公告离线缓存落在账户命名空间里(方案 2.3 的「缓存上一条」)——
            本校公告不该跟着另一个账号登录出现在下一块屏幕上。 */
         noticeStorage: auth.userStorage,

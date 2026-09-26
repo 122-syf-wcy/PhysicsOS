@@ -22,17 +22,17 @@ PhysicsOS domain packages
 
 PhysicsOS 只占用正式 slot：
 
-| Slot | PhysicsOS 内容 |
-| --- | --- |
-| `sidebar.brand` | PhysicsOS 品牌与回首页 |
-| `sidebar.nav` | 首页 / 物理实验室 / 试题空间 |
-| `sidebar.new` | 新建菜单 |
-| `sidebar.workspaces` | 最近空间 |
-| `sidebar.footer.action` | 学习记录入口 |
-| `conversation.hero.brand` | 首页品牌 |
-| `conversation.hero.actions` | 示例、实验/试题入口、最近空间 |
-| `conversation.hero.agentPreset` | 学生学习模式 |
-| `conversation.surface` | Physics Lab / Question Space |
+| Slot                            | PhysicsOS 内容                |
+| ------------------------------- | ----------------------------- |
+| `sidebar.brand`                 | PhysicsOS 品牌与回首页        |
+| `sidebar.nav`                   | 首页 / 物理实验室 / 试题空间  |
+| `sidebar.new`                   | 新建菜单                      |
+| `sidebar.workspaces`            | 最近空间                      |
+| `sidebar.footer.action`         | 学习记录入口                  |
+| `conversation.hero.brand`       | 首页品牌                      |
+| `conversation.hero.actions`     | 示例、实验/试题入口、最近空间 |
+| `conversation.hero.agentPreset` | 学生学习模式                  |
+| `conversation.surface`          | Physics Lab / Question Space  |
 
 不修改 Harness Agent Loop、Session Store、Tools 和 ConversationRoot。
 
@@ -150,10 +150,10 @@ Agent（`physics/physics-agent.ts`）读取 scene / revision / simulation /
 verification / observations / 当前时间 / 已绘制视觉 id，答案引用这些事实并显示
 source chips；它**不重新计算物理量**，匹配不到就明确说无法回答。两类工具严格分离：
 
-| 工具 | 性质 | revision | PhysicsEvent |
-| --- | --- | --- | --- |
-| `physics.ui.highlight` | 纯视图交互 | 不变 | 不产生 |
-| `physics.scene.setParameter` | 真实 SceneCommand | +1 | 产生 |
+| 工具                         | 性质              | revision | PhysicsEvent |
+| ---------------------------- | ----------------- | -------- | ------------ |
+| `physics.ui.highlight`       | 纯视图交互        | 不变     | 不产生       |
+| `physics.scene.setParameter` | 真实 SceneCommand | +1       | 产生         |
 
 ---
 
@@ -181,10 +181,10 @@ Harness Client Plugin **不保证**普通 global CSS 被自动注入：bundler �
 
 `packages/client/ui-physicsos` 通过 `link:` 引用 `packages/*`：
 
-| 协议 | 行为 | 后果 |
-| --- | --- | --- |
+| 协议    | 行为                                                | 后果                                                                                                                             |
+| ------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `file:` | pnpm 把包**复制**进 `.pnpm` store，之后不随源码刷新 | 浏览器 bundle 编译旧副本，而 vitest 经 tsconfig paths 读源码 —— 两边静默分歧（实测：源码改了场景标题，测试看得到、浏览器看不到） |
-| `link:` | node_modules 里是指向源码目录的软链 | 编辑即时生效，bundle 与测试消费同一份源码 |
+| `link:` | node_modules 里是指向源码目录的软链                 | 编辑即时生效，bundle 与测试消费同一份源码                                                                                        |
 
 标记：**DEV INTEGRATION BRIDGE**。这不是最终架构，只是在
 「PhysicsOS 仓库 + vendored Harness 子模块」这个布局下让开发回路可信的最小手段。

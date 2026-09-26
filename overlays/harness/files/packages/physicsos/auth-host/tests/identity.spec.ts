@@ -51,6 +51,7 @@ const school: School = {
   shortName: '身份中学',
   status: 'active',
   createdAt: now,
+  updatedAt: now,
 }
 
 const teacher: UserRecord = {
@@ -62,6 +63,7 @@ const teacher: UserRecord = {
   role: 'TEACHER',
   status: 'active',
   createdAt: now,
+  updatedAt: now,
 }
 
 void fakeDomain.table('schools').put(school.id, school)

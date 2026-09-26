@@ -54,9 +54,10 @@ export function buildCircuitSceneFromIR(
   const slider = ir.rheostatSliderPosition ?? 0.5
 
   const title = '试题场景：直流电路'
-  const description = options.questionId === undefined
-    ? '由 Circuit Question IR 生成'
-    : `由试题 ${options.questionId} 的 Circuit Question IR 生成`
+  const description =
+    options.questionId === undefined
+      ? '由 Circuit Question IR 生成'
+      : `由试题 ${options.questionId} 的 Circuit Question IR 生成`
   const now = options.now
   const sceneId = options.sceneId
 
@@ -78,7 +79,10 @@ export function buildCircuitSceneFromIR(
       description,
       ...(now === undefined ? {} : { now }),
     })
-    return { scene, irToSceneMapping: { battery: 'bat', rheostat: 'rv', voltmeter: 'vm', ammeter: 'am' } }
+    return {
+      scene,
+      irToSceneMapping: { battery: 'bat', rheostat: 'rv', voltmeter: 'vm', ammeter: 'am' },
+    }
   }
 
   const topology = ir.circuitTopology ?? 'series'
@@ -95,7 +99,13 @@ export function buildCircuitSceneFromIR(
     })
     return {
       scene,
-      irToSceneMapping: { battery: 'bat', rheostat: 'rv', fixed_resistor: 'r0', voltmeter: 'vm', ammeter: 'am' },
+      irToSceneMapping: {
+        battery: 'bat',
+        rheostat: 'rv',
+        fixed_resistor: 'r0',
+        voltmeter: 'vm',
+        ammeter: 'am',
+      },
     }
   }
 
@@ -111,7 +121,13 @@ export function buildCircuitSceneFromIR(
     })
     return {
       scene,
-      irToSceneMapping: { battery: 'bat', resistor_1: 'r1', resistor_2: 'r2', voltmeter: 'vm', ammeter: 'am' },
+      irToSceneMapping: {
+        battery: 'bat',
+        resistor_1: 'r1',
+        resistor_2: 'r2',
+        voltmeter: 'vm',
+        ammeter: 'am',
+      },
     }
   }
 
@@ -146,18 +162,42 @@ export function buildCircuitSceneFromIR(
   if (topology === 'series' && internal !== undefined) {
     const components: CircuitComponentSpec[] = [
       {
-        id: 'bat', type: 'voltage_source', name: 'E', voltage: emf, internalResistance: internal,
+        id: 'bat',
+        type: 'voltage_source',
+        name: 'E',
+        voltage: emf,
+        internalResistance: internal,
         terminals: { positive: 'n1', negative: 'n4' },
         layout: { x: 0, y: -3, rotation: 0 },
       },
       {
-        id: 'sw', type: 'switch', name: 'S', state: 'closed',
+        id: 'sw',
+        type: 'switch',
+        name: 'S',
+        state: 'closed',
         terminals: { a: 'n1', b: 'n2' },
         layout: { x: 5, y: 0, rotation: 90 },
       },
       ...(ir.hasAmmeter
-        ? [{ id: 'am', type: 'ammeter' as const, name: 'A', terminals: { a: 'n2' as const, b: 'n3' as const }, layout: { x: 2.5, y: 3, rotation: 180 as const } }]
-        : [{ id: 'wire-am', type: 'switch' as const, name: '', state: 'closed' as const, terminals: { a: 'n2' as const, b: 'n3' as const }, layout: { x: 2.5, y: 3, rotation: 180 as const } }]),
+        ? [
+            {
+              id: 'am',
+              type: 'ammeter' as const,
+              name: 'A',
+              terminals: { a: 'n2' as const, b: 'n3' as const },
+              layout: { x: 2.5, y: 3, rotation: 180 as const },
+            },
+          ]
+        : [
+            {
+              id: 'wire-am',
+              type: 'switch' as const,
+              name: '',
+              state: 'closed' as const,
+              terminals: { a: 'n2' as const, b: 'n3' as const },
+              layout: { x: 2.5, y: 3, rotation: 180 as const },
+            },
+          ]),
     ]
     const resistors: CircuitComponentSpec[] = []
     const rValues = ir.circuitResistances ?? [r1]
@@ -165,15 +205,24 @@ export function buildCircuitSceneFromIR(
       const netFrom = index === 0 ? 'n3' : 'n4'
       const netTo = 'n4'
       resistors.push({
-        id: `r${index + 1}`, type: 'resistor', name: `R${index + 1}`, resistance: r,
+        id: `r${index + 1}`,
+        type: 'resistor',
+        name: `R${index + 1}`,
+        resistance: r,
         terminals: { a: netFrom, b: netTo },
-        layout: { x: index === 0 ? -1 : -3, y: index === 0 ? 3 : 0, rotation: index === 0 ? 180 : 270 },
+        layout: {
+          x: index === 0 ? -1 : -3,
+          y: index === 0 ? 3 : 0,
+          rotation: index === 0 ? 180 : 270,
+        },
       })
     }
     components.push(...resistors)
     if (ir.hasVoltmeter) {
       components.push({
-        id: 'vm', type: 'voltmeter', name: 'V',
+        id: 'vm',
+        type: 'voltmeter',
+        name: 'V',
         terminals: { a: 'n3', b: 'n4' },
         layout: { x: -3.1, y: 0, rotation: 270 },
       })
@@ -204,6 +253,12 @@ export function buildCircuitSceneFromIR(
   })
   return {
     scene,
-    irToSceneMapping: { battery: 'bat', resistor_1: 'r1', resistor_2: 'r2', voltmeter: 'vm', ammeter: 'am' },
+    irToSceneMapping: {
+      battery: 'bat',
+      resistor_1: 'r1',
+      resistor_2: 'r2',
+      voltmeter: 'vm',
+      ammeter: 'am',
+    },
   }
 }

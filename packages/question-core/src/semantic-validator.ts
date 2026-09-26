@@ -9,14 +9,24 @@ export function validateSemanticIR(ir: PhysicsSemanticIR): SemanticValidationRes
   /* A recognised-but-unsolvable question shape (see UnsupportedModelId) is not a
      domain problem: the parser already knows the pipeline would silently drop
      the second case, so validation says so before any scene is built. */
-  if (ir.model === 'multi_case_comparison') {
+  if (
+    ir.model === 'multi_case_comparison' ||
+    ir.model === 'atomic_energy_level' ||
+    ir.model === 'radioactive_decay' ||
+    ir.model === 'nuclear_reaction'
+  ) {
     return {
       status: 'UNSUPPORTED_MODEL',
-      issues: [{
-        code: 'MULTI_CASE_COMPARISON',
-        message: '比较/多情形题目暂不支持：当前一条流水线只求解一个场景，请拆成单题分别求解。',
-        severity: 'error',
-      }],
+      issues: [
+        {
+          code: 'MULTI_CASE_COMPARISON',
+          message:
+            ir.model === 'multi_case_comparison'
+              ? '比较/多情形题目暂不支持：当前一条流水线只求解一个场景，请拆成单题分别求解。'
+              : `现代物理模型 ${ir.model} 尚未实现；返回 UNSUPPORTED_MODEL，而不是套用其他模型。`,
+          severity: 'error',
+        },
+      ],
       ambiguities: [],
     }
   }
@@ -48,15 +58,66 @@ export function validateSemanticIR(ir: PhysicsSemanticIR): SemanticValidationRes
   if (ir.domain === 'wave') {
     return validateWaveIR(ir)
   }
+  if (ir.domain === 'modern_physics') {
+    return validateModernPhysicsIR(ir)
+  }
   return {
     status: 'UNSUPPORTED_MODEL',
-    issues: [{
-      code: 'UNSUPPORTED_DOMAIN',
-      message: `暂不支持 ${ir.domain} 题目。`,
-      severity: 'error',
-    }],
+    issues: [
+      {
+        code: 'UNSUPPORTED_DOMAIN',
+        message: `暂不支持 ${ir.domain} 题目。`,
+        severity: 'error',
+      },
+    ],
     ambiguities: [],
   }
+}
+
+function validateModernPhysicsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
+  const issues: QuestionParseIssue[] = []
+  const ambiguities: QuestionAmbiguity[] = []
+  if (ir.model !== 'photoelectric_effect') {
+    return {
+      status: 'UNSUPPORTED_MODEL',
+      issues: [
+        {
+          code: 'UNSUPPORTED_MODERN_MODEL',
+          message: `现代物理模型 ${ir.model} 尚未实现。`,
+          severity: 'error',
+        },
+      ],
+      ambiguities,
+    }
+  }
+  const workFunction =
+    ir.workFunction ?? ir.knowns.find((entry) => entry.key === 'work_function')?.value
+  const photonWavelength =
+    ir.photonWavelength ?? ir.knowns.find((entry) => entry.key === 'photon_wavelength')?.value
+  if (workFunction === undefined || !Number.isFinite(workFunction) || workFunction <= 0) {
+    issues.push({
+      code: 'MISSING_WORK_FUNCTION',
+      message: '缺少正的金属逸出功。',
+      severity: 'error',
+    })
+  }
+  if (
+    photonWavelength === undefined ||
+    !Number.isFinite(photonWavelength) ||
+    photonWavelength <= 0
+  ) {
+    issues.push({
+      code: 'MISSING_PHOTON_WAVELENGTH',
+      message: '缺少正的入射光波长。',
+      severity: 'error',
+    })
+  }
+  if (ir.targets.length === 0) {
+    issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
+  }
+  return issues.length > 0
+    ? { status: 'INVALID_SEMANTICS', issues, ambiguities }
+    : { status: 'VALID', issues, ambiguities }
 }
 
 const COMPOSITE_MODEL_IDS: ReadonlySet<string> = new Set([
@@ -88,24 +149,81 @@ function validateCompositeIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   const ambiguities: QuestionAmbiguity[] = []
 
   if (ir.model === 'cyclotron') {
-    return {
-      status: 'UNSUPPORTED_MODEL',
-      issues: [{
-        code: 'UNSUPPORTED_APPARATUS',
-        message: '回旋加速器需要随时间变化的加速电场，当前引擎只模拟分段恒定场，暂不支持。',
+    const charge = ir.knowns.find((entry) => entry.key === 'charge')
+    const mass = ir.knowns.find((entry) => entry.key === 'mass')
+    const speed = ir.knowns.find((entry) => entry.key === 'initial_velocity')
+    const magnetic =
+      ir.magneticFluxDensity ??
+      ir.knowns.find((entry) => entry.key === 'magnetic_field_strength')?.value
+    const voltage = ir.gapVoltage ?? ir.knowns.find((entry) => entry.key === 'gap_voltage')?.value
+    const deeRadius = ir.deeRadius ?? ir.knowns.find((entry) => entry.key === 'dee_radius')?.value
+    if (charge === undefined || !Number.isFinite(charge.value) || charge.value === 0) {
+      issues.push({
+        code: 'MISSING_OR_INVALID_CHARGE',
+        message: '回旋加速器需要非零电荷量。',
         severity: 'error',
-      }],
-      ambiguities,
+      })
     }
+    if (mass === undefined || !Number.isFinite(mass.value) || mass.value <= 0) {
+      issues.push({
+        code: 'MISSING_OR_INVALID_MASS',
+        message: '回旋加速器需要正质量。',
+        severity: 'error',
+      })
+    }
+    if (speed === undefined || !Number.isFinite(speed.value) || speed.value < 0) {
+      issues.push({
+        code: 'MISSING_OR_INVALID_INITIAL_VELOCITY',
+        message: '回旋加速器需要非负初速度。',
+        severity: 'error',
+      })
+    }
+    if (magnetic === undefined || !Number.isFinite(magnetic) || magnetic <= 0) {
+      issues.push({
+        code: 'MISSING_OR_INVALID_B_FIELD',
+        message: '回旋加速器需要正磁感应强度。',
+        severity: 'error',
+      })
+    }
+    if (voltage === undefined || !Number.isFinite(voltage) || voltage <= 0) {
+      issues.push({
+        code: 'MISSING_OR_INVALID_GAP_VOLTAGE',
+        message: '回旋加速器需要正加速电压。',
+        severity: 'error',
+      })
+    }
+    if (deeRadius === undefined || !Number.isFinite(deeRadius) || deeRadius <= 0) {
+      issues.push({
+        code: 'MISSING_OR_INVALID_DEE_RADIUS',
+        message: '回旋加速器需要正 D 形盒半径。',
+        severity: 'error',
+      })
+    }
+    if (ir.targets.length === 0) {
+      issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
+    }
+    if (issues.length > 0) return { status: 'INVALID_SEMANTICS', issues, ambiguities }
+    if (ir.magneticFieldOrientation === undefined) {
+      ambiguities.push({
+        field: 'magneticFieldOrientation',
+        message: '需要确认磁场方向（垂直纸面向里或向外）。',
+        options: ['into_page', 'out_of_page'],
+      })
+    }
+    return ambiguities.length > 0
+      ? { status: 'AMBIGUOUS', issues, ambiguities }
+      : { status: 'VALID', issues, ambiguities }
   }
 
   const charge = ir.knowns.find((entry) => entry.key === 'charge')
   const mass = ir.knowns.find((entry) => entry.key === 'mass')
   const speed = ir.knowns.find((entry) => entry.key === 'initial_velocity')
-  const electric = ir.electricFieldStrength
-    ?? ir.knowns.find((entry) => entry.key === 'electric_field_strength')?.value
-  const magnetic = ir.magneticFluxDensity
-    ?? ir.knowns.find((entry) => entry.key === 'magnetic_field_strength')?.value
+  const electric =
+    ir.electricFieldStrength ??
+    ir.knowns.find((entry) => entry.key === 'electric_field_strength')?.value
+  const magnetic =
+    ir.magneticFluxDensity ??
+    ir.knowns.find((entry) => entry.key === 'magnetic_field_strength')?.value
 
   for (const forbidden of ['ignore_electric_field', 'ignore_magnetic_field'] as const) {
     if (ir.assumptions.includes(forbidden)) {
@@ -119,7 +237,11 @@ function validateCompositeIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (charge === undefined) {
     issues.push({ code: 'MISSING_CHARGE', message: '缺少电荷量。', severity: 'error' })
   } else if (!Number.isFinite(charge.value) || charge.value === 0) {
-    issues.push({ code: 'INVALID_CHARGE', message: '带电粒子的电荷量必须是非零有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_CHARGE',
+      message: '带电粒子的电荷量必须是非零有限值。',
+      severity: 'error',
+    })
   }
   if (mass === undefined) {
     issues.push({ code: 'MISSING_MASS', message: '缺少质量。', severity: 'error' })
@@ -129,12 +251,20 @@ function validateCompositeIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (electric === undefined) {
     issues.push({ code: 'MISSING_E_FIELD', message: '缺少电场强度。', severity: 'error' })
   } else if (!Number.isFinite(electric) || electric <= 0) {
-    issues.push({ code: 'INVALID_E_FIELD', message: '电场强度大小必须为正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_E_FIELD',
+      message: '电场强度大小必须为正有限值。',
+      severity: 'error',
+    })
   }
   if (magnetic === undefined) {
     issues.push({ code: 'MISSING_B_FIELD', message: '缺少磁感应强度。', severity: 'error' })
   } else if (!Number.isFinite(magnetic) || magnetic <= 0) {
-    issues.push({ code: 'INVALID_B_FIELD', message: '磁感应强度大小必须为正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_B_FIELD',
+      message: '磁感应强度大小必须为正有限值。',
+      severity: 'error',
+    })
   }
   /* A selector question can legitimately omit v₀ — "求能通过的粒子速度" asks for it.
      Every other composite target needs the entry speed to integrate the motion. */
@@ -142,7 +272,11 @@ function validateCompositeIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (speed === undefined && !asksForSelectedVelocity) {
     issues.push({ code: 'MISSING_INITIAL_VELOCITY', message: '缺少入射速度。', severity: 'error' })
   } else if (speed !== undefined && (!Number.isFinite(speed.value) || speed.value < 0)) {
-    issues.push({ code: 'INVALID_INITIAL_VELOCITY', message: '入射速度必须是非负有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_INITIAL_VELOCITY',
+      message: '入射速度必须是非负有限值。',
+      severity: 'error',
+    })
   }
   if (ir.targets.length === 0) {
     issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
@@ -201,21 +335,27 @@ function validateElectricIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   const initialVelocity = ir.knowns.find((known) => known.key === 'initial_velocity')
   const electricField = ir.knowns.find((known) => known.key === 'electric_field_strength')
   const time = ir.knowns.find((known) => known.key === 'time')
-  const timeDependentTargets = ir.targets.some((target) => [
-    'final_velocity',
-    'displacement',
-    'trajectory',
-    'electric_potential_change',
-    'electric_potential_energy_change',
-    'kinetic_energy',
-    'kinetic_energy_change',
-    'work_by_electric_field',
-  ].includes(target))
+  const timeDependentTargets = ir.targets.some((target) =>
+    [
+      'final_velocity',
+      'displacement',
+      'trajectory',
+      'electric_potential_change',
+      'electric_potential_energy_change',
+      'kinetic_energy',
+      'kinetic_energy_change',
+      'work_by_electric_field',
+    ].includes(target),
+  )
 
   if (charge === undefined) {
     issues.push({ code: 'MISSING_CHARGE', message: '缺少电荷量。', severity: 'error' })
   } else if (!Number.isFinite(charge.value) || charge.value === 0) {
-    issues.push({ code: 'INVALID_CHARGE', message: '带电粒子的电荷量必须是非零有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_CHARGE',
+      message: '带电粒子的电荷量必须是非零有限值。',
+      severity: 'error',
+    })
   }
   if (mass === undefined) {
     issues.push({ code: 'MISSING_MASS', message: '缺少质量。', severity: 'error' })
@@ -225,21 +365,37 @@ function validateElectricIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (electricField === undefined) {
     issues.push({ code: 'MISSING_E_FIELD', message: '缺少电场强度。', severity: 'error' })
   } else if (!Number.isFinite(electricField.value) || electricField.value <= 0) {
-    issues.push({ code: 'INVALID_E_FIELD', message: '当前模型要求电场强度大小为正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_E_FIELD',
+      message: '当前模型要求电场强度大小为正有限值。',
+      severity: 'error',
+    })
   }
   if (ir.targets.length === 0) {
     issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
   }
   if (timeDependentTargets && initialVelocity === undefined) {
-    issues.push({ code: 'MISSING_INITIAL_VELOCITY', message: '运动学与能量目标需要初速度。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_INITIAL_VELOCITY',
+      message: '运动学与能量目标需要初速度。',
+      severity: 'error',
+    })
   } else if (
     initialVelocity !== undefined &&
     (!Number.isFinite(initialVelocity.value) || initialVelocity.value < 0)
   ) {
-    issues.push({ code: 'INVALID_INITIAL_VELOCITY', message: '初速度大小必须是非负有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_INITIAL_VELOCITY',
+      message: '初速度大小必须是非负有限值。',
+      severity: 'error',
+    })
   }
   if (timeDependentTargets && time === undefined) {
-    issues.push({ code: 'MISSING_TIME', message: '运动学与能量目标需要运动时间。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_TIME',
+      message: '运动学与能量目标需要运动时间。',
+      severity: 'error',
+    })
   } else if (time !== undefined && (!Number.isFinite(time.value) || time.value <= 0)) {
     issues.push({ code: 'INVALID_TIME', message: '运动时间必须大于零。', severity: 'error' })
   }
@@ -291,7 +447,11 @@ function validateBoundedElectricIR(ir: PhysicsSemanticIR): SemanticValidationRes
   if (charge === undefined) {
     issues.push({ code: 'MISSING_CHARGE', message: '缺少电荷量。', severity: 'error' })
   } else if (!Number.isFinite(charge.value) || charge.value === 0) {
-    issues.push({ code: 'INVALID_CHARGE', message: '带电粒子的电荷量必须是非零有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_CHARGE',
+      message: '带电粒子的电荷量必须是非零有限值。',
+      severity: 'error',
+    })
   }
   if (mass === undefined) {
     issues.push({ code: 'MISSING_MASS', message: '缺少质量。', severity: 'error' })
@@ -301,18 +461,38 @@ function validateBoundedElectricIR(ir: PhysicsSemanticIR): SemanticValidationRes
   if (electricField === undefined) {
     issues.push({ code: 'MISSING_E_FIELD', message: '缺少电场强度。', severity: 'error' })
   } else if (!Number.isFinite(electricField.value) || electricField.value <= 0) {
-    issues.push({ code: 'INVALID_E_FIELD', message: '电场强度大小必须为正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_E_FIELD',
+      message: '电场强度大小必须为正有限值。',
+      severity: 'error',
+    })
   }
   if (initialVelocity === undefined) {
     issues.push({ code: 'MISSING_INITIAL_VELOCITY', message: '缺少初速度。', severity: 'error' })
   } else if (!Number.isFinite(initialVelocity.value) || initialVelocity.value < 0) {
-    issues.push({ code: 'INVALID_INITIAL_VELOCITY', message: '初速度大小必须是非负有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_INITIAL_VELOCITY',
+      message: '初速度大小必须是非负有限值。',
+      severity: 'error',
+    })
   }
-  if (ir.plateSeparation === undefined || !Number.isFinite(ir.plateSeparation) || ir.plateSeparation <= 0) {
-    issues.push({ code: 'MISSING_PLATE_SEPARATION', message: '缺少板间距或板间距无效。', severity: 'error' })
+  if (
+    ir.plateSeparation === undefined ||
+    !Number.isFinite(ir.plateSeparation) ||
+    ir.plateSeparation <= 0
+  ) {
+    issues.push({
+      code: 'MISSING_PLATE_SEPARATION',
+      message: '缺少板间距或板间距无效。',
+      severity: 'error',
+    })
   }
   if (ir.plateLength === undefined || !Number.isFinite(ir.plateLength) || ir.plateLength <= 0) {
-    issues.push({ code: 'MISSING_PLATE_LENGTH', message: '缺少板长或板长无效。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_PLATE_LENGTH',
+      message: '缺少板长或板长无效。',
+      severity: 'error',
+    })
   }
   if (ir.targets.length === 0) {
     issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
@@ -321,7 +501,13 @@ function validateBoundedElectricIR(ir: PhysicsSemanticIR): SemanticValidationRes
   /* 初速度沿/逆电场方向时粒子不会横穿极板，"偏转/轨迹/出场速度"类目标没有
      类平抛运动可言。防止方向解析错误（或题面本身如此）时给出无意义的
      deflection 数值。 */
-  const lateralTargets = ['deflection', 'displacement', 'trajectory', 'exit_velocity', 'electric_field_direction']
+  const lateralTargets = [
+    'deflection',
+    'displacement',
+    'trajectory',
+    'exit_velocity',
+    'electric_field_direction',
+  ]
   const asksLateral = ir.targets.some((t) => lateralTargets.includes(t))
   const parallelPair =
     (ir.initialVelocityDirection === 'up' || ir.initialVelocityDirection === 'down') &&
@@ -411,7 +597,11 @@ function validatePointChargeIR(ir: PhysicsSemanticIR): SemanticValidationResult 
   if (charge === undefined) {
     issues.push({ code: 'MISSING_CHARGE', message: '缺少源电荷量。', severity: 'error' })
   } else if (!Number.isFinite(charge.value) || charge.value === 0) {
-    issues.push({ code: 'INVALID_CHARGE', message: '源电荷量必须是非零有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_CHARGE',
+      message: '源电荷量必须是非零有限值。',
+      severity: 'error',
+    })
   }
   if (distance === undefined && ir.sourceDistance === undefined) {
     issues.push({ code: 'MISSING_DISTANCE', message: '缺少到源电荷的距离。', severity: 'error' })
@@ -456,7 +646,8 @@ function validateMagneticIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (!charge) issues.push({ code: 'MISSING_CHARGE', message: '缺少电荷量', severity: 'error' })
   if (!mass) issues.push({ code: 'MISSING_MASS', message: '缺少质量', severity: 'error' })
   if (!velocity) issues.push({ code: 'MISSING_VELOCITY', message: '缺少速度', severity: 'error' })
-  if (!bField) issues.push({ code: 'MISSING_B_FIELD', message: '缺少磁感应强度', severity: 'error' })
+  if (!bField)
+    issues.push({ code: 'MISSING_B_FIELD', message: '缺少磁感应强度', severity: 'error' })
 
   if (ir.chargeSign === 'unknown') {
     ambiguities.push({
@@ -477,7 +668,10 @@ function validateMagneticIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (bField && bField.value === 0) {
     return {
       status: 'INVALID_SEMANTICS',
-      issues: [...issues, { code: 'ZERO_FIELD', message: '磁感应强度为零，无洛伦兹力。', severity: 'error' }],
+      issues: [
+        ...issues,
+        { code: 'ZERO_FIELD', message: '磁感应强度为零，无洛伦兹力。', severity: 'error' },
+      ],
       ambiguities,
     }
   }
@@ -502,7 +696,11 @@ function validateMechanicsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   const ambiguities: QuestionAmbiguity[] = []
 
   if (ir.knowns.length < 2) {
-    issues.push({ code: 'INSUFFICIENT_KNOWNS', message: '已知条件不足，至少需要 2 个已知量。', severity: 'error' })
+    issues.push({
+      code: 'INSUFFICIENT_KNOWNS',
+      message: '已知条件不足，至少需要 2 个已知量。',
+      severity: 'error',
+    })
   }
 
   if (issues.length > 0) {
@@ -534,14 +732,22 @@ function validateOpticsIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     if (focalLength === undefined) {
       issues.push({ code: 'MISSING_FOCAL_LENGTH', message: '缺少焦距。', severity: 'error' })
     } else if (!Number.isFinite(focalLength.value) || focalLength.value === 0) {
-      issues.push({ code: 'INVALID_FOCAL_LENGTH', message: '焦距必须是非零有限值。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_FOCAL_LENGTH',
+        message: '焦距必须是非零有限值。',
+        severity: 'error',
+      })
     }
   }
 
   if (objectDistance === undefined) {
     issues.push({ code: 'MISSING_OBJECT_DISTANCE', message: '缺少物距。', severity: 'error' })
   } else if (!Number.isFinite(objectDistance.value) || objectDistance.value <= 0) {
-    issues.push({ code: 'INVALID_OBJECT_DISTANCE', message: '物距必须是正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_OBJECT_DISTANCE',
+      message: '物距必须是正有限值。',
+      severity: 'error',
+    })
   }
   return { status: issues.length === 0 ? 'VALID' : 'INVALID_SEMANTICS', issues, ambiguities }
 }
@@ -571,11 +777,19 @@ function validateCircuitIR(ir: PhysicsSemanticIR): SemanticValidationResult {
 
   /* At least one source-like known must be present. */
   if (emf === undefined && voltage === undefined && current === undefined) {
-    issues.push({ code: 'MISSING_SOURCE', message: '缺少电动势、电压或电流，无法定义电路。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_SOURCE',
+      message: '缺少电动势、电压或电流，无法定义电路。',
+      severity: 'error',
+    })
   }
   /* At least one resistance (or a rheostat) must be present. */
   if (resistances.length === 0 && !hasRheostat && internal === undefined) {
-    issues.push({ code: 'MISSING_RESISTANCE', message: '缺少电阻值，无法构成电路。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_RESISTANCE',
+      message: '缺少电阻值，无法构成电路。',
+      severity: 'error',
+    })
   }
   if (ir.targets.length === 0) {
     issues.push({ code: 'MISSING_TARGET', message: '缺少明确的求解目标。', severity: 'error' })
@@ -592,7 +806,11 @@ function validateCircuitIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   }
   for (const resistor of resistances) {
     if (!Number.isFinite(resistor.value) || resistor.value <= 0) {
-      issues.push({ code: 'INVALID_RESISTANCE', message: '电阻必须为正有限值。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_RESISTANCE',
+        message: '电阻必须为正有限值。',
+        severity: 'error',
+      })
     }
   }
   if (internal !== undefined && (!Number.isFinite(internal.value) || internal.value < 0)) {
@@ -632,12 +850,20 @@ function validateInductionIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   if (field === undefined) {
     issues.push({ code: 'MISSING_B_FIELD', message: '缺少磁感应强度。', severity: 'error' })
   } else if (!Number.isFinite(field.value) || field.value <= 0) {
-    issues.push({ code: 'INVALID_B_FIELD', message: '磁感应强度必须为正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_B_FIELD',
+      message: '磁感应强度必须为正有限值。',
+      severity: 'error',
+    })
   }
   if (resistance === undefined) {
     issues.push({ code: 'MISSING_RESISTANCE', message: '缺少回路电阻。', severity: 'error' })
   } else if (!Number.isFinite(resistance.value) || resistance.value <= 0) {
-    issues.push({ code: 'INVALID_RESISTANCE', message: '回路电阻必须为正有限值。', severity: 'error' })
+    issues.push({
+      code: 'INVALID_RESISTANCE',
+      message: '回路电阻必须为正有限值。',
+      severity: 'error',
+    })
   }
 
   if (ir.model === 'bar_motion_emf') {
@@ -646,12 +872,20 @@ function validateInductionIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     if (barLength === undefined) {
       issues.push({ code: 'MISSING_BAR_LENGTH', message: '缺少导体棒长度。', severity: 'error' })
     } else if (!Number.isFinite(barLength.value) || barLength.value <= 0) {
-      issues.push({ code: 'INVALID_BAR_LENGTH', message: '导体棒长度必须为正有限值。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_BAR_LENGTH',
+        message: '导体棒长度必须为正有限值。',
+        severity: 'error',
+      })
     }
     if (barVelocity === undefined) {
       issues.push({ code: 'MISSING_BAR_VELOCITY', message: '缺少导体棒速度。', severity: 'error' })
     } else if (!Number.isFinite(barVelocity.value)) {
-      issues.push({ code: 'INVALID_BAR_VELOCITY', message: '导体棒速度必须为有限值。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_BAR_VELOCITY',
+        message: '导体棒速度必须为有限值。',
+        severity: 'error',
+      })
     }
   } else if (ir.model === 'flux_change_emf') {
     const fluxRate = ir.knowns.find((entry) => entry.key === 'flux_rate')
@@ -670,7 +904,11 @@ function validateInductionIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     }
     const coilArea = ir.knowns.find((entry) => entry.key === 'coil_area')
     if (coilArea !== undefined && (!Number.isFinite(coilArea.value) || coilArea.value <= 0)) {
-      issues.push({ code: 'INVALID_COIL_AREA', message: '线圈面积必须为正有限值。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_COIL_AREA',
+        message: '线圈面积必须为正有限值。',
+        severity: 'error',
+      })
     }
   } else {
     return { status: 'UNSUPPORTED_MODEL', issues, ambiguities }
@@ -722,7 +960,11 @@ function validateWaveIR(ir: PhysicsSemanticIR): SemanticValidationResult {
   const wavelength = positiveKnown('wavelength', 'INVALID_WAVELENGTH', '波长')
   const waveSpeed = positiveKnown('wave_speed', 'INVALID_WAVE_SPEED', '波速')
 
-  if (ir.model === 'travelling_wave' || ir.model === 'wave_interference') {
+  if (
+    ir.model === 'travelling_wave' ||
+    ir.model === 'wave_interference' ||
+    ir.model === 'longitudinal_wave'
+  ) {
     if (frequency === undefined && period === undefined) {
       issues.push({ code: 'MISSING_FREQUENCY', message: '缺少频率或周期。', severity: 'error' })
     }
@@ -740,7 +982,11 @@ function validateWaveIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     const pathTwo = positiveKnown('path_two', 'INVALID_PATH', '到波源的距离')
     const stated = ir.knowns.find((entry) => entry.key === 'path_difference')
     if (stated !== undefined && (!Number.isFinite(stated.value) || stated.value < 0)) {
-      issues.push({ code: 'INVALID_PATH_DIFFERENCE', message: '路程差必须为非负有限值。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_PATH_DIFFERENCE',
+        message: '路程差必须为非负有限值。',
+        severity: 'error',
+      })
     }
     const pathDifference =
       stated?.value ??
@@ -774,7 +1020,11 @@ function validateWaveIR(ir: PhysicsSemanticIR): SemanticValidationResult {
     if (harmonic === undefined) {
       issues.push({ code: 'MISSING_HARMONIC', message: '缺少谐波次数。', severity: 'error' })
     } else if (!Number.isInteger(harmonic.value) || harmonic.value < 1) {
-      issues.push({ code: 'INVALID_HARMONIC', message: '谐波次数必须为正整数。', severity: 'error' })
+      issues.push({
+        code: 'INVALID_HARMONIC',
+        message: '谐波次数必须为正整数。',
+        severity: 'error',
+      })
     }
     if (waveSpeed === undefined && frequency === undefined) {
       issues.push({
@@ -783,8 +1033,98 @@ function validateWaveIR(ir: PhysicsSemanticIR): SemanticValidationResult {
         severity: 'error',
       })
     }
-  } else if (ir.model !== 'travelling_wave') {
-    return { status: 'UNSUPPORTED_MODEL', issues, ambiguities }
+  } else if (ir.model === 'reflection_refraction') {
+    const incidentSpeed = positiveKnown('incident_speed', 'INVALID_INCIDENT_SPEED', '入射介质波速')
+    const transmittedSpeed = positiveKnown(
+      'transmitted_speed',
+      'INVALID_TRANSMITTED_SPEED',
+      '第二介质波速',
+    )
+    const incidentAngle = ir.knowns.find((entry) => entry.key === 'incident_angle')
+    if (incidentSpeed === undefined) {
+      issues.push({
+        code: 'MISSING_INCIDENT_SPEED',
+        message: '缺少入射介质波速。',
+        severity: 'error',
+      })
+    }
+    if (transmittedSpeed === undefined) {
+      issues.push({
+        code: 'MISSING_TRANSMITTED_SPEED',
+        message: '缺少第二介质波速。',
+        severity: 'error',
+      })
+    }
+    if (
+      incidentAngle === undefined ||
+      !Number.isFinite(incidentAngle.value) ||
+      incidentAngle.value < 0 ||
+      incidentAngle.value >= Math.PI / 2
+    ) {
+      issues.push({
+        code: 'INVALID_INCIDENT_ANGLE',
+        message: '入射角必须位于 [0°, 90°)。',
+        severity: 'error',
+      })
+    }
+    if (frequency === undefined && period === undefined) {
+      issues.push({ code: 'MISSING_FREQUENCY', message: '缺少频率或周期。', severity: 'error' })
+    }
+  } else if (ir.model === 'wave_diffraction') {
+    const slitWidth = positiveKnown('slit_width', 'INVALID_SLIT_WIDTH', '缝宽')
+    const screenDistance = positiveKnown('screen_distance', 'INVALID_SCREEN_DISTANCE', '缝到屏距离')
+    if (slitWidth === undefined) {
+      issues.push({ code: 'MISSING_SLIT_WIDTH', message: '缺少缝宽。', severity: 'error' })
+    }
+    if (screenDistance === undefined) {
+      issues.push({
+        code: 'MISSING_SCREEN_DISTANCE',
+        message: '缺少缝到屏距离。',
+        severity: 'error',
+      })
+    }
+    if (frequency === undefined && period === undefined) {
+      issues.push({ code: 'MISSING_FREQUENCY', message: '缺少频率或周期。', severity: 'error' })
+    }
+    if (wavelength === undefined && waveSpeed === undefined) {
+      issues.push({
+        code: 'MISSING_WAVELENGTH_OR_SPEED',
+        message: '缺少波长或波速。',
+        severity: 'error',
+      })
+    }
+  } else if (ir.model === 'wave_doppler') {
+    const sourceSpeed =
+      ir.waveSourceSpeed ?? positiveKnown('source_speed', 'INVALID_SOURCE_SPEED', '波源速度')
+    const observerSpeed =
+      ir.waveObserverSpeed ??
+      positiveKnown('observer_speed', 'INVALID_OBSERVER_SPEED', '观察者速度')
+    if (waveSpeed === undefined) {
+      issues.push({ code: 'MISSING_WAVE_SPEED', message: '缺少介质波速。', severity: 'error' })
+    }
+    if (frequency === undefined) {
+      issues.push({ code: 'MISSING_FREQUENCY', message: '缺少波源频率。', severity: 'error' })
+    }
+    if (sourceSpeed === undefined || sourceSpeed < 0) {
+      issues.push({
+        code: 'MISSING_SOURCE_SPEED',
+        message: '缺少非负波源速度。',
+        severity: 'error',
+      })
+    } else if (waveSpeed !== undefined && sourceSpeed >= waveSpeed) {
+      issues.push({
+        code: 'SUPERSONIC_SOURCE_UNSUPPORTED',
+        message: '当前多普勒模型只支持波源速度小于介质波速。',
+        severity: 'error',
+      })
+    }
+    if (observerSpeed !== undefined && observerSpeed < 0) {
+      issues.push({
+        code: 'INVALID_OBSERVER_SPEED',
+        message: '观察者速度必须非负。',
+        severity: 'error',
+      })
+    }
   }
 
   if (ir.targets.length === 0) {

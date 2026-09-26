@@ -190,8 +190,10 @@ export const parseSimulationWorkerMessage = (raw: unknown): SimulationWorkerMess
   switch (kind) {
     case 'simulation-request': {
       if (body.schemaVersion !== 'simulation-request/1.0') return undefined
-      if (typeof body.simulationId !== 'string' || typeof body.sceneId !== 'string') return undefined
-      if (typeof body.sceneRevision !== 'number' || !Number.isFinite(body.sceneRevision)) return undefined
+      if (typeof body.simulationId !== 'string' || typeof body.sceneId !== 'string')
+        return undefined
+      if (typeof body.sceneRevision !== 'number' || !Number.isFinite(body.sceneRevision))
+        return undefined
       if (typeof body.options !== 'object' || body.options === null) return undefined
       if (typeof body.trace !== 'object' || body.trace === null) return undefined
       return record as unknown as SimulationWorkerMessage
@@ -210,7 +212,8 @@ export const parseSimulationWorkerMessage = (raw: unknown): SimulationWorkerMess
     }
     case 'simulation-result': {
       if (body.schemaVersion !== 'simulation-result/1.0') return undefined
-      if (typeof body.simulationId !== 'string' || typeof body.sceneId !== 'string') return undefined
+      if (typeof body.simulationId !== 'string' || typeof body.sceneId !== 'string')
+        return undefined
       if (!Array.isArray(body.states) || !Array.isArray(body.events)) return undefined
       return record as unknown as SimulationWorkerMessage
     }

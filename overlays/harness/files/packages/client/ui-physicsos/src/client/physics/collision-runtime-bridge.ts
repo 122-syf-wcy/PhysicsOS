@@ -52,6 +52,9 @@ interface CollisionSimulationCache {
   readonly status: RuntimeStatus
 }
 
+/**
+ * The collision runtime snapshot shape used by the collision runtime bridge module.
+ */
 export interface CollisionRuntimeSnapshot {
   readonly scene: PhysicsScene
   readonly sceneRevision: number
@@ -70,6 +73,9 @@ export interface CollisionRuntimeSnapshot {
   readonly error?: RuntimeErrorView
 }
 
+/**
+ * The collision runtime command outcome shape used by the collision runtime bridge module.
+ */
 export interface CollisionRuntimeCommandOutcome {
   readonly result: SceneCommandResult
   readonly snapshot: CollisionRuntimeSnapshot
@@ -114,6 +120,9 @@ const observableKeyOf = (type: string): ObservableKey | undefined => {
 
 /* ------------------------------------------------------------------ bridge -- */
 
+/**
+ * The collision runtime bridge — see the module doc for its role.
+ */
 export class CollisionRuntimeBridge {
   private sceneRuntime: SceneRuntime
   private readonly engine = new CollisionEngine()
@@ -133,14 +142,28 @@ export class CollisionRuntimeBridge {
     this.recompute()
   }
 
+  /**
+   * Get snapshot.
+   * @returns the collision runtime snapshot.
+   */
   getSnapshot(): CollisionRuntimeSnapshot {
     return this.snapshot
   }
 
+  /**
+   * Get events.
+   * @returns the events list.
+   */
   getEvents(): readonly PhysicsEvent[] {
     return this.sceneRuntime.getEvents()
   }
 
+  /**
+   * The edit parameter of the collision runtime bridge module.
+   * @param id - the target row id.
+   * @param value - the new value.
+   * @returns the collision runtime snapshot.
+   */
   editParameter(id: string, value: number): CollisionRuntimeSnapshot {
     if (!Number.isFinite(value)) return this.snapshot
     /* Parameter ids: mass-<bodyId>, speed-<bodyId>, radius-<bodyId>. */
@@ -151,12 +174,22 @@ export class CollisionRuntimeBridge {
     return this.snapshot
   }
 
+  /**
+   * Set highlight.
+   * @param ids - the target row ids.
+   * @returns the collision runtime snapshot.
+   */
   setHighlight(ids: readonly string[]): CollisionRuntimeSnapshot {
     this.highlighted = ids
     return this.recompute()
   }
 
-  /** Discard the branch and return to the scene the question stated. */
+  /**
+   * Discard the branch and return to the scene the question stated.
+   * @returns the collision runtime snapshot.
+   * @param origin - the origin point.
+   * @returns the collision runtime snapshot.
+   */
   restoreOrigin(origin: PhysicsScene): CollisionRuntimeSnapshot {
     this.sceneRuntime = new SceneRuntime(origin)
     this.simulationCache = undefined
@@ -201,10 +234,22 @@ export class CollisionRuntimeBridge {
     )
   }
 
+  /**
+   * Set body mass.
+   * @param bodyId - the body the symbol attaches to.
+   * @param value - the new value.
+   * @returns the collision runtime command outcome.
+   */
   setBodyMass(bodyId: string, value: number): CollisionRuntimeCommandOutcome {
     return this.command('SetBodyMass', { bodyId, mass: { value, unit: 'kg', dimension: 'mass' } })
   }
 
+  /**
+   * Set body speed.
+   * @param bodyId - the body the symbol attaches to.
+   * @param value - the new value.
+   * @returns the collision runtime command outcome.
+   */
   setBodySpeed(bodyId: string, value: number): CollisionRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies.find(b => b.id === bodyId)
@@ -221,6 +266,12 @@ export class CollisionRuntimeBridge {
     })
   }
 
+  /**
+   * Set observable enabled.
+   * @param key - the key.
+   * @param enabled - the enabled.
+   * @returns the collision runtime snapshot.
+   */
   setObservableEnabled(key: ObservableKey, enabled: boolean): CollisionRuntimeSnapshot {
     const scene = this.sceneRuntime.getScene()
     const definition = scene.observableDefinitions.find(
@@ -231,6 +282,11 @@ export class CollisionRuntimeBridge {
     return this.snapshot
   }
 
+  /**
+   * Set running.
+   * @param running - the running.
+   * @returns the collision runtime snapshot.
+   */
   setRunning(running: boolean): CollisionRuntimeSnapshot {
     const total = this.snapshot.clock.total
     /* Same replay contract as the other finite runtimes: run pressed at the
@@ -240,11 +296,21 @@ export class CollisionRuntimeBridge {
     return this.recompute()
   }
 
+  /**
+   * Set playback rate.
+   * @param rate - the rate.
+   * @returns the collision runtime snapshot.
+   */
   setPlaybackRate(rate: number): CollisionRuntimeSnapshot {
     if (Number.isFinite(rate) && rate > 0) this.playbackRate = rate
     return this.recompute()
   }
 
+  /**
+   * The seek of the collision runtime bridge module.
+   * @param seconds - the time in seconds.
+   * @returns the collision runtime snapshot.
+   */
   seek(seconds: number): CollisionRuntimeSnapshot {
     const total = this.snapshot.clock.total
     this.currentTime = Number.isFinite(seconds) ? Math.min(total, Math.max(0, seconds)) : 0
@@ -252,10 +318,20 @@ export class CollisionRuntimeBridge {
     return this.recompute()
   }
 
+  /**
+   * The step of the collision runtime bridge module.
+   * @param deltaSeconds - the delta seconds.
+   * @returns the collision runtime snapshot.
+   */
   step(deltaSeconds: number): CollisionRuntimeSnapshot {
     return this.seek(this.currentTime + deltaSeconds)
   }
 
+  /**
+   * The advance of the collision runtime bridge module.
+   * @param wallClockSeconds - the wall clock seconds.
+   * @returns the collision runtime snapshot.
+   */
   advance(wallClockSeconds: number): CollisionRuntimeSnapshot {
     const total = this.snapshot.clock.total
     if (this.running && Number.isFinite(wallClockSeconds) && total > 0) {
@@ -266,6 +342,10 @@ export class CollisionRuntimeBridge {
     return this.recompute()
   }
 
+  /**
+   * The recompute of the collision runtime bridge module.
+   * @returns the collision runtime snapshot.
+   */
   recompute(): CollisionRuntimeSnapshot {
     const scene = this.sceneRuntime.getScene()
     const modelId = detectCollisionModel(scene) ?? 'elastic_collision'
@@ -639,6 +719,11 @@ export class CollisionRuntimeBridge {
   }
 }
 
+/**
+ * The collision runtime bridge helper `createCollisionRuntime`.
+ * @returns the collision runtime bridge.
+ * @param input - the caller-supplied fields.
+ */
 export const createCollisionRuntime = (
   input: CollisionSceneInput | PhysicsScene,
 ): CollisionRuntimeBridge => new CollisionRuntimeBridge(input)

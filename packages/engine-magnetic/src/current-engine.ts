@@ -457,8 +457,7 @@ const buildVerification = (
               reading.comparisonField / reading.field -
                 reading.probeDistance / reading.comparisonDistance,
             ) <=
-              CURRENT_RELATIVE_TOLERANCE *
-                (reading.probeDistance / reading.comparisonDistance) &&
+              CURRENT_RELATIVE_TOLERANCE * (reading.probeDistance / reading.comparisonDistance) &&
             within(rederived, reading.comparisonField, reading.comparisonField),
           {
             message: '磁场与距离成反比：B·r 在两处探测点上相同，距离加倍磁场就减半。',
@@ -682,8 +681,7 @@ const buildVerification = (
         'constraint',
         within(doubledPull, 4 * reading.pull, 4 * reading.pull),
         {
-          message:
-            '吸力与磁感应强度的平方成正比：F = B²A/(2μ₀)，电流加倍 B 加倍、吸力变为四倍。',
+          message: '吸力与磁感应强度的平方成正比：F = B²A/(2μ₀)，电流加倍 B 加倍、吸力变为四倍。',
           targetId: model.benchId,
           details: {
             current: model.current,
@@ -771,7 +769,9 @@ const buildVerification = (
       check(
         'field_proportional_to_turns',
         'constraint',
-        Math.abs(reading.comparisonTurns / reading.turns - reading.comparisonField / reading.field) <=
+        Math.abs(
+          reading.comparisonTurns / reading.turns - reading.comparisonField / reading.field,
+        ) <=
           CURRENT_RELATIVE_TOLERANCE * (reading.comparisonTurns / reading.turns) &&
           within(rederived, reading.comparisonField, reading.comparisonField),
         {
@@ -859,12 +859,7 @@ export class CurrentFieldEngine implements PhysicsEngine<PhysicsScene, PhysicsEv
   canHandle(scene: PhysicsScene): ModelSupport {
     if (currentBenchesOf(scene).length !== 1) {
       return unsupportedModel(
-        [
-          failure(
-            'single_bench',
-            'Current Engine requires exactly one current-magnetic bench.',
-          ),
-        ],
+        [failure('single_bench', 'Current Engine requires exactly one current-magnetic bench.')],
         CURRENT_ENGINE_ID,
       )
     }

@@ -91,10 +91,7 @@ export interface ResolvedMotor {
 
 /** The bench a scene describes, as SI numbers. */
 export type ResolvedCurrentModel =
-  | ResolvedStraightWire
-  | ResolvedSolenoid
-  | ResolvedElectromagnet
-  | ResolvedMotor
+  ResolvedStraightWire | ResolvedSolenoid | ResolvedElectromagnet | ResolvedMotor
 
 const modelError = (code: string, message: string): PhysicsOSError =>
   new PhysicsOSError(code, message)

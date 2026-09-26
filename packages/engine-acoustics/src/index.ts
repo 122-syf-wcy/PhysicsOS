@@ -9,10 +9,7 @@
  * and both legs are checked for uniform propagation and symmetry.
  */
 
-export {
-  resolveAcousticModel,
-  type ResolvedAcousticModel,
-} from './acoustics-model.ts'
+export { resolveAcousticModel, type ResolvedAcousticModel } from './acoustics-model.ts'
 export {
   echoTimingOf,
   pulseStateAt,
@@ -30,10 +27,7 @@ export {
   resolveEchoRanging,
 } from './acoustics-engine.ts'
 
-export {
-  resolveNoiseModel,
-  type ResolvedNoiseModel,
-} from './noise-model.ts'
+export { resolveNoiseModel, type ResolvedNoiseModel } from './noise-model.ts'
 export {
   POINT_SOURCE_SPREADING,
   REFERENCE_INTENSITY,

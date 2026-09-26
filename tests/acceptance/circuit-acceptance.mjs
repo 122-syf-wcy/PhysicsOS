@@ -23,43 +23,47 @@ const { page, check, shot, dismissOnboarding, finish } = await openAcceptance(im
 const picker = () => page.locator('[data-physicsos-state="picker"]')
 
 /** Geometry + schematic facts the visual gate depends on. */
-const geometry = () => page.evaluate(() => {
-  const cover = document.querySelector('[data-physicsos-surface="lab"]')
-  const canvas = cover?.querySelector('svg[role="img"]')
-  const body = cover?.querySelector('[class*="body"]')
-  const doc = document.documentElement
-  return {
-    domain: cover?.getAttribute('data-physicsos-domain'),
-    revision: cover?.getAttribute('data-scene-revision'),
-    status: cover?.getAttribute('data-verification-status'),
-    canvasShare: canvas && body
-      ? +(canvas.getBoundingClientRect().width / body.getBoundingClientRect().width).toFixed(3)
-      : 0,
-    pageScrolls: doc.scrollHeight > doc.clientHeight + 1,
-    wireCount: canvas?.querySelectorAll('path[class*="circuitWire"]').length ?? 0,
-    junctionCount: canvas?.querySelectorAll('circle[class*="circuitJunction"]').length ?? 0,
-    symbolCount: canvas?.querySelectorAll('[class*="circuitSymbol"]').length ?? 0,
-    spriteCount: canvas?.querySelectorAll('[data-testid^="sprite-"]').length ?? 0,
-    imageCount: canvas?.querySelectorAll('image').length ?? 0,
-    currentArrows: canvas?.querySelectorAll('[data-testid^="current-"]').length ?? 0,
-    switchClosed: canvas?.querySelector('[data-testid="switch-sw"]')?.getAttribute('data-closed'),
-    sliderArrow: canvas?.querySelector('[data-testid="slider-rv"]') !== null,
-    canvasTexts: [...(canvas?.querySelectorAll('text') ?? [])]
-      .map((node) => node.textContent?.trim())
-      .filter((text) => text !== undefined && text.length > 0),
-    paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter((node) => {
-      const stroke = getComputedStyle(node).stroke
-      return stroke !== 'none' && stroke !== ''
-    }).length,
-    displayScale: (() => {
-      const box = canvas?.getBoundingClientRect()
-      const viewBox = canvas?.getAttribute('viewBox')?.split(' ').map(Number)
-      if (box === undefined || viewBox === undefined || viewBox.length !== 4) return 0
-      const [, , vw, vh] = viewBox
-      return +Math.min(box.width / vw, box.height / vh).toFixed(3)
-    })(),
-  }
-})
+const geometry = () =>
+  page.evaluate(() => {
+    const cover = document.querySelector('[data-physicsos-surface="lab"]')
+    const canvas = cover?.querySelector('svg[role="img"]')
+    const body = cover?.querySelector('[class*="body"]')
+    const doc = document.documentElement
+    return {
+      domain: cover?.getAttribute('data-physicsos-domain'),
+      revision: cover?.getAttribute('data-scene-revision'),
+      status: cover?.getAttribute('data-verification-status'),
+      canvasShare:
+        canvas && body
+          ? +(canvas.getBoundingClientRect().width / body.getBoundingClientRect().width).toFixed(3)
+          : 0,
+      pageScrolls: doc.scrollHeight > doc.clientHeight + 1,
+      wireCount: canvas?.querySelectorAll('path[class*="circuitWire"]').length ?? 0,
+      junctionCount: canvas?.querySelectorAll('circle[class*="circuitJunction"]').length ?? 0,
+      symbolCount: canvas?.querySelectorAll('[class*="circuitSymbol"]').length ?? 0,
+      spriteCount: canvas?.querySelectorAll('[data-testid^="sprite-"]').length ?? 0,
+      imageCount: canvas?.querySelectorAll('image').length ?? 0,
+      currentArrows: canvas?.querySelectorAll('[data-testid^="current-"]').length ?? 0,
+      switchClosed: canvas?.querySelector('[data-testid="switch-sw"]')?.getAttribute('data-closed'),
+      sliderArrow: canvas?.querySelector('[data-testid="slider-rv"]') !== null,
+      canvasTexts: [...(canvas?.querySelectorAll('text') ?? [])]
+        .map((node) => node.textContent?.trim())
+        .filter((text) => text !== undefined && text.length > 0),
+      paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter(
+        (node) => {
+          const stroke = getComputedStyle(node).stroke
+          return stroke !== 'none' && stroke !== ''
+        },
+      ).length,
+      displayScale: (() => {
+        const box = canvas?.getBoundingClientRect()
+        const viewBox = canvas?.getAttribute('viewBox')?.split(' ').map(Number)
+        if (box === undefined || viewBox === undefined || viewBox.length !== 4) return 0
+        const [, , vw, vh] = viewBox
+        return +Math.min(box.width / vw, box.height / vh).toFixed(3)
+      })(),
+    }
+  })
 
 /** Verification rows live on the inspector's 校验 tab — select it, read,
     then leave the inspector back on 属性 for the next interaction. */
@@ -67,8 +71,10 @@ const verificationRows = async () => {
   await page.getByRole('tab', { name: '校验' }).click()
   await page.waitForTimeout(250)
   const rows = await page.evaluate(() => {
-  const rows = {}
-    for (const item of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="verificationItem"]')) {
+    const rows = {}
+    for (const item of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="verificationItem"]',
+    )) {
       const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
       if (label !== undefined) rows[label] = item.getAttribute('data-status')
     }
@@ -92,7 +98,9 @@ const openPickerFromToolbar = async () => {
 }
 
 const waitForCircuitLab = async () => {
-  await page.locator('[data-physicsos-domain="circuit"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-domain="circuit"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(600)
 }
 
@@ -105,18 +113,28 @@ await page.getByRole('button', { name: '物理实验室' }).click()
 {
   await picker().waitFor({ state: 'visible', timeout: 20_000 })
   const state = await page.evaluate(() => ({
-    templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button').length,
-    tabs: [...document.querySelectorAll('[data-physicsos-state="picker"] [role="tab"]')]
-      .map((node) => node.textContent?.trim()),
+    templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button')
+      .length,
+    tabs: [...document.querySelectorAll('[data-physicsos-state="picker"] [role="tab"]')].map(
+      (node) => node.textContent?.trim(),
+    ),
   }))
-  check('at least 21 creatable templates listed', state.templates >= 21, `${state.templates} entries`)
+  check(
+    'at least 21 creatable templates listed',
+    state.templates >= 21,
+    `${state.templates} entries`,
+  )
   check('电路 tab joins the domain tabs', state.tabs.includes('电路'), state.tabs.join(','))
 
   await page.getByRole('tab', { name: '电路' }).click()
   await page.waitForTimeout(200)
   /* Five senior rigs plus the two 初中 measurement rigs (伏安法测电阻 / 测小灯泡电功率). */
   const circuitEntries = await page.locator('[class*="grid"] button').count()
-  check('circuit tab lists the seven circuit experiments', circuitEntries === 7, `${circuitEntries} entries`)
+  check(
+    'circuit tab lists the seven circuit experiments',
+    circuitEntries === 7,
+    `${circuitEntries} entries`,
+  )
   await shot('circuit-library-1600x900')
 }
 
@@ -132,19 +150,38 @@ await waitForCircuitLab()
   check('junction dots at shared terminals', g.junctionCount >= 2, `${g.junctionCount} junctions`)
   /* Components render as photographed parts3d sprites — the vector-symbol
      count is the fallback path, not the default one. */
-  check('component sprites painted', g.spriteCount >= 5, `${g.spriteCount} sprites, ${g.symbolCount} vector symbols`)
-  check('canvas actually paints', g.paintedStrokes + g.imageCount > 20, `${g.paintedStrokes} strokes + ${g.imageCount} images`)
+  check(
+    'component sprites painted',
+    g.spriteCount >= 5,
+    `${g.spriteCount} sprites, ${g.symbolCount} vector symbols`,
+  )
+  check(
+    'canvas actually paints',
+    g.paintedStrokes + g.imageCount > 20,
+    `${g.paintedStrokes} strokes + ${g.imageCount} images`,
+  )
   /* 6 V across 10 + 20 Ω → 0.2 A; the voltmeter across R₂ reads 4 V. */
-  check('ammeter reads the engine current 0.2 A', g.canvasTexts.includes('0.2 A'), g.canvasTexts.join(','))
+  check(
+    'ammeter reads the engine current 0.2 A',
+    g.canvasTexts.includes('0.2 A'),
+    g.canvasTexts.join(','),
+  )
   check('voltmeter reads U₂ = 4 V', g.canvasTexts.includes('4 V'), g.canvasTexts.join(','))
   check('current direction arrows on the loop', g.currentArrows >= 3, `${g.currentArrows} arrows`)
   check('canvas keeps ≥55% of the workspace', g.canvasShare >= 0.55, String(g.canvasShare))
   check('no page scroll', g.pageScrolls === false)
 
   const verification = await verificationRows()
-  check('KCL check passes', verification['基尔霍夫电流定律'] === 'passed', JSON.stringify(verification))
-  check('power balance check passes', verification['功率守恒（P源 = ΣP耗）'] === 'passed',
-    JSON.stringify(verification))
+  check(
+    'KCL check passes',
+    verification['基尔霍夫电流定律'] === 'passed',
+    JSON.stringify(verification),
+  )
+  check(
+    'power balance check passes',
+    verification['功率守恒（P源 = ΣP耗）'] === 'passed',
+    JSON.stringify(verification),
+  )
   await shot('circuit-series-lab-1600x900')
 }
 
@@ -157,16 +194,27 @@ stdout.write('\nCASE C · 修改电动势 → revision +1，欧姆定律联动\n
   await emf.blur()
   await page.waitForTimeout(500)
   const after = await geometry()
-  check('EMF edit bumps the scene revision', Number(after.revision) === Number(before.revision) + 1,
-    `${before.revision} → ${after.revision}`)
-  check('ammeter re-solves to 0.4 A at 12 V', after.canvasTexts.includes('0.4 A'), after.canvasTexts.join(','))
+  check(
+    'EMF edit bumps the scene revision',
+    Number(after.revision) === Number(before.revision) + 1,
+    `${before.revision} → ${after.revision}`,
+  )
+  check(
+    'ammeter re-solves to 0.4 A at 12 V',
+    after.canvasTexts.includes('0.4 A'),
+    after.canvasTexts.join(','),
+  )
   check('still verified after the edit', after.status === 'verified', after.status)
 
   await emf.fill('6')
   await emf.blur()
   await page.waitForTimeout(500)
   const restored = await geometry()
-  check('restore 6 V → 0.2 A returns', restored.canvasTexts.includes('0.2 A'), restored.canvasTexts.join(','))
+  check(
+    'restore 6 V → 0.2 A returns',
+    restored.canvasTexts.includes('0.2 A'),
+    restored.canvasTexts.join(','),
+  )
 }
 
 /* ---------------------------------------------------------------- CASE D -- */
@@ -177,7 +225,11 @@ stdout.write('\nCASE D · 断开开关 → 全电路无电流；闭合恢复\n')
   await page.waitForTimeout(500)
   const open = await geometry()
   check('switch symbol opens', open.switchClosed === 'false', String(open.switchClosed))
-  check('ammeter reads 0 A on the open loop', open.canvasTexts.includes('0 A'), open.canvasTexts.join(','))
+  check(
+    'ammeter reads 0 A on the open loop',
+    open.canvasTexts.includes('0 A'),
+    open.canvasTexts.join(','),
+  )
   check('current arrows disappear', open.currentArrows === 0, `${open.currentArrows} arrows`)
   check('open circuit stays verified physics', open.status === 'verified', open.status)
   await shot('circuit-series-open-1600x900')
@@ -185,7 +237,11 @@ stdout.write('\nCASE D · 断开开关 → 全电路无电流；闭合恢复\n')
   await swSelect.selectOption('closed')
   await page.waitForTimeout(500)
   const closed = await geometry()
-  check('closing restores the current', closed.canvasTexts.includes('0.2 A'), closed.canvasTexts.join(','))
+  check(
+    'closing restores the current',
+    closed.canvasTexts.includes('0.2 A'),
+    closed.canvasTexts.join(','),
+  )
   check('switch symbol closes', closed.switchClosed === 'true', String(closed.switchClosed))
 }
 
@@ -210,8 +266,11 @@ await waitForCircuitLab()
   await page.getByRole('button', { name: '暂停', exact: true }).click()
   const paused = Number(await scrubber.inputValue())
   const share = paused / total
-  check('2s of playback advances the sweep proportionally', share > 0.1 && share < 0.6,
-    `${(share * 100).toFixed(1)}% of the window`)
+  check(
+    '2s of playback advances the sweep proportionally',
+    share > 0.1 && share < 0.6,
+    `${(share * 100).toFixed(1)}% of the window`,
+  )
 
   await scrubber.fill('8')
   await page.waitForTimeout(500)
@@ -222,10 +281,16 @@ await waitForCircuitLab()
 
   await page.getByRole('button', { name: '图像', exact: true }).click()
   await page.waitForTimeout(300)
-  const charts = await page.evaluate(() => [...document.querySelectorAll('[data-physicsos-surface="lab"] svg[class*="chart"]')]
-    .map((node) => node.getAttribute('aria-label') ?? ''))
-  check('I-t / U-t / P-t curves published', ['I - t', 'U - t', 'P - t']
-    .every((title) => charts.some((label) => label.includes(title))), charts.join(' | '))
+  const charts = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-physicsos-surface="lab"] svg[class*="chart"]')].map(
+      (node) => node.getAttribute('aria-label') ?? '',
+    ),
+  )
+  check(
+    'I-t / U-t / P-t curves published',
+    ['I - t', 'U - t', 'P - t'].every((title) => charts.some((label) => label.includes(title))),
+    charts.join(' | '),
+  )
   await shot('circuit-rheostat-lab-1600x900')
 }
 
@@ -238,18 +303,27 @@ await waitForCircuitLab()
   const loaded = await geometry()
   check('EMF measurement lab is verified', loaded.status === 'verified', loaded.status)
   /* E = 4.5 V, r = 0.5 Ω, load 2 Ω → I = 1.8 A, U = E − I·r = 3.6 V. */
-  check('voltmeter reads the terminal voltage 3.6 V', loaded.canvasTexts.includes('3.6 V'),
-    loaded.canvasTexts.join(','))
+  check(
+    'voltmeter reads the terminal voltage 3.6 V',
+    loaded.canvasTexts.includes('3.6 V'),
+    loaded.canvasTexts.join(','),
+  )
   const verification = await verificationRows()
-  check('terminal voltage law U = E − I·r verified', verification['路端电压 U = E − I·r'] === 'passed',
-    JSON.stringify(verification))
+  check(
+    'terminal voltage law U = E − I·r verified',
+    verification['路端电压 U = E − I·r'] === 'passed',
+    JSON.stringify(verification),
+  )
 
   const swSelect = page.getByRole('combobox', { name: 'S' })
   await swSelect.selectOption('open')
   await page.waitForTimeout(500)
   const open = await geometry()
-  check('open switch → voltmeter reads the EMF itself 4.5 V', open.canvasTexts.includes('4.5 V'),
-    open.canvasTexts.join(','))
+  check(
+    'open switch → voltmeter reads the EMF itself 4.5 V',
+    open.canvasTexts.includes('4.5 V'),
+    open.canvasTexts.join(','),
+  )
   await shot('circuit-emf-lab-1600x900')
 }
 
@@ -266,7 +340,11 @@ for (const [label, size] of [
   const g = await geometry()
   check(`${label}: canvas keeps ≥55%`, g.canvasShare >= 0.55, String(g.canvasShare))
   check(`${label}: no page scroll`, g.pageScrolls === false)
-  check(`${label}: canvas is never magnified`, g.displayScale > 0 && g.displayScale <= 1, `scale ${g.displayScale}`)
+  check(
+    `${label}: canvas is never magnified`,
+    g.displayScale > 0 && g.displayScale <= 1,
+    `scale ${g.displayScale}`,
+  )
 }
 await page.setViewportSize({ width: 1600, height: 900 })
 

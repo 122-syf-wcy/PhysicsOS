@@ -8,6 +8,8 @@ export type WorkspaceKnowledge = {
 /**
  * Infer a subject / knowledge-point pair from a workspace title.
  * Heuristic only — Physics Engine does not supply these fields yet.
+ * @param title - the workspace title to classify.
+ * @returns the best-guess subject/topic pair; `'待标注知识点'` when nothing matches.
  */
 export function workspaceKnowledge(title: string): WorkspaceKnowledge {
   if (/磁|洛伦兹|安培/.test(title)) return { subject: '电磁学', topic: '磁场与洛伦兹力' }
@@ -23,6 +25,7 @@ export function workspaceKnowledge(title: string): WorkspaceKnowledge {
  * Compact relative clock for a workspace `updatedAt` ISO string.
  * @param iso - workspace last-mutation instant
  * @param now - clock injection for tests
+ * @returns a relative label like `3 分钟前`; `''` for absent/unparseable input.
  */
 export function formatUpdatedAt(iso: string | undefined, now = Date.now()): string {
   if (iso === undefined || iso === '') return ''

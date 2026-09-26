@@ -12,10 +12,7 @@ import type {
 import { parseQuantity, canonicalValue, isKnownUnit } from '@physicsos/physics-units'
 
 function parseScientificNumber(text: string): { value: number; raw: string } | null {
-  const patterns = [
-    /([+-]?\d+\.?\d*)\s*[×x*]\s*10\^?(-?\d+)/g,
-    /([+-]?\d+\.?\d*)e(-?\d+)/gi,
-  ]
+  const patterns = [/([+-]?\d+\.?\d*)\s*[×x*]\s*10\^?(-?\d+)/g, /([+-]?\d+\.?\d*)e(-?\d+)/gi]
   for (const pattern of patterns) {
     const m = pattern.exec(text)
     if (m && m[1] && m[2]) {
@@ -31,7 +28,11 @@ function parseScientificNumber(text: string): { value: number; raw: string } | n
   return null
 }
 
-function extractValueWithUnit(text: string, patterns: readonly RegExp[], defaultUnit: string): { siValue: number; originalValue: number; originalUnit: string } | null {
+function extractValueWithUnit(
+  text: string,
+  patterns: readonly RegExp[],
+  defaultUnit: string,
+): { siValue: number; originalValue: number; originalUnit: string } | null {
   for (const pattern of patterns) {
     const m = pattern.exec(text)
     if (m && m[1]) {
@@ -56,7 +57,8 @@ function detectModel(text: string): MechanicsModelId {
   if (/平抛|斜抛|抛体|projectile|抛出|水平抛/.test(text)) return 'projectile_motion'
   if (/牛顿|newton|合力|net.?force/.test(text)) return 'newton_second_law'
   if (/匀速|uniform.*linear|匀速直线/.test(text)) return 'uniform_linear_motion'
-  if (/匀加速|匀变速|accelerated|加速度.*=.*\d|加速度为/.test(text)) return 'uniformly_accelerated_motion'
+  if (/匀加速|匀变速|accelerated|加速度.*=.*\d|加速度为/.test(text))
+    return 'uniformly_accelerated_motion'
   return 'uniformly_accelerated_motion'
 }
 
@@ -115,24 +117,20 @@ const MECH_PATTERNS = {
     /倾角\s*=?\s*(\d+\.?\d*)/,
     /θ\s*=?\s*(\d+\.?\d*)/,
   ],
-  friction: [
-    /摩擦系数\s*=?\s*(\d+\.?\d*)/,
-    /μ\s*=?\s*(\d+\.?\d*)/,
-  ],
-  gravity: [
-    /g\s*=?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i,
-    /重力加速度\s*=?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i,
-  ],
-  horizontalSpeed: [
-    /水平速度\s*=?\s*(\d+\.?\d*)\s*(m\/s|km\/s)?/i,
-  ],
-  launchAngle: [
-    /抛射角\s*=?\s*(\d+\.?\d*)\s*°?/,
-    /与.*水平.*成\s*(\d+\.?\d*)\s*°?/,
-  ],
+  friction: [/摩擦系数\s*=?\s*(\d+\.?\d*)/, /μ\s*=?\s*(\d+\.?\d*)/],
+  gravity: [/g\s*=?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i, /重力加速度\s*=?\s*(\d+\.?\d*)\s*(m\/s\^2)?/i],
+  horizontalSpeed: [/水平速度\s*=?\s*(\d+\.?\d*)\s*(m\/s|km\/s)?/i],
+  launchAngle: [/抛射角\s*=?\s*(\d+\.?\d*)\s*°?/, /与.*水平.*成\s*(\d+\.?\d*)\s*°?/],
 } as const
 
-function makeKnown(key: string, label: string, symbol: string, siValue: number, unit: string, dimension: string): KnownValue {
+function makeKnown(
+  key: string,
+  label: string,
+  symbol: string,
+  siValue: number,
+  unit: string,
+  dimension: string,
+): KnownValue {
   return { key, label, symbol, value: siValue, unit, dimension, displayValue: `${siValue} ${unit}` }
 }
 
@@ -146,28 +144,42 @@ export const DeterministicMechanicsQuestionParser: QuestionParserProvider = {
     const model = detectModel(text)
 
     const velResult = extractValueWithUnit(text, MECH_PATTERNS.velocity, 'm/s')
-    if (velResult) knowns.push(makeKnown('initial_velocity', '初速度', 'v0', velResult.siValue, 'm/s', 'velocity'))
+    if (velResult)
+      knowns.push(
+        makeKnown('initial_velocity', '初速度', 'v0', velResult.siValue, 'm/s', 'velocity'),
+      )
 
     const accResult = extractValueWithUnit(text, MECH_PATTERNS.acceleration, 'm/s^2')
-    if (accResult) knowns.push(makeKnown('acceleration', '加速度', 'a', accResult.siValue, 'm/s^2', 'acceleration'))
+    if (accResult)
+      knowns.push(
+        makeKnown('acceleration', '加速度', 'a', accResult.siValue, 'm/s^2', 'acceleration'),
+      )
 
     const timeResult = extractValueWithUnit(text, MECH_PATTERNS.time, 's')
     if (timeResult) knowns.push(makeKnown('time', '时间', 't', timeResult.siValue, 's', 'time'))
 
     const heightResult = extractValueWithUnit(text, MECH_PATTERNS.height, 'm')
-    if (heightResult) knowns.push(makeKnown('height', '高度', 'h', heightResult.siValue, 'm', 'length'))
+    if (heightResult)
+      knowns.push(makeKnown('height', '高度', 'h', heightResult.siValue, 'm', 'length'))
 
     const massResult = extractValueWithUnit(text, MECH_PATTERNS.mass, 'kg')
     if (massResult) knowns.push(makeKnown('mass', '质量', 'm', massResult.siValue, 'kg', 'mass'))
 
     const forceResult = extractValueWithUnit(text, MECH_PATTERNS.force, 'N')
-    if (forceResult) knowns.push(makeKnown('applied_force', '作用力', 'F', forceResult.siValue, 'N', 'force'))
+    if (forceResult)
+      knowns.push(makeKnown('applied_force', '作用力', 'F', forceResult.siValue, 'N', 'force'))
 
     const gravResult = extractValueWithUnit(text, MECH_PATTERNS.gravity, 'm/s^2')
-    if (gravResult) knowns.push(makeKnown('gravity', '重力加速度', 'g', gravResult.siValue, 'm/s^2', 'acceleration'))
+    if (gravResult)
+      knowns.push(
+        makeKnown('gravity', '重力加速度', 'g', gravResult.siValue, 'm/s^2', 'acceleration'),
+      )
 
     const hSpeedResult = extractValueWithUnit(text, MECH_PATTERNS.horizontalSpeed, 'm/s')
-    if (hSpeedResult) knowns.push(makeKnown('horizontal_speed', '水平速度', 'vx', hSpeedResult.siValue, 'm/s', 'velocity'))
+    if (hSpeedResult)
+      knowns.push(
+        makeKnown('horizontal_speed', '水平速度', 'vx', hSpeedResult.siValue, 'm/s', 'velocity'),
+      )
 
     const angleMatch = text.match(/(\d+\.?\d*)\s*°/)
     let inclineAngle: number | undefined
@@ -182,7 +194,16 @@ export const DeterministicMechanicsQuestionParser: QuestionParserProvider = {
     let frictionCoefficient: number | undefined
     if (frictionMatch && frictionMatch[1]) {
       frictionCoefficient = parseFloat(frictionMatch[1])
-      knowns.push(makeKnown('friction_coefficient', '摩擦系数', 'μ', frictionCoefficient, '', 'dimensionless'))
+      knowns.push(
+        makeKnown(
+          'friction_coefficient',
+          '摩擦系数',
+          'μ',
+          frictionCoefficient,
+          '',
+          'dimensionless',
+        ),
+      )
     }
 
     const targets = detectTargets(text)

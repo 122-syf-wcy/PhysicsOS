@@ -37,6 +37,7 @@ export const createEchoRangingScene = (input: EchoRangingSceneInput = {}): Physi
     reflector: { id: 'wall-1', name: '峭壁', position: wallDistance },
     soundSpeed,
     title: '回声测距',
-    description: '利用回声测距离：声音以声速直线传播，遇峭壁反射；往返时间的一半乘以声速即为距离 d = v·t/2。',
+    description:
+      '利用回声测距离：声音以声速直线传播，遇峭壁反射；往返时间的一半乘以声速即为距离 d = v·t/2。',
   })
 }

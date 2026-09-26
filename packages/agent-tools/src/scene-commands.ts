@@ -21,7 +21,11 @@ export type CommandFieldSpec =
   | { readonly kind: 'number'; readonly description: string }
   | { readonly kind: 'boolean'; readonly description: string }
   | { readonly kind: 'enum'; readonly values: readonly string[]; readonly description: string }
-  | { readonly kind: 'quantity'; readonly dimension: PhysicalDimension; readonly description: string }
+  | {
+      readonly kind: 'quantity'
+      readonly dimension: PhysicalDimension
+      readonly description: string
+    }
   | { readonly kind: 'vector'; readonly dimension: PhysicalDimension; readonly description: string }
 
 export interface CommandSpec {
@@ -53,22 +57,34 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetParticleCharge: {
     domain: 'magnetic / electric / composite',
     summary: '改带电粒子的电荷量（可为负）',
-    fields: { particleId: id('粒子 id'), charge: quantity('electric_charge', '电荷，如 {value:1.6e-19, unit:"C"}') },
+    fields: {
+      particleId: id('粒子 id'),
+      charge: quantity('electric_charge', '电荷，如 {value:1.6e-19, unit:"C"}'),
+    },
   },
   SetParticleMass: {
     domain: 'magnetic / electric / composite',
     summary: '改带电粒子的质量（> 0）',
-    fields: { particleId: id('粒子 id'), mass: quantity('mass', '质量，如 {value:1.67e-27, unit:"kg"}') },
+    fields: {
+      particleId: id('粒子 id'),
+      mass: quantity('mass', '质量，如 {value:1.67e-27, unit:"kg"}'),
+    },
   },
   SetParticleVelocity: {
     domain: 'magnetic / electric / composite',
     summary: '改带电粒子的初速度矢量',
-    fields: { particleId: id('粒子 id'), velocity: vector('velocity', '速度矢量，如 {x:2e6, y:0, unit:"m/s"}') },
+    fields: {
+      particleId: id('粒子 id'),
+      velocity: vector('velocity', '速度矢量，如 {x:2e6, y:0, unit:"m/s"}'),
+    },
   },
   SetMagneticFieldStrength: {
     domain: 'magnetic / composite',
     summary: '改匀强磁场的磁感应强度（> 0）',
-    fields: { fieldId: id('磁场 id'), strength: quantity('magnetic_flux_density', '如 {value:0.5, unit:"T"}') },
+    fields: {
+      fieldId: id('磁场 id'),
+      strength: quantity('magnetic_flux_density', '如 {value:0.5, unit:"T"}'),
+    },
   },
   SetMagneticFieldDirection: {
     domain: 'magnetic / composite',
@@ -78,18 +94,27 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetElectricFieldStrength: {
     domain: 'electric / composite',
     summary: '改匀强电场的场强（> 0）',
-    fields: { fieldId: id('电场 id'), strength: quantity('electric_field', '如 {value:2e4, unit:"V/m"}') },
+    fields: {
+      fieldId: id('电场 id'),
+      strength: quantity('electric_field', '如 {value:2e4, unit:"V/m"}'),
+    },
   },
   SetElectricFieldDirection: {
     domain: 'electric / composite',
     summary: '改匀强电场的方向',
-    fields: { fieldId: id('电场 id'), direction: choice(['right', 'left', 'up', 'down'], '电场方向') },
+    fields: {
+      fieldId: id('电场 id'),
+      direction: choice(['right', 'left', 'up', 'down'], '电场方向'),
+    },
   },
   SetObservableEnabled: {
     domain: '所有领域',
     summary: '开关一个可观察量图层（不改物理事实，不触发实验分支）',
     fields: {
-      observableId: { kind: 'observable_id', description: '可观察量 id（场景 observables 列表里的 id）' },
+      observableId: {
+        kind: 'observable_id',
+        description: '可观察量 id（场景 observables 列表里的 id）',
+      },
       enabled: { kind: 'boolean', description: '是否显示' },
     },
   },
@@ -111,7 +136,10 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetGravityAcceleration: {
     domain: 'mechanics',
     summary: '改重力加速度矢量',
-    fields: { fieldId: id('重力场 id'), acceleration: vector('acceleration', '如 {x:0, y:-9.8, unit:"m/s^2"}') },
+    fields: {
+      fieldId: id('重力场 id'),
+      acceleration: vector('acceleration', '如 {x:0, y:-9.8, unit:"m/s^2"}'),
+    },
   },
   SetInclineAngle: {
     domain: 'mechanics（斜面）',
@@ -150,7 +178,11 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetAppliedForce: {
     domain: 'mechanics（牛顿第二定律）',
     summary: '改外力矢量',
-    fields: { forceId: id('力 id'), targetId: id('受力物体 id'), vector: vector('force', '如 {x:10, y:0, unit:"N"}') },
+    fields: {
+      forceId: id('力 id'),
+      targetId: id('受力物体 id'),
+      vector: vector('force', '如 {x:10, y:0, unit:"N"}'),
+    },
   },
   SetGroundLevel: {
     domain: 'mechanics（抛体）',
@@ -163,27 +195,47 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetComponentResistance: {
     domain: 'circuit',
     summary: '改定值电阻 / 滑动变阻器的电阻',
-    fields: { circuitId: id('电路 id'), componentId: id('元件 id'), resistance: quantity('resistance', '如 {value:10, unit:"Ω"}') },
+    fields: {
+      circuitId: id('电路 id'),
+      componentId: id('元件 id'),
+      resistance: quantity('resistance', '如 {value:10, unit:"Ω"}'),
+    },
   },
   SetSourceVoltage: {
     domain: 'circuit',
     summary: '改电源电动势',
-    fields: { circuitId: id('电路 id'), componentId: id('电源 id'), voltage: quantity('electric_potential', '如 {value:6, unit:"V"}') },
+    fields: {
+      circuitId: id('电路 id'),
+      componentId: id('电源 id'),
+      voltage: quantity('electric_potential', '如 {value:6, unit:"V"}'),
+    },
   },
   SetSourceInternalResistance: {
     domain: 'circuit',
     summary: '改电源内阻',
-    fields: { circuitId: id('电路 id'), componentId: id('电源 id'), internalResistance: quantity('resistance', '如 {value:0.5, unit:"Ω"}') },
+    fields: {
+      circuitId: id('电路 id'),
+      componentId: id('电源 id'),
+      internalResistance: quantity('resistance', '如 {value:0.5, unit:"Ω"}'),
+    },
   },
   SetSwitchState: {
     domain: 'circuit',
     summary: '闭合 / 断开开关',
-    fields: { circuitId: id('电路 id'), componentId: id('开关 id'), state: choice(['open', 'closed'], '开关状态') },
+    fields: {
+      circuitId: id('电路 id'),
+      componentId: id('开关 id'),
+      state: choice(['open', 'closed'], '开关状态'),
+    },
   },
   SetSliderPosition: {
     domain: 'circuit',
     summary: '改滑动变阻器滑片位置（0..1）',
-    fields: { circuitId: id('电路 id'), componentId: id('滑动变阻器 id'), position: number('0 到 1') },
+    fields: {
+      circuitId: id('电路 id'),
+      componentId: id('滑动变阻器 id'),
+      position: number('0 到 1'),
+    },
   },
   SetComponentPlacement: {
     domain: 'circuit',
@@ -208,12 +260,20 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetLensFocalLength: {
     domain: 'optics（透镜）',
     summary: '改薄透镜焦距（非零，> 0 会聚）',
-    fields: { benchId: id('光具座 id'), elementId: id('透镜 id'), focalLength: quantity('length', '如 {value:10, unit:"cm"}') },
+    fields: {
+      benchId: id('光具座 id'),
+      elementId: id('透镜 id'),
+      focalLength: quantity('length', '如 {value:10, unit:"cm"}'),
+    },
   },
   SetMirrorFocalLength: {
     domain: 'optics（球面镜）',
     summary: '改球面镜焦距（> 0 凹面镜，< 0 凸面镜）',
-    fields: { benchId: id('光具座 id'), elementId: id('镜 id'), focalLength: quantity('length', '如 {value:-10, unit:"cm"}') },
+    fields: {
+      benchId: id('光具座 id'),
+      elementId: id('镜 id'),
+      focalLength: quantity('length', '如 {value:-10, unit:"cm"}'),
+    },
   },
   SetOpticalScreenPosition: {
     domain: 'optics',
@@ -228,12 +288,18 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetAcousticSoundSpeed: {
     domain: 'acoustics',
     summary: '改介质中的声速（> 0）',
-    fields: { benchId: id('声学台 id'), soundSpeed: quantity('velocity', '如 {value:1500, unit:"m/s"}') },
+    fields: {
+      benchId: id('声学台 id'),
+      soundSpeed: quantity('velocity', '如 {value:1500, unit:"m/s"}'),
+    },
   },
   SetLiquidDensity: {
     domain: 'fluid',
     summary: '改液体密度（> 0）',
-    fields: { tankId: id('水槽 id'), density: quantity('density', '如 {value:1030, unit:"kg/m^3"}') },
+    fields: {
+      tankId: id('水槽 id'),
+      density: quantity('density', '如 {value:1030, unit:"kg/m^3"}'),
+    },
   },
   SetBlockMass: {
     domain: 'fluid',
@@ -260,7 +326,10 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetPressureLiquidDensity: {
     domain: 'fluid（压强·液体）',
     summary: '改被探究液体的密度（> 0）',
-    fields: { benchId: id('压强台 id'), density: quantity('density', '如 {value:1000, unit:"kg/m^3"}') },
+    fields: {
+      benchId: id('压强台 id'),
+      density: quantity('density', '如 {value:1000, unit:"kg/m^3"}'),
+    },
   },
   SetPressureProbeDepth: {
     domain: 'fluid（压强·液体）',
@@ -275,17 +344,26 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetPressureComparisonLiquidDensity: {
     domain: 'fluid（压强·液体）',
     summary: '改同深度下另一种液体的密度（> 0）',
-    fields: { benchId: id('压强台 id'), density: quantity('density', '如 {value:1100, unit:"kg/m^3"}') },
+    fields: {
+      benchId: id('压强台 id'),
+      density: quantity('density', '如 {value:1100, unit:"kg/m^3"}'),
+    },
   },
   SetPressureAtmospheric: {
     domain: 'fluid（压强·大气）',
     summary: '改大气压（> 0），汞柱高度与半球拉力随之改变',
-    fields: { benchId: id('压强台 id'), pressure: quantity('pressure', '如 {value:101300, unit:"Pa"}') },
+    fields: {
+      benchId: id('压强台 id'),
+      pressure: quantity('pressure', '如 {value:101300, unit:"Pa"}'),
+    },
   },
   SetPressureBarometerFluidDensity: {
     domain: 'fluid（压强·大气）',
     summary: '改气压计所用液体密度（> 0），同一大气压下的液柱高度随之改变',
-    fields: { benchId: id('压强台 id'), density: quantity('density', '如 {value:13600, unit:"kg/m^3"}') },
+    fields: {
+      benchId: id('压强台 id'),
+      density: quantity('density', '如 {value:13600, unit:"kg/m^3"}'),
+    },
   },
   SetPressureHemisphereRadius: {
     domain: 'fluid（压强·大气）',
@@ -304,12 +382,18 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetProbeDistance: {
     domain: 'magnetic（电生磁·直导线）',
     summary: '改探测点到直导线的距离（> 0），磁场按 B = μ₀I/(2πr) 反比变化',
-    fields: { benchId: id('电流磁场台 id'), distance: quantity('length', '如 {value:5, unit:"cm"}') },
+    fields: {
+      benchId: id('电流磁场台 id'),
+      distance: quantity('length', '如 {value:5, unit:"cm"}'),
+    },
   },
   SetComparisonProbeDistance: {
     domain: 'magnetic（电生磁·直导线）',
     summary: '改第二个探测点的距离（> 0），用来把「距离加倍、磁场减半」摆在同一张图上',
-    fields: { benchId: id('电流磁场台 id'), distance: quantity('length', '如 {value:10, unit:"cm"}') },
+    fields: {
+      benchId: id('电流磁场台 id'),
+      distance: quantity('length', '如 {value:10, unit:"cm"}'),
+    },
   },
   SetSolenoidTurns: {
     domain: 'magnetic（电生磁·螺线管）',
@@ -330,7 +414,10 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetSolenoidLength: {
     domain: 'magnetic（电生磁·螺线管）',
     summary: '改螺线管长度（> 0），匝数不变时长度减半则单位长度匝数翻倍、磁场也翻倍',
-    fields: { benchId: id('电流磁场台 id'), length: quantity('length', '如 {value:20, unit:"cm"}') },
+    fields: {
+      benchId: id('电流磁场台 id'),
+      length: quantity('length', '如 {value:20, unit:"cm"}'),
+    },
   },
   SetCorePermeability: {
     domain: 'magnetic（电生磁·电磁铁）',
@@ -423,13 +510,19 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetThermometerTemperature: {
     domain: 'thermal（温度计）',
     summary: '改温度计所测的温度。液柱高度 h = h₀ + k·t 随之线性变化 —— 均匀的刻度就是这么来的',
-    fields: { benchId: id('温度计台 id'), temperature: quantity('temperature', '如 {value:25, unit:"degC"}') },
+    fields: {
+      benchId: id('温度计台 id'),
+      temperature: quantity('temperature', '如 {value:25, unit:"degC"}'),
+    },
   },
   SetThermometerBore: {
     domain: 'thermal（温度计）',
     summary:
       '改细管直径（> 0）。管越粗，同样的体积膨胀摊在更大的截面上，**液柱反而升得越少** —— 温度计越不灵敏',
-    fields: { benchId: id('温度计台 id'), diameter: quantity('length', '如 {value:0.16, unit:"mm"}') },
+    fields: {
+      benchId: id('温度计台 id'),
+      diameter: quantity('length', '如 {value:0.16, unit:"mm"}'),
+    },
   },
   SetFillingLiquid: {
     domain: 'thermal（温度计）',
@@ -443,7 +536,10 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetThermometerBulb: {
     domain: 'thermal（温度计）',
     summary: '改玻璃泡体积（> 0）。泡越大，同样的温升挤出更多的液体，液柱升得越高',
-    fields: { benchId: id('温度计台 id'), volume: quantity('volume', '如 {value:0.1, unit:"cm^3"}') },
+    fields: {
+      benchId: id('温度计台 id'),
+      volume: quantity('volume', '如 {value:0.1, unit:"cm^3"}'),
+    },
   },
   SetTransformerVoltage: {
     domain: 'induction（变压器）',
@@ -456,11 +552,15 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetTransformerCurrent: {
     domain: 'induction（变压器）',
     summary: '改一次绕组电流（≥ 0；0 就是副绕组开路），副绕组电流 I₂ = I₁·N₁/N₂',
-    fields: { benchId: id('变压器台 id'), current: quantity('electric_current', '如 {value:0.1, unit:"A"}') },
+    fields: {
+      benchId: id('变压器台 id'),
+      current: quantity('electric_current', '如 {value:0.1, unit:"A"}'),
+    },
   },
   SetPrimaryTurns: {
     domain: 'induction（变压器）',
-    summary: '改一次绕组匝数（> 0）。**只有匝比 N₁/N₂ 是一台机器** —— 两个绕组同时翻倍，输出电压一点不变',
+    summary:
+      '改一次绕组匝数（> 0）。**只有匝比 N₁/N₂ 是一台机器** —— 两个绕组同时翻倍，输出电压一点不变',
     fields: {
       benchId: id('变压器台 id'),
       turns: quantity('dimensionless', '如 {value:1000, unit:""}'),
@@ -530,27 +630,44 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetHangerMass: {
     domain: 'mechanics（杠杆）',
     summary: '改某个钩码的质量（> 0）',
-    fields: { leverId: id('杠杆 id'), hangerId: id('钩码 id'), mass: quantity('mass', '如 {value:0.2, unit:"kg"}') },
+    fields: {
+      leverId: id('杠杆 id'),
+      hangerId: id('钩码 id'),
+      mass: quantity('mass', '如 {value:0.2, unit:"kg"}'),
+    },
   },
   SetHangerArm: {
     domain: 'mechanics（杠杆）',
     summary: '改某个钩码到支点的力臂（> 0）',
-    fields: { leverId: id('杠杆 id'), hangerId: id('钩码 id'), armLength: quantity('length', '如 {value:15, unit:"cm"}') },
+    fields: {
+      leverId: id('杠杆 id'),
+      hangerId: id('钩码 id'),
+      armLength: quantity('length', '如 {value:15, unit:"cm"}'),
+    },
   },
   SetInductionFieldStrength: {
     domain: 'induction',
     summary: '改感应台磁感应强度（> 0）',
-    fields: { benchId: id('感应台 id'), strength: quantity('magnetic_flux_density', '如 {value:0.5, unit:"T"}') },
+    fields: {
+      benchId: id('感应台 id'),
+      strength: quantity('magnetic_flux_density', '如 {value:0.5, unit:"T"}'),
+    },
   },
   SetInductionLoopResistance: {
     domain: 'induction',
     summary: '改回路电阻（> 0）',
-    fields: { benchId: id('感应台 id'), resistance: quantity('resistance', '如 {value:5, unit:"Ω"}') },
+    fields: {
+      benchId: id('感应台 id'),
+      resistance: quantity('resistance', '如 {value:5, unit:"Ω"}'),
+    },
   },
   SetInductionBarVelocity: {
     domain: 'induction（导体棒）',
     summary: '改棒速（正负 = 切割方向）',
-    fields: { benchId: id('感应台 id'), velocity: quantity('velocity', '如 {value:2, unit:"m/s"}') },
+    fields: {
+      benchId: id('感应台 id'),
+      velocity: quantity('velocity', '如 {value:2, unit:"m/s"}'),
+    },
   },
   SetInductionBarLength: {
     domain: 'induction（导体棒）',
@@ -560,20 +677,30 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetInductionFluxRate: {
     domain: 'induction（磁通量变化）',
     summary: '改磁通量变化率 dΦ/dt（正负 = 增加 / 减少）',
-    fields: { benchId: id('感应台 id'), fluxRate: quantity('magnetic_flux_rate', '如 {value:0.05, unit:"Wb/s"}') },
+    fields: {
+      benchId: id('感应台 id'),
+      fluxRate: quantity('magnetic_flux_rate', '如 {value:0.05, unit:"Wb/s"}'),
+    },
   },
   SetInductionBarMasses: {
     domain: 'induction（双棒）',
     summary: '改两根导体棒的质量（各自 > 0，按 [棒1, 棒2] 位置）',
     fields: {
       benchId: id('感应台 id'),
-      masses: quantity('mass', '如 [{value:100, unit:"g"}, {value:0.1, unit:"kg"}]，各元素单位独立'),
+      masses: quantity(
+        'mass',
+        '如 [{value:100, unit:"g"}, {value:0.1, unit:"kg"}]，各元素单位独立',
+      ),
     },
   },
   SetInductionBarVelocityOne: {
     domain: 'induction（双棒）',
     summary: '改某一根棒的初速度（正负 = 沿导轨方向；barIndex 1 = 棒1，2 = 棒2）',
-    fields: { benchId: id('感应台 id'), barIndex: choice(['1', '2'], '1 = 棒1，2 = 棒2'), velocity: quantity('velocity', '如 {value:2, unit:"m/s"}') },
+    fields: {
+      benchId: id('感应台 id'),
+      barIndex: choice(['1', '2'], '1 = 棒1，2 = 棒2'),
+      velocity: quantity('velocity', '如 {value:2, unit:"m/s"}'),
+    },
   },
   SetInductionExternalForce: {
     domain: 'induction（双棒）',
@@ -588,7 +715,10 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetWaveFrequency: {
     domain: 'wave（绳波 / 干涉）',
     summary: '改波源频率；介质定波速，λ = v/f 自动重推（驻波台拒绝）',
-    fields: { benchId: id('波动台 id'), frequency: quantity('frequency', '如 {value:5, unit:"Hz"}') },
+    fields: {
+      benchId: id('波动台 id'),
+      frequency: quantity('frequency', '如 {value:5, unit:"Hz"}'),
+    },
   },
   SetWaveSpeed: {
     domain: 'wave',
@@ -598,12 +728,18 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   SetWavePathDifference: {
     domain: 'wave（干涉）',
     summary: '改观察点的路程差 Δ（0 ≤ Δ ≤ 波源间距）',
-    fields: { benchId: id('波动台 id'), pathDifference: quantity('length', '如 {value:0.1, unit:"m"}') },
+    fields: {
+      benchId: id('波动台 id'),
+      pathDifference: quantity('length', '如 {value:0.1, unit:"m"}'),
+    },
   },
   SetWaveStringLength: {
     domain: 'wave（驻波）',
     summary: '改弦长（> 0），f_n 随之重推',
-    fields: { benchId: id('波动台 id'), stringLength: quantity('length', '如 {value:1, unit:"m"}') },
+    fields: {
+      benchId: id('波动台 id'),
+      stringLength: quantity('length', '如 {value:1, unit:"m"}'),
+    },
   },
   SetWaveHarmonic: {
     domain: 'wave（驻波）',
@@ -612,7 +748,9 @@ export const COMMAND_SPECS: Readonly<Record<SceneCommandType, CommandSpec>> = {
   },
 }
 
-export const COMMAND_TYPES: readonly SceneCommandType[] = Object.keys(COMMAND_SPECS) as SceneCommandType[]
+export const COMMAND_TYPES: readonly SceneCommandType[] = Object.keys(
+  COMMAND_SPECS,
+) as SceneCommandType[]
 
 /** Compact, model-readable reference of every command and its payload. */
 export const commandReferenceText = (): string =>

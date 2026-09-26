@@ -1016,6 +1016,82 @@ const WaveStandingArt = () => (
   </>
 )
 
+/** 纵波: compressions and rarefactions travelling along a column. */
+const WaveLongitudinalArt = () => (
+  <>
+    <Stroke d="M14 36 H106" width={1.3} opacity={0.4} dash="3 3" />
+    {[
+      18, 25, 31, 36, 40, 44, 49, 55, 62, 70, 78, 86, 94, 102,
+    ].map((x, index) => (
+      <Stroke key={x} d={`M${x} 22 V50`} width={index % 4 === 2 ? 2.2 : 1.4} opacity={index % 4 === 2 ? 0.85 : 0.55} />
+    ))}
+    <Arrow x1={92} y1={12} x2={106} y2={12} width={1.6} opacity={0.75} head={4.2} />
+  </>
+)
+
+/** 反射与折射: one interface, three rays meeting at the incidence point. */
+const WaveBoundaryArt = () => (
+  <>
+    <Stroke d="M12 42 H108" width={1.8} opacity={0.7} />
+    <Stroke d="M12 42 H108" width={1.2} opacity={0.35} dash="3 3" />
+    <Stroke d="M60 42 L36 14" width={1.8} />
+    <Stroke d="M60 42 L86 14" width={1.5} opacity={0.7} dash="4 3" />
+    <Stroke d="M60 42 L34 68" width={1.8} opacity={0.85} />
+    <Dot x={60} y={42} r={3} />
+    <Stroke d="M60 30 V42" width={1.2} opacity={0.45} dash="2 2" />
+  </>
+)
+
+/** 单缝衍射: plane wavefronts squeezing through one slit, circular beyond. */
+const WaveDiffractionArt = () => (
+  <>
+    <Stroke d="M38 12 V32 M38 52 V72" width={2.4} opacity={0.8} />
+    {[48, 58, 68].map(x => (
+      <Stroke key={x} d={`M${x} 20 V64`} width={1.4} opacity={0.5} />
+    ))}
+    {[10, 20, 30].map(r => (
+      <Stroke key={r} d={`M38 42 A${r} ${r} 0 0 1 38 ${42 + r}`} width={1.4} opacity={0.75 - r / 60} />
+    ))}
+    <Arrow x1={14} y1={42} x2={28} y2={42} width={1.6} opacity={0.7} head={4} />
+  </>
+)
+
+/** 多普勒: a moving source whose fronts crowd ahead and stretch behind. */
+const WaveDopplerArt = () => (
+  <>
+    <Stroke d="M12 36 H108" width={1.3} opacity={0.4} dash="3 3" />
+    {[9, 18, 27].map(r => (
+      <Stroke key={`ahead${r}`} d={`M74 36 A${r} ${r} 0 0 1 74 ${36 + r}`} width={1.5} opacity={0.8 - r / 45} />
+    ))}
+    {[14, 28].map(r => (
+      <Stroke key={`behind${r}`} d={`M74 36 A${r} ${r} 0 0 1 74 ${36 - r}`} width={1.4} opacity={0.6 - r / 70} />
+    ))}
+    <Dot x={74} y={36} r={3.4} />
+    <Arrow x1={74} y1={20} x2={94} y2={20} width={1.7} opacity={0.8} head={4.4} />
+  </>
+)
+
+/** 光电效应: photons strike a metal plate and knock out an electron. */
+const PhotoelectricArt = () => (
+  <>
+    <Stroke d="M78 12 V72" width={3.4} opacity={0.85} />
+    {[18, 32, 46].map(y => (
+      <g key={y}>
+        <Stroke d={`M18 ${y - 6} L46 ${y}`} width={1.6} opacity={0.75} dash="6 4" />
+        <Arrow x1={40} y1={y - 1} x2={48} y2={y} width={1.5} opacity={0.75} head={3.8} />
+        <text x={12} y={y + 4} fontSize={9} opacity={0.7} fill="currentColor" stroke="none">
+          hν
+        </text>
+      </g>
+    ))}
+    <Stroke d="M78 40 L108 26" width={1.7} opacity={0.85} />
+    <Dot x={108} y={26} r={3.2} />
+    <text x={96} y={20} fontSize={9} opacity={0.7} fill="currentColor" stroke="none">
+      e⁻
+    </text>
+  </>
+)
+
 /* ----------------------------------------------------------------- fallbacks -- */
 
 /** A custom or agent-built scene: the lab flask crossed by an orbit. */
@@ -1413,6 +1489,11 @@ export const TEMPLATE_ART: Readonly<Record<string, () => ReactElement>> = {
   'wave-travelling': WaveTravellingArt,
   'wave-interference': WaveInterferenceArt,
   'wave-standing': WaveStandingArt,
+  'wave-longitudinal': WaveLongitudinalArt,
+  'wave-reflection-refraction': WaveBoundaryArt,
+  'wave-diffraction': WaveDiffractionArt,
+  'wave-doppler': WaveDopplerArt,
+  'photoelectric-effect': PhotoelectricArt,
   'vt-area': VtAreaArt,
   'force-composition': ForceCompositionArt,
   'concurrent-equilibrium': ConcurrentEquilibriumArt,
@@ -1488,6 +1569,12 @@ const SCENE_ID_BASES: readonly (readonly [templateId: string, base: string])[] =
   ['wave-travelling', 'wave-travelling'],
   ['wave-interference', 'wave-interference'],
   ['wave-standing', 'wave-standing'],
+  ['cyclotron', 'composite-cyclotron'],
+  ['wave-longitudinal', 'wave-longitudinal'],
+  ['wave-reflection-refraction', 'wave-reflection-refraction'],
+  ['wave-diffraction', 'wave-diffraction'],
+  ['wave-doppler', 'wave-doppler'],
+  ['photoelectric-effect', 'modern-photoelectric'],
   ['vt-area', 'mechanics-vt-area'],
   ['force-composition', 'mechanics-force-composition'],
   ['concurrent-equilibrium', 'mechanics-concurrent-equilibrium'],

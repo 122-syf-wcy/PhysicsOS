@@ -11,7 +11,10 @@
   z-index: 8;
   display: flex;
   flex-direction: column;
-  background: var(--physics-workspace-bg, var(--dsw-alias-bg-base, #f3f6fa));
+  /* The desk carries the ambient light: every glass panel above it needs
+     something coloured to refract, or the material reads as flat grey. */
+  background-color: var(--physics-workspace-bg, var(--dsw-alias-bg-base, #f3f6fa));
+  background-image: var(--physics-glass-ambient);
   color: var(--dsw-alias-label-primary);
   overflow: hidden;
 }
@@ -234,9 +237,13 @@
 }
 
 .card {
-  background: var(--dsw-alias-bg-module-platform, #fff);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  border: 1px solid var(--physics-glass-border-soft);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+  border-radius: 16px;
   padding: 16px 18px;
   margin-bottom: 14px;
   /* Wide ledger tables scroll inside the card instead of overflowing it. */
@@ -246,9 +253,13 @@
 .block {
   margin: 14px 0;
   padding: 14px 16px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-module-platform, #fff);
+  border-radius: 16px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  border: 1px solid var(--physics-glass-border-soft);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
   overflow-x: auto;
 }
 
@@ -497,9 +508,13 @@
 }
 
 .stepCard {
-  background: var(--dsw-alias-bg-module-platform, #fff);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  border: 1px solid var(--physics-glass-border-soft);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+  border-radius: 16px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -550,9 +565,13 @@
 }
 
 .summaryCard {
-  background: var(--dsw-alias-bg-module-platform, #fff);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  border: 1px solid var(--physics-glass-border-soft);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+  border-radius: 16px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -789,6 +808,11 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  box-shadow: var(--physics-glass-rim);
   margin-bottom: 10px;
   border: 1px dashed var(--dsw-alias-border-l2);
   border-radius: 9px;
@@ -1179,4 +1203,69 @@
   border-color: var(--dsw-alias-button-info-fill, #2563eb);
   color: var(--dsw-alias-button-info-fill, #2563eb);
   font-weight: 600;
+}
+
+
+/* ---- 图片/PDF 导入 ---- */
+
+/* The picker is a native file input because the OS dialog is the right tool;
+   it is dressed to match the glass controls so the form reads as one set. */
+.formGrid input[type='file'] {
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border: 1px dashed var(--physics-glass-border-soft);
+  border-radius: 10px;
+  background-color: var(--physics-glass-fill);
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  color: var(--physics-ink-muted, var(--dsw-alias-label-secondary));
+  cursor: pointer;
+}
+
+.formGrid input[type='file']::file-selector-button {
+  margin-right: 10px;
+  padding: 5px 12px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 8px;
+  background-color: var(--physics-glass-fill-strong);
+  color: var(--physics-ink, var(--dsw-alias-label-primary));
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: box-shadow var(--physics-motion-fast) var(--physics-ease);
+}
+
+.formGrid input[type='file']::file-selector-button:hover {
+  box-shadow: var(--physics-glass-lift);
+}
+
+/* 识别原文 viewer: the teacher checks the transcription against the picture
+   before the rows are verified, so it sits in the same card. */
+.transcription {
+  margin-top: 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background-color: var(--physics-glass-fill);
+  overflow: hidden;
+}
+
+.transcription summary {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--physics-ink-link, var(--dsw-static-blue-500));
+  cursor: pointer;
+}
+
+.transcription pre {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 260px;
+  overflow: auto;
+  border-top: 1px solid var(--physics-glass-border-soft);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  color: var(--physics-ink, var(--dsw-alias-label-primary));
 }

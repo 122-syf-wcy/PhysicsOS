@@ -45,15 +45,13 @@ const failure = (condition: string, message: string) => ({ condition, message })
 const joules = (value: number): Quantity<'energy'> => quantity(value, 'J', 'energy')
 const kilograms = (value: number): Quantity<'mass'> => quantity(value, 'kg', 'mass')
 const metres = (value: number): Quantity<'length'> => quantity(value, 'm', 'length')
-const metresPerSecond = (value: number): Quantity<'velocity'> =>
-  quantity(value, 'm/s', 'velocity')
+const metresPerSecond = (value: number): Quantity<'velocity'> => quantity(value, 'm/s', 'velocity')
 const radians = (value: number): Quantity<'angle'> => quantity(value, 'rad', 'angle')
 const dimensionless = (value: number): Quantity<'dimensionless'> =>
   quantity(value, '', 'dimensionless')
 
 /** Solve the scene's energy bench; the single entry point UI layers reuse. */
-export const resolveEnergy = (scene: PhysicsScene): ResolvedEnergyModel =>
-  resolveEnergyModel(scene)
+export const resolveEnergy = (scene: PhysicsScene): ResolvedEnergyModel => resolveEnergyModel(scene)
 
 /* ------------------------------------------------------------- state/dqs -- */
 
@@ -149,10 +147,7 @@ const within = (actual: number, expected: number, scale: number): boolean =>
   Math.abs(actual - expected) <=
   Math.max(ENERGY_RELATIVE_TOLERANCE, ENERGY_RELATIVE_TOLERANCE * Math.abs(scale))
 
-const buildVerification = (
-  scene: PhysicsScene,
-  model: ResolvedEnergyModel,
-): VerificationResult => {
+const buildVerification = (scene: PhysicsScene, model: ResolvedEnergyModel): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const ledger = energyLedgerOf(model)

@@ -17,10 +17,7 @@ const inlineDoc = (text: string): QuestionDocument => ({
   updatedAt: '2026-01-01T00:00:00Z',
 })
 
-const scalar = (
-  result: ReturnType<typeof processQuestion>,
-  key: string,
-): number => {
+const scalar = (result: ReturnType<typeof processQuestion>, key: string): number => {
   const derived = result.simulation?.derivedQuantities.find((candidate) => candidate.key === key)
   if (derived === undefined || 'vector' in derived.value) {
     throw new Error(`Missing scalar derived quantity ${key}`)
@@ -48,7 +45,9 @@ describe('DeterministicOpticsQuestionParser', () => {
     expect(candidate.ir.relations).toContain('thin_lens_imaging')
     expect(candidate.ir.assumptions).toContain('thin_lens_imaging')
     expect(candidate.ir.assumptions).toContain('paraxial_approximation')
-    expect(candidate.ir.targets).toEqual(expect.arrayContaining(['image_distance', 'magnification']))
+    expect(candidate.ir.targets).toEqual(
+      expect.arrayContaining(['image_distance', 'magnification']),
+    )
     expect(candidate.ir.knowns.find((k) => k.key === 'focal_length')?.value).toBeCloseTo(0.1)
     expect(candidate.ir.knowns.find((k) => k.key === 'object_distance')?.value).toBeCloseTo(0.3)
   })
@@ -61,7 +60,9 @@ describe('DeterministicOpticsQuestionParser', () => {
     expect(candidate.ir.model).toBe('plane_mirror_imaging')
     expect(candidate.ir.relations).toContain('plane_mirror_imaging')
     expect(candidate.ir.knowns.find((k) => k.key === 'object_distance')?.value).toBeCloseTo(0.15)
-    expect(candidate.ir.targets).toEqual(expect.arrayContaining(['image_distance', 'magnification']))
+    expect(candidate.ir.targets).toEqual(
+      expect.arrayContaining(['image_distance', 'magnification']),
+    )
   })
 
   it('detects a concave mirror question', () => {
@@ -165,11 +166,15 @@ describe('Optics Question full pipeline', () => {
   })
 
   it('answers 倒正 and 像高 for a converging lens beyond 2f (倒立缩小实像)', () => {
-    const doc = inlineDoc('凸透镜焦距 f = 10 cm，物高 4 cm，物距 u = 30 cm。求：像高、像是倒立还是正立、像的虚实')
+    const doc = inlineDoc(
+      '凸透镜焦距 f = 10 cm，物高 4 cm，物距 u = 30 cm。求：像高、像是倒立还是正立、像的虚实',
+    )
     const result = processQuestion(doc)
 
     expect(result.workflowState).toBe('READY')
-    expect(result.ir?.targets).toEqual(expect.arrayContaining(['image_height', 'image_orientation', 'image_nature']))
+    expect(result.ir?.targets).toEqual(
+      expect.arrayContaining(['image_height', 'image_orientation', 'image_nature']),
+    )
     expect(result.solution?.results['image_orientation']?.value).toBe('倒立')
     expect(result.solution?.results['image_nature']?.value).toBe('倒立、缩小、实像')
     /* h' = m·h = 0.5 × 4 cm = 2 cm */
@@ -183,7 +188,9 @@ describe('Optics semantic validation', () => {
     const result = processQuestion(doc)
 
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
-    expect(result.validation?.issues).toContainEqual(expect.objectContaining({ code: 'MISSING_FOCAL_LENGTH' }))
+    expect(result.validation?.issues).toContainEqual(
+      expect.objectContaining({ code: 'MISSING_FOCAL_LENGTH' }),
+    )
     expect(result.scene).toBeNull()
   })
 
@@ -192,6 +199,8 @@ describe('Optics semantic validation', () => {
     const result = processQuestion(doc)
 
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
-    expect(result.validation?.issues).toContainEqual(expect.objectContaining({ code: 'MISSING_OBJECT_DISTANCE' }))
+    expect(result.validation?.issues).toContainEqual(
+      expect.objectContaining({ code: 'MISSING_OBJECT_DISTANCE' }),
+    )
   })
 })

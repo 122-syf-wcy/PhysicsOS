@@ -49,8 +49,10 @@ export function detectMechanicsModel(scene: PhysicsScene): MechanicsModelId | nu
      the scene could mean a circular orbit. */
   if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'orbit'))
     return 'circular_orbit'
-  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'ground')) return 'projectile_motion'
-  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'incline')) return 'inclined_plane'
+  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'ground'))
+    return 'projectile_motion'
+  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'incline'))
+    return 'inclined_plane'
   if (scene.forces.some((f) => f.type === 'friction')) return 'inclined_plane'
   if (scene.forces.some((f) => f.type === 'custom')) return 'newton_second_law'
 

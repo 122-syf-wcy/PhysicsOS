@@ -25,7 +25,10 @@ export interface PaperModelRoute {
 const draftSectionSchema = z.array(paperQuestionSchema.omit({ status: true }))
 
 /** Models emit `null` for omitted fields; treat null as absent, and `knowledge`
- * — the one required array — falls back to empty for the checker to flag. */
+ * — the one required array — falls back to empty for the checker to flag.
+ * @param raw - one parsed question object from the model's JSON.
+ * @returns a schema-clean copy; non-objects pass through for the schema to reject.
+ */
 export function sanitizeQuestion(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw
   /* Copy without the nulls in one pass — a `delete` on a computed key would
@@ -78,6 +81,11 @@ export function sanitizeQuestion(raw: unknown): unknown {
  * Assemble one streamed call into its text. Shared by drafting, repair,
  * bank ingest and adaptation — every model call in this plugin takes this
  * shape: one system prompt, one user message, text blocks joined.
+ * @param ctx - plugin context carrying `llm`.
+ * @param route - the deployment's provider/model pair.
+ * @param system - the system prompt for this call.
+ * @param prompt - the single user message.
+ * @returns the joined text of all text blocks; throws on error/aborted finishes.
  */
 export async function callModel(ctx: Context, route: PaperModelRoute, system: string, prompt: string): Promise<string> {
   const assembler = new BlockAssembler()
@@ -107,7 +115,11 @@ export async function callModel(ctx: Context, route: PaperModelRoute, system: st
     .join('')
 }
 
-/** Extract the first JSON array or object from model output. */
+/**
+ * Extract the first JSON array or object from model output.
+ * @param text - the raw model text (may wrap JSON in a fenced block).
+ * @returns the parsed value; throws when no `[`/`{` appears.
+ */
 export function extractJson(text: string): unknown {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text)
   const candidate = fenced?.[1] ?? text

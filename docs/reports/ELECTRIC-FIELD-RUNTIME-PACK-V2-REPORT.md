@@ -31,69 +31,69 @@ V1 没暴露多源，只因 Question IR/Parser/Scene Builder 只产单源。V2 �
 
 ### A. 多源 Question 解析与场景构建
 
-| 文件 | 改动 |
-|---|---|
-| `packages/question-core/src/semantic-ir.ts` | `PhysicsSemanticIR` 增 `sourceCharges`/`samplePosition`；`SemanticRelation` 增 `multi_source_superposition` |
-| `packages/question-core/src/semantic-validator.ts` | 多源分支：每源非零有限、需 samplePosition、多源方向 → 歧义「合场流线决定」 |
+| 文件                                                          | 改动                                                                                                                                                                 |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/question-core/src/semantic-ir.ts`                   | `PhysicsSemanticIR` 增 `sourceCharges`/`samplePosition`；`SemanticRelation` 增 `multi_source_superposition`                                                          |
+| `packages/question-core/src/semantic-validator.ts`            | 多源分支：每源非零有限、需 samplePosition、多源方向 → 歧义「合场流线决定」                                                                                           |
 | `packages/question-core/src/deterministic-electric-parser.ts` | `MULTI_SOURCE_SIGNAL`、`isMultiSourceQuestionText`、`parseMultiSource`（±separation/2、中点场点）、`extractSourceCharges`（matchAll q1/q2、电荷A/B）；多源优先于单源 |
-| `packages/question-core/src/electric-scene-builder.ts` | 多源分支：`sourceCharges.map` → source-1/source-2 + probe at samplePosition |
-| `packages/question-core/src/golden-questions.ts` | 3 道多源题（electric-06 异种中点、electric-07 同种中点、electric-08 偶极子中点） |
-| `packages/question-core/src/question-runtime.ts` | `buildSolution` 多源标题/描述/公式 `E = Σ kqᵢ/rᵢ²`、方向「合场流线决定」 |
-| `packages/question-core/tests/electric-questions.test.ts` | 3 道多源题：`sourceCharges.length===2`、verification passed、E 数值、superposition check |
+| `packages/question-core/src/electric-scene-builder.ts`        | 多源分支：`sourceCharges.map` → source-1/source-2 + probe at samplePosition                                                                                          |
+| `packages/question-core/src/golden-questions.ts`              | 3 道多源题（electric-06 异种中点、electric-07 同种中点、electric-08 偶极子中点）                                                                                     |
+| `packages/question-core/src/question-runtime.ts`              | `buildSolution` 多源标题/描述/公式 `E = Σ kqᵢ/rᵢ²`、方向「合场流线决定」                                                                                             |
+| `packages/question-core/tests/electric-questions.test.ts`     | 3 道多源题：`sourceCharges.length===2`、verification passed、E 数值、superposition check                                                                             |
 
 ### B. 等势线可视化
 
-| 文件 | 改动 |
-|---|---|
-| `packages/engine-electric/src/field-solver.ts` | `PotentialGrid` 接口 + `samplePotentialGrid`（Float64Array、NaN 跳过源邻域） |
-| `packages/engine-electric/src/index.ts` | 导出 `samplePotentialGrid`、`PotentialGrid` |
-| `packages/physics-scene/src/electric/electric-scene-builder.ts` | 多源时 `observableDefinitions` 追加 `annotation: equipotential` |
-| `vendor/.../scene-visual-model.ts` | `EquipotentialVisual`；`SceneVisualModel.equipotentials?`；`ObservableKey` 增 `equipotentials` |
-| `vendor/.../electric-visual-bridge.ts` | `potentialAt`、`contourAtLevel`（marching squares 16 case + saddle）、`equipotentialsOf`（48×27 网格、自动 level、多源 only）、`visibilityOf` 读 equipotential annotation |
-| `vendor/.../renderers.module.css` | `.equipotentials` / `.equipotentialPath`（虚线、measurement 色） |
-| `vendor/.../renderer-registry.tsx` | 等势线渲染块（streamlines 后、Vectors 前） |
-| `vendor/.../tests/electric-point-charge-visual.client.spec.tsx` | 多源等势线非空/闭合/visible；单源无；DOM 渲染 |
-| `packages/engine-electric/tests/point-charge-runtime.test.ts` | `samplePotentialGrid` 中点 V=0（1×1 网格精确采原点）、远点与 solvePotentialAt 一致 |
+| 文件                                                            | 改动                                                                                                                                                                      |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/engine-electric/src/field-solver.ts`                  | `PotentialGrid` 接口 + `samplePotentialGrid`（Float64Array、NaN 跳过源邻域）                                                                                              |
+| `packages/engine-electric/src/index.ts`                         | 导出 `samplePotentialGrid`、`PotentialGrid`                                                                                                                               |
+| `packages/physics-scene/src/electric/electric-scene-builder.ts` | 多源时 `observableDefinitions` 追加 `annotation: equipotential`                                                                                                           |
+| `vendor/.../scene-visual-model.ts`                              | `EquipotentialVisual`；`SceneVisualModel.equipotentials?`；`ObservableKey` 增 `equipotentials`                                                                            |
+| `vendor/.../electric-visual-bridge.ts`                          | `potentialAt`、`contourAtLevel`（marching squares 16 case + saddle）、`equipotentialsOf`（48×27 网格、自动 level、多源 only）、`visibilityOf` 读 equipotential annotation |
+| `vendor/.../renderers.module.css`                               | `.equipotentials` / `.equipotentialPath`（虚线、measurement 色）                                                                                                          |
+| `vendor/.../renderer-registry.tsx`                              | 等势线渲染块（streamlines 后、Vectors 前）                                                                                                                                |
+| `vendor/.../tests/electric-point-charge-visual.client.spec.tsx` | 多源等势线非空/闭合/visible；单源无；DOM 渲染                                                                                                                             |
+| `packages/engine-electric/tests/point-charge-runtime.test.ts`   | `samplePotentialGrid` 中点 V=0（1×1 网格精确采原点）、远点与 solvePotentialAt 一致                                                                                        |
 
 ### C. R1 修复 + Agent 多源解释
 
-| 文件 | 改动 |
-|---|---|
-| `vendor/.../QuestionWorkspace.tsx` | R1：probeId `find(p=>p.id!=='source-1')` → `probeParticleOf`（排除所有 source）；`ELECTRIC_HIGHLIGHTS` 增 q1/q2/P → source-1/source-2/probe-1 |
-| `vendor/.../physics-agent.ts` | `sourceChargeSignsOf`（遍历所有 source parameter）；`chargeSigns` context；`resolveHighlightTarget` 支持 `*` 前缀通配；`field-line` → `source-*` |
-| `vendor/.../physics-agent-answers.ts` | `electric-field-direction` 多源处理（不谎称单值方向）；新 `electric-field-line-origin`（chargeSigns + 方向校验）；新 `electric-superposition`（superposition 校验）；matchIntent 规则 |
-| `vendor/.../tests/physics-agent.client.spec.tsx` | 7 个多源测试：chargeSigns、suggestions、superposition 校验、field-line-origin 不谎称方向、direction 多源、field-line 高亮 source id、R1 probeId |
+| 文件                                             | 改动                                                                                                                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vendor/.../QuestionWorkspace.tsx`               | R1：probeId `find(p=>p.id!=='source-1')` → `probeParticleOf`（排除所有 source）；`ELECTRIC_HIGHLIGHTS` 增 q1/q2/P → source-1/source-2/probe-1                                         |
+| `vendor/.../physics-agent.ts`                    | `sourceChargeSignsOf`（遍历所有 source parameter）；`chargeSigns` context；`resolveHighlightTarget` 支持 `*` 前缀通配；`field-line` → `source-*`                                      |
+| `vendor/.../physics-agent-answers.ts`            | `electric-field-direction` 多源处理（不谎称单值方向）；新 `electric-field-line-origin`（chargeSigns + 方向校验）；新 `electric-superposition`（superposition 校验）；matchIntent 规则 |
+| `vendor/.../tests/physics-agent.client.spec.tsx` | 7 个多源测试：chargeSigns、suggestions、superposition 校验、field-line-origin 不谎称方向、direction 多源、field-line 高亮 source id、R1 probeId                                       |
 
 ## 4. 浏览器验收 Case
 
-| Case | 场景 | 验证点 | 结果 |
-|---|---|---|---|
-| J | 等量异种点电荷中点求 E（Golden Question） | 题面解析 → 已知量高亮（q1/q2→source-1/source-2）→ 叠加步骤 → verified | PASS |
-| K | 多源场景渲染 + Inspector 编辑 | 两个 source sphere + 弯曲流线 + 等势线；Inspector 多 source 可编辑；编辑后 revision+1 仍 verified | PASS |
-| L | Agent「电场线为什么从正电荷出来」 | 高亮 stream（source-*）+ 引用 chargeSigns（正、负）+ 不谎称单值方向 + revision 不变 | PASS |
-| M | Agent「合场是怎么来的」 | 引用 `electric_field_superposition` 校验 + 叠加公式 + revision 不变 | PASS |
+| Case | 场景                                      | 验证点                                                                                            | 结果 |
+| ---- | ----------------------------------------- | ------------------------------------------------------------------------------------------------- | ---- |
+| J    | 等量异种点电荷中点求 E（Golden Question） | 题面解析 → 已知量高亮（q1/q2→source-1/source-2）→ 叠加步骤 → verified                             | PASS |
+| K    | 多源场景渲染 + Inspector 编辑             | 两个 source sphere + 弯曲流线 + 等势线；Inspector 多 source 可编辑；编辑后 revision+1 仍 verified | PASS |
+| L    | Agent「电场线为什么从正电荷出来」         | 高亮 stream（source-*）+ 引用 chargeSigns（正、负）+ 不谎称单值方向 + revision 不变               | PASS |
+| M    | Agent「合场是怎么来的」                   | 引用 `electric_field_superposition` 校验 + 叠加公式 + revision 不变                               | PASS |
 
 ## 5. 门禁计数器
 
-| 门禁 | 计数 |
-|---|---|
-| console errors | 0 |
-| page errors | 0 |
-| unhandled rejections | 0 |
-| failed requests | 0 |
-| error responses | 0 |
+| 门禁                 | 计数 |
+| -------------------- | ---- |
+| console errors       | 0    |
+| page errors          | 0    |
+| unhandled rejections | 0    |
+| failed requests      | 0    |
+| error responses      | 0    |
 
 ## 6. 截图清单
 
-| 文件 | 内容 |
-|---|---|
-| `question-dipole-field-1600x900.png` | 等量异种中点题（已知量高亮） |
-| `electric-equipotential-1600x900.png` | 多源 Lab：两 source + 弯曲流线 + 等势线 |
-| `agent-field-line-origin-1600x900.png` | Agent 电场线源头解释（stream 高亮） |
-| `agent-superposition-1600x900.png` | Agent 合场叠加解释 |
-| `question-dipole-field-final-1600x900.png` | 最终集：偶极子题 |
-| `electric-equipotential-final-1600x900.png` | 最终集：等势线 Lab |
-| `agent-superposition-final-1600x900.png` | 最终集：叠加 Agent |
+| 文件                                        | 内容                                    |
+| ------------------------------------------- | --------------------------------------- |
+| `question-dipole-field-1600x900.png`        | 等量异种中点题（已知量高亮）            |
+| `electric-equipotential-1600x900.png`       | 多源 Lab：两 source + 弯曲流线 + 等势线 |
+| `agent-field-line-origin-1600x900.png`      | Agent 电场线源头解释（stream 高亮）     |
+| `agent-superposition-1600x900.png`          | Agent 合场叠加解释                      |
+| `question-dipole-field-final-1600x900.png`  | 最终集：偶极子题                        |
+| `electric-equipotential-final-1600x900.png` | 最终集：等势线 Lab                      |
+| `agent-superposition-final-1600x900.png`    | 最终集：叠加 Agent                      |
 
 ## 7. 测试数据
 

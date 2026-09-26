@@ -21,14 +21,14 @@
 
 ## 2. 交付物
 
-| 路径 | 内容 |
-| --- | --- |
-| `overlays/harness/files/packages/physicsos/tool-physicsos/` | Harness 工作区成员 `@deepseek-ai/dsh-tool-physicsos`：`src/index.ts`（7 个 `defineTool` 注册 + 按会话隔离的 `PhysicsToolRuntime`）、`src/invariant.ts`（伴生不变量占位）、`tsdown.config.ts`（Node 库打包，内联 `@physicsos/*`）、两份 vitest 规格、README |
-| `overlays/harness/files/apps/cli/config/agent-presets/physics-student/` | Agent 预设「物理学习模式」：物理宪法 persona、`tool-physicsos` 行、`tool-ask-user` 行；不含 shell / fs / web / 子代理 |
-| `overlays/harness/upstream-changes.patch` | 新增两处 hunk：`apps/cli/package.json` 依赖 `@deepseek-ai/dsh-tool-physicsos`，`tsconfig.host.json` 项目引用；vendor `pnpm-lock.yaml` 随之更新 |
-| `scripts/overlay/harness-overlay.mjs` | `OVERLAY_PATHS` 加入上述两个路径 |
-| `package.json`（根） | `build:agent` / `typecheck:agent` / `lint:agent` / `test:agent`；`build:web`、`typecheck`、`lint`、`test` 已把它们串进去 |
-| `tests/agent/` | `physics-headless.patch.yml`（headless 档的同一组合）、`headless-physics-acceptance.mjs`（13 项门禁）、`run-mock-llm.mjs`、`dump-session-log.mjs` |
+| 路径                                                                    | 内容                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `overlays/harness/files/packages/physicsos/tool-physicsos/`             | Harness 工作区成员 `@deepseek-ai/dsh-tool-physicsos`：`src/index.ts`（7 个 `defineTool` 注册 + 按会话隔离的 `PhysicsToolRuntime`）、`src/invariant.ts`（伴生不变量占位）、`tsdown.config.ts`（Node 库打包，内联 `@physicsos/*`）、两份 vitest 规格、README |
+| `overlays/harness/files/apps/cli/config/agent-presets/physics-student/` | Agent 预设「物理学习模式」：物理宪法 persona、`tool-physicsos` 行、`tool-ask-user` 行；不含 shell / fs / web / 子代理                                                                                                                                      |
+| `overlays/harness/upstream-changes.patch`                               | 新增两处 hunk：`apps/cli/package.json` 依赖 `@deepseek-ai/dsh-tool-physicsos`，`tsconfig.host.json` 项目引用；vendor `pnpm-lock.yaml` 随之更新                                                                                                             |
+| `scripts/overlay/harness-overlay.mjs`                                   | `OVERLAY_PATHS` 加入上述两个路径                                                                                                                                                                                                                           |
+| `package.json`（根）                                                    | `build:agent` / `typecheck:agent` / `lint:agent` / `test:agent`；`build:web`、`typecheck`、`lint`、`test` 已把它们串进去                                                                                                                                   |
+| `tests/agent/`                                                          | `physics-headless.patch.yml`（headless 档的同一组合）、`headless-physics-acceptance.mjs`（13 项门禁）、`run-mock-llm.mjs`、`dump-session-log.mjs`                                                                                                          |
 
 ## 3. 设计决策
 
@@ -154,7 +154,7 @@
 - `typecheck`（core + web + agent）与 `lint`（core + web + agent）零错误。
 - `test:agent` 22 用例（+5 scene mirroring：发布折叠 / 拒发不发 / solve 发布 + sourceQuestionId /
   agent-less 不发 / fold last-wins 不改状态）；`test:web` 28 文件 360 用例（+`agent-scene-sync.client
-  .spec` 5 条、`overlay.client.spec` 档位断言更新）；agent-tools 32 用例。
+.spec` 5 条、`overlay.client.spec` 档位断言更新）；agent-tools 32 用例。
 - 端到端 `headless-physics-acceptance.mjs` **16 项门禁全 PASS**：在真实 `dsh` 进程 + mock LLM 下，
   `physics_solve_question` 之后会话日志出现恰一条 `physics/scene`（cause `solved`），内嵌 scene 与
   工具结果登记的场景同 id / revision、schema 为 `physics-scene/1.0`，本轮无 create / command 类发布。

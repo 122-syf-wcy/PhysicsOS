@@ -24,6 +24,9 @@ const MODEL_SUBTITLE: Readonly<Record<string, string>> = {
 
 const fmt = formatSignificant
 
+/**
+ * The collision workspace runtime — see the module doc for its role.
+ */
 export class CollisionWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: CollisionRuntimeBridge
   /** The scene as the source stated it, kept so a branch can be discarded. */
@@ -134,14 +137,27 @@ export class CollisionWorkspaceRuntime implements WorkspaceRuntime {
   }
 }
 
+/**
+ * The collision workspace runtime helper `createCollisionWorkspaceRuntime`.
+ * @returns the collision workspace runtime.
+ * @param input - the caller-supplied fields.
+ */
 export const createCollisionWorkspaceRuntime = (
   input: CollisionSceneInput | PhysicsScene,
 ): CollisionWorkspaceRuntime => new CollisionWorkspaceRuntime(input)
 
-/** 供 LabWorkspace 分派时快速识别碰撞场景。 */
+/**
+ * 供 LabWorkspace 分派时快速识别碰撞场景。
+ * @returns true when collision scene input holds.
+ * @param scene - the physics scene.
+ */
 export const isCollisionSceneInput = (scene: PhysicsScene): boolean =>
   detectCollisionModel(scene) !== null && scene.bodies.length >= 2
 
-/** 模型显示名，供侧栏/报告使用。 */
+/**
+ * 模型显示名，供侧栏/报告使用
+ * @returns the formatted string.
+ * @param scene - the physics scene.
+ */
 export const collisionModelTitle = (scene: PhysicsScene): string =>
   COLLISION_MODEL_LABELS[detectCollisionModel(scene) ?? 'elastic_collision']

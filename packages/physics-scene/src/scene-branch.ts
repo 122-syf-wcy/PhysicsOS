@@ -47,7 +47,9 @@ export const forkExperimentalScene = (input: ForkExperimentalSceneInput): Physic
   )
 
   const lineage: SceneLineage = {
-    origin: parentLineage?.origin ?? (scene.metadata.sourceQuestionId === undefined ? 'template' : 'question'),
+    origin:
+      parentLineage?.origin ??
+      (scene.metadata.sourceQuestionId === undefined ? 'template' : 'question'),
     branchType: 'experimental',
     ...(scene.metadata.sourceQuestionId === undefined
       ? parentLineage?.originQuestionId === undefined

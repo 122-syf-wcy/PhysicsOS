@@ -70,7 +70,9 @@ export interface AtmosphericPressureReading {
 }
 
 /** p = F/S. A zero force is a real rig — it reads zero pressure. */
-export const solidPressureOf = (model: ResolvedPressureModel & { type: 'solid' }): SolidPressureReading => {
+export const solidPressureOf = (
+  model: ResolvedPressureModel & { type: 'solid' },
+): SolidPressureReading => {
   const pressure = model.force / model.area
   return {
     force: model.force,
@@ -93,7 +95,9 @@ export const liquidPressureOf = (
     pressure: at(model.liquidDensity, model.depth),
     comparisonDepth: model.comparisonDepth,
     comparisonDepthPressure:
-      model.comparisonDepth === undefined ? undefined : at(model.liquidDensity, model.comparisonDepth),
+      model.comparisonDepth === undefined
+        ? undefined
+        : at(model.liquidDensity, model.comparisonDepth),
     comparisonLiquidDensity: model.comparisonLiquidDensity,
     comparisonLiquidPressure:
       model.comparisonLiquidDensity === undefined

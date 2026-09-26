@@ -34,10 +34,8 @@ export const centripetalAcceleration = (speed: number, radius: number): number =
   (speed * speed) / radius
 
 /** The acceleration gravity actually supplies at that radius: a = GM/r² (m/s²). */
-export const gravitationalAcceleration = (
-  gravitationalParameter: number,
-  radius: number,
-): number => gravitationalParameter / (radius * radius)
+export const gravitationalAcceleration = (gravitationalParameter: number, radius: number): number =>
+  gravitationalParameter / (radius * radius)
 
 /** What a circular orbit reads. */
 export interface OrbitReading {

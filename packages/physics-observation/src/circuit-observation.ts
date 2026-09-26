@@ -1,8 +1,4 @@
-import {
-  derivedScalar,
-  type SimulationResult,
-  type SimulationState,
-} from '@physicsos/physics-core'
+import { derivedScalar, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
 import { PhysicsOSError, asObservableId } from '@physicsos/shared'
 import {
   circuitOf,
@@ -83,7 +79,10 @@ const scalarOf = <D extends PhysicalDimension>(
 const selectState = (scene: PhysicsScene, simulation: SimulationResult): SimulationState => {
   const first = simulation.states[0]
   if (first === undefined) {
-    throw new PhysicsOSError('OBSERVATION_STATE_MISSING', 'Circuit SimulationResult contains no states.')
+    throw new PhysicsOSError(
+      'OBSERVATION_STATE_MISSING',
+      'Circuit SimulationResult contains no states.',
+    )
   }
   const targetTime = scene.timeline.currentTime.value
   return simulation.states.reduce((closest, candidate) =>
@@ -115,7 +114,9 @@ const visible = (scene: PhysicsScene, type: ObservableDefinition['type']): Obser
  * the SimulationState's per-component `values` and the SimulationResult's
  * derived set. Visibility is controlled solely by scene definitions.
  */
-export const observeCircuitScene = (input: CircuitObservationInput): CircuitObservationRuntimeState => {
+export const observeCircuitScene = (
+  input: CircuitObservationInput,
+): CircuitObservationRuntimeState => {
   const { scene, simulation } = input
   if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
     throw new PhysicsOSError(
@@ -191,7 +192,11 @@ export const observeCircuitScene = (input: CircuitObservationInput): CircuitObse
   if (sourceId !== undefined) {
     const emf = scalarOf(simulation.derivedQuantities, 'emf', 'electric_potential')
     const mainCurrent = scalarOf(simulation.derivedQuantities, 'main_current', 'electric_current')
-    const terminalVoltage = scalarOf(simulation.derivedQuantities, 'terminal_voltage', 'electric_potential')
+    const terminalVoltage = scalarOf(
+      simulation.derivedQuantities,
+      'terminal_voltage',
+      'electric_potential',
+    )
     observations.push({
       type: 'circuit_source_summary',
       observableId: asObservableId('observable-circuit-power'),

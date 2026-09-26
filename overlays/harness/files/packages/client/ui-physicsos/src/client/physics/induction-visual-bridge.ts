@@ -29,6 +29,12 @@ import type {
 /** Engine model lengths are SI metres; the bench displays centimetres. */
 const CM_PER_METRE = 100
 
+/**
+ * The induction scene visuals helper `fmtInductionValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtInductionValue = (value: number, digits = 3): string =>
   formatSignificant(value, digits)
 
@@ -36,6 +42,8 @@ export const fmtInductionValue = (value: number, digits = 3): string =>
  * Scene observable definition → canvas toggle key. The induction factory stamps
  * `observable-induction-emf / -current / -flux / -bar_motion` (the scene key is
  * the snake-case observable name), all keyed by the id suffix.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const inductionObservableKeyOf = (
   definition: ObservableDefinition,
@@ -60,7 +68,11 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
 /** Student-facing one-liner for the Lenz direction readout. The value that
  *  decides the sentence is an engine fact — for a sweeping bar the derived EMF
  *  (E = BLv, its sign is the cutting direction), for the coil the bench's
- *  stated flux rate — never an EMF this module recomputes from B·L·v. */
+ *  stated flux rate — never an EMF this module recomputes from B·L·v.  * @returns the formatted string.
+ * @param signedValue - the signed measurement.
+ * @param isBar - whether the element is a bar.
+ * @returns the formatted string.
+ */
 export const lenzDirectionText = (isBar: boolean, signedValue: number): string => {
   if (isBar) {
     if (!Number.isFinite(signedValue) || Math.abs(signedValue) < 1e-12) return '棒静止，无感应电流'
@@ -72,6 +84,9 @@ export const lenzDirectionText = (isBar: boolean, signedValue: number): string =
     : '楞次定律：磁通量减少，感应磁场补偿原磁场'
 }
 
+/**
+ * The induction visual input shape used by the induction scene visuals module.
+ */
 export interface InductionVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedInductionModel
@@ -115,14 +130,18 @@ const objectX = (state: SimulationState | undefined, objectId: string): number =
  * positions, the BIL force arrows on each bar and the loop current. The
  * current arrow's sign and every number come from the engine — never re-derived
  * here.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
  */
-export const inductionSceneVisual = ({
-  scene,
-  model,
-  simulation,
-  time,
-  state,
-}: InductionVisualInput): SceneVisualModel => {
+export const inductionSceneVisual = (input: InductionVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+    simulation,
+    time,
+    state,
+  } = input
+
   const bench = inductionBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('induction')
 

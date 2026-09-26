@@ -95,7 +95,9 @@ function imageNatureOrientation(
   return { nature: 'virtual', orientation: 'upright' }
 }
 
-export const observeOpticsScene = (input: OpticsObservationInput): OpticsObservationRuntimeState => {
+export const observeOpticsScene = (
+  input: OpticsObservationInput,
+): OpticsObservationRuntimeState => {
   const { scene, simulation } = input
   if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
     throw new PhysicsOSError(
@@ -107,12 +109,18 @@ export const observeOpticsScene = (input: OpticsObservationInput): OpticsObserva
 
   const bench = opticalBenchOf(scene)
   if (bench === undefined) {
-    throw new PhysicsOSError('OBSERVATION_BENCH_MISSING', 'Optics observations require an optical bench.')
+    throw new PhysicsOSError(
+      'OBSERVATION_BENCH_MISSING',
+      'Optics observations require an optical bench.',
+    )
   }
 
   const element = opticalElementOf(bench)
   if (element === undefined) {
-    throw new PhysicsOSError('OBSERVATION_ELEMENT_MISSING', 'Optics observations require an imaging element.')
+    throw new PhysicsOSError(
+      'OBSERVATION_ELEMENT_MISSING',
+      'Optics observations require an imaging element.',
+    )
   }
 
   const objectDistance = canonicalValue(element.position) - canonicalValue(bench.object.position)
@@ -171,10 +179,8 @@ export const observeOpticsScene = (input: OpticsObservationInput): OpticsObserva
 }
 
 /** Re-export for type narrowing in tests. */
-export const isOpticsImageObservation = (
-  obs: OpticsObservation,
-): obs is OpticsImageObservation => obs.type === 'optics_image'
+export const isOpticsImageObservation = (obs: OpticsObservation): obs is OpticsImageObservation =>
+  obs.type === 'optics_image'
 
-export const isOpticsObjectObservation = (
-  obs: OpticsObservation,
-): obs is OpticsObjectObservation => obs.type === 'optics_object'
+export const isOpticsObjectObservation = (obs: OpticsObservation): obs is OpticsObjectObservation =>
+  obs.type === 'optics_object'

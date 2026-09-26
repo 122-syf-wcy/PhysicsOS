@@ -11,15 +11,16 @@
  * Copy lives in {@link locales.ts}, so `title`/`hint` here are KEYS, never
  * sentences: the same template reads correctly in zh and en.
  *
- * Cyclotron is intentionally absent from the selectable templates: the composite
- * engine models static uniform regions, not a time-dependent alternating field,
- * so a cyclotron here would be a fake. It is surfaced only as "即将支持".
+ * Cyclotron is a real selectable template backed by the ideal time-varying-gap
+ * model. Modern-physics templates are exported separately for controller-owned
+ * registry wiring; their locale keys are not part of this task's write set.
  */
 
 import {
   createArchimedesScene,
   createAtmosphericPressureScene,
   createCompositeFieldScene,
+  createCyclotronScene,
   createConcaveMirrorScene,
   createConvexLensScene,
   createConvexMirrorScene,
@@ -54,6 +55,11 @@ import {
   createStandingWaveScene,
   createTravellingWaveScene,
   createWaveInterferenceScene,
+  createDiffractionScene,
+  createDopplerScene,
+  createLongitudinalWaveScene,
+  createPhotoelectricEffectScene,
+  createReflectionRefractionScene,
   createCollisionScene,
   createElectromagnetScene,
   createMechanicalEnergyScene,
@@ -81,6 +87,7 @@ export type ExperimentDomain =
   | 'thermal'
   | 'induction'
   | 'wave'
+  | 'modern'
 
 /**
  * School stage a template belongs to (学段). Junior covers the 初中 curriculum
@@ -107,6 +114,9 @@ export interface ExperimentTemplate {
   readonly comingSoon?: true
 }
 
+/**
+ * The experiment template group shape used by the experiment templates module.
+ */
 export interface ExperimentTemplateGroup {
   readonly id: ExperimentDomain
   /** Locale key for the group (tab) heading. */
@@ -224,7 +234,11 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
         model: 'projectile_motion',
         mass: 1,
         position: { x: 0, y: 0, z: 0 },
-        velocity: { x: 20 * Math.cos((40 * Math.PI) / 180), y: 20 * Math.sin((40 * Math.PI) / 180), z: 0 },
+        velocity: {
+          x: 20 * Math.cos((40 * Math.PI) / 180),
+          y: 20 * Math.sin((40 * Math.PI) / 180),
+          z: 0,
+        },
         gravity: { x: 0, y: -g, z: 0 },
         groundY: 0,
         launchAngle: 40,
@@ -337,8 +351,22 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
       const scene = createCollisionScene({
         sceneId: stampId('collision-elastic'),
         bodies: [
-          { id: 'ball-a', mass: 1, position: [-2.4, 0], velocity: [2, 0], radius: 0.5, restitution: 1 },
-          { id: 'ball-b', mass: 1, position: [2.4, 0], velocity: [-1.5, 0], radius: 0.5, restitution: 1 },
+          {
+            id: 'ball-a',
+            mass: 1,
+            position: [-2.4, 0],
+            velocity: [2, 0],
+            radius: 0.5,
+            restitution: 1,
+          },
+          {
+            id: 'ball-b',
+            mass: 1,
+            position: [2.4, 0],
+            velocity: [-1.5, 0],
+            radius: 0.5,
+            restitution: 1,
+          },
         ],
         boundary: { width: 12, height: 5 },
         boundaryRestitution: 1,
@@ -359,8 +387,22 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
       const scene = createCollisionScene({
         sceneId: stampId('collision-inelastic'),
         bodies: [
-          { id: 'ball-a', mass: 2, position: [-2.6, 0], velocity: [1.6, 0], radius: 0.55, restitution: 0.5 },
-          { id: 'ball-b', mass: 1, position: [2.6, 0], velocity: [0, 0], radius: 0.4, restitution: 0.5 },
+          {
+            id: 'ball-a',
+            mass: 2,
+            position: [-2.6, 0],
+            velocity: [1.6, 0],
+            radius: 0.55,
+            restitution: 0.5,
+          },
+          {
+            id: 'ball-b',
+            mass: 1,
+            position: [2.6, 0],
+            velocity: [0, 0],
+            radius: 0.4,
+            restitution: 0.5,
+          },
         ],
         boundary: { width: 12, height: 5 },
         boundaryRestitution: 0.8,
@@ -381,8 +423,22 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
       const scene = createCollisionScene({
         sceneId: stampId('collision-perfectly-inelastic'),
         bodies: [
-          { id: 'ball-a', mass: 1, position: [-2.6, 0], velocity: [3, 0], radius: 0.45, restitution: 0 },
-          { id: 'ball-b', mass: 1, position: [2.6, 0], velocity: [0, 0], radius: 0.45, restitution: 0 },
+          {
+            id: 'ball-a',
+            mass: 1,
+            position: [-2.6, 0],
+            velocity: [3, 0],
+            radius: 0.45,
+            restitution: 0,
+          },
+          {
+            id: 'ball-b',
+            mass: 1,
+            position: [2.6, 0],
+            velocity: [0, 0],
+            radius: 0.45,
+            restitution: 0,
+          },
         ],
         boundary: { width: 12, height: 5 },
         boundaryRestitution: 1,
@@ -503,8 +559,22 @@ const mechanicsTemplates: readonly ExperimentTemplate[] = [
       const scene = createCollisionScene({
         sceneId: stampId('mechanics-chase-meeting'),
         bodies: [
-          { id: 'chaser', mass: 1, position: [-4, 0.7], velocity: [3, 0], radius: 0.45, restitution: 1 },
-          { id: 'leader', mass: 1, position: [0, -0.7], velocity: [1, 0], radius: 0.45, restitution: 1 },
+          {
+            id: 'chaser',
+            mass: 1,
+            position: [-4, 0.7],
+            velocity: [3, 0],
+            radius: 0.45,
+            restitution: 1,
+          },
+          {
+            id: 'leader',
+            mass: 1,
+            position: [0, -0.7],
+            velocity: [1, 0],
+            radius: 0.45,
+            restitution: 1,
+          },
         ],
         boundary: { width: 24, height: 4 },
         boundaryRestitution: 1,
@@ -1461,12 +1531,12 @@ const compositeTemplates: readonly ExperimentTemplate[] = [
     label: 'lab.template.cyclotron',
     hint: 'lab.template.cyclotron.hint',
     tags: ['复合场'],
-    /* The composite engine models static uniform regions, not a time-dependent
-       alternating field. A cyclotron here would compute the wrong trajectory, so
-       it is shown as "即将支持" until the engine gains time-dependent fields. */
-    comingSoon: true,
-    createScene: () => {
-      throw new Error('cyclotron is not yet modelled by the composite engine')
+    createScene: (title) => {
+      const scene = createCyclotronScene({
+        sceneId: stampId('composite-cyclotron'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
     },
   },
 ]
@@ -1620,6 +1690,77 @@ const waveTemplates: readonly ExperimentTemplate[] = [
       return { sceneId: String(scene.id), scene }
     },
   },
+  {
+    id: 'wave-longitudinal',
+    domain: 'wave',
+    stage: 'senior',
+    label: 'lab.template.waveLongitudinal',
+    hint: 'lab.template.waveLongitudinal.hint',
+    tags: ['机械波', '高中', '纵波', '压缩', '稀疏'],
+    createScene: (title) => {
+      const scene = createLongitudinalWaveScene({ sceneId: stampId('wave-longitudinal'), title })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'wave-reflection-refraction',
+    domain: 'wave',
+    stage: 'senior',
+    label: 'lab.template.waveBoundary',
+    hint: 'lab.template.waveBoundary.hint',
+    tags: ['机械波', '高中', '反射', '折射'],
+    createScene: (title) => {
+      const scene = createReflectionRefractionScene({
+        sceneId: stampId('wave-reflection-refraction'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'wave-diffraction',
+    domain: 'wave',
+    stage: 'senior',
+    label: 'lab.template.waveDiffraction',
+    hint: 'lab.template.waveDiffraction.hint',
+    tags: ['机械波', '高中', '单缝', '衍射'],
+    createScene: (title) => {
+      const scene = createDiffractionScene({ sceneId: stampId('wave-diffraction'), title })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+  {
+    id: 'wave-doppler',
+    domain: 'wave',
+    stage: 'senior',
+    label: 'lab.template.waveDoppler',
+    hint: 'lab.template.waveDoppler.hint',
+    tags: ['机械波', '高中', '多普勒', '频移'],
+    createScene: (title) => {
+      const scene = createDopplerScene({ sceneId: stampId('wave-doppler'), title })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
+]
+
+/* ----------------------------------------------------------------- modern -- */
+
+const modernTemplates: readonly ExperimentTemplate[] = [
+  {
+    id: 'photoelectric-effect',
+    domain: 'modern',
+    stage: 'senior',
+    label: 'lab.template.photoelectric',
+    hint: 'lab.template.photoelectric.hint',
+    tags: ['近代物理', '光电效应', '光子', '爱因斯坦方程'],
+    createScene: (title) => {
+      const scene = createPhotoelectricEffectScene({
+        sceneId: stampId('modern-photoelectric'),
+        title,
+      })
+      return { sceneId: String(scene.id), scene }
+    },
+  },
 ]
 
 /** Ordered groups, one per domain. The "全部" tab is built by flattening these. */
@@ -1635,7 +1776,11 @@ export const EXPERIMENT_TEMPLATE_GROUPS: readonly ExperimentTemplateGroup[] = [
   { id: 'circuit', label: 'lab.template.group.circuit', templates: circuitTemplates },
   { id: 'composite', label: 'lab.template.group.composite', templates: compositeTemplates },
   { id: 'induction', label: 'lab.template.group.induction', templates: inductionTemplates },
+  { id: 'modern', label: 'lab.template.group.modern', templates: modernTemplates },
 ]
+
+/** The modern-physics templates, in registry order, for tests and callers. */
+export const MODERN_EXPERIMENT_TEMPLATES: readonly ExperimentTemplate[] = modernTemplates
 
 /** Every selectable template, flattened across groups. */
 export const EXPERIMENT_TEMPLATES: readonly ExperimentTemplate[] =
@@ -1646,6 +1791,11 @@ export const SELECTABLE_TEMPLATE_COUNT = EXPERIMENT_TEMPLATES.filter(
   template => template.comingSoon !== true,
 ).length
 
+/**
+ * The experiment templates helper `findExperimentTemplate`.
+ * @returns the experiment template.
+ * @param id - the target row id.
+ */
 export const findExperimentTemplate = (id: string): ExperimentTemplate | undefined =>
   EXPERIMENT_TEMPLATES.find(template => template.id === id)
 
@@ -1655,6 +1805,9 @@ export const findExperimentTemplate = (id: string): ExperimentTemplate | undefin
  * Shared by every entry point so the sidebar popover, the Home action and the
  * Lab empty state produce byte-identical scenes; the title is passed in because
  * it is UI copy and only the caller holds the translator.
+ * @returns the {.
+ * @param title - the title.
+ * @param template - the experiment template.
  */
 export const createExperimentSceneRef = (
   template: ExperimentTemplate,

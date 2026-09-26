@@ -27,6 +27,7 @@ import { PaperService, PaperError } from './service.ts'
 import { adaptBankItem, draftSection, assembleDocument, repairQuestion } from './draft.ts'
 import { independentSolve } from './solve.ts'
 import { ingestBankText, type IngestInput } from './ingest.ts'
+import { transcribeQuestionImages, type TranscribeImage } from './transcribe.ts'
 import { exportPaper } from './export.ts'
 import { paperRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
@@ -52,6 +53,7 @@ export interface Config {
   imageApi?: {
     /** e.g. `https://host/v1` — `/images/generations` is appended. */
     baseURL: string
+    /** Image model name passed to the endpoint. */
     model: string
     /** Env var holding the bearer key; never the key itself. */
     apiKeyEnv: string
@@ -153,7 +155,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         }
         /* Bank-assisted assembly: plan every row first and stamp it for
            audit, then each row is served verbatim → adapt → generate. */
-        const plans = service.bankPlanFor(job.specTable, job.request, bankPolicy)
+        const plans = service.bankPlanFor(job.specTable, job.request, bankPolicy, job.schoolId)
         await service.stampBankPlan(jobId, plans)
         const planByNo = new Map(plans.map(plan => [plan.row.questionNo, plan]))
 
@@ -272,6 +274,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           })),
         }
         await service.commitDocument(jobId, nextDoc, `第${questionNo}题按审核意见修订`)
+        await service.markStage(jobId, 'checking')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const [solved] = await independentSolve(ctx, route, [{ ...revised }], config.solveDelayMs, config.solveTimeoutMs)
         if (solved === undefined) {
@@ -308,17 +311,22 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       const verbatimOnPaper = doc.sections.flatMap(s => s.items)
         .filter(q => q.provenance?.mode === 'verbatim' && q.number !== questionNo).length
       const recentPaperIds = new Set(
-        service.listJobs()
+        service.listJobs(undefined, job.schoolId)
           .filter(other => other.id !== jobId && (other.status === 'approved' || other.status === 'exported'))
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
           .slice(0, bankPolicy.freshnessPapers)
           .map(other => other.id),
       )
-      const plan = planRow(row, job.request, service.listBankItems({ status: 'verified' }), {
+      const plan = planRow(row, job.request, service.listBankItems({ status: 'verified' }, job.schoolId), {
         taken,
         recentPaperIds,
-        usageOf: itemId => service.bankUsageFor(itemId),
-        sourceOf: id => domain.table('source_papers').get(id),
+        usageOf: itemId => service.bankUsageFor(itemId, job.schoolId),
+        sourceOf: (id) => {
+          const source = domain.table('source_papers').get(id)
+          return source !== undefined && (job.schoolId == null || source.schoolId == null || source.schoolId === job.schoolId)
+            ? source
+            : undefined
+        },
         verbatimSpent: verbatimOnPaper,
         policy: bankPolicy,
       })
@@ -344,6 +352,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           })),
         }
         await service.commitDocument(jobId, nextDoc, `第${questionNo}题更换题库候选（${plan.mode === 'verbatim' ? '原题' : '改编'} ${item.sourceLabel ?? item.id}）`)
+        await service.markStage(jobId, 'checking')
         await service.recordBankUsage(item.id, jobId, plan.mode === 'verbatim' ? 'verbatim' : 'adapted')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const [solved] = await independentSolve(ctx, route, [{ ...replacement }], config.solveDelayMs, config.solveTimeoutMs)
@@ -374,7 +383,75 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         sourcePaperId: input.sourcePaperId,
         sourceUrl: input.sourceUrl,
         enteredBy: input.enteredBy,
+        ...input.schoolId === undefined ? {} : { schoolId: input.schoolId },
       })))
+    }
+
+    /* 图片/扫描件录入：视觉模型转录题面（不解题），再走与粘贴导入同一条
+       结构化管线。转录文本随响应返回，教师能在入库前对照原图。 */
+    const runImageIngest = async (input: {
+      images: readonly TranscribeImage[]
+      level: IngestInput['level']
+      subject: IngestInput['subject']
+      sourceUrl?: string
+      enteredBy: string
+      schoolId: string | null
+    }) => {
+      const transcription = await transcribeQuestionImages(ctx, route, input.images)
+      const ingested = await runIngest({
+        text: transcription,
+        level: input.level,
+        subject: input.subject,
+        sourceUrl: input.sourceUrl,
+        enteredBy: input.enteredBy,
+        schoolId: input.schoolId,
+      })
+      return { ...ingested, transcription }
+    }
+
+    /* Engine triage over pending bank rows: the solver answers each item
+       blind and the verdict lands as an `engine-check:*` anomaly the reviewer
+       can filter on. `status` never moves here — verifying stays a human
+       decision. One run at a time: two overlapping passes would double the
+       model spend for the same rows. */
+    let triageRunning = false
+    const triageBusy = (): boolean => triageRunning
+    const runTriage = async (targets: readonly BankItem[]): Promise<void> => {
+      triageRunning = true
+      try {
+        for (const [index, item] of targets.entries()) {
+          const question: PaperQuestion = {
+            number: index + 1,
+            subject: item.subject,
+            kind: item.kind,
+            score: item.score,
+            stem: item.stem,
+            options: item.options,
+            answer: item.answer,
+            knowledge: item.knowledge,
+            ability: item.ability,
+            difficulty: item.difficulty,
+            status: 'draft',
+          }
+          /* Serial per-item solves: one provider flake marks one row
+             `unresolved` instead of parking the whole batch. */
+          try {
+            const [result] = await independentSolve(
+              ctx, route, [question], config.solveDelayMs, config.solveTimeoutMs)
+            const check = result === undefined || result.solvedAnswer === '' ? 'unresolved'
+              : result.consistent ? 'agreed' : 'mismatch'
+            await service.noteBankTriage(
+              item.id, check,
+              check === 'mismatch' && result !== undefined ? result.solvedAnswer : undefined)
+          } catch (error) {
+            await service.noteBankTriage(item.id, 'unresolved')
+            ctx.logger.warn(`paper-host: triage ${item.id} failed: ${String(error)}`)
+          }
+        }
+        ctx.logger.info(`paper-host: triage finished on ${targets.length} item(s)`)
+      } finally {
+        triageRunning = false
+      }
     }
 
     const runExport = async (jobId: string): Promise<{ files: import('./export.ts').ExportFileSet }> => {
@@ -399,6 +476,9 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
            service does not exist yet when this line runs. */
         identity: () => identityOf(ctx),
         runDraft, runChecks, runRepair, runReplace, planReplace, runExport, runIngest,
+        runImageIngest,
+        planTriage: (input, schoolId) => service.planBankTriage(input, schoolId),
+        runTriage, triageBusy,
       }),
     })
     yield () => domain.close()

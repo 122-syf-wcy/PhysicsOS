@@ -57,7 +57,7 @@ const sessionOf = async (username, password) => {
   })
   if (res.status !== 200) return undefined
   const cookies = res.headers.getSetCookie?.() ?? [res.headers.get('set-cookie') ?? '']
-  const session = cookies.find(value => value.startsWith('physicsos_session='))
+  const session = cookies.find((value) => value.startsWith('physicsos_session='))
   return session === undefined ? undefined : session.split(';')[0]
 }
 
@@ -76,7 +76,12 @@ try {
 
   const studentSignUp = await call('/physicsos/auth/register', {
     method: 'POST',
-    body: { schoolName: '乌当中学', username: studentName, displayName: '验收学生', password: STUDENT_PASSWORD },
+    body: {
+      schoolName: '乌当中学',
+      username: studentName,
+      displayName: '验收学生',
+      password: STUDENT_PASSWORD,
+    },
   })
   check('学生账号注册成功', studentSignUp.status === 201, `HTTP ${studentSignUp.status}`)
   const student = (await studentSignUp.json()).user
@@ -97,8 +102,11 @@ try {
       role: 'TEACHER',
     },
   })
-  check('超管为该学校开通了一个教师账号', created.status === 200 || created.status === 201,
-    `HTTP ${created.status}`)
+  check(
+    '超管为该学校开通了一个教师账号',
+    created.status === 200 || created.status === 201,
+    `HTTP ${created.status}`,
+  )
   teacherSchoolId = student.schoolId
   teacherCookie = await sessionOf(teacherName, TEACHER_PASSWORD)
   check('教师账号登录成功', teacherCookie !== undefined)
@@ -121,8 +129,11 @@ try {
   check('学生写题库被拒', studentWrite.status === 403, `HTTP ${studentWrite.status}`)
 
   const studentRead = await call('/physicsos/paper/sources', { cookie: studentCookie })
-  check('学生可以读（读不是特权，是书架本身）', studentRead.status === 200,
-    `HTTP ${studentRead.status}`)
+  check(
+    '学生可以读（读不是特权，是书架本身）',
+    studentRead.status === 200,
+    `HTTP ${studentRead.status}`,
+  )
 
   /* A real teacher write, with a body the wire actually accepts. */
   const source = {
@@ -144,7 +155,7 @@ try {
 
   /* Refused writes must not have landed. */
   const listed = await (await call('/physicsos/paper/sources', { cookie: teacherCookie })).json()
-  const ids = listed.map(entry => entry.id)
+  const ids = listed.map((entry) => entry.id)
   check('被拒的写入没有落库', !ids.includes('should-not-land'), ids.join(','))
   check('教师的那一条在库里', ids.includes(source.id))
 
@@ -155,21 +166,30 @@ try {
      milliseconds behind the 201, and this polls rather than sleeping a guessed
      interval: the assertion is "it lands", not "it lands within 30 ms". */
   const readAudit = async () =>
-    (await (await call(`/physicsos/admin/audit?schoolId=${teacherSchoolId}`, {
-      cookie: adminCookie,
-    })).json()).events.filter(event => event.action === 'paper.post')
+    (
+      await (
+        await call(`/physicsos/admin/audit?schoolId=${teacherSchoolId}`, {
+          cookie: adminCookie,
+        })
+      ).json()
+    ).events.filter((event) => event.action === 'paper.post')
   const startedAt = Date.now()
   let paperRows = await readAudit()
   while (paperRows.length === 0 && Date.now() - startedAt < 3_000) {
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 50))
     paperRows = await readAudit()
   }
   stdout.write(`  审计在 ${Date.now() - startedAt} ms 内落地\n`)
-  check('审计里恰好一条出卷写入', paperRows.length === 1,
-    paperRows.map(row => `${row.actorKey} ${row.target}`).join(' | '))
-  check('审计记的是教师本人',
+  check(
+    '审计里恰好一条出卷写入',
+    paperRows.length === 1,
+    paperRows.map((row) => `${row.actorKey} ${row.target}`).join(' | '),
+  )
+  check(
+    '审计记的是教师本人',
     paperRows[0]?.actorKey === `${teacherSchoolId}:${teacherName.toLowerCase()}`,
-    String(paperRows[0]?.actorKey))
+    String(paperRows[0]?.actorKey),
+  )
 
   /* ---------------- the surface ---------------- */
 
@@ -182,7 +202,10 @@ try {
   const studentSees = await page.getByRole('button', { name: '出卷专区' }).count()
   check('学生的侧栏里没有出卷专区', studentSees === 0, `${studentSees} 个入口`)
   /* …but the rest of the rail is untouched. */
-  check('学生仍然有物理实验室', await page.getByRole('button', { name: '物理实验室' }).count() === 1)
+  check(
+    '学生仍然有物理实验室',
+    (await page.getByRole('button', { name: '物理实验室' }).count()) === 1,
+  )
 
   await resetSession(page, base)
   await loginUser(page, { username: teacherName, password: TEACHER_PASSWORD })
@@ -190,12 +213,16 @@ try {
   check('教师的侧栏里有出卷专区', teacherSees === 1, `${teacherSees} 个入口`)
 
   await page.getByRole('button', { name: '出卷专区' }).click()
-  await page.locator('[data-physicsos-surface="paper"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-surface="paper"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   const tabs = await page.getByRole('button', { name: /新建试卷/ }).count()
   check('教师能打开出卷专区的工作台', tabs === 1, `${tabs} 个标签`)
 
-  stdout.write(`\n  学生 cookie ${studentCookie === undefined ? '缺失' : '已签发'}`
-    + `｜教师 cookie ${teacherCookie === undefined ? '缺失' : '已签发'}\n`)
+  stdout.write(
+    `\n  学生 cookie ${studentCookie === undefined ? '缺失' : '已签发'}` +
+      `｜教师 cookie ${teacherCookie === undefined ? '缺失' : '已签发'}\n`,
+  )
 } finally {
   await finish()
   server.stop()

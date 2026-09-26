@@ -47,7 +47,10 @@ const execute = <T extends SceneCommandType>(
 }
 
 const simulated = (scene: PhysicsScene) =>
-  inductionEngine.simulate(scene, createInductionSimulationRequest(scene, 'sim-induction', 'trace-induction'))
+  inductionEngine.simulate(
+    scene,
+    createInductionSimulationRequest(scene, 'sim-induction', 'trace-induction'),
+  )
 
 const scalar = (result: ReturnType<typeof simulated>, key: string): number =>
   derivedScalar(result.derivedQuantities, key).value
@@ -62,19 +65,19 @@ describe('Induction Engine · bar_motion_emf', () => {
     const model = resolveInductionModel(createBarMotionScene())
     expect(model.subModel).toBe('bar_motion_emf')
     expect(model.magneticFluxDensity).toBeCloseTo(0.5, 12)
-    expect(model.barLength).toBeCloseTo(0.20, 12) /* 20 cm → 0.20 m */
+    expect(model.barLength).toBeCloseTo(0.2, 12) /* 20 cm → 0.20 m */
     expect(model.barVelocity).toBeCloseTo(2, 12)
     expect(model.resistance).toBeCloseTo(5, 12)
   })
 
   it('2. computes E = BLv = 0.20 V on the textbook defaults', () => {
     const result = simulated(createBarMotionScene())
-    expect(scalar(result, 'induced_emf')).toBeCloseTo(0.20, 12)
+    expect(scalar(result, 'induced_emf')).toBeCloseTo(0.2, 12)
   })
 
   it('3. computes I = E / R = 0.040 A on the textbook defaults', () => {
     const result = simulated(createBarMotionScene())
-    expect(scalar(result, 'induced_current')).toBeCloseTo(0.040, 12)
+    expect(scalar(result, 'induced_current')).toBeCloseTo(0.04, 12)
   })
 
   it('4. publishes E and I as volts and amperes with the right dimensions', () => {
@@ -108,10 +111,8 @@ describe('Induction Engine · bar_motion_emf', () => {
 
   it('6. keeps E constant across the entire run (constant v)', () => {
     const result = simulated(createBarMotionScene())
-    const emfs = result.states.map((state) =>
-      derivedScalar(state.derived, 'induced_emf').value,
-    )
-    expect(emfs.every((emf) => Math.abs(emf - 0.20) < 1e-9)).toBe(true)
+    const emfs = result.states.map((state) => derivedScalar(state.derived, 'induced_emf').value)
+    expect(emfs.every((emf) => Math.abs(emf - 0.2) < 1e-9)).toBe(true)
   })
 
   it('7. doubles E when v doubles (E = BLv is linear in v)', () => {
@@ -132,7 +133,7 @@ describe('Induction Engine · bar_motion_emf', () => {
     const negative = simulated(createBarMotionScene({ barVelocity: -2 }))
     expect(scalar(positive, 'lenz_direction')).toBe(1)
     expect(scalar(negative, 'lenz_direction')).toBe(-1)
-    expect(scalar(negative, 'induced_emf')).toBeCloseTo(-0.20, 12)
+    expect(scalar(negative, 'induced_emf')).toBeCloseTo(-0.2, 12)
   })
 
   it('10. gives zero EMF when v = 0 (no flux cutting)', () => {
@@ -182,13 +183,11 @@ describe('Induction Engine · verification & support', () => {
     const result = simulated(createBarMotionScene())
     expect(result.verification.status).toBe('passed')
     const ids = result.verification.checks.map((check) => check.id)
-    expect(ids).toEqual(
-      expect.arrayContaining(['faraday_law', 'lenz_direction', 'ohm_law_loop']),
-    )
+    expect(ids).toEqual(expect.arrayContaining(['faraday_law', 'lenz_direction', 'ohm_law_loop']))
     expect(
-      result.verification.checks.filter((check) =>
-        ['faraday_law', 'lenz_direction', 'ohm_law_loop'].includes(check.id),
-      ).every((check) => check.passed),
+      result.verification.checks
+        .filter((check) => ['faraday_law', 'lenz_direction', 'ohm_law_loop'].includes(check.id))
+        .every((check) => check.passed),
     ).toBe(true)
   })
 
@@ -196,9 +195,9 @@ describe('Induction Engine · verification & support', () => {
     const result = simulated(createFluxChangeScene())
     expect(result.verification.status).toBe('passed')
     expect(
-      result.verification.checks.filter((check) =>
-        ['faraday_law', 'lenz_direction', 'ohm_law_loop'].includes(check.id),
-      ).every((check) => check.passed),
+      result.verification.checks
+        .filter((check) => ['faraday_law', 'lenz_direction', 'ohm_law_loop'].includes(check.id))
+        .every((check) => check.passed),
     ).toBe(true)
   })
 
@@ -310,10 +309,12 @@ describe('Induction scene commands', () => {
 
   it('changes the loop resistance and the current follows I = E/R', () => {
     const runtime = new SceneRuntime(createBarMotionScene())
-    expect(execute(runtime, 'SetInductionLoopResistance', {
-      benchId: 'induction-bench-1',
-      resistance: quantity(10, 'Ω', 'resistance'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetInductionLoopResistance', {
+        benchId: 'induction-bench-1',
+        resistance: quantity(10, 'Ω', 'resistance'),
+      }).ok,
+    ).toBe(true)
     const result = inductionEngine.simulate(
       runtime.getScene(),
       createInductionSimulationRequest(runtime.getScene(), 'sim', 'trace'),
@@ -325,19 +326,23 @@ describe('Induction scene commands', () => {
 
   it('flips the Lenz sign by reversing the velocity command', () => {
     const runtime = new SceneRuntime(createBarMotionScene())
-    expect(execute(runtime, 'SetInductionBarVelocity', {
-      benchId: 'induction-bench-1',
-      velocity: quantity(-2, 'm/s', 'velocity'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetInductionBarVelocity', {
+        benchId: 'induction-bench-1',
+        velocity: quantity(-2, 'm/s', 'velocity'),
+      }).ok,
+    ).toBe(true)
     expect(inducedEmfOf(runtime.getScene())).toBeCloseTo(-0.2, 12)
   })
 
   it('edits the flux rate on a flux_change bench', () => {
     const runtime = new SceneRuntime(createFluxChangeScene())
-    expect(execute(runtime, 'SetInductionFluxRate', {
-      benchId: 'induction-bench-1',
-      fluxRate: quantity(-0.1, 'Wb/s', 'magnetic_flux_rate'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetInductionFluxRate', {
+        benchId: 'induction-bench-1',
+        fluxRate: quantity(-0.1, 'Wb/s', 'magnetic_flux_rate'),
+      }).ok,
+    ).toBe(true)
     const model = resolveInductionModel(runtime.getScene())
     /* E = -dΦ/dt = +0.1 V after the flip. */
     expect(model.fluxRate).toBeCloseTo(-0.1, 12)

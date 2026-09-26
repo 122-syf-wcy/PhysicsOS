@@ -18,11 +18,23 @@ import { AdminDashboardTab } from './AdminDashboardTab.tsx'
 import { AdminDeviceTab } from './AdminDeviceTab.tsx'
 import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
+import { PasswordResetQueue } from './AuthGate.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { GlassSelect } from './GlassSelect.tsx'
 import css from './AdminWorkspace.module.css'
 
-type Tab = 'requests' | 'schools' | 'dashboard' | 'users' | 'content' | 'notice' | 'ops' | 'devices' | 'audit'
+type Tab =
+  | 'requests'
+  | 'schools'
+  | 'dashboard'
+  | 'users'
+  | 'resets'
+  | 'content'
+  | 'notice'
+  | 'ops'
+  | 'devices'
+  | 'audit'
 
 export interface AdminWorkspaceProps {
   api: AdminApi
@@ -77,6 +89,10 @@ export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWo
     ] : []),
     { id: 'dashboard' as const, label: t('admin.tab.dashboard') },
     { id: 'users' as const, label: t('admin.tab.users') },
+    /* 密码重置队列 is the admin side of the self-service flow: students file a
+       request from the login gate, an admin issues the one-time link here.
+       School admins see their own tenant; SUPER_ADMIN sees every school. */
+    { id: 'resets' as const, label: t('admin.tab.resets') },
     ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content') }]),
     ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice') }]),
     { id: 'ops' as const, label: t('admin.tab.ops') },
@@ -110,6 +126,7 @@ export function AdminWorkspace({ api, paperApi, noticeApi, useAuth, t }: AdminWo
       {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}
       {active === 'dashboard' && <AdminDashboardTab api={api} t={t} />}
       {active === 'users' && <UsersTab api={api} t={t} isSuper={isSuper} />}
+      {active === 'resets' && <PasswordResetQueue api={api} t={t} />}
       {active === 'content' && paperApi !== undefined && (
         <AdminContentTab api={paperApi} reviewer={username} t={t} />
       )}
@@ -357,14 +374,18 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
             value={form.displayName} onChange={(e) => { setForm(f => ({ ...f, displayName: e.target.value })) }} />
           <input className={css.input} type="password" placeholder={t('admin.users.field.password')}
             value={form.password} onChange={(e) => { setForm(f => ({ ...f, password: e.target.value })) }} />
-          <select
-            className={css.select} value={form.role}
-            onChange={(e) => { setForm(f => ({ ...f, role: e.target.value })) }}
-          >
-            <option value="STUDENT">{t('role.STUDENT')}</option>
-            <option value="TEACHER">{t('role.TEACHER')}</option>
-            {isSuper && <option value="SCHOOL_ADMIN">{t('role.SCHOOL_ADMIN')}</option>}
-          </select>
+          <GlassSelect
+            className={css.select}
+            value={form.role}
+            ariaLabel={t('admin.users.field.role')}
+            testId="user-role"
+            options={[
+              { value: 'STUDENT', label: t('role.STUDENT') },
+              { value: 'TEACHER', label: t('role.TEACHER') },
+              ...isSuper ? [{ value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') }] : [],
+            ]}
+            onChange={(role) => { setForm(f => ({ ...f, role })) }}
+          />
           <button
             type="button" className={css.primary}
             onClick={() => {
@@ -387,13 +408,20 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
       <div className={css.toolbar}>
         <input className={css.input} placeholder={t('admin.users.search')}
           value={q} onChange={(e) => { setQ(e.target.value) }} />
-        <select className={css.select} value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value) }}>
-          <option value="">{t('admin.users.role.all')}</option>
-          <option value="STUDENT">{t('role.STUDENT')}</option>
-          <option value="TEACHER">{t('role.TEACHER')}</option>
-          <option value="SCHOOL_ADMIN">{t('role.SCHOOL_ADMIN')}</option>
-          {isSuper && <option value="SUPER_ADMIN">{t('role.SUPER_ADMIN')}</option>}
-        </select>
+        <GlassSelect
+          className={css.select}
+          value={roleFilter}
+          ariaLabel={t('admin.users.role.all')}
+          testId="role-filter"
+          options={[
+            { value: '', label: t('admin.users.role.all') },
+            { value: 'STUDENT', label: t('role.STUDENT') },
+            { value: 'TEACHER', label: t('role.TEACHER') },
+            { value: 'SCHOOL_ADMIN', label: t('role.SCHOOL_ADMIN') },
+            ...isSuper ? [{ value: 'SUPER_ADMIN', label: t('role.SUPER_ADMIN') }] : [],
+          ]}
+          onChange={setRoleFilter}
+        />
       </div>
 
       {data === undefined

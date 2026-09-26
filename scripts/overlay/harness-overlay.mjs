@@ -34,6 +34,20 @@ const OVERLAY_PATHS = [
   /* PhysicsOS 反馈与公告 host plugin — student bug/idea intake plus the
      admin announcement surface, over the shared identity service. */
   'packages/physicsos/notice-host',
+  /* PhysicsOS 更新通道 host plugin — hosts the Tauri updater's latest.json
+     (publish / rollback / yank). Its signing half is minisign/Ed25519, NOT the
+     Apple/Windows code-signing certs, which is why this half is not blocked. */
+  'packages/physicsos/update-host',
+  /* Production liveness/readiness routes and dependency probes. */
+  'packages/physicsos/health-host',
+  /* Account-scoped personal attempts and saved-scene synchronization. */
+  'packages/physicsos/learning-host',
+  /* Class, assignment, submission, review, and completion host plugin. */
+  'packages/physicsos/class-host',
+  /* PostgreSQL storage backend (kv facet) — the production storage medium. */
+  'packages/storage/storage-postgres',
+  /* Redis/memory rate limits and one-time claims shared across replicas. */
+  'packages/physicsos/shared-state-host',
   'apps/cli/config/agent-presets/physics-student',
 ]
 
@@ -48,7 +62,11 @@ function isExcluded(absolutePath) {
 function git(args, options = {}) {
   /* The upstream patch is well past the 1 MiB default `maxBuffer` once
      untracked files ride along; without this the capture dies with ENOBUFS. */
-  const result = spawnSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...options })
+  const result = spawnSync('git', args, {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    ...options,
+  })
   if (result.error) throw result.error
   return result
 }
@@ -65,7 +83,9 @@ async function copyTree(from, to, { clean }) {
 
 async function capture() {
   if (!existsSync(path.join(vendorRoot, '.git'))) {
-    throw new Error('vendor/deepseek-harness is not checked out; run: git submodule update --init --recursive')
+    throw new Error(
+      'vendor/deepseek-harness is not checked out; run: git submodule update --init --recursive',
+    )
   }
 
   for (const relativePath of OVERLAY_PATHS) {
@@ -113,7 +133,9 @@ async function capture() {
 
 async function apply() {
   if (!existsSync(path.join(vendorRoot, '.git'))) {
-    throw new Error('vendor/deepseek-harness is not checked out; run: git submodule update --init --recursive')
+    throw new Error(
+      'vendor/deepseek-harness is not checked out; run: git submodule update --init --recursive',
+    )
   }
 
   for (const relativePath of OVERLAY_PATHS) {
@@ -142,7 +164,9 @@ async function apply() {
     stdio: 'inherit',
   })
   if (applied.status !== 0) {
-    throw new Error('failed to apply overlays/harness/upstream-changes.patch; resolve conflicts in vendor/deepseek-harness manually')
+    throw new Error(
+      'failed to apply overlays/harness/upstream-changes.patch; resolve conflicts in vendor/deepseek-harness manually',
+    )
   }
   console.log('applied upstream-changes.patch')
 }

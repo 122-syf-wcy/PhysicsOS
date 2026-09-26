@@ -176,7 +176,9 @@ const buildVerification = (
      k = V₀β/A — and they have to agree at every temperature, which is what makes
      the scale read correctly rather than merely evenly. */
   const at100 = columnLengthAt(model.icePointLength, reading.scale, 100) - model.icePointLength
-  const fromVolume = expansionVolume(model.bulbVolume, model.expansionCoefficient, 100) / boreArea(model.boreDiameter)
+  const fromVolume =
+    expansionVolume(model.bulbVolume, model.expansionCoefficient, 100) /
+    boreArea(model.boreDiameter)
   checks.push(
     check(
       'column_from_expansion',
@@ -213,7 +215,7 @@ const buildVerification = (
     check(
       'scale_is_uniform',
       'constraint',
-      rises.every(rise => within(rise, rises[0] ?? 0, rises[0] ?? 1)),
+      rises.every((rise) => within(rise, rises[0] ?? 0, rises[0] ?? 1)),
       {
         message:
           '刻度是均匀的：膨胀与温度成正比，所以**每一度在玻璃上都是同样长的一段** —— 这是线性膨胀的结果，不是画刻度时的约定。',

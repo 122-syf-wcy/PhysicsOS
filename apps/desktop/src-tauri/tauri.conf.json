@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PhysicsOS",
+  "version": "0.1.0",
+  "identifier": "dev.physicsos.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --dir ../.. dev",
+    "devUrl": "http://127.0.0.1:3080",
+    "frontendDist": "../web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "PhysicsOS",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:38971 ws://127.0.0.1:38971; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "resources": {
+      "resources/agent-sidecar/": "agent-sidecar/"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRDNjY4MTQ2OEFDRkU0MzIKUldReTVNK0tSb0ZtVElmNUpHNVBPUklaWXpLeHpPY2Z5YUdpbnd0U3MyV2syR2VMTnRmaFFwTEoK",
+      "endpoints": ["https://physicsos.dev/physicsos/update/latest.json?channel=stable"]
+    }
+  }
+}

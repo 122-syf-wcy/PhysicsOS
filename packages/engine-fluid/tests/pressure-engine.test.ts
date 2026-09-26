@@ -91,7 +91,7 @@ describe('solid pressure model', () => {
 
   it('keeps F = p·S equal on both faces and the pressures in inverse area ratio', () => {
     const check = simulated(solidScene()).verification.checks.find(
-      entry => entry.id === 'contact_force_invariant',
+      (entry) => entry.id === 'contact_force_invariant',
     )
     expect(check?.passed).toBe(true)
   })
@@ -106,7 +106,7 @@ describe('solid pressure model', () => {
     const support = pressureEngine.canHandle(broken)
     expect(support.supported).toBe(false)
     if (!support.supported) {
-      expect(support.failedConditions.map(entry => entry.condition)).toContain(
+      expect(support.failedConditions.map((entry) => entry.condition)).toContain(
         'pressure_bench_values:pressure-bench-1',
       )
     }
@@ -142,7 +142,7 @@ describe('liquid pressure model', () => {
       'pressure_proportional_to_depth',
       'pressure_proportional_to_density',
     ]) {
-      expect(checks.find(entry => entry.id === id)?.passed).toBe(true)
+      expect(checks.find((entry) => entry.id === id)?.passed).toBe(true)
     }
   })
 
@@ -188,7 +188,7 @@ describe('atmospheric pressure model', () => {
   it('verifies the projected force and the column balance', () => {
     const checks = simulated(atmosphericScene()).verification.checks
     for (const id of ['hemisphere_projected_force', 'barometer_column_balance']) {
-      expect(checks.find(entry => entry.id === id)?.passed).toBe(true)
+      expect(checks.find((entry) => entry.id === id)?.passed).toBe(true)
     }
   })
 
@@ -204,16 +204,14 @@ describe('pressure engine support', () => {
   it('names the sub-model it will solve', () => {
     expect(pressureEngine.canHandle(solidScene()).modelId).toBe(SOLID_PRESSURE_MODEL)
     expect(pressureEngine.canHandle(liquidScene()).modelId).toBe(LIQUID_PRESSURE_MODEL)
-    expect(pressureEngine.canHandle(atmosphericScene()).modelId).toBe(
-      ATMOSPHERIC_PRESSURE_MODEL,
-    )
+    expect(pressureEngine.canHandle(atmosphericScene()).modelId).toBe(ATMOSPHERIC_PRESSURE_MODEL)
     expect(pressureEngine.engineId).toBe(PRESSURE_ENGINE_ID)
   })
 
   it('rejects a scene with no pressure bench and one with two', () => {
-    expect(pressureEngine.canHandle({ ...solidScene(), pressureBenches: undefined }).supported).toBe(
-      false,
-    )
+    expect(
+      pressureEngine.canHandle({ ...solidScene(), pressureBenches: undefined }).supported,
+    ).toBe(false)
     const scene = solidScene()
     const bench = scene.pressureBenches?.[0]
     if (bench === undefined) throw new Error('no bench')
@@ -232,7 +230,9 @@ describe('pressure engine support', () => {
     const support = pressureEngine.canHandle(mixed)
     expect(support.supported).toBe(false)
     if (!support.supported) {
-      expect(support.failedConditions.map(entry => entry.condition)).toContain('pure_pressure_scene')
+      expect(support.failedConditions.map((entry) => entry.condition)).toContain(
+        'pure_pressure_scene',
+      )
     }
   })
 
@@ -252,7 +252,7 @@ describe('pressure engine support', () => {
   it('emits a single settled reading rather than an invented trajectory', () => {
     const result = simulated(liquidScene())
     expect(result.states).toHaveLength(1)
-    expect(result.events.map(event => event.type)).toEqual(['PressureReadingSettled'])
+    expect(result.events.map((event) => event.type)).toEqual(['PressureReadingSettled'])
     expect(result.verification.status).toBe('passed')
   })
 

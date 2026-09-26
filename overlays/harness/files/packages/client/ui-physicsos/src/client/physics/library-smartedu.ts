@@ -21,6 +21,9 @@ export interface SmarteduBookSource {
   readonly officialTitle: string
 }
 
+/**
+ * The smartedu_book_sources of the library smartedu module.
+ */
 export const SMARTEDU_BOOK_SOURCES: readonly SmarteduBookSource[] = [
   { stage: 'junior', volume: '八年级上册', contentId: 'e5618f17-c06e-4c4c-944e-0ee8ced25391', officialTitle: '（根据2022年版课程标准修订）义务教育教科书·物理八年级上册' },
   { stage: 'junior', volume: '八年级下册', contentId: 'aec6de38-33d2-417a-bbdb-e39154a046a9', officialTitle: '（根据2022年版课程标准修订）义务教育教科书·物理八年级下册' },
@@ -51,6 +54,9 @@ export interface SmarteduItem {
   readonly title: string
 }
 
+/**
+ * The smartedu course chapter shape used by the library smartedu module.
+ */
 export interface SmarteduCourseChapter {
   /** 平台章节树的章名（以平台为准，可能与旧版教材章名不同）。 */
   readonly title: string
@@ -66,6 +72,9 @@ export interface SmarteduCourse {
   readonly chapters: readonly SmarteduCourseChapter[]
 }
 
+/**
+ * The smartedu_courses of the library smartedu module.
+ */
 export const SMARTEDU_COURSES: readonly SmarteduCourse[] = [
   {
     stage: 'junior', volume: '八年级上册', teachingmaterialId: '5370d999-5dd2-4c64-a9ed-089ec2694300',

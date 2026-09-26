@@ -19,10 +19,12 @@ import type {
  * discriminators; a bare 镜 with a distance is ambiguous and left to the
  * mechanics fallback.
  */
-const OPTICS_SIGNAL = /凸透镜|凹透镜|平面镜|凹面镜|凸面镜|薄透镜|透镜|焦距|物距|像距|放大率|成像|虚像|实像|光屏|lens|mirror|focal\s+length|object\s+distance|image\s+distance|magnification/i
+const OPTICS_SIGNAL =
+  /凸透镜|凹透镜|平面镜|凹面镜|凸面镜|薄透镜|透镜|焦距|物距|像距|放大率|成像|虚像|实像|光屏|lens|mirror|focal\s+length|object\s+distance|image\s+distance|magnification/i
 
 /** Signals that mark a question as NOT optics (electric/magnetic/circuit). */
-const NON_OPTICS_SIGNAL = /匀强电场|电场强度|点电荷|洛伦兹力|匀强磁场|磁感应强度|电容器|平行板|电流|电压|电路|electric\s+field|magnetic\s+field/i
+const NON_OPTICS_SIGNAL =
+  /匀强电场|电场强度|点电荷|洛伦兹力|匀强磁场|磁感应强度|电容器|平行板|电流|电压|电路|electric\s+field|magnetic\s+field/i
 
 export const isOpticsQuestionText = (text: string): boolean =>
   OPTICS_SIGNAL.test(text) && !NON_OPTICS_SIGNAL.test(text)
@@ -76,7 +78,10 @@ const OPTICS_PATTERNS = {
   objectDistance: [
     new RegExp(String.raw`物距(?:为|是|=)?\s*(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
     new RegExp(String.raw`\bu\s*=\s*(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
-    new RegExp(String.raw`物体(?:放在|置于|位于|距|离)[^。；;，,\d]{0,8}?(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
+    new RegExp(
+      String.raw`物体(?:放在|置于|位于|距|离)[^。；;，,\d]{0,8}?(${NUMBER})\s*(cm|mm|m)\b`,
+      'i',
+    ),
     new RegExp(String.raw`物(?:放在|置于|位于)[^。；;，,\d]{0,6}?(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
   ],
   imageDistance: [
@@ -87,9 +92,7 @@ const OPTICS_PATTERNS = {
     new RegExp(String.raw`物高(?:为|是|=)?\s*(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
     new RegExp(String.raw`物体高(?:度)?(?:为|是|=)?\s*(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
   ],
-  imageHeight: [
-    new RegExp(String.raw`像高(?:为|是|=)?\s*(${NUMBER})\s*(cm|mm|m)\b`, 'i'),
-  ],
+  imageHeight: [new RegExp(String.raw`像高(?:为|是|=)?\s*(${NUMBER})\s*(cm|mm|m)\b`, 'i')],
   magnification: [
     new RegExp(String.raw`放大率(?:为|是|=)?\s*(${NUMBER})\b`, 'i'),
     new RegExp(String.raw`放大倍数(?:为|是|=)?\s*(${NUMBER})\b`, 'i'),
@@ -198,7 +201,11 @@ export const DeterministicOpticsQuestionParser: QuestionParserProvider = {
 
     const elementType = detectElementType(text)
     if (elementType === null) {
-      issues.push({ code: 'NOT_OPTICS_QUESTION', message: '未识别到光学元件（透镜或镜）。', severity: 'error' })
+      issues.push({
+        code: 'NOT_OPTICS_QUESTION',
+        message: '未识别到光学元件（透镜或镜）。',
+        severity: 'error',
+      })
       const ir: PhysicsSemanticIR = {
         schemaVersion: 'physics-ir/1.0',
         domain: 'optics',
@@ -225,7 +232,10 @@ export const DeterministicOpticsQuestionParser: QuestionParserProvider = {
     if (focalLength !== null) {
       /* Diverging elements have negative focal length; the scene builder and
          engine use the sign to choose the imaging law. */
-      const signedF = diverging && element !== 'plane_mirror' ? -Math.abs(focalLength.siValue) : Math.abs(focalLength.siValue)
+      const signedF =
+        diverging && element !== 'plane_mirror'
+          ? -Math.abs(focalLength.siValue)
+          : Math.abs(focalLength.siValue)
       knowns.push(known('focal_length', '焦距', 'f', signedF, 'm', 'length'))
     } else if (element !== 'plane_mirror') {
       issues.push({ code: 'MISSING_FOCAL_LENGTH', message: '缺少焦距。', severity: 'warning' })
@@ -248,9 +258,7 @@ export const DeterministicOpticsQuestionParser: QuestionParserProvider = {
 
     /* Entity list depends on the element kind. */
     const entities: PhysicsSemanticIR['entities'] =
-      element === 'thin_lens'
-        ? ['lens', 'optical_object']
-        : ['mirror', 'optical_object']
+      element === 'thin_lens' ? ['lens', 'optical_object'] : ['mirror', 'optical_object']
     if (/光屏|screen/i.test(text)) {
       entities.push('screen')
     }
@@ -266,7 +274,11 @@ export const DeterministicOpticsQuestionParser: QuestionParserProvider = {
     }
 
     if (targets.length === 0) {
-      issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+      issues.push({
+        code: 'MISSING_TARGET',
+        message: '未识别到需要求解的物理量。',
+        severity: 'error',
+      })
     }
 
     const ir: PhysicsSemanticIR = {

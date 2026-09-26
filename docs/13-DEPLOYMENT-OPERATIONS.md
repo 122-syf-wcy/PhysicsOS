@@ -27,6 +27,12 @@ Every service has a Docker healthcheck. The app's `/healthz` route is process
 liveness; `/readyz` is fail-closed readiness for PostgreSQL and Redis. Docker
 starts the app only after both dependencies are healthy.
 
+The supported public-beta topology is a **single `app` replica**. Session logs
+live under `DSH_HOME` (`PHYSICSOS_SESSIONS_ROOT`, default
+`dshHomePath('sessions')` inside the `app_data` volume). A second replica sees
+only the sessions it wrote itself unless that root points at a shared
+filesystem, so scale the app out only after that change has been tested.
+
 ## 2. Prerequisites
 
 - Docker Engine with Compose v2
@@ -40,12 +46,19 @@ image, Compose environment values, source files, or frontend bundles.
 
 ## 3. Configure secrets
 
-Create the five secret files once per environment:
+Compose wires seven secret files. `scripts/docker-entrypoint.mjs` materializes
+each `<NAME>_FILE` into the plain `<NAME>` variable the Harness reads; a
+missing or empty file aborts startup instead of silently degrading.
+
+Create them once per environment:
 
 ```sh
 umask 077
 openssl rand -hex 32 > .env.postgres_password
 openssl rand -hex 32 > .env.redis_password
+# Bootstrap SUPER_ADMIN. There is no self-service path to an admin account:
+# registration only ever creates STUDENT. No default password is invented here.
+openssl rand -base64 24 > .env.admin_password
 
 postgres_password="$(cat .env.postgres_password)"
 redis_password="$(cat .env.redis_password)"
@@ -55,13 +68,65 @@ printf 'postgresql://physicsos:%s@postgres:5432/physicsos\n' "$postgres_password
 printf 'redis://:%s@redis:6379/0\n' "$redis_password" \
   > .env.redis_url
 printf '%s\n' 'replace-with-the-model-provider-key' > .env.deepseek_api_key
+printf '%s\n' 'replace-with-the-question-image-api-key' > .env.image_api_key
 ```
 
 Percent-encode characters before inserting credentials into URLs. Production
 secret managers may provide the same files at another path with
 `PHYSICSOS_POSTGRES_PASSWORD_FILE`, `PHYSICSOS_REDIS_PASSWORD_FILE`,
-`PHYSICSOS_DATABASE_URL_FILE`, `PHYSICSOS_REDIS_URL_FILE`, and
-`PHYSICSOS_DEEPSEEK_API_KEY_FILE`.
+`PHYSICSOS_DATABASE_URL_FILE`, `PHYSICSOS_REDIS_URL_FILE`,
+`PHYSICSOS_DEEPSEEK_API_KEY_FILE`, `PHYSICSOS_ADMIN_PASSWORD_FILE`, and
+`PHYSICOS_IMAGE_API_KEY_FILE`.
+
+The seven names by role:
+
+| File                     | Secret                           | Missing/empty behavior                   |
+| ------------------------ | -------------------------------- | ---------------------------------------- |
+| `.env.postgres_password` | PostgreSQL superuser password    | `postgres` container refuses to start    |
+| `.env.redis_password`    | Redis `requirepass`              | `redis` container exits                  |
+| `.env.database_url`      | App → PostgreSQL DSN             | `docker compose config` fails            |
+| `.env.redis_url`         | App → Redis DSN                  | `docker compose config` fails            |
+| `.env.deepseek_api_key`  | Model provider key               | app refuses to start                     |
+| `.env.admin_password`    | Bootstrap `SUPER_ADMIN` password | app refuses to start; no admin is seeded |
+| `.env.image_api_key`     | Paper question-image generation  | app refuses to start                     |
+
+`.env.admin_password` is consumed once, at first boot, to seed
+`PHYSICSOS-OPEN:admin`. Keep the file afterwards so later restarts stay
+consistent, and rotate the account password through the normal flow rather
+than editing the file. If question images are intentionally disabled for the
+beta, remove the `image_api_key` secret from `compose.yml` instead of leaving
+an empty file, and record that decision in the release notes.
+
+### 3.1 Reverse proxy and forwarded headers
+
+Set `PHYSICOS_TRUSTED_PROXIES` to the **exact IP literals** of the proxy peers
+that connect to the app, comma-separated. CIDR ranges and hostnames are
+rejected at startup:
+
+```sh
+# TLS terminator on the same Docker host (published via the loopback port)
+PHYSICOS_TRUSTED_PROXIES=127.0.0.1,::1
+
+# Proxy in another container: use the bridge gateway address the app sees
+PHYSICOS_TRUSTED_PROXIES=172.18.0.1
+```
+
+Only a TCP peer in this list may supply `X-Forwarded-Proto` and
+`X-Forwarded-For`. Leaving it empty behind a TLS proxy means the session
+cookie is issued without `Secure`, CSRF origin checks may reject `https`
+requests, and every visitor shares the proxy's rate-limit bucket. Setting it
+too broadly (or listing an address an untrusted client can reach from) lets
+clients spoof their IP and protocol, defeating per-IP limits and audit
+attribution.
+
+Optional knobs, all plain environment variables:
+
+| Variable                   | Default               | Purpose                                                       |
+| -------------------------- | --------------------- | ------------------------------------------------------------- |
+| `PHYSICOS_TRUSTED_PROXIES` | empty (trust nothing) | Exact proxy IP literals for forwarded headers                 |
+| `PHYSICSOS_SESSIONS_ROOT`  | `DSH_HOME/sessions`   | Shared session root; required before scaling past one replica |
+| `PHYSICSOS_PANDOC`         | `/usr/bin/pandoc`     | Pandoc binary used for A4 export                              |
+| `PHYSICSOS_SOFFICE`        | `/usr/bin/soffice`    | LibreOffice binary; macOS dev can point at the app bundle     |
 
 Validate the composed configuration without starting containers:
 
@@ -336,3 +401,17 @@ Incident response:
 
 Production is ready only when health, logs, metrics, alerts, backup, restore,
 rollback, resource limits, and ownership are all defined and tested.
+
+## 11. 公测前检查清单
+
+- [ ] `.env.admin_password` 已设置为随机强密码，且首启日志确认 `PHYSICSOS-OPEN:admin`
+      已种为 `SUPER_ADMIN`；公测期间不自助注册管理员。
+- [ ] TLS 反代已启用，且 `PHYSICOS_TRUSTED_PROXIES` 是该反代的精确 IP（含 IPv6
+      写法如有）；未配置时不要对外暴露。
+- [ ] `.env.image_api_key` 已设置；若有意关闭题图生成，已在 `compose.yml` 移除
+      `image_api_key` secret 并记录该决定。
+- [ ] `docker compose up -d postgres redis` 后两者 healthy，`/readyz` 返回成功。
+- [ ] 最近一次备份已完成并做过一次恢复演练（PostgreSQL + Redis + `app_data`
+      三件套齐全，manifest 校验通过）。
+- [ ] 仍是单副本；若已多副本，`PHYSICSOS_SESSIONS_ROOT` 指向共享文件系统并验证过
+      跨副本会话可见。

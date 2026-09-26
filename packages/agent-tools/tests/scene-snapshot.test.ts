@@ -26,7 +26,11 @@ describe('PhysicsToolRuntime.sceneSnapshot', () => {
     expect(after.revision).toBe(1)
     expect(after.particles[0]!.mass.value).not.toBe(42)
     const magnetic = after.fields.find((entry) => entry.type === 'uniform_magnetic')
-    expect(magnetic?.type === 'uniform_magnetic' ? Math.abs(magnetic.magneticFluxDensity.vector.z) : undefined).toBe(1)
+    expect(
+      magnetic?.type === 'uniform_magnetic'
+        ? Math.abs(magnetic.magneticFluxDensity.vector.z)
+        : undefined,
+    ).toBe(1)
   })
 
   it('rejects an unknown scene with the coded error', () => {

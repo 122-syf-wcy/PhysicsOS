@@ -51,12 +51,12 @@ describe('composite scene factories', () => {
     const magnetic = scene.observableDefinitions.find((o) => o.type === 'magnetic_field')
     expect(electric?.targetId).toBeDefined()
     expect(ids.has(electric?.targetId ?? '')).toBe(true)
-    expect(
-      scene.fields.find((field) => field.id === electric?.targetId)?.type,
-    ).toBe('uniform_electric')
-    expect(
-      scene.fields.find((field) => field.id === magnetic?.targetId)?.type,
-    ).toBe('uniform_magnetic')
+    expect(scene.fields.find((field) => field.id === electric?.targetId)?.type).toBe(
+      'uniform_electric',
+    )
+    expect(scene.fields.find((field) => field.id === magnetic?.targetId)?.type).toBe(
+      'uniform_magnetic',
+    )
   })
 
   it('omits the electric observable when the scene carries no electric field', () => {

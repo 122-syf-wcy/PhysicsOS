@@ -58,7 +58,8 @@ export const resolveMomentBalance = (scene: PhysicsScene): ResolvedLeverModel =>
 const derivedOf = (model: ResolvedLeverModel): DerivedQuantity[] => {
   const assumptions = [...LEVER_ASSUMPTIONS]
   const moments = momentsOf(model)
-  const ratio = moments.rightMoment === 0 ? Number.POSITIVE_INFINITY : moments.leftMoment / moments.rightMoment
+  const ratio =
+    moments.rightMoment === 0 ? Number.POSITIVE_INFINITY : moments.leftMoment / moments.rightMoment
   return [
     {
       key: 'left_weight',
@@ -143,10 +144,7 @@ const stateOf = (model: ResolvedLeverModel, timeSeconds: number): SimulationStat
   }
 }
 
-const buildVerification = (
-  scene: PhysicsScene,
-  model: ResolvedLeverModel,
-): VerificationResult => {
+const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const moments = momentsOf(model)
@@ -171,7 +169,9 @@ const buildVerification = (
     ),
   )
 
-  const leftMomentResidual = Math.abs(moments.leftMoment - moments.leftWeight * model.left.armLength)
+  const leftMomentResidual = Math.abs(
+    moments.leftMoment - moments.leftWeight * model.left.armLength,
+  )
   const rightMomentResidual = Math.abs(
     moments.rightMoment - moments.rightWeight * model.right.armLength,
   )

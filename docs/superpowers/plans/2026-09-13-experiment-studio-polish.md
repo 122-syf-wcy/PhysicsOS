@@ -24,6 +24,7 @@
 ### Task 1: 实验中心与共享工作台
 
 **文件：**
+
 - 修改 `overlays/harness/files/packages/client/ui-physicsos/src/client/ExperimentPicker.tsx`、`ExperimentPicker.module.css`、`LabEmptyState.tsx`、`LabEmptyState.module.css`。
 - 修改同目录 `PhysicsWorkspace.tsx`、`LabWorkspace.module.css`、`workspace-parts.tsx`、`locales.ts`。
 - 可新增一个小型工作台局部组件，避免继续膨胀主文件；不能新增插件公共导出。
@@ -51,6 +52,7 @@ expect(screen.getByRole('button', { name: '专注实验' })).toBeVisible()
 ### Task 2: 所有领域的画布与器材呈现
 
 **文件：**
+
 - 修改 `overlays/harness/files/packages/client/ui-physicsos/src/client/physics/PhysicsCanvas.module.css`、`primitives.module.css`、`renderers.module.css`。
 - 按需修改同目录 `PhysicsCanvas.tsx`、`renderer-registry.tsx`、`circuit-renderer.tsx`、各领域 `*-renderer.tsx`；每处只做呈现调整，禁止改物理模型。
 - 新素材接入 `parts3d-catalog.ts` 与 `overlays/harness/files/apps/web/public/physicsos/parts3d/manifest.json`。控制器准备资源，实施代理只更新消费方与渲染锚点。
@@ -68,6 +70,7 @@ expect(screen.getByRole('button', { name: '专注实验' })).toBeVisible()
 ### Task 3: 电路直接操作及回归
 
 **文件：**
+
 - 修改 `PhysicsWorkspace.tsx`、`physics/PhysicsCanvas.tsx`、`physics/renderer-registry.tsx`、`physics/circuit-renderer.tsx`，必要时新增小型 `physics/circuit-interactions.ts`。
 - 修改 `physics/renderers.module.css`、`locales.ts` 和 `tests/circuit.client.spec.tsx`。
 - 只有确实需要 UI 手势桥接才修改 `physics/workspace-runtime.ts` 或 `circuit-workspace-runtime.ts`，不得改根 `packages/` 引擎。

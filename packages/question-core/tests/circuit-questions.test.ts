@@ -19,7 +19,9 @@ describe('DeterministicCircuitQuestionParser', () => {
   it('recognizes a series circuit question and rejects electric-field text', () => {
     expect(isCircuitQuestionText(circuitQuestion('circ-01-series-current').text)).toBe(true)
     /* An electric-field question must NOT be claimed by the circuit parser. */
-    const electricText = GOLDEN_QUESTIONS.find((q) => q.id === 'electric-01-perpendicular-deflection')!.text
+    const electricText = GOLDEN_QUESTIONS.find(
+      (q) => q.id === 'electric-01-perpendicular-deflection',
+    )!.text
     expect(isCircuitQuestionText(electricText)).toBe(false)
     /* A magnetic question must not be claimed either. */
     const magneticText = GOLDEN_QUESTIONS[0]!.text
@@ -33,7 +35,9 @@ describe('DeterministicCircuitQuestionParser', () => {
     expect(candidate.confidence).toBeGreaterThan(0.9)
     expect(candidate.ir.domain).toBe('circuit')
     expect(candidate.ir.model).toBe('dc_steady_state_mna')
-    expect(candidate.ir.entities).toEqual(expect.arrayContaining(['circuit_loop', 'battery', 'resistor']))
+    expect(candidate.ir.entities).toEqual(
+      expect.arrayContaining(['circuit_loop', 'battery', 'resistor']),
+    )
     expect(candidate.ir.circuitTopology).toBe('series')
     expect(candidate.ir.relations).toContain('series_circuit')
     expect(candidate.ir.relations).toContain('ohms_law')
@@ -45,7 +49,9 @@ describe('DeterministicCircuitQuestionParser', () => {
   })
 
   it('detects parallel topology from a parallel question', () => {
-    const document = createGoldenQuestionDocument(circuitQuestion('circ-02-parallel-total-resistance'))
+    const document = createGoldenQuestionDocument(
+      circuitQuestion('circ-02-parallel-total-resistance'),
+    )
     const candidate = DeterministicCircuitQuestionParser.parse(document)
 
     expect(candidate.ir.circuitTopology).toBe('parallel')
@@ -88,7 +94,9 @@ describe('DeterministicCircuitQuestionParser', () => {
   it('does not claim a composite-field question', () => {
     const compositeText = GOLDEN_QUESTIONS.find((q) => q.id === 'comp-01-selector-balance')!.text
     expect(isCircuitQuestionText(compositeText)).toBe(false)
-    const document = createGoldenQuestionDocument({ ...circuitQuestion('comp-01-selector-balance') })
+    const document = createGoldenQuestionDocument({
+      ...circuitQuestion('comp-01-selector-balance'),
+    })
     const result = processQuestion(document)
     /* A composite-field question is routed on its model, not its domain tag. */
     expect(result.workflowState).toBe('READY')
@@ -128,7 +136,9 @@ describe('Circuit Question full pipeline', () => {
     expect((emf!.value as { value: number }).value).toBeCloseTo(6, 6)
 
     /* Verification carries the built-in engine checks. */
-    const kclCheck = result.simulation?.verification.checks.find((c) => c.id === 'kcl_current_conservation')
+    const kclCheck = result.simulation?.verification.checks.find(
+      (c) => c.id === 'kcl_current_conservation',
+    )
     expect(kclCheck?.passed).toBe(true)
     const powerCheck = result.simulation?.verification.checks.find((c) => c.id === 'power_balance')
     expect(powerCheck?.passed).toBe(true)
@@ -136,12 +146,14 @@ describe('Circuit Question full pipeline', () => {
     /* Observations are produced from the engine's component operating points. */
     expect(result.observations).not.toBeNull()
     const types = result.observations!.observations.map((o) => o.type)
-    expect(types).toEqual(expect.arrayContaining([
-      'circuit_current',
-      'circuit_voltage',
-      'circuit_power',
-      'circuit_source_summary',
-    ]))
+    expect(types).toEqual(
+      expect.arrayContaining([
+        'circuit_current',
+        'circuit_voltage',
+        'circuit_power',
+        'circuit_source_summary',
+      ]),
+    )
 
     /* The solution surfaces the engine result, not a recomputation. */
     expect(result.solution?.results['current']).toBeDefined()
@@ -149,7 +161,9 @@ describe('Circuit Question full pipeline', () => {
   })
 
   it('runs a parallel circuit through the full pipeline', () => {
-    const document = createGoldenQuestionDocument(circuitQuestion('circ-02-parallel-total-resistance'))
+    const document = createGoldenQuestionDocument(
+      circuitQuestion('circ-02-parallel-total-resistance'),
+    )
     const result = processQuestion(document)
 
     expect(result.workflowState).toBe('READY')
@@ -188,11 +202,14 @@ describe('Circuit Question full pipeline', () => {
     const dq = result.simulation!.derivedQuantities
     const mainCurrent = (dq.find((d) => d.key === 'main_current')!.value as { value: number }).value
     expect(mainCurrent).toBeCloseTo(4.5 / 20.5, 3)
-    const terminalV = (dq.find((d) => d.key === 'terminal_voltage')!.value as { value: number }).value
+    const terminalV = (dq.find((d) => d.key === 'terminal_voltage')!.value as { value: number })
+      .value
     expect(terminalV).toBeCloseTo(4.5 - (4.5 / 20.5) * 0.5, 3)
 
     /* The terminal-voltage verifier check must pass. */
-    const tvCheck = result.simulation?.verification.checks.find((c) => c.id.startsWith('terminal_voltage_law'))
+    const tvCheck = result.simulation?.verification.checks.find((c) =>
+      c.id.startsWith('terminal_voltage_law'),
+    )
     expect(tvCheck?.passed).toBe(true)
 
     expect(result.solution?.results['current']).toBeDefined()
@@ -248,7 +265,8 @@ describe('Circuit Question full pipeline', () => {
     const dq = result.simulation!.derivedQuantities
     const mainCurrent = (dq.find((d) => d.key === 'main_current')!.value as { value: number }).value
     expect(mainCurrent).toBeCloseTo(1.5, 1)
-    const terminalV = (dq.find((d) => d.key === 'terminal_voltage')!.value as { value: number }).value
+    const terminalV = (dq.find((d) => d.key === 'terminal_voltage')!.value as { value: number })
+      .value
     expect(terminalV).toBeCloseTo(7.5, 1)
 
     expect(result.solution?.results['current']).toBeDefined()
@@ -270,7 +288,9 @@ describe('Circuit semantic validation', () => {
     const result = processQuestion(document)
 
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
-    expect(result.validation?.issues).toContainEqual(expect.objectContaining({ code: 'MISSING_SOURCE' }))
+    expect(result.validation?.issues).toContainEqual(
+      expect.objectContaining({ code: 'MISSING_SOURCE' }),
+    )
     expect(result.scene).toBeNull()
   })
 
@@ -287,6 +307,8 @@ describe('Circuit semantic validation', () => {
     const result = processQuestion(document)
 
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
-    expect(result.validation?.issues).toContainEqual(expect.objectContaining({ code: 'MISSING_RESISTANCE' }))
+    expect(result.validation?.issues).toContainEqual(
+      expect.objectContaining({ code: 'MISSING_RESISTANCE' }),
+    )
   })
 })

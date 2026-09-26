@@ -77,8 +77,7 @@ export const thinLensOutcome = (
 ): ImagingOutcome => {
   if (nearlyEqual(objectDistance, focalLength)) return { kind: 'no_image' }
   /* 1/u + 1/v = 1/f ⇒ v = uf/(u−f); v < 0 is a virtual image on the object side. */
-  const signedImageDistance =
-    (objectDistance * focalLength) / (objectDistance - focalLength)
+  const signedImageDistance = (objectDistance * focalLength) / (objectDistance - focalLength)
   const real = signedImageDistance > 0
   const distance = Math.abs(signedImageDistance)
   const magnification = distance / objectDistance
@@ -125,8 +124,7 @@ export const curvedMirrorOutcome = (
   elementX: number,
 ): ImagingOutcome => {
   if (focalLength > 0 && nearlyEqual(objectDistance, focalLength)) return { kind: 'no_image' }
-  const signedImageDistance =
-    (objectDistance * focalLength) / (objectDistance - focalLength)
+  const signedImageDistance = (objectDistance * focalLength) / (objectDistance - focalLength)
   const real = signedImageDistance > 0
   const distance = Math.abs(signedImageDistance)
   const magnification = distance / objectDistance

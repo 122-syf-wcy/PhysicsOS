@@ -8,6 +8,9 @@ if (await lab.count()) await lab.click()
 await p.waitForTimeout(2000)
 await p.screenshot({ path: 'tmp/picker-a.png' })
 const btn = p.getByText('新建').first()
-if (await btn.count()) { await btn.click(); await p.waitForTimeout(1500) }
+if (await btn.count()) {
+  await btn.click()
+  await p.waitForTimeout(1500)
+}
 await p.screenshot({ path: 'tmp/picker-b.png' })
 await b.close()

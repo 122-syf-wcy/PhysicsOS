@@ -2,11 +2,12 @@
 
 > 文件：`docs/05-PHYSICS-ENGINE-ARCHITECTURE.md`  
 > 文档定位：PhysicsOS 物理世界运行时 / Physics Engine / Simulation / Verification / Observation 总体架构  
-> 上游文档：  
-> - `00-PRODUCT-OVERVIEW.md`  
-> - `01-DEVELOPMENT-GUIDE.md`  
-> - `02-ENGINEERING-STANDARDS.md`  
-> - `03-DOMAIN-CONTRACTS.md`  
+> 上游文档：
+>
+> - `00-PRODUCT-OVERVIEW.md`
+> - `01-DEVELOPMENT-GUIDE.md`
+> - `02-ENGINEERING-STANDARDS.md`
+> - `03-DOMAIN-CONTRACTS.md`
 > - `04-AGENT-ARCHITECTURE.md`
 >
 > 本文档定义 PhysicsOS 中“物理世界如何真实运行”的核心架构。
@@ -711,18 +712,11 @@ interface PhysicsEngine {
   readonly version: string
   readonly domain: PhysicsDomain
 
-  supports(
-    scene: PhysicsScene
-  ): boolean
+  supports(scene: PhysicsScene): boolean
 
-  validate(
-    scene: PhysicsScene
-  ): VerificationResult
+  validate(scene: PhysicsScene): VerificationResult
 
-  simulate(
-    scene: PhysicsScene,
-    options: SimulationOptions
-  ): Promise<SimulationResult>
+  simulate(scene: PhysicsScene, options: SimulationOptions): Promise<SimulationResult>
 }
 ```
 

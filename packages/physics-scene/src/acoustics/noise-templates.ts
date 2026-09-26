@@ -26,9 +26,7 @@ export interface NoiseBarrierSceneInput {
  * The point the scale makes is that "6 dB" sounds like a little and is in fact
  * three quarters of the energy gone — which is why 在传播过程中减弱 works.
  */
-export const createNoiseBarrierScene = (
-  input: NoiseBarrierSceneInput = {},
-): PhysicsScene =>
+export const createNoiseBarrierScene = (input: NoiseBarrierSceneInput = {}): PhysicsScene =>
   createNoiseBenchScene({
     sceneId: input.sceneId ?? 'lab-noise-barrier',
     ...(input.now === undefined ? {} : { now: input.now }),

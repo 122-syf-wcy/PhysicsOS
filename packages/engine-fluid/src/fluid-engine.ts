@@ -137,10 +137,7 @@ const stateOf = (model: ResolvedFluidModel, timeSeconds: number): SimulationStat
 
 /* ---------------------------------------------------------- verification -- */
 
-const buildVerification = (
-  scene: PhysicsScene,
-  model: ResolvedFluidModel,
-): VerificationResult => {
+const buildVerification = (scene: PhysicsScene, model: ResolvedFluidModel): VerificationResult => {
   const sceneVerification = validateScene(scene)
   const checks: VerificationCheck[] = [...sceneVerification.checks]
   const { weight, floats, settledSubmergedHeight, settleTime } = equilibriumOf(model)
@@ -393,19 +390,19 @@ export class FluidEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       },
       floats
         ? {
-          eventId: asPhysicsEventId(`event-block-floats-${model.tankId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'BlockFloats',
-          time: settleTime,
-        }
+            eventId: asPhysicsEventId(`event-block-floats-${model.tankId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'BlockFloats',
+            time: settleTime,
+          }
         : {
-          eventId: asPhysicsEventId(`event-block-submerged-${model.tankId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'BlockFullySubmerged',
-          time: model.blockHeight / model.lowerRate,
-        },
+            eventId: asPhysicsEventId(`event-block-submerged-${model.tankId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'BlockFullySubmerged',
+            time: model.blockHeight / model.lowerRate,
+          },
       {
         eventId: asPhysicsEventId(`event-descent-complete-${model.tankId}`),
         sceneId: scene.id,

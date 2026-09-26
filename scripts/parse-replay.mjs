@@ -11,14 +11,14 @@ const results = {}
 for (const [label, path] of files) {
   const raw = readFileSync(path, 'utf8')
   const lines = raw.split('\n').map(stripAnsi)
-  
+
   // Find lines like "FAIL  apps/web/tests/xxx.ts"
   const failFiles = new Set()
   for (const l of lines) {
     const m = l.match(/FAIL\s+(apps\/web\/tests\/\S+)/)
     if (m) failFiles.add(m[1])
   }
-  
+
   // Find lines with "× testname"
   const failTests = new Set()
   for (const l of lines) {
@@ -27,7 +27,7 @@ for (const [label, path] of files) {
       if (m) failTests.add(m[1].trim())
     }
   }
-  
+
   // Find summary
   let testFiles = ''
   let tests = ''
@@ -35,17 +35,22 @@ for (const [label, path] of files) {
     if (l.includes('Test Files')) testFiles = l.trim()
     if (l.match(/^\s+Tests\s/)) tests = l.trim()
   }
-  
-  results[label] = { failFiles: [...failFiles].sort(), failTests: [...failTests].sort(), testFiles, tests }
+
+  results[label] = {
+    failFiles: [...failFiles].sort(),
+    failTests: [...failTests].sort(),
+    testFiles,
+    tests,
+  }
 }
 
 // Diff
 const baseline = new Set(results.BASELINE.failFiles)
 const physicsos = new Set(results.PHYSICSOS.failFiles)
 
-const a_only = [...baseline].filter(f => !physicsos.has(f))
-const b_only = [...physicsos].filter(f => !baseline.has(f))
-const both = [...baseline].filter(f => physicsos.has(f))
+const a_only = [...baseline].filter((f) => !physicsos.has(f))
+const b_only = [...physicsos].filter((f) => !baseline.has(f))
+const both = [...baseline].filter((f) => physicsos.has(f))
 
 console.log('=== BASELINE ===')
 console.log(results.BASELINE.testFiles)

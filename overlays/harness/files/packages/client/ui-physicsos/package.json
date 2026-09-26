@@ -59,6 +59,7 @@
     "@physicsos/engine-collision": "link:../../../../../packages/engine-collision",
     "@physicsos/engine-induction": "link:../../../../../packages/engine-induction",
     "@physicsos/engine-wave": "link:../../../../../packages/engine-wave",
+    "@physicsos/engine-modern": "link:../../../../../packages/engine-modern",
     "@physicsos/physics-composite-core": "link:../../../../../packages/physics-composite-core",
     "@physicsos/physics-observation": "link:../../../../../packages/physics-observation",
     "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",

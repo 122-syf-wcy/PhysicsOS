@@ -145,7 +145,8 @@ describe('Question to Lab scene consistency', () => {
     const dq = sim.derivedQuantities
     const radius = (dq.find((d) => d.key === 'cyclotron_radius')!.value as { value: number }).value
     const period = (dq.find((d) => d.key === 'cyclotron_period')!.value as { value: number }).value
-    const force = (dq.find((d) => d.key === 'lorentz_force_magnitude')!.value as { value: number }).value
+    const force = (dq.find((d) => d.key === 'lorentz_force_magnitude')!.value as { value: number })
+      .value
 
     expect(radius).toBeCloseTo(0.0418, 1)
     expect(period).toBeCloseTo(1.31e-7, 1)
@@ -249,7 +250,9 @@ describe('Unmatched question text', () => {
   })
 
   it('returns PARSE_FAILED instead of a magnetic IR for thermodynamics text', () => {
-    const result = processQuestion(runtimeDoc('一定质量理想气体从状态 A 到状态 B，温度从 300 K 升到 400 K，求内能变化。'))
+    const result = processQuestion(
+      runtimeDoc('一定质量理想气体从状态 A 到状态 B，温度从 300 K 升到 400 K，求内能变化。'),
+    )
     expect(result.workflowState).toBe('PARSE_FAILED')
     expect(result.ir).toBeNull()
   })

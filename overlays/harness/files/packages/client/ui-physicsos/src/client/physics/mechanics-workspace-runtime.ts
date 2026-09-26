@@ -28,6 +28,9 @@ const MODEL_SUBTITLE: Record<string, string> = {
 
 const fmt = formatSignificant
 
+/**
+ * The mechanics workspace runtime — see the module doc for its role.
+ */
 export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: MechanicsRuntimeBridge
   /** The scene as the source stated it, kept so a branch can be discarded. */
@@ -147,6 +150,11 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
   }
 }
 
+/**
+ * The mechanics workspace runtime helper `createMechanicsWorkspaceRuntime`.
+ * @returns the mechanics workspace runtime.
+ * @param input - the caller-supplied fields.
+ */
 export const createMechanicsWorkspaceRuntime = (
   input: MechanicsSceneInput | PhysicsScene,
 ): MechanicsWorkspaceRuntime => new MechanicsWorkspaceRuntime(input)

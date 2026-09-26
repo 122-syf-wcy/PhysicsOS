@@ -105,7 +105,10 @@ const ELECTRIC_PATTERNS = {
   ],
   /** A probe/test charge that FEELS the field, distinct from the source. */
   probeCharge: [
-    new RegExp(String.raw`(?:试探电荷|检验电荷)(?:的)?(?:电荷量)?(?:为|是|=)?\s*(${NUMBER})\s*(${CHARGE_UNIT})?\b`, 'i'),
+    new RegExp(
+      String.raw`(?:试探电荷|检验电荷)(?:的)?(?:电荷量)?(?:为|是|=)?\s*(${NUMBER})\s*(${CHARGE_UNIT})?\b`,
+      'i',
+    ),
     new RegExp(String.raw`q['’]\s*=\s*(${NUMBER})\s*(${CHARGE_UNIT})?\b`, 'i'),
   ],
   /** Multiple named source charges, e.g. q1 = +2 μC, q2 = −2 μC, or 电荷A = 3 μC. */
@@ -204,9 +207,12 @@ function directionIn(fragment: string): PlanarDirection {
 }
 
 function detectElectricFieldDirection(text: string): PlanarDirection {
-  const explicit = /(?:电场|场强|E)[^。；;]{0,40}?(?:方向(?:为|是)?|沿)\s*([^，,。；;]+)/i.exec(text)
+  const explicit = /(?:电场|场强|E)[^。；;]{0,40}?(?:方向(?:为|是)?|沿)\s*([^，,。；;]+)/i.exec(
+    text,
+  )
   if (explicit?.[1] !== undefined) return directionIn(explicit[1])
-  const beforeField = /((?:水平|竖直)?向[上下左右]|[xy]\s*轴[正负]方向)[^。；;]{0,12}(?:的)?匀强电场/i.exec(text)
+  const beforeField =
+    /((?:水平|竖直)?向[上下左右]|[xy]\s*轴[正负]方向)[^。；;]{0,12}(?:的)?匀强电场/i.exec(text)
   return beforeField?.[1] === undefined ? 'unknown' : directionIn(beforeField[1])
 }
 
@@ -217,9 +223,14 @@ const FIELD_DIRECTION_CLAUSE =
 
 function detectInitialVelocityDirection(text: string): PlanarDirection {
   const scrubbed = text.replace(FIELD_DIRECTION_CLAUSE, (clause) => '　'.repeat(clause.length))
-  const explicit = /(?:初速度|速度|以)[^。；;]{0,40}?(?:方向(?:为|是)?|沿)\s*([^，,。；;]+)/i.exec(scrubbed)
+  const explicit = /(?:初速度|速度|以)[^。；;]{0,40}?(?:方向(?:为|是)?|沿)\s*([^，,。；;]+)/i.exec(
+    scrubbed,
+  )
   if (explicit?.[1] !== undefined) return directionIn(explicit[1])
-  const afterSpeed = /(?:m\/s|km\/s|km\/h)\s*(?:，|,)?\s*(?:速度)?(?:方向(?:为|是)?|沿)?\s*((?:水平|竖直)?向[上下左右]|[xy]\s*轴[正负]方向)/i.exec(scrubbed)
+  const afterSpeed =
+    /(?:m\/s|km\/s|km\/h)\s*(?:，|,)?\s*(?:速度)?(?:方向(?:为|是)?|沿)?\s*((?:水平|竖直)?向[上下左右]|[xy]\s*轴[正负]方向)/i.exec(
+      scrubbed,
+    )
   return afterSpeed?.[1] === undefined ? 'unknown' : directionIn(afterSpeed[1])
 }
 
@@ -236,12 +247,14 @@ function detectTargets(text: string): SemanticTarget[] {
   }
   if (/电场力|库仑力|electric\s+force/i.test(text)) add('electric_force')
   if (/电场强度|场强(?!.*方向)|求\s*E|\bE\s*=|电场的大小/i.test(text)) add('electric_field')
-  if (/电场.{0,4}方向|场强.{0,4}方向|指向|向外|向内|判断.*方向/i.test(text)) add('electric_field_direction')
+  if (/电场.{0,4}方向|场强.{0,4}方向|指向|向外|向内|判断.*方向/i.test(text))
+    add('electric_field_direction')
   if (/加速度|acceleration/i.test(text)) add('acceleration')
   if (/末速度|最终速度|final\s+velocity/i.test(text)) add('final_velocity')
   if (/位移|偏转(?:量|距离)?|displacement|deflection/i.test(text)) add('displacement')
   if (/运动轨迹|轨迹|trajectory/i.test(text)) add('trajectory')
-  if (/电势(?:的)?变化|电势差|Δ\s*[φϕ]|delta\s*(?:phi|potential)/i.test(text)) add('electric_potential_change')
+  if (/电势(?:的)?变化|电势差|Δ\s*[φϕ]|delta\s*(?:phi|potential)/i.test(text))
+    add('electric_potential_change')
   if (/电势能(?:的)?变化|Δ\s*U|delta\s*U/i.test(text)) add('electric_potential_energy_change')
   if (/动能(?:的)?变化|Δ\s*K|delta\s*K/i.test(text)) add('kinetic_energy_change')
   if (/电场力(?:所)?做功|电场做功|electric\s+work/i.test(text)) add('work_by_electric_field')
@@ -307,8 +320,10 @@ const parsePointCharge = (
         const si = canonicalValue(parseQuantity(rawValue, unit))
         distance = { siValue: si, originalUnit: unit }
         const directionWord = directionalMatch[1]
-        if (/左侧|左边|负方向/i.test(directionWord)) sampleOffset = { axis: 'x', sign: -1, distance: si }
-        else if (/右侧|右边|正方向/i.test(directionWord)) sampleOffset = { axis: 'x', sign: 1, distance: si }
+        if (/左侧|左边|负方向/i.test(directionWord))
+          sampleOffset = { axis: 'x', sign: -1, distance: si }
+        else if (/右侧|右边|正方向/i.test(directionWord))
+          sampleOffset = { axis: 'x', sign: 1, distance: si }
         else if (/上方/i.test(directionWord)) sampleOffset = { axis: 'y', sign: 1, distance: si }
         else if (/下方/i.test(directionWord)) sampleOffset = { axis: 'y', sign: -1, distance: si }
       } catch {
@@ -327,11 +342,17 @@ const parsePointCharge = (
 
   const probe = extractValueWithUnit(text, ELECTRIC_PATTERNS.probeCharge, 'C')
   if (probe !== null) {
-    pointChargeKnowns.push(known('probe_charge', '试探电荷量', "q'", probe.siValue, 'C', 'electric_charge'))
+    pointChargeKnowns.push(
+      known('probe_charge', '试探电荷量', "q'", probe.siValue, 'C', 'electric_charge'),
+    )
   }
 
   if (targets.length === 0) {
-    issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_TARGET',
+      message: '未识别到需要求解的物理量。',
+      severity: 'error',
+    })
   }
 
   const ir: PhysicsSemanticIR = {
@@ -359,7 +380,10 @@ const parsePointCharge = (
   }
 
   const confidence =
-    isPointChargeQuestionText(text) && sourceCharge !== undefined && distance !== null && targets.length > 0
+    isPointChargeQuestionText(text) &&
+    sourceCharge !== undefined &&
+    distance !== null &&
+    targets.length > 0
       ? 0.95
       : 0.2
   return { ir, issues, confidence }
@@ -383,7 +407,16 @@ const parseMultiSource = (
   const multiKnowns: KnownValue[] = []
   sourceCharges.forEach((source, index) => {
     const label = source.label ?? `q${index + 1}`
-    multiKnowns.push(known(`source_charge_${index + 1}`, `源电荷 ${label}`, label, source.charge, 'C', 'electric_charge'))
+    multiKnowns.push(
+      known(
+        `source_charge_${index + 1}`,
+        `源电荷 ${label}`,
+        label,
+        source.charge,
+        'C',
+        'electric_charge',
+      ),
+    )
   })
   if (separation !== undefined) {
     multiKnowns.push(known('separation', '两电荷间距', 'd', separation, 'm', 'length'))
@@ -402,7 +435,11 @@ const parseMultiSource = (
   multiKnowns.push(known('sample_position', '待求场点', 'P', 0, 'm', 'length'))
 
   if (targets.length === 0) {
-    issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_TARGET',
+      message: '未识别到需要求解的物理量。',
+      severity: 'error',
+    })
   }
 
   const ir: PhysicsSemanticIR = {
@@ -433,9 +470,7 @@ const parseMultiSource = (
   }
 
   const confidence =
-    sourceCharges.length >= 2 && separation !== undefined && targets.length > 0
-      ? 0.9
-      : 0.2
+    sourceCharges.length >= 2 && separation !== undefined && targets.length > 0 ? 0.9 : 0.2
   return { ir, issues, confidence }
 }
 
@@ -448,9 +483,7 @@ const parseMultiSource = (
  * positive (a question that omits the sign on a negative charge is caught by the
  * validator's direction ambiguity gate).
  */
-const extractSourceCharges = (
-  text: string,
-): ReadonlyArray<{ charge: number; label?: string }> => {
+const extractSourceCharges = (text: string): ReadonlyArray<{ charge: number; label?: string }> => {
   const sources: { charge: number; label?: string }[] = []
   const push = (raw: string, unit: string, label: string | undefined) => {
     const value = parseScientificNumber(raw)
@@ -465,14 +498,20 @@ const extractSourceCharges = (
     }
   }
   /* q1 = ... / q2 = ... patterns: capture group 1 is value, group 2 is unit. */
-  const qPattern = new RegExp(String.raw`q\s*([12])\s*=\s*([+-]?${NUMBER})\s*(${CHARGE_UNIT})?\b`, 'gi')
+  const qPattern = new RegExp(
+    String.raw`q\s*([12])\s*=\s*([+-]?${NUMBER})\s*(${CHARGE_UNIT})?\b`,
+    'gi',
+  )
   for (const match of text.matchAll(qPattern)) {
     if (match[1] !== undefined && match[2] !== undefined) {
       push(match[2], (match[3] ?? 'C').trim(), `q${match[1]}`)
     }
   }
   /* 电荷A = ... / 电荷B = ...: group 1 is A/B, group 2 is value, group 3 is unit. */
-  const abPattern = new RegExp(String.raw`电荷\s*([AB])[^\d+-]{0,8}?([+-]?${NUMBER})\s*(${CHARGE_UNIT})?\b`, 'gi')
+  const abPattern = new RegExp(
+    String.raw`电荷\s*([AB])[^\d+-]{0,8}?([+-]?${NUMBER})\s*(${CHARGE_UNIT})?\b`,
+    'gi',
+  )
   for (const match of text.matchAll(abPattern)) {
     if (match[1] !== undefined && match[2] !== undefined) {
       push(match[2], (match[3] ?? 'C').trim(), match[1])
@@ -527,9 +566,15 @@ const parseParallelPlate = (
 
   const plateSeparation = extractValueWithUnit(text, ELECTRIC_PATTERNS.plateSeparation, 'm')
   if (plateSeparation !== null) {
-    plateKnowns.push(known('plate_separation', '板间距', 'd', plateSeparation.siValue, 'm', 'length'))
+    plateKnowns.push(
+      known('plate_separation', '板间距', 'd', plateSeparation.siValue, 'm', 'length'),
+    )
   } else {
-    issues.push({ code: 'MISSING_PLATE_SEPARATION', message: '缺少平行板间距。', severity: 'warning' })
+    issues.push({
+      code: 'MISSING_PLATE_SEPARATION',
+      message: '缺少平行板间距。',
+      severity: 'warning',
+    })
   }
 
   const plateLength = extractValueWithUnit(text, ELECTRIC_PATTERNS.plateLength, 'm')
@@ -559,15 +604,18 @@ const parseParallelPlate = (
   }
 
   if (ppTargets.length === 0) {
-    issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+    issues.push({
+      code: 'MISSING_TARGET',
+      message: '未识别到需要求解的物理量。',
+      severity: 'error',
+    })
   }
 
   const fieldDirection = detectPlateFieldDirection(text)
   const velocityDir = detectInitialVelocityDirection(text)
   /* "水平射入" → right; default for parallel-plate is horizontal entry from left. */
   const resolvedVelocityDir: PlanarDirection =
-    velocityDir !== 'unknown' ? velocityDir :
-    /水平/.test(text) ? 'right' : 'right'
+    velocityDir !== 'unknown' ? velocityDir : /水平/.test(text) ? 'right' : 'right'
 
   const ir: PhysicsSemanticIR = {
     schemaVersion: 'physics-ir/1.0',
@@ -576,9 +624,7 @@ const parseParallelPlate = (
     entities: ['particle', 'electric_field'],
     knowns: plateKnowns,
     unknowns: ppTargets.map((target) => ({ key: target, ...targetMetadata(target) })),
-    constraints: [
-      { type: 'parallel_plate_field', description: '平行板电容器产生有界匀强电场' },
-    ],
+    constraints: [{ type: 'parallel_plate_field', description: '平行板电容器产生有界匀强电场' }],
     relations: ['charged_particle_in_bounded_electric_field', 'particle_enters_field'],
     targets: ppTargets,
     assumptions: [
@@ -629,7 +675,16 @@ export const DeterministicElectricQuestionParser: QuestionParserProvider = {
     }
     const electricField = extractValueWithUnit(text, ELECTRIC_PATTERNS.electricField, 'V/m')
     if (electricField !== null) {
-      knowns.push(known('electric_field_strength', '电场强度', 'E', electricField.siValue, 'V/m', 'electric_field'))
+      knowns.push(
+        known(
+          'electric_field_strength',
+          '电场强度',
+          'E',
+          electricField.siValue,
+          'V/m',
+          'electric_field',
+        ),
+      )
     }
     const time = extractValueWithUnit(text, ELECTRIC_PATTERNS.time, 's')
     if (time !== null) knowns.push(known('time', '时间', 't', time.siValue, 's', 'time'))
@@ -716,10 +771,18 @@ export const DeterministicElectricQuestionParser: QuestionParserProvider = {
       })
     }
     if (knowns.length < 3) {
-      issues.push({ code: 'PARTIAL_PARSE', message: '未能提取足够的电场题已知条件。', severity: 'warning' })
+      issues.push({
+        code: 'PARTIAL_PARSE',
+        message: '未能提取足够的电场题已知条件。',
+        severity: 'warning',
+      })
     }
     if (targets.length === 0) {
-      issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+      issues.push({
+        code: 'MISSING_TARGET',
+        message: '未识别到需要求解的物理量。',
+        severity: 'error',
+      })
     }
 
     const ir: PhysicsSemanticIR = {
@@ -729,9 +792,7 @@ export const DeterministicElectricQuestionParser: QuestionParserProvider = {
       entities: ['particle', 'electric_field'],
       knowns,
       unknowns: targets.map((target) => ({ key: target, ...targetMetadata(target) })),
-      constraints: [
-        { type: 'uniform_electric_field', description: '带电粒子只受恒定电场力作用' },
-      ],
+      constraints: [{ type: 'uniform_electric_field', description: '带电粒子只受恒定电场力作用' }],
       relations,
       targets,
       assumptions,
@@ -742,7 +803,8 @@ export const DeterministicElectricQuestionParser: QuestionParserProvider = {
       initialVelocityDirection,
     }
 
-    const confidence = isElectricQuestionText(text) && knowns.length >= 3 && targets.length > 0 ? 0.95 : 0.2
+    const confidence =
+      isElectricQuestionText(text) && knowns.length >= 3 && targets.length > 0 ? 0.95 : 0.2
     return { ir, issues, confidence }
   },
 }

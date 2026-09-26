@@ -29,7 +29,17 @@ import path from 'node:path'
 import process from 'node:process'
 
 const OUT_DIR = process.env.PARTS3D_OUT
-  ? path.join('overlays', 'harness', 'files', 'apps', 'web', 'public', 'physicsos', 'parts3d', process.env.PARTS3D_OUT)
+  ? path.join(
+      'overlays',
+      'harness',
+      'files',
+      'apps',
+      'web',
+      'public',
+      'physicsos',
+      'parts3d',
+      process.env.PARTS3D_OUT,
+    )
   : path.join('overlays', 'harness', 'files', 'apps', 'web', 'public', 'physicsos', 'parts3d')
 const CONCURRENCY = 3
 const MAX_ATTEMPTS = 3
@@ -40,7 +50,8 @@ const BACKOFF_MS = [15_000, 45_000]
 const readEnv = () => {
   if (!existsSync('.env')) throw new Error('.env 不存在；无法读取生图凭据')
   return Object.fromEntries(
-    readFileSync('.env', 'utf8').split(/\r?\n/)
+    readFileSync('.env', 'utf8')
+      .split(/\r?\n/)
       .filter((line) => line.includes('='))
       .map((line) => [
         line.slice(0, line.indexOf('=')).trim(),
@@ -63,33 +74,34 @@ if (!BASE_URL || !API_KEY) throw new Error('缺少 PHYSICSOS_IMAGE_PRIMARY_BASE_
 const CAMERA_THREE_QUARTER =
   'three-quarter view from above at roughly 45 degrees elevation, orthographic lens,'
 const CAMERA_FLAT =
-  'strictly top-down 90 degree orthographic view seen from straight above, '
-  + 'no perspective foreshortening, no isometric or oblique tilt, no diagonal rotation, '
-  + 'the apparatus lying level across the frame parallel to the image edge,'
+  'strictly top-down 90 degree orthographic view seen from straight above, ' +
+  'no perspective foreshortening, no isometric or oblique tilt, no diagonal rotation, ' +
+  'the apparatus lying level across the frame parallel to the image edge,'
 
 /* 量接线柱的前提：两个端子在同一水平中线上、位于器材最左与最右、且不被遮挡。 */
 const TERMINALS_LEVEL =
-  'the two brass binding posts are the leftmost and rightmost points of the apparatus, '
-  + 'their centres on one identical horizontal centre line, both fully visible and unoccluded,'
+  'the two brass binding posts are the leftmost and rightmost points of the apparatus, ' +
+  'their centres on one identical horizontal centre line, both fully visible and unoccluded,'
 
 /** 风格串。除相机条款外全套共用；改任何一条都要重生成整批。 */
-const style = (camera) => [
-  'photorealistic 3D render of a single school-laboratory physics apparatus item,',
-  camera,
-  'object perfectly centred and fully inside the frame with generous margin,',
-  'soft studio lighting with one key light from the upper left and gentle fill,',
-  'subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite,',
-  'only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground,',
-  'isolated on a fully transparent background, nothing else in frame,',
-  'professional product-shot clarity, physically plausible proportions,',
-  'no text, no letters, no numbers, no logo, no watermark, no border, no backdrop',
-].join(' ')
+const style = (camera) =>
+  [
+    'photorealistic 3D render of a single school-laboratory physics apparatus item,',
+    camera,
+    'object perfectly centred and fully inside the frame with generous margin,',
+    'soft studio lighting with one key light from the upper left and gentle fill,',
+    'subtle specular highlights, restrained muted palette of steel, brass, ceramic and dark bakelite,',
+    'only a faint ambient-occlusion darkening at the very base, no cast shadow on the ground,',
+    'isolated on a fully transparent background, nothing else in frame,',
+    'professional product-shot clarity, physically plausible proportions,',
+    'no text, no letters, no numbers, no logo, no watermark, no border, no backdrop',
+  ].join(' ')
 
 /* 电源类器材的正负极必须看得出来：渲染层在精灵路径上不画极性符号，A/V 与 +/−
  * 全靠照片里的红黑接线柱表达。 */
 const POLARITY =
-  'one binding post at the right hand end is bright red and the one at the left hand end is '
-  + 'black, so the positive terminal is unmistakably on the right,'
+  'one binding post at the right hand end is bright red and the one at the left hand end is ' +
+  'black, so the positive terminal is unmistakably on the right,'
 
 /** 以 1cm 接线柱为参照，保证器材之间的相对尺度一致。 */
 const SCALE_NOTE = 'All items are rendered at a consistent scale relative to a 1 cm binding post.'
@@ -97,62 +109,72 @@ const SCALE_NOTE = 'All items are rendered at a consistent scale relative to a 1
 const PARTS = [
   {
     id: 'lamp-off',
-    body: 'a small incandescent lamp bulb with a clear glass envelope and a brass screw base, '
-      + 'switched off, the filament inside visible as a thin dark wire',
+    body:
+      'a small incandescent lamp bulb with a clear glass envelope and a brass screw base, ' +
+      'switched off, the filament inside visible as a thin dark wire',
   },
   {
     id: 'lamp-on',
-    body: 'a small incandescent lamp bulb with a clear glass envelope and a brass screw base, '
-      + 'switched on and glowing brightly, a hot yellow-white filament inside casting a warm halo '
-      + 'through the glass',
+    body:
+      'a small incandescent lamp bulb with a clear glass envelope and a brass screw base, ' +
+      'switched on and glowing brightly, a hot yellow-white filament inside casting a warm halo ' +
+      'through the glass',
   },
   {
     id: 'resistor',
-    body: 'a laboratory fixed resistor mounted as a bench apparatus: a horizontal ceramic tube '
-      + 'wound with dark resistance wire on a small dark wooden base, with one brass binding post '
-      + 'at each end of the base, matching the knife switch and rheostat family',
+    body:
+      'a laboratory fixed resistor mounted as a bench apparatus: a horizontal ceramic tube ' +
+      'wound with dark resistance wire on a small dark wooden base, with one brass binding post ' +
+      'at each end of the base, matching the knife switch and rheostat family',
   },
   {
     id: 'rheostat',
-    body: 'a laboratory sliding rheostat, a horizontal ceramic tube wound with bare resistance wire, '
-      + 'a bare metal slider riding on a brass guide rail above it, with a vertical metal rod and two '
-      + 'binding posts at the base',
+    body:
+      'a laboratory sliding rheostat, a horizontal ceramic tube wound with bare resistance wire, ' +
+      'a bare metal slider riding on a brass guide rail above it, with a vertical metal rod and two ' +
+      'binding posts at the base',
   },
   {
     id: 'battery',
-    body: 'a laboratory DC power source, a compact rectangular battery pack in a dark bakelite case '
-      + 'with two brass binding posts on top and a small metal label plate, both terminals clearly '
-      + 'visible',
+    body:
+      'a laboratory DC power source, a compact rectangular battery pack in a dark bakelite case ' +
+      'with two brass binding posts on top and a small metal label plate, both terminals clearly ' +
+      'visible',
   },
   {
     id: 'switch-open',
-    body: 'a laboratory single-pole knife switch mounted on a small dark wooden base, the flat brass '
-      + 'blade lifted up and tilted away from the contacts so the circuit is open, two brass binding '
-      + 'posts at the two ends of the base',
+    body:
+      'a laboratory single-pole knife switch mounted on a small dark wooden base, the flat brass ' +
+      'blade lifted up and tilted away from the contacts so the circuit is open, two brass binding ' +
+      'posts at the two ends of the base',
   },
   {
     id: 'switch-closed',
-    body: 'a laboratory single-pole knife switch mounted on a small dark wooden base, the flat brass '
-      + 'blade lowered and lying flat across the two contacts so the circuit is closed, two brass '
-      + 'binding posts at the two ends of the base',
+    body:
+      'a laboratory single-pole knife switch mounted on a small dark wooden base, the flat brass ' +
+      'blade lowered and lying flat across the two contacts so the circuit is closed, two brass ' +
+      'binding posts at the two ends of the base',
   },
   {
     id: 'ammeter',
-    body: 'an analogue panel ammeter in a rectangular black bakelite housing with a brushed metal '
-      + 'bezel, a blank white dial face that is completely empty with no markings of any kind, a thin '
-      + 'black needle resting near the middle, two brass binding posts at the lower edge',
+    body:
+      'an analogue panel ammeter in a rectangular black bakelite housing with a brushed metal ' +
+      'bezel, a blank white dial face that is completely empty with no markings of any kind, a thin ' +
+      'black needle resting near the middle, two brass binding posts at the lower edge',
   },
   {
     id: 'voltmeter',
-    body: 'an analogue panel voltmeter in a rectangular black bakelite housing with a brushed metal '
-      + 'bezel, standing upright on a desk; the blank white dial face is completely empty with no '
-      + 'markings of any kind and is turned toward the viewer and clearly readable, a thin black '
-      + 'needle resting near the middle, two brass binding posts at the lower front edge',
+    body:
+      'an analogue panel voltmeter in a rectangular black bakelite housing with a brushed metal ' +
+      'bezel, standing upright on a desk; the blank white dial face is completely empty with no ' +
+      'markings of any kind and is turned toward the viewer and clearly readable, a thin black ' +
+      'needle resting near the middle, two brass binding posts at the lower front edge',
   },
   {
     id: 'terminal',
-    body: 'a single brass laboratory binding post terminal, a short threaded metal post with a '
-      + 'knurled nut and a flat base, standing upright',
+    body:
+      'a single brass laboratory binding post terminal, a short threaded metal post with a ' +
+      'knurled nut and a flat base, standing upright',
   },
 
   /* ---------------------------------------------------------------------------
@@ -167,68 +189,78 @@ const PARTS = [
     id: 'cell-aa',
     flat: true,
     polarity: true,
-    body: 'a single AA dry cell battery lying flat on its side and extended along the horizontal, '
-      + 'a slim cylindrical zinc-carbon cell wrapped in a plain muted grey-blue paper jacket, '
-      + 'one short insulated lead ending in a small brass crocodile clip at each end so that the '
-      + 'two clips are the extreme left and right of the apparatus',
+    body:
+      'a single AA dry cell battery lying flat on its side and extended along the horizontal, ' +
+      'a slim cylindrical zinc-carbon cell wrapped in a plain muted grey-blue paper jacket, ' +
+      'one short insulated lead ending in a small brass crocodile clip at each end so that the ' +
+      'two clips are the extreme left and right of the apparatus',
   },
   {
     id: 'battery-pack',
     flat: true,
     polarity: true,
-    body: 'a laboratory battery pack laid flat and extended along the horizontal: four cylindrical '
-      + 'dry cells held side by side in a dark bakelite carrier, brass connecting straps linking '
-      + 'them in series, and one brass binding post at each end of the holder, the two posts being '
-      + 'the extreme left and right of the apparatus',
+    body:
+      'a laboratory battery pack laid flat and extended along the horizontal: four cylindrical ' +
+      'dry cells held side by side in a dark bakelite carrier, brass connecting straps linking ' +
+      'them in series, and one brass binding post at each end of the holder, the two posts being ' +
+      'the extreme left and right of the apparatus',
   },
   {
     id: 'supply-dc',
     flat: true,
     polarity: true,
-    body: 'a bench DC power supply unit in a low rectangular steel case seen from directly above, '
-      + 'a brushed aluminium panel bearing two large black knurled rotary knobs, one brass binding '
-      + 'post at each end of the front edge so that the two posts are the extreme left and right of '
-      + 'the apparatus, and a small blank dark display window showing no digits; plain panel with '
-      + 'no lettering, no dial markings and no logo',
+    body:
+      'a bench DC power supply unit in a low rectangular steel case seen from directly above, ' +
+      'a brushed aluminium panel bearing two large black knurled rotary knobs, one brass binding ' +
+      'post at each end of the front edge so that the two posts are the extreme left and right of ' +
+      'the apparatus, and a small blank dark display window showing no digits; plain panel with ' +
+      'no lettering, no dial markings and no logo',
   },
   {
     id: 'switch-button',
-    body: 'a laboratory push-button switch mounted on a small dark wooden base: a round black '
-      + 'bakelite button on a short brass shaft above two brass contact posts, with one brass '
-      + 'binding post at each end of the base',
+    body:
+      'a laboratory push-button switch mounted on a small dark wooden base: a round black ' +
+      'bakelite button on a short brass shaft above two brass contact posts, with one brass ' +
+      'binding post at each end of the base',
   },
   {
     id: 'resistor-5',
     flat: true,
-    body: 'a laboratory fixed resistor on a small dark wooden base, a horizontal ceramic tube '
-      + 'wound with resistance wire and coated in a pale beige vitreous enamel, a single narrow '
-      + 'green painted band around the middle of the coating, one brass binding post at each end '
-      + 'of the base, the two posts being the extreme left and right of the apparatus',
+    body:
+      'a laboratory fixed resistor on a small dark wooden base, a horizontal ceramic tube ' +
+      'wound with resistance wire and coated in a pale beige vitreous enamel, a single narrow ' +
+      'green painted band around the middle of the coating, one brass binding post at each end ' +
+      'of the base, the two posts being the extreme left and right of the apparatus',
   },
   {
     id: 'resistor-50',
     flat: true,
-    body: 'a laboratory fixed resistor on a small dark wooden base, a noticeably longer and thicker '
-      + 'horizontal ceramic tube wound with resistance wire and coated in a pale beige vitreous '
-      + 'enamel, three separate narrow painted bands (orange, orange, black) around the middle of '
-      + 'the coating, one brass binding post at each end of the base, the two posts being the '
-      + 'extreme left and right of the apparatus',
+    body:
+      'a laboratory fixed resistor on a small dark wooden base, a noticeably longer and thicker ' +
+      'horizontal ceramic tube wound with resistance wire and coated in a pale beige vitreous ' +
+      'enamel, three separate narrow painted bands (orange, orange, black) around the middle of ' +
+      'the coating, one brass binding post at each end of the base, the two posts being the ' +
+      'extreme left and right of the apparatus',
   },
   {
     id: 'rheostat-50',
     flat: true,
-    body: 'a large laboratory sliding rheostat laid flat and extended along the horizontal, a long '
-      + 'thick horizontal ceramic tube densely wound with bare resistance wire, a heavy bare metal '
-      + 'slider riding on a brass guide rail with a black bakelite knob, one brass binding post at '
-      + 'each end of the base so that the two posts are the extreme left and right of the '
-      + 'apparatus, with a longer ceramic tube than a small rheostat, the whole apparatus including '
-      + 'both end brackets well inside the frame',
+    body:
+      'a large laboratory sliding rheostat laid flat and extended along the horizontal, a long ' +
+      'thick horizontal ceramic tube densely wound with bare resistance wire, a heavy bare metal ' +
+      'slider riding on a brass guide rail with a black bakelite knob, one brass binding post at ' +
+      'each end of the base so that the two posts are the extreme left and right of the ' +
+      'apparatus, with a longer ceramic tube than a small rheostat, the whole apparatus including ' +
+      'both end brackets well inside the frame',
   },
 ]
 
 /* ------------------------------------------------------------------ 出图 -- */
 
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
+const sleep = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 const requestOnce = async (prompt) => {
   const controller = new AbortController()
@@ -249,9 +281,17 @@ const requestOnce = async (prompt) => {
     })
     const text = await response.text()
     let json
-    try { json = JSON.parse(text) } catch { json = undefined }
+    try {
+      json = JSON.parse(text)
+    } catch {
+      json = undefined
+    }
     if (response.status !== 200) {
-      return { ok: false, status: response.status, error: json?.error?.message ?? text.slice(0, 200) }
+      return {
+        ok: false,
+        status: response.status,
+        error: json?.error?.message ?? text.slice(0, 200),
+      }
     }
     const item = json?.data?.[0]
     let bytes
@@ -259,7 +299,8 @@ const requestOnce = async (prompt) => {
       bytes = Buffer.from(item.b64_json, 'base64')
     } else if (typeof item?.url === 'string') {
       const imageResponse = await fetch(item.url)
-      if (!imageResponse.ok) return { ok: false, status: imageResponse.status, error: 'download failed' }
+      if (!imageResponse.ok)
+        return { ok: false, status: imageResponse.status, error: 'download failed' }
       bytes = Buffer.from(await imageResponse.arrayBuffer())
     } else {
       return { ok: false, status: response.status, error: `unexpected body: ${text.slice(0, 160)}` }
@@ -281,14 +322,18 @@ const generateWithRetry = async (part) => {
     flat ? TERMINALS_LEVEL : undefined,
     part.polarity === true ? POLARITY : undefined,
     SCALE_NOTE,
-  ].filter((clause) => clause !== undefined).join(' ')
+  ]
+    .filter((clause) => clause !== undefined)
+    .join(' ')
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const started = Date.now()
     const result = await requestOnce(prompt)
     const elapsedMs = Date.now() - started
     if (result.ok) return { ...result, prompt, elapsedMs, attempt }
     const retryable = result.status === 0 || result.status >= 500 || result.status === 429
-    process.stderr.write(`  ! ${part.id} 第 ${attempt} 次失败 (HTTP ${result.status}: ${result.error})\n`)
+    process.stderr.write(
+      `  ! ${part.id} 第 ${attempt} 次失败 (HTTP ${result.status}: ${result.error})\n`,
+    )
     if (!retryable || attempt === MAX_ATTEMPTS) {
       return { ok: false, prompt, error: result.error, status: result.status, attempt }
     }
@@ -316,9 +361,7 @@ const mapLimited = async (items, limit, worker) => {
 
 const main = async () => {
   const only = process.argv.slice(2).filter((arg) => !arg.startsWith('-'))
-  const targets = only.length > 0
-    ? PARTS.filter((part) => only.includes(part.id))
-    : PARTS
+  const targets = only.length > 0 ? PARTS.filter((part) => only.includes(part.id)) : PARTS
   if (targets.length === 0) {
     throw new Error(`没有匹配的器材 id。可用：${PARTS.map((p) => p.id).join(', ')}`)
   }
@@ -336,19 +379,25 @@ const main = async () => {
     writeFileSync(file, outcome.bytes)
     writeFileSync(
       path.join(OUT_DIR, `${part.id}.json`),
-      `${JSON.stringify({
-        id: part.id,
-        file: `${part.id}.png`,
-        model: MODEL,
-        endpoint: BASE_URL,
-        bytes: outcome.bytes.length,
-        createdAt: new Date().toISOString(),
-        elapsedMs: outcome.elapsedMs,
-        attempts: outcome.attempt,
-        prompt: outcome.prompt,
-      }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          id: part.id,
+          file: `${part.id}.png`,
+          model: MODEL,
+          endpoint: BASE_URL,
+          bytes: outcome.bytes.length,
+          createdAt: new Date().toISOString(),
+          elapsedMs: outcome.elapsedMs,
+          attempts: outcome.attempt,
+          prompt: outcome.prompt,
+        },
+        null,
+        2,
+      )}\n`,
     )
-    console.log(`  ✓ ${part.id}  ${(outcome.bytes.length / 1024).toFixed(0)} KiB  (${(outcome.elapsedMs / 1000).toFixed(1)}s)`)
+    console.log(
+      `  ✓ ${part.id}  ${(outcome.bytes.length / 1024).toFixed(0)} KiB  (${(outcome.elapsedMs / 1000).toFixed(1)}s)`,
+    )
     return { part, ok: true }
   })
 

@@ -278,7 +278,10 @@ const buildVerification = (
 
   const sourcePower = point.solution.totalSourcePower
   const dissipated = point.solution.totalDissipatedPower
-  const powerTolerance = Math.max(1e-9, 1e-6 * Math.max(Math.abs(sourcePower), Math.abs(dissipated)))
+  const powerTolerance = Math.max(
+    1e-9,
+    1e-6 * Math.max(Math.abs(sourcePower), Math.abs(dissipated)),
+  )
   checks.push(
     check('power_balance', 'conservation', Math.abs(sourcePower - dissipated) < powerTolerance, {
       message: '电源总功率等于电路消耗功率（能量守恒）。',
@@ -431,7 +434,12 @@ export class CircuitEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLi
     const sources = enabled.filter((component) => component.type === 'voltage_source')
     if (sources.length !== 1) {
       return unsupportedModel(
-        [failure('single_voltage_source', 'Circuit Engine V1 requires exactly one voltage source.')],
+        [
+          failure(
+            'single_voltage_source',
+            'Circuit Engine V1 requires exactly one voltage source.',
+          ),
+        ],
         CIRCUIT_ENGINE_ID,
       )
     }
@@ -511,8 +519,15 @@ export class CircuitEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLi
     const sceneDuration =
       scene.timeline.endTime === undefined ? 0 : canonicalValue(scene.timeline.endTime)
     const endTime =
-      request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
-    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime < startTime) {
+      request.options.endTime === undefined
+        ? sceneDuration
+        : canonicalValue(request.options.endTime)
+    if (
+      !Number.isFinite(startTime) ||
+      !Number.isFinite(endTime) ||
+      startTime < 0 ||
+      endTime < startTime
+    ) {
       throw new PhysicsOSError(
         'INVALID_SIMULATION_RANGE',
         'Simulation range must satisfy 0 <= startTime <= endTime.',

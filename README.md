@@ -2,11 +2,31 @@
 
 > **开源公益项目**：面向初高中物理教学，免费、非商业。授权见 [`LICENSE`](./LICENSE)（PolyForm Noncommercial 1.0.0），仅限个人学习、学校与公益机构等非商业用途使用。
 >
-> **状态：正在开发中（work in progress）**。当前为早期开发版本，接口、数据结构与界面随时可能变化，尚不适合直接用于正式教学，也不接受“功能已完备”的预期。已完成与未完成范围见下文，界面会明确标记尚未接通的能力。
+> **状态：公测准备中（public beta）**。账户体系、班级作业、出卷专区、学习记录同步、生产部署与桌面壳均已落地；接口与界面仍可能调整，请勿视作功能已完备。已完成与未完成范围见下文，界面会明确标记尚未接通的能力。
 
 PhysicsOS 是一个面向初高中物理学习的公益可视化智能体，通过 AI 理解题目并结合物理引擎，将抽象物理过程转化为可交互、可观察、可计算、可验证的真实物理场景。
 
 当前正式产品运行在 DeepSeek Harness Web Client 中，Physics Engine 负责结果，Observation 与统一 `PhysicsCanvas` 负责把结果变成可交互视觉。
+
+## 界面截图
+
+以下截图取自真实服务器 + 真实浏览器的验收运行（`pnpm run test:acceptance`，浏览器门禁：console / pageerror / unhandled rejection / failed request / error response 全部为 0）。
+
+| 登录门 | 出卷专区 |
+| --- | --- |
+| ![登录门](docs/reports/screenshots/beta/01-login-gate.png) | ![出卷专区](docs/reports/screenshots/beta/02-paper-studio.png) |
+
+| 班级教学（教师） | 我的班级（学生） |
+| --- | --- |
+| ![班级教学](docs/reports/screenshots/beta/03-class-teacher.png) | ![我的班级](docs/reports/screenshots/beta/04-class-student.png) |
+
+| 实验选择器（回旋加速器） | 回旋加速器实验 |
+| --- | --- |
+| ![实验选择器](docs/reports/screenshots/beta/05-cyclotron-picker.png) | ![回旋加速器](docs/reports/screenshots/beta/06-cyclotron-lab.png) |
+
+| 管理后台 · 密码重置队列 | 学习记录 |
+| --- | --- |
+| ![密码重置队列](docs/reports/screenshots/beta/07-password-resets.png) | ![学习记录](docs/reports/screenshots/beta/08-learning-record.png) |
 
 ## 正式入口
 
@@ -18,12 +38,12 @@ vendor/deepseek-harness/apps/web
 @deepseek-ai/dsh-client-ui-physicsos
 ```
 
-根目录 `apps/web` 是已废弃的旧版独立界面，只保留作迁移参考；新功能、运行时接入和验收不得继续写入该入口。
+旧版独立原型 `apps/web` 已删除；浏览器端正式入口是 vendor harness 的 `dsh-client-ui-physicsos`。
 
 ## 当前能力
 
 - PhysicsOS 首页、侧栏、学生模式与正式 Harness 工作区
-- 实验中心：38 个可创建实验模板（力学/光学/声学/机械波/流体/热学/电场/磁场/电路/复合场/电磁感应十一个分类），另有回旋加速器因引擎尚不支持时变场而标记“即将支持”；继续上次实验与按学习记录的薄弱点推荐
+- 实验中心：力学/光学/声学/机械波/流体/热学/电场/磁场/电路/复合场/电磁感应/近代物理十二个分类；**回旋加速器已接通时变场求解**（不再是“即将支持”），新增纵波、反射折射、衍射、多普勒与光电效应模板；继续上次实验与按学习记录的薄弱点推荐
 - 匀强磁场带电粒子实验：参数编辑、运行/暂停/单步/重置、倍速、时间轴、可观察量、数据、图像、推导和事件
 - 五类力学场景：匀速、匀加速、平抛/斜抛、牛顿第二定律、无摩擦斜面
 - 碰撞实验：弹性/非弹性（e = 0.5）/完全非弹性三类模板，独立碰撞引擎（多刚体圆-圆冲量求解、边界反射、恢复系数模型），动量守恒与动能守恒（弹性时）引擎验证，碰撞事件进时间轴；首页 Hero 是同一套圆形刚体 + 速度箭头的弹性碰撞小场景（装饰性，带轨迹尾迹与接触闪环）
@@ -42,12 +62,14 @@ vendor/deepseek-harness/apps/web
 
 ## 尚未完成
 
-- 图片/PDF/OCR/VLM 试题识别与整卷拆题
 - 实验室里的 AI 助教抽屉仍是确定性意图匹配（模型化回答见 backlog `AGENT_MODEL_BACKED_ANSWERS_BACKLOG`）；学生模式档位已映射到 `physics-student` 预设（`ui-physicsos/profiles.ts`）
-- 保存、更多菜单等按钮对应的完整业务闭环
-- 学习记录的服务端持久化（当前仅本地 localStorage）
+- 首页「打开场景」「模板」和实验「更多」菜单仍是禁用入口，需要完成闭环或移除
+- 学习记录、最近场景和个人配置的跨设备同步（当前个人数据仅本地 localStorage；服务端只有匿名聚合）
 - 纵波、波的反射 / 折射 / 衍射 / 多普勒效应，以及近代物理等后续领域
-- 教师端、发布协作和 Desktop 壳层
+- 班级、作业、提交、批改和学情看板
+- 可签名、可安装、可持续更新的 Desktop 壳层
+- 生产部署基础：根 CI/CD、Docker/Compose、数据库/共享限流、健康检查、备份恢复与可观测性
+- 图片/PDF/VLM 录题已经实现；真实卷库继续扩充仍需要可授权卷源与教师核验
 
 界面会明确标记尚未接通的能力，不用占位成功状态冒充完成。
 

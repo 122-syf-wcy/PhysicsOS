@@ -50,11 +50,15 @@ describe('transformer through the engine', () => {
 
   it('refuses a bench that is not a transformer, or has no windings', () => {
     expect(engine.canHandle({ ...scene(), transformerBenches: [] }).supported).toBe(false)
-    expect(
-      engine.canHandle(createTransformerBenchScene({ secondaryTurns: 0 })).supported,
-    ).toBe(false)
-    expect(engine.canHandle(createTransformerBenchScene({ primaryVoltage: 0 })).supported).toBe(false)
+    expect(engine.canHandle(createTransformerBenchScene({ secondaryTurns: 0 })).supported).toBe(
+      false,
+    )
+    expect(engine.canHandle(createTransformerBenchScene({ primaryVoltage: 0 })).supported).toBe(
+      false,
+    )
     /* A secondary drawing no current is a real (open-circuit) rig. */
-    expect(engine.canHandle(createTransformerBenchScene({ primaryCurrent: 0 })).supported).toBe(true)
+    expect(engine.canHandle(createTransformerBenchScene({ primaryCurrent: 0 })).supported).toBe(
+      true,
+    )
   })
 })

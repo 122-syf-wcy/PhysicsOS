@@ -37,6 +37,12 @@ const useAuthAs = (role?: AuthUser['role']) => {
   return function boundAuth<T>(selector: (snapshot: AuthState) => T): T { return selector(state) }
 }
 
+/** The studio never touches sessions or workspaces in these cases. */
+const neverHook = (() => {
+  throw new Error('unused hook')
+}) as never
+const t = (key: string): string => key
+
 const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   listSources: vi.fn().mockResolvedValue([]),
   addSource: vi.fn(),
@@ -56,6 +62,8 @@ const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   runChecks: vi.fn(),
   reviewQuestion: vi.fn(),
   repairQuestion: vi.fn(),
+  replaceQuestion: vi.fn(),
+  bankPlan: vi.fn(),
   approve: vi.fn(),
   runExport: vi.fn(),
   listExports: vi.fn().mockResolvedValue([]),
@@ -64,13 +72,16 @@ const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   ingestBank: vi.fn(),
   updateBankItem: vi.fn(),
   reviewBankItem: vi.fn(),
+  reviewBankItems: vi.fn(),
+  triageBankItems: vi.fn(),
+  ingestBankImages: vi.fn(),
 })
 
 describe('PaperWorkspace', () => {
   afterEach(() => { cleanup() })
 
   it('renders the pipeline stepper with counts and the sources tab', async () => {
-    render(<PaperWorkspace api={stubApi([job(), job({ id: 'p2', status: 'exported' })])} useAuth={useAuthAs('TEACHER')} />)
+    render(<PaperWorkspace api={stubApi([job(), job({ id: 'p2', status: 'exported' })])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     expect(screen.getByRole('button', { name: /新建试卷/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /草稿与审核/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /已定稿/ })).toBeTruthy()
@@ -79,7 +90,7 @@ describe('PaperWorkspace', () => {
   })
 
   it('shows the three-step wizard and summary card on the new-paper tab', async () => {
-    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} />)
+    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     expect(await screen.findByText('选择试卷结构')).toBeTruthy()
     expect(screen.getByText('划定考试范围')).toBeTruthy()
     expect(screen.getByText('设定难度配比')).toBeTruthy()
@@ -103,7 +114,7 @@ describe('PaperWorkspace', () => {
         ] as never }],
       },
     })
-    render(<PaperWorkspace api={stubApi([j])} useAuth={useAuthAs('TEACHER')} />)
+    render(<PaperWorkspace api={stubApi([j])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
     expect(await screen.findByText('2027 贵州省中考物理月考卷')).toBeTruthy()
     expect(screen.getByText('待审核')).toBeTruthy()
@@ -111,7 +122,7 @@ describe('PaperWorkspace', () => {
   })
 
   it('opens a job detail with the stage rail marking the current phase', async () => {
-    render(<PaperWorkspace api={stubApi([job()])} useAuth={useAuthAs('TEACHER')} />)
+    render(<PaperWorkspace api={stubApi([job()])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
     fireEvent.click(await screen.findByText(/月考·bp-gz|paper-1|bp-gz/))
     expect(await screen.findByRole('list', { name: '任务阶段' })).toBeTruthy()
@@ -121,7 +132,7 @@ describe('PaperWorkspace', () => {
 
   it('submits region, school, kind and featured with a new source paper', async () => {
     const api = stubApi()
-    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} />)
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /真题资料库/ }))
     fireEvent.change(screen.getByPlaceholderText('如 2025-gz-jh-lz'), { target: { value: 'p-guiyang' } })
     fireEvent.change(screen.getByPlaceholderText('如 2025 年贵州省中考理综卷'), { target: { value: '贵阳一中九月月考' } })
@@ -139,7 +150,7 @@ describe('PaperWorkspace', () => {
 
   it('requires a stem before saving a question annotation', async () => {
     const api = stubApi()
-    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} />)
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /真题资料库/ }))
     const annoCard = screen.getByText('逐题考点录入').parentElement as HTMLElement
     fireEvent.click(within(annoCard).getByRole('button', { name: '保存考点' }))
@@ -163,7 +174,7 @@ describe('PaperWorkspace role gate', () => {
 
   it('tells a student this is a teacher surface, without mounting the studio', () => {
     const api = stubApi()
-    render(<PaperWorkspace api={api} useAuth={useAuthAs('STUDENT')} />)
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('STUDENT')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
 
     expect(screen.getByText(/只有教师及以上角色/)).toBeTruthy()
     /* The studio's tabs are absent, and so is every request it would have made:
@@ -177,13 +188,21 @@ describe('PaperWorkspace role gate', () => {
     /* `undefined` is the loading answer as well as the guest one — a reload
        paints the gate before /me returns. Showing the studio optimistically and
        then yanking it away is the flicker the AuthGate exists to avoid. */
-    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs()} />)
+    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs()} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
     expect(screen.getByText(/只有教师及以上角色/)).toBeTruthy()
   })
 
   it('mounts the studio for every teaching role', async () => {
     for (const role of ['TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'] as const) {
-      const view = render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs(role)} />)
+      const view = render(
+        <PaperWorkspace
+          api={stubApi()}
+          useAuth={useAuthAs(role)}
+          useSessions={neverHook}
+          useWorkspaces={neverHook}
+          t={t}
+        />,
+      )
       expect(await screen.findByRole('button', { name: /新建试卷/ }), role).toBeTruthy()
       view.unmount()
     }

@@ -176,9 +176,7 @@ export interface SolenoidFieldSceneInput {
  * The second winding doubles N on the same length, so its field is exactly
  * double — the turn count, not the current, is what changed.
  */
-export const createSolenoidFieldScene = (
-  input: SolenoidFieldSceneInput = {},
-): PhysicsScene => {
+export const createSolenoidFieldScene = (input: SolenoidFieldSceneInput = {}): PhysicsScene => {
   const bench: SolenoidFieldSpec = {
     benchId: 'current-bench-1',
     type: 'solenoid',

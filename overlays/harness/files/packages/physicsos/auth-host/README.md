@@ -171,6 +171,55 @@ Unknown owners or malformed entries abort before the first write. An existing
 resource with a different owner is reported as a conflict and is never
 rewritten; the command exits 2 when conflicts exist.
 
+## School tenant merge
+
+Two tenants that describe the same real school cannot be repaired through the
+registration/admin surface because every user, class, submission, and learning
+row is keyed by the tenant id. Use the operator-only merge CLI with the
+explicit source/target pair (the command never guesses a name mapping):
+
+```sh
+pnpm --filter @deepseek-ai/dsh-auth-host run merge:schools -- \
+  --storage-root "$DSH_HOME/storages" \
+  --source gz_source \
+  --target gz_target \
+  --operator 'PHYSICSOS-OPEN:ops-admin'
+
+# Review the deterministic JSON plan and row counts first. Then repeat the
+# target in --confirm:
+pnpm --filter @deepseek-ai/dsh-auth-host run merge:schools -- \
+  --storage-root "$DSH_HOME/storages" \
+  --source gz_source \
+  --target gz_target \
+  --operator 'PHYSICSOS-OPEN:ops-admin' \
+  --confirm gz_target \
+  --apply
+```
+
+The dry-run writes nothing. Apply refuses a missing/different `--confirm`,
+the platform tenant as source, a missing/disabled target, a source already
+merged elsewhere, destination-key collisions, prefix mismatches, unknown
+source references, unknown storage tables, and a per-table row cap (default
+10,000; lower it with `--max-rows-per-table`). Stop the service before apply:
+the merge journal makes a crash resumable, but it is not a cross-process lock.
+The journal is written before the first row is moved. A crash leaves an
+`applying` journal; a later dry-run reports `resume-required`, and a later
+apply resumes idempotently. A completed merge reports `already-merged` and
+leaves one `school.merge` audit row with `operatorKey`, tenant pair, timestamp,
+per-table counts, and total rows.
+
+`admin_audit` history is intentionally not rewritten. `school_requests` that
+reference the source tenant are deliberately refused rather than guessing
+whether they are historical or actionable. The source school row remains as a
+disabled tombstone with `mergedInto`/`mergedAt`; registration resolves the
+surviving active target.
+
+After an apply, verify the invariant by rerunning the command without
+`--apply`; it must print `status: "already-merged"`. If inspecting the JSON
+backend directly, check each unit's tables for keys beginning with the source
+id plus `:` or `|` and confirm the source school row has
+`"status": "disabled"`.
+
 ## Invariant
 
 `auth-host-invariant` asserts every session row resolves to a live `(schoolId, username)` user key with a matching `userId`, and every user references an existing school — a violation means a write bypassed `AuthService`.

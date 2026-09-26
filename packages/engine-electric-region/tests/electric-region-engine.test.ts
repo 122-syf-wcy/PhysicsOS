@@ -157,7 +157,9 @@ describe('ElectricRegionEngine', () => {
     const scene = passingScene()
     const request = simRequest(scene)
     request.sceneRevision += 1
-    expect(() => electricRegionEngine.simulate(scene, request)).toThrow(/exact PhysicsScene revision/)
+    expect(() => electricRegionEngine.simulate(scene, request)).toThrow(
+      /exact PhysicsScene revision/,
+    )
   })
 
   it('resolves the model with correct geometry', () => {

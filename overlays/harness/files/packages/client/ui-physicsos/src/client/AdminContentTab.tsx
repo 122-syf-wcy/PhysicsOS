@@ -23,6 +23,7 @@ import clsx from 'clsx'
 
 import type { BankItemRow, PaperApi, SourcePaperRow } from './paper-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { GlassSelect } from './GlassSelect.tsx'
 import css from './AdminWorkspace.module.css'
 
 type BankStatus = 'pending' | 'verified' | 'rejected'
@@ -126,6 +127,44 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
     }
   }
 
+  /* Engine triage spends model tokens, so the button names its scope: with a
+     selection it checks those rows; without one it takes the first pending
+     page. The verdict lands as `engine-check:*` anomalies — refresh to watch
+     them arrive. */
+  const runTriage = async () => {
+    if (busy) return
+    setBusy(true)
+    setNote(undefined)
+    try {
+      const pendingSelected = (items ?? [])
+        .filter(item => selected.has(item.id) && item.status === 'pending')
+        .map(item => item.id)
+      const result = await api.triageBankItems(
+        pendingSelected.length > 0 ? { ids: pendingSelected } : { limit: 50 })
+      setNote(t('admin.content.triageStarted')
+        .replace('{n}', String(result.accepted)))
+      load()
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* The triage payoff: one click selects every visible row the blind solve
+     agreed with, so a batch verify reviews the engine-confirmed set first. */
+  const selectAgreed = () => {
+    setSelected(new Set(visible
+      .filter(item => item.status === 'pending'
+        && item.anomalies.some(a => a.startsWith('engine-check:agreed')))
+      .map(item => item.id)))
+  }
+
+  const agreedCount = useMemo(() => visible.filter(
+    item => item.status === 'pending'
+      && item.anomalies.some(a => a.startsWith('engine-check:agreed')),
+  ).length, [visible])
+
   const toggle = (id: string) => {
     setSelected((current) => {
       const next = new Set(current)
@@ -165,22 +204,40 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
       {error !== undefined && <p className={css.error}>{error}</p>}
 
       <div className={css.toolbar}>
-        <select className={css.select} value={status}
-          onChange={(event) => { setStatus(event.target.value as BankStatus | '') }}>
-          <option value="">{t('admin.content.filter.all')}</option>
-          {STATUS_ORDER.map(key => (
-            <option key={key} value={key}>{t(`admin.content.status.${key}`)}</option>
-          ))}
-        </select>
-        <select className={css.select} value={level} onChange={(event) => { setLevel(event.target.value) }}>
-          <option value="">{t('admin.content.filter.level.all')}</option>
-          <option value="zhongkao">中考</option>
-          <option value="gaokao">高考</option>
-        </select>
-        <select className={css.select} value={kind} onChange={(event) => { setKind(event.target.value) }}>
-          <option value="">{t('admin.content.filter.kind.all')}</option>
-          {kinds.map(value => <option key={value} value={value}>{value}</option>)}
-        </select>
+        <GlassSelect
+          className={css.select}
+          value={status}
+          ariaLabel={t('admin.content.filter.all')}
+          testId="bank-status"
+          options={[
+            { value: '', label: t('admin.content.filter.all') },
+            ...STATUS_ORDER.map(key => ({ value: key, label: t(`admin.content.status.${key}`) })),
+          ]}
+          onChange={(next) => { setStatus(next as BankStatus | '') }}
+        />
+        <GlassSelect
+          className={css.select}
+          value={level}
+          ariaLabel={t('admin.content.filter.level.all')}
+          testId="bank-level"
+          options={[
+            { value: '', label: t('admin.content.filter.level.all') },
+            { value: 'zhongkao', label: '中考' },
+            { value: 'gaokao', label: '高考' },
+          ]}
+          onChange={setLevel}
+        />
+        <GlassSelect
+          className={css.select}
+          value={kind}
+          ariaLabel={t('admin.content.filter.kind.all')}
+          testId="bank-kind"
+          options={[
+            { value: '', label: t('admin.content.filter.kind.all') },
+            ...kinds.map(value => ({ value, label: value })),
+          ]}
+          onChange={setKind}
+        />
         <input className={css.input} placeholder={t('admin.content.search')}
           value={query} onChange={(event) => { setQuery(event.target.value) }} />
         <label className={css.checkbox}>
@@ -215,6 +272,14 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
         <button type="button" className={css.ghost} disabled={busy || selected.size === 0}
           onClick={() => { void runReview('pending') }}>
           {t('admin.content.requeue')}
+        </button>
+        <button type="button" className={css.ghost} disabled={busy || counts.pending === 0}
+          onClick={() => { void runTriage() }}>
+          {t('admin.content.triage')}
+        </button>
+        <button type="button" className={css.ghost} disabled={busy || agreedCount === 0}
+          onClick={selectAgreed}>
+          {t('admin.content.selectAgreed')}（{agreedCount}）
         </button>
       </div>
 

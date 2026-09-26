@@ -75,6 +75,11 @@ const baseIdOf = (id: string): string => {
   return colon < 0 ? id : id.slice(0, colon)
 }
 
+/**
+ * The verification presentation helper `isStructuralCheck`.
+ * @returns true when structural check holds.
+ * @param id - the target row id.
+ */
 export const isStructuralCheck = (id: string): boolean =>
   Object.prototype.hasOwnProperty.call(STRUCTURAL_CHECK_LABELS, baseIdOf(id))
 
@@ -82,6 +87,8 @@ export const isStructuralCheck = (id: string): boolean =>
  * Readable fallback for a check whose runtime gave it no label: the structural
  * map first, then the identifier with its underscores opened up, so a student
  * never meets `plate_hit_time_consistent` verbatim.
+ * @returns the formatted string.
+ * @param id - the target row id.
  */
 export const humanizeCheckId = (id: string): string => {
   const base = baseIdOf(id)
@@ -94,6 +101,9 @@ export const humanizeCheckId = (id: string): string => {
 const labelIsRawId = (check: VerificationCheckView): boolean =>
   check.label === check.id || check.label === baseIdOf(check.id)
 
+/**
+ * The presented verification shape used by the verification presentation module.
+ */
 export interface PresentedVerification {
   /** Physical-law checks, one row each, labelled for a student. */
   readonly laws: readonly VerificationCheckView[]
@@ -105,6 +115,11 @@ export interface PresentedVerification {
   }
 }
 
+/**
+ * The verification presentation helper `presentVerification`.
+ * @returns the presented verification.
+ * @param checks - the checks.
+ */
 export const presentVerification = (
   checks: readonly VerificationCheckView[],
 ): PresentedVerification => {
@@ -142,6 +157,9 @@ export const presentVerification = (
  */
 const VECTOR_VALUE = /^\(\s*[^,()]+\s*,\s*[^,()]+(?:\s*,\s*[^,()]+)?\s*\)$/
 
+/**
+ * The presented derived shape used by the verification presentation module.
+ */
 export interface PresentedDerived extends DerivedQuantityView {
   /** Vector components shown under the magnitude when both were published. */
   readonly components?: string
@@ -151,6 +169,8 @@ export interface PresentedDerived extends DerivedQuantityView {
  * Fold a vector row and a magnitude row that share a label into one row: the
  * magnitude is the headline number, the components sit beneath it. Rows that
  * are alone keep their form. Order follows the first appearance of each label.
+ * @returns the present derived list.
+ * @param rows - the rows.
  */
 export const presentDerived = (rows: readonly DerivedQuantityView[]): readonly PresentedDerived[] => {
   const out: PresentedDerived[] = []
@@ -194,6 +214,11 @@ const SUPERSCRIPT: Readonly<Record<string, string>> = {
   '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻', '+': '',
 }
 
+/**
+ * The verification presentation helper `typesetNumber`.
+ * @returns the formatted string.
+ * @param text - the text.
+ */
 export const typesetNumber = (text: string): string =>
   text.replace(/(-?\d+(?:\.\d+)?)e([+-]?\d+)/g, (_, mantissa: string, exponent: string) => {
     const exp = exponent.replace(/^\+/, '').split('').map(ch => SUPERSCRIPT[ch] ?? ch).join('')

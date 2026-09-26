@@ -99,6 +99,9 @@ interface Computed {
   readonly model: ResolvedEnergyModel
 }
 
+/**
+ * The energy workspace runtime — see the module doc for its role.
+ */
 export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new EnergyEngine()
@@ -547,5 +550,10 @@ const tableOf = (model: ResolvedEnergyModel): DataTableView => {
   }
 }
 
+/**
+ * The energy workspace runtime helper `createEnergyWorkspaceRuntime`.
+ * @returns the workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createEnergyWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
   new EnergyWorkspaceRuntime(scene)

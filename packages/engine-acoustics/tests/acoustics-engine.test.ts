@@ -29,10 +29,7 @@ const echoScene = (wallDistance = 340, soundSpeed = 340): PhysicsScene =>
   createEchoRangingScene({ wallDistance, soundSpeed })
 
 const simulated = (scene: PhysicsScene) =>
-  acousticsEngine.simulate(
-    scene,
-    createAcousticsSimulationRequest(scene, 'sim-echo', 'trace-echo'),
-  )
+  acousticsEngine.simulate(scene, createAcousticsSimulationRequest(scene, 'sim-echo', 'trace-echo'))
 
 describe('echo ranging timing', () => {
   it('times the textbook round trip: 340 m in 15 °C air is exactly 2 s', () => {
@@ -133,10 +130,7 @@ describe('acoustics engine', () => {
     const state = acousticsEngine.stateAt(scene, quantity(0.25, 's', 'time'))
     const bench = state.objects.find((object) => object.id === 'acoustic-bench-1')
     const pulseX = bench?.values?.['pulse_position_x']
-    expect(pulseX !== undefined && 'value' in pulseX ? pulseX.value : Number.NaN).toBeCloseTo(
-      85,
-      9,
-    )
+    expect(pulseX !== undefined && 'value' in pulseX ? pulseX.value : Number.NaN).toBeCloseTo(85, 9)
     expect(() => acousticsEngine.stateAt(scene, quantity(-1, 's', 'time'))).toThrow()
   })
 

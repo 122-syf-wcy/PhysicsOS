@@ -91,7 +91,11 @@ export interface OpticsAgentFacts {
   readonly screenLit?: boolean
 }
 
-/** Build the Agent's view of the world from one workspace frame. */
+/**
+ * Build the Agent's view of the world from one workspace frame
+ * @returns the physics agent context.
+ * @param snapshot - the runtime snapshot.
+ */
 export const physicsAgentContext = (snapshot: WorkspaceSnapshot): PhysicsAgentContext => {
   const chargeSigns = sourceChargeSignsOf(snapshot)
   const chargeSign = chargeSigns?.[0]
@@ -188,7 +192,11 @@ const sourceChargeSignsOf = (
   return signs.length === 0 ? undefined : signs
 }
 
-/** Ids present in the current frame; a highlight for anything else is a no-op. */
+/**
+ * Ids present in the current frame; a highlight for anything else is a no-op.
+ * @returns the drawn visual ids list.
+ * @param snapshot - the runtime snapshot.
+ */
 export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] => {
   const view = snapshot.view
   return [
@@ -276,6 +284,9 @@ export const drawnVisualIds = (snapshot: WorkspaceSnapshot): readonly string[] =
 
 /* -------------------------------------------------------------- tool calls -- */
 
+/**
+ * The highlight tool call shape used by the physics agent module.
+ */
 export interface HighlightToolCall {
   readonly tool: 'physics.ui.highlight'
   /** Visual id, or a semantic alias resolved through {@link resolveHighlightTarget}. */
@@ -284,6 +295,9 @@ export interface HighlightToolCall {
   readonly duration?: number
 }
 
+/**
+ * The scene parameter tool call shape used by the physics agent module.
+ */
 export interface SceneParameterToolCall {
   readonly tool: 'physics.scene.setParameter'
   /** Inspector parameter id, e.g. `angle`, `height`, `friction`, `B`. */
@@ -291,8 +305,14 @@ export interface SceneParameterToolCall {
   readonly value: number
 }
 
+/**
+ * The physics agent tool call shape used by the physics agent module.
+ */
 export type PhysicsAgentToolCall = HighlightToolCall | SceneParameterToolCall
 
+/**
+ * The tool outcome shape used by the physics agent module.
+ */
 export interface ToolOutcome {
   readonly ok: boolean
   /** Student-facing note; the Drawer shows this, never a stack trace. */
@@ -420,6 +440,9 @@ const HIGHLIGHT_ALIASES: Readonly<Record<string, readonly string[]>> = {
  * rather than as a silent highlight of nothing. A candidate ending in `*` matches
  * every drawn id that starts with the prefix (so `stream-*` catches every
  * `stream-source-1-0`, `stream-source-2-3`, … the bridge emits this frame).
+ * @returns the resolve highlight target list.
+ * @param drawn - the drawable ids this frame.
+ * @param targetId - the target id.
  */
 export const resolveHighlightTarget = (
   targetId: string,
@@ -534,7 +557,11 @@ const HIGHLIGHT_LABELS: Readonly<Record<string, string>> = {
   'sound-pulse': '声脉冲',
 }
 
-/** Student-facing name for a highlight target; shared by the drawer's buttons. */
+/**
+ * Student-facing name for a highlight target; shared by the drawer's buttons
+ * @returns the formatted string.
+ * @param id - the target row id.
+ */
 export const highlightLabel = (id: string): string => HIGHLIGHT_LABELS[id] ?? id
 
 /**
@@ -543,6 +570,9 @@ export const highlightLabel = (id: string): string => HIGHLIGHT_LABELS[id] ?? id
  * A highlight goes through `setHighlight`, which is pure view state; a parameter
  * change goes through `editParameter`, which is a revisioned SceneCommand. The
  * Agent is only ever the caller — the same gate the Inspector uses applies.
+ * @returns the tool outcome.
+ * @param call - the tool call.
+ * @param runtime - the runtime bridge.
  */
 export const runPhysicsAgentTool = (
   runtime: WorkspaceRuntime,

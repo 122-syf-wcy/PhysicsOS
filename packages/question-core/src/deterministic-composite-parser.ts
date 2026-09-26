@@ -17,10 +17,9 @@
  * parser that answered the question would be a second physics implementation, and
  * the two would drift.
  *
- * Cyclotron text is deliberately NOT claimed as a supported model: the composite
- * engine has no time-varying field, so a cyclotron IR would route to an engine
- * that cannot model it. It is detected only to report `UNSUPPORTED_MODEL` with an
- * honest reason instead of silently solving the wrong physics.
+ * Cyclotron text is claimed by its own model id and routes to the composite
+ * engine's synchronized time-varying-gap solver. Missing gap voltage / dee radius
+ * is rejected by semantic validation rather than approximated.
  */
 
 import { canonicalValue, isKnownUnit, parseQuantity } from '@physicsos/physics-units'
@@ -57,7 +56,8 @@ const COEXIST_SIGNAL =
 const IGNORE_GRAVITY_SIGNAL = /不计重力|忽略重力|重力不计|不考虑重力/i
 
 /** The apparatus outcome a selector question describes. */
-const UNDEFLECTED_SIGNAL = /不(?:发生)?偏转|沿(?:着)?直线|直线(?:通过|飞过|穿过|运动)|恰好(?:能)?通过|匀速(?:直线)?通过/
+const UNDEFLECTED_SIGNAL =
+  /不(?:发生)?偏转|沿(?:着)?直线|直线(?:通过|飞过|穿过|运动)|恰好(?:能)?通过|匀速(?:直线)?通过/
 
 /**
  * True when a question needs the composite engine.
@@ -68,7 +68,9 @@ const UNDEFLECTED_SIGNAL = /不(?:发生)?偏转|沿(?:着)?直线|直线(?:通�
  * absent is not composite.
  */
 export const isCompositeQuestionText = (text: string): boolean => {
-  if (SELECTOR_SIGNAL.test(text) || SPECTROMETER_SIGNAL.test(text)) return true
+  if (SELECTOR_SIGNAL.test(text) || SPECTROMETER_SIGNAL.test(text) || CYCLOTRON_SIGNAL.test(text)) {
+    return true
+  }
   const hasE = ELECTRIC_FIELD_SIGNAL.test(text)
   const hasB = MAGNETIC_FIELD_SIGNAL.test(text)
   const hasG = GRAVITY_SIGNAL.test(text) && !IGNORE_GRAVITY_SIGNAL.test(text)
@@ -138,12 +140,18 @@ const PATTERNS = {
   ],
   velocity: [
     new RegExp(String.raw`v0?\s*=\s*(${NUMBER})\s*(m/s|km/s|km/h)?`, 'i'),
-    new RegExp(String.raw`(?:初速度|速度|速率)(?:为|是|=|大小为)?\s*(${NUMBER})\s*(m/s|km/s|km/h)?`, 'i'),
+    new RegExp(
+      String.raw`(?:初速度|速度|速率)(?:为|是|=|大小为)?\s*(${NUMBER})\s*(m/s|km/s|km/h)?`,
+      'i',
+    ),
     new RegExp(String.raw`以\s*(${NUMBER})\s*(m/s|km/s|km/h)`, 'i'),
   ],
   electricField: [
     new RegExp(String.raw`E\s*=\s*(${NUMBER})\s*(V/m|N/C|kV/m)?`, 'i'),
-    new RegExp(String.raw`(?:电场强度|场强)(?:为|是|=|大小为)?\s*(${NUMBER})\s*(V/m|N/C|kV/m)?`, 'i'),
+    new RegExp(
+      String.raw`(?:电场强度|场强)(?:为|是|=|大小为)?\s*(${NUMBER})\s*(V/m|N/C|kV/m)?`,
+      'i',
+    ),
   ],
   magneticField: [
     new RegExp(String.raw`B\s*=\s*(${NUMBER})\s*(T|mT|Gs)?`, 'i'),
@@ -160,6 +168,17 @@ const PATTERNS = {
   time: [
     new RegExp(String.raw`(?:经过|运动|历时|用时|经)\s*(${NUMBER})\s*(s|ms|μs|µs|us|ns)`, 'i'),
     new RegExp(String.raw`t\s*=\s*(${NUMBER})\s*(s|ms|μs|µs|us|ns)?`, 'i'),
+  ],
+  gapVoltage: [
+    new RegExp(String.raw`(?:加速电压|缝隙电压|gap\s+voltage|U)\s*=\s*(${NUMBER})\s*(V|kV)?`, 'i'),
+    new RegExp(String.raw`加速电压(?:为|是)?\s*(${NUMBER})\s*(V|kV)`, 'i'),
+  ],
+  deeRadius: [
+    new RegExp(
+      String.raw`(?:D形盒半径|D\s*形盒半径|盒半径|dee\s+radius|R)\s*=\s*(${NUMBER})\s*(m|cm)?`,
+      'i',
+    ),
+    new RegExp(String.raw`(?:D形盒|D\s*形盒)(?:的)?半径(?:为|是)?\s*(${NUMBER})\s*(m|cm)?`, 'i'),
   ],
 } as const
 
@@ -230,7 +249,10 @@ function initialVelocityDirection(text: string): PlanarDirection {
 /* ----------------------------------------------------------------- targets -- */
 
 const TARGET_RULES: readonly { target: SemanticTarget; test: RegExp }[] = [
-  { target: 'selected_velocity', test: /选择(?:出)?的?速度|被?选(?:出|中)的?速度|通过的?粒子的?速度|速度大小.*选择|求.*选择速度|能?(?:够)?通过.*速度/ },
+  {
+    target: 'selected_velocity',
+    test: /选择(?:出)?的?速度|被?选(?:出|中)的?速度|通过的?粒子的?速度|速度大小.*选择|求.*选择速度|能?(?:够)?通过.*速度/,
+  },
   { target: 'mass_charge_ratio', test: /荷质比|比荷|q\s*\/\s*m|电荷质量比/ },
   { target: 'magnetic_force', test: /洛伦兹力|磁场力|安培力大小/ },
   { target: 'electric_force', test: /电场力/ },
@@ -238,7 +260,7 @@ const TARGET_RULES: readonly { target: SemanticTarget; test: RegExp }[] = [
   { target: 'radius', test: /半径/ },
   { target: 'period', test: /周期/ },
   { target: 'trajectory', test: /轨迹|运动路径|画出.*运动/ },
-  { target: 'final_velocity', test: /末速度|离开.*速度|出射速度/ },
+  { target: 'final_velocity', test: /末速度|最大速度|离开.*速度|出射速度/ },
   { target: 'velocity', test: /速度大小(?!.*选择)/ },
   { target: 'kinetic_energy', test: /动能(?!变化)/ },
   { target: 'kinetic_energy_change', test: /动能变化|动能增加|动能减少/ },
@@ -254,7 +276,8 @@ function detectTargets(text: string): SemanticTarget[] {
 
 /* ------------------------------------------------------------------ models -- */
 
-type CompositeModel = 'velocity_selector' | 'mass_spectrometer' | 'charged_particle_composite_field'
+type CompositeModel =
+  'velocity_selector' | 'mass_spectrometer' | 'charged_particle_composite_field' | 'cyclotron'
 
 /**
  * Which apparatus the text describes.
@@ -264,6 +287,7 @@ type CompositeModel = 'velocity_selector' | 'mass_spectrometer' | 'charged_parti
  * as a bare selector would drop the deflection region the question is about.
  */
 function detectModel(text: string): CompositeModel {
+  if (CYCLOTRON_SIGNAL.test(text)) return 'cyclotron'
   if (SPECTROMETER_SIGNAL.test(text)) return 'mass_spectrometer'
   if (SELECTOR_SIGNAL.test(text)) return 'velocity_selector'
   /* An unnamed apparatus that describes crossed fields AND an undeflected beam is
@@ -280,7 +304,11 @@ function detectModel(text: string): CompositeModel {
 
 /* --------------------------------------------------------------- assembling -- */
 
-const entitiesOf = (hasElectric: boolean, hasMagnetic: boolean, hasGravity: boolean): SemanticEntity[] => {
+const entitiesOf = (
+  hasElectric: boolean,
+  hasMagnetic: boolean,
+  hasGravity: boolean,
+): SemanticEntity[] => {
   const entities: SemanticEntity[] = ['particle']
   if (hasElectric) entities.push('electric_field')
   if (hasMagnetic) entities.push('magnetic_field')
@@ -288,15 +316,15 @@ const entitiesOf = (hasElectric: boolean, hasMagnetic: boolean, hasGravity: bool
   return entities
 }
 
-const relationsOf = (
-  model: CompositeModel,
-  text: string,
-): SemanticRelation[] => {
+const relationsOf = (model: CompositeModel, text: string): SemanticRelation[] => {
   const relations: SemanticRelation[] = ['charged_particle_in_composite_field']
   if (model === 'velocity_selector' || model === 'mass_spectrometer') {
     relations.push('velocity_selection', 'electric_magnetic_force_balance')
   }
   if (model === 'mass_spectrometer') relations.push('magnetic_deflection_after_selection')
+  if (model === 'cyclotron') {
+    relations.push('alternating_acceleration', 'particle_enters_region', 'particle_exits_region')
+  }
   if (/进入|射入|飞入|穿过|通过/.test(text)) relations.push('particle_enters_region')
   if (/离开|射出|飞出|穿出/.test(text)) relations.push('particle_exits_region')
   return [...new Set(relations)]
@@ -328,6 +356,20 @@ const TARGET_METADATA: Record<string, { label: string; symbol: string }> = {
   deflection: { label: '偏转距离', symbol: 'y' },
   time: { label: '时间', symbol: 't' },
   acceleration: { label: '加速度', symbol: 'a' },
+  reflection_angle: { label: '反射角', symbol: 'θr' },
+  refracted_angle: { label: '折射角', symbol: 'θt' },
+  critical_angle: { label: '临界角', symbol: 'θc' },
+  central_maximum_width: { label: '中央明纹宽度', symbol: 'w0' },
+  diffraction_angle: { label: '衍射角', symbol: 'θ' },
+  observed_frequency: { label: '观察频率', symbol: "f'" },
+  frequency_shift: { label: '频率变化', symbol: 'Δf' },
+  photon_energy: { label: '光子能量', symbol: 'E' },
+  threshold_frequency: { label: '截止频率', symbol: 'f0' },
+  threshold_wavelength: { label: '截止波长', symbol: 'λ0' },
+  max_kinetic_energy: { label: '最大初动能', symbol: 'Kmax' },
+  stopping_potential: { label: '遏止电压', symbol: 'Us' },
+  photocurrent: { label: '光电流', symbol: 'I' },
+  emits_photoelectrons: { label: '是否发生光电效应', symbol: '' },
 }
 
 const targetMetadata = (target: SemanticTarget): { label: string; symbol: string } =>
@@ -354,7 +396,14 @@ export const DeterministicCompositeQuestionParser: QuestionParserProvider = {
     const electricField = extractValueWithUnit(text, PATTERNS.electricField, 'V/m')
     if (electricField !== null) {
       knowns.push(
-        known('electric_field_strength', '电场强度', 'E', electricField.siValue, 'V/m', 'electric_field'),
+        known(
+          'electric_field_strength',
+          '电场强度',
+          'E',
+          electricField.siValue,
+          'V/m',
+          'electric_field',
+        ),
       )
     }
     const magneticField = extractValueWithUnit(text, PATTERNS.magneticField, 'T')
@@ -381,6 +430,16 @@ export const DeterministicCompositeQuestionParser: QuestionParserProvider = {
     }
     const time = extractValueWithUnit(text, PATTERNS.time, 's')
     if (time !== null) knowns.push(known('time', '时间', 't', time.siValue, 's', 'time'))
+    const gapVoltage = extractValueWithUnit(text, PATTERNS.gapVoltage, 'V')
+    if (gapVoltage !== null) {
+      knowns.push(
+        known('gap_voltage', '加速电压', 'U', gapVoltage.siValue, 'V', 'electric_potential'),
+      )
+    }
+    const deeRadius = extractValueWithUnit(text, PATTERNS.deeRadius, 'm')
+    if (deeRadius !== null) {
+      knowns.push(known('dee_radius', 'D形盒半径', 'R', deeRadius.siValue, 'm', 'length'))
+    }
 
     const model = detectModel(text)
     const targets = detectTargets(text)
@@ -390,13 +449,6 @@ export const DeterministicCompositeQuestionParser: QuestionParserProvider = {
     const eDirection = electricFieldDirection(text)
     const bOrientation = magneticOrientation(text)
 
-    if (isCyclotronQuestionText(text)) {
-      issues.push({
-        code: 'UNSUPPORTED_APPARATUS',
-        message: '回旋加速器需要随时间变化的加速电场，当前 Composite Engine 只模拟分段恒定场。',
-        severity: 'error',
-      })
-    }
     if (!isCompositeQuestionText(text)) {
       issues.push({
         code: 'NOT_COMPOSITE_QUESTION',
@@ -405,18 +457,24 @@ export const DeterministicCompositeQuestionParser: QuestionParserProvider = {
       })
     }
     if (targets.length === 0) {
-      issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+      issues.push({
+        code: 'MISSING_TARGET',
+        message: '未识别到需要求解的物理量。',
+        severity: 'error',
+      })
     }
     if (knowns.length < 3) {
-      issues.push({ code: 'PARTIAL_PARSE', message: '未能提取足够的复合场题已知条件。', severity: 'warning' })
+      issues.push({
+        code: 'PARTIAL_PARSE',
+        message: '未能提取足够的复合场题已知条件。',
+        severity: 'warning',
+      })
     }
 
     const ir: PhysicsSemanticIR = {
       schemaVersion: 'physics-ir/1.0',
       domain: 'electromagnetic',
-      /* A cyclotron keeps its own model id so the validator can reject it by name
-         rather than mis-solving it as a generic composite field. */
-      model: isCyclotronQuestionText(text) ? 'cyclotron' : model,
+      model,
       entities: entitiesOf(hasElectric, hasMagnetic, hasGravity),
       knowns,
       unknowns: targets.map((target) => ({ key: target, ...targetMetadata(target) })),
@@ -437,10 +495,14 @@ export const DeterministicCompositeQuestionParser: QuestionParserProvider = {
       ...(electricField === null ? {} : { electricFieldStrength: electricField.siValue }),
       ...(magneticField === null ? {} : { magneticFluxDensity: magneticField.siValue }),
       ...(bOrientation === undefined ? {} : { magneticFieldOrientation: bOrientation }),
+      ...(gapVoltage === null ? {} : { gapVoltage: gapVoltage.siValue }),
+      ...(deeRadius === null ? {} : { deeRadius: deeRadius.siValue }),
     }
 
     const confidence =
-      isCompositeQuestionText(text) && !isCyclotronQuestionText(text) && knowns.length >= 3 && targets.length > 0
+      isCompositeQuestionText(text) &&
+      knowns.length >= 3 &&
+      targets.length > 0
         ? 0.95
         : 0.2
     return { ir, issues, confidence }

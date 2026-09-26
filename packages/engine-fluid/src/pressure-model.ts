@@ -1,8 +1,4 @@
-import {
-  pressureBenchesOf,
-  type PhysicsScene,
-  type PressureBench,
-} from '@physicsos/physics-scene'
+import { pressureBenchesOf, type PhysicsScene, type PressureBench } from '@physicsos/physics-scene'
 import { canonicalValue, type Quantity } from '@physicsos/physics-units'
 import { PhysicsOSError } from '@physicsos/shared'
 
@@ -15,41 +11,41 @@ import { PhysicsOSError } from '@physicsos/shared'
  */
 export type ResolvedPressureModel =
   | {
-    readonly benchId: string
-    readonly type: 'solid'
-    /** Gravitational field strength (m/s²), > 0. */
-    readonly gravity: number
-    /** Perpendicular force on the contact face (N), ≥ 0. */
-    readonly force: number
-    /** Loaded contact area (m²), > 0. */
-    readonly area: number
-    /** The same force on another face (m²), > 0; absent when not authored. */
-    readonly comparisonArea: number | undefined
-  }
+      readonly benchId: string
+      readonly type: 'solid'
+      /** Gravitational field strength (m/s²), > 0. */
+      readonly gravity: number
+      /** Perpendicular force on the contact face (N), ≥ 0. */
+      readonly force: number
+      /** Loaded contact area (m²), > 0. */
+      readonly area: number
+      /** The same force on another face (m²), > 0; absent when not authored. */
+      readonly comparisonArea: number | undefined
+    }
   | {
-    readonly benchId: string
-    readonly type: 'liquid'
-    readonly gravity: number
-    /** Density of the probed liquid (kg/m³), > 0. */
-    readonly liquidDensity: number
-    /** Probe depth below the surface (m), ≥ 0. */
-    readonly depth: number
-    /** Second probe depth in the same liquid (m), ≥ 0; absent when not authored. */
-    readonly comparisonDepth: number | undefined
-    /** A second liquid probed at `depth` (kg/m³), > 0; absent when not authored. */
-    readonly comparisonLiquidDensity: number | undefined
-  }
+      readonly benchId: string
+      readonly type: 'liquid'
+      readonly gravity: number
+      /** Density of the probed liquid (kg/m³), > 0. */
+      readonly liquidDensity: number
+      /** Probe depth below the surface (m), ≥ 0. */
+      readonly depth: number
+      /** Second probe depth in the same liquid (m), ≥ 0; absent when not authored. */
+      readonly comparisonDepth: number | undefined
+      /** A second liquid probed at `depth` (kg/m³), > 0; absent when not authored. */
+      readonly comparisonLiquidDensity: number | undefined
+    }
   | {
-    readonly benchId: string
-    readonly type: 'atmospheric'
-    readonly gravity: number
-    /** Atmospheric pressure both instruments read (Pa), > 0. */
-    readonly atmosphericPressure: number
-    /** Density of the barometer fluid (kg/m³), > 0. */
-    readonly barometerFluidDensity: number
-    /** Radius of each Magdeburg hemisphere (m), > 0. */
-    readonly hemisphereRadius: number
-  }
+      readonly benchId: string
+      readonly type: 'atmospheric'
+      readonly gravity: number
+      /** Atmospheric pressure both instruments read (Pa), > 0. */
+      readonly atmosphericPressure: number
+      /** Density of the barometer fluid (kg/m³), > 0. */
+      readonly barometerFluidDensity: number
+      /** Radius of each Magdeburg hemisphere (m), > 0. */
+      readonly hemisphereRadius: number
+    }
 
 const modelError = (code: string, message: string): PhysicsOSError =>
   new PhysicsOSError(code, message)
@@ -70,7 +66,14 @@ const nonNegativeOrThrow = (value: number, code: string, message: string): numbe
  * value to default — a made-up area would produce a confident wrong reading.
  */
 const requiredOrThrow = (
-  value: Quantity<'force'> | Quantity<'area'> | Quantity<'density'> | Quantity<'length'> | Quantity<'acceleration'> | Quantity<'pressure'> | undefined,
+  value:
+    | Quantity<'force'>
+    | Quantity<'area'>
+    | Quantity<'density'>
+    | Quantity<'length'>
+    | Quantity<'acceleration'>
+    | Quantity<'pressure'>
+    | undefined,
   code: string,
   message: string,
 ): number => {
@@ -84,7 +87,11 @@ const optional = (
 
 const gravityOfOrThrow = (bench: PressureBench, code: string): number =>
   positiveOrThrow(
-    requiredOrThrow(bench.gravity, code, 'Pressure bench needs a positive gravitational field strength.'),
+    requiredOrThrow(
+      bench.gravity,
+      code,
+      'Pressure bench needs a positive gravitational field strength.',
+    ),
     code,
     'Pressure bench needs a positive gravitational field strength.',
   )
@@ -120,7 +127,11 @@ const resolveLiquid = (bench: PressureBench): ResolvedPressureModel => {
     'Liquid pressure bench needs a liquid density > 0.',
   )
   const depth = nonNegativeOrThrow(
-    requiredOrThrow(bench.depth, 'PRESSURE_DEPTH', 'Liquid pressure bench needs a probe depth ≥ 0.'),
+    requiredOrThrow(
+      bench.depth,
+      'PRESSURE_DEPTH',
+      'Liquid pressure bench needs a probe depth ≥ 0.',
+    ),
     'PRESSURE_DEPTH',
     'Liquid pressure bench needs a probe depth ≥ 0.',
   )

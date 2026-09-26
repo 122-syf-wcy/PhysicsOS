@@ -77,10 +77,11 @@ describe('AdminContentTab', () => {
     expect(stat('rejected')).toBe('1')         // 已退回
     expect(stat('anomalies')).toBe('1')        // 有异常
     /* Narrow the view to verified only; the collection's numbers stay put.
-       The status control is the FIRST select in the toolbar, and asking for it
-       by role alone would match all three. */
+       The status control is the FIRST combobox in the toolbar, and asking for
+       it by role alone would match all three. */
     const [statusSelect] = screen.getAllByRole('combobox')
-    fireEvent.change(statusSelect!, { target: { value: 'verified' } })
+    fireEvent.click(statusSelect!)
+    fireEvent.click(screen.getByRole('option', { name: '已核验' }))
     await waitFor(() => { expect(stat('verified')).toBe('1') })
     expect(stat('total')).toBe('4')
   })
@@ -97,7 +98,8 @@ describe('AdminContentTab', () => {
     expect(screen.queryByText('已核验的题干')).toBeNull()
 
     const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[0]!, { target: { value: 'verified' } })
+    fireEvent.click(selects[0]!)
+    fireEvent.click(screen.getByRole('option', { name: '已核验' }))
     expect(await screen.findByText('已核验的题干')).toBeTruthy()
     expect(screen.queryByText('待核验的题干')).toBeNull()
   })
@@ -175,11 +177,13 @@ describe('AdminContentTab', () => {
     await screen.findByText('第一题')
 
     for (const name of ['通过', '退回', '打回待审']) {
-      expect(screen.getByRole('button', { name }).disabled, name).toBe(true)
+      const button = screen.getByRole('button', { name }) as HTMLButtonElement
+      expect(button.disabled, name).toBe(true)
     }
     fireEvent.click(screen.getByLabelText(/全选当前筛选/))
     for (const name of ['通过', '退回', '打回待审']) {
-      expect(screen.getByRole('button', { name }).disabled, name).toBe(false)
+      const button = screen.getByRole('button', { name }) as HTMLButtonElement
+      expect(button.disabled, name).toBe(false)
     }
   })
 

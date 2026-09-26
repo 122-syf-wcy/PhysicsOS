@@ -1,13 +1,5 @@
-export {
-  isPhysicalDimension,
-  physicalDimensions,
-  type PhysicalDimension,
-} from './dimension.ts'
-export {
-  UNIT_DEFINITIONS,
-  type UnitDefinition,
-  type UnitKey,
-} from './unit-definition.ts'
+export { isPhysicalDimension, physicalDimensions, type PhysicalDimension } from './dimension.ts'
+export { UNIT_DEFINITIONS, type UnitDefinition, type UnitKey } from './unit-definition.ts'
 export {
   assertDimension,
   canonicalSymbolFor,

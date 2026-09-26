@@ -19,10 +19,7 @@ import {
 } from '@physicsos/physics-core'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
-import {
-  validateScene,
-  type PhysicsScene,
-} from '@physicsos/physics-scene'
+import { validateScene, type PhysicsScene } from '@physicsos/physics-scene'
 
 import { collisionModelOf, type CollisionModelId } from './collision-model.ts'
 import {
@@ -86,9 +83,11 @@ const buildVerification = (
     const e = body.material?.restitution === undefined ? 1 : body.material.restitution
     if (!Number.isFinite(e) || e < 0 || e > 1) restitutionValid = false
   }
-  checks.push(check('restitution_in_range', 'constraint', restitutionValid, {
-    message: 'Every body restitution is within [0, 1].',
-  }))
+  checks.push(
+    check('restitution_in_range', 'constraint', restitutionValid, {
+      message: 'Every body restitution is within [0, 1].',
+    }),
+  )
 
   /* Masses positive and radii finite — the solver divides by mass. */
   let bodiesValid = true
@@ -97,9 +96,11 @@ const buildVerification = (
     const radius = body.shape.type === 'circle' ? canonicalValue(body.shape.radius) : Number.NaN
     if (!(mass > 0) || !Number.isFinite(radius) || radius <= 0) bodiesValid = false
   }
-  checks.push(check('collision_body_valid', 'constraint', bodiesValid, {
-    message: 'Every collision body has positive mass and a finite positive radius.',
-  }))
+  checks.push(
+    check('collision_body_valid', 'constraint', bodiesValid, {
+      message: 'Every collision body has positive mass and a finite positive radius.',
+    }),
+  )
 
   /* Momentum conservation: internal impulses are equal and opposite, so with
      no external impulse the total momentum vector is an invariant. Gravity
@@ -108,9 +109,10 @@ const buildVerification = (
      check therefore covers only the free-flight window before the first wall
      contact. */
   const hasGravity = resolved.gravity.x !== 0 || resolved.gravity.y !== 0
-  const momentumStates = firstWallContactAt === null
-    ? states
-    : states.filter((state) => state.time.value < firstWallContactAt)
+  const momentumStates =
+    firstWallContactAt === null
+      ? states
+      : states.filter((state) => state.time.value < firstWallContactAt)
   if (!hasGravity && momentumStates.length > 1) {
     const first = momentumStates[0]
     let conserved = first !== undefined
@@ -141,12 +143,15 @@ const buildVerification = (
         conserved = false
       }
     }
-    checks.push(check('momentum_conservation', 'conservation', conserved, {
-      message: firstWallContactAt === null
-        ? '无外力时总动量守恒：内部冲量等大反向，Σp 恒定。'
-        : '首次碰壁前总动量守恒：内部冲量等大反向；墙壁反弹属外冲量，之后 Σp 可变。',
-      ...(p0 === undefined ? {} : { details: { p0 } }),
-    }))
+    checks.push(
+      check('momentum_conservation', 'conservation', conserved, {
+        message:
+          firstWallContactAt === null
+            ? '无外力时总动量守恒：内部冲量等大反向，Σp 恒定。'
+            : '首次碰壁前总动量守恒：内部冲量等大反向；墙壁反弹属外冲量，之后 Σp 可变。',
+        ...(p0 === undefined ? {} : { details: { p0 } }),
+      }),
+    )
   }
 
   /* Kinetic energy: only the fully elastic model conserves it. The perfect and
@@ -176,10 +181,12 @@ const buildVerification = (
         conserved = false
       }
     }
-    checks.push(check('energy_conservation', 'conservation', conserved, {
-      message: '完全弹性碰撞中动能守恒：Σ½mv² 恒定。',
-      details: { k0 },
-    }))
+    checks.push(
+      check('energy_conservation', 'conservation', conserved, {
+        message: '完全弹性碰撞中动能守恒：Σ½mv² 恒定。',
+        details: { k0 },
+      }),
+    )
   }
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
@@ -196,13 +203,19 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
       sceneVerification = validateScene(scene)
     } catch (error: unknown) {
       return invalidModelCondition(COLLISION_ENGINE_ID, [
-        { condition: 'scene_valid', message: error instanceof Error ? error.message : 'Scene validation failed.' },
+        {
+          condition: 'scene_valid',
+          message: error instanceof Error ? error.message : 'Scene validation failed.',
+        },
       ])
     }
     if (sceneVerification.status === 'failed') {
       return invalidModelCondition(
         COLLISION_ENGINE_ID,
-        sceneVerification.errors.map((issue) => ({ condition: issue.code, message: issue.message })),
+        sceneVerification.errors.map((issue) => ({
+          condition: issue.code,
+          message: issue.message,
+        })),
       )
     }
     if (scene.dimension !== '2d') {
@@ -213,7 +226,12 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
     }
     if (scene.bodies.length < 2) {
       return unsupportedModel(
-        [{ condition: 'at_least_two_bodies', message: 'A collision experiment needs at least two bodies.' }],
+        [
+          {
+            condition: 'at_least_two_bodies',
+            message: 'A collision experiment needs at least two bodies.',
+          },
+        ],
         COLLISION_ENGINE_ID,
       )
     }
@@ -231,7 +249,12 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
     )
     if (hasEmFields) {
       return unsupportedModel(
-        [{ condition: 'no_em_fields', message: 'Collision scenes cannot carry electric or magnetic fields.' }],
+        [
+          {
+            condition: 'no_em_fields',
+            message: 'Collision scenes cannot carry electric or magnetic fields.',
+          },
+        ],
         COLLISION_ENGINE_ID,
       )
     }
@@ -245,7 +268,10 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
       const mass = canonicalValue(body.mass)
       if (!(mass > 0)) {
         return invalidModelCondition(COLLISION_ENGINE_ID, [
-          { condition: 'mass_positive', message: `Body "${body.id}" mass must be > 0, got ${mass}.` },
+          {
+            condition: 'mass_positive',
+            message: `Body "${body.id}" mass must be > 0, got ${mass}.`,
+          },
         ])
       }
     }
@@ -274,7 +300,10 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
     return stateAtResolved(resolveCollisionScene(scene), canonicalValue(time))
   }
 
-  simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<CollisionPhysicsEvent> {
+  simulate(
+    scene: PhysicsScene,
+    request: SimulationRequest,
+  ): SimulationResult<CollisionPhysicsEvent> {
     if (request.sceneId !== scene.id || request.sceneRevision !== scene.revision) {
       throw new PhysicsOSError(
         'SIMULATION_SCENE_MISMATCH',
@@ -293,7 +322,9 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
     const model = collisionModelOf(scene) ?? 'elastic_collision'
     const resolved = resolveCollisionScene(scene)
     const startTime = request.options.startTime ? canonicalValue(request.options.startTime) : 0
-    const endTime = request.options.endTime ? canonicalValue(request.options.endTime) : DEFAULT_DURATION_SECONDS
+    const endTime = request.options.endTime
+      ? canonicalValue(request.options.endTime)
+      : DEFAULT_DURATION_SECONDS
     if (endTime < startTime) {
       throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'endTime must be >= startTime.')
     }
@@ -302,7 +333,13 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
     const states = simulation.states
     const events = simulation.events
 
-    const verification = buildVerification(scene, resolved, model, states, simulation.firstWallContactAt)
+    const verification = buildVerification(
+      scene,
+      resolved,
+      model,
+      states,
+      simulation.firstWallContactAt,
+    )
     const startedAt = new Date().toISOString()
 
     return {

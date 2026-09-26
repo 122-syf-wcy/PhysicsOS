@@ -1,0 +1,7 @@
+node_modules/
+src-tauri/gen/
+src-tauri/target/
+web-release/
+release.config.json
+src-tauri/resources/agent-sidecar/runtime/
+src-tauri/resources/agent-sidecar/sidecar.json

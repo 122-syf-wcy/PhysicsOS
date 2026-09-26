@@ -89,6 +89,9 @@ interface Computed {
   readonly model: ResolvedLightModel
 }
 
+/**
+ * The light workspace runtime — see the module doc for its role.
+ */
 export class LightWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new LightEngine()
@@ -618,5 +621,10 @@ const tableOf = (model: ResolvedLightModel): DataTableView => {
   }
 }
 
+/**
+ * The light workspace runtime helper `createLightWorkspaceRuntime`.
+ * @returns the workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createLightWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
   new LightWorkspaceRuntime(scene)

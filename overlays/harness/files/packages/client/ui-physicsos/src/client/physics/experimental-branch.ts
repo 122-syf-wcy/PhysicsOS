@@ -162,6 +162,11 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetWaveHarmonic',
 ])
 
+/**
+ * The experimental branch helper `isFactCommand`.
+ * @returns true when fact command holds.
+ * @param type - the part type.
+ */
 export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.has(type)
 
 /**
@@ -174,12 +179,17 @@ export const isFactCommand = (type: SceneCommandType): boolean => FACT_COMMANDS.
  * has a SceneCommand of its own — parallel-plate geometry (gap height, plate
  * length) is rewritten on the scene directly, and it must obey exactly the same
  * fork policy as a fact that does have a command.
+ * @returns true when requires experimental fork for fact holds.
+ * @param scene - the physics scene.
  */
 export const requiresExperimentalForkForFact = (scene: PhysicsScene): boolean =>
   scene.metadata.sourceQuestionId !== undefined && !isExperimentalBranch(scene)
 
 /**
  * Whether this command must fork before it is applied.
+ * @returns true when requires experimental fork holds.
+ * @param type - the part type.
+ * @param scene - the physics scene.
  */
 export const requiresExperimentalFork = (
   scene: PhysicsScene,
@@ -193,6 +203,11 @@ export interface BranchBadge {
   readonly parentRevision: number
 }
 
+/**
+ * The experimental branch helper `branchBadgeOf`.
+ * @returns the branch badge.
+ * @param scene - the physics scene.
+ */
 export const branchBadgeOf = (scene: PhysicsScene): BranchBadge | undefined => {
   /* `branchType` is the literal 'experimental' — only experimental branches may
      carry lineage at all — so presence of lineage IS the badge condition. */

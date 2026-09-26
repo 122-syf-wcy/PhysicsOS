@@ -102,9 +102,7 @@ const toElement = (spec: OpticalElementSpec): OpticalElement => {
       type: 'thin_lens',
       position: cm(spec.position),
       focalLength: cm(spec.focalLength),
-      ...(spec.apertureRadius === undefined
-        ? {}
-        : { apertureRadius: cm(spec.apertureRadius) }),
+      ...(spec.apertureRadius === undefined ? {} : { apertureRadius: cm(spec.apertureRadius) }),
     }
   }
   if (spec.type === 'curved_mirror') {
@@ -113,9 +111,7 @@ const toElement = (spec: OpticalElementSpec): OpticalElement => {
       type: 'curved_mirror',
       position: cm(spec.position),
       focalLength: cm(spec.focalLength),
-      ...(spec.apertureRadius === undefined
-        ? {}
-        : { apertureRadius: cm(spec.apertureRadius) }),
+      ...(spec.apertureRadius === undefined ? {} : { apertureRadius: cm(spec.apertureRadius) }),
     }
   }
   return {
@@ -207,8 +203,7 @@ export const createOpticalBenchScene = (input: OpticalBenchSceneInput): PhysicsS
  * Optical benches of a scene. Legacy-safe: scenes persisted before the optics
  * slice have no `opticalBenches` collection, so readers fall back to `[]`.
  */
-export const opticalBenchesOf = (scene: PhysicsScene): OpticalBench[] =>
-  scene.opticalBenches ?? []
+export const opticalBenchesOf = (scene: PhysicsScene): OpticalBench[] => scene.opticalBenches ?? []
 
 /** The single optical bench of an optics scene, if present. */
 export const opticalBenchOf = (scene: PhysicsScene): OpticalBench | undefined =>

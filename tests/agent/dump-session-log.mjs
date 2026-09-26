@@ -29,7 +29,9 @@ for (let index = 0; index < frameStarts.length; index += 1) {
   try {
     text += zstdDecompressSync(buffer.subarray(start, end)).toString('utf8')
   } catch (error) {
-    console.error(`frame ${index} failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.error(
+      `frame ${index} failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
   }
 }
 for (const line of text.split(/\r?\n/)) {

@@ -28,12 +28,7 @@ import { defaultCoordinateSystem } from '../scene-validation.ts'
 import type { Boundary, PhysicsScene, Region, UniformElectricField } from '../scene.ts'
 
 export type ParallelPlateObservableKey =
-  | 'electricField'
-  | 'force'
-  | 'velocity'
-  | 'acceleration'
-  | 'trajectory'
-  | 'energy'
+  'electricField' | 'force' | 'velocity' | 'acceleration' | 'trajectory' | 'energy'
 
 export interface ParallelPlateSceneInput {
   readonly sceneId?: string
@@ -199,12 +194,42 @@ export const createParallelPlateScene = (input: ParallelPlateSceneInput = {}): P
     leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
-      { id: observableId('electricField'), type: 'electric_field', targetId: fieldId, visible: visibility.electricField ?? true },
-      { id: observableId('force'), type: 'force', targetId: particleId, visible: visibility.force ?? true },
-      { id: observableId('velocity'), type: 'velocity', targetId: particleId, visible: visibility.velocity ?? true },
-      { id: observableId('acceleration'), type: 'acceleration', targetId: particleId, visible: visibility.acceleration ?? true },
-      { id: observableId('trajectory'), type: 'trajectory', targetId: particleId, visible: visibility.trajectory ?? true },
-      { id: observableId('energy'), type: 'energy', targetId: particleId, visible: visibility.energy ?? true },
+      {
+        id: observableId('electricField'),
+        type: 'electric_field',
+        targetId: fieldId,
+        visible: visibility.electricField ?? true,
+      },
+      {
+        id: observableId('force'),
+        type: 'force',
+        targetId: particleId,
+        visible: visibility.force ?? true,
+      },
+      {
+        id: observableId('velocity'),
+        type: 'velocity',
+        targetId: particleId,
+        visible: visibility.velocity ?? true,
+      },
+      {
+        id: observableId('acceleration'),
+        type: 'acceleration',
+        targetId: particleId,
+        visible: visibility.acceleration ?? true,
+      },
+      {
+        id: observableId('trajectory'),
+        type: 'trajectory',
+        targetId: particleId,
+        visible: visibility.trajectory ?? true,
+      },
+      {
+        id: observableId('energy'),
+        type: 'energy',
+        targetId: particleId,
+        visible: visibility.energy ?? true,
+      },
     ],
     annotations: [],
     metadata: {

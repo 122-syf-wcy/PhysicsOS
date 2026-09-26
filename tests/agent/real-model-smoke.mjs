@@ -11,7 +11,15 @@
  *   node tests/agent/real-model-smoke.mjs
  */
 import { spawn } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -34,7 +42,7 @@ function readRepoEnv(name) {
   try {
     const line = readFileSync(path.join(repoRoot, '.env'), 'utf8')
       .split(/\r?\n/)
-      .find(l => l.startsWith(`${name}=`))
+      .find((l) => l.startsWith(`${name}=`))
     return line?.slice(name.length + 1).trim()
   } catch {
     return undefined
@@ -42,7 +50,10 @@ function readRepoEnv(name) {
 }
 
 const apiKey = process.env.PHYSICSOS_MODEL_API_KEY ?? readRepoEnv('PHYSICSOS_MODEL_API_KEY')
-const baseURL = process.env.PHYSICSOS_MODEL_BASE_URL ?? readRepoEnv('PHYSICSOS_MODEL_BASE_URL') ?? 'https://ai.anna.tf/v1'
+const baseURL =
+  process.env.PHYSICSOS_MODEL_BASE_URL ??
+  readRepoEnv('PHYSICSOS_MODEL_BASE_URL') ??
+  'https://ai.anna.tf/v1'
 const modelId = process.env.PHYSICSOS_MODEL_ID ?? 'DeepSeek V4.1 Flash'
 
 if (!apiKey) {
@@ -86,10 +97,13 @@ function runHeadless() {
     const child = spawn(
       process.execPath,
       [
-        '--import', 'tsx/esm',
+        '--import',
+        'tsx/esm',
         'apps/cli/src/bin.ts',
-        '--profile', 'headless',
-        '--patch', patchFile,
+        '--profile',
+        'headless',
+        '--patch',
+        patchFile,
         '请用 PhysicsOS 工具解这道题并给出半径和周期：一个质子以 3.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.40 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 轨道半径 2. 运动周期',
       ],
       {
@@ -100,13 +114,20 @@ function runHeadless() {
     )
     let stdout = ''
     let stderr = ''
-    child.stdout.on('data', c => { stdout += c.toString() })
-    child.stderr.on('data', c => { stderr += c.toString() })
+    child.stdout.on('data', (c) => {
+      stdout += c.toString()
+    })
+    child.stderr.on('data', (c) => {
+      stderr += c.toString()
+    })
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       resolve({ stdout, stderr: stderr + '\n[timed out at 180s]', code: 124 })
     }, 180_000)
-    child.on('exit', code => { clearTimeout(timer); resolve({ stdout, stderr, code }) })
+    child.on('exit', (code) => {
+      clearTimeout(timer)
+      resolve({ stdout, stderr, code })
+    })
   })
 }
 
@@ -127,54 +148,105 @@ function readSessionEvents(home) {
   const buffer = readFileSync(file)
   const magic = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
   const starts = []
-  for (let offset = buffer.indexOf(magic); offset >= 0; offset = buffer.indexOf(magic, offset + 4)) starts.push(offset)
+  for (let offset = buffer.indexOf(magic); offset >= 0; offset = buffer.indexOf(magic, offset + 4))
+    starts.push(offset)
   let text = ''
   starts.forEach((start, index) => {
     const end = index + 1 < starts.length ? starts[index + 1] : buffer.length
     text += zstdDecompressSync(buffer.subarray(start, end)).toString('utf8')
   })
-  return text.split(/\r?\n/).filter(l => l.trim().length > 0).map(l => JSON.parse(l))
+  return text
+    .split(/\r?\n/)
+    .filter((l) => l.trim().length > 0)
+    .map((l) => JSON.parse(l))
 }
 
 try {
   const run = await runHeadless()
-  writeFileSync(path.join(dshHome, 'smoke-stdout.txt'), run.stdout + '\n===== STDERR =====\n' + run.stderr)
-  check('headless run exited 0', run.code === 0, `exit=${run.code}${run.code === 0 ? '' : `\n${(run.stderr || run.stdout).slice(-1200)}`}`)
+  writeFileSync(
+    path.join(dshHome, 'smoke-stdout.txt'),
+    run.stdout + '\n===== STDERR =====\n' + run.stderr,
+  )
+  check(
+    'headless run exited 0',
+    run.code === 0,
+    `exit=${run.code}${run.code === 0 ? '' : `\n${(run.stderr || run.stdout).slice(-1200)}`}`,
+  )
 
   const events = readSessionEvents(dshHome)
-  const header = events.find(e => e.type === 'request/header')
-  const advertised = (header?.data?.header?.tools ?? []).map(t => t.name).filter(n => n.startsWith('physics_')).sort()
-  check('physics tools advertised', advertised.includes('physics_solve_question'), advertised.join(', '))
+  const header = events.find((e) => e.type === 'request/header')
+  const advertised = (header?.data?.header?.tools ?? [])
+    .map((t) => t.name)
+    .filter((n) => n.startsWith('physics_'))
+    .sort()
+  check(
+    'physics tools advertised',
+    advertised.includes('physics_solve_question'),
+    advertised.join(', '),
+  )
   const route = header?.data?.header?.config
-  check('request went to the anna route', route?.provider === 'anna' && route?.model === modelId, `provider=${route?.provider} model=${route?.model}`)
+  check(
+    'request went to the anna route',
+    route?.provider === 'anna' && route?.model === modelId,
+    `provider=${route?.provider} model=${route?.model}`,
+  )
 
-  const calls = events.filter(e => e.type === 'tool/call')
-  check('model called physics_solve_question', calls.some(c => c.data.name === 'physics_solve_question'), calls.map(c => c.data.name).join(', '))
+  const calls = events.filter((e) => e.type === 'tool/call')
+  check(
+    'model called physics_solve_question',
+    calls.some((c) => c.data.name === 'physics_solve_question'),
+    calls.map((c) => c.data.name).join(', '),
+  )
 
   const resultTexts = events
-    .filter(e => e.type === 'tool/result')
-    .map(e => {
-      const block = e.data?.message?.content?.find(c => c.type === 'tool-result')
-      return (block?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('')
+    .filter((e) => e.type === 'tool/result')
+    .map((e) => {
+      const block = e.data?.message?.content?.find((c) => c.type === 'tool-result')
+      return (block?.content ?? [])
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text)
+        .join('')
     })
-  const solvedText = resultTexts.find(t => t.includes('已求解'))
-  check('engine solved the magnetic question', solvedText?.includes('charged_particle_uniform_magnetic_field') === true, solvedText?.split('\n')[0] ?? resultTexts[0]?.split('\n')[0])
-  check('engine answer carries the radius', solvedText?.includes('R = 7.83 cm') === true || solvedText?.includes('0.078') === true)
+  const solvedText = resultTexts.find((t) => t.includes('已求解'))
+  check(
+    'engine solved the magnetic question',
+    solvedText?.includes('charged_particle_uniform_magnetic_field') === true,
+    solvedText?.split('\n')[0] ?? resultTexts[0]?.split('\n')[0],
+  )
+  check(
+    'engine answer carries the radius',
+    solvedText?.includes('R = 7.83 cm') === true || solvedText?.includes('0.078') === true,
+  )
 
-  const sceneEvents = events.filter(e => e.type === 'physics/scene')
-  check('solved scene published to session log', sceneEvents.length >= 1 && sceneEvents[0]?.data?.cause === 'solved', `${sceneEvents.length} physics/scene event(s)`)
+  const sceneEvents = events.filter((e) => e.type === 'physics/scene')
+  check(
+    'solved scene published to session log',
+    sceneEvents.length >= 1 && sceneEvents[0]?.data?.cause === 'solved',
+    `${sceneEvents.length} physics/scene event(s)`,
+  )
 
-  const end = events.find(e => e.type === 'turn/end')
-  check('turn ended completed', end?.data?.reason?.kind === 'completed', JSON.stringify(end?.data?.reason))
+  const end = events.find((e) => e.type === 'turn/end')
+  check(
+    'turn ended completed',
+    end?.data?.reason?.kind === 'completed',
+    JSON.stringify(end?.data?.reason),
+  )
 
-  const assistantText = events.filter(e => e.type === 'message/complete' || e.type === 'assistant/message').map(e => JSON.stringify(e.data)).join('')
+  const assistantText = events
+    .filter((e) => e.type === 'message/complete' || e.type === 'assistant/message')
+    .map((e) => JSON.stringify(e.data))
+    .join('')
   check('assistant gave a final answer', run.stdout.trim().length > 0 || assistantText.length > 0)
 } catch (error) {
   check('smoke ran', false, error instanceof Error ? error.message : String(error))
 }
 
-const failed = results.filter(r => !r.ok)
-console.log(failed.length === 0 ? `\nALL CHECKS PASSED (${results.length})` : `\n${failed.length} CHECK(S) FAILED`)
+const failed = results.filter((r) => !r.ok)
+console.log(
+  failed.length === 0
+    ? `\nALL CHECKS PASSED (${results.length})`
+    : `\n${failed.length} CHECK(S) FAILED`,
+)
 console.log(`session home kept at ${dshHome}`)
 if (failed.length === 0) rmSync(dshHome, { recursive: true, force: true })
 process.exit(failed.length === 0 ? 0 : 1)

@@ -1,10 +1,7 @@
 {
-  "extends": "../../../../../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": false,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "outDir": "lib",
+    "outDir": "lib/types",
     "rootDir": "src",
     "types": ["node"]
   },

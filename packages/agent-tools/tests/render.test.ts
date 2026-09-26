@@ -91,7 +91,9 @@ describe('model-facing renders', () => {
     expect(rendered).toContain('答案：')
     expect(rendered).toContain('轨道半径')
     expect(rendered).toContain('校验：passed')
-    expect(rendered).toContain('场景已就绪：sceneId = question-golden-01-proton-basic（修订 0，引擎 engine-magnetic）')
+    expect(rendered).toContain(
+      '场景已就绪：sceneId = question-golden-01-proton-basic（修订 0，引擎 engine-magnetic）',
+    )
   })
 
   it('renders a rejected question with reasons and an explicit no-guessing instruction', () => {
@@ -106,6 +108,8 @@ describe('model-facing renders', () => {
   it('offers one renderer per tool name', () => {
     expect(Object.keys(PHYSICS_TOOL_RENDERERS).sort()).toEqual([...PHYSICS_TOOL_NAMES].sort())
     const listing = runtime.listExperiments()
-    expect(PHYSICS_TOOL_RENDERERS.physics_list_experiments(listing)).toBe(renderExperiments(listing))
+    expect(PHYSICS_TOOL_RENDERERS.physics_list_experiments(listing)).toBe(
+      renderExperiments(listing),
+    )
   })
 })

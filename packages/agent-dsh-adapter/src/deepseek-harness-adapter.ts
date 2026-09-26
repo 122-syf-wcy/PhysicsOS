@@ -43,10 +43,7 @@ export class DeepSeekHarnessAdapter implements PhysicsAgentRuntime {
     return Promise.reject(new UnimplementedError('DeepSeekHarnessAdapter.getSession'))
   }
 
-  forkSession(
-    _sessionId: SessionId,
-    _options?: ForkSessionOptions,
-  ): Promise<PhysicsAgentSession> {
+  forkSession(_sessionId: SessionId, _options?: ForkSessionOptions): Promise<PhysicsAgentSession> {
     return Promise.reject(new UnimplementedError('DeepSeekHarnessAdapter.forkSession'))
   }
 }
@@ -68,10 +65,7 @@ export class DeepSeekHarnessTransport implements AgentTransport {
     return Promise.reject(new UnimplementedError('DeepSeekHarnessTransport.createSession'))
   }
 
-  send(
-    _sessionId: SessionId,
-    _input: PhysicsAgentInput,
-  ): AsyncIterable<AgentClientEvent> {
+  send(_sessionId: SessionId, _input: PhysicsAgentInput): AsyncIterable<AgentClientEvent> {
     return unimplementedStream('DeepSeekHarnessTransport.send')
   }
 

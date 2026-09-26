@@ -137,15 +137,18 @@ describe('Wave Engine · travelling_wave', () => {
     expect(xs.size).toBe(1)
     expect([...xs][0]).toBeCloseTo(0.3, 12)
     expect(maxY).toBeLessThanOrEqual(0.05 + 1e-12)
-    const velocity = at(scene, 0.1).objects.find((entry) => entry.id === waveMarkerId('wave-bench-1'))
-      ?.velocity?.vector
+    const velocity = at(scene, 0.1).objects.find(
+      (entry) => entry.id === waveMarkerId('wave-bench-1'),
+    )?.velocity?.vector
     expect(velocity?.x).toBe(0)
   })
 
   it('6. gives the marked particle transverse speed 2πfA at the equilibrium crossing', () => {
     const scene = createTravellingWaveScene()
     /* At x = 0.3 m, y = A·sin(2π(0.75 − 5t)); y = 0 when 5t = 0.75 → t = 0.15 s. */
-    const marker = at(scene, 0.15).objects.find((entry) => entry.id === waveMarkerId('wave-bench-1'))
+    const marker = at(scene, 0.15).objects.find(
+      (entry) => entry.id === waveMarkerId('wave-bench-1'),
+    )
     expect(marker?.position?.vector.y).toBeCloseTo(0, 9)
     expect(Math.abs(marker?.velocity?.vector.y ?? 0)).toBeCloseTo(2 * Math.PI * 5 * 0.05, 9)
   })
@@ -200,9 +203,8 @@ describe('Wave Engine · wave_interference', () => {
     expect(scalar(result, 'interference_type')).toBe(-1)
     /* The summed displacement at P vanishes at every sampled time. */
     const displacements = result.states.map((state) => {
-      const value = state.objects.find((entry) => entry.id === wavePointId('wave-bench-1'))?.values?.[
-        'displacement'
-      ]
+      const value = state.objects.find((entry) => entry.id === wavePointId('wave-bench-1'))
+        ?.values?.['displacement']
       return value !== undefined && 'value' in value ? value.value : Number.NaN
     })
     expect(displacements.every((value) => Math.abs(value) < 1e-12)).toBe(true)
@@ -384,7 +386,10 @@ describe('Wave Engine · contract', () => {
     expect(scalar(after, 'period')).toBeCloseTo(scalar(before, 'period') / 2, 12)
 
     /* A new medium at the same source frequency: v = 4 m/s → λ = 0.4 m. */
-    execute(runtime, 'SetWaveSpeed', { benchId: 'wave-bench-1', speed: quantity(4, 'm/s', 'velocity') })
+    execute(runtime, 'SetWaveSpeed', {
+      benchId: 'wave-bench-1',
+      speed: quantity(4, 'm/s', 'velocity'),
+    })
     const faster = simulated(runtime.getScene())
     expect(scalar(faster, 'wave_speed')).toBeCloseTo(4, 12)
     expect(scalar(faster, 'wavelength')).toBeCloseTo(0.4, 12)
@@ -409,7 +414,9 @@ describe('Wave Engine · contract', () => {
     expect(profileSampleCountOf(resolveWaveModel(dense))).toBe(96)
     const end = at(dense, 0).objects.find((entry) => entry.id === waveProfileId('wave-bench-1', 96))
     expect(end?.position?.vector.x).toBeCloseTo(1.2, 12)
-    expect(at(dense, 0).objects.some((entry) => entry.id === waveProfileId('wave-bench-1', 97))).toBe(false)
+    expect(
+      at(dense, 0).objects.some((entry) => entry.id === waveProfileId('wave-bench-1', 97)),
+    ).toBe(false)
     /* A second-harmonic string is one wavelength long: the floor applies. */
     expect(profileSampleCountOf(resolveWaveModel(createStandingWaveScene()))).toBe(48)
     expect(simulated(dense).verification.status).toBe('passed')

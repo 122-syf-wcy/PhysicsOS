@@ -30,6 +30,12 @@ import type {
 /** Metres → centimetres, the unit the tank is drawn in. */
 const cm = (metres: number): number => metres * 100
 
+/**
+ * The fluid scene visuals helper `fmtFluidValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtFluidValue = (value: number, digits = 4): string => {
   if (!Number.isFinite(value)) return '—'
   if (Math.abs(value) < 1e-12) return '0'
@@ -40,6 +46,8 @@ export const fmtFluidValue = (value: number, digits = 4): string => {
  * Scene observable definition → canvas toggle key. The fluid factory stamps
  * `observable-fluid-forces` / `observable-fluid-displaced`, so the key is
  * carried by the id rather than inferred from the observable type.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const fluidObservableKeyOf = (
   definition: ObservableDefinition,
@@ -59,7 +67,11 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-/** Student-facing one-liner for the block's current stage of the descent. */
+/**
+ * Student-facing one-liner for the block's current stage of the descent
+ * @returns the formatted string.
+ * @param phase - the wave phase.
+ */
 export const immersionPhaseText = (phase: ImmersionState['phase']): string => {
   switch (phase) {
     case 'dry':
@@ -73,6 +85,9 @@ export const immersionPhaseText = (phase: ImmersionState['phase']): string => {
   }
 }
 
+/**
+ * The fluid visual input shape used by the fluid scene visuals module.
+ */
 export interface FluidVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedFluidModel
@@ -81,13 +96,19 @@ export interface FluidVisualInput {
   readonly time: number
 }
 
-/** Build one buoyancy frame from the verified immersion state. */
-export const fluidSceneVisual = ({
-  scene,
-  model,
-  immersion,
-  time,
-}: FluidVisualInput): SceneVisualModel => {
+/**
+ * Build one buoyancy frame from the verified immersion state.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const fluidSceneVisual = (input: FluidVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+    immersion,
+    time,
+  } = input
+
   const tank = fluidTankOf(scene)
   if (tank === undefined) return emptyVisualModel('fluid')
 

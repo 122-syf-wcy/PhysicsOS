@@ -27,6 +27,7 @@ import type {
   TimelineEvent,
   VerificationCheckView,
 } from './physics/scene-visual-model.ts'
+import { GlassSelect } from './GlassSelect.tsx'
 import css from './LabWorkspace.module.css'
 
 /* ------------------------------------------------------------- scene tree -- */
@@ -263,16 +264,13 @@ const SectionFields = ({
     {section.choices?.map(choice => (
       <div key={choice.id} className={css.field}>
         <span className={css.fieldLabel}>{choice.label}</span>
-        <select
+        <GlassSelect
           className={css.select}
           value={choice.value}
-          aria-label={choice.label}
-          onChange={(event) => { onChoice(choice.id, event.target.value) }}
-        >
-          {choice.options.map(option => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+          ariaLabel={choice.label}
+          options={choice.options.map(option => ({ value: option.value, label: option.label }))}
+          onChange={(next) => { onChoice(choice.id, next) }}
+        />
       </div>
     ))}
   </>

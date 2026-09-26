@@ -62,18 +62,18 @@ Renderer 不算力，Canvas 不算轨迹，Agent 不算 vₓ。
 
 ## 2. 分层职责与禁止事项
 
-| 层 | 拥有 | 禁止 |
-| --- | --- | --- |
-| `physics-core` | Quantity / QuantityVector / SimulationRequest / SimulationResult / VerificationCheck 等**跨域**契约 | 加入任何单一物理域的概念（点电荷、斜面、回旋半径） |
-| 域 core（`physics-electric-core` …） | 该域的纯契约与纯数学（E = kq/r²、F = qE） | 引用 Scene、Engine、Runtime、UI |
-| `physics-scene` | PhysicsScene 结构、Scene Command / PhysicsEvent、revision 闸门、scene 校验、场景工厂、实验分支 fork | 求解物理；调用 Engine |
-| `engine-*` | `canHandle` 前提判定、解析求解、`stateAt(t)`、derivedQuantities、离散事件 | 读 UI 状态；决定「显示什么」 |
-| `physics-verifier` | 具名物理检查（水平速度守恒、N = mg·cosθ …） | 修正引擎结果 |
-| `physics-observation` | 把已验证事实变成「值得展示的观测」，并受 scene observable 开关控制 | 计算新的物理量；决定颜色与坐标 |
-| Visual Bridge（UI 内） | Observation → `SceneVisualModel`（场景单位、y 向上）、取景包围盒、显示长度 | 调用 Engine；读 Scene 的物理字段去算数 |
-| `PhysicsCanvas` | 投影（唯一一次 y 翻转）、网格、坐标轴、刻度、比例尺、renderer 派发、hover/seek | 知道什么是抛体或洛伦兹力 |
-| Renderer | 用共享图元把 `SceneVisualModel` 画出来 | import 任何 engine；做物理算术 |
-| Agent Tool Layer | 读 context、调用工具 | 自己算物理；绕过 Scene Command |
+| 层                                   | 拥有                                                                                                | 禁止                                               |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `physics-core`                       | Quantity / QuantityVector / SimulationRequest / SimulationResult / VerificationCheck 等**跨域**契约 | 加入任何单一物理域的概念（点电荷、斜面、回旋半径） |
+| 域 core（`physics-electric-core` …） | 该域的纯契约与纯数学（E = kq/r²、F = qE）                                                           | 引用 Scene、Engine、Runtime、UI                    |
+| `physics-scene`                      | PhysicsScene 结构、Scene Command / PhysicsEvent、revision 闸门、scene 校验、场景工厂、实验分支 fork | 求解物理；调用 Engine                              |
+| `engine-*`                           | `canHandle` 前提判定、解析求解、`stateAt(t)`、derivedQuantities、离散事件                           | 读 UI 状态；决定「显示什么」                       |
+| `physics-verifier`                   | 具名物理检查（水平速度守恒、N = mg·cosθ …）                                                         | 修正引擎结果                                       |
+| `physics-observation`                | 把已验证事实变成「值得展示的观测」，并受 scene observable 开关控制                                  | 计算新的物理量；决定颜色与坐标                     |
+| Visual Bridge（UI 内）               | Observation → `SceneVisualModel`（场景单位、y 向上）、取景包围盒、显示长度                          | 调用 Engine；读 Scene 的物理字段去算数             |
+| `PhysicsCanvas`                      | 投影（唯一一次 y 翻转）、网格、坐标轴、刻度、比例尺、renderer 派发、hover/seek                      | 知道什么是抛体或洛伦兹力                           |
+| Renderer                             | 用共享图元把 `SceneVisualModel` 画出来                                                              | import 任何 engine；做物理算术                     |
+| Agent Tool Layer                     | 读 context、调用工具                                                                                | 自己算物理；绕过 Scene Command                     |
 
 ---
 
@@ -146,7 +146,7 @@ Body / Ground / Incline / Platform / Trajectory / Vector / Angle / Dimension /
 KeyPoint / Coordinate / Label / Measurement / Field / Particle / Guide。
 
 ```ts
-RENDERERS = { magnetic, mechanics, electric }   // domain → renderer
+RENDERERS = { magnetic, mechanics, electric } // domain → renderer
 ```
 
 新增域 = **registry 一个条目 + 一个 renderer 文件**。
@@ -166,9 +166,16 @@ UI 外壳只认一个接口：
 
 ```ts
 interface WorkspaceRuntime {
-  getSnapshot(); editParameter(id, value); setChoice(id, value)
-  setObservable(key, enabled); setRunning(r); setRate(r)
-  seek(t); step(dt); advance(wallSeconds); setHighlight(ids)
+  getSnapshot()
+  editParameter(id, value)
+  setChoice(id, value)
+  setObservable(key, enabled)
+  setRunning(r)
+  setRate(r)
+  seek(t)
+  step(dt)
+  advance(wallSeconds)
+  setHighlight(ids)
   restoreOrigin?()
 }
 ```
@@ -186,10 +193,10 @@ clock / **当前实际绘制的视觉 id** / branch），答案只引用这些�
 
 两类工具严格分离：
 
-| 工具 | 性质 | revision | PhysicsEvent |
-| --- | --- | --- | --- |
-| `physics.ui.*`（如 `highlight`） | 视图交互 | 不变 | 不产生 |
-| `physics.scene.*`（如 `setParameter`） | 域命令 | +1 | 产生 |
+| 工具                                   | 性质     | revision | PhysicsEvent |
+| -------------------------------------- | -------- | -------- | ------------ |
+| `physics.ui.*`（如 `highlight`）       | 视图交互 | 不变     | 不产生       |
+| `physics.scene.*`（如 `setParameter`） | 域命令   | +1       | 产生         |
 
 `physics.scene.*` 走 UI 完全相同的路径：`expectedRevision` → Scene Runtime →
 Engine → Verifier → Observation → UI。Agent 只是调用者，没有旁路。

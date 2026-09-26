@@ -21,19 +21,31 @@ const documentOf = (id: string, text: string): QuestionDocument =>
   ({
     id,
     content: { source: 'text', rawText: text, extractedText: text, status: 'EXTRACTED' },
-    metadata: { domain: 'wave', createdAt: '2026-09-02T00:00:00.000Z', updatedAt: '2026-09-02T00:00:00.000Z' },
+    metadata: {
+      domain: 'wave',
+      createdAt: '2026-09-02T00:00:00.000Z',
+      updatedAt: '2026-09-02T00:00:00.000Z',
+    },
   }) as unknown as QuestionDocument
 
 describe('DeterministicWaveQuestionParser', () => {
   it('recognizes mechanical-wave text and rejects optics, sound, magnetic and mechanics text', () => {
-    expect(isWaveQuestionText(waveQuestion('wave-01-speed-from-wavelength-frequency').text)).toBe(true)
+    expect(isWaveQuestionText(waveQuestion('wave-01-speed-from-wavelength-frequency').text)).toBe(
+      true,
+    )
     expect(isWaveQuestionText(waveQuestion('wave-03-interference-constructive').text)).toBe(true)
     expect(isWaveQuestionText(waveQuestion('wave-05-standing-third-harmonic').text)).toBe(true)
     /* Optics interference is light, not a rope. */
     expect(isWaveQuestionText('双缝干涉实验中光的波长为 600 nm，求条纹间距。')).toBe(false)
     /* The echo rig is the acoustics bench. */
     expect(isWaveQuestionText('声速 340 m/s，2 s 后听到回声，求峭壁距离。')).toBe(false)
-    for (const id of ['01-proton-basic', 'circ-01-series-current', 'mech-02-projectile-horizontal', 'ind-01-bar-motion-emf', 'opt-02-convex-lens-beyond-2f']) {
+    for (const id of [
+      '01-proton-basic',
+      'circ-01-series-current',
+      'mech-02-projectile-horizontal',
+      'ind-01-bar-motion-emf',
+      'opt-02-convex-lens-beyond-2f',
+    ]) {
       expect(isWaveQuestionText(waveQuestion(id).text), id).toBe(false)
     }
   })
@@ -74,7 +86,9 @@ describe('DeterministicWaveQuestionParser', () => {
     expect(candidate.ir.wavePathOne).toBeCloseTo(1.0, 12)
     expect(candidate.ir.wavePathTwo).toBeCloseTo(1.4, 12)
     expect(candidate.ir.waveAmplitude).toBeCloseTo(0.03, 12)
-    expect(candidate.ir.targets).toEqual(expect.arrayContaining(['interference_type', 'resultant_amplitude']))
+    expect(candidate.ir.targets).toEqual(
+      expect.arrayContaining(['interference_type', 'resultant_amplitude']),
+    )
     expect(candidate.ir.assumptions).toContain('coherent_in_phase_sources')
   })
 
@@ -103,7 +117,9 @@ describe('DeterministicWaveQuestionParser', () => {
 
 describe('Wave Question full pipeline', () => {
   it('solves v = λf and T = 1/f on the rope through Scene, Engine, Verifier and Observation', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('wave-01-speed-from-wavelength-frequency')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('wave-01-speed-from-wavelength-frequency')),
+    )
     expect(result.workflowState).toBe('READY')
     expect(result.ir?.domain).toBe('wave')
     expect(result.scene).not.toBeNull()
@@ -120,7 +136,9 @@ describe('Wave Question full pipeline', () => {
   })
 
   it('lets the scene contract resolve λ = v/f when the question states the speed', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('wave-02-wavelength-from-speed')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('wave-02-wavelength-from-speed')),
+    )
     expect(result.workflowState).toBe('READY')
     /* λ = 2 / 10 = 0.2 m; the bench stored λ, the engine reports it. */
     expect(waveBenchOf(result.scene!)?.wavelength?.value).toBeCloseTo(0.2, 12)
@@ -129,7 +147,9 @@ describe('Wave Question full pipeline', () => {
   })
 
   it('judges Δ = 2λ constructive with A_P = 2A = 6 cm from the engine verdict', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('wave-03-interference-constructive')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('wave-03-interference-constructive')),
+    )
     expect(result.workflowState).toBe('READY')
     expect(result.solution?.results['interference_type']?.value).toBe('振动加强')
     expect(result.solution?.results['resultant_amplitude']?.value).toBe('6.0000')
@@ -140,7 +160,9 @@ describe('Wave Question full pipeline', () => {
   })
 
   it('judges Δ = 1.5λ destructive with a zero resultant when only Δ is stated', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('wave-04-interference-destructive')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('wave-04-interference-destructive')),
+    )
     expect(result.workflowState).toBe('READY')
     const bench = waveBenchOf(result.scene!)
     /* The builder parks P a separation from S₁ and Δ farther from S₂. */
@@ -151,7 +173,9 @@ describe('Wave Question full pipeline', () => {
   })
 
   it('reads λ, f_n and the node count of the third harmonic', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('wave-05-standing-third-harmonic')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('wave-05-standing-third-harmonic')),
+    )
     expect(result.workflowState).toBe('READY')
     /* λ = 2L/n = 2/3 m, f = n·v/2L = 60 Hz, nodes = n + 1 = 4 */
     expect(result.solution?.results['wavelength']?.value).toBe('0.6667')
@@ -162,13 +186,17 @@ describe('Wave Question full pipeline', () => {
   })
 
   it('rejects a rope question without a frequency as INVALID_SEMANTICS', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('wave-06-missing-frequency')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('wave-06-missing-frequency')),
+    )
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
     expect(result.validation?.issues.some((issue) => issue.code === 'MISSING_FREQUENCY')).toBe(true)
   })
 
   it('still routes kinematics text to mechanics after the wave dispatch (no regression)', () => {
-    const result = processQuestion(createGoldenQuestionDocument(waveQuestion('mech-02-projectile-horizontal')))
+    const result = processQuestion(
+      createGoldenQuestionDocument(waveQuestion('mech-02-projectile-horizontal')),
+    )
     expect(result.workflowState).toBe('READY')
     expect(result.ir?.domain).toBe('mechanics')
   })
@@ -177,7 +205,10 @@ describe('Wave Question full pipeline', () => {
 describe('Wave semantic validation', () => {
   it('folds a stated period into the frequency the rig needs', () => {
     const result = processQuestion(
-      documentOf('test-period', '一列绳上的横波，波长 λ = 0.4 m，周期 T = 0.2 s，振幅 5 cm。求：波速'),
+      documentOf(
+        'test-period',
+        '一列绳上的横波，波长 λ = 0.4 m，周期 T = 0.2 s，振幅 5 cm。求：波速',
+      ),
     )
     expect(result.workflowState).toBe('READY')
     expect(waveBenchOf(result.scene!)?.frequency.value).toBeCloseTo(5, 9)
@@ -192,12 +223,17 @@ describe('Wave semantic validation', () => {
       ),
     )
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
-    expect(result.validation?.issues.some((issue) => issue.code === 'UNREACHABLE_PATH_DIFFERENCE')).toBe(true)
+    expect(
+      result.validation?.issues.some((issue) => issue.code === 'UNREACHABLE_PATH_DIFFERENCE'),
+    ).toBe(true)
   })
 
   it('requires the string length, the harmonic and a medium on a standing question', () => {
     const result = processQuestion(
-      documentOf('test-standing-missing', '一根弦两端固定，形成驻波，弦上波速 v = 40 m/s。求：振动频率'),
+      documentOf(
+        'test-standing-missing',
+        '一根弦两端固定，形成驻波，弦上波速 v = 40 m/s。求：振动频率',
+      ),
     )
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
     const codes = (result.validation?.issues ?? []).map((issue) => issue.code)

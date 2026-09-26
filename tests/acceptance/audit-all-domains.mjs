@@ -37,8 +37,8 @@ const BASE = external ?? own.base
 const browser = await chromium.launch()
 const page = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage()
 const problems = []
-page.on('pageerror', e => problems.push(`PAGEERR ${e.message.slice(0, 160)}`))
-page.on('console', m => {
+page.on('pageerror', (e) => problems.push(`PAGEERR ${e.message.slice(0, 160)}`))
+page.on('console', (m) => {
   if (m.type() !== 'error') return
   /* The boot-time guest `/auth/me` 401 is the documented answer, not a fault. */
   if (isExpectedGuest401(m.location()?.url ?? '', m.text())) return
@@ -51,12 +51,22 @@ const toPicker = async () => {
   const later = page.getByRole('button', { name: '稍后配置' })
   await later.waitFor({ state: 'visible', timeout: 6000 }).catch(() => {})
   if (await later.isVisible().catch(() => false)) await later.click()
-  await page.locator('[class*="mask"]').waitFor({ state: 'detached', timeout: 15_000 }).catch(() => {})
-  if (await page.locator('[data-physicsos-auth-gate]').isVisible().catch(() => false)) {
+  await page
+    .locator('[class*="mask"]')
+    .waitFor({ state: 'detached', timeout: 15_000 })
+    .catch(() => {})
+  if (
+    await page
+      .locator('[data-physicsos-auth-gate]')
+      .isVisible()
+      .catch(() => false)
+  ) {
     await registerStudent(page)
   }
   await page.getByRole('button', { name: '物理实验室' }).click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(900)
 }
 
@@ -64,9 +74,9 @@ await toPicker()
 
 const ids = await page
   .locator('[data-template-id]')
-  .evaluateAll(nodes => [...new Set(nodes.map(n => n.getAttribute('data-template-id')))])
+  .evaluateAll((nodes) => [...new Set(nodes.map((n) => n.getAttribute('data-template-id')))])
 console.log(`templates: ${ids.length}`)
-const list = ONLY === undefined ? ids : ids.filter(id => ONLY.includes(id))
+const list = ONLY === undefined ? ids : ids.filter((id) => ONLY.includes(id))
 console.log(`auditing: ${list.length}`)
 
 let opened = 0
@@ -85,10 +95,17 @@ for (const id of list) {
     await card.click({ timeout: 5000 })
     await page.waitForTimeout(900)
     await page.screenshot({ path: path.join(OUT, `${tag}-idle.png`) })
-    await page.getByRole('button', { name: '运行', exact: true }).first()
-      .click({ timeout: 3000 }).catch(() => {})
+    await page
+      .getByRole('button', { name: '运行', exact: true })
+      .first()
+      .click({ timeout: 3000 })
+      .catch(() => {})
     await page.waitForTimeout(2200)
-    await page.getByRole('button', { name: '暂停' }).first().click({ timeout: 2000 }).catch(() => {})
+    await page
+      .getByRole('button', { name: '暂停' })
+      .first()
+      .click({ timeout: 2000 })
+      .catch(() => {})
     await page.waitForTimeout(300)
     await page.screenshot({ path: path.join(OUT, `${tag}-run.png`) })
 
@@ -96,16 +113,28 @@ for (const id of list) {
     if (await insp.isVisible().catch(() => false)) {
       await insp.click()
       await page.waitForTimeout(300)
-      await page.getByRole('tab', { name: '读数' }).click().catch(() => {})
+      await page
+        .getByRole('tab', { name: '读数' })
+        .click()
+        .catch(() => {})
       await page.waitForTimeout(200)
       await page.screenshot({ path: path.join(OUT, `${tag}-inspector.png`) })
     }
 
-    await page.getByRole('button', { name: '后退' }).first().click().catch(async () => {
-      await page.goBack().catch(() => {})
-    })
+    await page
+      .getByRole('button', { name: '后退' })
+      .first()
+      .click()
+      .catch(async () => {
+        await page.goBack().catch(() => {})
+      })
     await page.waitForTimeout(700)
-    if (!(await page.locator('[data-physicsos-state="picker"]').isVisible().catch(() => false))) {
+    if (
+      !(await page
+        .locator('[data-physicsos-state="picker"]')
+        .isVisible()
+        .catch(() => false))
+    ) {
       await toPicker()
     }
     opened++

@@ -26,12 +26,6 @@ Playback uses `requestAnimationFrame`. A magnetic orbit is normalized to a visib
 - Question Space with 16 deterministic examples and Question → Lab
 - Desktop, narrow desktop, and mobile layouts
 
-## Known limitations
-
-- Image/PDF/OCR/VLM ingest is not connected.
-- Save, AI tutor, template library, and user-learning persistence are not complete business flows.
-- Electric, Circuit, Induction, Optics, Wave, teacher, and desktop products remain future work.
-
 ## Verification
 
 From the repository root:
@@ -43,6 +37,16 @@ pnpm test:web
 pnpm build:web
 ```
 
-## Model experience
+## Model Experience
 
-This package does not directly assemble or send provider requests. Model configuration and conversation behavior remain owned by Harness.
+None, as the package is a browser-side UI plugin layer that registers nothing model-facing.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
+
+## Known Limitations and Deferred Work
+
+- Image/PDF/OCR/VLM ingest is not connected.
+- Save, AI tutor, template library, and user-learning persistence are not complete business flows.
+- Electric, Circuit, Induction, Optics, Wave, teacher, and desktop products remain future work.

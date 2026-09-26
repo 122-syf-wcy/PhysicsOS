@@ -24,25 +24,33 @@ const flag = (name, fallback) => {
 const port = flag('--port', '8765')
 const toolName = flag('--tool', 'physics_solve_question')
 const argsFile = flag('--args-file')
-const toolArguments = argsFile === undefined
-  ? JSON.stringify({ templateId: 'magnetic-circular' })
-  : readFileSync(path.resolve(repoRoot, argsFile), 'utf8').trim()
+const toolArguments =
+  argsFile === undefined
+    ? JSON.stringify({ templateId: 'magnetic-circular' })
+    : readFileSync(path.resolve(repoRoot, argsFile), 'utf8').trim()
 const successText = flag('--success-text', '（模拟模型）已根据 PhysicsOS 引擎返回值作答。')
 
 const child = spawn(
   process.execPath,
   [
-    '--import', 'tsx',
+    '--import',
+    'tsx',
     'packages/test-support/llm-mock-server/src/bin.ts',
-    '--port', port,
-    '--api-key', 'mock-key',
+    '--port',
+    port,
+    '--api-key',
+    'mock-key',
     /* One tool call, then plain text for every later request: the agent's
        follow-up step AND the session-title request both draw from the script. */
-    '--sequence', 'tool_call_success,success',
+    '--sequence',
+    'tool_call_success,success',
     '--repeat-last',
-    '--tool-name', toolName,
-    '--tool-arguments', toolArguments,
-    '--success-text', successText,
+    '--tool-name',
+    toolName,
+    '--tool-arguments',
+    toolArguments,
+    '--success-text',
+    successText,
   ],
   { cwd: vendorRoot, stdio: 'inherit' },
 )

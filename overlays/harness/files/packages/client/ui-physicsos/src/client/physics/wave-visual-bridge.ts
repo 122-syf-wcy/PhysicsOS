@@ -41,6 +41,12 @@ const AMPLITUDE_FRACTION = 0.12
 /** Gains a student can read at a glance; the bridge picks the closest fit. */
 const GAIN_STEPS = [1, 2, 3, 4, 5, 8, 10, 15, 20, 30, 50, 100] as const
 
+/**
+ * The wave scene visuals helper `fmtWaveValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtWaveValue = (value: number, digits = 3): string => {
   if (!Number.isFinite(value)) return '—'
   if (Math.abs(value) < 1e-12) return '0'
@@ -51,8 +57,12 @@ export const fmtWaveValue = (value: number, digits = 3): string => {
  * Scene observable definition → canvas toggle key. The wave factory stamps
  * `observable-wave-waveform / -wave_speed / -superposition / -nodes`, keyed by
  * the id suffix.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
-export const waveObservableKeyOf = (definition: ObservableDefinition): ObservableKey | undefined => {
+export const waveObservableKeyOf = (
+  definition: ObservableDefinition,
+): ObservableKey | undefined => {
   const id = String(definition.id)
   if (id.endsWith('-waveform')) return 'waveform'
   if (id.endsWith('-wave_speed')) return 'waveSpeed'
@@ -74,6 +84,8 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
  * The vertical exaggeration for a rig: the smallest listed gain that lifts the
  * amplitude to about a tenth of the horizontal extent. Declared once so the
  * axis label, the readout and every drawn displacement agree.
+ * @returns the computed number.
+ * @param model - the model.
  */
 export const verticalGainOf = (model: ResolvedWaveModel): number => {
   const widthCm = horizontalExtentMetres(model) * CM_PER_METRE
@@ -89,11 +101,21 @@ export const verticalGainOf = (model: ResolvedWaveModel): number => {
 const horizontalExtentMetres = (model: ResolvedWaveModel): number => {
   if (model.subModel === 'travelling_wave') return model.ropeLength ?? model.wavelength * 3
   if (model.subModel === 'standing_wave') return model.stringLength ?? 1
+  if (model.subModel === 'longitudinal_wave') return model.mediumLength ?? model.wavelength * 3
+  if (model.subModel === 'wave_diffraction') return model.screenDistance ?? 2
+  if (model.subModel === 'wave_doppler') return 4
+  if (model.subModel === 'reflection_refraction') return 2
   return Math.max(model.sourceSeparation ?? 1, (model.pathOne ?? 0) + (model.pathTwo ?? 0)) || 1
 }
 
-/** Student-facing verdict for the interference readout. */
-export const interferenceVerdictText = (verdict: 'constructive' | 'destructive' | 'partial'): string =>
+/**
+ * Student-facing verdict for the interference readout.
+ * @returns the formatted string.
+ * @param verdict - the review verdict.
+ */
+export const interferenceVerdictText = (
+  verdict: 'constructive' | 'destructive' | 'partial',
+): string =>
   verdict === 'constructive' ? '振动加强' : verdict === 'destructive' ? '振动减弱' : '部分叠加'
 
 const verdictOf = (sign: number): 'constructive' | 'destructive' | 'partial' =>
@@ -139,6 +161,33 @@ const indexedPointsOf = (
 const profilePointsOf = (state: SimulationState, benchId: string, gain: number): ScenePoint[] =>
   indexedPointsOf(state, benchId, 'profile', gain)
 
+/** Longitudinal displacement graph: ξ is published as a value, not a y position. */
+const longitudinalPointsOf = (
+  state: SimulationState,
+  benchId: string,
+  gain: number,
+  mediumLength: number,
+): ScenePoint[] => {
+  const prefix = `${benchId}.profile.`
+  const entries: { index: number; displacement: number }[] = []
+  for (const object of state.objects) {
+    if (!object.id.startsWith(prefix)) continue
+    const index = Number(object.id.slice(prefix.length))
+    const displacement = object.values?.['displacement']
+    if (!Number.isFinite(index) || displacement === undefined || 'vector' in displacement) continue
+    entries.push({ index, displacement: displacement.value })
+  }
+  entries.sort((left, right) => left.index - right.index)
+  const lastIndex = entries.at(-1)?.index ?? 0
+  return entries.map(entry => ({
+    x: (cmOf(mediumLength) * entry.index) / Math.max(1, lastIndex),
+    y: cmOf(entry.displacement) * gain,
+  }))
+}
+
+/**
+ * The wave visual input shape used by the wave scene visuals module.
+ */
 export interface WaveVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedWaveModel
@@ -158,15 +207,19 @@ export interface WaveVisualInput {
  * their spreading crests, the r₁ / r₂ / d dimensions and the observation point
  * carrying the engine's verdict. Standing: the string, its envelope, nodes and
  * antinodes, an L dimension and a λ/2 dimension between adjacent nodes.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
  */
-export const waveSceneVisual = ({
-  scene,
-  model,
-  simulation,
-  state,
-  envelopeState,
-  time,
-}: WaveVisualInput): SceneVisualModel => {
+export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+    simulation,
+    state,
+    envelopeState,
+    time,
+  } = input
+
   const bench = waveBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('wave')
 
@@ -258,10 +311,187 @@ export const waveSceneVisual = ({
         readout: [
           '绳上的简谐横波',
           `A = ${fmtWaveValue(amplitudeCm)} cm · λ = ${fmtWaveValue(model.wavelength)} m · f = ${fmtWaveValue(model.frequency)} Hz`,
-          ...(showSpeed ? [`v = λf = ${fmtWaveValue(speed)} m/s · T = 1/f = ${fmtWaveValue(period)} s`] : []),
+          ...(showSpeed
+            ? [`v = λf = ${fmtWaveValue(speed)} m/s · T = 1/f = ${fmtWaveValue(period)} s`]
+            : []),
           `${timeText} · 纵向放大 ×${gain}（读数为真实值）`,
         ],
         scale: { label: '10 cm', length: 10 },
+      },
+      visible,
+    })
+  }
+
+  if (model.subModel === 'longitudinal_wave') {
+    const mediumCm = cmOf(model.mediumLength ?? model.wavelength * 3)
+    const displayedAmplitude = amplitudeCm * gain
+    const points = longitudinalPointsOf(
+      state,
+      model.benchId,
+      gain,
+      model.mediumLength ?? model.wavelength * 3,
+    )
+    const marker = state.objects.find(entry => entry.id === `${model.benchId}.marker`)
+    const displacement = marker?.values?.['displacement']
+    return emptyVisualModel('wave', {
+      extent: { width: mediumCm * 1.12, height: displayedAmplitude * 3.2 },
+      origin: { x: -mediumCm * 0.06, y: -displayedAmplitude * 1.6 },
+      grid: { minor: mediumCm / 20, major: mediumCm / 5 },
+      axes: { x: 'x / cm', y: `ξ / cm（×${gain}）` },
+      tickStep: mediumCm / 5,
+      waveProfile: {
+        id: model.benchId,
+        kind: 'rope',
+        points,
+        equilibrium: { from: { x: 0, y: 0 }, to: { x: mediumCm, y: 0 } },
+      },
+      overlay: {
+        readout: [
+          '纵波：质点振动方向与传播方向平行',
+          `A = ${fmtWaveValue(amplitudeCm)} cm · λ = ${fmtWaveValue(model.wavelength)} m · f = ${fmtWaveValue(model.frequency)} Hz`,
+          ...(showSpeed ? [`v = λf = ${fmtWaveValue(speed)} m/s`] : []),
+          ...(displacement !== undefined && !('vector' in displacement)
+            ? [`中点位移 ξ = ${fmtWaveValue(cmOf(displacement.value))} cm · 压缩区应变 ∂ξ/∂x < 0`]
+            : []),
+          `${timeText} · 纵向放大 ×${gain}`,
+        ],
+        scale: { label: '10 cm', length: 10 },
+      },
+      visible,
+    })
+  }
+
+  if (model.subModel === 'reflection_refraction') {
+    const incident = positionOf(state, `${model.benchId}.incident`)
+    const reflected = positionOf(state, `${model.benchId}.reflected`)
+    const refracted = positionOf(state, `${model.benchId}.refracted`)
+    const boundary = positionOf(state, `${model.benchId}.boundary`) ?? { x: 0, y: 0 }
+    const rayLength = 140
+    const line = (point: { x: number; y: number }, scaleSign = -1): ScenePoint[] => [
+      {
+        x: boundary.x * 100 + scaleSign * point.x * rayLength,
+        y: boundary.y * 100 + scaleSign * point.y * rayLength,
+      },
+      { x: boundary.x * 100, y: boundary.y * 100 },
+    ]
+    const trajectories = [
+      {
+        id: 'wave-incident-ray',
+        kind: 'history' as const,
+        points: line(incident ?? { x: -1, y: 1 }),
+      },
+      {
+        id: 'wave-reflected-ray',
+        kind: 'predicted' as const,
+        points: line(reflected ?? { x: -1, y: -1 }, 1).reverse(),
+      },
+      ...(refracted === undefined
+        ? []
+        : [
+          {
+            id: 'wave-refracted-ray',
+            kind: 'predicted' as const,
+            points: line(refracted, 1).reverse(),
+          },
+        ]),
+    ]
+    const reading =
+      model.refractedAngleRad === undefined
+        ? `θ₁ = ${fmtWaveValue(((model.incidentAngleRad ?? 0) * 180) / Math.PI)}° · 全反射`
+        : `θ₁ = ${fmtWaveValue(((model.incidentAngleRad ?? 0) * 180) / Math.PI)}° · θt = ${fmtWaveValue((model.refractedAngleRad * 180) / Math.PI)}°`
+    return emptyVisualModel('wave', {
+      extent: { width: 420, height: 300 },
+      origin: { x: -160, y: -150 },
+      grid: { minor: 20, major: 100 },
+      axes: { x: 'x / cm', y: 'y / cm' },
+      tickStep: 100,
+      trajectories,
+      labels: [
+        { id: 'wave-boundary-label', at: { x: 0, y: 0 }, text: '界面 · 频率不变', anchor: 'start' },
+      ],
+      overlay: {
+        readout: [
+          '波的反射与折射',
+          `v₁ = ${fmtWaveValue(model.incidentSpeed ?? 0)} m/s · v₂ = ${fmtWaveValue(model.transmittedWaveSpeed ?? 0)} m/s`,
+          reading,
+        ],
+        scale: { label: '50 cm', length: 50 },
+      },
+      visible,
+    })
+  }
+
+  if (model.subModel === 'wave_diffraction') {
+    const slit = positionOf(state, `${model.benchId}.slit`) ?? { x: 0, y: 0 }
+    const minimum = positionOf(state, `${model.benchId}.minimum.${model.diffractionOrder ?? 1}`)
+    const screenDistanceCm = cmOf(model.screenDistance ?? 0)
+    const centralWidthCm = cmOf(model.centralMaximumWidth ?? 0)
+    const points: ScenePoint[] = [
+      { x: cmOf(slit.x), y: cmOf(slit.y) },
+      ...(minimum === undefined ? [] : [{ x: cmOf(minimum.x), y: cmOf(minimum.y) }]),
+    ]
+    return emptyVisualModel('wave', {
+      extent: {
+        width: Math.max(screenDistanceCm * 1.3, 120),
+        height: Math.max(centralWidthCm * 2.5, 100),
+      },
+      origin: { x: -screenDistanceCm * 0.1, y: -Math.max(centralWidthCm * 1.25, 50) },
+      grid: { minor: 20, major: 100 },
+      axes: { x: 'x / cm', y: 'y / cm' },
+      tickStep: 100,
+      trajectories:
+        points.length < 2 ? [] : [{ id: 'wave-first-minimum', kind: 'predicted', points }],
+      labels: [
+        { id: 'wave-slit-label', at: { x: 0, y: 0 }, text: '单缝', anchor: 'end' },
+        { id: 'wave-screen-label', at: { x: screenDistanceCm, y: 0 }, text: '屏', anchor: 'start' },
+      ],
+      dimensions: [
+        {
+          id: 'wave-central-width',
+          from: { x: screenDistanceCm, y: -centralWidthCm / 2 },
+          to: { x: screenDistanceCm, y: centralWidthCm / 2 },
+          label: `w₀ = ${fmtWaveValue(model.centralMaximumWidth ?? 0)} m`,
+          side: 'right',
+        },
+      ],
+      overlay: {
+        readout: [
+          '单缝衍射',
+          `a = ${fmtWaveValue(model.slitWidth ?? 0)} m · λ = ${fmtWaveValue(model.wavelength)} m · L = ${fmtWaveValue(model.screenDistance ?? 0)} m`,
+          `中央明纹宽度 w₀ = 2Lλ/a = ${fmtWaveValue(model.centralMaximumWidth ?? 0)} m`,
+        ],
+        scale: { label: '50 cm', length: 50 },
+      },
+      visible,
+    })
+  }
+
+  if (model.subModel === 'wave_doppler') {
+    const source = positionOf(state, `${model.benchId}.source`) ?? { x: -1, y: 0 }
+    const observer = positionOf(state, `${model.benchId}.observer`) ?? { x: 1, y: 0 }
+    const observed = derivedScalar(simulation.derivedQuantities, 'observed_frequency').value
+    const shift = derivedScalar(simulation.derivedQuantities, 'frequency_shift').value
+    const s = { x: cmOf(source.x), y: 0 }
+    const o = { x: cmOf(observer.x), y: 0 }
+    return emptyVisualModel('wave', {
+      extent: { width: 360, height: 120 },
+      origin: { x: -180, y: -60 },
+      grid: { minor: 20, major: 100 },
+      axes: { x: 'x / cm', y: 'y / cm' },
+      tickStep: 100,
+      waveSources: [
+        { id: `${model.benchId}.source`, at: s, label: '运动波源 S' },
+        { id: `${model.benchId}.observer`, at: o, label: '观察者 O' },
+      ],
+      trajectories: [{ id: 'wave-doppler-axis', kind: 'predicted', points: [s, o] }],
+      overlay: {
+        readout: [
+          '多普勒效应',
+          `f = ${fmtWaveValue(model.frequency)} Hz · v = ${fmtWaveValue(model.waveSpeed)} m/s`,
+          `vs = ${fmtWaveValue(model.sourceSpeed ?? 0)} m/s（${model.sourceDirection === 'approaching' ? '接近' : '远离'}）`,
+          `观察频率 f′ = ${fmtWaveValue(observed)} Hz · Δf = ${fmtWaveValue(shift)} Hz`,
+        ],
+        scale: { label: '50 cm', length: 50 },
       },
       visible,
     })
@@ -282,7 +512,9 @@ export const waveSceneVisual = ({
     const pathDifference = derivedScalar(simulation.derivedQuantities, 'path_difference').value
     const ratio = derivedScalar(simulation.derivedQuantities, 'path_difference_ratio').value
     const resultant = derivedScalar(simulation.derivedQuantities, 'resultant_amplitude').value
-    const verdict = verdictOf(derivedScalar(simulation.derivedQuantities, 'interference_type').value)
+    const verdict = verdictOf(
+      derivedScalar(simulation.derivedQuantities, 'interference_type').value,
+    )
     const displacement = scalarValueOf(state, `${model.benchId}.point`, 'displacement') ?? 0
 
     /* Crest circles must respect causality and the engine's own phase.
@@ -295,7 +527,9 @@ export const waveSceneVisual = ({
       Math.max(model.pathOne ?? 0, model.pathTwo ?? 0) + model.wavelength,
       speed * time,
     )
-    const crestRadius0 = ((speed * time - model.wavelength / 4) % model.wavelength + model.wavelength) % model.wavelength
+    const crestRadius0 =
+      (((speed * time - model.wavelength / 4) % model.wavelength) + model.wavelength) %
+      model.wavelength
     const fronts: WaveFrontVisual[] = []
     for (const [index, source] of [s1, s2].entries()) {
       for (let radius = crestRadius0; radius <= frontReach; radius += model.wavelength) {
@@ -309,8 +543,20 @@ export const waveSceneVisual = ({
     }
 
     const dimensions: DimensionVisual[] = [
-      { id: 'wave-path-one', from: s1, to: p, label: `r_1 = ${fmtWaveValue(model.pathOne ?? 0)} m`, side: 'left' },
-      { id: 'wave-path-two', from: s2, to: p, label: `r_2 = ${fmtWaveValue(model.pathTwo ?? 0)} m`, side: 'right' },
+      {
+        id: 'wave-path-one',
+        from: s1,
+        to: p,
+        label: `r_1 = ${fmtWaveValue(model.pathOne ?? 0)} m`,
+        side: 'left',
+      },
+      {
+        id: 'wave-path-two',
+        from: s2,
+        to: p,
+        label: `r_2 = ${fmtWaveValue(model.pathTwo ?? 0)} m`,
+        side: 'right',
+      },
       {
         id: 'wave-source-separation',
         from: { x: s1.x, y: -separationCm * 0.16 },

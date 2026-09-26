@@ -23,6 +23,10 @@ const school = z.object({
   /** 区县 label when the roster source carries one. */
   county: z.string().optional(),
   status: z.enum(['active', 'disabled']),
+  /** Set when this tenant was merged into a surviving tenant. */
+  mergedInto: z.string().min(1).optional(),
+  /** When {@link mergedInto} was recorded. */
+  mergedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -138,6 +142,24 @@ const auditEvent = z.object({
   createdAt: z.string(),
 })
 
+/**
+ * Durable two-phase marker for an operator-driven school merge. `applying`
+ * means a crash or failed commit may have moved a prefix of the plan; the next
+ * invocation must either resume it or finalize it, never assume it never ran.
+ */
+const schoolMerge = z.object({
+  id: z.string().min(1),
+  sourceSchoolId: z.string().min(1),
+  targetSchoolId: z.string().min(1),
+  operatorKey: z.string().min(1),
+  status: z.enum(['applying', 'completed']),
+  planHash: z.string().min(1),
+  counts: z.record(z.string(), z.number().int().min(0)),
+  totalRows: z.number().int().min(0),
+  startedAt: z.string(),
+  updatedAt: z.string(),
+})
+
 /* 学习上报的聚合计数 —— 一行就是一个小格子:(学校, 日期, 知识点) → 对/错次数。
 
    有意为之的四列,别的一律没有:没有 userId、没有账号、没有答题原文、没有自
@@ -239,6 +261,8 @@ export type PasswordResetToken = z.infer<typeof passwordResetToken>
 export type SchoolRequestRecord = z.infer<typeof schoolRequest>
 /** One attributed admin/write audit row. */
 export type AuditEvent = z.infer<typeof auditEvent>
+/** One durable school-merge journal row. */
+export type SchoolMergeRecord = z.infer<typeof schoolMerge>
 /** One aggregated learning cell, keyed `schoolId|date|knowledgeId` — no account fields by design. */
 export type LearningCount = z.infer<typeof learningCount>
 /** One registered device row, keyed `userKey|deviceId`. */
@@ -439,6 +463,7 @@ export const authDomain = defineDomain({
     password_reset_tokens: domainTable<string, PasswordResetToken>(passwordResetToken),
     school_requests: domainTable<string, SchoolRequestRecord>(schoolRequest),
     admin_audit: domainTable<string, AuditEvent>(auditEvent),
+    school_merges: domainTable<string, SchoolMergeRecord>(schoolMerge),
     learning_counts: domainTable<string, LearningCount>(learningCount),
     devices: domainTable<string, DeviceRecord>(device),
     device_revocations: domainTable<string, DeviceRevocation>(deviceRevocation),

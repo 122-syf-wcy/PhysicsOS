@@ -1,9 +1,7 @@
 import type { PhysicsScene } from '@physicsos/physics-scene'
 
 export type CollisionModelId =
-  | 'elastic_collision'
-  | 'inelastic_collision'
-  | 'perfectly_inelastic_collision'
+  'elastic_collision' | 'inelastic_collision' | 'perfectly_inelastic_collision'
 
 /**
  * The collision model a scene's bodies collectively define.

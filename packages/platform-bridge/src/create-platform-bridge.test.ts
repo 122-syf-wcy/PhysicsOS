@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UnimplementedError } from '@physicsos/shared'
+import { PhysicsOSError, UnimplementedError } from '@physicsos/shared'
 import { createPlatformBridge } from './create-platform-bridge.ts'
 
 describe('createPlatformBridge', () => {
@@ -9,7 +9,7 @@ describe('createPlatformBridge', () => {
   })
 
   it('reserves Tauri as an explicit unimplemented boundary', () => {
-    expect(() => createPlatformBridge('tauri')).toThrow(UnimplementedError)
+    expect(() => createPlatformBridge('tauri')).toThrow(PhysicsOSError)
   })
 })
 
@@ -20,7 +20,9 @@ describe('桌面版 seam 契约', () => {
     const map = new Map<string, string>()
     return {
       getItem: (key: string) => map.get(key) ?? null,
-      setItem: (key: string, value: string) => { map.set(key, value) },
+      setItem: (key: string, value: string) => {
+        map.set(key, value)
+      },
     }
   })()
   ;(globalThis as { localStorage?: unknown }).localStorage = fakeStorage
@@ -50,9 +52,9 @@ describe('桌面版 seam 契约', () => {
     await expect(bridge.storage?.dataDir()).rejects.toThrow(UnimplementedError)
   })
 
-  it('the Tauri bridge stays unimplemented until the shell lands', () => {
-    /* 契约已定,但**实现**还没有:第 3 期的壳要等签名证书。这条断言是防止
-       有人把「契约有了」误读成「桌面版能跑了」。 */
-    expect(() => createPlatformBridge('tauri')).toThrow(/not implemented/i)
+  it('the Tauri bridge fails closed outside a shell', () => {
+    /* 壳已经实现;在普通浏览器里没有注入 Tauri invoke,必须明确失败,
+       而不是退回一个看似可用、实际无法读设备或安装更新的空桥。 */
+    expect(() => createPlatformBridge('tauri')).toThrow(/Tauri native client is unavailable/i)
   })
 })

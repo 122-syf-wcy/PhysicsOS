@@ -111,7 +111,7 @@ qE 与 qv×B **同向**（都向上），选择器"筛掉所有粒子"。改为 
 - `deterministic-composite-parser.ts`：识别 速度选择器/质谱仪/荷质比/同位素/
   互相垂直/不偏转/直线通过/回旋加速器 等信号；抽取 q/m/v/E/B/r 与方向词；
   产出 IR `domain: composite`，`model: velocity_selector | mass_spectrometer |
-  charged_particle_composite_field`。缺磁场方向 → AMBIGUOUS（comp-08），
+charged_particle_composite_field`。缺磁场方向 → AMBIGUOUS（comp-08），
   回旋加速器 → 显式 UNSUPPORTED（comp-21），不硬解。
 - `composite-scene-builder.ts`：IR → 复用同一批 Scene Factory，写
   `sourceQuestionId`。
@@ -122,7 +122,7 @@ qE 与 qv×B **同向**（都向上），选择器"筛掉所有粒子"。改为 
   读取已验证的引擎结果 → Verifier 检查。公式（v = E/B、r = mv/(|q|B)、
   T = 2πm/(|q|B)）作为推理展示，数值 Fact 全部来自 Runtime 派生量。
 - **在物理世界中打开**：composite 题与力学/电场题走同一 `openSurface('lab',
-  sceneRef)`，Lab 由 `domainOfScene` 自动路由到 CompositeWorkspaceRuntime。
+sceneRef)`，Lab 由 `domainOfScene` 自动路由到 CompositeWorkspaceRuntime。
 
 ## 7. Workspace Runtime / Renderer / Observation
 
@@ -174,18 +174,18 @@ Composite 题目场景在 Lab 中改 E / B / v₀ 时先 fork（`forkExperimenta
 
 ## 11. 浏览器验收（composite-acceptance.mjs，最终构建全绿）
 
-| CASE | 内容 | 结果 |
-|---|---|---|
-| A | 物理实验室 → 实验库（非自动磁场）；≥16 模板；5 个分类 Tab；快速开始；搜索过滤；回旋加速器灰置 | PASS |
-| B | 创建速度选择器：composite verified；区域/粒子/轨迹/E/F_E/F_B/v 全部绘制；选择条件 PASS | PASS |
-| C | v₀ → 1.5×10⁵：revision +1、轨迹改变、选择条件 FAIL、物理仍 verified | PASS |
-| D | v₀ → 1.0×10⁵：选择条件恢复 PASS、直线轨迹恢复 | PASS |
-| E | 质谱仪：3 场区绘制、场景树三区命名、回旋半径来自引擎 | PASS |
-| F | Timeline：≥4 个进入/离开 marker、指数时间格式、点击 seek、事件列表 | PASS |
-| G | 速度选择器题 → READY → 结构化步骤 → 在物理世界中打开 → 实验分支 fork/恢复 | PASS |
-| H | 质谱仪题 → READY → Lab 复用同一场景、3 区完整 | PASS |
-| I | Agent「为什么不偏转」：引用速度选择条件 + Runtime 数值、≥2 力同屏高亮、revision 不变 | PASS |
-| + | E+B+g：mg 与 F_net 绘制、verified；1440/1920 响应式（canvas ≥55%、无放大） | PASS |
+| CASE | 内容                                                                                                               | 结果 |
+| ---- | ------------------------------------------------------------------------------------------------------------------ | ---- |
+| A    | 物理实验室 → 实验库（非自动磁场）；≥16 模板；5 个分类 Tab；快速开始；搜索过滤；回旋加速器灰置                      | PASS |
+| B    | 创建速度选择器：composite verified；区域/粒子/轨迹/E/F_E/F_B/v 全部绘制；选择条件 PASS                             | PASS |
+| C    | v₀ → 1.5×10⁵：revision +1、轨迹改变、选择条件 FAIL、物理仍 verified                                                | PASS |
+| D    | v₀ → 1.0×10⁵：选择条件恢复 PASS、直线轨迹恢复                                                                      | PASS |
+| E    | 质谱仪：3 场区绘制、场景树三区命名、回旋半径来自引擎                                                               | PASS |
+| F    | Timeline：≥4 个进入/离开 marker、指数时间格式、点击 seek、事件列表                                                 | PASS |
+| G    | 速度选择器题 → READY → 结构化步骤 → 在物理世界中打开 → 实验分支 fork/恢复                                          | PASS |
+| H    | 质谱仪题 → READY → Lab 复用同一场景、3 区完整                                                                      | PASS |
+| I    | Agent「为什么不偏转」：引用速度选择条件 + Runtime 数值、≥2 力同屏高亮、revision 不变                               | PASS |
+| +    | E+B+g：mg 与 F_net 绘制、verified；1440/1920 响应式（canvas ≥55%、无放大）                                         | PASS |
 | 门禁 | consoleErrors / pageErrors / unhandledRejections / failedRequests / errorResponses 全 0；整页无滚动条；Canvas 可见 | PASS |
 
 回归（同一最终构建连跑）：`mechanics-acceptance.mjs`（含磁场回归，改为经
@@ -204,38 +204,38 @@ Composite 题目场景在 Lab 中改 E / B / v₀ 时先 fork（`forkExperimenta
 
 `docs/reports/screenshots/`（全部在最终构建重拍）：
 
-| 截图 | 人工检查结论 |
-|---|---|
-| `experiment-library-1600x900.png` | 16 模板 + 灰置回旋加速器；图标/领域标签/快速开始/Tabs 清晰；无滚动条 |
-| `velocity-selector-lab-1600x900.png` | F_E↑ 与 F_B↓ 等大反向、readout 两力同为 3.20e-15 N、合力 0、直线轨迹、区域可辨、比例尺 20 cm |
-| `velocity-selector-lab-1440x900 / 1920x1080` | 三视口布局一致、矢量与标签不遮挡、canvas 未被放大 |
-| `mass-spectrometer-lab-1600x900.png` | 三区可辨、选择器内直线、偏转区内清晰圆弧（r≈0.52 m 与 1.2 m 区域同量级） |
-| `composite-timeline-1600x900.png` | 事件面板四行进入/离开 + 指数时刻；marker 点击后播放头 5.00e-7 s |
-| `composite-ebg-lab-1600x900.png` | mg 与 F_net 可见；readout \|F_net\| = 1.64e-26 N 恰等于 mg（E/B 力抵消） |
-| `velocity-selector-question-1600x900.png` | 已知量/求解目标/物理关系/五步解析/验证 4/4；数值与 Lab 一致 |
-| `mass-spectrometer-question-1600x900.png` | 轨道半径 0.5219 m 来自引擎；21 道 composite 题在列表可见 |
-| `composite-agent-1600x900.png` | 依据 chips + 中文高亮操作按钮 + 「合力未绘制」诚实拒绝提示 |
+| 截图                                         | 人工检查结论                                                                                 |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `experiment-library-1600x900.png`            | 16 模板 + 灰置回旋加速器；图标/领域标签/快速开始/Tabs 清晰；无滚动条                         |
+| `velocity-selector-lab-1600x900.png`         | F_E↑ 与 F_B↓ 等大反向、readout 两力同为 3.20e-15 N、合力 0、直线轨迹、区域可辨、比例尺 20 cm |
+| `velocity-selector-lab-1440x900 / 1920x1080` | 三视口布局一致、矢量与标签不遮挡、canvas 未被放大                                            |
+| `mass-spectrometer-lab-1600x900.png`         | 三区可辨、选择器内直线、偏转区内清晰圆弧（r≈0.52 m 与 1.2 m 区域同量级）                     |
+| `composite-timeline-1600x900.png`            | 事件面板四行进入/离开 + 指数时刻；marker 点击后播放头 5.00e-7 s                              |
+| `composite-ebg-lab-1600x900.png`             | mg 与 F_net 可见；readout \|F_net\| = 1.64e-26 N 恰等于 mg（E/B 力抵消）                     |
+| `velocity-selector-question-1600x900.png`    | 已知量/求解目标/物理关系/五步解析/验证 4/4；数值与 Lab 一致                                  |
+| `mass-spectrometer-question-1600x900.png`    | 轨道半径 0.5219 m 来自引擎；21 道 composite 题在列表可见                                     |
+| `composite-agent-1600x900.png`               | 依据 chips + 中文高亮操作按钮 + 「合力未绘制」诚实拒绝提示                                   |
 
 厘米级场景无米级 min-extent 放大（composite-visual-bridge 用内容比例 padding，
 质谱仪 1.2 m 与选择器 0.4 m 装置取景都正常）。
 
 ## 13. 测试与构建门禁（最终状态）
 
-| 门禁 | 结果 |
-|---|---|
-| engine-composite | 26/26 |
-| physics-composite-core | 48/48 |
-| physics-scene | 39/39 |
-| physics-observation | 14/14 |
-| physics-verifier | 30/30 |
-| question-core（含 21 道 composite golden） | 220/220 |
-| 其余 core 包（mechanics/electric/electric-region/magnetic/units/core…） | 全绿 |
-| ui-physicsos（`test:web`） | 190/190（15 文件） |
-| `typecheck`（core + web） | 零错误 |
-| `lint`（core + web） | 零错误（本轮顺带清掉了历史遗留的 24+ 处 oxlint 违规） |
-| Harness build（ui-physicsos bundle + web-frontend） | 通过 |
-| Harness GUI（`test:gui`，packages/client + packages/host） | 3948/3950 通过、1 跳过、1 个上游 `code-block` shiki 懒加载测试在并行负载下超时，**单独重跑 15/15 通过**（与既有 `UPSTREAM_PARALLEL_TEST_FLAKE` 同类） |
-| overlay capture | 已回写 `overlays/harness/files/` |
+| 门禁                                                                    | 结果                                                                                                                                                  |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| engine-composite                                                        | 26/26                                                                                                                                                 |
+| physics-composite-core                                                  | 48/48                                                                                                                                                 |
+| physics-scene                                                           | 39/39                                                                                                                                                 |
+| physics-observation                                                     | 14/14                                                                                                                                                 |
+| physics-verifier                                                        | 30/30                                                                                                                                                 |
+| question-core（含 21 道 composite golden）                              | 220/220                                                                                                                                               |
+| 其余 core 包（mechanics/electric/electric-region/magnetic/units/core…） | 全绿                                                                                                                                                  |
+| ui-physicsos（`test:web`）                                              | 190/190（15 文件）                                                                                                                                    |
+| `typecheck`（core + web）                                               | 零错误                                                                                                                                                |
+| `lint`（core + web）                                                    | 零错误（本轮顺带清掉了历史遗留的 24+ 处 oxlint 违规）                                                                                                 |
+| Harness build（ui-physicsos bundle + web-frontend）                     | 通过                                                                                                                                                  |
+| Harness GUI（`test:gui`，packages/client + packages/host）              | 3948/3950 通过、1 跳过、1 个上游 `code-block` shiki 懒加载测试在并行负载下超时，**单独重跑 15/15 通过**（与既有 `UPSTREAM_PARALLEL_TEST_FLAKE` 同类） |
+| overlay capture                                                         | 已回写 `overlays/harness/files/`                                                                                                                      |
 
 Harness Full Replay 按 `HARNESS_WINDOWS_REPLAY_GATE_DEFERRED` 继续豁免。
 

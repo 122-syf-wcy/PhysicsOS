@@ -202,7 +202,9 @@ const resolveAssetUrl = (rawUrl, baseUrl) => {
 
 const fetchWithTimeout = async (url, init, timeoutMs) => {
   const controller = new AbortController()
-  const timer = setTimeout(() => { controller.abort() }, timeoutMs)
+  const timer = setTimeout(() => {
+    controller.abort()
+  }, timeoutMs)
   try {
     return await fetch(url, { ...init, signal: controller.signal })
   } finally {
@@ -210,7 +212,10 @@ const fetchWithTimeout = async (url, init, timeoutMs) => {
   }
 }
 
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
+const sleep = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 /**
  * These providers proxy to an upstream that intermittently 502s on long prompts,
@@ -337,7 +342,9 @@ if (argv.includes('--list') || argv.length === 0) {
   for (const [key, asset] of Object.entries(ASSETS)) {
     process.stdout.write(`  ${key.padEnd(28)} ${asset.provider.padEnd(10)} ${asset.title}\n`)
   }
-  process.stdout.write('\nRun with --all, or pass asset keys. Add --provider secondary to override.\n')
+  process.stdout.write(
+    '\nRun with --all, or pass asset keys. Add --provider secondary to override.\n',
+  )
   process.exit(0)
 }
 
@@ -346,10 +353,10 @@ const providerOverride = providerIndex === -1 ? undefined : argv[providerIndex +
 const keys = argv.includes('--all')
   ? Object.keys(ASSETS)
   : argv.filter((entry, index) => {
-    if (entry.startsWith('--')) return false
-    if (providerIndex !== -1 && index === providerIndex + 1) return false
-    return true
-  })
+      if (entry.startsWith('--')) return false
+      if (providerIndex !== -1 && index === providerIndex + 1) return false
+      return true
+    })
 
 mkdirSync(OUT_DIR, { recursive: true })
 

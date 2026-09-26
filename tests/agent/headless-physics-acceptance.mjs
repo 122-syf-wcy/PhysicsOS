@@ -61,20 +61,30 @@ function startMock() {
     const child = spawn(
       process.execPath,
       [
-        '--import', 'tsx',
+        '--import',
+        'tsx',
         'packages/test-support/llm-mock-server/src/bin.ts',
-        '--port', String(MOCK_PORT),
-        '--api-key', 'mock-key',
-        '--sequence', 'tool_call_success,success',
+        '--port',
+        String(MOCK_PORT),
+        '--api-key',
+        'mock-key',
+        '--sequence',
+        'tool_call_success,success',
         '--repeat-last',
-        '--tool-name', 'physics_solve_question',
-        '--tool-arguments', JSON.stringify({ text: QUESTION }),
-        '--success-text', '（模拟模型）已根据 PhysicsOS 引擎返回值作答。',
+        '--tool-name',
+        'physics_solve_question',
+        '--tool-arguments',
+        JSON.stringify({ text: QUESTION }),
+        '--success-text',
+        '（模拟模型）已根据 PhysicsOS 引擎返回值作答。',
       ],
       { cwd: vendorRoot, stdio: ['ignore', 'pipe', 'pipe'] },
     )
     let output = ''
-    const timer = setTimeout(() => reject(new Error(`mock LLM did not report ready:\n${output}`)), 60_000)
+    const timer = setTimeout(
+      () => reject(new Error(`mock LLM did not report ready:\n${output}`)),
+      60_000,
+    )
     child.stdout.on('data', (chunk) => {
       output += chunk.toString()
       if (output.includes('"type":"ready"')) {
@@ -98,10 +108,13 @@ function runHeadless(dshHome) {
     const child = spawn(
       process.execPath,
       [
-        '--import', 'tsx/esm',
+        '--import',
+        'tsx/esm',
         'apps/cli/src/bin.ts',
-        '--profile', 'headless',
-        '--patch', patchFile,
+        '--profile',
+        'headless',
+        '--patch',
+        patchFile,
         '请用 PhysicsOS 工具解这道题并给出半径和周期。',
       ],
       {
@@ -146,7 +159,8 @@ function readSessionEvents(dshHome) {
   const buffer = readFileSync(file)
   const magic = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
   const starts = []
-  for (let offset = buffer.indexOf(magic); offset >= 0; offset = buffer.indexOf(magic, offset + 4)) starts.push(offset)
+  for (let offset = buffer.indexOf(magic); offset >= 0; offset = buffer.indexOf(magic, offset + 4))
+    starts.push(offset)
   let text = ''
   starts.forEach((start, index) => {
     const end = index + 1 < starts.length ? starts[index + 1] : buffer.length
@@ -164,26 +178,63 @@ try {
   mock = await startMock()
   const run = await runHeadless(dshHome)
   writeFileSync(path.join(dshHome, 'headless-stdout.txt'), run.stdout + run.stderr)
-  check('headless run exited 0', run.code === 0, `exit=${run.code}${run.code === 0 ? '' : `\n${run.stderr.slice(-800)}`}`)
-  check('final assistant text reached stdout', run.stdout.includes('（模拟模型）已根据 PhysicsOS 引擎返回值作答。'))
+  check(
+    'headless run exited 0',
+    run.code === 0,
+    `exit=${run.code}${run.code === 0 ? '' : `\n${run.stderr.slice(-800)}`}`,
+  )
+  check(
+    'final assistant text reached stdout',
+    run.stdout.includes('（模拟模型）已根据 PhysicsOS 引擎返回值作答。'),
+  )
 
   const events = readSessionEvents(dshHome)
   const header = events.find((event) => event.type === 'request/header')
-  const advertised = (header?.data?.header?.tools ?? []).map((tool) => tool.name).filter((name) => name.startsWith('physics_')).sort()
-  check('request advertised the seven physics_* tools', JSON.stringify(advertised) === JSON.stringify(EXPECTED_TOOLS), advertised.join(', '))
-  check('no coding tools were advertised', !(header?.data?.header?.tools ?? []).some((tool) => /^(bash|pwsh|read|write|edit|grep|glob|web_search|todo_write|str_replace)/.test(tool.name)))
-  check('persona carries the Physics Constitution', String(header?.data?.header?.system ?? '').includes('物理宪法'))
+  const advertised = (header?.data?.header?.tools ?? [])
+    .map((tool) => tool.name)
+    .filter((name) => name.startsWith('physics_'))
+    .sort()
+  check(
+    'request advertised the seven physics_* tools',
+    JSON.stringify(advertised) === JSON.stringify(EXPECTED_TOOLS),
+    advertised.join(', '),
+  )
+  check(
+    'no coding tools were advertised',
+    !(header?.data?.header?.tools ?? []).some((tool) =>
+      /^(bash|pwsh|read|write|edit|grep|glob|web_search|todo_write|str_replace)/.test(tool.name),
+    ),
+  )
+  check(
+    'persona carries the Physics Constitution',
+    String(header?.data?.header?.system ?? '').includes('物理宪法'),
+  )
 
   const calls = events.filter((event) => event.type === 'tool/call')
-  check('exactly one tool call, physics_solve_question', calls.length === 1 && calls[0].data.name === 'physics_solve_question', calls.map((call) => call.data.name).join(', '))
+  check(
+    'exactly one tool call, physics_solve_question',
+    calls.length === 1 && calls[0].data.name === 'physics_solve_question',
+    calls.map((call) => call.data.name).join(', '),
+  )
 
   const result = events.find((event) => event.type === 'tool/result')
   const block = result?.data?.message?.content?.find((entry) => entry.type === 'tool-result')
-  const resultText = (block?.content ?? []).filter((entry) => entry.type === 'text').map((entry) => entry.text).join('')
+  const resultText = (block?.content ?? [])
+    .filter((entry) => entry.type === 'text')
+    .map((entry) => entry.text)
+    .join('')
   check('tool result is not an error', block !== undefined && block.isError === false)
-  check('Question Runtime solved it (magnetic model)', resultText.includes('已求解（magnetic / charged_particle_uniform_magnetic_field）'), resultText.split('\n')[0])
+  check(
+    'Question Runtime solved it (magnetic model)',
+    resultText.includes('已求解（magnetic / charged_particle_uniform_magnetic_field）'),
+    resultText.split('\n')[0],
+  )
   const verification = resultText.match(/校验：(\w+)（(\d+)\/(\d+) 项通过）/)
-  check('engine verification passed', verification?.[1] === 'passed' && verification[2] === verification[3], verification?.[0])
+  check(
+    'engine verification passed',
+    verification?.[1] === 'passed' && verification[2] === verification[3],
+    verification?.[0],
+  )
   check('radius R = 7.83 cm from the engine', resultText.includes('轨道半径 R = 7.83 cm'))
   check('period T = 1.64×10⁻⁷ s from the engine', resultText.includes('运动周期 T = 1.64×10⁻⁷ s'))
   const sceneLine = resultText.match(/场景已就绪：sceneId = (question-agent-question-[\w-]+)/)
@@ -218,7 +269,11 @@ try {
   )
 
   const end = events.find((event) => event.type === 'turn/end')
-  check('turn ended completed', end?.data?.reason?.kind === 'completed', JSON.stringify(end?.data?.reason))
+  check(
+    'turn ended completed',
+    end?.data?.reason?.kind === 'completed',
+    JSON.stringify(end?.data?.reason),
+  )
 } catch (error) {
   check('acceptance harness ran', false, error instanceof Error ? error.message : String(error))
 } finally {
@@ -227,7 +282,11 @@ try {
 }
 
 const failed = results.filter((entry) => !entry.ok)
-console.log(failed.length === 0 ? `\nALL CHECKS PASSED (${results.length})` : `\n${failed.length} CHECK(S) FAILED`)
+console.log(
+  failed.length === 0
+    ? `\nALL CHECKS PASSED (${results.length})`
+    : `\n${failed.length} CHECK(S) FAILED`,
+)
 console.log(`session home kept at ${dshHome}`)
 if (failed.length === 0) rmSync(dshHome, { recursive: true, force: true })
 process.exit(failed.length === 0 ? 0 : 1)

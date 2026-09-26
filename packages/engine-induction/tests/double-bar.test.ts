@@ -44,7 +44,10 @@ const execute = <T extends SceneCommandType>(
 }
 
 const simulated = (scene: PhysicsScene) =>
-  inductionEngine.simulate(scene, createInductionSimulationRequest(scene, 'sim-induction', 'trace-induction'))
+  inductionEngine.simulate(
+    scene,
+    createInductionSimulationRequest(scene, 'sim-induction', 'trace-induction'),
+  )
 
 /** The engine's exact state at a time — closed form, not a sampled neighbour. */
 const stateAt = (scene: PhysicsScene, t: number) =>
@@ -117,7 +120,8 @@ describe('Induction Engine · double_bar_rail (momentum pair)', () => {
   })
 
   it('keeps the leading bar ahead — the gap grows from 0.4 m toward 0.4 + τ·u₀ = 0.9 m', () => {
-    const gapAt = (t: number) => objectXAt(scene, t, 'induction-bench-1.bar1') - objectXAt(scene, t, 'induction-bench-1.bar2')
+    const gapAt = (t: number) =>
+      objectXAt(scene, t, 'induction-bench-1.bar1') - objectXAt(scene, t, 'induction-bench-1.bar2')
     expect(gapAt(0)).toBeCloseTo(0.4, 12)
     expect(gapAt(TAU)).toBeCloseTo(0.4 + 0.5 * (1 - Math.exp(-1)), 9)
     expect(gapAt(4)).toBeCloseTo(0.9, 6)
@@ -142,11 +146,16 @@ describe('Induction Engine · double_bar_rail (momentum pair)', () => {
 
   it('publishes the momentum/energy verification set on the free pair', () => {
     const ids = result.verification.checks.map((c) => c.id)
-    expect(ids).toEqual(expect.arrayContaining([
-      'faraday_law', 'lenz_direction', 'ohm_law_loop',
-      'momentum_conservation', 'energy_bookkeeping',
-      'lenz_force_opposes_relative_motion',
-    ]))
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'faraday_law',
+        'lenz_direction',
+        'ohm_law_loop',
+        'momentum_conservation',
+        'energy_bookkeeping',
+        'lenz_force_opposes_relative_motion',
+      ]),
+    )
     for (const c of result.verification.checks) {
       expect(c.passed, c.id).toBe(true)
     }
@@ -241,27 +250,39 @@ describe('Induction double-bar scene commands', () => {
 
   it('sets either bar velocity by index', () => {
     const runtime = new SceneRuntime(createDoubleBarRailScene({ sceneId: 'db-cmd2' }))
-    expect(execute(runtime, 'SetInductionBarVelocityOne', {
-      benchId: 'induction-bench-1', barIndex: 2, velocity: quantity(-2, 'm/s', 'velocity'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetInductionBarVelocityOne', {
+        benchId: 'induction-bench-1',
+        barIndex: 2,
+        velocity: quantity(-2, 'm/s', 'velocity'),
+      }).ok,
+    ).toBe(true)
     let model = resolveInductionModel(runtime.getScene())
     expect(model.barVelocities).toEqual([2, -2])
-    expect(execute(runtime, 'SetInductionBarVelocityOne', {
-      benchId: 'induction-bench-1', barIndex: 1, velocity: quantity(3, 'm/s', 'velocity'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetInductionBarVelocityOne', {
+        benchId: 'induction-bench-1',
+        barIndex: 1,
+        velocity: quantity(3, 'm/s', 'velocity'),
+      }).ok,
+    ).toBe(true)
     model = resolveInductionModel(runtime.getScene())
     expect(model.barVelocities).toEqual([3, -2])
   })
 
   it('sets the external force and rejects a negative one', () => {
     const runtime = new SceneRuntime(createDoubleBarRailScene({ sceneId: 'db-cmd3' }))
-    expect(execute(runtime, 'SetInductionExternalForce', {
-      benchId: 'induction-bench-1', force: quantity(0.02, 'N', 'force'),
-    }).ok).toBe(true)
+    expect(
+      execute(runtime, 'SetInductionExternalForce', {
+        benchId: 'induction-bench-1',
+        force: quantity(0.02, 'N', 'force'),
+      }).ok,
+    ).toBe(true)
     expect(resolveInductionModel(runtime.getScene()).externalForce).toBeCloseTo(0.02, 12)
 
     const negative = execute(runtime, 'SetInductionExternalForce', {
-      benchId: 'induction-bench-1', force: quantity(-1, 'N', 'force'),
+      benchId: 'induction-bench-1',
+      force: quantity(-1, 'N', 'force'),
     })
     expect(negative.ok).toBe(false)
     if (negative.ok) throw new Error('Expected rejection.')
@@ -279,7 +300,9 @@ describe('Induction double-bar scene commands', () => {
     expect(masses.error.code).toBe('INDUCTION_WRONG_SUBMODEL')
 
     const velocity = execute(runtime, 'SetInductionBarVelocityOne', {
-      benchId: 'induction-bench-1', barIndex: 1, velocity: quantity(1, 'm/s', 'velocity'),
+      benchId: 'induction-bench-1',
+      barIndex: 1,
+      velocity: quantity(1, 'm/s', 'velocity'),
     })
     expect(velocity.ok).toBe(false)
   })
@@ -287,7 +310,8 @@ describe('Induction double-bar scene commands', () => {
   it('accepts SetInductionBarLength on a double_bar_rail bench (rail spacing)', () => {
     const runtime = new SceneRuntime(createDoubleBarRailScene({ sceneId: 'db-cmd4' }))
     const result = execute(runtime, 'SetInductionBarLength', {
-      benchId: 'induction-bench-1', length: quantity(30, 'cm', 'length'),
+      benchId: 'induction-bench-1',
+      length: quantity(30, 'cm', 'length'),
     })
     expect(result.ok).toBe(true)
     expect(resolveInductionModel(runtime.getScene()).barLength).toBeCloseTo(0.3, 12)
@@ -296,7 +320,8 @@ describe('Induction double-bar scene commands', () => {
   it('still rejects SetInductionBarLength on a flux_change bench', () => {
     const runtime = new SceneRuntime(createFluxChangeScene())
     const result = execute(runtime, 'SetInductionBarLength', {
-      benchId: 'induction-bench-1', length: quantity(30, 'cm', 'length'),
+      benchId: 'induction-bench-1',
+      length: quantity(30, 'cm', 'length'),
     })
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('Expected rejection.')

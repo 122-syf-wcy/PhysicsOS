@@ -5,20 +5,21 @@
 
 ## 环境记录
 
-| 项目 | 值 |
-|------|-----|
-| OS | Microsoft Windows NT 10.0.26200.0 |
-| Node | v24.18.0 |
-| pnpm | 11.9.0 |
-| PowerShell | 5.1.26100.9168 |
-| pwsh | **未安装** |
-| bash | C:\windows\system32\bash.exe (WSL) |
-| git | 2.45.1.windows.1 |
+| 项目            | 值                                         |
+| --------------- | ------------------------------------------ |
+| OS              | Microsoft Windows NT 10.0.26200.0          |
+| Node            | v24.18.0                                   |
+| pnpm            | 11.9.0                                     |
+| PowerShell      | 5.1.26100.9168                             |
+| pwsh            | **未安装**                                 |
+| bash            | C:\windows\system32\bash.exe (WSL)         |
+| git             | 2.45.1.windows.1                           |
 | Upstream commit | `47f943859bef60e4160492346772ded9b24f765a` |
 
 ## Build 结论
 
 ### Baseline Build Command
+
 ```
 cd d:\PhysicsOS\_baseline-harness
 pnpm install --frozen-lockfile
@@ -26,28 +27,31 @@ npm run build
 ```
 
 ### Baseline Build Result
+
 - **PASS** (exit 0, `✓ built in 5.92s`)
 - 日志：`docs/reports/baseline-build-original.log`
 
 ### PhysicsOS Build Command
+
 ```
 cd d:\PhysicsOS\vendor\deepseek-harness
 npm run build
 ```
 
 ### PhysicsOS Build Result
+
 - **PASS** (exit 0, `✓ built in 4.21s`)
 - 日志：`docs/reports/physicsos-harness-build.log`
 
 ### Build Config Diff
 
-| 文件 | Baseline (HEAD) | PhysicsOS | 差异 |
-|------|----------------|-----------|------|
-| `package.json` | 无 `@types/react` devDep | 添加 `@types/react: ~18.3.1` | PhysicsOS 补丁 |
-| `tsconfig.client.json` | 无 `ui-physicsos` ref | 添加 `ui-physicsos` ref | PhysicsOS 补丁 |
-| `packages/bundle/web-app/package.json` | 无 `ui-physicsos` dep | 添加 `ui-physicsos` dep | PhysicsOS 补丁 |
-| `packages/bundle/web-app/cordis.patch.yml` | 无 `ui-physicsos` slot | 添加 `ui-physicsos` slot | PhysicsOS 补丁 |
-| `tsconfig.base.json` | `skipLibCheck: true` | `skipLibCheck: true` | **无差异** |
+| 文件                                       | Baseline (HEAD)          | PhysicsOS                    | 差异           |
+| ------------------------------------------ | ------------------------ | ---------------------------- | -------------- |
+| `package.json`                             | 无 `@types/react` devDep | 添加 `@types/react: ~18.3.1` | PhysicsOS 补丁 |
+| `tsconfig.client.json`                     | 无 `ui-physicsos` ref    | 添加 `ui-physicsos` ref      | PhysicsOS 补丁 |
+| `packages/bundle/web-app/package.json`     | 无 `ui-physicsos` dep    | 添加 `ui-physicsos` dep      | PhysicsOS 补丁 |
+| `packages/bundle/web-app/cordis.patch.yml` | 无 `ui-physicsos` slot   | 添加 `ui-physicsos` slot     | PhysicsOS 补丁 |
+| `tsconfig.base.json`                       | `skipLibCheck: true`     | `skipLibCheck: true`         | **无差异**     |
 
 ### TypeScript Error Root Cause
 
@@ -167,6 +171,7 @@ apps/web/tests/workflow-run.e2e.ts
 ### D. 因前序 fixture 崩溃导致的 cascading skip
 
 PhysicsOS 侧 175 skipped（vs Baseline 90 skipped），差额 85 个 skip 几乎全部是 cascading：
+
 - 前序 workspace bootstrap 失败 → 后续测试无法创建 workspace → 全部 skip
 - 资源竞争导致 browser context 超时 → 整个文件 skip
 
@@ -175,6 +180,7 @@ PhysicsOS 侧 175 skipped（vs Baseline 90 skipped），差额 85 个 skip 几�
 ### 1. `unknown tool "bash"` 错误
 
 多个两边都失败的测试中反复出现：
+
 ```
 Error: unknown tool "bash"
 ```
@@ -184,6 +190,7 @@ Error: unknown tool "bash"
 ### 2. Workspace bootstrap 卡死
 
 PhysicsOS 侧 `turn-tail-actions.e2e.ts` 的失败栈：
+
 ```
 TimeoutError: locator.click: Timeout 30000ms exceeded.
 Call log:
@@ -206,6 +213,7 @@ PhysicsOS 修改了 `support.ts` 中的 workspace 选择文案（`'选择工作�
 ## PID Artifact Audit
 
 根仓有 4 个未跟踪的 PID 文件：
+
 ```
 DRELOCA~1ASUSTempdsh-subprocess-spec-4IgulWgrandchild-1787024101634.pid
 DRELOCA~1ASUSTempdsh-subprocess-spec-4IgulWpipe-holder-1787024113463.pid

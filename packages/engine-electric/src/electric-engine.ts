@@ -1,11 +1,4 @@
-import {
-  add,
-  dot,
-  isFiniteVector,
-  magnitude,
-  scale,
-  type Vector3,
-} from '@physicsos/physics-math'
+import { add, dot, isFiniteVector, magnitude, scale, type Vector3 } from '@physicsos/physics-math'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 import {
@@ -128,7 +121,10 @@ export const resolveUniformElectricModel = (scene: PhysicsScene): UniformElectri
 }
 
 const derivedAt = (model: UniformElectricParticleModel, time: number): DerivedQuantity[] => {
-  const displacement = add(scale(model.velocity, time), scale(model.acceleration, 0.5 * time * time))
+  const displacement = add(
+    scale(model.velocity, time),
+    scale(model.acceleration, 0.5 * time * time),
+  )
   const velocity = add(model.velocity, scale(model.acceleration, time))
   const electricPotentialChange = -dot(model.electricField, displacement)
   const potentialEnergyChange = model.charge * electricPotentialChange
@@ -261,7 +257,10 @@ export const evaluateUniformElectricState = (
   seconds: number,
 ): SimulationState => {
   if (!Number.isFinite(seconds) || seconds < 0) {
-    throw new PhysicsOSError('INVALID_SIMULATION_TIME', 'Electric state time must be finite and non-negative.')
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_TIME',
+      'Electric state time must be finite and non-negative.',
+    )
   }
   return stateForModel(model, seconds)
 }
@@ -285,7 +284,10 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
         }
       } catch (error: unknown) {
         return invalidModelCondition(ELECTRIC_ENGINE_ID, [
-          failure('scene_valid', error instanceof Error ? error.message : 'Scene validation failed.'),
+          failure(
+            'scene_valid',
+            error instanceof Error ? error.message : 'Scene validation failed.',
+          ),
         ])
       }
       return canHandlePointCharge(scene)
@@ -306,23 +308,41 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       )
     }
     if (scene.dimension !== '2d') {
-      return unsupportedModel([failure('scene_is_2d', 'Electric V1 supports 2D scenes only.')], ELECTRIC_ENGINE_ID)
+      return unsupportedModel(
+        [failure('scene_is_2d', 'Electric V1 supports 2D scenes only.')],
+        ELECTRIC_ENGINE_ID,
+      )
     }
     if (scene.particles.length !== 1 || scene.bodies.length > 0) {
       return unsupportedModel(
-        [failure('single_particle', 'Electric V1 requires exactly one particle and no rigid bodies.')],
+        [
+          failure(
+            'single_particle',
+            'Electric V1 requires exactly one particle and no rigid bodies.',
+          ),
+        ],
         ELECTRIC_ENGINE_ID,
       )
     }
     if (scene.fields.length !== 1 || uniformElectricFields(scene).length !== 1) {
       return unsupportedModel(
-        [failure('single_uniform_electric_field', 'Electric V1 requires one global uniform electric field.')],
+        [
+          failure(
+            'single_uniform_electric_field',
+            'Electric V1 requires one global uniform electric field.',
+          ),
+        ],
         ELECTRIC_ENGINE_ID,
       )
     }
     if (scene.forces.length > 0 || scene.boundaries.length > 0 || scene.constraints.length > 0) {
       return unsupportedModel(
-        [failure('electric_force_only', 'Electric V1 does not combine explicit forces, boundaries or constraints.')],
+        [
+          failure(
+            'electric_force_only',
+            'Electric V1 does not combine explicit forces, boundaries or constraints.',
+          ),
+        ],
         ELECTRIC_ENGINE_ID,
       )
     }
@@ -404,13 +424,26 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     if (isPointChargeScene(scene)) return this.simulatePointCharge(scene, request)
 
     const model = resolveUniformElectricModel(scene)
-    const startTime = request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const sceneDuration = scene.timeline.endTime === undefined
-      ? DEFAULT_DURATION_SECONDS
-      : canonicalValue(scene.timeline.endTime)
-    const endTime = request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
-    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime < startTime) {
-      throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'Electric simulation range must satisfy 0 <= startTime <= endTime.')
+    const startTime =
+      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+    const sceneDuration =
+      scene.timeline.endTime === undefined
+        ? DEFAULT_DURATION_SECONDS
+        : canonicalValue(scene.timeline.endTime)
+    const endTime =
+      request.options.endTime === undefined
+        ? sceneDuration
+        : canonicalValue(request.options.endTime)
+    if (
+      !Number.isFinite(startTime) ||
+      !Number.isFinite(endTime) ||
+      startTime < 0 ||
+      endTime < startTime
+    ) {
+      throw new PhysicsOSError(
+        'INVALID_SIMULATION_RANGE',
+        'Electric simulation range must satisfy 0 <= startTime <= endTime.',
+      )
     }
 
     const times = trajectorySampleTimes(
@@ -495,20 +528,22 @@ const pointChargeState = (model: PointChargeModel, seconds: number): SimulationS
     })),
     ...(model.probe === undefined
       ? []
-      : [{
-        id: model.probe.id,
-        position: quantityVector(model.probe.position, 'm', 'length'),
-        velocity: quantityVector(model.probe.velocity, 'm/s', 'velocity'),
-        ...(model.acceleration === undefined
-          ? {}
-          : { acceleration: quantityVector(model.acceleration, 'm/s^2', 'acceleration') }),
-        values: {
-          electric_field: quantityVector(model.field, 'V/m', 'electric_field'),
-          ...(model.force === undefined
-            ? {}
-            : { electric_force: quantityVector(model.force, 'N', 'force') }),
-        },
-      }]),
+      : [
+          {
+            id: model.probe.id,
+            position: quantityVector(model.probe.position, 'm', 'length'),
+            velocity: quantityVector(model.probe.velocity, 'm/s', 'velocity'),
+            ...(model.acceleration === undefined
+              ? {}
+              : { acceleration: quantityVector(model.acceleration, 'm/s^2', 'acceleration') }),
+            values: {
+              electric_field: quantityVector(model.field, 'V/m', 'electric_field'),
+              ...(model.force === undefined
+                ? {}
+                : { electric_force: quantityVector(model.force, 'N', 'force') }),
+            },
+          },
+        ]),
   ],
   derived: [
     {
@@ -526,14 +561,24 @@ const pointChargeState = (model: PointChargeModel, seconds: number): SimulationS
     ...(model.force === undefined
       ? []
       : [
-        { key: 'electric_force_vector', value: quantityVector(model.force, 'N', 'force') },
-        ...(model.forceMagnitude === undefined
-          ? []
-          : [{ key: 'electric_force_magnitude', value: quantity(model.forceMagnitude, 'N', 'force') }]),
-        ...(model.acceleration === undefined
-          ? []
-          : [{ key: 'acceleration_vector', value: quantityVector(model.acceleration, 'm/s^2', 'acceleration') }]),
-      ]),
+          { key: 'electric_force_vector', value: quantityVector(model.force, 'N', 'force') },
+          ...(model.forceMagnitude === undefined
+            ? []
+            : [
+                {
+                  key: 'electric_force_magnitude',
+                  value: quantity(model.forceMagnitude, 'N', 'force'),
+                },
+              ]),
+          ...(model.acceleration === undefined
+            ? []
+            : [
+                {
+                  key: 'acceleration_vector',
+                  value: quantityVector(model.acceleration, 'm/s^2', 'acceleration'),
+                },
+              ]),
+        ]),
   ],
 })
 

@@ -23,13 +23,16 @@ PhysicsOS 与 DeepSeek Harness 之间的**唯一** Adapter。上层只看见 `Ph
 
 ## PHASE-01 status
 
-骨架 + 边界 + contract test。所有方法抛出 `UnimplementedError`，**不返回假成功**。
+Harness 直连 Adapter 仍是明确抛错的骨架。桌面本地运行已新增两条实现：
 
-## Implementation plan
+- `LocalSidecarAgentTransport`：把 `AgentTransport` 映射到 JSON-RPC 风格的本地
+  sidecar channel，校验每个事件并只在对应 run 的终止事件到达后结束流。
+- `TauriSidecarRpc`：把 `sidecar_start` / `sidecar_request` 与
+  `sidecar://event` 适配成该 channel。
 
-1. 阅读 `vendor/deepseek-harness` 的公开 API / `docs/architecture.md`
-2. 在 Adapter 内定义 Harness DTO → PhysicsOS DTO 映射
-3. 实现 `HttpSseAgentTransport`（Web）
-4. 预留 `LocalIpcAgentTransport`（Desktop sidecar）
-5. 补 Session / Resume / Cancel / Fork contract tests
-6. 升级 Harness 只走本 package + `docs/HARNESS-UPSTREAM.md` 流程
+sidecar 进程路径从 Tauri 资源清单解析，开发/测试也可用 shell 环境变量
+`PHYSICSOS_AGENT_SIDECAR` 覆盖；渲染进程不能指定任意可执行文件。桌面桥已实现
+`session/create`、`session/send`、`run/cancel`、`run/resume` 四个本地方法，
+其中 `run/resume` 只对仍活跃的 run 生效，已完成 run 明确返回
+`RUN_NOT_RESUMABLE`。直接 Harness Adapter 的 `getSession` / `forkSession` 仍是
+显式未实现边界，后续若接入公开 SDK 再补 DTO 与 contract tests。

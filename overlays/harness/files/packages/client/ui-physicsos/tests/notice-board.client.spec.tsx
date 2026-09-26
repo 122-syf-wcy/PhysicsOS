@@ -112,10 +112,11 @@ describe('NoticeBoard', () => {
     mount(api)
     await waitFor(() => { expect(screen.getByText('版本更新')).toBeTruthy() })
 
-    expect(screen.getByRole('button', { name: '提交' }).disabled).toBe(true)
+    const button = screen.getByRole('button', { name: '提交' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
     /* Whitespace is not content either. */
     fireEvent.change(bodyBox(), { target: { value: '   ' } })
-    expect(screen.getByRole('button', { name: '提交' }).disabled).toBe(true)
+    expect(button.disabled).toBe(true)
     expect(submitFeedback).not.toHaveBeenCalled()
   })
 

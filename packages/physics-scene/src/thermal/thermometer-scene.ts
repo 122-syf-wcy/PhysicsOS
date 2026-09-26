@@ -56,11 +56,7 @@ export const createThermometerBenchScene = (
     expansionCoefficient: quantity(input.expansionCoefficient ?? 2e-4, '', 'dimensionless'),
     /* The registry has kelvin, not degrees Celsius: the authoring unit is °C
        and the conversion happens here, the way the heating benches do it. */
-    temperature: quantity(
-      (input.temperature ?? 25) + CELSIUS_ZERO_IN_KELVIN,
-      'K',
-      'temperature',
-    ),
+    temperature: quantity((input.temperature ?? 25) + CELSIUS_ZERO_IN_KELVIN, 'K', 'temperature'),
     icePointLength: quantity((input.icePointLength ?? 2) / 100, 'm', 'length'),
   }
 
@@ -118,8 +114,7 @@ export const createThermometerBenchScene = (
       createdAt: now,
       updatedAt: now,
       title: input.title ?? '温度计实验台',
-      description:
-        input.description ?? 'Thermometer · 刻度均匀来自膨胀的线性 · 两个固定点定标',
+      description: input.description ?? 'Thermometer · 刻度均匀来自膨胀的线性 · 两个固定点定标',
     },
   }
 }

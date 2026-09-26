@@ -33,6 +33,12 @@ import type {
 /** Engine model lengths are SI metres; the bench displays centimetres. */
 const CM_PER_METRE = 100
 
+/**
+ * The optics scene visuals helper `fmtOpticsValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtOpticsValue = (value: number, digits = 3): string => {
   if (!Number.isFinite(value)) return '—'
   if (Math.abs(value) < 1e-9) return '0'
@@ -43,6 +49,8 @@ export const fmtOpticsValue = (value: number, digits = 3): string => {
  * Scene observable definition → canvas toggle key. The optics factory stamps
  * `observable-optics-rays` / `observable-optics-image`, both of type
  * `geometry`, so the key is carried by the id.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const opticsObservableKeyOf = (
   definition: ObservableDefinition,
@@ -67,7 +75,11 @@ const cmPoint = (point: { readonly x: number; readonly y: number }): ScenePoint 
   y: point.y * CM_PER_METRE,
 })
 
-/** Student-facing one-liner for the image: 倒立/正立 · 缩小/等大/放大 · 实/虚. */
+/**
+ * Student-facing one-liner for the image: 倒立/正立 · 缩小/等大/放大 · 实/虚
+ * @returns the formatted string.
+ * @param result - the result.
+ */
 export const imageNatureText = (result: OpticalImagingResult): string => {
   const { outcome } = result
   if (outcome.kind !== 'image') {
@@ -83,13 +95,25 @@ export const imageNatureText = (result: OpticalImagingResult): string => {
   return `${orientation}、${size}的${nature}`
 }
 
+/**
+ * The optics visual input shape used by the optics scene visuals module.
+ */
 export interface OpticsVisualInput {
   readonly scene: PhysicsScene
   readonly result: OpticalImagingResult
 }
 
-/** Build one optics frame from the verified imaging result. */
-export const opticsSceneVisual = ({ scene, result }: OpticsVisualInput): SceneVisualModel => {
+/**
+ * Build one optics frame from the verified imaging result.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const opticsSceneVisual = (input: OpticsVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    result,
+  } = input
+
   const bench = opticalBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('optics')
 

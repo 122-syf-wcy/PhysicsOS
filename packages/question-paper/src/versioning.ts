@@ -15,7 +15,7 @@ function canonicalize(value: unknown): string {
   if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>
     const keys = Object.keys(record).sort()
-    return `{${keys.map(key => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`
   }
   return JSON.stringify(value)
 }
@@ -32,7 +32,7 @@ export function canonicalDocument(doc: PaperDocument): string {
      only an actual content edit should void approvals. Strip them per item. */
   const content = {
     ...doc,
-    sections: doc.sections.map(section => ({
+    sections: doc.sections.map((section) => ({
       ...section,
       items: section.items.map(({ status: _status, reviewNote: _reviewNote, ...item }) => item),
     })),
@@ -59,7 +59,7 @@ export function documentHash(doc: PaperDocument): string {
  */
 export function stemFingerprint(stem: string): string {
   const normalized = stem
-    .replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
     .replace(/\s+/g, '')
     .replace(/[，。；：、（）【】《》「」‘’“”.,;:!?'""''()\-—_·…]/g, '')
     .toLowerCase()

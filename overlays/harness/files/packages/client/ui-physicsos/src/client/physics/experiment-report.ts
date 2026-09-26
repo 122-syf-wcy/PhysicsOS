@@ -12,11 +12,17 @@
 
 import type { WorkspaceSnapshot } from './workspace-runtime.ts'
 
+/**
+ * The report row shape used by the experiment report module.
+ */
 export interface ReportRow {
   readonly label: string
   readonly value: string
 }
 
+/**
+ * The experiment report shape used by the experiment report module.
+ */
 export interface ExperimentReport {
   readonly title: string
   readonly goal: string
@@ -50,7 +56,12 @@ const STATUS_TEXT: Record<string, string> = {
   skipped: '—',
 }
 
-/** Build the report for the frame the student is looking at. */
+/**
+ * Build the report for the frame the student is looking at.
+ * @returns the experiment report.
+ * @param now - clock injection for tests.
+ * @param snapshot - the runtime snapshot.
+ */
 export const buildExperimentReport = (
   snapshot: WorkspaceSnapshot,
   now = new Date(),
@@ -172,6 +183,8 @@ const tableHtml = (
  * The report as a self-contained printable HTML document (styles inlined, no
  * external assets), so 打印版导出 works offline and survives being saved as a
  * file. Same facts as the panel and the Markdown download — never recomputed.
+ * @returns the formatted string.
+ * @param report - the report.
  */
 export const experimentReportPrintHtml = (report: ExperimentReport): string => {
   const checks = report.verification

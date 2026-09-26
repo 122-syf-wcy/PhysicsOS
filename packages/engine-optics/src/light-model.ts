@@ -99,21 +99,21 @@ const benchOf = (bench: LightBench): ResolvedLightModel => {
   return {
     type: 'pinhole',
     benchId: bench.id,
-  objectHeight: positiveOrThrow(
-    canonicalValue(bench.objectHeight),
-    'LIGHT_OBJECT_HEIGHT',
-    `Light bench "${bench.id}" object height must be finite and > 0.`,
-  ),
-  objectDistance: positiveOrThrow(
-    canonicalValue(bench.objectDistance),
-    'LIGHT_OBJECT_DISTANCE',
-    `Light bench "${bench.id}" object distance must be finite and > 0.`,
-  ),
-  screenDistance: positiveOrThrow(
-    canonicalValue(bench.screenDistance),
-    'LIGHT_SCREEN_DISTANCE',
-    `Light bench "${bench.id}" screen distance must be finite and > 0.`,
-  ),
+    objectHeight: positiveOrThrow(
+      canonicalValue(bench.objectHeight),
+      'LIGHT_OBJECT_HEIGHT',
+      `Light bench "${bench.id}" object height must be finite and > 0.`,
+    ),
+    objectDistance: positiveOrThrow(
+      canonicalValue(bench.objectDistance),
+      'LIGHT_OBJECT_DISTANCE',
+      `Light bench "${bench.id}" object distance must be finite and > 0.`,
+    ),
+    screenDistance: positiveOrThrow(
+      canonicalValue(bench.screenDistance),
+      'LIGHT_SCREEN_DISTANCE',
+      `Light bench "${bench.id}" screen distance must be finite and > 0.`,
+    ),
   }
 }
 

@@ -35,11 +35,7 @@ import {
 
 import { domainOfEngine, pickEngine, simulateScene, type EngineEntry } from './engines.ts'
 import { EXPERIMENT_CATALOG, findExperiment } from './experiment-catalog.ts'
-import {
-  COMMAND_SPECS,
-  CommandPayloadError,
-  normalizeCommandPayload,
-} from './scene-commands.ts'
+import { COMMAND_SPECS, CommandPayloadError, normalizeCommandPayload } from './scene-commands.ts'
 
 /* --------------------------------------------------------------- results -- */
 
@@ -165,7 +161,11 @@ export interface SimulateResult {
   readonly domain: string
   readonly verification: ToolVerification
   readonly derived: readonly ToolScalar[]
-  readonly events: readonly { readonly kind: string; readonly time: number | null; readonly targetId?: string }[]
+  readonly events: readonly {
+    readonly kind: string
+    readonly time: number | null
+    readonly targetId?: string
+  }[]
   readonly sampleCount: number
   readonly startTime: number | null
   readonly endTime: number | null
@@ -174,8 +174,18 @@ export interface SimulateResult {
 export interface ObservedObject {
   readonly id: string
   /** Non-finite components become null; `-0` canonicalizes to `0` for the lossless-JSON boundary. */
-  readonly position?: { readonly x: number | null; readonly y: number | null; readonly z: number | null; readonly unit: string }
-  readonly velocity?: { readonly x: number | null; readonly y: number | null; readonly z: number | null; readonly unit: string }
+  readonly position?: {
+    readonly x: number | null
+    readonly y: number | null
+    readonly z: number | null
+    readonly unit: string
+  }
+  readonly velocity?: {
+    readonly x: number | null
+    readonly y: number | null
+    readonly z: number | null
+    readonly unit: string
+  }
   readonly values: readonly ToolScalar[]
 }
 
@@ -211,13 +221,15 @@ const finiteOrNull = (value: number): number | null => (Number.isFinite(value) ?
 const scalarsOf = (derived: readonly DerivedQuantity[]): ToolScalar[] =>
   derived.flatMap((entry) => {
     if ('vector' in entry.value) return []
-    return [{
-      key: entry.key,
-      value: finiteOrNull(entry.value.value),
-      unit: entry.value.unit,
-      ...(entry.formula?.expression === undefined ? {} : { formula: entry.formula.expression }),
-      ...(entry.targetId === undefined ? {} : { targetId: entry.targetId }),
-    }]
+    return [
+      {
+        key: entry.key,
+        value: finiteOrNull(entry.value.value),
+        unit: entry.value.unit,
+        ...(entry.formula?.expression === undefined ? {} : { formula: entry.formula.expression }),
+        ...(entry.targetId === undefined ? {} : { targetId: entry.targetId }),
+      },
+    ]
   })
 
 const verificationOf = (verification: VerificationResult): ToolVerification => ({
@@ -242,7 +254,8 @@ const objectsOf = (scene: PhysicsScene): SceneObjectSummary[] => {
   for (const region of scene.regions) add(region.id, 'region', region.name)
   for (const circuit of scene.circuits) {
     add(circuit.id, 'circuit', circuit.name)
-    for (const component of circuit.components) add(component.id, `circuit:${component.type}`, component.name)
+    for (const component of circuit.components)
+      add(component.id, `circuit:${component.type}`, component.name)
   }
   for (const bench of scene.opticalBenches ?? []) {
     add(bench.id, 'optical_bench', bench.name)
@@ -263,15 +276,18 @@ const objectsOf = (scene: PhysicsScene): SceneObjectSummary[] => {
   for (const bench of scene.thermalBenches ?? []) {
     add(bench.id, 'thermal_bench', bench.name)
     add(bench.sample.id, 'thermal_sample', bench.sample.name)
-    if (bench.comparisonSample !== undefined) add(bench.comparisonSample.id, 'thermal_sample', bench.comparisonSample.name)
+    if (bench.comparisonSample !== undefined)
+      add(bench.comparisonSample.id, 'thermal_sample', bench.comparisonSample.name)
   }
   for (const bench of scene.leverBenches ?? []) {
     add(bench.id, 'lever_bench', bench.name)
     for (const hanger of bench.hangers) add(hanger.id, `lever_hanger:${hanger.side}`, hanger.name)
   }
-  for (const bench of scene.inductionBenches ?? []) add(bench.id, `induction_bench:${bench.type}`, bench.name)
+  for (const bench of scene.inductionBenches ?? [])
+    add(bench.id, `induction_bench:${bench.type}`, bench.name)
   for (const bench of scene.waveBenches ?? []) add(bench.id, `wave_bench:${bench.type}`, bench.name)
-  for (const bench of scene.pressureBenches ?? []) add(bench.id, `pressure_bench:${bench.type}`, bench.name)
+  for (const bench of scene.pressureBenches ?? [])
+    add(bench.id, `pressure_bench:${bench.type}`, bench.name)
   return objects
 }
 
@@ -394,9 +410,10 @@ export class PhysicsToolRuntime {
    * still links the attempt back to the bank (self-checks, learning record).
    */
   solveQuestion(text: string, questionId?: string): SolveQuestionResult {
-    const byId = questionId === undefined
-      ? undefined
-      : GOLDEN_QUESTIONS.find((candidate) => candidate.id === questionId)
+    const byId =
+      questionId === undefined
+        ? undefined
+        : GOLDEN_QUESTIONS.find((candidate) => candidate.id === questionId)
     const trimmed = (byId?.text ?? text).trim()
     if (trimmed.length === 0) {
       throw new ToolRuntimeError('EMPTY_QUESTION', '题面为空。')
@@ -417,13 +434,18 @@ export class PhysicsToolRuntime {
     const document: QuestionDocument =
       golden !== undefined
         ? createGoldenQuestionDocument(golden)
-        : {
+        : ({
             id: asQuestionId(this.nextId('agent-question')),
-            content: { source: 'text', rawText: trimmed, extractedText: trimmed, status: 'EXTRACTED' },
+            content: {
+              source: 'text',
+              rawText: trimmed,
+              extractedText: trimmed,
+              status: 'EXTRACTED',
+            },
             metadata: { title: trimmed.slice(0, 40), tags: ['agent'], difficulty: 'standard' },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-          } as unknown as QuestionDocument
+          } as unknown as QuestionDocument)
     const result = processQuestion(document)
     const solved = this.solveResultOf(result, String(document.id), golden?.id)
     if (solved.status === 'solved') this.solvedQuestions.set(dedupeKey, solved)
@@ -456,7 +478,12 @@ export class PhysicsToolRuntime {
         severity: 'ambiguity',
       })),
     ]
-    if (result.workflowState !== 'READY' || result.scene === null || result.simulation === null || result.solution === null) {
+    if (
+      result.workflowState !== 'READY' ||
+      result.scene === null ||
+      result.simulation === null ||
+      result.solution === null
+    ) {
       const fallback =
         issues.length === 0 && result.error !== undefined
           ? [{ code: result.workflowState, message: result.error, severity: 'error' }]
@@ -478,16 +505,21 @@ export class PhysicsToolRuntime {
     // knows which document it just processed, so the link never goes missing.
     const scene: PhysicsScene =
       result.scene.metadata.sourceQuestionId === undefined
-        ? { ...result.scene, metadata: { ...result.scene.metadata, sourceQuestionId: asQuestionId(questionId) } }
+        ? {
+            ...result.scene,
+            metadata: { ...result.scene.metadata, sourceQuestionId: asQuestionId(questionId) },
+          }
         : result.scene
     const live = this.register(scene)
-    const answers: QuestionAnswer[] = Object.entries(result.solution.results).map(([key, answer]) => ({
-      key,
-      label: answer.label,
-      symbol: answer.symbol,
-      value: answer.value,
-      unit: answer.unit,
-    }))
+    const answers: QuestionAnswer[] = Object.entries(result.solution.results).map(
+      ([key, answer]) => ({
+        key,
+        label: answer.label,
+        symbol: answer.symbol,
+        value: answer.value,
+        unit: answer.unit,
+      }),
+    )
     const steps: QuestionStep[] = result.solution.steps.map((step) => ({
       index: step.index,
       title: step.title,
@@ -495,7 +527,10 @@ export class PhysicsToolRuntime {
       ...(step.substitution === undefined ? {} : { substitution: step.substitution }),
       ...(step.resultValue === undefined
         ? {}
-        : { result: `${step.resultSymbol ?? ''} = ${step.resultValue} ${step.resultUnit ?? ''}`.trim() }),
+        : {
+            result:
+              `${step.resultSymbol ?? ''} = ${step.resultValue} ${step.resultUnit ?? ''}`.trim(),
+          }),
     }))
     return {
       status: 'solved',
@@ -533,15 +568,21 @@ export class PhysicsToolRuntime {
       sceneId,
       revision: scene.revision,
       title: scene.metadata.title ?? sceneId,
-      ...(scene.metadata.description === undefined ? {} : { description: scene.metadata.description }),
+      ...(scene.metadata.description === undefined
+        ? {}
+        : { description: scene.metadata.description }),
       domain,
       engineId: live.engine.engine.engineId,
       ...(scene.metadata.sourceQuestionId === undefined
         ? {}
         : { sourceQuestionId: String(scene.metadata.sourceQuestionId) }),
       timeline: {
-        start: scene.timeline.startTime === undefined ? 0 : (finiteOrNull(scene.timeline.startTime.value) ?? 0),
-        end: scene.timeline.endTime === undefined ? null : finiteOrNull(scene.timeline.endTime.value),
+        start:
+          scene.timeline.startTime === undefined
+            ? 0
+            : (finiteOrNull(scene.timeline.startTime.value) ?? 0),
+        end:
+          scene.timeline.endTime === undefined ? null : finiteOrNull(scene.timeline.endTime.value),
       },
       objects: objectsOf(scene),
       observables: scene.observableDefinitions.map((definition) => ({
@@ -624,8 +665,19 @@ export class PhysicsToolRuntime {
       )
     }
     this.serial += 1
-    const simulated = simulateScene(scene, live.engine, `agent-sim-${this.serial}`, `agent-sim-trace-${this.serial}`)
-    return this.simulateResultOf(sceneId, scene.revision, simulated.engineId, simulated.domain, simulated.simulation)
+    const simulated = simulateScene(
+      scene,
+      live.engine,
+      `agent-sim-${this.serial}`,
+      `agent-sim-trace-${this.serial}`,
+    )
+    return this.simulateResultOf(
+      sceneId,
+      scene.revision,
+      simulated.engineId,
+      simulated.domain,
+      simulated.simulation,
+    )
   }
 
   private simulateResultOf(
@@ -645,8 +697,18 @@ export class PhysicsToolRuntime {
       verification: verificationOf(simulation.verification),
       derived: scalarsOf(simulation.derivedQuantities),
       events: simulation.events.map((event) => {
-        const record = event as unknown as { kind?: unknown; type?: unknown; time?: unknown; targetId?: unknown }
-        const kind = typeof record.kind === 'string' ? record.kind : typeof record.type === 'string' ? record.type : 'event'
+        const record = event as unknown as {
+          kind?: unknown
+          type?: unknown
+          time?: unknown
+          targetId?: unknown
+        }
+        const kind =
+          typeof record.kind === 'string'
+            ? record.kind
+            : typeof record.type === 'string'
+              ? record.type
+              : 'event'
         const timeValue = record.time
         const time =
           typeof timeValue === 'number'
@@ -673,7 +735,11 @@ export class PhysicsToolRuntime {
       throw new ToolRuntimeError('INVALID_TIME', '时间必须是非负有限秒数。')
     }
     const scene = live.runtime.getScene()
-    const state: SimulationState = live.engine.engine.stateAt(scene, { value: time, unit: 's', dimension: 'time' })
+    const state: SimulationState = live.engine.engine.stateAt(scene, {
+      value: time,
+      unit: 's',
+      dimension: 'time',
+    })
     return {
       sceneId,
       revision: scene.revision,
@@ -683,27 +749,25 @@ export class PhysicsToolRuntime {
         ...(object.position === undefined
           ? {}
           : {
-            position: {
-              x: finiteOrNull(object.position.vector.x),
-              y: finiteOrNull(object.position.vector.y),
-              z: finiteOrNull(object.position.vector.z),
-              unit: object.position.unit,
-            },
-          }),
+              position: {
+                x: finiteOrNull(object.position.vector.x),
+                y: finiteOrNull(object.position.vector.y),
+                z: finiteOrNull(object.position.vector.z),
+                unit: object.position.unit,
+              },
+            }),
         ...(object.velocity === undefined
           ? {}
           : {
-            velocity: {
-              x: finiteOrNull(object.velocity.vector.x),
-              y: finiteOrNull(object.velocity.vector.y),
-              z: finiteOrNull(object.velocity.vector.z),
-              unit: object.velocity.unit,
-            },
-          }),
+              velocity: {
+                x: finiteOrNull(object.velocity.vector.x),
+                y: finiteOrNull(object.velocity.vector.y),
+                z: finiteOrNull(object.velocity.vector.z),
+                unit: object.velocity.unit,
+              },
+            }),
         values: Object.entries(object.values ?? {}).flatMap(([key, value]) =>
-          'vector' in value
-            ? []
-            : [{ key, value: finiteOrNull(value.value), unit: value.unit }],
+          'vector' in value ? [] : [{ key, value: finiteOrNull(value.value), unit: value.unit }],
         ),
       })),
       derived: scalarsOf(state.derived),
@@ -711,5 +775,6 @@ export class PhysicsToolRuntime {
   }
 }
 
-export const createPhysicsToolRuntime = (options: PhysicsToolRuntimeOptions = {}): PhysicsToolRuntime =>
-  new PhysicsToolRuntime(options)
+export const createPhysicsToolRuntime = (
+  options: PhysicsToolRuntimeOptions = {},
+): PhysicsToolRuntime => new PhysicsToolRuntime(options)

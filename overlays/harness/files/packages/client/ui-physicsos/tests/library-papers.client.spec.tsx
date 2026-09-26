@@ -10,6 +10,9 @@ const translations: Readonly<Record<string, string>> = zh
 const t = ((key: PhysicsosKey) => translations[key] ?? key) as never
 const useLearningRecord = ((selector: (state: { attempts: never[] }) => unknown) =>
   selector({ attempts: [] })) as never
+const neverHook = (() => {
+  throw new Error('unused hook')
+}) as never
 
 const paper = (over: Partial<SourcePaperRow> = {}): SourcePaperRow => ({
   id: 'p1', year: 2025, level: 'zhongkao', subject: 'physics',
@@ -47,14 +50,31 @@ const stubApi = (sources: SourcePaperRow[], annotations: AnnotationRow[]): Paper
   runChecks: vi.fn(),
   reviewQuestion: vi.fn(),
   repairQuestion: vi.fn(),
+  replaceQuestion: vi.fn(),
+  bankPlan: vi.fn(),
   approve: vi.fn(),
   runExport: vi.fn(),
   listExports: vi.fn().mockResolvedValue([]),
   fileUrl: vi.fn().mockReturnValue(''),
+  listBankItems: vi.fn().mockResolvedValue([]),
+  ingestBank: vi.fn(),
+  updateBankItem: vi.fn(),
+  reviewBankItem: vi.fn(),
+  reviewBankItems: vi.fn(),
+  triageBankItems: vi.fn(),
+  ingestBankImages: vi.fn(),
 })
 
 const openPapers = async (api: PaperApi) => {
-  render(<LibraryWorkspace useLearningRecord={useLearningRecord} paperApi={api} t={t} />)
+  render(
+    <LibraryWorkspace
+      useLearningRecord={useLearningRecord}
+      paperApi={api}
+      t={t}
+      useSessions={neverHook}
+      useWorkspaces={neverHook}
+    />,
+  )
   fireEvent.click(screen.getByRole('tab', { name: '真题卷' }))
   await screen.findByText('最新真题与名校模拟卷，逐题考点标注；筛选后按年份与录入时间排序。')
 }
@@ -124,7 +144,14 @@ describe('LibraryWorkspace 真题卷库', () => {
   })
 
   it('honest states: offline without api and honest empty-questions copy', async () => {
-    render(<LibraryWorkspace useLearningRecord={useLearningRecord} t={t} />)
+    render(
+      <LibraryWorkspace
+        useLearningRecord={useLearningRecord}
+        t={t}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+      />,
+    )
     fireEvent.click(screen.getByRole('tab', { name: '真题卷' }))
     expect(await screen.findByText('真题服务未接入，暂时无法展示。')).toBeTruthy()
     cleanup()

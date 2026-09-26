@@ -14,15 +14,15 @@ V1/V2/Phase 3 覆盖的是无界匀强电场与点电荷静电场，两者都没
 
 本阶段补齐的是一条完整的垂直切片：
 
-| 层 | 交付物 |
-|---|---|
-| Scene | `createParallelPlateScene` —— 1 粒子 + 1 区域绑定匀强场 + 1 矩形场区 + 2 极板边界 |
-| IR | `charged_particle_bounded_electric_field` 模型 + `plateSeparation` / `plateLength` / `enterPosition` 字段 |
-| Engine | `@physicsos/engine-electric-region` —— 分段解析（场外 a=0、场内 a=qE/m）+ 三类离散事件 + 14 个派生量 + 5 项校验 |
-| Parser | `parseParallelPlate` + 10 道 Golden Question（electric-10 ~ electric-19） |
-| Runtime | 平行板分支 + `SimulationResult.events` → `TimelineEvent` 映射 + 平行板专属 tree/inspector/editParameter |
-| Renderer | `ElectricRegionRenderer` —— 金属质感极板 + clipPath 裁剪的有界场格 + 轨迹 + 向量 |
-| Agent | 10 个有界场教学意图，全部引用引擎已断言的 check 与派生量 |
+| 层       | 交付物                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------- |
+| Scene    | `createParallelPlateScene` —— 1 粒子 + 1 区域绑定匀强场 + 1 矩形场区 + 2 极板边界                               |
+| IR       | `charged_particle_bounded_electric_field` 模型 + `plateSeparation` / `plateLength` / `enterPosition` 字段       |
+| Engine   | `@physicsos/engine-electric-region` —— 分段解析（场外 a=0、场内 a=qE/m）+ 三类离散事件 + 14 个派生量 + 5 项校验 |
+| Parser   | `parseParallelPlate` + 10 道 Golden Question（electric-10 ~ electric-19）                                       |
+| Runtime  | 平行板分支 + `SimulationResult.events` → `TimelineEvent` 映射 + 平行板专属 tree/inspector/editParameter         |
+| Renderer | `ElectricRegionRenderer` —— 金属质感极板 + clipPath 裁剪的有界场格 + 轨迹 + 向量                                |
+| Agent    | 10 个有界场教学意图，全部引用引擎已断言的 check 与派生量                                                        |
 
 物理正确性的关键点：**场只存在于板间矩形区域**。粒子在场外做匀速直线运动
 （a = 0，F = 0），进入场区后做类平抛（a = qE/m 恒定），离开后恢复匀速直线，
@@ -63,14 +63,14 @@ Renderer 不 import 任何 engine，只消费 `SceneVisualModel`；极板几何�
 
 `apps/web/e2e/electric-region-acceptance.mjs` —— 6 个 Case，全部 PASS：
 
-| Case | 验收内容 | 结果 |
-|---|---|---|
-| A | 点电荷回归：`electric-03` 仍 verified、源电荷仍绘制、**极板不泄漏到点电荷帧** | ✓ 6/6 |
-| B | 匀强场回归：`electric-01` 仍 verified、轨迹仍绘制、**无界场无极板无区域事件** | ✓ 6/6 |
-| C | 平行板全链路：`electric-10` READY → 解答步骤 → 实验室 verified → **两块极板** → 轨迹 | ✓ 9/9 |
-| D | 事件时间轴：标记数 ≥ 2、点击标记 seek 时钟生效 | ✓ 2/2 |
-| E | Agent 解释偏转：引用依据、**不引库仑 1/r²**、高亮命中、**revision 不变** | ✓ 6/6 |
-| F | Scene Branch：改参数 revision +1 且仍 verified、题目场景未被污染 | ✓ 4/4 |
+| Case | 验收内容                                                                             | 结果  |
+| ---- | ------------------------------------------------------------------------------------ | ----- |
+| A    | 点电荷回归：`electric-03` 仍 verified、源电荷仍绘制、**极板不泄漏到点电荷帧**        | ✓ 6/6 |
+| B    | 匀强场回归：`electric-01` 仍 verified、轨迹仍绘制、**无界场无极板无区域事件**        | ✓ 6/6 |
+| C    | 平行板全链路：`electric-10` READY → 解答步骤 → 实验室 verified → **两块极板** → 轨迹 | ✓ 9/9 |
+| D    | 事件时间轴：标记数 ≥ 2、点击标记 seek 时钟生效                                       | ✓ 2/2 |
+| E    | Agent 解释偏转：引用依据、**不引库仑 1/r²**、高亮命中、**revision 不变**             | ✓ 6/6 |
+| F    | Scene Branch：改参数 revision +1 且仍 verified、题目场景未被污染                     | ✓ 4/4 |
 
 5 项门禁全部为 0：console errors、page errors、unhandled rejections、
 failed requests、error responses。
@@ -92,13 +92,13 @@ enter + exit）。`HitPlate` 这条路径另外在浏览器里验过 `electric-1
 
 ## 4. 单元测试
 
-| 范围 | 数量 |
-|---|---|
-| `test:core`（17 个包） | 445 全绿 |
-| `test:web`（ui-physicsos） | 163 全绿 |
-| 其中 `engine-electric-region` | 16 |
-| 其中 `question-core`（含 10 道平行板题） | 146 |
-| 其中 region runtime / visual / agent | 23 / 8 / 52 |
+| 范围                                     | 数量        |
+| ---------------------------------------- | ----------- |
+| `test:core`（17 个包）                   | 445 全绿    |
+| `test:web`（ui-physicsos）               | 163 全绿    |
+| 其中 `engine-electric-region`            | 16          |
+| 其中 `question-core`（含 10 道平行板题） | 146         |
+| 其中 region runtime / visual / agent     | 23 / 8 / 52 |
 
 `typecheck:core` 与 `typecheck:web` 均零错误。bundle 已重建。
 

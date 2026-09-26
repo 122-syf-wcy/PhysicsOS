@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { createMechanicsSimulationRequest, MechanicsEngine } from '../../engine-mechanics/src/index.ts'
+import {
+  createMechanicsSimulationRequest,
+  MechanicsEngine,
+} from '../../engine-mechanics/src/index.ts'
 import { vec3 } from '@physicsos/physics-math'
 import { createMechanicsScene } from '@physicsos/physics-scene'
 
@@ -26,7 +29,11 @@ describe('mechanics verifier', () => {
     const scene = createScene()
     const result = new MechanicsEngine().simulate(
       scene,
-      createMechanicsSimulationRequest(scene, 'mechanics-verifier-simulation', 'mechanics-verifier-trace'),
+      createMechanicsSimulationRequest(
+        scene,
+        'mechanics-verifier-simulation',
+        'mechanics-verifier-trace',
+      ),
     )
 
     expect(verifyMechanicsScene(scene).status).toBe('passed')
@@ -41,7 +48,11 @@ describe('mechanics verifier', () => {
     const scene = createScene()
     const result = new MechanicsEngine().simulate(
       scene,
-      createMechanicsSimulationRequest(scene, 'mechanics-verifier-simulation', 'mechanics-verifier-trace'),
+      createMechanicsSimulationRequest(
+        scene,
+        'mechanics-verifier-simulation',
+        'mechanics-verifier-trace',
+      ),
     )
     const broken = structuredClone(result)
     broken.sceneRevision += 1

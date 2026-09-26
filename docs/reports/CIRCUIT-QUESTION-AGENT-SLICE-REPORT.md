@@ -16,10 +16,10 @@
 
 ## 2. 交付物
 
-| 路径 | 内容 |
-| --- | --- |
+| 路径                                                       | 内容                                                                                               |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `ui-physicsos/src/client/physics/physics-agent-answers.ts` | 8 个电路意图 + 4 个辅助函数 + `matchIntent` 电路规则（置于复合场规则后、力学规则前，域闸门防串场） |
-| `ui-physicsos/tests/physics-agent.client.spec.tsx` | +10 电路意图用例（事实发布 / 拓扑分派 / 具名校验引用 / 路由 / 高亮可解析 / 域隔离） |
+| `ui-physicsos/tests/physics-agent.client.spec.tsx`         | +10 电路意图用例（事实发布 / 拓扑分派 / 具名校验引用 / 路由 / 高亮可解析 / 域隔离）                |
 
 高亮标签表（`HIGHLIGHT_LABELS`）在既有电路条目（bat / am / vm / sw / rv / r0-r3）已具备，本轮零改动；`CircuitAgentFacts`（内阻 / 滑变 / 结点数）与 `physicsAgentContext` 已随 `CIRCUIT_RUNTIME_PACK_V1` 就位，本轮只消费。
 
@@ -27,16 +27,16 @@
 
 八个意图全部遵守「答案只复述运行时已产出的事实」：
 
-| 意图 | 闸门 | 引用的运行时事实 |
-| --- | --- | --- |
-| `circuit-ohm-current`（这个电流是怎么来的） | domain=circuit | 派生量「干路电流 I」+ `kcl_current_conservation` 校验，公式 I = E/(R外 + r) |
-| `circuit-terminal-voltage`（路端电压为什么比电动势小） | domain=circuit | 派生量「路端电压 U」+ `terminal_voltage_law:<id>` 校验（U = E − I·r） |
-| `circuit-internal-resistance`（内阻有什么用） | r > 0 | 派生量「内阻耗散功率」+ 路端电压定律校验，P内 = I²·r |
-| `circuit-series-loop`（串联电流处处相等） | junctionCount = 0 | 派生量「干路电流 I」+ KCL 校验 |
-| `circuit-parallel-split`（电流在结点怎么分） | junctionCount > 0 | 派生量「干路电流 I」+ KCL 校验，I支 = U/R支 反比分流 |
-| `circuit-rheostat-sweep`（滑片移动电流怎么变） | hasSlider | 派生量「接入电阻 R滑」+「干路电流 I」，R滑 = p·R全 |
-| `circuit-power-balance`（电源的功率去哪了） | domain=circuit | `power_balance` 校验 + 总/输出/内阻功率三派生量，P总 = P外 + P内 |
-| `circuit-meters-ideal`（理想电表为什么不影响电路） | 画布有 am/vm 符号 | `ideal_meters_non_intrusive` 校验 |
+| 意图                                                   | 闸门              | 引用的运行时事实                                                            |
+| ------------------------------------------------------ | ----------------- | --------------------------------------------------------------------------- |
+| `circuit-ohm-current`（这个电流是怎么来的）            | domain=circuit    | 派生量「干路电流 I」+ `kcl_current_conservation` 校验，公式 I = E/(R外 + r) |
+| `circuit-terminal-voltage`（路端电压为什么比电动势小） | domain=circuit    | 派生量「路端电压 U」+ `terminal_voltage_law:<id>` 校验（U = E − I·r）       |
+| `circuit-internal-resistance`（内阻有什么用）          | r > 0             | 派生量「内阻耗散功率」+ 路端电压定律校验，P内 = I²·r                        |
+| `circuit-series-loop`（串联电流处处相等）              | junctionCount = 0 | 派生量「干路电流 I」+ KCL 校验                                              |
+| `circuit-parallel-split`（电流在结点怎么分）           | junctionCount > 0 | 派生量「干路电流 I」+ KCL 校验，I支 = U/R支 反比分流                        |
+| `circuit-rheostat-sweep`（滑片移动电流怎么变）         | hasSlider         | 派生量「接入电阻 R滑」+「干路电流 I」，R滑 = p·R全                          |
+| `circuit-power-balance`（电源的功率去哪了）            | domain=circuit    | `power_balance` 校验 + 总/输出/内阻功率三派生量，P总 = P外 + P内            |
+| `circuit-meters-ideal`（理想电表为什么不影响电路）     | 画布有 am/vm 符号 | `ideal_meters_non_intrusive` 校验                                           |
 
 设计要点：
 

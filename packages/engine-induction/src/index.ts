@@ -31,10 +31,7 @@ export {
   type ResolvedInductionModel,
 } from './induction-model.ts'
 
-export {
-  resolveTransformerModel,
-  type ResolvedTransformerModel,
-} from './transformer-model.ts'
+export { resolveTransformerModel, type ResolvedTransformerModel } from './transformer-model.ts'
 export {
   TRANSFORMER_RELATIVE_TOLERANCE,
   secondaryCurrent,

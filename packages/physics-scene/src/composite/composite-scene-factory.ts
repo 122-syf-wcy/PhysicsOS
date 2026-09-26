@@ -103,8 +103,7 @@ const electricDirectionVector = (
   }
 }
 
-const observableId = (key: CompositeObservableKey) =>
-  asObservableId(`observable-composite-${key}`)
+const observableId = (key: CompositeObservableKey) => asObservableId(`observable-composite-${key}`)
 
 /**
  * Observable definitions for a composite scene.
@@ -120,21 +119,62 @@ const observableDefinitions = (
   fieldIds: { readonly electric: string | undefined; readonly magnetic: string },
   visibility: Partial<Record<CompositeObservableKey, boolean>>,
 ): ObservableDefinition[] => [
-  { id: observableId('velocity'), type: 'velocity', targetId: particleId, visible: visibility.velocity ?? true },
-  { id: observableId('electricForce'), type: 'force', targetId: particleId, visible: visibility.electricForce ?? true, parameters: { kind: 'electric' } },
-  { id: observableId('magneticForce'), type: 'force', targetId: particleId, visible: visibility.magneticForce ?? true, parameters: { kind: 'magnetic' } },
-  { id: observableId('gravityForce'), type: 'force', targetId: particleId, visible: visibility.gravityForce ?? false, parameters: { kind: 'gravity' } },
-  { id: observableId('netForce'), type: 'force', targetId: particleId, visible: visibility.netForce ?? true, parameters: { kind: 'net' } },
+  {
+    id: observableId('velocity'),
+    type: 'velocity',
+    targetId: particleId,
+    visible: visibility.velocity ?? true,
+  },
+  {
+    id: observableId('electricForce'),
+    type: 'force',
+    targetId: particleId,
+    visible: visibility.electricForce ?? true,
+    parameters: { kind: 'electric' },
+  },
+  {
+    id: observableId('magneticForce'),
+    type: 'force',
+    targetId: particleId,
+    visible: visibility.magneticForce ?? true,
+    parameters: { kind: 'magnetic' },
+  },
+  {
+    id: observableId('gravityForce'),
+    type: 'force',
+    targetId: particleId,
+    visible: visibility.gravityForce ?? false,
+    parameters: { kind: 'gravity' },
+  },
+  {
+    id: observableId('netForce'),
+    type: 'force',
+    targetId: particleId,
+    visible: visibility.netForce ?? true,
+    parameters: { kind: 'net' },
+  },
   ...(fieldIds.electric === undefined
     ? []
-    : [{
-        id: observableId('electricField'),
-        type: 'electric_field' as const,
-        targetId: fieldIds.electric,
-        visible: visibility.electricField ?? true,
-      }]),
-  { id: observableId('magneticField'), type: 'magnetic_field', targetId: fieldIds.magnetic, visible: visibility.magneticField ?? true },
-  { id: observableId('trajectory'), type: 'trajectory', targetId: particleId, visible: visibility.trajectory ?? true },
+    : [
+        {
+          id: observableId('electricField'),
+          type: 'electric_field' as const,
+          targetId: fieldIds.electric,
+          visible: visibility.electricField ?? true,
+        },
+      ]),
+  {
+    id: observableId('magneticField'),
+    type: 'magnetic_field',
+    targetId: fieldIds.magnetic,
+    visible: visibility.magneticField ?? true,
+  },
+  {
+    id: observableId('trajectory'),
+    type: 'trajectory',
+    targetId: particleId,
+    visible: visibility.trajectory ?? true,
+  },
 ]
 
 interface FieldParts {
@@ -145,10 +185,7 @@ interface FieldParts {
   readonly fieldIds: { readonly electric: string | undefined; readonly magnetic: string }
 }
 
-const buildFields = (
-  input: CompositeSceneInput,
-  regionId: string | undefined,
-): FieldParts => {
+const buildFields = (input: CompositeSceneInput, regionId: string | undefined): FieldParts => {
   const strength = Math.abs(input.magneticFieldStrength ?? DEFAULTS.magneticFieldStrength)
   const orientation = input.magneticFieldOrientation ?? DEFAULTS.magneticFieldOrientation
   const fieldZ = orientation === 'into_page' ? -strength : strength
@@ -159,30 +196,36 @@ const buildFields = (
     ...(regionId === undefined ? {} : { regionId }),
   }
   const electricStrength = Math.abs(input.electricFieldStrength ?? 0)
-  const electric: UniformElectricField | undefined = electricStrength > 0
-    ? {
-        id: 'composite-electric-1',
-        type: 'uniform_electric',
-        fieldStrength: quantityVector(
-          electricDirectionVector(
-            input.electricFieldDirection ?? DEFAULTS.electricFieldDirection,
-            electricStrength,
+  const electric: UniformElectricField | undefined =
+    electricStrength > 0
+      ? {
+          id: 'composite-electric-1',
+          type: 'uniform_electric',
+          fieldStrength: quantityVector(
+            electricDirectionVector(
+              input.electricFieldDirection ?? DEFAULTS.electricFieldDirection,
+              electricStrength,
+            ),
+            'V/m',
+            'electric_field',
           ),
-          'V/m',
-          'electric_field',
-        ),
-        ...(regionId === undefined ? {} : { regionId }),
-      }
-    : undefined
+          ...(regionId === undefined ? {} : { regionId }),
+        }
+      : undefined
   const gravityMagnitude = input.gravity
-  const gravity: GravityField | undefined = gravityMagnitude === undefined
-    ? undefined
-    : {
-        id: 'composite-gravity-1',
-        type: 'uniform_gravity',
-        acceleration: quantityVector(vec3(0, -Math.abs(gravityMagnitude), 0), 'm/s^2', 'acceleration'),
-        ...(regionId === undefined ? {} : { regionId }),
-      }
+  const gravity: GravityField | undefined =
+    gravityMagnitude === undefined
+      ? undefined
+      : {
+          id: 'composite-gravity-1',
+          type: 'uniform_gravity',
+          acceleration: quantityVector(
+            vec3(0, -Math.abs(gravityMagnitude), 0),
+            'm/s^2',
+            'acceleration',
+          ),
+          ...(regionId === undefined ? {} : { regionId }),
+        }
   return {
     electric,
     magnetic,
@@ -314,11 +357,7 @@ export const createVelocitySelectorScene = (
   const scene = buildScene(selectorInput, [region], fields, parts.fieldIds)
   /* Start the particle just left of the selector region so it is field-free
      until it enters — the textbook "从左端进入" setup. */
-  scene.particles[0]!.position = quantityVector(
-    input.position ?? vec3(-0.05, 0, 0),
-    'm',
-    'length',
-  )
+  scene.particles[0]!.position = quantityVector(input.position ?? vec3(-0.05, 0, 0), 'm', 'length')
   return {
     ...scene,
     metadata: {
@@ -380,17 +419,29 @@ export const createMassSpectrometerScene = (
   const regions: Region[] = [
     {
       id: selectorId,
-      shape: { type: 'rectangle', width: quantity(selectorWidth, 'm', 'length'), height: quantity(selectorHeight, 'm', 'length') },
+      shape: {
+        type: 'rectangle',
+        width: quantity(selectorWidth, 'm', 'length'),
+        height: quantity(selectorHeight, 'm', 'length'),
+      },
       center: quantityVector(selectorCenter, 'm', 'length'),
     },
     {
       id: driftId,
-      shape: { type: 'rectangle', width: quantity(driftWidth, 'm', 'length'), height: quantity(driftHeight, 'm', 'length') },
+      shape: {
+        type: 'rectangle',
+        width: quantity(driftWidth, 'm', 'length'),
+        height: quantity(driftHeight, 'm', 'length'),
+      },
       center: quantityVector(driftCenter, 'm', 'length'),
     },
     {
       id: deflectionId,
-      shape: { type: 'rectangle', width: quantity(deflectionWidth, 'm', 'length'), height: quantity(deflectionHeight, 'm', 'length') },
+      shape: {
+        type: 'rectangle',
+        width: quantity(deflectionWidth, 'm', 'length'),
+        height: quantity(deflectionHeight, 'm', 'length'),
+      },
       center: quantityVector(deflectionCenter, 'm', 'length'),
     },
   ]
@@ -441,11 +492,7 @@ export const createMassSpectrometerScene = (
     magnetic: 'spectrometer-magnetic-selector',
   })
   /* Start the particle just left of the selector region. */
-  scene.particles[0]!.position = quantityVector(
-    input.position ?? vec3(-0.05, 0, 0),
-    'm',
-    'length',
-  )
+  scene.particles[0]!.position = quantityVector(input.position ?? vec3(-0.05, 0, 0), 'm', 'length')
   return {
     ...scene,
     metadata: {
@@ -589,18 +636,13 @@ export const createMultiRegionFieldScene = (
     electric: 'multi-region-electric-1',
     magnetic: 'multi-region-magnetic-1',
   })
-  scene.particles[0]!.position = quantityVector(
-    input.position ?? vec3(-0.05, 0, 0),
-    'm',
-    'length',
-  )
+  scene.particles[0]!.position = quantityVector(input.position ?? vec3(-0.05, 0, 0), 'm', 'length')
   return {
     ...scene,
     metadata: {
       ...scene.metadata,
       title: input.title ?? '多场区带电粒子运动',
-      description:
-        input.description ?? 'Composite Engine · 电场区 → 磁场区 → 复合场区 多相位穿越',
+      description: input.description ?? 'Composite Engine · 电场区 → 磁场区 → 复合场区 多相位穿越',
     },
   }
 }

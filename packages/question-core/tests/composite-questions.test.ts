@@ -25,9 +25,7 @@ import { selectEngine } from '../src/engine-selector.ts'
  * parser's regexes would pass while the question still rendered half the physics.
  */
 
-const composites = GOLDEN_QUESTIONS.filter(
-  (question) => question.expectedDomain === 'composite',
-)
+const composites = GOLDEN_QUESTIONS.filter((question) => question.expectedDomain === 'composite')
 
 const run = (definition: GoldenQuestionDefinition) =>
   processQuestion(createGoldenQuestionDocument(definition, '2026-08-23T00:00:00.000Z'))
@@ -43,6 +41,7 @@ describe('composite golden questions', () => {
     /* E+B and E+B+g both use the generic crossed-field model; six of them together
        cover the 3 + 3 split the product asks for. */
     expect(crossed.length).toBeGreaterThanOrEqual(6)
+    expect(composites.filter((q) => q.expectedModel === 'cyclotron')).toHaveLength(1)
     expect(crossed.filter((q) => /重力加速度|g = /.test(q.text)).length).toBeGreaterThanOrEqual(3)
   })
 
@@ -52,9 +51,10 @@ describe('composite golden questions', () => {
          signal rather than the crossed-field one — but it must never fall through
          to the magnetic parser, which would answer 求回旋周期 from B alone and quietly
          drop the accelerating field. */
-      const claimed = question.expectedModel === 'cyclotron'
-        ? isCyclotronQuestionText(question.text)
-        : isCompositeQuestionText(question.text)
+      const claimed =
+        question.expectedModel === 'cyclotron'
+          ? isCyclotronQuestionText(question.text)
+          : isCompositeQuestionText(question.text)
       expect(claimed, question.id).toBe(true)
     }
   })
@@ -97,7 +97,7 @@ describe('composite golden questions', () => {
     }
   })
 
-  it('builds a scene that carries both fields and the question provenance', () => {
+  it('builds the tracked apparatus scene and carries the question provenance', () => {
     for (const question of composites) {
       if (question.expectedValidation !== 'VALID') continue
       const candidate = DeterministicCompositeQuestionParser.parse(
@@ -107,8 +107,18 @@ describe('composite golden questions', () => {
         sceneId: `scene-${question.id}`,
         questionId: question.id,
       })
-      expect(scene.fields.some((field) => field.type === 'uniform_electric'), question.id).toBe(true)
-      expect(scene.fields.some((field) => field.type === 'uniform_magnetic'), question.id).toBe(true)
+      if (question.expectedModel === 'cyclotron') {
+        expect(scene.cyclotronBenches, question.id).toHaveLength(1)
+      } else {
+        expect(
+          scene.fields.some((field) => field.type === 'uniform_electric'),
+          question.id,
+        ).toBe(true)
+      }
+      expect(
+        scene.fields.some((field) => field.type === 'uniform_magnetic'),
+        question.id,
+      ).toBe(true)
       expect(String(scene.metadata.sourceQuestionId), question.id).toBe(question.id)
       expect(scene.particles).toHaveLength(1)
       /* The charge sign the question stated must survive into the scene: it decides
@@ -136,13 +146,41 @@ describe('composite golden questions', () => {
       ).toBe(true)
 
       const steps = result.solution?.steps ?? []
-      /* The fixed pedagogical narrative: E-force direction, Lorentz direction, the
-         condition, the engine result, the verifier. */
-      expect(steps.length, question.id).toBeGreaterThanOrEqual(5)
-      expect(steps.some((step) => /电场力方向/.test(step.title)), question.id).toBe(true)
-      expect(steps.some((step) => /洛伦兹力方向/.test(step.title)), question.id).toBe(true)
-      expect(steps.some((step) => /引擎结果/.test(step.title)), question.id).toBe(true)
-      expect(steps.some((step) => /验证/.test(step.title)), question.id).toBe(true)
+      expect(steps.length, question.id).toBeGreaterThanOrEqual(4)
+      if (question.expectedModel === 'cyclotron') {
+        expect(
+          steps.some((step) => /回旋频率/.test(step.title)),
+          question.id,
+        ).toBe(true)
+        expect(
+          steps.some((step) => /缝隙/.test(step.title)),
+          question.id,
+        ).toBe(true)
+        expect(
+          steps.some((step) => /时变场模型结果/.test(step.title)),
+          question.id,
+        ).toBe(true)
+      } else {
+        /* The fixed pedagogical narrative: E-force direction, Lorentz direction,
+           the condition, the engine result, the verifier. */
+        expect(steps.length, question.id).toBeGreaterThanOrEqual(5)
+        expect(
+          steps.some((step) => /电场力方向/.test(step.title)),
+          question.id,
+        ).toBe(true)
+        expect(
+          steps.some((step) => /洛伦兹力方向/.test(step.title)),
+          question.id,
+        ).toBe(true)
+        expect(
+          steps.some((step) => /引擎结果/.test(step.title)),
+          question.id,
+        ).toBe(true)
+        expect(
+          steps.some((step) => /验证/.test(step.title)),
+          question.id,
+        ).toBe(true)
+      }
 
       /* Every reported force magnitude must match a derived quantity the engine
          published — the solution quotes the runtime, it does not recompute. */
@@ -175,16 +213,27 @@ describe('composite golden questions', () => {
     expect(ratioQuestion.solution?.results['mass_charge_ratio']).toBeDefined()
     /* q/m for a proton: 1.6e-19 / 1.67e-27 ≈ 9.58e7 C/kg. Read from the scene the
        engine solved, so a wrong charge sign or mass would show up here. */
-    const ratio = Number(ratioQuestion.solution?.results['mass_charge_ratio']?.value.replace(/×10/, 'e').replace('¹', '1'))
+    const ratio = Number(
+      ratioQuestion.solution?.results['mass_charge_ratio']?.value
+        .replace(/×10/, 'e')
+        .replace('¹', '1'),
+    )
     expect(Number.isFinite(ratio) || true).toBe(true)
     expect(radiusQuestion.solution?.results['mass_charge_ratio']).toBeUndefined()
   })
 
-  it('refuses to solve a cyclotron instead of mis-solving it', () => {
-    const cyclotron = run(composites.find((q) => q.id === 'comp-21-cyclotron-unsupported')!)
-    expect(cyclotron.workflowState).toBe('UNSUPPORTED_MODEL')
-    expect(cyclotron.simulation).toBeNull()
-    expect(cyclotron.validation?.issues.some((issue) => /时变|变化的加速电场/.test(issue.message))).toBe(true)
+  it('solves the cyclotron with the synchronized time-varying gap model', () => {
+    const cyclotron = run(composites.find((q) => q.id === 'comp-21-cyclotron')!)
+    expect(cyclotron.workflowState).toBe('READY')
+    expect(cyclotron.simulation).not.toBeNull()
+    expect(cyclotron.solution?.results['period']).toBeDefined()
+    expect(cyclotron.solution?.results['final_velocity']).toBeDefined()
+    expect(cyclotron.solution?.results['max_kinetic_energy']).toBeDefined()
+    expect(
+      cyclotron.simulation?.verification.checks.find(
+        (check) => check.id === 'time_varying_gap_synchronized',
+      )?.passed,
+    ).toBe(true)
   })
 
   it('keeps single-field questions on their own engines', () => {

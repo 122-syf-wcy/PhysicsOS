@@ -8,13 +8,7 @@ import { defaultCoordinateSystem } from './scene-validation.ts'
 import type { PhysicsScene } from './scene.ts'
 
 export type ElectricObservableKey =
-  | 'electricField'
-  | 'force'
-  | 'velocity'
-  | 'acceleration'
-  | 'trajectory'
-  | 'potential'
-  | 'energy'
+  'electricField' | 'force' | 'velocity' | 'acceleration' | 'trajectory' | 'potential' | 'energy'
 
 export interface ElectricSceneInput {
   readonly sceneId?: string
@@ -121,13 +115,48 @@ export const createElectricScene = (input: ElectricSceneInput = {}): PhysicsScen
     leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
-      { id: observableId('electricField'), type: 'electric_field', targetId: fieldId, visible: visibility.electricField ?? true },
-      { id: observableId('force'), type: 'force', targetId: particleId, visible: visibility.force ?? true },
-      { id: observableId('velocity'), type: 'velocity', targetId: particleId, visible: visibility.velocity ?? true },
-      { id: observableId('acceleration'), type: 'acceleration', targetId: particleId, visible: visibility.acceleration ?? false },
-      { id: observableId('trajectory'), type: 'trajectory', targetId: particleId, visible: visibility.trajectory ?? true },
-      { id: observableId('potential'), type: 'electric_potential', targetId: particleId, visible: visibility.potential ?? false },
-      { id: observableId('energy'), type: 'energy', targetId: particleId, visible: visibility.energy ?? true },
+      {
+        id: observableId('electricField'),
+        type: 'electric_field',
+        targetId: fieldId,
+        visible: visibility.electricField ?? true,
+      },
+      {
+        id: observableId('force'),
+        type: 'force',
+        targetId: particleId,
+        visible: visibility.force ?? true,
+      },
+      {
+        id: observableId('velocity'),
+        type: 'velocity',
+        targetId: particleId,
+        visible: visibility.velocity ?? true,
+      },
+      {
+        id: observableId('acceleration'),
+        type: 'acceleration',
+        targetId: particleId,
+        visible: visibility.acceleration ?? false,
+      },
+      {
+        id: observableId('trajectory'),
+        type: 'trajectory',
+        targetId: particleId,
+        visible: visibility.trajectory ?? true,
+      },
+      {
+        id: observableId('potential'),
+        type: 'electric_potential',
+        targetId: particleId,
+        visible: visibility.potential ?? false,
+      },
+      {
+        id: observableId('energy'),
+        type: 'energy',
+        targetId: particleId,
+        visible: visibility.energy ?? true,
+      },
     ],
     annotations: [],
     metadata: {

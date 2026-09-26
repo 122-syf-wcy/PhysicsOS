@@ -40,7 +40,12 @@ const labelBoxes = () =>
           rect.right > box.right + 1 ||
           rect.top < box.top - 1 ||
           rect.bottom > box.bottom + 1,
-        box: [Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)],
+        box: [
+          Math.round(rect.left),
+          Math.round(rect.top),
+          Math.round(rect.width),
+          Math.round(rect.height),
+        ],
       }
     })
     return { canvas: [Math.round(box.width), Math.round(box.height)], labels }
@@ -76,16 +81,16 @@ const apparatusBoxes = () =>
       mercury: part('rect[class*="pressureMercury"]:not([class*="Pool"])'),
       pool: part('rect[class*="pressureMercuryPool"]'),
       dish: part('path[class*="pressureDish"]'),
-      vessels: [...svg.querySelectorAll('path[class*="pressureVesselWall"]')].map(node =>
+      vessels: [...svg.querySelectorAll('path[class*="pressureVesselWall"]')].map((node) =>
         rel(node.getBoundingClientRect()),
       ),
-      plates: [...svg.querySelectorAll('rect[class*="pressurePlate"]')].map(node =>
+      plates: [...svg.querySelectorAll('rect[class*="pressurePlate"]')].map((node) =>
         rel(node.getBoundingClientRect()),
       ),
-      blocks: [...svg.querySelectorAll('rect[class*="pressureBlock"]')].map(node =>
+      blocks: [...svg.querySelectorAll('rect[class*="pressureBlock"]')].map((node) =>
         rel(node.getBoundingClientRect()),
       ),
-      texts: [...svg.querySelectorAll('text')].map(node => ({
+      texts: [...svg.querySelectorAll('text')].map((node) => ({
         text: (node.textContent ?? '').trim(),
         className: node.getAttribute('class') ?? '',
         ...rel(node.getBoundingClientRect()),
@@ -111,7 +116,9 @@ const openRig = async (rig) => {
 
 const backToPicker = async () => {
   await page.getByTitle('切换实验').click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 15_000 })
 }
 
 /**
@@ -124,39 +131,43 @@ const checkRig = async (rig, width) => {
   /* Only the dimension labels: the same strings appear again in the panel the
      canvas draws down the left edge (`h₂ = 40 cm → p₂ = 3920 Pa`), and those
      lines are not measured against anything. */
-  const texts = (parts?.texts ?? []).filter(text => text.className.includes('dimensionLabel'))
-  const show = box => (box === null || box === undefined ? 'none' : `${box.x},${box.y},${box.w},${box.h}`)
+  const texts = (parts?.texts ?? []).filter((text) => text.className.includes('dimensionLabel'))
+  const show = (box) =>
+    box === null || box === undefined ? 'none' : `${box.x},${box.y},${box.w},${box.h}`
 
   if (rig.id === 'solid-pressure') {
     /* The area rules hang below the plates, and the reading inside each block is
        the rig's dial — so only the area captions are asked to stay clear of the
        blocks they measure. */
-    const areas = texts.filter(text => text.text.startsWith('S = '))
-    const buried = areas.filter(text =>
-      [...(parts?.plates ?? []), ...(parts?.blocks ?? [])].some(box => overlap(text, box) > 0),
+    const areas = texts.filter((text) => text.text.startsWith('S = '))
+    const buried = areas.filter((text) =>
+      [...(parts?.plates ?? []), ...(parts?.blocks ?? [])].some((box) => overlap(text, box) > 0),
     )
     check(
       `${rig.id}@${width} 受力面积标注没有压在试块上`,
       areas.length > 0 && buried.length === 0,
-      `${areas.length} 个标注｜越界 ${buried.map(text => text.text).join(' | ')}`,
+      `${areas.length} 个标注｜越界 ${buried.map((text) => text.text).join(' | ')}`,
     )
   }
 
   if (rig.id === 'liquid-pressure') {
     /* "the dimension and its label both stay within the vessel" is a claim the
        bridge already makes in a comment; this is the measurement of it. */
-    const depths = texts.filter(text => /^h(₂)? = /.test(text.text))
+    const depths = texts.filter((text) => /^h(₂)? = /.test(text.text))
     const strays = depths.filter(
-      label =>
+      (label) =>
         !(parts?.vessels ?? []).some(
-          vessel => label.x >= vessel.x && label.x + label.w <= vessel.x + vessel.w,
+          (vessel) => label.x >= vessel.x && label.x + label.w <= vessel.x + vessel.w,
         ),
     )
     check(
       `${rig.id}@${width} 深度标注留在量筒内`,
       depths.length === 3 && strays.length === 0,
       `${depths.length} 个标注｜越界 ${strays
-        .map(text => `${text.text}@${[text.x, text.y, text.w, text.h].join(',')} 量筒 ${(parts?.vessels ?? []).map(show).join(' / ')}`)
+        .map(
+          (text) =>
+            `${text.text}@${[text.x, text.y, text.w, text.h].join(',')} 量筒 ${(parts?.vessels ?? []).map(show).join(' / ')}`,
+        )
         .join(' | ')}`,
     )
   }
@@ -182,12 +193,15 @@ const checkRig = async (rig, width) => {
     const onColumn =
       parts?.mercury === null || parts?.mercury === undefined
         ? []
-        : texts.filter(text => overlap(text, parts.mercury) > 0)
+        : texts.filter((text) => overlap(text, parts.mercury) > 0)
     check(
       `${rig.id}@${width} 标注没有压在汞柱上`,
       onColumn.length === 0,
       onColumn
-        .map(text => `${text.text}@${[text.x, text.y, text.w, text.h].join(',')} 汞柱 ${show(parts?.mercury)}`)
+        .map(
+          (text) =>
+            `${text.text}@${[text.x, text.y, text.w, text.h].join(',')} 汞柱 ${show(parts?.mercury)}`,
+        )
         .join(' | '),
     )
   }
@@ -204,7 +218,9 @@ try {
   await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60_000 })
   await registerStudent(page)
   await page.getByRole('button', { name: '物理实验室' }).click()
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
 
   for (const [index, rig] of RIGS.entries()) {
     if (index > 0) await backToPicker()
@@ -217,15 +233,19 @@ try {
     await canvas.screenshot({ path: wide })
     shots.push(wide)
     const boxes = await labelBoxes()
-    const outside = (boxes?.labels ?? []).filter(label => label.outside)
+    const outside = (boxes?.labels ?? []).filter((label) => label.outside)
     check(
       `${rig.id} 的标注都在画布内`,
       outside.length === 0,
-      outside.map(label => `${label.text}@${label.box.join(',')}`).join(' | '),
+      outside.map((label) => `${label.text}@${label.box.join(',')}`).join(' | '),
     )
     /* The rig has to actually say something — an empty canvas would pass the
        containment check for the wrong reason. */
-    check(`${rig.id} 画出了标注`, (boxes?.labels.length ?? 0) >= 3, `${boxes?.labels.length ?? 0} 个`)
+    check(
+      `${rig.id} 画出了标注`,
+      (boxes?.labels.length ?? 0) >= 3,
+      `${boxes?.labels.length ?? 0} 个`,
+    )
     await checkRig(rig, 1600)
 
     /* Narrower viewport: the layout has less room, which is where a long label
@@ -236,20 +256,25 @@ try {
     await page.screenshot({ path: narrow })
     shots.push(narrow)
     const narrowBoxes = await labelBoxes()
-    const narrowOutside = (narrowBoxes?.labels ?? []).filter(label => label.outside)
+    const narrowOutside = (narrowBoxes?.labels ?? []).filter((label) => label.outside)
     check(
       `${rig.id} 在 1280 宽下标注仍在画布内`,
       narrowOutside.length === 0,
-      narrowOutside.map(label => `${label.text}@${label.box.join(',')}`).join(' | '),
+      narrowOutside.map((label) => `${label.text}@${label.box.join(',')}`).join(' | '),
     )
     await checkRig(rig, 1280)
     await page.setViewportSize({ width: 1600, height: 900 })
     await page.waitForTimeout(320)
 
-    stdout.write(`  ${rig.id} 画布 ${JSON.stringify(boxes?.canvas)}｜标注 ${JSON.stringify((boxes?.labels ?? []).map(l => l.text))}\n`)
+    stdout.write(
+      `  ${rig.id} 画布 ${JSON.stringify(boxes?.canvas)}｜标注 ${JSON.stringify((boxes?.labels ?? []).map((l) => l.text))}\n`,
+    )
   }
 } finally {
-  writeFileSync(path.join(process.cwd(), 'tmp', 'pressure-rigs-shots.json'), `${JSON.stringify(shots, null, 2)}\n`)
+  writeFileSync(
+    path.join(process.cwd(), 'tmp', 'pressure-rigs-shots.json'),
+    `${JSON.stringify(shots, null, 2)}\n`,
+  )
   await finish()
   server.stop()
 }

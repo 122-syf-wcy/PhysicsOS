@@ -37,12 +37,17 @@ describe('DeterministicInductionQuestionParser', () => {
     expect(candidate.confidence).toBeGreaterThanOrEqual(0.9)
     expect(candidate.ir.domain).toBe('induction')
     expect(candidate.ir.model).toBe('bar_motion_emf')
-    expect(candidate.ir.entities).toEqual(expect.arrayContaining(['conducting_bar', 'circuit_loop']))
+    expect(candidate.ir.entities).toEqual(
+      expect.arrayContaining(['conducting_bar', 'circuit_loop']),
+    )
     expect(candidate.ir.relations).toContain('bar_cuts_field_lines')
     expect(candidate.ir.relations).toContain('faraday_law')
     expect(candidate.ir.assumptions).toContain('constant_velocity_bar')
     expect(candidate.ir.targets).toEqual(expect.arrayContaining(['induced_emf', 'induced_current']))
-    expect(candidate.ir.knowns.find((k) => k.key === 'magnetic_field_strength')?.value).toBeCloseTo(0.5, 12)
+    expect(candidate.ir.knowns.find((k) => k.key === 'magnetic_field_strength')?.value).toBeCloseTo(
+      0.5,
+      12,
+    )
     expect(candidate.ir.knowns.find((k) => k.key === 'bar_length')?.value).toBeCloseTo(0.2, 12)
     expect(candidate.ir.knowns.find((k) => k.key === 'bar_velocity')?.value).toBeCloseTo(2, 12)
     expect(candidate.ir.knowns.find((k) => k.key === 'resistance_1')?.value).toBeCloseTo(5, 12)
@@ -137,7 +142,9 @@ describe('Induction Question full pipeline', () => {
     const result = processQuestion(document)
 
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
-    expect(result.validation?.issues.some((issue) => issue.code === 'MISSING_RESISTANCE')).toBe(true)
+    expect(result.validation?.issues.some((issue) => issue.code === 'MISSING_RESISTANCE')).toBe(
+      true,
+    )
   })
 
   it('still solves the magnetic golden questions after the induction dispatch (no regression)', () => {
@@ -150,11 +157,16 @@ describe('Induction Question full pipeline', () => {
 
 describe('Induction semantic validation', () => {
   it('returns INVALID_SEMANTICS when B is missing', () => {
-    const text = '一根长 L = 20 cm 的导体棒以 v = 2 m/s 的速度垂直切割磁感线，回路电阻 R = 5 Ω。求感应电动势。'
+    const text =
+      '一根长 L = 20 cm 的导体棒以 v = 2 m/s 的速度垂直切割磁感线，回路电阻 R = 5 Ω。求感应电动势。'
     const document: import('../src/index.ts').QuestionDocument = {
       id: 'test-no-b',
       content: { source: 'text', rawText: text, extractedText: text, status: 'EXTRACTED' },
-      metadata: { domain: 'induction', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+      metadata: {
+        domain: 'induction',
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
     } as unknown as import('../src/index.ts').QuestionDocument
     const result = processQuestion(document)
     expect(result.workflowState).toBe('INVALID_SEMANTICS')
@@ -162,11 +174,16 @@ describe('Induction semantic validation', () => {
   })
 
   it('returns INVALID_SEMANTICS when a flux-change question states no rate', () => {
-    const text = '线圈放在磁感应强度 B = 0.4 T 的磁场中，线圈面积 S = 50 cm²，回路电阻 R = 2 Ω。求感应电动势。'
+    const text =
+      '线圈放在磁感应强度 B = 0.4 T 的磁场中，线圈面积 S = 50 cm²，回路电阻 R = 2 Ω。求感应电动势。'
     const document: import('../src/index.ts').QuestionDocument = {
       id: 'test-no-rate',
       content: { source: 'text', rawText: text, extractedText: text, status: 'EXTRACTED' },
-      metadata: { domain: 'induction', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+      metadata: {
+        domain: 'induction',
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
     } as unknown as import('../src/index.ts').QuestionDocument
     const result = processQuestion(document)
     expect(result.workflowState).toBe('INVALID_SEMANTICS')

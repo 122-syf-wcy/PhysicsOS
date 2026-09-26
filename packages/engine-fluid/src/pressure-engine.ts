@@ -214,14 +214,16 @@ const buildVerification = (
     const ratioHolds =
       reading.comparisonArea === undefined ||
       reading.comparisonPressure === undefined ||
-      Math.abs(reading.comparisonPressure / reading.pressure - reading.area / reading.comparisonArea) <=
+      Math.abs(
+        reading.comparisonPressure / reading.pressure - reading.area / reading.comparisonArea,
+      ) <=
         PRESSURE_RELATIVE_TOLERANCE * (reading.area / reading.comparisonArea)
     checks.push(
       check(
         'contact_force_invariant',
         'constraint',
-        Math.abs(fromLoaded - reading.force) <= PRESSURE_RELATIVE_TOLERANCE * Math.max(reading.force, 1) &&
-          ratioHolds,
+        Math.abs(fromLoaded - reading.force) <=
+          PRESSURE_RELATIVE_TOLERANCE * Math.max(reading.force, 1) && ratioHolds,
         {
           message:
             '压力与压强的关系：两个受力面上的 F = p·S 相同，且压强与受力面积成反比 —— 面积变成几分之一，压强就变成几倍。',
@@ -258,7 +260,11 @@ const buildVerification = (
         {
           message: '静水压强：由 dp/dh = ρg 沿深度积分所得压强与 p = ρgh 一致。',
           targetId: model.benchId,
-          details: { fromProduct: reading.pressure, fromIntegral: integrated, depth: reading.depth },
+          details: {
+            fromProduct: reading.pressure,
+            fromIntegral: integrated,
+            depth: reading.depth,
+          },
         },
       ),
     )
@@ -277,7 +283,8 @@ const buildVerification = (
             Math.abs(
               reading.comparisonDepthPressure / reading.pressure -
                 reading.comparisonDepth / reading.depth,
-            ) <= PRESSURE_RELATIVE_TOLERANCE * (reading.comparisonDepth / reading.depth) &&
+            ) <=
+              PRESSURE_RELATIVE_TOLERANCE * (reading.comparisonDepth / reading.depth) &&
             Math.abs(doubled.pressure - reading.comparisonDepthPressure) <=
               PRESSURE_RELATIVE_TOLERANCE * Math.max(reading.comparisonDepthPressure, 1),
           {
@@ -305,7 +312,8 @@ const buildVerification = (
           Math.abs(
             reading.comparisonLiquidPressure / reading.pressure -
               reading.comparisonLiquidDensity / reading.liquidDensity,
-          ) <= PRESSURE_RELATIVE_TOLERANCE * (reading.comparisonLiquidDensity / reading.liquidDensity),
+          ) <=
+            PRESSURE_RELATIVE_TOLERANCE * (reading.comparisonLiquidDensity / reading.liquidDensity),
           {
             message: '压强与液体密度成正比：同一深度处换用密度更大的液体，压强按密度之比增大。',
             targetId: model.benchId,
@@ -337,7 +345,8 @@ const buildVerification = (
       Math.abs(integrated - reading.hemisphereForce) <=
         PRESSURE_RELATIVE_TOLERANCE * Math.max(reading.hemisphereForce, 1),
       {
-        message: '马德堡半球的拉力等于大气压乘以半球的投影面积 πr²：沿球面积分 p·cosθ 与 p₀·πr² 一致。',
+        message:
+          '马德堡半球的拉力等于大气压乘以半球的投影面积 πr²：沿球面积分 p·cosθ 与 p₀·πr² 一致。',
         targetId: model.benchId,
         details: {
           fromProjectedArea: reading.hemisphereForce,

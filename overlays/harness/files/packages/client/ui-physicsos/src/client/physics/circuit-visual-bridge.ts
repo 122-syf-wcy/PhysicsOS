@@ -59,6 +59,12 @@ const LAMP_MIN_WATTS = 1e-9
 /** Currents below this never drift beads: meter leaks (~nA) and solve noise. */
 const FLOW_MIN_AMPS = 1e-6
 
+/**
+ * The circuit scene visuals helper `fmtQuantityValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtQuantityValue = (value: number, digits = 3): string => {
   if (!Number.isFinite(value)) return '—'
   const absolute = Math.abs(value)
@@ -71,7 +77,11 @@ export const fmtQuantityValue = (value: number, digits = 3): string => {
   return String(Number.parseFloat(value.toPrecision(digits)))
 }
 
-/** Scene observable definition → canvas toggle key. `graph` has no canvas layer. */
+/**
+ * Scene observable definition → canvas toggle key. `graph` has no canvas layer
+ * @returns the observable key.
+ * @param definition - the observable definition.
+ */
 export const circuitObservableKeyOf = (
   definition: ObservableDefinition,
 ): ObservableKey | undefined => {
@@ -373,6 +383,9 @@ const chargeFlowsOf = (
   return flows
 }
 
+/**
+ * The circuit visual input shape used by the circuit scene visuals module.
+ */
 export interface CircuitVisualInput {
   readonly scene: PhysicsScene
   /** Solved operating point at the frame being drawn. */
@@ -391,10 +404,21 @@ export interface CircuitVisualInput {
   }
 }
 
-/** Build the one visual frame the circuit renderer consumes. */
+/**
+ * Build the one visual frame the circuit renderer consumes.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
 export const circuitSceneVisualAt = (
-  { scene, point, time, frame }: CircuitVisualInput,
+  input: CircuitVisualInput,
 ): SceneVisualModel => {
+  const {
+    scene,
+    point,
+    time,
+    frame,
+  } = input
+
   const circuit = circuitOf(scene)
   if (circuit === undefined) return emptyVisualModel('circuit')
 

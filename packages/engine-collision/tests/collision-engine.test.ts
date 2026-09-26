@@ -77,8 +77,12 @@ describe('engine-collision · elastic collisions', () => {
     })
     const result = simulate(scene)
     /* After the elastic exchange a should carry -1 and b should carry 2. */
-    const finalA = result.states[result.states.length - 1]?.objects.find(o => o.id === 'a')?.velocity
-    const finalB = result.states[result.states.length - 1]?.objects.find(o => o.id === 'b')?.velocity
+    const finalA = result.states[result.states.length - 1]?.objects.find(
+      (o) => o.id === 'a',
+    )?.velocity
+    const finalB = result.states[result.states.length - 1]?.objects.find(
+      (o) => o.id === 'b',
+    )?.velocity
     const va = toCanonicalVector(finalA as never).vectorSI
     const vb = toCanonicalVector(finalB as never).vectorSI
     expect(va.x).toBeCloseTo(-1, 1)
@@ -105,8 +109,8 @@ describe('engine-collision · elastic collisions', () => {
     expect(pEnd.y).toBeCloseTo(p0.y, 6)
     expect(totalEnergyAt(first)).toBeCloseTo(totalEnergyAt(last), 6)
 
-    const finalA = last.objects.find(o => o.id === 'a')?.velocity
-    const finalB = last.objects.find(o => o.id === 'b')?.velocity
+    const finalA = last.objects.find((o) => o.id === 'a')?.velocity
+    const finalB = last.objects.find((o) => o.id === 'b')?.velocity
     const va = toCanonicalVector(finalA as never).vectorSI
     const vb = toCanonicalVector(finalB as never).vectorSI
     expect(va.x).toBeCloseTo(-3, 1)
@@ -121,12 +125,12 @@ describe('engine-collision · elastic collisions', () => {
       ],
     })
     const result = simulate(scene, 15)
-    const ids = result.verification.checks.map(c => c.id)
+    const ids = result.verification.checks.map((c) => c.id)
     expect(ids).toContain('momentum_conservation')
     expect(ids).toContain('energy_conservation')
-    const momentumCheck = result.verification.checks.find(c => c.id === 'momentum_conservation')
+    const momentumCheck = result.verification.checks.find((c) => c.id === 'momentum_conservation')
     expect(momentumCheck?.passed).toBe(true)
-    const energyCheck = result.verification.checks.find(c => c.id === 'energy_conservation')
+    const energyCheck = result.verification.checks.find((c) => c.id === 'energy_conservation')
     expect(energyCheck?.passed).toBe(true)
   })
 })
@@ -141,9 +145,11 @@ describe('engine-collision · perfectly inelastic', () => {
       ],
     })
     const result = simulate(scene, 20)
-    const last = result.states[result.states.length - 1] as NonNullable<(typeof result.states)[number]>
-    const va = toCanonicalVector(last.objects.find(o => o.id === 'a')?.velocity as never).vectorSI
-    const vb = toCanonicalVector(last.objects.find(o => o.id === 'b')?.velocity as never).vectorSI
+    const last = result.states[result.states.length - 1] as NonNullable<
+      (typeof result.states)[number]
+    >
+    const va = toCanonicalVector(last.objects.find((o) => o.id === 'a')?.velocity as never).vectorSI
+    const vb = toCanonicalVector(last.objects.find((o) => o.id === 'b')?.velocity as never).vectorSI
     expect(va.x).toBeCloseTo(0.5, 2)
     expect(vb.x).toBeCloseTo(0.5, 2)
     /* Momentum still conserved. */
@@ -163,14 +169,14 @@ describe('engine-collision · perfectly inelastic', () => {
       ],
     })
     const result = simulate(scene, 15)
-    const ids = result.verification.checks.map(c => c.id)
+    const ids = result.verification.checks.map((c) => c.id)
     expect(ids).toContain('momentum_conservation')
     expect(ids).not.toContain('energy_conservation')
   })
 })
 
 describe('engine-collision · partial restitution', () => {
-  it('reproduces e = -(vB\' - vA\') / (vB - vA) along the normal', () => {
+  it("reproduces e = -(vB' - vA') / (vB - vA) along the normal", () => {
     const e = 0.5
     const scene = createCollisionScene({
       bodies: [
@@ -179,9 +185,11 @@ describe('engine-collision · partial restitution', () => {
       ],
     })
     const result = simulate(scene, 20)
-    const last = result.states[result.states.length - 1] as NonNullable<(typeof result.states)[number]>
-    const va = toCanonicalVector(last.objects.find(o => o.id === 'a')?.velocity as never).vectorSI
-    const vb = toCanonicalVector(last.objects.find(o => o.id === 'b')?.velocity as never).vectorSI
+    const last = result.states[result.states.length - 1] as NonNullable<
+      (typeof result.states)[number]
+    >
+    const va = toCanonicalVector(last.objects.find((o) => o.id === 'a')?.velocity as never).vectorSI
+    const vb = toCanonicalVector(last.objects.find((o) => o.id === 'b')?.velocity as never).vectorSI
     const closing = -1 - 3 // vB0 - vA0 = -4
     const separating = vb.x - va.x
     expect(separating / closing).toBeCloseTo(-e, 3)
@@ -201,15 +209,18 @@ describe('engine-collision · boundary reflection', () => {
     const result = simulate(scene, 10)
     const events = result.events
     /* b stays put; a bounces off the right wall, so it changes sign at least once. */
-    const vxSeries = result.states.map(s =>
-      toCanonicalVector(s.objects.find(o => o.id === 'a')?.velocity as never).vectorSI.x)
+    const vxSeries = result.states.map(
+      (s) => toCanonicalVector(s.objects.find((o) => o.id === 'a')?.velocity as never).vectorSI.x,
+    )
     const minVx = Math.min(...vxSeries)
     const maxVx = Math.max(...vxSeries)
     expect(minVx).toBeLessThan(0)
     expect(maxVx).toBeGreaterThan(0)
     /* With e=1 the speed magnitude is preserved. */
     const first = result.states[0] as NonNullable<(typeof result.states)[number]>
-    const last = result.states[result.states.length - 1] as NonNullable<(typeof result.states)[number]>
+    const last = result.states[result.states.length - 1] as NonNullable<
+      (typeof result.states)[number]
+    >
     const v0 = Math.hypot(...Object.values(totalMomentumAt(first)).map((v, i) => (i < 2 ? v : 0)))
     const vEnd = Math.hypot(totalMomentumAt(last).x, totalMomentumAt(last).y)
     expect(Math.abs(vEnd - v0)).toBeLessThan(1e-6)
@@ -221,15 +232,29 @@ describe('engine-collision · boundary reflection', () => {
        first wall contact; asserting it across the whole run fails the scene. */
     const scene = createCollisionScene({
       bodies: [
-        { id: 'ball-a', mass: 1, position: [-2.4, 0], velocity: [2, 0], radius: 0.5, restitution: 1 },
-        { id: 'ball-b', mass: 1, position: [2.4, 0], velocity: [-1.5, 0], radius: 0.5, restitution: 1 },
+        {
+          id: 'ball-a',
+          mass: 1,
+          position: [-2.4, 0],
+          velocity: [2, 0],
+          radius: 0.5,
+          restitution: 1,
+        },
+        {
+          id: 'ball-b',
+          mass: 1,
+          position: [2.4, 0],
+          velocity: [-1.5, 0],
+          radius: 0.5,
+          restitution: 1,
+        },
       ],
       boundary: { width: 12, height: 5 },
       boundaryRestitution: 1,
     })
     const result = simulate(scene, 10)
     expect(result.verification.status).toBe('passed')
-    const momentum = result.verification.checks.find(c => c.id === 'momentum_conservation')
+    const momentum = result.verification.checks.find((c) => c.id === 'momentum_conservation')
     expect(momentum?.passed).toBe(true)
     /* The run really did bounce off walls, so the check must be a windowed
        one rather than a skipped one. */
@@ -246,7 +271,7 @@ describe('engine-collision · events', () => {
       ],
     })
     const result = simulate(scene, 10)
-    const collisions = result.events.filter(e => e.type === 'CollisionOccurred')
+    const collisions = result.events.filter((e) => e.type === 'CollisionOccurred')
     expect(collisions.length).toBeGreaterThan(0)
     /* Balls start 6 m apart closing at 2 m/s → first contact near t = 2.5 s. */
     const firstCollision = collisions[0]

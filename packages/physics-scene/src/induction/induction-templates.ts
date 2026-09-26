@@ -82,7 +82,7 @@ export const createFluxChangeScene = (input: FluxChangeSceneInput = {}): Physics
       resistance: input.resistance ?? 2,
     },
     title: input.title ?? '磁通量变化产生感应电动势',
-    description: "Induction Engine · 法拉第电磁感应定律 E = -dΦ/dt（楞次定律）",
+    description: 'Induction Engine · 法拉第电磁感应定律 E = -dΦ/dt（楞次定律）',
   })
 
 export interface DoubleBarRailSceneInput {

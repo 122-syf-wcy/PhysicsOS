@@ -76,9 +76,7 @@ export const resolveCollisionScene = (scene: PhysicsScene): ResolvedCollisionSce
     const position = toVector(body.position)
     const velocity = toVector(body.velocity)
     const radius = body.shape.type === 'circle' ? canonicalValue(body.shape.radius) : 0.5
-    const restitution = body.material?.restitution === undefined
-      ? 1
-      : body.material.restitution
+    const restitution = body.material?.restitution === undefined ? 1 : body.material.restitution
     return {
       id: body.id,
       m: canonicalValue(body.mass),
@@ -105,9 +103,10 @@ export const resolveCollisionScene = (scene: PhysicsScene): ResolvedCollisionSce
     if (wall.behavior !== undefined && wall.behavior.type !== 'reflect') continue
     const width = canonicalValue(wall.geometry.width)
     const height = canonicalValue(wall.geometry.height)
-    const e = wall.behavior?.type === 'reflect' && wall.behavior.restitution !== undefined
-      ? wall.behavior.restitution
-      : 1
+    const e =
+      wall.behavior?.type === 'reflect' && wall.behavior.restitution !== undefined
+        ? wall.behavior.restitution
+        : 1
     boundary = { halfW: width / 2, halfH: height / 2, e }
   }
 

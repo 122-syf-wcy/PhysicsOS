@@ -15,10 +15,7 @@
  * quantities the engine already published, projected by the visual bridge.
  */
 
-import {
-  CompositeEngine,
-  createCompositeSimulationRequest,
-} from '@physicsos/engine-composite'
+import { CompositeEngine, createCompositeSimulationRequest } from '@physicsos/engine-composite'
 import {
   derivedScalar,
   isQuantityVector,
@@ -32,6 +29,7 @@ import { observeCompositeScene } from '@physicsos/physics-observation'
 import { verifyCompositeApparatus } from '@physicsos/physics-verifier'
 import {
   SceneRuntime,
+  cyclotronBenchOf,
   createSceneCommand,
   sampleFieldsAt,
   type ElectricFieldDirection,
@@ -91,6 +89,16 @@ const DERIVED_LABELS: Record<string, string> = {
   gyro_radius: '回旋半径',
   cyclotron_period: '回旋周期',
   selected_velocity: '选择速度',
+  cyclotron_frequency: '回旋频率',
+  gap_voltage: '加速电压',
+  gap_electric_field: '缝隙电场',
+  magnetic_flux_density: '磁感应强度',
+  max_speed: '最大速度',
+  max_kinetic_energy: '最大动能',
+  extraction_radius: 'D 形盒半径',
+  acceleration_count: '加速次数',
+  crossings_completed: '已完成穿越次数',
+  turns_completed: '已完成圈数',
 }
 
 const OBSERVABLE_LABELS: Record<string, string> = {
@@ -123,7 +131,7 @@ const observableTreeChildren = (scene: PhysicsScene): readonly SceneTreeNode[] =
     if (key === undefined) return []
     const label =
       definition.type === 'force'
-        ? ((OBSERVABLE_LABELS.force ?? '力') +
+        ? (OBSERVABLE_LABELS.force ?? '力') +
           (definition.parameters?.['kind'] === 'electric'
             ? '·电场力'
             : definition.parameters?.['kind'] === 'magnetic'
@@ -132,21 +140,24 @@ const observableTreeChildren = (scene: PhysicsScene): readonly SceneTreeNode[] =
                 ? '·重力'
                 : definition.parameters?.['kind'] === 'net'
                   ? '·合力'
-                  : ''))
-        : OBSERVABLE_LABELS[definition.type] ?? definition.type
-    return [{
-      id: String(definition.id),
-      label,
-      icon: definition.type === 'velocity'
-        ? 'velocity'
-        : definition.type === 'force'
-          ? 'force'
-          : definition.type === 'trajectory'
-            ? 'trajectory'
-            : 'observable',
-      kind: 'observable' as const,
-      observable: key,
-    }]
+                  : '')
+        : (OBSERVABLE_LABELS[definition.type] ?? definition.type)
+    return [
+      {
+        id: String(definition.id),
+        label,
+        icon:
+          definition.type === 'velocity'
+            ? 'velocity'
+            : definition.type === 'force'
+              ? 'force'
+              : definition.type === 'trajectory'
+                ? 'trajectory'
+                : 'observable',
+        kind: 'observable' as const,
+        observable: key,
+      },
+    ]
   })
 
 const DIRECTION_OPTIONS: readonly { value: ElectricFieldDirection; label: string }[] = [
@@ -173,6 +184,12 @@ interface Computed {
 
 /** Region role label for the scene tree, read from the region's bound fields. */
 const regionKindLabel = (scene: PhysicsScene, regionId: string): string => {
+  const cyclotron = cyclotronBenchOf(scene)
+  if (cyclotron !== undefined) {
+    if (regionId === 'cyclotron-gap') return '加速缝隙（时变电场）'
+    if (regionId === 'cyclotron-dee-left') return '左 D 形盒（B）'
+    if (regionId === 'cyclotron-dee-right') return '右 D 形盒（B）'
+  }
   const fields = scene.fields.filter(field => field.regionId === regionId)
   const hasE = fields.some(field => field.type === 'uniform_electric')
   const hasB = fields.some(field => field.type === 'uniform_magnetic')
@@ -182,6 +199,9 @@ const regionKindLabel = (scene: PhysicsScene, regionId: string): string => {
   return '场区'
 }
 
+/**
+ * The composite workspace runtime — see the module doc for its role.
+ */
 export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new CompositeEngine()
@@ -320,7 +340,11 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, state, endTime } = this.computed
-    const observations = observeCompositeScene({ scene, simulation, state })
+    const cyclotron = cyclotronBenchOf(scene)
+    const observations =
+      cyclotron === undefined
+        ? observeCompositeScene({ scene, simulation, state })
+        : { sceneRevision: scene.revision, observations: [] }
     const view = compositeSceneVisualAt({
       scene,
       simulation,
@@ -412,7 +436,11 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     const speed =
       particle === undefined
         ? 0
-        : Math.hypot(particle.velocity.vector.x, particle.velocity.vector.y, particle.velocity.vector.z)
+        : Math.hypot(
+          particle.velocity.vector.x,
+          particle.velocity.vector.y,
+          particle.velocity.vector.z,
+        )
     const regionChildren: SceneTreeNode[] = scene.regions.map((region) => {
       const width = region.shape.type === 'rectangle' ? region.shape.width.value : 0
       const height = region.shape.type === 'rectangle' ? region.shape.height.value : 0
@@ -424,6 +452,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
         kind: 'object' as const,
       }
     })
+    const cyclotron = cyclotronBenchOf(scene)
     const fieldChildren: SceneTreeNode[] = scene.fields
       .filter(field => field.type !== 'point_charge')
       .map((field) => {
@@ -468,10 +497,22 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
           {
             id: particle?.id ?? 'particle',
             label: (particle?.charge?.value ?? 0) >= 0 ? '正电粒子' : '负电粒子',
-            secondary: particle?.charge === undefined ? '—' : `${particle.charge.value.toExponential(2)} C`,
+            secondary:
+              particle?.charge === undefined ? '—' : `${particle.charge.value.toExponential(2)} C`,
             icon: 'particle',
             kind: 'object',
           },
+          ...(cyclotron === undefined
+            ? []
+            : [
+              {
+                id: cyclotron.id,
+                label: '回旋加速器参数',
+                secondary: `B = ${fmt(cyclotron.magneticFluxDensity.value)} T · U = ${fmt(cyclotron.gapVoltage.value)} V · R = ${fmt(cyclotron.deeRadius.value)} m`,
+                icon: 'field' as const,
+                kind: 'object' as const,
+              },
+            ]),
           ...fieldChildren,
           ...regionChildren,
         ],
@@ -482,7 +523,13 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
         icon: 'folder',
         kind: 'group',
         children: [
-          { id: 'init-velocity', label: '初速度', secondary: `${fmt(speed)} m/s`, icon: 'velocity', kind: 'object' },
+          {
+            id: 'init-velocity',
+            label: '初速度',
+            secondary: `${fmt(speed)} m/s`,
+            icon: 'velocity',
+            kind: 'object',
+          },
         ],
       },
       {
@@ -506,7 +553,11 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     const speed =
       particle === undefined
         ? 0
-        : Math.hypot(particle.velocity.vector.x, particle.velocity.vector.y, particle.velocity.vector.z)
+        : Math.hypot(
+          particle.velocity.vector.x,
+          particle.velocity.vector.y,
+          particle.velocity.vector.z,
+        )
     const electricStrength =
       electricField?.type === 'uniform_electric'
         ? Math.hypot(electricField.fieldStrength.vector.x, electricField.fieldStrength.vector.y)
@@ -519,6 +570,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
        set: outside a field region every contribution is zero, and an end-of-run
        summary would contradict the canvas readout the moment a student seeks. */
     const derivedSource = state?.derived ?? simulation?.derivedQuantities ?? []
+    const cyclotron = cyclotronBenchOf(scene)
     const derived: DerivedQuantityView[] = derivedSource.map(entry => ({
       id: entry.key,
       label: DERIVED_LABELS[entry.key] ?? entry.key,
@@ -531,29 +583,81 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
         id: 'particle',
         title: '粒子属性',
         parameters: [
-          { id: 'q', label: '电荷量', symbol: 'q', unit: 'C', value: particle?.charge?.value ?? 0, step: 1e-19, highlights: 'electric-force-vector' },
-          { id: 'm', label: '质量', symbol: 'm', unit: 'kg', value: particle?.mass.value ?? 0, min: 1e-32, step: 1e-27 },
-          { id: 'v0', label: '初速度', symbol: 'v_0', unit: 'm/s', value: speed, min: 0, step: 1e4, highlights: 'velocity-vector' },
+          {
+            id: 'q',
+            label: '电荷量',
+            symbol: 'q',
+            unit: 'C',
+            value: particle?.charge?.value ?? 0,
+            step: 1e-19,
+            highlights: 'electric-force-vector',
+          },
+          {
+            id: 'm',
+            label: '质量',
+            symbol: 'm',
+            unit: 'kg',
+            value: particle?.mass.value ?? 0,
+            min: 1e-32,
+            step: 1e-27,
+          },
+          {
+            id: 'v0',
+            label: '初速度',
+            symbol: 'v_0',
+            unit: 'm/s',
+            value: speed,
+            min: 0,
+            step: 1e4,
+            highlights: 'velocity-vector',
+          },
         ],
       },
-      {
-        id: 'fields',
-        title: '场',
-        parameters: [
-          { id: 'E', label: '电场强度', symbol: 'E', unit: 'V/m', value: electricStrength, min: 0, step: 1e3, highlights: 'electric-field-vector' },
-          { id: 'B', label: '磁感应强度', symbol: 'B', unit: 'T', value: magneticStrength, min: 0, step: 0.01, highlights: 'magnetic-field' },
-        ],
-        ...(electricField === undefined ? {} : {
-          choices: [
-            {
-              id: 'direction',
-              label: '电场方向',
-              value: fieldDirectionOf(scene),
-              options: DIRECTION_OPTIONS.map(option => ({ value: option.value, label: option.label })),
-            },
-          ],
-        }),
-      },
+      ...(cyclotron === undefined
+        ? [
+          {
+            id: 'fields',
+            title: '场',
+            parameters: [
+              {
+                id: 'E',
+                label: '电场强度',
+                symbol: 'E',
+                unit: 'V/m',
+                value: electricStrength,
+                min: 0,
+                step: 1e3,
+                highlights: 'electric-field-vector',
+              },
+              {
+                id: 'B',
+                label: '磁感应强度',
+                symbol: 'B',
+                unit: 'T',
+                value: magneticStrength,
+                min: 0,
+                step: 0.01,
+                highlights: 'magnetic-field',
+              },
+            ],
+            ...(electricField === undefined
+              ? {}
+              : {
+                choices: [
+                  {
+                    id: 'direction',
+                    label: '电场方向',
+                    value: fieldDirectionOf(scene),
+                    options: DIRECTION_OPTIONS.map(option => ({
+                      value: option.value,
+                      label: option.label,
+                    })),
+                  },
+                ],
+              }),
+          },
+        ]
+        : []),
     ]
     if (derived.length > 0) {
       sections.push({ id: 'derived', title: '派生量', derived })
@@ -573,7 +677,10 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
         charge: { value, unit: 'C', dimension: 'electric_charge' },
       })
     } else if (id === 'm') {
-      this.command('SetParticleMass', { particleId, mass: { value, unit: 'kg', dimension: 'mass' } })
+      this.command('SetParticleMass', {
+        particleId,
+        mass: { value, unit: 'kg', dimension: 'mass' },
+      })
     } else if (id === 'v0') {
       this.command('SetParticleVelocity', {
         particleId,
@@ -677,9 +784,8 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
 const chartsOf = (simulation: SimulationResult, particleId: string): readonly ChartSeries[] => {
   const samples = simulation.states.map((sample) => {
     const object = sample.objects.find(candidate => candidate.id === particleId)
-    const position = object?.position === undefined
-      ? { x: 0, y: 0 }
-      : toCanonicalVector(object.position).vectorSI
+    const position =
+      object?.position === undefined ? { x: 0, y: 0 } : toCanonicalVector(object.position).vectorSI
     return {
       t: sample.time.value,
       x: position.x,
@@ -724,9 +830,10 @@ const tableOf = (simulation: SimulationResult, particleId: string): DataTableVie
     .filter((_, index) => index % stride === 0 || index === simulation.states.length - 1)
     .map((sample, index) => {
       const object = sample.objects.find(candidate => candidate.id === particleId)
-      const position = object?.position === undefined
-        ? { x: 0, y: 0 }
-        : toCanonicalVector(object.position).vectorSI
+      const position =
+        object?.position === undefined
+          ? { x: 0, y: 0 }
+          : toCanonicalVector(object.position).vectorSI
       return {
         step: index,
         values: [
@@ -765,9 +872,11 @@ const openingPlayheadTime = (
     if (object?.position === undefined) return false
     const sample = sampleFieldsAt(scene, toCanonicalVector(object.position).vectorSI)
     return (
-      sample.electricField.x !== 0 || sample.electricField.y !== 0 ||
+      sample.electricField.x !== 0 ||
+      sample.electricField.y !== 0 ||
       sample.magneticFluxDensity.z !== 0 ||
-      sample.gravity.x !== 0 || sample.gravity.y !== 0
+      sample.gravity.x !== 0 ||
+      sample.gravity.y !== 0
     )
   }
   /* Already inside a field region: the opening frame is already informative. */
@@ -815,12 +924,15 @@ const verificationOf = (
     status: (check.passed ? 'passed' : 'failed') as VerificationCheckView['status'],
     ...(check.message === undefined ? {} : { detail: check.message }),
   }))
-  const apparatus = verifyCompositeApparatus(scene, simulation).checks.map(check => ({
-    id: check.id,
-    label: VERIFICATION_LABELS[check.id] ?? check.id,
-    status: (check.passed ? 'passed' : 'failed') as VerificationCheckView['status'],
-    ...(check.message === undefined ? {} : { detail: check.message }),
-  }))
+  const apparatus =
+    cyclotronBenchOf(scene) === undefined
+      ? verifyCompositeApparatus(scene, simulation).checks.map(check => ({
+        id: check.id,
+        label: VERIFICATION_LABELS[check.id] ?? check.id,
+        status: (check.passed ? 'passed' : 'failed') as VerificationCheckView['status'],
+        ...(check.message === undefined ? {} : { detail: check.message }),
+      }))
+      : []
   return [...engineChecks, ...apparatus]
 }
 
@@ -856,7 +968,10 @@ const compositeEventsOf = (
     if (event.type === 'EnterRegion') {
       enterCount += 1
       const regionId = regionIdOfEvent(event)
-      const region = regionId === undefined ? undefined : scene.regions.find(candidate => candidate.id === regionId)
+      const region =
+        regionId === undefined
+          ? undefined
+          : scene.regions.find(candidate => candidate.id === regionId)
       events.push({
         id: `event-enter-${enterCount}`,
         time,
@@ -866,7 +981,10 @@ const compositeEventsOf = (
     } else if (event.type === 'ExitRegion') {
       exitCount += 1
       const regionId = regionIdOfEvent(event)
-      const region = regionId === undefined ? undefined : scene.regions.find(candidate => candidate.id === regionId)
+      const region =
+        regionId === undefined
+          ? undefined
+          : scene.regions.find(candidate => candidate.id === regionId)
       events.push({
         id: `event-exit-${exitCount}`,
         time,
@@ -880,6 +998,21 @@ const compositeEventsOf = (
         time,
         label: '场区切换',
         kind: 'generic',
+      })
+    } else if (event.type === 'AcceleratingGapCrossing') {
+      switchCount += 1
+      events.push({
+        id: `event-cyclotron-crossing-${switchCount}`,
+        time,
+        label: `第 ${switchCount} 次通过加速缝隙`,
+        kind: 'generic',
+      })
+    } else if (event.type === 'CyclotronExtraction') {
+      events.push({
+        id: 'event-cyclotron-extraction',
+        time,
+        label: '达到 D 形盒半径，停止加速',
+        kind: 'exit',
       })
     }
   }
@@ -898,9 +1031,10 @@ const velocityAtSpeed = (
 ): SceneCommandPayloadMap['SetParticleVelocity']['velocity'] => {
   const vector = raw ?? { x: 1, y: 0, z: 0 }
   const magnitude = Math.hypot(vector.x, vector.y, vector.z)
-  const direction = magnitude === 0
-    ? { x: 1, y: 0, z: 0 }
-    : { x: vector.x / magnitude, y: vector.y / magnitude, z: vector.z / magnitude }
+  const direction =
+    magnitude === 0
+      ? { x: 1, y: 0, z: 0 }
+      : { x: vector.x / magnitude, y: vector.y / magnitude, z: vector.z / magnitude }
   return {
     vector: { x: direction.x * speed, y: direction.y * speed, z: direction.z * speed },
     unit: 'm/s',
@@ -908,5 +1042,10 @@ const velocityAtSpeed = (
   }
 }
 
+/**
+ * The composite workspace runtime helper `createCompositeWorkspaceRuntime`.
+ * @returns the composite workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createCompositeWorkspaceRuntime = (scene: PhysicsScene): CompositeWorkspaceRuntime =>
   new CompositeWorkspaceRuntime(scene)

@@ -127,10 +127,9 @@ describe('circuit scene commands', () => {
     if (at0 === undefined) throw new Error('r1 has no authored placement.')
     const circuit = circuitOf(runtime.getScene())!
     const touched = circuit.connections.filter(
-      entry =>
-        String(entry.from.componentId) === 'r1' || String(entry.to.componentId) === 'r1',
+      (entry) => String(entry.from.componentId) === 'r1' || String(entry.to.componentId) === 'r1',
     )
-    const shaped = touched.filter(entry => (layout?.wires?.[entry.id]?.length ?? 0) > 0)
+    const shaped = touched.filter((entry) => (layout?.wires?.[entry.id]?.length ?? 0) > 0)
     expect(shaped.length).toBeGreaterThan(0)
 
     const result = execute(runtime, 'SetComponentPlacement', {

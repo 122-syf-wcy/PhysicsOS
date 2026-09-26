@@ -144,6 +144,9 @@ interface Computed {
   readonly model: ResolvedPressureModel
 }
 
+/**
+ * The pressure workspace runtime — see the module doc for its role.
+ */
 export class PressureWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new PressureEngine()
@@ -854,6 +857,11 @@ const tableOf = (model: ResolvedPressureModel): DataTableView => {
   }
 }
 
+/**
+ * The pressure workspace runtime helper `createPressureWorkspaceRuntime`.
+ * @returns the pressure workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createPressureWorkspaceRuntime = (
   scene: PhysicsScene,
 ): PressureWorkspaceRuntime => new PressureWorkspaceRuntime(scene)

@@ -26,7 +26,13 @@ mkdirSync(SHOTS, { recursive: true })
 
 const BASE = 'http://127.0.0.1:3080'
 const failures = []
-const gate = { consoleErrors: [], pageErrors: [], rejections: [], failedRequests: [], errorResponses: [] }
+const gate = {
+  consoleErrors: [],
+  pageErrors: [],
+  rejections: [],
+  failedRequests: [],
+  errorResponses: [],
+}
 
 const check = (label, condition, detail) => {
   if (condition) {
@@ -45,7 +51,9 @@ const page = await context.newPage()
 page.on('console', (message) => {
   if (message.type() === 'error') gate.consoleErrors.push(message.text().slice(0, 300))
 })
-page.on('pageerror', (error) => { gate.pageErrors.push(error.message.slice(0, 300)) })
+page.on('pageerror', (error) => {
+  gate.pageErrors.push(error.message.slice(0, 300))
+})
 page.on('requestfailed', (request) => {
   gate.failedRequests.push(`${request.method()} ${request.url().slice(0, 160)}`)
 })
@@ -74,42 +82,49 @@ const lab = () => page.locator('[data-physicsos-surface="lab"]')
 const questions = () => page.locator('[data-physicsos-surface="questions"]')
 
 /** Geometry facts the visual gate depends on, scoped to whichever surface is up. */
-const geometry = () => page.evaluate(() => {
-  const cover = document.querySelector('[data-physicsos-surface="lab"]')
-  const canvas = cover?.querySelector('svg[role="img"]')
-  const body = cover?.querySelector('[class*="body"]')
-  const doc = document.documentElement
-  return {
-    domain: cover?.getAttribute('data-physicsos-domain'),
-    revision: cover?.getAttribute('data-scene-revision'),
-    status: cover?.getAttribute('data-verification-status'),
-    canvasShare: canvas && body
-      ? +(canvas.getBoundingClientRect().width / body.getBoundingClientRect().width).toFixed(3)
-      : 0,
-    pageScrolls: doc.scrollHeight > doc.clientHeight + 1,
-    paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter((node) => {
-      const stroke = getComputedStyle(node).stroke
-      return stroke !== 'none' && stroke !== ''
-    }).length,
-    vectorLabels: [...(canvas?.querySelectorAll('text') ?? [])]
-      .map((node) => node.textContent?.trim())
-      .filter((text) => text !== undefined && text.length > 0 && text.length <= 12),
-  }
-})
+const geometry = () =>
+  page.evaluate(() => {
+    const cover = document.querySelector('[data-physicsos-surface="lab"]')
+    const canvas = cover?.querySelector('svg[role="img"]')
+    const body = cover?.querySelector('[class*="body"]')
+    const doc = document.documentElement
+    return {
+      domain: cover?.getAttribute('data-physicsos-domain'),
+      revision: cover?.getAttribute('data-scene-revision'),
+      status: cover?.getAttribute('data-verification-status'),
+      canvasShare:
+        canvas && body
+          ? +(canvas.getBoundingClientRect().width / body.getBoundingClientRect().width).toFixed(3)
+          : 0,
+      pageScrolls: doc.scrollHeight > doc.clientHeight + 1,
+      paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter(
+        (node) => {
+          const stroke = getComputedStyle(node).stroke
+          return stroke !== 'none' && stroke !== ''
+        },
+      ).length,
+      vectorLabels: [...(canvas?.querySelectorAll('text') ?? [])]
+        .map((node) => node.textContent?.trim())
+        .filter((text) => text !== undefined && text.length > 0 && text.length <= 12),
+    }
+  })
 
 /** Question workflow state (matches mechanics-acceptance.mjs). */
 const workflowOf = () => questions().getAttribute('data-workflow')
 
 /** Inspector derived rows, keyed by their localized physical name. */
-const derivedRows = () => page.evaluate(() => {
-  const rows = {}
-  for (const row of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="derived"]')) {
-    const name = row.querySelector('[class*="derivedName"]')?.textContent?.trim()
-    const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
-    if (name !== undefined && value !== undefined) rows[name] = value
-  }
-  return rows
-})
+const derivedRows = () =>
+  page.evaluate(() => {
+    const rows = {}
+    for (const row of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="derived"]',
+    )) {
+      const name = row.querySelector('[class*="derivedName"]')?.textContent?.trim()
+      const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
+      if (name !== undefined && value !== undefined) rows[name] = value
+    }
+    return rows
+  })
 
 /** Open a golden question by title and wait for the workflow to settle. */
 const openQuestion = async (title) => {
@@ -124,7 +139,10 @@ await page.goto(`${BASE}/`, { waitUntil: 'networkidle', timeout: 60_000 })
 const later = page.getByRole('button', { name: '稍后配置' })
 await later.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {})
 if (await later.isVisible().catch(() => false)) await later.click()
-await page.locator('[class*="mask"]').waitFor({ state: 'detached', timeout: 15_000 }).catch(() => {})
+await page
+  .locator('[class*="mask"]')
+  .waitFor({ state: 'detached', timeout: 15_000 })
+  .catch(() => {})
 await page.getByText('探索一个物理世界').waitFor({ state: 'visible', timeout: 20_000 })
 
 /* Go straight to Question Space — the point-charge slice lives there, not in the
@@ -138,14 +156,23 @@ await openQuestion('点电荷的电场强度')
 {
   check('E question solves', (await workflowOf()) === 'READY', String(await workflowOf()))
 
-  const highlightable = page.locator('[data-physicsos-surface="questions"] button[class*="knownButton"]')
+  const highlightable = page.locator(
+    '[data-physicsos-surface="questions"] button[class*="knownButton"]',
+  )
   const knownCount = await highlightable.count()
   if (knownCount > 0) {
     await highlightable.first().click()
     await page.waitForTimeout(300)
-    const highlighted = await page.evaluate(() =>
-      document.querySelectorAll('[data-physicsos-surface="questions"] svg [class*="highlight"]').length)
-    check('E: clicking a known highlights the canvas', highlighted > 0, `${highlighted} highlighted nodes`)
+    const highlighted = await page.evaluate(
+      () =>
+        document.querySelectorAll('[data-physicsos-surface="questions"] svg [class*="highlight"]')
+          .length,
+    )
+    check(
+      'E: clicking a known highlights the canvas',
+      highlighted > 0,
+      `${highlighted} highlighted nodes`,
+    )
   } else {
     check('E: knowns are clickable', false, 'no known button rendered')
   }
@@ -173,7 +200,11 @@ await openQuestion('点电荷对试探电荷的电场力')
     check('F: opens in the electric lab', g.domain === 'electric', String(g.domain))
     check('F: lab scene is verified', g.status === 'verified', String(g.status))
     const rows = await derivedRows()
-    check('F: force magnitude is published', '电场力' in rows || Object.values(rows).some((v) => /N\s*$/.test(v)), JSON.stringify(rows))
+    check(
+      'F: force magnitude is published',
+      '电场力' in rows || Object.values(rows).some((v) => /N\s*$/.test(v)),
+      JSON.stringify(rows),
+    )
     await shot('electric-lab-point-charge-1600x900')
     await page.getByRole('button', { name: '试题空间' }).click()
     await questions().waitFor({ state: 'visible', timeout: 20_000 })
@@ -210,14 +241,18 @@ await openQuestion('点电荷的电场强度')
 
   /* Edit the source charge in the Inspector to create an experimental branch. */
   const sourceCharge = page.getByRole('textbox', { name: '正电荷' }).first()
-  if (await sourceCharge.count() > 0) {
+  if ((await sourceCharge.count()) > 0) {
     await sourceCharge.fill('6e-6')
     await sourceCharge.blur()
     await page.waitForTimeout(500)
   }
   const afterFork = await geometry()
   check('H: charge edit creates an experimental branch', (await branchCount()) === 1)
-  check('H: branch restarts its own revision', afterFork.revision === '1', `${beforeFork.revision} → ${afterFork.revision}`)
+  check(
+    'H: branch restarts its own revision',
+    afterFork.revision === '1',
+    `${beforeFork.revision} → ${afterFork.revision}`,
+  )
   check('H: branch still verified', afterFork.status === 'verified', afterFork.status)
   await shot('electric-lab-branch-1600x900')
 }
@@ -229,22 +264,35 @@ stdout.write('\nCASE I · Agent highlight is view-only\n')
   const before = await geometry()
   await page.getByRole('button', { name: /AI 助教/ }).click()
   const suggest = page.getByRole('button', { name: /电场强度是怎么来的|电场强度|这个电场强度/ })
-  if (await suggest.count() > 0) {
+  if ((await suggest.count()) > 0) {
     await suggest.first().click()
   } else {
     /* Fall back to typing the prompt if the suggestion chip is not rendered. */
-    const input = page.locator('[data-physicsos-surface="lab"] input, [data-physicsos-surface="lab"] textarea').first()
-    if (await input.count() > 0) {
+    const input = page
+      .locator('[data-physicsos-surface="lab"] input, [data-physicsos-surface="lab"] textarea')
+      .first()
+    if ((await input.count()) > 0) {
       await input.fill('这个电场强度是怎么来的？')
       await page.keyboard.press('Enter')
     }
   }
   await page.waitForTimeout(600)
-  const highlighted = await page.evaluate(() =>
-    document.querySelectorAll('[data-physicsos-surface="lab"] svg [class*="highlightGroup"]').length)
+  const highlighted = await page.evaluate(
+    () =>
+      document.querySelectorAll('[data-physicsos-surface="lab"] svg [class*="highlightGroup"]')
+        .length,
+  )
   const after = await geometry()
-  check('I: agent highlight reaches the canvas', highlighted > 0, `${highlighted} highlighted groups`)
-  check('I: agent highlight does not change the revision', after.revision === before.revision, `${before.revision} → ${after.revision}`)
+  check(
+    'I: agent highlight reaches the canvas',
+    highlighted > 0,
+    `${highlighted} highlighted groups`,
+  )
+  check(
+    'I: agent highlight does not change the revision',
+    after.revision === before.revision,
+    `${before.revision} → ${after.revision}`,
+  )
   check('I: agent cites its basis', (await page.getByText('依据').count()) > 0)
   await shot('agent-electric-highlight-1600x900')
 }

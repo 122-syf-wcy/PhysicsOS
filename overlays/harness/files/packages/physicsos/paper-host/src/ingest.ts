@@ -15,7 +15,7 @@ import type { BankItem, PaperLevel, Subject } from '@physicsos/question-paper'
 import { callModel, extractJson, sanitizeQuestion, type PaperModelRoute } from './draft.ts'
 
 /* The model emits ingest drafts without storage-owned fields: id/stemHash/
-   status/enteredBy/enteredAt/reuseModes are stamped by the service. */
+   status/enteredBy/enteredAt/reuseModes/schoolId are stamped by the host. */
 const ingestItemSchema = z.object({
   stem: z.string().min(1),
   options: z.array(z.string()).optional(),
@@ -53,6 +53,8 @@ export interface IngestInput {
   readonly sourceUrl?: string
   readonly sourcePaperId?: string
   readonly enteredBy: string
+  /** Server-resolved tenant scope; absent only for internal legacy callers. */
+  readonly schoolId?: string | null
 }
 
 const SYSTEM = `你是中学物理/化学题库结构化专家。把粘贴的题目文本抽取为严格 JSON 数组，不要输出其他文字。

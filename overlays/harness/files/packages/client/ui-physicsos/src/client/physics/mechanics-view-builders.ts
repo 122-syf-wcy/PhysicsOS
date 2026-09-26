@@ -42,6 +42,9 @@ const bodyStateOf = (state: SimulationState, bodyId: string) =>
 
 /* ------------------------------------------------------------------ view --- */
 
+/**
+ * The snapshot input shape used by the mechanics view builders module.
+ */
 export interface SnapshotInput {
   scene: PhysicsScene
   modelId: MechanicsModelId
@@ -55,6 +58,9 @@ export interface SnapshotInput {
   status: RuntimeStatus
 }
 
+/**
+ * The built snapshot shape used by the mechanics view builders module.
+ */
 export interface BuiltSnapshot {
   scene: PhysicsScene
   sceneRevision: number
@@ -72,7 +78,12 @@ export interface BuiltSnapshot {
   trajectoryTimes: readonly number[]
 }
 
-/** Build the whole snapshot from one verified simulation + current state. */
+/**
+ * Build the whole snapshot from one verified simulation + current state.
+ * @returns the built snapshot.
+ * @param input - the caller-supplied fields.
+ * @returns the built snapshot.
+ */
 export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
   const { scene, model, simulation, state, clock, status, modelId } = input
   /* Readings follow the playhead: a key the engine also writes per-state
@@ -121,6 +132,12 @@ export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
 
 /* ------------------------------------------------------------------ trees --- */
 
+/**
+ * The tree of of the mechanics view builders module.
+ * @param scene - the physics scene.
+ * @param modelId - the model id.
+ * @returns the tree of list.
+ */
 export function treeOf(
   scene: PhysicsScene,
   modelId: MechanicsModelId,
@@ -218,6 +235,13 @@ function observableNode(
 
 /* ------------------------------------------------------------- inspectors --- */
 
+/**
+ * The inspector of of the mechanics view builders module.
+ * @param scene - the physics scene.
+ * @param modelId - the model id.
+ * @param dq - the dq.
+ * @returns the inspector of list.
+ */
 export function inspectorOf(
   scene: PhysicsScene,
   modelId: MechanicsModelId,

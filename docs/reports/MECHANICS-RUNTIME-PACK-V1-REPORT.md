@@ -8,12 +8,14 @@
 ## 1. Mechanics Contracts
 
 `packages/physics-scene` 扩展：
+
 - `Body`（rigid_body）已有完整 Contract（mass, position, velocity, acceleration, shape, material）
 - `Force` 已有完整 Contract（type: gravity, normal, friction, tension, spring, electric, lorentz, ampere, drag, custom；vector, targetId, model, derived）
 - `GravityField` 已有完整 Contract（uniform_gravity, acceleration: QuantityVector）
 - Scene validation 扩展：Body 单位/维度/有限性/质量正数检查，Body ID 加入 observable target 校验
 
 新增 `mechanics-scene-factory.ts`：
+
 - `createMechanicsScene(input)` — 根据 model 创建合法 PhysicsScene
 - `createMechanicsSimulationRequest(scene, simId, traceId)` — 创建 SimulationRequest
 - 支持 5 种 model + gravity, groundY, inclineAngle, frictionCoefficient, appliedForce
@@ -34,6 +36,7 @@
 - `M5 inclined_plane` — g sinθ, g cosθ, N = mg cosθ, f = μN, a = g(sinθ - μcosθ)
 
 `mechanics-model-selector.ts`：
+
 - `detectMechanicsModel(scene)` — 通过 title/description/observable/force/body 自动检测 model
 - `resolveMechanicsModel(scene)` — 返回完整 MechanicsModel
 
@@ -61,6 +64,7 @@
 ## 5. Verifier
 
 `packages/physics-verifier` 扩展：
+
 - `verifyNewtonSecondLaw(m, F, a)` — ΣF = ma 数值检查
 - `verifyKinematicConsistency(v0, a, t, v, x, x0)` — v(t) = v0 + at 检查
 - `verifyProjectileHorizontalVelocity(states, bodyId)` — vx constant 检查
@@ -75,6 +79,7 @@ Engine 内置 verification 在 simulate 中生成。
 ## 6. Observation
 
 `packages/physics-observation` 扩展：
+
 - PositionObservation, MechanicsVelocityObservation, AccelerationObservation
 - ForceObservation, NetForceObservation
 - MechanicsTrajectoryObservation
@@ -96,6 +101,7 @@ Mechanics Lab Templates 和 Renderer 待 UI 阶段完成。
 ## 8. Question Parser
 
 `packages/question-core` 扩展：
+
 - `DeterministicMechanicsQuestionParser` — 识别中文力学题
 - 支持：初速度、末速度、加速度、时间、位移、高度、质量、力、角度、摩擦系数、重力加速度、水平速度、抛射角
 - 单位通过 `physics-units` 的 `parseQuantity` + `canonicalValue` 转换
@@ -106,6 +112,7 @@ Mechanics Lab Templates 和 Renderer 待 UI 阶段完成。
 ## 9. Semantic IR
 
 `PhysicsSemanticIR` 扩展：
+
 - domain: 'mechanics'
 - model: uniform_linear_motion | uniformly_accelerated_motion | projectile_motion | newton_second_law | inclined_plane
 - 新增 targets: final_velocity, displacement, time, acceleration, range, max_height, flight_time, normal_force, friction_force, net_force, velocity
@@ -120,6 +127,7 @@ Mechanics Lab Templates 和 Renderer 待 UI 阶段完成。
 ## 10. Question Runtime
 
 `question-runtime.ts` 重写：
+
 - 自动检测 magnetic vs mechanics 题目
 - 磁场 → DeterministicMagneticQuestionParser + MagneticEngine
 - 力学 → DeterministicMechanicsQuestionParser + MechanicsEngine
@@ -144,12 +152,14 @@ MechanicsEngine.stateAt 支持 Play/Pause/Seek/Step/Speed。
 ## 13. Golden Tests
 
 ### 磁场 Golden Questions（原有 49 tests）
+
 - 10 个磁场题目全部通过
 - Q09 单位转换（km/s + mT）现在通过 physics-units 正确转换
 
 ### 力学 Golden Questions（新增 64 tests）
 
 Golden Questions（6 个）：
+
 - mech-01: 匀加速 v0=10, a=2, t=5 → v=20, s=75 ✓
 - mech-02: 平抛 h=20m, vx=10m/s, g=10 → t=2s, R=20m ✓
 - mech-03: 斜抛 v0=20, θ=30°, g=10 → maxH, flightTime, range ✓
@@ -158,17 +168,20 @@ Golden Questions（6 个）：
 - mech-06: 单位转换 72 km/h → 20 m/s ✓
 
 Engine Direct Tests:
+
 - canHandle uniform linear / projectile / incline ✓
 - rejects mass ≤ 0 ✓
 - stateAt returns valid state ✓
 - simulate produces states and derived ✓
 
 Metamorphic Tests:
+
 - projectile vx×2 → range×2, same flight time ✓
 - newton F×2 → a×2 ✓
 - incline mass×2 → acceleration unchanged ✓
 
 Edge Cases:
+
 - mass = 0 → unsupported ✓
 - mass < 0 → unsupported ✓
 - g = 0 projectile → no crash, no NaN ✓
@@ -210,13 +223,13 @@ HARNESS_WINDOWS_REPLAY_GATE_DEFERRED
 
 ## 18. Test Statistics
 
-| Suite | Tests | Status |
-|-------|-------|--------|
-| Magnetic Golden Questions | 49 | PASS |
-| Mechanics Golden Questions | 64 | PASS |
-| **Total** | **113** | **PASS** |
-| root typecheck | 16 tasks | PASS |
-| root test | 21 tasks | PASS |
+| Suite                      | Tests    | Status   |
+| -------------------------- | -------- | -------- |
+| Magnetic Golden Questions  | 49       | PASS     |
+| Mechanics Golden Questions | 64       | PASS     |
+| **Total**                  | **113**  | **PASS** |
+| root typecheck             | 16 tasks | PASS     |
+| root test                  | 21 tasks | PASS     |
 
 ---
 
@@ -374,15 +387,15 @@ toggle 经 `SetObservableEnabled` 命令 → revision +1 → `ObservableEnabled/
 `PHYSICSOS_IMAGE_SECONDARY_*`），metadata 记录 provider / model / prompt /
 实际像素 / 时间，**不记录 key**。上游偶发 502，脚本对 5xx/429 重试。
 
-| Asset | Provider | 实际尺寸 | 用途 |
-| --- | --- | --- | --- |
-| `icon-concept-sheet` | gpt-image-2 | 2880² | 图标系统视觉参考 |
-| `component-reference-sheet` | gpt-image-2 | 2880² | 画布图元 1:1 复刻参考 |
-| `projectile-hero` | gpt-image-2 | 1254² | 平抛视觉参考 |
-| `inclined-plane-hero` | gpt-image-2 | 2880² | 斜面视觉参考 |
-| `newton-force-hero` | gpt-image-2 | 2880² | 牛顿第二定律视觉参考 |
-| `uniform-acceleration-hero` | gpt-image-2 | 2880² | 匀变速视觉参考 |
-| `lab-empty-state` | gpt-image-2 | 1254² | 空状态背景参考 |
+| Asset                       | Provider    | 实际尺寸 | 用途                  |
+| --------------------------- | ----------- | -------- | --------------------- |
+| `icon-concept-sheet`        | gpt-image-2 | 2880²    | 图标系统视觉参考      |
+| `component-reference-sheet` | gpt-image-2 | 2880²    | 画布图元 1:1 复刻参考 |
+| `projectile-hero`           | gpt-image-2 | 1254²    | 平抛视觉参考          |
+| `inclined-plane-hero`       | gpt-image-2 | 2880²    | 斜面视觉参考          |
+| `newton-force-hero`         | gpt-image-2 | 2880²    | 牛顿第二定律视觉参考  |
+| `uniform-acceleration-hero` | gpt-image-2 | 2880²    | 匀变速视觉参考        |
+| `lab-empty-state`           | gpt-image-2 | 1254²    | 空状态背景参考        |
 
 请求 4096² 时服务端上限约 2880²，metadata 记录的是解码得到的真实尺寸而非请求值。
 Lab 空状态最终使用内联 SVG（点阵 + 一条真实二次贝塞尔抛物线），不使用 raster。
@@ -393,13 +406,13 @@ Lab 空状态最终使用内联 SVG（点阵 + 一条真实二次贝塞尔抛物
 
 `node apps/web/e2e/mechanics-acceptance.mjs`（需先起 `pnpm dsh web`）。
 
-| Case | 内容 | 结果 |
-| --- | --- | --- |
-| E | 磁场回归：verified、canvas ≥55%、无棋盘格、无整页滚动、真实着墨 >20 stroke、v/F 标签 | PASS |
-| A | 平抛：模板创建 → 改 h=45 → revision 1 + 射程重算 + 仍 verified → 播放推进时钟 → 图像面板 ≥2 张带轴图 | PASS |
-| B | 斜面：mg/N/f/a 四箭头齐备 → 开启力分解得到 3 个 mg* 标签 → 改 θ=45 → 支持力变化 | PASS |
-| C | 平抛题：READY → 点击已知量高亮画布 → 结构化步骤 → 在物理世界中打开 → mechanics + verified | PASS |
-| D | 斜面题：同上 | PASS |
+| Case | 内容                                                                                                 | 结果 |
+| ---- | ---------------------------------------------------------------------------------------------------- | ---- |
+| E    | 磁场回归：verified、canvas ≥55%、无棋盘格、无整页滚动、真实着墨 >20 stroke、v/F 标签                 | PASS |
+| A    | 平抛：模板创建 → 改 h=45 → revision 1 + 射程重算 + 仍 verified → 播放推进时钟 → 图像面板 ≥2 张带轴图 | PASS |
+| B    | 斜面：mg/N/f/a 四箭头齐备 → 开启力分解得到 3 个 mg* 标签 → 改 θ=45 → 支持力变化                      | PASS |
+| C    | 平抛题：READY → 点击已知量高亮画布 → 结构化步骤 → 在物理世界中打开 → mechanics + verified            | PASS |
+| D    | 斜面题：同上                                                                                         | PASS |
 
 门禁：consoleErrors 0 / pageErrors 0 / unhandledRejections 0 /
 failedRequests 0 / errorResponses 0 —— 全部 0。
@@ -468,10 +481,10 @@ node_modules 里是指向源码的软链，编辑即时生效。
   （当前 UI 不使用 raster，避免引入未被消费的资产）
 - **Canvas Camera V1（适应场景 / 100% / 复位视角）未实现为显式控件。**
   它要解决的问题——极端场景与放大导致的线宽变粗——已由「viewBox 跟随容器像素尺寸
-  + 世界包围盒等比 fit」解决：gate C 对四个场景（含 400 m 落差、1200 m 射程）
-  断言恒定 fit，浏览器门禁在 1440 / 1600 / 1920 三档断言渲染缩放 ≤ 1。
-  在没有实测到取景不足的场景之前，加一组缩放控件只会增加无人使用的 UI；
-  一旦出现真正需要平移/缩放的场景（例如多物体远距离交互）再补
+  - 世界包围盒等比 fit」解决：gate C 对四个场景（含 400 m 落差、1200 m 射程）
+    断言恒定 fit，浏览器门禁在 1440 / 1600 / 1920 三档断言渲染缩放 ≤ 1。
+    在没有实测到取景不足的场景之前，加一组缩放控件只会增加无人使用的 UI；
+    一旦出现真正需要平移/缩放的场景（例如多物体远距离交互）再补
 - 斜面上 ΣF 与 a 同向时两个标签仍偏近（力分解开启时最明显）：
   布局算法沿各自箭头方向推开，同向箭头因此只能靠长度差区分
 - 1920×1080 下画布下方留白偏多：世界包围盒按 16:9 归一，
@@ -493,9 +506,9 @@ interface SceneLineage {
   origin: 'question' | 'template' | 'blank'
   branchType: 'experimental'
   originQuestionId?: QuestionId
-  originSceneId: SceneId     // 原始场景，回到原题只需一跳
-  parentSceneId: SceneId     // 直接父级
-  parentRevision: number     // fork 瞬间的父级 revision
+  originSceneId: SceneId // 原始场景，回到原题只需一跳
+  parentSceneId: SceneId // 直接父级
+  parentRevision: number // fork 瞬间的父级 revision
   forkedAt: IsoDateTime
 }
 ```
@@ -562,10 +575,10 @@ Agent **不**重新计算 vₓ。答案里出现的每个数值都来自 context
 
 ### 工具与 PhysicsEvent 严格分离
 
-| 工具 | 性质 | revision | PhysicsEvent |
-| --- | --- | --- | --- |
-| `physics.ui.highlight` | 纯视图交互 | 不变 | 不产生 |
-| `physics.scene.setParameter` | 真实 SceneCommand | +1 | 产生 |
+| 工具                         | 性质              | revision | PhysicsEvent |
+| ---------------------------- | ----------------- | -------- | ------------ |
+| `physics.ui.highlight`       | 纯视图交互        | 不变     | 不产生       |
+| `physics.scene.setParameter` | 真实 SceneCommand | +1       | 产生         |
 
 `physics.scene.setParameter` 走的是 Inspector 用的同一个 `editParameter`
 → `expectedRevision` → SceneRuntime → Engine → Verifier → Observation → UI。
@@ -600,16 +613,16 @@ Drawer 端到端（高亮到画布 + 引用依据 + 命令落到 Inspector）
 
 `tests/regression-gates.client.spec.ts` + 浏览器门禁，针对**静默**故障：
 
-| Gate | 断言 | 位置 |
-| --- | --- | --- |
-| A | 所有 `--physics-*` token 实际注入 | `chrome.client.spec.ts` / `regression-gates` |
-| B | 画布每个域都产出真实几何（轨迹 / 矢量 / 地面 / 场） | `regression-gates` + 浏览器 `paintedStrokes > 20` |
-| C | 场景恒定 fit 进固定 plot box 且保持等比；渲染缩放 ≤ 1 | `regression-gates` + 浏览器 `displayScale ≤ 1` |
-| D | 题目原场景不被实验分支修改 | `scene-branch.test.ts` + 浏览器 CASE F |
-| E | Agent 高亮不改变 scene revision | `physics-agent.client.spec.tsx` + 浏览器 CASE G |
-| F | Agent 参数命令改变 revision 并触发重算 | `physics-agent.client.spec.tsx` + 浏览器 CASE H |
-| G | Observable toggle 真正改变 Observation 输出 | `regression-gates`（力分解观测从无到有） |
-| H | runtime 读到的是当前源码而非 stale copy | `regression-gates`（断言只存在于当前源码的 observable 与 metadata 字段） |
+| Gate | 断言                                                  | 位置                                                                     |
+| ---- | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| A    | 所有 `--physics-*` token 实际注入                     | `chrome.client.spec.ts` / `regression-gates`                             |
+| B    | 画布每个域都产出真实几何（轨迹 / 矢量 / 地面 / 场）   | `regression-gates` + 浏览器 `paintedStrokes > 20`                        |
+| C    | 场景恒定 fit 进固定 plot box 且保持等比；渲染缩放 ≤ 1 | `regression-gates` + 浏览器 `displayScale ≤ 1`                           |
+| D    | 题目原场景不被实验分支修改                            | `scene-branch.test.ts` + 浏览器 CASE F                                   |
+| E    | Agent 高亮不改变 scene revision                       | `physics-agent.client.spec.tsx` + 浏览器 CASE G                          |
+| F    | Agent 参数命令改变 revision 并触发重算                | `physics-agent.client.spec.tsx` + 浏览器 CASE H                          |
+| G    | Observable toggle 真正改变 Observation 输出           | `regression-gates`（力分解观测从无到有）                                 |
+| H    | runtime 读到的是当前源码而非 stale copy               | `regression-gates`（断言只存在于当前源码的 observable 与 metadata 字段） |
 
 Gate C 的教训值得记录：早期断言写成「px-per-metre ≤ 1」是错的 ——
 那是单位换算不是放大。真正要守的是 **viewBox 尺寸与渲染像素尺寸之比 ≤ 1**。
@@ -620,15 +633,15 @@ Gate C 的教训值得记录：早期断言写成「px-per-metre ≤ 1」是错�
 
 ## 34. Final Verification
 
-| 项目 | 结果 |
-| --- | --- |
-| root `pnpm typecheck` | PASS |
-| root `pnpm test` | PASS（11 文件） |
-| `ui-physicsos` vitest | PASS（11 文件 / 83 测试） |
-| harness `pnpm build` | PASS |
-| harness `pnpm test:gui` | **PASS（283 文件 / 3842 测试 / 1 skipped / 0 失败）** |
-| 浏览器验收 `mechanics-acceptance.mjs` | ALL CHECKS PASSED |
-| 浏览器门禁 | consoleErrors / pageErrors / unhandledRejections / failedRequests / errorResponses 全 0 |
+| 项目                                  | 结果                                                                                    |
+| ------------------------------------- | --------------------------------------------------------------------------------------- |
+| root `pnpm typecheck`                 | PASS                                                                                    |
+| root `pnpm test`                      | PASS（11 文件）                                                                         |
+| `ui-physicsos` vitest                 | PASS（11 文件 / 83 测试）                                                               |
+| harness `pnpm build`                  | PASS                                                                                    |
+| harness `pnpm test:gui`               | **PASS（283 文件 / 3842 测试 / 1 skipped / 0 失败）**                                   |
+| 浏览器验收 `mechanics-acceptance.mjs` | ALL CHECKS PASSED                                                                       |
+| 浏览器门禁                            | consoleErrors / pageErrors / unhandledRejections / failedRequests / errorResponses 全 0 |
 
 ### UPSTREAM_PARALLEL_TEST_FLAKE
 
@@ -648,16 +661,16 @@ Gate C 的教训值得记录：早期断言写成「px-per-metre ≤ 1」是错�
 
 `node apps/web/e2e/mechanics-acceptance.mjs`
 
-| Case | 内容 | 结果 |
-| --- | --- | --- |
-| E | 磁场回归：verified / canvas ≥55% / 无棋盘格 / 无整页滚动 / 真实着墨 / v·F 标签 | PASS |
-| A | 平抛：模板 → 改 h=45 → revision +1 + 射程重算 + 仍 verified → 播放推进 → 图像面板 | PASS |
-| B | 斜面：mg·N·f·a 齐备 → 力分解得 3 个 mg* → 改 θ=45 → 支持力变化 | PASS |
-| C | 平抛题：READY → 点击已知量高亮画布 → 结构化步骤 → 在物理世界中打开 → verified | PASS |
-| D | 斜面题：同上 | PASS |
-| F | 题目 → Lab：只看不 fork → 改 h → 生成实验分支（revision 归 1）→ 返回题目原值不变 | PASS |
-| G | Agent「这个高度是什么？」→ 画布高亮 + 引用依据 + **revision 不变** | PASS |
-| H | Agent「把斜面角度改成 45°」→ revision +1 + Inspector 同步 + 引擎重算 + 仍 verified | PASS |
+| Case | 内容                                                                               | 结果 |
+| ---- | ---------------------------------------------------------------------------------- | ---- |
+| E    | 磁场回归：verified / canvas ≥55% / 无棋盘格 / 无整页滚动 / 真实着墨 / v·F 标签     | PASS |
+| A    | 平抛：模板 → 改 h=45 → revision +1 + 射程重算 + 仍 verified → 播放推进 → 图像面板  | PASS |
+| B    | 斜面：mg·N·f·a 齐备 → 力分解得 3 个 mg* → 改 θ=45 → 支持力变化                     | PASS |
+| C    | 平抛题：READY → 点击已知量高亮画布 → 结构化步骤 → 在物理世界中打开 → verified      | PASS |
+| D    | 斜面题：同上                                                                       | PASS |
+| F    | 题目 → Lab：只看不 fork → 改 h → 生成实验分支（revision 归 1）→ 返回题目原值不变   | PASS |
+| G    | Agent「这个高度是什么？」→ 画布高亮 + 引用依据 + **revision 不变**                 | PASS |
+| H    | Agent「把斜面角度改成 45°」→ revision +1 + Inspector 同步 + 引擎重算 + 仍 verified | PASS |
 
 响应式：1440 / 1600 / 1920 三档 canvas ≥55%、无整页滚动、渲染缩放 ≤ 1。
 

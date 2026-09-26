@@ -3,11 +3,7 @@ import type { IsoDateTime, QuestionId } from '@physicsos/shared'
 export type QuestionSource = 'text' | 'image' | 'pdf'
 
 export type QuestionContentStatus =
-  | 'PENDING'
-  | 'WAITING_PROVIDER'
-  | 'UNAVAILABLE'
-  | 'EXTRACTED'
-  | 'FAILED'
+  'PENDING' | 'WAITING_PROVIDER' | 'UNAVAILABLE' | 'EXTRACTED' | 'FAILED'
 
 export interface QuestionContent {
   source: QuestionSource

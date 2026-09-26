@@ -102,6 +102,9 @@ interface Computed {
   readonly result: OpticalImagingResult
 }
 
+/**
+ * The optics workspace runtime — see the module doc for its role.
+ */
 export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new OpticsEngine()
@@ -619,5 +622,10 @@ const tableOf = (result: OpticalImagingResult): DataTableView => {
   }
 }
 
+/**
+ * The optics workspace runtime helper `createOpticsWorkspaceRuntime`.
+ * @returns the optics workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createOpticsWorkspaceRuntime = (scene: PhysicsScene): OpticsWorkspaceRuntime =>
   new OpticsWorkspaceRuntime(scene)

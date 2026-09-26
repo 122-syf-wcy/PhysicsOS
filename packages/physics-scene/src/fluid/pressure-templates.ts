@@ -35,9 +35,7 @@ export interface SolidPressureSceneInput {
  * Nothing about the force changed, so the four-fold pressure ratio is the
  * area's doing alone — which is the whole point of separating 压力 from 压强.
  */
-export const createSolidPressureScene = (
-  input: SolidPressureSceneInput = {},
-): PhysicsScene => {
+export const createSolidPressureScene = (input: SolidPressureSceneInput = {}): PhysicsScene => {
   const bench: SolidPressureSpec = {
     benchId: 'pressure-bench-1',
     type: 'solid',
@@ -76,9 +74,7 @@ export interface LiquidPressureSceneInput {
  * original 20 cm reads 2156 Pa. Both dependences — depth and density — are
  * visible without changing the apparatus.
  */
-export const createLiquidPressureScene = (
-  input: LiquidPressureSceneInput = {},
-): PhysicsScene => {
+export const createLiquidPressureScene = (input: LiquidPressureSceneInput = {}): PhysicsScene => {
   const bench: LiquidPressureSpec = {
     benchId: 'pressure-bench-1',
     type: 'liquid',

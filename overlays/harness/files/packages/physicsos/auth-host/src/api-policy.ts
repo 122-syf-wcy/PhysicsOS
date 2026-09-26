@@ -48,12 +48,58 @@ export interface ApiPolicyWorkspace {
   readonly path: string
 }
 
+/** Fixed-window policy passed through the existing auth limiter seam. */
+export interface ApiPolicyRateLimitPolicy {
+  readonly name: string
+  readonly limit: number
+  readonly windowMs: number
+  readonly maxBuckets: number
+}
+
+/** Atomic rate-limit backend accepted by the `/api` policy. */
+export interface ApiPolicyLimiterBackend {
+  readonly kind: string
+  consume(
+    policy: ApiPolicyRateLimitPolicy,
+    key: string,
+    now?: number,
+  ): boolean | Promise<boolean>
+}
+
+/** One reservation in the shared one-time response ledger. */
+export interface ApiPolicyOnceClaim {
+  readonly status: 'claimed' | 'already-claimed'
+  readonly expiresAt: number
+}
+
+/** Structural subset of the shared-state once ledger used by the `/api` policy. */
+export interface ApiPolicyOnceLedger {
+  readonly kind: string
+  claim(
+    key: string,
+    ttlSeconds: number,
+    now?: number,
+  ): ApiPolicyOnceClaim | Promise<ApiPolicyOnceClaim>
+  consume(key: string, now?: number): boolean | Promise<boolean>
+  release(key: string, now?: number): void | Promise<void>
+}
+
+/** Optional per-account model budget overrides. */
+export interface ApiPolicyModelBudget {
+  readonly limit: number
+  readonly windowMs: number
+  readonly maxBuckets: number
+}
+
 /** Host seams the pure policy needs. */
 export interface ApiPolicyDeps {
   actorFromCookie(cookie: string | undefined): ApiPolicyActor | null
   actorFromRequest(req: IncomingMessage): ApiPolicyActor | null
   readonly store: ApiPolicyStore
   ensureWorkspace(actor: ApiPolicyActor): Promise<ApiPolicyWorkspace>
+  readonly limiter?: ApiPolicyLimiterBackend
+  readonly onceLedger?: ApiPolicyOnceLedger
+  readonly modelPolicy?: Partial<ApiPolicyModelBudget>
 }
 
 /** One request envelope before schema validation. */
@@ -83,6 +129,29 @@ interface JsonResponseBody {
 
 const STUDENT_PRESET = 'physics-student'
 
+/** Cordis service key for the shared one-time response ledger, when composed. */
+export const ONCE_LEDGER_SERVICE = 'physicsosOnceLedger'
+
+/** Default per-account model budget for the open-registration beta. */
+export const DEFAULT_MODEL_ATTEMPT_LIMIT = 60
+export const DEFAULT_MODEL_ATTEMPT_WINDOW_MS = 10 * 60 * 1000
+
+const MODEL_POLICY_NAME = 'model'
+const MODEL_BUDGET_EXCEEDED = 'MODEL_BUDGET_EXCEEDED'
+const DEPENDENCY_UNAVAILABLE = 'DEPENDENCY_UNAVAILABLE'
+const PENDING_RESPONSE_TTL_MS = 15 * 60 * 1000
+const ONBOARDING_SETTINGS_NAMESPACE = 'ui-onboarding'
+const ONBOARDING_ACK_FIELD = 'welcomeNoticeVersion'
+
+/** Methods that can start or continue an agent turn and therefore spend model budget. */
+const MODEL_CONSUMING_METHODS = new Set([
+  'session.create',
+  'session.prompt',
+  'subagent.prompt',
+  'goal.create',
+  'goal.resume',
+])
+
 /** Remote methods that operate on host paths or the deployment configuration. */
 const ADMIN_ONLY_METHODS = new Set([
   'host.pickDirectory',
@@ -107,6 +176,16 @@ const ADMIN_ONLY_METHODS = new Set([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+const isOnboardingMutation = (payload: Record<string, unknown>): boolean => {
+  if (payload['ns'] !== ONBOARDING_SETTINGS_NAMESPACE || !Array.isArray(payload['ops'])) return false
+  return payload['ops'].every((operation) => {
+    if (!isRecord(operation)) return false
+    const path = operation['path']
+    if (!Array.isArray(path) || path.length !== 1 || path[0] !== ONBOARDING_ACK_FIELD) return false
+    return operation['op'] === 'set' || operation['op'] === 'unset'
+  })
+}
+
 const isEnvelope = (value: unknown): value is ClientEnvelope =>
   isRecord(value) && value['type'] === 'client-request'
 
@@ -118,11 +197,16 @@ const rpcError = (
   code: string,
   message: string,
   details: Record<string, unknown>,
+  status = 200,
 ): Response => Response.json({
   type: 'server-response',
   rpcId,
   result: { ok: false, error: { code, message, details } },
-} satisfies ClientValue<never>)
+} satisfies ClientValue<never>, { status })
+
+const dependencyUnavailable = (message: string): Response => Response.json({
+  error: { code: DEPENDENCY_UNAVAILABLE, message },
+}, { status: 503 })
 
 const rpcValue = (rpcId: string, value: unknown): Response => Response.json({
   type: 'server-response',
@@ -204,6 +288,32 @@ const hasSameAuthority = (origin: string, host: string): boolean => {
 }
 
 /**
+ * Validate the optional shared one-time ledger service before policy boot.
+ * @param value - Cordis service value, when composed.
+ * @returns the validated ledger, or undefined in single-process mode.
+ */
+export function asOnceLedger(value: unknown): ApiPolicyOnceLedger | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`${ONCE_LEDGER_SERVICE} must be an object`)
+  }
+  const candidate = value as Partial<ApiPolicyOnceLedger>
+  if (typeof candidate.kind !== 'string' || candidate.kind.trim() === '') {
+    throw new Error(`${ONCE_LEDGER_SERVICE}.kind must be a non-empty string`)
+  }
+  if (typeof candidate.claim !== 'function') {
+    throw new Error(`${ONCE_LEDGER_SERVICE}.claim must be a function`)
+  }
+  if (typeof candidate.consume !== 'function') {
+    throw new Error(`${ONCE_LEDGER_SERVICE}.consume must be a function`)
+  }
+  if (typeof candidate.release !== 'function') {
+    throw new Error(`${ONCE_LEDGER_SERVICE}.release must be a function`)
+  }
+  return candidate as ApiPolicyOnceLedger
+}
+
+/**
  * Build the policy object Connection resolves as `apiPolicy`.
  * @param deps - cookie resolution, ownership storage, and private-workspace creation.
  * @returns the shared `/api` policy.
@@ -213,10 +323,19 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   scopeEvents(req: IncomingMessage, events: EventsApi): Promise<EventsApi | undefined>
 } {
   const pendingResponses = new Map<string, { expiresAt: number }>()
-  const pendingResponseTtlMs = 15 * 60 * 1000
+  const approvalResponseKeys = new Map<string, string>()
   const admin = (actor: ApiPolicyActor): boolean => actor.role === 'SUPER_ADMIN'
   const pendingKey = (actor: ApiPolicyActor, rpcId: string): string =>
     `${actor.userKey}\u0000${rpcId}`
+  const approvalKey = (actor: ApiPolicyActor, approvalId: string): string =>
+    `${actor.userKey}\u0000${approvalId}`
+  const modelPolicy: ApiPolicyRateLimitPolicy = {
+    name: MODEL_POLICY_NAME,
+    limit: deps.modelPolicy?.limit ?? DEFAULT_MODEL_ATTEMPT_LIMIT,
+    windowMs: deps.modelPolicy?.windowMs ?? DEFAULT_MODEL_ATTEMPT_WINDOW_MS,
+    maxBuckets: deps.modelPolicy?.maxBuckets ?? 10_000,
+  }
+  const memoryBudgetBuckets = new Map<string, { count: number; resetAt: number }>()
 
   const prunePending = (now = Date.now()): void => {
     for (const [rpcId, pending] of pendingResponses) {
@@ -224,14 +343,92 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     }
   }
 
-  const consumePending = (actor: ApiPolicyActor, rpcId: string): boolean => {
-    if (admin(actor)) return true
-    prunePending()
+  const pruneModelBudget = (now: number): void => {
+    for (const [key, bucket] of memoryBudgetBuckets) {
+      if (bucket.resetAt <= now) memoryBudgetBuckets.delete(key)
+    }
+  }
+
+  const consumeMemoryModelBudget = (key: string, now = Date.now()): boolean => {
+    pruneModelBudget(now)
+    const existing = memoryBudgetBuckets.get(key)
+    if (existing === undefined) {
+      if (memoryBudgetBuckets.size >= modelPolicy.maxBuckets) return false
+      memoryBudgetBuckets.set(key, { count: 1, resetAt: now + modelPolicy.windowMs })
+      return modelPolicy.limit >= 1
+    }
+    existing.count += 1
+    return existing.count <= modelPolicy.limit
+  }
+
+  const chargeModelBudget = async (
+    actor: ApiPolicyActor,
+    method: string,
+    rpcId: string,
+  ): Promise<Response | undefined> => {
+    // Platform operators stay exempt so a depleted beta budget can never lock
+    // them out of incident response or deployment administration.
+    if (admin(actor) || !MODEL_CONSUMING_METHODS.has(method)) return undefined
+    try {
+      const allowed = deps.limiter === undefined
+        ? consumeMemoryModelBudget(actor.userKey)
+        : await deps.limiter.consume(modelPolicy, actor.userKey)
+      if (allowed) return undefined
+      return rpcError(
+        rpcId,
+        MODEL_BUDGET_EXCEEDED,
+        '模型调用额度已用完，请稍后再试',
+        { limit: modelPolicy.limit, windowMs: modelPolicy.windowMs },
+        429,
+      )
+    } catch {
+      return rpcError(
+        rpcId,
+        DEPENDENCY_UNAVAILABLE,
+        '模型调用额度服务暂时不可用，请稍后再试',
+        {},
+        503,
+      )
+    }
+  }
+
+  const claimPending = async (actor: ApiPolicyActor, rpcId: string): Promise<string> => {
     const key = pendingKey(actor, rpcId)
-    const pending = pendingResponses.get(key)
-    if (pending === undefined) return false
+    if (deps.onceLedger === undefined) {
+      prunePending()
+      if (!pendingResponses.has(key)) {
+        pendingResponses.set(key, { expiresAt: Date.now() + PENDING_RESPONSE_TTL_MS })
+      }
+      return key
+    }
+    const claim = await deps.onceLedger.claim(key, PENDING_RESPONSE_TTL_MS / 1_000)
+    pendingResponses.set(key, { expiresAt: claim.expiresAt })
+    return key
+  }
+
+  const releasePendingKey = async (key: string): Promise<void> => {
     pendingResponses.delete(key)
-    return true
+    await deps.onceLedger?.release(key)
+  }
+
+  const consumePending = async (
+    actor: ApiPolicyActor,
+    rpcId: string,
+  ): Promise<'accepted' | 'missing' | 'unavailable'> => {
+    if (admin(actor)) return 'accepted'
+    const key = pendingKey(actor, rpcId)
+    if (deps.onceLedger !== undefined) {
+      try {
+        return await deps.onceLedger.consume(key) ? 'accepted' : 'missing'
+      } catch {
+        return 'unavailable'
+      }
+    }
+    prunePending()
+    const pending = pendingResponses.get(key)
+    if (pending === undefined) return 'missing'
+    pendingResponses.delete(key)
+    return 'accepted'
   }
 
   const authorizeMethod = (
@@ -240,7 +437,10 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     payload: Record<string, unknown>,
     rpcId: string,
   ): Response | undefined => {
-    if (ADMIN_ONLY_METHODS.has(method) && !admin(actor)) {
+    const allowedNonAdminSettingsMethod =
+      method === 'settings.describe' ||
+      (method === 'settings.mutate' && isOnboardingMutation(payload))
+    if (ADMIN_ONLY_METHODS.has(method) && !admin(actor) && !allowedNonAdminSettingsMethod) {
       return rpcError(rpcId, 'internal', 'this method is available only to platform administrators', {})
     }
 
@@ -372,6 +572,15 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     if (!isRecord(value)) return response
     let changed = false
 
+    if (method === 'settings.describe' && !admin(actor)) {
+      const namespaces = value['namespaces']
+      value['namespaces'] = Array.isArray(namespaces)
+        ? namespaces.filter(namespace =>
+          isRecord(namespace) && namespace['ns'] === ONBOARDING_SETTINGS_NAMESPACE)
+        : []
+      changed = true
+    }
+
     if (method === 'session.list' && Array.isArray(value['items'])) {
       value['items'] = admin(actor) ? value['items'] : value['items'].filter(item =>
         isRecord(item) && typeof item['sessionId'] === 'string'
@@ -484,7 +693,12 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         } catch {
           // The downstream carrier owns malformed-body diagnostics.
         }
-        return rpcId !== undefined && consumePending(actor, rpcId)
+        if (rpcId === undefined) return new Response('forbidden', { status: 403 })
+        const pending = await consumePending(actor, rpcId)
+        if (pending === 'unavailable') {
+          return dependencyUnavailable('一次性响应校验服务暂时不可用，请稍后再试')
+        }
+        return pending === 'accepted'
           ? next(request)
           : new Response('forbidden', { status: 403 })
       }
@@ -504,6 +718,9 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
       const denied = authorizeMethod(actor, method, payload, rpcId)
       if (denied !== undefined) return denied
+
+      const budgetDenied = await chargeModelBudget(actor, method, rpcId)
+      if (budgetDenied !== undefined) return budgetDenied
 
       const rewritten = await rewriteRequest(actor, request, method, body)
       if (rewritten.response !== undefined) return rewritten.response
@@ -529,22 +746,46 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
       return Promise.resolve({
         mux: async function * (request, signal) {
-          for await (const frame of events.mux(request, signal)) {
-            const payload: MuxFrame = frame.payload
-            if (payload.type === 'stream/error') {
+          const claimedKeys = new Set<string>()
+          try {
+            for await (const frame of events.mux(request, signal)) {
+              const payload: MuxFrame = frame.payload
+              if (payload.type === 'stream/error') {
+                yield frame
+                continue
+              }
+              if (!ownsSession(payload.sessionId)) continue
+              if (payload.type === 'question/requested' || payload.type === 'approval/requested') {
+                const key = await claimPending(actor, frame.rpcId)
+                claimedKeys.add(key)
+                if (payload.type === 'approval/requested') {
+                  approvalResponseKeys.set(approvalKey(actor, payload.approvalId), key)
+                }
+              }
+              if (payload.type === 'question/resolved') {
+                const key = pendingKey(actor, payload.questionRpcId)
+                claimedKeys.delete(key)
+                await releasePendingKey(key)
+              }
+              if (payload.type === 'approval/resolved') {
+                const key = approvalResponseKeys.get(approvalKey(actor, payload.approvalId))
+                if (key !== undefined) {
+                  approvalResponseKeys.delete(approvalKey(actor, payload.approvalId))
+                  claimedKeys.delete(key)
+                  await releasePendingKey(key)
+                }
+              }
               yield frame
-              continue
             }
-            if (!ownsSession(payload.sessionId)) continue
-            if (payload.type === 'question/requested' || payload.type === 'approval/requested') {
-              pendingResponses.set(pendingKey(actor, frame.rpcId), {
-                expiresAt: Date.now() + pendingResponseTtlMs,
-              })
+          } finally {
+            const released = new Set<string>()
+            for (const key of claimedKeys) {
+              await releasePendingKey(key)
+              released.add(key)
             }
-            if (payload.type === 'question/resolved') {
-              pendingResponses.delete(pendingKey(actor, payload.questionRpcId))
+            for (const [key, pendingKeyValue] of approvalResponseKeys) {
+              if (released.has(pendingKeyValue)) approvalResponseKeys.delete(key)
             }
-            yield frame
           }
         },
         host: (request, signal) => mapFrames(events.host(request, signal), (frame) => {

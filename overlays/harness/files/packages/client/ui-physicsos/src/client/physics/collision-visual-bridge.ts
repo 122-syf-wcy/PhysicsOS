@@ -28,6 +28,9 @@ import {
 } from './scene-visual-model.ts'
 import { formatSignificant } from './number-format.ts'
 
+/**
+ * The collision visual input shape used by the collision scene visuals module.
+ */
 export interface CollisionVisualInput {
   readonly scene: PhysicsScene
   readonly simulation: SimulationResult
@@ -169,6 +172,8 @@ const derivedScalarOf = (state: SimulationState, key: string): number | undefine
  * runtime builds `trajectoryTimes` from the SAME list, so the canvas's
  * hover / seek / strobe pairing (trajectoryTimes.length === points.length)
  * holds instead of silently disabling itself.
+ * @returns the collision sample indices list.
+ * @param count - the count.
  */
 export const collisionSampleIndices = (count: number): readonly number[] => {
   if (count <= 0) return []
@@ -181,13 +186,20 @@ export const collisionSampleIndices = (count: number): readonly number[] => {
   return indices
 }
 
-export const collisionSceneVisualAt = ({
-  scene,
-  simulation,
-  observations: _observations,
-  stateIndex,
-  state: exactState,
-}: CollisionVisualInput): SceneVisualModel => {
+/**
+ * The collision scene visuals helper `collisionSceneVisualAt`.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const collisionSceneVisualAt = (input: CollisionVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    simulation,
+    observations: _observations,
+    stateIndex,
+    state: exactState,
+  } = input
+
   const model = detectCollisionModel(scene)
   const state = exactState ?? simulation.states[
     Math.min(Math.max(0, stateIndex), simulation.states.length - 1)

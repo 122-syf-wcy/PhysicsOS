@@ -96,6 +96,9 @@ interface Computed {
   readonly model: ResolvedNoiseModel
 }
 
+/**
+ * The noise workspace runtime — see the module doc for its role.
+ */
 export class NoiseWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new NoiseEngine()
@@ -536,5 +539,10 @@ const tableOf = (model: ResolvedNoiseModel): DataTableView => {
   }
 }
 
+/**
+ * The noise workspace runtime helper `createNoiseWorkspaceRuntime`.
+ * @returns the workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createNoiseWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
   new NoiseWorkspaceRuntime(scene)

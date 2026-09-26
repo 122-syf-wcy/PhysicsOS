@@ -88,7 +88,8 @@ describe('observeMechanicsScene', () => {
     const { scene, simulation } = runProjectile(vec3(10, 0, 0), 20)
     const observed = observeMechanicsScene({ scene, simulation })
     const keyPoint = observed.observations.find((entry) => entry.type === 'projectile_key_point')
-    if (keyPoint?.type !== 'projectile_key_point') throw new Error('Projectile key point is absent.')
+    if (keyPoint?.type !== 'projectile_key_point')
+      throw new Error('Projectile key point is absent.')
 
     const launch = toCanonicalVector(keyPoint.launchPoint).vectorSI
     const apex = toCanonicalVector(keyPoint.apexPoint).vectorSI
@@ -100,13 +101,14 @@ describe('observeMechanicsScene', () => {
     const { scene, simulation } = runProjectile(vec3(12, 8, 0), 0)
     const observed = observeMechanicsScene({ scene, simulation })
     const keyPoint = observed.observations.find((entry) => entry.type === 'projectile_key_point')
-    if (keyPoint?.type !== 'projectile_key_point') throw new Error('Projectile key point is absent.')
+    if (keyPoint?.type !== 'projectile_key_point')
+      throw new Error('Projectile key point is absent.')
 
     const expected = simulation.states
       .map((state) => state.objects[0]?.position)
       .filter((position) => position !== undefined)
       .map((position) => toCanonicalVector(position).vectorSI)
-      .reduce((highest, candidate) => candidate.y > highest.y ? candidate : highest)
+      .reduce((highest, candidate) => (candidate.y > highest.y ? candidate : highest))
     const apex = toCanonicalVector(keyPoint.apexPoint).vectorSI
     expect(apex.x).toBeCloseTo(expected.x, 8)
     expect(apex.y).toBeCloseTo(expected.y, 8)

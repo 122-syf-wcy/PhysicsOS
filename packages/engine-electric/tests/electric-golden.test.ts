@@ -29,7 +29,10 @@ describe('Electric Engine golden cases', () => {
       now: '2026-08-19T00:00:00.000Z',
     })
     const engine = new ElectricEngine()
-    const result = engine.simulate(scene, createElectricSimulationRequest(scene, 'sim-uniform', 'trace-uniform'))
+    const result = engine.simulate(
+      scene,
+      createElectricSimulationRequest(scene, 'sim-uniform', 'trace-uniform'),
+    )
     const finalState = result.states.at(-1)
     const position = finalState?.objects[0]?.position
     const velocity = finalState?.objects[0]?.velocity
@@ -67,16 +70,19 @@ describe('Electric Engine golden cases', () => {
     const actual = evaluateUniformElectricState(resolveUniformElectricModel(scene), 0.375)
 
     expect(actual).toEqual(expected)
-    expect(() => evaluateUniformElectricState(resolveUniformElectricModel(scene), -1))
-      .toThrow(/finite and non-negative/)
+    expect(() => evaluateUniformElectricState(resolveUniformElectricModel(scene), -1)).toThrow(
+      /finite and non-negative/,
+    )
   })
 
   it('computes the two-point-charge field, force and potential', () => {
     const field = pointChargeElectricField(2e-6, vec3(0, 0, 0), vec3(3, 0, 0))
     expect(field.x).toBeCloseTo((COULOMB_CONSTANT * 2e-6) / 9, 8)
     expect(field.y).toBe(0)
-    expect(pointChargePotential(2e-6, vec3(0, 0, 0), vec3(3, 0, 0)))
-      .toBeCloseTo((COULOMB_CONSTANT * 2e-6) / 3, 8)
+    expect(pointChargePotential(2e-6, vec3(0, 0, 0), vec3(3, 0, 0))).toBeCloseTo(
+      (COULOMB_CONSTANT * 2e-6) / 3,
+      8,
+    )
     expect(coulombForce(2e-6, -3e-6, vec3(0, 0, 0), vec3(3, 0, 0)).x).toBeLessThan(0)
   })
 
@@ -87,8 +93,9 @@ describe('Electric Engine golden cases', () => {
   })
 
   it('rejects point-charge singularities', () => {
-    expect(() => pointChargeElectricField(1, vec3(0, 0, 0), vec3(0, 0, 0)))
-      .toThrow(/undefined at the source position/)
+    expect(() => pointChargeElectricField(1, vec3(0, 0, 0), vec3(0, 0, 0))).toThrow(
+      /undefined at the source position/,
+    )
   })
 
   it('rejects unsupported magnetic scenes and stale simulation requests', () => {

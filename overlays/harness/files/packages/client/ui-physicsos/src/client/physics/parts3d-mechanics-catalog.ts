@@ -40,6 +40,9 @@ export interface MechanicsPart3dEntry {
   readonly radius?: number
 }
 
+/**
+ * The parts3d mechanics catalog helper `MECHANICS_PARTS3D`.
+ */
 export const MECHANICS_PARTS3D: Readonly<Record<string, MechanicsPart3dEntry>> = {
   ball: {
     file: 'ball.png',
@@ -116,6 +119,10 @@ export const MECHANICS_PARTS3D: Readonly<Record<string, MechanicsPart3dEntry>> =
 
 const PARTS3D_BASE = '/physicsos/parts3d/mechanics'
 
-/** Public URL for a mechanics sprite file. */
+/**
+ * Public URL for a mechanics sprite file.
+ * @returns the formatted string.
+ * @param entry - the entry.
+ */
 export const mechanicsPart3dUrl = (entry: MechanicsPart3dEntry): string =>
   `${PARTS3D_BASE}/${entry.file}`

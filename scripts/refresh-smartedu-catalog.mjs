@@ -44,15 +44,60 @@ const FETCH_TIMEOUT_MS = 30_000
  * textbook editions the contentIds resolve to.
  */
 const VOLUMES = [
-  ['junior', '八年级上册', 'e5618f17-c06e-4c4c-944e-0ee8ced25391', '5370d999-5dd2-4c64-a9ed-089ec2694300'],
-  ['junior', '八年级下册', 'aec6de38-33d2-417a-bbdb-e39154a046a9', 'd31ed57a-d283-498c-84d8-c587fe349b22'],
-  ['junior', '九年级全一册', 'ed5f6a59-0cc5-47e9-adc3-0033711700ea', '5a228904-f03b-404b-bff8-618361025657'],
-  ['senior', '必修第一册', '708256b6-6f06-4d14-89c7-4df16dfe3b81', '12eed579-1883-4b7c-b543-3bac585a4f16'],
-  ['senior', '必修第二册', '55baa3cc-156f-4358-8e28-bfa21a864450', '699354bf-34e7-43d3-91a9-b14bd86dfddb'],
-  ['senior', '必修第三册', 'dcd8cc6b-5380-4008-a2d0-a061f24d34dd', 'f85ffb75-546d-4c21-8d60-3e00e861f11f'],
-  ['senior', '选择性必修第一册', '346c3c04-1663-472c-849e-ff876dcf293f', 'be6f070a-0e81-11ee-baab-8c409e55d11a'],
-  ['senior', '选择性必修第二册', '2ee7d7fa-1920-4d37-a179-91d5fd59b8c1', '78ee810b-401f-4b41-9f9b-904b755901d5'],
-  ['senior', '选择性必修第三册', '2109c25c-2e52-4da3-8ab3-18cbe632ec11', 'dfb166d8-0e81-11ee-baab-8c409e55d11a'],
+  [
+    'junior',
+    '八年级上册',
+    'e5618f17-c06e-4c4c-944e-0ee8ced25391',
+    '5370d999-5dd2-4c64-a9ed-089ec2694300',
+  ],
+  [
+    'junior',
+    '八年级下册',
+    'aec6de38-33d2-417a-bbdb-e39154a046a9',
+    'd31ed57a-d283-498c-84d8-c587fe349b22',
+  ],
+  [
+    'junior',
+    '九年级全一册',
+    'ed5f6a59-0cc5-47e9-adc3-0033711700ea',
+    '5a228904-f03b-404b-bff8-618361025657',
+  ],
+  [
+    'senior',
+    '必修第一册',
+    '708256b6-6f06-4d14-89c7-4df16dfe3b81',
+    '12eed579-1883-4b7c-b543-3bac585a4f16',
+  ],
+  [
+    'senior',
+    '必修第二册',
+    '55baa3cc-156f-4358-8e28-bfa21a864450',
+    '699354bf-34e7-43d3-91a9-b14bd86dfddb',
+  ],
+  [
+    'senior',
+    '必修第三册',
+    'dcd8cc6b-5380-4008-a2d0-a061f24d34dd',
+    'f85ffb75-546d-4c21-8d60-3e00e861f11f',
+  ],
+  [
+    'senior',
+    '选择性必修第一册',
+    '346c3c04-1663-472c-849e-ff876dcf293f',
+    'be6f070a-0e81-11ee-baab-8c409e55d11a',
+  ],
+  [
+    'senior',
+    '选择性必修第二册',
+    '2ee7d7fa-1920-4d37-a179-91d5fd59b8c1',
+    '78ee810b-401f-4b41-9f9b-904b755901d5',
+  ],
+  [
+    'senior',
+    '选择性必修第三册',
+    '2109c25c-2e52-4da3-8ab3-18cbe632ec11',
+    'dfb166d8-0e81-11ee-baab-8c409e55d11a',
+  ],
 ]
 
 const getJson = async (url) => {
@@ -67,8 +112,8 @@ const fetchBook = async (contentId) => {
   const detail = await getJson(`${CDN}/zxx/ndrv2/resources/tch_material/details/${contentId}.json`)
   const title = detail.title
   return typeof title === 'object' && title !== null
-    ? title['zh-CN'] ?? ''
-    : detail.global_title?.['zh-CN'] ?? String(title ?? '')
+    ? (title['zh-CN'] ?? '')
+    : (detail.global_title?.['zh-CN'] ?? String(title ?? ''))
 }
 
 const RESOURCE_KINDS = new Set([
@@ -86,7 +131,7 @@ const fetchCourse = async (tmId) => {
   ])
   const items = (await Promise.all(parts.map(getJson)))
     .flat()
-    .filter(item => item.status === 'ONLINE' && RESOURCE_KINDS.has(item.resource_type_code))
+    .filter((item) => item.status === 'ONLINE' && RESOURCE_KINDS.has(item.resource_type_code))
 
   /* Leaf nodes in DFS order — a lesson sorts by the position of the node it
      hangs under, so chapters emit lessons in textbook order. */
@@ -100,14 +145,17 @@ const fetchCourse = async (tmId) => {
 
   const chapters = tree.map((top) => {
     const rows = items
-      .filter(item => (item.chapter_paths ?? [])
-        .some(p => p === top.id || p.startsWith(`${top.id}/`)))
-      .sort((a, b) =>
-        Math.min(...(a.chapter_paths ?? []).map(p => leafOrder.get(p) ?? 9999))
-        - Math.min(...(b.chapter_paths ?? []).map(p => leafOrder.get(p) ?? 9999)))
+      .filter((item) =>
+        (item.chapter_paths ?? []).some((p) => p === top.id || p.startsWith(`${top.id}/`)),
+      )
+      .sort(
+        (a, b) =>
+          Math.min(...(a.chapter_paths ?? []).map((p) => leafOrder.get(p) ?? 9999)) -
+          Math.min(...(b.chapter_paths ?? []).map((p) => leafOrder.get(p) ?? 9999)),
+      )
     return {
       title: top.title,
-      items: rows.map(item => ({
+      items: rows.map((item) => ({
         k: item.resource_type_code,
         a: item.id,
         c: (item.chapter_ids ?? ['', '']).at(-1),
@@ -145,7 +193,9 @@ const emit = (books, courses, date) => {
   L.push('')
   L.push('export const SMARTEDU_BOOK_SOURCES: readonly SmarteduBookSource[] = [')
   for (const b of books) {
-    L.push(`  { stage: '${b.stage}', volume: '${esc(b.volume)}', contentId: '${b.contentId}', officialTitle: '${esc(b.officialTitle)}' },`)
+    L.push(
+      `  { stage: '${b.stage}', volume: '${esc(b.volume)}', contentId: '${b.contentId}', officialTitle: '${esc(b.officialTitle)}' },`,
+    )
   }
   L.push(']')
   L.push('')
@@ -190,7 +240,9 @@ const emit = (books, courses, date) => {
     for (const ch of c.chapters) {
       L.push(`      { title: '${esc(ch.title)}', items: [`)
       for (const l of ch.items) {
-        L.push(`        { kind: '${l.k}', id: '${l.a}', chapterId: '${l.c}', title: '${esc(l.t)}' },`)
+        L.push(
+          `        { kind: '${l.k}', id: '${l.a}', chapterId: '${l.c}', title: '${esc(l.t)}' },`,
+        )
       }
       L.push('      ] },')
     }
@@ -204,19 +256,20 @@ const emit = (books, courses, date) => {
 const main = async () => {
   const mode = process.argv.includes('--check')
     ? 'check'
-    : process.argv.includes('--dry-run') ? 'dry' : 'write'
+    : process.argv.includes('--dry-run')
+      ? 'dry'
+      : 'write'
   const date = new Date().toISOString().slice(0, 10)
 
   const books = []
   const courses = []
   for (const [stage, volume, contentId, tm] of VOLUMES) {
-    const [officialTitle, course] = await Promise.all([
-      fetchBook(contentId),
-      fetchCourse(tm),
-    ])
+    const [officialTitle, course] = await Promise.all([fetchBook(contentId), fetchCourse(tm)])
     books.push({ stage, volume, contentId, officialTitle })
     courses.push({ stage, volume, tm, chapters: course.chapters })
-    console.log(`${volume}: 「${officialTitle}」 ${course.lessonCount} 条资源 / ${course.chapters.length} 章`)
+    console.log(
+      `${volume}: 「${officialTitle}」 ${course.lessonCount} 条资源 / ${course.chapters.length} 章`,
+    )
   }
 
   const source = emit(books, courses, date)

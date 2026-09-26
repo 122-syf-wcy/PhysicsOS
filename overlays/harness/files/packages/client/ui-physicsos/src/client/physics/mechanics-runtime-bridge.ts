@@ -50,6 +50,9 @@ interface MechanicsSimulationCache {
 
 /* -------------------------------------------------------------- snapshot --- */
 
+/**
+ * The mechanics runtime snapshot shape used by the mechanics runtime bridge module.
+ */
 export interface MechanicsRuntimeSnapshot {
   readonly scene: PhysicsScene
   readonly sceneRevision: number
@@ -69,6 +72,9 @@ export interface MechanicsRuntimeSnapshot {
   readonly error?: RuntimeErrorView
 }
 
+/**
+ * The mechanics runtime command outcome shape used by the mechanics runtime bridge module.
+ */
 export interface MechanicsRuntimeCommandOutcome {
   readonly result: SceneCommandResult
   readonly snapshot: MechanicsRuntimeSnapshot
@@ -179,15 +185,29 @@ export class MechanicsRuntimeBridge {
     this.recompute()
   }
 
+  /**
+   * Get snapshot.
+   * @returns the mechanics runtime snapshot.
+   */
   getSnapshot(): MechanicsRuntimeSnapshot {
     return this.snapshot
   }
 
+  /**
+   * Get events.
+   * @returns the events list.
+   */
   getEvents(): readonly PhysicsEvent[] {
     return this.sceneRuntime.getEvents()
   }
 
-  /** Route an Inspector parameter edit to the matching scene command. */
+  /**
+   * Route an Inspector parameter edit to the matching scene command.
+   * @returns the mechanics runtime snapshot.
+   * @param value - the new value.
+   * @param id - the target row id.
+   * @returns the mechanics runtime snapshot.
+   */
   editParameter(id: string, value: number): MechanicsRuntimeSnapshot {
     if (!Number.isFinite(value)) return this.snapshot
     switch (id) {
@@ -232,7 +252,12 @@ export class MechanicsRuntimeBridge {
     }
   }
 
-  /** Light up canvas primitives (e.g. from a clicked Known). */
+  /**
+   * Light up canvas primitives (e.g. from a clicked Known)
+   * @returns the mechanics runtime snapshot.
+   * @param ids - the target row ids.
+   * @returns the mechanics runtime snapshot.
+   */
   setHighlight(ids: readonly string[]): MechanicsRuntimeSnapshot {
     this.highlighted = ids
     return this.recompute()
@@ -279,7 +304,12 @@ export class MechanicsRuntimeBridge {
     )
   }
 
-  /** Discard the branch and return to the scene the question stated. */
+  /**
+   * Discard the branch and return to the scene the question stated.
+   * @returns the mechanics runtime snapshot.
+   * @param origin - the origin point.
+   * @returns the mechanics runtime snapshot.
+   */
   restoreOrigin(origin: PhysicsScene): MechanicsRuntimeSnapshot {
     this.sceneRuntime = new SceneRuntime(origin)
     this.simulationCache = undefined
@@ -289,11 +319,22 @@ export class MechanicsRuntimeBridge {
     return this.recompute()
   }
 
+  /**
+   * Set body mass.
+   * @param value - the new value.
+   * @returns the mechanics runtime command outcome.
+   */
   setBodyMass(value: number): MechanicsRuntimeCommandOutcome {
     const bodyId = this.sceneRuntime.getScene().bodies[0]?.id ?? 'body-1'
     return this.command('SetBodyMass', { bodyId, mass: { value, unit: 'kg', dimension: 'mass' } })
   }
 
+  /**
+   * Set initial speed.
+   * @param value - the new value.
+   * @param axis - the axis.
+   * @returns the mechanics runtime command outcome.
+   */
   setInitialSpeed(value: number, axis: 'x' | 'y'): MechanicsRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
@@ -305,6 +346,11 @@ export class MechanicsRuntimeBridge {
     })
   }
 
+  /**
+   * Set initial height.
+   * @param value - the new value.
+   * @returns the mechanics runtime command outcome.
+   */
   setInitialHeight(value: number): MechanicsRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
@@ -315,6 +361,11 @@ export class MechanicsRuntimeBridge {
     })
   }
 
+  /**
+   * Set gravity.
+   * @param value - the new value.
+   * @returns the mechanics runtime command outcome.
+   */
   setGravity(value: number): MechanicsRuntimeCommandOutcome {
     const field = this.sceneRuntime.getScene().fields.find(f => f.type === 'uniform_gravity')
     return this.command('SetGravityAcceleration', {
@@ -323,6 +374,11 @@ export class MechanicsRuntimeBridge {
     })
   }
 
+  /**
+   * Set launch angle.
+   * @param degrees - the degrees.
+   * @returns the mechanics runtime command outcome.
+   */
   setLaunchAngle(degrees: number): MechanicsRuntimeCommandOutcome {
     /* Angle edits the velocity direction while keeping the current speed, so the
        change is a physical rotation of v₀, not an unrelated field. */
@@ -341,6 +397,11 @@ export class MechanicsRuntimeBridge {
     })
   }
 
+  /**
+   * Set incline angle.
+   * @param degrees - the degrees.
+   * @returns the mechanics runtime command outcome.
+   */
   setInclineAngle(degrees: number): MechanicsRuntimeCommandOutcome {
     const obs = this.sceneRuntime
       .getScene()
@@ -349,16 +410,31 @@ export class MechanicsRuntimeBridge {
     return this.command('SetInclineAngle', { observableId: obs.id, angleDegrees: degrees })
   }
 
+  /**
+   * Set friction.
+   * @param coefficient - the coefficient.
+   * @returns the mechanics runtime command outcome.
+   */
   setFriction(coefficient: number): MechanicsRuntimeCommandOutcome {
     const bodyId = this.sceneRuntime.getScene().bodies[0]?.id ?? 'body-1'
     return this.command('SetFrictionCoefficient', { bodyId, coefficient })
   }
 
+  /**
+   * Set static friction.
+   * @param coefficient - the coefficient.
+   * @returns the mechanics runtime command outcome.
+   */
   setStaticFriction(coefficient: number): MechanicsRuntimeCommandOutcome {
     const bodyId = this.sceneRuntime.getScene().bodies[0]?.id ?? 'body-1'
     return this.command('SetStaticFrictionCoefficient', { bodyId, coefficient })
   }
 
+  /**
+   * Set spring constant.
+   * @param constant - the constant.
+   * @returns the mechanics runtime command outcome.
+   */
   setSpringConstant(constant: number): MechanicsRuntimeCommandOutcome {
     const spring = this.sceneRuntime.getScene().constraints.find(c => c.type === 'spring')
     if (spring === undefined) return { result: this.noSuchTarget(), snapshot: this.snapshot }
@@ -397,13 +473,23 @@ export class MechanicsRuntimeBridge {
     })
   }
 
+  /**
+   * Set pendulum length.
+   * @param length - the length.
+   * @returns the mechanics runtime command outcome.
+   */
   setPendulumLength(length: number): MechanicsRuntimeCommandOutcome {
     const rope = this.sceneRuntime.getScene().constraints.find(c => c.type === 'rope')
     if (rope === undefined) return { result: this.noSuchTarget(), snapshot: this.snapshot }
     return this.command('SetPendulumLength', { constraintId: rope.id, length })
   }
 
-  /** Release offset: where the oscillator/bob starts, read off the constraint axis. */
+  /**
+   * Release offset: where the oscillator/bob starts, read off the constraint axis
+   * @returns the mechanics runtime command outcome.
+   * @param offset - the offset.
+   * @returns the mechanics runtime command outcome.
+   */
   setAmplitude(offset: number): MechanicsRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
@@ -448,6 +534,11 @@ export class MechanicsRuntimeBridge {
     return { result: this.noSuchTarget(), snapshot: this.snapshot }
   }
 
+  /**
+   * Set applied force.
+   * @param value - the new value.
+   * @returns the mechanics runtime command outcome.
+   */
   setAppliedForce(value: number): MechanicsRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
@@ -459,6 +550,12 @@ export class MechanicsRuntimeBridge {
     })
   }
 
+  /**
+   * Set observable enabled.
+   * @param key - the key.
+   * @param enabled - the enabled.
+   * @returns the mechanics runtime snapshot.
+   */
   setObservableEnabled(key: ObservableKey, enabled: boolean): MechanicsRuntimeSnapshot {
     /* Every layer, including velocity components and force decomposition, is a
        scene observable, so the toggle goes through the command gate and produces
@@ -472,6 +569,11 @@ export class MechanicsRuntimeBridge {
     return this.snapshot
   }
 
+  /**
+   * Set running.
+   * @param running - the running.
+   * @returns the mechanics runtime snapshot.
+   */
   setRunning(running: boolean): MechanicsRuntimeSnapshot {
     const total = this.snapshot.clock.total
     /* Replay contract shared with every finite runtime: pressing run after the
@@ -482,11 +584,21 @@ export class MechanicsRuntimeBridge {
     return this.recompute()
   }
 
+  /**
+   * Set playback rate.
+   * @param rate - the rate.
+   * @returns the mechanics runtime snapshot.
+   */
   setPlaybackRate(rate: number): MechanicsRuntimeSnapshot {
     if (Number.isFinite(rate) && rate > 0) this.playbackRate = rate
     return this.recompute()
   }
 
+  /**
+   * The seek of the mechanics runtime bridge module.
+   * @param seconds - the time in seconds.
+   * @returns the mechanics runtime snapshot.
+   */
   seek(seconds: number): MechanicsRuntimeSnapshot {
     const total = this.snapshot.clock.total
     this.currentTime = Number.isFinite(seconds) ? Math.min(total, Math.max(0, seconds)) : 0
@@ -494,10 +606,20 @@ export class MechanicsRuntimeBridge {
     return this.recompute()
   }
 
+  /**
+   * The step of the mechanics runtime bridge module.
+   * @param deltaSeconds - the delta seconds.
+   * @returns the mechanics runtime snapshot.
+   */
   step(deltaSeconds: number): MechanicsRuntimeSnapshot {
     return this.seek(this.currentTime + deltaSeconds)
   }
 
+  /**
+   * The advance of the mechanics runtime bridge module.
+   * @param wallClockSeconds - the wall clock seconds.
+   * @returns the mechanics runtime snapshot.
+   */
   advance(wallClockSeconds: number): MechanicsRuntimeSnapshot {
     const total = this.snapshot.clock.total
     if (this.running && Number.isFinite(wallClockSeconds) && total > 0) {
@@ -535,6 +657,10 @@ export class MechanicsRuntimeBridge {
     }
   }
 
+  /**
+   * The recompute of the mechanics runtime bridge module.
+   * @returns the mechanics runtime snapshot.
+   */
   recompute(): MechanicsRuntimeSnapshot {
     const scene = this.sceneRuntime.getScene()
     const modelId = detectMechanicsModel(scene) ?? 'uniform_linear_motion'
@@ -661,6 +787,11 @@ export class MechanicsRuntimeBridge {
   }
 }
 
+/**
+ * The mechanics runtime bridge helper `createMechanicsRuntime`.
+ * @returns the mechanics runtime bridge.
+ * @param input - the caller-supplied fields.
+ */
 export const createMechanicsRuntime = (
   input: MechanicsSceneInput | PhysicsScene,
 ): MechanicsRuntimeBridge => new MechanicsRuntimeBridge(input)

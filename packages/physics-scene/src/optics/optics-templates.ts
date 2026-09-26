@@ -161,7 +161,8 @@ export const createConvexMirrorScene = (input: ConvexMirrorSceneInput = {}): Phy
       position: input.screenPosition ?? -2 * Math.abs(focalLength),
     },
     title: '凸面镜后视镜',
-    description: '探究凸面镜成像：无论物体多远，反射光的反向延长线都在镜后交出正立、缩小的虚像 —— 视野更大，正是汽车后视镜与路口反光镜的原理。',
+    description:
+      '探究凸面镜成像：无论物体多远，反射光的反向延长线都在镜后交出正立、缩小的虚像 —— 视野更大，正是汽车后视镜与路口反光镜的原理。',
   })
 }
 

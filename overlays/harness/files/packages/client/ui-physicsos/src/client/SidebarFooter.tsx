@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconFolderOpenOutline16, IconListPenOutline16, IconUserOutline16, Menu,
+  IconListPenOutline16, IconUserOutline16, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
@@ -75,16 +75,6 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
       >
         <IconListPenOutline16 size={wide ? 16 : 18} />
         {wide && <span>{t('nav.history')}</span>}
-      </button>
-      <button
-        type="button"
-        className={css.item}
-        aria-label={t('nav.library')}
-        disabled
-        title={t('feature.unavailable')}
-      >
-        <IconFolderOpenOutline16 size={wide ? 16 : 18} />
-        {wide && <span>{t('nav.library')}</span>}
       </button>
       {user !== undefined && (
         <Menu

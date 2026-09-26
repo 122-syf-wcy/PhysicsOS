@@ -34,17 +34,25 @@ const CORE_HALF_HEIGHT = 1.6
 const loopsOf = (turns: number): number => Math.min(12, Math.max(4, Math.round(turns / 100)))
 const SPACING = (2 * COIL_HALF_WIDTH) / 12
 
+/**
+ * The transformer visual input shape used by the transformer scene visuals module.
+ */
 export interface TransformerVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedTransformerModel
 }
 
-/** Student-facing name of the rig. */
+/**
+ * Student-facing name of the rig.
+ * @returns the formatted string.
+ */
 export const transformerRigText = (): string => '变压器'
 
 /**
  * Scene observable definition → canvas toggle key. The bench factory stamps
  * `observable-transformer-readings` / `observable-transformer-windings`.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const transformerObservableKeyOf = (
   definition: ObservableDefinition,
@@ -64,10 +72,17 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-export const transformerSceneVisual = ({
-  scene,
-  model,
-}: TransformerVisualInput): SceneVisualModel => {
+/**
+ * The transformer scene visuals helper `transformerSceneVisual`.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const transformerSceneVisual = (input: TransformerVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const reading = transformerReadingOf(
     model.primaryVoltage,
     model.primaryCurrent,

@@ -56,19 +56,19 @@ export const createLightBenchScene = (input: LightBenchSceneInput = {}): Physics
   const bench: LightBench =
     input.refraction === undefined
       ? {
-        id: benchId,
-        type: 'pinhole',
-        objectHeight: quantity(input.objectHeight ?? 6, 'cm', 'length'),
-        objectDistance: quantity(input.objectDistance ?? 30, 'cm', 'length'),
-        screenDistance: quantity(input.screenDistance ?? 15, 'cm', 'length'),
-      }
+          id: benchId,
+          type: 'pinhole',
+          objectHeight: quantity(input.objectHeight ?? 6, 'cm', 'length'),
+          objectDistance: quantity(input.objectDistance ?? 30, 'cm', 'length'),
+          screenDistance: quantity(input.screenDistance ?? 15, 'cm', 'length'),
+        }
       : {
-        id: benchId,
-        type: 'total_reflection',
-        incidentIndex: quantity(input.refraction.incidentIndex, '', 'dimensionless'),
-        refractedIndex: quantity(input.refraction.refractedIndex, '', 'dimensionless'),
-        incidentAngle: quantity(input.refraction.incidentAngle, 'deg', 'angle'),
-      }
+          id: benchId,
+          type: 'total_reflection',
+          incidentIndex: quantity(input.refraction.incidentIndex, '', 'dimensionless'),
+          refractedIndex: quantity(input.refraction.refractedIndex, '', 'dimensionless'),
+          incidentAngle: quantity(input.refraction.incidentAngle, 'deg', 'angle'),
+        }
 
   const observables: ObservableDefinition[] = [
     {
@@ -121,8 +121,7 @@ export const createLightBenchScene = (input: LightBenchSceneInput = {}): Physics
       createdAt: now,
       updatedAt: now,
       title: input.title ?? '光的直线传播实验台',
-      description:
-        input.description ?? 'Light Propagation · 小孔成像 h′ = h·v/u',
+      description: input.description ?? 'Light Propagation · 小孔成像 h′ = h·v/u',
     },
   }
 }

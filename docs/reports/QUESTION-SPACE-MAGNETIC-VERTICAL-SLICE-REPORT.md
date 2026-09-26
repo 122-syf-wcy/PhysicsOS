@@ -40,6 +40,7 @@
 ## 4. Semantic IR
 
 `PhysicsSemanticIR` 包含：
+
 - `domain: magnetic`
 - `model: charged_particle_uniform_magnetic_field`
 - `entities: [particle, magnetic_field]`
@@ -53,6 +54,7 @@
 ## 5. Validation
 
 `validateSemanticIR` 检查：
+
 - 必要实体是否齐全（charge / mass / velocity / B）
 - 电荷正负是否明确 → `AMBIGUOUS`
 - B = 0 → `INVALID_SEMANTICS`
@@ -63,6 +65,7 @@
 ## 6. Scene Builder
 
 `buildSceneFromIR` 将 IR 映射为 `PhysicsScene`：
+
 - 直接使用 `@physicsos/physics-scene` 的 `createMagneticScene` 等价构建
 - 构建粒子、匀强磁场、Observable 定义
 - Scene Builder 不计算 R、T、ω、F — Physics Fact 全部来自 `engine-magnetic`
@@ -72,6 +75,7 @@
 ## 7. Engine Selector
 
 `selectEngine` 根据 IR `model` 选择引擎：
+
 - `charged_particle_uniform_magnetic_field` → `engine-magnetic`
 - 预留其他领域接口
 
@@ -103,6 +107,7 @@
 ## 11. Solution
 
 `QuestionSolution` 结构化：
+
 - 5 个推导步骤
 - 结果读取自 `SimulationResult.derivedQuantities`（不重新计算）
 - 包含 F、R、T、方向
@@ -112,6 +117,7 @@
 ## 12. Question UI
 
 在 Harness Shell 内构建 `QuestionWorkspace` 组件：
+
 - 左栏：题目输入 + Golden Question 列表 + 已知条件 + 求解目标
 - 中栏：复用 `LabCanvas` 渲染 Physics Visualization + Timeline
 - 右栏：解题过程 / 验证详情 Tabs
@@ -166,6 +172,7 @@ HARNESS_WINDOWS_REPLAY_GATE_DEFERRED
 ```
 
 以下工作留到后续 RELEASE GATE 统一处理：
+
 - 串行跑 Baseline / PhysicsOS Replay
 - 修 bash/pwsh / PID cleanup
 - 逐个排 59 个失败文件

@@ -11,10 +11,12 @@ const { chromium } = await import(
 
 const argv = process.argv.slice(2)
 const out = argv[0] && !argv[0].startsWith('--') ? argv[0] : 'tmp/qa/svg-probe.json'
-const wait = Number((() => {
-  const i = argv.indexOf('--wait')
-  return i === -1 ? 5000 : argv[i + 1]
-})())
+const wait = Number(
+  (() => {
+    const i = argv.indexOf('--wait')
+    return i === -1 ? 5000 : argv[i + 1]
+  })(),
+)
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 })
@@ -32,7 +34,10 @@ for (let i = 0; i < argv.length; i += 1) {
   if (argv[i] === '--text') steps.push(argv[i + 1])
 }
 for (const label of steps) {
-  const target = page.getByRole('button', { name: label }).or(page.getByRole('link', { name: label })).first()
+  const target = page
+    .getByRole('button', { name: label })
+    .or(page.getByRole('link', { name: label }))
+    .first()
   await target.waitFor({ state: 'visible', timeout: 10000 })
   await target.click()
   await page.waitForTimeout(1300)
@@ -74,5 +79,6 @@ for (let i = 0; i < dump.length; i += 1) {
 const { writeFileSync } = await import('node:fs')
 writeFileSync(out, JSON.stringify({ boxes: dump, overlaps }, null, 2))
 console.log(`wrote ${out}: ${dump.length} boxes, ${overlaps.length} cross-component overlaps`)
-for (const o of overlaps.slice(0, 30)) console.log(`  OVERLAP ${JSON.stringify(o.a)} x ${JSON.stringify(o.b)} (${o.ox}x${o.oy}px)`)
+for (const o of overlaps.slice(0, 30))
+  console.log(`  OVERLAP ${JSON.stringify(o.a)} x ${JSON.stringify(o.b)} (${o.ox}x${o.oy}px)`)
 await browser.close()

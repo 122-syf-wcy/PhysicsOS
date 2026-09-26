@@ -1,0 +1,8 @@
+{
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_PRODUCTION_TAURI_UPDATER_PUBLIC_KEY",
+      "endpoints": ["https://updates.example.invalid/physicsos/update/latest.json?channel=stable"]
+    }
+  }
+}

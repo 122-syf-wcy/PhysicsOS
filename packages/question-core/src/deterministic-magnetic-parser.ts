@@ -11,10 +11,7 @@ import type {
 import { parseQuantity, canonicalValue, isKnownUnit } from '@physicsos/physics-units'
 
 function parseScientificNumber(text: string): { value: number; raw: string } | null {
-  const patterns = [
-    /([+-]?\d+\.?\d*)\s*[×x*]\s*10\^?(-?\d+)/g,
-    /([+-]?\d+\.?\d*)e(-?\d+)/gi,
-  ]
+  const patterns = [/([+-]?\d+\.?\d*)\s*[×x*]\s*10\^?(-?\d+)/g, /([+-]?\d+\.?\d*)e(-?\d+)/gi]
   for (const pattern of patterns) {
     const m = pattern.exec(text)
     if (m && m[1] && m[2]) {
@@ -30,7 +27,11 @@ function parseScientificNumber(text: string): { value: number; raw: string } | n
   return null
 }
 
-function extractValueWithUnit(text: string, patterns: readonly RegExp[], canonicalUnit: string): { siValue: number; originalValue: number; originalUnit: string } | null {
+function extractValueWithUnit(
+  text: string,
+  patterns: readonly RegExp[],
+  canonicalUnit: string,
+): { siValue: number; originalValue: number; originalUnit: string } | null {
   for (const pattern of patterns) {
     const m = pattern.exec(text)
     if (m && m[1]) {
@@ -83,7 +84,19 @@ function formatScientific(value: number, unit: string): string {
   if (Math.abs(value) >= 1e4 || (Math.abs(value) < 1e-2 && value !== 0)) {
     const exp = Math.floor(Math.log10(Math.abs(value)))
     const mantissa = value / Math.pow(10, exp)
-    const supExp = exp.toString().replace(/-/g, '⁻').replace(/0/g, '⁰').replace(/1/g, '¹').replace(/2/g, '²').replace(/3/g, '³').replace(/4/g, '⁴').replace(/5/g, '⁵').replace(/6/g, '⁶').replace(/7/g, '⁷').replace(/8/g, '⁸').replace(/9/g, '⁹')
+    const supExp = exp
+      .toString()
+      .replace(/-/g, '⁻')
+      .replace(/0/g, '⁰')
+      .replace(/1/g, '¹')
+      .replace(/2/g, '²')
+      .replace(/3/g, '³')
+      .replace(/4/g, '⁴')
+      .replace(/5/g, '⁵')
+      .replace(/6/g, '⁶')
+      .replace(/7/g, '⁷')
+      .replace(/8/g, '⁸')
+      .replace(/9/g, '⁹')
     return mantissa.toFixed(2) + '×10' + supExp + ' ' + unit
   }
   return value.toString() + ' ' + unit
@@ -113,7 +126,15 @@ const KNOWN_PATTERNS = {
   ],
 } as const
 
-function extractKnown(text: string, key: string, patterns: readonly RegExp[], canonicalUnit: string, dimension: string, label: string, symbol: string): KnownValue | null {
+function extractKnown(
+  text: string,
+  key: string,
+  patterns: readonly RegExp[],
+  canonicalUnit: string,
+  dimension: string,
+  label: string,
+  symbol: string,
+): KnownValue | null {
   const result = extractValueWithUnit(text, patterns, canonicalUnit)
   if (result) {
     return {
@@ -137,24 +158,54 @@ export const DeterministicMagneticQuestionParser: QuestionParserProvider = {
     const issues: QuestionParseIssue[] = []
     const knowns: KnownValue[] = []
 
-    const charge = extractKnown(text, 'charge', KNOWN_PATTERNS.charge, 'C', 'electric_charge', '电荷量', 'q')
+    const charge = extractKnown(
+      text,
+      'charge',
+      KNOWN_PATTERNS.charge,
+      'C',
+      'electric_charge',
+      '电荷量',
+      'q',
+    )
     if (charge) knowns.push(charge)
 
     const mass = extractKnown(text, 'mass', KNOWN_PATTERNS.mass, 'kg', 'mass', '质量', 'm')
     if (mass) knowns.push(mass)
 
-    const velocity = extractKnown(text, 'velocity', KNOWN_PATTERNS.velocity, 'm/s', 'velocity', '速度', 'v')
+    const velocity = extractKnown(
+      text,
+      'velocity',
+      KNOWN_PATTERNS.velocity,
+      'm/s',
+      'velocity',
+      '速度',
+      'v',
+    )
     if (velocity) knowns.push(velocity)
 
-    const bField = extractKnown(text, 'magnetic_field_strength', KNOWN_PATTERNS.bField, 'T', 'magnetic_flux_density', '磁感应强度', 'B')
+    const bField = extractKnown(
+      text,
+      'magnetic_field_strength',
+      KNOWN_PATTERNS.bField,
+      'T',
+      'magnetic_flux_density',
+      '磁感应强度',
+      'B',
+    )
     if (bField) knowns.push(bField)
 
     const chargeSign = detectChargeSign(text)
     const fieldDirection = detectFieldDirection(text)
     const velocityDirection = detectVelocityDirection(text)
     const targets = detectTargets(text)
-    const relations: SemanticRelation[] = velocityDirection === 'perpendicular_to_B' ? ['velocity_perpendicular_B'] : []
-    const assumptions: SemanticAssumption[] = ['uniform_magnetic_field', 'magnetic_force_only', 'ignore_electric_field', 'ignore_gravity']
+    const relations: SemanticRelation[] =
+      velocityDirection === 'perpendicular_to_B' ? ['velocity_perpendicular_B'] : []
+    const assumptions: SemanticAssumption[] = [
+      'uniform_magnetic_field',
+      'magnetic_force_only',
+      'ignore_electric_field',
+      'ignore_gravity',
+    ]
 
     const ir: PhysicsSemanticIR = {
       schemaVersion: 'physics-ir/1.0',

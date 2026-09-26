@@ -199,6 +199,9 @@ const trajectoryTimesOf = (snapshot: MagneticRuntimeSnapshot): readonly number[]
   return times.length === 0 ? undefined : times
 }
 
+/**
+ * The magnetic workspace runtime — see the module doc for its role.
+ */
 export class MagneticWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: MagneticRuntimeBridge
   private highlighted: readonly string[] = []
@@ -364,6 +367,11 @@ export class MagneticWorkspaceRuntime implements WorkspaceRuntime {
   }
 }
 
+/**
+ * The magnetic workspace runtime helper `createMagneticWorkspaceRuntime`.
+ * @returns the magnetic workspace runtime.
+ * @param input - the caller-supplied fields.
+ */
 export const createMagneticWorkspaceRuntime = (
   input?: PhysicsScene,
 ): MagneticWorkspaceRuntime => new MagneticWorkspaceRuntime(input ?? MAGNETIC_SCENE_INPUT)

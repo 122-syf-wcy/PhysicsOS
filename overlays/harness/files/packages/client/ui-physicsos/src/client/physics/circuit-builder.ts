@@ -34,7 +34,11 @@ export type BuilderComponentType = CircuitComponentSpec['type']
 const isBuilderType = (type: CircuitComponent['type']): type is BuilderComponentType =>
   (BUILDER_COMPONENT_TYPES as readonly string[]).includes(type)
 
-/** Terminal keys per kind; sources name their polarity instead of a/b. */
+/**
+ * Terminal keys per kind; sources name their polarity instead of a/b.
+ * @returns the terminal keys of list.
+ * @param type - the part type.
+ */
 export const terminalKeysOf = (type: BuilderComponentType): readonly string[] =>
   type === 'voltage_source' ? ['positive', 'negative'] : ['a', 'b']
 
@@ -144,7 +148,11 @@ const nextId = (draft: CircuitDraft, type: BuilderComponentType): string => {
   }
 }
 
-/** Snap a free placement onto the schematic grid. */
+/**
+ * Snap a free placement onto the schematic grid.
+ * @returns the {.
+ * @param point - the point to snap.
+ */
 export const snapToGrid = (point: ScenePoint): { x: number; y: number } => ({
   x: Math.round(point.x / BUILDER_GRID) * BUILDER_GRID,
   y: Math.round(point.y / BUILDER_GRID) * BUILDER_GRID,
@@ -185,7 +193,13 @@ export const BUILDER_PARTS: readonly BuilderPartSpec[] = [
   { id: 'voltmeter', type: 'voltmeter', params: {} },
 ]
 
-/** Place a catalogued part. The rating travels with the item, not the kind. */
+/**
+ * Place a catalogued part. The rating travels with the item, not the kind
+ * @returns the {.
+ * @param at - the canvas position.
+ * @param part - the catalog part to place.
+ * @param draft - the draft being edited.
+ */
 export const addPart = (
   draft: CircuitDraft,
   part: BuilderPartSpec,
@@ -195,7 +209,10 @@ export const addPart = (
 
 /* --------------------------------------------------------------- edits -- */
 
-/** An empty bench: valid to render, but nothing to solve. */
+/**
+ * An empty bench: valid to render, but nothing to solve
+ * @returns the circuit draft.
+ */
 export const emptyDraft = (): CircuitDraft => ({
   components: [],
   title: '自由搭建电路',
@@ -221,7 +238,14 @@ const wireNetsFor = (
   return { nets, nextNet: cursor }
 }
 
-/** Place a new component at a point. Returns the draft and the id it took. */
+/**
+ * Place a new component at a point. Returns the draft and the id it took
+ * @returns the {.
+ * @param params - the parameter patch.
+ * @param at - the canvas position.
+ * @param type - the part type.
+ * @param draft - the draft being edited.
+ */
 export const addComponent = (
   draft: CircuitDraft,
   type: BuilderComponentType,
@@ -243,7 +267,12 @@ export const addComponent = (
   }
 }
 
-/** Drop a component. Its nets die with it; survivors keep theirs. */
+/**
+ * Drop a component. Its nets die with it; survivors keep theirs
+ * @returns the circuit draft.
+ * @param id - the target row id.
+ * @param draft - the draft being edited.
+ */
 export const removeComponent = (draft: CircuitDraft, id: string): CircuitDraft => ({
   ...draft,
   components: draft.components.filter(component => component.id !== id),
@@ -260,21 +289,38 @@ const update = (
   ),
 })
 
-/** Move a component to a snapped point. */
+/**
+ * Move a component to a snapped point.
+ * @returns the circuit draft.
+ * @param at - the canvas position.
+ * @param id - the target row id.
+ * @param draft - the draft being edited.
+ */
 export const moveComponent = (draft: CircuitDraft, id: string, at: ScenePoint): CircuitDraft =>
   update(draft, id, component => ({
     ...component,
     placement: { ...component.placement, ...snapToGrid(at) },
   }))
 
-/** Turn a component a quarter turn clockwise. */
+/**
+ * Turn a component a quarter turn clockwise.
+ * @returns the circuit draft.
+ * @param id - the target row id.
+ * @param draft - the draft being edited.
+ */
 export const rotateComponent = (draft: CircuitDraft, id: string): CircuitDraft =>
   update(draft, id, (component) => {
     const next = ((component.placement.rotation + 90) % 360) as 0 | 90 | 180 | 270
     return { ...component, placement: { ...component.placement, rotation: next } }
   })
 
-/** Merge in new parameter values. */
+/**
+ * Merge in new parameter values.
+ * @returns the circuit draft.
+ * @param params - the parameter patch.
+ * @param id - the target row id.
+ * @param draft - the draft being edited.
+ */
 export const setParams = (draft: CircuitDraft, id: string, params: BuilderParams): CircuitDraft =>
   update(draft, id, component => ({ ...component, params: { ...component.params, ...params } }))
 
@@ -296,6 +342,10 @@ const terminalsOn = (draft: CircuitDraft, net: NetId): TerminalRef[] =>
  * a connection is nothing but two terminals naming the same net, so joining two
  * nets joins every terminal that was already on either of them — which is what
  * a student expects when they clip a lead onto a node that already has wires.
+ * @returns the circuit draft.
+ * @param to - the terminal the wire ends at.
+ * @param from - the terminal the wire starts at.
+ * @param draft - the draft being edited.
  */
 export const connectTerminals = (
   draft: CircuitDraft,
@@ -326,6 +376,9 @@ export const connectTerminals = (
  *
  * A lone terminal has nothing to share, so this is a no-op — there is no wire
  * to cut, and splitting it would only churn the draft.
+ * @returns the circuit draft.
+ * @param ref - the terminal reference.
+ * @param draft - the draft being edited.
  */
 export const disconnectTerminal = (draft: CircuitDraft, ref: TerminalRef): CircuitDraft => {
   const net = netOf(draft, ref)
@@ -350,6 +403,9 @@ export const disconnectTerminal = (draft: CircuitDraft, ref: TerminalRef): Circu
  * No wire waypoints are emitted: the renderer routes each connection as an
  * orthogonal elbow between its two terminal endpoints, and junction dots come
  * from the net topology, so electrical meaning survives an untidy route.
+ * @returns the physics scene.
+ * @param options - conversion options.
+ * @param draft - the draft being edited.
  */
 export const draftToScene = (
   draft: CircuitDraft,
@@ -442,13 +498,23 @@ export interface DraftHistory {
 
 const HISTORY_LIMIT = 50
 
+/**
+ * The circuit builder helper `beginHistory`.
+ * @returns the draft history.
+ * @param draft - the draft being edited.
+ */
 export const beginHistory = (draft: CircuitDraft): DraftHistory => ({
   past: [],
   present: draft,
   future: [],
 })
 
-/** Record an edit. A no-op edit (same object) does not consume a history slot. */
+/**
+ * Record an edit. A no-op edit (same object) does not consume a history slot
+ * @returns the draft history.
+ * @param next - the state to push.
+ * @param history - the undo stack being updated.
+ */
 export const commit = (history: DraftHistory, next: CircuitDraft): DraftHistory => {
   if (next === history.present) return history
   return {
@@ -458,9 +524,24 @@ export const commit = (history: DraftHistory, next: CircuitDraft): DraftHistory 
   }
 }
 
+/**
+ * The circuit builder helper `canUndo`.
+ * @returns true when undo holds.
+ * @param history - the undo stack being updated.
+ */
 export const canUndo = (history: DraftHistory): boolean => history.past.length > 0
+/**
+ * The circuit builder helper `canRedo`.
+ * @returns true when redo holds.
+ * @param history - the undo stack being updated.
+ */
 export const canRedo = (history: DraftHistory): boolean => history.future.length > 0
 
+/**
+ * The circuit builder helper `undo`.
+ * @returns the draft history.
+ * @param history - the undo stack being updated.
+ */
 export const undo = (history: DraftHistory): DraftHistory => {
   const previous = history.past[history.past.length - 1]
   if (previous === undefined) return history
@@ -471,6 +552,11 @@ export const undo = (history: DraftHistory): DraftHistory => {
   }
 }
 
+/**
+ * The circuit builder helper `redo`.
+ * @returns the draft history.
+ * @param history - the undo stack being updated.
+ */
 export const redo = (history: DraftHistory): DraftHistory => {
   const [next, ...rest] = history.future
   if (next === undefined) return history
@@ -488,6 +574,8 @@ export const redo = (history: DraftHistory): DraftHistory => {
  * can drift. Nets are recovered by joining the terminals each connection
  * bridges; net numbers are handed out in a stable order so repeated reads of
  * an unchanged scene produce an identical draft.
+ * @returns the circuit draft.
+ * @param scene - the physics scene.
  */
 export const draftFromScene = (scene: PhysicsScene): CircuitDraft => {
   const circuit = circuitOf(scene)
@@ -604,6 +692,7 @@ const paramsOf = (component: CircuitComponent): BuilderParams => {
  * Opening on a blank grid would greet them with "无唯一解" before they have
  * done anything, so the starter is a real loop with a real reading they can
  * immediately change, take apart, and rebuild.
+ * @returns the circuit draft.
  */
 export const starterDraft = (): CircuitDraft => {
   const components: BuilderComponent[] = [

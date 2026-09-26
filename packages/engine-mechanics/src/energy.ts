@@ -10,8 +10,7 @@ import type { ResolvedEnergyModel } from './energy-model.ts'
 export const ENERGY_RELATIVE_TOLERANCE = 1e-9
 
 /** Kinetic energy, Ek = ½mv² (J). */
-export const kineticEnergy = (mass: number, speed: number): number =>
-  0.5 * mass * speed * speed
+export const kineticEnergy = (mass: number, speed: number): number => 0.5 * mass * speed * speed
 
 /** Gravitational potential energy relative to the bottom of the ramp, Ep = mgh (J). */
 export const gravitationalPotentialEnergy = (

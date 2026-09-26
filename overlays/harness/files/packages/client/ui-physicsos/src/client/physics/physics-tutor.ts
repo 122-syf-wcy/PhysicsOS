@@ -30,6 +30,9 @@ export interface TutorEvidence {
   readonly status: 'passed' | 'failed' | 'warning'
 }
 
+/**
+ * The tutor script shape used by the physics tutor module.
+ */
 export interface TutorScript {
   readonly id: string
   /** Lesson topic shown as the card heading. */
@@ -1812,6 +1815,8 @@ const standingWaveLesson = (context: PhysicsAgentContext): TutorScript => {
  * mechanics frames: a lever (two hangers drawn) teaches F₁l₁ = F₂l₂, otherwise
  * the scene title the template stamped (测平均速度 / 抛体 / 斜面 / 力与运动). Unknown
  * frames return undefined and the drawer keeps Q&A.
+ * @returns the tutor script.
+ * @param context - the agent context.
  */
 export const tutorScriptOf = (context: PhysicsAgentContext): TutorScript | undefined => {
   if (context.status === 'failed') return undefined

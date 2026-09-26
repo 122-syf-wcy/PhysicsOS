@@ -1,10 +1,25 @@
 import { vec3, type Vector3 } from '@physicsos/physics-math'
 import { quantityVector } from '@physicsos/physics-core'
-import { asSceneId, asObservableId, asQuestionId, asSimulationId, asTraceId, type IsoDateTime } from '@physicsos/shared'
+import {
+  asSceneId,
+  asObservableId,
+  asQuestionId,
+  asSimulationId,
+  asTraceId,
+  type IsoDateTime,
+} from '@physicsos/shared'
 import { quantity } from '@physicsos/physics-units'
 import type { SimulationRequest } from '@physicsos/physics-core'
 import { defaultCoordinateSystem } from './scene-validation.ts'
-import type { PhysicsScene, Body, Constraint, Force, GravityField, ShapeDefinition, ObservableDefinition } from './scene.ts'
+import type {
+  PhysicsScene,
+  Body,
+  Constraint,
+  Force,
+  GravityField,
+  ShapeDefinition,
+  ObservableDefinition,
+} from './scene.ts'
 
 export type MechanicsModelId =
   | 'uniform_linear_motion'
@@ -115,16 +130,18 @@ function makeBody(
     frictionCoefficient === undefined && staticFrictionCoefficient === undefined
       ? undefined
       : {
-        ...(frictionCoefficient === undefined ? {} : { frictionCoefficient }),
-        ...(staticFrictionCoefficient === undefined ? {} : { staticFrictionCoefficient }),
-      }
+          ...(frictionCoefficient === undefined ? {} : { frictionCoefficient }),
+          ...(staticFrictionCoefficient === undefined ? {} : { staticFrictionCoefficient }),
+        }
   return {
     id,
     type: 'rigid_body',
     mass: quantity(mass, 'kg', 'mass'),
     position: quantityVector(position, 'm', 'length'),
     velocity: quantityVector(velocity, 'm/s', 'velocity'),
-    ...(acceleration !== undefined ? { acceleration: quantityVector(acceleration, 'm/s^2', 'acceleration') } : {}),
+    ...(acceleration !== undefined
+      ? { acceleration: quantityVector(acceleration, 'm/s^2', 'acceleration') }
+      : {}),
     /* μ lives on the body's material because that is where the model resolver
        reads it: declaring a friction FORCE without it would let a scene claim
        friction while the solver silently used μ = 0. */
@@ -185,10 +202,31 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
   })
 
   const observableDefs: ObservableDefinition[] = [
-    { id: asObservableId('obs-position'), type: 'geometry' as const, targetId: bodyId, visible: false, parameters: { kind: 'position' } },
-    { id: asObservableId('obs-velocity'), type: 'velocity' as const, targetId: bodyId, visible: true },
-    { id: asObservableId('obs-acceleration'), type: 'acceleration' as const, targetId: bodyId, visible: true },
-    { id: asObservableId('obs-trajectory'), type: 'trajectory' as const, targetId: bodyId, visible: true },
+    {
+      id: asObservableId('obs-position'),
+      type: 'geometry' as const,
+      targetId: bodyId,
+      visible: false,
+      parameters: { kind: 'position' },
+    },
+    {
+      id: asObservableId('obs-velocity'),
+      type: 'velocity' as const,
+      targetId: bodyId,
+      visible: true,
+    },
+    {
+      id: asObservableId('obs-acceleration'),
+      type: 'acceleration' as const,
+      targetId: bodyId,
+      visible: true,
+    },
+    {
+      id: asObservableId('obs-trajectory'),
+      type: 'trajectory' as const,
+      targetId: bodyId,
+      visible: true,
+    },
     /* Forces are a first-class observable so the free-body arrows are gated by
        scene state and toggled through a command, not hidden with CSS. */
     { id: asObservableId('obs-forces'), type: 'force' as const, targetId: bodyId, visible: true },
@@ -196,19 +234,53 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
 
   if (model === 'projectile_motion') {
     observableDefs.push(
-      { id: asObservableId('obs-ground'), type: 'geometry' as const, visible: true, parameters: { kind: 'ground', groundY } },
-      { id: asObservableId('obs-impact'), type: 'geometry' as const, targetId: bodyId, visible: false, parameters: { kind: 'impact_point' } },
-      { id: asObservableId('obs-keypoints'), type: 'geometry' as const, targetId: bodyId, visible: true, parameters: { kind: 'keypoints' } },
+      {
+        id: asObservableId('obs-ground'),
+        type: 'geometry' as const,
+        visible: true,
+        parameters: { kind: 'ground', groundY },
+      },
+      {
+        id: asObservableId('obs-impact'),
+        type: 'geometry' as const,
+        targetId: bodyId,
+        visible: false,
+        parameters: { kind: 'impact_point' },
+      },
+      {
+        id: asObservableId('obs-keypoints'),
+        type: 'geometry' as const,
+        targetId: bodyId,
+        visible: true,
+        parameters: { kind: 'keypoints' },
+      },
       /* Components start hidden: the resultant is the physical statement, the
          projection onto axes is a study aid the student opts into. */
-      { id: asObservableId('obs-components'), type: 'geometry' as const, targetId: bodyId, visible: false, parameters: { kind: 'velocity_components' } },
+      {
+        id: asObservableId('obs-components'),
+        type: 'geometry' as const,
+        targetId: bodyId,
+        visible: false,
+        parameters: { kind: 'velocity_components' },
+      },
     )
   }
 
   if (model === 'inclined_plane') {
     observableDefs.push(
-      { id: asObservableId('obs-incline'), type: 'geometry' as const, visible: true, parameters: { kind: 'incline', angle: input.inclineAngle ?? 30 } },
-      { id: asObservableId('obs-decomposition'), type: 'geometry' as const, targetId: bodyId, visible: false, parameters: { kind: 'force_decomposition' } },
+      {
+        id: asObservableId('obs-incline'),
+        type: 'geometry' as const,
+        visible: true,
+        parameters: { kind: 'incline', angle: input.inclineAngle ?? 30 },
+      },
+      {
+        id: asObservableId('obs-decomposition'),
+        type: 'geometry' as const,
+        targetId: bodyId,
+        visible: false,
+        parameters: { kind: 'force_decomposition' },
+      },
     )
     if (input.frictionCoefficient !== undefined && input.frictionCoefficient > 0) {
       forces.push({
@@ -337,7 +409,17 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
       state: 'idle',
       playbackRate: 1,
     },
-    bodies: [makeBody(bodyId, mass, position, velocity, acceleration, input.frictionCoefficient, input.staticFrictionCoefficient)],
+    bodies: [
+      makeBody(
+        bodyId,
+        mass,
+        position,
+        velocity,
+        acceleration,
+        input.frictionCoefficient,
+        input.staticFrictionCoefficient,
+      ),
+    ],
     particles: [],
     fields,
     forces,
@@ -360,7 +442,8 @@ export const createMechanicsScene = (input: MechanicsSceneInput): PhysicsScene =
         ? {}
         : { sourceQuestionId: asQuestionId(input.sourceQuestionId) }),
       title: input.title ?? `Mechanics Scene: ${model}`,
-      description: input.description ?? `Generated by PhysicsOS Mechanics Scene Factory for model ${model}`,
+      description:
+        input.description ?? `Generated by PhysicsOS Mechanics Scene Factory for model ${model}`,
     },
   }
 }

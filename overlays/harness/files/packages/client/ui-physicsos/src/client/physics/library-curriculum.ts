@@ -58,7 +58,11 @@ export interface LibraryChapterRef {
   readonly chapter: string
 }
 
-/** Stable key for a chapter (data attributes, selection state). */
+/**
+ * Stable key for a chapter (data attributes, selection state)
+ * @returns the formatted string.
+ * @param ref - the terminal reference.
+ */
 export const chapterKey = (ref: Pick<LibraryChapterRef, 'volume' | 'chapter'>): string =>
   `${ref.volume}|${ref.chapter}`
 
@@ -196,6 +200,8 @@ const CN_DIGIT: Readonly<Record<string, number>> = {
 /**
  * The chapter number a '第N章' title encodes (一…九十九). Returns 0 when the
  * title carries no chapter number, which sorts it first inside its volume.
+ * @returns the computed number.
+ * @param chapter - the chapter.
  */
 export const chapterOrdinal = (chapter: string): number => {
   const match = /^第([一二三四五六七八九十]+)章/.exec(chapter)
@@ -254,6 +260,7 @@ export interface LibraryStageTree {
  * knowledge-node anchors — so the tree mirrors the book's table of contents.
  * Questions attach through their knowledge nodes and dedupe inside a
  * chapter; a chapter with no questions still shows, marked empty.
+ * @returns the build library curriculum list.
  */
 export function buildLibraryCurriculum(): readonly LibraryStageTree[] {
   const chapters = new Map<string, {
@@ -344,6 +351,7 @@ export function buildLibraryCurriculum(): readonly LibraryStageTree[] {
  * Every practisable question once, with all its chapter refs — the shape
  * search consumes. Built from the same anchors as the tree, so a flat list
  * can never disagree with it about where a question belongs.
+ * @returns the build library items list.
  */
 export function buildLibraryItems(): readonly LibraryItem[] {
   const questionChapters = new Map<string, LibraryChapterRef[]>()
@@ -369,7 +377,11 @@ export function buildLibraryItems(): readonly LibraryItem[] {
 
 /* ------------------------------------------------------ official sources -- */
 
-/** The stable reader-facing page for an electronic textbook on the platform. */
+/**
+ * The stable reader-facing page for an electronic textbook on the platform.
+ * @returns the formatted string.
+ * @param contentId - the content id.
+ */
 export const smarteduBookUrl = (contentId: string): string =>
   `https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&contentId=${contentId}&catalogType=tchMaterial&subCatalog=tchMaterial`
 
@@ -378,6 +390,9 @@ export const smarteduBookUrl = (contentId: string): string =>
  * resource_type_code. Routes mirror the platform's own links: 精品课 opens
  * the qualityCourse player, 知识点微课/课件/配套练习卷 open syncClassroom
  * detail views, all carrying the real chapter/teachingmaterial context.
+ * @returns the formatted string.
+ * @param teachingmaterialId - the teaching-material id.
+ * @param item - the item.
  */
 export const smarteduItemUrl = (
   item: Pick<SmarteduItem, 'kind' | 'id' | 'chapterId'>,
@@ -424,7 +439,9 @@ export interface LibraryBook {
 /** The volumes the textbook anchors declare, plus every volume with a
     verified official source — the 书籍 shelf's real stock. A volume with no
     internal chapters yet still lists (its outline says so), because the
-    book itself is real. */
+    book itself is real.  * @returns the build library books list.
+ * @returns the build library books list.
+ */
 export function buildLibraryBooks(): readonly LibraryBook[] {
   const sourceByVolume = new Map(
     SMARTEDU_BOOK_SOURCES.map(source => [source.volume, source]),
@@ -465,6 +482,7 @@ export interface LibraryNodeContent {
  * The 知识点 view: curriculum roots in KNOWLEDGE_NODES order, each with its
  * leaf nodes and the questions that train them through QUESTION_KNOWLEDGE.
  * Leaf rows are honest about having nothing yet when no question cites them.
+ * @returns the build knowledge index list.
  */
 export function buildKnowledgeIndex(): readonly {
   readonly domain: KnowledgeDomain
@@ -489,7 +507,11 @@ export function buildKnowledgeIndex(): readonly {
   })
 }
 
-/** The domain a question belongs to, reused for the subject colour chip. */
+/**
+ * The domain a question belongs to, reused for the subject colour chip.
+ * @returns the experiment domain.
+ * @param question - the question.
+ */
 export const libraryQuestionDomain = (
   question: GoldenQuestionDefinition,
 ): ExperimentDomain => goldenQuestionDomain(question)
@@ -550,6 +572,7 @@ const toVideoCourse = (course: SmarteduCourse): LibraryVideoCourse => {
  * chapter tree. Every URL carries the platform's real resource/chapter/
  * teachingmaterial ids — nothing here is invented, and a chapter with zero
  * recorded resources still lists (marked empty).
+ * @returns the build library videos list.
  */
 export function buildLibraryVideos(): readonly LibraryVideoCourse[] {
   const byKey = new Map(SMARTEDU_COURSES.map(course => [`${course.stage}|${course.volume}`, course]))

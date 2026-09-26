@@ -1,8 +1,4 @@
-import {
-  derivedScalar,
-  type SimulationResult,
-  type SimulationState,
-} from '@physicsos/physics-core'
+import { derivedScalar, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
 import { PhysicsOSError } from '@physicsos/shared'
 import {
   inductionBenchOf,
@@ -91,7 +87,10 @@ const scalarOrUndefined = (
 const selectState = (scene: PhysicsScene, simulation: SimulationResult): SimulationState => {
   const first = simulation.states[0]
   if (first === undefined) {
-    throw new PhysicsOSError('OBSERVATION_STATE_MISSING', 'Induction SimulationResult contains no states.')
+    throw new PhysicsOSError(
+      'OBSERVATION_STATE_MISSING',
+      'Induction SimulationResult contains no states.',
+    )
   }
   const targetTime = scene.timeline.currentTime.value
   return simulation.states.reduce((closest, candidate) =>
@@ -140,7 +139,8 @@ export const observeInductionScene = (
   if (emf !== undefined) {
     observations.push({
       type: 'induction_emf',
-      observableId: 'observable-induction-emf' as unknown as InductionObservationBase['observableId'],
+      observableId:
+        'observable-induction-emf' as unknown as InductionObservationBase['observableId'],
       targetId: bench.id,
       time: state.time,
       emf: { value: emf, unit: 'V', dimension: 'electric_potential' },
@@ -150,7 +150,8 @@ export const observeInductionScene = (
   if (current !== undefined) {
     observations.push({
       type: 'induction_current',
-      observableId: 'observable-induction-current' as unknown as InductionObservationBase['observableId'],
+      observableId:
+        'observable-induction-current' as unknown as InductionObservationBase['observableId'],
       targetId: bench.id,
       time: state.time,
       current: { value: current, unit: 'A', dimension: 'electric_current' },
@@ -163,7 +164,8 @@ export const observeInductionScene = (
   if (flux !== undefined) {
     observations.push({
       type: 'induction_flux',
-      observableId: 'observable-induction-flux' as unknown as InductionObservationBase['observableId'],
+      observableId:
+        'observable-induction-flux' as unknown as InductionObservationBase['observableId'],
       targetId: bench.id,
       time: state.time,
       flux: { value: flux, unit: 'Wb', dimension: 'magnetic_flux' },
@@ -176,7 +178,8 @@ export const observeInductionScene = (
   if (lenz !== undefined) {
     observations.push({
       type: 'induction_direction',
-      observableId: 'observable-induction-direction' as unknown as InductionObservationBase['observableId'],
+      observableId:
+        'observable-induction-direction' as unknown as InductionObservationBase['observableId'],
       targetId: bench.id,
       time: state.time,
       direction: lenz > 0 ? 'positive' : lenz < 0 ? 'negative' : 'none',

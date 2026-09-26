@@ -103,7 +103,6 @@ export const immersionStateAt = (model: ResolvedFluidModel, time: number): Immer
 export const buoyancyFromPressure = (model: ResolvedFluidModel, depth: number): number => {
   const bottomDepth = Math.max(0, depth)
   const topDepth = Math.max(0, depth - model.blockHeight)
-  const pressureDifference =
-    model.liquidDensity * model.gravity * (bottomDepth - topDepth)
+  const pressureDifference = model.liquidDensity * model.gravity * (bottomDepth - topDepth)
   return pressureDifference * model.crossSection
 }

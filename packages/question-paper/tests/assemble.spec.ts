@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_BANK_POLICY, planPaper, planRow, questionFromBankItem, rankCandidates,
+  DEFAULT_BANK_POLICY,
+  planPaper,
+  planRow,
+  questionFromBankItem,
+  rankCandidates,
   stemFingerprint,
 } from '../src/index.ts'
-import type {
-  BankItem, BankUsage, PaperRequest, SourcePaper, SpecRow,
-} from '../src/index.ts'
+import type { BankItem, BankUsage, PaperRequest, SourcePaper, SpecRow } from '../src/index.ts'
 
 /* ---------------------------------------------------------- fixtures -- */
 
@@ -75,17 +77,19 @@ const realPaper: SourcePaper = {
   enteredAt: '2026-09-01T00:00:00Z',
 }
 
-const ctx = (overrides: Partial<{
-  taken: Set<string>
-  recentPaperIds: Set<string>
-  usages: BankUsage[]
-  sources: Map<string, SourcePaper>
-  verbatimSpent: number
-  policy: typeof DEFAULT_BANK_POLICY
-}> = {}) => ({
+const ctx = (
+  overrides: Partial<{
+    taken: Set<string>
+    recentPaperIds: Set<string>
+    usages: BankUsage[]
+    sources: Map<string, SourcePaper>
+    verbatimSpent: number
+    policy: typeof DEFAULT_BANK_POLICY
+  }> = {},
+) => ({
   taken: overrides.taken ?? new Set<string>(),
   recentPaperIds: overrides.recentPaperIds ?? new Set<string>(),
-  usageOf: (itemId: string) => (overrides.usages ?? []).filter(u => u.itemId === itemId),
+  usageOf: (itemId: string) => (overrides.usages ?? []).filter((u) => u.itemId === itemId),
   sourceOf: (id: string) => (overrides.sources ?? new Map()).get(id),
   verbatimSpent: overrides.verbatimSpent ?? 0,
   policy: overrides.policy ?? DEFAULT_BANK_POLICY,
@@ -104,10 +108,10 @@ describe('rankCandidates', () => {
       item({ id: 'no-verbatim', reuseModes: ['adapt'] }),
     ]
     const ranked = rankCandidates(row(), request, items, { ...ctx(), mode: 'verbatim' })
-    expect(ranked.map(c => c.item.id)).toEqual(['ok'])
+    expect(ranked.map((c) => c.item.id)).toEqual(['ok'])
     /* The adapt-only item becomes eligible under the adapt mode. */
     const adaptRanked = rankCandidates(row(), request, items, { ...ctx(), mode: 'adapt' })
-    expect(adaptRanked.map(c => c.item.id).sort()).toEqual(['no-verbatim', 'ok'])
+    expect(adaptRanked.map((c) => c.item.id).sort()).toEqual(['no-verbatim', 'ok'])
   })
 
   it('requires score equality for verbatim but not for adapt', () => {
@@ -121,18 +125,29 @@ describe('rankCandidates', () => {
       { itemId: 'item-1', paperId: 'paper-old', usedAt: '2026-09-01T00:00:00Z', mode: 'verbatim' },
     ]
     const recent = new Set(['paper-old'])
-    expect(rankCandidates(row(), request, [item()], { ...ctx({ usages, recentPaperIds: recent }), mode: 'adapt' }))
-      .toHaveLength(0)
+    expect(
+      rankCandidates(row(), request, [item()], {
+        ...ctx({ usages, recentPaperIds: recent }),
+        mode: 'adapt',
+      }),
+    ).toHaveLength(0)
     /* Usage on a paper outside the window does not count. */
-    expect(rankCandidates(row(), request, [item()], { ...ctx({ usages }), mode: 'adapt' }))
-      .toHaveLength(1)
+    expect(
+      rankCandidates(row(), request, [item()], { ...ctx({ usages }), mode: 'adapt' }),
+    ).toHaveLength(1)
   })
 
   it('excludes banned knowledge and out-of-scope tagged chapters', () => {
-    const banned = rankCandidates(row(), { ...request, exclude: ['牛顿第二定律'] }, [item()], { ...ctx(), mode: 'adapt' })
+    const banned = rankCandidates(row(), { ...request, exclude: ['牛顿第二定律'] }, [item()], {
+      ...ctx(),
+      mode: 'adapt',
+    })
     expect(banned).toHaveLength(0)
     const scoped = { ...request, chapters: ['必修一'] }
-    const outOfScope = rankCandidates(row(), scoped, [item({ chapter: '选修三' })], { ...ctx(), mode: 'adapt' })
+    const outOfScope = rankCandidates(row(), scoped, [item({ chapter: '选修三' })], {
+      ...ctx(),
+      mode: 'adapt',
+    })
     expect(outOfScope).toHaveLength(0)
     /* An untagged chapter stays eligible — the tag may simply be missing. */
     const untagged = rankCandidates(row(), scoped, [item()], { ...ctx(), mode: 'adapt' })
@@ -143,10 +158,16 @@ describe('rankCandidates', () => {
     const sources = new Map([['sp-1', realPaper]])
     const best = item({ id: 'best', sourcePaperId: 'sp-1', answerTier: 'original-scan' })
     const weaker = item({
-      id: 'weaker', knowledge: ['其他考点', '牛顿第二定律'],
-      difficulty: 'hard', ability: '识记', answerTier: 'web-public',
+      id: 'weaker',
+      knowledge: ['其他考点', '牛顿第二定律'],
+      difficulty: 'hard',
+      ability: '识记',
+      answerTier: 'web-public',
     })
-    const ranked = rankCandidates(row(), request, [weaker, best], { ...ctx({ sources }), mode: 'adapt' })
+    const ranked = rankCandidates(row(), request, [weaker, best], {
+      ...ctx({ sources }),
+      mode: 'adapt',
+    })
     expect(ranked[0]?.item.id).toBe('best')
     expect(ranked[0]!.score).toBeGreaterThan(ranked[1]!.score)
     expect(ranked[0]!.breakdown.knowledge).toBeGreaterThan(ranked[1]!.breakdown.knowledge)
@@ -161,9 +182,12 @@ describe('planRow', () => {
     /* manual-transcript caps source at 0.7 — only original-scan evidence
        on a verified real paper clears the verbatim threshold. */
     const sources = new Map([['sp-1', realPaper]])
-    const strong = planRow(row(), request,
+    const strong = planRow(
+      row(),
+      request,
       [item({ sourcePaperId: 'sp-1', answerTier: 'original-scan' })],
-      ctx({ sources }))
+      ctx({ sources }),
+    )
     expect(strong.mode).toBe('verbatim')
     expect(strong.item?.id).toBe('item-1')
   })
@@ -185,13 +209,15 @@ describe('planRow', () => {
 
   it('chooses generate when candidates exist but score below the adapt threshold', () => {
     const weak = item({
-      knowledge: ['完全不同的考点'], difficulty: 'basic', ability: '识记',
+      knowledge: ['完全不同的考点'],
+      difficulty: 'basic',
+      ability: '识记',
       answerTier: 'web-public',
     })
     const plan = planRow(row(), request, [weak], ctx())
     expect(plan.mode).toBe('generate')
     expect(plan.candidates).toBe(1)
-    expect(plan.exemplars.map(e => e.id)).toEqual(['item-1'])
+    expect(plan.exemplars.map((e) => e.id)).toEqual(['item-1'])
   })
 })
 
@@ -205,10 +231,10 @@ describe('planPaper', () => {
     const plans = planPaper(rows, request, [strong], {
       recentPaperIds: new Set(),
       usageOf: () => [],
-      sourceOf: id => sources.get(id),
+      sourceOf: (id) => sources.get(id),
       policy: DEFAULT_BANK_POLICY,
     })
-    const served = plans.filter(p => p.item !== undefined)
+    const served = plans.filter((p) => p.item !== undefined)
     expect(served).toHaveLength(1)
     /* The second row falls to adapt/generate — same item may not repeat. */
     expect(plans[1]?.item).toBeUndefined()
@@ -223,7 +249,9 @@ describe('questionFromBankItem', () => {
     expect(q.number).toBe(7)
     expect(q.stem).toBe(item().stem)
     expect(q.provenance).toEqual({
-      bankItemId: 'item-1', mode: 'verbatim', sourceLabel: '2024·贵阳一中高三月考',
+      bankItemId: 'item-1',
+      mode: 'verbatim',
+      sourceLabel: '2024·贵阳一中高三月考',
     })
     expect(q.status).toBe('draft')
   })

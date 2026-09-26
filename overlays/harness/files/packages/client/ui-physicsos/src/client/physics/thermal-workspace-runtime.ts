@@ -129,6 +129,9 @@ interface Computed {
   readonly model: ResolvedThermalModel
 }
 
+/**
+ * The thermal workspace runtime — see the module doc for its role.
+ */
 export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new ThermalEngine()
@@ -700,5 +703,10 @@ const tableOf = (
   }
 }
 
+/**
+ * The thermal workspace runtime helper `createThermalWorkspaceRuntime`.
+ * @returns the thermal workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createThermalWorkspaceRuntime = (scene: PhysicsScene): ThermalWorkspaceRuntime =>
   new ThermalWorkspaceRuntime(scene)

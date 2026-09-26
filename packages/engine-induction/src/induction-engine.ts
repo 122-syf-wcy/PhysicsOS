@@ -26,10 +26,7 @@ import {
 } from '@physicsos/physics-scene'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
-import {
-  resolveInductionModel,
-  type ResolvedInductionModel,
-} from './induction-model.ts'
+import { resolveInductionModel, type ResolvedInductionModel } from './induction-model.ts'
 
 export const INDUCTION_ENGINE_ID = 'engine-induction'
 export const INDUCTION_ENGINE_VERSION = '1.0.0'
@@ -70,11 +67,9 @@ const volts = (value: number): Quantity<'electric_potential'> =>
   quantity(value, 'V', 'electric_potential')
 const amperes = (value: number): Quantity<'electric_current'> =>
   quantity(value, 'A', 'electric_current')
-const webers = (value: number): Quantity<'magnetic_flux'> =>
-  quantity(value, 'Wb', 'magnetic_flux')
+const webers = (value: number): Quantity<'magnetic_flux'> => quantity(value, 'Wb', 'magnetic_flux')
 const metres = (value: number): Quantity<'length'> => quantity(value, 'm', 'length')
-const metresPerSecond = (value: number): Quantity<'velocity'> =>
-  quantity(value, 'm/s', 'velocity')
+const metresPerSecond = (value: number): Quantity<'velocity'> => quantity(value, 'm/s', 'velocity')
 const seconds = (value: number): Quantity<'time'> => quantity(value, 's', 'time')
 const ohms = (value: number): Quantity<'resistance'> => quantity(value, 'Ω', 'resistance')
 const newtons = (value: number): Quantity<'force'> => quantity(value, 'N', 'force')
@@ -120,8 +115,7 @@ const derivedOf = (model: ResolvedInductionModel, atTime?: number): DerivedQuant
       targetId: model.benchId,
       value: volts(emf),
       formula: {
-        expression:
-          model.subModel === 'bar_motion_emf' ? 'E = BLv' : 'E = -dΦ/dt',
+        expression: model.subModel === 'bar_motion_emf' ? 'E = BLv' : 'E = -dΦ/dt',
       },
       assumptions,
     },
@@ -246,10 +240,7 @@ interface DoubleBarState {
   readonly jouleHeat: number
 }
 
-const doubleBarStateAt = (
-  model: ResolvedInductionModel,
-  t: number,
-): DoubleBarState => {
+const doubleBarStateAt = (model: ResolvedInductionModel, t: number): DoubleBarState => {
   const m1 = model.barMasses?.[0] ?? 1
   const m2 = model.barMasses?.[1] ?? 1
   const [v10, v20] = model.barVelocities ?? [0, 0]
@@ -290,33 +281,127 @@ const doubleBarStateAt = (
       2 * uInf * (u0 - uInf) * tau * (1 - decay) +
       ((u0 - uInf) * (u0 - uInf) * tau * (1 - decay2)) / 2)
 
-  return { v1, v2, x1, x2, u, emf, current, forceOnBar1, momentum1, momentum2, kineticEnergy, jouleHeat }
+  return {
+    v1,
+    v2,
+    x1,
+    x2,
+    u,
+    emf,
+    current,
+    forceOnBar1,
+    momentum1,
+    momentum2,
+    kineticEnergy,
+    jouleHeat,
+  }
 }
 
 /** Per-state derived set for the double-bar rig — every readout the UI draws. */
-const derivedOfDoubleBar = (
-  model: ResolvedInductionModel,
-  t: number,
-): DerivedQuantity[] => {
+const derivedOfDoubleBar = (model: ResolvedInductionModel, t: number): DerivedQuantity[] => {
   const s = doubleBarStateAt(model, t)
   const assumptions = [...DOUBLE_BAR_RAIL_ASSUMPTIONS]
   const bench = model.benchId
 
   return [
-    { key: 'induced_emf', targetId: bench, value: volts(s.emf), formula: { expression: 'E = BL(v₁−v₂)' }, assumptions },
-    { key: 'induced_current', targetId: bench, value: amperes(s.current), formula: { expression: 'I = E / R' }, assumptions },
-    { key: 'loop_resistance', targetId: bench, value: ohms(model.resistance), formula: { expression: 'R' }, assumptions },
-    { key: 'magnetic_flux_density', targetId: bench, value: quantity(model.magneticFluxDensity, 'T', 'magnetic_flux_density'), formula: { expression: 'B' }, assumptions },
-    { key: 'bar_length', targetId: bench, value: metres(model.barLength), formula: { expression: 'L' }, assumptions },
-    { key: 'bar1_velocity', targetId: `${bench}.bar1`, value: metresPerSecond(s.v1), formula: { expression: 'v₁(t) = v_cm + (m₂/M)·u(t)' }, assumptions },
-    { key: 'bar2_velocity', targetId: `${bench}.bar2`, value: metresPerSecond(s.v2), formula: { expression: 'v₂(t) = v_cm − (m₁/M)·u(t)' }, assumptions },
-    { key: 'relative_velocity', targetId: bench, value: metresPerSecond(s.u), formula: { expression: 'u = v₁ − v₂ = u∞ + (u₀−u∞)e^(−t/τ)' }, assumptions },
-    { key: 'magnetic_force', targetId: `${bench}.bar1`, value: newtons(s.forceOnBar1), formula: { expression: 'F磁 = −B²L²·u / R (on bar 1)' }, assumptions },
-    { key: 'lenz_direction', targetId: bench, value: dimensionless(Math.sign(s.emf)), formula: { expression: 'sign(E) (Lenz)' }, assumptions },
-    { key: 'momentum1', targetId: `${bench}.bar1`, value: momentum(s.momentum1), formula: { expression: 'p₁ = m₁v₁' }, assumptions },
-    { key: 'momentum2', targetId: `${bench}.bar2`, value: momentum(s.momentum2), formula: { expression: 'p₂ = m₂v₂' }, assumptions },
-    { key: 'kinetic_energy', targetId: bench, value: joules(s.kineticEnergy), formula: { expression: 'K = ½Mv_cm² + ½μu²' }, assumptions },
-    { key: 'joule_heat', targetId: bench, value: joules(s.jouleHeat), formula: { expression: 'Q = ∫I²R dt' }, assumptions },
+    {
+      key: 'induced_emf',
+      targetId: bench,
+      value: volts(s.emf),
+      formula: { expression: 'E = BL(v₁−v₂)' },
+      assumptions,
+    },
+    {
+      key: 'induced_current',
+      targetId: bench,
+      value: amperes(s.current),
+      formula: { expression: 'I = E / R' },
+      assumptions,
+    },
+    {
+      key: 'loop_resistance',
+      targetId: bench,
+      value: ohms(model.resistance),
+      formula: { expression: 'R' },
+      assumptions,
+    },
+    {
+      key: 'magnetic_flux_density',
+      targetId: bench,
+      value: quantity(model.magneticFluxDensity, 'T', 'magnetic_flux_density'),
+      formula: { expression: 'B' },
+      assumptions,
+    },
+    {
+      key: 'bar_length',
+      targetId: bench,
+      value: metres(model.barLength),
+      formula: { expression: 'L' },
+      assumptions,
+    },
+    {
+      key: 'bar1_velocity',
+      targetId: `${bench}.bar1`,
+      value: metresPerSecond(s.v1),
+      formula: { expression: 'v₁(t) = v_cm + (m₂/M)·u(t)' },
+      assumptions,
+    },
+    {
+      key: 'bar2_velocity',
+      targetId: `${bench}.bar2`,
+      value: metresPerSecond(s.v2),
+      formula: { expression: 'v₂(t) = v_cm − (m₁/M)·u(t)' },
+      assumptions,
+    },
+    {
+      key: 'relative_velocity',
+      targetId: bench,
+      value: metresPerSecond(s.u),
+      formula: { expression: 'u = v₁ − v₂ = u∞ + (u₀−u∞)e^(−t/τ)' },
+      assumptions,
+    },
+    {
+      key: 'magnetic_force',
+      targetId: `${bench}.bar1`,
+      value: newtons(s.forceOnBar1),
+      formula: { expression: 'F磁 = −B²L²·u / R (on bar 1)' },
+      assumptions,
+    },
+    {
+      key: 'lenz_direction',
+      targetId: bench,
+      value: dimensionless(Math.sign(s.emf)),
+      formula: { expression: 'sign(E) (Lenz)' },
+      assumptions,
+    },
+    {
+      key: 'momentum1',
+      targetId: `${bench}.bar1`,
+      value: momentum(s.momentum1),
+      formula: { expression: 'p₁ = m₁v₁' },
+      assumptions,
+    },
+    {
+      key: 'momentum2',
+      targetId: `${bench}.bar2`,
+      value: momentum(s.momentum2),
+      formula: { expression: 'p₂ = m₂v₂' },
+      assumptions,
+    },
+    {
+      key: 'kinetic_energy',
+      targetId: bench,
+      value: joules(s.kineticEnergy),
+      formula: { expression: 'K = ½Mv_cm² + ½μu²' },
+      assumptions,
+    },
+    {
+      key: 'joule_heat',
+      targetId: bench,
+      value: joules(s.jouleHeat),
+      formula: { expression: 'Q = ∫I²R dt' },
+      assumptions,
+    },
   ]
 }
 
@@ -342,18 +427,19 @@ const doubleBarVerification = (model: ResolvedInductionModel): VerificationCheck
 
   const times = [0, 1, 2.5, 5, 7.5, 10]
   const states = times.map((t) => doubleBarStateAt(model, t))
-  const tolerance = (a: number, b: number): number => INDUCTION_RELATIVE_TOLERANCE * Math.max(Math.abs(a), Math.abs(b), 1e-12)
+  const tolerance = (a: number, b: number): number =>
+    INDUCTION_RELATIVE_TOLERANCE * Math.max(Math.abs(a), Math.abs(b), 1e-12)
 
   const s0 = states[0]!
 
   /* Faraday at every probe time. */
-  const faradayOk = states.every((s) =>
-    Math.abs(s.emf - B * L * s.u) <= tolerance(s.emf, B * L * s.u),
+  const faradayOk = states.every(
+    (s) => Math.abs(s.emf - B * L * s.u) <= tolerance(s.emf, B * L * s.u),
   )
   const lenzOk = states.every((s) => Math.sign(s.emf) === Math.sign(s.u) || s.u === 0)
   const forceOpposesOk = states.every((s) => s.u * s.forceOnBar1 <= 1e-15)
-  const ohmOk = states.every((s) =>
-    Math.abs(s.current - s.emf / R) <= tolerance(s.current, s.emf / R),
+  const ohmOk = states.every(
+    (s) => Math.abs(s.current - s.emf / R) <= tolerance(s.current, s.emf / R),
   )
 
   const checks: VerificationCheck[] = [
@@ -384,14 +470,17 @@ const doubleBarVerification = (model: ResolvedInductionModel): VerificationCheck
      false physics — it is simply not emitted. */
   if (F === 0) {
     const p0 = m1 * v10 + m2 * v20
-    const momentumOk = states.every((s) =>
-      Math.abs(s.momentum1 + s.momentum2 - p0) <= tolerance(s.momentum1 + s.momentum2, p0),
+    const momentumOk = states.every(
+      (s) => Math.abs(s.momentum1 + s.momentum2 - p0) <= tolerance(s.momentum1 + s.momentum2, p0),
     )
     checks.push(
       check('momentum_conservation', 'conservation', momentumOk, {
         message: '动量守恒：无外力时 m₁v₁ + m₂v₂ 恒等于初值（磁力是内力）。',
         targetId: benchId,
-        details: { p0, pEnd: states[states.length - 1]!.momentum1 + states[states.length - 1]!.momentum2 },
+        details: {
+          p0,
+          pEnd: states[states.length - 1]!.momentum1 + states[states.length - 1]!.momentum2,
+        },
       }),
     )
   }
@@ -401,7 +490,10 @@ const doubleBarVerification = (model: ResolvedInductionModel): VerificationCheck
   const energyOk = states.every((s, index) => {
     const t = times[index]!
     const work = F * (s.x1 - x10)
-    return Math.abs(s.kineticEnergy + s.jouleHeat - (K0 + work)) <= tolerance(s.kineticEnergy + s.jouleHeat, K0 + work) * 10 + 1e-12 * Math.max(1, t)
+    return (
+      Math.abs(s.kineticEnergy + s.jouleHeat - (K0 + work)) <=
+      tolerance(s.kineticEnergy + s.jouleHeat, K0 + work) * 10 + 1e-12 * Math.max(1, t)
+    )
   })
   checks.push(
     check('energy_bookkeeping', 'conservation', energyOk, {
@@ -530,7 +622,7 @@ const buildVerification = (
         message:
           model.subModel === 'bar_motion_emf'
             ? '法拉第电磁感应：导体棒切割磁感线 E = BLv。'
-            : "法拉第电磁感应定律：E = -dΦ/dt（楞次定律定方向）。",
+            : '法拉第电磁感应定律：E = -dΦ/dt（楞次定律定方向）。',
         targetId: model.benchId,
         details: { emf, expected: faradayExpected },
       },
@@ -560,8 +652,7 @@ const buildVerification = (
       : lenzOk
   checks.push(
     check('lenz_direction', 'constraint', lenzCheck, {
-      message:
-        '楞次定律：感应电流的方向使它的磁场阻碍引起感应电流的磁通量的变化。',
+      message: '楞次定律：感应电流的方向使它的磁场阻碍引起感应电流的磁通量的变化。',
       targetId: model.benchId,
       details: { emf, dPhiDt },
     }),
@@ -573,16 +664,11 @@ const buildVerification = (
   const ohmResidual = Math.abs(current - ohmExpected)
   const ohmScale = Math.max(Math.abs(current), Math.abs(ohmExpected), 1e-12)
   checks.push(
-    check(
-      'ohm_law_loop',
-      'constraint',
-      ohmResidual <= INDUCTION_RELATIVE_TOLERANCE * ohmScale,
-      {
-        message: '闭合回路欧姆定律：I = E / R。',
-        targetId: model.benchId,
-        details: { current, expected: ohmExpected, resistance: model.resistance },
-      },
-    ),
+    check('ohm_law_loop', 'constraint', ohmResidual <= INDUCTION_RELATIVE_TOLERANCE * ohmScale, {
+      message: '闭合回路欧姆定律：I = E / R。',
+      targetId: model.benchId,
+      details: { current, expected: ohmExpected, resistance: model.resistance },
+    }),
   )
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
@@ -618,7 +704,12 @@ export class InductionEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
   canHandle(scene: PhysicsScene): ModelSupport {
     if (inductionBenchesOf(scene).length !== 1) {
       return unsupportedModel(
-        [failure('single_induction_bench', 'Induction Engine requires exactly one induction bench.')],
+        [
+          failure(
+            'single_induction_bench',
+            'Induction Engine requires exactly one induction bench.',
+          ),
+        ],
         INDUCTION_ENGINE_ID,
       )
     }
@@ -733,12 +824,22 @@ export class InductionEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
 
     const startedAt = new Date().toISOString()
     const model = resolveInductionModel(scene)
-    const sceneDuration = scene.timeline.endTime === undefined
-      ? DEFAULT_DURATION_SECONDS
-      : canonicalValue(scene.timeline.endTime)
-    const startTime = request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
-    const endTime = request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
-    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime < startTime) {
+    const sceneDuration =
+      scene.timeline.endTime === undefined
+        ? DEFAULT_DURATION_SECONDS
+        : canonicalValue(scene.timeline.endTime)
+    const startTime =
+      request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
+    const endTime =
+      request.options.endTime === undefined
+        ? sceneDuration
+        : canonicalValue(request.options.endTime)
+    if (
+      !Number.isFinite(startTime) ||
+      !Number.isFinite(endTime) ||
+      startTime < 0 ||
+      endTime < startTime
+    ) {
       throw new PhysicsOSError(
         'INVALID_SIMULATION_RANGE',
         'Induction simulation range must satisfy 0 <= startTime <= endTime.',

@@ -145,43 +145,43 @@ search   寻找 —— 实验中心头部、学习记录空态、无结果
 
 ```css
 :root {
-  --bg-app: #F7F9FC;
-  --bg-page: #FAFBFD;
-  --bg-surface: #FFFFFF;
-  --bg-subtle: #F5F7FA;
-  --bg-hover: #F2F6FF;
-  --bg-selected: #EDF4FF;
+  --bg-app: #f7f9fc;
+  --bg-page: #fafbfd;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f5f7fa;
+  --bg-hover: #f2f6ff;
+  --bg-selected: #edf4ff;
 
-  --text-primary: #14213D;
-  --text-secondary: #5F6B7A;
-  --text-tertiary: #8A94A6;
-  --text-disabled: #B5BDCA;
+  --text-primary: #14213d;
+  --text-secondary: #5f6b7a;
+  --text-tertiary: #8a94a6;
+  --text-disabled: #b5bdca;
 
-  --primary-50: #F3F7FF;
-  --primary-100: #E8F0FF;
-  --primary-200: #D4E3FF;
-  --primary-300: #AFCBFF;
-  --primary-400: #76A5FF;
-  --primary-500: #3B82F6;
-  --primary-600: #2563EB;
-  --primary-700: #1D4ED8;
+  --primary-50: #f3f7ff;
+  --primary-100: #e8f0ff;
+  --primary-200: #d4e3ff;
+  --primary-300: #afcbff;
+  --primary-400: #76a5ff;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
 
-  --success-50: #F2FBF4;
-  --success-500: #4CAF50;
-  --success-600: #3D9442;
+  --success-50: #f2fbf4;
+  --success-500: #4caf50;
+  --success-600: #3d9442;
 
-  --warning-50: #FFF9EE;
-  --warning-500: #F2A93B;
+  --warning-50: #fff9ee;
+  --warning-500: #f2a93b;
 
-  --danger-50: #FFF3F2;
-  --danger-500: #E95B54;
+  --danger-50: #fff3f2;
+  --danger-500: #e95b54;
 
-  --border-soft: #E8ECF2;
-  --border-default: #DDE3EC;
-  --border-strong: #CCD5E1;
+  --border-soft: #e8ecf2;
+  --border-default: #dde3ec;
+  --border-strong: #ccd5e1;
 
-  --glass: rgba(255,255,255,.72);
-  --glass-strong: rgba(255,255,255,.88);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.88);
 }
 ```
 
@@ -221,8 +221,8 @@ search   寻找 —— 实验中心头部、学习记录空态、无结果
 
 ```css
 background:
-  radial-gradient(circle at 35% 0%, rgba(214,229,255,.22), transparent 34%),
-  linear-gradient(180deg, #FBFCFE 0%, #F7F9FC 100%);
+  radial-gradient(circle at 35% 0%, rgba(214, 229, 255, 0.22), transparent 34%),
+  linear-gradient(180deg, #fbfcfe 0%, #f7f9fc 100%);
 ```
 
 工作区 Canvas 背景可使用：
@@ -356,22 +356,22 @@ Micro         11 / 16 / 400
 默认：
 
 ```css
-border: 1px solid #E8ECF2;
+border: 1px solid #e8ecf2;
 ```
 
 选中：
 
 ```css
-border-color: #8BB4FF;
-box-shadow: 0 0 0 2px rgba(59,130,246,.08);
+border-color: #8bb4ff;
+box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08);
 ```
 
 阴影：
 
 ```css
---shadow-xs: 0 1px 2px rgba(20,33,61,.04);
---shadow-sm: 0 4px 14px rgba(20,33,61,.06);
---shadow-md: 0 10px 30px rgba(20,33,61,.08);
+--shadow-xs: 0 1px 2px rgba(20, 33, 61, 0.04);
+--shadow-sm: 0 4px 14px rgba(20, 33, 61, 0.06);
+--shadow-md: 0 10px 30px rgba(20, 33, 61, 0.08);
 ```
 
 ---
@@ -391,9 +391,9 @@ Modal
 推荐：
 
 ```css
-background: rgba(255,255,255,.76);
+background: rgba(255, 255, 255, 0.76);
 backdrop-filter: blur(18px) saturate(140%);
-border: 1px solid rgba(222,229,239,.72);
+border: 1px solid rgba(222, 229, 239, 0.72);
 ```
 
 ---

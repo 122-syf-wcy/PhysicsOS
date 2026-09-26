@@ -174,8 +174,7 @@ export const sampleStateAt = (
   if (clamped < warmUpTime) {
     return {
       temperature:
-        sample.initialTemperature +
-        heatAbsorbed / (sample.mass * sample.solidSpecificHeat),
+        sample.initialTemperature + heatAbsorbed / (sample.mass * sample.solidSpecificHeat),
       heatAbsorbed,
       meltedFraction: 0,
       phase: 'solid',
@@ -209,8 +208,7 @@ export const sampleStateAt = (
   return {
     temperature:
       sample.meltingPoint +
-      (heaterPower * (clamped - meltingEndTime)) /
-        (sample.mass * sample.liquidSpecificHeat),
+      (heaterPower * (clamped - meltingEndTime)) / (sample.mass * sample.liquidSpecificHeat),
     heatAbsorbed,
     meltedFraction: 1,
     phase: 'liquid',

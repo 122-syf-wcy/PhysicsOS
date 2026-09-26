@@ -49,9 +49,10 @@ export function buildElectricSceneFromIR(
   const chargeMagnitude = knownValue(ir, 'charge') ?? 1
   const duration = knownValue(ir, 'time') ?? 5
   const fieldStrength = knownValue(ir, 'electric_field_strength') ?? 1
-  const fieldDirection = ir.electricFieldDirection === 'unknown' || ir.electricFieldDirection === undefined
-    ? 'right'
-    : ir.electricFieldDirection
+  const fieldDirection =
+    ir.electricFieldDirection === 'unknown' || ir.electricFieldDirection === undefined
+      ? 'right'
+      : ir.electricFieldDirection
 
   const scene = createElectricScene({
     sceneId: options.sceneId ?? 'question-electric-scene',
@@ -75,9 +76,10 @@ export function buildElectricSceneFromIR(
     },
     ...(options.now === undefined ? {} : { now: options.now }),
     title: '试题场景：匀强电场中的带电粒子',
-    description: options.questionId === undefined
-      ? '由 Electric Question IR 生成'
-      : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
+    description:
+      options.questionId === undefined
+        ? '由 Electric Question IR 生成'
+        : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
   })
 
   return {
@@ -126,9 +128,10 @@ export const buildPointChargeSceneFromIR = (
       samplePoint: { x: sample.x, y: sample.y, z: 0 },
       ...(options.now === undefined ? {} : { now: options.now }),
       title: '试题场景：多源点电荷电场',
-      description: options.questionId === undefined
-        ? '由 Electric Question IR 生成'
-        : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
+      description:
+        options.questionId === undefined
+          ? '由 Electric Question IR 生成'
+          : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
       ...(options.questionId === undefined ? {} : { sourceQuestionId: options.questionId }),
     })
     return {
@@ -174,9 +177,10 @@ export const buildPointChargeSceneFromIR = (
     probe,
     ...(options.now === undefined ? {} : { now: options.now }),
     title: '试题场景：点电荷的电场',
-    description: options.questionId === undefined
-      ? '由 Electric Question IR 生成'
-      : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
+    description:
+      options.questionId === undefined
+        ? '由 Electric Question IR 生成'
+        : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
     ...(options.questionId === undefined ? {} : { sourceQuestionId: options.questionId }),
   })
 
@@ -213,27 +217,32 @@ export const buildParallelPlateSceneFromIR = (
   const enterPosition = ir.enterPosition ?? 'edge'
 
   const fieldDirection: ElectricFieldDirection =
-    ir.electricFieldDirection === 'up' ? 'up' :
-    ir.electricFieldDirection === 'left' ? 'left' :
-    ir.electricFieldDirection === 'right' ? 'right' :
-    'down'
+    ir.electricFieldDirection === 'up'
+      ? 'up'
+      : ir.electricFieldDirection === 'left'
+        ? 'left'
+        : ir.electricFieldDirection === 'right'
+          ? 'right'
+          : 'down'
 
   /* Initial position: enter from the left edge → start just outside the field
      region at x = -plateLength/2 - small offset. For center entry, start above
      the gap at y = plateSeparation/2 + offset. */
-  const position: Vector3 = enterPosition === 'edge'
-    ? vec3(-plateLength / 2 - 0.01, 0, 0)
-    : vec3(0, plateSeparation / 2 + 0.01, 0)
+  const position: Vector3 =
+    enterPosition === 'edge'
+      ? vec3(-plateLength / 2 - 0.01, 0, 0)
+      : vec3(0, plateSeparation / 2 + 0.01, 0)
 
   /* Initial velocity: "水平射入" → along +x; default is horizontal. */
   const velocityDir = ir.initialVelocityDirection ?? 'right'
-  const velocity: Vector3 = velocityDir === 'left'
-    ? vec3(-velocityMagnitude, 0, 0)
-    : velocityDir === 'up'
-      ? vec3(0, velocityMagnitude, 0)
-      : velocityDir === 'down'
-        ? vec3(0, -velocityMagnitude, 0)
-        : vec3(velocityMagnitude, 0, 0)
+  const velocity: Vector3 =
+    velocityDir === 'left'
+      ? vec3(-velocityMagnitude, 0, 0)
+      : velocityDir === 'up'
+        ? vec3(0, velocityMagnitude, 0)
+        : velocityDir === 'down'
+          ? vec3(0, -velocityMagnitude, 0)
+          : vec3(velocityMagnitude, 0, 0)
 
   /* Duration: estimate from plate length and velocity (time to traverse the field).
      Use a generous multiple so the trajectory covers the full field region. */
@@ -263,9 +272,10 @@ export const buildParallelPlateSceneFromIR = (
     },
     ...(options.now === undefined ? {} : { now: options.now }),
     title: '试题场景：平行板电场中的带电粒子',
-    description: options.questionId === undefined
-      ? '由 Electric Question IR 生成'
-      : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
+    description:
+      options.questionId === undefined
+        ? '由 Electric Question IR 生成'
+        : `由试题 ${options.questionId} 的 Electric Question IR 生成`,
     ...(options.questionId === undefined ? {} : { sourceQuestionId: options.questionId }),
   })
 

@@ -9,10 +9,17 @@ ENV CI=true \
     PATH=/pnpm:${PATH}
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates git \
+    # python3/make/g++ compile the one native package that ships no Linux
+    # prebuild: node-pty (only darwin/win32 binaries are published). Everything
+    # else still installs with scripts disabled; only node-pty is rebuilt below.
+    && apt-get install --yes --no-install-recommends ca-certificates git python3 make g++ \
     && rm -rf /var/lib/apt/lists/* \
-    && corepack enable \
-    && corepack prepare pnpm@11.9.0 --activate
+    # Install pnpm directly instead of through corepack: the PhysicsOS root pins
+    # pnpm 11.9.0 while the vendored Harness pins 11.7.0, and a corepack-managed
+    # pnpm refuses to serve the other version ("pnpm does not switch versions
+    # when running under corepack"). A plain install resolves the pinned version
+    # per directory, which is exactly what this two-version workspace needs.
+    && npm install --global pnpm@11.9.0
 
 WORKDIR /app
 COPY . .
@@ -27,11 +34,20 @@ RUN git -C vendor/deepseek-harness init -q \
 
 RUN node scripts/overlay/harness-overlay.mjs apply
 
-RUN pnpm install --frozen-lockfile \
-    && pnpm -C vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
+# pnpm refuses when the invoked version differs from a project's pinned
+# `packageManager`; the two trees here pin different versions on purpose, so the
+# version check is downgraded to a warning for these installs only.
+# node-pty publishes prebuilds for darwin/win32 only, so the Linux image has to
+# compile it: allowlist exactly that one build script (inside the image only, so
+# local macOS installs stay untouched), install with scripts enabled for the
+# vendored tree, and rebuild the package explicitly.
+RUN printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/pnpm-workspace.yaml \
+    && pnpm install --frozen-lockfile \
+    && pnpm -C vendor/deepseek-harness install --frozen-lockfile \
+    && pnpm -C vendor/deepseek-harness rebuild node-pty
 
 RUN pnpm -C vendor/deepseek-harness run build:lib \
-    && pnpm exec tsc -p overlays/harness/files/packages/physicsos/health-host/tsconfig.json \
+    && pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-health-host run bundle \
     && pnpm build \
     && rm -rf vendor/deepseek-harness/.git
 
@@ -40,7 +56,15 @@ FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \
     DSH_HOME=/var/lib/physicsos
 
-RUN groupadd --system physicsos \
+# pandoc + LibreOffice 只在 runtime 安装：builder 阶段不需要它们，A4 导出也
+# 不再是 docx 降级。fonts-noto-cjk 保证中文 PDF 不出现豆腐块。
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        pandoc \
+        libreoffice-writer \
+        fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system physicsos \
     && useradd --system --gid physicsos --home-dir /var/lib/physicsos physicsos \
     && install -d -o physicsos -g physicsos /var/lib/physicsos /app
 
@@ -54,6 +78,7 @@ COPY --from=builder --chown=physicsos:physicsos \
     /app/overlays/harness/files/packages/physicsos/health-host \
     ./overlays/harness/files/packages/physicsos/health-host
 COPY --from=builder --chown=physicsos:physicsos /app/scripts/healthcheck.mjs ./scripts/healthcheck.mjs
+COPY --from=builder --chown=physicsos:physicsos /app/scripts/docker-entrypoint.mjs ./scripts/docker-entrypoint.mjs
 
 USER physicsos
 
@@ -63,6 +88,7 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD ["node", "scripts/healthcheck.mjs", "http://127.0.0.1:3080/readyz"]
 
-CMD ["node", "vendor/deepseek-harness/apps/cli/lib/bin.js", "web", \
+CMD ["node", "scripts/docker-entrypoint.mjs", \
+    "node", "vendor/deepseek-harness/apps/cli/lib/bin.js", "web", \
     "--patch", "/app/overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml", \
     "--port", "3080"]

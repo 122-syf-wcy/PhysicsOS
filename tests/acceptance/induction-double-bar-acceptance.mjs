@@ -22,59 +22,72 @@ const { page, check, shot, dismissOnboarding, finish } = await openAcceptance(im
 const picker = () => page.locator('[data-physicsos-state="picker"]')
 
 /** Rig facts the visual gate depends on. */
-const geometry = () => page.evaluate(() => {
-  const cover = document.querySelector('[data-physicsos-surface="lab"]')
-  const canvas = cover?.querySelector('svg[role="img"]')
-  return {
-    domain: cover?.getAttribute('data-physicsos-domain'),
-    revision: cover?.getAttribute('data-scene-revision'),
-    status: cover?.getAttribute('data-verification-status'),
-    rails: canvas?.querySelectorAll('line[class*="inductionRail"]').length ?? 0,
-    pairBars: canvas?.querySelectorAll('line[class*="inductionRod"]').length ?? 0,
-    forceArrowLabels: [...(canvas?.querySelectorAll('text') ?? [])]
-      .map((node) => node.textContent?.trim() ?? '')
-      .filter((text) => text.startsWith('F磁')),
-    canvasTexts: [...(canvas?.querySelectorAll('text') ?? [])]
-      .map((node) => node.textContent?.trim())
-      .filter((text) => text !== undefined && text.length > 0),
-    paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter((node) => {
-      const stroke = getComputedStyle(node).stroke
-      return stroke !== 'none' && stroke !== ''
-    }).length,
-    /* Framing gate: every bar must sit inside the drawn viewBox for the whole
+const geometry = () =>
+  page.evaluate(() => {
+    const cover = document.querySelector('[data-physicsos-surface="lab"]')
+    const canvas = cover?.querySelector('svg[role="img"]')
+    return {
+      domain: cover?.getAttribute('data-physicsos-domain'),
+      revision: cover?.getAttribute('data-scene-revision'),
+      status: cover?.getAttribute('data-verification-status'),
+      rails: canvas?.querySelectorAll('line[class*="inductionRail"]').length ?? 0,
+      pairBars: canvas?.querySelectorAll('line[class*="inductionRod"]').length ?? 0,
+      forceArrowLabels: [...(canvas?.querySelectorAll('text') ?? [])]
+        .map((node) => node.textContent?.trim() ?? '')
+        .filter((text) => text.startsWith('F磁')),
+      canvasTexts: [...(canvas?.querySelectorAll('text') ?? [])]
+        .map((node) => node.textContent?.trim())
+        .filter((text) => text !== undefined && text.length > 0),
+      paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter(
+        (node) => {
+          const stroke = getComputedStyle(node).stroke
+          return stroke !== 'none' && stroke !== ''
+        },
+      ).length,
+      /* Framing gate: every bar must sit inside the drawn viewBox for the whole
        run, or the animation loses its protagonist off-screen. */
-    viewBox: (() => {
-      const parts = canvas?.getAttribute('viewBox')?.split(' ').map(Number)
-      return parts === undefined || parts.length !== 4 ? null : { x: parts[0], y: parts[1], w: parts[2], h: parts[3] }
-    })(),
-    barXs: [...(canvas?.querySelectorAll('line[class*="inductionRod"]') ?? [])]
-      .map((node) => Number(node.getAttribute('x1'))),
-    forceArrowCount: canvas?.querySelectorAll('line[class*="inductionForceArrow"]').length ?? 0,
-    forceArrowStrokes: [...(canvas?.querySelectorAll('line[class*="inductionForceArrow"]') ?? [])]
-      .map((node) => getComputedStyle(node).stroke),
-  }
-})
+      viewBox: (() => {
+        const parts = canvas?.getAttribute('viewBox')?.split(' ').map(Number)
+        return parts === undefined || parts.length !== 4
+          ? null
+          : { x: parts[0], y: parts[1], w: parts[2], h: parts[3] }
+      })(),
+      barXs: [...(canvas?.querySelectorAll('line[class*="inductionRod"]') ?? [])].map((node) =>
+        Number(node.getAttribute('x1')),
+      ),
+      forceArrowCount: canvas?.querySelectorAll('line[class*="inductionForceArrow"]').length ?? 0,
+      forceArrowStrokes: [
+        ...(canvas?.querySelectorAll('line[class*="inductionForceArrow"]') ?? []),
+      ].map((node) => getComputedStyle(node).stroke),
+    }
+  })
 
 /** Verification rows: label → data-status, from the inspector list. */
-const verificationRows = () => page.evaluate(() => {
-  const rows = {}
-  for (const item of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="verificationItem"]')) {
-    const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
-    if (label !== undefined) rows[label] = item.getAttribute('data-status')
-  }
-  return rows
-})
+const verificationRows = () =>
+  page.evaluate(() => {
+    const rows = {}
+    for (const item of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="verificationItem"]',
+    )) {
+      const label = item.querySelector('[class*="verificationLabel"]')?.textContent?.trim()
+      if (label !== undefined) rows[label] = item.getAttribute('data-status')
+    }
+    return rows
+  })
 
 /** Derived rows by label from the inspector's derived section. */
-const derivedValues = () => page.evaluate(() => {
-  const rows = {}
-  for (const item of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="derivedRow"], [data-physicsos-surface="lab"] [class*="inspector"] li, [data-physicsos-surface="lab"] [class*="derived"] [class*="row"]')) {
-    const label = item.querySelector('[class*="label"], [class*="symbol"]')?.textContent?.trim()
-    const value = item.querySelector('[class*="value"]')?.textContent?.trim()
-    if (label !== undefined && value !== undefined) rows[label] = value
-  }
-  return rows
-})
+const derivedValues = () =>
+  page.evaluate(() => {
+    const rows = {}
+    for (const item of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="derivedRow"], [data-physicsos-surface="lab"] [class*="inspector"] li, [data-physicsos-surface="lab"] [class*="derived"] [class*="row"]',
+    )) {
+      const label = item.querySelector('[class*="label"], [class*="symbol"]')?.textContent?.trim()
+      const value = item.querySelector('[class*="value"]')?.textContent?.trim()
+      if (label !== undefined && value !== undefined) rows[label] = value
+    }
+    return rows
+  })
 
 const pickTemplate = async (namePattern) => {
   await picker().waitFor({ state: 'visible', timeout: 15_000 })
@@ -87,7 +100,9 @@ const openPickerFromToolbar = async () => {
 }
 
 const waitForInductionLab = async () => {
-  await page.locator('[data-physicsos-surface="lab"][data-physicsos-domain="induction"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-surface="lab"][data-physicsos-domain="induction"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(800)
 }
 
@@ -102,11 +117,14 @@ await page.getByRole('button', { name: '物理实验室' }).click()
 {
   await picker().waitFor({ state: 'visible', timeout: 20_000 })
   const state = await page.evaluate(() => ({
-    templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button').length,
-    momentum: [...document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button')]
-      .some((node) => (node.textContent ?? '').includes('导轨双棒 · 冲量型')),
-    force: [...document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button')]
-      .some((node) => (node.textContent ?? '').includes('导轨双棒 · 恒力型')),
+    templates: document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button')
+      .length,
+    momentum: [
+      ...document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button'),
+    ].some((node) => (node.textContent ?? '').includes('导轨双棒 · 冲量型')),
+    force: [
+      ...document.querySelectorAll('[data-physicsos-state="picker"] [class*="grid"] button'),
+    ].some((node) => (node.textContent ?? '').includes('导轨双棒 · 恒力型')),
   }))
   check('模板总数 ≥ 40', state.templates >= 40, `got ${state.templates}`)
   check('冲量型模板在列表中', state.momentum)
@@ -120,14 +138,26 @@ await pickTemplate('导轨双棒 · 冲量型')
 await waitForInductionLab()
 {
   const g = await geometry()
-  check('induction 域 + verified', g.domain === 'induction' && g.status === 'verified', `${g.domain}/${g.status}`)
+  check(
+    'induction 域 + verified',
+    g.domain === 'induction' && g.status === 'verified',
+    `${g.domain}/${g.status}`,
+  )
   check('两条导轨绘制', g.rails === 2, `rails=${g.rails}`)
   check('两根棒绘制（含标签）', g.pairBars >= 2, `bars=${g.pairBars}`)
-  check('力箭头标签出现（F磁）', g.forceArrowLabels.length >= 2, `labels=${g.forceArrowLabels.length}`)
+  check(
+    '力箭头标签出现（F磁）',
+    g.forceArrowLabels.length >= 2,
+    `labels=${g.forceArrowLabels.length}`,
+  )
   check('E = BL(v₁−v₂) 读数出现', textIncluding(g.canvasTexts, 'E = BL(v₁−v₂)'))
   check('t = 0 时 E = 0.2 V', textIncluding(g.canvasTexts, '0.2'))
   const rows = await verificationRows()
-  check('动量守恒校验行存在且通过', rows['动量守恒（无外力双棒）'] === 'passed', JSON.stringify(rows))
+  check(
+    '动量守恒校验行存在且通过',
+    rows['动量守恒（无外力双棒）'] === 'passed',
+    JSON.stringify(rows),
+  )
   check('能量守恒校验行存在且通过', rows['能量守恒：K + Q = K₀ + W'] === 'passed')
   check('楞次力阻碍相对运动校验通过', rows['楞次定律：磁力阻碍相对运动'] === 'passed')
   check('画布有真实笔画（非空白）', g.paintedStrokes >= 10, `strokes=${g.paintedStrokes}`)
@@ -138,25 +168,38 @@ await waitForInductionLab()
     const line = cover?.querySelector('line[class*="inductionCurrentArrow"]')
     return line === null || line === undefined ? null : getComputedStyle(line).stroke
   })
-  check('力箭头用磁力色而非电流色', g.forceArrowCount >= 1 && g.forceArrowStrokes.every((s) => s !== currentStroke),
-    `force=${g.forceArrowStrokes.join(',')} current=${currentStroke}`)
+  check(
+    '力箭头用磁力色而非电流色',
+    g.forceArrowCount >= 1 && g.forceArrowStrokes.every((s) => s !== currentStroke),
+    `force=${g.forceArrowStrokes.join(',')} current=${currentStroke}`,
+  )
   /* Direction, not just the label: at t = 0 bar 1 leads (v₁ = 2 > v₂ = 0), so the
      magnetic force must BRAKE bar 1 (tail→tip points −x, the way it came) and
      DRAG bar 2 (+x). The two arrows are the action–reaction pair the engine
      published, so they must point opposite ways. */
   const arrowDirs = await page.evaluate(() => {
     const cover = document.querySelector('[data-physicsos-surface="lab"]')
-    return [...(cover?.querySelectorAll('line[class*="inductionForceArrow"]') ?? [])].map((node) => ({
-      dir: Math.sign(Number(node.getAttribute('x2')) - Number(node.getAttribute('x1'))),
-      y: Number(node.getAttribute('y1')),
-    }))
+    return [...(cover?.querySelectorAll('line[class*="inductionForceArrow"]') ?? [])].map(
+      (node) => ({
+        dir: Math.sign(Number(node.getAttribute('x2')) - Number(node.getAttribute('x1'))),
+        y: Number(node.getAttribute('y1')),
+      }),
+    )
   })
-  const bar1Arrow = arrowDirs.length === 2 ? (arrowDirs[0].y < arrowDirs[1].y ? arrowDirs[0] : arrowDirs[1]) : null
-  const bar2Arrow = arrowDirs.length === 2 ? (arrowDirs[0].y < arrowDirs[1].y ? arrowDirs[1] : arrowDirs[0]) : null
-  check('棒 1 的磁力与运动反向（制动 −x）', bar1Arrow?.dir === -1, `dirs=${JSON.stringify(arrowDirs)}`)
-  check('两棒磁力为作用力与反作用力（方向相反）',
+  const bar1Arrow =
+    arrowDirs.length === 2 ? (arrowDirs[0].y < arrowDirs[1].y ? arrowDirs[0] : arrowDirs[1]) : null
+  const bar2Arrow =
+    arrowDirs.length === 2 ? (arrowDirs[0].y < arrowDirs[1].y ? arrowDirs[1] : arrowDirs[0]) : null
+  check(
+    '棒 1 的磁力与运动反向（制动 −x）',
+    bar1Arrow?.dir === -1,
+    `dirs=${JSON.stringify(arrowDirs)}`,
+  )
+  check(
+    '两棒磁力为作用力与反作用力（方向相反）',
     bar1Arrow !== null && bar2Arrow !== null && bar1Arrow.dir === -bar2Arrow.dir,
-    `dirs=${JSON.stringify(arrowDirs)}`)
+    `dirs=${JSON.stringify(arrowDirs)}`,
+  )
   await shot('double-bar-momentum-t0')
 }
 
@@ -182,8 +225,16 @@ stdout.write('\nCASE C · 播放推进 + 时间轴 seek → 双棒渐趋同速�
   const after = await geometry()
   const beforeV = before.canvasTexts.find((t) => t.includes('v₁ =')) ?? ''
   const afterV = after.canvasTexts.find((t) => t.includes('v₁ =')) ?? ''
-  check('读数跟随 seek 到 t ≈ τ', textIncluding(after.canvasTexts, 't = 0.25 s'), after.canvasTexts.join(',').slice(0, 120))
-  check('v₁ 从 2 衰减（t=τ 时 = 1 + 1/e ≈ 1.37）', beforeV !== afterV && afterV.includes('1.37'), `${beforeV} → ${afterV}`)
+  check(
+    '读数跟随 seek 到 t ≈ τ',
+    textIncluding(after.canvasTexts, 't = 0.25 s'),
+    after.canvasTexts.join(',').slice(0, 120),
+  )
+  check(
+    'v₁ 从 2 衰减（t=τ 时 = 1 + 1/e ≈ 1.37）',
+    beforeV !== afterV && afterV.includes('1.37'),
+    `${beforeV} → ${afterV}`,
+  )
   const emfAfter = after.canvasTexts.find((t) => t.includes('E = BL')) ?? ''
   check('E 衰减到 0.0742 V（0.2·e^−0.992）', emfAfter.includes('0.0742'), emfAfter)
   await shot('double-bar-momentum-tau')
@@ -260,7 +311,11 @@ await waitForInductionLab()
     await scrubber.fill(t)
     await page.waitForTimeout(320)
     const g = await geometry()
-    if (g.viewBox === null || g.barXs.length < 2) { allInside = false; worst = `t=${t} elements missing`; break }
+    if (g.viewBox === null || g.barXs.length < 2) {
+      allInside = false
+      worst = `t=${t} elements missing`
+      break
+    }
     const { x, w } = g.viewBox
     for (const bx of g.barXs) {
       if (!(bx >= x - 0.5 && bx <= x + w + 0.5)) {
@@ -275,13 +330,20 @@ await waitForInductionLab()
 
 /* ---------------------------------------------------------------- CASE G -- */
 stdout.write('\nCASE G · 单棒与磁通量装置：共享场盒绘制无回归\n')
-for (const [name, marker] of [['导体棒切割磁感线', 'v = '], ['磁通量变化产生感应电动势', 'E = -dΦ/dt']]) {
+for (const [name, marker] of [
+  ['导体棒切割磁感线', 'v = '],
+  ['磁通量变化产生感应电动势', 'E = -dΦ/dt'],
+]) {
   await openPickerFromToolbar()
   await pickTemplate(name)
   await waitForInductionLab()
   const g = await geometry()
   check(`${name} 画布有真实笔画`, g.paintedStrokes >= 10, `strokes=${g.paintedStrokes}`)
-  check(`${name} 读数出现`, textIncluding(g.canvasTexts, marker), g.canvasTexts.join(',').slice(0, 100))
+  check(
+    `${name} 读数出现`,
+    textIncluding(g.canvasTexts, marker),
+    g.canvasTexts.join(',').slice(0, 100),
+  )
   const rects = await page.evaluate(() => {
     const cover = document.querySelector('[data-physicsos-surface="lab"]')
     return [...(cover?.querySelectorAll('rect') ?? [])]

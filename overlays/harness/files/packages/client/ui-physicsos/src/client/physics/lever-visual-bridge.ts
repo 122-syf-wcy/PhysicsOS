@@ -30,12 +30,23 @@ import type {
 /** Metres → centimetres, the unit the lever is drawn in. */
 const cm = (metres: number): number => metres * 100
 
+/**
+ * The lever scene visuals helper `fmtLeverValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtLeverValue = (value: number, digits = 4): string => {
   if (!Number.isFinite(value)) return '—'
   if (Math.abs(value) < 1e-12) return '0'
   return String(Number.parseFloat(value.toPrecision(digits)))
 }
 
+/**
+ * The lever scene visuals helper `leverObservableKeyOf`.
+ * @returns the observable key.
+ * @param definition - the observable definition.
+ */
 export const leverObservableKeyOf = (
   definition: ObservableDefinition,
 ): ObservableKey | undefined => {
@@ -54,6 +65,11 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
+/**
+ * The lever scene visuals helper `leverPhaseText`.
+ * @returns the formatted string.
+ * @param state - the current state.
+ */
 export const leverPhaseText = (state: LeverState): string => {
   switch (state.phase) {
     case 'balanced':
@@ -65,6 +81,9 @@ export const leverPhaseText = (state: LeverState): string => {
   }
 }
 
+/**
+ * The lever visual input shape used by the lever scene visuals module.
+ */
 export interface LeverVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedLeverModel
@@ -77,13 +96,19 @@ const rotate = (point: ScenePoint, tilt: number): ScenePoint => ({
   y: point.x * Math.sin(tilt) + point.y * Math.cos(tilt),
 })
 
-/** Build one lever frame from the verified statics state. */
-export const leverSceneVisual = ({
-  scene,
-  model,
-  state,
-  time,
-}: LeverVisualInput): SceneVisualModel => {
+/**
+ * Build one lever frame from the verified statics state.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const leverSceneVisual = (input: LeverVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+    state,
+    time,
+  } = input
+
   const bench = leverBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('mechanics')
 

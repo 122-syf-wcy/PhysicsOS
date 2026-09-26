@@ -33,15 +33,16 @@ export const fmt = (value: number | null): string => {
 }
 
 const scalarLine = (scalar: ToolScalar): string =>
-  `- ${scalar.key} = ${fmt(scalar.value)}${scalar.unit === '' ? '' : ` ${scalar.unit}`}`
-  + (scalar.formula === undefined ? '' : `（${scalar.formula}）`)
-  + (scalar.targetId === undefined ? '' : ` @${scalar.targetId}`)
+  `- ${scalar.key} = ${fmt(scalar.value)}${scalar.unit === '' ? '' : ` ${scalar.unit}`}` +
+  (scalar.formula === undefined ? '' : `（${scalar.formula}）`) +
+  (scalar.targetId === undefined ? '' : ` @${scalar.targetId}`)
 
 const verificationLines = (verification: ToolVerification): string[] => {
   const passed = verification.checks.filter((check) => check.passed).length
   const lines = [`校验：${verification.status}（${passed}/${verification.checks.length} 项通过）`]
   for (const check of verification.checks) {
-    if (!check.passed) lines.push(`  ✗ ${check.id}${check.message === undefined ? '' : `：${check.message}`}`)
+    if (!check.passed)
+      lines.push(`  ✗ ${check.id}${check.message === undefined ? '' : `：${check.message}`}`)
   }
   for (const error of verification.errors) lines.push(`  ! ${error}`)
   return lines
@@ -58,7 +59,9 @@ export const renderExperiments = (listing: readonly ExperimentListing[]): string
   for (const [domain, entries] of byDomain) {
     lines.push(`[${domain}]`)
     for (const entry of entries) {
-      lines.push(`- ${entry.id}（${entry.stage === 'junior' ? '初中' : '高中'}）${entry.title}：${entry.description}`)
+      lines.push(
+        `- ${entry.id}（${entry.stage === 'junior' ? '初中' : '高中'}）${entry.title}：${entry.description}`,
+      )
     }
   }
   return lines.join('\n')
@@ -67,8 +70,8 @@ export const renderExperiments = (listing: readonly ExperimentListing[]): string
 export const renderScene = (scene: SceneDescription): string => {
   const lines = [
     `场景 ${scene.sceneId} · 修订 ${scene.revision} · ${scene.title}`,
-    `领域 ${scene.domain} · 引擎 ${scene.engineId}`
-    + (scene.sourceQuestionId === undefined ? '' : ` · 来源题目 ${scene.sourceQuestionId}`),
+    `领域 ${scene.domain} · 引擎 ${scene.engineId}` +
+      (scene.sourceQuestionId === undefined ? '' : ` · 来源题目 ${scene.sourceQuestionId}`),
   ]
   if (scene.description !== undefined) lines.push(scene.description)
   lines.push(
@@ -76,11 +79,16 @@ export const renderScene = (scene: SceneDescription): string => {
   )
   lines.push('对象：')
   for (const object of scene.objects) {
-    lines.push(`- ${object.id} [${object.kind}]${object.name === undefined ? '' : ` ${object.name}`}`)
+    lines.push(
+      `- ${object.id} [${object.kind}]${object.name === undefined ? '' : ` ${object.name}`}`,
+    )
   }
   if (scene.observables.length > 0) {
     lines.push(
-      '可观察量：' + scene.observables.map((item) => `${item.id}(${item.type}${item.visible ? '' : '，隐藏'})`).join('、'),
+      '可观察量：' +
+        scene.observables
+          .map((item) => `${item.id}(${item.type}${item.visible ? '' : '，隐藏'})`)
+          .join('、'),
     )
   }
   lines.push('可用命令：' + scene.commands.join('、'))
@@ -91,43 +99,64 @@ export const renderSolve = (result: SolveQuestionResult): string => {
   const lines: string[] = []
   if (result.status === 'rejected') {
     lines.push(`未能求解（${result.workflowState}）。`)
-    if (result.domain !== undefined) lines.push(`识别到的领域 / 模型：${result.domain} / ${result.model ?? '?'}`)
+    if (result.domain !== undefined)
+      lines.push(`识别到的领域 / 模型：${result.domain} / ${result.model ?? '?'}`)
     if (result.knowns.length > 0) {
-      lines.push('读到的已知量：' + result.knowns.map((known) => `${known.symbol} = ${fmt(known.value)} ${known.unit}`).join('，'))
+      lines.push(
+        '读到的已知量：' +
+          result.knowns
+            .map((known) => `${known.symbol} = ${fmt(known.value)} ${known.unit}`)
+            .join('，'),
+      )
     }
     if (result.targets.length > 0) lines.push('读到的待求量：' + result.targets.join('、'))
     lines.push('原因：')
-    for (const issue of result.issues) lines.push(`- [${issue.severity}] ${issue.code}：${issue.message}`)
+    for (const issue of result.issues)
+      lines.push(`- [${issue.severity}] ${issue.code}：${issue.message}`)
     lines.push('请不要自行估算答案；向学生说明题面哪里需要补全或改写。')
     return lines.join('\n')
   }
   lines.push(
-    `已求解（${result.domain ?? '?'} / ${result.model ?? '?'}）`
-    + (result.goldenQuestionId === undefined ? '' : ` · 题库题 ${result.goldenQuestionId}`),
+    `已求解（${result.domain ?? '?'} / ${result.model ?? '?'}）` +
+      (result.goldenQuestionId === undefined ? '' : ` · 题库题 ${result.goldenQuestionId}`),
   )
   if (result.knowns.length > 0) {
-    lines.push('已知：' + result.knowns.map((known) => `${known.label} ${known.symbol} = ${fmt(known.value)} ${known.unit}`).join('，'))
+    lines.push(
+      '已知：' +
+        result.knowns
+          .map((known) => `${known.label} ${known.symbol} = ${fmt(known.value)} ${known.unit}`)
+          .join('，'),
+    )
   }
-  lines.push('待求：' + (result.targets.length === 0 ? '（题面未指明）' : result.targets.join('、')))
+  lines.push(
+    '待求：' + (result.targets.length === 0 ? '（题面未指明）' : result.targets.join('、')),
+  )
   lines.push('答案：')
   for (const answer of result.answers) {
-    lines.push(`- ${answer.label}${answer.symbol === '' ? '' : ` ${answer.symbol}`} = ${answer.value}${answer.unit === '' ? '' : ` ${answer.unit}`}`)
+    lines.push(
+      `- ${answer.label}${answer.symbol === '' ? '' : ` ${answer.symbol}`} = ${answer.value}${answer.unit === '' ? '' : ` ${answer.unit}`}`,
+    )
   }
   lines.push('步骤：')
   for (const step of result.steps) {
-    lines.push(`${step.index}. ${step.title}${step.description === '' ? '' : ` — ${step.description}`}`)
+    lines.push(
+      `${step.index}. ${step.title}${step.description === '' ? '' : ` — ${step.description}`}`,
+    )
     if (step.substitution !== undefined) lines.push(`   代入：${step.substitution}`)
     if (step.result !== undefined) lines.push(`   结果：${step.result}`)
   }
   if (result.verification !== undefined) lines.push(...verificationLines(result.verification))
-  for (const issue of result.issues) lines.push(`- [${issue.severity}] ${issue.code}：${issue.message}`)
+  for (const issue of result.issues)
+    lines.push(`- [${issue.severity}] ${issue.code}：${issue.message}`)
   if (result.scene !== undefined) {
     lines.push(
       result.reusedScene === true
         ? `题面与之前相同：复用已有场景 ${result.scene.sceneId}（修订 ${result.scene.revision}），没有新建场景。`
         : `场景已就绪：sceneId = ${result.scene.sceneId}（修订 ${result.scene.revision}，引擎 ${result.scene.engineId}）。`,
     )
-    lines.push('对象：' + result.scene.objects.map((object) => `${object.id}[${object.kind}]`).join('、'))
+    lines.push(
+      '对象：' + result.scene.objects.map((object) => `${object.id}[${object.kind}]`).join('、'),
+    )
     lines.push('告诉学生：左侧"最近空间"里打开该场景即可看动画（点"运行"播放运动过程）。')
   }
   return lines.join('\n')
@@ -149,23 +178,32 @@ export const renderSimulate = (result: SimulateResult): string => {
   if (result.events.length > 0) {
     lines.push('事件：')
     for (const event of result.events) {
-      lines.push(`- ${event.kind}${event.time === null ? '' : ` @ t = ${fmt(event.time)} s`}${event.targetId === undefined ? '' : ` (${event.targetId})`}`)
+      lines.push(
+        `- ${event.kind}${event.time === null ? '' : ` @ t = ${fmt(event.time)} s`}${event.targetId === undefined ? '' : ` (${event.targetId})`}`,
+      )
     }
   }
   return lines.join('\n')
 }
 
 export const renderObserve = (result: ObserveResult): string => {
-  const lines = [`场景 ${result.sceneId} 修订 ${result.revision} 在 t = ${fmt(result.time)} s 的状态：`]
+  const lines = [
+    `场景 ${result.sceneId} 修订 ${result.revision} 在 t = ${fmt(result.time)} s 的状态：`,
+  ]
   for (const object of result.objects) {
     const parts: string[] = []
     if (object.position !== undefined) {
-      parts.push(`位置 (${fmt(object.position.x)}, ${fmt(object.position.y)}${object.position.z ? `, ${fmt(object.position.z)}` : ''}) ${object.position.unit}`)
+      parts.push(
+        `位置 (${fmt(object.position.x)}, ${fmt(object.position.y)}${object.position.z ? `, ${fmt(object.position.z)}` : ''}) ${object.position.unit}`,
+      )
     }
     if (object.velocity !== undefined) {
-      parts.push(`速度 (${fmt(object.velocity.x)}, ${fmt(object.velocity.y)}${object.velocity.z ? `, ${fmt(object.velocity.z)}` : ''}) ${object.velocity.unit}`)
+      parts.push(
+        `速度 (${fmt(object.velocity.x)}, ${fmt(object.velocity.y)}${object.velocity.z ? `, ${fmt(object.velocity.z)}` : ''}) ${object.velocity.unit}`,
+      )
     }
-    for (const value of object.values) parts.push(`${value.key} = ${fmt(value.value)}${value.unit === '' ? '' : ` ${value.unit}`}`)
+    for (const value of object.values)
+      parts.push(`${value.key} = ${fmt(value.value)}${value.unit === '' ? '' : ` ${value.unit}`}`)
     lines.push(`- ${object.id}：${parts.length === 0 ? '（无数值）' : parts.join('；')}`)
   }
   if (result.derived.length > 0) {
@@ -180,12 +218,13 @@ export const renderObserve = (result: ObserveResult): string => {
  * generically: `PHYSICS_TOOL_RENDERERS[name](value)`. Each accepts the canonical
  * JSON the matching runtime method returned.
  */
-export const PHYSICS_TOOL_RENDERERS: Readonly<Record<PhysicsToolName, (value: unknown) => string>> = {
-  physics_list_experiments: (value) => renderExperiments(value as readonly ExperimentListing[]),
-  physics_create_experiment: (value) => renderScene(value as SceneDescription),
-  physics_solve_question: (value) => renderSolve(value as SolveQuestionResult),
-  physics_describe_scene: (value) => renderScene(value as SceneDescription),
-  physics_scene_command: (value) => renderCommand(value as CommandResult),
-  physics_simulate: (value) => renderSimulate(value as SimulateResult),
-  physics_observe: (value) => renderObserve(value as ObserveResult),
-}
+export const PHYSICS_TOOL_RENDERERS: Readonly<Record<PhysicsToolName, (value: unknown) => string>> =
+  {
+    physics_list_experiments: (value) => renderExperiments(value as readonly ExperimentListing[]),
+    physics_create_experiment: (value) => renderScene(value as SceneDescription),
+    physics_solve_question: (value) => renderSolve(value as SolveQuestionResult),
+    physics_describe_scene: (value) => renderScene(value as SceneDescription),
+    physics_scene_command: (value) => renderCommand(value as CommandResult),
+    physics_simulate: (value) => renderSimulate(value as SimulateResult),
+    physics_observe: (value) => renderObserve(value as ObserveResult),
+  }

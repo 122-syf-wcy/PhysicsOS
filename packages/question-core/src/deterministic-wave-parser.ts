@@ -32,10 +32,11 @@ import type {
  * optics and sound questions, so the exclusion list below is checked first.
  */
 const WAVE_SIGNAL =
-  /机械波|横波|纵波|绳波|水波|简谐波|波长|波速|驻波|波节|波腹|谐波|基频|相干波源|波源|波的叠加|波的干涉|干涉/
+  /机械波|横波|纵波|绳波|水波|简谐波|波长|波速|驻波|波节|波腹|谐波|基频|相干波源|波源|波的叠加|波的干涉|干涉|单缝|衍射|多普勒|声源频率|波的反射|波的折射/
 
 /** Signals that hand the question to another parser (or to no parser). */
-const NON_WAVE_SIGNAL = /光的干涉|双缝|薄膜|电磁波|光波|折射|透镜|回声|声速|洛伦兹|磁感应|电场强度/
+const NON_WAVE_SIGNAL =
+  /光的干涉|双缝|薄膜|电磁波|光波|折射率|透镜|凸透镜|凹透镜|光的折射|回声|声速|洛伦兹|磁感应|电场强度/
 
 export const isWaveQuestionText = (text: string): boolean =>
   WAVE_SIGNAL.test(text) && !NON_WAVE_SIGNAL.test(text)
@@ -105,36 +106,106 @@ const WAVE_PATTERNS = {
   ],
   waveSpeed: [
     new RegExp(String.raw`波速(?:为|是|=)?\s*(${NUMBER})\s*(${SPEED_UNIT})?\b`, 'i'),
-    new RegExp(String.raw`以\s*(${NUMBER})\s*(${SPEED_UNIT})\s*(?:的速度)?(?:沿|在|向).{0,8}传播`, 'i'),
+    new RegExp(
+      String.raw`以\s*(${NUMBER})\s*(${SPEED_UNIT})\s*(?:的速度)?(?:沿|在|向).{0,8}传播`,
+      'i',
+    ),
     new RegExp(String.raw`传播速度(?:为|是|=)?\s*(${NUMBER})\s*(${SPEED_UNIT})?\b`, 'i'),
     new RegExp(String.raw`\bv\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})?\b`),
   ],
   sourceSeparation: [
-    new RegExp(String.raw`(?:两|双)?波源(?:之间)?(?:的)?(?:间距|距离|相距)(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
+    new RegExp(
+      String.raw`(?:两|双)?波源(?:之间)?(?:的)?(?:间距|距离|相距)(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`,
+      'i',
+    ),
     new RegExp(String.raw`相距\s*(${NUMBER})\s*(${LENGTH_UNIT})\b`, 'i'),
     new RegExp(String.raw`\bd\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`),
   ],
   pathOne: [
-    new RegExp(String.raw`到\s*S[₁1]\s*(?:的)?距离(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
+    new RegExp(
+      String.raw`到\s*S[₁1]\s*(?:的)?距离(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`,
+      'i',
+    ),
     new RegExp(String.raw`r[₁1]\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
   ],
   pathTwo: [
-    new RegExp(String.raw`到\s*S[₂2]\s*(?:的)?距离(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
+    new RegExp(
+      String.raw`到\s*S[₂2]\s*(?:的)?距离(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`,
+      'i',
+    ),
     new RegExp(String.raw`r[₂2]\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
   ],
   pathDifference: [
-    new RegExp(String.raw`(?:路程差|波程差)(?:Δ)?(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
+    new RegExp(
+      String.raw`(?:路程差|波程差)(?:Δ)?(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`,
+      'i',
+    ),
     new RegExp(String.raw`Δ\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
   ],
   stringLength: [
-    new RegExp(String.raw`(?:弦|绳)(?:的)?长(?:度)?(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
-    new RegExp(String.raw`长\s*(?:L\s*=\s*)?(${NUMBER})\s*(${LENGTH_UNIT})\s*的(?:弦|琴弦|绳)`, 'i'),
+    new RegExp(
+      String.raw`(?:弦|绳)(?:的)?长(?:度)?(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`,
+      'i',
+    ),
+    new RegExp(
+      String.raw`长\s*(?:L\s*=\s*)?(${NUMBER})\s*(${LENGTH_UNIT})\s*的(?:弦|琴弦|绳)`,
+      'i',
+    ),
     new RegExp(String.raw`\bL\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`),
+  ],
+  incidentWaveSpeed: [
+    new RegExp(
+      String.raw`(?:入射介质|介质1|第一种介质)[^。；;]{0,20}?波速\s*v[₁1]?\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})`,
+      'i',
+    ),
+    new RegExp(String.raw`v[₁1]\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})`, 'i'),
+  ],
+  transmittedWaveSpeed: [
+    new RegExp(
+      String.raw`(?:折射介质|介质2|第二种介质)[^。；;]{0,20}?波速\s*v[₂2]?\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})`,
+      'i',
+    ),
+    new RegExp(String.raw`v[₂2]\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})`, 'i'),
+  ],
+  incidentAngle: [
+    new RegExp(String.raw`入射角\s*(?:θ\s*)?[₁1]?\s*=\s*(${NUMBER})\s*(?:°|deg|rad)?`, 'i'),
+  ],
+  slitWidth: [
+    new RegExp(
+      String.raw`(?:缝宽|狭缝宽度|单缝宽度)\s*(?:a)?\s*(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})`,
+      'i',
+    ),
+    new RegExp(String.raw`\ba\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})`, 'i'),
+  ],
+  screenDistance: [
+    new RegExp(
+      String.raw`(?:缝到屏|屏距|缝与屏之间)(?:的)?距离\s*(?:L)?\s*(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})`,
+      'i',
+    ),
+    new RegExp(String.raw`\bL\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})`, 'i'),
+  ],
+  sourceSpeed: [
+    new RegExp(String.raw`(?:波源|声源)以\s*(${NUMBER})\s*(${SPEED_UNIT})`, 'i'),
+    new RegExp(String.raw`(?:v[sₛ]|v_s)\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})`, 'i'),
+  ],
+  observerSpeed: [
+    new RegExp(String.raw`观察者以\s*(${NUMBER})\s*(${SPEED_UNIT})`, 'i'),
+    new RegExp(String.raw`(?:v[o₀]|v_o)\s*=\s*(${NUMBER})\s*(${SPEED_UNIT})`, 'i'),
   ],
 } as const
 
 const CHINESE_NUMERALS: Readonly<Record<string, number>> = {
-  一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+  十: 10,
 }
 
 /**
@@ -167,9 +238,16 @@ function known(
  * IS a superposition and questions often say so; interference vocabulary
  * (干涉 / 相干 / 路程差 / two sources) wins over the bare travelling wave.
  */
-function detectSubModel(text: string): WaveModelId {
+export function detectMechanicalWaveModel(text: string): WaveModelId {
+  if (/多普勒|观察者.*接收|接收.*频率/.test(text)) return 'wave_doppler'
+  if (/单缝|衍射/.test(text)) return 'wave_diffraction'
+  if (/波的反射|波的折射|反射角|折射角|入射角|进入介质|从.*介质.*进入/.test(text)) {
+    return 'reflection_refraction'
+  }
+  if (/纵波|压缩|稀疏|疏密/.test(text)) return 'longitudinal_wave'
   if (/驻波|波节|波腹|谐波|基频|两端固定/.test(text)) return 'standing_wave'
-  if (/干涉|相干|路程差|波程差|两个?波源|双波源|S[₁1].*S[₂2]|叠加/.test(text)) return 'wave_interference'
+  if (/干涉|相干|路程差|波程差|两个?波源|双波源|S[₁1].*S[₂2]|叠加/.test(text))
+    return 'wave_interference'
   return 'travelling_wave'
 }
 
@@ -180,7 +258,10 @@ function detectTargets(text: string, model: WaveModelId): SemanticTarget[] {
   }
   /* Only the part after 求 / 判断 / 问 names what is asked; a stated 波长 in
      the givens must not read as a target. */
-  const asked = text.split(/求[:：]?|判断|问[:：]?/).slice(1).join(' ')
+  const asked = text
+    .split(/求[:：]?|判断|问[:：]?/)
+    .slice(1)
+    .join(' ')
   if (asked.length === 0) return targets
   if (/波速|传播速度|传播的速度/.test(asked)) add('wave_speed')
   if (/波长/.test(asked)) add('wavelength')
@@ -191,7 +272,21 @@ function detectTargets(text: string, model: WaveModelId): SemanticTarget[] {
     if (/合振幅|振幅/.test(asked)) add('resultant_amplitude')
     if (/路程差|波程差/.test(asked)) add('path_difference')
   }
+
   if (model === 'standing_wave' && /波节|波腹/.test(asked)) add('node_count')
+  if (model === 'reflection_refraction') {
+    if (/反射角/.test(asked)) add('reflection_angle')
+    if (/折射角/.test(asked)) add('refracted_angle')
+    if (/临界角/.test(asked)) add('critical_angle')
+  }
+  if (model === 'wave_diffraction') {
+    if (/中央明纹|中央亮纹|中央最大|条纹宽度/.test(asked)) add('central_maximum_width')
+    if (/衍射角|暗纹角|暗纹位置/.test(asked)) add('diffraction_angle')
+  }
+  if (model === 'wave_doppler') {
+    if (/观察者.*频率|接收.*频率|观察频率|频率.*观察者/.test(asked)) add('observed_frequency')
+    if (/频移|频率变化/.test(asked)) add('frequency_shift')
+  }
   return targets
 }
 
@@ -205,6 +300,13 @@ const targetMetadata = (target: SemanticTarget): { label: string; symbol: string
     interference_type: { label: '振动加强或减弱', symbol: '' },
     resultant_amplitude: { label: '合振幅', symbol: 'A_P' },
     node_count: { label: '波节个数', symbol: '' },
+    reflection_angle: { label: '反射角', symbol: 'θr' },
+    refracted_angle: { label: '折射角', symbol: 'θt' },
+    critical_angle: { label: '临界角', symbol: 'θc' },
+    central_maximum_width: { label: '中央明纹宽度', symbol: 'w0' },
+    diffraction_angle: { label: '衍射角', symbol: 'θ' },
+    observed_frequency: { label: '观察频率', symbol: "f'" },
+    frequency_shift: { label: '频率变化', symbol: 'Δf' },
   }
   return values[target] ?? { label: target, symbol: '' }
 }
@@ -217,7 +319,7 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
     const issues: QuestionParseIssue[] = []
     const knowns: KnownValue[] = []
 
-    const model = detectSubModel(text)
+    const model = detectMechanicalWaveModel(text)
 
     const amplitude = extractValueWithUnit(text, WAVE_PATTERNS.amplitude, 'cm')
     if (amplitude !== null) {
@@ -247,12 +349,16 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
     if (model === 'wave_interference') {
       sourceSeparation = extractValueWithUnit(text, WAVE_PATTERNS.sourceSeparation, 'm')
       if (sourceSeparation !== null) {
-        knowns.push(known('source_separation', '波源间距', 'd', sourceSeparation.siValue, 'm', 'length'))
+        knowns.push(
+          known('source_separation', '波源间距', 'd', sourceSeparation.siValue, 'm', 'length'),
+        )
       }
       pathOne = extractValueWithUnit(text, WAVE_PATTERNS.pathOne, 'm')
       pathTwo = extractValueWithUnit(text, WAVE_PATTERNS.pathTwo, 'm')
-      if (pathOne !== null) knowns.push(known('path_one', '到 S₁ 的距离', 'r₁', pathOne.siValue, 'm', 'length'))
-      if (pathTwo !== null) knowns.push(known('path_two', '到 S₂ 的距离', 'r₂', pathTwo.siValue, 'm', 'length'))
+      if (pathOne !== null)
+        knowns.push(known('path_one', '到 S₁ 的距离', 'r₁', pathOne.siValue, 'm', 'length'))
+      if (pathTwo !== null)
+        knowns.push(known('path_two', '到 S₂ 的距离', 'r₂', pathTwo.siValue, 'm', 'length'))
       pathDifference = extractValueWithUnit(text, WAVE_PATTERNS.pathDifference, 'm')
       if (pathDifference !== null && (pathOne === null || pathTwo === null)) {
         knowns.push(known('path_difference', '路程差', 'Δ', pathDifference.siValue, 'm', 'length'))
@@ -272,6 +378,82 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
       }
     }
 
+    let mediumLength: ExtractedValue | null = null
+    if (model === 'longitudinal_wave') {
+      mediumLength =
+        extractValueWithUnit(
+          text,
+          [
+            new RegExp(
+              String.raw`介质(?:长度|长)\s*(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})`,
+              'i',
+            ),
+          ],
+          'm',
+        ) ?? null
+      if (mediumLength !== null) {
+        knowns.push(known('medium_length', '介质长度', 'ℓ', mediumLength.siValue, 'm', 'length'))
+      }
+    }
+
+    let incidentSpeed: ExtractedValue | null = null
+    let transmittedSpeed: ExtractedValue | null = null
+    let incidentAngle: ExtractedValue | null = null
+    if (model === 'reflection_refraction') {
+      incidentSpeed = extractValueWithUnit(text, WAVE_PATTERNS.incidentWaveSpeed, 'm/s')
+      transmittedSpeed = extractValueWithUnit(text, WAVE_PATTERNS.transmittedWaveSpeed, 'm/s')
+      incidentAngle = extractValueWithUnit(text, WAVE_PATTERNS.incidentAngle, 'deg')
+      if (incidentSpeed !== null) {
+        knowns.push(
+          known('incident_speed', '入射介质波速', 'v₁', incidentSpeed.siValue, 'm/s', 'velocity'),
+        )
+      }
+      if (transmittedSpeed !== null) {
+        knowns.push(
+          known(
+            'transmitted_speed',
+            '第二介质波速',
+            'v₂',
+            transmittedSpeed.siValue,
+            'm/s',
+            'velocity',
+          ),
+        )
+      }
+      if (incidentAngle !== null) {
+        knowns.push(known('incident_angle', '入射角', 'θ₁', incidentAngle.siValue, 'rad', 'angle'))
+      }
+    }
+
+    let slitWidth: ExtractedValue | null = null
+    let screenDistance: ExtractedValue | null = null
+    if (model === 'wave_diffraction') {
+      slitWidth = extractValueWithUnit(text, WAVE_PATTERNS.slitWidth, 'm')
+      screenDistance = extractValueWithUnit(text, WAVE_PATTERNS.screenDistance, 'm')
+      if (slitWidth !== null)
+        knowns.push(known('slit_width', '缝宽', 'a', slitWidth.siValue, 'm', 'length'))
+      if (screenDistance !== null) {
+        knowns.push(
+          known('screen_distance', '缝到屏距离', 'L', screenDistance.siValue, 'm', 'length'),
+        )
+      }
+    }
+
+    let sourceSpeed: ExtractedValue | null = null
+    let observerSpeed: ExtractedValue | null = null
+    if (model === 'wave_doppler') {
+      sourceSpeed = extractValueWithUnit(text, WAVE_PATTERNS.sourceSpeed, 'm/s')
+      observerSpeed = extractValueWithUnit(text, WAVE_PATTERNS.observerSpeed, 'm/s')
+      if (sourceSpeed !== null) {
+        knowns.push(known('source_speed', '波源速度', 'vs', sourceSpeed.siValue, 'm/s', 'velocity'))
+      }
+      if (observerSpeed !== null) {
+        knowns.push(
+          known('observer_speed', '观察者速度', 'vo', observerSpeed.siValue, 'm/s', 'velocity'),
+        )
+      }
+    }
+
     const targets = detectTargets(text, model)
 
     const entities: PhysicsSemanticIR['entities'] =
@@ -279,19 +461,49 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
         ? ['rope', 'wave_source']
         : model === 'wave_interference'
           ? ['wave_source', 'wave_source', 'observation_point']
-          : ['string']
-    const relations: SemanticRelation[] =
-      model === 'travelling_wave'
-        ? ['wave_speed_relation']
-        : model === 'wave_interference'
-          ? ['wave_speed_relation', 'path_difference_superposition']
-          : ['wave_speed_relation', 'standing_wave_resonance']
-    const assumptions: SemanticAssumption[] =
-      model === 'travelling_wave'
-        ? ['ideal_medium_no_damping']
-        : model === 'wave_interference'
-          ? ['ideal_medium_no_damping', 'coherent_in_phase_sources']
-          : ['ideal_medium_no_damping', 'string_clamped_both_ends']
+          : model === 'longitudinal_wave'
+            ? ['wave_source', 'observation_point']
+            : model === 'reflection_refraction'
+              ? ['wave_source', 'observation_point']
+              : model === 'wave_diffraction'
+                ? ['wave_source', 'screen']
+                : ['wave_source', 'observation_point']
+    const relations: SemanticRelation[] = (() => {
+      switch (model) {
+        case 'travelling_wave':
+          return ['wave_speed_relation']
+        case 'wave_interference':
+          return ['wave_speed_relation', 'path_difference_superposition']
+        case 'standing_wave':
+          return ['wave_speed_relation', 'standing_wave_resonance']
+        case 'longitudinal_wave':
+          return ['wave_speed_relation', 'longitudinal_wave_motion']
+        case 'reflection_refraction':
+          return ['wave_speed_relation', 'wave_reflection', 'wave_refraction']
+        case 'wave_diffraction':
+          return ['wave_speed_relation', 'single_slit_diffraction']
+        case 'wave_doppler':
+          return ['doppler_effect']
+      }
+    })()
+    const assumptions: SemanticAssumption[] = (() => {
+      switch (model) {
+        case 'travelling_wave':
+          return ['ideal_medium_no_damping']
+        case 'wave_interference':
+          return ['ideal_medium_no_damping', 'coherent_in_phase_sources']
+        case 'standing_wave':
+          return ['ideal_medium_no_damping', 'string_clamped_both_ends']
+        case 'longitudinal_wave':
+          return ['ideal_medium_no_damping']
+        case 'reflection_refraction':
+          return ['ideal_medium_no_damping']
+        case 'wave_diffraction':
+          return ['plane_wave_normal_incidence', 'far_field_diffraction']
+        case 'wave_doppler':
+          return ['subsonic_source']
+      }
+    })()
 
     if (!isWaveQuestionText(text)) {
       issues.push({
@@ -305,10 +517,22 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
       issues.push({ code: 'MISSING_FREQUENCY', message: '缺少频率或周期。', severity: 'warning' })
     }
     if (model !== 'standing_wave' && wavelength === null && waveSpeed === null) {
-      issues.push({ code: 'MISSING_WAVELENGTH_OR_SPEED', message: '缺少波长或波速。', severity: 'warning' })
+      issues.push({
+        code: 'MISSING_WAVELENGTH_OR_SPEED',
+        message: '缺少波长或波速。',
+        severity: 'warning',
+      })
     }
-    if (model === 'wave_interference' && pathDifference === null && (pathOne === null || pathTwo === null)) {
-      issues.push({ code: 'MISSING_PATH_DIFFERENCE', message: '缺少到两波源的距离或路程差。', severity: 'warning' })
+    if (
+      model === 'wave_interference' &&
+      pathDifference === null &&
+      (pathOne === null || pathTwo === null)
+    ) {
+      issues.push({
+        code: 'MISSING_PATH_DIFFERENCE',
+        message: '缺少到两波源的距离或路程差。',
+        severity: 'warning',
+      })
     }
     if (model === 'standing_wave') {
       if (stringLength === null) {
@@ -318,11 +542,19 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
         issues.push({ code: 'MISSING_HARMONIC', message: '缺少谐波次数。', severity: 'warning' })
       }
       if (waveSpeed === null && frequency === null) {
-        issues.push({ code: 'MISSING_WAVE_SPEED', message: '缺少弦上波速或谐波频率。', severity: 'warning' })
+        issues.push({
+          code: 'MISSING_WAVE_SPEED',
+          message: '缺少弦上波速或谐波频率。',
+          severity: 'warning',
+        })
       }
     }
     if (targets.length === 0) {
-      issues.push({ code: 'MISSING_TARGET', message: '未识别到需要求解的物理量。', severity: 'error' })
+      issues.push({
+        code: 'MISSING_TARGET',
+        message: '未识别到需要求解的物理量。',
+        severity: 'error',
+      })
     }
 
     /* Structured fields carry only what the text stated; the period is folded
@@ -338,6 +570,26 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
       ...(pathDifference === null ? {} : { wavePathDifference: pathDifference.siValue }),
       ...(stringLength === null ? {} : { waveStringLength: stringLength.siValue }),
       ...(harmonic === undefined ? {} : { waveHarmonic: harmonic }),
+      ...(mediumLength === null ? {} : { waveMediumLength: mediumLength.siValue }),
+      ...(incidentSpeed === null ? {} : { waveIncidentSpeed: incidentSpeed.siValue }),
+      ...(transmittedSpeed === null ? {} : { waveTransmittedSpeed: transmittedSpeed.siValue }),
+      ...(incidentAngle === null ? {} : { waveIncidentAngle: incidentAngle.siValue }),
+      ...(slitWidth === null ? {} : { waveSlitWidth: slitWidth.siValue }),
+      ...(screenDistance === null ? {} : { waveScreenDistance: screenDistance.siValue }),
+      ...(sourceSpeed === null ? {} : { waveSourceSpeed: sourceSpeed.siValue }),
+      ...(observerSpeed === null ? {} : { waveObserverSpeed: observerSpeed.siValue }),
+      ...(model !== 'wave_doppler'
+        ? {}
+        : {
+            waveSourceDirection: /远离|驶离|背离/.test(text)
+              ? ('receding' as const)
+              : ('approaching' as const),
+            waveObserverDirection: /观察者.*(?:静止|不动)|静止的?观察者/.test(text)
+              ? ('stationary' as const)
+              : /观察者.*远离|观察者.*背离/.test(text)
+                ? ('receding' as const)
+                : ('approaching' as const),
+          }),
     }
 
     const ir: PhysicsSemanticIR = {
@@ -371,10 +623,26 @@ export const DeterministicWaveQuestionParser: QuestionParserProvider = {
       isWaveQuestionText(text) &&
       targets.length > 0 &&
       (model === 'standing_wave'
-        ? stringLength !== null && harmonic !== undefined && (waveSpeed !== null || frequency !== null)
-        : hasFrequency &&
-          (wavelength !== null || waveSpeed !== null) &&
-          (model !== 'wave_interference' || pathDifference !== null || (pathOne !== null && pathTwo !== null)))
+        ? stringLength !== null &&
+          harmonic !== undefined &&
+          (waveSpeed !== null || frequency !== null)
+        : model === 'reflection_refraction'
+          ? incidentSpeed !== null &&
+            transmittedSpeed !== null &&
+            incidentAngle !== null &&
+            frequency !== null
+          : model === 'wave_diffraction'
+            ? slitWidth !== null &&
+              screenDistance !== null &&
+              frequency !== null &&
+              (wavelength !== null || waveSpeed !== null)
+            : model === 'wave_doppler'
+              ? waveSpeed !== null && frequency !== null && sourceSpeed !== null
+              : hasFrequency &&
+                (wavelength !== null || waveSpeed !== null) &&
+                (model !== 'wave_interference' ||
+                  pathDifference !== null ||
+                  (pathOne !== null && pathTwo !== null)))
     const confidence = hasCoreKnowns ? 0.9 : 0.3
     return { ir, issues, confidence }
   },

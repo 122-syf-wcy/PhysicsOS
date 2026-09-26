@@ -1,0 +1,41 @@
+{
+  "name": "@deepseek-ai/dsh-shared-state-host",
+  "description": "PhysicsOS shared runtime state: atomic rate-limit counters and one-time claim ledgers backed by memory or Redis",
+  "version": "0.1.0-rc.5",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/physicsos/shared-state-host"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "scripts": {
+    "bundle": "tsc -b tsconfig.json && tsdown",
+    "watch": "tsdown --watch"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  }
+}

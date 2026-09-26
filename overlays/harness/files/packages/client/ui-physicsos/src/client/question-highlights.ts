@@ -80,7 +80,11 @@ const HIGHLIGHTS_BY_DOMAIN: Readonly<Record<string, Readonly<Record<string, read
   magnetic: MAGNETIC_HIGHLIGHTS,
 }
 
-/** Set equality for the drawn-id Selection summary (content, not reference). */
+/** Set equality for the drawn-id Selection summary (content, not reference).
+ * @param a - first id set.
+ * @param b - second id set.
+ * @returns true when both sets hold the same ids.
+ */
 export const sameDrawnSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => {
   if (a.size !== b.size) return false
   for (const id of a) {
@@ -89,7 +93,10 @@ export const sameDrawnSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): bo
   return true
 }
 
-/** Every id the current frame can actually light up. */
+/** Every id the current frame can actually light up.
+ * @param view - the scene's visual model, or null before first render.
+ * @returns the drawable object ids.
+ */
 export const drawnIds = (view: SceneVisualModel | null): ReadonlySet<string> => {
   if (view === null) return new Set()
   return new Set([
@@ -113,6 +120,11 @@ export const drawnIds = (view: SceneVisualModel | null): ReadonlySet<string> => 
  * Ids a symbol may highlight, filtered against what is drawn. Returning an empty
  * list is the signal to render a caption instead of a button: a control that
  * changes nothing on screen teaches the student that clicking is pointless.
+ * @param symbols - the formula symbols a known quantity mentions.
+ * @param domain - the question's physics domain (drives the highlight table).
+ * @param bodyId - the body the symbol attaches to, when the table needs one.
+ * @param drawn - ids actually drawable this frame (from `drawnIds`).
+ * @returns drawable ids the symbols may highlight — empty means show a caption.
  */
 export const highlightableIds = (
   symbols: readonly string[],

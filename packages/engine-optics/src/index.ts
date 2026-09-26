@@ -56,10 +56,7 @@ export {
   type RayPoint,
 } from './principal-rays.ts'
 
-export {
-  resolveLightModel,
-  type ResolvedLightModel,
-} from './light-model.ts'
+export { resolveLightModel, type ResolvedLightModel } from './light-model.ts'
 export {
   LIGHT_RELATIVE_TOLERANCE,
   imagePointOf,

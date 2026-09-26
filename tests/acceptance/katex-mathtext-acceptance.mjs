@@ -24,10 +24,18 @@ const check = (label, condition, detail) => {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
-page.on('console', (m) => { if (m.type() === 'error') gate.consoleErrors.push(m.text().slice(0, 200)) })
-page.on('pageerror', (e) => { gate.pageErrors.push(e.message.slice(0, 200)) })
-page.on('requestfailed', (r) => { gate.failedRequests.push(`${r.method()} ${r.url().slice(0, 140)}`) })
-page.on('response', (r) => { if (r.status() >= 400) gate.errorResponses.push(`${r.status()} ${r.url().slice(0, 140)}`) })
+page.on('console', (m) => {
+  if (m.type() === 'error') gate.consoleErrors.push(m.text().slice(0, 200))
+})
+page.on('pageerror', (e) => {
+  gate.pageErrors.push(e.message.slice(0, 200))
+})
+page.on('requestfailed', (r) => {
+  gate.failedRequests.push(`${r.method()} ${r.url().slice(0, 140)}`)
+})
+page.on('response', (r) => {
+  if (r.status() >= 400) gate.errorResponses.push(`${r.status()} ${r.url().slice(0, 140)}`)
+})
 
 await page.goto(BASE, { waitUntil: 'networkidle' })
 const later = page.getByRole('button', { name: '稍后再说' })
@@ -56,7 +64,7 @@ check('KaTeX fonts served', fontOk)
 
 /* Readings tab: derived rows go through MathText. */
 await page.evaluate(() => {
-  const btn = [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === '数据')
+  const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === '数据')
   btn?.click()
 })
 await page.waitForTimeout(400)
@@ -71,13 +79,16 @@ await page.evaluate(() => {
   document.querySelector('[title="切换实验"]')?.click()
 })
 await page.waitForTimeout(600)
-await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {})
+await page
+  .locator('[data-physicsos-state="picker"]')
+  .waitFor({ state: 'visible', timeout: 15_000 })
+  .catch(() => {})
 await page.evaluate(() => {
   document.querySelector('button[data-template-id="vt-area"]')?.click()
 })
 await page.waitForTimeout(1200)
 await page.evaluate(() => {
-  const btn = [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === '推导')
+  const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === '推导')
   btn?.click()
 })
 await page.waitForTimeout(400)

@@ -13,6 +13,7 @@ const dashboard = (): DashboardRow => ({
   users: { total: 2, byRole: { STUDENT: 2, TEACHER: 0, SCHOOL_ADMIN: 0, SUPER_ADMIN: 0 }, disabled: 0 },
   sessions: { live: 1, distinctUsers: 1 },
   activity: [],
+  learning: { available: false, attempts: 0, correct: 0, wrong: 0, nodes: [], days: 0 },
   limiters: {
     login: { tracked: 3, saturated: 1, limit: 5, windowMs: 60_000 },
     ip: { tracked: 2, saturated: 0, limit: 20, windowMs: 60_000 },

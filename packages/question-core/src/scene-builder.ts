@@ -77,11 +77,38 @@ export function buildSceneFromIR(
     leverBenches: [],
     measurementDefinitions: [],
     observableDefinitions: [
-      { id: asObservableId('observable-velocity'), type: 'velocity', targetId: particleId, visible: true },
-      { id: asObservableId('observable-force'), type: 'force', targetId: particleId, visible: true },
-      { id: asObservableId('observable-trajectory'), type: 'trajectory', targetId: particleId, visible: true },
-      { id: asObservableId('observable-center'), type: 'geometry', targetId: particleId, visible: false, parameters: { kind: 'orbit_center' } },
-      { id: asObservableId('observable-radius'), type: 'geometry', targetId: particleId, visible: false, parameters: { kind: 'radius' } },
+      {
+        id: asObservableId('observable-velocity'),
+        type: 'velocity',
+        targetId: particleId,
+        visible: true,
+      },
+      {
+        id: asObservableId('observable-force'),
+        type: 'force',
+        targetId: particleId,
+        visible: true,
+      },
+      {
+        id: asObservableId('observable-trajectory'),
+        type: 'trajectory',
+        targetId: particleId,
+        visible: true,
+      },
+      {
+        id: asObservableId('observable-center'),
+        type: 'geometry',
+        targetId: particleId,
+        visible: false,
+        parameters: { kind: 'orbit_center' },
+      },
+      {
+        id: asObservableId('observable-radius'),
+        type: 'geometry',
+        targetId: particleId,
+        visible: false,
+        parameters: { kind: 'radius' },
+      },
     ],
     annotations: [],
     metadata: {

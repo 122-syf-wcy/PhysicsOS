@@ -54,9 +54,12 @@ const announcement = z.object({
   createdAt: z.string(),
 })
 
+/** One feedback row in `feedback` — author key resolved server-side, reply attributed to the operator. */
 export type FeedbackRecord = z.infer<typeof feedback>
+/** One announcement row in `announcements`; `schoolId: null` is platform-wide. */
 export type AnnouncementRecord = z.infer<typeof announcement>
 
+/** The `physicsos_notice` domain: the feedback queue plus tenant/platform announcements. */
 export const noticeDomain = defineDomain({
   name: 'physicsos_notice',
   version: 0,

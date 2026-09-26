@@ -64,6 +64,8 @@ const densityText = (value: number): string => `${fmtFluidValue(value, 5)} kg/mÂ
  * Scene observable definition â†’ canvas toggle key. The pressure factory stamps
  * `observable-pressure-reading` / `observable-pressure-comparison` for all three
  * rigs, so the key rides on the id rather than the observable type.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const pressureObservableKeyOf = (
   definition: ObservableDefinition,
@@ -89,7 +91,11 @@ interface Layers {
   readonly comparison: boolean
 }
 
-/** Student-facing name of the rig the frame is showing. */
+/**
+ * Student-facing name of the rig the frame is showing.
+ * @returns the formatted string.
+ * @param type - the part type.
+ */
 export const pressureRigText = (type: PressureRigKind): string => {
   switch (type) {
     case 'solid':
@@ -495,13 +501,25 @@ const atmosphericPicture = (
 
 /* ------------------------------------------------------------------ frame -- */
 
+/**
+ * The pressure visual input shape used by the pressure scene visuals module.
+ */
 export interface PressureVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedPressureModel
 }
 
-/** Build one pressure frame from the engine's resolved model. */
-export const pressureSceneVisual = ({ scene, model }: PressureVisualInput): SceneVisualModel => {
+/**
+ * Build one pressure frame from the engine's resolved model
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const pressureSceneVisual = (input: PressureVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const visible = visibilityOf(scene)
   const layers: Layers = {
     reading: visible.pressure === true,

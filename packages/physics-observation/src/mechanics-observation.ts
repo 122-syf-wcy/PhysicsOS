@@ -146,7 +146,10 @@ type MechanicsTrajectoryPoints = MechanicsTrajectoryObservation['points']
 
 const trajectoryCache = new WeakMap<SimulationResult, Map<string, MechanicsTrajectoryPoints>>()
 
-const trajectoryPoints = (simulation: SimulationResult, bodyId: string): MechanicsTrajectoryPoints => {
+const trajectoryPoints = (
+  simulation: SimulationResult,
+  bodyId: string,
+): MechanicsTrajectoryPoints => {
   const cachedByParticle = trajectoryCache.get(simulation)
   const cached = cachedByParticle?.get(bodyId)
   if (cached !== undefined) return cached
@@ -212,12 +215,15 @@ const scalarOrUndefined = (simulation: SimulationResult, key: string): number | 
 const gravityForceMagnitude = (scene: PhysicsScene, bodyId: string): number | undefined => {
   const body = scene.bodies.find((candidate) => candidate.id === bodyId)
   const field = scene.fields.find((candidate) => candidate.type === 'uniform_gravity')
-  if (body === undefined || field === undefined || field.type !== 'uniform_gravity') return undefined
+  if (body === undefined || field === undefined || field.type !== 'uniform_gravity')
+    return undefined
   const g = magnitude(field.acceleration.vector)
   return body.mass.value * g
 }
 
-export const observeMechanicsScene = (input: MechanicsObservationInput): MechanicsObservationRuntimeState => {
+export const observeMechanicsScene = (
+  input: MechanicsObservationInput,
+): MechanicsObservationRuntimeState => {
   const { scene, simulation } = input
   if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
     throw new PhysicsOSError(
@@ -278,7 +284,10 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
   }
 
   try {
-    const netForce = derivedVector(simulation.derivedQuantities, 'net_force') as QuantityVector<'force'>
+    const netForce = derivedVector(
+      simulation.derivedQuantities,
+      'net_force',
+    ) as QuantityVector<'force'>
     for (const def of visible(scene, 'force')) {
       observations.push({
         type: 'net_force',
@@ -294,7 +303,9 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
         },
       })
     }
-  } catch { /* net_force not available */ }
+  } catch {
+    /* net_force not available */
+  }
 
   /* Weight, for any mechanics scene that shows forces.
    *
@@ -306,7 +317,14 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
   if (gravityMagnitude !== undefined && gravityMagnitude > 0) {
     for (const def of visible(scene, 'force')) {
       observations.push(
-        forceObservation(def.id, body.id, state.time, bodyState.position, { x: 0, y: -gravityMagnitude, z: 0 }, 'gravity'),
+        forceObservation(
+          def.id,
+          body.id,
+          state.time,
+          bodyState.position,
+          { x: 0, y: -gravityMagnitude, z: 0 },
+          'gravity',
+        ),
       )
     }
   }
@@ -361,7 +379,14 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
   ) {
     for (const def of visible(scene, 'force')) {
       observations.push(
-        forceObservation(def.id, body.id, state.time, bodyState.position, { x: 0, y: gravityMagnitude, z: 0 }, 'normal'),
+        forceObservation(
+          def.id,
+          body.id,
+          state.time,
+          bodyState.position,
+          { x: 0, y: gravityMagnitude, z: 0 },
+          'normal',
+        ),
       )
     }
   }
@@ -408,14 +433,27 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
     if (springForce !== undefined) {
       for (const def of visible(scene, 'force')) {
         observations.push(
-          forceObservation(def.id, body.id, state.time, bodyState.position, springForce.vector, 'spring'),
+          forceObservation(
+            def.id,
+            body.id,
+            state.time,
+            bodyState.position,
+            springForce.vector,
+            'spring',
+          ),
         )
       }
     }
   }
   const ropeConstraint = scene.constraints.find((c) => c.type === 'rope')
   if (ropeConstraint !== undefined) {
-    const tension = (() => { try { return derivedScalar(state.derived, 'tension').value } catch { return undefined } })()
+    const tension = (() => {
+      try {
+        return derivedScalar(state.derived, 'tension').value
+      } catch {
+        return undefined
+      }
+    })()
     if (tension !== undefined) {
       const pivot = ropeConstraint.parameters['pivot'] as { x?: number; y?: number } | undefined
       const dx = (pivot?.x ?? 0) - (bodyState.position?.vector.x ?? 0)
@@ -424,7 +462,14 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
       if (len > 0) {
         for (const def of visible(scene, 'force')) {
           observations.push(
-            forceObservation(def.id, body.id, state.time, bodyState.position, { x: (dx / len) * tension, y: (dy / len) * tension, z: 0 }, 'tension'),
+            forceObservation(
+              def.id,
+              body.id,
+              state.time,
+              bodyState.position,
+              { x: (dx / len) * tension, y: (dy / len) * tension, z: 0 },
+              'tension',
+            ),
           )
         }
       }
@@ -439,21 +484,47 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
     (def) => def.parameters?.['kind'] === 'friction_surface',
   )
   if (frictionSurface !== undefined && inclineDef === undefined) {
-    const friction = (() => { try { return derivedScalar(state.derived, 'friction_force').value } catch { return undefined } })()
-    const applied = (() => { try { return derivedScalar(state.derived, 'applied_force').value } catch { return undefined } })()
+    const friction = (() => {
+      try {
+        return derivedScalar(state.derived, 'friction_force').value
+      } catch {
+        return undefined
+      }
+    })()
+    const applied = (() => {
+      try {
+        return derivedScalar(state.derived, 'applied_force').value
+      } catch {
+        return undefined
+      }
+    })()
     if (friction !== undefined && friction > 0) {
       const vx = bodyState.velocity?.vector.x ?? 0
       const direction = Math.abs(vx) > 1e-9 ? -Math.sign(vx) : -1
       for (const def of visible(scene, 'force')) {
         observations.push(
-          forceObservation(def.id, body.id, state.time, bodyState.position, { x: direction * friction, y: 0, z: 0 }, 'friction'),
+          forceObservation(
+            def.id,
+            body.id,
+            state.time,
+            bodyState.position,
+            { x: direction * friction, y: 0, z: 0 },
+            'friction',
+          ),
         )
       }
     }
     if (applied !== undefined && applied > 0) {
       for (const def of visible(scene, 'force')) {
         observations.push(
-          forceObservation(def.id, body.id, state.time, bodyState.position, { x: applied, y: 0, z: 0 }, 'applied'),
+          forceObservation(
+            def.id,
+            body.id,
+            state.time,
+            bodyState.position,
+            { x: applied, y: 0, z: 0 },
+            'applied',
+          ),
         )
       }
     }
@@ -472,14 +543,28 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
       const normalForce = scalarOrUndefined(simulation, 'normal_force')
       if (normalForce !== undefined) {
         observations.push(
-          forceObservation(def.id, body.id, state.time, bodyState.position, scaleVector(normal, normalForce), 'normal'),
+          forceObservation(
+            def.id,
+            body.id,
+            state.time,
+            bodyState.position,
+            scaleVector(normal, normalForce),
+            'normal',
+          ),
         )
       }
       const frictionForce = scalarOrUndefined(simulation, 'friction_force')
       if (frictionForce !== undefined && frictionForce > 0) {
         /* Kinetic friction opposes the slide, i.e. up the slope. */
         observations.push(
-          forceObservation(def.id, body.id, state.time, bodyState.position, scaleVector(along, -frictionForce), 'friction'),
+          forceObservation(
+            def.id,
+            body.id,
+            state.time,
+            bodyState.position,
+            scaleVector(along, -frictionForce),
+            'friction',
+          ),
         )
       }
     }
@@ -540,7 +625,10 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
   }
 
   try {
-    const flightTime = derivedScalar(simulation.derivedQuantities, 'flight_time') as Quantity<'time'>
+    const flightTime = derivedScalar(
+      simulation.derivedQuantities,
+      'flight_time',
+    ) as Quantity<'time'>
     const maxH = derivedScalar(simulation.derivedQuantities, 'max_height') as Quantity<'length'>
     const range = derivedScalar(simulation.derivedQuantities, 'range') as Quantity<'length'>
     /* Key points are gated by their own observable when the scene declares one, so
@@ -580,7 +668,9 @@ export const observeMechanicsScene = (input: MechanicsObservationInput): Mechani
         }
       }
     }
-  } catch { /* not projectile */ }
+  } catch {
+    /* not projectile */
+  }
 
   return { sceneRevision: scene.revision, observations }
 }

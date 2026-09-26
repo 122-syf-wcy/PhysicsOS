@@ -91,6 +91,9 @@ interface Computed {
   readonly model: ResolvedTransformerModel
 }
 
+/**
+ * The transformer workspace runtime — see the module doc for its role.
+ */
 export class TransformerWorkspaceRuntime implements WorkspaceRuntime {
   private sceneRuntime: SceneRuntime
   private readonly engine = new TransformerEngine()
@@ -528,5 +531,10 @@ const tableOf = (model: ResolvedTransformerModel): DataTableView => {
   }
 }
 
+/**
+ * The transformer workspace runtime helper `createTransformerWorkspaceRuntime`.
+ * @returns the workspace runtime.
+ * @param scene - the physics scene.
+ */
 export const createTransformerWorkspaceRuntime = (scene: PhysicsScene): WorkspaceRuntime =>
   new TransformerWorkspaceRuntime(scene)

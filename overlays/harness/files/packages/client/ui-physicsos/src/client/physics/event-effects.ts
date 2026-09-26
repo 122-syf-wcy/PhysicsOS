@@ -46,7 +46,11 @@ const kindOf = (event: TimelineEvent): CanvasEffect['kind'] => {
   }
 }
 
-/** The moving thing in this frame, whichever domain it belongs to. */
+/**
+ * The moving thing in this frame, whichever domain it belongs to.
+ * @returns the scene point.
+ * @param view - the visual model.
+ */
 export const liveAnchorOf = (view: SceneVisualModel): ScenePoint | undefined => {
   const liveBody = view.bodies.find(body => body.live === true) ?? view.bodies[0]
   return liveBody?.at
@@ -59,7 +63,12 @@ export const liveAnchorOf = (view: SceneVisualModel): ScenePoint | undefined => 
     ?? view.leverHangers?.[0]?.massAt
 }
 
-/** Where an event should burst on this frame, if anywhere. */
+/**
+ * Where an event should burst on this frame, if anywhere.
+ * @returns the scene point.
+ * @param view - the visual model.
+ * @param event - the event.
+ */
 export const anchorForEvent = (event: TimelineEvent, view: SceneVisualModel): ScenePoint | undefined =>
   view.keyPoints.find(point => point.id === event.id)?.at ?? liveAnchorOf(view)
 
@@ -68,6 +77,8 @@ export const anchorForEvent = (event: TimelineEvent, view: SceneVisualModel): Sc
  * @param previous - clock time of the last frame.
  * @param current - clock time of this frame.
  * @param total - run window, for the seek guard.
+ * @returns the crossed events list.
+ * @param events - the events.
  */
 export const crossedEvents = (
   events: readonly TimelineEvent[],
@@ -87,6 +98,7 @@ export const crossedEvents = (
  * @param clock - the playback clock of the current snapshot.
  * @param events - the snapshot's timeline events.
  * @param view - the snapshot's visual frame, for anchoring.
+ * @returns the use event effects list.
  */
 export function useEventEffects(
   clock: PlaybackClock,

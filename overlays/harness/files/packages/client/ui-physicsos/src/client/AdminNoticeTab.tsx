@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { AnnouncementRow, FeedbackRow, FeedbackStatus, NoticeApi } from './notice-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { GlassSelect } from './GlassSelect.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminNoticeTabProps {
@@ -88,13 +89,19 @@ export function AdminNoticeTab({ api, canPublish, t }: AdminNoticeTabProps) {
       </div>
 
       <div className={css.toolbar}>
-        <select className={css.select} value={status}
-          onChange={(event) => { setStatus(event.target.value as FeedbackStatus | '') }}>
-          <option value="">{t('admin.content.filter.all')}</option>
-          {(['open', 'answered', 'closed'] as const).map(bucket => (
-            <option key={bucket} value={bucket}>{t(`admin.notice.status.${bucket}`)}</option>
-          ))}
-        </select>
+        <GlassSelect
+          className={css.select}
+          value={status}
+          ariaLabel={t('admin.content.filter.all')}
+          testId="feedback-status"
+          options={[
+            { value: '', label: t('admin.content.filter.all') },
+            ...(['open', 'answered', 'closed'] as const).map(bucket => ({
+              value: bucket, label: t(`admin.notice.status.${bucket}`),
+            })),
+          ]}
+          onChange={(next) => { setStatus(next as FeedbackStatus | '') }}
+        />
       </div>
 
       <div className={css.list}>

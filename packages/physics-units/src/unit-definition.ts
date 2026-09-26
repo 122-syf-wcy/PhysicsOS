@@ -120,10 +120,7 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('kilometer_per_hour', 'velocity', 'km/h', 1000 / 3600, false, ['kph', 'kmph']),
   define('kilometer_per_second', 'velocity', 'km/s', 1e3, false, ['km*s^-1']),
 
-  define('meter_per_second_squared', 'acceleration', 'm/s^2', 1, true, [
-    'm/s\u00b2',
-    'm*s^-2',
-  ]),
+  define('meter_per_second_squared', 'acceleration', 'm/s^2', 1, true, ['m/s\u00b2', 'm*s^-2']),
 
   define('newton', 'force', 'N', 1, true),
   define('joule', 'energy', 'J', 1, true),
@@ -156,10 +153,7 @@ export const UNIT_DEFINITIONS: readonly UnitDefinition[] = [
   define('degree', 'angle', 'deg', Math.PI / 180, false, ['\u00b0']),
   define('radian_per_second', 'angular_velocity', 'rad/s', 1, true, ['rad*s^-1']),
 
-  define('kilogram_meter_per_second', 'momentum', 'kg*m/s', 1, true, [
-    'kg\u00b7m/s',
-    'kg m/s',
-  ]),
+  define('kilogram_meter_per_second', 'momentum', 'kg*m/s', 1, true, ['kg\u00b7m/s', 'kg m/s']),
   define('pascal', 'pressure', 'Pa', 1, true),
   define('kilogram_per_cubic_meter', 'density', 'kg/m^3', 1, true, ['kg/m\u00b3']),
 

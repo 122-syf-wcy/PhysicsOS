@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { vec3 } from '@physicsos/physics-math'
-import {
-  createMassSpectrometerScene,
-  createVelocitySelectorScene,
-} from '@physicsos/physics-scene'
+import { createMassSpectrometerScene, createVelocitySelectorScene } from '@physicsos/physics-scene'
 
-import { CompositeEngine, createCompositeSimulationRequest } from '../../engine-composite/src/index.ts'
+import {
+  CompositeEngine,
+  createCompositeSimulationRequest,
+} from '../../engine-composite/src/index.ts'
 import {
   isCompositeVerifiableScene,
   reportCompositeSelection,
@@ -75,10 +75,15 @@ describe('composite apparatus verifier', () => {
     expect(report.relativeResidual).toBeLessThan(0)
 
     const verification = verifyCompositeApparatus(scene, simulation)
-    expect(verification.checks.find((c) => c.id === 'velocity_selection_condition')?.passed).toBe(false)
+    expect(verification.checks.find((c) => c.id === 'velocity_selection_condition')?.passed).toBe(
+      false,
+    )
     /* The physics is still right: a deflecting beam is a correct outcome, so the
        engine's own verification must not be dragged down by the readout. */
-    expect(simulation.verification.status === 'passed' || simulation.verification.status === 'passed_with_warnings').toBe(true)
+    expect(
+      simulation.verification.status === 'passed' ||
+        simulation.verification.status === 'passed_with_warnings',
+    ).toBe(true)
   })
 
   it('fails the selection condition when the particle is too slow', () => {

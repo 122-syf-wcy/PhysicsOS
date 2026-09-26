@@ -1,4 +1,11 @@
-import type { IsoDateTime, QuestionId, SceneId, SessionId, SnapshotId, UserId } from '@physicsos/shared'
+import type {
+  IsoDateTime,
+  QuestionId,
+  SceneId,
+  SessionId,
+  SnapshotId,
+  UserId,
+} from '@physicsos/shared'
 
 export type PhysicsAgentMode = 'experiment' | 'question' | 'teacher' | 'diagnostic'
 

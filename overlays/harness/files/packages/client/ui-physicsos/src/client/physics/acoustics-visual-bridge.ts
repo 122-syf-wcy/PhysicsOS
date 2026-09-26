@@ -29,6 +29,12 @@ import type {
   SceneVisualModel,
 } from './scene-visual-model.ts'
 
+/**
+ * The acoustics scene visuals helper `fmtAcousticsValue`.
+ * @returns the formatted string.
+ * @param digits - the digits.
+ * @param value - the new value.
+ */
 export const fmtAcousticsValue = (value: number, digits = 4): string => {
   if (!Number.isFinite(value)) return '—'
   if (Math.abs(value) < 1e-9) return '0'
@@ -39,6 +45,8 @@ export const fmtAcousticsValue = (value: number, digits = 4): string => {
  * Scene observable definition → canvas toggle key. The acoustics factory
  * stamps `observable-acoustics-wavefronts` / `observable-acoustics-path`, both
  * of type `geometry`, so the key is carried by the id.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const acousticsObservableKeyOf = (
   definition: ObservableDefinition,
@@ -58,7 +66,11 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-/** Student-facing one-liner for the pulse's current leg. */
+/**
+ * Student-facing one-liner for the pulse's current leg
+ * @returns the formatted string.
+ * @param phase - the wave phase.
+ */
 export const pulsePhaseText = (phase: PulseState['phase']): string =>
   phase === 'outbound' ? '去程（向峭壁传播）' : phase === 'return' ? '回程（反射后返回）' : '回声已接收'
 
@@ -72,6 +84,9 @@ const tickStepOf = (span: number): number => {
   return decade * 10
 }
 
+/**
+ * The acoustics visual input shape used by the acoustics scene visuals module.
+ */
 export interface AcousticsVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedAcousticModel
@@ -80,13 +95,19 @@ export interface AcousticsVisualInput {
   readonly time: number
 }
 
-/** Build one acoustics frame from the verified echo state. */
-export const acousticsSceneVisual = ({
-  scene,
-  model,
-  pulse,
-  time,
-}: AcousticsVisualInput): SceneVisualModel => {
+/**
+ * Build one acoustics frame from the verified echo state.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const acousticsSceneVisual = (input: AcousticsVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+    pulse,
+    time,
+  } = input
+
   const bench = acousticBenchOf(scene)
   if (bench === undefined) return emptyVisualModel('acoustics')
 

@@ -40,6 +40,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * that is not a `{ latest, scenes }` fold of scene snapshots whose embedded
  * scene agrees with its header (same id and revision, frozen schema version).
  * @param value - raw projection value (unknown until proven).
+ * @returns the agent scenes projection.
  */
 export const readAgentScenesProjection = (value: unknown): AgentScenesProjection | undefined => {
   if (!isRecord(value)) return undefined
@@ -73,6 +74,9 @@ export interface AgentSceneRef {
   scene: PhysicsScene
 }
 
+/**
+ * The agent scene sync deps shape used by the agent scene sync module.
+ */
 export interface AgentSceneSyncDeps {
   /** Make the scene the active one without changing surface (baseline / session switch). */
   adoptScene: (ref: AgentSceneRef) => void
@@ -83,6 +87,9 @@ export interface AgentSceneSyncDeps {
 /** What one `apply` did, for callers and tests. */
 export type AgentSceneSyncOutcome = 'absent' | 'invalid' | 'unchanged' | 'adopted' | 'shown'
 
+/**
+ * The agent scene sync shape used by the agent scene sync module.
+ */
 export interface AgentSceneSync {
   /**
    * Feed the current session and its `physicsScenes` projection value.
@@ -97,6 +104,7 @@ export interface AgentSceneSync {
  * acted on, so a projection re-delivery (reconnect, list rebuild) is a no-op
  * and a malformed value is not retried until the projection changes.
  * @param deps - the two surface actions.
+ * @returns the agent scene sync.
  */
 export function createAgentSceneSync(deps: AgentSceneSyncDeps): AgentSceneSync {
   const applied = new Map<string, string>()

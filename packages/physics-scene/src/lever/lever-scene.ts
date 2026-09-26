@@ -133,7 +133,8 @@ export const createLeverBenchScene = (input: LeverBenchSceneInput): PhysicsScene
 export const leverBenchesOf = (scene: PhysicsScene): LeverBench[] => scene.leverBenches ?? []
 
 /** The single lever of a lever-statics scene, if present. */
-export const leverBenchOf = (scene: PhysicsScene): LeverBench | undefined => leverBenchesOf(scene)[0]
+export const leverBenchOf = (scene: PhysicsScene): LeverBench | undefined =>
+  leverBenchesOf(scene)[0]
 
 /** True when the scene is a pure single-lever class-1 balance scene. */
 export const isLeverScene = (scene: PhysicsScene): boolean =>

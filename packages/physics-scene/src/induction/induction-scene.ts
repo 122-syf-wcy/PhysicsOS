@@ -86,8 +86,7 @@ export interface InductionBenchSceneInput {
   readonly description?: string
 }
 
-const observableId = (key: InductionObservableKey) =>
-  asObservableId(`observable-induction-${key}`)
+const observableId = (key: InductionObservableKey) => asObservableId(`observable-induction-${key}`)
 
 const isBarMotion = (spec: InductionBenchSpec): spec is BarMotionSpec =>
   (spec.type ?? 'bar_motion') === 'bar_motion'

@@ -73,6 +73,7 @@ import {
   type DraftHistory,
   type TerminalRef,
 } from './physics/circuit-builder.ts'
+import { GlassSelect } from './GlassSelect.tsx'
 import css from './LabWorkspace.module.css'
 
 type Translate = (key: PhysicsosKey) => string
@@ -924,18 +925,16 @@ export function PhysicsWorkspace({
               <span className={clsx(css.clock, css.clockEnd)}>
                 {formatTimeIn(clock.total, clockScale)}
               </span>
-              <select
+              <GlassSelect
                 className={css.rate}
-                aria-label={t('lab.rate')}
-                value={clock.rate}
-                onChange={(event) => {
-                  commit(runtime.setRate(Number(event.target.value)))
+                ariaLabel={t('lab.rate')}
+                testId="playback-rate"
+                value={String(clock.rate)}
+                options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}x` }))}
+                onChange={(next) => {
+                  commit(runtime.setRate(Number(next)))
                 }}
-              >
-                {PLAYBACK_RATES.map(rate => (
-                  <option key={rate} value={rate}>{`${rate}x`}</option>
-                ))}
-              </select>
+              />
             </div>
 
             <section className={clsx(css.dataPanel, dataOpen && css.dataPanelOpen)}>

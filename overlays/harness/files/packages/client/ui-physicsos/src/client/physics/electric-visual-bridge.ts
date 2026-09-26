@@ -35,6 +35,9 @@ import {
 import { latticeSpacingOf, radialCountForCharge, splitTrajectoryAtTime } from './bridge-helpers.ts'
 import { formatTimeAt } from './time-format.ts'
 
+/**
+ * The electric visual input shape used by the electric scene visuals module.
+ */
 export interface ElectricVisualInput {
   readonly scene: PhysicsScene
   readonly simulation: SimulationResult
@@ -240,6 +243,11 @@ const stableVisualFrame = (
   return frame
 }
 
+/**
+ * The electric scene visuals helper `electricSceneVisualAt`.
+ * @returns the scene visual model.
+ * @param input - the caller-supplied fields.
+ */
 export const electricSceneVisualAt = (input: ElectricVisualInput): SceneVisualModel => {
   const { scene } = input
   if (isParallelPlateScene(scene)) return electricRegionVisualAt(input)
@@ -676,6 +684,13 @@ const electricUniformVisualAt = (input: ElectricVisualInput): SceneVisualModel =
   })
 }
 
+/**
+ * The electric scene visuals helper `electricSampleReadout`.
+ * @returns the electric sample readout list.
+ * @param index - the index.
+ * @param particleId - the particle id.
+ * @param simulation - the simulation.
+ */
 export const electricSampleReadout = (
   simulation: SimulationResult,
   particleId: string,

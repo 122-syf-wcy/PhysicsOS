@@ -200,7 +200,8 @@ export function reportCompositeSelection(
   /* Balance is judged on the NET force, not on the two magnitudes alone: two equal
      magnitudes pointing the same way do not cancel, and a selector wired with the
      wrong polarity is exactly that case. */
-  const relativeResidual = scaleOf > 0 ? (electricForceMagnitude - magneticForceMagnitude) / scaleOf : 0
+  const relativeResidual =
+    scaleOf > 0 ? (electricForceMagnitude - magneticForceMagnitude) / scaleOf : 0
   const balanced = scaleOf > 0 && netForceMagnitude / scaleOf < BALANCE_TOLERANCE
   return {
     evaluated: true,

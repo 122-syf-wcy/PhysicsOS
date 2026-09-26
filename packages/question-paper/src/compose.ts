@@ -8,9 +8,7 @@
 import { QUESTION_BANK } from './bank.ts'
 import { EXAM_BLUEPRINTS } from './blueprints.ts'
 import { weightsFor } from './knowledge-weights.ts'
-import type {
-  BankQuestion, BlueprintSection, PaperKind, PaperLevel,
-} from './paper.ts'
+import type { BankQuestion, BlueprintSection, PaperKind, PaperLevel } from './paper.ts'
 
 /** One compose request: which exam, which product, which scope. */
 export interface ComposeRequest {
@@ -69,7 +67,11 @@ const mulberry32 = (seed: number) => {
   }
 }
 
-const pickWeighted = <T>(items: readonly T[], weight: (item: T) => number, next: () => number): T => {
+const pickWeighted = <T>(
+  items: readonly T[],
+  weight: (item: T) => number,
+  next: () => number,
+): T => {
   const total = items.reduce((sum, item) => sum + weight(item), 0)
   let roll = next() * total
   for (const item of items) {
@@ -83,14 +85,16 @@ const pickWeighted = <T>(items: readonly T[], weight: (item: T) => number, next:
 
 /** Flatten a slot-based structure template into sampler sections. */
 const sectionsOf = (level: PaperLevel): readonly SamplerSection[] => {
-  const blueprint = EXAM_BLUEPRINTS.find(entry => entry.level === level)
+  const blueprint = EXAM_BLUEPRINTS.find((entry) => entry.level === level)
   if (blueprint === undefined) throw new Error(`no blueprint for level ${level}`)
   return blueprint.sections.flatMap((section: BlueprintSection) => {
     const groups = new Map<BankQuestion['kind'], number>()
     for (const slot of section.slots) groups.set(slot.kind, (groups.get(slot.kind) ?? 0) + 1)
     return [...groups.entries()].map(([kind, count]) => ({
-      title: section.title, kind, count,
-      scoreEach: section.slots.find(slot => slot.kind === kind)?.score ?? 0,
+      title: section.title,
+      kind,
+      count,
+      scoreEach: section.slots.find((slot) => slot.kind === kind)?.score ?? 0,
     }))
   })
 }
@@ -101,7 +105,10 @@ const sectionsOf = (level: PaperLevel): readonly SamplerSection[] => {
  * @param bank - question pool (defaults to the built-in seed).
  * @returns the draft; `gaps` lists every unfilled slot.
  */
-export function composePaper(request: ComposeRequest, bank: readonly BankQuestion[] = QUESTION_BANK): DraftPaper {
+export function composePaper(
+  request: ComposeRequest,
+  bank: readonly BankQuestion[] = QUESTION_BANK,
+): DraftPaper {
   const scope = request.scope ?? []
   const inScope = (item: BankQuestion): boolean =>
     item.level === request.level && (scope.length === 0 || scope.includes(item.domain))
@@ -114,15 +121,16 @@ export function composePaper(request: ComposeRequest, bank: readonly BankQuestio
   let number = 1
 
   for (const section of sectionsOf(request.level)) {
-    const pool = bank.filter(item =>
-      item.kind === section.kind && inScope(item) && !used.has(item.id))
+    const pool = bank.filter(
+      (item) => item.kind === section.kind && inScope(item) && !used.has(item.id),
+    )
     const missing = section.count - pool.length
     if (missing > 0) gaps.push({ section, needed: section.count, available: pool.length })
 
     for (let index = 0; index < Math.min(section.count, pool.length); index++) {
       const item = pickWeighted(
-        pool.filter(candidate => !used.has(candidate.id)),
-        entry => weights[entry.domain] ?? 0.02,
+        pool.filter((candidate) => !used.has(candidate.id)),
+        (entry) => weights[entry.domain] ?? 0.02,
         next,
       )
       used.add(item.id)

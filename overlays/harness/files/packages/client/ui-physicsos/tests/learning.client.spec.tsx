@@ -16,7 +16,7 @@ import { ExperimentReportPanel } from '../src/client/ExperimentReportPanel.tsx'
 import { LearningRecordWorkspace } from '../src/client/LearningRecordWorkspace.tsx'
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import type { PhysicsSceneCardData } from '../src/client/scene-chat-node.ts'
-import { cardSession, solvedCardData } from './solved-card-fixture.ts'
+import { cardSession, solvedCardData } from './solved-card-fixture.client.ts'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import {
   createLearningRecordController,

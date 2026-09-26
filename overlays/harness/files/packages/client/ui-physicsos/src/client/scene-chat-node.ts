@@ -187,7 +187,10 @@ export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsScene
   },
 }
 
-/** Narrowing helper for tests and the card: is this event a scene snapshot? */
+/** Narrowing helper for tests and the card: is this event a scene snapshot?
+ * @param event - any session event.
+ * @returns true when the event is a `physics/scene` snapshot.
+ */
 export const isPhysicsSceneEvent = (
   event: SessionEvent,
 ): event is SessionEvent<'physics/scene'> => event.type === 'physics/scene'

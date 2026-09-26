@@ -41,12 +41,12 @@ export type QuestionKind =
  * excluded from statistics and template eligibility.
  */
 export type EvidenceTier =
-  | 'policy'                 // official policy / 考试方案文件
-  | 'original-scan'          // 原卷扫描件
-  | 'manual-transcript'      // 人工转录的原卷
-  | 'institution-analysis'   // 机构解析版
-  | 'web-public'             // 公开网络题源 — 题库候选可用, never stats-eligible
-  | 'recalled'               // 回忆版 — never stats-eligible
+  | 'policy' // official policy / 考试方案文件
+  | 'original-scan' // 原卷扫描件
+  | 'manual-transcript' // 人工转录的原卷
+  | 'institution-analysis' // 机构解析版
+  | 'web-public' // 公开网络题源 — 题库候选可用, never stats-eligible
+  | 'recalled' // 回忆版 — never stats-eligible
 
 /** Review lifecycle shared by source records and templates. */
 export type ReviewStatus = 'pending' | 'verified' | 'rejected'
@@ -59,18 +59,20 @@ export type Difficulty = 'basic' | 'medium' | 'hard'
 
 /** Occasion a real paper belongs to — the 卷库 type filter axis. */
 export type SourcePaperKind =
-  | 'real'      // 真题（官方考试原卷）
-  | 'mock'      // 模拟预测卷
-  | 'monthly'   // 月考
-  | 'midterm'   // 期中
-  | 'final'     // 期末
-  | 'joint'     // 联考/统考
+  | 'real' // 真题（官方考试原卷）
+  | 'mock' // 模拟预测卷
+  | 'monthly' // 月考
+  | 'midterm' // 期中
+  | 'final' // 期末
+  | 'joint' // 联考/统考
 
 /* ------------------------------------------------- real-paper intake -- */
 
 /** One real Guizhou exam paper on file (原卷登记). */
 export interface SourcePaper {
   readonly id: string
+  /** Tenant owner; null is platform-wide and absence is a legacy unscoped row. */
+  readonly schoolId?: string | null
   readonly level: PaperLevel
   /**
    * `combined` covers the 物化合卷: annotations then carry the per-question
@@ -104,6 +106,8 @@ export interface SourcePaper {
 /** One independently scored sub-question of a source paper (逐小题考点记录). */
 export interface KnowledgeAnnotation {
   readonly id: string
+  /** Tenant owner; null is platform-wide and absence is a legacy unscoped row. */
+  readonly schoolId?: string | null
   readonly sourcePaperId: string
   readonly pageNo?: number
   /** Printed question number; sub-questions use `12(2)` form. */
@@ -142,6 +146,8 @@ export type BankReuseMode = 'verbatim' | 'adapt'
  */
 export interface BankItem {
   readonly id: string
+  /** Tenant owner; null is platform-wide and absence is a legacy unscoped row. */
+  readonly schoolId?: string | null
   /** Registered paper this item was lifted from; absent for loose 散题. */
   readonly sourcePaperId?: string
   readonly level: PaperLevel
@@ -221,6 +227,8 @@ export interface BlueprintSection {
  */
 export interface ExamBlueprint {
   readonly id: string
+  /** Tenant owner; null is platform-wide and absence is a legacy unscoped row. */
+  readonly schoolId?: string | null
   readonly level: PaperLevel
   readonly subject: Subject
   readonly title: string
@@ -404,22 +412,22 @@ export interface PaperApproval {
 
 /** All check-finding codes; durable schemas and adjudication sets derive from this one list. */
 export const CHECK_CODES = [
-  'score-mismatch',      // per-question, grading-point or total score wrong
-  'missing-answer',      // no answer/grading points
-  'missing-figure',      // stem references a figure that is absent
-  'numbering',           // question numbers broken
-  'out-of-scope',        // chapter/knowledge outside the request
-  'duplicate',           // near-duplicate inside the paper
-  'format',              // choice options malformed etc.
-  'spec-mismatch',       // question drifts off its confirmed spec-table row
-  'missing-knowledge',   // no stated knowledge point — 命题依据缺失
-  'answer-format',       // answer text is not a valid option letter set
-  'difficulty-drift',    // paper coefficient drifts from the target mix
-  'solve-mismatch',      // independent solver disagrees with the draft answer
-  'engine-mismatch',     // PhysicsOS engine result disagrees
-  'bank-reuse',          // verbatim placement of an item used on a recent paper
+  'score-mismatch', // per-question, grading-point or total score wrong
+  'missing-answer', // no answer/grading points
+  'missing-figure', // stem references a figure that is absent
+  'numbering', // question numbers broken
+  'out-of-scope', // chapter/knowledge outside the request
+  'duplicate', // near-duplicate inside the paper
+  'format', // choice options malformed etc.
+  'spec-mismatch', // question drifts off its confirmed spec-table row
+  'missing-knowledge', // no stated knowledge point — 命题依据缺失
+  'answer-format', // answer text is not a valid option letter set
+  'difficulty-drift', // paper coefficient drifts from the target mix
+  'solve-mismatch', // independent solver disagrees with the draft answer
+  'engine-mismatch', // PhysicsOS engine result disagrees
+  'bank-reuse', // verbatim placement of an item used on a recent paper
   'provenance-mismatch', // stamped source mode disagrees with the printed content
-  'answer-source',       // sourced question rests on weak answer evidence
+  'answer-source', // sourced question rests on weak answer evidence
 ] as const
 
 /** One automated finding on a draft. */
@@ -443,17 +451,19 @@ export interface SolveResult {
 
 /** Lifecycle of one paper-generation job. */
 export type PaperJobStatus =
-  | 'spec'        // spec table being confirmed
-  | 'drafting'    // AI drafting in progress / done, checks pending
-  | 'checking'    // auto checks + independent solving ran
-  | 'review'      // teacher reviewing per question
-  | 'approved'    // whole-paper approval bound to the current hash
-  | 'exported'    // export bundle produced from the approved hash
-  | 'failed'      // unrecoverable — draft kept, export blocked
+  | 'spec' // spec table being confirmed
+  | 'drafting' // AI drafting in progress / done, checks pending
+  | 'checking' // auto checks + independent solving ran
+  | 'review' // teacher reviewing per question
+  | 'approved' // whole-paper approval bound to the current hash
+  | 'exported' // export bundle produced from the approved hash
+  | 'failed' // unrecoverable — draft kept, export blocked
 
 /** The durable record the host stores — document plus its audit trail. */
 export interface PaperJob {
   readonly id: string
+  /** Tenant owner; null is platform-wide and absence is a legacy unscoped row. */
+  readonly schoolId?: string | null
   /** The structure template this job draws from. */
   readonly blueprintId: string
   readonly request: PaperRequest

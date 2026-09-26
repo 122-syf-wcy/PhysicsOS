@@ -108,7 +108,10 @@ const INDUCTION_PATTERNS = {
   ],
   /** Rod length: L = 20 cm / 棒长 0.2 m / 导体棒长. */
   barLength: [
-    new RegExp(String.raw`(?:导体)?棒(?:长|长度)(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
+    new RegExp(
+      String.raw`(?:导体)?棒(?:长|长度)(?:为|是|=)?\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`,
+      'i',
+    ),
     new RegExp(String.raw`\bL\s*=\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`),
     new RegExp(String.raw`棒长\s*(${NUMBER})\s*(${LENGTH_UNIT})?\b`, 'i'),
   ],
@@ -130,7 +133,10 @@ const INDUCTION_PATTERNS = {
   ],
   /** Flux change rate: 磁通量变化率 0.05 Wb/s / 每秒变化 0.05 Wb / dΦ/dt. */
   fluxRate: [
-    new RegExp(String.raw`磁通量(?:的)?变化率(?:为|是|=)?\s*(${NUMBER})\s*(Wb\/s|Wb\s*\*\s*s\^?-?1|韦伯\/秒)?`, 'i'),
+    new RegExp(
+      String.raw`磁通量(?:的)?变化率(?:为|是|=)?\s*(${NUMBER})\s*(Wb\/s|Wb\s*\*\s*s\^?-?1|韦伯\/秒)?`,
+      'i',
+    ),
     new RegExp(String.raw`磁通量每秒(?:变化|增加|减少)\s*(${NUMBER})\s*(Wb)?`, 'i'),
     new RegExp(String.raw`\bdΦ\/dt\s*=\s*(${NUMBER})\s*(Wb\/s)?`, 'i'),
     new RegExp(String.raw`磁通量变化\s*(${NUMBER})\s*Wb`, 'i'),
@@ -213,7 +219,16 @@ export const DeterministicInductionQuestionParser: QuestionParserProvider = {
     /* Magnetic flux density and loop resistance are shared by both rigs. */
     const field = extractValueWithUnit(text, INDUCTION_PATTERNS.magneticFluxDensity, 'T')
     if (field !== null) {
-      knowns.push(known('magnetic_field_strength', '磁感应强度', 'B', field.siValue, 'T', 'magnetic_flux_density'))
+      knowns.push(
+        known(
+          'magnetic_field_strength',
+          '磁感应强度',
+          'B',
+          field.siValue,
+          'T',
+          'magnetic_flux_density',
+        ),
+      )
     }
     const resistance = extractValueWithUnit(text, INDUCTION_PATTERNS.resistance, 'Ω')
     if (resistance !== null) {
@@ -239,11 +254,22 @@ export const DeterministicInductionQuestionParser: QuestionParserProvider = {
       if (coilAngle !== null) {
         /* Angle is stored in radians so the scene builder can hand it to
            Φ = B·S·cosθ without a unit dance. */
-        knowns.push(known('coil_angle', '夹角', 'θ', (coilAngle.siValue * Math.PI) / 180, 'rad', 'angle'))
+        knowns.push(
+          known('coil_angle', '夹角', 'θ', (coilAngle.siValue * Math.PI) / 180, 'rad', 'angle'),
+        )
       }
       const fluxRate = extractValueWithUnit(text, INDUCTION_PATTERNS.fluxRate, 'Wb/s')
       if (fluxRate !== null) {
-        knowns.push(known('flux_rate', '磁通量变化率', 'dΦ/dt', fluxRate.siValue, 'Wb/s', 'magnetic_flux_rate'))
+        knowns.push(
+          known(
+            'flux_rate',
+            '磁通量变化率',
+            'dΦ/dt',
+            fluxRate.siValue,
+            'Wb/s',
+            'magnetic_flux_rate',
+          ),
+        )
       }
       const flux = extractValueWithUnit(text, INDUCTION_PATTERNS.flux, 'Wb')
       if (flux !== null && fluxRate === null) {
@@ -283,10 +309,18 @@ export const DeterministicInductionQuestionParser: QuestionParserProvider = {
       const hasBarLength = knowns.some((entry) => entry.key === 'bar_length')
       const hasBarVelocity = knowns.some((entry) => entry.key === 'bar_velocity')
       if (!hasBarLength) {
-        issues.push({ code: 'MISSING_BAR_LENGTH', message: '缺少导体棒长度。', severity: 'warning' })
+        issues.push({
+          code: 'MISSING_BAR_LENGTH',
+          message: '缺少导体棒长度。',
+          severity: 'warning',
+        })
       }
       if (!hasBarVelocity) {
-        issues.push({ code: 'MISSING_BAR_VELOCITY', message: '缺少导体棒速度。', severity: 'warning' })
+        issues.push({
+          code: 'MISSING_BAR_VELOCITY',
+          message: '缺少导体棒速度。',
+          severity: 'warning',
+        })
       }
     } else {
       const hasFluxRate = knowns.some((entry) => entry.key === 'flux_rate')
@@ -323,8 +357,9 @@ export const DeterministicInductionQuestionParser: QuestionParserProvider = {
             inductionBarVelocity: barVelocityValue,
           }
         : {}
-    const coilGeometry = !isBarMotion && fluxRateValue !== undefined
-      ? {
+    const coilGeometry =
+      !isBarMotion && fluxRateValue !== undefined
+        ? {
             inductionFluxRate: fluxRateValue,
             ...(coilAreaValue !== undefined ? { inductionCoilArea: coilAreaValue } : {}),
             ...(coilAngleValue !== undefined ? { inductionCoilAngle: coilAngleValue } : {}),
@@ -343,7 +378,7 @@ export const DeterministicInductionQuestionParser: QuestionParserProvider = {
           type: model,
           description: isBarMotion
             ? '动生电动势 E = BLv（右手定则定方向），感应电流 I = E/R'
-            : "法拉第电磁感应定律 E = -dΦ/dt（楞次定律定方向），感应电流 I = E/R",
+            : '法拉第电磁感应定律 E = -dΦ/dt（楞次定律定方向），感应电流 I = E/R',
         },
       ],
       relations,

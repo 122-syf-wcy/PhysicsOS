@@ -90,9 +90,7 @@ export const tryNormalize = (v: Vector3): Vector3 | undefined => {
 export const distance = (a: Vector3, b: Vector3): number => magnitude(subtract(a, b))
 
 export const equals = (a: Vector3, b: Vector3, epsilon = 0): boolean =>
-  Math.abs(a.x - b.x) <= epsilon &&
-  Math.abs(a.y - b.y) <= epsilon &&
-  Math.abs(a.z - b.z) <= epsilon
+  Math.abs(a.x - b.x) <= epsilon && Math.abs(a.y - b.y) <= epsilon && Math.abs(a.z - b.z) <= epsilon
 
 export const isFiniteVector = (v: Vector3): boolean =>
   Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
@@ -120,8 +118,7 @@ export const projectOnto = (v: Vector3, axis: Vector3): Vector3 => {
 }
 
 /** Component of `v` perpendicular to `axis`. */
-export const rejectFrom = (v: Vector3, axis: Vector3): Vector3 =>
-  subtract(v, projectOnto(v, axis))
+export const rejectFrom = (v: Vector3, axis: Vector3): Vector3 => subtract(v, projectOnto(v, axis))
 
 /** Rotates a vector about the +z axis by `radians` (counter-clockwise). */
 export const rotateAboutZ = (v: Vector3, radians: number): Vector3 => {

@@ -40,10 +40,7 @@ const files: FileBridge = {
 
   async saveFile(data: Blob | ArrayBuffer | string, options: FileSaveOptions): Promise<void> {
     assertBrowser()
-    const blob =
-      data instanceof Blob
-        ? data
-        : new Blob([data], { type: options.mimeType })
+    const blob = data instanceof Blob ? data : new Blob([data], { type: options.mimeType })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url

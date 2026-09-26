@@ -12,7 +12,9 @@
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { MistakeType } from '@physicsos/question-core'
+import type { LearningApi } from './learning-api.ts'
 
+/** One recorded self-check answer — local-only history, never leaves the browser. */
 export interface StudentAttempt {
   readonly id: string
   /** Golden question id, or the lab topic key for an experiment self-check. */
@@ -35,6 +37,7 @@ export interface StudentAttempt {
   readonly at: string
 }
 
+/** The store's snapshot shape — newest-first attempts, capped at 200. */
 export interface LearningRecordState {
   attempts: readonly StudentAttempt[]
 }
@@ -46,6 +49,7 @@ const STORAGE_KEY = 'physicsos.learning-record'
 const ATTEMPT_LIMIT = 200
 
 type RecordStorage = Pick<Storage, 'getItem' | 'setItem'>
+type LearningRecordSync = Pick<LearningApi, 'listAttempts' | 'putAttempt'>
 
 const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
   try {
@@ -54,61 +58,120 @@ const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
     return parsed
-      .filter((entry): entry is StudentAttempt =>
-        typeof entry === 'object' && entry !== null &&
-        typeof (entry as { questionId?: unknown }).questionId === 'string' &&
-        typeof (entry as { selfCheckId?: unknown }).selfCheckId === 'string' &&
-        typeof (entry as { correct?: unknown }).correct === 'boolean' &&
-        /* `knowledge` drives `for…of` in mastery aggregation — a row that
+      .filter(
+        (entry): entry is StudentAttempt =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as { questionId?: unknown }).questionId === 'string' &&
+          typeof (entry as { selfCheckId?: unknown }).selfCheckId === 'string' &&
+          typeof (entry as { correct?: unknown }).correct === 'boolean' &&
+          /* `knowledge` drives `for…of` in mastery aggregation — a row that
            lacks it is corrupt and is dropped here, not downstream. */
-        Array.isArray((entry as { knowledge?: unknown }).knowledge))
+          Array.isArray((entry as { knowledge?: unknown }).knowledge),
+      )
       .slice(0, ATTEMPT_LIMIT)
   } catch {
     return []
   }
 }
 
+/** The surface the views bind against: snapshot store plus `record`. */
 export interface LearningRecordController {
   store: SnapshotStore<LearningRecordState>
   record: (attempt: Omit<StudentAttempt, 'id' | 'at'>) => StudentAttempt
+  /** Migrate local attempts, upload unsynced rows, then merge server pages. */
+  sync: () => Promise<void>
 }
 
 let attemptSerial = 0
 
-/** Create the learning-record store, optionally persisted. */
+/** Create the learning-record store, optionally persisted.
+ * @param storage - the per-user storage view; absent keeps attempts in memory only.
+ * @returns the controller the views bind against.
+ */
 export function createLearningRecordController(
   storage?: RecordStorage,
+  remote?: LearningRecordSync,
 ): LearningRecordController {
   const store = createSnapshotStore<LearningRecordState>({ attempts: readStored(storage) })
+  const persist = (attempts: readonly StudentAttempt[]): void => {
+    try {
+      storage?.setItem(STORAGE_KEY, JSON.stringify(attempts))
+    } catch {
+      /* Storage full or unavailable - the in-memory record still works. */
+    }
+  }
+  const merge = (groups: readonly (readonly StudentAttempt[])[]): StudentAttempt[] => {
+    const byId = new Map<string, StudentAttempt>()
+    for (const group of groups) {
+      for (const attempt of group) {
+        const current = byId.get(attempt.id)
+        if (current === undefined || current.at <= attempt.at) byId.set(attempt.id, attempt)
+      }
+    }
+    return [...byId.values()]
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id))
+      .slice(0, ATTEMPT_LIMIT)
+  }
+  let activeSync: Promise<void> | undefined
+  const sync = (): Promise<void> => {
+    if (remote === undefined) return Promise.resolve()
+    activeSync ??= (async () => {
+      for (const attempt of store.getSnapshot().attempts) {
+        await remote.putAttempt(attempt)
+      }
+      const remoteAttempts: StudentAttempt[] = []
+      const seenCursors = new Set<string>()
+      let cursor: string | undefined
+      for (let page = 0; page < 100; page += 1) {
+        const result = await remote.listAttempts(cursor === undefined ? {} : { cursor })
+        remoteAttempts.push(...result.items)
+        if (result.nextCursor === undefined) break
+        if (seenCursors.has(result.nextCursor)) throw new Error('learning sync repeated a cursor')
+        seenCursors.add(result.nextCursor)
+        cursor = result.nextCursor
+      }
+      const attempts = merge([remoteAttempts, store.getSnapshot().attempts])
+      store.set({ attempts })
+      persist(attempts)
+    })().finally(() => {
+      activeSync = undefined
+    })
+    return activeSync
+  }
   return {
     store,
     record: (input) => {
       const attempt: StudentAttempt = {
         ...input,
-        id: `attempt-${Date.now().toString(36)}-${(attemptSerial++).toString(36)}`,
+        id: `attempt-${Date.now().toString(36)}-${(attemptSerial++).toString(36)}-${globalThis.crypto.randomUUID()}`,
         at: new Date().toISOString(),
       }
       const attempts = [attempt, ...store.getSnapshot().attempts].slice(0, ATTEMPT_LIMIT)
       store.set({ attempts })
-      try {
-        storage?.setItem(STORAGE_KEY, JSON.stringify(attempts))
-      } catch {
-        /* Storage full or unavailable — the in-memory record still works. */
-      }
+      persist(attempts)
+      void remote?.putAttempt(attempt).catch(() => {
+        /* Local-first: the next explicit sync retries this row. */
+      })
       return attempt
     },
+    sync,
   }
 }
 
 /* -------------------------------------------------------------- aggregation -- */
 
+/** Per-knowledge-node totals over a student's attempts. */
 export interface KnowledgeMastery {
   readonly nodeId: string
   readonly total: number
   readonly correct: number
 }
 
-/** Attempts per knowledge node, insertion-ordered by first appearance. */
+/** Attempts per knowledge node, insertion-ordered by first appearance.
+ * @param attempts - the student's attempts (only `correct`/`knowledge` are read).
+ * @returns one mastery row per knowledge node.
+ */
 export const knowledgeMasteryOf = (
   attempts: readonly Pick<StudentAttempt, 'correct' | 'knowledge'>[],
 ): readonly KnowledgeMastery[] => {
@@ -124,7 +187,10 @@ export const knowledgeMasteryOf = (
   return [...byNode.entries()].map(([nodeId, entry]) => ({ nodeId, ...entry }))
 }
 
-/** Wrong attempts per mistake type. */
+/** Wrong attempts per mistake type.
+ * @param attempts - the student's attempts.
+ * @returns a `{concept, direction, modeling}` count map.
+ */
 export const mistakeCountsOf = (
   attempts: readonly StudentAttempt[],
 ): Readonly<Record<MistakeType, number>> => {
@@ -136,9 +202,12 @@ export const mistakeCountsOf = (
   return counts
 }
 
-/** Newest-first wrong attempts. */
+/** Newest-first wrong attempts.
+ * @param attempts - the student's attempts (already newest-first).
+ * @param limit - cap on returned rows, default 20.
+ * @returns the wrong attempts, up to `limit`.
+ */
 export const recentMistakesOf = (
   attempts: readonly StudentAttempt[],
   limit = 20,
-): readonly StudentAttempt[] =>
-  attempts.filter(attempt => !attempt.correct).slice(0, limit)
+): readonly StudentAttempt[] => attempts.filter(attempt => !attempt.correct).slice(0, limit)

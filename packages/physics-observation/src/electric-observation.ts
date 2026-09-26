@@ -158,8 +158,10 @@ const trajectoryPointsOf = (
 
   const points = decimateTrajectoryPoints(
     simulation.states.flatMap((sample) => {
-      const object = sample.objects.find(candidate => candidate.id === particleId)
-      return object?.position === undefined ? [] : [{ time: sample.time, position: object.position }]
+      const object = sample.objects.find((candidate) => candidate.id === particleId)
+      return object?.position === undefined
+        ? []
+        : [{ time: sample.time, position: object.position }]
     }),
     MAX_TRAJECTORY_RENDER_POINTS,
   )
@@ -300,7 +302,9 @@ const isPointChargeScene = (scene: PhysicsScene): boolean =>
  * field or force. The point-charge model is instantaneous (one state), so there
  * is no trajectory.
  */
-const observePointChargeScene = (input: ElectricObservationInput): ElectricObservationRuntimeState => {
+const observePointChargeScene = (
+  input: ElectricObservationInput,
+): ElectricObservationRuntimeState => {
   const { scene, simulation } = input
   const state = input.state ?? selectState(scene, simulation)
 
@@ -314,11 +318,11 @@ const observePointChargeScene = (input: ElectricObservationInput): ElectricObser
     (particle) => !sourceIds.has(particle.id) && particle.fixed !== true,
   )
   const originProbe = probe ?? scene.particles[0]
-  const samplePoint = probe !== undefined
-    ? toCanonicalVector(probe.position).vectorSI
-    : fieldSamplePointOf(scene)
+  const samplePoint =
+    probe !== undefined ? toCanonicalVector(probe.position).vectorSI : fieldSamplePointOf(scene)
   const origin = quantityVector(
-    samplePoint ?? (originProbe ? toCanonicalVector(originProbe.position).vectorSI : { x: 0, y: 0, z: 0 }),
+    samplePoint ??
+      (originProbe ? toCanonicalVector(originProbe.position).vectorSI : { x: 0, y: 0, z: 0 }),
     'm',
     'length',
   )
@@ -348,9 +352,8 @@ const observePointChargeScene = (input: ElectricObservationInput): ElectricObser
     })
   }
   for (const definition of visible(scene, 'velocity')) {
-    const velocityVector = probe === undefined
-      ? quantityVector({ x: 0, y: 0, z: 0 }, 'm/s', 'velocity')
-      : probe.velocity
+    const velocityVector =
+      probe === undefined ? quantityVector({ x: 0, y: 0, z: 0 }, 'm/s', 'velocity') : probe.velocity
     const velocitySI = toCanonicalVector(velocityVector).vectorSI
     observations.push({
       type: 'electric_velocity',
@@ -392,7 +395,8 @@ const observePointChargeScene = (input: ElectricObservationInput): ElectricObser
      observations that share one definition id). */
   const sourceParticles = sourceChargesOf(scene.particles, scene.fields)
   for (const definition of scene.observableDefinitions.filter(
-    (entry) => entry.visible && entry.type === 'annotation' && entry.parameters?.['kind'] === 'charge_sign',
+    (entry) =>
+      entry.visible && entry.type === 'annotation' && entry.parameters?.['kind'] === 'charge_sign',
   )) {
     for (const source of sourceParticles) {
       const chargeValue = source.charge === undefined ? 0 : source.charge.value

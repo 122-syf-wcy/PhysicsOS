@@ -12,8 +12,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { PaperError } from './service.ts'
 
+/** Service name this host resolves for the auth seam (`auth-host` provides it). */
 export const IDENTITY_SERVICE = 'physicsosIdentity'
 
+/** The acting account as auth-host resolved it from the session cookie. */
 export interface IdentityActor {
   readonly userKey: string
   readonly schoolId: string
@@ -30,6 +32,7 @@ export interface IdentityActor {
  */
 export type IdentityRole = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
 
+/** The seam auth-host publishes: session resolution plus the shared audit ledger. */
 export interface PhysicsosIdentity {
   actorOf(req: IncomingMessage): IdentityActor | null
   record(
@@ -40,6 +43,14 @@ export interface PhysicsosIdentity {
   ): Promise<void>
 }
 
+/**
+ * Resolve the caller or throw: 503 without the service, 401 without a session,
+ * 403 when a STUDENT attempts a write.
+ * @param identity - the seam, or undefined when auth-host is not mounted.
+ * @param req - the incoming request carrying the session cookie.
+ * @param method - the request method; anything but GET counts as a write.
+ * @returns the resolved actor plus whether this request is a write.
+ */
 export const guard = (
   identity: PhysicsosIdentity | undefined,
   req: IncomingMessage,
@@ -62,6 +73,15 @@ export const guard = (
   return { actor, writes }
 }
 
+/**
+ * File one audit row for a successful non-GET request; reads and refused
+ * requests (4xx/5xx) are not events.
+ * @param ledger - the identity seam carrying `record`.
+ * @param actor - the actor the row is filed under.
+ * @param req - the handled request (method decides whether anything is written).
+ * @param res - the response; only status < 400 is recorded.
+ * @param path - the route path recorded as the audit target.
+ */
 export const auditWrites = async (
   ledger: PhysicsosIdentity,
   actor: IdentityActor,
@@ -78,7 +98,11 @@ export const auditWrites = async (
   })
 }
 
-/** Lazily look up the identity service: called per request to break load-order ties. */
+/**
+ * Lazily look up the identity service: called per request to break load-order ties.
+ * @param ctx - the plugin context (only `get` is used).
+ * @returns the seam, or undefined when auth-host is absent.
+ */
 export const identityOf = (ctx: { get: (name: string) => unknown }): PhysicsosIdentity | undefined => {
   const service = ctx.get(IDENTITY_SERVICE)
   return service === undefined ? undefined : service as PhysicsosIdentity

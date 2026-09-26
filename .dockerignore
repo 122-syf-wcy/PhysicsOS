@@ -9,7 +9,13 @@
 **/.pnpm-store
 **/.turbo
 **/dist
-**/lib
+# Build outputs only: a blanket `**/lib` also stripped source directories that are
+# legitimately named `lib` (packages/ui/src/lib/cn.ts), which broke the image build.
+**/packages/*/lib
+vendor/deepseek-harness/packages/*/*/lib
+**/vendor/*/lib
+**/apps/*/lib
+**/apps/*/*/lib
 **/build
 **/coverage
 **/*.tsbuildinfo

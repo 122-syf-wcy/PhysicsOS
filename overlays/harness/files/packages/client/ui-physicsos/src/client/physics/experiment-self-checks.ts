@@ -37,6 +37,8 @@ import type { PhysicsAgentContext } from './physics-agent.ts'
  * The lab topic of a circuit frame, undefined for other domains or failed
  * frames. Order matters: an EMF rig also carries a rheostat, and a rheostat
  * rig is also a series loop — the most specific fact wins.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const circuitTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'circuit') return undefined
@@ -57,6 +59,8 @@ export const circuitTopicOf = (context: PhysicsAgentContext): string | undefined
  * its template stamped; the class-1 lever is recognised by the hangers the
  * runtime actually drew. Other mechanics frames return undefined so the drawer
  * keeps the 自测 tab off where the bank has nothing.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const mechanicsTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'mechanics') return undefined
@@ -78,6 +82,8 @@ export const mechanicsTopicOf = (context: PhysicsAgentContext): string | undefin
  * The lab topic of an optics frame, read from the bench itself: the single
  * imaging element IS the topic, so a renamed or question-forked bench still
  * gets the probes that match what the canvas shows.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const opticsTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'optics') return undefined
@@ -94,6 +100,8 @@ export const opticsTopicOf = (context: PhysicsAgentContext): string | undefined 
  * The lab topic of an acoustics frame. The acoustic bench models exactly one
  * apparatus (a source facing a reflector), so the domain IS the topic — a
  * renamed scene still gets the echo-ranging probes.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const acousticsTopicOf = (context: PhysicsAgentContext): string | undefined =>
   context.status !== 'failed' && context.domain === 'acoustics' ? 'acoustics-echo' : undefined
@@ -102,6 +110,8 @@ export const acousticsTopicOf = (context: PhysicsAgentContext): string | undefin
  * The lab topic of a fluid frame. The tank models exactly one apparatus (a
  * block on a spring scale over one liquid), so the domain IS the topic — a
  * renamed scene still gets the buoyancy probes.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const fluidTopicOf = (context: PhysicsAgentContext): string | undefined =>
   context.status !== 'failed' && context.domain === 'fluid' ? 'fluid-buoyancy' : undefined
@@ -111,6 +121,8 @@ export const fluidTopicOf = (context: PhysicsAgentContext): string | undefined =
  * melting bench vs a two-beaker comparison. The second sample being drawn is
  * the fact that tells them apart — a renamed scene still gets the probes that
  * match the canvas.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const thermalTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'thermal') return undefined
@@ -122,6 +134,8 @@ export const thermalTopicOf = (context: PhysicsAgentContext): string | undefined
  * apparatus — a single charge in a uniform field — so the domain IS the topic:
  * a renamed scene still gets the 洛伦兹力 / 圆周运动 probes, the same dispatch
  * style as the acoustics and fluid benches.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const magneticTopicOf = (context: PhysicsAgentContext): string | undefined =>
   context.status !== 'failed' && context.domain === 'magnetic' ? 'magnetic-circular' : undefined
@@ -131,6 +145,8 @@ export const magneticTopicOf = (context: PhysicsAgentContext): string | undefine
  * the two plate boundaries of a parallel-plate rig vs the source sphere(s) of a
  * point-charge rig. A renamed or question-forked bench still resolves from what
  * the canvas shows — exactly how the optics topic reads the imaging element.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const electricTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'electric') return undefined
@@ -148,6 +164,8 @@ export const electricTopicOf = (context: PhysicsAgentContext): string | undefine
  * verifier check selects the selector; everything else is the crossed E+B
  * rig. Order matters — the deflection arc also carries a magnetic field, and
  * the selector also carries gravity-free E+B, so the most specific fact wins.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const compositeTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'composite') return undefined
@@ -165,6 +183,8 @@ export const compositeTopicOf = (context: PhysicsAgentContext): string | undefin
  * the rod object (`…​.bar`) only exists on the cutting rig, everything else is
  * the flux-changing coil. A renamed or question-forked bench still resolves
  * from what the canvas shows.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const inductionTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'induction') return undefined
@@ -178,6 +198,8 @@ export const inductionTopicOf = (context: PhysicsAgentContext): string | undefin
  * particle only exists on the rope, sources only on the interference tank,
  * nodes only on the clamped string. A renamed or question-forked bench still
  * resolves from what the canvas shows.
+ * @returns the string.
+ * @param context - the agent context.
  */
 export const waveTopicOf = (context: PhysicsAgentContext): string | undefined => {
   if (context.status === 'failed' || context.domain !== 'wave') return undefined
@@ -187,7 +209,11 @@ export const waveTopicOf = (context: PhysicsAgentContext): string | undefined =>
   return undefined
 }
 
-/** The lab topic of any frame; undefined where no domain resolver claims it. */
+/**
+ * The lab topic of any frame; undefined where no domain resolver claims it.
+ * @returns the string.
+ * @param context - the agent context.
+ */
 export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   circuitTopicOf(context)
   ?? mechanicsTopicOf(context)
@@ -201,7 +227,11 @@ export const labTopicOf = (context: PhysicsAgentContext): string | undefined =>
   ?? inductionTopicOf(context)
   ?? waveTopicOf(context)
 
-/** The self-check set for the current frame; undefined keeps the tab hidden. */
+/**
+ * The self-check set for the current frame; undefined keeps the tab hidden.
+ * @returns the experiment self check set.
+ * @param context - the agent context.
+ */
 export const experimentSelfChecksOf = (
   context: PhysicsAgentContext,
 ): ExperimentSelfCheckSet | undefined => {
@@ -246,4 +276,5 @@ export const SELF_CHECK_EXPERIMENT: Readonly<Record<string, string>> = {
   'wave-travelling': 'wave-travelling',
   'wave-interference': 'wave-interference',
   'wave-standing': 'wave-standing',
+  'wave-expanded': 'wave-longitudinal',
 }

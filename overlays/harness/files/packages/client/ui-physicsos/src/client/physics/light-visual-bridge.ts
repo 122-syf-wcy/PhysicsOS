@@ -42,17 +42,25 @@ const LIGHT_MARGIN = 8
 
 const lengthText = (value: number): string => `${fmtFluidValue(value, 4)} cm`
 
+/**
+ * The light visual input shape used by the light scene visuals module.
+ */
 export interface LightVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedLightModel
 }
 
-/** Student-facing name of the rig. */
+/**
+ * Student-facing name of the rig.
+ * @returns the formatted string.
+ */
 export const lightRigText = (): string => '小孔成像'
 
 /**
  * Scene observable definition → canvas toggle key. The bench factory stamps
  * `observable-light-rays` / `observable-light-image`.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const lightObservableKeyOf = (
   definition: ObservableDefinition,
@@ -72,7 +80,17 @@ const visibilityOf = (scene: PhysicsScene): ObservableVisibility => {
   return visible
 }
 
-export const lightSceneVisual = ({ scene, model }: LightVisualInput): SceneVisualModel => {
+/**
+ * The light scene visuals helper `lightSceneVisual`.
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const lightSceneVisual = (input: LightVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const visible = visibilityOf(scene)
   if (model.type === 'total_reflection') return refractionVisual(model, visible)
   const reading = pinholeReadingOf(model)

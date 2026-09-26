@@ -70,6 +70,8 @@ const answersAgree = (a: string, b: string): boolean => {
  * @param ctx - plugin context carrying `llm`.
  * @param route - model route.
  * @param questions - the drafted questions.
+ * @param delayMs - spacing between serial solves (rate-limit hygiene); default 0.
+ * @param timeoutMs - per-attempt abort deadline; default `SOLVE_TIMEOUT_MS`.
  * @returns one SolveResult per question; failures report as inconsistent.
  */
 export async function independentSolve(

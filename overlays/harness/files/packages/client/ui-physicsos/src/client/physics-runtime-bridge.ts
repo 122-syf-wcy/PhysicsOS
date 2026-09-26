@@ -43,8 +43,10 @@ type MagneticSimulation = ReturnType<MagneticEngine['simulate']>
 type MagneticState = ReturnType<MagneticEngine['stateAtSeconds']>
 type MagneticVerification = ReturnType<typeof verifyMagneticScene>
 
+/** Outcome of a verification pass over the current scene. */
 export type MagneticRuntimeStatus = 'verified' | 'warning' | 'failed'
 
+/** A classified runtime failure — code and retryability the UI can act on. */
 export interface MagneticRuntimeError {
   readonly code: string
   readonly message: string
@@ -52,6 +54,7 @@ export interface MagneticRuntimeError {
   readonly details: Readonly<Record<string, unknown>>
 }
 
+/** The immutable per-frame view model the Lab renders from. */
 export interface MagneticRuntimeSnapshot {
   readonly scene: PhysicsScene
   readonly sceneRevision: number
@@ -71,6 +74,7 @@ export interface MagneticRuntimeSnapshot {
   readonly error?: MagneticRuntimeError
 }
 
+/** One derived readout row in the Lab's data panel. */
 export interface LabDerivedView {
   readonly id: string
   readonly label: string
@@ -79,6 +83,7 @@ export interface LabDerivedView {
   readonly unit: string
 }
 
+/** A command's result plus the refreshed snapshot it produced. */
 export interface MagneticRuntimeCommandOutcome {
   readonly result: SceneCommandResult
   readonly snapshot: MagneticRuntimeSnapshot
@@ -742,25 +747,48 @@ export class MagneticRuntimeBridge {
     this.snapshot = this.recompute()
   }
 
+  /**
+   * The cached view model — recomputed on every accepted command.
+   * @returns the last computed snapshot.
+   */
   getSnapshot(): MagneticRuntimeSnapshot {
     return this.snapshot
   }
 
+  /**
+   * The scene's emitted physics events.
+   * @returns every physics event the scene has emitted.
+   */
   getEvents(): readonly PhysicsEvent[] {
     return this.sceneRuntime.getEvents()
   }
 
+  /**
+   * Run a scene command; a successful write recomputes the snapshot.
+   * @param command - the scene command to apply.
+   * @returns the engine's command result.
+   */
   execute(command: SceneCommand): SceneCommandResult {
     const result = this.sceneRuntime.execute(command)
     if (result.ok) this.recompute()
     return result
   }
 
+  /**
+   * `execute` plus the fresh snapshot in one return — the setters' shared shape.
+   * @param command - the scene command to apply.
+   * @returns the command result paired with the new snapshot.
+   */
   dispatch(command: SceneCommand): MagneticRuntimeCommandOutcome {
     const result = this.execute(command)
     return { result, snapshot: this.snapshot }
   }
 
+  /**
+   * Set the tracked particle's charge.
+   * @param value - charge in coulombs.
+   * @returns the command result plus refreshed snapshot.
+   */
   setParticleCharge(value: number): MagneticRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const particle = scene.particles[0]
@@ -779,6 +807,11 @@ export class MagneticRuntimeBridge {
     )
   }
 
+  /**
+   * Set the tracked particle's mass.
+   * @param value - mass in kilograms.
+   * @returns the command result plus refreshed snapshot.
+   */
   setParticleMass(value: number): MagneticRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const particle = scene.particles[0]
@@ -797,6 +830,11 @@ export class MagneticRuntimeBridge {
     )
   }
 
+  /**
+   * Rescale the tracked particle's speed without changing its direction.
+   * @param value - speed magnitude in m/s; direction follows the current velocity.
+   * @returns the command result plus refreshed snapshot.
+   */
   setParticleSpeed(value: number): MagneticRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const particle = scene.particles[0]
@@ -825,6 +863,11 @@ export class MagneticRuntimeBridge {
     )
   }
 
+  /**
+   * Set the uniform magnetic field's magnitude.
+   * @param value - field strength in tesla.
+   * @returns the command result plus refreshed snapshot.
+   */
   setMagneticFieldStrength(value: number): MagneticRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const field = scene.fields.find(candidate => candidate.type === 'uniform_magnetic')
@@ -843,6 +886,11 @@ export class MagneticRuntimeBridge {
     )
   }
 
+  /**
+   * Flip the uniform field's direction.
+   * @param direction - into or out of the page.
+   * @returns the command result plus refreshed snapshot.
+   */
   setMagneticFieldDirection(direction: LabFieldDirection): MagneticRuntimeCommandOutcome {
     const scene = this.sceneRuntime.getScene()
     const field = scene.fields.find(candidate => candidate.type === 'uniform_magnetic')
@@ -861,6 +909,12 @@ export class MagneticRuntimeBridge {
     )
   }
 
+  /**
+   * Toggle an observation overlay (guides are view-local; others dispatch a command).
+   * @param key - the observable id.
+   * @param enabled - whether it renders.
+   * @returns the refreshed snapshot.
+   */
   setObservableEnabled(key: LabObservableId, enabled: boolean): MagneticRuntimeSnapshot {
     if (key === 'guides') {
       this.guidesVisible = enabled
@@ -887,16 +941,31 @@ export class MagneticRuntimeBridge {
     return outcome.snapshot
   }
 
+  /**
+   * Play or pause the playback clock.
+   * @param running - whether the clock advances on `advance`.
+   * @returns the refreshed snapshot.
+   */
   setRunning(running: boolean): MagneticRuntimeSnapshot {
     this.running = running
     return this.renderCurrentFrame()
   }
 
+  /**
+   * Set the playback speed multiplier.
+   * @param rate - playback multiplier; non-positive/non-finite values are ignored.
+   * @returns the refreshed snapshot.
+   */
   setPlaybackRate(rate: number): MagneticRuntimeSnapshot {
     if (Number.isFinite(rate) && rate > 0) this.playbackRate = rate
     return this.renderCurrentFrame()
   }
 
+  /**
+   * Jump the playhead and pause.
+   * @param seconds - target display time, clamped to [0, period].
+   * @returns the refreshed snapshot.
+   */
   seek(seconds: number): MagneticRuntimeSnapshot {
     const total = this.totalPeriod()
     this.currentTime = Number.isFinite(seconds) ? Math.min(total, Math.max(0, seconds)) : 0
@@ -904,10 +973,20 @@ export class MagneticRuntimeBridge {
     return this.renderCurrentFrame()
   }
 
+  /**
+   * Nudge the playhead by a fixed delta (单步).
+   * @param deltaSeconds - signed offset from the current time.
+   * @returns the refreshed snapshot.
+   */
   step(deltaSeconds: number): MagneticRuntimeSnapshot {
     return this.seek(this.currentTime + deltaSeconds)
   }
 
+  /**
+   * Advance the running clock by a wall-clock delta, wrapping at the period.
+   * @param wallClockSeconds - elapsed wall time scaled by the playback rate.
+   * @returns the refreshed snapshot.
+   */
   advance(wallClockSeconds: number): MagneticRuntimeSnapshot {
     const total = this.totalPeriod()
     if (this.running && Number.isFinite(wallClockSeconds) && total > 0) {
@@ -916,6 +995,10 @@ export class MagneticRuntimeBridge {
     return this.renderCurrentFrame()
   }
 
+  /**
+   * Re-simulate + verify the current scene and store the fresh snapshot.
+   * @returns the new snapshot (also assigned to `this.snapshot`).
+   */
   recompute(): MagneticRuntimeSnapshot {
     const scene = this.sceneRuntime.getScene()
     try {
@@ -1082,6 +1165,11 @@ export class MagneticRuntimeBridge {
   }
 }
 
+/**
+ * Build a runtime bridge over a fresh or given magnetic scene.
+ * @param input - scene parameters or an existing scene; default is the demo scene.
+ * @returns the bridge the Lab binds against.
+ */
 export const createMagneticRuntime = (input: MagneticSceneInput | PhysicsScene = {}): MagneticRuntimeBridge =>
   new MagneticRuntimeBridge(input)
 

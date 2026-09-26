@@ -12,7 +12,9 @@ import { NoticeError, auditWrites, guard, type PhysicsosIdentity } from './ident
 import type { NoticeService } from './service.ts'
 
 type Body = Record<string, unknown>
+const BODY_LIMIT = 64 * 1024
 
+/** The collaborators the route handler closes over. */
 export interface RouteDeps {
   readonly service: NoticeService
   /** Resolved per request: this host loads BEFORE auth-host declares it. */
@@ -50,14 +52,46 @@ const send = (res: ServerResponse, status: number, body: unknown): void => {
 }
 
 const readJson = async (req: IncomingMessage): Promise<Body> => {
+  const declaredLength = Number(req.headers['content-length'])
+  if (Number.isFinite(declaredLength) && declaredLength > BODY_LIMIT) {
+    throw new NoticeError(413, 'BODY_TOO_LARGE', '请求体过大')
+  }
   const chunks: Buffer[] = []
-  for await (const chunk of req) chunks.push(chunk as Buffer)
+  let size = 0
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length
+    if (size > BODY_LIMIT) throw new NoticeError(413, 'BODY_TOO_LARGE', '请求体过大')
+    chunks.push(chunk as Buffer)
+  }
   if (chunks.length === 0) return {}
   try {
     const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
     return (parsed !== null && typeof parsed === 'object') ? parsed as Body : {}
   } catch {
     throw new NoticeError(400, 'BAD_REQUEST', '请求体不是合法 JSON')
+  }
+}
+
+const checkCsrf = (req: IncomingMessage): void => {
+  const contentType = req.headers['content-type']
+  if (typeof contentType !== 'string'
+    || contentType.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+    throw new NoticeError(400, 'BAD_REQUEST', 'content-type 必须为 application/json')
+  }
+  const origin = req.headers.origin
+  if (origin !== undefined) {
+    try {
+      if (typeof origin !== 'string' || new URL(origin).host !== req.headers.host) {
+        throw new NoticeError(403, 'FORBIDDEN', '跨站请求被拒绝')
+      }
+    } catch (error) {
+      if (error instanceof NoticeError) throw error
+      throw new NoticeError(403, 'FORBIDDEN', '跨站请求被拒绝')
+    }
+  }
+  const fetchSite = req.headers['sec-fetch-site']
+  if (typeof fetchSite === 'string' && !['same-origin', 'same-site', 'none'].includes(fetchSite)) {
+    throw new NoticeError(403, 'FORBIDDEN', '跨站请求被拒绝')
   }
 }
 
@@ -82,10 +116,13 @@ export function noticeRoutes(deps: RouteDeps): (req: IncomingMessage, res: Serve
       const floor = writeFloor(path, seg, method)
       const identity = identityOf()
       const { actor, writes } = guard(identity, req, floor)
+      if (writes) checkCsrf(req)
       if (writes && identity !== undefined) {
         const ledger = identity
         res.on('finish', () => {
-          void auditWrites(ledger, actor, req, res.statusCode, path)
+          void auditWrites(ledger, actor, req, res.statusCode, path).catch(() => {
+            console.error('[notice-host] audit write failed')
+          })
         })
       }
 
@@ -130,12 +167,7 @@ export function noticeRoutes(deps: RouteDeps): (req: IncomingMessage, res: Serve
         send(res, error.status, { error: { code: error.code, message: error.message } })
         return
       }
-      send(res, 500, {
-        error: {
-          code: 'INTERNAL',
-          message: error instanceof Error ? error.message : String(error),
-        },
-      })
+      send(res, 500, { error: { code: 'INTERNAL', message: 'internal error' } })
     }
   }
 }

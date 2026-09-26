@@ -16,7 +16,10 @@ const probeAt = (position: { x: number; y: number; z: number }): ProbeParticleIn
   position,
 })
 
-const observe = (charges: Parameters<typeof createPointChargeScene>[0]['charges'], probe?: ProbeParticleInput) => {
+const observe = (
+  charges: Parameters<typeof createPointChargeScene>[0]['charges'],
+  probe?: ProbeParticleInput,
+) => {
   const scene = createPointChargeScene({
     sceneId: 'obs-test',
     charges,
@@ -80,13 +83,16 @@ describe('point-charge observation', () => {
     )
     const signs = observations.filter((o) => o.type === 'charge_sign')
     expect(signs).toHaveLength(2)
-    expect(signs.map((s) => 'sign' in s ? s.sign : '').sort()).toEqual(['negative', 'positive'])
+    expect(signs.map((s) => ('sign' in s ? s.sign : '')).sort()).toEqual(['negative', 'positive'])
   })
 
   it('does not regress the uniform-field observation path', () => {
     const scene = createElectricScene({ duration: 1, now: '2026-08-19T00:00:00.000Z' })
     const engine = new ElectricEngine()
-    const simulation = engine.simulate(scene, createElectricSimulationRequest(scene, 'sim-u', 'trace-u'))
+    const simulation = engine.simulate(
+      scene,
+      createElectricSimulationRequest(scene, 'sim-u', 'trace-u'),
+    )
     const state = simulation.states[0]
     if (state === undefined) throw new Error('No state.')
     const { observations } = observeElectricScene({ scene, simulation, state })

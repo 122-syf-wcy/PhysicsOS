@@ -87,7 +87,7 @@ function probeTcp(host: string, port: number, signal: AbortSignal): Promise<void
   return new Promise((resolve, reject) => {
     let settled = false
     const socket = connect({ host, port })
-    const finish = (error?: unknown): void => {
+    const finish = (error?: Error): void => {
       if (settled) return
       settled = true
       signal.removeEventListener('abort', onAbort)
@@ -160,11 +160,13 @@ export function configuredChecks(env: NodeJS.ProcessEnv = process.env): readonly
 
 async function runOne(check: ReadinessCheck, timeoutMs: number): Promise<CheckResult> {
   const controller = new AbortController()
-  let timedOut = false
+  /* A property, not a `let`: control-flow analysis would otherwise narrow a
+     closure-assigned boolean to its initial `false` at the use site below. */
+  const state = { timedOut: false }
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      timedOut = true
+      state.timedOut = true
       controller.abort()
       reject(failure('TIMEOUT'))
     }, timeoutMs)
@@ -178,7 +180,7 @@ async function runOne(check: ReadinessCheck, timeoutMs: number): Promise<CheckRe
     return {
       name: check.name,
       status: 'failed',
-      code: timedOut ? 'TIMEOUT' : safeFailureCode(error),
+      code: state.timedOut ? 'TIMEOUT' : safeFailureCode(error),
     }
   } finally {
     if (timer !== undefined) clearTimeout(timer)
@@ -196,5 +198,5 @@ export function runReadinessChecks(
   checks: readonly ReadinessCheck[],
   timeoutMs: number,
 ): Promise<readonly CheckResult[]> {
-  return Promise.all(checks.map((check) => runOne(check, timeoutMs)))
+  return Promise.all(checks.map(check => runOne(check, timeoutMs)))
 }

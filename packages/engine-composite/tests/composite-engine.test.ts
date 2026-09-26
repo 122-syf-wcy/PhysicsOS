@@ -215,7 +215,10 @@ describe('velocity selector', () => {
         duration: 1e-7,
       }),
     )
-    expect(scalarOf(light, 'selected_velocity')).toBeCloseTo(scalarOf(heavy, 'selected_velocity'), 6)
+    expect(scalarOf(light, 'selected_velocity')).toBeCloseTo(
+      scalarOf(heavy, 'selected_velocity'),
+      6,
+    )
     /* Both pass straight through. */
     expect(positionAt(heavy, heavy.states.length - 1).y).toBeCloseTo(0, 12)
   })
@@ -291,11 +294,24 @@ describe('composite of all three forces', () => {
     const magnetic = derived(result, 'magnetic_force_vector')
     const gravity = derived(result, 'gravity_force_vector')
     const net = derived(result, 'net_force_vector')
-    if (!('vector' in electric) || !('vector' in magnetic) || !('vector' in gravity) || !('vector' in net)) {
+    if (
+      !('vector' in electric) ||
+      !('vector' in magnetic) ||
+      !('vector' in gravity) ||
+      !('vector' in net)
+    ) {
       throw new Error('force derived quantities must be vectors')
     }
     const summed = add(add(electric.vector, magnetic.vector), gravity.vector)
-    expect(magnitude(summed) === 0 ? 0 : magnitude({ x: summed.x - net.vector.x, y: summed.y - net.vector.y, z: summed.z - net.vector.z }) / magnitude(summed)).toBeLessThan(1e-12)
+    expect(
+      magnitude(summed) === 0
+        ? 0
+        : magnitude({
+            x: summed.x - net.vector.x,
+            y: summed.y - net.vector.y,
+            z: summed.z - net.vector.z,
+          }) / magnitude(summed),
+    ).toBeLessThan(1e-12)
     expect(
       result.verification.checks.find((c) => c.id === 'composite_force_superposition')?.passed,
     ).toBe(true)

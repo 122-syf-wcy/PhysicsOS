@@ -23,6 +23,9 @@ export interface LabelBox {
   anchor: 'start' | 'middle' | 'end'
 }
 
+/**
+ * The placed label shape used by the vector label layout module.
+ */
 export interface PlacedLabel {
   id: string
   x: number
@@ -143,6 +146,9 @@ export const layoutVectorLabels = (boxes: readonly LabelBox[]): readonly PlacedL
  * placement. Physics symbols are short and predictable (`v`, `v_x`, `mg\\sinθ`),
  * so a per-character estimate that slightly OVER-estimates is the right trade:
  * it errs toward extra spacing rather than toward collisions.
+ * @returns the computed number.
+ * @param fontSize - the label font size.
+ * @param symbol - the formula symbol.
  */
 export const estimateLabelWidth = (symbol: string, fontSize: number): number => {
   /* Sub/superscript markers cost roughly half a glyph; the rest are full. */

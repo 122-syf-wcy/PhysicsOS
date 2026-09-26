@@ -86,7 +86,10 @@ const KNOWLEDGE_RULES = [
   [/噪声|隔声|消声|吸声/, ['噪声与防治', '噪声的危害和控制']],
   [/传声|介质|真空不能传声|声速/, ['声现象', '声音的产生与传播']],
   /* 光 */
-  [/凸透镜成像|物距|像距|放大|缩小|实像|虚像|照相机|投影仪|放大镜/, ['凸透镜成像规律', '透镜及其应用', '探究凸透镜成像']],
+  [
+    /凸透镜成像|物距|像距|放大|缩小|实像|虚像|照相机|投影仪|放大镜/,
+    ['凸透镜成像规律', '透镜及其应用', '探究凸透镜成像'],
+  ],
   [/近视|远视|眼镜|焦距|度数/, ['眼睛与眼镜']],
   [/光的反射|入射角|反射角|镜面反射|漫反射/, ['光的反射', '光的反射定律']],
   [/平面镜|成像特点|对称/, ['平面镜成像', '平面镜成像特点']],
@@ -102,13 +105,19 @@ const KNOWLEDGE_RULES = [
   [/内能|热传递|做功改变内能|分子热运动|扩散/, ['内能', '内能的改变']],
   [/电荷|摩擦起电|同种电荷|验电器/, ['两种电荷', '摩擦起电']],
   [/电流|电压|电阻|欧姆定律|伏安|变阻器/, ['欧姆定律', '伏安法测电阻', '测电阻']],
-  [/串联电路|并联电路|串联|并联|干路|支路/, ['串并联电路', '串联电路计算', '并联电路计算', '动态电路分析']],
+  [
+    /串联电路|并联电路|串联|并联|干路|支路/,
+    ['串并联电路', '串联电路计算', '并联电路计算', '动态电路分析'],
+  ],
   [/电功率|额定功率|电能表|千瓦时|焦耳定律|电流热效应/, ['电功率与焦耳定律', '焦耳定律', '电功率']],
   [/家庭电路|保险丝|触电|试电笔|三孔插座|短路/, ['家庭电路与安全用电', '家庭电路', '安全用电']],
   [/磁场|磁感线|通电螺线管|电磁铁|安培定则|奥斯特/, ['电生磁', '电磁铁', '通电螺线管']],
   [/电磁感应|楞次|磁通量|发电机|动生|感生/, ['电磁感应现象', '电磁感应']],
   [/通电导线在磁场|安培力|洛伦兹|左手定则/, ['安培力', '磁场对通电导线的作用']],
-  [/带电粒子|电场强度|库仑|电势|电容器|偏转/, ['带电粒子在电场中的运动', '电场强度', '带电粒子偏转']],
+  [
+    /带电粒子|电场强度|库仑|电势|电容器|偏转/,
+    ['带电粒子在电场中的运动', '电场强度', '带电粒子偏转'],
+  ],
   [/复合场|速度选择器|质谱仪|回旋加速器/, ['带电粒子在复合场中的运动', '复合场']],
   [/安培力|磁通量变化|导轨|双棒/, ['电磁感应中的电路与力学', '导体棒切割磁感线']],
   /* 力 */
@@ -127,7 +136,10 @@ const KNOWLEDGE_RULES = [
   [/杠杆|力臂|平衡条件/, ['杠杆平衡条件', '杠杆']],
   [/滑轮|机械效率|有用功|额外功|斜面效率/, ['机械效率', '滑轮组机械效率']],
   [/功|功率|做功/, ['功与功率', '功率', '功的计算']],
-  [/动能|势能|机械能|能量转化|动能定理/, ['机械能及其转化', '影响动能大小的因素', '动能与势能', '能量转化']],
+  [
+    /动能|势能|机械能|能量转化|动能定理/,
+    ['机械能及其转化', '影响动能大小的因素', '动能与势能', '能量转化'],
+  ],
   [/重力|万有引力|圆周运动|向心力|卫星/, ['万有引力与圆周运动', '万有引力', '圆周运动']],
   [/弹簧|弹性形变|胡克/, ['弹力', '弹簧测力计']],
   [/密度|质量|天平|量筒/, ['密度', '密度的测量']],
@@ -184,7 +196,7 @@ const fetchJson = async (url, attempt = 1) => {
   if ((response.status === 429 || response.status >= 500) && attempt <= 4) {
     const waitMs = 2000 * 2 ** (attempt - 1)
     stdout.write(`  … ${response.status}，${waitMs / 1000}s 后重试（第 ${attempt} 次）\n`)
-    await new Promise(resolve => setTimeout(resolve, waitMs))
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
     return fetchJson(url, attempt + 1)
   }
   throw new Error(`${response.status} ${url}`)
@@ -194,13 +206,14 @@ const fetchJson = async (url, attempt = 1) => {
 const fetchSplit = async (config, split) => {
   const rows = []
   for (let offset = 0; ; offset += PAGE) {
-    const url = `${ROWS_ENDPOINT}?dataset=${encodeURIComponent(DATASET)}`
-      + `&config=${config}&split=${split}&offset=${offset}&length=${PAGE}`
+    const url =
+      `${ROWS_ENDPOINT}?dataset=${encodeURIComponent(DATASET)}` +
+      `&config=${config}&split=${split}&offset=${offset}&length=${PAGE}`
     const page = await fetchJson(url)
     const batch = page.rows ?? []
-    rows.push(...batch.map(entry => entry.row))
+    rows.push(...batch.map((entry) => entry.row))
     if (batch.length < PAGE) return rows
-    await new Promise(resolve => setTimeout(resolve, PAGE_DELAY_MS))
+    await new Promise((resolve) => setTimeout(resolve, PAGE_DELAY_MS))
   }
 }
 
@@ -213,10 +226,12 @@ const fetchSplit = async (config, split) => {
  */
 const toBankItem = (row, { config, level }, split) => {
   const stem = String(row.question ?? '').trim()
-  const options = LETTERS
-    .filter(letter => typeof row[letter] === 'string' && row[letter].trim() !== '')
-    .map(letter => `${letter}. ${String(row[letter]).trim()}`)
-  const answerLetter = String(row.answer ?? '').trim().toUpperCase()
+  const options = LETTERS.filter(
+    (letter) => typeof row[letter] === 'string' && row[letter].trim() !== '',
+  ).map((letter) => `${letter}. ${String(row[letter]).trim()}`)
+  const answerLetter = String(row.answer ?? '')
+    .trim()
+    .toUpperCase()
   const answerText = LETTERS.includes(answerLetter) ? String(row[answerLetter] ?? '').trim() : ''
   const explanation = String(row.explanation ?? '').trim()
 
@@ -251,25 +266,32 @@ const toBankItem = (row, { config, level }, split) => {
 
 const main = async () => {
   const { base, dryRun, retag } = parseArgs()
-  stdout.write(`C-Eval → 题库${dryRun ? '（dry-run）' : retag ? '（retag）' : ''}`
-    + `${dryRun ? '' : ` @ ${base}`}\n\n`)
+  stdout.write(
+    `C-Eval → 题库${dryRun ? '（dry-run）' : retag ? '（retag）' : ''}` +
+      `${dryRun ? '' : ` @ ${base}`}\n\n`,
+  )
 
   const collected = []
   for (const subject of SUBJECTS) {
     for (const split of SPLITS) {
       const rows = await fetchSplit(subject.config, split)
       stdout.write(`  ${subject.config}/${split}: ${rows.length} 行\n`)
-      collected.push(...rows.map(row => toBankItem(row, subject, split)))
+      collected.push(...rows.map((row) => toBankItem(row, subject, split)))
     }
   }
 
   /* A blank stem or a missing answer would be rejected by the wire schema; drop
      them here so the run reports a real number instead of a wall of 400s. */
-  const usable = collected.filter(item =>
-    item.stem.length > 0 && item.options.length >= 2
-    && /^[A-D]$/.test(item.answer.result.slice(0, 1)))
+  const usable = collected.filter(
+    (item) =>
+      item.stem.length > 0 &&
+      item.options.length >= 2 &&
+      /^[A-D]$/.test(item.answer.result.slice(0, 1)),
+  )
   const skipped = collected.length - usable.length
-  stdout.write(`\n映射 ${collected.length} 行 → 可用 ${usable.length}（丢弃 ${skipped}：题干空/选项不足/无答案）\n`)
+  stdout.write(
+    `\n映射 ${collected.length} 行 → 可用 ${usable.length}（丢弃 ${skipped}：题干空/选项不足/无答案）\n`,
+  )
 
   if (retag) {
     /* PUT only `knowledge`: `status`, `reuseModes`, `verifiedBy` and the audit
@@ -278,13 +300,22 @@ const main = async () => {
     let skipped = 0
     const failures = []
     for (const item of usable) {
-      const response = await fetch(`${base}/physicsos/paper/bank/items/${encodeURIComponent(item.id)}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json', origin: base },
-        body: JSON.stringify({ knowledge: item.knowledge }),
-      })
-      if (response.status === 200) { patched++; continue }
-      if (response.status === 404) { skipped++; continue }
+      const response = await fetch(
+        `${base}/physicsos/paper/bank/items/${encodeURIComponent(item.id)}`,
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json', origin: base },
+          body: JSON.stringify({ knowledge: item.knowledge }),
+        },
+      )
+      if (response.status === 200) {
+        patched++
+        continue
+      }
+      if (response.status === 404) {
+        skipped++
+        continue
+      }
       const body = await response.json().catch(() => undefined)
       failures.push(`${item.id}: ${response.status} ${body?.error?.code ?? ''}`)
     }
@@ -310,17 +341,25 @@ const main = async () => {
       headers: { 'content-type': 'application/json', origin: base },
       body: JSON.stringify(item),
     })
-    if (response.status === 201) { created++; continue }
+    if (response.status === 201) {
+      created++
+      continue
+    }
     const body = await response.json().catch(() => undefined)
-    if (response.status === 409) { duplicates++; continue }
+    if (response.status === 409) {
+      duplicates++
+      continue
+    }
     failures.push(`${item.id}: ${response.status} ${body?.error?.code ?? ''}`)
   }
 
   stdout.write(`\n新建 ${created}｜已存在 ${duplicates}｜失败 ${failures.length}\n`)
   for (const failure of failures.slice(0, 10)) stdout.write(`  ✗ ${failure}\n`)
   if (failures.length > 10) stdout.write(`  … 另有 ${failures.length - 10} 条\n`)
-  stdout.write('\n全部条目为 status=pending、reuseModes=[adapt]，'
-    + `需教师在出卷专区「真题资料库」逐条核验后才会参与组卷。\n`)
+  stdout.write(
+    '\n全部条目为 status=pending、reuseModes=[adapt]，' +
+      `需教师在出卷专区「真题资料库」逐条核验后才会参与组卷。\n`,
+  )
   if (failures.length > 0) process.exitCode = 1
 }
 

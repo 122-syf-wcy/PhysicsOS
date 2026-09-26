@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminApi, AuthApi, AuthUser } from '../src/client/auth-api.ts'
 import {
@@ -48,6 +48,8 @@ const stubApi = (overrides: Partial<AuthApi> = {}): AuthApi => ({
   logout: async () => ({ ok: true }),
   me: async () => ({ user: USER }),
   forgotPassword: async () => ({ ok: true }),
+  resetPassword: async () => ({ ok: true }),
+  reportLearning: async () => ({ ok: true }),
   ...overrides,
 })
 
@@ -203,15 +205,17 @@ describe('AuthGate', () => {
     fireEvent.change(container.querySelector('input[type="password"]')!, { target: { value: 'sharedpass1' } })
     fireEvent.click(getByText('登录 PhysicsOS'))
 
-    const select = await waitFor(() => {
-      const found = container.querySelector('select')
+    /* The picker is a GlassSelect combobox: open it, then read the rows the
+       popover renders (they carry the region labels that disambiguate). */
+    const picker = await waitFor(() => {
+      const found = container.querySelector('[data-glass-select]')
       expect(found).toBeTruthy()
-      return found!
+      return found as HTMLElement
     })
-    /* Region labels disambiguate same-name schools in the picker. */
-    const options = [...select.querySelectorAll('option')].map(o => o.textContent)
+    fireEvent.click(picker)
+    const options = screen.getAllByRole('option').map(o => o.textContent)
     expect(options).toEqual(['贵州大学（贵阳市 花溪区）', '贵州师范大学（贵阳市）'])
-    fireEvent.change(select, { target: { value: 'GZNU' } })
+    fireEvent.click(screen.getByRole('option', { name: '贵州师范大学（贵阳市）' }))
     fireEvent.click(getByText('登录 PhysicsOS'))
     await waitFor(() => {
       expect(props.login).toHaveBeenLastCalledWith({
@@ -401,6 +405,12 @@ describe('AdminWorkspace', () => {
     resetUserPassword: async () => ({ ok: true }),
     revokeUserSessions: async () => ({ ok: true }),
     listAudit: async () => ({ events: [] }),
+    listPasswordResets: async () => ({ requests: [] }),
+    issuePasswordReset: async () => { throw new Error('unused') },
+    cancelPasswordReset: async () => { throw new Error('unused') },
+    dashboard: async () => { throw new Error('unused') },
+    listDevices: async () => ({ devices: [], risk: [] }),
+    setDeviceRevoked: async () => ({ deviceId: '', scope: '' }),
   })
 
   const authedAs = (role: AuthUser['role']) =>

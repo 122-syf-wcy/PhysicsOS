@@ -64,9 +64,7 @@ export interface TotalReflectionSceneInput {
  * turned back entirely. Drop the angle to 30° and a refracted ray reappears at
  * 48.6°, which is the point: 全反射 is a threshold, not a gradual dimming.
  */
-export const createTotalReflectionScene = (
-  input: TotalReflectionSceneInput = {},
-): PhysicsScene =>
+export const createTotalReflectionScene = (input: TotalReflectionSceneInput = {}): PhysicsScene =>
   createLightBenchScene({
     sceneId: input.sceneId ?? 'lab-total-reflection',
     ...(input.now === undefined ? {} : { now: input.now }),

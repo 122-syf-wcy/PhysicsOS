@@ -1,10 +1,24 @@
 import { vec3, type Vector3 } from '@physicsos/physics-math'
 import { quantityVector } from '@physicsos/physics-core'
-import { asSceneId, asObservableId, asQuestionId, asSimulationId, asTraceId, type IsoDateTime } from '@physicsos/shared'
+import {
+  asSceneId,
+  asObservableId,
+  asQuestionId,
+  asSimulationId,
+  asTraceId,
+  type IsoDateTime,
+} from '@physicsos/shared'
 import { quantity } from '@physicsos/physics-units'
 import type { SimulationRequest } from '@physicsos/physics-core'
 import { defaultCoordinateSystem } from '../scene-validation.ts'
-import type { PhysicsScene, Body, GravityField, ShapeDefinition, ObservableDefinition, Boundary } from '../scene.ts'
+import type {
+  PhysicsScene,
+  Body,
+  GravityField,
+  ShapeDefinition,
+  ObservableDefinition,
+  Boundary,
+} from '../scene.ts'
 
 /**
  * A body of a collision experiment.
@@ -66,9 +80,7 @@ const makeBody = (spec: CollisionBodySpec): Body => {
        like the mechanics engine reads friction off the material: the material is
        where the body's contact behaviour lives, so a scene cannot claim a
        restitution the solver would silently ignore. */
-    ...(spec.restitution === undefined
-      ? {}
-      : { material: { restitution: spec.restitution } }),
+    ...(spec.restitution === undefined ? {} : { material: { restitution: spec.restitution } }),
     shape,
   }
 }
@@ -85,31 +97,43 @@ export const createCollisionScene = (input: CollisionSceneInput): PhysicsScene =
   const now = input.now ?? new Date().toISOString()
   const sceneId = input.sceneId ?? 'collision-scene'
   const bodies = input.bodies.map(makeBody)
-  const gravity: Vector3 = input.gravity === undefined ? vec3(0, 0, 0) : vec3(input.gravity[0], input.gravity[1], 0)
+  const gravity: Vector3 =
+    input.gravity === undefined ? vec3(0, 0, 0) : vec3(input.gravity[0], input.gravity[1], 0)
 
-  const fields: GravityField[] = gravity.x !== 0 || gravity.y !== 0
-    ? [{
-        id: 'gravity-1',
-        type: 'uniform_gravity',
-        acceleration: quantityVector(gravity, 'm/s^2', 'acceleration'),
-      }]
-    : []
+  const fields: GravityField[] =
+    gravity.x !== 0 || gravity.y !== 0
+      ? [
+          {
+            id: 'gravity-1',
+            type: 'uniform_gravity',
+            acceleration: quantityVector(gravity, 'm/s^2', 'acceleration'),
+          },
+        ]
+      : []
 
-  const boundaries: Boundary[] = input.boundary === undefined
-    ? []
-    : [{
-        id: 'boundary-1',
-        type: 'rectangle',
-        geometry: {
-          type: 'rectangle',
-          width: quantity(input.boundary.width, 'm', 'length'),
-          height: quantity(input.boundary.height, 'm', 'length'),
-        },
-        behavior: { type: 'reflect', restitution: input.boundaryRestitution ?? 1 },
-      }]
+  const boundaries: Boundary[] =
+    input.boundary === undefined
+      ? []
+      : [
+          {
+            id: 'boundary-1',
+            type: 'rectangle',
+            geometry: {
+              type: 'rectangle',
+              width: quantity(input.boundary.width, 'm', 'length'),
+              height: quantity(input.boundary.height, 'm', 'length'),
+            },
+            behavior: { type: 'reflect', restitution: input.boundaryRestitution ?? 1 },
+          },
+        ]
 
   const observableDefs: ObservableDefinition[] = [
-    { id: asObservableId('obs-position'), type: 'geometry' as const, visible: false, parameters: { kind: 'position' } },
+    {
+      id: asObservableId('obs-position'),
+      type: 'geometry' as const,
+      visible: false,
+      parameters: { kind: 'position' },
+    },
     { id: asObservableId('obs-velocity'), type: 'velocity' as const, visible: true },
     { id: asObservableId('obs-trajectory'), type: 'trajectory' as const, visible: true },
     { id: asObservableId('obs-momentum'), type: 'momentum' as const, visible: true },

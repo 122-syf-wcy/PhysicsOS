@@ -12,7 +12,11 @@ import type { DataTableView } from './scene-visual-model.ts'
 /** Escape one cell per RFC 4180: wrap in quotes, double embedded quotes. */
 const csvCell = (value: string): string => `"${value.replaceAll('"', '""')}"`
 
-/** Build the CSV text for a data table (BOM-prefixed, CRLF line endings). */
+/**
+ * Build the CSV text for a data table (BOM-prefixed, CRLF line endings)
+ * @returns the formatted string.
+ * @param table - the spec table.
+ */
 export const tableToCsv = (table: DataTableView): string => {
   const lines = [
     table.columns.map(csvCell).join(','),
@@ -21,7 +25,11 @@ export const tableToCsv = (table: DataTableView): string => {
   return `﻿${lines.join('\r\n')}`
 }
 
-/** Download the table as `<title>-数据.csv`. No-op on an empty table. */
+/**
+ * Download the table as `<title>-数据.csv`. No-op on an empty table
+ * @param table - the spec table.
+ * @param title - the title.
+ */
 export const exportTableCsv = (title: string, table: DataTableView): void => {
   if (table.columns.length === 0 || table.rows.length === 0) return
   const blob = new Blob([tableToCsv(table)], { type: 'text/csv;charset=utf-8' })

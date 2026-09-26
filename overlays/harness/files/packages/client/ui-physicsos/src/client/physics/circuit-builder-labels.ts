@@ -30,6 +30,10 @@ export const TERMINAL_LABELS: Readonly<Record<string, string>> = {
  * Ratings are compared with slack because the inspector accepts any number: a
  * value between two stocked sizes keeps the smaller part rather than dropping
  * to nothing.
+ * @returns the formatted string.
+ * @param closed - the closed.
+ * @param rating - the rating.
+ * @param kind - the kind tag.
  */
 export const spriteIdFor = (
   kind: BuilderComponentType,
@@ -57,7 +61,12 @@ export const spriteIdFor = (
   }
 }
 
-/** The rating a kind is judged by; meters have none. */
+/**
+ * The rating a kind is judged by; meters have none.
+ * @returns the number.
+ * @param params - the parameter patch.
+ * @param kind - the kind tag.
+ */
 export const ratingOfParams = (
   kind: BuilderComponentType,
   params: { readonly voltage?: number; readonly resistance?: number; readonly totalResistance?: number },

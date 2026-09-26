@@ -122,7 +122,7 @@ describe('pinhole image', () => {
     expect(scalarOf(scene, 'image_height')).toBeCloseTo(0.03, 15)
     expect(scalarOf(scene, 'inverted')).toBe(-1)
     const image = simulated(scene).derivedQuantities.find((entry) => entry.key === 'image_height')
-    expect(image?.formula?.expression).toBe("h′ = h·v/u")
+    expect(image?.formula?.expression).toBe('h′ = h·v/u')
     expect(lightEngine.canHandle(scene)).toMatchObject({ supported: true, modelId: PINHOLE_MODEL })
     expect(lightEngine.engineId).toBe(LIGHT_ENGINE_ID)
   })
@@ -134,7 +134,9 @@ describe('pinhole image', () => {
       lightEngine.canHandle({ ...pinholeScene(), lightBenches: [bench, { ...bench, id: 'x' }] })
         .supported,
     ).toBe(false)
-    expect(new LightEngine().canHandle(createPinholeScene({ objectHeight: 0 })).supported).toBe(false)
+    expect(new LightEngine().canHandle(createPinholeScene({ objectHeight: 0 })).supported).toBe(
+      false,
+    )
   })
 
   it('re-solves from the inspector: the screen, the object and its height', () => {

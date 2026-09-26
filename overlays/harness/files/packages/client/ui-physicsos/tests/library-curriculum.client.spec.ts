@@ -60,6 +60,7 @@ describe('library curriculum (章节树)', () => {
     }
     for (const stageTree of tree) {
       const order = volumeOrder[stageTree.stage]
+      if (order === undefined) throw new Error(`missing volume order for ${stageTree.stage}`)
       const names = stageTree.volumes.map(v => v.volume)
       expect(names).toEqual([...names].sort((a, b) => order.indexOf(a) - order.indexOf(b)))
       for (const volume of stageTree.volumes) {
@@ -289,7 +290,10 @@ describe('library smartedu sources (官方资源)', () => {
           const url = new URL(item.url)
           expect(url.host).toBe('basic.smartedu.cn')
           expect(url.pathname, `${item.kind} route`).toBe(PATH[item.kind])
-          const id = url.searchParams.get(ID_PARAM[item.kind])!
+          const idParam = ID_PARAM[item.kind]
+          if (idParam === undefined) throw new Error(`missing id parameter for ${item.kind}`)
+          const id = url.searchParams.get(idParam)
+          if (id === null) throw new Error(`missing ${idParam} for ${item.title}`)
           expect(UUID.test(id), `${item.title} ${item.kind} id`).toBe(true)
           expect(item.title.length).toBeGreaterThan(0)
           seenIds.add(`${item.kind}|${id}`)

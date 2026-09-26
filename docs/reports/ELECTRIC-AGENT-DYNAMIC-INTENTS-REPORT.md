@@ -11,7 +11,7 @@ V2 完成多源点电荷 + 等势线后，确认匀强电场动力学（类平�
 轨迹+向量渲染 → 结构化解答），但存在四处盲区：
 
 1. **Agent 在匀强场说错话**：`electric-field-magnitude` 硬编码"库仑定律 E=kq/r²"
-   + 引用点电荷专属的 `electric_field_1_over_r2` check——匀强场无源电荷。
+   - 引用点电荷专属的 `electric_field_1_over_r2` check——匀强场无源电荷。
 2. **Agent 缺动力学意图**：无法解释轨迹为何是抛物线、加速度为何恒定、
    电场力做功与动能定理、末速度怎么来的。
 3. **Parser 缺复杂空间解析**：只支持"距 r=20cm"，不支持"距其左侧 15cm"。
@@ -40,18 +40,18 @@ V2 完成多源点电荷 + 等势线后，确认匀强电场动力学（类平�
 
 ### A. 修复 Agent 匀强场文案
 
-| 文件 | 改动 |
-|---|---|
+| 文件                                  | 改动                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `vendor/.../physics-agent-answers.ts` | A.1 `isUniformElectricField(context)` helper（基于 `electric_kinematic_consistency` check 判别，非 drawnIds 推断）；A.2 `electric-field-magnitude` 按场景分支（匀强场说"E 是给定恒定值"、引用 `electric_force_consistency`；点电荷维持库仑定律 + 1/r²）；A.3 `electric-force-magnitude` 用 `electric_force_qE ?? electric_force_consistency` 回退 + 文案分支 |
 
 ### B. 新增 4 个匀强场动力学意图
 
-| Intent | 引用 check | 引用 derived | highlight |
-|---|---|---|---|
-| `electric-acceleration-constant` | `electric_acceleration_consistency` | 加速度 | `electric-acceleration-vector` |
-| `electric-trajectory-shape` | `electric_kinematic_consistency` | 位移 | `electric-trajectory` |
-| `electric-work-energy` | `electric_energy_consistency` | 电场力做功 / 动能变化 | `electric-force-vector` |
-| `electric-velocity-evolution` | `electric_kinematic_consistency` | 速率 | `electric-velocity-vector` |
+| Intent                           | 引用 check                          | 引用 derived          | highlight                      |
+| -------------------------------- | ----------------------------------- | --------------------- | ------------------------------ |
+| `electric-acceleration-constant` | `electric_acceleration_consistency` | 加速度                | `electric-acceleration-vector` |
+| `electric-trajectory-shape`      | `electric_kinematic_consistency`    | 位移                  | `electric-trajectory`          |
+| `electric-work-energy`           | `electric_energy_consistency`       | 电场力做功 / 动能变化 | `electric-force-vector`        |
+| `electric-velocity-evolution`    | `electric_kinematic_consistency`    | 速率                  | `electric-velocity-vector`     |
 
 - 所有 `available` 用 `isUniformElectricField(context)` 闸门（排除点电荷误触发）。
 - `acceleration-vector` 的 observable 默认关，B.1 的 `available` 仍用
@@ -67,54 +67,54 @@ V2 完成多源点电荷 + 等势线后，确认匀强电场动力学（类平�
 
 ### C. 复杂空间解析
 
-| 文件 | 改动 |
-|---|---|
-| `packages/question-core/src/semantic-ir.ts` | `PhysicsSemanticIR` 增 `sampleOffset?: { axis: 'x'\|'y'; sign: 1\|-1; distance: number }` |
+| 文件                                                          | 改动                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/question-core/src/semantic-ir.ts`                   | `PhysicsSemanticIR` 增 `sampleOffset?: { axis: 'x'\|'y'; sign: 1\|-1; distance: number }`                                                                                                                                                                                                        |
 | `packages/question-core/src/deterministic-electric-parser.ts` | `ELECTRIC_PATTERNS.directionalDistance` 正则（匹配 距其/在 + 左侧/右侧/上方/下方 + 数值 + 单位）；`parsePointCharge` 优先提取方向性距离，按方向词填 `sampleOffset`（group 1=方向、2=值、3=单位，inline 单位转换避免与 `extractValueWithUnit` 的 group 约定冲突）；IR 构建条件展开 `sampleOffset` |
-| `packages/question-core/src/electric-scene-builder.ts` | 单源 probe 位置：`sampleOffset` 存在时按 axis/sign 放置（x 轴 `vec3(sign·d, 0, 0)`、y 轴 `vec3(0, sign·d, 0)`），否则维持 `vec3(d, 0, 0)`；多源不受影响 |
-| `packages/question-core/src/golden-questions.ts` | `electric-09-off-axis-field`：q=+4μC，距其左侧 15cm，求 E 大小与方向 |
-| `packages/question-core/tests/electric-questions.test.ts` | 方向性距离题测试：`sampleOffset.axis==='x' && sign===-1`、probe `position.vector.x===-0.15`、E≈1.598×10⁶、E 指向 -x |
+| `packages/question-core/src/electric-scene-builder.ts`        | 单源 probe 位置：`sampleOffset` 存在时按 axis/sign 放置（x 轴 `vec3(sign·d, 0, 0)`、y 轴 `vec3(0, sign·d, 0)`），否则维持 `vec3(d, 0, 0)`；多源不受影响                                                                                                                                          |
+| `packages/question-core/src/golden-questions.ts`              | `electric-09-off-axis-field`：q=+4μC，距其左侧 15cm，求 E 大小与方向                                                                                                                                                                                                                             |
+| `packages/question-core/tests/electric-questions.test.ts`     | 方向性距离题测试：`sampleOffset.axis==='x' && sign===-1`、probe `position.vector.x===-0.15`、E≈1.598×10⁶、E 指向 -x                                                                                                                                                                              |
 
 ### D. 匀强场动力学验收与暴露
 
-| 文件 | 改动 |
-|---|---|
+| 文件                                      | 改动                                                                                                                                                                         |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web/e2e/electric-acceptance-v2.mjs` | Case N（electric-01 类平抛：试题→已知量→结构化步骤→verified→Lab 轨迹渲染）；Case O（Agent"轨迹为什么是抛物线"→引用 `electric_kinematic_consistency`→不引库仑→revision 不变） |
-| `apps/web/e2e/final-screenshots.mjs` | 匀强场动力学 3 张截图：`question-electric-dynamics-final`、`electric-dynamics-trajectory-final`、`agent-trajectory-shape-final` |
+| `apps/web/e2e/final-screenshots.mjs`      | 匀强场动力学 3 张截图：`question-electric-dynamics-final`、`electric-dynamics-trajectory-final`、`agent-trajectory-shape-final`                                              |
 
 **D.3 不做**：Lab 新建菜单加匀强电场模板。与 V1"不在 Lab 新建菜单加电场
 模板"决策一致——匀强场仍走 Question → Lab。
 
 ## 4. 浏览器验收 Case
 
-| Case | 场景 | 验证点 | 结果 |
-|---|---|---|---|
-| J | 等量异种点电荷中点求 E（Golden Question） | 题面→已知量高亮→叠加步骤→verified | PASS |
-| K | 多源渲染 + Inspector 编辑 | 两 source + 弯曲流线 + 等势线；Inspector 多 source 可编辑；编辑后 verified | PASS |
-| L | Agent「电场线为什么从正电荷出来」 | 高亮 stream + 引用 chargeSigns + 不谎称方向 + revision 不变 | PASS |
-| M | Agent「合场是怎么来的」 | 引用 `electric_field_superposition` + revision 不变 | PASS |
-| N | 匀强电场动力学题（类平抛） | 试题→结构化步骤→Lab verified→轨迹渲染 | PASS |
-| O | Agent「轨迹为什么是抛物线」 | 引用 `electric_kinematic_consistency` + 不引库仑 + revision 不变 | PASS |
+| Case | 场景                                      | 验证点                                                                     | 结果 |
+| ---- | ----------------------------------------- | -------------------------------------------------------------------------- | ---- |
+| J    | 等量异种点电荷中点求 E（Golden Question） | 题面→已知量高亮→叠加步骤→verified                                          | PASS |
+| K    | 多源渲染 + Inspector 编辑                 | 两 source + 弯曲流线 + 等势线；Inspector 多 source 可编辑；编辑后 verified | PASS |
+| L    | Agent「电场线为什么从正电荷出来」         | 高亮 stream + 引用 chargeSigns + 不谎称方向 + revision 不变                | PASS |
+| M    | Agent「合场是怎么来的」                   | 引用 `electric_field_superposition` + revision 不变                        | PASS |
+| N    | 匀强电场动力学题（类平抛）                | 试题→结构化步骤→Lab verified→轨迹渲染                                      | PASS |
+| O    | Agent「轨迹为什么是抛物线」               | 引用 `electric_kinematic_consistency` + 不引库仑 + revision 不变           | PASS |
 
 ## 5. 门禁计数器
 
-| 门禁 | 计数 |
-|---|---|
-| console errors | 0 |
-| page errors | 0 |
-| unhandled rejections | 0 |
-| failed requests | 0 |
-| error responses | 0 |
+| 门禁                 | 计数 |
+| -------------------- | ---- |
+| console errors       | 0    |
+| page errors          | 0    |
+| unhandled rejections | 0    |
+| failed requests      | 0    |
+| error responses      | 0    |
 
 ## 6. 截图清单
 
-| 文件 | 内容 |
-|---|---|
-| `electric-dynamics-trajectory-1600x900.png` | 匀强场类平抛 Lab：轨迹线 + E/F/v 向量 |
-| `agent-trajectory-shape-1600x900.png` | Agent 解释抛物线轨迹 |
-| `question-electric-dynamics-final-1600x900.png` | 最终集：匀强场动力学题 |
-| `electric-dynamics-trajectory-final-1600x900.png` | 最终集：轨迹 Lab |
-| `agent-trajectory-shape-final-1600x900.png` | 最终集：Agent 抛物线解释 |
+| 文件                                              | 内容                                  |
+| ------------------------------------------------- | ------------------------------------- |
+| `electric-dynamics-trajectory-1600x900.png`       | 匀强场类平抛 Lab：轨迹线 + E/F/v 向量 |
+| `agent-trajectory-shape-1600x900.png`             | Agent 解释抛物线轨迹                  |
+| `question-electric-dynamics-final-1600x900.png`   | 最终集：匀强场动力学题                |
+| `electric-dynamics-trajectory-final-1600x900.png` | 最终集：轨迹 Lab                      |
+| `agent-trajectory-shape-final-1600x900.png`       | 最终集：Agent 抛物线解释              |
 
 ## 7. 测试数据
 

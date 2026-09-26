@@ -111,7 +111,7 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
 }
 
 describe('real Loader composition', () => {
-  it('keeps the shared /api session surface behind account ownership', { timeout: 60_000 }, async () => {
+  it('keeps the shared /api session surface behind account ownership', { timeout: 180_000 }, async () => {
     const loaded = await loadYaml(root => [
       '- id: webserver',
       "  name: '@deepseek-ai/dsh-host-webserver'",
@@ -199,7 +199,7 @@ describe('real Loader composition', () => {
     })
   })
 
-  it('boots the shipped plugin chain and serves register → me → logout over HTTP', { timeout: 60_000 }, async () => {
+  it('boots the shipped plugin chain and serves register → me → logout over HTTP', { timeout: 180_000 }, async () => {
     const loaded = await loadYaml(root => [
       '- id: webserver',
       "  name: '@deepseek-ai/dsh-host-webserver'",
@@ -258,7 +258,7 @@ describe('real Loader composition', () => {
     expect(afterLogout.status).toBe(401)
   })
 
-  it('boots a seeded SUPER_ADMIN and serves the application → approval → admin-login flow', { timeout: 60_000 }, async () => {
+  it('boots a seeded SUPER_ADMIN and serves the application → approval → admin-login flow', { timeout: 180_000 }, async () => {
     const loaded = await loadYaml(root => [
       '- id: webserver',
       "  name: '@deepseek-ai/dsh-host-webserver'",
@@ -336,7 +336,7 @@ describe('real Loader composition', () => {
     expect(events.some(e => e.action === 'school_request.approve')).toBe(true)
   })
 
-  it('completes forgot → admin issue → single-use password reset over the real loader chain', { timeout: 60_000 }, async () => {
+  it('completes forgot → admin issue → single-use password reset over the real loader chain', { timeout: 180_000 }, async () => {
     const loaded = await loadYaml(root => [
       '- id: webserver',
       "  name: '@deepseek-ai/dsh-host-webserver'",

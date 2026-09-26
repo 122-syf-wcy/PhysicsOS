@@ -38,6 +38,9 @@ export interface Part3dEntry {
   readonly dial?: { readonly pivot: { readonly x: number; readonly y: number }; readonly radius: number }
 }
 
+/**
+ * The parts3d catalog helper `PARTS3D`.
+ */
 export const PARTS3D: Readonly<Record<string, Part3dEntry>> = {
   ammeter: {
     file: 'ammeter.png',
@@ -176,4 +179,9 @@ export const PARTS3D: Readonly<Record<string, Part3dEntry>> = {
   },
 }
 
+/**
+ * The parts3d catalog helper `part3dUrl`.
+ * @returns the formatted string.
+ * @param part - the catalog part to place.
+ */
 export const part3dUrl = (part: Part3dEntry): string => `/physicsos/parts3d/${part.file}`

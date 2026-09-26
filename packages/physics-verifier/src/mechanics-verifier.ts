@@ -54,13 +54,20 @@ export function verifyKinematicConsistency(
 }
 
 export function verifyProjectileHorizontalVelocity(
-  states: readonly { time: { value: number }; objects: { id: string; velocity?: { vector: Vector3; unit: string; dimension: string } }[] }[],
+  states: readonly {
+    time: { value: number }
+    objects: { id: string; velocity?: { vector: Vector3; unit: string; dimension: string } }[]
+  }[],
   bodyId: string,
 ): VerificationCheck {
-  if (states.length < 2) return check('projectile_vx_constant', 'conservation', true, { message: 'Insufficient states.' })
+  if (states.length < 2)
+    return check('projectile_vx_constant', 'conservation', true, {
+      message: 'Insufficient states.',
+    })
   const firstObj = states[0]?.objects.find((o) => o.id === bodyId)
   const lastObj = states[states.length - 1]?.objects.find((o) => o.id === bodyId)
-  if (!firstObj?.velocity || !lastObj?.velocity) return check('projectile_vx_constant', 'conservation', true, { message: 'No velocity data.' })
+  if (!firstObj?.velocity || !lastObj?.velocity)
+    return check('projectile_vx_constant', 'conservation', true, { message: 'No velocity data.' })
   const vx0 = firstObj.velocity.vector.x
   const vx1 = lastObj.velocity.vector.x
   const diff = Math.abs(vx0 - vx1)
@@ -90,7 +97,8 @@ export function verifyProjectileImpact(
 ): VerificationCheck {
   const diff = Math.abs(finalY - groundY)
   return check('projectile_impact', 'boundary', diff < tolerance, {
-    message: diff < tolerance ? 'Impact y ≈ groundY.' : `Impact y = ${finalY}, groundY = ${groundY}`,
+    message:
+      diff < tolerance ? 'Impact y ≈ groundY.' : `Impact y = ${finalY}, groundY = ${groundY}`,
     details: { finalY, groundY, diff, tolerance },
   })
 }
@@ -135,9 +143,11 @@ export function verifyMechanicsScene(scene: PhysicsScene): VerificationResult {
     warnings.push(...validation.warnings)
     errors.push(...validation.errors)
   } catch (error: unknown) {
-    checks.push(check('mechanics_scene_valid', 'schema', false, {
-      message: error instanceof Error ? error.message : 'Mechanics scene validation failed.',
-    }))
+    checks.push(
+      check('mechanics_scene_valid', 'schema', false, {
+        message: error instanceof Error ? error.message : 'Mechanics scene validation failed.',
+      }),
+    )
   }
   checks.push(
     check('mechanics_scene_2d', 'constraint', scene.dimension === '2d', {
@@ -166,17 +176,27 @@ export function verifyMechanicsSimulation(
       return body?.position !== undefined && body.velocity !== undefined
     })
   checks.push(
-    check('mechanics_result_schema', 'schema', simulation.schemaVersion === 'simulation-result/1.0', {
-      message: 'SimulationResult must use schema simulation-result/1.0.',
-    }),
+    check(
+      'mechanics_result_schema',
+      'schema',
+      simulation.schemaVersion === 'simulation-result/1.0',
+      {
+        message: 'SimulationResult must use schema simulation-result/1.0.',
+      },
+    ),
     check('mechanics_result_scene_id', 'schema', simulation.sceneId === scene.id, {
       message: 'SimulationResult must reference the supplied scene id.',
       details: { expected: scene.id, actual: simulation.sceneId },
     }),
-    check('mechanics_result_scene_revision', 'schema', simulation.sceneRevision === scene.revision, {
-      message: 'SimulationResult must reference the supplied scene revision.',
-      details: { expected: scene.revision, actual: simulation.sceneRevision },
-    }),
+    check(
+      'mechanics_result_scene_revision',
+      'schema',
+      simulation.sceneRevision === scene.revision,
+      {
+        message: 'SimulationResult must reference the supplied scene revision.',
+        details: { expected: scene.revision, actual: simulation.sceneRevision },
+      },
+    ),
     check('mechanics_result_body_states', 'trajectory', statesContainBody, {
       message: 'Every mechanics state must contain the scene body position and velocity.',
       details: { bodyId, stateCount: simulation.states.length },

@@ -86,6 +86,8 @@ const cmText = (value: number): string => `${fmtFluidValue(value, 4)} cm`
  * Scene observable definition → canvas toggle key. The bench factory stamps
  * `observable-current-field` / `observable-current-comparison` for both rigs, so
  * the key rides on the id rather than the observable type.
+ * @returns the observable key.
+ * @param definition - the observable definition.
  */
 export const currentObservableKeyOf = (
   definition: ObservableDefinition,
@@ -111,7 +113,11 @@ interface Layers {
   readonly comparison: boolean
 }
 
-/** Student-facing name of the rig the frame is showing. */
+/**
+ * Student-facing name of the rig the frame is showing.
+ * @returns the formatted string.
+ * @param type - the part type.
+ */
 export const currentRigText = (type: CurrentRigKind): string => {
   switch (type) {
     case 'straight_wire':
@@ -541,13 +547,25 @@ const motorPicture = (
 
 /* ------------------------------------------------------------------ frame -- */
 
+/**
+ * The current visual input shape used by the current scene visuals module.
+ */
 export interface CurrentVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedCurrentModel
 }
 
-/** Build one current-magnetic frame from the engine's resolved model. */
-export const currentSceneVisual = ({ scene, model }: CurrentVisualInput): SceneVisualModel => {
+/**
+ * Build one current-magnetic frame from the engine's resolved model
+ * @returns the scene visual model.
+ * @param input - the visual input for this frame.
+ */
+export const currentSceneVisual = (input: CurrentVisualInput): SceneVisualModel => {
+  const {
+    scene,
+    model,
+  } = input
+
   const visible = visibilityOf(scene)
   const layers: Layers = {
     field: visible.fieldLines === true,

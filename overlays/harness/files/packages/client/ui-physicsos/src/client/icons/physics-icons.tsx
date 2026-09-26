@@ -630,6 +630,16 @@ export const IconLibrary = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Classroom: a teacher figure with two students. */
+export const IconClassUsers = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <circle cx="9" cy="8" r="2.6" />
+    <path d="M4.2 19.2c0-2.6 2.1-4.7 4.8-4.7s4.8 2.1 4.8 4.7" />
+    <circle cx="17" cy="9.4" r="2.1" />
+    <path d="M15.4 14.6c2.4-.5 4.4 1.2 4.4 3.6" />
+  </Glyph>
+)
+
 /* ---------------------------------------------------------------- transport -- */
 
 /** Play. */

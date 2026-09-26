@@ -4,14 +4,15 @@
 
 ## 内容
 
-| 路径 | 说明 |
-| --- | --- |
-| `files/packages/client/ui-physicsos/` | PhysicsOS 正式 Client Plugin 源码与测试（`lib/`、`node_modules/` 为构建产物，不入库） |
-| `files/packages/physicsos/tool-physicsos/` | PhysicsOS 宿主侧工具插件 `@deepseek-ai/dsh-tool-physicsos`：把 `@physicsos/agent-tools` 注册为模型可调用的 `physics_*` 工具（`lib/` 由 `pnpm run build:agent` 生成，不入库） |
-| `files/apps/cli/config/agent-presets/physics-student/` | Agent 预设「物理学习模式」：物理宪法 persona + 物理工具 + 提问工具，随附根目录发现，Web 设置页可选 |
-| `files/packages/client/ui-settings-models/src/client/protocol.ts` | Harness 侧新增文件，被本地改动引用 |
-| `files/apps/web/public/physicsos/` | 网页压缩版首页资产 |
-| `upstream-changes.patch` | 对 Harness 已跟踪文件的本地改动（不含 `AGENTS.md` 类文档删除）；含 `apps/cli/package.json` 对工具插件的依赖与 `tsconfig.host.json` 的项目引用 |
+| 路径                                                              | 说明                                                                                                                                                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `files/packages/client/ui-physicsos/`                             | PhysicsOS 正式 Client Plugin 源码与测试（`lib/`、`node_modules/` 为构建产物，不入库）                                                                                        |
+| `files/packages/physicsos/tool-physicsos/`                        | PhysicsOS 宿主侧工具插件 `@deepseek-ai/dsh-tool-physicsos`：把 `@physicsos/agent-tools` 注册为模型可调用的 `physics_*` 工具（`lib/` 由 `pnpm run build:agent` 生成，不入库） |
+| `files/packages/physicsos/auth-host/`                             | PhysicsOS 账户体系与共享 `/api` 账号策略：学校/账号/会话、资源归属、私有工作区及学生预设限制                                                                                 |
+| `files/apps/cli/config/agent-presets/physics-student/`            | Agent 预设「物理学习模式」：物理宪法 persona + 物理工具 + 提问工具，随附根目录发现，Web 设置页可选                                                                           |
+| `files/packages/client/ui-settings-models/src/client/protocol.ts` | Harness 侧新增文件，被本地改动引用                                                                                                                                           |
+| `files/apps/web/public/physicsos/`                                | 网页压缩版首页资产                                                                                                                                                           |
+| `upstream-changes.patch`                                          | 对 Harness 已跟踪文件的本地改动（不含 `AGENTS.md` 类文档删除）；含 `apps/cli/package.json` 对工具插件的依赖与 `tsconfig.host.json` 的项目引用                                |
 
 ## 用法
 
@@ -26,6 +27,16 @@ node scripts/overlay/harness-overlay.mjs apply
 
 ```sh
 node scripts/overlay/harness-overlay.mjs capture
+```
+
+## 编辑器
+
+`files/**` 里的 `tsconfig.json` 不是可编译的项目文件：它们的 `extends` 与 `references` 指向 `tsconfig.base.json`、`vendor/cosmokit` 等路径，这些路径只有 `apply` 进 `vendor/deepseek-harness` 之后才存在。打开 overlay 里的 `.ts` 文件、或开启项目级诊断时，TS server 会原地加载这些 tsconfig 并把缺失目标报成错误——那是上下文缺失，不是代码问题；真实信号以 vendor 路径下的 `pnpm run typecheck` 为准。
+
+要让 IDE 不再报这类噪音，在用户设置里关掉项目级诊断（本仓库 `.vscode/` 在 `.gitignore` 中，属本机配置）：
+
+```json
+{ "typescript.tsserver.experimental.enableProjectDiagnostics": false }
 ```
 
 ## 边界

@@ -48,9 +48,8 @@ export interface Measurement {
   metadata?: Record<string, unknown>
 }
 
-export const isQuantityVector = (
-  value: Quantity | QuantityVector,
-): value is QuantityVector => 'vector' in value
+export const isQuantityVector = (value: Quantity | QuantityVector): value is QuantityVector =>
+  'vector' in value
 
 export const isScalarQuantity = (value: Quantity | QuantityVector): value is Quantity =>
   'value' in value
@@ -61,10 +60,7 @@ export const findDerived = (
 ): DerivedQuantity | undefined => derived.find((entry) => entry.key === key)
 
 /** Reads a derived scalar by key, throwing when it is missing or vector-valued. */
-export const derivedScalar = (
-  derived: readonly DerivedQuantity[],
-  key: string,
-): Quantity => {
+export const derivedScalar = (derived: readonly DerivedQuantity[], key: string): Quantity => {
   const found = findDerived(derived, key)
   if (found === undefined) throw new Error(`Derived quantity "${key}" is absent.`)
   if (!isScalarQuantity(found.value)) {
@@ -74,10 +70,7 @@ export const derivedScalar = (
 }
 
 /** Reads a derived vector by key, throwing when it is missing or scalar-valued. */
-export const derivedVector = (
-  derived: readonly DerivedQuantity[],
-  key: string,
-): QuantityVector => {
+export const derivedVector = (derived: readonly DerivedQuantity[], key: string): QuantityVector => {
   const found = findDerived(derived, key)
   if (found === undefined) throw new Error(`Derived quantity "${key}" is absent.`)
   if (!isQuantityVector(found.value)) {

@@ -29,9 +29,18 @@ import { seedSchools } from './schools.ts'
 import { adminRoutes, authRoutes } from './routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
 import { readSessionCookie } from './cookies.ts'
-import { createApiPolicy, type ApiPolicyActor, type ApiPolicyWorkspace } from './api-policy.ts'
+import {
+  DEFAULT_MODEL_ATTEMPT_LIMIT,
+  DEFAULT_MODEL_ATTEMPT_WINDOW_MS,
+  ONCE_LEDGER_SERVICE,
+  asOnceLedger,
+  createApiPolicy,
+  type ApiPolicyActor,
+  type ApiPolicyLimiterBackend,
+  type ApiPolicyWorkspace,
+} from './api-policy.ts'
 import { validateTrustedProxies } from './proxy.ts'
-import { LIMITER_SERVICE, asLimiterBackend } from './limiter.ts'
+import { LIMITER_SERVICE, asLimiterBackend, type LimiterPolicy } from './limiter.ts'
 import {
   PASSWORD_RESET_DELIVERY_SERVICE, asPasswordResetDelivery,
 } from './reset-delivery.ts'
@@ -66,6 +75,10 @@ export interface Config extends Partial<AuthServiceConfig> {
   bootstrapAdmins?: BootstrapAdmin[]
   /** Root for account-private Harness workspaces. */
   workspaceRoot?: string
+  /** Per-account model-call budget for the beta. Super admins are exempt. */
+  modelAttemptLimit?: number
+  /** Fixed window for {@link modelAttemptLimit}. */
+  modelAttemptWindowMs?: number
 }
 
 const bootstrapAdmin = z.object({
@@ -91,6 +104,8 @@ export const Config: z<Config> = z.object({
   attemptWindowMs: z.number().default(DEFAULT_AUTH_CONFIG.attemptWindowMs),
   bootstrapAdmins: z.array(bootstrapAdmin).default([]),
   workspaceRoot: z.string().default(dshHomePath('physicsos-users')),
+  modelAttemptLimit: z.number().min(1).step(1).default(DEFAULT_MODEL_ATTEMPT_LIMIT),
+  modelAttemptWindowMs: z.number().min(1).step(1).default(DEFAULT_MODEL_ATTEMPT_WINDOW_MS),
 })
 
 /**
@@ -111,6 +126,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   await ctx.effect(async function* () {
     const domain = await openAuthDomain(ctx)
     const limiter = asLimiterBackend(ctx.get(LIMITER_SERVICE))
+    const apiPolicyLimiter: ApiPolicyLimiterBackend | undefined = limiter === undefined
+      ? undefined
+      : {
+        kind: limiter.kind,
+        // The shared backend keys by the string name at runtime; the auth
+        // limiter's compile-time union predates the new `model` policy.
+        consume: (policy, key, now) =>
+          limiter.consume(policy as unknown as LimiterPolicy, key, now),
+      }
+    const onceLedger = asOnceLedger(ctx.get(ONCE_LEDGER_SERVICE))
     const resetDelivery = asPasswordResetDelivery(ctx.get(PASSWORD_RESET_DELIVERY_SERVICE))
     const service = new AuthService(domain, config as AuthServiceConfig, {
       ...(limiter === undefined ? {} : { limiter }),
@@ -178,6 +203,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         release: (actor, kind, id) => service.releaseApiResource(actor, kind, id),
       },
       ensureWorkspace,
+      ...(apiPolicyLimiter === undefined ? {} : { limiter: apiPolicyLimiter }),
+      ...(onceLedger === undefined ? {} : { onceLedger }),
+      modelPolicy: {
+        limit: config.modelAttemptLimit ?? DEFAULT_MODEL_ATTEMPT_LIMIT,
+        windowMs: config.modelAttemptWindowMs ?? DEFAULT_MODEL_ATTEMPT_WINDOW_MS,
+        maxBuckets: config.attemptBucketLimit ?? DEFAULT_AUTH_CONFIG.attemptBucketLimit,
+      },
     }))
 
     const seededAdmins = await seedBootstrapAdmins(domain, config.bootstrapAdmins ?? [])

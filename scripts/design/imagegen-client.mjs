@@ -54,7 +54,10 @@ const FLAGS = new Map() // long flag (sans --) -> value | true
 const POSITIONAL = []
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i]
-  if (arg === '--') { POSITIONAL.push(...argv.slice(i + 1)); break }
+  if (arg === '--') {
+    POSITIONAL.push(...argv.slice(i + 1))
+    break
+  }
   if (arg.startsWith('--')) {
     const eq = arg.indexOf('=')
     if (eq >= 0) {
@@ -90,7 +93,9 @@ const SIZE = value('SIZE', 'size')
 const RESPONSE_FORMAT = FLAGS.has('response-format') ? FLAGS.get('response-format') : undefined
 const QUIET = FLAGS.has('quiet')
 
-const log = (msg) => { if (!QUIET) process.stdout.write(`${msg}\n`) }
+const log = (msg) => {
+  if (!QUIET) process.stdout.write(`${msg}\n`)
+}
 const fail = (msg) => {
   process.stderr.write(`error: ${msg}\n`)
   process.exitCode = 1
@@ -114,7 +119,10 @@ const assertCreds = () => {
 
 /* ----------------------------------------------------------------- http ---- */
 
-const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
+const sleep = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 /**
  * One request helper with timeout. Resolves to { status, json, text } — never
@@ -122,16 +130,26 @@ const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
  */
 const call = async (pathname, init = {}, timeoutMs = 600_000) => {
   const controller = new AbortController()
-  const timer = setTimeout(() => { controller.abort() }, timeoutMs)
+  const timer = setTimeout(() => {
+    controller.abort()
+  }, timeoutMs)
   try {
     const response = await fetch(`${BASE_URL}${pathname}`, {
       ...init,
-      headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json', ...init.headers },
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+        ...init.headers,
+      },
       signal: controller.signal,
     })
     const text = await response.text()
     let json
-    try { json = JSON.parse(text) } catch { /* html or empty body */ }
+    try {
+      json = JSON.parse(text)
+    } catch {
+      /* html or empty body */
+    }
     return { status: response.status, json, text }
   } finally {
     clearTimeout(timer)
@@ -170,7 +188,11 @@ const generateOnce = async (model, size) => {
   if (res.status !== 200) return { ok: false, error: gatewayError(res), status: res.status }
   const item = res.json?.data?.[0]
   if (!item || (typeof item.b64_json !== 'string' && typeof item.url !== 'string')) {
-    return { ok: false, error: `unexpected success body: ${res.text.slice(0, 160)}`, status: res.status }
+    return {
+      ok: false,
+      error: `unexpected success body: ${res.text.slice(0, 160)}`,
+      status: res.status,
+    }
   }
   return { ok: true, item, revisedPrompt: res.json?.data?.[0]?.revised_prompt }
 }
@@ -201,7 +223,10 @@ const generateWithFallbacks = async () => {
 
   /* Model-name fallback: many gateways expose a different id than the doc
      default (e.g. "gpt-image-2" instead of "gpt-image"). */
-  if (!result.ok && /requires an image model|model.*(not found|not exist)|unknown model/i.test(result.error ?? '')) {
+  if (
+    !result.ok &&
+    /requires an image model|model.*(not found|not exist)|unknown model/i.test(result.error ?? '')
+  ) {
     log(`  ~ model "${model}" rejected (${result.error}); probing /v1/models ...`)
     const models = await listModels()
     if (models && models.length > 0) {
@@ -223,7 +248,9 @@ const generateWithFallbacks = async () => {
   while (!result.ok && result.status >= 500 && retryDelayIndex < RETRY_DELAYS.length) {
     const delay = RETRY_DELAYS[retryDelayIndex]
     retryDelayIndex += 1
-    log(`  ~ upstream error (${result.error}); waiting ${(delay / 1000).toFixed(0)}s and retrying \u2026`)
+    log(
+      `  ~ upstream error (${result.error}); waiting ${(delay / 1000).toFixed(0)}s and retrying \u2026`,
+    )
     await sleep(delay)
     result = await tryOnce(model, size)
   }
@@ -279,7 +306,10 @@ const run = async () => {
   if (FLAGS.has('list-models')) {
     const models = await listModels()
     if (models === null) return
-    if (models.length === 0) { fail('GET /v1/models returned an empty list.'); return }
+    if (models.length === 0) {
+      fail('GET /v1/models returned an empty list.')
+      return
+    }
     log(models.join('\n'))
     return
   }
@@ -314,7 +344,9 @@ const run = async () => {
       const attempts = (outcome.attempts ?? [])
         .map((a) => `${a.model}${a.size ? `/${a.size}` : ''}->HTTP ${a.status}`)
         .join(', ')
-      process.stderr.write(`  \u2717 ${path.basename(pngFile)}: ${outcome.error}${attempts ? `  [attempts: ${attempts}]` : ''}\n`)
+      process.stderr.write(
+        `  \u2717 ${path.basename(pngFile)}: ${outcome.error}${attempts ? `  [attempts: ${attempts}]` : ''}\n`,
+      )
       continue
     }
 
@@ -332,11 +364,14 @@ const run = async () => {
       elapsedMs,
     }
     if (outcome.revisedPrompt) entry.revisedPrompt = outcome.revisedPrompt
-    if (outcome.model !== MODEL) entry.note = `requested "${MODEL}", gateway resolved "${outcome.model}"`
+    if (outcome.model !== MODEL)
+      entry.note = `requested "${MODEL}", gateway resolved "${outcome.model}"`
 
     writeFileSync(`${outStem}${suffix}.json`, `${JSON.stringify(entry, null, 2)}\n`)
     appendManifest(outDir, entry)
-    log(`  \u2713 ${path.relative(process.cwd(), pngFile)}  ${(outcome.bytes.length / 1024).toFixed(0)} KiB  ${pixels}  (${(elapsedMs / 1000).toFixed(1)}s)`)
+    log(
+      `  \u2713 ${path.relative(process.cwd(), pngFile)}  ${(outcome.bytes.length / 1024).toFixed(0)} KiB  ${pixels}  (${(elapsedMs / 1000).toFixed(1)}s)`,
+    )
   }
 
   const total = COUNT - failures

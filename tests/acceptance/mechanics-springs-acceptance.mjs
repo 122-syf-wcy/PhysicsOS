@@ -16,55 +16,67 @@ const { page, check, shot, dismissOnboarding, finish } = await openAcceptance(im
 const lab = () => page.locator('[data-physicsos-surface="lab"]')
 
 /** Inspector derived rows, keyed by their physical name. */
-const derivedRows = () => page.evaluate(() => {
-  const rows = {}
-  for (const row of document.querySelectorAll('[data-physicsos-surface="lab"] [class*="derived"]')) {
-    const nameEl = row.querySelector('[class*="derivedName"]')
-    /* derivedName = "{label} <MathText/>" — the symbol is rendered twice by
+const derivedRows = () =>
+  page.evaluate(() => {
+    const rows = {}
+    for (const row of document.querySelectorAll(
+      '[data-physicsos-surface="lab"] [class*="derived"]',
+    )) {
+      const nameEl = row.querySelector('[class*="derivedName"]')
+      /* derivedName = "{label} <MathText/>" — the symbol is rendered twice by
        KaTeX (mathml + html), so key on the leading text node only. */
-    const name = nameEl?.firstChild?.textContent?.trim()
-    const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
-    if (name !== undefined && name !== '' && value !== undefined) rows[name] = value
-  }
-  return rows
-})
+      const name = nameEl?.firstChild?.textContent?.trim()
+      const value = row.querySelector('[class*="derivedValue"]')?.textContent?.trim()
+      if (name !== undefined && name !== '' && value !== undefined) rows[name] = value
+    }
+    return rows
+  })
 
-const geometry = () => page.evaluate(() => {
-  const cover = document.querySelector('[data-physicsos-surface="lab"]')
-  const canvas = cover?.querySelector('svg[role="img"]')
-  return {
-    domain: cover?.getAttribute('data-physicsos-domain'),
-    revision: cover?.getAttribute('data-scene-revision'),
-    status: cover?.getAttribute('data-verification-status'),
-    springCoils: canvas?.querySelectorAll('[data-testid="spring-coil"]').length ?? 0,
-    pendulumRigs: canvas?.querySelectorAll('[data-testid="pendulum-rig"]').length ?? 0,
-    clamps: canvas?.querySelectorAll('[data-testid="apparatus-support-clamp"]').length ?? 0,
-    scales: canvas?.querySelectorAll('[data-testid="apparatus-spring-scale"]').length ?? 0,
-    protractors: canvas?.querySelectorAll('[data-testid="apparatus-protractor"]').length ?? 0,
-    rulers: canvas?.querySelectorAll('[data-testid="apparatus-ruler-vertical"]').length ?? 0,
-    rails: canvas?.querySelectorAll('[data-testid="apparatus-track-rail"]').length ?? 0,
-    weightHooks: canvas?.querySelectorAll('[data-testid="sprite-weight-hook"]').length ?? 0,
-    cartSprites: canvas?.querySelectorAll('[data-testid="sprite-cart"]').length ?? 0,
-    highlighted: canvas?.querySelectorAll('[class*="highlightGroup"]').length ?? 0,
-    vectorLabels: [...(canvas?.querySelectorAll('text') ?? [])]
-      .map((node) => node.textContent?.trim())
-      .filter((text) => text !== undefined && text.length > 0 && text.length <= 12),
-    paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter((node) => {
-      const stroke = getComputedStyle(node).stroke
-      return stroke !== 'none' && stroke !== ''
-    }).length,
-  }
-})
+const geometry = () =>
+  page.evaluate(() => {
+    const cover = document.querySelector('[data-physicsos-surface="lab"]')
+    const canvas = cover?.querySelector('svg[role="img"]')
+    return {
+      domain: cover?.getAttribute('data-physicsos-domain'),
+      revision: cover?.getAttribute('data-scene-revision'),
+      status: cover?.getAttribute('data-verification-status'),
+      springCoils: canvas?.querySelectorAll('[data-testid="spring-coil"]').length ?? 0,
+      pendulumRigs: canvas?.querySelectorAll('[data-testid="pendulum-rig"]').length ?? 0,
+      clamps: canvas?.querySelectorAll('[data-testid="apparatus-support-clamp"]').length ?? 0,
+      scales: canvas?.querySelectorAll('[data-testid="apparatus-spring-scale"]').length ?? 0,
+      protractors: canvas?.querySelectorAll('[data-testid="apparatus-protractor"]').length ?? 0,
+      rulers: canvas?.querySelectorAll('[data-testid="apparatus-ruler-vertical"]').length ?? 0,
+      rails: canvas?.querySelectorAll('[data-testid="apparatus-track-rail"]').length ?? 0,
+      weightHooks: canvas?.querySelectorAll('[data-testid="sprite-weight-hook"]').length ?? 0,
+      cartSprites: canvas?.querySelectorAll('[data-testid="sprite-cart"]').length ?? 0,
+      highlighted: canvas?.querySelectorAll('[class*="highlightGroup"]').length ?? 0,
+      vectorLabels: [...(canvas?.querySelectorAll('text') ?? [])]
+        .map((node) => node.textContent?.trim())
+        .filter((text) => text !== undefined && text.length > 0 && text.length <= 12),
+      paintedStrokes: [...(canvas?.querySelectorAll('path,line,circle,rect') ?? [])].filter(
+        (node) => {
+          const stroke = getComputedStyle(node).stroke
+          return stroke !== 'none' && stroke !== ''
+        },
+      ).length,
+    }
+  })
 
 const clockText = () =>
-  lab().getByText(/^\d+\.\d\d s$/).first().innerText().catch(() => '')
+  lab()
+    .getByText(/^\d+\.\d\d s$/)
+    .first()
+    .innerText()
+    .catch(() => '')
 
 await page.goto(`${BASE}/`, { waitUntil: 'networkidle', timeout: 60_000 })
 await dismissOnboarding()
 
 /** Create an experiment through the shared picker (the Lab's empty state). */
 const pickTemplate = async (namePattern) => {
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 15_000 })
   await page.locator('[class*="grid"] button', { hasText: namePattern }).first().click()
 }
 
@@ -77,12 +89,16 @@ const openPicker = async () => {
     await page.getByRole('button', { name: '新建', exact: true }).click()
     await page.getByRole('menuitem', { name: '新建物理实验' }).click()
   }
-  await page.locator('[data-physicsos-state="picker"]').waitFor({ state: 'visible', timeout: 15_000 })
+  await page
+    .locator('[data-physicsos-state="picker"]')
+    .waitFor({ state: 'visible', timeout: 15_000 })
 }
 
 const enterLab = async () => {
   await lab().waitFor({ state: 'visible', timeout: 20_000 })
-  await page.locator('[data-physicsos-domain="mechanics"]').waitFor({ state: 'visible', timeout: 20_000 })
+  await page
+    .locator('[data-physicsos-domain="mechanics"]')
+    .waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForTimeout(600)
   /* The Inspector is already open on desktop — the tabs just need selecting.
      Derived rows live on 读数; editable fields live on 属性 (the default). */
@@ -110,8 +126,16 @@ await enterLab()
   check('support clamp sprite at the anchor', g.clamps === 1, `${g.clamps}`)
   check('extension ruler sprite beside the spring', g.rulers === 1, `${g.rulers}`)
   check('hooked weight sprite hangs from the coil', g.weightHooks === 1, `${g.weightHooks}`)
-  check('hanging rig has no phantom normal arrow', !g.vectorLabels.includes('N'), g.vectorLabels.join(','))
-  check('gravity and spring arrows labelled', g.vectorLabels.includes('mg') && g.vectorLabels.includes('F弹'), g.vectorLabels.join(','))
+  check(
+    'hanging rig has no phantom normal arrow',
+    !g.vectorLabels.includes('N'),
+    g.vectorLabels.join(','),
+  )
+  check(
+    'gravity and spring arrows labelled',
+    g.vectorLabels.includes('mg') && g.vectorLabels.includes('F弹'),
+    g.vectorLabels.join(','),
+  )
   await showReadings()
   const rows = await derivedRows()
   check('伸长量 Δx = 0.2 m', rows['伸长量']?.includes('0.2'), rows['伸长量'])
@@ -133,8 +157,16 @@ await enterLab()
   const rowsAfter = await derivedRows()
   /* Statics edits dispatch two commands: the parameter, then the re-seat onto
      the new equilibrium — so the revision climbs by two, not one. */
-  check('k edit bumps the scene revision', Number(after.revision) > Number(before), `${before} → ${after.revision}`)
-  check('Δx halves when k doubles', rowsAfter['伸长量']?.includes('0.1'), `${rows['伸长量']} → ${rowsAfter['伸长量']}`)
+  check(
+    'k edit bumps the scene revision',
+    Number(after.revision) > Number(before),
+    `${before} → ${after.revision}`,
+  )
+  check(
+    'Δx halves when k doubles',
+    rowsAfter['伸长量']?.includes('0.1'),
+    `${rows['伸长量']} → ${rowsAfter['伸长量']}`,
+  )
   check('still verified after the edit', after.status === 'verified', after.status)
 }
 
@@ -147,11 +179,19 @@ await enterLab()
   const g = await geometry()
   check('oscillator lab is verified', g.status === 'verified', g.status)
   check('spring coil is drawn', g.springCoils === 1, `${g.springCoils}`)
-  check('cart sprite rides the rail', g.cartSprites === 1 && g.rails === 1, `carts=${g.cartSprites} rails=${g.rails}`)
+  check(
+    'cart sprite rides the rail',
+    g.cartSprites === 1 && g.rails === 1,
+    `carts=${g.cartSprites} rails=${g.rails}`,
+  )
   await showReadings()
   const rows = await derivedRows()
   /* m = 1, k = 50 → T = 2π√(1/50) ≈ 0.886 s, A = 0.5 m */
-  check('周期 T ≈ 0.89 s', rows['周期']?.includes('0.88') || rows['周期']?.includes('0.89'), rows['周期'])
+  check(
+    '周期 T ≈ 0.89 s',
+    rows['周期']?.includes('0.88') || rows['周期']?.includes('0.89'),
+    rows['周期'],
+  )
   check('振幅 A = 0.5 m', rows['振幅']?.includes('0.5'), rows['振幅'])
   await shot('mechanics-spring-oscillator-1600x900')
 
@@ -194,9 +234,17 @@ await enterLab()
   const after = await geometry()
   await showReadings()
   const rowsAfter = await derivedRows()
-  check('L edit bumps the scene revision', Number(after.revision) === Number(before) + 1, `${before} → ${after.revision}`)
+  check(
+    'L edit bumps the scene revision',
+    Number(after.revision) === Number(before) + 1,
+    `${before} → ${after.revision}`,
+  )
   /* T scales with √L: 2.84 · √(4.5/2) ≈ 4.26 s */
-  check('T grows with √L', rowsAfter['周期']?.includes('4.2') || rowsAfter['周期']?.includes('4.3'), `${rows['周期']} → ${rowsAfter['周期']}`)
+  check(
+    'T grows with √L',
+    rowsAfter['周期']?.includes('4.2') || rowsAfter['周期']?.includes('4.3'),
+    `${rows['周期']} → ${rowsAfter['周期']}`,
+  )
   check('still verified after the edit', after.status === 'verified', after.status)
 }
 
@@ -222,10 +270,18 @@ await enterLab()
   })
   await page.waitForTimeout(400)
   const playing = await geometry()
-  check('applied and friction arrows labelled once pulled', playing.vectorLabels.includes('F') && playing.vectorLabels.includes('f'), playing.vectorLabels.join(','))
+  check(
+    'applied and friction arrows labelled once pulled',
+    playing.vectorLabels.includes('F') && playing.vectorLabels.includes('f'),
+    playing.vectorLabels.join(','),
+  )
   await showReadings()
   const rows = await derivedRows()
-  check('static phase: f = F', rows['摩擦力'] !== undefined && rows['摩擦力'] === rows['拉力'] && rows['摩擦力'] !== '0', `f=${rows['摩擦力']} F=${rows['拉力']}`)
+  check(
+    'static phase: f = F',
+    rows['摩擦力'] !== undefined && rows['摩擦力'] === rows['拉力'] && rows['摩擦力'] !== '0',
+    `f=${rows['摩擦力']} F=${rows['拉力']}`,
+  )
   /* m = 2, μs = 0.5 → N = 19.6 N, fmax = 9.8 N, slip at t = 4.9 s (ramp 2 N/s) */
   check('支持力 N = 19.6 N', rows['支持力']?.includes('19.6'), rows['支持力'])
   check('最大静摩擦 = 9.8 N', rows['最大静摩擦']?.includes('9.8'), rows['最大静摩擦'])
