@@ -1,0 +1,122 @@
+name: physicsos
+
+services:
+  app:
+    image: ${PHYSICSOS_APP_IMAGE:-physicsos-app:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24.7.0-bookworm-slim}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DSH_HOME: /var/lib/physicsos
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
+    secrets:
+      - database_url
+      - redis_url
+      - deepseek_api_key
+    volumes:
+      - app_data:/var/lib/physicsos
+    ports:
+      - '127.0.0.1:${PHYSICSOS_HTTP_PORT:-3080}:3080'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - scripts/healthcheck.mjs
+        - http://127.0.0.1:3080/readyz
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    stop_grace_period: 45s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: physicsos
+      POSTGRES_USER: physicsos
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+
+  redis:
+    image: redis:7.4-bookworm
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"
+    secrets:
+      - redis_password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          REDISCLI_AUTH="$$(cat /run/secrets/redis_password)"
+          redis-cli --no-auth-warning ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '5'
+
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:
+
+secrets:
+  postgres_password:
+    file: ${PHYSICSOS_POSTGRES_PASSWORD_FILE:-./.env.postgres_password}
+  redis_password:
+    file: ${PHYSICSOS_REDIS_PASSWORD_FILE:-./.env.redis_password}
+  database_url:
+    file: ${PHYSICSOS_DATABASE_URL_FILE:-./.env.database_url}
+  redis_url:
+    file: ${PHYSICSOS_REDIS_URL_FILE:-./.env.redis_url}
+  deepseek_api_key:
+    file: ${PHYSICSOS_DEEPSEEK_API_KEY_FILE:-./.env.deepseek_api_key}

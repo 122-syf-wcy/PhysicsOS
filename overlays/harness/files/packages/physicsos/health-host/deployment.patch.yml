@@ -1,0 +1,9 @@
+# Applied by the production image after the Web profile is composed.
+- id: webserver
+  config:
+    host: '0.0.0.0'
+    port: 3080
+
+- insert:
+    - id: health-host
+      name: '/app/overlays/harness/files/packages/physicsos/health-host/lib/index.js'
