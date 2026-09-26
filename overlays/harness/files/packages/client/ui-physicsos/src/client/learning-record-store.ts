@@ -12,6 +12,7 @@
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { MistakeType } from '@physicsos/question-core'
+import type { LearningApi } from './learning-api.ts'
 
 export interface StudentAttempt {
   readonly id: string
@@ -46,6 +47,7 @@ const STORAGE_KEY = 'physicsos.learning-record'
 const ATTEMPT_LIMIT = 200
 
 type RecordStorage = Pick<Storage, 'getItem' | 'setItem'>
+type LearningRecordSync = Pick<LearningApi, 'listAttempts' | 'putAttempt'>
 
 const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
   try {
@@ -54,14 +56,17 @@ const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
     return parsed
-      .filter((entry): entry is StudentAttempt =>
-        typeof entry === 'object' && entry !== null &&
-        typeof (entry as { questionId?: unknown }).questionId === 'string' &&
-        typeof (entry as { selfCheckId?: unknown }).selfCheckId === 'string' &&
-        typeof (entry as { correct?: unknown }).correct === 'boolean' &&
-        /* `knowledge` drives `for…of` in mastery aggregation — a row that
+      .filter(
+        (entry): entry is StudentAttempt =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as { questionId?: unknown }).questionId === 'string' &&
+          typeof (entry as { selfCheckId?: unknown }).selfCheckId === 'string' &&
+          typeof (entry as { correct?: unknown }).correct === 'boolean' &&
+          /* `knowledge` drives `for…of` in mastery aggregation — a row that
            lacks it is corrupt and is dropped here, not downstream. */
-        Array.isArray((entry as { knowledge?: unknown }).knowledge))
+          Array.isArray((entry as { knowledge?: unknown }).knowledge),
+      )
       .slice(0, ATTEMPT_LIMIT)
   } catch {
     return []
@@ -71,6 +76,8 @@ const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
 export interface LearningRecordController {
   store: SnapshotStore<LearningRecordState>
   record: (attempt: Omit<StudentAttempt, 'id' | 'at'>) => StudentAttempt
+  /** Migrate local attempts, upload unsynced rows, then merge server pages. */
+  sync: () => Promise<void>
 }
 
 let attemptSerial = 0
@@ -78,25 +85,71 @@ let attemptSerial = 0
 /** Create the learning-record store, optionally persisted. */
 export function createLearningRecordController(
   storage?: RecordStorage,
+  remote?: LearningRecordSync,
 ): LearningRecordController {
   const store = createSnapshotStore<LearningRecordState>({ attempts: readStored(storage) })
+  const persist = (attempts: readonly StudentAttempt[]): void => {
+    try {
+      storage?.setItem(STORAGE_KEY, JSON.stringify(attempts))
+    } catch {
+      /* Storage full or unavailable - the in-memory record still works. */
+    }
+  }
+  const merge = (groups: readonly (readonly StudentAttempt[])[]): StudentAttempt[] => {
+    const byId = new Map<string, StudentAttempt>()
+    for (const group of groups) {
+      for (const attempt of group) {
+        const current = byId.get(attempt.id)
+        if (current === undefined || current.at <= attempt.at) byId.set(attempt.id, attempt)
+      }
+    }
+    return [...byId.values()]
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id))
+      .slice(0, ATTEMPT_LIMIT)
+  }
+  let activeSync: Promise<void> | undefined
+  const sync = (): Promise<void> => {
+    if (remote === undefined) return Promise.resolve()
+    activeSync ??= (async () => {
+      for (const attempt of store.getSnapshot().attempts) {
+        await remote.putAttempt(attempt)
+      }
+      const remoteAttempts: StudentAttempt[] = []
+      const seenCursors = new Set<string>()
+      let cursor: string | undefined
+      for (let page = 0; page < 100; page += 1) {
+        const result = await remote.listAttempts(cursor === undefined ? {} : { cursor })
+        remoteAttempts.push(...result.items)
+        if (result.nextCursor === undefined) break
+        if (seenCursors.has(result.nextCursor)) throw new Error('learning sync repeated a cursor')
+        seenCursors.add(result.nextCursor)
+        cursor = result.nextCursor
+      }
+      const attempts = merge([remoteAttempts, store.getSnapshot().attempts])
+      store.set({ attempts })
+      persist(attempts)
+    })().finally(() => {
+      activeSync = undefined
+    })
+    return activeSync
+  }
   return {
     store,
     record: (input) => {
       const attempt: StudentAttempt = {
         ...input,
-        id: `attempt-${Date.now().toString(36)}-${(attemptSerial++).toString(36)}`,
+        id: `attempt-${Date.now().toString(36)}-${(attemptSerial++).toString(36)}-${globalThis.crypto.randomUUID()}`,
         at: new Date().toISOString(),
       }
       const attempts = [attempt, ...store.getSnapshot().attempts].slice(0, ATTEMPT_LIMIT)
       store.set({ attempts })
-      try {
-        storage?.setItem(STORAGE_KEY, JSON.stringify(attempts))
-      } catch {
-        /* Storage full or unavailable — the in-memory record still works. */
-      }
+      persist(attempts)
+      void remote?.putAttempt(attempt).catch(() => {
+        /* Local-first: the next explicit sync retries this row. */
+      })
       return attempt
     },
+    sync,
   }
 }
 
@@ -140,5 +193,4 @@ export const mistakeCountsOf = (
 export const recentMistakesOf = (
   attempts: readonly StudentAttempt[],
   limit = 20,
-): readonly StudentAttempt[] =>
-  attempts.filter(attempt => !attempt.correct).slice(0, limit)
+): readonly StudentAttempt[] => attempts.filter(attempt => !attempt.correct).slice(0, limit)
