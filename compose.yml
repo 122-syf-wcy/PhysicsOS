@@ -3,6 +3,21 @@ name: physicsos
 services:
   app:
     image: ${PHYSICSOS_APP_IMAGE:-physicsos-app:local}
+    # 反代域名必须同时出现在 `--trusted-host`：/api 的浏览器信任栅栏只认
+    # CLI 参数（外加同网段 IP 字面量），不读环境变量。Dockerfile 的 CMD 与这里
+    # 必须保持一致，只是多了一个 --trusted-host。
+    command:
+      - node
+      - scripts/docker-entrypoint.mjs
+      - node
+      - vendor/deepseek-harness/apps/cli/lib/bin.js
+      - web
+      - --patch
+      - /app/overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml
+      - --port
+      - '3080'
+      - --trusted-host
+      - ${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}
     build:
       context: .
       dockerfile: Dockerfile
@@ -23,6 +38,12 @@ services:
       PHYSICSOS_SHARED_STATE_BACKEND: redis
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL_FILE: /run/secrets/redis_url
+      # 模型链路：base 组合的 agent-default-model 是 deepseek-official，
+      # 适配器默认打 https://api.deepseek.com，这里把它指向实际可用的
+      # OpenAI 兼容网关。只允许通过本变量覆盖端点，key 仍然只经 secret 文件注入。
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.fengshao1227.com/v1}
+      # 该 key 必须对上面的 DEEPSEEK_BASE_URL 有效；部署脚本只检查文件非空，
+      # 所以换网关时必须同步换这个 secret，否则真实回合会以 AUTH 401 失败。
       DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
       # auth-host 只从 PHYSICSOS_ADMIN_PASSWORD 种 SUPER_ADMIN；自注册只能得到
       # STUDENT。entrypoint 把 *_FILE materialize 成同名明文变量，文件缺失或为空
@@ -33,10 +54,10 @@ services:
       # TLS 反代后的真实客户端 IP / Secure cookie 判断。非 secret：Compose 里
       # 显式给出默认空串，未配置时一律不信任转发头。
       PHYSICOS_TRUSTED_PROXIES: ${PHYSICOS_TRUSTED_PROXIES:-}
-      # Comma-separated public authorities (host[:port]) this deployment serves.
-      # Without it the connection layer treats the domain as untrusted and 403s
-      # every privileged method (settings.*, host.*, credentials.*).
-      PHYSICOS_TRUSTED_HOSTS: ${PHYSICOS_TRUSTED_HOSTS:-}
+      # Public authority (host[:port]) this deployment serves; the same value is
+      # passed to the CLI as --trusted-host above. Without it the connection
+      # layer treats the domain as untrusted and 403s every /api request.
+      PHYSICOS_TRUSTED_HOSTS: ${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}
       # 公测控量开关：open(默认) / invite(必须邀请码) / closed(关闭注册)。
       # 取值非法时 auth-host 启动即失败，不会静默退回开放注册。
       PHYSICSOS_REGISTRATION_MODE: ${PHYSICSOS_REGISTRATION_MODE:-open}
@@ -135,6 +156,16 @@ volumes:
   postgres_data:
   redis_data:
 
+# File-based secrets are bind-mounted as-is: Docker Compose accepts
+# `uid`/`gid`/`mode` on a service secret but ignores them for `file:` secrets
+# (it warns "secrets `uid`, `gid` and `mode` are not supported, they will be
+# ignored"), so those keys would document a guarantee that does not exist.
+# The invariant lives on the host files instead, enforced by
+# `scripts/deploy/secure-secrets.sh` on every deploy:
+#   root:<physicsos gid> 0440  — readable by the app user (uid/gid 999) and by
+#   root, unreadable by every other identity (e.g. `exec -u 1000`).
+# Never relax these files back to 0644/0444: a world-readable admin password or
+# model key is readable by any process in the container, not just the agent.
 secrets:
   postgres_password:
     file: ${PHYSICSOS_POSTGRES_PASSWORD_FILE:-./.env.postgres_password}

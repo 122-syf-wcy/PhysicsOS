@@ -155,6 +155,61 @@ Validate the composed configuration without starting containers:
 docker compose config --quiet
 ```
 
+### 3.3 模型链路（provider / base URL / key）
+
+生产组合的默认模型走 `llm-deepseek` 的 `deepseek-official` 路由：适配器把
+`DEEPSEEK_BASE_URL` 当端点、把 secret `deepseek_api_key` 展开成 `DEEPSEEK_API_KEY`
+当凭据，两者必须指向同一个供应商。
+
+| 项       | 生产取值                                   | 说明                                                                             |
+| -------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| base URL | `https://api.fengshao1227.com/v1`          | compose 透传 `DEEPSEEK_BASE_URL`；换网关只改这个变量与 secret                    |
+| key      | `.env.deepseek_api_key`（OpenAI 兼容 key） | 必须对该 base URL 有效；`deploy-server.sh` 只检查文件非空，不校验有效性          |
+| 模型名   | `deepseek-v4.1-flash`                      | base 组合默认 `deepseek-v4-flash`，多数中转网关没有，会回 `model_not_found`      |
+| 输出上限 | `maxTokens: 32768`                         | 推理模型先花 reasoning token；上限太小会 `content:null` + `finish_reason:length` |
+
+模型名与输出上限写在 `$DSH_HOME/settings.yaml`（容器内
+`/var/lib/physicsos/settings.yaml`，缺失时回落到 base 组合默认值）：
+
+```yaml
+llm-deepseek:
+  maxTokens: 32768
+  models:
+    - id: deepseek-v4.1-flash
+      name: DeepSeek V4.1 Flash
+      contextWindow: 1000000
+      maxTokens: 32768
+
+agent-default-model:
+  provider: deepseek-official
+  model: deepseek-v4.1-flash
+  reasoningEffort: high
+```
+
+三个容易踩的坑：
+
+1. **secret 文件权限**：compose secret 以宿主机文件权限挂进容器，而 app 以非 root
+   用户运行。`0600 root:root` 会让容器起不来并打印
+   `secret file for DEEPSEEK_API_KEY_FILE is unreadable (EACCES)`；保持 `0644`
+   （与本目录其他 `.env.*` 一致）。
+2. **`/api` 的域名信任栅栏只认 CLI 参数**：`PHYSICOS_TRUSTED_HOSTS` 本身不会被
+   harness 读取，它必须同时出现在 compose 的
+   `--trusted-host ${PHYSICOS_TRUSTED_HOSTS}` 里。漏传时公网的
+   `/api/host.describe` 返回 `403 forbidden`，浏览器客户端卡在“正在加载工作区 /
+   Loading plugins”，而 loopback 仍然正常。
+3. **辅助请求也走模型**：会话标题、出卷专区的解题调用共用同一端点与 key，
+   `session-title-first-prompt-llm` 也会消耗额度，因此一次真实回合的按账号计数
+   通常 +2。
+
+最小验收（服务器上执行；key 只从 secret 读，不回显）：
+
+```sh
+cd /opt/physicsos && K=$(cat .env.deepseek_api_key)
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.fengshao1227.com/v1/models \
+  -H "Authorization: Bearer $K"
+docker compose exec -T app cat /var/lib/physicsos/settings.yaml
+```
+
 ## 4. Continuous integration
 
 `.github/workflows/ci.yml` runs on `main` pushes, pull requests, and manual

@@ -1,0 +1,334 @@
+# PhysicsOS 多用户隔离审计（Stage 0）
+
+审计日期：2026-09-26  
+目标：`https://physics.dongsiwei.com`  
+服务器：`root@38.76.190.3`（通过 SSH key 登录）  
+部署提交：`cb13250dbbf0ed77385420c7f2e49bb27476a39e`  
+App 镜像：`sha256:b191b6308fea7442c2f625573fe14bc70002eecee7876cccd467b857522c9b54`
+
+本报告只做验证，不修改产品代码、不提交、不执行 overlay capture。新增的验收脚本是
+[`tests/acceptance/isolation.mjs`](../../tests/acceptance/isolation.mjs)。
+
+## 结论先说
+
+**已通过**
+
+- 学习作答和学习场景按账号隔离。学生 A 读取不到学生 B 写入的 attempt/scene。
+- 班级列表按成员关系过滤；A 直接读取 B 的班级成员或 dashboard 得到 `403`。
+- 会话列表、会话导出和会话 prompt 的所有权检查在 HTTP 语义上没有泄漏内容；
+  但成功拒绝使用 RPC envelope，HTTP 状态是 `200`，不是字面意义的 `404/403`。
+
+**未通过（阻断公测）**
+
+1. **P0：Agent 文件沙箱不限制读取。** 文件系统 sandbox 明确只在写操作上做
+   fence，三种模式都允许读；bash sandbox 同样把 `/` 作为只读可见根挂载。容器内
+   应用 UID 为 `999`，`/run/secrets/admin_password` 是 `0644 root:root`，因此
+   agent 只要能调用 read/bash，就能读取生产管理员密码。实际模型调用因 DeepSeek
+   API key 返回 `401` 而没有完成，但这是“模型链路不可用”，不是隔离边界存在。
+2. **P0：部署中的学生会话没有落到账号私有工作区。** 通过容器 loopback 创建的
+   学生会话返回 `agentPreset=standard`，`cwd=/etc`；会话文件实际落在
+   `/var/lib/physicsos/sessions/--etc--/`，而不是账号目录。源码本来要求非管理员
+   `session.create` 被改写成账号 workspace，并强制 `physics-student`，但部署运行
+   时没有发生，说明当前发布物的会话边界没有真正生效。
+3. **P0：公网 `/api` 整面被信任边界拒绝。** `Host: physics.dongsiwei.com` 访问
+   `/api/session.list` 返回 `403 forbidden`；`Host: 127.0.0.1:3080` 才能进入
+   `401 unauthenticated` 的 host 处理层。`PHYSICOS_TRUSTED_HOSTS` 没有以
+   `--trusted-host` 传给 `dsh web`，因此 Web/桌面端的 agent 通道在正式域名下不可用。
+   这不直接等于数据泄漏，但它会让真实浏览器路径无法完成 agent 隔离验收，并且是
+   公测时的功能阻断。
+
+## 1. 双账号学习数据隔离
+
+运行命令：
+
+```sh
+PHYSICSOS_AUDIT_ADMIN_PASSWORD='<env-injected>' \
+  node tests/acceptance/isolation.mjs
+```
+
+外部域名运行时，学习/班级校验通过，`/api/session.create` 被 `403` 阻断：
+
+```text
+[PASS] learning attempts are account-scoped
+[PASS] learning scenes are account-scoped
+[PASS] class list is membership-scoped
+[PASS] foreign class detail is denied: members=403 dashboard=403
+[BLOCKED] session setup reaches the host: public /api/session.create returned 403
+SUMMARY pass=8 fail=0 blocked=1
+```
+
+通过 SSH 本地端口转发走同一容器的 loopback 后，完整脚本结果：
+
+```text
+[PASS] learning attempts are account-scoped
+[PASS] learning scenes are account-scoped
+[PASS] class list is membership-scoped
+[PASS] foreign class detail is denied: members=403 dashboard=403
+[PASS] session setup succeeds
+[PASS] session list is account-scoped
+[PASS] foreign session export is denied
+[PASS] foreign session prompt is denied
+SUMMARY pass=12 fail=0 blocked=0
+```
+
+关键原始响应：
+
+```text
+GET /physicsos/learning/attempts?limit=100  (A) -> 200
+{"items":[]}
+
+GET /physicsos/learning/attempts?limit=100  (B) -> 200
+{"items":[{"id":"isolation-attempt-muies4k1_616ab1", ...}]}
+
+GET /physicsos/class/classes?limit=100  (A) -> 200
+{"items":[]}
+
+GET /physicsos/class/classes?limit=100  (B) -> 200
+{"items":[{"id":"cls_oyLA2sw_a2IC", ...}]}
+
+GET /physicsos/class/classes/cls_oyLA2sw_a2IC/members?limit=100  (A) -> 403
+{"error":{"code":"FORBIDDEN","message":"只有班主任或校管理员可以管理该班级"}}
+```
+
+会话所有权原始响应（A 访问 B 的 session）：
+
+```text
+GET /api/session.export?sessionId=session-758d4b59-cc51-47fe-9146-c62ec6f7f45f (A) -> 200
+{"type":"server-response","rpcId":"session-export","result":{"ok":false,"error":{"code":"session-not-found","message":"session \"session-758d4b59-cc51-47fe-9146-c62ec6f7f45f\" not found"}}}
+
+POST /api/session.prompt (A, foreign sessionId) -> 200
+{"type":"server-response","rpcId":"isolation-a-prompt-muies4k1_616ab1","result":{"ok":false,"error":{"code":"session-not-found","message":"session \"session-758d4b59-cc51-47fe-9146-c62ec6f7f45f\" not found"}}}
+```
+
+这说明**没有返回对方内容**，但不满足字面上的“HTTP 必须 404/403”：这里使用的是
+成功 HTTP 响应加 RPC error envelope。若 Stage 2 的验收标准要求 HTTP 404/403，
+这个差异必须单独修。
+
+## 2. Agent 沙箱越权
+
+### 2.1 真实 agent 回合
+
+先用学生账号创建一个会话，连接真实 `/api/events.mux` WebSocket，再发送要求执行
+`pwd; ls -la ..; if [ -r /run/secrets/admin_password ]; then wc -c < ...; else echo DENIED; fi`
+的 prompt。模型请求没有到达工具执行阶段，服务端返回：
+
+```text
+EVENT assistant/chunk {"chunk":{"type":"finish","reason":{"kind":"error","failure":{"message":"Authentication Fails, Your api key: ****e4b2 is invalid","code":"AUTH","status":401}}}}
+EVENT turn/end {"reason":{"kind":"error","error":{"message":"Authentication Fails, Your api key: ****e4b2 is invalid","code":"AUTH","status":401}}}
+```
+
+因此**无法诚实判定“模型收到文件内容后的自述行为”**。但越权是否可能，不能依赖模型
+自觉拒绝；服务器侧边界已经足够给出结论。
+
+### 2.2 服务器侧证据
+
+在 app 容器内检查：
+
+```sh
+ssh -i ~/.ssh/id_ed25519 root@38.76.190.3 \
+  'cd /opt/physicsos && docker compose exec -T app sh -c '\''id -u; stat -c "%a %U:%G %n" /run/secrets/admin_password; if [ -r /run/secrets/admin_password ]; then printf "secret_readable=yes bytes="; wc -c < /run/secrets/admin_password; else echo secret_readable=no; fi'\'''
+```
+
+原始结果：
+
+```text
+999
+644 root:root /run/secrets/admin_password
+secret_readable=yes bytes=10
+```
+
+源码也明确写出同一结论：
+
+```text
+vendor/deepseek-harness/packages/fs/fs-sandbox/src/index.ts:7
+Reads pass through untouched: every mode permits reading.
+
+vendor/deepseek-harness/packages/fs/fs-sandbox/README.md:5
+Reads always pass through — every mode permits reading.
+
+vendor/deepseek-harness/packages/sandbox/sandbox-local/src/profiles.ts:17
+const args = ['--ro-bind', '/', '/', ...]
+
+vendor/deepseek-harness/packages/sandbox/sandbox-local/src/profiles.ts:30-35
+landlockGrantArgs({ readOnly: ['/'], readWrite })
+```
+
+所以结论是：**确认存在 P0 漏洞风险**。当前缺少的是一条有效的模型 key；一旦模型
+能发起 read/bash 工具调用，读取 `/run/secrets/admin_password` 不会被文件 sandbox
+拒绝。最小复现路径就是上面的容器内 `secret_readable=yes`，而不是依赖模型回答。
+
+## 3. 会话磁盘布局取证
+
+服务器命令：
+
+```sh
+ssh -i ~/.ssh/id_ed25519 root@38.76.190.3 \
+  'cd /opt/physicsos && docker compose exec -T app sh -c '\''find /var/lib/physicsos/sessions -maxdepth 3 -printf "%M %u:%g %s %p\n" | sort'\'''
+```
+
+原始结果：
+
+```text
+drwx------ physicsos:physicsos 4096 /var/lib/physicsos/sessions
+drwx------ physicsos:physicsos 4096 /var/lib/physicsos/sessions/--etc--
+drwx------ physicsos:physicsos 4096 /var/lib/physicsos/sessions/--etc--/session-065fe385-960f-4c59-a0cd-5a44e28ab6bf
+-rw------- physicsos:physicsos 13324 /var/lib/physicsos/sessions/--etc--/session-065fe385-960f-4c59-a0cd-5a44e28ab6bf/session.jsonl.zstd
+drwx------ physicsos:physicsos 4096 /var/lib/physicsos/sessions/--etc--/session-758d4b59-cc51-47fe-9146-c62ec6f7f45f
+-rw------- physicsos:physicsos 297 /var/lib/physicsos/sessions/--etc--/session-758d4b59-cc51-47fe-9146-c62ec6f7f45f/session.jsonl.zstd
+drwx------ physicsos:physicsos 4096 /var/lib/physicsos/sessions/--etc--/session-2f2fdf8e-acab-47d1-9240-7d5bab4af0b6
+-rw------- physicsos:physicsos 298 /var/lib/physicsos/sessions/--etc--/session-2f2fdf8e-acab-47d1-9240-7d5bab4af0b6/session.jsonl.zstd
+```
+
+目前是**按 cwd 分桶的单一 root**（这里是 `--etc--`），不是按账号分层。不同账号的
+session 文件位于同一目录树，并以同一个 `physicsos` UID 运行：
+
+```sh
+ssh -i ~/.ssh/id_ed25519 root@38.76.190.3 \
+  'cd /opt/physicsos && docker compose exec -T app sh -c '\''for f in /var/lib/physicsos/sessions/--etc--/session-*/session.jsonl.zstd; do printf "%s " "$f"; [ -r "$f" ] && printf "READABLE " && wc -c < "$f"; done'\'''
+```
+
+```text
+/var/lib/physicsos/sessions/--etc--/session-065fe385-960f-4c59-a0cd-5a44e28ab6bf/session.jsonl.zstd READABLE 13324
+/var/lib/physicsos/sessions/--etc--/session-2f2fdf8e-acab-47d1-9240-7d5bab4af0b6/session.jsonl.zstd READABLE 298
+/var/lib/physicsos/sessions/--etc--/session-758d4b59-cc51-47fe-9146-c62ec6f7f45f/session.jsonl.zstd READABLE 297
+```
+
+这提供了第二条 P0 泄漏路径：即使 HTTP API 正确拒绝 A 读取 B 的 session，同 UID 的
+agent 仍可在文件系统层读取 B 的 session 日志。Stage 2 必须把会话持久化按账号分区，
+并且让 agent 的读权限限制在自身分区。
+
+## 4. 公网 `/api` 信任边界
+
+服务器命令：
+
+```sh
+ssh -i ~/.ssh/id_ed25519 root@38.76.190.3 \
+  'for host in physics.dongsiwei.com 127.0.0.1:3080; do
+     curl -sS -o /tmp/fence-body -w "$host -> %{http_code} " \
+       -H "host: $host" -H "content-type: application/json" \
+       -X POST http://127.0.0.1:3080/api/session.list \
+       --data "{\"type\":\"client-request\",\"rpcId\":\"fence\",\"method\":\"session.list\",\"payload\":{}}";
+     head -c 80 /tmp/fence-body; echo;
+   done'
+```
+
+原始结果：
+
+```text
+physics.dongsiwei.com -> 403 forbidden
+127.0.0.1:3080 -> 401 {"error":"unauthenticated"}
+```
+
+`PHYSICOS_TRUSTED_HOSTS=physics.dongsiwei.com` 已在 Compose 环境中，但 Dockerfile 的
+`dsh web` 启动命令没有对应的 `--trusted-host` 参数；`dsh web` 的启动 provider 只从
+CLI 参数取 `trustedHost`。因此域名请求在信任 fence 处被拒绝，公网浏览器无法使用
+agent API。最小复现就是上面的两个 Host 请求。
+
+## 5. 额外发现
+
+- 服务器上的 secret 文件模式均为 `0644 root:root`：
+  `.env.admin_password`、`.env.database_url`、`.env.deepseek_api_key`、
+  `.env.image_api_key`、`.env.redis_url`。内容未读取，只记录了权限。
+- 真实 agent 回合暴露的 DeepSeek key 被服务端标记为 `AUTH 401`。这说明当前生产
+  实例没有可用的模型调用链路；即使修复沙箱，agent 功能仍需要在生产密钥修好后重测。
+- 公开的 `/api/session.export` 和 `/api/session.prompt` 在无权时使用 `200 + RPC
+error`，不是资源级的 `404/403`。如果客户端或安全验收依赖 HTTP 状态，需要统一语义。
+
+## 6. 结论与 Stage 2 的最小验收条件
+
+Stage 2 修复后，至少应满足：
+
+1. 域名 `https://physics.dongsiwei.com` 的 `/api` 可被合法浏览器访问，未登录仍为
+   `401`，恶意 Host/Origin 仍被拒绝。
+2. 非管理员 `session.create` 不能携带或保留调用方提供的 `cwd`，返回的 preset
+   必须是账号允许的 preset，session 文件必须落在账号私有分区。
+3. fs/bash agent 的读取也不能越出账号分区，至少不能读取 `/run/secrets/*`、其他账号
+   的 session 目录和平台配置。
+4. 使用有效模型 key 重跑真实 agent prompt：读取 `/run/secrets/admin_password` 必须
+   被 sandbox 拒绝，且事件流里不能出现 secret 内容或可推断的长度/内容。
+5. 重新执行双账号脚本，确认 A 看不到 B 的 attempt、scene、class 和 session，且
+   `session.export`/`session.prompt` 的拒绝语义在客户端层可稳定识别。
+
+当前状态：**数据面 HTTP 隔离基本通过；agent 文件读取、会话工作区分区、公网 API
+信任边界三处未通过，不能把当前实例视为已满足多用户 agent 隔离。**
+
+## 7. 模型链路修复记录（2026-09-26）
+
+### 7.1 症状与根因
+
+症状：真实回合在事件流里返回 `AUTH 401`（`Authentication Fails, Your api key:
+****e4b2 is invalid`）。逐层排查后确认三个叠加问题：
+
+1. 生产 secret 里放的是 `PHYSICSOS_MODEL_API_KEY`（sha256 前缀 `0ee633…`），该 key
+   对 `https://api.deepseek.com` 与可用网关都返回 401；可用 key 是同机
+   `~/.dsh/.env` 里的另一个变量（值不记录）。
+2. base 组合的默认路由是 `deepseek-official` + `https://api.deepseek.com` +
+   `deepseek-v4-flash`，与实际可用的 OpenAI 兼容网关（`deepseek-v4.1-flash`）
+   不一致，即使 key 正确也会 `model_not_found`。
+3. 顺带发现：compose 只设置了 `PHYSICOS_TRUSTED_HOSTS` 环境变量，却从未把它传给
+   CLI 的 `--trusted-host`（该栅栏只认 CLI 参数），因此公网
+   `https://physics.dongsiwei.com/api/*` 全量 `403 forbidden`，浏览器客户端卡在
+   “正在加载工作区 / Loading plugins”。
+
+### 7.2 修复内容（不含 auth-host / session / 客户端代码）
+
+| 位置            | 改动                                                                                                                                                                                                                                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compose.yml`   | 新增 `DEEPSEEK_BASE_URL` 透传（默认 `https://api.fengshao1227.com/v1`）；app 增加 `command:`，把 `${PHYSICOS_TRUSTED_HOSTS}` 作为 `--trusted-host` 传给 CLI                                                                              |
+| 服务器 secret   | `/opt/physicsos/.env.deepseek_api_key` 换成对该端点有效的 key（`0644`，值不入库不入报告）                                                                                                                                                |
+| 运行时 settings | `/var/lib/physicsos/settings.yaml` 固定 `llm-deepseek.models`（`deepseek-v4.1-flash`, `maxTokens: 32768`）与 `agent-default-model`（`deepseek-official` / `deepseek-v4.1-flash` / `high`），详见 `docs/13-DEPLOYMENT-OPERATIONS.md` §3.3 |
+
+### 7.3 验证证据（命令与截断输出）
+
+直连网关（服务器上、key 从 secret 读，不回显）：
+
+```text
+GET  /v1/models                -> http=200, 列出 16 个模型，含 deepseek-v4.1-flash
+POST /v1/chat/completions      -> http=200, model=deepseek-ai/deepseek-v4.1-flash,
+                                  finish=stop, content='pong', reasoning_content=64 字符
+```
+
+容器内真实回合（admin / `PHYSICSOS-OPEN`，先 `session.create` + `session.selectModel`
+再 `session.prompt`，事件流取 `/api/events.mux`）：
+
+```text
+request/header   config={"provider":"deepseek-official","model":"deepseek-v4.1-flash",
+                         "reasoningEffort":"high","maxTokens":32768}
+assistant/chunk  {"type":"text-delta","index":0,"text":"pong"}
+assistant/message {"role":"assistant","content":[{"type":"text","text":"pong"}],
+                   "source":{"kind":"model","provider":"deepseek-official",
+                             "model":"deepseek-v4.1-flash"}}
+turn/end         {"reason":{"kind":"completed"}}
+sessionStats     llmMs=12596 ttftMs=12486 decodeTokens=4
+```
+
+按账号配额计数（新注册学生 `quota_probe_muih6lk5`，STUDENT；SUPER_ADMIN 按设计豁免）：
+
+```text
+GET physicsos:limiter:model:877ce432… 回合前 -> (nil)   TTL -2
+GET physicsos:limiter:model:877ce432… 回合后 -> 2       TTL 545
+回合本身: turn/end {"kind":"completed"}，assistant text "ok"
+```
+
+公网 `/api` 信任边界（修复前 / 后）：
+
+```text
+POST https://physics.dongsiwei.com/api/host.describe
+  修复前 -> 403 forbidden
+  修复后 -> 401 {"error":"unauthenticated"}
+```
+
+### 7.4 结论与残留
+
+**模型链路已通**：`deepseek-v4.1-flash` 在部署实例上返回真实内容（`pong` / `ok`），
+不再是 `AUTH 401`；按账号模型计数确实增长（0 → 2，含会话标题辅助请求）。
+
+残留与注意点：
+
+- `SUPER_ADMIN` 不消耗按账号配额（事故处理豁免），验证计数必须用普通账号。
+- `web_search` 工具仍用 `DEEPSEEK_API_KEY` 指向 DeepSeek 官方搜索端点，在第三方
+  网关下不可用；本次未纳入修复。
+- 网关自带敏感词过滤，命中时返回 `500 / new_api_error`（测试中英文短句可复现），
+  真实教学提示词可能被拒，需要在上线前用真实题库采样验证。
+- 本次 `compose.yml` 改动已同步到服务器并生效；因本机当时无法连通 github.com，
+  尚未推送到远端 `main`（服务器工作区与该文件因此处于“本地已改”状态）。
