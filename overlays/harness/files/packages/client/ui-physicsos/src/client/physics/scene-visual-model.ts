@@ -98,6 +98,10 @@ export type ObservableKey =
   // acoustics
   | 'wavefronts'
   | 'path'
+  // modern physics
+  | 'photonEnergy'
+  | 'photocurrent'
+  | 'stoppingPotential'
   // fluid statics
   | 'displaced'
   // pressure rigs (fluid domain): the primary reading and the comparison
@@ -468,12 +472,7 @@ export interface CompositeRegionVisual {
 
 /** Kind of schematic symbol to draw; mirrors the scene's DC component types. */
 export type CircuitSymbolKind =
-  | 'resistor'
-  | 'voltage_source'
-  | 'switch'
-  | 'ammeter'
-  | 'voltmeter'
-  | 'variable_resistor'
+  'resistor' | 'voltage_source' | 'switch' | 'ammeter' | 'voltmeter' | 'variable_resistor'
 
 /**
  * One schematic symbol on the abstract circuit grid.
@@ -514,7 +513,7 @@ export interface CircuitComponentVisual {
   /** Variable resistor only: slider position 0..1 at the current frame. */
   sliderPosition?: number
   /** Dissipated power normalized 0..1 across the circuit's loads; the bridge
-     * emits it only on components drawn as lamps, which light by Joule heat. */
+   * emits it only on components drawn as lamps, which light by Joule heat. */
   glow?: number
 }
 
@@ -976,7 +975,7 @@ export interface MotorRotorVisual {
   label?: string
 }
 
-/** One drawn field line of a coil rig: axial inside, looping back outside. */export interface CurrentFieldLineVisual {
+/** One drawn field line of a coil rig: axial inside, looping back outside. */ export interface CurrentFieldLineVisual {
   id: string
   /**
    * Points along the line, in scene coordinates, ordered ALONG THE FIELD. The
@@ -1305,7 +1304,8 @@ export interface ThermalHeaterVisual {
 /* -------------------------------------------------------------------- lever -- */
 
 /** The rigid beam of a class-1 lever, already rotated to the engine's tilt. */
-export interface LeverBeamVisual {  id: string
+export interface LeverBeamVisual {
+  id: string
   from: ScenePoint
   to: ScenePoint
   /** Rotation from horizontal, positive = CCW = left down (rad). */
@@ -1828,14 +1828,7 @@ export interface TimelineEvent {
   /** Scene time in seconds. */
   time: number
   label: string
-  kind:
-    | 'launch'
-    | 'apex'
-    | 'impact'
-    | 'enter'
-    | 'exit'
-    | 'plate-impact'
-    | 'generic'
+  kind: 'launch' | 'apex' | 'impact' | 'enter' | 'exit' | 'plate-impact' | 'generic'
 }
 
 /** Playback clock shared by the timeline and the canvas. */

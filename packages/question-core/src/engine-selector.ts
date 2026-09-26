@@ -10,6 +10,7 @@ import { OpticsEngine } from '@physicsos/engine-optics'
 import { CircuitEngine } from '@physicsos/engine-circuit'
 import { InductionEngine } from '@physicsos/engine-induction'
 import { WaveEngine } from '@physicsos/engine-wave'
+import { ModernPhysicsEngine } from '@physicsos/engine-modern'
 const electricEngine = new ElectricEngine()
 const electricRegionEngine = new ElectricRegionEngine()
 const compositeEngine = new CompositeEngine()
@@ -19,6 +20,7 @@ const opticsEngine = new OpticsEngine()
 const circuitEngine = new CircuitEngine()
 const inductionEngine = new InductionEngine()
 const waveEngine = new WaveEngine()
+const modernPhysicsEngine = new ModernPhysicsEngine()
 export interface EngineSelectionResult {
   engine: PhysicsEngine<PhysicsScene> | null
   support: ModelSupport | null
@@ -74,9 +76,21 @@ export function selectEngine(ir: PhysicsSemanticIR): EngineSelectionResult {
   }
   if (
     ir.domain === 'wave' &&
-    (ir.model === 'travelling_wave' || ir.model === 'wave_interference' || ir.model === 'standing_wave')
+    (ir.model === 'travelling_wave' ||
+      ir.model === 'wave_interference' ||
+      ir.model === 'standing_wave' ||
+      ir.model === 'longitudinal_wave' ||
+      ir.model === 'reflection_refraction' ||
+      ir.model === 'wave_diffraction' ||
+      ir.model === 'wave_doppler')
   ) {
     return { engine: waveEngine as unknown as PhysicsEngine<PhysicsScene>, support: null }
+  }
+  if (ir.domain === 'modern_physics' && ir.model === 'photoelectric_effect') {
+    return {
+      engine: modernPhysicsEngine as unknown as PhysicsEngine<PhysicsScene>,
+      support: null,
+    }
   }
   return {
     engine: null,

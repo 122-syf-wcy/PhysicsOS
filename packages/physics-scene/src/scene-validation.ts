@@ -87,6 +87,8 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     ...(scene.transformerBenches ?? []).map((entry) => entry.id),
     ...(scene.thermometerBenches ?? []).map((entry) => entry.id),
     ...(scene.noiseBenches ?? []).map((entry) => entry.id),
+    ...(scene.cyclotronBenches ?? []).map((entry) => entry.id),
+    ...(scene.modernPhysicsBenches ?? []).map((entry) => entry.id),
   ]
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
   checks.push(
@@ -196,21 +198,17 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     }
 
     checks.push(
-      check(
-        `body_position_finite:${body.id}`,
-        'numerical',
-        isFiniteVector(body.position.vector),
-        { message: `Body "${body.id}" position must be finite.`, targetId: body.id },
-      ),
+      check(`body_position_finite:${body.id}`, 'numerical', isFiniteVector(body.position.vector), {
+        message: `Body "${body.id}" position must be finite.`,
+        targetId: body.id,
+      }),
     )
 
     checks.push(
-      check(
-        `body_velocity_finite:${body.id}`,
-        'numerical',
-        isFiniteVector(body.velocity.vector),
-        { message: `Body "${body.id}" velocity must be finite.`, targetId: body.id },
-      ),
+      check(`body_velocity_finite:${body.id}`, 'numerical', isFiniteVector(body.velocity.vector), {
+        message: `Body "${body.id}" velocity must be finite.`,
+        targetId: body.id,
+      }),
     )
   }
 
@@ -436,10 +434,8 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       let dimensionsValid = hasExpectedDimension(element.position, 'length')
       let valuesValid = dimensionsValid && Number.isFinite(canonicalValue(element.position))
       if (element.apertureRadius !== undefined) {
-        dimensionsValid =
-          dimensionsValid && hasExpectedDimension(element.apertureRadius, 'length')
-        valuesValid =
-          valuesValid && dimensionsValid && canonicalValue(element.apertureRadius) > 0
+        dimensionsValid = dimensionsValid && hasExpectedDimension(element.apertureRadius, 'length')
+        valuesValid = valuesValid && dimensionsValid && canonicalValue(element.apertureRadius) > 0
       }
       if (element.type === 'thin_lens' || element.type === 'curved_mirror') {
         const focalDimensionValid = hasExpectedDimension(element.focalLength, 'length')
@@ -551,13 +547,15 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       bench.sample,
       ...(bench.comparisonSample === undefined ? [] : [bench.comparisonSample]),
     ]
-    const sampleDimensionsValid = samples.every((sample) =>
-      hasExpectedDimension(sample.mass, 'mass') &&
-      hasExpectedDimension(sample.solidSpecificHeat, 'specific_heat') &&
-      hasExpectedDimension(sample.liquidSpecificHeat, 'specific_heat') &&
-      hasExpectedDimension(sample.latentHeat, 'specific_latent_heat') &&
-      hasExpectedDimension(sample.meltingPoint, 'temperature') &&
-      hasExpectedDimension(sample.initialTemperature, 'temperature'))
+    const sampleDimensionsValid = samples.every(
+      (sample) =>
+        hasExpectedDimension(sample.mass, 'mass') &&
+        hasExpectedDimension(sample.solidSpecificHeat, 'specific_heat') &&
+        hasExpectedDimension(sample.liquidSpecificHeat, 'specific_heat') &&
+        hasExpectedDimension(sample.latentHeat, 'specific_latent_heat') &&
+        hasExpectedDimension(sample.meltingPoint, 'temperature') &&
+        hasExpectedDimension(sample.initialTemperature, 'temperature'),
+    )
     const dimensionsValid =
       sampleDimensionsValid &&
       hasExpectedDimension(bench.heaterPower, 'power') &&
@@ -620,10 +618,7 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     }
     const halfBeam = dimensionsValid ? canonicalValue(bench.beamLength) / 2 : 0
     const sides = bench.hangers.map((hanger) => hanger.side)
-    const classOne =
-      bench.hangers.length === 2 &&
-      sides.includes('left') &&
-      sides.includes('right')
+    const classOne = bench.hangers.length === 2 && sides.includes('left') && sides.includes('right')
     const armsOnBeam =
       dimensionsValid &&
       bench.hangers.every((hanger) => canonicalValue(hanger.armLength) <= halfBeam)
@@ -680,9 +675,12 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         (bench.externalForce === undefined || hasExpectedDimension(bench.externalForce, 'force'))
       subValues =
         (bench.barLength === undefined || positive(bench.barLength)) &&
-        (bench.barMasses === undefined || (positive(bench.barMasses[0]) && positive(bench.barMasses[1]))) &&
-        (bench.barVelocities === undefined || (finite(bench.barVelocities[0]) && finite(bench.barVelocities[1]))) &&
-        (bench.barPositions === undefined || (finite(bench.barPositions[0]) && finite(bench.barPositions[1]))) &&
+        (bench.barMasses === undefined ||
+          (positive(bench.barMasses[0]) && positive(bench.barMasses[1]))) &&
+        (bench.barVelocities === undefined ||
+          (finite(bench.barVelocities[0]) && finite(bench.barVelocities[1]))) &&
+        (bench.barPositions === undefined ||
+          (finite(bench.barPositions[0]) && finite(bench.barPositions[1]))) &&
         (bench.externalForce === undefined || canonicalValue(bench.externalForce) >= 0)
     } else {
       /* flux_change */
@@ -707,7 +705,11 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     /* B > 0 and R > 0 are always required: a zero field produces no EMF and a
        zero resistance is not a loop. The bar length / coil area must be > 0
        when present; velocity and flux rate may carry a sign (direction). */
-    const valuesValid = dimensionsValid && positive(bench.magneticFluxDensity) && positive(bench.resistance) && subValues
+    const valuesValid =
+      dimensionsValid &&
+      positive(bench.magneticFluxDensity) &&
+      positive(bench.resistance) &&
+      subValues
     checks.push(
       check(`induction_bench_values:${bench.id}`, 'constraint', valuesValid, {
         message: `Induction bench "${bench.id}" needs a positive magnetic flux density and resistance, and positive lengths/areas where applicable.`,
@@ -730,16 +732,14 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
     let subValues: boolean
     if (bench.type === 'standing') {
       subDimensions =
-        (bench.stringLength === undefined ||
-          hasExpectedDimension(bench.stringLength, 'length')) &&
+        (bench.stringLength === undefined || hasExpectedDimension(bench.stringLength, 'length')) &&
         (bench.waveSpeed === undefined || hasExpectedDimension(bench.waveSpeed, 'velocity'))
       /* The harmonic is a mode index, not a measurement: n must be a positive
          integer or L = nλ/2 describes no mode of a clamped string. */
       subValues =
         (bench.stringLength === undefined || positive(bench.stringLength)) &&
         (bench.waveSpeed === undefined || positive(bench.waveSpeed)) &&
-        (bench.harmonic === undefined ||
-          (Number.isInteger(bench.harmonic) && bench.harmonic >= 1))
+        (bench.harmonic === undefined || (Number.isInteger(bench.harmonic) && bench.harmonic >= 1))
     } else if (bench.type === 'interference') {
       subDimensions =
         (bench.wavelength === undefined || hasExpectedDimension(bench.wavelength, 'length')) &&
@@ -752,6 +752,48 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         (bench.sourceSeparation === undefined || positive(bench.sourceSeparation)) &&
         (bench.pathOne === undefined || positive(bench.pathOne)) &&
         (bench.pathTwo === undefined || positive(bench.pathTwo))
+    } else if (bench.type === 'longitudinal') {
+      subDimensions =
+        (bench.wavelength === undefined || hasExpectedDimension(bench.wavelength, 'length')) &&
+        (bench.mediumLength === undefined || hasExpectedDimension(bench.mediumLength, 'length'))
+      subValues =
+        (bench.wavelength === undefined || positive(bench.wavelength)) &&
+        (bench.mediumLength === undefined || positive(bench.mediumLength))
+    } else if (bench.type === 'reflection_refraction') {
+      subDimensions =
+        (bench.incidentSpeed === undefined ||
+          hasExpectedDimension(bench.incidentSpeed, 'velocity')) &&
+        (bench.transmittedWaveSpeed === undefined ||
+          hasExpectedDimension(bench.transmittedWaveSpeed, 'velocity')) &&
+        (bench.incidentAngle === undefined || hasExpectedDimension(bench.incidentAngle, 'angle'))
+      const incidentAngle =
+        bench.incidentAngle === undefined ? Number.NaN : canonicalValue(bench.incidentAngle)
+      subValues =
+        (bench.incidentSpeed === undefined || positive(bench.incidentSpeed)) &&
+        (bench.transmittedWaveSpeed === undefined || positive(bench.transmittedWaveSpeed)) &&
+        Number.isFinite(incidentAngle) &&
+        incidentAngle >= 0 &&
+        incidentAngle < Math.PI / 2
+    } else if (bench.type === 'diffraction') {
+      subDimensions =
+        (bench.wavelength === undefined || hasExpectedDimension(bench.wavelength, 'length')) &&
+        (bench.slitWidth === undefined || hasExpectedDimension(bench.slitWidth, 'length')) &&
+        (bench.screenDistance === undefined || hasExpectedDimension(bench.screenDistance, 'length'))
+      subValues =
+        (bench.wavelength === undefined || positive(bench.wavelength)) &&
+        (bench.slitWidth === undefined || positive(bench.slitWidth)) &&
+        (bench.screenDistance === undefined || positive(bench.screenDistance)) &&
+        (bench.diffractionOrder === undefined ||
+          (Number.isInteger(bench.diffractionOrder) && bench.diffractionOrder >= 1))
+    } else if (bench.type === 'doppler') {
+      subDimensions =
+        (bench.waveSpeed === undefined || hasExpectedDimension(bench.waveSpeed, 'velocity')) &&
+        (bench.sourceSpeed === undefined || hasExpectedDimension(bench.sourceSpeed, 'velocity')) &&
+        (bench.observerSpeed === undefined || hasExpectedDimension(bench.observerSpeed, 'velocity'))
+      subValues =
+        (bench.waveSpeed === undefined || positive(bench.waveSpeed)) &&
+        (bench.sourceSpeed === undefined || canonicalValue(bench.sourceSpeed) >= 0) &&
+        (bench.observerSpeed === undefined || canonicalValue(bench.observerSpeed) >= 0)
     } else {
       /* travelling */
       subDimensions =
@@ -780,6 +822,77 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
         message: `Wave bench "${bench.id}" needs a positive amplitude and frequency, positive lengths, and an integral harmonic n ≥ 1.`,
         targetId: bench.id,
       }),
+    )
+  }
+
+  for (const bench of scene.cyclotronBenches ?? []) {
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    const dimensionsValid =
+      hasExpectedDimension(bench.magneticFluxDensity, 'magnetic_flux_density') &&
+      hasExpectedDimension(bench.gapVoltage, 'electric_potential') &&
+      hasExpectedDimension(bench.gapWidth, 'length') &&
+      hasExpectedDimension(bench.deeRadius, 'length')
+    checks.push(
+      check(`cyclotron_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Cyclotron bench "${bench.id}" quantities must use magnetic flux density / potential / length dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(
+        `cyclotron_bench_values:${bench.id}`,
+        'constraint',
+        dimensionsValid &&
+          positive(bench.magneticFluxDensity) &&
+          positive(bench.gapVoltage) &&
+          positive(bench.gapWidth) &&
+          positive(bench.deeRadius) &&
+          (bench.magneticOrientation === 'into_page' ||
+            bench.magneticOrientation === 'out_of_page'),
+        {
+          message: `Cyclotron bench "${bench.id}" needs positive fields and geometry with B perpendicular to the plane.`,
+          targetId: bench.id,
+        },
+      ),
+    )
+  }
+
+  for (const bench of scene.modernPhysicsBenches ?? []) {
+    const positive = (quantity: Parameters<typeof canonicalValue>[0]): boolean => {
+      const value = canonicalValue(quantity)
+      return Number.isFinite(value) && value > 0
+    }
+    const dimensionsValid =
+      hasExpectedDimension(bench.workFunction, 'energy') &&
+      hasExpectedDimension(bench.photonWavelength, 'length') &&
+      hasExpectedDimension(bench.lightIntensity, 'intensity') &&
+      hasExpectedDimension(bench.cathodeArea, 'area')
+    checks.push(
+      check(`modern_physics_bench_dimensions:${bench.id}`, 'dimension', dimensionsValid, {
+        message: `Modern physics bench "${bench.id}" quantities must use energy / length / intensity / area dimensions.`,
+        targetId: bench.id,
+      }),
+    )
+    checks.push(
+      check(
+        `modern_physics_bench_values:${bench.id}`,
+        'constraint',
+        dimensionsValid &&
+          positive(bench.workFunction) &&
+          positive(bench.photonWavelength) &&
+          positive(bench.lightIntensity) &&
+          positive(bench.cathodeArea) &&
+          Number.isFinite(bench.quantumEfficiency) &&
+          bench.quantumEfficiency >= 0 &&
+          bench.quantumEfficiency <= 1,
+        {
+          message: `Modern physics bench "${bench.id}" needs positive values and 0 <= quantum efficiency <= 1.`,
+          targetId: bench.id,
+        },
+      ),
     )
   }
 
@@ -978,15 +1091,10 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
       }),
     )
     checks.push(
-      check(
-        `current_bench_values:${bench.id}`,
-        'constraint',
-        subDimensions && subValues,
-        {
-          message: `Current bench "${bench.id}" is missing a required ${bench.type} quantity, or carries a non-physical one (a zero current makes no field).`,
-          targetId: bench.id,
-        },
-      ),
+      check(`current_bench_values:${bench.id}`, 'constraint', subDimensions && subValues, {
+        message: `Current bench "${bench.id}" is missing a required ${bench.type} quantity, or carries a non-physical one (a zero current makes no field).`,
+        targetId: bench.id,
+      }),
     )
   }
 
@@ -1064,20 +1172,20 @@ export const validateScene = (scene: PhysicsScene): VerificationResult => {
           positive(bench.objectDistance) &&
           positive(bench.screenDistance)
         : (() => {
-          const index = (value?: Parameters<typeof canonicalValue>[0]) =>
-            value === undefined ? Number.NaN : canonicalValue(value)
-          const angle = index(bench.incidentAngle)
-          return (
-            bench.incidentIndex !== undefined &&
-            bench.refractedIndex !== undefined &&
-            bench.incidentAngle !== undefined &&
-            index(bench.incidentIndex) >= 1 &&
-            positive(bench.refractedIndex) &&
-            Number.isFinite(angle) &&
-            angle >= 0 &&
-            angle < Math.PI / 2
-          )
-        })()
+            const index = (value?: Parameters<typeof canonicalValue>[0]) =>
+              value === undefined ? Number.NaN : canonicalValue(value)
+            const angle = index(bench.incidentAngle)
+            return (
+              bench.incidentIndex !== undefined &&
+              bench.refractedIndex !== undefined &&
+              bench.incidentAngle !== undefined &&
+              index(bench.incidentIndex) >= 1 &&
+              positive(bench.refractedIndex) &&
+              Number.isFinite(angle) &&
+              angle >= 0 &&
+              angle < Math.PI / 2
+            )
+          })()
     checks.push(
       check(`light_bench_values:${bench.id}`, 'constraint', dimensionsValid && subValues, {
         message:

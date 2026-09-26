@@ -1,12 +1,6 @@
 import type { QuantityVector } from '@physicsos/physics-core'
 import type { Quantity } from '@physicsos/physics-units'
-import type {
-  IsoDateTime,
-  ObservableId,
-  QuestionId,
-  SceneId,
-  ComponentId,
-} from '@physicsos/shared'
+import type { IsoDateTime, ObservableId, QuestionId, SceneId, ComponentId } from '@physicsos/shared'
 import type { ActorRef } from '@physicsos/physics-core'
 import type { Vector3 } from '@physicsos/physics-math'
 
@@ -165,11 +159,7 @@ export interface PointChargeField extends FieldBase {
 }
 
 /** docs/03 §39 — full union, even though only magnetic is implemented this slice. */
-export type Field =
-  | UniformElectricField
-  | UniformMagneticField
-  | GravityField
-  | PointChargeField
+export type Field = UniformElectricField | UniformMagneticField | GravityField | PointChargeField
 
 /** docs/03 §43 — minimal shapes for this slice; full union per docs/03. */
 export type RegionShape =
@@ -245,12 +235,7 @@ export interface Force extends PhysicsObjectBase {
 }
 
 /** docs/03 §45 */
-export type BoundaryType =
-  | 'line'
-  | 'segment'
-  | 'circle'
-  | 'rectangle'
-  | 'polygon'
+export type BoundaryType = 'line' | 'segment' | 'circle' | 'rectangle' | 'polygon'
 
 /** docs/03 §46 */
 export interface Boundary extends PhysicsObjectBase {
@@ -268,14 +253,7 @@ export type BoundaryBehavior =
 
 /** docs/03 §48 */
 export type ConstraintType =
-  | 'fixed'
-  | 'distance'
-  | 'rope'
-  | 'hinge'
-  | 'surface'
-  | 'spring'
-  | 'track'
-  | 'custom'
+  'fixed' | 'distance' | 'rope' | 'hinge' | 'surface' | 'spring' | 'track' | 'custom'
 
 /** docs/03 §49 */
 export interface Constraint extends PhysicsObjectBase {
@@ -1007,7 +985,14 @@ export interface InductionBench extends PhysicsObjectBase {
  *   L = n·λ/2 fixes the wavelength, so f_n = n·v/(2L) and the node/antinode
  *   positions follow.
  */
-export type WaveBenchType = 'travelling' | 'interference' | 'standing'
+export type WaveBenchType =
+  | 'travelling'
+  | 'interference'
+  | 'standing'
+  | 'longitudinal'
+  | 'reflection_refraction'
+  | 'diffraction'
+  | 'doppler'
 
 /**
  * Wave bench (junior/senior wave slice). One bench carries a single wave rig:
@@ -1056,6 +1041,73 @@ export interface WaveBench extends PhysicsObjectBase {
   harmonic?: number
   /** Wave speed on the string; finite and > 0 (standing only). */
   waveSpeed?: Quantity<'velocity'>
+  /* ----------------------------------------------------- longitudinal -- */
+  /** Length of the medium drawn for a longitudinal wave; finite and > 0. */
+  mediumLength?: Quantity<'length'>
+  /* ------------------------------------------------ reflection/refraction -- */
+  /** Speed of the incident wave; finite and > 0. */
+  incidentSpeed?: Quantity<'velocity'>
+  /** Speed in the second medium; finite and > 0. */
+  transmittedWaveSpeed?: Quantity<'velocity'>
+  /** Angle between the incident ray and the boundary normal. */
+  incidentAngle?: Quantity<'angle'>
+  /* -------------------------------------------------------- diffraction -- */
+  /** Width of the single slit; finite and > 0. */
+  slitWidth?: Quantity<'length'>
+  /** Distance from the slit to the screen; finite and > 0. */
+  screenDistance?: Quantity<'length'>
+  /** Diffraction order m ≥ 1. */
+  diffractionOrder?: number
+  /* ------------------------------------------------------------ Doppler -- */
+  /** Source speed along the line joining source and observer; finite and ≥ 0. */
+  sourceSpeed?: Quantity<'velocity'>
+  /** Observer speed along the line joining source and observer; finite and ≥ 0. */
+  observerSpeed?: Quantity<'velocity'>
+  sourceDirection?: 'approaching' | 'receding'
+  observerDirection?: 'approaching' | 'receding' | 'stationary'
+}
+
+/* --------------------------------------------------------- cyclotron bench -- */
+
+/**
+ * Ideal time-varying-field cyclotron.
+ *
+ * The dees carry a static perpendicular B. The narrow gap carries an electric
+ * field whose direction reverses every half cyclotron period. The model treats
+ * the gap as impulsive: the transit time is neglected, and each synchronized
+ * crossing adds qV of kinetic energy. This is the standard high-school
+ * cyclotron abstraction and is kept explicit so the engine never claims to
+ * solve the finite-gap field distribution it does not model.
+ */
+export interface CyclotronBench extends PhysicsObjectBase {
+  type: 'cyclotron'
+  magneticFluxDensity: Quantity<'magnetic_flux_density'>
+  magneticOrientation: 'into_page' | 'out_of_page'
+  /** Peak potential difference across the accelerating gap. */
+  gapVoltage: Quantity<'electric_potential'>
+  /** Width used to publish the ideal gap field E = V/d. */
+  gapWidth: Quantity<'length'>
+  /** Extraction radius of the dees. */
+  deeRadius: Quantity<'length'>
+}
+
+/* ------------------------------------------------------ modern-physics bench -- */
+
+export type ModernPhysicsBenchType = 'photoelectric_effect'
+
+/**
+ * Modern-physics apparatus. The scene stores only measured/controlled facts;
+ * photon energy, threshold values, maximum photoelectron energy and current are
+ * derived by the modern engine.
+ */
+export interface ModernPhysicsBench extends PhysicsObjectBase {
+  type: ModernPhysicsBenchType
+  workFunction: Quantity<'energy'>
+  photonWavelength: Quantity<'length'>
+  lightIntensity: Quantity<'intensity'>
+  cathodeArea: Quantity<'area'>
+  /** Fraction of incident photons that release a collected photoelectron. */
+  quantumEfficiency: number
 }
 
 /** docs/03 §64 */
@@ -1121,6 +1173,13 @@ export interface PhysicsScene {
    * to `[]` rather than the schema demanding an empty array everywhere.
    */
   waveBenches?: WaveBench[]
+  /**
+   * Time-varying-field cyclotron benches. Optional like the other specialist
+   * benches so scenes from earlier schema revisions remain readable.
+   */
+  cyclotronBenches?: CyclotronBench[]
+  /** Modern-physics benches; optional for legacy scenes. */
+  modernPhysicsBenches?: ModernPhysicsBench[]
   /**
    * Pressure benches. Optional for the same reason as `inductionBenches`:
    * scenes persisted before the pressure slice must stay readable, so accessors

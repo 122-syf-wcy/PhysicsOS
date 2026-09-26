@@ -72,7 +72,8 @@ export const MAGNETIC_WORK: SelfCheckItem = {
 const LORENTZ_RULE: SelfCheckItem = {
   id: 'lorentz-direction-rule',
   prompt: '判断带电粒子在磁场中受到的洛伦兹力方向，应该用哪个规则？',
-  takeaway: '洛伦兹力方向用左手定则：磁感线穿入掌心，四指指向正电荷速度方向，拇指即为受力方向；负电荷取反。',
+  takeaway:
+    '洛伦兹力方向用左手定则：磁感线穿入掌心，四指指向正电荷速度方向，拇指即为受力方向；负电荷取反。',
   options: [
     { id: 'left-hand', label: '左手定则（负电荷时方向取反）', correct: true },
     {
@@ -107,7 +108,8 @@ export const RADIUS_MASS: SelfCheckItem = {
       label: '轨道半径更小',
       mistake: {
         type: 'concept',
-        explanation: '由 qvB = mv²/r 得 r = mv/(qB)，质量在分子上：质量越大，同样的洛伦兹力越难把它拉弯。',
+        explanation:
+          '由 qvB = mv²/r 得 r = mv/(qB)，质量在分子上：质量越大，同样的洛伦兹力越难把它拉弯。',
         review: ['向心力方程 qvB = mv²/r', '质谱仪原理'],
       },
     },
@@ -134,7 +136,8 @@ export const SELECTOR_CONDITION: SelfCheckItem = {
       label: '只有正电荷才能直线通过',
       mistake: {
         type: 'concept',
-        explanation: '电荷变号时电场力与洛伦兹力同时反向，平衡关系不变；速度选择器对正负电荷同样有效。',
+        explanation:
+          '电荷变号时电场力与洛伦兹力同时反向，平衡关系不变；速度选择器对正负电荷同样有效。',
         review: ['速度选择条件 |qE| = |qvB|', '电场力与洛伦兹力方向'],
         evidenceCheckId: 'velocity_selection_condition',
       },
@@ -144,7 +147,8 @@ export const SELECTOR_CONDITION: SelfCheckItem = {
       label: '速度足够大就能冲过去',
       mistake: {
         type: 'concept',
-        explanation: '速度越大洛伦兹力越大，两力失衡反而偏转得越厉害；只有恰好 v = E/B 的粒子沿直线通过。',
+        explanation:
+          '速度越大洛伦兹力越大，两力失衡反而偏转得越厉害；只有恰好 v = E/B 的粒子沿直线通过。',
         review: ['洛伦兹力 F = qvB 与速度成正比', '速度选择条件'],
         evidenceCheckId: 'velocity_selection_condition',
       },
@@ -163,7 +167,8 @@ export const SELECTOR_TOO_FAST: SelfCheckItem = {
       label: '向电场力一侧偏转',
       mistake: {
         type: 'direction',
-        explanation: '电场力 |qE| 与速度无关，洛伦兹力 |qvB| 随速度增大；速度偏大时是洛伦兹力占优。',
+        explanation:
+          '电场力 |qE| 与速度无关，洛伦兹力 |qvB| 随速度增大；速度偏大时是洛伦兹力占优。',
         review: ['|F_E| = qE 与速度无关', '|F_B| = qvB 与速度成正比'],
         evidenceCheckId: 'velocity_selection_condition',
       },
@@ -231,7 +236,8 @@ export const CROSSED_NET_FORCE: SelfCheckItem = {
       label: '只考虑其中较大的那个力',
       mistake: {
         type: 'modeling',
-        explanation: '两个同量级的力都会改变运动；丢掉任何一个都会得到错误轨迹。速度选择器正是两力共同作用的结果。',
+        explanation:
+          '两个同量级的力都会改变运动；丢掉任何一个都会得到错误轨迹。速度选择器正是两力共同作用的结果。',
         review: ['受力分析的完整性', '复合场 F = qE + qv×B'],
         evidenceCheckId: 'composite_force_superposition',
       },
@@ -242,7 +248,8 @@ export const CROSSED_NET_FORCE: SelfCheckItem = {
 export const THREE_FIELD_GRAVITY: SelfCheckItem = {
   id: 'three-field-gravity',
   prompt: '质子、电子这类微观粒子在复合场问题中，重力通常如何处理？',
-  takeaway: '微观粒子的重力比电磁力小十几个数量级，通常忽略；带电小球、液滴类宏观对象则必须考虑重力。',
+  takeaway:
+    '微观粒子的重力比电磁力小十几个数量级，通常忽略；带电小球、液滴类宏观对象则必须考虑重力。',
   options: [
     { id: 'neglect-micro', label: '微观粒子忽略重力，宏观带电小球必须考虑', correct: true },
     {
@@ -250,7 +257,8 @@ export const THREE_FIELD_GRAVITY: SelfCheckItem = {
       label: '任何时候都必须把重力算进去，否则就是错的',
       mistake: {
         type: 'modeling',
-        explanation: '建模要看数量级：质子 mg ≈ 10⁻²⁶ N，而典型电磁力 ≈ 10⁻¹⁵ N，重力的影响完全淹没在电磁力里。',
+        explanation:
+          '建模要看数量级：质子 mg ≈ 10⁻²⁶ N，而典型电磁力 ≈ 10⁻¹⁵ N，重力的影响完全淹没在电磁力里。',
         review: ['数量级估算', '建模时的近似处理'],
       },
     },
@@ -331,7 +339,8 @@ const UNIFORM_ACCELERATION: SelfCheckItem = {
       label: '随速度一起增大',
       mistake: {
         type: 'concept',
-        explanation: '加速度描述速度的变化率；匀变速运动中变化率本身是常数，增大的是速度不是加速度。',
+        explanation:
+          '加速度描述速度的变化率；匀变速运动中变化率本身是常数，增大的是速度不是加速度。',
         review: ['加速度定义 a = Δv/Δt'],
       },
     },
@@ -377,7 +386,8 @@ const NEWTON_SECOND: SelfCheckItem = {
 const INCLINE_NORMAL: SelfCheckItem = {
   id: 'incline-normal-direction',
   prompt: '斜面上物体受到的支持力方向是？',
-  takeaway: '支持力垂直于接触面：斜面上的支持力垂直于斜面向上，大小为 mg·cosθ（无其他竖直外力时）。',
+  takeaway:
+    '支持力垂直于接触面：斜面上的支持力垂直于斜面向上，大小为 mg·cosθ（无其他竖直外力时）。',
   options: [
     { id: 'perpendicular', label: '垂直于斜面向上', correct: true },
     {
@@ -485,7 +495,8 @@ const ECHO_RANGING_HALF: SelfCheckItem = {
 export const POINT_CHARGE_DIRECTION: SelfCheckItem = {
   id: 'point-charge-field-direction',
   prompt: '正点电荷周围某点的电场方向是？',
-  takeaway: '电场由源电荷决定：正电荷的场沿径向指向外，负电荷的场指向电荷本身，与放不放试探电荷无关。',
+  takeaway:
+    '电场由源电荷决定：正电荷的场沿径向指向外，负电荷的场指向电荷本身，与放不放试探电荷无关。',
   options: [
     { id: 'radially-out', label: '沿径向背离电荷指向外', correct: true },
     {
@@ -502,7 +513,8 @@ export const POINT_CHARGE_DIRECTION: SelfCheckItem = {
       label: '取决于放入的试探电荷正负',
       mistake: {
         type: 'concept',
-        explanation: '电场是源电荷的属性，先于试探电荷存在；试探电荷只改变受力方向 F = qE，不改变场的方向。',
+        explanation:
+          '电场是源电荷的属性，先于试探电荷存在；试探电荷只改变受力方向 F = qE，不改变场的方向。',
         review: ['电场强度的定义 E = F/q'],
       },
     },
@@ -512,7 +524,8 @@ export const POINT_CHARGE_DIRECTION: SelfCheckItem = {
 export const SUPERPOSITION: SelfCheckItem = {
   id: 'field-superposition',
   prompt: '两个点电荷在空间某点产生的总场强应当怎样求？',
-  takeaway: '场强叠加是矢量叠加：等量异种电荷连线中点两场同向相加，等量同种电荷连线中点两场反向抵消为零。',
+  takeaway:
+    '场强叠加是矢量叠加：等量异种电荷连线中点两场同向相加，等量同种电荷连线中点两场反向抵消为零。',
   options: [
     { id: 'vector-add', label: '两个场强的矢量和', correct: true },
     {
@@ -520,7 +533,8 @@ export const SUPERPOSITION: SelfCheckItem = {
       label: '两个场强大小直接相加',
       mistake: {
         type: 'concept',
-        explanation: '场强是矢量：等量同种电荷连线中点的两个场大小相等方向相反，代数相加会把 0 算成 2E。',
+        explanation:
+          '场强是矢量：等量同种电荷连线中点的两个场大小相等方向相反，代数相加会把 0 算成 2E。',
         review: ['电场叠加原理', '矢量合成'],
       },
     },
@@ -547,7 +561,8 @@ export const PLATE_MOTION: SelfCheckItem = {
       label: '匀速圆周运动',
       mistake: {
         type: 'concept',
-        explanation: '圆周运动需要始终指向圆心的力；匀强电场中电场力方向恒定，产生的是恒定加速度，轨迹为抛物线。',
+        explanation:
+          '圆周运动需要始终指向圆心的力；匀强电场中电场力方向恒定，产生的是恒定加速度，轨迹为抛物线。',
         review: ['匀强电场中的类平抛', '圆周运动的条件'],
       },
     },
@@ -679,7 +694,8 @@ const SERIES_PARALLEL_RULE: SelfCheckItem = {
       label: '电流相加',
       mistake: {
         type: 'modeling',
-        explanation: '电流相加是并联支路的特征（干路电流等于各支路电流之和），串联电路电流处处相等。',
+        explanation:
+          '电流相加是并联支路的特征（干路电流等于各支路电流之和），串联电路电流处处相等。',
         review: ['串并联电流与电压规律'],
       },
     },
@@ -762,7 +778,8 @@ const PLANE_MIRROR_IMAGE: SelfCheckItem = {
       label: '像距 = 30 cm，像比物大',
       mistake: {
         type: 'concept',
-        explanation: '平面镜成像的像距始终等于物距，不会放大；"放大"是凸透镜或凹面镜在一定物距下才出现的现象。',
+        explanation:
+          '平面镜成像的像距始终等于物距，不会放大；"放大"是凸透镜或凹面镜在一定物距下才出现的现象。',
         review: ['平面镜成像规律：像距 = 物距', '虚像不放大'],
       },
     },
@@ -771,7 +788,8 @@ const PLANE_MIRROR_IMAGE: SelfCheckItem = {
       label: '像距 = 15 cm，倒立实像',
       mistake: {
         type: 'concept',
-        explanation: '平面镜成的像是光的反射形成的虚像，不能呈现在光屏上；实像由实际光线会聚而成，平面镜不可能成实像。',
+        explanation:
+          '平面镜成的像是光的反射形成的虚像，不能呈现在光屏上；实像由实际光线会聚而成，平面镜不可能成实像。',
         review: ['实像与虚像的区别', '平面镜成像性质'],
       },
     },
@@ -789,7 +807,8 @@ const CONVEX_LENS_REAL_IMAGE: SelfCheckItem = {
       label: '正立、缩小、实像',
       mistake: {
         type: 'concept',
-        explanation: '凸透镜成的实像一律倒立；正立的像只能是虚像（u < f 时），不可能既正立又成实像。',
+        explanation:
+          '凸透镜成的实像一律倒立；正立的像只能是虚像（u < f 时），不可能既正立又成实像。',
         review: ['凸透镜成像规律：实像倒立、虚像正立', 'u > 2f 与 f < u < 2f 的像性质'],
       },
     },
@@ -798,7 +817,8 @@ const CONVEX_LENS_REAL_IMAGE: SelfCheckItem = {
       label: '倒立、放大、实像',
       mistake: {
         type: 'modeling',
-        explanation: 'u > 2f 时像距 f < v < 2f 且像缩小；放大实像出现在 f < u < 2f 时，物距区间不同像性质也不同。',
+        explanation:
+          'u > 2f 时像距 f < v < 2f 且像缩小；放大实像出现在 f < u < 2f 时，物距区间不同像性质也不同。',
         review: ['凸透镜成像规律表', '物距与像距、像性质对应关系'],
       },
     },
@@ -816,7 +836,8 @@ const CONVEX_LENS_MAGNIFYING: SelfCheckItem = {
       label: '倒立、缩小、实像',
       mistake: {
         type: 'concept',
-        explanation: 'u < f 时折射光线发散，不能会聚成实像；正立的像只能是虚像，与 u > 2f 的成像情况相反。',
+        explanation:
+          'u < f 时折射光线发散，不能会聚成实像；正立的像只能是虚像，与 u > 2f 的成像情况相反。',
         review: ['凸透镜 u < f 成虚像', '放大镜原理'],
       },
     },
@@ -825,7 +846,8 @@ const CONVEX_LENS_MAGNIFYING: SelfCheckItem = {
       label: '倒立、放大、实像',
       mistake: {
         type: 'modeling',
-        explanation: '倒立放大实像出现在 f < u < 2f；u < f 时根本不成实像，判断成像性质要先看物距与焦距的关系。',
+        explanation:
+          '倒立放大实像出现在 f < u < 2f；u < f 时根本不成实像，判断成像性质要先看物距与焦距的关系。',
         review: ['凸透镜成像规律：物距区间决定像性质'],
       },
     },
@@ -843,7 +865,8 @@ const CONCAVE_MIRROR_REAL_IMAGE: SelfCheckItem = {
       label: '正立、缩小、虚像',
       mistake: {
         type: 'concept',
-        explanation: '凹面镜 u > 2f 时反射光线会聚成实像，像倒立；正立虚像只出现在 u < f 时，与凸面镜不同。',
+        explanation:
+          '凹面镜 u > 2f 时反射光线会聚成实像，像倒立；正立虚像只出现在 u < f 时，与凸面镜不同。',
         review: ['凹面镜成像规律', '球面镜与透镜成像规律类比'],
       },
     },
@@ -852,7 +875,8 @@ const CONCAVE_MIRROR_REAL_IMAGE: SelfCheckItem = {
       label: '倒立、放大、实像',
       mistake: {
         type: 'modeling',
-        explanation: 'u > 2f 时像缩小；放大实像要求 f < u < 2f。把"凹面镜能成实像"误当成"一定放大"。',
+        explanation:
+          'u > 2f 时像缩小；放大实像要求 f < u < 2f。把"凹面镜能成实像"误当成"一定放大"。',
         review: ['凹面镜成像规律表', '物距与像性质对应关系'],
       },
     },
@@ -870,7 +894,8 @@ const CONVEX_MIRROR_IMAGE: SelfCheckItem = {
       label: '倒立、实像',
       mistake: {
         type: 'concept',
-        explanation: '凸面镜是发散面镜，反射光线不会会聚，永远不成实像；实像只有会聚面镜（凹面镜）在 u > f 时才能形成。',
+        explanation:
+          '凸面镜是发散面镜，反射光线不会会聚，永远不成实像；实像只有会聚面镜（凹面镜）在 u > f 时才能形成。',
         review: ['凸面镜的发散性质', '会聚面镜与发散面镜的区别'],
       },
     },
@@ -879,7 +904,8 @@ const CONVEX_MIRROR_IMAGE: SelfCheckItem = {
       label: '正立、放大、虚像',
       mistake: {
         type: 'concept',
-        explanation: '凸面镜的虚像始终缩小（放大率 |m| < 1），因为发散作用使像"被压缩"；放大虚像是凸透镜 u < f 时才出现的。',
+        explanation:
+          '凸面镜的虚像始终缩小（放大率 |m| < 1），因为发散作用使像"被压缩"；放大虚像是凸透镜 u < f 时才出现的。',
         review: ['凸面镜成像：始终缩小', '凸透镜放大镜的物距条件'],
       },
     },
@@ -906,7 +932,8 @@ const CONVEX_LENS_BETWEEN_F_2F: SelfCheckItem = {
       label: '倒立、缩小、实像',
       mistake: {
         type: 'modeling',
-        explanation: '缩小实像出现在 u > 2f；f < u < 2f 时像距 v > 2f 且像放大。混淆了两个物距区间的像性质。',
+        explanation:
+          '缩小实像出现在 u > 2f；f < u < 2f 时像距 v > 2f 且像放大。混淆了两个物距区间的像性质。',
         review: ['凸透镜成像规律表', '放大实像与缩小实像的物距条件'],
       },
     },
@@ -926,7 +953,8 @@ export const INDUCTION_BAR_EMF: SelfCheckItem = {
       label: 'E = BLv/R',
       mistake: {
         type: 'modeling',
-        explanation: 'BLv/R 是感应电流 I 的大小（欧姆定律 I = E/R），不是电动势。电动势只由 B、L、v 决定，与回路电阻无关。',
+        explanation:
+          'BLv/R 是感应电流 I 的大小（欧姆定律 I = E/R），不是电动势。电动势只由 B、L、v 决定，与回路电阻无关。',
         review: ['动生电动势 E = BLv', '感应电流 I = E/R'],
         evidenceCheckId: 'ohm_law_loop',
       },
@@ -936,7 +964,8 @@ export const INDUCTION_BAR_EMF: SelfCheckItem = {
       label: 'E = BL/v',
       mistake: {
         type: 'concept',
-        explanation: '速度 v 在分子上：单位时间扫过的面积是 Lv，磁通量变化率是 BLv。写成除法会导致单位都凑不齐（T·m ÷ (m/s) 不是伏特）。',
+        explanation:
+          '速度 v 在分子上：单位时间扫过的面积是 Lv，磁通量变化率是 BLv。写成除法会导致单位都凑不齐（T·m ÷ (m/s) 不是伏特）。',
         review: ['单位检验：T·m²/s = Wb/s = V', '动生电动势推导'],
         evidenceCheckId: 'faraday_law',
       },
@@ -947,7 +976,8 @@ export const INDUCTION_BAR_EMF: SelfCheckItem = {
 export const INDUCTION_LENZ: SelfCheckItem = {
   id: 'induction-lenz-opposition',
   prompt: '穿过线圈的磁通量增加时，楞次定律给出的感应电流方向是？',
-  takeaway: '楞次定律：感应电流的磁场总要阻碍引起感应电流的磁通量的变化 —— 磁通量增加时，感应电流的磁场与原磁场反向。',
+  takeaway:
+    '楞次定律：感应电流的磁场总要阻碍引起感应电流的磁通量的变化 —— 磁通量增加时，感应电流的磁场与原磁场反向。',
   options: [
     { id: 'opposes-increase', label: '使感应磁场与原磁场反向，阻碍增加', correct: true },
     {
@@ -955,7 +985,8 @@ export const INDUCTION_LENZ: SelfCheckItem = {
       label: '使感应磁场与原磁场同向，增强磁通量',
       mistake: {
         type: 'direction',
-        explanation: '若感应磁场与原磁场同向，磁通量会进一步增加，感应电动势进一步增大 —— 正反馈无限放大能量，违反能量守恒。楞次定律的"阻碍"正是能量守恒的体现。',
+        explanation:
+          '若感应磁场与原磁场同向，磁通量会进一步增加，感应电动势进一步增大 —— 正反馈无限放大能量，违反能量守恒。楞次定律的"阻碍"正是能量守恒的体现。',
         review: ['楞次定律的表述', '楞次定律与能量守恒'],
         evidenceCheckId: 'lenz_direction',
       },
@@ -965,7 +996,8 @@ export const INDUCTION_LENZ: SelfCheckItem = {
       label: '方向无法确定，与线圈电阻有关',
       mistake: {
         type: 'concept',
-        explanation: '感应电流的方向只由磁通量变化的方向和线圈绕向决定（楞次定律），电流的大小才与电阻有关（I = E/R）。',
+        explanation:
+          '感应电流的方向只由磁通量变化的方向和线圈绕向决定（楞次定律），电流的大小才与电阻有关（I = E/R）。',
         review: ['楞次定律定方向', 'I = E/R 定大小'],
         evidenceCheckId: 'lenz_direction',
       },
@@ -984,7 +1016,8 @@ export const INDUCTION_FARADAY: SelfCheckItem = {
       label: '磁通量的变化量 ΔΦ',
       mistake: {
         type: 'concept',
-        explanation: '同样的 ΔΦ 用 1 s 或 10 s 完成，电动势差 10 倍：缓慢变化几乎不产生电动势。决定电动势的是变化快慢（变化率），不是变化总量。',
+        explanation:
+          '同样的 ΔΦ 用 1 s 或 10 s 完成，电动势差 10 倍：缓慢变化几乎不产生电动势。决定电动势的是变化快慢（变化率），不是变化总量。',
         review: ['E = -dΦ/dt 的含义', '变化量与变化率的区别'],
         evidenceCheckId: 'faraday_law',
       },
@@ -994,7 +1027,8 @@ export const INDUCTION_FARADAY: SelfCheckItem = {
       label: '磁通量 Φ 本身的大小',
       mistake: {
         type: 'concept',
-        explanation: '一个很大的恒定磁通量（dΦ/dt = 0）不产生任何电动势；只有变化才感应。感应电动势与 Φ 的绝对值无关。',
+        explanation:
+          '一个很大的恒定磁通量（dΦ/dt = 0）不产生任何电动势；只有变化才感应。感应电动势与 Φ 的绝对值无关。',
         review: ['法拉第定律：变化才感应', '恒定磁通无电动势'],
         evidenceCheckId: 'faraday_law',
       },
@@ -1005,7 +1039,8 @@ export const INDUCTION_FARADAY: SelfCheckItem = {
 export const INDUCTION_NO_CUT: SelfCheckItem = {
   id: 'induction-zero-emf-conditions',
   prompt: '导体棒在磁场中运动，哪种情况感应电动势为零？',
-  takeaway: 'E = BLv 中任一量为零则电动势为零：v = 0（不运动）、棒平行于磁场运动（不切割）、或棒沿自身长度方向滑动（不扫过有效面积）。',
+  takeaway:
+    'E = BLv 中任一量为零则电动势为零：v = 0（不运动）、棒平行于磁场运动（不切割）、或棒沿自身长度方向滑动（不扫过有效面积）。',
   options: [
     { id: 'parallel-to-b', label: '棒沿磁场方向运动（速度与磁场平行）', correct: true },
     {
@@ -1013,7 +1048,8 @@ export const INDUCTION_NO_CUT: SelfCheckItem = {
       label: '棒运动得非常快时',
       mistake: {
         type: 'modeling',
-        explanation: 'E = BLv 与速度成正比：速度越快电动势越大，永远不会因为"太快"而变成零。为零的唯一方式是有效切割速度分量为零。',
+        explanation:
+          'E = BLv 与速度成正比：速度越快电动势越大，永远不会因为"太快"而变成零。为零的唯一方式是有效切割速度分量为零。',
         review: ['E = BLv 的速度是垂直于磁场的分量', '正比关系'],
         evidenceCheckId: 'faraday_law',
       },
@@ -1023,7 +1059,8 @@ export const INDUCTION_NO_CUT: SelfCheckItem = {
       label: '只要棒在磁场中运动，电动势就不为零',
       mistake: {
         type: 'concept',
-        explanation: '沿磁场方向运动不切割磁感线，E = BLv⊥ 中垂直分量 v⊥ = 0，电动势为零。"运动"不等于"切割"。',
+        explanation:
+          '沿磁场方向运动不切割磁感线，E = BLv⊥ 中垂直分量 v⊥ = 0，电动势为零。"运动"不等于"切割"。',
         review: ['切割磁感线的条件', '速度的垂直分量'],
         evidenceCheckId: 'faraday_law',
       },
@@ -1100,8 +1137,7 @@ export const WAVE_PARTICLE_TRANSPORT: SelfCheckItem = {
 export const WAVE_PATH_DIFFERENCE: SelfCheckItem = {
   id: 'wave-path-difference',
   prompt: '两个同相的相干波源到 P 点的路程差 Δ = 2λ，P 点的振动情况是？',
-  takeaway:
-    '路程差是波长的整数倍时，两列波同相到达：波峰遇波峰、波谷遇波谷，振动加强，振幅为 2A。',
+  takeaway: '路程差是波长的整数倍时，两列波同相到达：波峰遇波峰、波谷遇波谷，振动加强，振幅为 2A。',
   options: [
     { id: 'constructive', label: '振动加强，振幅 2A', correct: true },
     {
@@ -1225,6 +1261,138 @@ export const WAVE_HARMONIC_FREQUENCY: SelfCheckItem = {
   ],
 }
 
+export const WAVE_LONGITUDINAL_DIRECTION: SelfCheckItem = {
+  id: 'wave-longitudinal-direction',
+  prompt: '纵波在介质中传播时，质点的振动方向与传播方向有什么关系？',
+  takeaway: '纵波中质点沿传播方向前后振动，形成压缩区和稀疏区；横波才是垂直于传播方向振动。',
+  options: [
+    { id: 'parallel', label: '振动方向平行于传播方向', correct: true },
+    {
+      id: 'perpendicular',
+      label: '振动方向垂直于传播方向',
+      mistake: {
+        type: 'concept',
+        explanation: '垂直于传播方向振动的是横波；纵波通过介质的压缩和稀疏传播。',
+        review: ['纵波与横波的区别', '压缩与稀疏'],
+        evidenceCheckId: 'longitudinal_particle_motion',
+      },
+    },
+  ],
+}
+
+export const WAVE_BOUNDARY_RULE: SelfCheckItem = {
+  id: 'wave-boundary-rule',
+  prompt: '机械波从一种介质进入另一种介质时，哪个量保持不变？',
+  takeaway: '频率由波源决定，跨界面保持不变；波速改变，因此波长随介质改变。',
+  options: [
+    { id: 'frequency', label: '频率', correct: true },
+    {
+      id: 'speed',
+      label: '波速',
+      mistake: {
+        type: 'concept',
+        explanation: '介质改变会改变波速；为了保持 f 不变，波长按 λ = v/f 改变。',
+        review: ['v = λf', '跨界面频率不变'],
+        evidenceCheckId: 'frequency_unchanged_at_boundary',
+      },
+    },
+  ],
+}
+
+export const WAVE_DIFFRACTION_MINIMUM: SelfCheckItem = {
+  id: 'wave-diffraction-minimum',
+  prompt: '单缝衍射的暗纹条件是什么？',
+  takeaway: '暗纹满足 a·sinθ = mλ（m = ±1, ±2, …），缝越窄衍射展开越明显。',
+  options: [
+    { id: 'm-lambda', label: 'a·sinθ = mλ', correct: true },
+    {
+      id: 'half-lambda',
+      label: 'a·sinθ = (m + ½)λ',
+      mistake: {
+        type: 'modeling',
+        explanation: '(m + ½)λ 是双缝干涉的暗纹条件；单缝衍射来自同一缝内各子波的叠加。',
+        review: ['单缝衍射暗纹条件', '双缝干涉与单缝衍射的区别'],
+      },
+    },
+  ],
+}
+
+export const WAVE_DOPPLER_SIGN: SelfCheckItem = {
+  id: 'wave-doppler-sign',
+  prompt: '波源接近静止观察者时，观察者接收到的频率怎样变化？',
+  takeaway: '波源接近时波前被压密，接收频率高于源频率；远离时低于源频率。',
+  options: [
+    { id: 'higher', label: '频率升高', correct: true },
+    {
+      id: 'unchanged',
+      label: '频率不变',
+      mistake: {
+        type: 'concept',
+        explanation: '相对运动改变相邻波前到达观察者的时间间隔，因此接收频率发生改变。',
+        review: ['多普勒效应', 'f′ = f(v ± v₀)/(v ∓ vₛ)'],
+        evidenceCheckId: 'doppler_frequency_relation',
+      },
+    },
+  ],
+}
+
+export const PHOTOELECTRIC_EQUATION: SelfCheckItem = {
+  id: 'photoelectric-equation',
+  prompt: '光电效应中，增大入射光强度会怎样影响光电子的最大初动能？',
+  takeaway:
+    '光强增大只增加单位时间的入射光子数，从而增大光电流；每个光子能量 hf 不变，最大初动能不变。',
+  options: [
+    { id: 'unchanged', label: '最大初动能不变，光电流增大', correct: true },
+    {
+      id: 'increases',
+      label: '最大初动能随光强增大',
+      mistake: {
+        type: 'concept',
+        explanation: '爱因斯坦方程为 hf = W + Kmax，Kmax 只由频率和逸出功决定，与光强无关。',
+        review: ['光子能量 E = hf', 'Kmax = hf − W'],
+        evidenceCheckId: 'intensity_does_not_change_kmax',
+      },
+    },
+  ],
+}
+
+export const PHOTOELECTRIC_THRESHOLD: SelfCheckItem = {
+  id: 'photoelectric-threshold',
+  prompt: '入射光频率低于金属截止频率时，增大光强能否产生光电子？',
+  takeaway: '不能。单个光子能量 hf 小于逸出功时，再多的光子也不能让一个电子逸出。',
+  options: [
+    { id: 'cannot', label: '不能，Kmax = 0', correct: true },
+    {
+      id: 'can-with-intensity',
+      label: '可以，只要光强足够大',
+      mistake: {
+        type: 'concept',
+        explanation: '光电效应是单光子过程；频率低于截止频率时每个光子都不足以克服逸出功。',
+        review: ['截止频率 f₀ = W/h', '单光子光电效应'],
+        evidenceCheckId: 'photocurrent_extinction_below_threshold',
+      },
+    },
+  ],
+}
+
+export const MODERN_UNSUPPORTED: SelfCheckItem = {
+  id: 'modern-unsupported-model',
+  prompt: '当前引擎没有原子能级跃迁模型时，应当怎样回答此类题？',
+  takeaway: '应返回 UNSUPPORTED_MODEL 并说明模型缺口，不能套用经典公式伪造答案。',
+  options: [
+    { id: 'unsupported', label: '返回 UNSUPPORTED_MODEL', correct: true },
+    {
+      id: 'classical-guess',
+      label: '用任意经典公式估算',
+      mistake: {
+        type: 'modeling',
+        explanation: '能级跃迁是量子模型；用其他物理模型计算会得到没有物理依据的数值。',
+        review: ['模型适用边界', '失败关闭原则'],
+      },
+    },
+  ],
+}
+
 /**
  * Golden question → self-check items. The test suite asserts every golden
  * question has at least one item and every option is either correct or a
@@ -1293,7 +1461,7 @@ export const QUESTION_SELF_CHECKS: Readonly<Record<string, readonly SelfCheckIte
   'comp-18-ebg-balance': THREE_FIELD,
   'comp-19-ebg-droplet': THREE_FIELD,
   'comp-20-ebg-heavy-particle': THREE_FIELD,
-  'comp-21-cyclotron-unsupported': [CROSSED_NET_FORCE],
+  'comp-21-cyclotron': [CROSSED_NET_FORCE],
 
   'circ-01-series-current': CIRCUIT_OHM,
   'circ-02-parallel-total-resistance': [SERIES_PARALLEL_RULE, OHMS_LAW],
@@ -1323,6 +1491,10 @@ export const QUESTION_SELF_CHECKS: Readonly<Record<string, readonly SelfCheckIte
   'wave-04-interference-destructive': [WAVE_DESTRUCTIVE_HALF, WAVE_PATH_DIFFERENCE],
   'wave-05-standing-third-harmonic': [WAVE_HARMONIC_FREQUENCY, WAVE_NODE_MOTION],
   'wave-06-missing-frequency': [WAVE_SPEED_FREQUENCY],
+  'wave-07-longitudinal': [WAVE_LONGITUDINAL_DIRECTION, WAVE_SPEED_FREQUENCY],
+  'wave-08-reflection-refraction': [WAVE_BOUNDARY_RULE],
+  'wave-09-single-slit-diffraction': [WAVE_DIFFRACTION_MINIMUM],
+  'wave-10-doppler': [WAVE_DOPPLER_SIGN],
 }
 
 /** Self-check items for a question, [] when none are defined. */

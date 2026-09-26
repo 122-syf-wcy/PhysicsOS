@@ -1,0 +1,23 @@
+{
+  "name": "@physicsos/engine-modern",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modern physics engine: photoelectric effect and energy-level models",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@physicsos/shared": "file:../shared",
+    "@physicsos/physics-units": "file:../physics-units",
+    "@physicsos/physics-math": "file:../physics-math",
+    "@physicsos/physics-core": "file:../physics-core",
+    "@physicsos/physics-scene": "file:../physics-scene"
+  }
+}

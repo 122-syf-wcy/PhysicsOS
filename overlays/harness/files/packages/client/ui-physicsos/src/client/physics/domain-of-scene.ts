@@ -2,6 +2,7 @@ import {
   isAcousticsScene,
   isCircuitScene,
   isCompositeFieldScene,
+  isCyclotronScene,
   isCurrentScene,
   isEnergyScene,
   isFluidScene,
@@ -93,6 +94,10 @@ export const domainOfScene = (scene: PhysicsScene): SceneDomain => {
      fall past all of them to 'unsupported' — and an unsupported domain does not
      mount a workspace at all, which is a blank surface rather than an error. */
   if (isCompositeFieldScene(scene)) return 'composite'
+  /* The cyclotron carries a single static B field plus an explicitly typed
+     time-varying bench, so the single-field branch below would misroute it to
+     the magnetic runtime and drop the gap acceleration entirely. */
+  if (isCyclotronScene(scene)) return 'composite'
   /* A point-charge scene: particles with point-charge fields, no bodies, no
      other field type. Classified as electric so the Lab mounts it. */
   if (

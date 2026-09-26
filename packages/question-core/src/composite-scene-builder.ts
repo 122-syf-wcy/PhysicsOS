@@ -16,6 +16,7 @@
 import { vec3, type Vector3 } from '@physicsos/physics-math'
 import {
   createCompositeFieldScene,
+  createCyclotronScene,
   createMassSpectrometerScene,
   createVelocitySelectorScene,
   type CompositeElectricDirection,
@@ -98,8 +99,10 @@ export function buildCompositeSceneFromIR(
   const charge = signedCharge(ir, knownValue(ir, 'charge') ?? 1.6e-19)
   const mass = knownValue(ir, 'mass') ?? 1.67e-27
   const speed = knownValue(ir, 'initial_velocity') ?? 1.0e5
-  const electricStrength = ir.electricFieldStrength ?? knownValue(ir, 'electric_field_strength') ?? 2.0e4
-  const magneticStrength = ir.magneticFluxDensity ?? knownValue(ir, 'magnetic_field_strength') ?? 0.2
+  const electricStrength =
+    ir.electricFieldStrength ?? knownValue(ir, 'electric_field_strength') ?? 2.0e4
+  const magneticStrength =
+    ir.magneticFluxDensity ?? knownValue(ir, 'magnetic_field_strength') ?? 0.2
   const gravity = knownValue(ir, 'gravity')
 
   const electricDirection = electricDirectionOf(ir.electricFieldDirection) ?? 'up'
@@ -110,6 +113,48 @@ export function buildCompositeSceneFromIR(
       : 'into_page')
 
   const velocity = velocityVector(ir.initialVelocityDirection, speed)
+
+  if (ir.model === 'cyclotron') {
+    const gapVoltage = ir.gapVoltage ?? knownValue(ir, 'gap_voltage') ?? 2.0e3
+    const deeRadius = ir.deeRadius ?? knownValue(ir, 'dee_radius') ?? 0.5
+    const gapWidth = ir.knowns.find((entry) => entry.key === 'gap_width')?.value ?? 0.02
+    const scene = createCyclotronScene({
+      ...(options.sceneId === undefined ? {} : { sceneId: options.sceneId }),
+      ...(options.now === undefined ? {} : { now: options.now }),
+      charge,
+      mass,
+      initialVelocity: velocity,
+      magneticFluxDensity: magneticStrength,
+      ...(ir.magneticFieldOrientation === undefined
+        ? {}
+        : { magneticOrientation: ir.magneticFieldOrientation }),
+      gapVoltage,
+      gapWidth,
+      deeRadius,
+      duration: ((2 * Math.PI * mass) / (Math.abs(charge) * magneticStrength)) * 4,
+    })
+    return {
+      scene:
+        options.questionId === undefined
+          ? scene
+          : {
+              ...scene,
+              metadata: {
+                ...scene.metadata,
+                description: `由试题 ${options.questionId} 的 Cyclotron Question IR 生成`,
+                sourceQuestionId: asQuestionId(options.questionId),
+              },
+            },
+      irToSceneMapping: {
+        charge: 'particles[0].charge',
+        mass: 'particles[0].mass',
+        initial_velocity: 'particles[0].velocity',
+        magnetic_field_strength: 'cyclotronBenches[0].magneticFluxDensity',
+        gap_voltage: 'cyclotronBenches[0].gapVoltage',
+        dee_radius: 'cyclotronBenches[0].deeRadius',
+      },
+    }
+  }
 
   /* Long enough that the beam crosses every region at the parsed speed, and no
      longer: a duration set from the speed keeps the trajectory framed. */

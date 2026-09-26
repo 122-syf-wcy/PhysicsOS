@@ -16,7 +16,15 @@ import type { PhysicsScene, WaveBench, WaveBenchType } from '../scene.ts'
  * Authoring units follow the lab: centimetres for amplitude, metres for
  * wavelength and rig geometry, hertz for frequency.
  */
-export type WaveObservableKey = 'waveform' | 'wave_speed' | 'superposition' | 'nodes'
+export type WaveObservableKey =
+  | 'waveform'
+  | 'wave_speed'
+  | 'superposition'
+  | 'nodes'
+  | 'longitudinal'
+  | 'boundary'
+  | 'diffraction'
+  | 'doppler'
 
 /**
  * Netlist-style authoring input for the travelling rope-wave rig.
@@ -80,8 +88,86 @@ export interface StandingWaveSpec {
   readonly frequency?: number
 }
 
+/** Authoring input for a longitudinal wave in a one-dimensional medium. */
+export interface LongitudinalWaveSpec {
+  readonly benchId?: string
+  readonly type: 'longitudinal'
+  /** Displacement amplitude in centimetres (> 0). */
+  readonly amplitude: number
+  /** Wavelength in metres (> 0). Required unless `waveSpeed` is given. */
+  readonly wavelength?: number
+  /** Wave speed in m/s (> 0); used as λ = v/f when `wavelength` is absent. */
+  readonly waveSpeed?: number
+  /** Frequency in hertz (> 0). */
+  readonly frequency: number
+  /** Drawn medium length in metres (> 0); defaults to three wavelengths. */
+  readonly mediumLength?: number
+}
+
+/**
+ * Authoring input for a wave crossing a boundary between two media.
+ *
+ * Angles are measured from the boundary normal. The incident frequency is
+ * unchanged across the boundary; the transmitted speed sets the transmitted
+ * wavelength through λ = v/f.
+ */
+export interface ReflectionRefractionWaveSpec {
+  readonly benchId?: string
+  readonly type: 'reflection_refraction'
+  /** Relative amplitude in arbitrary length units; the model only uses ratios. */
+  readonly amplitude: number
+  /** Frequency in hertz (> 0). */
+  readonly frequency: number
+  /** Incident-medium wave speed in m/s (> 0). */
+  readonly incidentSpeed: number
+  /** Second-medium wave speed in m/s (> 0). */
+  readonly transmittedSpeed: number
+  /** Angle of incidence from the normal, in degrees. */
+  readonly incidentAngle: number
+}
+
+/** Authoring input for a single slit diffraction rig. */
+export interface DiffractionWaveSpec {
+  readonly benchId?: string
+  readonly type: 'diffraction'
+  readonly amplitude: number
+  readonly wavelength?: number
+  readonly waveSpeed?: number
+  readonly frequency: number
+  /** Slit width in metres (> 0). */
+  readonly slitWidth: number
+  /** Slit-to-screen distance in metres (> 0). */
+  readonly screenDistance: number
+  /** Order of the reported minimum; positive integer, defaults to 1. */
+  readonly order?: number
+}
+
+/** Authoring input for the moving-source/moving-observer Doppler rig. */
+export interface DopplerWaveSpec {
+  readonly benchId?: string
+  readonly type: 'doppler'
+  readonly amplitude: number
+  /** Emitted source frequency in hertz (> 0). */
+  readonly sourceFrequency: number
+  /** Wave speed in the medium in m/s (> 0). */
+  readonly waveSpeed: number
+  /** Source speed along the source-observer line in m/s (≥ 0). */
+  readonly sourceSpeed: number
+  /** Observer speed along the source-observer line in m/s (≥ 0). */
+  readonly observerSpeed: number
+  readonly sourceDirection: 'approaching' | 'receding'
+  readonly observerDirection: 'approaching' | 'receding' | 'stationary'
+}
+
 /** Discriminated authoring input: one sub-model per bench. */
-export type WaveBenchSpec = TravellingWaveSpec | InterferenceWaveSpec | StandingWaveSpec
+export type WaveBenchSpec =
+  | TravellingWaveSpec
+  | InterferenceWaveSpec
+  | StandingWaveSpec
+  | LongitudinalWaveSpec
+  | ReflectionRefractionWaveSpec
+  | DiffractionWaveSpec
+  | DopplerWaveSpec
 
 export interface WaveBenchSceneInput {
   readonly sceneId?: string
@@ -127,6 +213,8 @@ const wavelengthOf = (spec: TravellingWaveSpec | InterferenceWaveSpec): number =
   )
 }
 
+const wavelengthFromSpeed = (speed: number, frequency: number): number => speed / frequency
+
 const toBench = (spec: WaveBenchSpec): WaveBench => {
   const id = spec.benchId ?? 'wave-bench-1'
   const amplitude = quantity(spec.amplitude, 'cm', 'length')
@@ -161,6 +249,78 @@ const toBench = (spec: WaveBenchSpec): WaveBench => {
       sourceSeparation: quantity(pair.sourceSeparation, 'm', 'length'),
       pathOne: quantity(pair.pathOne, 'm', 'length'),
       pathTwo: quantity(pair.pathTwo, 'm', 'length'),
+    }
+  }
+
+  if (type === 'longitudinal') {
+    const longitudinal = spec as LongitudinalWaveSpec
+    const wavelength =
+      longitudinal.wavelength ??
+      (longitudinal.waveSpeed === undefined
+        ? undefined
+        : wavelengthFromSpeed(longitudinal.waveSpeed, longitudinal.frequency))
+    if (wavelength === undefined) {
+      throw new PhysicsOSError(
+        'WAVE_SPEC_INCOMPLETE',
+        'A longitudinal wave spec needs either wavelength or waveSpeed.',
+      )
+    }
+    return {
+      id,
+      type: 'longitudinal',
+      amplitude,
+      frequency: quantity(longitudinal.frequency, 'Hz', 'frequency'),
+      wavelength: quantity(wavelength, 'm', 'length'),
+      mediumLength: quantity(longitudinal.mediumLength ?? wavelength * 3, 'm', 'length'),
+    }
+  }
+
+  if (type === 'reflection_refraction') {
+    const boundary = spec as ReflectionRefractionWaveSpec
+    return {
+      id,
+      type: 'reflection_refraction',
+      amplitude,
+      frequency: quantity(boundary.frequency, 'Hz', 'frequency'),
+      incidentSpeed: quantity(boundary.incidentSpeed, 'm/s', 'velocity'),
+      transmittedWaveSpeed: quantity(boundary.transmittedSpeed, 'm/s', 'velocity'),
+      incidentAngle: quantity(boundary.incidentAngle, 'deg', 'angle'),
+    }
+  }
+
+  if (type === 'diffraction') {
+    const diffraction = spec as DiffractionWaveSpec
+    const wavelength = wavelengthOf({
+      amplitude: diffraction.amplitude,
+      frequency: diffraction.frequency,
+      ...(diffraction.wavelength === undefined ? {} : { wavelength: diffraction.wavelength }),
+      ...(diffraction.waveSpeed === undefined ? {} : { waveSpeed: diffraction.waveSpeed }),
+    })
+    return {
+      id,
+      type: 'diffraction',
+      amplitude,
+      frequency: quantity(diffraction.frequency, 'Hz', 'frequency'),
+      wavelength: quantity(wavelength, 'm', 'length'),
+      waveSpeed: quantity(wavelength * diffraction.frequency, 'm/s', 'velocity'),
+      slitWidth: quantity(diffraction.slitWidth, 'm', 'length'),
+      screenDistance: quantity(diffraction.screenDistance, 'm', 'length'),
+      diffractionOrder: diffraction.order ?? 1,
+    }
+  }
+
+  if (type === 'doppler') {
+    const doppler = spec as DopplerWaveSpec
+    return {
+      id,
+      type: 'doppler',
+      amplitude,
+      frequency: quantity(doppler.sourceFrequency, 'Hz', 'frequency'),
+      waveSpeed: quantity(doppler.waveSpeed, 'm/s', 'velocity'),
+      sourceSpeed: quantity(doppler.sourceSpeed, 'm/s', 'velocity'),
+      observerSpeed: quantity(doppler.observerSpeed, 'm/s', 'velocity'),
+      sourceDirection: doppler.sourceDirection,
+      observerDirection: doppler.observerDirection,
     }
   }
 
@@ -257,6 +417,46 @@ export const createWaveScene = (input: WaveBenchSceneInput): PhysicsScene => {
             },
           ]
         : []),
+      ...(bench.type === 'longitudinal'
+        ? [
+            {
+              id: observableId('longitudinal'),
+              type: 'annotation' as const,
+              targetId: bench.id,
+              visible: visibility.longitudinal ?? true,
+            },
+          ]
+        : []),
+      ...(bench.type === 'reflection_refraction'
+        ? [
+            {
+              id: observableId('boundary'),
+              type: 'geometry' as const,
+              targetId: bench.id,
+              visible: visibility.boundary ?? true,
+            },
+          ]
+        : []),
+      ...(bench.type === 'diffraction'
+        ? [
+            {
+              id: observableId('diffraction'),
+              type: 'geometry' as const,
+              targetId: bench.id,
+              visible: visibility.diffraction ?? true,
+            },
+          ]
+        : []),
+      ...(bench.type === 'doppler'
+        ? [
+            {
+              id: observableId('doppler'),
+              type: 'annotation' as const,
+              targetId: bench.id,
+              visible: visibility.doppler ?? true,
+            },
+          ]
+        : []),
     ],
     annotations: [],
     metadata: {
@@ -277,8 +477,7 @@ export const createWaveScene = (input: WaveBenchSceneInput): PhysicsScene => {
 export const waveBenchesOf = (scene: PhysicsScene): WaveBench[] => scene.waveBenches ?? []
 
 /** The single wave bench of a wave scene, if present. */
-export const waveBenchOf = (scene: PhysicsScene): WaveBench | undefined =>
-  waveBenchesOf(scene)[0]
+export const waveBenchOf = (scene: PhysicsScene): WaveBench | undefined => waveBenchesOf(scene)[0]
 
 /** True when the scene is a pure single-bench wave scene. */
 export const isWaveScene = (scene: PhysicsScene): boolean =>
@@ -292,7 +491,9 @@ export const isWaveScene = (scene: PhysicsScene): boolean =>
   (scene.fluidTanks ?? []).length === 0 &&
   (scene.thermalBenches ?? []).length === 0 &&
   (scene.leverBenches ?? []).length === 0 &&
-  (scene.inductionBenches ?? []).length === 0
+  (scene.inductionBenches ?? []).length === 0 &&
+  (scene.cyclotronBenches ?? []).length === 0 &&
+  (scene.modernPhysicsBenches ?? []).length === 0
 
 /** The wave sub-model type of the bench. */
 export const waveTypeOf = (bench: WaveBench): WaveBenchType => bench.type

@@ -104,10 +104,13 @@ describe('experiment template registry', () => {
     expect(second.sceneId).not.toBe(first.sceneId)
   })
 
-  it('never offers a cyclotron as creatable while the engine has no time-varying field', () => {
+  it('offers the cyclotron through the verified time-varying-field runtime', () => {
     const cyclotron = findExperimentTemplate('cyclotron')
-    expect(cyclotron?.comingSoon).toBe(true)
-    expect(() => cyclotron?.createScene('回旋加速器')).toThrow()
+    expect(cyclotron?.comingSoon).toBeUndefined()
+    const ref = cyclotron?.createScene('回旋加速器')
+    if (ref === undefined) throw new Error('cyclotron template did not create a scene')
+    expect(ref?.scene.cyclotronBenches).toHaveLength(1)
+    expect(domainOfScene(ref.scene)).toBe('composite')
   })
 })
 

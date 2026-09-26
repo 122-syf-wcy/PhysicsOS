@@ -1,16 +1,25 @@
 import { asQuestionId } from '@physicsos/shared'
 import type { QuestionDocument } from './question-document.ts'
+import type { PhysicsModelId } from './semantic-ir.ts'
 
 export interface GoldenQuestionDefinition {
   id: string
   title: string
   text: string
-  expectedDomain?: 'magnetic' | 'mechanics' | 'electric' | 'composite' | 'circuit' | 'optics' | 'induction' | 'wave'
+  expectedDomain?:
+    | 'magnetic'
+    | 'mechanics'
+    | 'electric'
+    | 'composite'
+    | 'circuit'
+    | 'optics'
+    | 'induction'
+    | 'wave'
   expectedChargeSign: 'positive' | 'negative' | 'unknown'
   expectedFieldDirection: 'into_page' | 'out_of_page' | 'unknown'
   expectedValidation: 'VALID' | 'AMBIGUOUS' | 'INVALID_SEMANTICS' | 'UNSUPPORTED_MODEL'
   /** Composite apparatus the question describes, when it is a composite one. */
-  expectedModel?: 'velocity_selector' | 'mass_spectrometer' | 'charged_particle_composite_field' | 'cyclotron'
+  expectedModel?: PhysicsModelId
 }
 
 export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
@@ -124,7 +133,7 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
   {
     id: 'electric-04-point-charge-force',
     title: '点电荷对试探电荷的电场力',
-    text: '一个点电荷 q = +5 μC，在距其 r = 20 cm 处放一个试探电荷 q\' = +2 μC。求试探电荷受到的电场力。',
+    text: "一个点电荷 q = +5 μC，在距其 r = 20 cm 处放一个试探电荷 q' = +2 μC。求试探电荷受到的电场力。",
     expectedDomain: 'electric',
     expectedChargeSign: 'positive',
     expectedFieldDirection: 'unknown',
@@ -524,14 +533,14 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedValidation: 'VALID',
   },
   {
-    id: 'comp-21-cyclotron-unsupported',
-    title: '回旋加速器（当前引擎不支持）',
-    text: '回旋加速器的匀强磁场方向垂直纸面向外，B = 1.5 T，加速电场频率与质子回旋频率相同。质子 q = 1.6×10^-19 C，m = 1.67×10^-27 kg，以 v = 1.0×10^5 m/s 开始加速。求：1. 回旋周期 2. 最大速度',
+    id: 'comp-21-cyclotron',
+    title: '回旋加速器',
+    text: '回旋加速器的匀强磁场方向垂直纸面向外，B = 1.5 T，加速电压 U = 2000 V，D形盒半径 R = 0.50 m，加速电场频率与质子回旋频率相同。质子 q = 1.6×10^-19 C，m = 1.67×10^-27 kg，以 v = 1.0×10^5 m/s 开始加速。求：1. 回旋周期 2. 最大速度 3. 最大动能',
     expectedDomain: 'composite',
     expectedModel: 'cyclotron',
     expectedChargeSign: 'positive',
     expectedFieldDirection: 'out_of_page',
-    expectedValidation: 'UNSUPPORTED_MODEL',
+    expectedValidation: 'VALID',
   },
 
   /* --------------------------------------------------------------- optics --- *
@@ -774,6 +783,46 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
     expectedFieldDirection: 'unknown',
     expectedValidation: 'INVALID_SEMANTICS',
   },
+  {
+    id: 'wave-07-longitudinal',
+    title: '纵波的波长、频率与波速',
+    text: '一列纵波沿弹性介质传播，振幅 A = 2 cm，波长 λ = 0.5 m，频率 f = 4 Hz，介质长度 ℓ = 1.5 m。求：波速和周期',
+    expectedDomain: 'wave',
+    expectedModel: 'longitudinal_wave',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-08-reflection-refraction',
+    title: '波的反射与折射',
+    text: '水波在介质1中的波速 v1 = 4 m/s，进入介质2后的波速 v2 = 2 m/s，入射角 θ1 = 30°，频率 f = 2 Hz。求反射角和折射角。',
+    expectedDomain: 'wave',
+    expectedModel: 'reflection_refraction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-09-single-slit-diffraction',
+    title: '单缝衍射的中央明纹',
+    text: '水波通过宽 a = 1 m 的单缝发生衍射，波长 λ = 0.5 m，频率 f = 2 Hz，缝到屏距离 L = 2 m。求中央明纹宽度和第一暗纹的衍射角。',
+    expectedDomain: 'wave',
+    expectedModel: 'wave_diffraction',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'wave-10-doppler',
+    title: '多普勒效应',
+    text: '一列机械波在介质中的波速 v = 340 m/s，波源频率 f = 500 Hz，波源以 vs = 34 m/s 接近静止的观察者。求观察者接收到的频率。',
+    expectedDomain: 'wave',
+    expectedModel: 'wave_doppler',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
 
   /* ------------------------------------------------------------- mechanics -- *
    * 匀速直线运动与牛顿第二定律：初中教材章节的入门题。写杠杆、单摆、浮力、热学
@@ -814,6 +863,41 @@ export const GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
 ]
 
 /**
+ * Modern-physics fixtures. Kept separate from the legacy golden list until the
+ * controller adds the `modern` library/renderer locale wiring; the question
+ * runtime and parser already exercise them end to end.
+ */
+export const MODERN_GOLDEN_QUESTIONS: readonly GoldenQuestionDefinition[] = [
+  {
+    id: 'modern-01-photoelectric-energy',
+    title: '光电效应的光子能量与最大初动能',
+    text: '某金属的逸出功 W = 2.0 eV，用波长 λ = 400 nm 的单色光照射，光强 I = 10 W/m^2，阴极面积 S = 1 cm^2。求光子能量、最大初动能、遏止电压和光电流。',
+    expectedModel: 'photoelectric_effect',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'modern-02-threshold',
+    title: '光电效应的截止频率与截止波长',
+    text: '某金属的逸出功 W = 3.0 eV，用波长 λ = 500 nm 的单色光照射。求截止频率、截止波长以及能否发生光电效应。',
+    expectedModel: 'photoelectric_effect',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'VALID',
+  },
+  {
+    id: 'modern-03-atomic-level-unsupported',
+    title: '氢原子能级跃迁（暂不支持）',
+    text: '处于 n = 2 能级的氢原子向低能级跃迁，求辐射光子的能量。',
+    expectedModel: 'atomic_energy_level',
+    expectedChargeSign: 'unknown',
+    expectedFieldDirection: 'unknown',
+    expectedValidation: 'UNSUPPORTED_MODEL',
+  },
+]
+
+/**
  * Domain a golden question exercises: the explicit `expectedDomain` when set,
  * otherwise the family the id prefix encodes (mech-/circ-/opt-/ind-/wave-).
  * Composite questions always declare theirs explicitly.
@@ -834,7 +918,10 @@ export const goldenQuestionDomain = (
             ? 'wave'
             : 'magnetic')
 
-export function createGoldenQuestionDocument(def: GoldenQuestionDefinition, now?: string): QuestionDocument {
+export function createGoldenQuestionDocument(
+  def: GoldenQuestionDefinition,
+  now?: string,
+): QuestionDocument {
   const ts = now ?? new Date().toISOString()
   const domain = goldenQuestionDomain(def)
   return {

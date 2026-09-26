@@ -19,3 +19,14 @@ export {
   type CompositePhase,
   type PhaseBoundaryKind,
 } from './composite-engine.ts'
+export {
+  CYCLOTRON_TIME_VARYING_MODEL,
+  crossingStateOf,
+  cyclotronMotionAt,
+  gapElectricFieldAt,
+  resolveCyclotronModel,
+  speedAfterCrossings,
+  type CyclotronCrossingState,
+  type CyclotronModel,
+  type CyclotronMotion,
+} from './cyclotron-model.ts'

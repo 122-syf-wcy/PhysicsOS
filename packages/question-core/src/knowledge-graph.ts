@@ -41,43 +41,138 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   /* 平均速度 is a 初中 lab node: no golden question maps to it yet — the Lab's
      测平均速度 self-checks are what write attempts against it. */
   { id: 'kin-average-speed', label: '平均速度', domain: 'mechanics', parentId: 'mechanics' },
-  { id: 'kin-uniform-acceleration', label: '匀变速直线运动', domain: 'mechanics', parentId: 'mechanics' },
+  {
+    id: 'kin-uniform-acceleration',
+    label: '匀变速直线运动',
+    domain: 'mechanics',
+    parentId: 'mechanics',
+  },
   { id: 'kin-projectile', label: '抛体运动', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-newton-second', label: '牛顿第二定律', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-force-analysis', label: '受力分析', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'dyn-incline', label: '斜面模型', domain: 'mechanics', parentId: 'mechanics' },
   /* 杠杆平衡 is a 初中 lab node: no golden question maps to it yet — the Lab's
      探究杠杆的平衡条件 self-checks are what write attempts against it. */
-  { id: 'dyn-lever-balance', label: '杠杆平衡条件 F₁l₁ = F₂l₂', domain: 'mechanics', parentId: 'mechanics' },
+  {
+    id: 'dyn-lever-balance',
+    label: '杠杆平衡条件 F₁l₁ = F₂l₂',
+    domain: 'mechanics',
+    parentId: 'mechanics',
+  },
   { id: 'dyn-moment', label: '力臂与力矩', domain: 'mechanics', parentId: 'mechanics' },
   /* 摩擦与振动节点：由 Lab 的摩擦/弹簧/单摆实验自测写入，暂无 golden 题。 */
-  { id: 'dyn-friction', label: '摩擦力（静摩擦与滑动摩擦）', domain: 'mechanics', parentId: 'mechanics' },
+  {
+    id: 'dyn-friction',
+    label: '摩擦力（静摩擦与滑动摩擦）',
+    domain: 'mechanics',
+    parentId: 'mechanics',
+  },
   { id: 'dyn-hooke', label: '胡克定律 F = kx', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'osc-spring', label: '弹簧振子与简谐运动', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'osc-pendulum', label: '单摆与周期测量', domain: 'mechanics', parentId: 'mechanics' },
   { id: 'method-units', label: '单位与数量级', domain: 'mechanics', parentId: 'mechanics' },
 
   { id: 'electromagnetism', label: '电磁学', domain: 'electromagnetism' },
-  { id: 'em-field-strength', label: '电场强度', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-superposition', label: '电场叠加', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-electric-force', label: '电场力', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-uniform-deflection', label: '匀强电场偏转（类平抛）', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-bounded-field', label: '有界电场与极板', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-energy', label: '电场力做功与动能', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  {
+    id: 'em-field-strength',
+    label: '电场强度',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-superposition',
+    label: '电场叠加',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-electric-force',
+    label: '电场力',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-uniform-deflection',
+    label: '匀强电场偏转（类平抛）',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-bounded-field',
+    label: '有界电场与极板',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-energy',
+    label: '电场力做功与动能',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
   { id: 'em-lorentz', label: '洛伦兹力', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-circular', label: '磁场中的圆周运动', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-crossed-fields', label: '复合场 E+B', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-velocity-selector', label: '速度选择器', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-mass-spectrometer', label: '质谱仪', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-three-field', label: '电、磁、重力三场平衡', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  {
+    id: 'em-circular',
+    label: '磁场中的圆周运动',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-crossed-fields',
+    label: '复合场 E+B',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-velocity-selector',
+    label: '速度选择器',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-mass-spectrometer',
+    label: '质谱仪',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-three-field',
+    label: '电、磁、重力三场平衡',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
   /* 电磁感应 nodes back the golden induction questions (导体棒切割磁感线 /
    * 磁通量变化) and the Lab's induction experiment self-checks. Golden
    * question attempts and lab attempts both write to these nodes. */
-  { id: 'em-induction', label: '电磁感应现象', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-motional-emf', label: '动生电动势 E = BLv', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-faraday-law', label: '法拉第电磁感应定律 E = -dΦ/dt', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-lenz-law', label: '楞次定律与感应方向', domain: 'electromagnetism', parentId: 'electromagnetism' },
-  { id: 'em-magnetic-flux', label: '磁通量 Φ = B·S·cosθ', domain: 'electromagnetism', parentId: 'electromagnetism' },
+  {
+    id: 'em-induction',
+    label: '电磁感应现象',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-motional-emf',
+    label: '动生电动势 E = BLv',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-faraday-law',
+    label: '法拉第电磁感应定律 E = -dΦ/dt',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-lenz-law',
+    label: '楞次定律与感应方向',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
+  {
+    id: 'em-magnetic-flux',
+    label: '磁通量 Φ = B·S·cosθ',
+    domain: 'electromagnetism',
+    parentId: 'electromagnetism',
+  },
 
   /* 电路 nodes are exercised by the Lab's experiment self-checks (there are no
      circuit golden questions yet); QUESTION_KNOWLEDGE therefore never maps to
@@ -97,23 +192,48 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'opt-light-reflection', label: '光的反射', domain: 'optics', parentId: 'optics' },
   { id: 'opt-plane-mirror', label: '平面镜成像', domain: 'optics', parentId: 'optics' },
   { id: 'opt-lens-imaging', label: '凸透镜成像规律', domain: 'optics', parentId: 'optics' },
-  { id: 'opt-curved-mirror', label: '球面镜成像（凹面镜/凸面镜）', domain: 'optics', parentId: 'optics' },
+  {
+    id: 'opt-curved-mirror',
+    label: '球面镜成像（凹面镜/凸面镜）',
+    domain: 'optics',
+    parentId: 'optics',
+  },
   { id: 'opt-real-virtual-image', label: '实像与虚像', domain: 'optics', parentId: 'optics' },
 
   /* 声学 nodes are exercised by the Lab's echo-ranging self-checks (回声测距);
      like optics they have no golden questions yet, so the learning record
      reaches them through lab attempts. */
   { id: 'acoustics', label: '声学', domain: 'acoustics' },
-  { id: 'ac-sound-propagation', label: '声音的传播与声速', domain: 'acoustics', parentId: 'acoustics' },
+  {
+    id: 'ac-sound-propagation',
+    label: '声音的传播与声速',
+    domain: 'acoustics',
+    parentId: 'acoustics',
+  },
   { id: 'ac-echo', label: '回声与反射', domain: 'acoustics', parentId: 'acoustics' },
-  { id: 'ac-echo-ranging', label: '回声测距 d = v·t/2', domain: 'acoustics', parentId: 'acoustics' },
+  {
+    id: 'ac-echo-ranging',
+    label: '回声测距 d = v·t/2',
+    domain: 'acoustics',
+    parentId: 'acoustics',
+  },
 
   /* 浮力 nodes are exercised by the Lab's spring-scale buoyancy self-checks;
      like optics and acoustics they have no golden questions yet, so the
      learning record reaches them through lab attempts. */
   { id: 'fluid', label: '浮力', domain: 'fluid' },
-  { id: 'fl-buoyancy-measure', label: '称重法测浮力 F_浮 = G − F_示', domain: 'fluid', parentId: 'fluid' },
-  { id: 'fl-archimedes', label: '阿基米德原理 F_浮 = ρ_液·g·V_排', domain: 'fluid', parentId: 'fluid' },
+  {
+    id: 'fl-buoyancy-measure',
+    label: '称重法测浮力 F_浮 = G − F_示',
+    domain: 'fluid',
+    parentId: 'fluid',
+  },
+  {
+    id: 'fl-archimedes',
+    label: '阿基米德原理 F_浮 = ρ_液·g·V_排',
+    domain: 'fluid',
+    parentId: 'fluid',
+  },
   { id: 'fl-float-sink', label: '物体的浮沉条件', domain: 'fluid', parentId: 'fluid' },
 
   /* 热学 nodes are exercised by the Lab's crystal-melting self-checks; like the
@@ -122,7 +242,12 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'thermal', label: '热学', domain: 'thermal' },
   { id: 'th-melting-point', label: '晶体与非晶体的熔化', domain: 'thermal', parentId: 'thermal' },
   { id: 'th-latent-heat', label: '熔化吸热与熔化热', domain: 'thermal', parentId: 'thermal' },
-  { id: 'th-specific-heat', label: '比热容与吸热 Q = cmΔt', domain: 'thermal', parentId: 'thermal' },
+  {
+    id: 'th-specific-heat',
+    label: '比热容与吸热 Q = cmΔt',
+    domain: 'thermal',
+    parentId: 'thermal',
+  },
 
   /* 机械波 nodes are exercised by the Lab's wave-bench self-checks (绳波 / 双源干涉 /
      弦驻波); like the other lab-only branches they have no golden questions yet, so
@@ -132,6 +257,10 @@ export const KNOWLEDGE_NODES: readonly KnowledgeNode[] = [
   { id: 'wv-particle-motion', label: '质点振动与波的传播', domain: 'wave', parentId: 'wave' },
   { id: 'wv-interference', label: '波的干涉与路程差', domain: 'wave', parentId: 'wave' },
   { id: 'wv-standing-wave', label: '驻波、波节与波腹', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-longitudinal', label: '纵波与疏密相间', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-reflection-refraction', label: '波的反射与折射', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-diffraction', label: '波的衍射', domain: 'wave', parentId: 'wave' },
+  { id: 'wv-doppler', label: '多普勒效应', domain: 'wave', parentId: 'wave' },
 ]
 
 const NODE_BY_ID: ReadonlyMap<string, KnowledgeNode> = new Map(
@@ -212,7 +341,7 @@ export const QUESTION_KNOWLEDGE: Readonly<Record<string, readonly string[]>> = {
   'comp-18-ebg-balance': ['em-three-field', 'dyn-force-analysis'],
   'comp-19-ebg-droplet': ['em-three-field', 'dyn-force-analysis'],
   'comp-20-ebg-heavy-particle': ['em-three-field', 'dyn-force-analysis'],
-  'comp-21-cyclotron-unsupported': ['em-crossed-fields'],
+  'comp-21-cyclotron': ['em-crossed-fields'],
 
   /* ---------------------------------------------------------------- optics -- */
   'opt-01-plane-mirror': ['opt-plane-mirror', 'opt-real-virtual-image'],
@@ -244,6 +373,10 @@ export const QUESTION_KNOWLEDGE: Readonly<Record<string, readonly string[]>> = {
   'wave-04-interference-destructive': ['wv-interference'],
   'wave-05-standing-third-harmonic': ['wv-standing-wave', 'wv-wave-speed'],
   'wave-06-missing-frequency': ['wv-wave-speed'],
+  'wave-07-longitudinal': ['wv-longitudinal', 'wv-wave-speed'],
+  'wave-08-reflection-refraction': ['wv-reflection-refraction', 'wv-wave-speed'],
+  'wave-09-single-slit-diffraction': ['wv-diffraction', 'wv-wave-speed'],
+  'wave-10-doppler': ['wv-doppler'],
 }
 
 /** Knowledge nodes for a question id, in table order; unknown ids yield []. */

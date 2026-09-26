@@ -2,10 +2,7 @@ import type { PhysicsDomain } from '@physicsos/physics-core'
 
 export type MagneticModelId = 'charged_particle_uniform_magnetic_field'
 
-export type OpticsModelId =
-  | 'thin_lens_imaging'
-  | 'plane_mirror_imaging'
-  | 'curved_mirror_imaging'
+export type OpticsModelId = 'thin_lens_imaging' | 'plane_mirror_imaging' | 'curved_mirror_imaging'
 export type ElectricModelId =
   | 'charged_particle_uniform_electric_field'
   | 'point_charge_electrostatic_field'
@@ -26,10 +23,7 @@ export type MechanicsModelId =
  * energy) and each needs its own solution narrative.
  */
 export type CompositeModelId =
-  | 'velocity_selector'
-  | 'mass_spectrometer'
-  | 'cyclotron'
-  | 'charged_particle_composite_field'
+  'velocity_selector' | 'mass_spectrometer' | 'cyclotron' | 'charged_particle_composite_field'
 
 /**
  * Not a physics model: the parser recognised a question SHAPE the pipeline
@@ -37,7 +31,8 @@ export type CompositeModelId =
  * maps it to UNSUPPORTED_MODEL so the reason reaches the student instead of a
  * silently single-solved pseudo-result.
  */
-export type UnsupportedModelId = 'multi_case_comparison'
+export type UnsupportedModelId =
+  'multi_case_comparison' | 'atomic_energy_level' | 'radioactive_decay' | 'nuclear_reaction'
 
 export type PhysicsModelId =
   | MagneticModelId
@@ -48,6 +43,7 @@ export type PhysicsModelId =
   | CircuitModelId
   | InductionModelId
   | WaveModelId
+  | ModernPhysicsModelId
   | UnsupportedModelId
 
 /**
@@ -57,7 +53,17 @@ export type PhysicsModelId =
  * its path difference to two coherent sources; a standing question reads the
  * harmonic of a string clamped at both ends.
  */
-export type WaveModelId = 'travelling_wave' | 'wave_interference' | 'standing_wave'
+export type WaveModelId =
+  | 'travelling_wave'
+  | 'wave_interference'
+  | 'standing_wave'
+  | 'longitudinal_wave'
+  | 'reflection_refraction'
+  | 'wave_diffraction'
+  | 'wave_doppler'
+
+/** Modern-physics models. Only the photoelectric slice is implemented. */
+export type ModernPhysicsModelId = 'photoelectric_effect'
 
 /**
  * DC steady-state circuit model. The circuit engine solves a single-source
@@ -101,6 +107,9 @@ export type SemanticEntity =
   | 'wave_source'
   | 'observation_point'
   | 'string'
+  | 'metal_cathode'
+  | 'photon'
+  | 'photoelectron'
 export type SemanticTarget =
   | 'force'
   | 'radius'
@@ -169,6 +178,20 @@ export type SemanticTarget =
   | 'interference_type'
   | 'resultant_amplitude'
   | 'node_count'
+  | 'reflection_angle'
+  | 'refracted_angle'
+  | 'critical_angle'
+  | 'central_maximum_width'
+  | 'diffraction_angle'
+  | 'observed_frequency'
+  | 'frequency_shift'
+  | 'photon_energy'
+  | 'threshold_frequency'
+  | 'threshold_wavelength'
+  | 'max_kinetic_energy'
+  | 'stopping_potential'
+  | 'photocurrent'
+  | 'emits_photoelectrons'
 export type SemanticRelation =
   | 'velocity_perpendicular_B'
   | 'velocity_parallel_B'
@@ -210,6 +233,12 @@ export type SemanticRelation =
   | 'wave_speed_relation'
   | 'path_difference_superposition'
   | 'standing_wave_resonance'
+  | 'longitudinal_wave_motion'
+  | 'wave_reflection'
+  | 'wave_refraction'
+  | 'single_slit_diffraction'
+  | 'doppler_effect'
+  | 'photoelectric_effect'
 export type SemanticAssumption =
   | 'uniform_magnetic_field'
   | 'magnetic_force_only'
@@ -251,6 +280,12 @@ export type SemanticAssumption =
   | 'ideal_medium_no_damping'
   | 'coherent_in_phase_sources'
   | 'string_clamped_both_ends'
+  | 'plane_wave_normal_incidence'
+  | 'far_field_diffraction'
+  | 'subsonic_source'
+  | 'monochromatic_light'
+  | 'one_photon_photoemission'
+  | 'all_photoelectrons_collected'
 export type PlanarDirection = 'right' | 'left' | 'up' | 'down' | 'unknown'
 
 export interface KnownValue {
@@ -405,13 +440,29 @@ export interface PhysicsSemanticIR {
   wavePathDifference?: number
   waveStringLength?: number
   waveHarmonic?: number
+  waveMediumLength?: number
+  waveIncidentSpeed?: number
+  waveTransmittedSpeed?: number
+  /** Angle of incidence in radians. */
+  waveIncidentAngle?: number
+  waveSlitWidth?: number
+  waveScreenDistance?: number
+  waveDiffractionOrder?: number
+  waveSourceSpeed?: number
+  waveObserverSpeed?: number
+  waveSourceDirection?: 'approaching' | 'receding'
+  waveObserverDirection?: 'approaching' | 'receding' | 'stationary'
+
+  /* Modern-physics facts (SI). */
+  workFunction?: number
+  photonWavelength?: number
+  lightIntensity?: number
+  cathodeArea?: number
+  quantumEfficiency?: number
 }
 
 export type ValidationResultStatus =
-  | 'VALID'
-  | 'AMBIGUOUS'
-  | 'INVALID_SEMANTICS'
-  | 'UNSUPPORTED_MODEL'
+  'VALID' | 'AMBIGUOUS' | 'INVALID_SEMANTICS' | 'UNSUPPORTED_MODEL'
 
 export interface QuestionParseIssue {
   code: string

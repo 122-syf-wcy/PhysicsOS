@@ -68,9 +68,12 @@ export {
   type PressureBenchType,
   type CurrentBench,
   type CurrentBenchType,
+  type CyclotronBench,
   type EnergyBench,
   type WaveBench,
   type WaveBenchType,
+  type ModernPhysicsBench,
+  type ModernPhysicsBenchType,
   type Timeline,
   type TimelineState,
   type UniformElectricField,
@@ -179,6 +182,13 @@ export {
   type VelocitySelectorSceneInput,
 } from './composite/composite-scene-factory.ts'
 export {
+  createCyclotronScene,
+  cyclotronBenchOf,
+  cyclotronBenchesOf,
+  isCyclotronScene,
+  type CyclotronSceneInput,
+} from './composite/cyclotron-scene.ts'
+export {
   CIRCUIT_SWEEP_DURATION_SECONDS,
   CIRCUIT_SYMBOL_HALF_LENGTH,
   SOURCE_TERMINAL_KEYS,
@@ -262,10 +272,7 @@ export {
   type SubmergedBlockSpec,
   type TankLiquidSpec,
 } from './fluid/fluid-scene.ts'
-export {
-  createArchimedesScene,
-  type ArchimedesSceneInput,
-} from './fluid/fluid-templates.ts'
+export { createArchimedesScene, type ArchimedesSceneInput } from './fluid/fluid-templates.ts'
 export {
   createPressureBenchScene,
   isPressureScene,
@@ -396,10 +403,7 @@ export {
   type LeverHangerSpec,
   type LeverObservableKey,
 } from './lever/lever-scene.ts'
-export {
-  createLeverBalanceScene,
-  type LeverBalanceSceneInput,
-} from './lever/lever-templates.ts'
+export { createLeverBalanceScene, type LeverBalanceSceneInput } from './lever/lever-templates.ts'
 export {
   createInductionScene,
   inductionBenchOf,
@@ -428,6 +432,10 @@ export {
   waveBenchesOf,
   waveTypeOf,
   type InterferenceWaveSpec,
+  type LongitudinalWaveSpec,
+  type ReflectionRefractionWaveSpec,
+  type DiffractionWaveSpec,
+  type DopplerWaveSpec,
   type StandingWaveSpec,
   type TravellingWaveSpec,
   type WaveBenchSceneInput,
@@ -438,10 +446,27 @@ export {
   createStandingWaveScene,
   createTravellingWaveScene,
   createWaveInterferenceScene,
+  createLongitudinalWaveScene,
+  createReflectionRefractionScene,
+  createDiffractionScene,
+  createDopplerScene,
+  type DopplerWaveSceneInput,
+  type DiffractionWaveSceneInput,
   type InterferenceWaveSceneInput,
+  type LongitudinalWaveSceneInput,
+  type ReflectionRefractionSceneInput,
   type StandingWaveSceneInput,
   type TravellingWaveSceneInput,
 } from './wave/wave-templates.ts'
+export {
+  ELECTRON_VOLT_JOULES,
+  createModernPhysicsScene,
+  createPhotoelectricEffectScene,
+  isModernPhysicsScene,
+  modernPhysicsBenchOf,
+  modernPhysicsBenchesOf,
+  type ModernPhysicsSceneInput,
+} from './modern/modern-physics-scene.ts'
 export {
   MAX_TRAJECTORY_RENDER_POINTS,
   MAX_TRAJECTORY_STORAGE_SAMPLES,

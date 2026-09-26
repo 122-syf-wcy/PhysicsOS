@@ -51,6 +51,7 @@ import {
 } from '@physicsos/physics-core'
 import {
   hasUnsampleableRegion,
+  cyclotronBenchOf,
   isCompositeFieldScene,
   sameFieldEnvironment,
   sampleFieldsAt,
@@ -68,6 +69,14 @@ import {
   gyroRadius,
   selectorSpeed,
 } from '@physicsos/physics-composite-core'
+import {
+  CYCLOTRON_TIME_VARYING_MODEL,
+  cyclotronMotionAt,
+  gapElectricFieldAt,
+  resolveCyclotronModel,
+  speedAfterCrossings,
+  type CyclotronModel,
+} from './cyclotron-model.ts'
 
 export const COMPOSITE_ENGINE_ID = 'engine-composite'
 export const COMPOSITE_ENGINE_VERSION = '1.0.0'
@@ -143,7 +152,10 @@ const regionDelta = (before: FieldSample, after: FieldSample) => ({
   exited: before.regionIds.filter((id) => !after.regionIds.includes(id)),
 })
 
-const boundaryKindOf = (entered: readonly string[], exited: readonly string[]): PhaseBoundaryKind => {
+const boundaryKindOf = (
+  entered: readonly string[],
+  exited: readonly string[],
+): PhaseBoundaryKind => {
   if (entered.length > 0) return 'enter_region'
   if (exited.length > 0) return 'exit_region'
   /* Fields changed without any region membership changing — two regions sharing a
@@ -198,7 +210,14 @@ export const decomposePhases = (
         let high = dt
         for (let round = 0; round < BISECTION_ROUNDS; round += 1) {
           const mid = (low + high) / 2
-          const midMotion = compositeMotionAt(model.charge, model.mass, position, velocity, sample, mid)
+          const midMotion = compositeMotionAt(
+            model.charge,
+            model.mass,
+            position,
+            velocity,
+            sample,
+            mid,
+          )
           const midSample = sampleFieldsAt(scene, midMotion.position)
           const unchanged =
             sameFieldEnvironment(sample, midSample) &&
@@ -651,10 +670,16 @@ const buildVerification = (
     tol.absolute,
   )
   checks.push(
-    check('energy_consistency', 'conservation', Math.abs(work - deltaKinetic) / energyScale < 1e-6, {
-      message: 'Work done by the electric and gravitational forces equals the kinetic-energy change.',
-      details: { work, deltaKinetic, energyScale },
-    }),
+    check(
+      'energy_consistency',
+      'conservation',
+      Math.abs(work - deltaKinetic) / energyScale < 1e-6,
+      {
+        message:
+          'Work done by the electric and gravitational forces equals the kinetic-energy change.',
+        details: { work, deltaKinetic, energyScale },
+      },
+    ),
   )
 
   /* Cyclotron period depends only on q/m and B, never on speed — the fact that
@@ -669,9 +694,10 @@ const buildVerification = (
     if (period !== undefined) {
       const speedBase = Math.max(1e-6, magnitude(model.velocity))
       const launchSpeeds = [speedBase, speedBase * 3]
-      const direction = magnitude(model.velocity) > 0
-        ? scale(model.velocity, 1 / magnitude(model.velocity))
-        : vec3(1, 0, 0)
+      const direction =
+        magnitude(model.velocity) > 0
+          ? scale(model.velocity, 1 / magnitude(model.velocity))
+          : vec3(1, 0, 0)
       const phaseClosesAtBothSpeeds = launchSpeeds.every((speed) => {
         const v0 = scale(direction, speed)
         const after = compositeMotionAt(
@@ -686,15 +712,10 @@ const buildVerification = (
         return residual < tol.absolute + 1e-9 * speed
       })
       checks.push(
-        check(
-          'cyclotron_period_independent_of_speed',
-          'constraint',
-          phaseClosesAtBothSpeeds,
-          {
-            message: 'The cyclotron period is set by q/m and B alone, independent of speed.',
-            details: { period },
-          },
-        ),
+        check('cyclotron_period_independent_of_speed', 'constraint', phaseClosesAtBothSpeeds, {
+          message: 'The cyclotron period is set by q/m and B alone, independent of speed.',
+          details: { period },
+        }),
       )
     }
   }
@@ -726,6 +747,305 @@ export function createCompositeSimulationRequest(
   }
 }
 
+/* -------------------------------------------------------- cyclotron model -- */
+
+const CYCLOTRON_ASSUMPTIONS = [
+  'uniform B perpendicular to the motion plane',
+  'ideal zero-width accelerating gap with negligible transit time',
+  'gap field reverses every half cyclotron period',
+  'non-relativistic point particle',
+] as const
+
+const cyclotronDerivedAt = (model: CyclotronModel, timeSeconds: number): DerivedQuantity[] => {
+  const motion = cyclotronMotionAt(model, timeSeconds)
+  const assumptions = [...CYCLOTRON_ASSUMPTIONS]
+  const gapVoltage = quantity(model.gapVoltage, 'V', 'electric_potential')
+  const magneticField = quantity(model.magneticFluxDensity, 'T', 'magnetic_flux_density')
+
+  return [
+    {
+      key: 'cyclotron_frequency',
+      targetId: model.particleId,
+      value: quantity(model.frequency, 'Hz', 'frequency'),
+      formula: { expression: 'f = |q|B / (2πm)' },
+      assumptions,
+    },
+    {
+      key: 'cyclotron_period',
+      targetId: model.particleId,
+      value: quantity(model.period, 's', 'time'),
+      formula: { expression: 'T = 2πm / (|q|B)' },
+      assumptions,
+    },
+    {
+      key: 'gap_voltage',
+      targetId: model.benchId,
+      value: gapVoltage,
+      formula: { expression: 'V' },
+      assumptions,
+    },
+    {
+      key: 'gap_electric_field',
+      targetId: model.benchId,
+      value: quantity(motion.gapElectricField, 'V/m', 'electric_field'),
+      formula: { expression: 'E(t) = ±V/d' },
+      assumptions,
+    },
+    {
+      key: 'magnetic_flux_density',
+      targetId: model.benchId,
+      value: magneticField,
+      formula: { expression: 'B' },
+      assumptions,
+    },
+    {
+      key: 'speed',
+      targetId: model.particleId,
+      value: quantity(motion.speed, 'm/s', 'velocity'),
+      formula: { expression: '|v(t)|' },
+      assumptions,
+    },
+    {
+      key: 'kinetic_energy',
+      targetId: model.particleId,
+      value: quantity(motion.kineticEnergy, 'J', 'energy'),
+      formula: { expression: 'K = ½m|v|²' },
+      assumptions,
+    },
+    {
+      key: 'gyro_radius',
+      targetId: model.particleId,
+      value: quantity(motion.radius, 'm', 'length'),
+      formula: { expression: 'r = mv / (|q|B)' },
+      assumptions,
+    },
+    {
+      key: 'max_speed',
+      targetId: model.benchId,
+      value: quantity(model.maxSpeed, 'm/s', 'velocity'),
+      formula: { expression: 'vmax = |q|BR / m' },
+      assumptions,
+    },
+    {
+      key: 'max_kinetic_energy',
+      targetId: model.benchId,
+      value: quantity(model.maxKineticEnergy, 'J', 'energy'),
+      formula: { expression: 'Kmax = q²B²R² / (2m)' },
+      assumptions,
+    },
+    {
+      key: 'extraction_radius',
+      targetId: model.benchId,
+      value: quantity(model.deeRadius, 'm', 'length'),
+      formula: { expression: 'R' },
+      assumptions,
+    },
+    {
+      key: 'acceleration_count',
+      targetId: model.particleId,
+      value: quantity(model.accelerationCount, '', 'dimensionless'),
+      formula: { expression: 'N = ceil((Kmax − K₀)/(qV))' },
+      assumptions,
+    },
+    {
+      key: 'crossings_completed',
+      targetId: model.particleId,
+      value: quantity(motion.crossingsCompleted, '', 'dimensionless'),
+      formula: { expression: 'floor(t / (T/2)) capped at N' },
+      assumptions,
+    },
+    {
+      key: 'turns_completed',
+      targetId: model.particleId,
+      value: quantity(motion.crossingsCompleted / 2, '', 'dimensionless'),
+      formula: { expression: 'Ncross / 2' },
+      assumptions,
+    },
+  ]
+}
+
+const cyclotronStateAt = (model: CyclotronModel, timeSeconds: number): SimulationState => {
+  const motion = cyclotronMotionAt(model, timeSeconds)
+  return {
+    time: quantity(timeSeconds, 's', 'time'),
+    objects: [
+      {
+        id: model.particleId,
+        position: quantityVector(motion.position, 'm', 'length'),
+        velocity: quantityVector(motion.velocity, 'm/s', 'velocity'),
+        acceleration: quantityVector(motion.acceleration, 'm/s^2', 'acceleration'),
+        values: {
+          gap_electric_field: quantity(motion.gapElectricField, 'V/m', 'electric_field'),
+          speed: quantity(motion.speed, 'm/s', 'velocity'),
+          kinetic_energy: quantity(motion.kineticEnergy, 'J', 'energy'),
+          gyro_radius: quantity(motion.radius, 'm', 'length'),
+          crossings_completed: quantity(motion.crossingsCompleted, '', 'dimensionless'),
+        },
+      },
+      {
+        id: model.benchId,
+        values: {
+          cyclotron_frequency: quantity(model.frequency, 'Hz', 'frequency'),
+          cyclotron_period: quantity(model.period, 's', 'time'),
+          gap_voltage: quantity(model.gapVoltage, 'V', 'electric_potential'),
+          max_speed: quantity(model.maxSpeed, 'm/s', 'velocity'),
+          acceleration_count: quantity(model.accelerationCount, '', 'dimensionless'),
+        },
+      },
+    ],
+    derived: cyclotronDerivedAt(model, timeSeconds),
+  }
+}
+
+const relative = (a: number, b: number, scale = 1): number =>
+  Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b), scale, Number.EPSILON)
+
+const buildCyclotronVerification = (
+  scene: PhysicsScene,
+  model: CyclotronModel,
+  states: readonly SimulationState[],
+): VerificationResult => {
+  const sceneVerification = validateScene(scene)
+  const checks: VerificationCheck[] = [...sceneVerification.checks]
+  const fieldPeriod =
+    (2 * Math.PI * model.mass) / (Math.abs(model.charge) * model.magneticFluxDensity)
+  checks.push(
+    check(
+      'cyclotron_frequency_from_qmb',
+      'constraint',
+      relative(model.period, fieldPeriod, fieldPeriod) < 1e-12,
+      {
+        message: 'Cyclotron period satisfies T = 2πm/(|q|B).',
+        targetId: model.particleId,
+        details: { period: model.period, fieldPeriod },
+      },
+    ),
+  )
+
+  const firstHalf = gapElectricFieldAt(model, model.period * 0.25)
+  const secondHalf = gapElectricFieldAt(model, model.period * 0.75)
+  const nextPeriod = gapElectricFieldAt(model, model.period * 1.25)
+  checks.push(
+    check(
+      'time_varying_gap_synchronized',
+      'constraint',
+      firstHalf * secondHalf < 0 && Math.abs(firstHalf - nextPeriod) < 1e-9 * Math.abs(firstHalf),
+      {
+        message: 'The ideal gap field reverses every half cyclotron period.',
+        targetId: model.benchId,
+        details: { firstHalf, secondHalf, nextPeriod },
+      },
+    ),
+  )
+
+  let worstEnergyError = 0
+  const probeCount = Math.min(model.accelerationCount, 64)
+  for (let crossing = 0; crossing < probeCount; crossing += 1) {
+    const before = 0.5 * model.mass * speedAfterCrossings(model, crossing) ** 2
+    const after = 0.5 * model.mass * speedAfterCrossings(model, crossing + 1) ** 2
+    const target =
+      crossing + 1 === model.accelerationCount
+        ? model.maxKineticEnergy
+        : before + Math.abs(model.charge) * model.gapVoltage
+    worstEnergyError = Math.max(
+      worstEnergyError,
+      Math.abs(after - target) /
+        Math.max(Math.abs(target), Math.abs(model.charge) * model.gapVoltage, Number.EPSILON),
+    )
+  }
+  checks.push(
+    check('gap_energy_gain_per_crossing', 'conservation', worstEnergyError < 1e-12, {
+      message:
+        'Each synchronized gap crossing adds qV of kinetic energy, except a final partial crossing at extraction.',
+      targetId: model.particleId,
+      details: { worstRelativeError: worstEnergyError, accelerationCount: model.accelerationCount },
+    }),
+  )
+
+  const bounded = states.every((state) => {
+    const speed = state.derived.find((entry) => entry.key === 'speed')?.value
+    return (
+      speed !== undefined && !('vector' in speed) && speed.value <= model.maxSpeed * (1 + 1e-12)
+    )
+  })
+  checks.push(
+    check('speed_below_extraction_limit', 'conservation', bounded, {
+      message: 'The particle speed never exceeds the extraction speed |q|BR/m.',
+      targetId: model.particleId,
+      details: { maxSpeed: model.maxSpeed, stateCount: states.length },
+    }),
+  )
+
+  return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
+}
+
+const simulateCyclotron = (
+  scene: PhysicsScene,
+  request: SimulationRequest,
+  startTime: number,
+  endTime: number,
+): SimulationResult<PhysicsEventLike> => {
+  const model = resolveCyclotronModel(scene)
+  const times = new Set<number>(
+    trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, TRAJECTORY_SAMPLES + 1),
+    ),
+  )
+  const crossingLimit = Math.min(model.accelerationCount, MAX_PHASES)
+  for (let crossing = 0; crossing <= crossingLimit; crossing += 1) {
+    const time = (crossing * model.period) / 2
+    if (time >= startTime && time <= endTime) times.add(time)
+  }
+  const states = [...times].sort((a, b) => a - b).map((time) => cyclotronStateAt(model, time))
+
+  const events: PhysicsEventLike[] = []
+  for (let crossing = 1; crossing <= crossingLimit; crossing += 1) {
+    const time = (crossing * model.period) / 2
+    if (time < startTime || time > endTime) continue
+    events.push({
+      eventId: asPhysicsEventId(`event-cyclotron-crossing-${crossing}`),
+      sceneId: scene.id,
+      revision: scene.revision,
+      type: 'AcceleratingGapCrossing',
+      time,
+    })
+  }
+  if (model.extractionTime >= startTime && model.extractionTime <= endTime) {
+    events.push({
+      eventId: asPhysicsEventId('event-cyclotron-extraction'),
+      sceneId: scene.id,
+      revision: scene.revision,
+      type: 'CyclotronExtraction',
+      time: model.extractionTime,
+    })
+  }
+
+  const startedAt = new Date().toISOString()
+  return {
+    schemaVersion: 'simulation-result/1.0',
+    simulationId: request.simulationId,
+    sceneId: scene.id,
+    sceneRevision: scene.revision,
+    states,
+    events,
+    measurements: [],
+    derivedQuantities: cyclotronDerivedAt(model, endTime),
+    verification: buildCyclotronVerification(scene, model, states),
+    metadata: {
+      engineId: COMPOSITE_ENGINE_ID,
+      engineVersion: COMPOSITE_ENGINE_VERSION,
+      solver: 'ideal-cyclotron-time-varying-gap',
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      durationMs: 0,
+      deterministic: true,
+    },
+    trace: request.trace,
+  }
+}
+
 /* ------------------------------------------------------------- the engine -- */
 
 export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
@@ -734,6 +1054,48 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
   readonly domain = 'composite' as const
 
   canHandle(scene: PhysicsScene): ModelSupport {
+    if (cyclotronBenchOf(scene) !== undefined) {
+      try {
+        resolveCyclotronModel(scene)
+      } catch (error: unknown) {
+        return unsupportedModel(
+          [
+            failure(
+              'supported_cyclotron_model',
+              error instanceof Error ? error.message : 'The cyclotron model is unsupported.',
+            ),
+          ],
+          COMPOSITE_ENGINE_ID,
+        )
+      }
+      if (scene.dimension !== '2d') {
+        return unsupportedModel(
+          [failure('scene_is_2d', 'Cyclotron model supports 2D scenes only.')],
+          COMPOSITE_ENGINE_ID,
+        )
+      }
+      let sceneVerification: VerificationResult
+      try {
+        sceneVerification = validateScene(scene)
+      } catch (error: unknown) {
+        return unsupportedModel(
+          [
+            failure(
+              'scene_valid',
+              error instanceof Error ? error.message : 'Scene validation failed.',
+            ),
+          ],
+          COMPOSITE_ENGINE_ID,
+        )
+      }
+      if (sceneVerification.status === 'failed') {
+        return unsupportedModel(
+          sceneVerification.errors.map((issue) => failure(issue.code, issue.message)),
+          COMPOSITE_ENGINE_ID,
+        )
+      }
+      return supported(CYCLOTRON_TIME_VARYING_MODEL, this.domain)
+    }
     if (!isCompositeFieldScene(scene)) {
       return unsupportedModel(
         [
@@ -783,7 +1145,12 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     }
     if (scene.particles.length !== 1 || scene.bodies.length > 0) {
       return unsupportedModel(
-        [failure('single_particle', 'Composite engine requires exactly one particle and no bodies.')],
+        [
+          failure(
+            'single_particle',
+            'Composite engine requires exactly one particle and no bodies.',
+          ),
+        ],
         COMPOSITE_ENGINE_ID,
       )
     }
@@ -866,6 +1233,9 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
         'Simulation time must be finite and non-negative.',
       )
     }
+    if (cyclotronBenchOf(scene) !== undefined) {
+      return cyclotronStateAt(resolveCyclotronModel(scene), seconds)
+    }
     const model = resolveCompositeModel(scene)
     const endTime =
       scene.timeline.endTime === undefined
@@ -895,7 +1265,6 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       )
     }
 
-    const model = resolveCompositeModel(scene)
     const startTime =
       request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
     const sceneDuration =
@@ -903,13 +1272,26 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
         ? DEFAULT_DURATION_SECONDS
         : canonicalValue(scene.timeline.endTime)
     const endTime =
-      request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
-    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime < startTime) {
+      request.options.endTime === undefined
+        ? sceneDuration
+        : canonicalValue(request.options.endTime)
+    if (
+      !Number.isFinite(startTime) ||
+      !Number.isFinite(endTime) ||
+      startTime < 0 ||
+      endTime < startTime
+    ) {
       throw new PhysicsOSError(
         'INVALID_SIMULATION_RANGE',
         'Simulation range must satisfy 0 <= startTime <= endTime.',
       )
     }
+
+    if (cyclotronBenchOf(scene) !== undefined) {
+      return simulateCyclotron(scene, request, startTime, endTime)
+    }
+
+    const model = resolveCompositeModel(scene)
 
     const { phases, truncated } = decomposePhases(scene, model, endTime)
 

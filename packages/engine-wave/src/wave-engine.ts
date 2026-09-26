@@ -29,12 +29,21 @@ import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import {
   antinodePositionsOf,
+  diffractionMinimumAngle,
+  dopplerObservedFrequency,
+  dopplerObservedWavelength,
   interferenceDisplacementAt,
   interferenceVerdictOf,
+  longitudinalDisplacementAt,
+  longitudinalParticleVelocityAt,
+  longitudinalPressureStateAt,
+  longitudinalStrainAt,
   nodePositionsOf,
   pathDifferenceOf,
+  reflectionRefractionReadingOf,
   resolveWaveModel,
   resultantAmplitudeOf,
+  singleSlitIntensityRatio,
   standingDisplacement,
   travellingDisplacement,
   travellingTransverseVelocity,
@@ -47,6 +56,10 @@ export const WAVE_ENGINE_VERSION = '1.0.0'
 export const TRAVELLING_WAVE_MODEL = 'travelling_wave'
 export const WAVE_INTERFERENCE_MODEL = 'wave_interference'
 export const STANDING_WAVE_MODEL = 'standing_wave'
+export const LONGITUDINAL_WAVE_MODEL = 'longitudinal_wave'
+export const REFLECTION_REFRACTION_WAVE_MODEL = 'reflection_refraction'
+export const DIFFRACTION_WAVE_MODEL = 'wave_diffraction'
+export const DOPPLER_WAVE_MODEL = 'wave_doppler'
 
 const DEFAULT_DURATION_SECONDS = 1
 const TRAJECTORY_SEGMENTS = 60
@@ -69,7 +82,9 @@ export const profileSampleCountOf = (model: ResolvedWaveModel): number => {
   const length =
     model.subModel === 'standing_wave'
       ? (model.stringLength ?? 0)
-      : (model.ropeLength ?? 0)
+      : model.subModel === 'longitudinal_wave'
+        ? (model.mediumLength ?? 0)
+        : (model.ropeLength ?? 0)
   const cycles = model.wavelength > 0 ? length / model.wavelength : 0
   return Math.min(
     MAX_PROFILE_SAMPLES,
@@ -100,15 +115,40 @@ const STANDING_ASSUMPTIONS = [
   'wave speed on the string is fixed by the medium',
 ] as const
 
+const LONGITUDINAL_ASSUMPTIONS = [
+  'one-dimensional ideal elastic medium with no damping',
+  'ξ(x, t) = A·sin(2π(x/λ − f·t)), displacement parallel to propagation',
+  'negative strain is compression and positive strain is rarefaction',
+] as const
+
+const BOUNDARY_ASSUMPTIONS = [
+  'plane boundary between two non-dispersive media',
+  'angles measured from the boundary normal',
+  'frequency is unchanged across the boundary',
+  'reflection angle equals the incident angle',
+] as const
+
+const DIFFRACTION_ASSUMPTIONS = [
+  'plane monochromatic wave incident normally on one slit',
+  'Fraunhofer far-field approximation L >> a',
+  'intensity follows the single-slit sinc² envelope',
+] as const
+
+const DOPPLER_ASSUMPTIONS = [
+  'source and observer move along the line joining them',
+  'subsonic source, |v_s| < v',
+  'stationary non-dispersive medium',
+] as const
+
 const failure = (condition: string, message: string) => ({ condition, message })
 
 const metres = (value: number): Quantity<'length'> => quantity(value, 'm', 'length')
 const hertz = (value: number): Quantity<'frequency'> => quantity(value, 'Hz', 'frequency')
 const seconds = (value: number): Quantity<'time'> => quantity(value, 's', 'time')
-const metresPerSecond = (value: number): Quantity<'velocity'> =>
-  quantity(value, 'm/s', 'velocity')
+const metresPerSecond = (value: number): Quantity<'velocity'> => quantity(value, 'm/s', 'velocity')
 const dimensionless = (value: number): Quantity<'dimensionless'> =>
   quantity(value, '', 'dimensionless')
+const radians = (value: number): Quantity<'angle'> => quantity(value, 'rad', 'angle')
 
 const verdictSign = (verdict: InterferenceVerdict): number =>
   verdict === 'constructive' ? 1 : verdict === 'destructive' ? -1 : 0
@@ -116,6 +156,10 @@ const verdictSign = (verdict: InterferenceVerdict): number =>
 const assumptionsOf = (model: ResolvedWaveModel): string[] => {
   if (model.subModel === 'travelling_wave') return [...TRAVELLING_ASSUMPTIONS]
   if (model.subModel === 'wave_interference') return [...INTERFERENCE_ASSUMPTIONS]
+  if (model.subModel === 'longitudinal_wave') return [...LONGITUDINAL_ASSUMPTIONS]
+  if (model.subModel === 'reflection_refraction') return [...BOUNDARY_ASSUMPTIONS]
+  if (model.subModel === 'wave_diffraction') return [...DIFFRACTION_ASSUMPTIONS]
+  if (model.subModel === 'wave_doppler') return [...DOPPLER_ASSUMPTIONS]
   return [...STANDING_ASSUMPTIONS]
 }
 
@@ -127,12 +171,23 @@ export const resolveWave = (scene: PhysicsScene): ResolvedWaveModel => resolveWa
 export const waveProfileId = (benchId: string, index: number): string =>
   `${benchId}.profile.${index}`
 export const waveMarkerId = (benchId: string): string => `${benchId}.marker`
-export const waveSourceId = (benchId: string, index: 1 | 2): string =>
-  `${benchId}.source-${index}`
+export const waveSourceId = (benchId: string, index: 1 | 2): string => `${benchId}.source-${index}`
 export const wavePointId = (benchId: string): string => `${benchId}.point`
 export const waveNodeId = (benchId: string, index: number): string => `${benchId}.node.${index}`
 export const waveAntinodeId = (benchId: string, index: number): string =>
   `${benchId}.antinode.${index}`
+export const waveParticleId = (benchId: string, index: number): string =>
+  `${benchId}.particle.${index}`
+export const waveBoundaryId = (benchId: string): string => `${benchId}.boundary`
+export const waveIncidentRayId = (benchId: string): string => `${benchId}.incident`
+export const waveReflectedRayId = (benchId: string): string => `${benchId}.reflected`
+export const waveRefractedRayId = (benchId: string): string => `${benchId}.refracted`
+export const waveSlitId = (benchId: string): string => `${benchId}.slit`
+export const waveScreenId = (benchId: string): string => `${benchId}.screen`
+export const waveMinimumId = (benchId: string, order: number): string =>
+  `${benchId}.minimum.${order}`
+export const waveDopplerSourceId = (benchId: string): string => `${benchId}.source`
+export const waveDopplerObserverId = (benchId: string): string => `${benchId}.observer`
 
 /**
  * Where the marked rope particle sits: a quarter rope in, so it is well inside
@@ -164,7 +219,9 @@ const interferenceGeometryValid = (model: ResolvedWaveModel): boolean => {
   const pathOne = model.pathOne ?? 0
   const pathTwo = model.pathTwo ?? 0
   const slack = WAVE_RELATIVE_TOLERANCE * Math.max(separation, pathOne, pathTwo)
-  return Math.abs(pathTwo - pathOne) <= separation + slack && separation <= pathOne + pathTwo + slack
+  return (
+    Math.abs(pathTwo - pathOne) <= separation + slack && separation <= pathOne + pathTwo + slack
+  )
 }
 
 /* ------------------------------------------------------- derived facts -- */
@@ -311,6 +368,169 @@ const derivedOf = (model: ResolvedWaveModel): DerivedQuantity[] => {
     )
   }
 
+  if (model.subModel === 'longitudinal_wave') {
+    const mediumLength = model.mediumLength ?? 0
+    facts.push(
+      {
+        key: 'medium_length',
+        targetId: model.benchId,
+        value: metres(mediumLength),
+        formula: { expression: 'ℓ' },
+        assumptions,
+      },
+      {
+        key: 'compression_spacing',
+        targetId: model.benchId,
+        value: metres(model.wavelength / 2),
+        formula: { expression: 'λ / 2' },
+        assumptions,
+      },
+      {
+        key: 'particle_displacement_direction',
+        targetId: model.benchId,
+        value: dimensionless(1),
+        formula: { expression: 'ξ ∥ propagation' },
+        assumptions,
+      },
+    )
+  }
+
+  if (model.subModel === 'reflection_refraction') {
+    const reading = reflectionRefractionReadingOf(model)
+    facts.push(
+      {
+        key: 'incident_speed',
+        targetId: model.benchId,
+        value: metresPerSecond(model.incidentSpeed ?? 0),
+        formula: { expression: 'v₁' },
+        assumptions,
+      },
+      {
+        key: 'transmitted_speed',
+        targetId: model.benchId,
+        value: metresPerSecond(model.transmittedWaveSpeed ?? 0),
+        formula: { expression: 'v₂' },
+        assumptions,
+      },
+      {
+        key: 'incident_angle',
+        targetId: model.benchId,
+        value: radians(model.incidentAngleRad ?? 0),
+        formula: { expression: 'θ₁' },
+        assumptions,
+      },
+      {
+        key: 'reflection_angle',
+        targetId: model.benchId,
+        value: radians(reading.reflectionAngleRad),
+        formula: { expression: 'θᵣ = θ₁' },
+        assumptions,
+      },
+      {
+        key: 'total_internal_reflection',
+        targetId: model.benchId,
+        value: dimensionless(reading.totalInternalReflection ? 1 : 0),
+        formula: { expression: 'sinθ₂ = (v₂/v₁)sinθ₁ > 1' },
+        assumptions,
+      },
+    )
+    if (reading.refractedAngleRad !== undefined) {
+      facts.push({
+        key: 'refracted_angle',
+        targetId: model.benchId,
+        value: radians(reading.refractedAngleRad),
+        formula: { expression: 'sinθ₁/v₁ = sinθ₂/v₂' },
+        assumptions,
+      })
+    }
+    if (reading.criticalAngleRad !== undefined) {
+      facts.push({
+        key: 'critical_angle',
+        targetId: model.benchId,
+        value: radians(reading.criticalAngleRad),
+        formula: { expression: 'θc = arcsin(v₁/v₂)' },
+        assumptions,
+      })
+    }
+  }
+
+  if (model.subModel === 'wave_diffraction') {
+    const order = model.diffractionOrder ?? 1
+    let minimumAngle: number | undefined
+    try {
+      minimumAngle = diffractionMinimumAngle(model, order)
+    } catch {
+      minimumAngle = undefined
+    }
+    facts.push(
+      {
+        key: 'slit_width',
+        targetId: model.benchId,
+        value: metres(model.slitWidth ?? 0),
+        formula: { expression: 'a' },
+        assumptions,
+      },
+      {
+        key: 'screen_distance',
+        targetId: model.benchId,
+        value: metres(model.screenDistance ?? 0),
+        formula: { expression: 'L' },
+        assumptions,
+      },
+      {
+        key: 'central_maximum_width',
+        targetId: model.benchId,
+        value: metres(model.centralMaximumWidth ?? 0),
+        formula: { expression: 'w₀ = 2Lλ/a' },
+        assumptions,
+      },
+    )
+    if (minimumAngle !== undefined) {
+      facts.push({
+        key: 'diffraction_angle',
+        targetId: model.benchId,
+        value: radians(minimumAngle),
+        formula: { expression: `a·sinθ${order} = ${order}λ` },
+        assumptions,
+      })
+    }
+  }
+
+  if (model.subModel === 'wave_doppler') {
+    const observedFrequency = dopplerObservedFrequency(model)
+    const observedWavelength = dopplerObservedWavelength(model)
+    facts.push(
+      {
+        key: 'source_frequency',
+        targetId: model.benchId,
+        value: hertz(model.frequency),
+        formula: { expression: 'f' },
+        assumptions,
+      },
+      {
+        key: 'observed_frequency',
+        targetId: model.benchId,
+        value: hertz(observedFrequency),
+        formula: { expression: 'f′ = f(v + v₀)/(v − vₛ)' },
+        assumptions,
+      },
+      {
+        key: 'observed_wavelength',
+        targetId: model.benchId,
+        value: metres(observedWavelength),
+        formula: { expression: 'λ′ = (v − vₛ)/f' },
+        assumptions,
+      },
+      {
+        key: 'frequency_shift',
+        targetId: model.benchId,
+        value: hertz(observedFrequency - model.frequency),
+        formula: { expression: 'Δf = f′ − f' },
+        assumptions,
+      },
+    )
+  }
+
   return facts
 }
 
@@ -365,7 +585,8 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
 
   if (model.subModel === 'wave_interference') {
     const separation = model.sourceSeparation ?? 0
-    const sourceDisplacement = model.amplitude * Math.sin(2 * Math.PI * model.frequency * timeSeconds)
+    const sourceDisplacement =
+      model.amplitude * Math.sin(2 * Math.PI * model.frequency * timeSeconds)
     objects.push(
       {
         id: waveSourceId(model.benchId, 1),
@@ -412,6 +633,164 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
     })
   }
 
+  if (model.subModel === 'longitudinal_wave') {
+    const mediumLength = model.mediumLength ?? 0
+    const count = profileSampleCountOf(model)
+    for (let index = 0; index <= count; index += 1) {
+      const x = (mediumLength * index) / count
+      const displacement = longitudinalDisplacementAt(model, x, timeSeconds)
+      objects.push({
+        id: waveProfileId(model.benchId, index),
+        /* y remains zero: longitudinal displacement is along the propagation
+           direction and is published as a value, not faked as a transverse wave. */
+        position: quantityVector({ x: x + displacement, y: 0, z: 0 }, 'm', 'length'),
+        values: {
+          displacement: metres(displacement),
+          strain: dimensionless(longitudinalStrainAt(model, x, timeSeconds)),
+          pressure_state: dimensionless(
+            longitudinalPressureStateAt(model, x, timeSeconds) === 'compression'
+              ? -1
+              : longitudinalPressureStateAt(model, x, timeSeconds) === 'rarefaction'
+                ? 1
+                : 0,
+          ),
+        },
+      })
+    }
+    const markerX = mediumLength / 2
+    const markerDisplacement = longitudinalDisplacementAt(model, markerX, timeSeconds)
+    objects.push({
+      id: waveMarkerId(model.benchId),
+      position: quantityVector({ x: markerX + markerDisplacement, y: 0, z: 0 }, 'm', 'length'),
+      velocity: quantityVector(
+        { x: longitudinalParticleVelocityAt(model, markerX, timeSeconds), y: 0, z: 0 },
+        'm/s',
+        'velocity',
+      ),
+    })
+  }
+
+  if (model.subModel === 'reflection_refraction') {
+    const reading = reflectionRefractionReadingOf(model)
+    objects.push(
+      {
+        id: waveBoundaryId(model.benchId),
+        position: quantityVector({ x: 0, y: 0, z: 0 }, 'm', 'length'),
+        values: {
+          incident_angle: radians(model.incidentAngleRad ?? 0),
+          reflection_angle: radians(reading.reflectionAngleRad),
+          total_internal_reflection: dimensionless(reading.totalInternalReflection ? 1 : 0),
+        },
+      },
+      {
+        id: waveIncidentRayId(model.benchId),
+        position: quantityVector(
+          {
+            x: -Math.sin(model.incidentAngleRad ?? 0),
+            y: Math.cos(model.incidentAngleRad ?? 0),
+            z: 0,
+          },
+          'm',
+          'length',
+        ),
+        values: { angle: radians(model.incidentAngleRad ?? 0) },
+      },
+      {
+        id: waveReflectedRayId(model.benchId),
+        position: quantityVector(
+          {
+            x: -Math.sin(reading.reflectionAngleRad),
+            y: -Math.cos(reading.reflectionAngleRad),
+            z: 0,
+          },
+          'm',
+          'length',
+        ),
+        values: { angle: radians(reading.reflectionAngleRad) },
+      },
+    )
+    if (reading.refractedAngleRad !== undefined) {
+      objects.push({
+        id: waveRefractedRayId(model.benchId),
+        position: quantityVector(
+          { x: Math.sin(reading.refractedAngleRad), y: -Math.cos(reading.refractedAngleRad), z: 0 },
+          'm',
+          'length',
+        ),
+        values: { angle: radians(reading.refractedAngleRad) },
+      })
+    }
+  }
+
+  if (model.subModel === 'wave_diffraction') {
+    const order = model.diffractionOrder ?? 1
+    const minimumAngle = diffractionMinimumAngle(model, order)
+    const screenDistance = model.screenDistance ?? 0
+    objects.push(
+      {
+        id: waveSlitId(model.benchId),
+        position: quantityVector({ x: 0, y: 0, z: 0 }, 'm', 'length'),
+        values: { slit_width: metres(model.slitWidth ?? 0) },
+      },
+      {
+        id: waveScreenId(model.benchId),
+        position: quantityVector({ x: screenDistance, y: 0, z: 0 }, 'm', 'length'),
+      },
+      {
+        id: waveMinimumId(model.benchId, order),
+        position: quantityVector(
+          { x: screenDistance, y: screenDistance * Math.tan(minimumAngle), z: 0 },
+          'm',
+          'length',
+        ),
+        values: {
+          angle: radians(minimumAngle),
+          intensity_ratio: dimensionless(0),
+        },
+      },
+    )
+  }
+
+  if (model.subModel === 'wave_doppler') {
+    const sourceSign = model.sourceDirection === 'approaching' ? 1 : -1
+    const observerSign =
+      model.observerDirection === 'approaching'
+        ? -1
+        : model.observerDirection === 'receding'
+          ? 1
+          : 0
+    const sourcePosition = -1 + sourceSign * (model.sourceSpeed ?? 0) * timeSeconds
+    const observerPosition = 1 + observerSign * (model.observerSpeed ?? 0) * timeSeconds
+    objects.push(
+      {
+        id: waveDopplerSourceId(model.benchId),
+        position: quantityVector({ x: sourcePosition, y: 0, z: 0 }, 'm', 'length'),
+        velocity: quantityVector(
+          { x: sourceSign * (model.sourceSpeed ?? 0), y: 0, z: 0 },
+          'm/s',
+          'velocity',
+        ),
+        values: {
+          emitted_frequency: hertz(model.frequency),
+          observed_frequency: hertz(dopplerObservedFrequency(model)),
+        },
+      },
+      {
+        id: waveDopplerObserverId(model.benchId),
+        position: quantityVector({ x: observerPosition, y: 0, z: 0 }, 'm', 'length'),
+        velocity: quantityVector(
+          { x: observerSign * (model.observerSpeed ?? 0), y: 0, z: 0 },
+          'm/s',
+          'velocity',
+        ),
+        values: {
+          observed_frequency: hertz(dopplerObservedFrequency(model)),
+          observed_wavelength: metres(dopplerObservedWavelength(model)),
+        },
+      },
+    )
+  }
+
   return {
     time: seconds(timeSeconds),
     objects,
@@ -450,7 +829,11 @@ const buildVerification = (
       {
         message: '波速、波长与频率满足 v = λf。',
         targetId: model.benchId,
-        details: { waveSpeed: model.waveSpeed, wavelength: model.wavelength, frequency: model.frequency },
+        details: {
+          waveSpeed: model.waveSpeed,
+          wavelength: model.wavelength,
+          frequency: model.frequency,
+        },
       },
     ),
     check('period_frequency_reciprocal', 'constraint', relativeClose(period * model.frequency, 1), {
@@ -572,7 +955,10 @@ const buildVerification = (
         {
           message: '第 n 次谐波频率 f_n = n·v/(2L) = n·f₁。',
           targetId: model.benchId,
-          details: { frequency: model.frequency, fundamental: model.waveSpeed / (2 * stringLength) },
+          details: {
+            frequency: model.frequency,
+            fundamental: model.waveSpeed / (2 * stringLength),
+          },
         },
       ),
     )
@@ -581,12 +967,13 @@ const buildVerification = (
     const nodeIds = nodePositionsOf(model).map((_, index) => waveNodeId(model.benchId, index))
     const lastSample = profileSampleCountOf(model)
     const endsFixed = states.every((state) =>
-      [waveProfileId(model.benchId, 0), waveProfileId(model.benchId, lastSample)].every(
-        (id) => {
-          const position = positionOf(state, id)
-          return position !== undefined && Math.abs(position.y) <= WAVE_RELATIVE_TOLERANCE * model.amplitude
-        },
-      ),
+      [waveProfileId(model.benchId, 0), waveProfileId(model.benchId, lastSample)].every((id) => {
+        const position = positionOf(state, id)
+        return (
+          position !== undefined &&
+          Math.abs(position.y) <= WAVE_RELATIVE_TOLERANCE * model.amplitude
+        )
+      }),
     )
     checks.push(
       check('boundary_nodes', 'constraint', endsFixed, {
@@ -611,6 +998,194 @@ const buildVerification = (
         targetId: model.benchId,
         details: { nodeCount: nodeIds.length },
       }),
+    )
+  }
+
+  if (model.subModel === 'longitudinal_wave') {
+    const marker = states.every((state) => {
+      const position = positionOf(state, waveMarkerId(model.benchId))
+      const object = state.objects.find((entry) => entry.id === waveMarkerId(model.benchId))
+      return (
+        position !== undefined &&
+        Math.abs(position.y) <= WAVE_RELATIVE_TOLERANCE * Math.max(1, model.amplitude) &&
+        object?.velocity !== undefined &&
+        Math.abs(object.velocity.vector.y) <= WAVE_RELATIVE_TOLERANCE
+      )
+    })
+    checks.push(
+      check('longitudinal_particle_motion', 'constraint', marker, {
+        message: '纵波中介质质点的振动方向平行于波的传播方向。',
+        targetId: waveMarkerId(model.benchId),
+        details: { sampleCount: states.length },
+      }),
+    )
+
+    let strainSignsHold = true
+    for (const state of states) {
+      const t = state.time.value
+      for (const fraction of [0.125, 0.375, 0.625, 0.875]) {
+        const x = (model.mediumLength ?? model.wavelength) * fraction
+        const expected = longitudinalPressureStateAt(model, x, t)
+        const strain = longitudinalStrainAt(model, x, t)
+        if (expected === 'compression' && !(strain < 0)) strainSignsHold = false
+        if (expected === 'rarefaction' && !(strain > 0)) strainSignsHold = false
+      }
+    }
+    checks.push(
+      check('longitudinal_strain_pressure_relation', 'constraint', strainSignsHold, {
+        message: '负应变对应压缩区，正应变对应稀疏区。',
+        targetId: model.benchId,
+      }),
+    )
+  }
+
+  if (model.subModel === 'reflection_refraction') {
+    const reading = reflectionRefractionReadingOf(model)
+    checks.push(
+      check(
+        'reflection_angle_equality',
+        'constraint',
+        relativeClose(reading.reflectionAngleRad, model.incidentAngleRad ?? 0, 1),
+        {
+          message: '波的反射角等于入射角。',
+          targetId: model.benchId,
+          details: {
+            incidentAngle: model.incidentAngleRad,
+            reflectionAngle: reading.reflectionAngleRad,
+          },
+        },
+      ),
+      check(
+        'frequency_unchanged_at_boundary',
+        'conservation',
+        Number.isFinite(model.frequency) && model.frequency > 0,
+        {
+          message: '波跨过界面时频率保持不变，介质改变的是波速与波长。',
+          targetId: model.benchId,
+          details: { frequency: model.frequency },
+        },
+      ),
+    )
+    const incidentInvariant = Math.sin(model.incidentAngleRad ?? 0) / (model.incidentSpeed ?? 1)
+    const transmittedInvariant =
+      reading.refractedAngleRad === undefined
+        ? undefined
+        : Math.sin(reading.refractedAngleRad) / (model.transmittedWaveSpeed ?? 1)
+    checks.push(
+      check(
+        'snells_law_wave_speed',
+        'constraint',
+        transmittedInvariant === undefined ||
+          relativeClose(
+            incidentInvariant,
+            transmittedInvariant,
+            Math.max(incidentInvariant, transmittedInvariant),
+          ),
+        {
+          message: reading.totalInternalReflection
+            ? '入射角超过临界角，折射支路不存在，全反射成立。'
+            : 'sinθ₁/v₁ = sinθ₂/v₂。',
+          targetId: model.benchId,
+          details: {
+            incidentInvariant,
+            transmittedInvariant,
+            totalInternalReflection: reading.totalInternalReflection,
+          },
+        },
+      ),
+    )
+  }
+
+  if (model.subModel === 'wave_diffraction') {
+    const order = model.diffractionOrder ?? 1
+    let minimumAngle: number | undefined
+    try {
+      minimumAngle = diffractionMinimumAngle(model, order)
+    } catch {
+      minimumAngle = undefined
+    }
+    const minimumCondition =
+      minimumAngle !== undefined &&
+      relativeClose(
+        (model.slitWidth ?? 0) * Math.sin(minimumAngle),
+        order * model.wavelength,
+        order * model.wavelength,
+      )
+    checks.push(
+      check('diffraction_minimum_condition', 'constraint', minimumCondition, {
+        message: '单缝衍射暗纹满足 a·sinθ = mλ。',
+        targetId: model.benchId,
+        details: { order, angle: minimumAngle, slitWidth: model.slitWidth },
+      }),
+    )
+    const width = model.centralMaximumWidth ?? 0
+    checks.push(
+      check(
+        'central_maximum_width',
+        'constraint',
+        relativeClose(
+          width,
+          (2 * (model.screenDistance ?? 0) * model.wavelength) / (model.slitWidth ?? 1),
+          width,
+        ),
+        {
+          message: '中央明纹宽度 w₀ = 2Lλ/a。',
+          targetId: model.benchId,
+          details: { width, screenDistance: model.screenDistance, wavelength: model.wavelength },
+        },
+      ),
+      check(
+        'diffraction_intensity_bounds',
+        'constraint',
+        states.every(() => {
+          const centre = singleSlitIntensityRatio(model, 0)
+          const edge = singleSlitIntensityRatio(model, Math.PI / 2)
+          return centre >= 0 && centre <= 1 + 1e-12 && edge >= 0 && edge <= 1 + 1e-12
+        }),
+        {
+          message: '单缝衍射归一化强度始终位于 0 与 1 之间。',
+          targetId: model.benchId,
+        },
+      ),
+    )
+  }
+
+  if (model.subModel === 'wave_doppler') {
+    const observed = dopplerObservedFrequency(model)
+    const wavelength = dopplerObservedWavelength(model)
+    const denominator =
+      model.waveSpeed -
+      (model.sourceDirection === 'approaching'
+        ? (model.sourceSpeed ?? 0)
+        : -(model.sourceSpeed ?? 0))
+    const numerator =
+      model.waveSpeed +
+      (model.observerDirection === 'approaching'
+        ? (model.observerSpeed ?? 0)
+        : model.observerDirection === 'receding'
+          ? -(model.observerSpeed ?? 0)
+          : 0)
+    checks.push(
+      check(
+        'doppler_frequency_relation',
+        'constraint',
+        relativeClose(observed, (model.frequency * numerator) / denominator, observed),
+        {
+          message: '多普勒频移满足 f′ = f(v ± v₀)/(v ∓ vₛ)。',
+          targetId: model.benchId,
+          details: { emittedFrequency: model.frequency, observedFrequency: observed },
+        },
+      ),
+      check(
+        'doppler_observed_wavelength',
+        'constraint',
+        relativeClose(wavelength, denominator / model.frequency, wavelength),
+        {
+          message: '运动波源在介质中的波长 λ′ = (v − vₛ)/f。',
+          targetId: model.benchId,
+          details: { observedWavelength: wavelength, sourceSpeed: model.sourceSpeed },
+        },
+      ),
     )
   }
 
@@ -699,6 +1274,26 @@ export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike>
     try {
       model = resolveWaveModel(scene)
     } catch (error: unknown) {
+      const code = error instanceof PhysicsOSError ? error.code : undefined
+      const unsupportedCodes: ReadonlySet<string> = new Set([
+        'WAVE_BOUNDARY_GEOMETRY',
+        'WAVE_DIFFRACTION_GEOMETRY',
+        'WAVE_DIFFRACTION_ORDER',
+        'WAVE_DIFFRACTION_ORDER_UNAVAILABLE',
+        'WAVE_DOPPLER_GEOMETRY',
+        'WAVE_DOPPLER_SOURCE_SPEED',
+      ])
+      if (code !== undefined && unsupportedCodes.has(code)) {
+        return unsupportedModel(
+          [
+            failure(
+              'supported_wave_model',
+              error instanceof Error ? error.message : 'The wave model is not supported.',
+            ),
+          ],
+          WAVE_ENGINE_ID,
+        )
+      }
       return invalidModelCondition(WAVE_ENGINE_ID, [
         failure(
           'wave_model_resolvable',
@@ -775,7 +1370,9 @@ export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike>
     const startTime =
       request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
     const endTime =
-      request.options.endTime === undefined ? sceneDuration : canonicalValue(request.options.endTime)
+      request.options.endTime === undefined
+        ? sceneDuration
+        : canonicalValue(request.options.endTime)
     if (
       !Number.isFinite(startTime) ||
       !Number.isFinite(endTime) ||
