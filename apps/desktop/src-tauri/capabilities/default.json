@@ -1,0 +1,6 @@
+{
+  "identifier": "main-capability",
+  "description": "Core IPC for the PhysicsOS main window",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@physicsos/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build:local": "node ../../scripts/desktop/package-local.mjs",
+    "build:config": "node ../../scripts/desktop/validate-release-config.mjs",
+    "test": "node --test ../../scripts/desktop/*.test.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4"
+  }
+}

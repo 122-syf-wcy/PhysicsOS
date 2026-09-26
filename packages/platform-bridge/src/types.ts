@@ -36,7 +36,7 @@ export interface NotificationBridge {
 
    这三个面是第 3 期「桌面版基座」要求**先定契约**的部分。它们在这里只声明
    形状,不导入任何 Tauri 包:契约是纯类型,桌面壳与浏览器两侧各自实现,所以
-   `createPlatformBridge('tauri')` 在壳落地之前仍然抛 UnimplementedError。
+   普通浏览器选择 `tauri` 时会在缺少原生 invoke 的地方明确失败。
 
    每条注释都写清了「为什么这么定」,因为这几个选择一旦被下游当成既成事实就
    很难改。 */
@@ -94,6 +94,14 @@ export interface StorageBridge {
   read(key: string): Promise<string | null>
   /** 写一段本地缓存。 */
   write(key: string, value: string): Promise<void>
+}
+
+/**
+ * The small Tauri surface this package needs. The shell injects the real
+ * `window.__TAURI__.core.invoke`; tests inject a fake with the same shape.
+ */
+export interface TauriNativeClient {
+  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>
 }
 
 export interface PlatformBridge {

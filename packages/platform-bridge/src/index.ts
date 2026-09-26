@@ -1,6 +1,10 @@
 export { createBrowserPlatformBridge, BrowserPlatformBridge } from './browser-platform-bridge.ts'
 export { createPlatformBridge } from './create-platform-bridge.ts'
-export { createTauriPlatformBridge } from './tauri-platform-bridge.ts'
+export {
+  createTauriPlatformBridge,
+  TauriPlatformBridge,
+  type TauriPlatformBridgeOptions,
+} from './tauri-platform-bridge.ts'
 export type {
   ClipboardBridge,
   DeviceBridge,
@@ -13,6 +17,7 @@ export type {
   PlatformBridge,
   PlatformKind,
   StorageBridge,
+  TauriNativeClient,
   UpdateBridge,
   UpdateInfo,
 } from './types.ts'
