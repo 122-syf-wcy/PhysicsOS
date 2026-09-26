@@ -1004,7 +1004,7 @@ index 81cedbbb42..426452f2ff 100644
      "@vitest/coverage-v8": "^4.1.8",
      "@yarnpkg/cli-dist": "4.17.1",
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index b06e63b54f..8840e2ad8b 100644
+index b06e63b54f..b7091ead4e 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -32,6 +32,13 @@
@@ -1021,7 +1021,7 @@ index b06e63b54f..8840e2ad8b 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|code|both) opts a whole dsh
-@@ -56,16 +63,101 @@
+@@ -56,16 +63,104 @@
        config:
          root: !!js dshHomePath('storages')
  
@@ -1119,12 +1119,15 @@ index b06e63b54f..8840e2ad8b 100644
 +      name: '@deepseek-ai/dsh-auth-host'
 +      config:
 +        trustedProxies: !!js "process.env.PHYSICOS_TRUSTED_PROXIES ? process.env.PHYSICOS_TRUSTED_PROXIES.split(',').map(value => value.trim()).filter(Boolean) : []"
++        # 公测控量开关：open(默认，允许自助注册) / invite(必须邀请码) /
++        # closed(完全关闭注册)。改 .env 后重启容器即可生效，无需改代码。
++        registrationMode: !!js process.env.PHYSICSOS_REGISTRATION_MODE ?? 'open'
 +        bootstrapAdmins: !!js "process.env.PHYSICSOS_ADMIN_PASSWORD ? [{ schoolId: 'PHYSICSOS-OPEN', username: 'admin', password: process.env.PHYSICSOS_ADMIN_PASSWORD, displayName: '平台管理员', role: 'SUPER_ADMIN' }] : []"
 +
      # Browser Session export: `/export` command plus the shared download dialog.
      - id: session-log-download
        name: '@deepseek-ai/dsh-session-log-export'
-@@ -198,6 +290,9 @@
+@@ -198,6 +293,9 @@
      - id: ui-conversation
        name: '@deepseek-ai/dsh-client-ui-conversation'
  

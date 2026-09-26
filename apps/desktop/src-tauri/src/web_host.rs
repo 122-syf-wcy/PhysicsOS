@@ -11,6 +11,24 @@ pub struct WebHostState {
     child: Mutex<Option<Child>>,
 }
 
+impl WebHostState {
+    pub(crate) fn stop(&self) {
+        let Ok(mut guard) = self.child.lock() else {
+            return;
+        };
+        if let Some(mut child) = guard.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Drop for WebHostState {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 fn parse_ready_url(line: &str) -> Option<&str> {
     let marker = "dsh web: ";
     let start = line.find(marker)? + marker.len();

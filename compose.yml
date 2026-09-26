@@ -37,6 +37,9 @@ services:
       # Without it the connection layer treats the domain as untrusted and 403s
       # every privileged method (settings.*, host.*, credentials.*).
       PHYSICOS_TRUSTED_HOSTS: ${PHYSICOS_TRUSTED_HOSTS:-}
+      # 公测控量开关：open(默认) / invite(必须邀请码) / closed(关闭注册)。
+      # 取值非法时 auth-host 启动即失败，不会静默退回开放注册。
+      PHYSICSOS_REGISTRATION_MODE: ${PHYSICSOS_REGISTRATION_MODE:-open}
       # 以下值与 Dockerfile 的镜像默认值、.env.example 的运维变量保持一致。
       PHYSICSOS_SESSIONS_ROOT: ${PHYSICSOS_SESSIONS_ROOT:-/var/lib/physicsos/sessions}
       PHYSICSOS_PANDOC: ${PHYSICSOS_PANDOC:-/usr/bin/pandoc}

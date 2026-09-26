@@ -89,8 +89,28 @@ export function apply(ctx: ClientContext): void {
     return () => { document.title = previous }
   }, 'ui-physicsos: document title')
 
-  const startSession = (workspaceId?: WorkspaceId) => {
-    ctx.workspaces.startSession(workspaceId)
+  /**
+   * 开新会话。
+   *
+   * 不带工作区时，Harness 会去要一个目录——那是**本机桌面专属**的能力
+   * （`host.pickDirectory` / `host.listDirectory` 在服务器部署里被上游的本机
+   * 闸门拒绝，公网域名下必然 403）。托管形态下账号在服务端已有自己的工作区：
+   * auth-host 会把 `workspace.create` 改写成"该账号自己的那一个"，并且重复调用
+   * 是幂等的（存在即返回，不会新建）。所以这里先确保它存在，再开会话，
+   * 全程不碰本机目录选择器；失败时退回原行为，不影响单机版。
+   */
+  const startSession = (workspaceId?: WorkspaceId): void => {
+    if (workspaceId !== undefined) {
+      ctx.workspaces.startSession(workspaceId)
+      return
+    }
+    void ctx.workspaces
+      .create({ path: '' })
+      .then((workspace) => { ctx.workspaces.startSession(workspace.workspaceId) })
+      .catch((reason: unknown) => {
+        console.warn('workspace auto-provision failed, falling back:', reason)
+        ctx.workspaces.startSession()
+      })
   }
 
   /* 账户体系 Auth V1: the cookie session resolves through /me; every per-user

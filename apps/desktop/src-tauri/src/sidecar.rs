@@ -421,8 +421,7 @@ async fn current_session_cookie(app: &AppHandle) -> Result<Option<String>, Strin
     }
 }
 
-#[tauri::command]
-pub async fn sidecar_stop(state: State<'_, SidecarState>) -> Result<(), String> {
+pub(crate) async fn stop(state: &SidecarState) -> Result<(), String> {
     let mut guard = state.inner.lock().await;
     let Some(mut process) = guard.take() else {
         return Ok(());
@@ -433,6 +432,11 @@ pub async fn sidecar_stop(state: State<'_, SidecarState>) -> Result<(), String> 
         .map_err(|error| format!("cannot stop agent sidecar: {error}"))?;
     fail_pending(&process.pending, "agent sidecar stopped".into());
     Ok(())
+}
+
+#[tauri::command]
+pub async fn sidecar_stop(state: State<'_, SidecarState>) -> Result<(), String> {
+    stop(&state).await
 }
 
 #[tauri::command]

@@ -22,7 +22,7 @@ async fn sidecar_request(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SidecarState::default())
         .manage(UpdateState::default())
@@ -65,6 +65,16 @@ pub fn run() {
             sidecar_stop,
             sidecar_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run PhysicsOS desktop shell");
+        .build(tauri::generate_context!())
+        .expect("failed to build PhysicsOS desktop shell");
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            if let Some(host) = app_handle.try_state::<WebHostState>() {
+                host.stop();
+            }
+            if let Some(sidecar) = app_handle.try_state::<SidecarState>() {
+                let _ = tauri::async_runtime::block_on(sidecar::stop(&sidecar));
+            }
+        }
+    });
 }
