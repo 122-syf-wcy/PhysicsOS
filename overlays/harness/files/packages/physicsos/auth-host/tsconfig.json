@@ -21,6 +21,9 @@
       "path": "../../host/webserver"
     },
     {
+      "path": "../../host/apiproxy"
+    },
+    {
       "path": "../../storage/storage"
     },
     {
@@ -28,6 +31,9 @@
     },
     {
       "path": "../../storage/storage-json"
+    },
+    {
+      "path": "../../util/home-paths"
     },
     {
       "path": "../../runtime-diagnostics/invariants"

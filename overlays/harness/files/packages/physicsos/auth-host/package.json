@@ -11,6 +11,9 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
+  "bin": {
+    "physicsos-auth-migrate": "./lib/types/migrate-ownership-cli.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/types/index.d.ts",
@@ -31,11 +34,14 @@
   ],
   "scripts": {
     "bundle": "tsc -b tsconfig.json && tsdown",
-    "watch": "tsdown --watch"
+    "watch": "tsdown --watch",
+    "migrate:ownership": "tsc -b tsconfig.json && node ./lib/types/migrate-ownership-cli.js"
   },
   "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^",
+    "@deepseek-ai/dsh-host-apiproxy": "workspace:^",
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",

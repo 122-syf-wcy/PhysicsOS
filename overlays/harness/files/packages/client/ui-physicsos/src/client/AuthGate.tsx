@@ -1,23 +1,34 @@
 /**
  * AuthGate — the PhysicsOS 账户体系 entrance, registered into `shell.overlay`.
  *
- * Three states from the auth store: `loading` paints a quiet brand splash so
+ * Three store states plus four gate views: `loading` paints a quiet brand splash so
  * the shell never flashes through, `guest` paints the full-screen
- * login/register/forgot flow, `authed` renders nothing and the real shell
- * shows. All submits go through the injected controller callbacks — a
- * success ends in `location.reload()`, so the gate never hand-swaps state.
+ * login/register/forgot flow, a URL or injected reset token paints the
+ * redemption form, and `authed` renders nothing so the real shell shows. All
+ * session-changing submits go through the injected controller callbacks; reset
+ * submits use the injected callback or the package's same-origin API fallback.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { PhysicsOSMark } from './PhysicsOSMark.tsx'
-import type { AuthApiError, LoginInput, RegisterInput, SchoolRow } from './auth-api.ts'
+import {
+  createAuthApi,
+  type AdminApi,
+  type AuthApiError,
+  type IssuedPasswordReset,
+  type LoginInput,
+  type PasswordResetQueueRow,
+  type RegisterInput,
+  type SchoolRow,
+} from './auth-api.ts'
 import type { AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { buildStamp } from './build-stamp.ts'
+import { GlassSelect } from './GlassSelect.tsx'
 import css from './AuthGate.module.css'
 
 /** Registration-side face for {@link AuthGate}. */
@@ -26,14 +37,36 @@ export interface AuthGateInjected {
   login: (input: LoginInput) => Promise<void>
   register: (input: RegisterInput) => Promise<void>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
+  resetPassword?: (input: { token: string; newPassword: string }) => Promise<{ ok: boolean }>
 }
 
 export type AuthGateProps =
   & PropsRuntime<'shell.overlay'>
   & PropsLocale<'physicsos'>
   & InjectFace<AuthGateInjected>
+  & { resetToken?: string }
 
-type View = 'login' | 'register' | 'forgot'
+type View = 'login' | 'register' | 'forgot' | 'reset'
+
+/** Read a reset token from either query or fragment without mutating history. */
+function readResetToken(explicit?: string): string {
+  if (explicit !== undefined && explicit !== '') return explicit
+  if (typeof window === 'undefined') return ''
+  const fromSearch = new URLSearchParams(window.location.search).get('reset_token')
+  if (fromSearch !== null && fromSearch !== '') return fromSearch
+  const fragment = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash
+  return new URLSearchParams(fragment).get('reset_token') ?? ''
+}
+
+/** Remove a consumed token from the address bar before login is shown again. */
+function clearResetToken(): void {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.delete('reset_token')
+  window.history.replaceState({}, '', url)
+}
 
 /** The eye/eye-off affordance inside the password field. */
 const EyeIcon = ({ hidden }: { hidden: boolean }): ReactNode => (
@@ -85,9 +118,12 @@ function Field({ label, invalid, children }: { label: string; invalid?: boolean;
   )
 }
 
-export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGateProps) {
+export function AuthGate({
+  useAuth, login, register, forgotPassword, resetPassword, t, resetToken,
+}: AuthGateProps) {
   const status = useAuth(state => state.status)
-  const [view, setView] = useState<View>('login')
+  const [token, setToken] = useState(() => readResetToken(resetToken))
+  const [view, setView] = useState<View>(token === '' ? 'login' : 'reset')
   const [schoolName, setSchoolName] = useState('')
   const [candidates, setCandidates] = useState<SchoolRow[] | undefined>()
   const [schoolPick, setSchoolPick] = useState('')
@@ -101,13 +137,15 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
-  if (status === 'authed') return null
+  if (status === 'authed' && token === '') return null
 
   const switchView = (next: View): void => {
     setView(next)
     setError('')
     setForgotSent(false)
+    setResetSent(false)
     setCandidates(undefined)
     setSchoolPick('')
   }
@@ -187,7 +225,20 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
     })
   }
 
-  if (status === 'loading') {
+  const submitReset = (event: FormEvent): void => {
+    event.preventDefault()
+    if (password.length < 8) { setError(t('auth.error.passwordShort')); return }
+    if (password !== confirm) { setError(t('auth.error.passwordMismatch')); return }
+    void run(async () => {
+      const send = resetPassword ?? createAuthApi().resetPassword
+      await send({ token, newPassword: password })
+      clearResetToken()
+      setResetSent(true)
+      setBusy(false)
+    })
+  }
+
+  if (status === 'loading' && token === '') {
     return (
       <GateChrome t={t}>
         <div className={css.form} aria-busy="true">
@@ -202,7 +253,7 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
       <input
         className={css.input}
         type={showPassword ? 'text' : 'password'}
-        autoComplete={view === 'register' ? 'new-password' : 'current-password'}
+        autoComplete={view === 'register' || view === 'reset' ? 'new-password' : 'current-password'}
         value={password}
         onChange={(event) => { setPassword(event.target.value) }}
       />
@@ -236,15 +287,15 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
           </Field>
           {candidates !== undefined && (
             <Field label={t('auth.school.pick')}>
-              <select
-                className={css.input}
+              <GlassSelect
+                className={css.select}
                 value={schoolPick}
-                onChange={(event) => { setSchoolPick(event.target.value) }}
-              >
-                {candidates.map(school => (
-                  <option key={school.id} value={school.id}>{candidateLabel(school)}</option>
-                ))}
-              </select>
+                ariaLabel={t('auth.school.pick')}
+                testId="login-school"
+                placeholder={t('auth.school.pick')}
+                options={candidates.map(school => ({ value: school.id, label: candidateLabel(school) }))}
+                onChange={setSchoolPick}
+              />
             </Field>
           )}
           <Field label={t('auth.password.label')}>
@@ -295,15 +346,15 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
           </Field>
           {candidates !== undefined && (
             <Field label={t('auth.school.pick')}>
-              <select
-                className={css.input}
+              <GlassSelect
+                className={css.select}
                 value={schoolPick}
-                onChange={(event) => { setSchoolPick(event.target.value) }}
-              >
-                {candidates.map(school => (
-                  <option key={school.id} value={school.id}>{candidateLabel(school)}</option>
-                ))}
-              </select>
+                ariaLabel={t('auth.school.pick')}
+                testId="register-school"
+                placeholder={t('auth.school.pick')}
+                options={candidates.map(school => ({ value: school.id, label: candidateLabel(school) }))}
+                onChange={setSchoolPick}
+              />
             </Field>
           )}
           <Field label={t('auth.username.label')}>
@@ -394,6 +445,177 @@ export function AuthGate({ useAuth, login, register, forgotPassword, t }: AuthGa
             </form>
           )
       )}
+
+      {view === 'reset' && (
+        resetSent
+          ? (
+            <div className={css.form} data-physicsos-auth-view="reset">
+              <h2 className={css.formTitle}>{t('auth.reset.title')}</h2>
+              <p className={css.receipt}>{t('auth.reset.receipt')}</p>
+              <button
+                type="button"
+                className={css.submit}
+                onClick={() => { window.location.reload() }}
+              >
+                {t('auth.reset.toLogin')}
+              </button>
+            </div>
+          )
+          : (
+            <form className={css.form} onSubmit={submitReset} noValidate>
+              <h2 className={css.formTitle}>{t('auth.reset.title')}</h2>
+              <p className={css.receipt}>{t('auth.reset.hint')}</p>
+              <Field label={t('auth.password.label')}>
+                {passwordField}
+              </Field>
+              <Field label={t('auth.confirm.label')}>
+                <input
+                  className={css.input}
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(event) => { setConfirm(event.target.value) }}
+                />
+              </Field>
+              {error !== '' && <p className={css.error} role="alert">{error}</p>}
+              <button type="submit" className={css.submit} disabled={busy}>
+                {busy ? t('auth.busy') : t('auth.reset.submit')}
+              </button>
+              <p className={css.alt}>
+                <button
+                  type="button"
+                  className={css.link}
+                  onClick={() => {
+                    clearResetToken()
+                    setToken('')
+                    setView('login')
+                  }}
+                >
+                  {t('auth.forgot.toLogin')}
+                </button>
+              </p>
+            </form>
+          )
+      )}
     </GateChrome>
+  )
+}
+
+/** Admin-facing password-reset queue and one-time token reveal. */
+export interface PasswordResetQueueProps {
+  api: Pick<AdminApi, 'listPasswordResets' | 'issuePasswordReset' | 'cancelPasswordReset'>
+  t: (key: PhysicsosKey) => string
+}
+
+const resetStatusKey = (status: PasswordResetQueueRow['status']): PhysicsosKey => {
+  switch (status) {
+    case 'pending': return 'admin.passwordResets.status.pending'
+    case 'active': return 'admin.passwordResets.status.active'
+    case 'used': return 'admin.passwordResets.status.used'
+    case 'cancelled': return 'admin.passwordResets.status.cancelled'
+    case 'expired': return 'admin.passwordResets.status.expired'
+    case 'superseded': return 'admin.passwordResets.status.superseded'
+    case 'delivery_failed': return 'admin.passwordResets.status.failed'
+  }
+}
+
+export function PasswordResetQueue({ api, t }: PasswordResetQueueProps) {
+  const [requests, setRequests] = useState<PasswordResetQueueRow[]>([])
+  const [issued, setIssued] = useState<Map<string, IssuedPasswordReset>>(() => new Map())
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+
+  const load = (): void => {
+    setError('')
+    api.listPasswordResets()
+      .then((result) => { setRequests(result.requests) })
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : String(reason))
+      })
+  }
+
+  useEffect(load, [api])
+
+  const issue = (request: PasswordResetQueueRow): void => {
+    setBusy(request.id)
+    setError('')
+    api.issuePasswordReset(request.id)
+      .then((result) => {
+        setIssued(current => new Map(current).set(request.id, result))
+        setRequests(current =>
+          current.map(row => row.id === request.id ? result.request : row))
+      })
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => { setBusy('') })
+  }
+
+  const cancel = (request: PasswordResetQueueRow): void => {
+    setBusy(request.id)
+    setError('')
+    api.cancelPasswordReset(request.id)
+      .then((result) => {
+        setRequests(current =>
+          current.map(row => row.id === request.id ? result.request : row))
+        setIssued((current) => {
+          const next = new Map(current)
+          next.delete(request.id)
+          return next
+        })
+      })
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : String(reason))
+      })
+      .finally(() => { setBusy('') })
+  }
+
+  return (
+    <section className={css.form} data-physicsos-password-reset-queue="">
+      <h2 className={css.formTitle}>{t('admin.passwordResets.title')}</h2>
+      <p className={css.receipt}>{t('admin.passwordResets.hint')}</p>
+      {error !== '' && <p className={css.error} role="alert">{error}</p>}
+      {requests.length === 0 && <p className={css.receipt}>{t('admin.empty')}</p>}
+      {requests.map((request) => {
+        const oneTime = issued.get(request.id)
+        const finished = request.status === 'used'
+          || request.status === 'cancelled'
+          || request.status === 'superseded'
+        return (
+          <div key={request.id}>
+            <p className={css.receipt}>
+              {request.displayName} @{request.username}
+              {' · '}{request.schoolName}
+              {' · '}{t(resetStatusKey(request.status))}
+            </p>
+            {oneTime !== undefined && (
+              <p className={css.receipt} data-reset-token={oneTime.token}>
+                <code>{oneTime.resetPath}</code>
+              </p>
+            )}
+            {!finished && (
+              <div className={css.row}>
+                <button
+                  type="button"
+                  className={css.link}
+                  disabled={busy === request.id}
+                  onClick={() => { issue(request) }}
+                >
+                  {t('admin.passwordResets.issue')}
+                </button>
+                <button
+                  type="button"
+                  className={css.link}
+                  disabled={busy === request.id}
+                  onClick={() => { cancel(request) }}
+                >
+                  {t('admin.passwordResets.cancel')}
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </section>
   )
 }

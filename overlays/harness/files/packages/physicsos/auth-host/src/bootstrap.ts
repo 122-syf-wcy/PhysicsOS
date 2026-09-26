@@ -11,10 +11,15 @@ import { hashPassword } from './passwords.ts'
 
 /** One config-supplied admin entry (post-validation shape). */
 export interface BootstrapAdmin {
+  /** Tenant the admin belongs to; a stub school row is created when the id is not among the seeded tenants. */
   schoolId: string
+  /** Login name inside that tenant — the account key is `schoolId:username`. */
   username: string
+  /** Initial plaintext password from deployment config; stored only as its argon2id hash. */
   password: string
+  /** Display name shown on admin surfaces. */
   displayName: string
+  /** Platform-wide or single-school scope; no other role is seedable. */
   role: 'SUPER_ADMIN' | 'SCHOOL_ADMIN'
 }
 

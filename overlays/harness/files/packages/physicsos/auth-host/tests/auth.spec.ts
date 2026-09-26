@@ -8,7 +8,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { AuthService } from '../src/service.ts'
+import { AuthService, DEFAULT_AUTH_CONFIG } from '../src/service.ts'
 import { authRoutes } from '../src/routes.ts'
 import {
   ARGON2_AVAILABLE,
@@ -194,13 +194,47 @@ describe('auth routes — register/login lifecycle', () => {
     expect(setCookie).not.toContain('Max-Age')
   })
 
-  it('logout revokes the session — /me then answers 401', async () => {
+  it('does not trust a spoofed forwarded proto when setting Secure', async () => {
+    const res = await post('/login', {
+      username: account.username, password: account.password,
+    }, { 'x-forwarded-proto': 'https' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('set-cookie')).not.toContain('Secure')
+  })
+
+  it('honors forwarded HTTPS only from an explicitly trusted proxy', async () => {
+    const service = new AuthService(fakeDomain, {
+      ...DEFAULT_AUTH_CONFIG,
+      trustedProxies: ['127.0.0.1'],
+    })
+    const handler = authRoutes(service)
+    const trustedServer = createServer((req, res) => { void handler(req, res) })
+    await new Promise<void>(resolve => trustedServer.listen(0, '127.0.0.1', resolve))
+    const origin = `https://127.0.0.1:${(trustedServer.address() as AddressInfo).port}`
+    try {
+      const res = await fetch(`${origin.replace(/^https:/, 'http:')}/physicsos/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-proto': 'https', origin },
+        body: JSON.stringify({ username: account.username, password: account.password }),
+      })
+      expect(res.status).toBe(200)
+      expect(res.headers.get('set-cookie')).toContain('Secure')
+    } finally {
+      await new Promise<void>(resolve => trustedServer.close(() => { resolve() }))
+    }
+  })
+
+  it('logout rejects cross-origin requests and revokes the session on same-origin POST', async () => {
     const login = await post('/login', { username: account.username, password: account.password })
     const cookie = cookieOf(login)
-    const out = await post('/logout', {}, { cookie: `physicsos_session=${cookie}` })
+    const headers = { cookie: `physicsos_session=${cookie}` }
+    const crossSite = await post('/logout', {}, { ...headers, origin: 'https://evil.example' })
+    expect(crossSite.status).toBe(403)
+    expect((await fetch(`${base}/me`, { headers })).status).toBe(200)
+
+    const out = await post('/logout', {}, headers)
     expect(out.status).toBe(200)
-    const me = await fetch(`${base}/me`, { headers: { cookie: `physicsos_session=${cookie}` } })
-    expect(me.status).toBe(401)
+    expect((await fetch(`${base}/me`, { headers })).status).toBe(401)
   })
 })
 
@@ -256,6 +290,14 @@ describe('auth routes — guards', () => {
     expect(res.status).toBe(403)
   })
 
+  it('does not accept a scheme mismatch based on an untrusted forwarded header', async () => {
+    const origin = new URL(base).origin.replace(/^http:/, 'https:')
+    const res = await post('/login', { username: 'x', password: 'y' }, {
+      origin, 'x-forwarded-proto': 'https',
+    })
+    expect(res.status).toBe(403)
+  })
+
   it('/me without a cookie answers 401 UNAUTHENTICATED', async () => {
     const res = await fetch(`${base}/me`)
     expect(res.status).toBe(401)
@@ -274,6 +316,61 @@ describe('auth routes — guards', () => {
     expect(exists.status).toBe(200)
     expect(ghost.status).toBe(200)
     expect(await exists.json()).toEqual(await ghost.json())
+  })
+})
+
+describe('auth service abuse budgets', () => {
+  it('rate-limits open registration per resolved source IP', async () => {
+    const service = new AuthService(fakeDomain, {
+      ...DEFAULT_AUTH_CONFIG,
+      registrationAttemptLimit: 2,
+      attemptWindowMs: 60_000,
+    })
+    const sourceIp = '192.0.2.25'
+    for (const username of ['reglimit-a', 'reglimit-b']) {
+      await expect(service.register({
+        schoolName: '贵州大学', username, displayName: '注册测试', password: 'strong-pass-123',
+      }, sourceIp)).resolves.toMatchObject({ user: { role: 'STUDENT' } })
+    }
+    await expect(service.register({
+      schoolName: '贵州大学', username: 'reglimit-c', displayName: '注册测试', password: 'strong-pass-123',
+    }, sourceIp)).rejects.toMatchObject({ status: 429, code: 'RATE_LIMITED' })
+  })
+
+  it('rate-limits learning reports per account without storing the account in aggregates', async () => {
+    const service = new AuthService(fakeDomain, {
+      ...DEFAULT_AUTH_CONFIG,
+      learningAttemptLimit: 2,
+      attemptWindowMs: 60_000,
+    })
+    const actor = {
+      userKey: 'GZU:learning-limit', schoolId: 'GZU', username: 'learning-limit', role: 'STUDENT' as const,
+    }
+    await service.reportLearning(actor, { knowledgeId: 'opt-lens-imaging', correct: true })
+    await service.reportLearning(actor, { knowledgeId: 'opt-lens-imaging', correct: false })
+    await expect(service.reportLearning(actor, { knowledgeId: 'opt-lens-imaging', correct: true }))
+      .rejects.toMatchObject({ status: 429, code: 'RATE_LIMITED' })
+    const rows = [...fakeDomain.table('learning_counts').entries()]
+    expect(rows.every(([, row]) => !('userKey' in row))).toBe(true)
+  })
+
+  it('bounds bucket cardinality and reclaims expired windows', async () => {
+    const service = new AuthService(fakeDomain, {
+      ...DEFAULT_AUTH_CONFIG,
+      accountAttemptLimit: 100,
+      ipAttemptLimit: 100,
+      attemptBucketLimit: 2,
+      attemptWindowMs: 1_000,
+    })
+    for (const username of ['bucket-a', 'bucket-b']) {
+      await expect(service.login({ username, password: 'wrong-password' }, '192.0.2.8'))
+        .rejects.toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' })
+    }
+    await expect(service.login({ username: 'bucket-c', password: 'wrong-password' }, '192.0.2.8'))
+      .rejects.toMatchObject({ status: 429, code: 'RATE_LIMITED' })
+    await new Promise(resolve => setTimeout(resolve, 1_050))
+    await expect(service.login({ username: 'bucket-d', password: 'wrong-password' }, '192.0.2.8'))
+      .rejects.toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' })
   })
 })
 

@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { AuthError, type AdminActor, type AuthService } from './service.ts'
 import { readSessionCookie, writeSessionCookie } from './cookies.ts'
 import { userKey } from './domain.ts'
+import { clientAddress, requestScheme } from './proxy.ts'
 
 const BODY_LIMIT = 16 * 1024
 
@@ -57,15 +58,20 @@ const readJson = async (req: IncomingMessage): Promise<unknown> => {
  * form cannot send `content-type: application/json`, and any Origin header
  * that does appear must match the request's own host.
  */
-const checkCsrf = (req: IncomingMessage): void => {
-  const type = req.headers['content-type'] ?? ''
-  if (!type.startsWith('application/json')) {
+const checkCsrf = (req: IncomingMessage, trustedProxies: readonly string[]): void => {
+  const type = req.headers['content-type']
+  if (typeof type !== 'string'
+    || type.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
     throw new AuthError(400, 'BAD_REQUEST', 'content-type 必须为 application/json')
   }
   const origin = req.headers['origin']
   if (origin !== undefined) {
     try {
-      if (new URL(origin).host !== req.headers.host) {
+      const host = req.headers.host
+      const expected = host === undefined
+        ? ''
+        : new URL(`${requestScheme(req, trustedProxies)}://${host}`).origin
+      if (typeof origin !== 'string' || new URL(origin).origin !== expected) {
         throw new AuthError(403, 'BAD_REQUEST', '跨站请求被拒绝')
       }
     } catch (error) {
@@ -81,14 +87,8 @@ const checkCsrf = (req: IncomingMessage): void => {
 }
 
 /** Best-effort client address for rate-limit buckets. */
-const clientIp = (req: IncomingMessage): string => {
-  const forwarded = req.headers['x-forwarded-for']
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    const first = forwarded.split(',')[0]
-    if (first !== undefined && first.length > 0) return first.trim()
-  }
-  return req.socket.remoteAddress ?? 'unknown'
-}
+const clientIp = (req: IncomingMessage, trustedProxies: readonly string[]): string =>
+  clientAddress(req, trustedProxies)
 
 /**
  * The `/physicsos/auth` prefix handler.
@@ -97,35 +97,37 @@ const clientIp = (req: IncomingMessage): string => {
  */
 export function authRoutes(service: AuthService):
 (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  const trustedProxies = service.config.trustedProxies ?? []
   return async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://x')
       const path = url.pathname.replace(/^\/physicsos\/auth/, '') || '/'
       const method = req.method ?? 'GET'
-      const ip = clientIp(req)
+      const ip = clientIp(req, trustedProxies)
       const userAgent = req.headers['user-agent']
 
       if (method === 'POST' && path === '/register') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const result = await service.register(await readJson(req), ip, userAgent)
-        writeSessionCookie(req, res, result.token, result.cookieMaxAge)
+        writeSessionCookie(req, res, result.token, result.cookieMaxAge, trustedProxies)
         const { user } = result
         send(res, 201, { user })
         return
       }
 
       if (method === 'POST' && path === '/login') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const result = await service.login(await readJson(req), ip, userAgent)
-        writeSessionCookie(req, res, result.token, result.cookieMaxAge)
+        writeSessionCookie(req, res, result.token, result.cookieMaxAge, trustedProxies)
         const { user } = result
         send(res, 200, { user })
         return
       }
 
       if (method === 'POST' && path === '/logout') {
+        checkCsrf(req, trustedProxies)
         await service.logout(readSessionCookie(req))
-        writeSessionCookie(req, res, null, 0)
+        writeSessionCookie(req, res, null, 0, trustedProxies)
         send(res, 200, { ok: true })
         return
       }
@@ -145,7 +147,7 @@ export function authRoutes(service: AuthService):
          是「有会话」而不是「是老师」。落库的行里没有账号:学校从会话取,日期
          从服务端时钟取,请求体只有知识点 id(课标闭集形状)与这一次对错。 */
       if (method === 'POST' && path === '/usage/learning') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const token = readSessionCookie(req)
         const resolved = token === null ? null : service.resolveSession(token)
         if (resolved === null) {
@@ -167,7 +169,7 @@ export function authRoutes(service: AuthService):
          正则钉住),账号与学校都取自会话 —— 请求体说不上话。幂等:再见只刷新
          最近活跃时间与次数。被注销的设备在这里返回 403,不悄悄复活。 */
       if (method === 'POST' && path === '/devices') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const token = readSessionCookie(req)
         const resolved = token === null ? null : service.resolveSession(token)
         if (resolved === null) {
@@ -185,9 +187,16 @@ export function authRoutes(service: AuthService):
       }
 
       if (method === 'POST' && path === '/password/forgot') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         await service.requestPasswordReset(await readJson(req), ip)
         /* Uniform receipt — never reveals whether the account exists. */
+        send(res, 200, { ok: true })
+        return
+      }
+
+      if (method === 'POST' && path === '/password/reset') {
+        checkCsrf(req, trustedProxies)
+        await service.submitPasswordReset(await readJson(req), ip)
         send(res, 200, { ok: true })
         return
       }
@@ -195,7 +204,7 @@ export function authRoutes(service: AuthService):
       /* 申请加入: anonymous by design (the applicant has no account yet); the
          live session — when one exists — only attributes the request. */
       if (method === 'POST' && path === '/school-requests') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const token = readSessionCookie(req)
         const resolved = token === null ? null : service.resolveSession(token)
         const requestedBy = resolved === null
@@ -224,6 +233,7 @@ export function authRoutes(service: AuthService):
  */
 export function adminRoutes(service: AuthService):
 (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  const trustedProxies = service.config.trustedProxies ?? []
   return async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://x')
@@ -252,7 +262,7 @@ export function adminRoutes(service: AuthService):
       }
 
       if (method === 'POST' && segments[0] === 'school-requests' && segments.length === 3) {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const id = segments[1]
         const verb = segments[2]
         if (id !== undefined && verb === 'approve') {
@@ -273,13 +283,13 @@ export function adminRoutes(service: AuthService):
       }
 
       if (method === 'POST' && path === '/schools') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         send(res, 201, { school: await service.createSchool(actor, await readJson(req)) })
         return
       }
 
       if (method === 'POST' && segments[0] === 'schools' && segments[2] === 'status') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         send(res, 200, {
           school: await service.setSchoolStatus(actor, segment(segments, 1), await readJson(req)),
         })
@@ -301,7 +311,7 @@ export function adminRoutes(service: AuthService):
       }
 
       if (method === 'POST' && path === '/users') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         send(res, 201, { user: await service.createUser(actor, await readJson(req)) })
         return
       }
@@ -309,7 +319,7 @@ export function adminRoutes(service: AuthService):
       /* The user path key is `schoolId:username` — schoolId's wire alphabet
          excludes ':', so the first colon is an unambiguous split point. */
       if (method === 'POST' && segments[0] === 'users' && segments.length === 3) {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const key = decodeURIComponent(segment(segments, 1))
         const split = key.indexOf(':')
         if (split > 0) {
@@ -349,7 +359,7 @@ export function adminRoutes(service: AuthService):
          某一行;租户隔离与审计都在 service 里。 */
       if (method === 'POST' && segments[0] === 'devices' && segments.length === 3
         && segments[2] === 'revoked') {
-        checkCsrf(req)
+        checkCsrf(req, trustedProxies)
         const body = await readJson(req)
         const revoked = (body as { revoked?: unknown }).revoked
         if (typeof revoked !== 'boolean') {
@@ -361,8 +371,35 @@ export function adminRoutes(service: AuthService):
         return
       }
 
+      if (method === 'GET' && path === '/password-resets') {
+        const filters: { status?: string; schoolId?: string; q?: string; limit?: number } = {}
+        const status = url.searchParams.get('status')
+        if (status !== null) filters.status = status
+        const schoolId = url.searchParams.get('schoolId')
+        if (schoolId !== null) filters.schoolId = schoolId
+        const q = url.searchParams.get('q')
+        if (q !== null) filters.q = q
+        const limit = url.searchParams.get('limit')
+        if (limit !== null) filters.limit = Number(limit)
+        send(res, 200, service.listPasswordResets(actor, filters))
+        return
+      }
+
+      if (method === 'POST' && segments[0] === 'password-resets' && segments.length === 3) {
+        checkCsrf(req, trustedProxies)
+        const id = decodeURIComponent(segment(segments, 1))
+        if (segments[2] === 'issue') {
+          send(res, 200, await service.issuePasswordReset(actor, id))
+          return
+        }
+        if (segments[2] === 'cancel') {
+          send(res, 200, { request: await service.cancelPasswordReset(actor, id) })
+          return
+        }
+      }
+
       if (method === 'GET' && path === '/dashboard') {
-        send(res, 200, service.dashboard(actor))
+        send(res, 200, await service.dashboard(actor))
         return
       }
 

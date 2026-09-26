@@ -44,6 +44,10 @@ export interface IdentityActor {
   readonly role: 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
 }
 
+/**
+ * The seam this host publishes for sibling hosts: resolve the acting account
+ * from a request's session cookie, and file an attributed audit row.
+ */
 export interface PhysicsosIdentity {
   /** The acting account for this request, or null when its session does not resolve. */
   actorOf(req: IncomingMessage): IdentityActor | null
@@ -60,6 +64,11 @@ export interface PhysicsosIdentity {
   ): Promise<void>
 }
 
+/**
+ * Adapt the service into the `physicsosIdentity` seam sibling hosts consume.
+ * @param service - the auth service doing session resolution and audit writes.
+ * @returns the published seam object.
+ */
 export const createIdentityService = (service: AuthService): PhysicsosIdentity => ({
   actorOf: (req) => {
     const token = readSessionCookie(req)

@@ -58,12 +58,56 @@ const session = z.object({
   deviceId: z.string().optional(),
 })
 
+const resetRequestStatus = z.enum([
+  'pending',
+  'active',
+  'used',
+  'cancelled',
+  'expired',
+  'superseded',
+  'delivery_failed',
+])
+
+/*
+ * Recovery queue + audit row. The optional fields keep rows written by the
+ * previous audit-only release readable; `status` defaults to pending when it
+ * is absent. Raw reset tokens never live here.
+ */
 const resetRequest = z.object({
   id: z.string().min(1),
   schoolId: z.string().min(1),
   username: z.string().min(1),
   at: z.string(),
   ip: z.string().optional(),
+  status: resetRequestStatus.default('pending'),
+  delivery: z.enum(['queue', 'direct']).default('queue'),
+  /** SHA-256 of the currently issued token; never serialized to admin clients. */
+  tokenHash: z.string().optional(),
+  issuedAt: z.string().optional(),
+  expiresAt: z.string().optional(),
+  usedAt: z.string().optional(),
+  cancelledAt: z.string().optional(),
+  decidedBy: z.string().optional(),
+  deliveryError: z.string().max(200).optional(),
+})
+
+/*
+ * One active/used reset token, keyed by its SHA-256. The table exists so
+ * redemption is O(1); issuance can then revoke every older token for the same
+ * account before publishing the replacement.
+ */
+const passwordResetToken = z.object({
+  id: z.string().min(1),
+  tokenHash: z.string().min(1),
+  requestId: z.string().min(1),
+  userId: z.string().min(1),
+  userKey: z.string().min(1),
+  schoolId: z.string().min(1),
+  username: z.string().min(1),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  usedAt: z.string().optional(),
+  revokedAt: z.string().optional(),
 })
 
 /* A school's application to join PhysicsOS — the register view's 申请开通
@@ -171,15 +215,38 @@ const deviceRevocation = z.object({
   affectedSchools: z.array(z.string()),
 })
 
+/** One Harness session/workspace assigned to the PhysicsOS account that made it. */
+const apiResourceOwner = z.object({
+  id: z.string().min(1),
+  kind: z.enum(['session', 'workspace']),
+  resourceId: z.string().min(1),
+  ownerKey: z.string().min(1),
+  schoolId: z.string().min(1),
+  createdAt: z.string(),
+})
+
+/** One school tenant row. */
 export type School = z.infer<typeof school>
+/** One account row, keyed `schoolId:username`. */
 export type UserRecord = z.infer<typeof user>
+/** One session row, keyed by the token's sha256 — the raw token never persists. */
 export type SessionRecord = z.infer<typeof session>
+/** One recorded password-recovery request (the V1 audit-only trail). */
 export type ResetRequest = z.infer<typeof resetRequest>
+/** One hashed password-reset token. */
+export type PasswordResetToken = z.infer<typeof passwordResetToken>
+/** One school-onboarding application row. */
 export type SchoolRequestRecord = z.infer<typeof schoolRequest>
+/** One attributed admin/write audit row. */
 export type AuditEvent = z.infer<typeof auditEvent>
+/** One aggregated learning cell, keyed `schoolId|date|knowledgeId` — no account fields by design. */
 export type LearningCount = z.infer<typeof learningCount>
+/** One registered device row, keyed `userKey|deviceId`. */
 export type DeviceRecord = z.infer<typeof device>
+/** One device revocation row, keyed `scope|deviceId` (`*` = platform-wide). */
 export type DeviceRevocation = z.infer<typeof deviceRevocation>
+/** One durable `/api` ownership row. */
+export type ApiResourceOwner = z.infer<typeof apiResourceOwner>
 
 /**
  * Registration accepts exactly these fields; `role` is never client input.
@@ -213,9 +280,16 @@ export const loginWire = z.object({
   deviceId: deviceIdWire.optional(),
 })
 
+/** Password-recovery request — resolves the account, never discloses whether it existed. */
 export const forgotWire = z.object({
   schoolId: z.string().min(1).optional(),
   username: z.string().min(1).max(64),
+})
+
+/** Public redemption body — the raw token plus the caller's new password. */
+export const passwordResetWire = z.object({
+  token: z.string().min(40).max(256),
+  newPassword: registerWire.shape.password,
 })
 
 /** 申请开通 a school — anonymous-allowed, IP rate-limited upstream. */
@@ -235,16 +309,19 @@ export const approveRequestWire = z.object({
   adminPassword: registerWire.shape.password,
 })
 
+/** Reject a school application; `reason` rides back to the applicant list. */
 export const rejectRequestWire = z.object({
   reason: z.string().max(200).optional(),
 })
 
+/** SUPER_ADMIN creates a tenant directly (bypassing the application queue). */
 export const createSchoolWire = z.object({
   id: schoolIdWire,
   name: z.string().min(2).max(64),
   shortName: z.string().min(1).max(16).optional(),
 })
 
+/** Suspend or reactivate a tenant. */
 export const schoolStatusWire = z.object({
   status: z.enum(['active', 'disabled']),
 })
@@ -261,10 +338,12 @@ export const createUserWire = z.object({
   role: z.enum(['STUDENT', 'TEACHER', 'SCHOOL_ADMIN']),
 })
 
+/** Suspend or reactivate an account. */
 export const userStatusWire = z.object({
   status: z.enum(['active', 'disabled']),
 })
 
+/** Admin password reset — assigns a new password without needing the old one. */
 export const resetPasswordWire = z.object({
   newPassword: registerWire.shape.password,
 })
@@ -287,6 +366,10 @@ export const learningReportWire = z.object({
  * `|` 是安全的分隔符而非随手选的:`schoolId` 的字母表是 `[A-Za-z0-9_-]`、
  * 日期是 `YYYY-MM-DD`、知识点 id 是 `[a-z0-9-]`,三段都不含 `|`,所以这个键
  * 不会被拼歧义。反过来,无论谁调 `reportLearning`,同一格永远落在同一行。
+ * @param schoolId - the reporting student's tenant, taken from the session.
+ * @param date - the server-local `YYYY-MM-DD` day.
+ * @param knowledgeId - the curriculum knowledge-point id.
+ * @returns the `learning_counts` row key `schoolId|date|knowledgeId`.
  */
 export const learningKey = (schoolId: string, date: string, knowledgeId: string): string =>
   `${schoolId}|${date}|${knowledgeId}`
@@ -313,18 +396,31 @@ export const registerDeviceWire = z.object({
  * `[a-z0-9_.-]`、deviceId 是 `[a-f0-9]`,三段都不含 `|`(而 `:` 在 username 里
  * 出现过,所以不能拿它当第二级分隔符)。一台共享电脑换一个账号登录就是一**新
  * 行**:设备跟着账号走,不会把两个学生合成一条。
+ * @param userKeyValue - the owning account's `schoolId:username` key.
+ * @param deviceId - the hash-shaped device id.
+ * @returns the `devices` row key `userKey|deviceId`.
  */
 export const deviceKey = (userKeyValue: string, deviceId: string): string =>
   `${userKeyValue}|${deviceId}`
 
-/** 设备注销行的键 —— `scope|deviceId`,scope 为 `'*'` 或学校 id。 */
+/**
+ * 设备注销行的键 —— `scope|deviceId`,scope 为 `'*'` 或学校 id。
+ * @param scope - `*` (platform-wide) or one school id.
+ * @param deviceId - the hash-shaped device id.
+ * @returns the `device_revocations` row key `scope|deviceId`.
+ */
 export const deviceRevocationKey = (scope: string, deviceId: string): string =>
   `${scope}|${deviceId}`
 
 /** 平台管理员的注销作用域。 */
 export const GLOBAL_DEVICE_SCOPE = GLOBAL_SCOPE
 
-/** The users-table key — the durable form of UNIQUE(school_id, username). */
+/**
+ * The users-table key — the durable form of UNIQUE(school_id, username).
+ * @param schoolId - the tenant id.
+ * @param username - the login name, lowercased so casing cannot fork the account.
+ * @returns the `users` row key `schoolId:username`.
+ */
 export const userKey = (schoolId: string, username: string): string =>
   `${schoolId}:${username.toLowerCase()}`
 
@@ -340,11 +436,13 @@ export const authDomain = defineDomain({
     users: domainTable<string, UserRecord>(user),
     sessions: domainTable<string, SessionRecord>(session),
     reset_requests: domainTable<string, ResetRequest>(resetRequest),
+    password_reset_tokens: domainTable<string, PasswordResetToken>(passwordResetToken),
     school_requests: domainTable<string, SchoolRequestRecord>(schoolRequest),
     admin_audit: domainTable<string, AuditEvent>(auditEvent),
     learning_counts: domainTable<string, LearningCount>(learningCount),
     devices: domainTable<string, DeviceRecord>(device),
     device_revocations: domainTable<string, DeviceRevocation>(deviceRevocation),
+    api_resources: domainTable<string, ApiResourceOwner>(apiResourceOwner),
   },
 })
 

@@ -26,6 +26,7 @@ export interface SchoolSeedEntry {
 const row = (name: string, city: string, county?: string): SchoolSeedEntry =>
   county === undefined ? { name, city } : { name, city, county }
 
+/** The Guizhou middle/high-school roster, names as published (see BACKLOG for coverage gaps). */
 export const GUIZHOU_SCHOOLS: readonly SchoolSeedEntry[] = [
   row('中国建筑四局第一建筑工程公司子弟中学', '贵阳市'),
   row('中央民族大学附属中学贵阳学校', '贵阳市'),
@@ -1612,7 +1613,7 @@ export const GUIZHOU_SCHOOLS: readonly SchoolSeedEntry[] = [
 
      ⚠️ 仍然是**不全的**：兴义市公办高中（兴义一中、兴义八中、兴义五中 …）
      与遵义市第四中学等仍未进来——本轮没找到对应的官方名录页。
-     详见 docs/reports/BACKLOG.md 的 GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP。 */
+     详见 PhysicsOS 仓库根的 BACKLOG.md(reports 目录下)的 GUIZHOU_SCHOOL_ROSTER_HIGH_SCHOOL_GAP。 */
   row('镇远县文德民族中学校', '黔东南州', '镇远县'),
   row('贵州省镇远中学校', '黔东南州', '镇远县'),
   row('兴义市兴铭高中', '黔西南州', '兴义市'),
@@ -1628,4 +1629,23 @@ export const GUIZHOU_SCHOOLS: readonly SchoolSeedEntry[] = [
   row('黔西南州顶兴高级中学', '黔西南州', '兴义市'),
   row('兴义笔山中学', '黔西南州', '兴义市'),
   row('望谟民族中学', '黔西南州', '望谟县'),
+
+  /* ---- 2026-09-25 补录:黔东南州 2026 年高中招生计划(州教育局发布) ----
+
+     来源:黔东南州教育局《黔东南州2026年普通高中招生计划》与《招生学校信息》
+     (2026-06-12,经黔东南信息港 http://www.qdn.cn/html/2026/qdnnews_0612/213070.shtml
+     转载,计划表与学校信息表均为官方图片,已逐校比对)。全表 53 所,46 所
+     已在册,本轮补 6 所;另有 8 所"官方全称 vs 在册简称"的写法差异
+     (如「贵州省锦屏中学」vs 在册「锦屏中学」)未补 —— 补全称会在
+     按名字哈希的租户表里给同一所学校建出第二个租户,留待名录去重时一并处理。
+
+     ⚠️ 初中侧仍不全:州教育局确有《2024年全州初中教育学校名录》
+     (2025-03-28 发布,搜索索引可见),但其页面在抓取时 404(站点改版),
+     2019 版 172 家名录在文库站付费墙后。见 BACKLOG 同名条目。 */
+  row('凯里市华鑫高级中学', '黔东南州', '凯里市'),
+  row('三穗县第三中学', '黔东南州', '三穗县'),
+  row('天柱县综合高中', '黔东南州', '天柱县'),
+  row('天柱县恒成高级中学', '黔东南州', '天柱县'),
+  row('岑巩县综合高级中学', '黔东南州', '岑巩县'),
+  row('台江县第一中学', '黔东南州', '台江县'),
 ]

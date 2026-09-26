@@ -11,16 +11,20 @@ import { createHash } from 'node:crypto'
 import type { School } from './domain'
 import { GUIZHOU_SCHOOLS } from './schools-data.ts'
 
+/** The built-in open tenant — registration works before any school is seeded. */
 export const OPEN_SCHOOL_ID = 'PHYSICSOS-OPEN'
 
 /**
  * Deterministic tenant id for a roster name — `gz_` marks a roster seed vs
  * admin-chosen ids (e.g. `SYZX`) or legacy `s_` rows. Identical names map to
  * one tenant everywhere, matching the roster's name-based deduplication.
+ * @param name - the school's official roster name.
+ * @returns the derived `gz_<sha256-prefix>` tenant id.
  */
 export const rosterSchoolId = (name: string): string =>
   `gz_${createHash('sha256').update(name, 'utf8').digest('base64url').slice(0, 12)}`
 
+/** The fixed tenant roster: the open school plus the Guizhou middle/high-school list. */
 export const SEED_SCHOOLS: readonly Omit<School, 'createdAt' | 'updatedAt'>[] = [
   { id: OPEN_SCHOOL_ID, name: 'PhysicsOS 开放学校', shortName: '开放学校', status: 'active' },
   ...GUIZHOU_SCHOOLS.map(seed => ({
@@ -35,7 +39,9 @@ export const SEED_SCHOOLS: readonly Omit<School, 'createdAt' | 'updatedAt'>[] = 
 /**
  * Insert seed rows the table lacks. Returns the number inserted so apply()
  * can log a quiet signal.
+ * @param get - the schools-table lookup handle.
  * @param put - the schools-table put handle.
+ * @returns how many seed rows were inserted.
  */
 export async function seedSchools(
   get: (id: string) => School | undefined | Promise<School | undefined>,

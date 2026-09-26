@@ -9,16 +9,25 @@
 import crypto from 'node:crypto'
 import type {
   AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, LearningCount, School,
-  SchoolRequestRecord, SessionRecord, UserRecord,
+  ResetRequest, SchoolRequestRecord, SessionRecord, UserRecord,
 } from './domain'
 import {
   approveRequestWire, createSchoolWire, createUserWire, deviceIdWire, deviceKey,
   deviceRevocationKey, forgotWire, GLOBAL_DEVICE_SCOPE, learningKey,
-  learningReportWire, loginWire, registerDeviceWire, registerWire, rejectRequestWire,
+  learningReportWire, loginWire, passwordResetWire, registerDeviceWire, registerWire, rejectRequestWire,
   resetPasswordWire, schoolRequestWire, schoolStatusWire, userKey, userStatusWire,
 } from './domain'
 import { hashPassword, verifyPassword } from './passwords'
 import { newSessionToken, sessionTokenHash } from './cookies'
+import type { IdentityActor } from './identity'
+import {
+  InMemoryLimiterBackend, type LimiterBackend, type LimiterName,
+  type LimiterPolicy, type LimiterSnapshot,
+} from './limiter'
+import { newPasswordResetToken, passwordResetPath, passwordResetTokenHash } from './reset'
+import {
+  QUEUE_PASSWORD_RESET_DELIVERY, type PasswordResetDelivery,
+} from './reset-delivery'
 
 /** Public error codes — the only failure vocabulary the wire exposes. */
 export type AuthErrorCode =
@@ -26,7 +35,9 @@ export type AuthErrorCode =
   | 'SCHOOL_REQUIRED' | 'SCHOOL_AMBIGUOUS'
   | 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'UNAUTHENTICATED'
   | 'FORBIDDEN' | 'NOT_FOUND' | 'DEVICE_REVOKED'
+  | 'INVALID_RESET_TOKEN' | 'DEPENDENCY_UNAVAILABLE'
 
+/** The only failure shape the wire exposes — `{error:{code,message,...details}}`. */
 export class AuthError extends Error {
   constructor(
     readonly status: number,
@@ -52,6 +63,7 @@ export interface PublicUser {
   role: UserRecord['role']
 }
 
+/** A successful register/login: the minted token plus the public principal. */
 export interface LoginResult {
   token: string
   expiresAt: string
@@ -60,6 +72,7 @@ export interface LoginResult {
   user: PublicUser
 }
 
+/** A live session's principal — the public user plus the session row that resolved it. */
 export interface ResolvedSession {
   user: PublicUser
   session: SessionRecord
@@ -105,6 +118,35 @@ export interface AdminUserRow extends PublicUser {
   lastLoginAt?: string
 }
 
+/** Admin queue row — never includes a token, its hash, or the source IP. */
+export interface PasswordResetQueueRow {
+  id: string
+  schoolId: string
+  schoolName: string
+  username: string
+  displayName: string
+  status: ResetRequest['status']
+  delivery: ResetRequest['delivery']
+  at: string
+  issuedAt?: string
+  expiresAt?: string
+  usedAt?: string
+  cancelledAt?: string
+  deliveryError?: string
+}
+
+/** Optional runtime seams; absent values use safe process-local defaults. */
+export interface AuthServiceDeps {
+  /** Atomic shared limiter. Defaults to {@link InMemoryLimiterBackend}. */
+  limiter?: LimiterBackend
+  /** Password-reset delivery. Defaults to the admin queue (no direct send). */
+  resetDelivery?: PasswordResetDelivery
+  /** Injectable clock for expiry tests and deterministic deployments. */
+  now?: () => Date
+  /** Client handoff path; defaults to `/?reset_token=<token>`. */
+  resetPath?: (token: string) => string
+}
+
 /** Management ceiling order — SUPER_ADMIN itself is never API-managed. */
 const ROLE_RANK: Record<UserRecord['role'], number> = {
   STUDENT: 0,
@@ -113,6 +155,7 @@ const ROLE_RANK: Record<UserRecord['role'], number> = {
   SUPER_ADMIN: 3,
 }
 
+/** Tunable lifetimes and rate-limit budgets, all cordis.yml-configurable. */
 export interface AuthServiceConfig {
   /** Non-remembered session lifetime (ms). Default 12h. */
   sessionTtlMs: number
@@ -122,22 +165,37 @@ export interface AuthServiceConfig {
   accountAttemptLimit: number
   /** Failed logins allowed per source IP within the window. Default 20. */
   ipAttemptLimit: number
-  /**
-   * Anonymous school applications allowed per source IP within the window —
-   * a dedicated bucket so flooding the public form cannot starve logins.
-   * Default 10.
-   */
+  /** Anonymous school applications allowed per source IP within the window. Default 10. */
   applyAttemptLimit: number
+  /** Student registrations allowed per source IP within the window. Default 10. */
+  registrationAttemptLimit?: number
+  /** Learning reports allowed per account within the window. Default 120. */
+  learningAttemptLimit?: number
+  /** Forgot/reset attempts allowed by source or account within the window. Default 10. */
+  passwordResetAttemptLimit?: number
+  /** Password-reset token lifetime. Default 30min. */
+  passwordResetTtlMs?: number
+  /** Exact IP literals of proxies allowed to supply forwarded client metadata. */
+  trustedProxies?: string[]
+  /** Maximum live buckets per limiter. Default 10000. */
+  attemptBucketLimit?: number
   /** Rate-limit window (ms). Default 10min. */
   attemptWindowMs: number
 }
 
-export const DEFAULT_AUTH_CONFIG: AuthServiceConfig = {
+/** The secure-by-default config values; a deployment overrides per field. */
+export const DEFAULT_AUTH_CONFIG: Required<AuthServiceConfig> = {
   sessionTtlMs: 12 * 60 * 60 * 1000,
   rememberTtlMs: 30 * 24 * 60 * 60 * 1000,
   accountAttemptLimit: 5,
   ipAttemptLimit: 20,
   applyAttemptLimit: 10,
+  registrationAttemptLimit: 60,
+  learningAttemptLimit: 120,
+  passwordResetAttemptLimit: 10,
+  passwordResetTtlMs: 30 * 60 * 1000,
+  trustedProxies: [],
+  attemptBucketLimit: 10_000,
   attemptWindowMs: 10 * 60 * 1000,
 }
 
@@ -167,67 +225,129 @@ const localDate = (at: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-/** Fixed-window attempt counters, keyed per bucket; process-local by design. */
-class AttemptLimiter {
-  private readonly buckets = new Map<string, { count: number; resetAt: number }>()
-
-  constructor(
-    private readonly limit: number,
-    private readonly windowMs: number,
-  ) {}
-
-  /**
-   * Read-only view for the ops console.
-   *
-   * The keys are IPs and usernames, so they are NOT returned: the console needs
-   * "how close is this deployment to its limiter", not a list of who is
-   * currently throttled. Reported as aggregate counts.
-   */
-  snapshot(now = Date.now()): { tracked: number; saturated: number; limit: number; windowMs: number } {
-    let tracked = 0
-    let saturated = 0
-    for (const bucket of this.buckets.values()) {
-      if (now >= bucket.resetAt) continue
-      tracked += 1
-      if (bucket.count >= this.limit) saturated += 1
-    }
-    return { tracked, saturated, limit: this.limit, windowMs: this.windowMs }
-  }
-
-  /** True when the bucket has room; consumes one slot when it does. */
-  consume(key: string, now = Date.now()): boolean {
-    const bucket = this.buckets.get(key)
-    if (bucket === undefined || now >= bucket.resetAt) {
-      this.buckets.set(key, { count: 1, resetAt: now + this.windowMs })
-      return true
-    }
-    bucket.count += 1
-    return bucket.count <= this.limit
-  }
-
-  reset(key: string): void {
-    this.buckets.delete(key)
-  }
-}
-
+/**
+ * The auth rules over the `physicsos_auth` domain: school-tenant registration
+ * and login, cookie sessions, attempt limiting, the admin surface, device
+ * registration/revocation, and the anonymous learning-aggregate channel.
+ */
 export class AuthService {
-  private readonly accountLimiter: AttemptLimiter
-  private readonly ipLimiter: AttemptLimiter
-  private readonly applyLimiter: AttemptLimiter
+  private readonly limiter: LimiterBackend
+  private readonly policies: Record<LimiterName, LimiterPolicy>
+  private readonly resetDelivery: PasswordResetDelivery
+  private readonly now: () => Date
+  private readonly resetPath: (token: string) => string
 
   constructor(
     private readonly domain: AuthDomain,
     readonly config: AuthServiceConfig = DEFAULT_AUTH_CONFIG,
+    deps: AuthServiceDeps = {},
   ) {
-    this.accountLimiter = new AttemptLimiter(config.accountAttemptLimit, config.attemptWindowMs)
-    this.ipLimiter = new AttemptLimiter(config.ipAttemptLimit, config.attemptWindowMs)
-    this.applyLimiter = new AttemptLimiter(config.applyAttemptLimit, config.attemptWindowMs)
+    const maxBuckets = config.attemptBucketLimit ?? DEFAULT_AUTH_CONFIG.attemptBucketLimit
+    const policy = (name: LimiterName, limit: number): LimiterPolicy => ({
+      name,
+      limit,
+      windowMs: config.attemptWindowMs,
+      maxBuckets,
+    })
+    this.policies = {
+      login: policy('login', config.accountAttemptLimit),
+      ip: policy('ip', config.ipAttemptLimit),
+      apply: policy('apply', config.applyAttemptLimit),
+      registration: policy(
+        'registration',
+        config.registrationAttemptLimit ?? DEFAULT_AUTH_CONFIG.registrationAttemptLimit,
+      ),
+      learning: policy(
+        'learning',
+        config.learningAttemptLimit ?? DEFAULT_AUTH_CONFIG.learningAttemptLimit,
+      ),
+      passwordReset: policy(
+        'passwordReset',
+        config.passwordResetAttemptLimit ?? DEFAULT_AUTH_CONFIG.passwordResetAttemptLimit,
+      ),
+    }
+    this.limiter = deps.limiter ?? new InMemoryLimiterBackend()
+    this.resetDelivery = deps.resetDelivery ?? QUEUE_PASSWORD_RESET_DELIVERY
+    this.now = deps.now ?? (() => new Date())
+    this.resetPath = deps.resetPath ?? passwordResetPath
   }
 
   private get schools() { return this.domain.table('schools') }
   private get users() { return this.domain.table('users') }
   private get sessions() { return this.domain.table('sessions') }
   private get resets() { return this.domain.table('reset_requests') }
+  private get resetTokens() { return this.domain.table('password_reset_tokens') }
+  private get apiResources() { return this.domain.table('api_resources') }
+
+  /**
+   * Whether an account owns one Harness session/workspace. Platform
+   * administrators retain an unscoped troubleshooting view.
+   * @param actor - the server-resolved account.
+   * @param kind - session or workspace.
+   * @param id - the Harness resource id.
+   * @returns whether the actor may address the resource.
+   */
+  ownsApiResource(actor: IdentityActor, kind: 'session' | 'workspace', id: string): boolean {
+    if (actor.role === 'SUPER_ADMIN') return true
+    return this.apiResources.get(`${kind}:${id}`)?.ownerKey === actor.userKey
+  }
+
+  /**
+   * The resources owned by one account, used to filter list responses.
+   * @param actor - the server-resolved account.
+   * @param kind - session or workspace.
+   * @returns owned resource ids; a platform administrator sees every row.
+   */
+  ownedApiResources(actor: IdentityActor, kind: 'session' | 'workspace'): Set<string> {
+    const rows = [...this.apiResources.entries()]
+      .map(([, row]) => row)
+      .filter(row => row.kind === kind)
+      .filter(row => actor.role === 'SUPER_ADMIN' || row.ownerKey === actor.userKey)
+    return new Set(rows.map(row => row.resourceId))
+  }
+
+  /**
+   * Claim a newly-created Harness resource for one account. A resource never
+   * changes owner: an existing row with another owner is indistinguishable
+   * from absence at the request boundary.
+   * @param actor - the server-resolved account.
+   * @param kind - session or workspace.
+   * @param id - the Harness resource id.
+   */
+  async claimApiResource(actor: IdentityActor, kind: 'session' | 'workspace', id: string): Promise<void> {
+    const key = `${kind}:${id}`
+    const existing = this.apiResources.get(key)
+    if (existing !== undefined) {
+      if (existing.ownerKey !== actor.userKey) {
+        throw new AuthError(403, 'NOT_FOUND', `${kind} "${id}" not found`)
+      }
+      return
+    }
+    await this.apiResources.put(key, {
+      id: key,
+      kind,
+      resourceId: id,
+      ownerKey: actor.userKey,
+      schoolId: actor.schoolId,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * Release one resource after its owning account deletes it.
+   * @param actor - the server-resolved account.
+   * @param kind - session or workspace.
+   * @param id - the Harness resource id.
+   */
+  async releaseApiResource(actor: IdentityActor, kind: 'session' | 'workspace', id: string): Promise<void> {
+    const key = `${kind}:${id}`
+    const existing = this.apiResources.get(key)
+    if (existing === undefined) return
+    if (actor.role !== 'SUPER_ADMIN' && existing.ownerKey !== actor.userKey) {
+      throw new AuthError(403, 'NOT_FOUND', `${kind} "${id}" not found`)
+    }
+    await this.apiResources.delete(key)
+  }
 
   /**
    * Active-user candidates for a username across active school tenants.
@@ -280,6 +400,59 @@ export class AuthService {
   }
 
   /**
+   * Consume one slot from the configured shared backend. Backend failures are
+   * translated to an explicit 503 and never fall through to an unlimited path.
+   */
+  private async allow(
+    name: LimiterName,
+    key: string,
+    message = '尝试过于频繁，请稍后再试',
+  ): Promise<void> {
+    try {
+      if (!(await this.limiter.consume(this.policies[name], key))) {
+        throw new AuthError(429, 'RATE_LIMITED', message)
+      }
+    } catch (error) {
+      if (error instanceof AuthError) throw error
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '限流服务暂时不可用，请稍后再试')
+    }
+  }
+
+  private async clearLimit(name: LimiterName, key: string): Promise<void> {
+    try {
+      await this.limiter.reset?.(this.policies[name], key)
+    } catch {
+      throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '限流服务暂时不可用，请稍后再试')
+    }
+  }
+
+  private async limiterSnapshot(name: LimiterName): Promise<LimiterSnapshot & { available: boolean }> {
+    const policy = this.policies[name]
+    try {
+      const snapshot = await this.limiter.snapshot?.(policy)
+      return snapshot === undefined
+        ? {
+          tracked: 0,
+          saturated: 0,
+          limit: policy.limit,
+          windowMs: policy.windowMs,
+          backend: this.limiter.kind,
+          available: false,
+        }
+        : { ...snapshot, backend: this.limiter.kind, available: true }
+    } catch {
+      return {
+        tracked: 0,
+        saturated: 0,
+        limit: policy.limit,
+        windowMs: policy.windowMs,
+        backend: this.limiter.kind,
+        available: false,
+      }
+    }
+  }
+
+  /**
    * Register a student account under a school tenant, then issue its first
    * session — the caller just proved the password, so a second verify would
    * only spend argon2 for nothing. The tenant list is fixed by the roster
@@ -287,11 +460,17 @@ export class AuthService {
    * tenant — name variants would otherwise fork one school per spelling.
    * `role` is pinned server-side: teacher/admin enrolment is a future admin
    * surface, not wire input.
+   * @param body - the wire body (`registerWire`): credentials plus a school selector.
+   * @param ip - the source IP for the register-path attempt ledger.
+   * @param userAgent - the client UA stored on the session row.
+   * @returns the fresh session token and public principal.
    */
   async register(body: unknown, ip?: string, userAgent?: string): Promise<LoginResult> {
     const input = registerWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     const { username, displayName, password } = input.data
+    const sourceIp = ip ?? 'unknown'
+    await this.allow('registration', `ip:${sourceIp}`, '注册请求过于频繁，请稍后再试')
 
     let school: School | undefined
     if (input.data.schoolId !== undefined) {
@@ -344,6 +523,10 @@ export class AuthService {
    * same username exists in several schools and the password matches more
    * than one, the caller gets `SCHOOL_REQUIRED` with the matching schools —
    * the only moment a school list ever reaches the wire.
+   * @param body - the wire body (`loginWire`): `username`, `password`, `rememberDevice`, `deviceId`.
+   * @param ip - the source IP, shared into the IP attempt bucket and stored on the session.
+   * @param userAgent - the client UA stored on the session row.
+   * @returns the minted session token, its expiry, the cookie Max-Age, and the public principal.
    */
   async login(body: unknown, ip?: string, userAgent?: string): Promise<LoginResult> {
     const input = loginWire.safeParse(body)
@@ -352,13 +535,9 @@ export class AuthService {
     const remember = input.data.rememberDevice === true
     const sourceIp = ip ?? 'unknown'
 
-    if (!this.ipLimiter.consume(`ip:${sourceIp}`)) {
-      throw new AuthError(429, 'RATE_LIMITED', '尝试过于频繁，请稍后再试')
-    }
+    await this.allow('ip', `ip:${sourceIp}`)
     const accountKey = `acct:${username.toLowerCase()}`
-    if (!this.accountLimiter.consume(accountKey)) {
-      throw new AuthError(429, 'RATE_LIMITED', '尝试过于频繁，请稍后再试')
-    }
+    await this.allow('login', accountKey)
 
     const candidates = this.loginCandidates(username, input.data.schoolId)
     /* A username living in more tenants than this cannot be brute-picked —
@@ -383,7 +562,7 @@ export class AuthService {
         candidates: matches.map(c => this.toCandidate(c.school)),
       })
     }
-    this.accountLimiter.reset(accountKey)
+    await this.clearLimit('login', accountKey)
     const match = matches[0]
     if (match === undefined) {
       throw new AuthError(401, 'INVALID_CREDENTIALS', '账号或密码错误')
@@ -411,7 +590,7 @@ export class AuthService {
     record: UserRecord, school: School, remember: boolean,
     ip?: string, userAgent?: string, deviceId?: string,
   ): Promise<LoginResult> {
-    const now = Date.now()
+    const now = this.now().getTime()
     const token = newSessionToken()
     const session: SessionRecord = {
       id: sessionTokenHash(token),
@@ -434,7 +613,10 @@ export class AuthService {
     }
   }
 
-  /** Revoke the session behind a raw cookie token; unknown tokens are a no-op. */
+  /**
+   * Revoke the session behind a raw cookie token; unknown tokens are a no-op.
+   * @param token - the raw cookie token, or null when the request carried none.
+   */
   async logout(token: string | null): Promise<void> {
     if (token === null) return
     const id = sessionTokenHash(token)
@@ -446,6 +628,8 @@ export class AuthService {
   /**
    * Resolve a raw cookie token to the live principal, or null when the session
    * is absent, revoked, expired, or its user/school left `active`.
+   * @param token - the raw `physicsos_session` cookie value.
+   * @returns `{user, session}` for a live session, else null.
    */
   /* Reads an in-memory index only, so it is sync — `await` at the call sites
      still works, and the plugin never has to invent a promise. */
@@ -469,28 +653,353 @@ export class AuthService {
   }
 
   /**
-   * Record a recovery request for the V1 admin-driven flow. The response is
-   * identical whether or not the account exists — enumeration is not a feature.
+   * Queue a recovery request and, when a direct adapter is configured, issue
+   * and deliver a token in the same call. The HTTP receipt is uniform in both
+   * modes and whether or not the account exists.
+   * @param body - the wire body (`forgotWire`): `username` plus `schoolId`.
+   * @param ip - the source IP for the password-reset attempt bucket.
    */
   async requestPasswordReset(body: unknown, ip?: string): Promise<void> {
     const input = forgotWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
-    if (!this.ipLimiter.consume(`forgot:${ip ?? 'unknown'}`)) {
-      throw new AuthError(429, 'RATE_LIMITED', '尝试过于频繁，请稍后再试')
-    }
     const { username, schoolId } = input.data
+    const sourceIp = ip ?? 'unknown'
+    await this.allow('passwordReset', `forgot:ip:${sourceIp}`)
+    await this.allow('passwordReset', `forgot:account:${username.toLowerCase()}`)
+
     const candidates = this.loginCandidates(username, schoolId)
     const only = candidates.length === 1 ? candidates[0] : undefined
     if (only === undefined) return
     const { record, school } = only
-    const id = `rr_${crypto.randomBytes(9).toString('base64url')}`
-    await this.resets.put(id, {
-      id,
+    const ownerKey = userKey(school.id, record.username)
+
+    /* A newer recovery request invalidates every older token and open queue row. */
+    await this.supersedeOpenResetRequests(ownerKey)
+
+    const request: ResetRequest = {
+      id: `rr_${crypto.randomBytes(9).toString('base64url')}`,
       schoolId: school.id,
       username: record.username,
-      at: new Date().toISOString(),
+      at: this.now().toISOString(),
+      status: 'pending',
+      delivery: this.resetDelivery.mode,
       ...(ip !== undefined ? { ip } : {}),
+    }
+    await this.resets.put(request.id, request)
+    if (this.resetDelivery.mode !== 'direct') return
+
+    const issued = await this.issueResetToken(request)
+    try {
+      await this.resetDelivery.deliver({
+        requestId: request.id,
+        userKey: ownerKey,
+        schoolId: school.id,
+        username: record.username,
+        displayName: record.displayName,
+        token: issued.token,
+        expiresAt: issued.request.expiresAt ?? '',
+        resetPath: this.resetPath(issued.token),
+      })
+    } catch {
+      await this.revokeResetToken(issued.request.tokenHash)
+      await this.resets.put(request.id, {
+        ...issued.request,
+        status: 'delivery_failed',
+        deliveryError: 'delivery adapter failed',
+      })
+    }
+  }
+
+  /**
+   * Admin recovery queue. Tokens and hashes never cross this boundary.
+   * @param actor - resolved admin principal.
+   * @param filter - optional status/school/query and capped result count.
+   * @returns tenant-scoped queue rows, newest first.
+   */
+  listPasswordResets(
+    actor: AdminActor,
+    filter: { status?: string; schoolId?: string; q?: string; limit?: number } = {},
+  ): { requests: PasswordResetQueueRow[] } {
+    this.requireAdmin(actor)
+    const statuses = new Set<ResetRequest['status']>([
+      'pending', 'active', 'used', 'cancelled', 'expired', 'superseded', 'delivery_failed',
+    ])
+    if (filter.status !== undefined && !statuses.has(filter.status as ResetRequest['status'])) {
+      throw new AuthError(400, 'BAD_REQUEST', '重置状态不正确')
+    }
+    const schoolId = actor.role === 'SUPER_ADMIN' ? filter.schoolId : actor.schoolId
+    const needle = filter.q?.trim().toLowerCase()
+    const requestedLimit = filter.limit !== undefined && Number.isFinite(filter.limit)
+      ? Math.trunc(filter.limit)
+      : 100
+    const limit = Math.min(Math.max(requestedLimit, 1), 200)
+    const requests = [...this.resets.entries()]
+      .map(([, request]) => this.toPasswordResetRow(request))
+      .filter(request => schoolId === undefined || request.schoolId === schoolId)
+      .filter(request => filter.status === undefined || request.status === filter.status)
+      .filter(request => needle === undefined || needle === ''
+        || request.username.includes(needle))
+      .sort((left, right) => right.at.localeCompare(left.at))
+      .slice(0, limit)
+    return { requests }
+  }
+
+  /**
+   * Issue a fresh token for one queued request and return the raw value exactly
+   * once to the acting administrator. Reissuing invalidates every older token
+   * held by that account.
+   * @param actor - resolved admin principal.
+   * @param requestId - queue row id.
+   * @returns the raw token, expiry, and client path.
+   */
+  async issuePasswordReset(
+    actor: AdminActor,
+    requestId: string,
+  ): Promise<{ request: PasswordResetQueueRow; token: string; expiresAt: string; resetPath: string }> {
+    this.requireAdmin(actor)
+    const request = this.loadManagedReset(actor, requestId)
+    if (request.status === 'used' || request.status === 'cancelled' || request.status === 'superseded') {
+      throw new AuthError(400, 'BAD_REQUEST', '该重置请求已结束')
+    }
+    if (request.status === 'active' && request.expiresAt !== undefined
+      && Date.parse(request.expiresAt) <= this.now().getTime()) {
+      await this.resets.put(request.id, { ...request, status: 'expired' })
+      throw new AuthError(400, 'BAD_REQUEST', '该重置请求已过期')
+    }
+    const target = this.users.get(userKey(request.schoolId, request.username))
+    if (target === undefined || target.status !== 'active') {
+      throw new AuthError(404, 'NOT_FOUND', '账号不存在或已停用')
+    }
+    const issued = await this.issueResetToken(request, actor.userKey)
+    await this.audit(actor, 'password_reset.issue', request.id, request.schoolId, {
+      username: request.username,
     })
+    return {
+      request: this.toPasswordResetRow(issued.request),
+      token: issued.token,
+      expiresAt: issued.request.expiresAt ?? '',
+      resetPath: this.resetPath(issued.token),
+    }
+  }
+
+  /**
+   * Cancel one queue row and revoke its currently issued token, if any.
+   * @param actor - resolved admin principal.
+   * @param requestId - queue row id.
+   * @returns the cancelled queue row.
+   */
+  async cancelPasswordReset(actor: AdminActor, requestId: string): Promise<PasswordResetQueueRow> {
+    this.requireAdmin(actor)
+    const request = this.loadManagedReset(actor, requestId)
+    if (request.status === 'used') throw new AuthError(400, 'BAD_REQUEST', '密码已经重置')
+    const now = this.now().toISOString()
+    await this.revokeResetToken(request.tokenHash, now)
+    const cancelled: ResetRequest = {
+      ...request,
+      status: 'cancelled',
+      cancelledAt: now,
+      decidedBy: actor.userKey,
+    }
+    await this.resets.put(cancelled.id, cancelled)
+    await this.audit(actor, 'password_reset.cancel', request.id, request.schoolId, {
+      username: request.username,
+    })
+    return this.toPasswordResetRow(cancelled)
+  }
+
+  /**
+   * Redeem one token, replace the password, and revoke every live session and
+   * every sibling token. Invalid, expired, revoked, and already-used values
+   * share one error so token probing learns nothing.
+   * @param body - `{token, newPassword}`.
+   * @param ip - source IP for the redemption limiter.
+   */
+  async submitPasswordReset(body: unknown, ip?: string): Promise<void> {
+    const input = passwordResetWire.safeParse(body)
+    if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
+    const sourceIp = ip ?? 'unknown'
+    const hash = passwordResetTokenHash(input.data.token)
+    await this.allow('passwordReset', `reset:ip:${sourceIp}`)
+    await this.allow('passwordReset', `reset:token:${hash}`)
+
+    const token = this.resetTokens.get(hash)
+    const now = this.now()
+    if (token === undefined || token.usedAt !== undefined || token.revokedAt !== undefined
+      || Date.parse(token.expiresAt) <= now.getTime()) {
+      if (token !== undefined && Date.parse(token.expiresAt) <= now.getTime()
+        && token.revokedAt === undefined) {
+        await this.revokeResetToken(hash, now.toISOString())
+        const request = this.resets.get(token.requestId)
+        if (request !== undefined) {
+          await this.resets.put(request.id, { ...request, status: 'expired' })
+        }
+      }
+      throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
+    }
+    if (!this.claimResetToken(hash)) {
+      throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
+    }
+
+    /* Claim before the first await: two local requests cannot both redeem the
+       same token. A shared multi-instance store must expose the same CAS. */
+    await this.resetTokens.put(hash, { ...token, usedAt: now.toISOString() })
+    this.claimedResetTokens.delete(hash)
+    const record = this.users.get(token.userKey)
+    const school = this.schools.get(token.schoolId)
+    if (record === undefined || school === undefined
+      || record.status !== 'active' || school.status !== 'active') {
+      throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
+    }
+
+    await this.users.put(token.userKey, {
+      ...record,
+      passwordHash: hashPassword(input.data.newPassword),
+      updatedAt: now.toISOString(),
+    })
+    await this.revokeUserSessions(record)
+    await this.supersedeOpenResetRequests(token.userKey, token.requestId)
+    const request = this.resets.get(token.requestId)
+    if (request !== undefined) {
+      await this.resets.put(request.id, {
+        ...request,
+        status: 'used',
+        usedAt: now.toISOString(),
+      })
+    }
+    await this.audit(
+      { userKey: 'system:password-reset', schoolId: token.schoolId, username: 'system', role: 'STUDENT' },
+      'password_reset.use',
+      token.requestId,
+      token.schoolId,
+      { username: token.username },
+    )
+  }
+
+  private readonly claimedResetTokens = new Set<string>()
+
+  private claimResetToken(hash: string): boolean {
+    if (this.claimedResetTokens.has(hash)) return false
+    this.claimedResetTokens.add(hash)
+    return true
+  }
+
+  private async revokeResetToken(
+    hash: string | undefined,
+    revokedAt = this.now().toISOString(),
+  ): Promise<void> {
+    if (hash === undefined) return
+    const token = this.resetTokens.get(hash)
+    if (token === undefined || token.revokedAt !== undefined) return
+    await this.resetTokens.put(hash, { ...token, revokedAt })
+  }
+
+  private async invalidateUserResetTokens(
+    ownerKey: string,
+    exceptRequestId?: string,
+  ): Promise<void> {
+    const now = this.now().toISOString()
+    for (const [hash, token] of this.resetTokens.entries()) {
+      if (token.userKey !== ownerKey || token.usedAt !== undefined || token.revokedAt !== undefined) {
+        continue
+      }
+      await this.resetTokens.put(hash, { ...token, revokedAt: now })
+      if (token.requestId === exceptRequestId) continue
+      const request = this.resets.get(token.requestId)
+      if (request !== undefined
+        && request.status !== 'used'
+        && request.status !== 'cancelled'
+        && request.status !== 'superseded') {
+        await this.resets.put(request.id, { ...request, status: 'superseded' })
+      }
+    }
+  }
+
+  private async supersedeOpenResetRequests(
+    ownerKey: string,
+    exceptRequestId?: string,
+  ): Promise<void> {
+    const now = this.now().toISOString()
+    for (const [id, request] of this.resets.entries()) {
+      if (id === exceptRequestId
+        || userKey(request.schoolId, request.username) !== ownerKey) continue
+      if (request.status !== 'pending' && request.status !== 'active'
+        && request.status !== 'delivery_failed') continue
+      await this.revokeResetToken(request.tokenHash, now)
+      await this.resets.put(id, { ...request, status: 'superseded' })
+    }
+  }
+
+  private async issueResetToken(
+    request: ResetRequest,
+    decidedBy?: string,
+  ): Promise<{ request: ResetRequest; token: string }> {
+    const ownerKey = userKey(request.schoolId, request.username)
+    await this.invalidateUserResetTokens(ownerKey, request.id)
+    const now = this.now()
+    const token = newPasswordResetToken()
+    const tokenHash = passwordResetTokenHash(token)
+    const expiresAt = new Date(
+      now.getTime() + (this.config.passwordResetTtlMs ?? DEFAULT_AUTH_CONFIG.passwordResetTtlMs),
+    ).toISOString()
+    const record = this.users.get(ownerKey)
+    if (record === undefined) throw new AuthError(404, 'NOT_FOUND', '账号不存在')
+    await this.resetTokens.put(tokenHash, {
+      id: tokenHash,
+      tokenHash,
+      requestId: request.id,
+      userId: record.id,
+      userKey: ownerKey,
+      schoolId: request.schoolId,
+      username: request.username,
+      createdAt: now.toISOString(),
+      expiresAt,
+    })
+    const issued: ResetRequest = {
+      id: request.id,
+      schoolId: request.schoolId,
+      username: request.username,
+      at: request.at,
+      status: 'active',
+      delivery: this.resetDelivery.mode,
+      tokenHash,
+      issuedAt: now.toISOString(),
+      expiresAt,
+      ...(request.ip !== undefined ? { ip: request.ip } : {}),
+      ...(decidedBy !== undefined ? { decidedBy } : {}),
+    }
+    await this.resets.put(issued.id, issued)
+    return { request: issued, token }
+  }
+
+  private loadManagedReset(actor: AdminActor, requestId: string): ResetRequest {
+    const request = this.resets.get(requestId)
+    if (request === undefined) throw new AuthError(404, 'NOT_FOUND', '重置请求不存在')
+    if (actor.role !== 'SUPER_ADMIN' && request.schoolId !== actor.schoolId) {
+      throw new AuthError(403, 'FORBIDDEN', '无权管理其他学校')
+    }
+    return request
+  }
+
+  private toPasswordResetRow(request: ResetRequest): PasswordResetQueueRow {
+    const school = this.schools.get(request.schoolId)
+    const user = this.users.get(userKey(request.schoolId, request.username))
+    const expired = request.status === 'active' && request.expiresAt !== undefined
+      && Date.parse(request.expiresAt) <= this.now().getTime()
+    return {
+      id: request.id,
+      schoolId: request.schoolId,
+      schoolName: school?.name ?? request.schoolId,
+      username: request.username,
+      displayName: user?.displayName ?? request.username,
+      status: expired ? 'expired' : request.status,
+      delivery: request.delivery,
+      at: request.at,
+      ...(request.issuedAt !== undefined ? { issuedAt: request.issuedAt } : {}),
+      ...(request.expiresAt !== undefined ? { expiresAt: request.expiresAt } : {}),
+      ...(request.usedAt !== undefined ? { usedAt: request.usedAt } : {}),
+      ...(request.cancelledAt !== undefined ? { cancelledAt: request.cancelledAt } : {}),
+      ...(request.deliveryError !== undefined ? { deliveryError: request.deliveryError } : {}),
+    }
   }
 
   /* ---- Admin Console ----
@@ -502,15 +1011,17 @@ export class AuthService {
    * an authed submitter is recorded so the approving admin can see who asked.
    * Re-submitting the same pending name returns the existing row — repeated
    * taps are idempotent, not a queue of duplicates.
+   * @param body - the wire body (`schoolRequestWire`): the school's roster name etc.
+   * @param requestedBy - the submitter's userKey, or null for an anonymous submission.
+   * @param ip - the source IP for the `apply:` attempt bucket.
+   * @returns the new or already-pending request row.
    */
   async submitSchoolRequest(
     body: unknown, requestedBy: string | null, ip?: string,
   ): Promise<SchoolRequestRecord> {
     const input = schoolRequestWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
-    if (!this.applyLimiter.consume(`apply:${ip ?? 'unknown'}`)) {
-      throw new AuthError(429, 'RATE_LIMITED', '提交过于频繁，请稍后再试')
-    }
+    await this.allow('apply', `apply:${ip ?? 'unknown'}`, '提交过于频繁，请稍后再试')
     const name = input.data.schoolName.trim()
     const pending = [...this.requests.entries()]
       .map(([, request]) => request)
@@ -531,7 +1042,12 @@ export class AuthService {
     return record
   }
 
-  /** Applications queue — SUPER_ADMIN only; newest first, optional status filter. */
+  /**
+   * Applications queue — SUPER_ADMIN only; newest first, optional status filter.
+   * @param actor - the resolved admin principal (must be SUPER_ADMIN).
+   * @param status - optional `pending|approved|rejected` filter.
+   * @returns the matching request rows, newest first.
+   */
   listSchoolRequests(actor: AdminActor, status?: string): SchoolRequestRecord[] {
     this.requireSuper(actor)
     return [...this.requests.entries()]
@@ -544,6 +1060,10 @@ export class AuthService {
    * Approve an application: create its school tenant and seed the first
    * SCHOOL_ADMIN with the approver-chosen credentials. Re-deciding a decided
    * request is rejected rather than replayed.
+   * @param actor - the resolved admin principal (must be SUPER_ADMIN).
+   * @param requestId - the pending request's id.
+   * @param body - `approveRequestWire`: the chosen school id plus first-admin credentials.
+   * @returns the created tenant and its seeded SCHOOL_ADMIN row.
    */
   async approveSchoolRequest(
     actor: AdminActor, requestId: string, body: unknown,
@@ -586,7 +1106,13 @@ export class AuthService {
     return { school, admin: this.toAdminRow(admin, school) }
   }
 
-  /** Reject an application; the optional reason rides the audit row. */
+  /**
+   * Reject an application; the optional reason rides the audit row.
+   * @param actor - the resolved admin principal (must be SUPER_ADMIN).
+   * @param requestId - the pending request's id.
+   * @param body - `rejectRequestWire`: an optional reason.
+   * @returns the updated request row.
+   */
   async rejectSchoolRequest(
     actor: AdminActor, requestId: string, body: unknown,
   ): Promise<SchoolRequestRecord> {
@@ -608,7 +1134,11 @@ export class AuthService {
     return rejected
   }
 
-  /** Tenant list — SUPER_ADMIN sees all; a school admin sees exactly its own. */
+  /**
+   * Tenant list — SUPER_ADMIN sees all; a school admin sees exactly its own.
+   * @param actor - the resolved admin principal.
+   * @returns the visible tenants, sorted by name.
+   */
   listSchoolsAdmin(actor: AdminActor): School[] {
     this.requireAdmin(actor)
     const all = [...this.schools.entries()].map(([, school]) => school)
@@ -618,7 +1148,12 @@ export class AuthService {
     return visible.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'))
   }
 
-  /** Direct school creation (SUPER_ADMIN), bypassing the application queue. */
+  /**
+   * Direct school creation (SUPER_ADMIN), bypassing the application queue.
+   * @param actor - the resolved admin principal (must be SUPER_ADMIN).
+   * @param body - `createSchoolWire`: `id`, `name`, optional `shortName`.
+   * @returns the created tenant row.
+   */
   async createSchool(actor: AdminActor, body: unknown): Promise<School> {
     this.requireSuper(actor)
     const input = createSchoolWire.safeParse(body)
@@ -644,6 +1179,10 @@ export class AuthService {
    * Enable/disable a tenant (SUPER_ADMIN). Disabling needs no session sweep:
    * `resolveSession` re-checks the school row, so every live session under it
    * fails closed on its next request.
+   * @param actor - the resolved admin principal (must be SUPER_ADMIN).
+   * @param schoolId - the tenant to update.
+   * @param body - `schoolStatusWire`: the new `status`.
+   * @returns the updated tenant row.
    */
   async setSchoolStatus(actor: AdminActor, schoolId: string, body: unknown): Promise<School> {
     this.requireSuper(actor)
@@ -662,6 +1201,9 @@ export class AuthService {
   /**
    * User list — a school admin's `schoolId` filter is forced to its own tenant
    * regardless of what the wire asked for.
+   * @param actor - the resolved admin principal.
+   * @param filter - optional `schoolId` (supers only), `role`, and a name substring `q`.
+   * @returns the matching accounts as admin-facing rows.
    */
   listUsers(
     actor: AdminActor, filter: { schoolId?: string; role?: string; q?: string },
@@ -684,6 +1226,9 @@ export class AuthService {
    * Provision a user. Tenant scope and role ceiling are server-enforced:
    * a school admin only mints STUDENT/TEACHER inside its own school; only a
    * super admin mints SCHOOL_ADMIN. SUPER_ADMIN is not a wire value at all.
+   * @param actor - the resolved admin principal.
+   * @param body - `createUserWire`: credentials, display name, role, optional schoolId.
+   * @returns the created account as an admin-facing row.
    */
   async createUser(actor: AdminActor, body: unknown): Promise<AdminUserRow> {
     this.requireAdmin(actor)
@@ -720,6 +1265,11 @@ export class AuthService {
    * Enable/disable an account. Disabling revokes the target's sessions
    * immediately; the target user itself cannot be a SUPER_ADMIN (those are
    * config-managed) nor the actor (self-lockout).
+   * @param actor - the resolved admin principal; a school admin stays in its tenant.
+   * @param schoolId - the target account's school.
+   * @param username - the target account's username.
+   * @param body - `userStatusWire`: the new `status`.
+   * @returns the updated account as an admin-facing row.
    */
   async setUserStatus(
     actor: AdminActor, schoolId: string, username: string, body: unknown,
@@ -734,10 +1284,13 @@ export class AuthService {
     }
     const target = this.loadManagedTarget(actor, schoolId, username)
     const updated: UserRecord = {
-      ...target.record, status: input.data.status, updatedAt: new Date().toISOString(),
+      ...target.record, status: input.data.status, updatedAt: this.now().toISOString(),
     }
     await this.users.put(target.userKey, updated)
-    if (input.data.status === 'disabled') await this.revokeUserSessions(target.record)
+    if (input.data.status === 'disabled') {
+      await this.revokeUserSessions(target.record)
+      await this.supersedeOpenResetRequests(target.userKey)
+    }
     await this.audit(actor, 'user.status', target.userKey, schoolId, { status: input.data.status })
     return this.toAdminRow(updated, this.schools.get(schoolId))
   }
@@ -746,6 +1299,10 @@ export class AuthService {
    * Admin-driven password reset (the forgot-password queue's consumer): rehash
    * and revoke every live session so the old password's sessions die with it.
    * The new password never appears in audit detail.
+   * @param actor - the resolved admin principal; a school admin stays in its tenant.
+   * @param schoolId - the target account's school.
+   * @param username - the target account's username.
+   * @param body - `resetPasswordWire`: the admin-chosen `newPassword`.
    */
   async resetUserPassword(
     actor: AdminActor, schoolId: string, username: string, body: unknown,
@@ -757,13 +1314,19 @@ export class AuthService {
     await this.users.put(target.userKey, {
       ...target.record,
       passwordHash: hashPassword(input.data.newPassword),
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.now().toISOString(),
     })
     await this.revokeUserSessions(target.record)
+    await this.supersedeOpenResetRequests(target.userKey)
     await this.audit(actor, 'user.reset_password', target.userKey, schoolId)
   }
 
-  /** Revoke every live session of one account without touching its password. */
+  /**
+   * Revoke every live session of one account without touching its password.
+   * @param actor - the resolved admin principal; a school admin stays in its tenant.
+   * @param schoolId - the target account's school.
+   * @param username - the target account's username.
+   */
   async revokeUserSessionsByAdmin(
     actor: AdminActor, schoolId: string, username: string,
   ): Promise<void> {
@@ -773,10 +1336,6 @@ export class AuthService {
     await this.audit(actor, 'user.revoke_sessions', target.userKey, schoolId)
   }
 
-  /**
-   * Audit ledger — append-only on the write side; school admins read only
-   * their own tenant's rows, supers may narrow with `schoolId`.
-   */
   /**
    * The dashboard's data — and ONLY the part the server actually knows.
    *
@@ -792,13 +1351,21 @@ export class AuthService {
    *
    * Counts are scoped exactly like every other admin read: a SUPER_ADMIN sees
    * the platform, anyone else sees their own tenant.
+   * @param actor - the resolved admin principal; scopes the counts to its tenant.
+   * @returns the dashboard payload — see the field docs for the two layers.
    */
-  dashboard(actor: AdminActor): {
+  async dashboard(actor: AdminActor): Promise<{
     schools: { total: number; active: number; disabled: number }
     users: { total: number; byRole: Record<string, number>; disabled: number }
     sessions: { live: number; distinctUsers: number }
     activity: { date: string; logins: number; created: number }[]
-    limiters: Record<'login' | 'ip' | 'apply', { tracked: number; saturated: number; limit: number; windowMs: number }>
+    limiters: {
+      backend: string
+      available: boolean
+      login: LimiterSnapshot
+      ip: LimiterSnapshot
+      apply: LimiterSnapshot
+    }
     /**
      * 第二层:来自 {@link reportLearning} 的聚合计数。`available` 为 false 时
      * 是「这台部署还没有人上报过」,不是「零正确率」——界面据此说人话,而不是
@@ -812,10 +1379,15 @@ export class AuthService {
       nodes: { knowledgeId: string; correct: number; wrong: number }[]
       days: number
     }
-  } {
+  }> {
     this.requireAdmin(actor)
     const scope = actor.role === 'SUPER_ADMIN' ? undefined : actor.schoolId
-    const now = Date.now()
+    const now = this.now().getTime()
+    const [loginLimiter, ipLimiter, applyLimiter] = await Promise.all([
+      this.limiterSnapshot('login'),
+      this.limiterSnapshot('ip'),
+      this.limiterSnapshot('apply'),
+    ])
 
     const schools = [...this.schools.entries()]
       .map(([, school]) => school)
@@ -898,14 +1470,23 @@ export class AuthService {
       /* Abuse posture, not a guest list: counts of in-flight buckets and how
          many are at the ceiling, with no IPs and no usernames. */
       limiters: {
-        login: this.accountLimiter.snapshot(now),
-        ip: this.ipLimiter.snapshot(now),
-        apply: this.applyLimiter.snapshot(now),
+        backend: this.limiter.kind,
+        available: loginLimiter.available && ipLimiter.available && applyLimiter.available,
+        login: loginLimiter,
+        ip: ipLimiter,
+        apply: applyLimiter,
       },
       learning,
     }
   }
 
+  /**
+   * Audit ledger — append-only on the write side; school admins read only
+   * their own tenant's rows, supers may narrow with `schoolId`.
+   * @param actor - the resolved admin principal; scopes the rows to its tenant.
+   * @param filter - optional `schoolId` (supers only) and a `limit` (default 200).
+   * @returns the newest matching audit rows.
+   */
   listAudit(
     actor: AdminActor, filter: { schoolId?: string; limit?: number },
   ): AuditEvent[] {
@@ -956,6 +1537,7 @@ export class AuthService {
   async reportLearning(actor: AdminActor, body: unknown): Promise<LearningCount> {
     const input = learningReportWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查上报内容')
+    await this.allow('learning', actor.userKey, '学习上报过于频繁，请稍后再试')
     const now = new Date()
     /* 日期取宿主本地时间,不是 UTC。对一所贵州的学校来说,UTC 的日界落在当地
        早上 8 点 —— 晚自习做的那批自测会被算进「昨天」,而这正是看板要回答的
@@ -987,6 +1569,9 @@ export class AuthService {
    *
    * 每行都带有效注销状态与最近活跃时间;设备**哈希**原样展示(它本来就是哈希,
    * 不是序列号),暴露不了硬件身份。
+   * @param actor - 已解析的管理员身份;校管理员的范围强制收窄到本校。
+   * @param filter - 可选 `schoolId`(仅超管可用)与设备哈希/用户名子串 `q`。
+   * @returns 设备行(带 `revoked`/`revokedGlobally`)与风控信号列表。
    */
   listDevices(
     actor: AdminActor, filter: { schoolId?: string; q?: string } = {},
@@ -1027,6 +1612,10 @@ export class AuthService {
    *
    * 注销时同一台设备**已经在线的会话一并失效**:否则被注销的机器只要不退出就能
    * 继续用,「远程注销」就成了摆设。
+   * @param actor - 已解析的管理员身份;超管的 scope 是 `'*'`,校管理员是本校。
+   * @param deviceId - 设备哈希(`deviceIdWire` 形状),非平台原始标识。
+   * @param revoked - true 注销,false 只解开自己那把 scope 的锁。
+   * @returns 设备 id、生效的 scope,以及注销时写入的锁行。
    */
   async setDeviceRevoked(
     actor: AdminActor, deviceId: string, revoked: boolean,
@@ -1185,6 +1774,9 @@ export class AuthService {
    * 与 `touchDevice` 分开是有意的:`touchDevice` 是登录路径上的副产物(拿的是
    * `UserRecord`),这里是**显式**登记(拿的是 actor),而且它必须拒绝一台正在
    * 被注销的机器 —— 否则「远程注销」会被机器自己的下一次心跳抹掉。
+   * @param actor - 会话解析出的设备主人;device 行记到 `(userKey, deviceId)`。
+   * @param body - `registerDeviceWire`:设备哈希、可选平台与版本。
+   * @returns 登记后的设备行。
    */
   async registerOwnDevice(actor: AdminActor, body: unknown): Promise<DeviceRecord> {
     const input = registerDeviceWire.safeParse(body)
@@ -1261,6 +1853,10 @@ export class AuthService {
    * end up in ONE trail with one shape — rather than a second audit log nobody
    * remembers to read. The school comes from the actor, so a caller cannot file
    * an action under a tenant it is not acting in.
+   * @param actor - the acting account (`userKey` + `schoolId` only — no role check).
+   * @param action - the verb, e.g. `paper.publish`.
+   * @param target - the object the action landed on.
+   * @param detail - optional structured extras; never secrets or raw answers.
    */
   async auditAs(
     actor: Pick<AdminActor, 'userKey' | 'schoolId'>,

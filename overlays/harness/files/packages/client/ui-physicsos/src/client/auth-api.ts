@@ -45,6 +45,7 @@ const adminPost = <T>(path: string, body?: unknown): Promise<T> =>
 /* Wire shapes — structural mirrors of the host's public rows; the host package
    stays host-side, the client keeps its own minimal contract. */
 
+/** A tenant row as `/schools` and admin routes return it. */
 export interface SchoolRow {
   readonly id: string
   readonly name: string
@@ -67,6 +68,7 @@ export interface AuthUser {
   readonly role: 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'SUPER_ADMIN'
 }
 
+/** `/register` body — school selection resolves server-side, never trusted as-is. */
 export interface RegisterInput {
   /** Free-text school the user typed; the host resolves it to a tenant. */
   readonly schoolName?: string
@@ -77,6 +79,7 @@ export interface RegisterInput {
   readonly password: string
 }
 
+/** `/login` body — credentials plus the remember-device flag. */
 export interface LoginInput {
   /** Disambiguation answer after `SCHOOL_REQUIRED`; not a form field otherwise. */
   readonly schoolId?: string
@@ -137,7 +140,10 @@ export interface DashboardRow {
     readonly saturated: number
     readonly limit: number
     readonly windowMs: number
-  }>>
+  }>> & {
+    readonly backend?: string
+    readonly available?: boolean
+  }
   /**
    * 第二层:学生自测的聚合计数,来自带会话的学习上报。
    *
@@ -158,6 +164,7 @@ export interface DashboardRow {
   }
 }
 
+/** One admin-readable audit-ledger row. */
 export interface AuditEventRow {
   readonly id: string
   readonly actorKey: string
@@ -203,6 +210,47 @@ export interface RiskSignalRow {
   readonly windowMs: number
 }
 
+/** Password-reset queue lifecycle states exposed to administrators. */
+export type PasswordResetStatus =
+  | 'pending'
+  | 'active'
+  | 'used'
+  | 'cancelled'
+  | 'expired'
+  | 'superseded'
+  | 'delivery_failed'
+
+/**
+ * One admin-visible recovery request.
+ *
+ * The host deliberately omits the token, its hash, and the source IP: the raw
+ * token is returned only once by `issuePasswordReset`.
+ */
+export interface PasswordResetQueueRow {
+  readonly id: string
+  readonly schoolId: string
+  readonly schoolName: string
+  readonly username: string
+  readonly displayName: string
+  readonly status: PasswordResetStatus
+  readonly delivery: 'queue' | 'direct'
+  readonly at: string
+  readonly issuedAt?: string
+  readonly expiresAt?: string
+  readonly usedAt?: string
+  readonly cancelledAt?: string
+  readonly deliveryError?: string
+}
+
+/** One-time result of issuing an admin reset link. */
+export interface IssuedPasswordReset {
+  readonly request: PasswordResetQueueRow
+  readonly token: string
+  readonly expiresAt: string
+  readonly resetPath: string
+}
+
+/** `/school-requests/:id/approve` body — the approver-chosen tenant id and first admin. */
 export interface ApproveInput {
   readonly schoolId: string
   readonly shortName?: string
@@ -211,6 +259,7 @@ export interface ApproveInput {
   readonly adminPassword: string
 }
 
+/** `/users` create body — the host enforces role ceiling and tenant scope. */
 export interface AdminCreateUserInput {
   /** Required for SUPER_ADMIN; a SCHOOL_ADMIN may omit it (own tenant implied). */
   readonly schoolId?: string
@@ -234,6 +283,17 @@ export interface AdminApi {
   resetUserPassword: (schoolId: string, username: string, newPassword: string) => Promise<{ ok: boolean }>
   revokeUserSessions: (schoolId: string, username: string) => Promise<{ ok: boolean }>
   listAudit: (filter?: { schoolId?: string; limit?: number }) => Promise<{ events: AuditEventRow[] }>
+  /** Password-recovery queue; rows never contain the raw token or its hash. */
+  listPasswordResets: (filter?: {
+    status?: PasswordResetStatus
+    schoolId?: string
+    q?: string
+    limit?: number
+  }) => Promise<{ requests: PasswordResetQueueRow[] }>
+  /** Issue and reveal a fresh one-time token to the acting administrator. */
+  issuePasswordReset: (id: string) => Promise<IssuedPasswordReset>
+  /** Cancel a queue row and revoke its currently active token. */
+  cancelPasswordReset: (id: string) => Promise<{ request: PasswordResetQueueRow }>
   /** Server-known platform/tenant figures. Never inferred, never client-side. */
   dashboard: () => Promise<DashboardRow>
   /** 登记过的设备 + 风控信号(第 4 期服务端半)。 */
@@ -251,6 +311,8 @@ export interface AuthApi {
   logout: () => Promise<{ ok: boolean }>
   me: () => Promise<{ user: AuthUser }>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
+  /** Redeem a one-time token; the host revokes every live session on success. */
+  resetPassword: (input: { token: string; newPassword: string }) => Promise<{ ok: boolean }>
   /**
    * 上报一次自测对错。只发知识点 id 与对错 —— 没有账号、没有答案、没有自由
    * 文本;学校与日期都由服务端决定。记录学习历史是本地的事,上报是尽力而为。
@@ -258,7 +320,9 @@ export interface AuthApi {
   reportLearning: (input: { knowledgeId: string; correct: boolean }) => Promise<{ ok: boolean }>
 }
 
-/** The real client — bound once in `apply`, injected as callbacks. */
+/** The real client — bound once in `apply`, injected as callbacks.
+ * @returns the `AuthApi` callback surface over `fetch`.
+ */
 export function createAuthApi(): AuthApi {
   return {
     register: input => post('/register', input),
@@ -266,6 +330,7 @@ export function createAuthApi(): AuthApi {
     logout: () => post('/logout'),
     me: () => request(AUTH_BASE, '/me'),
     forgotPassword: input => post('/password/forgot', input),
+    resetPassword: input => post('/password/reset', input),
     reportLearning: async (input) => {
       await post('/usage/learning', input)
       return { ok: true }
@@ -273,7 +338,9 @@ export function createAuthApi(): AuthApi {
   }
 }
 
-/** The admin client — same cookie session, `/physicsos/admin` prefix. */
+/** The admin client — same cookie session, `/physicsos/admin` prefix.
+ * @returns the `AdminApi` callback surface over `fetch`.
+ */
 export function createAdminApi(): AdminApi {
   const userPath = (schoolId: string, username: string, verb: string) =>
     `/users/${encodeURIComponent(`${schoolId}:${username}`)}/${verb}`
@@ -308,6 +375,19 @@ export function createAdminApi(): AdminApi {
       const qs = params.toString()
       return request(ADMIN_BASE, `/audit${qs === '' ? '' : `?${qs}`}`)
     },
+    listPasswordResets: (filter) => {
+      const params = new URLSearchParams()
+      if (filter?.status !== undefined) params.set('status', filter.status)
+      if (filter?.schoolId !== undefined) params.set('schoolId', filter.schoolId)
+      if (filter?.q !== undefined) params.set('q', filter.q)
+      if (filter?.limit !== undefined) params.set('limit', String(filter.limit))
+      const qs = params.toString()
+      return request(ADMIN_BASE, `/password-resets${qs === '' ? '' : `?${qs}`}`, { cache: 'no-store' })
+    },
+    issuePasswordReset: id =>
+      adminPost(`/password-resets/${encodeURIComponent(id)}/issue`, {}),
+    cancelPasswordReset: id =>
+      adminPost(`/password-resets/${encodeURIComponent(id)}/cancel`, {}),
     /* 看板是活数据:同一次会话里先看过一次,再点回来看的必须是新数字。
        没有这个 header 时,浏览器把 GET 缓存住,上报进来的新增量看不见 ——
        运维会照着过期数字做决定。 */

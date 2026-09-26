@@ -36,6 +36,8 @@ export type UserRole = AuthUser['role']
  * four-element list. Client and server are allowed to disagree about the
  * GREETING — but a `403` from a button the UI offered is a bug this predicate
  * is here to prevent.
+ * @param role - the session user's role (undefined while guest/loading).
+ * @returns true when the role may reach the paper-authoring surface.
  */
 export const isTeachingRole = (
   role: UserRole | undefined,
@@ -46,6 +48,8 @@ export const isTeachingRole = (
  * Who may open the 管理后台. Narrower than {@link isTeachingRole} by exactly one
  * member — a teacher may author papers but may not administer a school — and
  * the host enforces the same boundary again on every admin route.
+ * @param role - the session user's role (undefined while guest/loading).
+ * @returns true when the role may open the 管理后台.
  */
 export const isAdminRole = (
   role: UserRole | undefined,
@@ -62,6 +66,11 @@ interface StoredAuthUser {
   schoolId: string
 }
 
+/**
+ * Read the persisted identity hint (id + schoolId only — never secrets).
+ * @param storage - the base storage holding `physicsos.auth.user`.
+ * @returns the hint, or undefined when absent/corrupt.
+ */
 export const readStoredAuthUser = (storage: StorageLike): StoredAuthUser | undefined => {
   try {
     const raw = storage.getItem(AUTH_USER_KEY)
@@ -92,6 +101,9 @@ const NS_PREFIX = 'physicsos.u.'
  * recent scenes / learning records / profile land per account. Only the
  * surface controllers' `getItem`/`setItem` surface is needed; `removeItem`
  * and `key`/`length` ride along for future per-key cleanup.
+ * @param base - the real `localStorage`.
+ * @param userId - the account id whose namespace prefixes every key.
+ * @returns a `Storage` facade scoped to `physicsos.u.<userId>.`.
  */
 export function namespacedStorage(base: Storage, userId: string): Storage {
   const prefix = `${NS_PREFIX}${userId}.`
@@ -122,6 +134,8 @@ const MIGRATED_FLAG = 'physicsos.u.migrated'
  * this user's namespace (only where the namespaced key is still absent), then
  * flag the migration so a re-login never re-adopts stale anonymous data.
  * Anonymous keys are left in place — another guest boot still sees them.
+ * @param base - the real `localStorage` holding both anonymous and namespaced keys.
+ * @param userId - the account id whose namespace receives the copies.
  */
 export function migrateAnonymousProgress(base: StorageLike, userId: string): void {
   const flag = `${NS_PREFIX}${userId}.${MIGRATED_FLAG}`
@@ -162,6 +176,7 @@ export interface AuthController {
  * Create the auth controller.
  * @param api - the `/physicsos/auth` client.
  * @param base - the real localStorage (identity hint + anonymous progress).
+ * @returns the controller the views bind against.
  */
 export function createAuthController(api: AuthApi, base: Storage): AuthController {
   const stored = readStoredAuthUser(base)
