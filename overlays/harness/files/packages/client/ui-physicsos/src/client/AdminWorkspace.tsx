@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import clsx from 'clsx'
 import type {
   AdminApi, AdminUserRow, AuditEventRow, SchoolRequestRow,
 } from './auth-api.ts'
@@ -25,6 +24,16 @@ import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
 import { GlassSelect } from './GlassSelect.tsx'
+import {
+  AdminCard,
+  AdminCardActions,
+  AdminCardHead,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+  AdminPage,
+  AdminToolbar,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 type Tab =
@@ -117,43 +126,33 @@ export function AdminWorkspace({
 
   return (
     <div className={css.root} data-physicsos-surface="admin">
-      <header className={css.header}>
-        <h1 className={css.title}>{t('admin.title')}</h1>
-        <nav className={css.tabs} role="tablist">
-          {tabs.map(item => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={active === item.id}
-              className={clsx(css.tab, active === item.id && css.tabActive)}
-              onClick={() => { setTab(item.id) }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-      {active === 'requests' && isSuper && <RequestsTab api={api} t={t} />}
-      {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}
-      {active === 'dashboard' && <AdminDashboardTab api={api} t={t} />}
-      {active === 'users' && <UsersTab api={api} t={t} isSuper={isSuper} />}
-      {active === 'resets' && <PasswordResetQueue api={api} t={t} />}
-      {active === 'content' && paperApi !== undefined && (
-        <AdminContentTab api={paperApi} reviewer={username} t={t} />
-      )}
-      {active === 'notice' && noticeApi !== undefined && (
-        <AdminNoticeTab api={noticeApi} t={t} />
-      )}
-      {active === 'platformNotice' && noticeApi !== undefined && isSuper && (
-        <AdminPlatformNoticeTab api={noticeApi} t={t} />
-      )}
-      {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
-        <AdminModelPoolTab api={modelPoolApi} t={t} />
-      )}
-      {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
-      {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
-      {active === 'audit' && <AuditTab api={api} t={t} />}
+      <AdminPage
+        title={t('admin.title')}
+        tabs={tabs}
+        activeTab={active}
+        onTabChange={setTab}
+      >
+        {active === 'requests' && isSuper && <RequestsTab api={api} t={t} />}
+        {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}
+        {active === 'dashboard' && <AdminDashboardTab api={api} t={t} />}
+        {active === 'users' && <UsersTab api={api} t={t} isSuper={isSuper} />}
+        {active === 'resets' && <PasswordResetQueue api={api} t={t} />}
+        {active === 'content' && paperApi !== undefined && (
+          <AdminContentTab api={paperApi} reviewer={username} t={t} />
+        )}
+        {active === 'notice' && noticeApi !== undefined && (
+          <AdminNoticeTab api={noticeApi} t={t} />
+        )}
+        {active === 'platformNotice' && noticeApi !== undefined && isSuper && (
+          <AdminPlatformNoticeTab api={noticeApi} t={t} />
+        )}
+        {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
+          <AdminModelPoolTab api={modelPoolApi} t={t} />
+        )}
+        {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
+        {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
+        {active === 'audit' && <AuditTab api={api} t={t} />}
+      </AdminPage>
     </div>
   )
 }
@@ -200,24 +199,24 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
   }
 
   if (error !== undefined) return <p className={css.error}>{error}</p>
-  if (data === undefined) return <p className={css.empty}>{t('admin.loading')}</p>
-  if (data.length === 0) return <p className={css.empty}>{t('admin.empty')}</p>
+  if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
+  if (data.length === 0) return <AdminEmpty>{t('admin.empty')}</AdminEmpty>
 
   return (
-    <div className={css.list}>
+    <>
       {note !== undefined && <p className={css.error}>{note}</p>}
       {data.map((request: SchoolRequestRow) => (
-        <section key={request.id} className={css.card}>
-          <div className={css.cardHead}>
+        <AdminCard key={request.id}>
+          <AdminCardHead>
             <div>
-              <h3 className={css.cardTitle}>{request.schoolName}</h3>
-              <p className={css.cardMeta}>
+              <AdminCardTitle>{request.schoolName}</AdminCardTitle>
+              <AdminCardMeta>
                 {t('admin.contact')}: {request.contact} · {fmtTime(request.createdAt)}
                 {' · '}{t('admin.requestedBy')}: {request.requestedBy === null
                   ? t('admin.anonymous') : request.requestedBy}
-              </p>
+              </AdminCardMeta>
             </div>
-            <div className={css.actions}>
+            <AdminCardActions>
               <button
                 type="button" className={css.primary}
                 disabled={busy === request.id}
@@ -232,8 +231,8 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
               >
                 {t('admin.requests.reject')}
               </button>
-            </div>
-          </div>
+            </AdminCardActions>
+          </AdminCardHead>
           {expanded === request.id && (
             <div className={css.form}>
               <Field label={t('admin.requests.field.schoolId')}>
@@ -273,9 +272,9 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
               </button>
             </div>
           )}
-        </section>
+        </AdminCard>
       ))}
-    </div>
+    </>
   )
 }
 
@@ -296,13 +295,13 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
   const [creating, setCreating] = useState(false)
 
   if (error !== undefined) return <p className={css.error}>{error}</p>
-  if (data === undefined) return <p className={css.empty}>{t('admin.loading')}</p>
+  if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
 
   return (
-    <div className={css.list}>
+    <>
       {note !== undefined && <p className={css.error}>{note}</p>}
-      <section className={css.card}>
-        <h3 className={css.cardTitle}>{t('admin.schools.create')}</h3>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.schools.create')}</AdminCardTitle>
         <div className={css.formRow}>
           <input className={css.input} placeholder={t('admin.schools.field.id')}
             value={form.id} onChange={(e) => { setForm(f => ({ ...f, id: e.target.value })) }} />
@@ -323,16 +322,17 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
             {t('admin.confirm.submit')}
           </button>
         </div>
-      </section>
+      </AdminCard>
+      {data.length === 0 && <AdminEmpty>{t('admin.empty')}</AdminEmpty>}
       {data.map(school => (
-        <section key={school.id} className={css.card}>
-          <div className={css.cardHead}>
+        <AdminCard key={school.id}>
+          <AdminCardHead>
             <div>
-              <h3 className={css.cardTitle}>{school.name}</h3>
-              <p className={css.cardMeta}>
+              <AdminCardTitle>{school.name}</AdminCardTitle>
+              <AdminCardMeta>
                 {school.id}{school.shortName === undefined ? '' : ` · ${school.shortName}`}
                 {' · '}{school.status === 'active' ? t('admin.schools.status.active') : t('admin.schools.status.disabled')}
-              </p>
+              </AdminCardMeta>
             </div>
             <button
               type="button"
@@ -346,10 +346,10 @@ function SchoolsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => strin
             >
               {school.status === 'active' ? t('admin.schools.disable') : t('admin.schools.enable')}
             </button>
-          </div>
-        </section>
+          </AdminCardHead>
+        </AdminCard>
       ))}
-    </div>
+    </>
   )
 }
 
@@ -377,10 +377,10 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
   if (error !== undefined) return <p className={css.error}>{error}</p>
 
   return (
-    <div className={css.list}>
+    <>
       {note !== undefined && <p className={css.error}>{note}</p>}
-      <section className={css.card}>
-        <h3 className={css.cardTitle}>{t('admin.users.create')}</h3>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.users.create')}</AdminCardTitle>
         <div className={css.formRow}>
           {isSuper && (
             <input className={css.input} placeholder={t('admin.schools.field.id')}
@@ -421,9 +421,9 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
             {t('admin.confirm.submit')}
           </button>
         </div>
-      </section>
+      </AdminCard>
 
-      <div className={css.toolbar}>
+      <AdminToolbar>
         <input className={css.input} placeholder={t('admin.users.search')}
           value={q} onChange={(e) => { setQ(e.target.value) }} />
         <GlassSelect
@@ -440,28 +440,28 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
           ]}
           onChange={setRoleFilter}
         />
-      </div>
+      </AdminToolbar>
 
       {data === undefined
-        ? <p className={css.empty}>{t('admin.loading')}</p>
+        ? <AdminEmpty>{t('admin.loading')}</AdminEmpty>
         : data.length === 0
-          ? <p className={css.empty}>{t('admin.empty')}</p>
+          ? <AdminEmpty>{t('admin.empty')}</AdminEmpty>
           : data.map((user: AdminUserRow) => {
             const key = `${user.schoolId}:${user.username}`
             return (
-              <section key={key} className={css.card}>
-                <div className={css.cardHead}>
+              <AdminCard key={key}>
+                <AdminCardHead>
                   <div>
-                    <h3 className={css.cardTitle}>
+                    <AdminCardTitle>
                       {user.displayName} <span className={css.dim}>@{user.username}</span>
-                    </h3>
-                    <p className={css.cardMeta}>
+                    </AdminCardTitle>
+                    <AdminCardMeta>
                       {user.schoolName} · {t(`role.${user.role}`)}
                       {' · '}{user.status === 'active' ? t('admin.schools.status.active') : t('admin.schools.status.disabled')}
-                    </p>
+                    </AdminCardMeta>
                   </div>
                   {user.role !== 'SUPER_ADMIN' && (
-                    <div className={css.actions}>
+                    <AdminCardActions>
                       <button
                         type="button" className={user.status === 'active' ? css.danger : css.ghost}
                         onClick={() => {
@@ -484,9 +484,9 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
                       >
                         {t('admin.users.revoke')}
                       </button>
-                    </div>
+                    </AdminCardActions>
                   )}
-                </div>
+                </AdminCardHead>
                 {resetFor === key && (
                   <div className={css.formRow}>
                     <input
@@ -504,10 +504,10 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
                     </button>
                   </div>
                 )}
-              </section>
+              </AdminCard>
             )
           })}
-    </div>
+    </>
   )
 }
 
@@ -516,23 +516,23 @@ function UsersTab({ api, t, isSuper }: { api: AdminApi; t: (key: PhysicsosKey) =
 function AuditTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => string }) {
   const { data, error } = useLoad(() => api.listAudit({ limit: 200 }).then(r => r.events), [api])
   if (error !== undefined) return <p className={css.error}>{error}</p>
-  if (data === undefined) return <p className={css.empty}>{t('admin.loading')}</p>
-  if (data.length === 0) return <p className={css.empty}>{t('admin.empty')}</p>
+  if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
+  if (data.length === 0) return <AdminEmpty>{t('admin.empty')}</AdminEmpty>
 
   return (
-    <div className={css.list}>
+    <>
       {data.map((event: AuditEventRow) => (
-        <section key={event.id} className={css.card}>
-          <p className={css.cardMeta}>{fmtTime(event.createdAt)} · {event.schoolId}</p>
-          <h3 className={css.cardTitle}>
+        <AdminCard key={event.id}>
+          <AdminCardMeta>{fmtTime(event.createdAt)} · {event.schoolId}</AdminCardMeta>
+          <AdminCardTitle>
             <code className={css.action}>{event.action}</code> {event.target}
-          </h3>
-          <p className={css.cardMeta}>
+          </AdminCardTitle>
+          <AdminCardMeta>
             {t('admin.audit.actor')}: {event.actorKey}
             {event.detail === undefined ? '' : ` · ${JSON.stringify(event.detail)}`}
-          </p>
-        </section>
+          </AdminCardMeta>
+        </AdminCard>
       ))}
-    </div>
+    </>
   )
 }

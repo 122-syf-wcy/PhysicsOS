@@ -21,6 +21,12 @@ import { useCallback, useEffect, useState } from 'react'
 import type { AdminApi, DashboardRow } from './auth-api.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { AdminOpsPanel } from './AdminOpsPanel.tsx'
+import {
+  AdminCard,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminStats,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminOpsTabProps {
@@ -197,13 +203,13 @@ export function AdminOpsTab({ api, isSuper, t }: AdminOpsTabProps) {
   const created = report?.filter(row => row.ok).length ?? 0
 
   return (
-    <div className={css.list}>
+    <>
       {error !== undefined && <p className={css.error}>{error}</p>}
       {isSuper && <AdminOpsPanel api={api} t={t} />}
 
-      <section className={css.card}>
-        <h3 className={css.cardTitle}>{t('admin.ops.import')}</h3>
-        <p className={css.cardMeta}>{t('admin.ops.importHint')}</p>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.ops.import')}</AdminCardTitle>
+        <AdminCardMeta>{t('admin.ops.importHint')}</AdminCardMeta>
         <div className={css.formRow}>
           {isSuper && (
             <input className={css.input} placeholder={t('admin.schools.field.id')}
@@ -234,15 +240,15 @@ export function AdminOpsTab({ api, isSuper, t }: AdminOpsTabProps) {
               .replace('{bad}', String(clearPreview.errors.length))}
           </span>
         </div>
-      </section>
+      </AdminCard>
 
       {report !== undefined && (
-        <section className={css.card} data-testid="ops-report">
-          <h3 className={css.cardTitle}>
+        <AdminCard testId="ops-report">
+          <AdminCardTitle>
             {t('admin.ops.report')
               .replace('{ok}', String(created))
               .replace('{failed}', String(failed))}
-          </h3>
+          </AdminCardTitle>
           <div className={css.list}>
             {report.map(row => (
               <p key={row.line} className={row.ok ? css.cardMeta : css.error}>
@@ -254,12 +260,12 @@ export function AdminOpsTab({ api, isSuper, t }: AdminOpsTabProps) {
               </p>
             ))}
           </div>
-        </section>
+        </AdminCard>
       )}
 
-      <section className={css.card}>
-        <h3 className={css.cardTitle}>{t('admin.ops.disable')}</h3>
-        <p className={css.cardMeta}>{t('admin.ops.disableHint')}</p>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.ops.disable')}</AdminCardTitle>
+        <AdminCardMeta>{t('admin.ops.disableHint')}</AdminCardMeta>
         <textarea
           className={css.textarea}
           rows={6}
@@ -277,15 +283,15 @@ export function AdminOpsTab({ api, isSuper, t }: AdminOpsTabProps) {
             {busy ? t('admin.loading') : t('admin.ops.disableRun')}
           </button>
         </div>
-      </section>
+      </AdminCard>
 
       {disableReport !== undefined && (
-        <section className={css.card} data-testid="ops-disable-report">
-          <h3 className={css.cardTitle}>
+        <AdminCard testId="ops-disable-report">
+          <AdminCardTitle>
             {t('admin.ops.report')
               .replace('{ok}', String(disableReport.filter(r => r.ok).length))
               .replace('{failed}', String(disableReport.filter(r => !r.ok).length))}
-          </h3>
+          </AdminCardTitle>
           {disableReport.map(row => (
             <p key={row.line} className={row.ok ? css.cardMeta : css.error}>
               {t('admin.ops.line').replace('{line}', String(row.line))}
@@ -295,31 +301,32 @@ export function AdminOpsTab({ api, isSuper, t }: AdminOpsTabProps) {
               {row.ok ? t('admin.ops.rowOk') : (row.message ?? t('admin.ops.rowFailed'))}
             </p>
           ))}
-        </section>
+        </AdminCard>
       )}
 
       {/* Read-only, and honest about what a limiter view can be: the buckets
           live in memory, so a restart empties this and the numbers mean
           "since this process started", not "all time". */}
-      <section className={css.card} data-testid="ops-limiters">
-        <h3 className={css.cardTitle}>{t('admin.ops.limiters')}</h3>
-        <p className={css.cardMeta}>{t('admin.ops.limitersHint')}</p>
-        <div className={css.stats}>
-          {data === undefined ? (
-            <span className={css.stat}>{t('admin.loading')}</span>
-          ) : (
-            (['login', 'ip', 'apply'] as const).map(bucket => (
-              <span key={bucket} className={css.stat} data-stat={`limiter.${bucket}`}>
-                <strong>{data.limiters[bucket].saturated}</strong>
-                {' '}
+      <AdminCard testId="ops-limiters">
+        <AdminCardTitle>{t('admin.ops.limiters')}</AdminCardTitle>
+        <AdminCardMeta>{t('admin.ops.limitersHint')}</AdminCardMeta>
+        {data === undefined ? (
+          <AdminCardMeta>{t('admin.loading')}</AdminCardMeta>
+        ) : (
+          <AdminStats items={(['login', 'ip', 'apply'] as const).map(bucket => ({
+            key: bucket,
+            dataStat: `limiter.${bucket}`,
+            value: data.limiters[bucket].saturated,
+            label: (
+              <>
                 {t(`admin.ops.limiter.${bucket}`)}
                 {' · '}
                 {data.limiters[bucket].tracked}/{data.limiters[bucket].limit}
-              </span>
-            ))
-          )}
-        </div>
-      </section>
-    </div>
+              </>
+            ),
+          }))} />
+        )}
+      </AdminCard>
+    </>
   )
 }

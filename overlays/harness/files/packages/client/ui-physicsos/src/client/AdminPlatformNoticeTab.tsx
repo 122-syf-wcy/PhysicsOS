@@ -4,7 +4,14 @@ import { useEffect, useId, useState } from 'react'
 import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { NoticeApi, PlatformNoticeRow } from './notice-api.ts'
 import type { PhysicsosKey } from './locales.ts'
-import css from './PlatformDialog.module.css'
+import {
+  AdminCard,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+} from './AdminPrimitives.tsx'
+import css from './AdminWorkspace.module.css'
+import dialogCss from './PlatformDialog.module.css'
 
 export interface AdminPlatformNoticeTabProps {
   readonly api: NoticeApi
@@ -46,7 +53,7 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
   }, [api, t])
 
   if (notice === undefined) {
-    return <p className={css.empty}>{error ?? t('admin.loading')}</p>
+    return <AdminEmpty>{error ?? t('admin.loading')}</AdminEmpty>
   }
 
   const valid = title.trim() !== '' && title.trim().length <= 80
@@ -73,20 +80,18 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
   }
 
   return (
-    <div className={css.form} data-admin-platform-notice="">
-      <div>
-        <h2 className={css.title}>{t('admin.platformNotice.title')}</h2>
-        <p className={css.hint}>{t('admin.platformNotice.hint')}</p>
-        <p className={css.meta}>
-          {t('admin.platformNotice.version').replace('{version}', String(notice.version))}
-          {' · '}
-          {t('admin.platformNotice.updatedBy')} {notice.updatedBy || '—'}
-          {' · '}
-          {fmtTime(notice.updatedAt)}
-        </p>
-      </div>
+    <AdminCard data-admin-platform-notice="">
+      <AdminCardTitle>{t('admin.platformNotice.title')}</AdminCardTitle>
+      <AdminCardMeta>{t('admin.platformNotice.hint')}</AdminCardMeta>
+      <AdminCardMeta>
+        {t('admin.platformNotice.version').replace('{version}', String(notice.version))}
+        {' · '}
+        {t('admin.platformNotice.updatedBy')} {notice.updatedBy || '—'}
+        {' · '}
+        {fmtTime(notice.updatedAt)}
+      </AdminCardMeta>
       <label className={css.field} htmlFor={titleId}>
-        <span className={css.label}>{t('admin.platformNotice.titleField')}</span>
+        <span className={css.fieldLabel}>{t('admin.platformNotice.titleField')}</span>
         <input
           id={titleId}
           className={css.input}
@@ -96,7 +101,7 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
         />
       </label>
       <label className={css.field} htmlFor={bodyId}>
-        <span className={css.label}>{t('admin.platformNotice.bodyField')}</span>
+        <span className={css.fieldLabel}>{t('admin.platformNotice.bodyField')}</span>
         <textarea
           id={bodyId}
           className={css.textarea}
@@ -106,15 +111,15 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
           onChange={(event) => { setBody(event.target.value) }}
         />
       </label>
-      <div className={css.preview} data-platform-notice-preview="">
-        <p className={css.previewLabel}>{t('admin.platformNotice.preview')}</p>
-        <div className={css.copy}>
+      <div className={dialogCss.preview} data-platform-notice-preview="">
+        <p className={dialogCss.previewLabel}>{t('admin.platformNotice.preview')}</p>
+        <div className={dialogCss.copy}>
           {body.trim() === ''
-            ? <p className={css.previewEmpty}>{t('admin.platformNotice.previewEmpty')}</p>
+            ? <p className={dialogCss.previewEmpty}>{t('admin.platformNotice.previewEmpty')}</p>
             : <MarkdownText text={body} />}
         </div>
       </div>
-      <label className={css.label}>
+      <label className={css.checkbox}>
         <input
           type="checkbox"
           checked={enabled}
@@ -134,6 +139,6 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
           {busy ? t('admin.platformNotice.saving') : t('admin.platformNotice.save')}
         </button>
       </div>
-    </div>
+    </AdminCard>
   )
 }

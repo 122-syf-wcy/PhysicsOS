@@ -29,7 +29,14 @@ import type { AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { buildStamp } from './build-stamp.ts'
 import { GlassSelect } from './GlassSelect.tsx'
+import {
+  AdminCard,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+} from './AdminPrimitives.tsx'
 import css from './AuthGate.module.css'
+import adminCss from './AdminWorkspace.module.css'
 
 /** Registration-side face for {@link AuthGate}. */
 export interface AuthGateInjected {
@@ -571,33 +578,33 @@ export function PasswordResetQueue({ api, t }: PasswordResetQueueProps) {
   }
 
   return (
-    <section className={css.form} data-physicsos-password-reset-queue="">
-      <h2 className={css.formTitle}>{t('admin.passwordResets.title')}</h2>
-      <p className={css.receipt}>{t('admin.passwordResets.hint')}</p>
-      {error !== '' && <p className={css.error} role="alert">{error}</p>}
-      {requests.length === 0 && <p className={css.receipt}>{t('admin.empty')}</p>}
+    <AdminCard data-physicsos-password-reset-queue="">
+      <AdminCardTitle>{t('admin.passwordResets.title')}</AdminCardTitle>
+      <AdminCardMeta>{t('admin.passwordResets.hint')}</AdminCardMeta>
+      {error !== '' && <p className={adminCss.error} role="alert">{error}</p>}
+      {requests.length === 0 && <AdminEmpty>{t('admin.empty')}</AdminEmpty>}
       {requests.map((request) => {
         const oneTime = issued.get(request.id)
         const finished = request.status === 'used'
           || request.status === 'cancelled'
           || request.status === 'superseded'
         return (
-          <div key={request.id}>
-            <p className={css.receipt}>
+          <div key={request.id} className={adminCss.resetRow}>
+            <AdminCardMeta>
               {request.displayName} @{request.username}
               {' · '}{request.schoolName}
               {' · '}{t(resetStatusKey(request.status))}
-            </p>
+            </AdminCardMeta>
             {oneTime !== undefined && (
-              <p className={css.receipt} data-reset-token={oneTime.token}>
+              <AdminCardMeta data-reset-token={oneTime.token}>
                 <code>{oneTime.resetPath}</code>
-              </p>
+              </AdminCardMeta>
             )}
             {!finished && (
-              <div className={css.row}>
+              <div className={adminCss.actions}>
                 <button
                   type="button"
-                  className={css.link}
+                  className={adminCss.primary}
                   disabled={busy === request.id}
                   onClick={() => { issue(request) }}
                 >
@@ -605,7 +612,7 @@ export function PasswordResetQueue({ api, t }: PasswordResetQueueProps) {
                 </button>
                 <button
                   type="button"
-                  className={css.link}
+                  className={adminCss.ghost}
                   disabled={busy === request.id}
                   onClick={() => { cancel(request) }}
                 >
@@ -616,6 +623,6 @@ export function PasswordResetQueue({ api, t }: PasswordResetQueueProps) {
           </div>
         )
       })}
-    </section>
+    </AdminCard>
   )
 }
