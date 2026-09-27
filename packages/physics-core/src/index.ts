@@ -43,6 +43,27 @@ export {
   type VerificationStatus,
 } from './verification.ts'
 export {
+  assertVerifiedPhysicsOutput,
+  deriveVerificationLevel,
+  findUnverifiedProductValues,
+  PRODUCT_NUMERIC_OUTPUT_WITHOUT_PROVENANCE,
+  provenanceLevel,
+  toVerificationEvidence,
+  UnverifiedPhysicsOutputError,
+  verificationLevelAtLeast,
+  verificationLevelRank,
+  VERIFICATION_LEVEL_RANK,
+  VERIFIED_CLAIM_FLOOR,
+  type ProductPhysicsOutput,
+  type ProductProvenanceFailure,
+  type QuantityProvenance,
+  type VerificationLevel,
+  type VerificationEvidence,
+  type VerifiedProductValue,
+  type VerifiedQuantity,
+  type VerifiedStringQuantity,
+} from './provenance.ts'
+export {
   DEFAULT_TOLERANCE,
   NUMERIC_TOLERANCE,
   toleranceError,

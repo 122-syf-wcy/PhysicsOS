@@ -13,18 +13,30 @@
 import type {
   DerivedQuantity,
   PhysicsEventLike,
+  QuantityProvenance,
   SimulationResult,
   SimulationState,
+  VerificationLevel,
   VerificationResult,
+  VerifiedQuantity,
 } from '@physicsos/physics-core'
+import { assertVerifiedPhysicsOutput, deriveVerificationLevel } from '@physicsos/physics-core'
 import {
   SceneRuntime,
   createSceneCommand,
+  validateScene,
   type PhysicsScene,
   type SceneCommand,
   type SceneCommandType,
 } from '@physicsos/physics-scene'
 import { asQuestionId } from '@physicsos/shared'
+import {
+  PHYSICS_VERIFIER_ID,
+  SCENE_VALIDATOR_ID,
+  engineVerifierId,
+  provenanceForSimulation,
+  quantityProvenance,
+} from '@physicsos/physics-verifier'
 import {
   createGoldenQuestionDocument,
   GOLDEN_QUESTIONS,
@@ -39,11 +51,17 @@ import { COMMAND_SPECS, CommandPayloadError, normalizeCommandPayload } from './s
 
 /* --------------------------------------------------------------- results -- */
 
-/** A scalar the model may quote. `value` is null when the engine published a non-finite number. */
+/**
+ * A scalar the model may quote. `value` is null when the engine published a
+ * non-finite number. `provenance` is the trace the surface renders alongside it
+ * — engine, scene revision, verifier and the checks that passed — and is null
+ * only when no engine produced the value.
+ */
 export interface ToolScalar {
   readonly key: string
   readonly value: number | null
   readonly unit: string
+  readonly provenance: QuantityProvenance | null
   readonly formula?: string
   readonly targetId?: string
 }
@@ -56,6 +74,8 @@ export interface ToolCheck {
 
 export interface ToolVerification {
   readonly status: VerificationResult['status']
+  /** The evidence-derived level the verifier actually reached. */
+  readonly level: VerificationLevel
   readonly checks: readonly ToolCheck[]
   readonly errors: readonly string[]
 }
@@ -104,12 +124,19 @@ export interface QuestionKnown {
   readonly unit: string
 }
 
+/** A solved target. `value` is the engine's display string; `provenance` is its trace. */
 export interface QuestionAnswer {
   readonly key: string
   readonly label: string
   readonly symbol: string
+  /**
+   * The engine's answer, formatted for the student. It is derived from the
+   * engine's verified quantities — never a model proposal — and carries the
+   * `provenance` of the simulation that produced it.
+   */
   readonly value: string
   readonly unit: string
+  readonly provenance: QuantityProvenance | null
 }
 
 export interface QuestionStep {
@@ -179,12 +206,14 @@ export interface ObservedObject {
     readonly y: number | null
     readonly z: number | null
     readonly unit: string
+    readonly provenance: QuantityProvenance | null
   }
   readonly velocity?: {
     readonly x: number | null
     readonly y: number | null
     readonly z: number | null
     readonly unit: string
+    readonly provenance: QuantityProvenance | null
   }
   readonly values: readonly ToolScalar[]
 }
@@ -218,7 +247,10 @@ export class ToolRuntimeError extends Error {
  */
 const finiteOrNull = (value: number): number | null => (Number.isFinite(value) ? value + 0 : null)
 
-const scalarsOf = (derived: readonly DerivedQuantity[]): ToolScalar[] =>
+const scalarsOf = (
+  derived: readonly DerivedQuantity[],
+  provenance: QuantityProvenance | null,
+): ToolScalar[] =>
   derived.flatMap((entry) => {
     if ('vector' in entry.value) return []
     return [
@@ -226,6 +258,7 @@ const scalarsOf = (derived: readonly DerivedQuantity[]): ToolScalar[] =>
         key: entry.key,
         value: finiteOrNull(entry.value.value),
         unit: entry.value.unit,
+        provenance,
         ...(entry.formula?.expression === undefined ? {} : { formula: entry.formula.expression }),
         ...(entry.targetId === undefined ? {} : { targetId: entry.targetId }),
       },
@@ -234,6 +267,7 @@ const scalarsOf = (derived: readonly DerivedQuantity[]): ToolScalar[] =>
 
 const verificationOf = (verification: VerificationResult): ToolVerification => ({
   status: verification.status,
+  level: verification.level ?? deriveVerificationLevel(verification.checks),
   checks: verification.checks.map((check) => ({
     id: check.id,
     passed: check.passed,
@@ -241,6 +275,34 @@ const verificationOf = (verification: VerificationResult): ToolVerification => (
   })),
   errors: verification.errors.map((issue) => `${issue.code}: ${issue.message}`),
 })
+
+/**
+ * The one adapter the product surface binds to: a {@link ToolScalar} projected
+ * into the standard {@link VerifiedQuantity} DTO, or null when the value is
+ * non-finite or carries no provenance. A surface renders numbers from this and
+ * never reads the raw `value` field directly.
+ */
+export const verifiedQuantityOf = (scalar: ToolScalar): VerifiedQuantity | null =>
+  scalar.value === null || scalar.provenance === null
+    ? null
+    : { value: scalar.value, unit: scalar.unit, provenance: scalar.provenance }
+
+/**
+ * The verifier that signed off on a simulation: the external Physics Verifier
+ * owns the magnetic team's checks, every other engine verifies its own output.
+ */
+const verifierIdFor = (engineId: string): string =>
+  engineId === 'engine-magnetic' ? PHYSICS_VERIFIER_ID : engineVerifierId(engineId)
+
+/**
+ * Refuse to hand a surface a physics number with nothing behind it. Every method
+ * that returns engine-derived values routes them through here, so a bare number
+ * cannot leave the runtime.
+ */
+const assertProductValues = (
+  values: readonly unknown[],
+  minimum: VerificationLevel = 'ENGINE_COMPUTED',
+): void => assertVerifiedPhysicsOutput({ values }, minimum)
 
 const objectsOf = (scene: PhysicsScene): SceneObjectSummary[] => {
   const objects: SceneObjectSummary[] = []
@@ -511,6 +573,11 @@ export class PhysicsToolRuntime {
           }
         : result.scene
     const live = this.register(scene)
+    /* Every answer is the engine's, so it carries the simulation's trace: engine
+       id/version, scene revision, the verifier that signed off and its checks. */
+    const provenance = provenanceForSimulation(result.simulation, {
+      verifierId: verifierIdFor(result.simulation.metadata.engineId),
+    })
     const answers: QuestionAnswer[] = Object.entries(result.solution.results).map(
       ([key, answer]) => ({
         key,
@@ -518,7 +585,18 @@ export class PhysicsToolRuntime {
         symbol: answer.symbol,
         value: answer.value,
         unit: answer.unit,
+        provenance,
       }),
+    )
+    /* A solved answer is a conclusion the paper may print, so it must clear the
+       verified-claim floor: at least one real check passed for this revision. */
+    assertProductValues(
+      answers.map((answer) => ({
+        value: answer.value,
+        unit: answer.unit,
+        provenance: answer.provenance,
+      })),
+      'RULE_VERIFIED',
     )
     const steps: QuestionStep[] = result.solution.steps.map((step) => ({
       index: step.index,
@@ -689,13 +767,24 @@ export class PhysicsToolRuntime {
   ): SimulateResult {
     const first = simulation.states[0]
     const last = simulation.states.at(-1)
+    const provenance = provenanceForSimulation(simulation, {
+      verifierId: verifierIdFor(engineId),
+    })
+    const derived = scalarsOf(simulation.derivedQuantities, provenance)
+    assertProductValues(
+      derived.map((scalar) => ({
+        value: scalar.value,
+        unit: scalar.unit,
+        provenance: scalar.provenance,
+      })),
+    )
     return {
       sceneId,
       revision,
       engineId,
       domain,
       verification: verificationOf(simulation.verification),
-      derived: scalarsOf(simulation.derivedQuantities),
+      derived,
       events: simulation.events.map((event) => {
         const record = event as unknown as {
           kind?: unknown
@@ -740,37 +829,70 @@ export class PhysicsToolRuntime {
       unit: 's',
       dimension: 'time',
     })
+    /* An engine state read has no simulation of its own, so its evidence is the
+       scene validation that admitted the revision plus the engine's identity —
+       never a level with nothing behind it. */
+    const provenance = quantityProvenance({
+      engineId: live.engine.engine.engineId,
+      engineVersion: live.engine.engine.engineVersion,
+      sceneId: String(scene.id),
+      sceneRevision: scene.revision,
+      verifierId: SCENE_VALIDATOR_ID,
+      evidence: validateScene(scene).checks,
+    })
+    const objects: ObservedObject[] = state.objects.map((object) => ({
+      id: object.id,
+      ...(object.position === undefined
+        ? {}
+        : {
+            position: {
+              x: finiteOrNull(object.position.vector.x),
+              y: finiteOrNull(object.position.vector.y),
+              z: finiteOrNull(object.position.vector.z),
+              unit: object.position.unit,
+              provenance,
+            },
+          }),
+      ...(object.velocity === undefined
+        ? {}
+        : {
+            velocity: {
+              x: finiteOrNull(object.velocity.vector.x),
+              y: finiteOrNull(object.velocity.vector.y),
+              z: finiteOrNull(object.velocity.vector.z),
+              unit: object.velocity.unit,
+              provenance,
+            },
+          }),
+      values: Object.entries(object.values ?? {}).flatMap(([key, value]) =>
+        'vector' in value
+          ? []
+          : [{ key, value: finiteOrNull(value.value), unit: value.unit, provenance }],
+      ),
+    }))
+    const derived = scalarsOf(state.derived, provenance)
+    assertProductValues([
+      ...objects.flatMap((object) => [
+        ...(object.position === undefined ? [] : [object.position]),
+        ...(object.velocity === undefined ? [] : [object.velocity]),
+        ...object.values.map((scalar) => ({
+          value: scalar.value,
+          unit: scalar.unit,
+          provenance: scalar.provenance,
+        })),
+      ]),
+      ...derived.map((scalar) => ({
+        value: scalar.value,
+        unit: scalar.unit,
+        provenance: scalar.provenance,
+      })),
+    ])
     return {
       sceneId,
       revision: scene.revision,
       time,
-      objects: state.objects.map((object) => ({
-        id: object.id,
-        ...(object.position === undefined
-          ? {}
-          : {
-              position: {
-                x: finiteOrNull(object.position.vector.x),
-                y: finiteOrNull(object.position.vector.y),
-                z: finiteOrNull(object.position.vector.z),
-                unit: object.position.unit,
-              },
-            }),
-        ...(object.velocity === undefined
-          ? {}
-          : {
-              velocity: {
-                x: finiteOrNull(object.velocity.vector.x),
-                y: finiteOrNull(object.velocity.vector.y),
-                z: finiteOrNull(object.velocity.vector.z),
-                unit: object.velocity.unit,
-              },
-            }),
-        values: Object.entries(object.values ?? {}).flatMap(([key, value]) =>
-          'vector' in value ? [] : [{ key, value: finiteOrNull(value.value), unit: value.unit }],
-        ),
-      })),
-      derived: scalarsOf(state.derived),
+      objects,
+      derived,
     }
   }
 }

@@ -1,5 +1,15 @@
 // @physicsos/physics-verifier
 export {
+  engineVerifierId,
+  PHYSICS_VERIFIER_ID,
+  provenanceForSimulation,
+  quantityProvenance,
+  SCENE_VALIDATOR_ID,
+  type ProvenanceForSimulationOptions,
+  type ProvenanceParts,
+} from './provenance.ts'
+
+export {
   MAGNETIC_VERIFIER_ASSUMPTIONS,
   MagneticPhysicsVerifier,
   verify,
