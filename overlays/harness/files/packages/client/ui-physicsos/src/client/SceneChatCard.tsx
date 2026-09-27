@@ -34,7 +34,8 @@ import { MathText } from './physics/MathText.tsx'
 import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
 import { drawnIds, highlightableIds } from './question-highlights.ts'
-import { VerificationList } from './workspace-parts.tsx'
+import { toVerifiedResult } from './physics/verified-result.ts'
+import { VerifiedResult } from './VerifiedResult.tsx'
 import { LabSelfCheckCard } from './LabSelfCheckCard.tsx'
 import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import { QUESTION_KNOWLEDGE, selfChecksOfQuestion } from '@physicsos/question-core'
@@ -148,6 +149,7 @@ export const SceneChatCard = memo(function SceneChatCard({
             domain,
             bodyId: scene.bodies[0]?.id,
             sceneTitle: data.title,
+            revision: data.revision,
             recordAttempt,
           })}
         />
@@ -169,6 +171,7 @@ function CardStage({
   domain,
   bodyId,
   sceneTitle,
+  revision,
   recordAttempt,
 }: {
   runtime: WorkspaceRuntime
@@ -177,6 +180,7 @@ function CardStage({
   domain?: string | undefined
   bodyId?: string | undefined
   sceneTitle?: string | undefined
+  revision?: number | undefined
   recordAttempt?: ((attempt: SelfCheckAttemptInput) => void) | undefined
 }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(() => runtime.getSnapshot())
@@ -262,6 +266,7 @@ function CardStage({
           activeToken={highlightToken}
           onToggle={toggleKnown}
           sceneTitle={sceneTitle ?? ''}
+          revision={revision}
           recordAttempt={recordAttempt}
           t={t}
         />
@@ -380,6 +385,7 @@ function SolveSection({
   activeToken,
   onToggle,
   sceneTitle,
+  revision,
   recordAttempt,
   t,
 }: {
@@ -392,10 +398,21 @@ function SolveSection({
   activeToken: string | null
   onToggle: (token: string, ids: readonly string[]) => void
   sceneTitle: string
+  revision: number | undefined
   recordAttempt: ((attempt: SelfCheckAttemptInput) => void) | undefined
   t: Translate
 }) {
-  const verified = solve.verification?.status
+  /* The verification block's ONE consumption point: the seam turns the received
+     facts into the view, and nothing below re-derives a level. */
+  const primary = solve.answers[0]
+  const result = toVerifiedResult({
+    ...(solve.verification?.status === undefined ? {} : { status: solve.verification.status }),
+    ...(primary === undefined ? {} : { value: primary.value, unit: primary.unit }),
+    ...(domain === undefined ? {} : { domain }),
+    checks: verification,
+    ...(revision === undefined ? {} : { revision }),
+  })
+  const verified = result.level !== 'unverified'
   /* A golden question carries its self-check bank: answering in the card is
      the same practice loop Question Space ran, recorded identically. */
   const goldenId = solve.goldenQuestionId
@@ -406,9 +423,9 @@ function SolveSection({
         {t('sceneCard.solveTitle')}
         <span className={css.solveSummaryMeta}>
           {solve.knowns.length === 0 ? '' : t('sceneCard.solveKnownsCount', { count: solve.knowns.length })}
-          {verified === undefined ? '' : (
-            <span className={css.solveVerdict} data-status={verified}>{t('sceneCard.solveVerified')}</span>
-          )}
+          {verified ? (
+            <span className={css.solveVerdict} data-level={result.level}>{t('sceneCard.solveVerified')}</span>
+          ) : null}
         </span>
       </summary>
       {solve.knowns.length === 0 ? null : (
@@ -498,12 +515,12 @@ function SolveSection({
           </ol>
         </section>
       )}
-      {verification.length === 0 ? null : (
-        <section className={css.solveBlock} aria-label={t('sceneCard.solveVerification')}>
-          <h4 className={css.solveHeading}>{t('sceneCard.solveVerification')}</h4>
-          <VerificationList checks={verification} emptyLabel={t('sceneCard.solveVerification')} />
-        </section>
-      )}
+      {/* Always shown on a solved card: an unverified answer must say so, not
+          stay silent — that silence is what a re-skinned chat bot would do. */}
+      <section className={css.solveBlock} aria-label={t('sceneCard.solveVerification')}>
+        <h4 className={css.solveHeading}>{t('sceneCard.solveVerification')}</h4>
+        <VerifiedResult view={result} t={t} />
+      </section>
       {solve.issues.length === 0 ? null : (
         <section className={css.solveBlock} aria-label={t('sceneCard.solveIssues')}>
           <h4 className={css.solveHeading}>{t('sceneCard.solveIssues')}</h4>

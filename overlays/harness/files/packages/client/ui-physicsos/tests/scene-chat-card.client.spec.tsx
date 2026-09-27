@@ -398,4 +398,34 @@ describe('physics scene chat card', () => {
     expect(recordAttempt.mock.calls[0]![0].questionId).toBe('01-proton-basic')
     expect(recordAttempt.mock.calls[0]![0].correct).toBe(true)
   })
+
+  it('mounts the verification block on the solved card, next to the answer', () => {
+    const view = render(<SceneChatCard {...cardProps(solvedCardData('mech-01-uniform-acceleration'))} />)
+
+    /* One verification section, not a second copy beside it. */
+    expect(view.getAllByText('物理验证').length).toBe(1)
+    expect(view.getByText('物理已验证')).toBeTruthy()
+    expect(view.container.querySelector('[data-verification-level="physics-verified"]')).not.toBeNull()
+    /* The verifying engine is named from the scene domain. */
+    expect(view.container.querySelector('[data-verifier="mechanics"]')).not.toBeNull()
+    expect(view.getByText('验证项')).toBeTruthy()
+    /* The primary answer reaches the block with its unit. */
+    expect(view.container.querySelector('[data-verified-value]')?.textContent).toContain('m/s')
+  })
+
+  it('falls back to the unverified state when the solve carries no verification', () => {
+    const data = solvedCardData('mech-01-uniform-acceleration')
+    const solve = data.solve
+    if (solve === undefined) throw new Error('fixture has no solve')
+    /* A formatted answer and passing local checks are NOT provenance: without a
+       verdict from the solve summary the block must warn, never show a check. */
+    const { verification: _withoutVerification, ...rest } = solve
+    const view = render(<SceneChatCard {...cardProps({ ...data, solve: rest })} />)
+
+    expect(view.getByText('未验证')).toBeTruthy()
+    expect(view.container.textContent).not.toContain('物理已验证')
+    expect(view.container.querySelector('[data-verification-level="unverified"]')).not.toBeNull()
+    /* No verifier is named without a verdict. */
+    expect(view.container.querySelector('[data-verifier]')).toBeNull()
+  })
 })

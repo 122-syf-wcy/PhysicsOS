@@ -1,0 +1,98 @@
+/* Verification / provenance block — the answer's proof of engine support.
+   Mirrors the Lab's verification grammar (marks on --physics-verification-*)
+   at card scale, and keeps the state readable without colour: the glyph and the
+   label both carry it. */
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.valueUnit {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.badgeLabel {
+  font-weight: 600;
+}
+
+/* A verified verdict is a claim, so it earns the engine's ok accent; the plain
+   computed state stays neutral; the unverified state warns. */
+.badge[data-level='physics-verified'],
+.badge[data-level='strongly-verified'] {
+  border-color: color-mix(in srgb, var(--physics-verification-ok) 22%, transparent);
+  background: color-mix(in srgb, var(--physics-verification-ok) 7%, transparent);
+  color: color-mix(in srgb, var(--physics-verification-ok) 68%, var(--dsw-alias-label-primary));
+}
+
+.badge[data-level='engine-computed'] {
+  border-color: color-mix(in srgb, var(--physics-highlight) 26%, transparent);
+  background: color-mix(in srgb, var(--physics-highlight) 10%, transparent);
+  color: var(--dsw-alias-label-primary);
+}
+
+.badge[data-level='unverified'] {
+  border-color: color-mix(in srgb, var(--physics-verification-warning) 26%, transparent);
+  background: color-mix(in srgb, var(--physics-verification-warning) 7%, transparent);
+  color: color-mix(in srgb, var(--physics-verification-warning) 58%, var(--dsw-alias-label-primary));
+}
+
+.engine {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.checksLabel {
+  margin: 2px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.revision {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
