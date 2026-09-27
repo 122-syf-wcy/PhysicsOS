@@ -154,8 +154,8 @@ export const leverSceneVisual = (input: LeverVisualInput): SceneVisualModel => {
     {
       /* The arm of a vertical weight is the HORIZONTAL distance from the
          fulcrum to its line of action — the projected attach x, l·cos θ — so
-         the rule stays true while the beam tilts (18° max) instead of floating
-         ~5 % past the hanger. */
+         the rule stays true through the full swing, up to the moment-free
+         vertical, instead of floating past the hanger. */
       id: 'arm-left',
       from: { x: 0, y: 2.4 },
       to: { x: leftAttach.x, y: 2.4 },
@@ -209,12 +209,15 @@ export const leverSceneVisual = (input: LeverVisualInput): SceneVisualModel => {
   ]
 
   const span = halfBeam * 2 + 8
+  /* The beam swings to the moment-free vertical, so its ends reach
+     y = ±halfBeam; the lower hanger hangs one `string` below its end and its
+     weight arrow extends one more `arrowSpan`. The frame must cover that whole
+     range — the old y ∈ [−22, 12] clipped a near-vertical beam. */
+  const lowest = -(halfBeam + string + arrowSpan)
+  const highest = halfBeam + 2
   return emptyVisualModel('mechanics', {
-    /* The hanger hardware, its weight arrow and the G label all hang BELOW the
-       beam, so a floor at y = −16 cut the lower load's annotation (and the whole
-       arrow when the beam tips). Keep the ceiling, drop the floor. */
-    extent: { width: span, height: 34 },
-    origin: { x: -span / 2, y: -22 },
+    extent: { width: span, height: highest - lowest },
+    origin: { x: -span / 2, y: lowest },
     grid: { minor: 1, major: 5 },
     axes: { x: '', y: '' },
     tickStep: 5,

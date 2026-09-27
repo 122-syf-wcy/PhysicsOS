@@ -151,14 +151,17 @@ describe('ExperimentCapabilities model kinds against their runtimes', () => {
   })
 
   it('names the display-profile benches quasi-static, and they keep a real window', () => {
-    for (const id of ['lever-balance', 'rheostat-circuit']) {
+    for (const id of ['rheostat-circuit']) {
       expect(entryOf(id)?.model, id).toBe('quasi-static')
       expect(totalOf(id), id).toBeGreaterThan(0)
     }
   })
 
   it('names the time-free benches static, and seek is honestly a no-op', () => {
-    for (const id of ['plane-mirror', 'series-circuit', 'thermometer']) {
+    /* `lever-balance` joins them: its scene is the textbook balanced pair, so a
+       balanced beam is at rest from t = 0 and the default frame has no run
+       window — the timeline appears only once a hanger edit unbalances it. */
+    for (const id of ['plane-mirror', 'series-circuit', 'thermometer', 'lever-balance']) {
       expect(entryOf(id)?.model, id).toBe('static')
       const template = findExperimentTemplate(id)
       if (template === undefined) throw new Error(`unknown template: ${id}`)

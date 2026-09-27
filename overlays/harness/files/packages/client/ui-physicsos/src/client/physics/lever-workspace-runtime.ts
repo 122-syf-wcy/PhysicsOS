@@ -8,9 +8,9 @@
  * go through real scene commands, so a change is an auditable revision bump
  * rather than local component state.
  *
- * The physics is statics: masses and arms do not change with time. The short
- * clock is only the display tip — an unbalanced beam leans toward the larger
- * moment so the student can see which side went down.
+ * The clock is the engine's solved settle time: a balanced beam is at rest from
+ * t = 0, so it has no run window at all, while an unbalanced one runs until it
+ * reaches the moment-free vertical and stops.
  */
 
 import {
@@ -90,6 +90,10 @@ const VERIFICATION_LABELS: Record<string, string> = {
   timeline_dimensions_valid: '时间线量纲正确',
   lever_bench_dimensions: '实验台量纲正确',
   lever_bench_values: '两边钩码在支点两侧，质量与力臂均为正',
+  angular_dynamics_law: '转动动力学方程 τ=Iα+cω',
+  rotational_energy_dissipates: '阻尼耗散转动能量',
+  angular_equilibrium: '转动平衡（转到力矩为零处停下）',
+  angular_motion_bounded: '转动有界（不无限旋转）',
 }
 
 const verificationLabelOf = (id: string): string =>
@@ -155,7 +159,7 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
         return
       }
       const model = resolveMomentBalance(scene)
-      this.currentTime = Math.min(this.currentTime, leverRunDuration())
+      this.currentTime = Math.min(this.currentTime, leverRunDuration(model))
       this.failure = undefined
       this.computed = { simulation, model }
     } catch (error: unknown) {
@@ -222,7 +226,7 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
-    const totalTime = leverRunDuration()
+    const totalTime = leverRunDuration(model)
     const state = leverStateAt(model, this.currentTime)
     const view = leverSceneVisual({ scene, model, state, time: this.currentTime })
 
@@ -463,7 +467,7 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
 
   setRunning(running: boolean): WorkspaceSnapshot {
     if (running && this.computed !== undefined) {
-      const totalTime = leverRunDuration()
+      const totalTime = leverRunDuration(this.computed.model)
       if (this.currentTime >= totalTime) this.currentTime = 0
     }
     this.running = running
@@ -476,7 +480,7 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   seek(time: number): WorkspaceSnapshot {
-    const total = this.computed === undefined ? 0 : leverRunDuration()
+    const total = this.computed === undefined ? 0 : leverRunDuration(this.computed.model)
     this.currentTime = Number.isFinite(time) ? Math.min(total, Math.max(0, time)) : 0
     this.running = false
     return this.getSnapshot()
@@ -488,7 +492,7 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
-      const totalTime = leverRunDuration()
+      const totalTime = leverRunDuration(this.computed.model)
       const next = this.currentTime + wallClockSeconds * this.rate
       this.currentTime = next >= totalTime ? totalTime : next
       if (this.currentTime >= totalTime) this.running = false

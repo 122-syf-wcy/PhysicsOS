@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  LEVER_MAX_RUN_SECONDS,
+  leverRunDuration,
+  resolveMomentBalance,
+} from '@physicsos/engine-lever'
 import { createLeverBalanceScene } from '@physicsos/physics-scene'
 
 import { AgentDrawer } from '../src/client/AgentDrawer.tsx'
@@ -130,6 +135,36 @@ describe('lever workspace runtime', () => {
     expect(derivedValue(restored, '力矩比 M₁/M₂')).toBe('1')
     expect(derivedValue(restored, '平衡判断')).toContain('杠杆平衡')
     expect(runtime.seek(restored.clock.total).view.leverBeam?.tilt).toBe(0)
+  })
+
+  it('ends the clock at the engine solve time, not the no-model fallback', () => {
+    const balancedScene = createLeverBalanceScene()
+    /* A balanced beam is at equilibrium from t = 0, so the solved horizon is
+       zero and the timeline disables rather than inventing a run window. */
+    expect(leverRunDuration(resolveMomentBalance(balancedScene))).toBe(0)
+    expect(createLeverWorkspaceRuntime(balancedScene).getSnapshot().clock.total).toBe(0)
+
+    const tippedScene = createLeverBalanceScene({ leftMass: 400 })
+    const settle = leverRunDuration(resolveMomentBalance(tippedScene))
+    expect(settle).toBeGreaterThan(0)
+    expect(settle).toBeLessThan(LEVER_MAX_RUN_SECONDS)
+    expect(createLeverWorkspaceRuntime(tippedScene).getSnapshot().clock.total).toBe(settle)
+  })
+
+  it('labels every rotational-dynamics check the engine emits', () => {
+    const snapshot = createLeverWorkspaceRuntime(createLeverBalanceScene()).getSnapshot()
+    const dynamicsChecks = [
+      'angular_dynamics_law',
+      'rotational_energy_dissipates',
+      'angular_equilibrium',
+      'angular_motion_bounded',
+    ]
+    for (const id of dynamicsChecks) {
+      const check = snapshot.verification.find(entry => entry.id === id)
+      expect(check, id).toBeDefined()
+      // A real localized label, not the raw-id fallback.
+      expect(check?.label, id).not.toBe(id)
+    }
   })
 })
 
