@@ -15,6 +15,9 @@
  */
 
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+/* Type-only: the canonical provenance contract (`QuantityProvenance`) the
+   solved answers carry. Erased at build, so the snapshot stays plain data. */
+import type { QuantityProvenance } from '@physicsos/physics-core'
 
 /** Why a snapshot was published. */
 export type PhysicsSceneSnapshotCause = 'created' | 'solved' | 'command'
@@ -44,6 +47,14 @@ export interface PhysicsSceneSolveSummary {
     readonly symbol: string
     readonly value: string
     readonly unit: string
+    /**
+     * The engine's trace for this answer — engine id/version, scene revision,
+     * the verifier that signed off and the checks it ran — or null when no
+     * engine produced the value. The client derives the verified-result block
+     * from this ({@link QuantityProvenance}), never from the scene's domain or
+     * the bare number, so a surface can always say who computed the answer.
+     */
+    readonly provenance: QuantityProvenance | null
   }[]
   readonly steps: readonly {
     readonly index: number

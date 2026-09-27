@@ -8,6 +8,7 @@ import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { PHYSICS_TOOL_NAMES } from '@physicsos/agent-tools'
+import { deriveVerificationLevel } from '@physicsos/physics-core'
 
 import * as plugin from '../src/index.ts'
 import type { PhysicsSceneSnapshot, PhysicsScenesProjection } from '../src/types.ts'
@@ -360,6 +361,22 @@ describe('dsh-tool-physicsos scene mirroring', () => {
     expect(solve.steps.length).toBeGreaterThan(0)
     expect(solve.verification?.status).toBe('passed')
     expect(solve.goldenQuestionId).toBe('01-proton-basic')
+    /* Every answer carries the simulation's canonical provenance — engine,
+       revision, verifier and the checks that passed — so the client names the
+       engine behind the number instead of the scene domain. */
+    const answer = solve.answers[0]
+    if (answer === undefined) throw new Error('solved snapshot has no answer')
+    const provenance = answer.provenance
+    if (provenance === null) throw new Error('solved answer carries no provenance')
+    expect(provenance.engineId).toBe('engine-magnetic')
+    expect(provenance.engineVersion).not.toBe('')
+    expect(provenance.verifierId).toBe('physics-verifier')
+    expect(provenance.sceneRevision).toBe(0)
+    expect(provenance.evidence.length).toBeGreaterThan(0)
+    expect(provenance.evidence.every(entry => entry.passed)).toBe(true)
+    expect(provenance.verificationLevel).toBe(
+      deriveVerificationLevel(provenance.evidence),
+    )
     const projection = projectionOf(ctx, session)!
     expect(Object.keys(projection.scenes).sort()).toEqual([first.sceneId, questionSceneId].sort())
     expect(projection.latest).toBe(questionSceneId)

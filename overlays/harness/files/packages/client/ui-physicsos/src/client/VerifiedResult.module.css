@@ -81,6 +81,16 @@
   line-height: 18px;
 }
 
+/* The verifier is named beside the engine: it never wraps to a second row on
+   its own, so "who computed / who checked" reads as one line. */
+.verifier {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
 .checksLabel {
   margin: 2px 0 0;
   color: var(--dsw-alias-label-secondary);

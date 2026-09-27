@@ -402,13 +402,14 @@ function SolveSection({
   recordAttempt: ((attempt: SelfCheckAttemptInput) => void) | undefined
   t: Translate
 }) {
-  /* The verification block's ONE consumption point: the seam turns the received
-     facts into the view, and nothing below re-derives a level. */
+  /* The verification block's ONE consumption point: the seam turns the answer's
+     own provenance into the view, and nothing below re-derives a level. The
+     engine/verifier names come from that provenance, never from `domain`. */
   const primary = solve.answers[0]
   const result = toVerifiedResult({
-    ...(solve.verification?.status === undefined ? {} : { status: solve.verification.status }),
-    ...(primary === undefined ? {} : { value: primary.value, unit: primary.unit }),
-    ...(domain === undefined ? {} : { domain }),
+    ...(primary === undefined
+      ? {}
+      : { value: primary.value, unit: primary.unit, provenance: primary.provenance }),
     checks: verification,
     ...(revision === undefined ? {} : { revision }),
   })

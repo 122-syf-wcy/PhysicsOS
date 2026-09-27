@@ -400,32 +400,39 @@ describe('physics scene chat card', () => {
   })
 
   it('mounts the verification block on the solved card, next to the answer', () => {
-    const view = render(<SceneChatCard {...cardProps(solvedCardData('mech-01-uniform-acceleration'))} />)
+    const data = solvedCardData('mech-01-uniform-acceleration')
+    const provenance = data.solve?.answers[0]?.provenance
+    if (provenance === undefined || provenance === null) throw new Error('fixture has no provenance')
+    const view = render(<SceneChatCard {...cardProps(data)} />)
 
     /* One verification section, not a second copy beside it. */
     expect(view.getAllByText('物理验证').length).toBe(1)
     expect(view.getByText('物理已验证')).toBeTruthy()
     expect(view.container.querySelector('[data-verification-level="physics-verified"]')).not.toBeNull()
-    /* The verifying engine is named from the scene domain. */
-    expect(view.container.querySelector('[data-verifier="mechanics"]')).not.toBeNull()
+    /* The engine and verifier are named from the answer's OWN provenance, not
+       from the scene domain. */
+    expect(view.container.querySelector(`[data-engine="${provenance.engineId}"]`)).not.toBeNull()
+    expect(view.container.querySelector(`[data-verifier="${provenance.verifierId}"]`)).not.toBeNull()
     expect(view.getByText('验证项')).toBeTruthy()
     /* The primary answer reaches the block with its unit. */
     expect(view.container.querySelector('[data-verified-value]')?.textContent).toContain('m/s')
   })
 
-  it('falls back to the unverified state when the solve carries no verification', () => {
+  it('falls back to the unverified state when the solve answers carry no provenance', () => {
     const data = solvedCardData('mech-01-uniform-acceleration')
     const solve = data.solve
     if (solve === undefined) throw new Error('fixture has no solve')
     /* A formatted answer and passing local checks are NOT provenance: without a
-       verdict from the solve summary the block must warn, never show a check. */
-    const { verification: _withoutVerification, ...rest } = solve
-    const view = render(<SceneChatCard {...cardProps({ ...data, solve: rest })} />)
+       trace on the answer the block must warn, never show a check or name an
+       engine. */
+    const stripped = solve.answers.map(answer => ({ ...answer, provenance: null }))
+    const view = render(<SceneChatCard {...cardProps({ ...data, solve: { ...solve, answers: stripped } })} />)
 
     expect(view.getByText('未验证')).toBeTruthy()
     expect(view.container.textContent).not.toContain('物理已验证')
     expect(view.container.querySelector('[data-verification-level="unverified"]')).not.toBeNull()
-    /* No verifier is named without a verdict. */
+    /* No engine or verifier is named without a trace. */
+    expect(view.container.querySelector('[data-engine]')).toBeNull()
     expect(view.container.querySelector('[data-verifier]')).toBeNull()
   })
 })

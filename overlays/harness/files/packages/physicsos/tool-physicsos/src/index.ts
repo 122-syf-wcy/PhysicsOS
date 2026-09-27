@@ -270,7 +270,18 @@ export function apply(ctx: Context, config: Config): void {
           solve: {
             knowns: solved.knowns,
             targets: solved.targets,
-            answers: solved.answers,
+            /* Each answer carries the simulation's provenance — engine
+               id/version, scene revision, verifier and checks — so the client
+               names the engine behind the number instead of the scene domain.
+               An answer with no engine behind it forwards the honest null. */
+            answers: solved.answers.map(answer => ({
+              key: answer.key,
+              label: answer.label,
+              symbol: answer.symbol,
+              value: answer.value,
+              unit: answer.unit,
+              provenance: answer.provenance,
+            })),
             steps: solved.steps,
             ...(solved.verification === undefined ? {} : {
               verification: {
