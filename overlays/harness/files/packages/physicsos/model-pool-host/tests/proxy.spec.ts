@@ -17,7 +17,11 @@ interface Upstream {
 }
 
 const startUpstream = async (
-  respond: (body: Record<string, unknown>, res: import('node:http').ServerResponse) => void,
+  respond: (
+    body: Record<string, unknown>,
+    res: import('node:http').ServerResponse,
+    headers: import('node:http').IncomingHttpHeaders,
+  ) => void,
 ): Promise<Upstream> => {
   let hits = 0
   const server: Server = createServer((req, res) => {
@@ -26,7 +30,7 @@ const startUpstream = async (
     req.on('data', (chunk) => { chunks.push(chunk as Buffer) })
     req.on('end', () => {
       const raw = Buffer.concat(chunks).toString('utf8')
-      respond(raw === '' ? {} : JSON.parse(raw) as Record<string, unknown>, res)
+      respond(raw === '' ? {} : JSON.parse(raw) as Record<string, unknown>, res, req.headers)
     })
   })
   await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
@@ -97,7 +101,9 @@ const chat = async (
 
 describe('model pool proxy', () => {
   it('passes a successful completion through and marks the key healthy', async () => {
-    const upstream = await startUpstream((body, res) => {
+    let seenUserAgent = ''
+    const upstream = await startUpstream((body, res, headers) => {
+      seenUserAgent = headers['user-agent'] ?? ''
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ id: 'ok', model: body.model }))
     })
@@ -111,6 +117,7 @@ describe('model pool proxy', () => {
     expect(result.status).toBe(200)
     expect(result.text).toContain('"ok"')
     expect(result.attempts).toBe('1')
+    expect(seenUserAgent).toBe('OpenAI/Node 5.0.0')
     expect(store.key(key.id)?.requestCount).toBe(1)
   })
 

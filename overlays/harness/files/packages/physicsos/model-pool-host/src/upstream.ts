@@ -126,7 +126,11 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
         'content-type': 'application/json',
         accept: 'text/event-stream, application/json',
         authorization: `Bearer ${input.secret}`,
-        'user-agent': 'physicsos-model-pool/1',
+        /* Some OpenAI-compatible gateways sit behind a CDN that rejects
+           curl-like clients before authentication. Keep the standard SDK
+           identity so those channels stay reachable without a per-channel
+           header setting. */
+        'user-agent': 'OpenAI/Node 5.0.0',
       },
       body: JSON.stringify(input.payload),
       signal: controller.signal,
