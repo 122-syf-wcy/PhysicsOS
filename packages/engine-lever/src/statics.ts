@@ -1,27 +1,19 @@
 import type { ResolvedLeverModel } from './lever-model.ts'
 
 /**
- * Closed-form class-1 lever statics.
+ * Closed-form class-1 lever statics — the time-independent balance condition.
  *
- * Each hanger's weight is mg and its moment is F·l. The beam is balanced when
- * the two moments match; otherwise it tips toward the larger moment, to a
- * small display angle so the student can see which side went down. There is
- * no moment of inertia and no angular acceleration — junior statics, not a
- * rigid-body integrator.
+ * Each hanger's weight is G = mg and its moment is M = F·l. The beam is in
+ * equilibrium exactly when the two moments match, F₁l₁ = F₂l₂ — the textbook
+ * condition, verifiable on its own and independent of any motion.
+ *
+ * This module deliberately carries NO rotation and no clock. Statics answers
+ * "does it balance, and which side carries the larger moment?"; it cannot say
+ * what angle an unbalanced beam reaches, only that it is not in equilibrium.
+ * The real rotation is solved by `rotational-dynamics.ts` via τ = I·α. (An
+ * earlier version faked the rotation here as a linear display ramp; that is
+ * gone — a display ramp must not impersonate dynamics.)
  */
-
-/** Display tip when the moments do not match; 18° is readable without falling off the canvas. */
-export const MAX_TILT_RADIANS = (18 * Math.PI) / 180
-
-/** Time over which an unbalanced beam tips to MAX_TILT_RADIANS. */
-export const TIP_DURATION = 0.6
-
-/** Hold after the tip so the clock has a short, honest window. */
-export const HOLD_DURATION = 0.6
-
-export const leverRunDuration = (): number => TIP_DURATION + HOLD_DURATION
-
-export type LeverPhase = 'balanced' | 'settling' | 'tipped'
 
 export interface LeverMoments {
   /** Left weight G₁ = m₁g (N). */
@@ -38,11 +30,17 @@ export interface LeverMoments {
   readonly balanced: boolean
 }
 
-export interface LeverState {
+/** The pure balance condition — the statics-only view of the apparatus. */
+export interface LeverStaticState {
   readonly moments: LeverMoments
-  /** Beam rotation from horizontal, positive = CCW = left down (rad). */
+  /** Explicit kind so a consumer can say "静态平衡" truthfully. */
+  readonly modelKind: 'static_equilibrium'
+  /**
+   * A balanced beam is level (0). An unbalanced one has NO static angle: the
+   * honest statics answer is "not in equilibrium, so it rotates", which is the
+   * dynamic path, not a fabricated tilt.
+   */
   readonly tilt: number
-  readonly phase: LeverPhase
 }
 
 const RELATIVE_TOLERANCE = 1e-9
@@ -65,21 +63,11 @@ export const momentsOf = (model: ResolvedLeverModel): LeverMoments => {
 }
 
 /**
- * Beam state at time t ≥ 0. A balanced lever stays level. An unbalanced one
- * tips linearly to ±MAX_TILT_RADIANS over TIP_DURATION and then holds — the
- * hold is the reading, not an extrapolation past the experiment.
+ * The static path: moments plus the balance verdict, with no motion. A
+ * teacher/learner who only wants F₁l₁ = F₂l₂ reads this; a renderer that shows
+ * the beam reads `leverStateAt` in `lever-state.ts` for the solved rotation.
  */
-export const leverStateAt = (model: ResolvedLeverModel, time: number): LeverState => {
+export const staticLeverState = (model: ResolvedLeverModel): LeverStaticState => {
   const moments = momentsOf(model)
-  if (moments.balanced) {
-    return { moments, tilt: 0, phase: 'balanced' }
-  }
-  const sign = moments.netMoment > 0 ? 1 : -1
-  const progress = Math.min(Math.max(0, time) / TIP_DURATION, 1)
-  const tilt = sign * MAX_TILT_RADIANS * progress
-  return {
-    moments,
-    tilt,
-    phase: progress >= 1 ? 'tipped' : 'settling',
-  }
+  return { moments, modelKind: 'static_equilibrium', tilt: 0 }
 }

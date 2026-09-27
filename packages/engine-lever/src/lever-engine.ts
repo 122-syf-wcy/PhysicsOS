@@ -19,25 +19,42 @@ import { leverBenchesOf, validateScene, type PhysicsScene } from '@physicsos/phy
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import { resolveLeverModel, type ResolvedLeverModel } from './lever-model.ts'
+import { leverRunDuration, leverStateAt } from './lever-state.ts'
 import {
-  MAX_TILT_RADIANS,
-  TIP_DURATION,
-  leverRunDuration,
-  leverStateAt,
-  momentsOf,
-} from './statics.ts'
+  LEVER_INTEGRATION_STEP,
+  LEVER_MAX_ANGLE,
+  LEVER_MAX_ANGULAR_SPEED,
+  LEVER_MAX_RUN_SECONDS,
+  LEVER_SETTLED_TORQUE_FRACTION,
+  leverPotentialEnergyAt,
+  leverSettleSeconds,
+  resolveLeverRotationalModel,
+} from './rotational-dynamics.ts'
+import { momentsOf } from './statics.ts'
 
 export const LEVER_ENGINE_ID = 'engine-lever'
-export const LEVER_ENGINE_VERSION = '1.0.0'
+export const LEVER_ENGINE_VERSION = '1.1.0'
 export const MOMENT_BALANCE_MODEL = 'class_one_moment_balance'
 
 const TRAJECTORY_SEGMENTS = 24
 
 const LEVER_RELATIVE_TOLERANCE = 1e-9
 
+/** How many instants the dynamics checks sample along the solved run. */
+const DYNAMIC_SAMPLE_COUNT = 64
+
+/** The finite-difference law check: |I·α_fd + cω − τ(θ)| ≤ 10 % of |netMoment|.
+ * A linear display ramp (α ≡ 0 with τ ≠ 0) fails this by a factor of ~10. */
+const LEVER_LAW_RELATIVE_TOLERANCE = 0.1
+
+/** The energy check: E(t) must not grow by more than this fraction of |τ|. */
+const LEVER_ENERGY_RELATIVE_TOLERANCE = 1e-3
+
 const LEVER_ASSUMPTIONS = [
   'class-1 lever: the fulcrum sits between the two loads',
-  'statics: each weight is mg and each moment is F·l; no rotation inertia',
+  'statics: each weight is mg and each moment is F·l; a balanced beam satisfies F₁l₁ = F₂l₂',
+  'dynamics: point loads on a massless rigid beam give I = Σmᵢlᵢ²; the weights are vertical, so each moment arm is l·cos θ',
+  'the pivot damps as a fixed ratio of critical damping; the run stops at the moment-free vertical (θ = ±π/2)',
   'the beam is rigid and the hangers stay on their arms',
 ] as const
 
@@ -47,6 +64,9 @@ const newtons = (value: number): Quantity<'force'> => quantity(value, 'N', 'forc
 const metres = (value: number): Quantity<'length'> => quantity(value, 'm', 'length')
 const newtonMetres = (value: number): Quantity<'torque'> => quantity(value, 'N*m', 'torque')
 const radians = (value: number): Quantity<'angle'> => quantity(value, 'rad', 'angle')
+const radiansPerSecond = (value: number): Quantity<'angular_velocity'> =>
+  quantity(value, 'rad/s', 'angular_velocity')
+const joules = (value: number): Quantity<'energy'> => quantity(value, 'J', 'energy')
 const seconds = (value: number): Quantity<'time'> => quantity(value, 's', 'time')
 const dimensionless = (value: number): Quantity<'dimensionless'> =>
   quantity(value, '', 'dimensionless')
@@ -113,6 +133,11 @@ const derivedOf = (model: ResolvedLeverModel): DerivedQuantity[] => {
   ]
 }
 
+/**
+ * One solved instant. The lever object carries the angular state the renderer
+ * reads — θ, ω, τ_net — alongside the statics moments; the values come straight
+ * from the engine's integrator, never from a view-side ramp.
+ */
 const stateOf = (model: ResolvedLeverModel, timeSeconds: number): SimulationState => {
   const state = leverStateAt(model, timeSeconds)
   return {
@@ -122,7 +147,9 @@ const stateOf = (model: ResolvedLeverModel, timeSeconds: number): SimulationStat
         id: model.leverId,
         values: {
           tilt: radians(state.tilt),
+          angular_velocity: radiansPerSecond(state.angularVelocity),
           net_moment: newtonMetres(state.moments.netMoment),
+          net_torque: newtonMetres(state.netTorque),
         },
       },
       {
@@ -140,8 +167,120 @@ const stateOf = (model: ResolvedLeverModel, timeSeconds: number): SimulationStat
         },
       },
     ],
-    derived: derivedOf(model),
+    derived: [
+      ...derivedOf(model),
+      {
+        key: 'rotational_kinetic_energy',
+        targetId: model.leverId,
+        value: joules(state.rotationalKineticEnergy),
+        formula: { expression: 'K_rot = ½Iω²' },
+        assumptions: [...LEVER_ASSUMPTIONS],
+      },
+    ],
   }
+}
+
+/** The dynamics checks: equilibrium, energy sanity, the law and the bound. */
+const dynamicsChecks = (
+  model: ResolvedLeverModel,
+  moments: ReturnType<typeof momentsOf>,
+): VerificationCheck[] => {
+  const rotational = resolveLeverRotationalModel(model)
+  const settleTime = leverSettleSeconds(rotational)
+  const horizon = Math.max(settleTime, LEVER_INTEGRATION_STEP)
+  const sampleStep = horizon / DYNAMIC_SAMPLE_COUNT
+  const states = Array.from({ length: DYNAMIC_SAMPLE_COUNT + 1 }, (_, index) =>
+    leverStateAt(model, (index / DYNAMIC_SAMPLE_COUNT) * horizon),
+  )
+  const torqueScale = Math.max(Math.abs(rotational.netMoment), 1e-12)
+  const lawTolerance = LEVER_LAW_RELATIVE_TOLERANCE * torqueScale
+  const energyTolerance = LEVER_ENERGY_RELATIVE_TOLERANCE * torqueScale
+
+  /* τ_net(θ) = I·α + c·ω, with α taken by a CENTRAL difference from the emitted
+     trajectory: a fabricated ramp has α ≡ 0 while τ ≠ 0, so this fails it by
+     two orders of magnitude, while a genuine integrator passes with the O(h²)
+     difference error far below tolerance. */
+  let lawResidual = 0
+  for (let index = 1; index < states.length - 1; index += 1) {
+    const previous = states[index - 1]
+    const current = states[index]
+    const next = states[index + 1]
+    if (previous === undefined || current === undefined || next === undefined) continue
+    const alphaFd = (next.angularVelocity - previous.angularVelocity) / (2 * sampleStep)
+    const residual = Math.abs(
+      current.momentOfInertia * alphaFd +
+        rotational.dampingCoefficient * current.angularVelocity -
+        rotational.netMoment * Math.cos(current.tilt),
+    )
+    if (residual > lawResidual) lawResidual = residual
+  }
+
+  /* Damping only removes energy, so E = ½Iω² − netMoment·sin θ is non-increasing. */
+  let energyDrop = 0
+  let previousEnergy = Number.NEGATIVE_INFINITY
+  for (const state of states) {
+    const energy =
+      state.rotationalKineticEnergy + leverPotentialEnergyAt(rotational, state.tilt)
+    if (Number.isFinite(previousEnergy) && energy - previousEnergy > energyDrop) {
+      energyDrop = energy - previousEnergy
+    }
+    previousEnergy = energy
+  }
+
+  /* Bounded: finite and inside the safety limits at every sampled instant. */
+  const bounded = states.every(
+    (state) =>
+      Number.isFinite(state.tilt) &&
+      Number.isFinite(state.angularVelocity) &&
+      Math.abs(state.tilt) <= LEVER_MAX_ANGLE + LEVER_RELATIVE_TOLERANCE &&
+      Math.abs(state.angularVelocity) <= LEVER_MAX_ANGULAR_SPEED + LEVER_RELATIVE_TOLERANCE,
+  )
+
+  /* Equilibrium: a balanced beam is level throughout; an unbalanced one comes
+     to rest at the moment-free vertical (when it settles inside the horizon). */
+  const rest = leverStateAt(model, settleTime)
+  const settledWithinHorizon = settleTime < LEVER_MAX_RUN_SECONDS
+  const equilibriumOk = moments.balanced
+    ? states.every((state) => Math.abs(state.tilt) <= LEVER_RELATIVE_TOLERANCE)
+    : Math.sign(rest.tilt) === Math.sign(moments.netMoment) &&
+      (!settledWithinHorizon ||
+        (rest.settled &&
+          Math.abs(rest.netTorque) <= LEVER_SETTLED_TORQUE_FRACTION * Math.abs(moments.netMoment)))
+
+  return [
+    check('angular_dynamics_law', 'numerical', lawResidual <= lawTolerance, {
+      message: '转动动力学：τ_net(θ) = Iα + cω，状态由引擎积分给出。',
+      targetId: model.leverId,
+      details: {
+        residual: lawResidual,
+        tolerance: lawTolerance,
+        momentOfInertia: rotational.momentOfInertia,
+        dampingCoefficient: rotational.dampingCoefficient,
+      },
+    }),
+    check('rotational_energy_dissipates', 'conservation', energyDrop <= energyTolerance, {
+      message: '能量行为：阻尼只耗散能量，K_rot + U 不增加。',
+      targetId: model.leverId,
+      details: { maxIncrease: energyDrop, tolerance: energyTolerance },
+    }),
+    check('angular_equilibrium', 'constraint', equilibriumOk, {
+      message: moments.balanced
+        ? '静平衡：F₁l₁ = F₂l₂，杠杆保持水平。'
+        : '转动平衡：杠杆转至力矩为零的竖直位置并停下。',
+      targetId: model.leverId,
+      details: {
+        settled: rest.settled,
+        restAngle: rest.tilt,
+        restTorque: rest.netTorque,
+        settleSeconds: settleTime,
+      },
+    }),
+    check('angular_motion_bounded', 'boundary', bounded, {
+      message: '有界运动：倾角与角速度始终在安全限内，不会无限旋转。',
+      targetId: model.leverId,
+      details: { maxAngle: LEVER_MAX_ANGLE, maxAngularSpeed: LEVER_MAX_ANGULAR_SPEED },
+    }),
+  ]
 }
 
 const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): VerificationResult => {
@@ -205,15 +344,14 @@ const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): Veri
     ),
   )
 
-  /* The beam's tilt is a display of the moment difference, not a second law:
-     balanced ⇔ level, otherwise it tips toward the larger moment. Sampling
-     the finished pose, not just the algebra, so a drawing bug would fail. */
-  const finished = leverStateAt(model, leverRunDuration())
+  /* The static balance condition is a check on the apparatus, not on a pose:
+     balanced ⇔ the beam stays level, otherwise it rotates toward the side of the
+     larger moment. The beam's motion itself is checked by the dynamics checks. */
+  const rotational = resolveLeverRotationalModel(model)
+  const settled = leverStateAt(model, leverSettleSeconds(rotational))
   const tiltAgrees = moments.balanced
-    ? Math.abs(finished.tilt) <= LEVER_RELATIVE_TOLERANCE
-    : Math.sign(finished.tilt) === Math.sign(moments.netMoment) &&
-      Math.abs(Math.abs(finished.tilt) - MAX_TILT_RADIANS) <=
-        LEVER_RELATIVE_TOLERANCE * MAX_TILT_RADIANS
+    ? Math.abs(settled.tilt) <= LEVER_RELATIVE_TOLERANCE
+    : Math.sign(settled.tilt) === Math.sign(moments.netMoment) && settled.tilt !== 0
   checks.push(
     check('moment_balance', 'constraint', tiltAgrees, {
       message: moments.balanced
@@ -224,11 +362,13 @@ const buildVerification = (scene: PhysicsScene, model: ResolvedLeverModel): Veri
         leftMoment: moments.leftMoment,
         rightMoment: moments.rightMoment,
         netMoment: moments.netMoment,
-        tilt: finished.tilt,
+        tilt: settled.tilt,
         balanced: moments.balanced,
       },
     }),
   )
+
+  checks.push(...dynamicsChecks(model, moments))
 
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
 }
@@ -312,7 +452,9 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       return invalidModelCondition(LEVER_ENGINE_ID, [
         failure(
           'lever_model_resolvable',
-          error instanceof Error ? error.message : 'The lever cannot be resolved for statics.',
+          error instanceof Error
+            ? error.message
+            : 'The lever cannot be resolved for moment balance and rotational dynamics.',
         ),
       ])
     }
@@ -369,8 +511,10 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
 
     const startedAt = new Date().toISOString()
     const model = resolveLeverModel(scene)
-    const totalTime = leverRunDuration()
     const moments = momentsOf(model)
+    const rotational = resolveLeverRotationalModel(model)
+    const settleTime = leverSettleSeconds(rotational)
+    const totalTime = leverRunDuration(model)
 
     const states = Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) =>
       stateOf(model, (index / TRAJECTORY_SEGMENTS) * totalTime),
@@ -399,7 +543,7 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
             sceneId: scene.id,
             revision: scene.revision,
             type: 'LeverTipped',
-            time: TIP_DURATION,
+            time: settleTime,
           },
         ]
 
@@ -416,7 +560,7 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       metadata: {
         engineId: this.engineId,
         engineVersion: this.engineVersion,
-        solver: 'lever-statics-closed-form',
+        solver: 'lever-rotational-dynamics',
         startedAt,
         finishedAt: new Date().toISOString(),
         durationMs: 0,
