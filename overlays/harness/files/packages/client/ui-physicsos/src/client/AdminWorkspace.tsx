@@ -57,9 +57,9 @@ export interface AdminWorkspaceProps {
    */
   paperApi?: PaperApi
   /**
-   * 反馈与公告 client. Optional for the same reason paperApi is: a stripped
-   * composition may not mount the notice host, and the tab is then not offered
-   * rather than offered and broken.
+   * Feedback queue and platform-announcement client. Optional for the same
+   * reason paperApi is: a stripped composition may not mount the notice host,
+   * and the tabs are then not offered rather than offered and broken.
    */
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
@@ -83,9 +83,6 @@ export function AdminWorkspace({
   const username = useAuth(state => state.user?.username) ?? 'admin'
   const [tab, setTab] = useState<Tab>('users')
   const isSuper = role === 'SUPER_ADMIN'
-  /* Publishing needs SCHOOL_ADMIN; replying needs only TEACHER. The tab is
-     reached through the admin surface, so anyone here can already reply. */
-  const isSchoolAdmin = role === 'SCHOOL_ADMIN' || isSuper
 
   if (!isAdminRole(role)) {
     return <div className={css.root}><p className={css.empty}>{t('admin.forbidden')}</p></div>
@@ -146,7 +143,7 @@ export function AdminWorkspace({
         <AdminContentTab api={paperApi} reviewer={username} t={t} />
       )}
       {active === 'notice' && noticeApi !== undefined && (
-        <AdminNoticeTab api={noticeApi} canPublish={isSchoolAdmin} t={t} />
+        <AdminNoticeTab api={noticeApi} t={t} />
       )}
       {active === 'platformNotice' && noticeApi !== undefined && isSuper && (
         <AdminPlatformNoticeTab api={noticeApi} t={t} />

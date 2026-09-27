@@ -27,7 +27,6 @@ import { AdminWorkspace } from './AdminWorkspace.tsx'
 import type { AdminApi } from './auth-api.ts'
 import type { NoticeApi } from './notice-api.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
-import type { NoticeCacheStorage } from './notice-cache.ts'
 import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
 import { ClassSurface } from './ClassSurface.tsx'
@@ -97,12 +96,6 @@ export interface PhysicsSurfaceInjected {
   classApi?: ClassApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
-  /**
-   * Account-namespaced storage for the 公告 offline cache (方案 2.3).
-   * Per-account, not per-machine: a campus notice must not follow a
-   * different login onto the next screen.
-   */
-  noticeStorage?: NoticeCacheStorage
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Open the Lab assembling a circuit from scratch (实验中心 → 自由搭建). */
   openBuilder?: (sceneRef: PhysicsSceneRef) => void
@@ -143,7 +136,6 @@ export function PhysicsSurface({
   noticeApi,
   classApi,
   modelPoolApi,
-  noticeStorage,
   useAuth,
 }: PhysicsSurfaceProps) {
   const surfaceState = usePhysicsSurface(snapshot => snapshot)
@@ -218,7 +210,6 @@ export function PhysicsSurface({
       <NoticeBoard
         api={noticeApi}
         context="/notice"
-        {...(noticeStorage === undefined ? {} : { storage: noticeStorage })}
         t={t}
       />
     )

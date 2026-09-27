@@ -168,7 +168,7 @@ export function apply(ctx: ClientContext): void {
   /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
      reads the role from the auth store; the host enforces it on every call. */
   const adminApi = createAdminApi()
-  /* 反馈与公告: one client for both directions (`/physicsos/notice`). */
+  /* 反馈队列与平台公告弹窗共用一个 `/physicsos/notice` client. */
   const noticeApi = createNoticeApi()
   /* 模型通道: platform-wide pool and its encrypted upstream credentials. */
   const modelPoolApi = createModelPoolApi()
@@ -552,9 +552,6 @@ export function apply(ctx: ClientContext): void {
         noticeApi,
         classApi,
         modelPoolApi,
-        /* 公告离线缓存落在账户命名空间里(方案 2.3 的「缓存上一条」)——
-           本校公告不该跟着另一个账号登录出现在下一块屏幕上。 */
-        noticeStorage: auth.userStorage,
         openSurface: (
           id: Parameters<typeof surface.open>[0],
           sceneRef?: Parameters<typeof surface.open>[1],

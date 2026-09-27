@@ -10,7 +10,7 @@ const t = (key: PhysicsosKey): string => zh[key] ?? key
 
 const row = (over: Partial<PlatformNoticeRow> = {}): PlatformNoticeRow => ({
   title: 'PhysicsOS 公测声明',
-  body: '面向初高中物理教学。',
+  body: '## 公测说明\n\n- **数据**仅用于教学改进。',
   version: 7,
   enabled: true,
   updatedAt: '2026-09-26T12:30:00Z',
@@ -39,13 +39,13 @@ describe('AdminPlatformNoticeTab', () => {
     expect(await screen.findByDisplayValue('PhysicsOS 公测声明')).toBeTruthy()
     expect(screen.getByText(/当前版本 7/)).toBeTruthy()
 
-    fireEvent.change(screen.getByLabelText('平台声明标题'), {
+    fireEvent.change(screen.getByLabelText('公告标题'), {
       target: { value: '新学期公测说明' },
     })
-    fireEvent.change(screen.getByLabelText('平台声明正文'), {
+    fireEvent.change(screen.getByLabelText('公告正文（Markdown）'), {
       target: { value: '新正文' },
     })
-    fireEvent.click(screen.getByLabelText('下次进入时展示这份声明'))
+    fireEvent.click(screen.getByLabelText('下次进入时展示这份公告'))
     fireEvent.click(screen.getByRole('button', { name: '保存并发布新版本' }))
 
     await waitFor(() => {
@@ -58,17 +58,30 @@ describe('AdminPlatformNoticeTab', () => {
     expect(await screen.findByText(/当前版本 8/)).toBeTruthy()
   })
 
+  it('renders a live Markdown preview before saving', async () => {
+    mount()
+    await screen.findByRole('heading', { level: 2, name: '公测说明' })
+    expect(screen.getByText('数据').tagName).toBe('STRONG')
+    expect(screen.getByRole('list')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('公告正文（Markdown）'), {
+      target: { value: '### 维护通知\n\n> 今晚 22:00 起维护' },
+    })
+    expect(await screen.findByRole('heading', { level: 3, name: '维护通知' })).toBeTruthy()
+    expect(screen.getByText('今晚 22:00 起维护')).toBeTruthy()
+  })
+
   it('refuses an empty title or oversized body before the request', async () => {
     const { updatePlatformNotice } = mount()
     await screen.findByDisplayValue('PhysicsOS 公测声明')
 
-    const title = screen.getByLabelText('平台声明标题')
+    const title = screen.getByLabelText('公告标题')
     const button = screen.getByRole('button', { name: '保存并发布新版本' }) as HTMLButtonElement
     fireEvent.change(title, { target: { value: '   ' } })
     expect(button.disabled).toBe(true)
 
     fireEvent.change(title, { target: { value: '有效标题' } })
-    fireEvent.change(screen.getByLabelText('平台声明正文'), {
+    fireEvent.change(screen.getByLabelText('公告正文（Markdown）'), {
       target: { value: 'x'.repeat(2001) },
     })
     expect(button.disabled).toBe(true)

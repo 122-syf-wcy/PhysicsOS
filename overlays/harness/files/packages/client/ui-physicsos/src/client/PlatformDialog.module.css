@@ -65,12 +65,43 @@
   color: var(--physics-ink);
 }
 
-.copy p {
-  margin: 0 0 12px;
+.copy h1,
+.copy h2,
+.copy h3,
+.copy h4,
+.copy h5,
+.copy h6 {
+  color: var(--physics-ink-strong);
 }
 
-.copy p:last-child {
-  margin-bottom: 0;
+.copy a {
+  color: var(--dsw-alias-button-info-fill);
+}
+
+.preview {
+  margin-top: 2px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 52%, transparent);
+}
+
+.previewLabel {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--physics-ink-muted);
+}
+
+.preview .copy {
+  margin-top: 0;
+}
+
+.previewEmpty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--physics-ink-muted);
 }
 
 .form {

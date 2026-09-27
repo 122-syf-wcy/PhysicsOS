@@ -1,6 +1,7 @@
 /** Account-scoped PhysicsOS platform notice. */
 
 import { useEffect, useId, useState, type ReactNode } from 'react'
+import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 
@@ -88,7 +89,7 @@ export function PlatformNoticeDialog({
           </div>
         </header>
         <div className={css.copy}>
-          {notice.body.split('\n\n').map(paragraph => <p key={paragraph}>{paragraph}</p>)}
+          <MarkdownText text={notice.body} />
         </div>
         {error === undefined ? null : <p className={css.error} role="alert">{error}</p>}
         <div className={css.actions}>

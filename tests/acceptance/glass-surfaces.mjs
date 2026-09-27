@@ -64,9 +64,9 @@ await resetSession(page, base)
 await loginUser(page, { username: ACCEPTANCE_ADMIN_USERNAME, password: ACCEPTANCE_ADMIN_PASSWORD })
 await page.waitForTimeout(1200)
 
-/* ---- PhysicsOS 平台声明 ---- */
+/* ---- PhysicsOS 平台公告弹窗 ---- */
 const platformNotice = page.locator('[data-physicsos-platform-notice]')
-check('平台声明使用 PhysicsOS 公测文案', await visible(platformNotice, 15_000))
+check('平台公告使用 PhysicsOS 弹窗', await visible(platformNotice, 15_000))
 if (await platformNotice.isVisible().catch(() => false)) {
   await shot('01b-platform-notice')
   await platformNotice.getByRole('button', { name: '继续', exact: true }).click()
@@ -151,22 +151,22 @@ if ((await menu.count()) > 0) {
         await shot('08-admin-select-open')
         await page.keyboard.press('Escape')
       }
-      /* 公告 / 反馈 tab: the 待处理 filter used to be the one native select
-         left in the console. */
-      const noticeTab = page.getByRole('tab', { name: '反馈与公告' }).first()
+      /* 反馈 tab: the 待处理 filter used to be the one native select left in
+         the console. */
+      const noticeTab = page.getByRole('tab', { name: '反馈' }).first()
       if ((await noticeTab.count()) > 0) {
         await noticeTab.click().catch(() => {})
         await page.waitForTimeout(700)
         await shot('11-admin-notice')
       }
 
-      /* 平台声明编辑器：只有 SUPER_ADMIN 能看到。 */
-      const platformTab = page.getByRole('tab', { name: '平台声明' }).first()
-      check('平台管理员可编辑平台声明', (await platformTab.count()) > 0)
+      /* 公告编辑器：只有 SUPER_ADMIN 能看到。 */
+      const platformTab = page.getByRole('tab', { name: '公告' }).first()
+      check('平台管理员可编辑公告弹窗', (await platformTab.count()) > 0)
       if ((await platformTab.count()) > 0) {
         await platformTab.click().catch(() => {})
         const editor = page.locator('[data-admin-platform-notice]')
-        check('平台声明编辑器打开', await visible(editor))
+        check('公告编辑器打开', await visible(editor))
         await shot('11b-admin-platform-notice')
       }
 

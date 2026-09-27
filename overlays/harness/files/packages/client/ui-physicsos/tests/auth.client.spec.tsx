@@ -447,7 +447,7 @@ describe('AdminWorkspace', () => {
     expect(queryByRole('tab')).toBeNull()
   })
 
-  it('offers the platform notice editor only to SUPER_ADMIN', () => {
+  it('offers the announcement editor only to SUPER_ADMIN', () => {
     const noticeApi = {} as NoticeApi
     const superAdmin = render(
       <AdminWorkspace
@@ -457,7 +457,7 @@ describe('AdminWorkspace', () => {
         t={t}
       />,
     )
-    expect(superAdmin.getByRole('tab', { name: '平台声明' })).toBeTruthy()
+    expect(superAdmin.getByRole('tab', { name: '公告' })).toBeTruthy()
     superAdmin.unmount()
 
     const schoolAdmin = render(
@@ -468,6 +468,6 @@ describe('AdminWorkspace', () => {
         t={t}
       />,
     )
-    expect(schoolAdmin.queryByRole('tab', { name: '平台声明' })).toBeNull()
+    expect(schoolAdmin.queryByRole('tab', { name: '公告' })).toBeNull()
   })
 })

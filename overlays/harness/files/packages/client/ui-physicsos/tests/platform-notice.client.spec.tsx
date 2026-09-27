@@ -11,7 +11,7 @@ const t = (key: PhysicsosKey): string => zh[key] ?? key
 
 const notice = (over: Partial<PlatformNoticeRow> = {}): PlatformNoticeRow => ({
   title: 'PhysicsOS 公测声明',
-  body: 'PhysicsOS 目前处于面向初高中物理教学的公测阶段。\n\n欢迎反馈，数据仅用于教学改进。',
+  body: '## 公测说明\n\n- **数据**仅用于教学改进。\n- 欢迎通过反馈提交问题。',
   version: 4,
   enabled: true,
   updatedAt: '2026-09-26T12:00:00Z',
@@ -55,7 +55,10 @@ describe('PlatformNoticeDialog', () => {
   it('blocks an authenticated account until the current notice version is acknowledged', async () => {
     const { ackPlatformNotice } = mount({})
     const dialog = await screen.findByRole('dialog', { name: 'PhysicsOS 公测声明' })
-    expect(dialog.textContent).toContain('初高中物理教学')
+    expect(dialog.textContent).toContain('公测说明')
+    expect(screen.getByRole('heading', { level: 2, name: '公测说明' })).toBeTruthy()
+    expect(screen.getByText('数据').tagName).toBe('STRONG')
+    expect(screen.getByRole('list')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: '继续' }))
     await waitFor(() => { expect(ackPlatformNotice).toHaveBeenCalledWith(4) })

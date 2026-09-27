@@ -1,6 +1,7 @@
 
-/* 反馈与公告 — two independent panes: the two directions do not share a reading
-   order, and a long notice must not push the form away.
+/* Feedback — one focused surface. Platform announcements use the versioned
+   shell modal, so keeping a second announcement board here would split the
+   product's voice across two places.
 
    Materials come from the shared PhysicsOS chrome (`chrome.ts`): the glass fill
    / border / shadow trio for panels, the three-step physics ink ladder for
@@ -37,20 +38,8 @@
 }
 
 .columns {
-  max-width: 1040px;
+  max-width: 760px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
-}
-
-/* Two columns keep the form beside the notices at any width that can actually
-   hold them; below this the panes stack, because a 300px textarea is worse
-   than a scroll. The file's own rule is that a long notice must not push the
-   form away — stacking at 900px pushed it away on an ordinary laptop. */
-@media (max-width: 780px) {
-  .columns { grid-template-columns: minmax(0, 1fr); }
 }
 
 .pane {

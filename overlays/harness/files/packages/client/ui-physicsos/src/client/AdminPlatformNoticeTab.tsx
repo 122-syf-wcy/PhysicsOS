@@ -1,6 +1,7 @@
 /** SUPER_ADMIN editor for the platform-wide internal-testing notice. */
 
 import { useEffect, useId, useState } from 'react'
+import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { NoticeApi, PlatformNoticeRow } from './notice-api.ts'
 import type { PhysicsosKey } from './locales.ts'
 import css from './PlatformDialog.module.css'
@@ -105,6 +106,14 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
           onChange={(event) => { setBody(event.target.value) }}
         />
       </label>
+      <div className={css.preview} data-platform-notice-preview="">
+        <p className={css.previewLabel}>{t('admin.platformNotice.preview')}</p>
+        <div className={css.copy}>
+          {body.trim() === ''
+            ? <p className={css.previewEmpty}>{t('admin.platformNotice.previewEmpty')}</p>
+            : <MarkdownText text={body} />}
+        </div>
+      </div>
       <label className={css.label}>
         <input
           type="checkbox"

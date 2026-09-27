@@ -1,14 +1,13 @@
 /**
- * 反馈与公告 end to end, over a REAL server and a REAL browser session.
+ * Feedback + platform announcement end to end, over a REAL server and browser.
  *
- * Both directions, because they are one feature: a student files a report and
- * reads the announcements; a teacher answers it; an admin publishes. The parts
- * worth pinning are the ones a unit test cannot see:
+ * The split is deliberate: announcements are a versioned Markdown dialog,
+ * while the page is only the feedback queue. This pins both halves:
  *
- *   - the student's list really is their own rows (the server's filter, not
- *     the component's), so a second student's report must not appear;
- *   - a reply reaches the reporter through the SAME session that filed it;
- *   - the surface renders both panes against the live host.
+ *   - a student sees their own reports, never another account's;
+ *   - a reply reaches the reporter through the same session;
+ *   - the announcement dialog renders Markdown and the feedback page does not
+ *     carry a second announcement board.
  *
  * node tests/acceptance/notice-board.mjs
  */
@@ -27,9 +26,6 @@ import {
 const server = await startIsolatedServer({ port: 3093 })
 const { page, base, check, finish, shot } = await openAcceptance(import.meta.url, {
   base: server.base,
-  /* The offline case below makes the notice host answer 503 ON PURPOSE; the
-     gate excuses exactly these paths and nothing else. */
-  expectErrorPaths: ['/physicsos/notice/'],
 })
 
 const call = (path, { method = 'GET', body, cookie } = {}) =>
@@ -154,34 +150,47 @@ try {
     String(backToStudent.items[0]?.reply),
   )
 
-  const published = await call('/physicsos/notice/announcements', {
-    method: 'POST',
+  const noticeBody = `## 本次更新\n\n- **新增**四台装置\n- 欢迎继续反馈`
+  const published = await call('/physicsos/notice/platform-notice', {
+    method: 'PUT',
     cookie: adminCookie,
-    body: { title: `验收公告 ${stamp}`, body: '实验中心新增四台装置', schoolId: null },
+    body: { title: `验收公告 ${stamp}`, body: noticeBody, enabled: true },
   })
-  check('超管能发布平台公告', published.status === 201, `HTTP ${published.status}`)
+  const publishedBody = await published.json()
+  check('超管能发布 Markdown 公告弹窗', published.status === 200, `HTTP ${published.status}`)
+  check(
+    '公告正文按原样保存 Markdown',
+    publishedBody.notice?.body === noticeBody,
+    String(publishedBody.notice?.body),
+  )
 
   /* ---------------- the surface ---------------- */
 
   await resetSession(page, base)
   await loginUser(page, { username: studentName, password: PASSWORD })
 
-  await page.getByRole('button', { name: '反馈与公告' }).click()
+  const noticeDialog = page.locator('[data-physicsos-platform-notice]')
+  await noticeDialog.waitFor({ state: 'visible', timeout: 20_000 })
+  check(
+    '新公告以弹窗出现',
+    await noticeDialog.locator('header h2').getByText(`验收公告 ${stamp}`, { exact: true }).isVisible(),
+  )
+  check(
+    '公告弹窗渲染 Markdown 标题与列表',
+    (await noticeDialog.getByRole('heading', { level: 2, name: '本次更新' }).count()) === 1
+      && (await noticeDialog.getByRole('list').count()) === 1
+      && (await noticeDialog.getByText('新增').count()) === 1,
+  )
+  await shot('notice-board-announcement-markdown-1600x900')
+  await noticeDialog.getByRole('button', { name: '继续' }).click()
+  await noticeDialog.waitFor({ state: 'hidden', timeout: 20_000 })
+
+  await page.getByRole('button', { name: '反馈' }).click()
   await page
     .locator('[data-physicsos-surface="notice"]')
     .waitFor({ state: 'visible', timeout: 20_000 })
-  check('公告面板渲染出来了', (await page.getByTestId('notice-announcements').count()) === 1)
-  /* The board mounts before its fetch settles (that IS the fix under test),
-     so this waits rather than sampling the DOM the instant the pane appears. */
-  check(
-    '学生看得到那条平台公告',
-    await page
-      .getByText(`验收公告 ${stamp}`)
-      .first()
-      .waitFor({ state: 'visible', timeout: 20_000 })
-      .then(() => true)
-      .catch(() => false),
-  )
+  check('反馈页只保留反馈面板', (await page.getByTestId('notice-feedback').count()) === 1)
+  check('反馈页不再出现第二份公告列表', (await page.getByTestId('notice-announcements').count()) === 0)
 
   await page.getByTestId('feedback-body').fill(`界面提交 ${stamp}:小孔成像的像高不对`)
   await page.getByRole('button', { name: '提交' }).click()
@@ -193,55 +202,6 @@ try {
     '界面里能看到自己提交过的反馈与回复',
     (await page.getByText(/已确认,下个版本修复/).count()) === 1,
   )
-
-  /* 方案 2.3:断网时缓存上一条,不显示空白。This is the case the unit tests
-     cannot reach — a REAL reload with the notice host blocked, against the real
-     served bundle, asserting the last announcement is still on screen. */
-  stdout.write('\nCASE · 离线(公告接口被切断)→ 仍然显示上一条,且标注为离线\n')
-  const cachedBefore = await page.evaluate(() => {
-    const keys = Object.keys(globalThis.localStorage).filter((k) =>
-      k.includes('physicsos.notice-cache'),
-    )
-    return keys.map((k) => globalThis.localStorage.getItem(k) ?? '')
-  })
-  check(
-    '成功取回公告后写进了账户缓存',
-    cachedBefore.some((v) => v.includes(`验收公告 ${stamp}`)),
-    `cachedKeys=${cachedBefore.length}`,
-  )
-
-  /* Cut off every notice API call, then reload: the board must draw the last
-     announcement from the cache rather than an empty pane. */
-  /* An isolated server with the notice host answering 5xx: the fetch rejects
-     exactly as it does offline. Fulfilled rather than aborted because this
-     suite DECLARES the path below — an aborted route trips the browser gate's
-     `failedRequests` counter, which has no per-suite excuse. */
-  await page.route('**/physicsos/notice/**', (route) =>
-    route.fulfill({
-      status: 503,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: { code: 'OFFLINE', message: 'notice host unreachable' } }),
-    }),
-  )
-  await page.reload()
-  await page.getByRole('button', { name: '反馈与公告' }).click()
-  await page
-    .locator('[data-physicsos-surface="notice"]')
-    .waitFor({ state: 'visible', timeout: 20_000 })
-
-  check('断网重载后仍然看得到上一条公告', (await page.getByText(`验收公告 ${stamp}`).count()) === 1)
-  await page
-    .locator('[data-notice-stale]')
-    .waitFor({ state: 'visible', timeout: 20_000 })
-    .catch(() => {})
-  check(
-    '并且标注了这是离线缓存而不是当成最新',
-    (await page.locator('[data-notice-stale]').count()) === 1,
-  )
-  /* The point of the fix: the report form survives a dead notice host. */
-  check('公告取不到也不影响提交反馈的表单', (await page.getByTestId('feedback-body').count()) === 1)
-  await shot('notice-board-offline-cache-1600x900')
-  await page.unroute('**/physicsos/notice/**')
 
   await shot('notice-board-student-1600x900')
   stdout.write(`\n  学生 ${studentName} / 教师 ${teacherName} · schoolId ${schoolId}\n`)

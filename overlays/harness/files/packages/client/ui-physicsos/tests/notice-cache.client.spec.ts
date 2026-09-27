@@ -43,7 +43,6 @@ describe('notice offline cache', () => {
   })
 
   it('answers an empty list when there is no storage at all', () => {
-    /* A stripped composition has no storage — the board must still render. */
     expect(readCachedAnnouncements(undefined)).toEqual([])
     expect(() => { writeCachedAnnouncements(undefined, [row()]) }).not.toThrow()
   })
@@ -67,8 +66,6 @@ describe('notice offline cache', () => {
       { id: 'no-body' },
       { id: 'bad-title', body: 'x', title: 7, authorKey: 'a', createdAt: 'c', schoolId: null },
     ]))
-    /* A row without `body` would render an empty <p> that reads like a notice
-       saying nothing, so it is dropped here rather than drawn. */
     expect(readCachedAnnouncements(storage).map(item => item.id)).toEqual(['good'])
   })
 
