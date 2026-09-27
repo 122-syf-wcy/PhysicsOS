@@ -181,6 +181,7 @@ export function PhysicsSurface({
           useAuth={useAuth}
           useSessions={useSessions}
           useWorkspaces={useWorkspaces}
+          {...(openSurface === undefined ? {} : { openSurface })}
         />
       )
   }

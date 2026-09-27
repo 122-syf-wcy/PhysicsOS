@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ProductSurfaceBaseProps } from './surface-props.ts'
+import type { PhysicsSceneRef, PhysicsSurfaceId } from './surface-store.ts'
 import type {
   AnnotationRow, BankItemRow, BankPlanRow, BlueprintRow, ExportBundleRow, PaperApi, PaperJobWire, SourcePaperRow,
 } from './paper-api.ts'
@@ -34,6 +35,12 @@ export interface PaperWorkspaceInjected {
   readonly api: PaperApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
+  /**
+   * Leave the studio for the home surface. Optional: a stripped test
+   * composition (or a host that never elected the seat) then renders no way
+   * out rather than a control that does nothing.
+   */
+  openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
 }
 
 export type PaperWorkspaceProps =
@@ -65,6 +72,25 @@ const PLAN_LABEL: Record<string, string> = {
 const KINDS = ['unit', 'weekly', 'monthly', 'midterm', 'final', 'mock'] as const
 
 const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
+
+/**
+ * The nearest ancestor that is a real laid-out box.
+ *
+ * `display: contents` slot wrappers report a zero rect, so they cannot size
+ * the surface; the column that holds them can. Used when the studio is a global
+ * panel mounted straight into the shell's centre column, where there is no
+ * transcript scrollport to anchor the cover to.
+ */
+const nearestLaidOutAncestor = (el: HTMLElement): HTMLElement | null => {
+  let node: HTMLElement | null = el.parentElement
+  while (node !== null) {
+    if (getComputedStyle(node).display !== 'contents' && node.getBoundingClientRect().width > 0) {
+      return node
+    }
+    node = node.parentElement
+  }
+  return null
+}
 
 /**
  * Estimated difficulty rating for a job — score-weighted over the confirmed
@@ -152,7 +178,7 @@ export function PaperWorkspace(props: PaperWorkspaceProps) {
   return <PaperStudio {...props} />
 }
 
-function PaperStudio({ api }: PaperWorkspaceProps) {
+function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
   const [tab, setTab] = useState<Tab>('new')
   const [sources, setSources] = useState<SourcePaperRow[]>([])
   const [annotations, setAnnotations] = useState<AnnotationRow[]>([])
@@ -200,22 +226,26 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
 
   /* The cover is position:fixed over the whole conversation column — header
      tabs, scroll body, and composer alike, none of which belong to this
-     workflow. The scroll body's parent owns that full rect; we pin the
-     scroll, lock it, and track the rect while mounted. */
+     workflow. It is sized to an ancestor, so it fills that column instead of
+     shrink-to-fit at the top-left.
+
+     The column is normally the transcript scrollport's parent. The shell also
+     mounts a global panel directly in its centre column with NO scrollport in
+     the chain: the old search then walked to `null` and the cover fell back to
+     shrink-to-fit — a ~60%-wide box pinned left, which is the dead region on
+     the right. So take the scrollport when it exists, and otherwise the
+     nearest laid-out ancestor (skipping `display: contents` slot wrappers). */
   const coverRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const cover = coverRef.current
     if (cover === null) return
     let node: HTMLElement | null = cover.parentElement
-    /* The marker, not overflow state: a short conversation never overflows,
-       so scrollHeight > clientHeight misses the body and the cover would
-       stay shrink-to-fit at top-left instead of covering the column. */
     while (node !== null && !node.hasAttribute('data-conversation-scroll')) {
       node = node.parentElement
     }
-    if (node === null) return
     const scroller = node
-    const host = scroller.parentElement ?? scroller
+    const host = scroller?.parentElement ?? nearestLaidOutAncestor(cover)
+    if (host === null) return
     const fit = () => {
       const rect = host.getBoundingClientRect()
       cover.style.top = `${rect.top}px`
@@ -226,6 +256,9 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
     const observer = new ResizeObserver(fit)
     observer.observe(host)
     fit()
+    /* A global panel is its own column: there is no transcript scroll to
+       lock, and nothing to restore on teardown. */
+    if (scroller === null) return () => { observer.disconnect() }
     const previousOverflow = scroller.style.overflowY
     scroller.scrollTop = 0
     scroller.style.overflowY = 'hidden'
@@ -244,8 +277,19 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
   return (
     <div ref={coverRef} className={css.root} data-physicsos-surface="paper">
       <header className={css.hero}>
+        {openSurface === undefined ? null : (
+          /* Desktop-like leave control, first in the row so the eye lands on
+             it before the title. A plain text button: the surface's own icon
+             set has no back glyph, and every other control here (the step
+             rail, the notice dismiss) is a text button — an icon would be the
+             odd one out. Its accessible name is the localised label. */
+          <button type="button" className={css.back} onClick={() => { openSurface('home') }}>
+            <span className={css.backArrow} aria-hidden="true">←</span>
+            {t('paper.backToHome')}
+          </button>
+        )}
         <div className={css.heroText}>
-          <h1 className={css.title}>出卷专区</h1>
+          <h1 className={css.title}>贵州高考物理 · 出卷工作台</h1>
           <p className={css.subtitle}>贵州本土 · 2027 届 — 初中理综 / 高中物理 · 单元 · 周考 · 月考 · 期中 · 期末 · 模拟</p>
         </div>
         <label className={css.reviewer}>
@@ -296,6 +340,7 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
           api={api}
           onCreated={(job) => { setActiveJob(job); setTab('jobs'); void refresh() }}
           onError={setNotice}
+          onReview={() => { setTab('jobs') }}
         />
       )}
       {tab === 'jobs' && (
@@ -327,12 +372,28 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
 
 /* ------------------------------------------------------------- 新建试卷 -- */
 
-function NewPaperPanel({ blueprints, api, onCreated, onError }: {
+/**
+ * The builder's steps, in order. One is visible at a time so the form reads as
+ * a workbench rather than a page of stacked cards; the nav is the only place a
+ * teacher has to look to know where they are.
+ */
+const PAPER_STEPS = [
+  { id: 'basic', label: '基本信息' },
+  { id: 'scope', label: '内容范围' },
+  { id: 'structure', label: '题型结构' },
+  { id: 'difficulty', label: '难度' },
+  { id: 'constraints', label: '生成约束' },
+] as const
+type PaperStepId = (typeof PAPER_STEPS)[number]['id']
+
+function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
   blueprints: BlueprintRow[]
   api: PaperApi
   onCreated: (job: PaperJobWire) => void
   onError: (message: string) => void
+  onReview: () => void
 }) {
+  const [step, setStep] = useState<PaperStepId>('basic')
   const [blueprintId, setBlueprintId] = useState('')
   const [kind, setKind] = useState<string>('unit')
   const [chapters, setChapters] = useState('')
@@ -344,6 +405,10 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
 
   const blueprint = blueprints.find(b => b.id === blueprintId)
 
+  const splits = (text: string) => text.split(/[;；\n]/).map(s => s.trim()).filter(Boolean)
+  const chapterCount = splits(chapters).length
+  const totalQuestions = blueprint?.sections.reduce((n, s) => n + s.slots.length, 0) ?? 0
+
   const create = async () => {
     if (blueprint === undefined) { onError('请先选择试卷结构模板'); return }
     setBusy(true)
@@ -354,8 +419,8 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
         kind: kind,
         totalScore: blueprint.totalScore,
         minutes: blueprint.minutes,
-        chapters: chapters.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
-        exclude: exclude.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
+        chapters: splits(chapters),
+        exclude: splits(exclude),
         difficulty: { basic: preset.mix.basic, medium: preset.mix.medium, hard: preset.mix.hard },
         targetYear: 2027,
         textbook: '人教版',
@@ -371,91 +436,163 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
           暂无已核验的试卷结构。请先在「真题资料库」录入并核验对应年份的真题，再回到这里。
         </p>
       )}
-      <div className={css.wizard}>
-        <div className={css.wizardMain}>
-          <div className={css.stepCard}>
-            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>1</span>选择试卷结构</h3>
-            <div className={css.field}><span>结构模板（已核验）</span>
-              <GlassSelect
-                value={blueprintId}
-                ariaLabel="结构模板"
-                testId="blueprint"
-                placeholder="— 选择 —"
-                options={blueprints.map(b => ({
-                  value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
-                }))}
-                onChange={setBlueprintId}
-              />
-            </div>
-            {blueprint !== undefined && (
-              <div className={css.bpInfo}>
-                {blueprint.sections.map((s, i) => (
-                  <span key={i} className={css.bpSection}>
-                    {s.title} · {s.slots.length} 题
-                  </span>
-                ))}
+      <div className={css.workbench}>
+        <div className={css.workbenchMain}>
+          <nav className={css.stepNav} aria-label="出卷步骤">
+            {PAPER_STEPS.map((s, i) => (
+              <button key={s.id} type="button"
+                className={clsx(css.stepNavItem, step === s.id && css.stepNavActive)}
+                aria-current={step === s.id ? 'step' : undefined}
+                onClick={() => { setStep(s.id) }}>
+                <span className={css.stepNavNo} aria-hidden="true">{i + 1}</span>
+                <span className={css.stepNavLabel}>{s.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className={css.stepForm}>
+            {step === 'basic' && (
+              <div className={css.stepCard} data-paper-step="basic">
+                <h3 className={css.stepCardTitle}>基本信息</h3>
+                <div className={css.field}><span>结构模板（已核验）</span>
+                  <GlassSelect
+                    value={blueprintId}
+                    ariaLabel="结构模板"
+                    testId="blueprint"
+                    placeholder="— 选择 —"
+                    options={blueprints.map(b => ({
+                      value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
+                    }))}
+                    onChange={setBlueprintId}
+                  />
+                </div>
+                {blueprint !== undefined && (
+                  <div className={css.bpInfo}>
+                    {blueprint.sections.map((s, i) => (
+                      <span key={i} className={css.bpSection}>
+                        {s.title} · {s.slots.length} 题
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className={css.field}><span>卷型</span>
+                  <GlassSelect
+                    value={kind}
+                    ariaLabel="卷型"
+                    testId="paper-kind"
+                    options={KINDS.map(k => ({ value: k, label: KIND_LABEL[k] ?? k }))}
+                    onChange={setKind}
+                  />
+                </div>
+              </div>
+            )}
+
+            {step === 'scope' && (
+              <div className={css.stepCard} data-paper-step="scope">
+                <h3 className={css.stepCardTitle}>内容范围</h3>
+                <label className={css.field}>已教章节（分号或换行分隔）
+                  <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
+                    placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={6} />
+                </label>
+              </div>
+            )}
+
+            {step === 'structure' && (
+              <div className={css.stepCard} data-paper-step="structure">
+                <h3 className={css.stepCardTitle}>题型结构</h3>
+                {blueprint === undefined
+                  ? <p className={css.empty}>先回到「基本信息」选择试卷结构模板。</p>
+                  : (
+                    <ul className={css.structureList}>
+                      {blueprint.sections.map((s, i) => (
+                        <li key={i} className={css.structureRow}>
+                          <span className={css.structureTitle}>{s.title}</span>
+                          <span className={css.structureMeta}>
+                            {s.slots.length} 题 · {s.slots.reduce((n, x) => n + x.score, 0)} 分
+                          </span>
+                          {s.note !== undefined && <span className={css.structureNote}>{s.note}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+              </div>
+            )}
+
+            {step === 'difficulty' && (
+              <div className={css.stepCard} data-paper-step="difficulty">
+                <h3 className={css.stepCardTitle}>难度</h3>
+                <div className={css.field}><span>难度系数（贵州中高考标准档）</span>
+                  <GlassSelect
+                    value={presetKey}
+                    ariaLabel="难度系数"
+                    testId="difficulty-preset"
+                    options={DIFFICULTY_PRESETS.map(p => ({
+                      value: p.key, label: `${p.label} — 系数 ≈${mixCoefficient(p.mix).toFixed(2)}`,
+                    }))}
+                    onChange={setPresetKey}
+                  />
+                </div>
+                <MixBar mix={preset.mix} />
+              </div>
+            )}
+
+            {step === 'constraints' && (
+              <div className={css.stepCard} data-paper-step="constraints">
+                <h3 className={css.stepCardTitle}>生成约束</h3>
+                <label className={css.field}>排除内容（分号或换行分隔）
+                  <textarea value={exclude} onChange={(e) => { setExclude(e.target.value) }}
+                    placeholder="如：电功率综合计算" rows={5} />
+                </label>
+                <dl className={css.constraintList}>
+                  <div><dt>目标年份</dt><dd>2027 届</dd></div>
+                  <div><dt>教材版本</dt><dd>人教版</dd></div>
+                  <div><dt>结构模板</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
+                </dl>
               </div>
             )}
           </div>
-
-          <div className={css.stepCard}>
-            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>2</span>划定考试范围</h3>
-            <div className={css.fieldRow}>
-              <div className={css.field}><span>卷型</span>
-                <GlassSelect
-                  value={kind}
-                  ariaLabel="卷型"
-                  testId="paper-kind"
-                  options={KINDS.map(k => ({ value: k, label: KIND_LABEL[k] ?? k }))}
-                  onChange={setKind}
-                />
-              </div>
-            </div>
-            <label className={css.field}>已教章节（分号或换行分隔）
-              <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
-                placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={2} />
-            </label>
-            <label className={css.field}>排除内容
-              <textarea value={exclude} onChange={(e) => { setExclude(e.target.value) }}
-                placeholder="如：电功率综合计算" rows={2} />
-            </label>
-          </div>
-
-          <div className={css.stepCard}>
-            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>3</span>设定难度配比</h3>
-            <div className={css.field}><span>难度系数（贵州中高考标准档）</span>
-              <GlassSelect
-                value={presetKey}
-                ariaLabel="难度系数"
-                testId="difficulty-preset"
-                options={DIFFICULTY_PRESETS.map(p => ({
-                  value: p.key, label: `${p.label} — 系数 ≈${mixCoefficient(p.mix).toFixed(2)}`,
-                }))}
-                onChange={setPresetKey}
-              />
-            </div>
-            <MixBar mix={preset.mix} />
-          </div>
         </div>
 
-        <aside className={css.wizardSide}>
+        <aside className={css.workbenchSide} aria-label="试卷摘要">
           <div className={css.summaryCard}>
             <h3 className={css.summaryTitle}>试卷摘要</h3>
             <dl className={css.summaryList}>
-              <div><dt>结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
-              <div><dt>满分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
+              <div><dt>规范 Profile</dt><dd>{blueprint === undefined ? '未选择' : blueprint.policyLabel ?? '未标注'}</dd></div>
+              <div><dt>试卷结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
+              <div><dt>总分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
+              <div><dt>题量</dt><dd>{blueprint === undefined ? '—' : `${totalQuestions} 题`}</dd></div>
               <div><dt>卷型</dt><dd>{KIND_LABEL[kind] ?? kind}</dd></div>
-              <div><dt>章节范围</dt><dd>{chapters.trim() === '' ? '未填写' : `${chapters.split(/[;；\n]/).filter(s => s.trim() !== '').length} 章`}</dd></div>
+              <div><dt>知识覆盖</dt><dd>{chapterCount === 0 ? '未填写' : `${chapterCount} 章`}</dd></div>
               <div><dt>难度目标</dt><dd>{coefficientLabel(mixCoefficient(preset.mix))}</dd></div>
             </dl>
-            {blueprint?.policyLabel !== undefined && <p className={css.policy}>{blueprint.policyLabel}</p>}
-            <button type="button" className={css.primary} disabled={busy || blueprint === undefined}
-              onClick={() => { void create() }}>
-              {busy ? '创建中…' : '生成双向细目表'}
-            </button>
-            <p className={css.summaryHint}>确认细目表后进入 AI 起草与逐题审核</p>
+            {/* Two runtimes the paper is judged by, neither of which has run
+                yet. Rendered as the honest pending state — never a result that
+                has not been computed. */}
+            <ul className={css.statusList}>
+              <li className={css.statusRow}>
+                <span className={css.statusName}>物理验证<em className={css.statusEn}>Physics Verification</em></span>
+                <span className={clsx(css.statusPill, css.statusPending)}>待生成</span>
+              </li>
+              <li className={css.statusRow}>
+                <span className={css.statusName}>考试规范校验<em className={css.statusEn}>Exam Compliance</em></span>
+                <span className={clsx(css.statusPill, css.statusPending)}>待检查</span>
+              </li>
+            </ul>
+            <p className={css.summaryHint}>
+              双向细目表确认后 AI 起草；物理验证通过、考试规范校验到达
+              <code className={css.code}>READY_FOR_TEACHER_REVIEW</code> 再由教研复核。
+            </p>
           </div>
         </aside>
+
+        <div className={css.workbenchActions}>
+          <button type="button" className={css.primary} disabled={busy || blueprint === undefined}
+            onClick={() => { void create() }}>
+            {busy ? '创建中…' : '生成双向细目表'}
+          </button>
+          <button type="button" className={css.miniBtn} onClick={onReview}>前往审核</button>
+          {blueprint === undefined && <span className={css.actionHint}>请先选择试卷结构模板</span>}
+        </div>
       </div>
     </section>
   )

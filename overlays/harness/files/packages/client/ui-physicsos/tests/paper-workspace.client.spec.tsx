@@ -41,7 +41,9 @@ const useAuthAs = (role?: AuthUser['role']) => {
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
-const t = (key: string): string => key
+/* Only the back control is localised; everything else is Chinese-only and the
+   keys pass straight through. */
+const t = (key: string): string => (key === 'paper.backToHome' ? '返回首页' : key)
 
 const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   listSources: vi.fn().mockResolvedValue([]),
@@ -89,15 +91,34 @@ describe('PaperWorkspace', () => {
     expect((await screen.findAllByText('1')).length).toBeGreaterThan(0)
   })
 
-  it('shows the three-step wizard and summary card on the new-paper tab', async () => {
+  it('shows the builder steps, one step at a time, with the live summary', async () => {
     render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
-    expect(await screen.findByText('选择试卷结构')).toBeTruthy()
-    expect(screen.getByText('划定考试范围')).toBeTruthy()
-    expect(screen.getByText('设定难度配比')).toBeTruthy()
+    /* The step rail names every step… */
+    for (const label of ['基本信息', '内容范围', '题型结构', '难度', '生成约束']) {
+      expect(screen.getByRole('button', { name: label })).toBeTruthy()
+    }
+    /* …but exactly one step's form is mounted at a time. */
+    expect(await screen.findByTestId('blueprint')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="basic"]')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="scope"]')).toBeNull()
+    expect(document.querySelector('[data-paper-step="difficulty"]')).toBeNull()
+
+    /* The summary column is present and never claims a result that has not
+       been computed. */
     expect(screen.getByText('试卷摘要')).toBeTruthy()
-    const seg = (t: string) => screen.getByText(
-      (_content, el) => el?.textContent === t,
-    )
+    expect(screen.getByText('待生成')).toBeTruthy()
+    expect(screen.getByText('待检查')).toBeTruthy()
+    expect(screen.getByText('物理验证')).toBeTruthy()
+    expect(screen.getByText('考试规范校验')).toBeTruthy()
+  })
+
+  it('switches the visible form when another step is chosen', async () => {
+    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: '难度' }))
+    expect(await screen.findByText('难度系数（贵州中高考标准档）')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="difficulty"]')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="basic"]')).toBeNull()
+    const seg = (label: string) => screen.getByText((_content, el) => el?.textContent === label)
     expect(seg('基础 55%')).toBeTruthy()
     expect(seg('中档 35%')).toBeTruthy()
     expect(seg('提高 10%')).toBeTruthy()
@@ -206,5 +227,42 @@ describe('PaperWorkspace role gate', () => {
       expect(await screen.findByRole('button', { name: /新建试卷/ }), role).toBeTruthy()
       view.unmount()
     }
+  })
+})
+
+/**
+ * The way out.
+ *
+ * The studio is a full-takeover surface: without a control that leaves it the
+ * only exit is the browser's history, which a screen-reader or keyboard user
+ * cannot be asked to find. It calls the shell's own `openSurface`, the same
+ * seat every other surface uses to return `home`.
+ */
+describe('PaperWorkspace back control', () => {
+  afterEach(() => { cleanup() })
+
+  it('leaves for the home surface, with a localised accessible name', () => {
+    const openSurface = vi.fn()
+    render(
+      <PaperWorkspace
+        api={stubApi()}
+        useAuth={useAuthAs('TEACHER')}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+        t={t}
+        openSurface={openSurface}
+      />,
+    )
+    const back = screen.getByRole('button', { name: '返回首页' })
+    fireEvent.click(back)
+    expect(openSurface).toHaveBeenCalledTimes(1)
+    expect(openSurface).toHaveBeenCalledWith('home')
+  })
+
+  it('renders no back control when the seat is absent, and nothing harmful', () => {
+    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    expect(screen.queryByRole('button', { name: '返回首页' })).toBeNull()
+    /* The rest of the header is untouched — the title still anchors the page. */
+    expect(screen.getByRole('heading', { name: /出卷工作台/ })).toBeTruthy()
   })
 })

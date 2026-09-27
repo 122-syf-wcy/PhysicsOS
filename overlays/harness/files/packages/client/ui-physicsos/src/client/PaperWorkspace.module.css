@@ -21,18 +21,54 @@
 
 /* ---- hero band ---- */
 
+/* ---- workspace header ---- */
+
+/* A workbench header, not a marketing hero: the surface proves itself in the
+   tools below, so the band carries identity and the way out only. */
 .hero {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 32px;
-  background-image:
-    linear-gradient(90deg, var(--dsw-alias-bg-base, #f3f6fa) 0%, color-mix(in srgb, var(--dsw-alias-bg-base, #f3f6fa) 82%, transparent) 48%, color-mix(in srgb, var(--dsw-alias-bg-base, #f3f6fa) 30%, transparent) 78%),
-    url('/physicsos/paper-portal-hero.jpg');
-  background-size: cover;
-  background-position: center 32%;
+  gap: 14px;
+  flex: none;
+  padding: 12px 28px;
+  background-color: var(--physics-glass-fill-strong, rgba(255, 255, 255, 0.82));
+  background-image: var(--physics-glass-sheen);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
   border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* Leave the surface — the first thing the eye meets, reading as an exit
+   rather than a primary action. */
+.back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.back:hover {
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--physics-tint-accent-ink, #2563eb);
+  outline-offset: 2px;
+}
+
+.backArrow {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .heroText {
@@ -491,20 +527,143 @@
   gap: 12px;
 }
 
-/* ---- new-paper wizard ---- */
+/* ---- paper builder (workbench tier) ---- */
 
-.wizard {
+/* Left ≈55% carries the step rail and the active step's form; right ≈45% is
+   the live summary. Neither column is capped: the workbench consumes the whole
+   panel so there is no dead region beside it. */
+.workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 55fr) minmax(280px, 45fr);
+  gap: 18px;
   align-items: start;
 }
 
-.wizardMain {
+.workbenchMain {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
+}
+
+.stepNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--physics-glass-border-soft);
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+}
+
+.stepNavItem {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.stepNavItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.stepNavActive {
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--physics-glass-rim);
+}
+
+.stepNavNo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  background: var(--physics-tint-accent, #e8effa);
+  color: var(--physics-tint-accent-ink, #2563eb);
+  flex: none;
+}
+
+.stepForm {
+  min-width: 0;
+}
+
+.stepNavLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.structureList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.structureRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.structureTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.structureMeta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.structureNote {
+  font-size: 12px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.constraintList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.constraintList > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.constraintList dt {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.constraintList dd {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  text-align: right;
 }
 
 .stepCard {
@@ -559,9 +718,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.wizardSide {
+.workbenchSide {
   position: sticky;
   top: 0;
+  min-width: 0;
 }
 
 .summaryCard {
@@ -617,7 +777,77 @@
   margin: 0;
   font-size: 11px;
   color: var(--dsw-alias-label-caption);
-  text-align: center;
+  line-height: 1.6;
+}
+
+.summaryHint .code,
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The two runtimes that judge the paper, shown as honest pending states. */
+.statusList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  padding-top: 12px;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statusName {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.statusEn {
+  font-size: 10.5px;
+  font-style: normal;
+  color: var(--dsw-alias-label-caption);
+}
+
+.statusPill {
+  flex: none;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.statusPending {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Bottom action row — one place for Generate and the hand-off to Review. */
+.workbenchActions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  margin-top: 2px;
+}
+
+.actionHint {
+  font-size: 12px;
+  color: var(--dsw-alias-label-caption);
 }
 
 /* ---- difficulty mix bar ---- */
