@@ -22,7 +22,7 @@ import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
 import { createAuthController, isTeachingRole, type AuthState } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
-import { HomeHero } from './HomeHero.tsx'
+import { HomeHero, homeElection } from './HomeHero.tsx'
 import { HomeBrandMark } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceInjected } from './LabWorkspace.tsx'
@@ -455,32 +455,12 @@ export function apply(ctx: ClientContext): void {
     }),
   }, SidebarFooter))
 
-  /* The blank-Session hero: the product mark leads the shell's headline, and
-     the brand stage plus quick actions ride the full-width entry above the
-     composer. */
+  /* The blank-Session hero: the product mark leads the shell's headline. The
+     headline itself belongs to the shell's own hero phase, which the Home page
+     (below, on the composer chain) stands in for while the Session is blank. */
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
     name: 'conversation.hero.brand.mark',
   }, HomeBrandMark))
-
-  ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
-    name: 'conversation.input.dock',
-    id: 'physicsos-home',
-    order: 10,
-    locale: NS,
-    inject: () => ({
-      hooks: { recentExperiments: surface.recent },
-      /* "新建物理实验" is a creation intent, so it lands on the picker rather
-         than on the magnetic demo — the same chooser the sidebar uses. A recent
-         entry hands its stored scene over and restores it directly. */
-      openSurface: (
-        id: 'home' | 'lab' | 'record',
-        sceneRef?: Parameters<typeof surface.open>[1],
-      ) => {
-        if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
-        else surface.open(id, sceneRef)
-      },
-    }),
-  }, HomeHero))
 
   const controller = createPhysicsProfileController(undefined, undefined, auth.userStorage)
 
@@ -604,6 +584,40 @@ export function apply(ctx: ClientContext): void {
       if (result.ok) surface.open('home')
       return result
     }
+
+    /* PhysicsOS Home. Home IS the blank-Session Conversation panel, so the
+       product claims the composer seat through the chain's own overlay seam
+       (`overlay: true`): while the Session carries no messages the election
+       below stands the product page in for the shell's hero chrome — its
+       headline, workspace chip and agent-preset row — and for its chat
+       composer. The student therefore sees exactly ONE input (the hero one) and
+       no Harness workspace / folder / mode identity at first level. An engaged
+       Session, a pending approval or a pending question declines the election
+       and the resident transcript composer returns unchanged; priority 100 puts
+       this page last in the chain so every interaction takeover wins.
+       See docs/04 §Home. */
+    scope.slots.inject('conversation.composer', () => scope.slots.register({
+      name: 'conversation.composer',
+      priority: 100,
+      select: homeElection,
+      locale: NS,
+      inject: () => ({
+        hooks: { recentExperiments: surface.recent },
+        /* 开始探索 hands the typed prompt to the tutor on the student's current
+           Session; the solved scene card streams back into the conversation. */
+        submitPrompt: submitToTutor,
+        /* 物理实验室 opens the chooser rather than a demo scene — the same
+           chooser the sidebar uses; a recent card hands its stored scene over
+           and restores it directly. 题目空间 is the problem surface. */
+        openSurface: (
+          id: 'home' | 'lab' | 'record',
+          sceneRef?: Parameters<typeof surface.open>[1],
+        ) => {
+          if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
+          else surface.open(id, sceneRef)
+        },
+      }),
+    }, HomeHero))
 
     /* The product surfaces are global panels: 物理实验室 / 出卷专区 / 反馈 /
        资源库 / 学习记录 / 管理后台 each occupy a `main` key, and the sidebar's

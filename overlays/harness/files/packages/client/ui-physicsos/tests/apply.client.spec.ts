@@ -76,7 +76,8 @@ async function bench() {
     name: 'conversation',
     children: {
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
-      'conversation.input.dock': { kind: 'list', scope: 'session' },
+      /* Home stands in for the whole composer while the Session is blank. */
+      'conversation.composer': { kind: 'chain', scope: 'session' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       /* Declared by the chat view in the real tree; the bench declares it so
@@ -122,7 +123,15 @@ describe('ui-physicsos apply', () => {
     expect(mainPanels.map(entry => entry.options.key))
       .toEqual(expect.arrayContaining(Object.values(PHYSICS_PANEL_IDS)))
     expect(b.slots.entries('conversation.hero.brand.mark')).toHaveLength(1)
-    expect(b.slots.entries('conversation.input.dock')).toHaveLength(1)
+    /* The Home page claims the composer chain, and only for a blank Session. */
+    const homes = b.slots.entries('conversation.composer')
+    expect(homes).toHaveLength(1)
+    expect(homes[0]!.options.priority).toBe(100)
+    expect(typeof homes[0]!.select).toBe('function')
+    expect(homes[0]!.select!({ session: { blank: true }, pendingInteraction: undefined }))
+      .toEqual({ home: true })
+    expect(homes[0]!.select!({ session: { blank: false }, pendingInteraction: undefined }))
+      .toBeNull()
     expect(b.slots.entries('conversation.hero.agentPreset')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')[0]!.options.priority).toBe(-1)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(1)
