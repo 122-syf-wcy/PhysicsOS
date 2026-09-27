@@ -47,8 +47,8 @@
       ],
       "entry": "packages/physicsos/paper-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "e678323e1646dcfbd079c0c910f2654e46038e1fc42f9c05b0ffc2d824e78dd5",
-      "signature": "ed25519:VV3ZwnGD0nV3DOooJOO9wmCx/SVhIaZgmD0Ck+OmjFnPPrffYY3kBgqSbN3TQEqojaRVn4YuNoeWTYaorMSNDw==",
+      "sha256": "383815cfc035b9fb14fe4c461e072d2c709ae8abfb3100c4a50215eb41ac18bc",
+      "signature": "ed25519:W407nM+mn73DIFcqmrU+i8YuNqbqhCvRK/KfNrMbQkc3M+GV1dYutgELjp2DyhyLTVulTtsdc9C1CEYxrcqsAw==",
       "description": "Question-paper intake, drafting, verification, approval, and export."
     },
     {
