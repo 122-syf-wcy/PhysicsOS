@@ -1,7 +1,9 @@
 # PhysicsOS 公测上线报告
 
 - 报告日期：2026-09-27
-- 应用运行时提交：`63c20e6e701b1dc1e4188e66903a82a18306f2cc`
+- 应用运行时基线：`63c20e6e701b1dc1e4188e66903a82a18306f2cc`
+- 品牌与去班级化提交：`3d7e398a77c82209452224ee9770a46bbc8b4213`
+- 最新证据与截图提交：`543d7a57`
 - 正式地址：<https://physics.dongsiwei.com>
 - 部署目录：`/opt/physicsos`
 - 发布结论：**可以进入单副本、开放注册公测**。核心可用性、账号隔离、密钥权限、浏览器安全头和运维观测已经过实际生产复验；下文登记的项目仍不满足无限规模或长期无人值守生产的要求。
@@ -50,7 +52,9 @@ PhysicsOS app container
 | 应用监听 | 主机回环 `127.0.0.1:3080`，未裸露容器端口 |
 | Compose 服务 | `app`、`postgres`、`redis` 三容器均为 `healthy` |
 | 持久数据 | `app_data`、`postgres_data`、`redis_data` 命名卷 |
-| 应用运行时提交 | `63c20e6e701b1dc1e4188e66903a82a18306f2cc` |
+| 应用运行时基线 | `63c20e6e701b1dc1e4188e66903a82a18306f2cc` |
+| 品牌与产品边界 | `3d7e398a77c82209452224ee9770a46bbc8b4213`（生产增量镜像 `physicsos-app:brand-title-fix`） |
+| 最新证据与截图 | `543d7a57` |
 | 运维与文档 | 跟随 `origin/main`；后续文档、nginx 加固脚本更新不要求重建应用镜像 |
 | 管理员租户 | `PHYSICSOS-OPEN` |
 | 管理员账号 | `admin` |
