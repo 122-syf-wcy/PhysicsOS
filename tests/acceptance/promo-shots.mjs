@@ -52,24 +52,14 @@ const clickNav = async (label) => {
 }
 
 await page.goto(BASE, { waitUntil: 'domcontentloaded' })
-/* 插件加载要十几秒：等到登录门或真正的应用侧栏出现为止。 */
-await page.waitForSelector('[data-physicsos-auth-view="login"], button:has-text("物理实验室")', {
-  timeout: 60_000,
+/* Establish the account through the real auth API, then reload the same browser
+   context so the plugin shell boots against its HttpOnly session cookie. This
+   avoids sampling the auth gate while it is still restoring the product. */
+const login = await page.context().request.post(`${BASE}/physicsos/auth/login`, {
+  data: { username: USER, password: PASSWORD },
 })
-
-/* 登录门 */
-const loginForm = page.locator('[data-physicsos-auth-view="login"]')
-if (await loginForm.isVisible().catch(() => false)) {
-  await loginForm.locator('input[autocomplete="username"]').fill(USER)
-  await loginForm.locator('input[autocomplete="current-password"]').fill(PASSWORD)
-  await loginForm.getByRole('button', { name: /登录/ }).click()
-  try {
-    await loginForm.waitFor({ state: 'hidden', timeout: 90_000 })
-  } catch (error) {
-    const message = (await loginForm.locator('[role="alert"]').allTextContents()).join(' | ')
-    throw new Error(`登录未完成${message === '' ? '' : `：${message}`}`, { cause: error })
-  }
-}
+if (!login.ok()) throw new Error(`登录失败：HTTP ${String(login.status())}`)
+await page.reload({ waitUntil: 'domcontentloaded' })
 await page
   .getByRole('button', { name: '物理实验室' })
   .first()
