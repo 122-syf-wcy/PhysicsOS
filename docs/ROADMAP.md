@@ -62,6 +62,32 @@
 
 该验收须落地为**代码级不变量**，而不仅是一句政策。三个 P0 工作流并行开发不受限，合并顺序固定为 `Provenance → Gate → UI`：UI 不得先落地，再对着仍在变动的类型反复返工。完整记录见 `docs/superpowers/plans/2026-09-27-p0-provenance-program.md`。
 
+## P0.5 考试可信（Exam Trust）
+
+> 物理正确性由 PhysicsOS Engine / Verifier 决定，不由语言模型决定。
+> 考试规范由版本化 Official Exam Profile 决定，不由语言模型记忆决定。
+
+考试可信（P0.5）位于物理可信（P0）之后、实验闭环（P1）之前：出卷要产出「可被教师直接核验」的试卷、答案、解题过程与评分标准，其规范必须来自版本化官方标准，而不是模型的记忆或风格。它把 Exam Standard Runtime 确立为继物理世界运行时、物理编译器之后的第三道护城河，完整决策见 `docs/adr/0003-exam-standard-runtime.md`。
+
+分层顺序为 **P0 物理可信 → P0.5 考试可信 → P1 实验闭环（Physics Lab）→ P2 学习与成长（Learning / Growth）**。
+
+**状态：设计已定 / 实现进行中**（下列契约与验证器并行开发中，尚未发布）。
+
+| 组件                   | 职责                                                                                                                                                                                                     | 状态       |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| OfficialSourceRegistry | 登记每一条规则对应的官方来源（`MOE` / `GZ_EDUCATION_DEPARTMENT` / `GZ_EXAMINATION_AUTHORITY`、标题、日期、url、适用范围），显示已加载与缺失的来源；缺失显示 `⚠ 未确认`，系统不得假装自己知道未加载的内容 | 设计已定   |
+| ExamProfile            | `CN → Guizhou → {Zhongkao \| Gaokao} → {2024 \| 2025 \| 2026 …}` 的版本化考试画像，携带课程标准、试卷蓝图、考试范围、题型分类、素养模型、作答标准、评分标准与官方来源                                    | 设计已定   |
+| Guizhou Zhongkao Pack  | 贵州中考 Exam Standard Pack，锚定《义务教育物理课程标准（2022 年版）》                                                                                                                                   | 设计已定   |
+| Guizhou Gaokao Pack    | 贵州高考 Exam Standard Pack，锚定国家普通高中物理课程标准与贵州 3+1+2 选择考安排（物理为首选科目，省内自主命题）                                                                                         | 设计已定   |
+| PaperBlueprint         | 总分、时长、题型分区、覆盖约束、难度分布、最大同模型重复比；只来自 profile，绝不来自模型                                                                                                                 | 设计已定   |
+| QuestionTaxonomy       | 正式题型分类：选择{单选,多选}、实验{仪器读数,实验设计,数据处理,误差分析,探究实验}、计算{单模型,多过程,综合}、情境题                                                                                      | 设计已定   |
+| AnswerStandard         | 三级作答严格区分：FinalAnswer / ExamSolution（公式→代入→结果→单位，以「答：」收束）/ LearningExplanation；混用即为缺陷                                                                                   | 设计已定   |
+| ScoringRubric          | 结构化 `ScoringPoint { id, score, criterion, evidence ∈ EQUATION\|SUBSTITUTION\|RESULT\|UNIT\|DIRECTION\|REASONING }`，分值拆分来自已确认的评分标准                                                      | 设计已定   |
+| ExamComplianceVerifier | 与 PhysicsVerifier 分工：在范围内 / 题型合法 / 分值合法 / 作答格式合法 / 难度在目标区间 / 蓝图覆盖成立                                                                                                   | 实现进行中 |
+| ExamComplianceReport   | 汇总上述维度与生效的 source-profile id，终点为 `READY_FOR_TEACHER_REVIEW`                                                                                                                                | 设计已定   |
+
+**反伪官方与「不臆造官方数据」原则**：生成的产物必须标注 **PhysicsOS 模拟试卷 / 非官方试卷**，系统不得把输出冒充官方试卷，也不得自我认证，教师核验始终在环；任何未加载的官方标准、蓝图数值或来源元数据一律标记未确认，禁止以模型记忆补全。蓝图中的题目数量与分值不硬编码，只在该年度官方标准读入后才填入。官方真题语料因版权 / 许可未决而**有意暂不摄入**；2026 年贵州蓝图数值缺失，运行时须报告未确认。
+
 ## P1 实验闭环排序
 
 依据：打开实验 30 秒内，用户应能测量、探针、查看物理事件时间线并回放——这比再加一个 AI 面板更能证明存在真实的物理运行时。
