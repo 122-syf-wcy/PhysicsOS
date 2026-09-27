@@ -33,7 +33,7 @@ import process, { stdout } from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 /**
- * Whether an auth rejection is the documented guest answer rather than a fault.
+ * Whether a refusal is the documented guest answer rather than a fault.
  *
  * `/physicsos/auth/me` answers 401 to an anonymous visitor, and the client calls
  * it on every boot. The shared Harness `/api` policy answers 401 to every guest
@@ -41,12 +41,22 @@ import { fileURLToPath } from 'node:url'
  * those boot calls as console errors, so the gates excuse them only while the
  * browser has no `physicsos_session` cookie; after login every rejection still
  * fails the suite.
+ *
+ * Since 0.1.7-rc.2 a browser that exchanged the launch token is ALREADY
+ * transport-authenticated, so its guest `/api` boot calls no longer reach the
+ * 401 tier: `Connection.admit` consults the product policy's `admitUpgrade`,
+ * which answers `null` for an absent product session and turns the refusal into
+ * 403. Both statuses are therefore the same guest state, and both are excused
+ * on the same terms — only while the product session is absent.
  */
 export const isExpectedGuest401 = (url, text = '') => {
-  const unauthorized = `${url} ${text}`.toLowerCase().includes('401')
-    || `${url} ${text}`.toLowerCase().includes('unauthorized')
+  const haystack = `${url} ${text}`.toLowerCase()
+  const refused = haystack.includes('401')
+    || haystack.includes('unauthorized')
+    || haystack.includes('403')
+    || haystack.includes('forbidden')
     || (text.includes('/api/events.') && text.includes('403'))
-  if (!unauthorized) return false
+  if (!refused) return false
   return url.includes('/physicsos/auth/me')
     || url.includes('/api/')
     || text.includes('/api/')
@@ -74,6 +84,17 @@ export const HARNESS = path.join(ROOT, 'vendor', 'deepseek-harness')
 /** Password the isolated server bootstraps its SUPER_ADMIN with. */
 export const ACCEPTANCE_ADMIN_PASSWORD = 'acceptance-admin-pw-2026'
 export const ACCEPTANCE_ADMIN_USERNAME = 'admin'
+
+/**
+ * Prefix of the Harness transport cookie (`Connection`/`BrowserAuth`).
+ *
+ * Since 0.1.7-rc.2 every document request is gated behind a per-process launch
+ * token: `dsh web` prints an authenticated URL (`/?token=…`), and only a browser
+ * that has visited it once — exchanging the token for this authority-bound,
+ * signed `dsh-auth-<hash>` cookie — is served `index.html`. It is NOT the
+ * product session; {@link resetSession} preserves it while dropping the account.
+ */
+const TRANSPORT_COOKIE_PREFIX = 'dsh-auth-'
 
 /**
  * Whether `node` can actually compute argon2id — not merely expose the entry
@@ -113,7 +134,9 @@ const argon2Works = () => {
  * rewrites it as a nested `{version, records, refs}` document that this pinned
  * harness cannot parse, so the flat reference map is rebuilt here.
  *
- * @returns the base URL, the home path, and a `stop()` that tears both down.
+ * @returns the clean origin (`base`), the tokenized launch URL (`authUrl`, to
+ *   be handed to {@link openAcceptance} so the browser exchanges it for the
+ *   transport cookie), the home path, and a `stop()` that tears both down.
  */
 export const startIsolatedServer = async ({ port = 3099 } = {}) => {
   if (!argon2Works()) {
@@ -149,45 +172,61 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
     writeFileSync(target, body, { mode: 0o600 })
   }
 
-  const base = `http://127.0.0.1:${port}`
   const child = spawn(
     process.execPath,
-    ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', '--port', String(port)],
+    ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', '--port', String(port), '--no-open'],
     {
       cwd: HARNESS,
       env: { ...process.env, DSH_HOME: home, PHYSICSOS_ADMIN_PASSWORD: ACCEPTANCE_ADMIN_PASSWORD },
-      stdio: ['ignore', 'ignore', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
   )
+
+  /* Drain both streams: the launch URL line arrives on stdout, and a boot
+     failure would otherwise be invisible behind a bare 90 s timeout. */
+  let output = ''
+  child.stdout.on('data', (chunk) => { output += String(chunk) })
+  child.stderr.on('data', (chunk) => { output += String(chunk) })
 
   const stop = () => {
     if (child.exitCode === null) child.kill('SIGTERM')
     rmSync(home, { recursive: true, force: true })
   }
 
+  /* 0.1.7-rc.2 gates every document behind a per-process launch token, printed
+     as `dsh web: <url>?token=\u2026` once the Loader tree has settled and the
+     required-entry audit passed \u2014 which is exactly the readiness signal the old
+     `/physicsos/auth/me` 401 poll used to be (that route now 401s even before
+     the shell is up, so it no longer means ready). Visiting this URL once mints
+     the transport cookie; `base` stays the clean origin the walk afterwards. */
+  const launchUrlOf = (text) => /dsh web:\s+(\S+)/.exec(text)?.[1]
   const deadline = Date.now() + 90_000
+  let authUrl
   for (;;) {
     if (child.exitCode !== null) {
       stop()
-      throw new Error(`isolated dsh web exited with code ${child.exitCode} before becoming ready`)
+      throw new Error(
+        `isolated dsh web exited with code ${child.exitCode} before becoming ready\n${output.slice(-2000)}`,
+      )
     }
-    try {
-      const response = await fetch(`${base}/physicsos/auth/me`)
-      /* 401 is the ready signal: the route is mounted and answering guests. */
-      if (response.status === 401) break
-    } catch {
-      /* not listening yet */
-    }
+    authUrl = launchUrlOf(output)
+    if (authUrl !== undefined) break
     if (Date.now() > deadline) {
       stop()
-      throw new Error(`isolated dsh web on ${base} did not become ready within 90s`)
+      throw new Error(
+        `isolated dsh web on port ${port} did not print its launch URL within 90s\n${output.slice(-2000)}`,
+      )
     }
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 200))
   }
 
+  const base = new URL(authUrl).origin
   stdout.write(`  \u2139 isolated server ${base} (home ${home})\n`)
-  return { base, home, stop }
+  return { base, authUrl, home, stop }
 }
+
+/** The one rail row a signed-in account always carries (see {@link waitForShell}). */
+const PRODUCT_RAIL_ENTRY = '物理实验室'
 
 /**
  * Wait for the real product shell — specifically its navigation rail.
@@ -199,10 +238,19 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
  * though the entry is there a moment later. Every assertion about the rail
  * goes through this first, so "offered to this role" is answered about a
  * mounted nav rather than about a half-painted one.
+ *
+ * Since 0.1.7-rc.2 the sidebar shell names its navigation landmark from the
+ * upstream locale ("全局面板" / "Global panels") instead of the product, so the
+ * rail is located by the product row it carries — a PhysicsOS panel entry the
+ * shell renders inside that `<nav>`. Anchoring on the row, not a bare
+ * `getByRole('navigation')`, also keeps the wait off the chat surface's own
+ * turn-navigator landmark.
  */
 export const waitForShell = async (page) => {
   await page
-    .getByRole('navigation', { name: 'PhysicsOS' })
+    .getByRole('navigation')
+    .getByRole('button', { name: PRODUCT_RAIL_ENTRY, exact: true })
+    .first()
     .waitFor({ state: 'visible', timeout: 30_000 })
 }
 
@@ -296,7 +344,15 @@ export const loginUser = async (page, { username, password, remember = true }) =
  * identity hint — and reloads, which is how the app itself re-reads both.
  */
 export const resetSession = async (page, base) => {
-  await page.context().clearCookies()
+  const context = page.context()
+  /* The cookie that carries the product session is dropped, but the Harness
+     transport cookie is not: it authenticates the document itself, so clearing
+     it would 401 the reload before the gate could paint. Keep only that layer. */
+  const transport = (await context.cookies()).filter(
+    (cookie) => cookie.name.startsWith(TRANSPORT_COOKIE_PREFIX),
+  )
+  await context.clearCookies()
+  if (transport.length > 0) await context.addCookies(transport)
   /* Navigate BEFORE touching storage: a fresh page sits on about:blank, where
      `localStorage` is a SecurityError rather than an empty store. */
   await page.goto(`${base}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -307,11 +363,30 @@ export const resetSession = async (page, base) => {
 }
 
 /**
+ * Whether to launch headless. Defaults to a real headful browser wherever a
+ * display exists (so the walk renders exactly what a user sees), and headless
+ * on a display-less host. `ACCEPTANCE_HEADLESS=1` forces headless, `=0` forces
+ * headful — the documented switch for a CI box with a virtual display.
+ */
+const resolveHeadless = () => {
+  const override = process.env.ACCEPTANCE_HEADLESS
+  if (override !== undefined && override !== '') return override !== '0'
+  const hasDisplay = process.platform === 'darwin'
+    || process.env.DISPLAY !== undefined
+    || process.env.WAYLAND_DISPLAY !== undefined
+  return !hasDisplay
+}
+
+/**
  * Launch the browser and wire the gate.
  *
  * `settleMs` delays every screenshot so entrance choreography (staggered card
  * reveals on the library home) lands before capture; suites without entrance
  * animation keep the default 0.
+ *
+ * `authUrl` is the tokenized launch URL from {@link startIsolatedServer}: when
+ * given, the browser visits it once so the Harness exchanges the process token
+ * for the transport cookie, after which the clean `base` serves the shell.
  */
 export const openAcceptance = async (
   scriptUrl,
@@ -320,6 +395,7 @@ export const openAcceptance = async (
     locale = 'zh-CN',
     settleMs = 0,
     base = BASE,
+    authUrl,
     /** 4xx paths this suite asks the host for ON PURPOSE (see `provokedBy`). */
     expectErrorPaths = [],
   } = {},
@@ -347,7 +423,7 @@ export const openAcceptance = async (
     return false
   }
 
-  const browser = await chromium.launch()
+  const browser = await chromium.launch({ headless: resolveHeadless() })
   /* Product copy and acceptance selectors are Chinese; pin the browser locale
      instead of inheriting the developer machine's language. */
   const context = await browser.newContext({ viewport, locale })
@@ -380,13 +456,14 @@ export const openAcceptance = async (
   })
   page.on('response', async (response) => {
     if (response.status() < 400) return
-    /* `/physicsos/auth/me` answers 401 to an anonymous visitor on boot — that
-       is the documented contract, not an error. Every other 4xx/5xx still
-       fails the gate, so a genuine auth or API fault cannot hide here. */
+    /* `/physicsos/auth/me` and the `/api` boot probes answer 401 — or 403 once
+       the transport cookie is present — to an anonymous visitor on boot; that
+       is the documented guest contract, not an error. Every refusal that
+       survives login still fails the gate, so a genuine auth or API fault
+       cannot hide here. */
     const url = response.url()
     if (
-      response.status() === 401 &&
-      isExpectedGuest401(url, '401') &&
+      isExpectedGuest401(url, String(response.status())) &&
       !(await hasSession())
     ) return
     if (provoked(url)) return
@@ -398,6 +475,12 @@ export const openAcceptance = async (
       window.__unhandled.push(String(event.reason).slice(0, 300))
     })
   })
+
+  /* Exchange the launch token for the transport cookie before the suite takes
+     over the page. The boot's guest 401s are excused above (no session yet). */
+  if (authUrl !== undefined) {
+    await page.goto(authUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  }
 
   /** Screenshot into docs/reports/screenshots/; optional per-shot viewport. */
   const shot = async (name, shotViewport) => {

@@ -28,6 +28,7 @@ const server = await startIsolatedServer({ port: 3095 })
 process.once('exit', () => { server.stop() })
 const { page, base, check, dismissOnboarding, finish } = await openAcceptance(import.meta.url, {
   base: server.base,
+  authUrl: server.authUrl,
   viewport: { width: 1600, height: 1000 },
   settleMs: 300,
 })
