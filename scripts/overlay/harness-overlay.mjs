@@ -50,6 +50,8 @@ const OVERLAY_PATHS = [
   'packages/physicsos/shared-state-host',
   /* Read-only administrator operations metrics (capacity, dependencies, cache). */
   'packages/physicsos/ops-host',
+  /* Administrator plugin catalog and verified preinstalled-plugin controls. */
+  'packages/physicsos/plugin-center',
   /* 平台模型通道池：本机 OpenAI 兼容代理 + 多通道/多 key 轮训与故障转移。 */
   'packages/physicsos/model-pool-host',
   'apps/cli/config/agent-presets/physics-student',
