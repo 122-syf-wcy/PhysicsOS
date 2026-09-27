@@ -12,6 +12,8 @@
 > 本文档定义 PhysicsOS 中所有 Agent 相关能力的技术边界与运行方式。
 >
 > **核心原则：DeepSeek Harness 是 Agent 基础设施，不是 PhysicsOS 业务核心。**
+>
+> **状态标记（2026-09-27）**：本文档描述的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 适配对目前**未接线**（**非生产链路**），状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。文中所有出现该适配对的链路图与包结构均为设计稿，不代表当前生产架构；真实生产链路见 `docs/HARNESS-UPSTREAM.md`：Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 ---
 
@@ -170,6 +172,8 @@ agent-dsh-adapter
 
 接入。
 
+> **状态标记（未接线 / 非生产链路）**：`@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+
 ---
 
 # 3. Agent 总体架构
@@ -213,6 +217,8 @@ agent-dsh-adapter
                               │
       Model / Session / Loop / Tools / Prompt / Storage
 ```
+
+> **状态标记（未接线 / 非生产链路）**：图中 `PhysicsAgentRuntime API → DSH Adapter → DeepSeek Harness` 这一支为设计稿：`@physicsos/agent-runtime` 与 `@physicsos/agent-dsh-adapter` 当前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 ---
 
@@ -285,6 +291,8 @@ Physics Profile
 PhysicsOS Agent Runtime
 ```
 
+> **状态标记（未接线 / 非生产链路）**：链中的 `DSH Adapter` / `PhysicsOS Agent Runtime` 两层对应当前的 `@physicsos/agent-dsh-adapter` / `@physicsos/agent-runtime`，二者**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+
 理由：
 
 ```text
@@ -307,6 +315,8 @@ packages/agent-dsh-adapter
 
 直接依赖 DeepSeek Harness。
 
+> **状态标记（未接线 / 非生产链路）**：`packages/agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与 `packages/agent-runtime`（`@physicsos/agent-runtime`）当前**未接线**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。边界规则本身仍然有效，但今天没有任何模块经由它接入 Harness。
+
 其他模块：
 
 ```text
@@ -325,6 +335,8 @@ physics-scene
 # 7. PhysicsAgentRuntime API
 
 统一运行时接口：
+
+> **状态标记（未接线 / 非生产链路）**：该接口及其 `@physicsos/agent-runtime` 包目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；`@physicsos/agent-dsh-adapter` 中对应方法均为 `Promise.reject(new UnimplementedError(...))` 骨架。以下为设计稿，非当前调用面。
 
 ```ts
 interface PhysicsAgentRuntime {
@@ -3081,6 +3093,8 @@ Physics Audit
 
 # 132. Local Agent Runtime
 
+> **状态标记（未接线 / 非生产链路）**：本轮 §132–§134 出现的 `DSH Adapter → DeepSeek Harness` 链路所对应的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；当前可用的桌面 Agent 通道是 `apps/desktop/sidecar/bridge.mjs`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 引擎。
+
 未来 Desktop 可以：
 
 ```text
@@ -3515,6 +3529,8 @@ packages/
 └── agent-skills/
 ```
 
+> **状态标记（未接线 / 非生产链路）**：`agent-runtime/` 与 `agent-dsh-adapter/` 为设计稿中的包位；当前仓库中 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` **未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。当前真实在线的是 `agent-tools/`（`@physicsos/agent-tools` → 物理引擎 / verifier）。
+
 ---
 
 # 153. agent-runtime
@@ -3531,6 +3547,8 @@ Agent Client Events
 ```
 
 禁止直接依赖 Harness。
+
+> **状态标记（未接线 / 非生产链路）**：`@physicsos/agent-runtime` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；其全仓唯一消费者是 `@physicsos/agent-dsh-adapter`。以下职责为设计稿。
 
 ---
 
@@ -3549,6 +3567,8 @@ Resume / Fork Adapter
 ```
 
 这是 PhysicsOS Agent/Domain 层唯一依赖 Harness Agent Runtime 的 Package。`ui-physicsos` 仅是客户端展示集成边界，不承担 Session、Run、Tool 或模型调用适配。
+
+> **状态标记（未接线 / 非生产链路）**：`@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；其 `createSession` / `send` / `resume` / `cancel` / `getSession` / `forkSession` 均为 `Promise.reject(new UnimplementedError(...))` 骨架，无生产路径 import。以下职责为设计稿。
 
 ---
 
@@ -3634,6 +3654,8 @@ Repair
 Resume
 Failure
 ```
+
+> **状态标记**：真实的物理状态机不在 `agent-workflow`，而在 `overlays/harness/files/packages/physicsos/paper-host/src/domain.ts:277`（`spec|drafting|checking|review|approved|exported|failed`）与 `packages/physics-scene/src/scene-branch.ts`；`packages/question-core/src/workflow.ts` 只有阶段枚举，不是转移机。见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。
 
 ---
 

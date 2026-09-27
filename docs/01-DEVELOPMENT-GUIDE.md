@@ -195,6 +195,8 @@ DSH Adapter
 DeepSeek Harness
 ```
 
+> **状态标记（未接线 / 非生产链路）**：链中的 `PhysicsAgentRuntime` / `DSH Adapter` 对应的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+
 ---
 
 # 4. 总体工程结构
@@ -320,6 +322,8 @@ physics-os/
 ├── infra/
 └── scripts/
 ```
+
+> **状态标记（未接线 / 非生产链路）**：结构中的 `agent-runtime/` 与 `agent-dsh-adapter/` 为设计稿包位；当前 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` **未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实在线的是 `agent-tools/`（`@physicsos/agent-tools` → 物理引擎 / verifier）。
 
 ---
 
@@ -584,6 +588,8 @@ Tool Call
 Agent Status
 Streaming
 ```
+
+> **状态标记（未接线 / 非生产链路）**：`PhysicsAgentRuntime`（`@physicsos/agent-runtime`）目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以上为设计稿。
 
 ---
 
@@ -1551,6 +1557,8 @@ PhysicsAgentRuntime
 └── Diagnostic Role
 ```
 
+> **状态标记（未接线 / 非生产链路）**：`PhysicsAgentRuntime`（`@physicsos/agent-runtime`）目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下为设计稿。
+
 ---
 
 # 46. Agent 不等于 7 个常驻模型
@@ -1576,6 +1584,8 @@ Workflow
 # 47. PhysicsAgentRuntime API
 
 上层只依赖统一接口。
+
+> **状态标记（未接线 / 非生产链路）**：该接口及其 `@physicsos/agent-runtime` 包目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下为设计稿。
 
 ```ts
 interface AgentRuntime {
@@ -1616,6 +1626,8 @@ DSH Adapter
      ↓
 DeepSeek Harness
 ```
+
+> **状态标记（未接线 / 非生产链路）**：`agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与 `agent-runtime`（`@physicsos/agent-runtime`）目前**未接线**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；其方法均为 `Promise.reject(new UnimplementedError(...))` 骨架。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 ---
 

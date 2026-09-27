@@ -109,6 +109,8 @@ docs/
 UI/
 ```
 
+> **追记（2026-09-27）**：`packages/agent-runtime` / `packages/agent-dsh-adapter` 自 PHASE-01 起即为**未接线（非生产链路）**骨架，至今**无生产消费者**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下是当时的历史记录。
+
 技术锁定（npm 查询 + Harness 兼容，不是文档旧版本猜测）：
 
 - React `19.2.8` / Vite `8.2.1` / TypeScript `6.0.3`（Harness 限制 `<7`）
@@ -126,6 +128,8 @@ UI/
 | `@physicsos/agent-dsh-adapter` | 唯一 Harness 边界；方法拒绝假成功                | 骨架                   |
 | `@physicsos/ui`                | tokens / primitives / domain components          | 完成                   |
 | `@physicsos/web`               | 产品 UI                                          | UI + fixture           |
+
+> **追记（2026-09-27）**：上表中 `@physicsos/agent-runtime` 与 `@physicsos/agent-dsh-adapter` 至今仍**未接线（非生产链路）**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；后者方法均为 `Promise.reject(new UnimplementedError(...))` 骨架。真实生产 Agent 链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 业务组件未出现 `window.__TAURI__`。  
 `apps/web` 未 import `@deepseek-ai/*`。

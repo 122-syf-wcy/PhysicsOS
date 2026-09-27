@@ -1265,6 +1265,8 @@ agent-dsh-adapter
 
 允许直接依赖 DeepSeek Harness Agent Runtime。
 
+> **状态标记（未接线 / 非生产链路）**：`agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与 `agent-runtime`（`@physicsos/agent-runtime`）目前**未接线**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+
 禁止：
 
 ```text

@@ -1389,6 +1389,8 @@ DSH Adapter
 DeepSeek Harness
 ```
 
+> **状态标记（未接线 / 非生产链路）**：图中 `PhysicsAgentRuntime API` / `DSH Adapter` 对应的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+
 以后 DeepSeek Harness 接口变化，只修改 Adapter。
 
 ---
@@ -2517,6 +2519,8 @@ physics-os/
     └── visual/
 ```
 
+> **状态标记（未接线 / 非生产链路）**：结构中的 `agent-runtime/` 与 `agent-dsh-adapter/` 为设计稿包位；当前 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` **未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实在线的是 `agent-tools/`（`@physicsos/agent-tools` → 物理引擎 / verifier）。
+
 ---
 
 # 60. UI / UX 设计方向
@@ -2685,6 +2689,8 @@ DSH Adapter
         ↓
 DeepSeek Harness
 ```
+
+> **状态标记（未接线 / 非生产链路）**：`PhysicsAgentRuntime API` / `DSH Adapter` 对应的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 进行隔离。
 
