@@ -331,3 +331,47 @@ git apply --reverse --check：通过
 - 多副本扩容、共享 sessions root、Redis + app_data 异地恢复和完整灾备切换未演练。
 - 桌面端签名、公证、自动更新和安装包发布未执行。
 - CSP 未启用；仅在当前五类基础安全头基础上运行。
+
+## 10. 追加记录：Harness `dsh-v0.1.7-rc.2` 受控升级与插件平台（分支待发布）
+
+本节记录 2026-09-27 同日的后续升级工作。它**尚未进入生产**：上面第 9 节的结论仍对应当前生产状态，本节内容位于分支 `codex/harness-sync-ui-plugins`，未经过 Task 6 门禁、也未正式提升，不计入“已发布”。
+
+### 10.1 同步范围
+
+- 一次性受控同步：Harness 子模块从 `47f943859bef60e4160492346772ded9b24f765a` 升级到 release tag `dsh-v0.1.7-rc.2`（`477b4f420553e8a52c2fbccc464d7561b239c443`）。
+- 明确**不是**自动跟踪上游 `master`：只做这一次升级，验证发布后即固定该上游提交；后续仅在检测到新版本时提示，人工在隔离 worktree 内升级、验证后再发布。
+- 分支关键提交：`05c554a`（插件目录）、`6b8b1ae`（统一管理后台壳）、`a4e0bf1`（管理后台插件页）、`0a2a6b1`（Harness 同步）、`bc080ed`（插件签名轮换）、`37377a8`（构建边界）、`94cc797`（0.1.7 协议迁移与门禁修复）。
+
+### 10.2 产品获得的变更
+
+- **统一管理后台壳**：所有管理页共用 `AdminPage` / `AdminToolbar` / `AdminStats` / `AdminCard` / `AdminEmpty` / `AdminTable`，页面头、工具栏、卡片与空态几何一致，不再有各页各自的外边距包裹。
+- **插件中心**：官方目录直接投影 Harness 的 `pluginInventory`，不重复实现包发现；PhysicsOS 侧从签名清单 `plugins/manifest.json` 读取 12 个预装插件，逐条做 Ed25519 签名校验、SHA-256 摘要校验、Harness 版本范围校验和封闭能力白名单校验。首个版本只描述预装包并持久化管理员的启用/停用状态，**没有运行时下载或执行任意代码的路径**；`class-host` 已从清单与目录投影中排除。
+- **0.1.7 协议对齐**：`api-policy` 同时接受旧的扁平 `namespace.method` 载荷和 0.1.7 的 `namespace/method` + `{ args }` 线格式，并把改写后的载荷写回信封原有形状，使 session / workspace 所有权改写在新旧两种面上都保持生效；桌面 sidecar 改走 0.1.7 的 `remote.mux` + `session/follow` 会话流。
+- **旧会话日志前向迁移**：0.1.7 带有 `v0 → v1 → v2 → v3 → v4` 的会话格式迁移链（`packages/session/session-format-v0-to-v1` … `-v3-to-v4`，`catalog-migration.ts` 对 `version <= 3` 选择 `historicalSessionFormatCatalog`），现存 v0 会话日志升级后可读。
+
+### 10.3 现有验证证据（截至本节编制）
+
+分支 `94cc797` 上四个静态门禁通过并 `exit 0`：
+
+| 门禁                  | 结果                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| `pnpm run typecheck`  | exit 0                                                     |
+| `pnpm run lint`       | exit 0                                                     |
+| `pnpm run test`       | exit 0（core + web 872 + agent 440 + deploy + desktop）    |
+| `pnpm run build`      | exit 0                                                     |
+
+### 10.4 未完成与延后项（诚实记录）
+
+- **真实浏览器验收尚未通过**：`pnpm run test:acceptance`（`node tests/acceptance/glass-surfaces.mjs`）在编制本节时仍未通过，正在修复中（owner: web boot fix）。这是 Task 6 门禁，必须在正式提升前通过；本节不声称它通过。
+- **Task 6 其余步骤全部未做**：生产镜像构建 + 隔离 compose 冒烟、账号隔离 / 号池冒烟、回滚镜像与备份、正式提升都未执行。
+- **提升前必须备份**：0.1.7 会把现存的 v0 会话日志前向迁移，因此提升前必须对 sessions 根目录（`/var/lib/physicsos/sessions`）做文件系统级备份并做一次 `pg_dump`；回滚镜像（上一版 `14157e1`，子模块 `47f9438`）只有配合该备份才是真正的回滚，回滚时不做就地降级而是从备份恢复。宿主磁盘 78G 中约剩 23G，够一次镜像重建，重建前应先清理旧镜像。
+- **延后代码迁移**：`overlays/harness/files/packages/physicsos/tool-physicsos/src/index.ts` 与 `src/invariant.ts` 两处已弃用的同步 `session.snapshotEvents()` 调用仍以 `// oxlint-disable-next-line typescript/no-deprecated ... migration deferred.` 抑制，未迁移到 0.1.7 异步事件 API，记为延后迁移而非已完成。
+- **其他说明**：`typecheck:web` 现以 `--force` 对整个 Harness 客户端聚合做类型检查（更慢，但正是它捕获边界破坏）；`scripts/overlay/harness-overlay.mjs` 写出 `upstream-changes.patch` 时会把单空格空上下文行规范化，使 `git diff --check` 保持干净（`git apply` 接受，已用 `git apply --reverse --check` 验证）。
+
+### 10.5 生产事实（编制本节时的只读复核）
+
+- 生产 HEAD：`14157e180a702d056909eabbdec0416bd21a279c`（即上述回滚版本）。
+- `app` / `postgres` / `redis`：均为 `healthy`。
+- `http://127.0.0.1:3080/readyz`：`{"status":"ready","checks":{"postgres":{"status":"ok"},"redis":{"status":"ok"}}}`。
+- 宿主磁盘：78G 中约剩 23G。
+- 生产 sessions 目录 `/var/lib/physicsos/sessions` 下存有 34 份会话日志，其中最新一份仍是最早的磁盘格式 `{"type":"session","version":0,...}`。

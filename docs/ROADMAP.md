@@ -27,6 +27,7 @@
 | 公测题库采样     | 用真实初高中题目覆盖第三方模型网关的敏感词过滤、工具调用与拒答路径            | P0     |
 | 完整灾备恢复     | PostgreSQL 备份已有；Redis + `app_data` 异地备份、恢复和 RPO/RTO 演练仍需完成 | P0     |
 | 桌面签名分发     | Web 已公测；macOS/Windows 签名、公证、商店和自动更新闭环按需推进（可选形态）  | P2     |
+| Harness 事件迁移 | `tool-physicsos` 两处已弃用的同步 `session.snapshotEvents()`（`src/index.ts`、`src/invariant.ts`）暂以 oxlint-disable 抑制，待迁移到 0.1.7 异步事件 API | P2     |
 
 ## 计划中
 
@@ -40,6 +41,7 @@
 | 英文 i18n    | 完成界面、报告和错误信息的中英文覆盖             | P2     |
 | 插件化实验   | 为第三方实验模型提供受控扩展边界                 | P2     |
 | 告警外送     | 在控制面板阈值之外补齐邮件 / Webhook 告警与值班交接 | P2     |
+| Harness 人工升级 | 不自动跟踪上游 `master`；仅在有新版本时提示，人工在隔离 worktree 内升级、全量门禁与浏览器验收通过后再发布 | P2     |
 
 ## 维护规则
 
