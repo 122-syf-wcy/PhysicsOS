@@ -50,6 +50,7 @@ import type { ComponentControlChannel, ComponentDragChannel } from './physics/re
 import type { ObservableKey } from './physics/scene-visual-model.ts'
 import type { ExperimentMeta } from './physics/experiment-summaries.ts'
 import { exportTableCsv } from './physics/export-csv.ts'
+import { workspaceCapabilities } from './physics/experiment-capabilities.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
 import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import {
@@ -206,6 +207,12 @@ export function PhysicsWorkspace({
 
   const clock = snapshot.clock
   const running = clock.running
+  /* What this frame can actually back, read off the frame rather than the
+     template: a scene handed over from Question Space gets the same honest
+     toolbar as its Lab twin. A frame with no run window (clock.total <= 0) has
+     no timeline, no seek and no replay, so the transport is HIDDEN below rather
+     than rendered dead — the whole point of the capability manifest. */
+  const capabilities = workspaceCapabilities(snapshot)
   /* A finished run offers "replay", not a dead play button: the runtime
      rewinds to t = 0 on the next run press, and the shell says so. */
   const ended = clock.total > 0 && !running && clock.time >= clock.total
@@ -374,12 +381,19 @@ export function PhysicsWorkspace({
     [runtime, frameSource, commit],
   )
 
-  const statusLabel =
-    snapshot.status === 'verified'
-      ? t('lab.mechanics.verified')
-      : snapshot.status === 'warning'
-        ? t('lab.status.warning')
-        : t('lab.status.failed')
+  /* The badge is lit from evidence, not from the status string: a runtime that
+     says "verified" while reporting no passing check has verified nothing. The
+     precise re-derivation of the level lives in the runtime gate
+     (`runtimeStatusOf`); the shell only makes the coarse "at least one check
+     passed" judgement its data supports. */
+  const verifiedByEvidence =
+    snapshot.status === 'verified' &&
+    snapshot.verification.some(check => check.status === 'passed')
+  const statusLabel = verifiedByEvidence
+    ? t('lab.mechanics.verified')
+    : snapshot.status === 'failed'
+      ? t('lab.status.failed')
+      : t('lab.status.warning')
 
   const failed = snapshot.status === 'failed'
   /* While building, an unsolvable circuit is a state on the way to a circuit,
@@ -545,7 +559,8 @@ export function PhysicsWorkspace({
       data-physicsos-domain={snapshot.domain}
       data-physicsos-running={running ? 'true' : 'false'}
       data-scene-revision={snapshot.sceneRevision}
-      data-verification-status={snapshot.status}
+      data-verification-status={verifiedByEvidence ? 'verified' : snapshot.status}
+      data-physicsos-timeline={capabilities.timeline ? 'true' : 'false'}
       data-scene-collapsed={sceneCollapsed ? 'true' : undefined}
       data-inspector-collapsed={inspectorCollapsed ? 'true' : undefined}
       data-agent-open={agentOpen ? 'true' : undefined}
@@ -608,58 +623,73 @@ export function PhysicsWorkspace({
           )}
           <span
             className={clsx(css.verifiedState, failed && css.verifiedStateFailed)}
-            data-status={snapshot.status}
+            data-status={verifiedByEvidence ? 'verified' : snapshot.status}
           >
             <IconVerified size={13} />
             {statusLabel}
           </span>
-          <div className={css.playbackTools}>
-            <button
-              type="button"
-              className={clsx(css.primary, running && css.primaryRunning)}
-              disabled={failed || clock.total <= 0}
-              aria-pressed={running}
-              onClick={() => {
-                commit(runtime.setRunning(true))
-              }}
-            >
-              {ended ? <IconRefreshOutlineMedium size={13} /> : <IconPlayOutlineMedium size={13} />}
-              {ended ? t('lab.replay') : t('lab.run')}
-            </button>
-            <button
-              type="button"
-              className={css.secondary}
-              disabled={failed}
-              onClick={() => {
-                commit(runtime.setRunning(false))
-              }}
-            >
-              <IconPauseOutlineMedium size={13} />
-              {t('lab.pause')}
-            </button>
-            <button
-              type="button"
-              className={css.ghost}
-              disabled={failed}
-              onClick={() => {
-                commit(runtime.step(clock.total * STEP_FRACTION))
-              }}
-            >
-              <IconChevronRightOutlineMedium size={13} />
-              {t('lab.step')}
-            </button>
-            <button
-              type="button"
-              className={css.ghost}
-              disabled={failed}
-              onClick={() => {
-                commit(runtime.seek(0))
-              }}
-            >
-              <IconRefreshOutlineMedium size={13} />
-              {t('lab.reset')}
-            </button>
-          </div>
+          {/* Transport is capability-driven: an experiment with no run window
+              renders no transport at all — not a disabled one — and reset (a
+              seek to t = 0) only appears where seek is real. */}
+          {capabilities.timeline || capabilities.seek ? (
+            <div className={css.playbackTools}>
+              {capabilities.timeline ? (
+                <>
+                  <button
+                    type="button"
+                    className={clsx(css.primary, running && css.primaryRunning)}
+                    disabled={failed}
+                    aria-pressed={running}
+                    onClick={() => {
+                      commit(runtime.setRunning(true))
+                    }}
+                  >
+                    {ended ? (
+                      <IconRefreshOutlineMedium size={13} />
+                    ) : (
+                      <IconPlayOutlineMedium size={13} />
+                    )}
+                    {ended ? t('lab.replay') : t('lab.run')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.secondary}
+                    disabled={failed}
+                    onClick={() => {
+                      commit(runtime.setRunning(false))
+                    }}
+                  >
+                    <IconPauseOutlineMedium size={13} />
+                    {t('lab.pause')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.ghost}
+                    disabled={failed}
+                    onClick={() => {
+                      commit(runtime.step(clock.total * STEP_FRACTION))
+                    }}
+                  >
+                    <IconChevronRightOutlineMedium size={13} />
+                    {t('lab.step')}
+                  </button>
+                </>
+              ) : null}
+              {capabilities.seek ? (
+                <button
+                  type="button"
+                  className={css.ghost}
+                  disabled={failed}
+                  onClick={() => {
+                    commit(runtime.seek(0))
+                  }}
+                >
+                  <IconRefreshOutlineMedium size={13} />
+                  {t('lab.reset')}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {toolbarExtra}
           {experimentMeta === undefined ? null : (
             <button
@@ -872,70 +902,75 @@ export function PhysicsWorkspace({
               />
             </section>
 
-            <div className={css.timeline} aria-label={t('lab.timeline')}>
-              <button
-                type="button"
-                className={clsx(css.transport, css.transportPrimary)}
-                aria-label={ended ? t('lab.replay') : t('lab.playPause')}
-                disabled={failed || clock.total <= 0}
-                onClick={() => {
-                  commit(runtime.setRunning(!running))
-                }}
-              >
-                {running ? (
-                  <IconPauseOutlineMedium size={14} />
-                ) : ended ? (
-                  <IconRefreshOutlineMedium size={14} />
-                ) : (
-                  <IconPlayOutlineMedium size={14} />
-                )}
-              </button>
-              <button
-                type="button"
-                className={css.transport}
-                aria-label={t('lab.stepBack')}
-                onClick={() => {
-                  commit(runtime.step(-clock.total * STEP_FRACTION))
-                }}
-              >
-                <IconChevronLeftOutlineMedium size={13} />
-              </button>
-              <button
-                type="button"
-                className={css.transport}
-                aria-label={t('lab.step')}
-                onClick={() => {
-                  commit(runtime.step(clock.total * STEP_FRACTION))
-                }}
-              >
-                <IconChevronRightOutlineMedium size={13} />
-              </button>
-              <LiveClock source={frameSource} scale={clockScale} />
-              <div className={css.trackWrap}>
-                <TimelineScrubber
-                  label={t('lab.timeline')}
-                  min={0}
-                  max={clock.total}
-                  value={clock.time}
-                  valueText={`${formatTimeIn(clock.time, clockScale)} / ${formatTimeIn(clock.total, clockScale)}`}
-                  onChange={seek}
+            {/* The timeline row is only real where a run window exists. Hiding
+                it (rather than disabling its buttons) is the honest default for
+                an experiment whose model has no time dimension. */}
+            {capabilities.timeline ? (
+              <div className={css.timeline} aria-label={t('lab.timeline')}>
+                <button
+                  type="button"
+                  className={clsx(css.transport, css.transportPrimary)}
+                  aria-label={ended ? t('lab.replay') : t('lab.playPause')}
+                  disabled={failed}
+                  onClick={() => {
+                    commit(runtime.setRunning(!running))
+                  }}
+                >
+                  {running ? (
+                    <IconPauseOutlineMedium size={14} />
+                  ) : ended ? (
+                    <IconRefreshOutlineMedium size={14} />
+                  ) : (
+                    <IconPlayOutlineMedium size={14} />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={css.transport}
+                  aria-label={t('lab.stepBack')}
+                  onClick={() => {
+                    commit(runtime.step(-clock.total * STEP_FRACTION))
+                  }}
+                >
+                  <IconChevronLeftOutlineMedium size={13} />
+                </button>
+                <button
+                  type="button"
+                  className={css.transport}
+                  aria-label={t('lab.step')}
+                  onClick={() => {
+                    commit(runtime.step(clock.total * STEP_FRACTION))
+                  }}
+                >
+                  <IconChevronRightOutlineMedium size={13} />
+                </button>
+                <LiveClock source={frameSource} scale={clockScale} />
+                <div className={css.trackWrap}>
+                  <TimelineScrubber
+                    label={t('lab.timeline')}
+                    min={0}
+                    max={clock.total}
+                    value={clock.time}
+                    valueText={`${formatTimeIn(clock.time, clockScale)} / ${formatTimeIn(clock.total, clockScale)}`}
+                    onChange={seek}
+                  />
+                  <TimelineMarkers events={snapshot.events} total={clock.total} onSeek={seek} />
+                </div>
+                <span className={clsx(css.clock, css.clockEnd)}>
+                  {formatTimeIn(clock.total, clockScale)}
+                </span>
+                <GlassSelect
+                  className={css.rate}
+                  ariaLabel={t('lab.rate')}
+                  testId="playback-rate"
+                  value={String(clock.rate)}
+                  options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}x` }))}
+                  onChange={(next) => {
+                    commit(runtime.setRate(Number(next)))
+                  }}
                 />
-                <TimelineMarkers events={snapshot.events} total={clock.total} onSeek={seek} />
               </div>
-              <span className={clsx(css.clock, css.clockEnd)}>
-                {formatTimeIn(clock.total, clockScale)}
-              </span>
-              <GlassSelect
-                className={css.rate}
-                ariaLabel={t('lab.rate')}
-                testId="playback-rate"
-                value={String(clock.rate)}
-                options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}x` }))}
-                onChange={(next) => {
-                  commit(runtime.setRate(Number(next)))
-                }}
-              />
-            </div>
+            ) : null}
 
             <section className={clsx(css.dataPanel, dataOpen && css.dataPanelOpen)}>
               <div className={css.dataHead}>
