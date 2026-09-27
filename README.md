@@ -158,6 +158,7 @@ SceneVisualModel → PhysicsCanvas
 - Renderer 不决定物理事实。
 - Harness core 的 Agent Loop、Session 和 Tools 不做 PhysicsOS 特化修改。
 - 领域包位于根目录 `packages/`，正式界面适配层位于 `vendor/deepseek-harness/packages/client/ui-physicsos/`。
+- 自有代码与上游代码的规模与归属核对：见 [`docs/ARCHITECTURE-OWNERSHIP.md`](./docs/ARCHITECTURE-OWNERSHIP.md)。
 
 详细边界见 `docs/HARNESS-UPSTREAM.md` 与 `docs/HARNESS-UI-OVERLAY.md`。
 
