@@ -1,0 +1,46 @@
+{
+  // Shared declaration boundary for the PhysicsOS source graph consumed by
+  // both Harness faces. Sources stay at the repository root; only declarations
+  // are emitted here so project references can redirect @physicsos/* imports
+  // without duplicating package sources into the vendored workspace.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "emitDeclarationOnly": true,
+    "rootDir": "../../packages",
+    "outDir": "lib/physicsos-types",
+    "tsBuildInfoFile": "lib/physicsos-types/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "../../packages/agent-tools/src/**/*.ts",
+    "../../packages/engine-acoustics/src/**/*.ts",
+    "../../packages/engine-circuit/src/**/*.ts",
+    "../../packages/engine-collision/src/**/*.ts",
+    "../../packages/engine-composite/src/**/*.ts",
+    "../../packages/engine-electric/src/**/*.ts",
+    "../../packages/engine-electric-region/src/**/*.ts",
+    "../../packages/engine-fluid/src/**/*.ts",
+    "../../packages/engine-induction/src/**/*.ts",
+    "../../packages/engine-lever/src/**/*.ts",
+    "../../packages/engine-magnetic/src/**/*.ts",
+    "../../packages/engine-mechanics/src/**/*.ts",
+    "../../packages/engine-modern/src/**/*.ts",
+    "../../packages/engine-optics/src/**/*.ts",
+    "../../packages/engine-thermal/src/**/*.ts",
+    "../../packages/engine-wave/src/**/*.ts",
+    "../../packages/physics-composite-core/src/**/*.ts",
+    "../../packages/physics-core/src/**/*.ts",
+    "../../packages/physics-electric-core/src/**/*.ts",
+    "../../packages/physics-math/src/**/*.ts",
+    "../../packages/physics-observation/src/**/*.ts",
+    "../../packages/physics-scene/src/**/*.ts",
+    "../../packages/physics-units/src/**/*.ts",
+    "../../packages/physics-verifier/src/**/*.ts",
+    "../../packages/question-core/src/**/*.ts",
+    "../../packages/question-paper/src/**/*.ts",
+    "../../packages/shared/src/**/*.ts"
+  ],
+  "exclude": [
+    "../../packages/*/src/**/*.spec.ts",
+    "../../packages/*/src/**/*.test.ts"
+  ]
+}
