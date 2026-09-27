@@ -1,0 +1,16 @@
+{
+  "name": "@physicsos/exam-standard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Exam Standard Runtime: versioned Guizhou exam-standard packs, profile resolution, exam-compliance verification and the anti-fake-official gate",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json --noEmit"
+  }
+}
