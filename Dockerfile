@@ -58,10 +58,13 @@ RUN printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/p
 # silently). `build:native-system` is the harness's own `test` prerequisite.
 # The trailing probe loads the addon and takes a real lock, so an image whose
 # addon is missing or unloadable fails the BUILD instead of losing transcripts.
-RUN pnpm -C vendor/deepseek-harness run build:native-system \
-    && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')"
+# It must run AFTER `build:lib`: the addon's JS entry (`entry/lib/flock.js`) is
+# `tsc -b` output, so probing first fails on a missing module rather than on a
+# missing native addon — which is what an earlier revision of this file did.
+RUN pnpm -C vendor/deepseek-harness run build:native-system
 
 RUN pnpm -C vendor/deepseek-harness run build:lib \
+    && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')" \
     && pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-health-host run bundle \
     && pnpm build \
     && rm -rf vendor/deepseek-harness/.git
