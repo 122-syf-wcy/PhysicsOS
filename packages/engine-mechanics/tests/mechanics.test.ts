@@ -454,12 +454,15 @@ describe('projectile apex is an engine-computed fact', () => {
   })
 
   it('has no apex when the launch has no upward component (vy0 ≤ 0)', () => {
-    for (const vy of [0, -5]) {
+    /* The leftward horizontal throw (vx < 0, vy0 = 0) is the case the old
+       view guard let slip: atan2(0, vx<0) = π > 0.01, so the view used to fall
+       through to flightTime / 2 and invent an apex. */
+    for (const [vx, vy] of [[10, 0], [-10, 0], [10, -5]] as const) {
       const scene = createScene({
         model: 'projectile_motion',
         mass: 1,
         position: vec3(0, 20, 0),
-        velocity: vec3(10, vy, 0),
+        velocity: vec3(vx, vy, 0),
         gravity: vec3(0, -10, 0),
         groundY: 0,
       })

@@ -385,8 +385,10 @@ describe('projectile apex timeline event', () => {
   })
 
   it('emits no 最高点 when the launch has no upward component', () => {
-    for (const vy of [0, -5]) {
-      const snapshot = buildSnapshot(projectileInput({ x: 10, y: vy, z: 0 }))
+    /* Includes the leftward horizontal throw (vx < 0, vy0 = 0) that the old
+       view guard let fall through to a fabricated flightTime / 2 apex. */
+    for (const [vx, vy] of [[10, 0], [-10, 0], [10, -5]] as const) {
+      const snapshot = buildSnapshot(projectileInput({ x: vx, y: vy, z: 0 }))
       expect(snapshot.events.find(event => event.id === 'apex')).toBeUndefined()
       /* The honest absence is only for the apex: launch and impact remain. */
       expect(snapshot.events.some(event => event.id === 'impact')).toBe(true)
