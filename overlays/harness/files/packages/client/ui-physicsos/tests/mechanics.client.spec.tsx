@@ -1,11 +1,22 @@
 // @vitest-environment jsdom
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCollisionScene, createMechanicsScene } from '@physicsos/physics-scene'
+import {
+  createCollisionScene,
+  createMechanicsScene,
+  createMechanicsSimulationRequest,
+} from '@physicsos/physics-scene'
+import { MechanicsEngine, resolveMechanicsModel } from '@physicsos/engine-mechanics'
+import { observeMechanicsScene } from '@physicsos/physics-observation'
+import { verifyMechanicsSimulation } from '@physicsos/physics-verifier'
 
 import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
 import { createMechanicsWorkspaceRuntime } from '../src/client/physics/mechanics-workspace-runtime.ts'
 import { createCollisionRuntime } from '../src/client/physics/collision-runtime-bridge.ts'
+import {
+  buildSnapshot,
+  type SnapshotInput,
+} from '../src/client/physics/mechanics-view-builders.ts'
 
 afterEach(cleanup)
 
@@ -321,5 +332,89 @@ describe('playback contract', () => {
     const replay = runtime.setRunning(true)
     expect(replay.clock.time).toBe(0)
     expect(replay.clock.running).toBe(true)
+  })
+})
+
+describe('projectile apex timeline event', () => {
+  /* Assemble the exact SnapshotInput the runtime builds, so a builder-level
+     assertion exercises the same engine facts the product surface consumes. */
+  const projectileInput = (velocity: { x: number; y: number; z: number }): SnapshotInput => {
+    const scene = createMechanicsScene({
+      sceneId: 'apex-view-test',
+      model: 'projectile_motion',
+      position: { x: 0, y: 20, z: 0 },
+      velocity,
+      gravity: { x: 0, y: -10, z: 0 },
+      groundY: 0,
+      now: '2026-08-21T00:00:00.000Z',
+    })
+    const engine = new MechanicsEngine()
+    const simulation = engine.simulate(
+      scene,
+      createMechanicsSimulationRequest(scene, 'sim-apex', 'trace-apex'),
+    )
+    const model = resolveMechanicsModel(scene)
+    const state = engine.stateAt(scene, { value: 0, unit: 's', dimension: 'time' })
+    return {
+      scene,
+      modelId: 'projectile_motion',
+      model,
+      simulation,
+      state,
+      observations: observeMechanicsScene({ scene, simulation, state }),
+      verification: verifyMechanicsSimulation(scene, simulation),
+      visibility: {},
+      clock: {
+        time: 0,
+        total: model.modelId === 'projectile_motion' ? model.flightTime : 10,
+        running: false,
+        rate: 1,
+      },
+      status: 'verified',
+    }
+  }
+
+  it('places 最高点 at the engine apex time, not flightTime / 2', () => {
+    const input = projectileInput({ x: 12, y: 8, z: 0 })
+    if (input.model.modelId !== 'projectile_motion') throw new Error('expected projectile')
+    const apex = buildSnapshot(input).events.find(event => event.id === 'apex')
+    /* vy0 = 8, g = 10 → apex at 0.8 s; flightTime ≈ 2.954 s, so the old
+       midpoint fallback would have placed it at ≈ 1.477 s. */
+    expect(apex?.time).toBeCloseTo(8 / 10, 9)
+    expect(apex?.time ?? 0).not.toBeCloseTo(input.model.flightTime / 2, 1)
+  })
+
+  it('emits no 最高点 when the launch has no upward component', () => {
+    for (const vy of [0, -5]) {
+      const snapshot = buildSnapshot(projectileInput({ x: 10, y: vy, z: 0 }))
+      expect(snapshot.events.find(event => event.id === 'apex')).toBeUndefined()
+      /* The honest absence is only for the apex: launch and impact remain. */
+      expect(snapshot.events.some(event => event.id === 'impact')).toBe(true)
+    }
+    /* End to end through the runtime a student actually drives. */
+    const runtime = createMechanicsWorkspaceRuntime(
+      createMechanicsScene({
+        model: 'projectile_motion',
+        position: { x: 0, y: 20, z: 0 },
+        velocity: { x: 10, y: 0, z: 0 },
+        groundY: 0,
+        now: '2026-08-21T00:00:00.000Z',
+      }),
+    )
+    expect(runtime.getSnapshot().events.find(event => event.id === 'apex')).toBeUndefined()
+  })
+
+  it('reads the apex from the engine model instead of re-deriving vy0 / g', () => {
+    const input = projectileInput({ x: 12, y: 8, z: 0 })
+    if (input.model.modelId !== 'projectile_motion') throw new Error('expected projectile')
+    /* A value the view could never produce by computing vy0/g (which is 0.8):
+       if the event follows the sentinel, the builder is consuming, not deriving. */
+    const sentinel = 1.2345
+    const snapshot = buildSnapshot({
+      ...input,
+      model: { ...input.model, apexTime: sentinel },
+    })
+    const apex = snapshot.events.find(event => event.id === 'apex')
+    expect(apex?.time).toBeCloseTo(sentinel, 9)
   })
 })

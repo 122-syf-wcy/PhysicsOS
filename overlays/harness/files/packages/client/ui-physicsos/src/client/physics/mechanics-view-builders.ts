@@ -750,15 +750,13 @@ function eventsOf(
   if (modelId !== 'projectile_motion') return []
   const m = model as Extract<MechanicsModel, { modelId: 'projectile_motion' }>
   const events: TimelineEvent[] = [{ id: 'launch', time: 0, label: '发射', kind: 'launch' }]
-  if (m.launchAngle > 0.01) {
-    /* Apex is where vy = 0: t = vy0/g, not flightTime/2 — the two only agree
-       when launch and ground are at the same height. The engine's flight time
-       covers the extra fall from launch height, so half of it lands the pulse
-       after the ball has already passed its top. */
-    const gravity = Math.hypot(m.gravity.x, m.gravity.y) || 9.8
-    const vy0 = m.initialVelocity.y
-    const apexTime = vy0 > 0 ? vy0 / gravity : m.flightTime / 2
-    events.push({ id: 'apex', time: apexTime, label: '最高点', kind: 'apex' })
+  /* The apex instant is an ENGINE fact (`apexTime`, t where vy = 0), read here
+     like the other projectile results on this model — never re-derived from
+     vy0/g in the view. A launch with no upward component has NO apex, so the
+     engine leaves it undefined and the timeline shows none, rather than placing
+     a made-up 最高点 at the midpoint of the flight. */
+  if (m.apexTime !== undefined) {
+    events.push({ id: 'apex', time: m.apexTime, label: '最高点', kind: 'apex' })
   }
   events.push({ id: 'impact', time: m.flightTime, label: '落地', kind: 'impact' })
   return events
