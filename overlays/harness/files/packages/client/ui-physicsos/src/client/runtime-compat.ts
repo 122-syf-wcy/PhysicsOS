@@ -9,18 +9,13 @@
 
 export { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 export type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-export { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-export { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type {
-  ConversationNodeDefinition,
-  ConversationViewDefinition,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
 export type {
   ConversationLocation,
   ConversationNodeDefinition,
   ConversationViewDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-export type ConversationEventInput = ConversationNodeDefinition
+export type ConversationEventInput =
+  import('@deepseek-ai/dsh-api-session-controller/client').SessionEventLikeEntry
 export type { ChatConversationViewNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
 export { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 export type { SessionId } from '@deepseek-ai/dsh-session/types'

@@ -89,7 +89,7 @@ index 2cfc21e2c9..16c7dc460c 100644
 +    ],
    })
  })
- 
+
 -it('ships fixed-color favicons selected by document media queries', async () => {
 +it('ships the PhysicsOS mark as the favicon', async () => {
    const index = await readFile(join(DIST_ROOT, 'index.html'), 'utf8')
@@ -291,10 +291,28 @@ index c98289bc3e..43b81f7bc7 100644
        name: '@deepseek-ai/dsh-client-ui-approval'
  
 diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
-index fb56be4231..26929459e3 100644
+index fb56be4231..85e40b6b62 100644
 --- a/packages/bundle/web-app/package.json
 +++ b/packages/bundle/web-app/package.json
-@@ -62,6 +62,7 @@
+@@ -35,6 +35,7 @@
+     "presets/ptc.patch.yml",
+     "presets/minimal.patch.yml",
+     "presets/cordis.patch.yml",
++    "presets/physics-student.patch.yml",
+     "lib/types/**/*.d.ts"
+   ],
+   "license": "MIT",
+@@ -45,7 +46,8 @@
+         "./presets/standard.patch.yml",
+         "./presets/ptc.patch.yml",
+         "./presets/minimal.patch.yml",
+-        "./presets/cordis.patch.yml"
++        "./presets/cordis.patch.yml",
++        "./presets/physics-student.patch.yml"
+       ]
+     }
+   },
+@@ -62,6 +64,7 @@
      "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",
      "@deepseek-ai/dsh-api-workspace-files": "workspace:*",
      "@deepseek-ai/dsh-app-boot": "workspace:*",
@@ -302,7 +320,7 @@ index fb56be4231..26929459e3 100644
      "@deepseek-ai/dsh-client-connection": "workspace:*",
      "@deepseek-ai/dsh-client-file-upload": "workspace:*",
      "@deepseek-ai/dsh-client-hmr": "workspace:*",
-@@ -88,6 +89,7 @@
+@@ -88,6 +91,7 @@
      "@deepseek-ai/dsh-client-ui-open-in-app": "workspace:*",
      "@deepseek-ai/dsh-client-ui-permission-presets": "workspace:*",
      "@deepseek-ai/dsh-client-ui-plan": "workspace:*",
@@ -310,7 +328,7 @@ index fb56be4231..26929459e3 100644
      "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
      "@deepseek-ai/dsh-client-ui-reference": "workspace:*",
      "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
-@@ -132,9 +134,16 @@
+@@ -132,9 +136,16 @@
      "@deepseek-ai/dsh-host-open-in-app": "workspace:*",
      "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
      "@deepseek-ai/dsh-host-webserver": "workspace:*",
@@ -327,7 +345,7 @@ index fb56be4231..26929459e3 100644
      "@deepseek-ai/dsh-persona": "workspace:*",
      "@deepseek-ai/dsh-plan-mode": "workspace:*",
      "@deepseek-ai/dsh-plugin-manager": "workspace:*",
-@@ -143,7 +152,9 @@
+@@ -143,7 +154,9 @@
      "@deepseek-ai/dsh-session-reference": "workspace:*",
      "@deepseek-ai/dsh-session-stats": "workspace:*",
      "@deepseek-ai/dsh-session-turn-outline": "workspace:*",
@@ -337,7 +355,7 @@ index fb56be4231..26929459e3 100644
      "@deepseek-ai/dsh-subprocess": "workspace:*",
      "@deepseek-ai/dsh-terminal": "workspace:*",
      "@deepseek-ai/dsh-terminal-bash": "workspace:*",
-@@ -166,6 +177,7 @@
+@@ -166,6 +179,7 @@
      "@deepseek-ai/dsh-tool-todo": "workspace:*",
      "@deepseek-ai/dsh-tool-web": "workspace:*",
      "@deepseek-ai/dsh-tool-workflow": "workspace:*",
@@ -345,6 +363,59 @@ index fb56be4231..26929459e3 100644
      "@deepseek-ai/dsh-web-frontend": "workspace:*",
      "@deepseek-ai/dsh-workflow-ptc": "workspace:*",
      "@deepseek-ai/dsh-workspace": "workspace:*",
+diff --git a/packages/bundle/web-app/presets/physics-student.patch.yml b/packages/bundle/web-app/presets/physics-student.patch.yml
+new file mode 100644
+index 0000000000..c884842644
+--- /dev/null
++++ b/packages/bundle/web-app/presets/physics-student.patch.yml
+@@ -0,0 +1,47 @@
++# Agent preset physics-student: PhysicsOS's student composition, declared as
++# the 0.1.7 bundle patch rather than the retired agent-presets directory.
++- insert:
++    - id: preset-physics-student
++      name: '@deepseek-ai/dsh-agent-preset'
++      config:
++        id: physics-student
++        name: 物理学习模式
++        description: 'PhysicsOS 学生助教：只能通过物理工具开实验、解题、改条件、模拟与校验，所有数值来自物理引擎。'
++        order: 0
++        plugins:
++          - id: persona
++            name: '@deepseek-ai/dsh-persona'
++            config:
++              prefix: |-
++                你是 PhysicsOS 的物理助教，服务初高中学生。
++
++                产品身份：你对外始终以 PhysicsOS 物理助教的身份出现。学生询问你是什么模型、由谁提供或底层供应商时，只回答当前由「平台公益模型」提供；不要自称或介绍任何第三方模型名称、厂商背景，也不要把底层模型的技术参数当作 PhysicsOS 的产品介绍。
++
++                物理宪法（不可违反）：
++                1. 物理结果只能来自 PhysicsOS 引擎：所有数值（力、半径、周期、速度、电流、像距……）必须引用 physics_solve_question、physics_simulate、physics_observe 的返回值，禁止自己心算或凭记忆报数。
++                2. 只能通过工具修改场景：改条件必须调用 physics_scene_command，命令会被场景运行时校验；被拒绝就如实转述原因，不要绕过。
++                3. 不把假设当事实：题目缺条件时先用 ask_user_question 问学生，或明确标注「假设」，不得静默补数。
++                4. 不确定就说明：解析失败、引擎不支持的模型，要告诉学生哪里没看懂、哪些题型目前支持，绝不编造答案。
++                5. 教学不得篡改真实结果：可以分步提示、苏格拉底式引导、建议学生改参数做对比实验，但结论必须与引擎校验结果一致，并引用校验项作为证据。
++                6. 尊重场景修订：每次改条件后都重新 physics_simulate，再基于新结果解释。
++
++                图片 / 扫描页题目流程：
++                7. 学生贴题图或 PDF 扫描页时，先完整转录题面（保留单位、正负号、上下标、取值范围和题号），把转录结果展示给学生确认；图示信息（斜面、导轨、极板方向等）用文字明确写出。
++                8. 转录有歧义或缺条件时，先用 ask_user_question 问学生，不要猜；确认后把转录文本交给 physics_solve_question，不要直接报心算答案。
++                9. 解析器拒收时（PARSE_FAILED / AMBIGUOUS / INVALID_SEMANTICS / UNSUPPORTED_MODEL），先把题面改写成规范形式（已知量写成 q = 1.6×10^-19 C、B = 0.4 T 这种"符号 = 数值 单位"）再重试一次；仍拒收就如实说明这道题目前不支持，并告诉学生支持哪些题型。
++
++                答题格式（对齐中高考计算题规范，只写结果不得分）：
++                10. 最终答复先写「思路分析」再写「解」：「思路分析」讲清物理过程和入手方法——运动分几个阶段、每个阶段遵循什么规律、已知量和所求量怎么联系、为什么选这些公式；答复上方的场景动画就是这道题的物理图景，涉及轨迹、最高点、落地点、方向等内容时结合动画描述（如"动画中可以看到小球先上升再下落，最高点处竖直速度为零"），让学生先建立图景再看公式。「解」按规范写：先列已知（含单位换算），再分步写「原始公式 → 代入数据（带单位）→ 结果」，最后写「答」复述所有求得量。physics_solve_question 返回的每个步骤若带「代入」行，直接引用，不要省略；公式必须写原始式（$qvB = \dfrac{mv^2}{r}$），不要用变形结果式开头。
++                11. 每个数值都注明单位；结果用小数或科学记数法（1.60×10⁻¹⁹），不用分数；方向、正负号要写明确。
++
++                工作方式：先理解学生要什么（解题 / 开实验 / 解释现象），再选工具；开实验前可先 physics_list_experiments；用学生能懂的中文解释；所有公式一律写成 LaTeX：行内用 $...$（如 $v_y^2/(2g)$），独立成行用 $$...$$，分式用 \dfrac{a}{b}，上下标用 ^ 和 _；不要写 v_y²、qvB = mv²/r 这类纯文本公式。
++              complete: false
++              includeRuntimeContext: false
++
++          - id: tool-physicsos
++            name: '@deepseek-ai/dsh-tool-physicsos'
++            config:
++              sceneScope: session
++
++          - id: tool-ask-user
++            name: '@deepseek-ai/dsh-tool-ask-user'
 diff --git a/packages/client/connection/src/api-policy.ts b/packages/client/connection/src/api-policy.ts
 new file mode 100644
 index 0000000000..9d9e8c67ad
@@ -503,6 +574,60 @@ index 66d9844f17..7c954bbb8c 100644
      "src/api-request-trust.ts",
      "src/browser-auth.ts",
      "src/client/random-uuid.ts",
+diff --git a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
+index bebfb96c53..230afcc99c 100644
+--- a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
++++ b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
+@@ -1,5 +1,5 @@
+ /** Native webview events controlled by each test; presentation and navigation stay real. */
+-import { vi } from 'vitest'
++import { vi, type Mock } from 'vitest'
+ import type { DesktopBrowserBridge, DesktopBrowserLeaseId, DesktopBrowserReservation } from '../src/types.ts'
+ import type { BrowserTabState } from '../src/client/browser/BrowserPersistence.ts'
+ import { createElectronPage } from '../src/client/electron/pages.ts'
+@@ -12,16 +12,16 @@ export function electronFixture(initial?: BrowserTabState) {
+   const opens = new Set<(url: string) => void>()
+   const reservation: DesktopBrowserReservation = { lease: `lease-${++sequence}` as DesktopBrowserLeaseId, partition: 'partition' }
+   const bridge = {
+-    acquire: vi.fn(async (_workspace: string) => reservation),
+-    release: vi.fn(async (_lease: DesktopBrowserLeaseId) => {}),
++    acquire: vi.fn(async (_workspace: string) => reservation) as Mock<(workspace: string) => Promise<DesktopBrowserReservation>>,
++    release: vi.fn(async (_lease: DesktopBrowserLeaseId) => {}) as Mock<(lease: DesktopBrowserLeaseId) => Promise<void>>,
+     onOpenRequested: vi.fn((_lease: DesktopBrowserLeaseId, listener: (url: string) => void) => {
+       opens.add(listener)
+       return () => { opens.delete(listener) }
+-    }),
++    }) as Mock<(lease: DesktopBrowserLeaseId, listener: (url: string) => void) => () => void>,
+   } satisfies DesktopBrowserBridge
+-  const workspace = vi.fn(async (_signal: AbortSignal) => 'cwd:/workspace')
+-  const persist = vi.fn()
+-  const openRequested = vi.fn()
++  const workspace = vi.fn(async (_signal: AbortSignal) => 'cwd:/workspace') as Mock<(signal: AbortSignal) => Promise<string>>
++  const persist = vi.fn() as Mock<(state: BrowserTabState) => void>
++  const openRequested = vi.fn() as Mock<(url: string) => void>
+   const page = createElectronPage({ initial, persist, openRequested }, bridge, workspace)
+   const presentation = page.presentation
+   if (!(presentation instanceof ElectronWebviewPresentation)) throw new Error('expected the Electron presentation')
+@@ -30,7 +30,18 @@ export function electronFixture(initial?: BrowserTabState) {
+   function prepareGuest(approved: DesktopBrowserReservation) {
+     const element = create(approved)
+     const state = { url: 'about:blank', title: '', loading: true, back: false, forward: false }
+-    const methods = {
++    const methods: {
++      loadURL: Mock<(url: string) => Promise<void>>
++      getURL: Mock<() => string>
++      getTitle: Mock<() => string>
++      canGoBack: () => boolean
++      canGoForward: () => boolean
++      clearHistory: Mock<() => void>
++      goBack: Mock<() => void>
++      goForward: Mock<() => void>
++      reload: Mock<() => void>
++      isLoading: () => boolean
++    } = {
+       loadURL: vi.fn(async (_url: string) => {}), getURL: vi.fn(() => state.url), getTitle: vi.fn(() => state.title),
+       canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn(),
+       goBack: vi.fn(), goForward: vi.fn(), reload: vi.fn(), isLoading: () => state.loading,
 diff --git a/packages/core/session/src/known-event-types.ts b/packages/core/session/src/known-event-types.ts
 index adaca29255..7c2caa5da4 100644
 --- a/packages/core/session/src/known-event-types.ts
@@ -515,6 +640,46 @@ index adaca29255..7c2caa5da4 100644
    'plan/mode',
    'request/context',
    'request/header',
+diff --git a/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts b/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
+index 6e8b2fad64..cf9b3f317a 100644
+--- a/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
++++ b/packages/experimental/client-ui-voice-input/tests/audio-fixture.client.ts
+@@ -1,5 +1,5 @@
+ /** Controlled browser audio devices with real Recording ownership and conversion. */
+-import { vi } from 'vitest'
++import { vi, type Mock } from 'vitest'
+ import { Recording } from '../src/client/audio.ts'
+
+ /**
+@@ -8,9 +8,12 @@ import { Recording } from '../src/client/audio.ts'
+  * @returns the recording, device controls, and resource observations.
+  */
+ export function captureFixture(options: { empty?: boolean; recorderError?: boolean; constructError?: boolean } = {}) {
+-  const trackStop = vi.fn(), close = vi.fn(async () => {}), disposed = vi.fn()
+-  const decoding = vi.fn(async (_data: ArrayBuffer) => ({ duration: 2 }))
+-  const rendering = vi.fn(async () => ({ getChannelData: () => new Float32Array([0.5, -0.5]) }))
++  const trackStop = vi.fn() as Mock<() => void>
++  const close = vi.fn(async () => {}) as Mock<() => Promise<void>>
++  const disposed = vi.fn() as Mock<() => void>
++  const decoding = vi.fn(async (_data: ArrayBuffer) => ({ duration: 2 })) as Mock<(data: ArrayBuffer) => Promise<{ duration: number }>>
++  const rendering = vi.fn(async () => ({ getChannelData: () => new Float32Array([0.5, -0.5]) })) as
++    Mock<() => Promise<{ getChannelData: () => Float32Array }>>
+   let failRecorder: () => void
+   class Recorder {
+     state = 'inactive'
+@@ -35,7 +38,11 @@ export function captureFixture(options: { empty?: boolean; recorderError?: boole
+   }
+   const offline = vi.fn(function Offline(_channels: number, _frames: number, _rate: number) {
+     return { destination: {}, createBufferSource: () => ({ buffer: null, connect() {}, start() {} }), startRendering: rendering }
+-  })
++  }) as Mock<(channels: number, frames: number, rate: number) => {
++    destination: object
++    createBufferSource: () => { buffer: null; connect: () => void; start: () => void }
++    startRendering: typeof rendering
++  }>
+   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop: trackStop }] }) } })
+   vi.stubGlobal('MediaRecorder', Recorder)
+   vi.stubGlobal('AudioContext', function Audio() { return { state: 'running', close, decodeAudioData: decoding,
 diff --git a/packages/session/session-format-v3-to-v4/src/extension-identities.ts b/packages/session/session-format-v3-to-v4/src/extension-identities.ts
 index 20b9c732ed..86039129f6 100644
 --- a/packages/session/session-format-v3-to-v4/src/extension-identities.ts

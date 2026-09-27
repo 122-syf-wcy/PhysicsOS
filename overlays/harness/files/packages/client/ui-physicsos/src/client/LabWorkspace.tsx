@@ -9,8 +9,10 @@
 
 import { useMemo } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { SnapshotStore } from './runtime-compat.ts'
+/* Type-only: pulls the layout shell's `main` SlotMap entry, the root-scope
+   contract every product surface is registered under. */
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import {
   isCurrentScene,
   isEnergyScene,
@@ -111,7 +113,8 @@ export interface PhysicsSurfaceInjected {
 }
 
 /** Slot props for the conversation surface overlay. */
-export type PhysicsSurfaceProps = PropsRuntime<'conversation.surface'> &
+export type PhysicsSurfaceProps =
+  Pick<PropsRuntime<'main'>, 'useSessions' | 'useWorkspaces'> &
   PropsLocale<'physicsos'> &
   InjectFace<PhysicsSurfaceInjected>
 

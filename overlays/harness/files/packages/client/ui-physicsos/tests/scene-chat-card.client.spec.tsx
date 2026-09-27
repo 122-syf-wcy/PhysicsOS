@@ -5,9 +5,12 @@ import type {
   ChatConversationViewNode, ChatSnapshot, ConversationEventInput,
   ConversationNodeDefinition, ConversationViewDefinition,
 } from '@deepseek-ai/dsh-client-runtime/client'
-import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-runtime/client'
-import { commandDefinition } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation-nodes/command.ts'
-import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation-nodes/chat-snapshot-builder.ts'
+import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
+/* These business Definitions moved to the Chat target package in 0.1.7; the
+   card's kind is a renderer of that target, so its test assembles through the
+   same Definitions the Chat view registers. */
+import { commandDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/command.ts'
+import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import {
   isPhysicsSceneEvent, physicsSceneCardDefinition, physicsSceneTurnDefinition,
@@ -79,16 +82,19 @@ class TestViewDefinitions {
   }
 }
 
-function entry(seq: number, type: string, data: unknown): ConversationEventInput {
+type DurableEntry = Extract<ConversationEventInput, { readonly type: 'event' }>
+
+function entry(seq: number, type: string, data: unknown): DurableEntry {
   return {
-    event: { seq, time: 1_700_000_000_000 + seq, type, data } as ConversationEventInput['event'],
-    view: undefined,
+    type: 'event',
+    event: { seq, time: 1_700_000_000_000 + seq, type, data } as DurableEntry['event'],
   }
 }
 
 function snapshot(entries: readonly ConversationEventInput[], hasMore = false): ChatSnapshot {
   const assembler = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
   assembler.replaceWindow(entries, hasMore)
+  assembler.activateTarget('chat')
   assembler.flush()
   const value = assembler.snapshot('chat') as ChatSnapshot | undefined
   if (value === undefined) throw new Error('chat view was not registered')
@@ -99,11 +105,11 @@ function node(value: ChatSnapshot, kind: string): ChatConversationViewNode | und
   return value.nodes.values().find(candidate => candidate.kind === kind)
 }
 
-/** Minimal chat snapshot the card's supersede selector reads. */
-const useSessionOf = (nodes: readonly { key: string; kind: string; anchorSeq: number }[]) => {
+/** Minimal Chat-target snapshot the card's supersede selector reads. */
+const useChatOf = (nodes: readonly { key: string; kind: string; anchorSeq: number }[]) => {
   const map = new Map(nodes.map(candidate => [candidate.key, candidate]))
-  return (selector: (snapshot: { chat: { nodes: typeof map } }) => unknown) =>
-    selector({ chat: { nodes: map } })
+  return (selector: (snapshot: { nodes: typeof map }) => unknown) =>
+    selector({ nodes: map })
 }
 
 const cardProps = (
@@ -121,7 +127,7 @@ const cardProps = (
   t,
   openSceneInLab,
   ...(recordAttempt === undefined ? {} : { recordAttempt }),
-  useSession: useSessionOf(nodes),
+  useChat: useChatOf(nodes),
 }) as unknown as Parameters<typeof SceneChatCard>[0]
 
 describe('physics scene chat card', () => {

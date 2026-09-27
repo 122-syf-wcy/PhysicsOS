@@ -684,7 +684,7 @@ describe('PhysicsOS shared /api policy', () => {
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
     const scoped =
-      await delivered.policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+      await delivered.policy.scopeEvents(request, events) as unknown as ScopedEvents
     const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
     expect(await iterator.next()).toMatchObject({ value: { rpcId: 'question-rpc' } })
@@ -776,7 +776,7 @@ describe('PhysicsOS shared /api policy', () => {
       },
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+    const scoped = await policy.scopeEvents(request, events) as unknown as ScopedEvents
 
     expect((await collect(scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)))
       .map(frame => frame.rpcId))

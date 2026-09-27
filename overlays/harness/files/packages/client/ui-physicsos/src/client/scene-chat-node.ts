@@ -13,14 +13,15 @@
  * loaded window (including every log written before the `turn` field).
  */
 
-import type { JsonValue, SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 /* Type-only: merges the `physics/scene` event type into SessionEventMap and
    brings the solve-summary wire shape the card renders. */
 import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 import type {
   ChatConversationViewNode, ConversationLocation, ConversationNodeDefinition,
-} from '@deepseek-ai/dsh-client-runtime/client'
-import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-client-runtime/client'
+} from './runtime-compat.ts'
+import { isAppendSurfaceEvent } from './runtime-compat.ts'
 
 /** One frozen scene snapshot as the chat card renders it. */
 export interface PhysicsSceneCardData {
@@ -35,7 +36,10 @@ export interface PhysicsSceneCardData {
   readonly scene: JsonValue
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+/* The merge-extensible renderer payload registry lives in the Chat target's
+   own `/client` module (see ui-plan and ui-goal, which merge it the same way);
+   the Conversation package no longer declares it. */
+declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap {
     /** Inline physics-scene card published by a physics tool call. */
     'physics-scene-card': PhysicsSceneCardData

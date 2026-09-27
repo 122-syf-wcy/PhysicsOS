@@ -1,22 +1,12 @@
+/* The shell owns the interactive brand row (it doubles as New Session), so the
+   occupant's wordmark is presentation only: no pointer affordance of its own. */
 .wordmark {
-  flex: 1;
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   overflow: hidden;
   padding: 0;
-  border: none;
-  background: transparent;
   color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  transition: opacity var(--physics-motion-fast) var(--physics-ease),
-    transform var(--physics-motion-fast) var(--physics-ease);
-}
-
-.wordmark:hover {
-  opacity: 0.84;
-  transform: translateY(-1px);
 }
 
 .name {

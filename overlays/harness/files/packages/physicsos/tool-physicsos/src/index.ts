@@ -192,6 +192,7 @@ export function apply(ctx: Context, config: Config): void {
     /* The snapshot rides the owning turn so the chat card can dock at the
        answer: the tool call's own events carry the turn, this one does not —
        read it back off the open turn/start. */
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing open-turn lookup; projection migration deferred.
     const events = exec.agent.session.snapshotEvents()
     let turn: number | undefined
     for (let index = events.length - 1; index >= 0; index--) {

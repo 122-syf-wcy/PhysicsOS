@@ -557,8 +557,6 @@ describe('sidebar 学习记录 entry', () => {
         logout={vi.fn(async () => {})}
         useAuth={selector => selector({ status: 'guest' })}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
     const button = screen.getByRole('button', { name: '学习记录' })
@@ -577,7 +575,7 @@ const renderSolvedCard = (questionId: string, recordAttempt?: (a: SelfCheckAttem
       t,
       openSceneInLab: vi.fn(),
       ...(recordAttempt === undefined ? {} : { recordAttempt }),
-      useSession: cardSession(),
+      useChat: cardSession(),
     } as unknown as Parameters<typeof SceneChatCard>[0])} />,
   )
 
@@ -625,7 +623,7 @@ describe('solved-card self-checks (the migrated practice loop)', () => {
         node: { key: 'card:plain', kind: 'physics-scene-card', anchorSeq: 1.9, data: plain },
         t,
         openSceneInLab: vi.fn(),
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(view.queryByText('自测')).toBeNull()

@@ -11,14 +11,16 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronLeftOutline14,
-  IconChevronRightOutline14,
-  IconPauseOutline16,
-  IconPlayOutline16,
-  IconRefreshOutline16,
+  IconChevronLeftOutlineMedium,
+  IconChevronRightOutlineMedium,
+  IconPauseOutlineMedium,
+  IconPlayOutlineMedium,
+  IconRefreshOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+/* Type-only: pulls the Chat target's SlotMap entry, its `ChatNodeDataMap`
+   merge (the card's kind), and the Session-scoped `useChat` standard hook. */
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 
@@ -58,7 +60,7 @@ export interface SceneChatCardInjected {
 
 /** Slot props for the inline scene card. */
 export type SceneChatCardProps =
-  PropsRuntime<'conversation.chat.node', 'physics-scene-card'>
+  Pick<PropsRuntime<'conversation.chat.node', 'physics-scene-card'>, 'node' | 'useSession' | 'useChat'>
   & InjectFace<SceneChatCardInjected>
   & PropsLocale<'physicsos'>
 
@@ -71,12 +73,14 @@ const SUMMARY_INTERVAL_MS = 250
 const ANSWER_BOUNDARY = new Set(['user', 'steering'])
 
 export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, recordAttempt, useSession,
+  node, t, openSceneInLab, recordAttempt, useChat,
 }: SceneChatCardProps) {
   const data: PhysicsSceneCardData = node.data
-  const superseded = useSession((snapshot) => {
+  /* Supersede rule reads the Chat target's materialized Nodes (the Session
+     snapshot carries no `chat` slice any more). */
+  const superseded = useChat((snapshot) => {
     let horizon = Number.POSITIVE_INFINITY
-    for (const candidate of snapshot.chat.nodes.values()) {
+    for (const candidate of snapshot.nodes.values()) {
       if (
         ANSWER_BOUNDARY.has(candidate.kind)
         && candidate.anchorSeq > node.anchorSeq
@@ -85,7 +89,7 @@ export const SceneChatCard = memo(function SceneChatCard({
         horizon = candidate.anchorSeq
       }
     }
-    for (const candidate of snapshot.chat.nodes.values()) {
+    for (const candidate of snapshot.nodes.values()) {
       if (
         candidate.kind === 'physics-scene-card'
         && candidate.anchorSeq > node.anchorSeq
@@ -276,7 +280,7 @@ function CardStage({
             commit(runtime.setRunning(!running))
           }}
         >
-          {running ? <IconPauseOutline16 size={14} /> : <IconPlayOutline16 size={14} />}
+          {running ? <IconPauseOutlineMedium size={14} /> : <IconPlayOutlineMedium size={14} />}
         </button>
         <button
           type="button"
@@ -287,7 +291,7 @@ function CardStage({
             commit(runtime.step(-clock.total * STEP_FRACTION))
           }}
         >
-          <IconChevronLeftOutline14 size={13} />
+          <IconChevronLeftOutlineMedium size={13} />
         </button>
         <button
           type="button"
@@ -298,7 +302,7 @@ function CardStage({
             commit(runtime.step(clock.total * STEP_FRACTION))
           }}
         >
-          <IconChevronRightOutline14 size={13} />
+          <IconChevronRightOutlineMedium size={13} />
         </button>
         <button
           type="button"
@@ -309,7 +313,7 @@ function CardStage({
             commit(runtime.seek(0))
           }}
         >
-          <IconRefreshOutline16 size={13} />
+          <IconRefreshOutlineMedium size={13} />
         </button>
         <CardClock source={frameSource} scale={clockScale} />
         <div className={css.trackWrap}>

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import { IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
+import { IconFolderOpenOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   InjectFace, PropsLocale, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -54,8 +54,7 @@ export interface WorkspacePanelInjected {
 }
 
 export type WorkspacePanelProps =
-  & PropsRuntime<'shell.overlay'>
-  & InjectFace<WorkspacePanelInjected>
+  InjectFace<WorkspacePanelInjected>
   & PropsLocale<'physicsos'>
 
 const OPAQUE_TITLE = /^[a-f0-9]{16,}$/i
@@ -267,7 +266,7 @@ export interface WorkspacePickerTriggerInjected {
 }
 
 export type WorkspacePickerTriggerProps =
-  & PropsRuntime<'conversation.hero.workspace'>
+  Pick<PropsRuntime<'conversation.hero.workspace'>, 'useWorkspaces'>
   & InjectFace<WorkspacePickerTriggerInjected>
   & PropsLocale<'physicsos'>
 
@@ -283,7 +282,7 @@ export function WorkspacePickerTrigger({
       aria-label={t('workspacePanel.title')}
       onClick={openPanel}
     >
-      <IconFolderOpen16 size={15} />
+      <IconFolderOpenOutlineMedium size={15} />
       <span className={css.pickName}>{humanName(first?.title, t)}</span>
     </button>
   )

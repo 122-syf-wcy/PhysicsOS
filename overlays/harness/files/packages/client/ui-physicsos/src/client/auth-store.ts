@@ -9,8 +9,11 @@
  * the honest switch, not a piecemeal state swap.
  */
 
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import type { AuthApi, AuthApiError, AuthUser, LoginInput, RegisterInput } from './auth-api.ts'
+
+/** Auth principal used by the product surfaces and their test fixtures. */
+export type { AuthUser } from './auth-api.ts'
 
 /** Auth lifecycle: `loading` until the first /me answer, then guest or authed. */
 export interface AuthState {

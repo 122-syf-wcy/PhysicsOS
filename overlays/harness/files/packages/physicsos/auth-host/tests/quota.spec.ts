@@ -254,7 +254,7 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+    const scoped = await policy.scopeEvents(request, events) as unknown as ScopedEvents
     const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
 
@@ -281,7 +281,7 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const scopedRequest = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await first.scopeEvents(scopedRequest, events as never) as unknown as ScopedEvents
+    const scoped = await first.scopeEvents(scopedRequest, events) as unknown as ScopedEvents
 
     const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
@@ -333,7 +333,7 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+    const scoped = await policy.scopeEvents(request, events) as unknown as ScopedEvents
 
     const frames: string[] = []
     for await (const frame of scoped.mux(
@@ -362,7 +362,7 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const scopedRequest = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(scopedRequest, events as never) as unknown as ScopedEvents
+    const scoped = await policy.scopeEvents(scopedRequest, events) as unknown as ScopedEvents
     const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
     await iterator.next()

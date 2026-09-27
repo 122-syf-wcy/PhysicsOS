@@ -11,6 +11,9 @@
   ],
   "references": [
     {
+      "path": "../../../tsconfig.physicsos.json"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {

@@ -133,8 +133,12 @@ async function capture() {
     }
   }
   await mkdir(overlayRoot, { recursive: true })
-  await writeFile(patchFile, diff.stdout, 'utf8')
-  console.log(`captured upstream-changes.patch (${diff.stdout.length} bytes)`)
+  /* Git represents an unchanged blank line as a single-space context row.
+     Emitting it as an empty row keeps `git diff --check` clean; git apply
+     accepts the same patch shape. */
+  const normalizedDiff = diff.stdout.replace(/^ $/gm, '')
+  await writeFile(patchFile, normalizedDiff, 'utf8')
+  console.log(`captured upstream-changes.patch (${normalizedDiff.length} bytes)`)
 }
 
 async function apply() {

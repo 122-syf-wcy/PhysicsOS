@@ -407,7 +407,7 @@ describe('wave solved cards', () => {
         },
         t,
         openSceneInLab: vi.fn(),
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('已验证')
@@ -428,7 +428,7 @@ describe('wave solved cards', () => {
         },
         t,
         openSceneInLab: vi.fn(),
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('振动加强')

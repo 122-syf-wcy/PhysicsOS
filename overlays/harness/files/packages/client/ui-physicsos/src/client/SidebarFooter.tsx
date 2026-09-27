@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconListPenOutline16, IconUserOutline16, Menu,
+  IconListPenOutlineMedium, IconUserOutlineMedium, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarFooterActionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { buildStamp } from './build-stamp.ts'
 import type { AuthState } from './auth-store.ts'
@@ -27,8 +27,7 @@ export type SidebarFooterInjected = {
 }
 
 export type SidebarFooterProps =
-  & PropsRuntime<'sidebar.footer.action'>
-  & SidebarFooterActionOwnerProps
+  SidebarFooterActionOwnerProps
   & InjectFace<SidebarFooterInjected>
   & PropsLocale<'physicsos'>
 
@@ -73,7 +72,7 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
         title={wide ? undefined : t('nav.history')}
         onClick={() => { openRecord?.() }}
       >
-        <IconListPenOutline16 size={wide ? 16 : 18} />
+        <IconListPenOutlineMedium size={wide ? 16 : 18} />
         {wide && <span>{t('nav.history')}</span>}
       </button>
       {user !== undefined && (
@@ -97,7 +96,7 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
             >
               <span className={css.avatar} aria-hidden>
                 {user.avatarUrl === undefined
-                  ? (user.displayName.trim().charAt(0) || <IconUserOutline16 size={14} />)
+                  ? (user.displayName.trim().charAt(0) || <IconUserOutlineMedium size={14} />)
                   : <img src={user.avatarUrl} alt="" className={css.avatarImg} />}
               </span>
               {wide && <span className={css.accountName}>{user.displayName}</span>}

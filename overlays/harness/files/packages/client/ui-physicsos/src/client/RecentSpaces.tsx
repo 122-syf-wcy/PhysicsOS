@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { SessionId, SessionSummary, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId, SessionSummary, SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import clsx from 'clsx'
@@ -27,7 +27,7 @@ export interface RecentSpacesInjected {
 
 /** Slot props for the sidebar recent-space list. */
 export type RecentSpacesProps =
-  PropsRuntime<'sidebar.workspaces'>
+  Pick<PropsRuntime<'sidebar.workspaces'>, 'wide' | 'useSessions' | 'useWorkspaces'>
   & InjectFace<RecentSpacesInjected>
   & PropsLocale<'physicsos'>
 
@@ -46,6 +46,11 @@ export function RecentSpaces({
   const items = useRecentExperiments(s => s.items)
   const sessions = useSessions(s => s)
   const archivedSessionIds = useWorkspaces(s => s.archivedSessionIds)
+  /* The Session Controller keeps no `current` field any more: the main view's
+     retained reference is the selection, and its source count is what the row
+     highlight follows. The list snapshot carries that count per row. */
+  const currentSessionId = useSessions(s =>
+    s.ids.find(id => (s.byId[id]?.retainedBy.mainView ?? 0) > 0))
   /* History shows only real conversations: blank sessions (a 新建对话 not yet
      spoken into), subagent runs, and archived rows are not listed. */
   const history = useMemo(() => {
@@ -107,8 +112,8 @@ export function RecentSpaces({
             <li key={session.id} className={css.row}>
               <button
                 type="button"
-                className={clsx(css.item, session.id === sessions.current && css.active)}
-                aria-current={session.id === sessions.current ? 'true' : undefined}
+                className={clsx(css.item, session.id === currentSessionId && css.active)}
+                aria-current={session.id === currentSessionId ? 'true' : undefined}
                 onClick={() => {
                   openSession(session.id)
                 }}

@@ -11,7 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ProductSurfaceBaseProps } from './surface-props.ts'
 import type {
   AnnotationRow, BankItemRow, BankPlanRow, BlueprintRow, ExportBundleRow, PaperApi, PaperJobWire, SourcePaperRow,
 } from './paper-api.ts'
@@ -36,9 +37,7 @@ export interface PaperWorkspaceInjected {
 }
 
 export type PaperWorkspaceProps =
-  PropsRuntime<'conversation.surface'> &
-  PropsLocale<'physicsos'> &
-  InjectFace<PaperWorkspaceInjected>
+  ProductSurfaceBaseProps & InjectFace<PaperWorkspaceInjected>
 
 const KIND_LABEL: Record<string, string> = {
   unit: '单元测试', weekly: '周考', monthly: '月考',

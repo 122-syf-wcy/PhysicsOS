@@ -28,7 +28,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconSearchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconSearchOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { knowledgeNodeOf } from '@physicsos/question-core'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 
@@ -404,7 +404,7 @@ export function ExperimentPicker({
           </div>
           <div className={css.browseControls}>
             <div className={css.searchField}>
-              <IconSearchOutline16 size={16} />
+              <IconSearchOutlineMedium size={16} />
               <input
                 type="search"
                 className={css.search}

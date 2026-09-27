@@ -1,4 +1,5 @@
-import type { en } from './locales.ts'
+import type { ModelsKey } from './locales.ts'
+import { protocolLabel as labelForProtocol } from './protocol-label.ts'
 
 /**
  * Human label for a pi-ai wire protocol. Unknown ids stay as the adapter name.
@@ -6,9 +7,6 @@ import type { en } from './locales.ts'
  * @param t - Models copy.
  * @returns the localized label, or `api` itself when the id is unknown.
  */
-export function protocolLabel(api: string, t: (key: keyof typeof en) => string): string {
-  if (api === 'openai-completions') return t('protocolChat')
-  if (api === 'openai-responses') return t('protocolResponses')
-  if (api === 'anthropic-messages') return t('protocolAnthropic')
-  return api
+export function protocolLabel(api: string, t: (key: ModelsKey) => string): string {
+  return labelForProtocol(t, api)
 }

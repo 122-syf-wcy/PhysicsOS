@@ -10,7 +10,7 @@
 
 import { useEffect, useRef } from 'react'
 import clsx from 'clsx'
-import { IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import type { ExperimentMeta } from './physics/experiment-summaries.ts'
 import type { PhysicsosKey } from './locales.ts'
@@ -62,7 +62,7 @@ export function ExperimentGuidePanel({ meta, title, t, onClose }: ExperimentGuid
               aria-label={t('lab.collapse')}
               onClick={onClose}
             >
-              <IconCloseOutline16 size={14} />
+              <IconCloseOutlineMedium size={14} />
             </button>
           </div>
         </div>

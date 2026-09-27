@@ -9,7 +9,7 @@ import {
 import type { AuthState } from '../src/client/auth-store.ts'
 import { AdminWorkspace } from '../src/client/AdminWorkspace.tsx'
 import { AuthGate } from '../src/client/AuthGate.tsx'
-import { SidebarBrand } from '../src/client/SidebarBrand.tsx'
+import { SidebarBrandName } from '../src/client/SidebarBrand.tsx'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import { zh } from '../src/client/locales.ts'
 
@@ -301,12 +301,8 @@ describe('sidebar identity', () => {
   it('renders the school under the brand when authed', () => {
     const state: AuthState = { status: 'authed', user: USER }
     const { getByText } = render(
-      <SidebarBrand
-        wide
-        openHome={vi.fn()}
+      <SidebarBrandName
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector(state)}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
         t={t}
       />,
     )
@@ -317,12 +313,8 @@ describe('sidebar identity', () => {
   it('hides the school line for guests', () => {
     const state: AuthState = { status: 'guest' }
     const { queryByText } = render(
-      <SidebarBrand
-        wide
-        openHome={vi.fn()}
+      <SidebarBrandName
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector(state)}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
         t={t}
       />,
     )
@@ -339,8 +331,6 @@ describe('sidebar identity', () => {
         openHome={vi.fn()}
         logout={logout}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector(state)}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
         t={t}
       />,
     )
@@ -362,8 +352,6 @@ describe('sidebar identity', () => {
         openAdmin={openAdmin}
         logout={vi.fn(async () => {})}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector({ status: 'authed', user: admin })}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
         t={t}
       />,
     )
@@ -381,8 +369,6 @@ describe('sidebar identity', () => {
         openAdmin={openAdmin}
         logout={vi.fn(async () => {})}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector({ status: 'authed', user: USER })}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
         t={t}
       />,
     )

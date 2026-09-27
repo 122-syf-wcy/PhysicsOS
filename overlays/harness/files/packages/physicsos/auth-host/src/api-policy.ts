@@ -314,6 +314,27 @@ const isOnboardingMutation = (payload: Record<string, unknown>): boolean => {
 const isEnvelope = (value: unknown): value is ClientEnvelope =>
   isRecord(value) && value['type'] === 'client-request'
 
+/** Project either the legacy flat payload or the 0.1.7 named-argument payload. */
+const policyPayloadOf = (payload: Record<string, unknown>): Record<string, unknown> => {
+  const args = payload['args']
+  if (!isRecord(args)) return payload
+  const request = args['request']
+  return isRecord(request) ? request : args
+}
+
+/** Put a rewritten policy payload back into the envelope's original wire shape. */
+const withPolicyPayload = (
+  wirePayload: Record<string, unknown>,
+  policyPayload: Record<string, unknown>,
+): Record<string, unknown> => {
+  const args = wirePayload['args']
+  if (!isRecord(args)) return policyPayload
+  const request = args['request']
+  return isRecord(request)
+    ? { ...wirePayload, args: { ...args, request: policyPayload } }
+    : { ...wirePayload, args: policyPayload }
+}
+
 const rpcIdOf = (body: ClientEnvelope): string =>
   typeof body.rpcId === 'string' ? body.rpcId : 'invalid-request'
 
@@ -677,7 +698,8 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     method: string,
     body: ClientEnvelope,
   ): Promise<{ request: Request; response?: Response }> => {
-    const payload = isRecord(body.payload) ? { ...body.payload } : {}
+    const wirePayload = isRecord(body.payload) ? { ...body.payload } : {}
+    const payload = { ...policyPayloadOf(wirePayload) }
     const rpcId = rpcIdOf(body)
 
     if (method === 'workspace.create') {
@@ -718,7 +740,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       const next = new Request(request.url, {
         method: request.method,
         headers: new Headers([...request.headers].filter(([name]) => name !== 'content-length')),
-        body: JSON.stringify({ ...body, payload }),
+        body: JSON.stringify({ ...body, payload: withPolicyPayload(wirePayload, payload) }),
         signal: request.signal,
       })
       return { request: next }
@@ -734,7 +756,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   ): Promise<Response> => {
     const parsed = await bodyOf(response)
     if (parsed === undefined) return response
-    const payload = isRecord(body.payload) ? body.payload : {}
+    const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
     const value = valueOf(parsed)
     if (!isRecord(value)) return response
     let changed = false
@@ -881,7 +903,8 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       }
 
       const url = new URL(request.url)
-      const method = url.pathname.startsWith('/api/') ? url.pathname.slice('/api/'.length) : ''
+      const endpoint = url.pathname.startsWith('/api/') ? url.pathname.slice('/api/'.length) : ''
+      const method = endpoint.split('/').join('.')
       if (request.method === 'POST') {
         const origin = request.headers.get('origin')
         const host = request.headers.get('host')
@@ -928,7 +951,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       }
       if (body === undefined) return next(request)
       const rpcId = rpcIdOf(body)
-      const payload = isRecord(body.payload) ? body.payload : {}
+      const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
       if (actor.credential?.kind === 'api-token'
         && actor.credential.scope === 'read'
         && !READ_ONLY_METHODS.has(method)) {

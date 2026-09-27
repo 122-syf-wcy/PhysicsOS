@@ -6,6 +6,7 @@ class FakeHarness {
   constructor() {
     this.calls = []
     this.handlers = undefined
+    this.sessionHandlers = new Map()
     this.muxClosed = false
     this.promptResponse = { accepted: true }
   }
@@ -23,7 +24,17 @@ class FakeHarness {
 
   async openMux(handlers) {
     this.handlers = handlers
+    const owner = this
     return {
+      async followSession(sessionId, sessionHandlers) {
+        owner.sessionHandlers.set(sessionId, sessionHandlers)
+        sessionHandlers.onFrame({ type: 'snapshot' })
+        return {
+          close: () => {
+            owner.sessionHandlers.delete(sessionId)
+          },
+        }
+      },
       close: async () => {
         this.muxClosed = true
       },
@@ -35,7 +46,7 @@ class FakeHarness {
   }
 
   emitSession(sessionId, event) {
-    this.emit({ type: 'session/event', sessionId, event })
+    this.sessionHandlers.get(sessionId)?.onFrame({ type: 'event', event })
   }
 }
 

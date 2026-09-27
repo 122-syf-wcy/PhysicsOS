@@ -29,7 +29,6 @@ const user: AuthUser = {
   role: 'SUPER_ADMIN',
   schoolId: 'platform',
   schoolName: '平台',
-  status: 'active',
 }
 
 const authedAs = (role: AuthUser['role']) =>

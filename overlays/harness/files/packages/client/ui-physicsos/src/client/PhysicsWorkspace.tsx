@@ -15,18 +15,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronDownOutline14,
-  IconChevronLeftOutline14,
-  IconChevronRightOutline14,
-  IconDownloadOutline16,
-  IconEllipsisOutline16,
-  IconFullscreenOutline16,
-  IconListPenOutline16,
-  IconPauseOutline16,
-  IconPlayOutline16,
-  IconQuestionOutline14,
-  IconRefreshOutline16,
-  IconSparkle16,
+  IconChevronDownOutlineMedium,
+  IconChevronLeftOutlineMedium,
+  IconChevronRightOutlineMedium,
+  IconDownloadOutlineMedium,
+  IconEllipsisOutlineMedium,
+  IconFullscreenOutlineMedium,
+  IconListPenOutlineMedium,
+  IconPauseOutlineMedium,
+  IconPlayOutlineMedium,
+  IconQuestionOutlineMedium,
+  IconRefreshOutlineMedium,
+  IconSparkleMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { STEP_FRACTION, useAnimationClock } from './animation-clock.ts'
@@ -555,7 +555,7 @@ export function PhysicsWorkspace({
       <header className={css.toolbar}>
         {onReturnToChat === undefined ? null : (
           <button type="button" className={css.tool} onClick={onReturnToChat}>
-            <IconChevronLeftOutline14 size={13} />
+            <IconChevronLeftOutlineMedium size={13} />
             {t('lab.backToChat')}
           </button>
         )}
@@ -576,7 +576,7 @@ export function PhysicsWorkspace({
               aria-label={t('lab.toolbar.switch')}
               onClick={onSwitchExperiment}
             >
-              <IconChevronDownOutline14 size={13} />
+              <IconChevronDownOutlineMedium size={13} />
             </button>
           )}
           <span className={css.saveState}>{snapshot.subtitle}</span>
@@ -623,7 +623,7 @@ export function PhysicsWorkspace({
                 commit(runtime.setRunning(true))
               }}
             >
-              {ended ? <IconRefreshOutline16 size={13} /> : <IconPlayOutline16 size={13} />}
+              {ended ? <IconRefreshOutlineMedium size={13} /> : <IconPlayOutlineMedium size={13} />}
               {ended ? t('lab.replay') : t('lab.run')}
             </button>
             <button
@@ -634,7 +634,7 @@ export function PhysicsWorkspace({
                 commit(runtime.setRunning(false))
               }}
             >
-              <IconPauseOutline16 size={13} />
+              <IconPauseOutlineMedium size={13} />
               {t('lab.pause')}
             </button>
             <button
@@ -645,7 +645,7 @@ export function PhysicsWorkspace({
                 commit(runtime.step(clock.total * STEP_FRACTION))
               }}
             >
-              <IconChevronRightOutline14 size={13} />
+              <IconChevronRightOutlineMedium size={13} />
               {t('lab.step')}
             </button>
             <button
@@ -656,7 +656,7 @@ export function PhysicsWorkspace({
                 commit(runtime.seek(0))
               }}
             >
-              <IconRefreshOutline16 size={13} />
+              <IconRefreshOutlineMedium size={13} />
               {t('lab.reset')}
             </button>
           </div>
@@ -669,7 +669,7 @@ export function PhysicsWorkspace({
                 setGuideOpen(true)
               }}
             >
-              <IconQuestionOutline14 size={13} />
+              <IconQuestionOutlineMedium size={13} />
               {t('lab.guide')}
             </button>
           )}
@@ -681,7 +681,7 @@ export function PhysicsWorkspace({
               setReportOpen(true)
             }}
           >
-            <IconListPenOutline16 size={13} />
+            <IconListPenOutlineMedium size={13} />
             {t('lab.report.open')}
           </button>
           <button
@@ -695,7 +695,7 @@ export function PhysicsWorkspace({
               if (sceneDrawer.open) sceneDrawer.toggle()
             }}
           >
-            <IconFullscreenOutline16 size={13} />
+            <IconFullscreenOutlineMedium size={13} />
             {focused ? t('lab.focus.exit') : t('lab.focus.enter')}
           </button>
           {focused ? null : (
@@ -755,7 +755,7 @@ export function PhysicsWorkspace({
               }}
             >
               <Mascot pose="think" variant="avatar" size={26} className={css.agentDockMascot} />
-              <IconSparkle16 size={12} className={css.agentDockSpark} />
+              <IconSparkleMedium size={12} className={css.agentDockSpark} />
               {t('lab.agent')}
             </button>
           )}
@@ -765,7 +765,7 @@ export function PhysicsWorkspace({
             aria-label={t('lab.more')}
             disabled
           >
-            <IconEllipsisOutline16 size={14} />
+            <IconEllipsisOutlineMedium size={14} />
           </button>
         </div>
       </header>
@@ -883,11 +883,11 @@ export function PhysicsWorkspace({
                 }}
               >
                 {running ? (
-                  <IconPauseOutline16 size={14} />
+                  <IconPauseOutlineMedium size={14} />
                 ) : ended ? (
-                  <IconRefreshOutline16 size={14} />
+                  <IconRefreshOutlineMedium size={14} />
                 ) : (
-                  <IconPlayOutline16 size={14} />
+                  <IconPlayOutlineMedium size={14} />
                 )}
               </button>
               <button
@@ -898,7 +898,7 @@ export function PhysicsWorkspace({
                   commit(runtime.step(-clock.total * STEP_FRACTION))
                 }}
               >
-                <IconChevronLeftOutline14 size={13} />
+                <IconChevronLeftOutlineMedium size={13} />
               </button>
               <button
                 type="button"
@@ -908,7 +908,7 @@ export function PhysicsWorkspace({
                   commit(runtime.step(clock.total * STEP_FRACTION))
                 }}
               >
-                <IconChevronRightOutline14 size={13} />
+                <IconChevronRightOutlineMedium size={13} />
               </button>
               <LiveClock source={frameSource} scale={clockScale} />
               <div className={css.trackWrap}>
@@ -969,7 +969,7 @@ export function PhysicsWorkspace({
                       exportTableCsv(snapshot.title, snapshot.table)
                     }}
                   >
-                    <IconDownloadOutline16 size={12} />
+                    <IconDownloadOutlineMedium size={12} />
                     {t('lab.exportCsv')}
                   </button>
                 ) : null}

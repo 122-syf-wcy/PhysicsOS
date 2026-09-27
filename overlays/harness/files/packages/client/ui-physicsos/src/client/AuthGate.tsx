@@ -12,8 +12,8 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import clsx from 'clsx'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import {
   createAuthApi,
@@ -48,8 +48,7 @@ export interface AuthGateInjected {
 }
 
 export type AuthGateProps =
-  & PropsRuntime<'shell.overlay'>
-  & PropsLocale<'physicsos'>
+  PropsLocale<'physicsos'>
   & InjectFace<AuthGateInjected>
   & { resetToken?: string }
 

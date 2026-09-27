@@ -255,19 +255,20 @@ export class HarnessWebClient {
    */
   async call(method, payload, context = {}) {
     const rpcId = randomUUID()
+    const endpoint = method.split('.').join('/')
     const headers = { 'content-type': 'application/json' }
     if (context.cookie !== undefined) headers.cookie = context.cookie
     const request = createAbortController(context.signal, this.requestTimeoutMs)
     let response
     try {
-      response = await this.fetchImpl(`${this.baseUrl}/api/${encodeURIComponent(method)}`, {
+      response = await this.fetchImpl(`${this.baseUrl}/api/${endpoint}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           type: 'client-request',
           rpcId,
-          method,
-          payload,
+          method: endpoint,
+          payload: { args: { request: payload } },
         }),
         signal: request.signal,
       })
@@ -343,10 +344,12 @@ export class HarnessWebClient {
         'WebSocket is not available in this Node runtime',
       )
     }
-    const url = new URL('/api/events.mux', this.baseUrl)
+    const url = new URL('/api/remote.mux', this.baseUrl)
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    const requestTimeoutMs = this.requestTimeoutMs
     const options =
       handlers.cookie === undefined ? undefined : { headers: { Cookie: handlers.cookie } }
+    const streams = new Map()
     let socket
     try {
       socket =
@@ -365,6 +368,12 @@ export class HarnessWebClient {
       rejectOpen = reject
       const onOpen = () => {
         opened = true
+        socket.send(JSON.stringify({
+          type: 'open',
+          streamId: '$events',
+          endpoint: '$events',
+          payload: { args: {} },
+        }))
         resolve(undefined)
       }
       const onMessage = (event) => {
@@ -378,8 +387,31 @@ export class HarnessWebClient {
           })
           return
         }
-        const payload = value?.payload
-        if (isRecord(payload)) handlers.onFrame(payload)
+        if (!isRecord(value) || typeof value.type !== 'string' || typeof value.streamId !== 'string') {
+          return
+        }
+        if (value.streamId === '$events') {
+          if (value.type === 'item' && isRecord(value.value)) handlers.onFrame(value.value)
+          if (value.type === 'error') {
+            const error = isRecord(value.error) ? value.error : {}
+            handlers.onClose?.(new Error(errorMessage(error.message, 'Harness event stream failed')))
+          }
+          if (value.type === 'end') handlers.onClose?.()
+          return
+        }
+        const stream = streams.get(value.streamId)
+        if (stream === undefined) return
+        if (value.type === 'item') {
+          stream.onItem(value.value)
+          return
+        }
+        streams.delete(value.streamId)
+        if (value.type === 'error') {
+          const error = isRecord(value.error) ? value.error : {}
+          stream.onClose(new Error(errorMessage(error.message, 'Harness stream failed')))
+        } else if (value.type === 'end') {
+          stream.onClose()
+        }
       }
       const onError = (event) => {
         const error = event instanceof Error ? event : new Error('Harness event stream failed')
@@ -421,9 +453,66 @@ export class HarnessWebClient {
     }
 
     return {
+      async followSession(sessionId, streamHandlers) {
+        const streamId = `session-${randomUUID()}`
+        let handle
+        const openedStream = new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            streams.delete(streamId)
+            reject(new BridgeError('HARNESS_STREAM_UNAVAILABLE', 'Harness session stream did not open'))
+          }, requestTimeoutMs)
+          timer.unref?.()
+          let settled = false
+          handle = {
+            close() {
+              if (!streams.delete(streamId)) return
+              if (socketOpen(socket)) socket.send(JSON.stringify({ type: 'cancel', streamId }))
+            },
+          }
+          streams.set(streamId, {
+            onItem(value) {
+              if (!settled && isRecord(value) && value.type === 'snapshot') {
+                settled = true
+                clearTimeout(timer)
+                resolve(handle)
+              }
+              streamHandlers.onFrame(value)
+            },
+            onClose(error) {
+              if (!settled) {
+                settled = true
+                clearTimeout(timer)
+                reject(error ?? new BridgeError('HARNESS_STREAM_UNAVAILABLE', 'Harness session stream closed before opening'))
+                return
+              }
+              streamHandlers.onClose?.(error)
+            },
+          })
+          socket.send(JSON.stringify({
+            type: 'open',
+            streamId,
+            endpoint: 'session/follow',
+            payload: {
+              args: {
+                request: {
+                  address: { kind: 'session', sessionId },
+                  assistantStream: true,
+                },
+              },
+            },
+          }))
+        })
+        return openedStream
+      },
       async close() {
         if (closed) return
         closed = true
+        if (socketOpen(socket)) {
+          for (const streamId of streams.keys()) {
+            socket.send(JSON.stringify({ type: 'cancel', streamId }))
+          }
+        }
+        streams.clear()
         try {
           socket.close?.()
         } finally {
@@ -478,6 +567,13 @@ function eventText(event) {
     : undefined
 }
 
+function streamFrameText(frame) {
+  if (frame.type !== 'chunk' || !isRecord(frame.chunk)) return undefined
+  return frame.chunk.type === 'text-delta' && typeof frame.chunk.text === 'string'
+    ? frame.chunk.text
+    : undefined
+}
+
 /**
  * One bridge run. The adapter consumes the returned runId and receives events
  * through the Tauri event channel.
@@ -504,6 +600,7 @@ export class SidecarBridge {
     this.sessions = new Map()
     this.runs = new Map()
     this.activeRunBySession = new Map()
+    this.sessionStreams = new Map()
     this.mux = undefined
     this.muxCookie = undefined
     this.muxPromise = undefined
@@ -659,6 +756,7 @@ export class SidecarBridge {
     }
     const effectiveCookie = cookie ?? session.cookie
     await this.ensureMux(effectiveCookie)
+    await this.openSessionEvents(sessionId)
 
     const runId = `run_${this.uuid()}`
     const run = {
@@ -677,6 +775,7 @@ export class SidecarBridge {
       const promptResponse = await this.harness.call(
         'session.prompt',
         {
+          requestId: runId,
           sessionId,
           mode: 'queue',
           content: [{ type: 'text', text }],
@@ -750,6 +849,8 @@ export class SidecarBridge {
     const mux = this.mux
     this.mux = undefined
     this.muxPromise = undefined
+    for (const stream of this.sessionStreams.values()) stream.close()
+    this.sessionStreams.clear()
     if (mux !== undefined) await mux.close()
     this.runs.clear()
     this.activeRunBySession.clear()
@@ -769,6 +870,8 @@ export class SidecarBridge {
     if (this.mux !== undefined) {
       const previous = this.mux
       this.mux = undefined
+      for (const stream of this.sessionStreams.values()) stream.close()
+      this.sessionStreams.clear()
       await previous.close()
     }
     this.muxCookie = cookie
@@ -792,6 +895,57 @@ export class SidecarBridge {
         throw error
       })
     await this.muxPromise
+  }
+
+  async openSessionEvents(sessionId) {
+    if (this.sessionStreams.has(sessionId)) return
+    if (this.mux === undefined) {
+      throw new BridgeError('HARNESS_STREAM_UNAVAILABLE', 'Harness event stream is not connected')
+    }
+    try {
+      const stream = await this.mux.followSession(sessionId, {
+        onFrame: frame => { this.handleSessionStreamFrame(sessionId, frame) },
+        onClose: error => { this.handleSessionStreamClosed(sessionId, error) },
+      })
+      this.sessionStreams.set(sessionId, stream)
+    } catch (error) {
+      throw new BridgeError(
+        'HARNESS_STREAM_UNAVAILABLE',
+        errorMessage(error, 'Harness session stream failed to open'),
+        { reason: error instanceof Error ? error.stack ?? error.message : String(error) },
+      )
+    }
+  }
+
+  handleSessionStreamFrame(sessionId, frame) {
+    if (!isRecord(frame) || typeof frame.type !== 'string') return
+    if (frame.type === 'event' && isRecord(frame.event)) {
+      this.handleSessionEvent(sessionId, frame.event)
+      return
+    }
+    if (frame.type === 'assistant-stream' && isRecord(frame.frame)) {
+      const runId = this.activeRunBySession.get(sessionId)
+      const run = runId === undefined ? undefined : this.runs.get(runId)
+      if (run === undefined || run.status !== 'running') return
+      this.resetRunTimer(run)
+      const text = streamFrameText(frame.frame)
+      if (text !== undefined) this.emit({ type: 'text_delta', runId: run.id, text })
+    }
+  }
+
+  handleSessionStreamClosed(sessionId, error) {
+    this.sessionStreams.delete(sessionId)
+    if (this.closing) return
+    const runId = this.activeRunBySession.get(sessionId)
+    const run = runId === undefined ? undefined : this.runs.get(runId)
+    if (run !== undefined && run.status === 'running') {
+      this.finishRun(run, {
+        type: 'run_failed',
+        runId: run.id,
+        code: 'HARNESS_DISCONNECTED',
+        message: errorMessage(error, 'Harness session stream closed'),
+      })
+    }
   }
 
   handleMuxFrame(frame) {
@@ -832,6 +986,17 @@ export class SidecarBridge {
           },
         )
         .catch(() => {})
+      return
+    }
+    if ((frame.event === 'user-questions/request' || frame.event === 'approval/request')
+      && isRecord(frame.request)) {
+      const sessionId = typeof frame.request.sessionId === 'string'
+        ? frame.request.sessionId
+        : isRecord(frame.request.request) && typeof frame.request.request.sessionId === 'string'
+          ? frame.request.request.sessionId
+          : undefined
+      if (sessionId === undefined) return
+      this.handleMuxFrame({ type: 'question/requested', sessionId })
     }
   }
 
@@ -890,6 +1055,8 @@ export class SidecarBridge {
     run.status = terminal.type === 'run_completed' ? 'completed' : 'failed'
     this.clearRunTimer(run)
     this.activeRunBySession.delete(run.sessionId)
+    this.sessionStreams.get(run.sessionId)?.close()
+    this.sessionStreams.delete(run.sessionId)
     this.emit(terminal)
     this.pruneRuns()
   }

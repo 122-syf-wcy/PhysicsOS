@@ -2,18 +2,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HomeActions } from '../src/client/HomeActions.tsx'
+import { HomeHero, type HomeHeroProps } from '../src/client/HomeHero.tsx'
 import { PhysicsProfileSeat } from '../src/client/PhysicsProfileSeat.tsx'
-import { SidebarNew } from '../src/client/SidebarNew.tsx'
 import { createPhysicsProfileController, readStoredProfile } from '../src/client/profile-store.ts'
 import { STUDENT_PROFILES, TEACHER_PROFILES, runtimePresetOf } from '../src/client/profiles.ts'
-import { HomeBrand } from '../src/client/HomeBrand.tsx'
+import { HomeBrand, HomeBrandMark } from '../src/client/HomeBrand.tsx'
 import { PhysicsOSMark } from '../src/client/PhysicsOSMark.tsx'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import { RecentSpaces, type RecentSpacesProps } from '../src/client/RecentSpaces.tsx'
-import { SidebarBrand } from '../src/client/SidebarBrand.tsx'
+import { SidebarBrandMark, SidebarBrandName } from '../src/client/SidebarBrand.tsx'
 import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
-import { SidebarNav } from '../src/client/SidebarNav.tsx'
+import {
+  AdminPanelIcon, LabPanelIcon, LibraryPanelIcon, NoticePanelIcon,
+  PaperPanelIcon, RecordPanelIcon,
+} from '../src/client/SidebarPanels.tsx'
 import type { AuthUser } from '../src/client/auth-api.ts'
 import type { AuthState } from '../src/client/auth-store.ts'
 import { fillComposerDraft } from '../src/client/fill-draft.ts'
@@ -65,6 +68,7 @@ const sessionsHook = (state: {
     updatedAt: number
     blank: boolean
     running: boolean
+    retainedBy: Readonly<Record<string, number>>
     origin?: 'subagent'
   }>
   current?: string
@@ -122,7 +126,7 @@ const renderSolved = (
       },
       t,
       openSceneInLab,
-      useSession: cardSession(),
+      useChat: cardSession(),
     } as unknown as Parameters<typeof SceneChatCard>[0])} />,
   )
 
@@ -134,122 +138,51 @@ describe('PhysicsOS overlay presentation', () => {
     expect(mark?.getAttribute('aria-hidden')).toBe('true')
   })
 
-  it('renders the wide wordmark and returns Home', () => {
-    const openHome = vi.fn()
+  it('renders the wide wordmark with the school tenant', () => {
     render(
-      <SidebarBrand
-        wide
-        openHome={openHome}
-        useAuth={selector => selector({ status: 'guest' })}
+      <SidebarBrandName
+        useAuth={useAuthAs('STUDENT')}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '回到首页' }))
-    expect(openHome).toHaveBeenCalledOnce()
+    expect(screen.getByText('PhysicsOS')).toBeTruthy()
+    expect(screen.getByText('规格中学')).toBeTruthy()
   })
 
-  it('renders the rail mark without a button', () => {
-    const { container } = render(
-      <SidebarBrand
-        wide={false}
-        openHome={vi.fn()}
-        useAuth={selector => selector({ status: 'guest' })}
-        t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-      />,
-    )
-    expect(container.querySelector('button')).toBeNull()
+  /* The shell owns the brand row, the New Session control, and the panel rows
+     in 0.1.7, so the product contributes occupants rather than a private rail:
+     the mark at the shell's requested edge, and one glyph per surface. */
+  it('renders the brand mark at the shell-requested edge', () => {
+    const { container } = render(<SidebarBrandMark size={24} />)
     expect(container.querySelector('img')?.getAttribute('src'))
       .toBe('/physicsos/brand/physicsos-mark-128.png')
+    expect(container.querySelector('img')?.getAttribute('width')).toBe('24')
   })
 
-  it('keeps explore seats clickable with secondary copy', () => {
-    const openSurface = vi.fn()
-    const surface = createPhysicsSurfaceController()
-    render(
-      <SidebarNav
-        wide
-        openSurface={openSurface}
-        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
-        useAuth={useAuthAs('TEACHER')}
-        t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-      />,
-    )
-    expect(screen.getByText('主页')).toBeTruthy()
-    expect(screen.getByText('探索')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '首页' }))
-    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
-    expect(openSurface).toHaveBeenCalledTimes(2)
-    expect(openSurface).toHaveBeenNthCalledWith(2, 'lab', true)
-    expect(screen.getByRole('button', { name: '物理实验室' }).getAttribute('disabled')).toBeNull()
-    /* Question intake lives in the conversation now; no 试题空间 rail item. */
-    expect(screen.queryByRole('button', { name: '试题空间' })).toBeNull()
-    /* PhysicsOS is a personal learning product, not a classroom LMS. */
-    expect(screen.queryByRole('button', { name: /班级教学|我的班级/ })).toBeNull()
-  })
-
-  it('offers 出卷专区 to teaching roles only', () => {
-    /* The rail is where the invitation lives. A student who can see the entry
-       can open a surface whose every button would be refused by the host, which
-       is a worse answer than not offering it — so the entry follows the role,
-       and only a teacher-or-above sees it. */
-    const renderNav = (role?: Parameters<typeof useAuthAs>[0]) => render(
-      <SidebarNav
-        wide
-        openSurface={vi.fn()}
-        usePhysicsSurface={selector => selector({ surface: 'home' })}
-        useAuth={useAuthAs(role)}
-        t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-      />,
-    )
-
-    for (const role of ['TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'] as const) {
-      const view = renderNav(role)
-      expect(screen.getByRole('button', { name: '出卷专区' }), role).toBeTruthy()
-      view.unmount()
-    }
-
-    /* A student, and a visitor whose session has not resolved yet, get the rest
-       of the rail and no door they cannot open. */
-    for (const role of ['STUDENT', undefined] as const) {
-      const view = renderNav(role)
-      expect(screen.queryByRole('button', { name: '出卷专区' }), String(role)).toBeNull()
-      expect(screen.getByRole('button', { name: '物理实验室' }), String(role)).toBeTruthy()
-      expect(screen.getByRole('button', { name: '资源库' }), String(role)).toBeTruthy()
-      view.unmount()
+  it('renders one product glyph per panellist row at the requested edge', () => {
+    for (const [Glyph, label] of [
+      [LabPanelIcon, '物理实验室'],
+      [NoticePanelIcon, '反馈'],
+      [LibraryPanelIcon, '资源库'],
+      [RecordPanelIcon, '学习记录'],
+      [PaperPanelIcon, '出卷专区'],
+      [AdminPanelIcon, '管理后台'],
+    ] as const) {
+      const { container } = render(<Glyph size={18} active={false} />)
+      const svg = container.querySelector('svg')
+      expect(svg, label).not.toBeNull()
+      expect(svg?.getAttribute('width'), label).toBe('18')
+      /* The shell owns the row's accessible name; the glyph is decorative. */
+      expect(container.querySelector('button'), label).toBeNull()
+      cleanup()
     }
   })
 
-  it('renders rail navigation without labels', () => {
-    const openSurface = vi.fn()
-    render(
-      <SidebarNav
-        wide={false}
-        openSurface={openSurface}
-        usePhysicsSurface={selector => selector({ surface: 'home' })}
-        useAuth={useAuthAs('TEACHER')}
-        t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-      />,
-    )
-    expect(screen.queryByText('首页')).toBeNull()
-    expect(screen.queryByText('主页')).toBeNull()
-    expect(screen.getByRole('navigation', { name: 'PhysicsOS' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '首页' }).getAttribute('title')).toBe('首页')
-    expect(screen.getByRole('button', { name: '物理实验室' }).getAttribute('title')).toBe('物理实验室')
-    expect(screen.queryByRole('button', { name: '试题空间' })).toBeNull()
-    /* The resting rail reports the drawer as closed, so navigating from it
-       cannot flip the rail open over the surface it just asked for. */
-    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
-    expect(openSurface).toHaveBeenCalledWith('lab', false)
+  it('scopes the hero mark to the shell headline without adding chrome', () => {
+    const { container } = render(<HomeBrandMark size={34} className="headline-mark" />)
+    const mark = container.querySelector('img')
+    expect(mark?.getAttribute('src')).toBe('/physicsos/brand/physicsos-mark-128.png')
+    expect(mark?.getAttribute('class')).toContain('headline-mark')
   })
 
   it('keeps unavailable footer destinations disabled', () => {
@@ -262,8 +195,6 @@ describe('PhysicsOS overlay presentation', () => {
         logout={vi.fn(async () => {})}
         useAuth={selector => selector({ status: 'guest' })}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
     /* 学习记录 is a live destination (the learning-record surface); the footer
@@ -275,7 +206,7 @@ describe('PhysicsOS overlay presentation', () => {
   })
 
   it('renders the home brand copy', () => {
-    render(<HomeBrand t={t} useSessions={neverHook} useWorkspaces={neverHook} />)
+    render(<HomeBrand t={t} />)
     expect(screen.getByText('PhysicsOS')).toBeTruthy()
     expect(screen.getByText('探索一个物理世界')).toBeTruthy()
     expect(screen.getByText('描述一个物理现象、创建实验，或直接输入一道试题。')).toBeTruthy()
@@ -315,8 +246,6 @@ describe('PhysicsOS overlay presentation', () => {
         openSurface={openSurface}
         useRecentExperiments={useRecentExperiments}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
@@ -345,8 +274,6 @@ describe('PhysicsOS overlay presentation', () => {
         openSurface={openSurface}
         useRecentExperiments={useRecentExperiments}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
     expect(screen.getByText('正电粒子垂直进入匀强磁场')).toBeTruthy()
@@ -401,28 +328,36 @@ describe('PhysicsOS overlay presentation', () => {
     })
   })
 
-  it('opens a create menu from 新建 instead of starting a session immediately', () => {
-    const startSession = vi.fn()
+  /* `新建` is the shell's New Session control now (it starts a session, the
+     way every other Harness product does). "新建物理实验" is a product creation
+     intent, so it lives with the other product entrances on the blank-Session
+     hero; the hero itself must disappear once the Session is engaged. */
+  const heroProps = (
+    blank: boolean,
+    openSurface: (id: 'home' | 'lab' | 'record', sceneRef?: never) => void,
+  ): HomeHeroProps => ({
+    useSession: <S,>(selector: (snapshot: { blank: boolean }) => S): S => selector({ blank }),
+    useRecentExperiments: (selector: (snapshot: { items: never[] }) => unknown) =>
+      selector({ items: [] }),
+    openSurface,
+    t,
+  }) as unknown as HomeHeroProps
+
+  it('shows the product front page on a blank Session and creates through the picker', () => {
     const openSurface = vi.fn()
     render(
-      <SidebarNew
-        wide
-        startSession={startSession}
-        openSurface={openSurface}
-        t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-      />,
+      <HomeHero {...heroProps(true, openSurface)} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '新建' }))
-    expect(startSession).not.toHaveBeenCalled()
-    expect(screen.getByRole('menuitem', { name: '新建物理实验' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: '新建对话' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: '新建空白场景' }).getAttribute('disabled')).not.toBeNull()
-    expect(screen.getByRole('menuitem', { name: '导入场景' }).getAttribute('disabled')).not.toBeNull()
-    fireEvent.click(screen.getByRole('menuitem', { name: '新建物理实验' }))
+    expect(screen.getByText('探索一个物理世界')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
-    expect(startSession).not.toHaveBeenCalled()
+  })
+
+  it('keeps the front page out of an engaged Session', () => {
+    const { container } = render(
+      <HomeHero {...heroProps(false, vi.fn())} />,
+    )
+    expect(container.querySelector('[data-physicsos-home]')).toBeNull()
   })
 
   it('offers only PhysicsOS profiles and selects the mapped Harness preset', async () => {
@@ -438,8 +373,6 @@ describe('PhysicsOS overlay presentation', () => {
         usePhysicsProfile={selector => selector(controller.store.getSnapshot())}
         select={id => controller.select(id)}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '学习模式' }))
@@ -474,7 +407,6 @@ describe('PhysicsOS overlay presentation', () => {
         openSession={vi.fn()}
         archiveSession={vi.fn()}
         useRecentExperiments={useRecentExperiments}
-        expandSidebar={vi.fn()}
         t={t}
         useSessions={emptySessions}
         useWorkspaces={emptyWorkspaces}
@@ -509,7 +441,6 @@ describe('PhysicsOS overlay presentation', () => {
         openSession={vi.fn()}
         archiveSession={vi.fn()}
         useRecentExperiments={useRecentExperiments}
-        expandSidebar={vi.fn()}
         t={t}
         useSessions={emptySessions}
         useWorkspaces={emptyWorkspaces}
@@ -531,11 +462,26 @@ describe('PhysicsOS overlay presentation', () => {
     const useSessions = sessionsHook({
       ids: ['s1', 's2', 's3', 's4'],
       byId: {
-        s1: { id: 's1', displayTitle: '磁场题解答', updatedAt: now - 120_000, blank: false, running: false },
-        s2: { id: 's2', displayTitle: '平抛运动讨论', updatedAt: now - 60_000, blank: false, running: false },
-        s3: { id: 's3', displayTitle: '空白会话', updatedAt: now, blank: true, running: false },
-        s4: { id: 's4', displayTitle: '子代理运行', updatedAt: now - 30_000, blank: false, running: false, origin: 'subagent' },
-        s5: { id: 's5', displayTitle: '已归档会话', updatedAt: now - 10_000, blank: false, running: false },
+        s1: {
+          id: 's1', displayTitle: '磁场题解答', updatedAt: now - 120_000,
+          blank: false, running: false, retainedBy: { mainView: 1 },
+        },
+        s2: {
+          id: 's2', displayTitle: '平抛运动讨论', updatedAt: now - 60_000,
+          blank: false, running: false, retainedBy: {},
+        },
+        s3: {
+          id: 's3', displayTitle: '空白会话', updatedAt: now,
+          blank: true, running: false, retainedBy: {},
+        },
+        s4: {
+          id: 's4', displayTitle: '子代理运行', updatedAt: now - 30_000,
+          blank: false, running: false, retainedBy: {}, origin: 'subagent',
+        },
+        s5: {
+          id: 's5', displayTitle: '已归档会话', updatedAt: now - 10_000,
+          blank: false, running: false, retainedBy: {},
+        },
       },
       current: 's1',
     })
@@ -549,7 +495,6 @@ describe('PhysicsOS overlay presentation', () => {
         openSession={openSession}
         archiveSession={archiveSession}
         useRecentExperiments={emptyRecent}
-        expandSidebar={vi.fn()}
         t={t}
         useSessions={useSessions}
         useWorkspaces={workspacesHook(['s5'])}

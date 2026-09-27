@@ -39,7 +39,7 @@ const mount = (items: ReturnType<typeof workspace>[] = [], names = ['我的工�
   render(
     <WorkspacePanel
       usePanel={usePanel}
-      useWorkspaces={useWorkspaces as never} useSessions={neverHook}
+      useWorkspaces={useWorkspaces as never}
       createWorkspace={createWorkspace}
       renameWorkspace={renameWorkspace}
       openWorkspace={openWorkspace}
@@ -49,8 +49,6 @@ const mount = (items: ReturnType<typeof workspace>[] = [], names = ['我的工�
   )
   return { createWorkspace, renameWorkspace, openWorkspace, close, names }
 }
-
-const neverHook = (() => { throw new Error('unused hook') }) as never
 
 describe('WorkspacePanel', () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks() })
@@ -103,8 +101,8 @@ describe('WorkspacePickerTrigger', () => {
     render(
       <WorkspacePickerTrigger
         usePanel={usePanel}
-        useWorkspaces={useWorkspaces as never} useSessions={neverHook}
-        openPanel={openPanel} open onPick={() => {}} onClose={() => {}}
+        useWorkspaces={useWorkspaces as never}
+        openPanel={openPanel}
         t={t as never}
       />,
     )

@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react'
 import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { NoticeApi, PlatformNoticeRow } from './notice-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import { markdownLabels } from './markdown-labels.ts'
 import {
   AdminCard,
   AdminCardMeta,
@@ -116,7 +117,7 @@ export function AdminPlatformNoticeTab({ api, t }: AdminPlatformNoticeTabProps):
         <div className={dialogCss.copy}>
           {body.trim() === ''
             ? <p className={dialogCss.previewEmpty}>{t('admin.platformNotice.previewEmpty')}</p>
-            : <MarkdownText text={body} />}
+            : <MarkdownText text={body} labels={markdownLabels(t)} />}
         </div>
       </div>
       <label className={css.checkbox}>

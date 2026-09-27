@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconSparkleMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import type { PhysicsAgentToolCall } from './physics/physics-agent.ts'
 import type { TutorScript, TutorStage } from './physics/physics-tutor.ts'
@@ -68,7 +68,7 @@ export function TutorCard({ script, t, runTools }: TutorCardProps) {
   return (
     <article className={css.agentCard} data-physicsos-tutor={script.id}>
       <div className={css.tutorTopic}>
-        <IconSparkle16 size={13} />
+        <IconSparkleMedium size={13} />
         {script.topic}
       </div>
 

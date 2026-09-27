@@ -113,7 +113,7 @@ function PluginGroup({
           </tr>
         </thead>
         <tbody>
-          {entries.map(entry => {
+          {entries.map((entry) => {
             const enabling = entry.status === 'disabled'
             const disabled = busy !== undefined || (enabling && !canEnable(entry))
             return (

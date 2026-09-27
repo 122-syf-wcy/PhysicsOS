@@ -2,9 +2,9 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronRightOutline14,
-  IconCloseOutline16,
-  IconSettingsOutline14,
+  IconChevronRightOutlineMedium,
+  IconCloseOutlineMedium,
+  IconSettingsOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import css from './LabWorkspace.module.css'
@@ -75,7 +75,7 @@ export function ResponsiveInspectorToggle({
       title={label}
       onClick={controller.toggle}
     >
-      <IconSettingsOutline14 size={14} />
+      <IconSettingsOutlineMedium size={14} />
     </button>
   )
 }
@@ -145,7 +145,7 @@ export function ResponsiveInspector({
               title={collapseLabel}
               onClick={onCollapse}
             >
-              <IconChevronRightOutline14 size={14} />
+              <IconChevronRightOutlineMedium size={14} />
             </button>
           )}
           <button
@@ -156,7 +156,7 @@ export function ResponsiveInspector({
             title={closeLabel}
             onClick={controller.close}
           >
-            <IconCloseOutline16 size={14} />
+            <IconCloseOutlineMedium size={14} />
           </button>
         </div>
         <div className={css.panelBody}>{children}</div>

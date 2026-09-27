@@ -921,6 +921,15 @@ export const zh = {
   'role.TEACHER': '教师',
   'role.SCHOOL_ADMIN': '学校管理员',
   'role.SUPER_ADMIN': '平台管理员',
+  /* Chrome for the shared Markdown renderer (code fences and footnotes). The
+     product reads notices and admin copy through it, so the labels are
+     PhysicsOS's own rather than the Chat target's. */
+  'markdown.copy': '复制',
+  'markdown.copied': '已复制',
+  'markdown.code': '代码',
+  'markdown.wrap': '自动换行',
+  'markdown.unwrap': '取消换行',
+  'markdown.footnotes': '脚注',
 } satisfies Record<string, string>
 
 /** Every translation key — the union `zh` defines and `en` must mirror. */
@@ -1858,4 +1867,10 @@ export const en = {
   'role.TEACHER': 'Teacher',
   'role.SCHOOL_ADMIN': 'School admin',
   'role.SUPER_ADMIN': 'Platform admin',
+  'markdown.copy': 'Copy',
+  'markdown.copied': 'Copied',
+  'markdown.code': 'Code',
+  'markdown.wrap': 'Wrap lines',
+  'markdown.unwrap': 'No wrap',
+  'markdown.footnotes': 'Footnotes',
 } satisfies Record<PhysicsosKey, string>
