@@ -23,6 +23,12 @@ const OVERLAY_PATHS = [
   'packages/client/connection/src/api-policy.ts',
   'packages/bundle/web-app/presets/physics-student.patch.yml',
   'tsconfig.physicsos.json',
+  /* The branded document shell. Upstream ships its own index.html whose title is
+     rewritten by the vite build from `DSH_CLIENT_TITLE` (defaulting to
+     "DSH Local Build"); we replace the file outright so the served document is
+     branded regardless of build env. Overlay, not a patch hunk: a full-file
+     replacement re-applied as a patch drifts the moment either side changes. */
+  'apps/web/index.html',
   'apps/web/public/physicsos',
   /* Generated-image source material (prompt manifests + alternates) kept out
      of public/ so dist stays lean; mirrored like the shipped assets. */
