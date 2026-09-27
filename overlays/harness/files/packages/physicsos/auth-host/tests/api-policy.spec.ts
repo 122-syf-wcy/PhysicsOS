@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IncomingMessage } from 'node:http'
-import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import {
   createApiPolicy,
   type ApiPolicyActor,
@@ -686,7 +685,7 @@ describe('PhysicsOS shared /api policy', () => {
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
     const scoped =
       await delivered.policy.scopeEvents(request, events as never) as unknown as ScopedEvents
-    const source = scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)
+    const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
     expect(await iterator.next()).toMatchObject({ value: { rpcId: 'question-rpc' } })
 
@@ -779,16 +778,16 @@ describe('PhysicsOS shared /api policy', () => {
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
     const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
 
-    expect((await collect(scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))
+    expect((await collect(scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)))
       .map(frame => frame.rpcId))
       .toEqual(['mux-owned'])
-    expect((await collect(scoped.host({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))
+    expect((await collect(scoped.host({ rpcId: 'test', payload: {} }, new AbortController().signal)))
       .map(frame => frame.rpcId))
       .toEqual(['host-session', 'host-workspace', 'host-order', 'host-archive'])
-    expect((await collect(scoped.host({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))[2]).toMatchObject({
+    expect((await collect(scoped.host({ rpcId: 'test', payload: {} }, new AbortController().signal)))[2]).toMatchObject({
       payload: { workspaceIds: ['owned-workspace'] },
     })
-    expect((await collect(scoped.host({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))[3]).toMatchObject({
+    expect((await collect(scoped.host({ rpcId: 'test', payload: {} }, new AbortController().signal)))[3]).toMatchObject({
       payload: { archivedSessionIds: ['owned-session'] },
     })
   })

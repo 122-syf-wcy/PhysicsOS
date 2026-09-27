@@ -285,6 +285,41 @@ deployed. Preserve the image digest and commit SHA together in the release
 record. The format gate is intentionally scoped to the deployment-owned paths
 until the repository-wide Prettier baseline is reconciled.
 
+### Harness `dsh-v0.1.7-rc.2` sync (2026-09-27)
+
+The pinned Harness moved from `47f943859bef60e4160492346772ded9b24f765a` to
+`477b4f420553e8a52c2fbccc464d7561b239c443` (`dsh-v0.1.7-rc.2`). The
+compatibility patch records these interface decisions:
+
+- `client-connection` now requires the `credentials` service and dispatches
+  shared `/api` calls through registered RPC interceptors; the removed
+  `apiProxy` fallback is not restored. PhysicsOS adds policy hooks for request
+  authorization, fetch rewriting, and forwarded-event admission. The auth-host
+  account/session/workspace ownership ledger remains the authority for `/api`;
+  cross-account reads and writes still fail closed.
+- Private workspace provisioning now uses the target `workspaceRegistry`
+  service. The old `apiProxy.workspace.create/rename` seam was removed upstream.
+- Session persistence now reads released V3 (`session.v3.jsonl` or
+  `session.v3.jsonl.zstd`) and publishes a verified V4 successor on an explicit
+  write. Existing V3/Zstd logs are not deleted or rewritten during read-only
+  access, and `physics/scene` is admitted by the historical V3-to-V4 converter.
+  Rollback requiring an older Harness must restore the pre-upgrade session
+  volume or keep writes stopped; do not down-convert in place.
+- Connection's multipart binary response path is retained. Paper uploads and
+  PhysicsOS image imports continue through the attachment/binary framing rather
+  than base64 JSON substitution.
+- Model traffic remains `DEEPSEEK_BASE_URL -> 127.0.0.1:
+  ${PHYSICSOS_MODEL_POOL_PORT}` and the model-pool proxy remains the only
+  provider-selection layer.
+- `class-host` is not mounted in the production Web composition. `plugin-center`
+  is mounted immediately after `ops-host`; the package remains available for
+  migration and explicit administrative use.
+
+Rollback is application-first: restore the previous image digest and the
+submodule pointer/overlay pair from `47f943859bef60e4160492346772ded9b24f765a`
+before serving traffic, then reopen the preserved PostgreSQL/session volumes.
+Never delete existing session logs during rollback.
+
 ## 5. Build and release
 
 Build locally:

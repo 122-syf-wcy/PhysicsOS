@@ -19,9 +19,65 @@
  */
 
 import type { IncomingMessage } from 'node:http'
-import type {
-  EventsApi, HostFrame, MuxFrame, RpcRequest,
-} from '@deepseek-ai/dsh-host-apiproxy/api'
+
+interface LegacyRpcRequest<T = unknown> {
+  readonly rpcId: string
+  readonly payload: T
+}
+
+interface LegacyEventsApi {
+  mux(
+    request: LegacyRpcRequest,
+    signal: AbortSignal,
+  ): AsyncIterable<LegacyRpcRequest>
+  host(
+    request: LegacyRpcRequest,
+    signal: AbortSignal,
+  ): AsyncIterable<LegacyRpcRequest>
+}
+
+type RpcRequest<T = unknown> = LegacyRpcRequest<T>
+type EventsApi = LegacyEventsApi
+
+type MuxFrame =
+  | { readonly type: 'stream/error' }
+  | { readonly type: 'question/requested'; readonly sessionId: string }
+  | {
+    readonly type: 'approval/requested'
+    readonly sessionId: string
+    readonly approvalId: string
+  }
+  | {
+    readonly type: 'question/resolved'
+    readonly sessionId: string
+    readonly questionRpcId: string
+  }
+  | {
+    readonly type: 'approval/resolved'
+    readonly sessionId: string
+    readonly approvalId: string
+  }
+
+type HostFrame =
+  | { readonly type: 'stream/error' }
+  | {
+    readonly type: 'host/session-added' | 'host/session-removed' | 'host/session-status' | 'host/agent-error'
+    readonly sessionId: string
+  }
+  | {
+    readonly type: 'host/workspace-changed'
+    readonly workspace: { readonly workspaceId: string }
+  }
+  | { readonly type: 'host/workspace-removed'; readonly workspaceId: string }
+  | {
+    readonly type: 'host/workspace-order-changed'
+    readonly workspaceIds: readonly string[]
+  }
+  | {
+    readonly type: 'host/archived-sessions-changed'
+    readonly archivedSessionIds: readonly string[]
+  }
+  | { readonly type: 'host/remote-event' }
 
 /** The account fields the API policy needs from auth-host. */
 export interface ApiPolicyActor {
@@ -388,12 +444,31 @@ export function asOnceLedger(value: unknown): ApiPolicyOnceLedger | undefined {
  * @returns the shared `/api` policy.
  */
 export function createApiPolicy(deps: ApiPolicyDeps): {
+  authorizeRequest(req: Pick<IncomingMessage, 'headers'>): boolean
   wrapFetch(next: FetchLike): FetchLike
   scopeEvents(req: IncomingMessage, events: EventsApi): Promise<EventsApi | undefined>
+  admitUpgrade(
+    req: Pick<IncomingMessage, 'headers'>,
+  ): ((event: string, args: readonly unknown[]) => boolean) | null | undefined
 } {
   const pendingResponses = new Map<string, { expiresAt: number }>()
   const approvalResponseKeys = new Map<string, string>()
   const admin = (actor: ApiPolicyActor): boolean => actor.role === 'SUPER_ADMIN'
+  const ownsSession = (actor: ApiPolicyActor, id: string): boolean =>
+    deps.store.owns(actor, 'session', id)
+  const remoteSessionId = (args: readonly unknown[]): string | undefined => {
+    const first = args[0]
+    if (typeof first === 'string') return first
+    if (typeof first !== 'object' || first === null) return undefined
+    const record = first as Record<string, unknown>
+    if (typeof record['sessionId'] === 'string') return record['sessionId']
+    const agent = record['agent']
+    if (typeof agent === 'object' && agent !== null
+      && typeof (agent as Record<string, unknown>)['id'] === 'string') {
+      return (agent as Record<string, unknown>)['id'] as string
+    }
+    return undefined
+  }
   const pendingKey = (actor: ApiPolicyActor, rpcId: string): string =>
     `${actor.userKey}\u0000${rpcId}`
   const approvalKey = (actor: ApiPolicyActor, approvalId: string): string =>
@@ -783,6 +858,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   }
 
   return {
+    authorizeRequest: req => deps.actorFromRequest(req as IncomingMessage) !== null,
+    admitUpgrade: (req) => {
+      const actor = deps.actorFromRequest(req as IncomingMessage)
+      if (actor === null) return null
+      if (admin(actor)) return () => true
+      /* Only session-scoped events cross to ordinary accounts. Dropping
+         account-independent catalog and settings chatter is deliberate: the
+         old transport scoped every frame, and a global fallback would expose
+         another learner's activity. */
+      return (_event, args) => {
+        const sessionId = remoteSessionId(args)
+        return sessionId !== undefined && ownsSession(actor, sessionId)
+      }
+    },
     wrapFetch: next => async (request) => {
       const cookie = request.headers.get('cookie') ?? undefined
       const authorization = request.headers.get('authorization') ?? undefined
@@ -885,7 +974,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           const claimedKeys = new Set<string>()
           try {
             for await (const frame of events.mux(request, signal)) {
-              const payload: MuxFrame = frame.payload
+              const payload = frame.payload as MuxFrame
               if (payload.type === 'stream/error') {
                 yield frame
                 continue
@@ -925,7 +1014,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           }
         },
         host: (request, signal) => mapFrames(events.host(request, signal), (frame) => {
-          const payload: HostFrame = frame.payload
+          const payload = frame.payload as HostFrame
           switch (payload.type) {
             case 'stream/error':
               return frame

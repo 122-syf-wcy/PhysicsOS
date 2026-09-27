@@ -21,9 +21,6 @@
       "path": "../../host/webserver"
     },
     {
-      "path": "../../host/apiproxy"
-    },
-    {
       "path": "../../storage/storage"
     },
     {

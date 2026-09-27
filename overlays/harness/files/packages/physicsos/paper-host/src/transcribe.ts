@@ -55,7 +55,7 @@ export async function transcribeQuestionImages(
   if (images.length > limits.maxImagesPerMessage) {
     throw new Error(`一次最多转录 ${limits.maxImagesPerMessage} 张图片（收到 ${images.length} 张）`)
   }
-  const content: Parameters<typeof createUserMessage>[0]['content'] = [
+  const content: Array<Parameters<typeof createUserMessage>[0]['content'][number]> = [
     { type: 'text', text: '转录以下题目图片。' },
   ]
   for (const image of images) {

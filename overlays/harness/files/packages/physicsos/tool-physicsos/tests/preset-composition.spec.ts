@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { load } from 'js-yaml'
 import { Context } from '@deepseek-ai/cordis'
 import * as Persona from '@deepseek-ai/dsh-persona'
-import { PERSONA_SECTION } from '@deepseek-ai/dsh-persona'
+import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-persona'
 import { createScope, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -58,14 +58,14 @@ describe('the physics-student agent preset', () => {
       '@deepseek-ai/dsh-tool-physicsos',
       '@deepseek-ai/dsh-tool-ask-user',
     ])
-    const persona = rows[0]!.config as { text: string; complete: boolean; includeRuntimeContext: boolean }
+    const persona = rows[0]!.config as { prefix: string; complete: boolean; includeRuntimeContext: boolean }
     /* The Physics Constitution (docs/04 §105), in the words the model reads. */
-    expect(persona.text).toContain('physics_simulate')
-    expect(persona.text).toContain('physics_scene_command')
-    expect(persona.text).toContain('平台公益模型')
-    expect(persona.text).toContain('不要自称或介绍任何第三方模型名称')
-    expect(persona.text).toContain('不把假设当事实')
-    expect(persona.text).toContain('教学不得篡改真实结果')
+    expect(persona.prefix).toContain('physics_simulate')
+    expect(persona.prefix).toContain('physics_scene_command')
+    expect(persona.prefix).toContain('平台公益模型')
+    expect(persona.prefix).toContain('不要自称或介绍任何第三方模型名称')
+    expect(persona.prefix).toContain('不把假设当事实')
+    expect(persona.prefix).toContain('教学不得篡改真实结果')
     expect(persona.complete).toBe(false)
     expect(rows[1]!.config).toEqual({ sceneScope: 'session' })
     /* No shell / filesystem / web / delegation rows: a tutor stays off the student's disk. */
@@ -96,7 +96,7 @@ describe('the physics-student agent preset', () => {
     }
 
     const assembly = await ctx.systemPrompt.assemble({ scope: key })
-    const persona = assembly.sections.find(section => section.name === PERSONA_SECTION)?.text ?? ''
+    const persona = assembly.sections.find(section => section.name === PERSONA_PREFIX_SECTION)?.text ?? ''
     expect(persona).toContain('物理宪法')
     expect(persona).not.toContain('coding agent')
 

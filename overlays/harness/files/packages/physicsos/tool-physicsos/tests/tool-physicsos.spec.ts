@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -43,7 +43,7 @@ async function call(ctx: Context, name: string, args: unknown, options: CallOpti
   const agent = 'agent' in options ? options.agent : agentWithSession('student-1')
   return ctx.tools.execute({
     signal,
-    callId: CallId(`physics-call-${++callCounter}`),
+    callId: ToolCallId(`physics-call-${++callCounter}`),
     name,
     arguments: args,
     ...(agent === undefined ? {} : { agent }),
@@ -271,7 +271,7 @@ describe('dsh-tool-physicsos scene mirroring', () => {
   }
 
   const snapshots = (session: Session): PhysicsSceneSnapshot[] =>
-    session.events.flatMap(event => (event.type === 'physics/scene' ? [event.data] : []))
+    session.snapshotEvents().flatMap(event => (event.type === 'physics/scene' ? [event.data] : []))
 
   const projectionOf = (ctx: Context, session: Session): PhysicsScenesProjection | undefined =>
     ctx.sessionProjections.snapshot(session).values.physicsScenes

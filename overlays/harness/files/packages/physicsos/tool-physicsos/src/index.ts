@@ -19,7 +19,7 @@ import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
 import { HarnessError, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
-import type { JsonValue } from '@deepseek-ai/dsh-session'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 // Type-only: resolves ctx.sessionProjections for the optional unit child.
 import type {} from '@deepseek-ai/dsh-session-projection'
 import {
@@ -167,10 +167,10 @@ export function apply(ctx: Context, config: Config): void {
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     projectionCtx.sessionProjections.register<'physicsScenes', PhysicsScenesProjection>({
       key: 'physicsScenes',
-      schema: physicsScenesProjectionSchema,
+      stateSchema: physicsScenesProjectionSchema,
       init: () => EMPTY_PROJECTION,
       apply: (state, event) => (event.type === 'physics/scene' ? foldPhysicsScene(state, event.data) : state),
-      view: state => state,
+      wire: { viewSchema: physicsScenesProjectionSchema, view: state => state },
       stateVersion: 1,
     })
   })
@@ -192,7 +192,7 @@ export function apply(ctx: Context, config: Config): void {
     /* The snapshot rides the owning turn so the chat card can dock at the
        answer: the tool call's own events carry the turn, this one does not —
        read it back off the open turn/start. */
-    const events = exec.agent.session.events
+    const events = exec.agent.session.snapshotEvents()
     let turn: number | undefined
     for (let index = events.length - 1; index >= 0; index--) {
       const event = events[index]

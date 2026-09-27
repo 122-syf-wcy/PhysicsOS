@@ -11,7 +11,6 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as storageJson from '@deepseek-ai/dsh-storage-json'
 import * as storageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as connection from '../../../client/connection/src/index.ts'
-import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy/api'
 import * as authHost from '../src/index.ts'
 
 let root: string | undefined
@@ -53,71 +52,84 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
     ['@deepseek-ai/dsh-storage-json', storageJson],
     ['@deepseek-ai/dsh-storage-domain', storageDomain],
     ['@deepseek-ai/dsh-auth-host', authHost],
+    ['@deepseek-ai/dsh-test-credentials', {
+      name: 'test-credentials',
+      apply(ctx: Context) {
+        let record: unknown
+        ctx.provide('credentials', {
+          async modifyRecord(
+            _key: string,
+            update: (current: unknown) => Promise<unknown>,
+          ): Promise<unknown> {
+            record = await update(record)
+            return record
+          },
+        })
+      },
+    }],
     ['@deepseek-ai/dsh-client-connection', connection],
     ['@deepseek-ai/dsh-test-api-proxy', {
       name: 'test-api-proxy',
       apply(ctx: Context) {
-        ctx.provide('apiProxy', {
-          sessions: {
-            create: async (request: { rpcId: string; payload: Record<string, unknown> }) => {
-              apiCalls.push({ method: 'session.create', payload: { ...request.payload } })
-              return {
-                rpcId: request.rpcId,
-                result: {
+        ctx.provide('workspaceRegistry', {
+          async create(requestPath: string, title?: string) {
+            workspaceTitle = title ?? requestPath.split('/').filter(Boolean).at(-1) ?? 'private-workspace'
+            workspaceView = {
+              workspaceId: 'private-workspace',
+              path: requestPath,
+              sessionIds: [],
+              createdAt: new Date(0).toISOString(),
+              updatedAt: new Date(0).toISOString(),
+            }
+            return {
+              id: 'private-workspace',
+              path: requestPath,
+              title: workspaceTitle,
+              async setTitle(nextTitle: string) {
+                apiCalls.push({
+                  method: 'workspace.rename',
+                  payload: { workspaceId: 'private-workspace', title: nextTitle },
+                })
+                workspaceTitle = nextTitle
+                if (workspaceView !== undefined) workspaceView.updatedAt = new Date(0).toISOString()
+              },
+            }
+          },
+        })
+        ctx.inject(['connection'], (connectionCtx) => {
+          connectionCtx.connection.rpc.intercept(
+            '/api',
+            endpoint => [
+              'session.create', 'session.list', 'workspace.rename', 'workspace.list',
+            ].includes(endpoint),
+            async (endpoint, rawPayload) => {
+              const payload = rawPayload as Record<string, unknown>
+              if (endpoint === 'session.create') {
+                apiCalls.push({ method: endpoint, payload: { ...payload } })
+                return {
                   ok: true,
                   value: { sessionId: 'owned-session', agentPreset: 'physics-student' },
-                },
+                }
               }
-            },
-            list: async (request: { rpcId: string }) => ({
-              rpcId: request.rpcId,
-              result: {
-                ok: true,
-                value: {
-                  items: [
-                    { sessionId: 'owned-session', updatedAt: 2, running: false, blank: false },
-                    { sessionId: 'legacy-session', updatedAt: 1, running: false, blank: false },
-                  ],
-                },
-              },
-            }),
-          },
-          workspace: {
-            create: async (request: {
-              rpcId: string
-              payload: { path: string }
-            }) => {
-              // The real registry names a record after its directory basename
-              // (the account digest); the account's first adoption renames it.
-              workspaceTitle = request.payload.path.split('/').filter(Boolean).at(-1) ?? 'private-workspace'
-              workspaceView = {
-                workspaceId: 'private-workspace',
-                path: request.payload.path,
-                sessionIds: [],
-                createdAt: new Date(0).toISOString(),
-                updatedAt: new Date(0).toISOString(),
-              }
-              return {
-                rpcId: request.rpcId,
-                result: {
+              if (endpoint === 'session.list') {
+                return {
                   ok: true,
-                  value: { created: true, workspace: { ...workspaceView, title: workspaceTitle } },
-                },
+                  value: {
+                    items: [
+                      { sessionId: 'owned-session', updatedAt: 2, running: false, blank: false },
+                      { sessionId: 'legacy-session', updatedAt: 1, running: false, blank: false },
+                    ],
+                  },
+                }
               }
-            },
-            rename: async (request: {
-              rpcId: string
-              payload: { workspaceId: string; title: string }
-            }) => {
-              apiCalls.push({ method: 'workspace.rename', payload: { ...request.payload } })
-              workspaceTitle = request.payload.title
-              return {
-                rpcId: request.rpcId,
-                result: {
+              if (endpoint === 'workspace.rename') {
+                apiCalls.push({ method: endpoint, payload: { ...payload } })
+                workspaceTitle = String(payload['title'])
+                return {
                   ok: true,
                   value: {
                     workspace: {
-                      workspaceId: request.payload.workspaceId,
+                      workspaceId: String(payload['workspaceId']),
                       path: workspaceView?.path ?? '',
                       title: workspaceTitle,
                       sessionIds: [],
@@ -125,12 +137,9 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
                       updatedAt: new Date(0).toISOString(),
                     },
                   },
-                },
+                }
               }
-            },
-            list: async (request: { rpcId: string }) => ({
-              rpcId: request.rpcId,
-              result: {
+              return {
                 ok: true,
                 value: {
                   items: workspaceView === undefined
@@ -138,14 +147,10 @@ async function loadYaml(build: (root: string) => readonly string[]): Promise<Con
                     : [{ ...workspaceView, title: workspaceTitle }],
                   archivedSessionIds: [],
                 },
-              },
-            }),
-          },
-          events: {
-            mux: async function * () {},
-            host: async function * () {},
-          },
-        } as unknown as ApiProxy)
+              }
+            },
+          )
+        })
       },
     }],
   ])
@@ -186,6 +191,8 @@ describe('real Loader composition', () => {
       "  name: '@deepseek-ai/dsh-auth-host'",
       '  config:',
       `    workspaceRoot: ${JSON.stringify(join(root, 'workspaces'))}`,
+      '- id: test-credentials',
+      "  name: '@deepseek-ai/dsh-test-credentials'",
       '- id: test-api-proxy',
       "  name: '@deepseek-ai/dsh-test-api-proxy'",
       '- id: connection',
@@ -232,10 +239,6 @@ describe('real Loader composition', () => {
        policy's own unit-test double: production dropped it silently while the
        connection dispatch closure kept the outer request. */
     expect(apiCalls).toEqual([
-      {
-        method: 'workspace.rename',
-        payload: { workspaceId: 'private-workspace', title: '我的工作区' },
-      },
       {
         method: 'session.create',
         payload: { workspaceId: 'private-workspace', agentPreset: 'physics-student' },
