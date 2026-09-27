@@ -22,6 +22,11 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  /* WIDE tier: the rail is shared with .body so the header and the two-column
+     body centre on one axis. The cap lives in chrome.ts. */
+  width: 100%;
+  max-width: var(--physics-tier-wide);
+  margin-inline: auto;
 }
 
 .mascot {
@@ -202,6 +207,19 @@
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 14px;
+  /* Same WIDE rail as .header: header and body centre on one axis. */
+  width: 100%;
+  max-width: var(--physics-tier-wide);
+  margin-inline: auto;
+}
+
+/* Below the compact breakpoint the two-column body (rail + panel) collapses to
+   one column so the panel keeps its reading width instead of splitting a narrow
+   frame. The rail moves above the panel rather than disappearing. */
+@media (max-width: 1279px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .rail {

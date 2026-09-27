@@ -12,6 +12,10 @@
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  /* WORKSPACE tier: the lab is a workbench, so it fills the whole column with
+     no ordinary max-width cap (the tier lives in chrome.ts). Scene / canvas /
+     inspector panels scroll inside this box; the page never scrolls. */
+  max-width: none;
   padding: 10px;
   box-sizing: border-box;
   overflow: hidden;

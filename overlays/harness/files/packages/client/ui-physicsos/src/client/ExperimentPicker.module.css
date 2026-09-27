@@ -20,7 +20,10 @@
 .panel {
   display: flex;
   flex-direction: column;
-  width: min(1160px, 100%);
+  /* WIDE tier: the experiment library is a browsing surface, not a form, so it
+     takes the wide rail. The cap lives in chrome.ts (--physics-tier-wide). */
+  width: 100%;
+  max-width: var(--physics-tier-wide);
   min-width: 0;
   max-height: 100%;
   padding: 2px 8px 20px;

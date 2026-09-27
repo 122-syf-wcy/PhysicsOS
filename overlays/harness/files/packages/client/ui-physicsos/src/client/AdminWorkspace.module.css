@@ -20,8 +20,11 @@
 }
 
 .page {
-  width: min(1120px, 100%);
-  margin: 0 auto;
+  /* CONTENT tier: the cap lives in chrome.ts (--physics-tier-content), so the
+     console never carries a private magic number. */
+  width: 100%;
+  max-width: var(--physics-tier-content);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;

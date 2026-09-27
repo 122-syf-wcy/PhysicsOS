@@ -209,6 +209,18 @@ const PHYSICSOS_CHROME_CSS = `${PHYSICS_TOKENS}
 :root {
   --physicsos-focus: var(--dsw-static-blue-500, #3b82f6);
 
+  /* ---------- width tiers ----------
+     One number per tier, declared ONCE. A surface never hard-codes a rail: it
+     marks itself with [data-physics-width] and the cap follows. An educational
+     workbench is not a blog, so the tiers are not one narrow column:
+       content    settings, forms, articles, profile
+       wide       home, resource library, question bank
+       workspace  physics lab, paper studio, question space (no cap)
+     The cap is a max-width, not a width, and margin-inline centres it, so a
+     narrow frame still fills the column edge to edge. */
+  --physics-tier-content: 1120px;
+  --physics-tier-wide: 1400px;
+
   /* ---------- surfaces ----------
      The glass material is shared by every floating panel (cards, palette,
      inspector, composer). The desk itself is bound on body below, because its
@@ -378,6 +390,24 @@ body[data-ds-dark-theme] {
 
 ::-webkit-scrollbar-thumb {
   border-radius: 999px;
+}
+
+/* A surface marks its content rail with the tier it belongs to; the cap comes
+   from the token above, so the number lives in exactly one place. The rail is
+   centred and never wider than the frame. */
+[data-physics-width='content'] {
+  width: 100%;
+  max-width: var(--physics-tier-content);
+  margin-inline: auto;
+}
+[data-physics-width='wide'] {
+  width: 100%;
+  max-width: var(--physics-tier-wide);
+  margin-inline: auto;
+}
+[data-physics-width='workspace'] {
+  width: 100%;
+  max-width: none;
 }
 `
 

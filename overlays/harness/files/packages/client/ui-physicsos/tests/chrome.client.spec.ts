@@ -57,9 +57,26 @@ describe('mountPhysicsOSChrome', () => {
       '--physics-motion-fast',
       '--physics-motion-entrance',
       '--physics-ease-emphasized',
+      /* Width tiers: the shell's content rails read these, so a page never
+         hard-codes its own cap. A missing tier token would leave a surface
+         un-capped (or with an invalid max-width) silently. */
+      '--physics-tier-content',
+      '--physics-tier-wide',
     ]) {
       expect(css, `chrome CSS must define ${token}`).toContain(`${token}:`)
     }
+  })
+
+  it('declares the width tiers once and routes the tier helper through them', () => {
+    mountPhysicsOSChrome()
+    const css = document.head.querySelector('style[data-physicsos-chrome]')?.textContent ?? ''
+    /* The number lives in exactly one place: the tier helpers must reference the
+       tokens rather than repeat a px literal. */
+    expect(css).toMatch(/--physics-tier-content:\s*\d+px/)
+    expect(css).toMatch(/--physics-tier-wide:\s*\d+px/)
+    expect(css).toMatch(/\[data-physics-width='content'\][^}]*max-width:\s*var\(--physics-tier-content\)/)
+    expect(css).toMatch(/\[data-physics-width='wide'\][^}]*max-width:\s*var\(--physics-tier-wide\)/)
+    expect(css).toMatch(/\[data-physics-width='workspace'\][^}]*max-width:\s*none/)
   })
 
   it('keeps a single chrome style tag across remounts and removes its own on dispose', () => {
