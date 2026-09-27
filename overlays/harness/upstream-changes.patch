@@ -3039,10 +3039,18 @@ index e2b7da61e8..fffc3ac296 100644
        "@deepseek-ai/dsh-cordis-host-runner": ["./packages/extensions/cordis-host-runner/src/index.ts"],
        "@deepseek-ai/dsh-cordis-host-runner/types": ["./packages/extensions/cordis-host-runner/src/types.ts"],
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 0471bfa13b..1b85410e84 100644
+index 0471bfa13b..41f3454047 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -82,6 +82,7 @@
+@@ -43,6 +43,7 @@
+     "packages/client/*/tests/**/*.host.spec.ts"
+   ],
+   "references": [
++    { "path": "./tsconfig.physicsos.json" },
+     { "path": "./tsconfig.desktop-keyboard-tests.json" },
+     { "path": "./apps/desktop/tsconfig.client.json" },
+     { "path": "./packages/experimental/client-ui-voice-input" },
+@@ -82,6 +83,7 @@
      { "path": "./packages/client/ui-shortcuts" },
      { "path": "./packages/client/ui-layout" },
      { "path": "./packages/client/ui-sidebar" },
@@ -3051,10 +3059,18 @@ index 0471bfa13b..1b85410e84 100644
      { "path": "./packages/client/ui-approval" },
      { "path": "./packages/client/ui-chat/tsconfig.client.json" },
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index bbdbf3cac5..ae84eef03c 100644
+index bbdbf3cac5..ba4b10c640 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -303,6 +303,19 @@
+@@ -198,6 +198,7 @@
+     "scripts/client-bundle-purity.spec.ts"
+   ],
+   "references": [
++    { "path": "./tsconfig.physicsos.json" },
+     { "path": "./packages/experimental/speech-to-text" },
+     { "path": "./packages/experimental/speech-to-text-sensevoice" },
+     { "path": "./packages/experimental/api-speech-to-text" },
+@@ -303,6 +304,19 @@
      { "path": "./packages/storage/storage-json" },
      { "path": "./packages/storage/storage-sqlite" },
      { "path": "./packages/storage/storage-domain" },
@@ -3074,3 +3090,55 @@ index bbdbf3cac5..ae84eef03c 100644
      { "path": "./packages/feedback/message-feedback" },
      { "path": "./packages/workspace/workspace" },
      { "path": "./packages/session/session-title" },
+diff --git a/tsconfig.physicsos.json b/tsconfig.physicsos.json
+new file mode 100644
+index 0000000000..0d7c72fe3c
+--- /dev/null
++++ b/tsconfig.physicsos.json
+@@ -0,0 +1,46 @@
++{
++  // Shared declaration boundary for the PhysicsOS source graph consumed by
++  // both Harness faces. Sources stay at the repository root; only declarations
++  // are emitted here so project references can redirect @physicsos/* imports
++  // without duplicating package sources into the vendored workspace.
++  "extends": "./tsconfig.base.json",
++  "compilerOptions": {
++    "emitDeclarationOnly": true,
++    "rootDir": "../../packages",
++    "outDir": "lib/physicsos-types",
++    "tsBuildInfoFile": "lib/physicsos-types/tsconfig.tsbuildinfo"
++  },
++  "include": [
++    "../../packages/agent-tools/src/**/*.ts",
++    "../../packages/engine-acoustics/src/**/*.ts",
++    "../../packages/engine-circuit/src/**/*.ts",
++    "../../packages/engine-collision/src/**/*.ts",
++    "../../packages/engine-composite/src/**/*.ts",
++    "../../packages/engine-electric/src/**/*.ts",
++    "../../packages/engine-electric-region/src/**/*.ts",
++    "../../packages/engine-fluid/src/**/*.ts",
++    "../../packages/engine-induction/src/**/*.ts",
++    "../../packages/engine-lever/src/**/*.ts",
++    "../../packages/engine-magnetic/src/**/*.ts",
++    "../../packages/engine-mechanics/src/**/*.ts",
++    "../../packages/engine-modern/src/**/*.ts",
++    "../../packages/engine-optics/src/**/*.ts",
++    "../../packages/engine-thermal/src/**/*.ts",
++    "../../packages/engine-wave/src/**/*.ts",
++    "../../packages/physics-composite-core/src/**/*.ts",
++    "../../packages/physics-core/src/**/*.ts",
++    "../../packages/physics-electric-core/src/**/*.ts",
++    "../../packages/physics-math/src/**/*.ts",
++    "../../packages/physics-observation/src/**/*.ts",
++    "../../packages/physics-scene/src/**/*.ts",
++    "../../packages/physics-units/src/**/*.ts",
++    "../../packages/physics-verifier/src/**/*.ts",
++    "../../packages/question-core/src/**/*.ts",
++    "../../packages/question-paper/src/**/*.ts",
++    "../../packages/shared/src/**/*.ts"
++  ],
++  "exclude": [
++    "../../packages/*/src/**/*.spec.ts",
++    "../../packages/*/src/**/*.test.ts"
++  ]
++}

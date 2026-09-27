@@ -81,7 +81,7 @@ describe('the physics-student agent preset', () => {
 
   it('composes under one agent scope: the persona shadows the deployment default and the seven tools are visible to that scope only', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, { persona: 'You are a coding agent.' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: 'You are a coding agent.' })
     await ctx.plugin(ToolRuntime)
     const key: ScopeKey = { agent: 'physics-student-session' }
     const scope = createScope(ctx, key)
