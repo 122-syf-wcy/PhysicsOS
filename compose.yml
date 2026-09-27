@@ -38,6 +38,15 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:24.7.0-bookworm-slim}
+        # Public page title baked into the served document. The apps/web Vite
+        # `dsh-client-document-title` plugin projects this into the built
+        # index.html (replacing the upstream `DSH Local Build` placeholder) and
+        # the client inlines it as `DSH_CLIENT_TITLE`, which the runtime
+        # document title also falls back to. Left unset, both fall back to the
+        # upstream "DSH Local Build", which is exactly the wrong title
+        # production served. The builder stage must forward this variable to
+        # its `pnpm build` (see Dockerfile).
+        DSH_CLIENT_TITLE: ${DSH_CLIENT_TITLE:-PhysicsOS}
     restart: unless-stopped
     init: true
     depends_on:
