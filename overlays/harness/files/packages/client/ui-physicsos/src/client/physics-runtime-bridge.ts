@@ -37,6 +37,7 @@ import type {
   LabVectorView,
 } from './lab-view-model.ts'
 import type { SceneVisualModel } from './physics/scene-visual-model.ts'
+import { runtimeStatusOf } from './physics/verified-result.ts'
 import { latticeSpacingOf } from './physics/bridge-helpers.ts'
 
 type MagneticSimulation = ReturnType<MagneticEngine['simulate']>
@@ -1011,12 +1012,7 @@ export class MagneticRuntimeBridge {
         ),
       )
       const verification = verifyMagneticScene(scene, simulation)
-      const status: MagneticRuntimeStatus =
-        verification.status === 'failed'
-          ? 'failed'
-          : verification.status === 'passed_with_warnings'
-            ? 'warning'
-            : 'verified'
+      const status: MagneticRuntimeStatus = runtimeStatusOf(verification)
       const verifiedSimulation = { ...simulation, verification }
       const trusted = status !== 'failed'
       const period = trusted ? (scalarFact(simulation, 'cyclotron_period')?.value ?? 0) : 0

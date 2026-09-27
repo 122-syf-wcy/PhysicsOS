@@ -46,6 +46,7 @@ import {
   opticsSceneVisual,
 } from './optics-visual-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import type {
   DataTableView,
   DerivedQuantityView,
@@ -216,12 +217,7 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
     const { simulation, result } = this.computed
     const view = opticsSceneVisual({ scene, result })
 
-    const status =
-      simulation.verification.status === 'failed'
-        ? 'failed'
-        : simulation.verification.status === 'passed_with_warnings'
-          ? 'warning'
-          : 'verified'
+    const status = runtimeStatusOf(simulation.verification)
 
     return {
       domain: 'optics',

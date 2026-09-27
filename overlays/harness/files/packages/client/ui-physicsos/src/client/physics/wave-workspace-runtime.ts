@@ -44,6 +44,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -299,12 +300,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       time: this.currentTime,
     })
 
-    const status =
-      simulation.verification.status === 'failed'
-        ? 'failed'
-        : simulation.verification.status === 'passed_with_warnings'
-          ? 'warning'
-          : 'verified'
+    const status = runtimeStatusOf(simulation.verification)
 
     return {
       domain: 'wave',

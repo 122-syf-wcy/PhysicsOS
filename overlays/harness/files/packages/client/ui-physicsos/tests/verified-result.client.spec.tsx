@@ -3,11 +3,11 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   deriveVerificationLevel, toVerificationEvidence,
-  type QuantityProvenance, type VerificationCheck,
+  type QuantityProvenance, type VerificationCheck, type VerificationResult,
 } from '@physicsos/physics-core'
 import { VerificationBadge, VerifiedResult } from '../src/client/VerifiedResult.tsx'
 import {
-  toVerifiedResult, type VerificationLevel,
+  runtimeStatusOf, toVerifiedResult, type VerificationLevel,
 } from '../src/client/physics/verified-result.ts'
 import { zh } from '../src/client/locales.ts'
 import type { VerificationCheckView } from '../src/client/physics/scene-visual-model.ts'
@@ -130,6 +130,56 @@ describe('verified-result seam', () => {
     /* The value and revision are still facts, so they survive. */
     expect(unverified.value).toBe('20.00')
     expect(unverified.revision).toBe(0)
+  })
+})
+
+/** A verification result as the engine/verifier publishes it. */
+const verificationResult = (overrides: Partial<VerificationResult> = {}): VerificationResult => ({
+  status: 'passed',
+  checks: [],
+  warnings: [],
+  errors: [],
+  ...overrides,
+})
+
+describe('runtime verification-status gate (I4)', () => {
+  it('a forged status=passed with no checks cannot reach the verified state', () => {
+    /* The exact forged result the plan names: the engine CLAIMS it passed but
+       carried no evidence. The runtime must read the status off the checks, not
+       the string, so the Lab never paints 已验证 over zero evidence — the
+       empty-checks placeholder an engine's `validate()` returns fails closed to
+       `warning`, never `verified`. */
+    const forged = verificationResult({ status: 'passed', checks: [] })
+    expect(runtimeStatusOf(forged)).not.toBe('verified')
+    expect(runtimeStatusOf(forged)).toBe('warning')
+
+    /* The badge seam agrees: a result with no provenance is unverified, and the
+       block names no engine. */
+    const view = toVerifiedResult({ value: '0.156', unit: 'm', checks: [] })
+    expect(view.level).toBe('unverified')
+    const rendered = render(<VerifiedResult view={view} t={t} />)
+    const badge = badgeOf(rendered.container)
+    expect(badge.getAttribute('data-level')).toBe('unverified')
+    expect(badge.textContent).toBe('未验证')
+    expect(rendered.container.textContent).not.toContain('物理已验证')
+  })
+
+  it('derives the runtime status from the checks, never the status string', () => {
+    /* One real passed check earns `verified`... */
+    expect(runtimeStatusOf(verificationResult({
+      checks: [{ id: 'law_check', type: 'constraint', passed: true }],
+    }))).toBe('verified')
+    /* ...a failed status stays `failed`... */
+    expect(runtimeStatusOf(verificationResult({ status: 'failed' }))).toBe('failed')
+    /* ...a warning status stays `warning`... */
+    expect(runtimeStatusOf(verificationResult({
+      status: 'passed_with_warnings',
+      checks: [{ id: 'law_check', type: 'constraint', passed: true }],
+    }))).toBe('warning')
+    /* ...and an all-failing check list is not evidence of verification. */
+    expect(runtimeStatusOf(verificationResult({
+      checks: [{ id: 'law_check', type: 'constraint', passed: false }],
+    }))).toBe('warning')
   })
 })
 

@@ -28,6 +28,7 @@ import { canonicalValue } from '@physicsos/physics-units'
 
 import { collisionSceneVisualAt, collisionSampleIndices } from './collision-visual-bridge.ts'
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import { forkExperimentalScene, requiresExperimentalFork } from './experimental-branch.ts'
 import type {
   ChartSeries,
@@ -377,12 +378,7 @@ export class CollisionRuntimeBridge {
           ),
         )
         : cached.simulation
-      const status: RuntimeStatus =
-        simulation.verification.status === 'failed'
-          ? 'failed'
-          : simulation.verification.status === 'passed_with_warnings'
-            ? 'warning'
-            : 'verified'
+      const status: RuntimeStatus = runtimeStatusOf(simulation.verification)
       this.simulationCache = { sceneRevision: scene.revision, simulation, status }
 
       if (status === 'failed') {

@@ -4,6 +4,7 @@ import { SceneRuntime, createSceneCommand } from '@physicsos/physics-scene'
 
 import { modernDerivedRows, modernSceneVisual } from './modern-visual-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import type { ObservableKey, SceneTreeNode } from './scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 
@@ -111,7 +112,7 @@ export class ModernPhysicsWorkspaceRuntime implements WorkspaceRuntime {
       domain: 'modern' as unknown as WorkspaceSnapshot['domain'],
       title,
       subtitle: scene.metadata.description ?? '真实近代物理 Runtime',
-      status: this.simulation.verification.status === 'failed' ? 'failed' : 'verified',
+      status: runtimeStatusOf(this.simulation.verification),
       sceneRevision: scene.revision,
       view: {
         ...modernSceneVisual(scene, this.simulation),

@@ -40,6 +40,7 @@ import {
 } from './experimental-branch.ts'
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import type {
   DataTableView,
   DerivedQuantityView,
@@ -206,12 +207,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
 
     const { simulation, model } = this.computed
     const view = energySceneVisual({ scene, model })
-    const status =
-      simulation.verification.status === 'failed'
-        ? 'failed'
-        : simulation.verification.status === 'passed_with_warnings'
-          ? 'warning'
-          : 'verified'
+    const status = runtimeStatusOf(simulation.verification)
 
     return {
       domain: 'mechanics',

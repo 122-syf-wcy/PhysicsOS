@@ -48,6 +48,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -378,17 +379,13 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
       }
     }
 
-    /* Status comes from the engine's LAW verification only. A failed law check is
-       a real failure and must read as one — mapping anything that is not
-       `passed_with_warnings` to "verified" once painted a green badge over a scene
-       whose observables did not resolve. The apparatus checks below (selection
-       condition) are a readout and deliberately excluded from this. */
-    const status =
-      simulation.verification.status === 'failed'
-        ? 'failed'
-        : simulation.verification.status === 'passed_with_warnings'
-          ? 'warning'
-          : 'verified'
+    /* Status comes from the engine's LAW verification only, and — like the
+       badge level — from that verification's OWN evidence, not its status
+       string: `runtimeStatusOf` re-derives the level from the law checks, so a
+       `passed` status carrying no checks warns instead of painting a green
+       badge over a scene whose observables did not resolve. The apparatus checks
+       below (selection condition) are a readout and deliberately excluded. */
+    const status = runtimeStatusOf(simulation.verification)
 
     return {
       domain: 'composite',
@@ -911,8 +908,8 @@ const VERIFICATION_LABELS: Record<string, string> = {
  *
  * The apparatus checks are a readout. `v ≠ E/B` makes the selection condition FAIL
  * while the physics stays correct — the beam simply deflects — so these rows must
- * never feed the runtime status. The status is derived from
- * `simulation.verification.status` alone.
+ * never feed the runtime status. The status is derived from the engine's own
+ * `simulation.verification` checks alone (`runtimeStatusOf`).
  */
 const verificationOf = (
   scene: PhysicsScene,

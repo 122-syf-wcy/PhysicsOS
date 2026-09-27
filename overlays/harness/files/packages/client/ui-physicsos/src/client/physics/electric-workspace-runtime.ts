@@ -60,6 +60,7 @@ import {
   requiresExperimentalForkForFact,
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -376,8 +377,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
       observations: observations.observations,
       state,
     })
-    const status =
-      simulation.verification.status === 'passed_with_warnings' ? 'warning' : 'verified'
+    const status = runtimeStatusOf(simulation.verification)
 
     if (pointCharge) {
       /* Point-charge world is instantaneous: no trajectory, so charts/table sample a

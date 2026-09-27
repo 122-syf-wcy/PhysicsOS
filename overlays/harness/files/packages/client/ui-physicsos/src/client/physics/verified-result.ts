@@ -17,12 +17,16 @@
  */
 
 import {
+  deriveVerificationLevel,
   provenanceLevel,
+  verificationLevelAtLeast,
+  VERIFIED_CLAIM_FLOOR,
   type QuantityProvenance,
   type VerificationLevel as ProvenanceLevel,
+  type VerificationResult,
 } from '@physicsos/physics-core'
 
-import type { VerificationCheckView } from './scene-visual-model.ts'
+import type { RuntimeStatus, VerificationCheckView } from './scene-visual-model.ts'
 
 /** The four user-visible verification states. */
 export type VerificationLevel =
@@ -117,4 +121,25 @@ export const toVerifiedResult = (facts: VerifiedResultFacts): VerifiedResultView
     checks: facts.checks ?? [],
     revision: provenance?.sceneRevision ?? facts.revision ?? null,
   }
+}
+
+/**
+ * The workspace status a verification result's OWN evidence supports.
+ *
+ * The runtime status is the Lab's aggregate "is this frame trustworthy" verdict,
+ * and like the badge level it must be read off the evidence, never off the
+ * engine's `status` string. `verified` requires the checks to actually reach the
+ * verified-claim floor — at least one real check passed; a `passed` status that
+ * carries no checks (the empty-checks placeholder an engine's `validate()`
+ * returns) is not a verification and degrades to `warning`, so a value can never
+ * reach the UI with a status but no evidence. A `failed` status stays `failed`
+ * and a `passed_with_warnings` status stays `warning`.
+ * @param verification - the engine/verifier result the runtime received.
+ * @returns the evidence-derived workspace status.
+ */
+export const runtimeStatusOf = (verification: VerificationResult): RuntimeStatus => {
+  if (verification.status === 'failed') return 'failed'
+  const level = deriveVerificationLevel(verification.checks)
+  if (!verificationLevelAtLeast(level, VERIFIED_CLAIM_FLOOR)) return 'warning'
+  return verification.status === 'passed_with_warnings' ? 'warning' : 'verified'
 }

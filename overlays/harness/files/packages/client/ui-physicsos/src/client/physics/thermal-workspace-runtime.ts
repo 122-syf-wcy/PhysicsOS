@@ -42,6 +42,7 @@ import {
   requiresExperimentalFork,
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import {
   celsiusOf,
   fmtThermalValue,
@@ -269,12 +270,7 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
       peakTemperature: Math.max(primaryPeak, comparisonPeak),
     })
 
-    const status =
-      simulation.verification.status === 'failed'
-        ? 'failed'
-        : simulation.verification.status === 'passed_with_warnings'
-          ? 'warning'
-          : 'verified'
+    const status = runtimeStatusOf(simulation.verification)
 
     return {
       domain: 'thermal',

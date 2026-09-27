@@ -22,6 +22,7 @@ import { observeMechanicsScene } from '@physicsos/physics-observation'
 import { verifyMechanicsSimulation } from '@physicsos/physics-verifier'
 
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
+import { runtimeStatusOf } from './verified-result.ts'
 import { forkExperimentalScene, requiresExperimentalFork } from './experimental-branch.ts'
 import { buildSnapshot, inspectorOf, treeOf } from './mechanics-view-builders.ts'
 import type {
@@ -693,13 +694,18 @@ export class MechanicsRuntimeBridge {
         )
         : cached.simulation
       const verification = fresh ? verifyMechanicsSimulation(scene, simulation) : cached.verification
+      /* Both the engine's own verification and the mechanics verifier must
+         reach the verified floor from their checks; either one failing fails the
+         frame, and anything weaker than a real passed check warns rather than
+         painting a green verified badge over unsupported evidence. */
+      const engineStatus = runtimeStatusOf(simulation.verification)
+      const verifierStatus = runtimeStatusOf(verification)
       const status: RuntimeStatus =
-        simulation.verification.status === 'failed' || verification.status === 'failed'
+        engineStatus === 'failed' || verifierStatus === 'failed'
           ? 'failed'
-          : simulation.verification.status === 'passed_with_warnings' ||
-              verification.status === 'passed_with_warnings'
-            ? 'warning'
-            : 'verified'
+          : engineStatus === 'verified' && verifierStatus === 'verified'
+            ? 'verified'
+            : 'warning'
       this.simulationCache = { sceneRevision: scene.revision, simulation, verification, status }
 
       if (status === 'failed') {
