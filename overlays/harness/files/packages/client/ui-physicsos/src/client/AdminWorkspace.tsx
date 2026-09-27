@@ -19,10 +19,12 @@ import { AdminModelPoolTab } from './AdminModelPoolTab.tsx'
 import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
 import { AdminPlatformNoticeTab } from './AdminPlatformNoticeTab.tsx'
+import { AdminPluginTab } from './AdminPluginTab.tsx'
 import { PasswordResetQueue } from './AuthGate.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
+import { createPluginCenterApi, type PluginCenterApi } from './PluginCenterApi.ts'
 import { GlassSelect } from './GlassSelect.tsx'
 import {
   AdminCard,
@@ -46,6 +48,7 @@ type Tab =
   | 'notice'
   | 'platformNotice'
   | 'modelPool'
+  | 'plugins'
   | 'ops'
   | 'devices'
   | 'audit'
@@ -73,6 +76,8 @@ export interface AdminWorkspaceProps {
   noticeApi?: NoticeApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
+  /** SUPER_ADMIN plugin catalog client; defaults to the same-origin route. */
+  pluginApi?: PluginCenterApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
   t: (key: PhysicsosKey) => string
@@ -83,8 +88,10 @@ const fmtTime = (iso: string): string => {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString('zh-CN', { hour12: false })
 }
 
+const defaultPluginApi = createPluginCenterApi()
+
 export function AdminWorkspace({
-  api, paperApi, noticeApi, modelPoolApi, useAuth, t,
+  api, paperApi, noticeApi, modelPoolApi, pluginApi = defaultPluginApi, useAuth, t,
 }: AdminWorkspaceProps) {
   const role = useAuth(state => state.user?.role)
   /* The judging account, attributed on every review — the same identity the
@@ -116,6 +123,7 @@ export function AdminWorkspace({
     ...(modelPoolApi === undefined || !isSuper
       ? []
       : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool') }]),
+    ...(!isSuper ? [] : [{ id: 'plugins' as const, label: t('admin.tab.plugins') }]),
     { id: 'ops' as const, label: t('admin.tab.ops') },
     { id: 'devices' as const, label: t('admin.tab.devices') },
     { id: 'audit' as const, label: t('admin.tab.audit') },
@@ -149,6 +157,7 @@ export function AdminWorkspace({
         {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
           <AdminModelPoolTab api={modelPoolApi} t={t} />
         )}
+        {active === 'plugins' && isSuper && <AdminPluginTab api={pluginApi} t={t} />}
         {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
         {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
         {active === 'audit' && <AuditTab api={api} t={t} />}
