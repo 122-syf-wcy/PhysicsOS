@@ -12,8 +12,14 @@ services:
   app:
     image: ${PHYSICSOS_APP_IMAGE:-physicsos-app:local}
     # 反代域名必须同时出现在 `--trusted-host`：/api 的浏览器信任栅栏只认
-    # CLI 参数（外加同网段 IP 字面量），不读环境变量。Dockerfile 的 CMD 与这里
-    # 必须保持一致，只是多了一个 --trusted-host。
+    # CLI 参数（外加同网段 IP 字面量），不读环境变量。0.1.7 起同一份列表
+    # 还是「文档闸门」的放行名单——上游默认给每个文档发一张 per-process
+    # launch token，反代后的公网域名拿不到、也留不住，必须由部署声明自己的
+    # 权威域名来放行（见 docs/13-DEPLOYMENT-OPERATIONS.md 第 4 节）。
+    # `--no-open` 是服务器侧的固定姿势：容器里没有浏览器，默认会 spawn 一个
+    # 必然失败的 opener，只在 stderr 留一行告警。Dockerfile 的 CMD 是镜像
+    # 默认值（交互式 `docker run` 仍可自动开浏览器），compose 在此之上加了
+    # --no-open 与 --trusted-host。
     command:
       - node
       - scripts/docker-entrypoint.mjs
@@ -24,6 +30,7 @@ services:
       - /app/overlays/harness/files/packages/physicsos/health-host/deployment.patch.yml
       - --port
       - '3080'
+      - --no-open
       - --trusted-host
       - ${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}
     build:

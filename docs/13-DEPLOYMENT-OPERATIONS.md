@@ -315,6 +315,36 @@ compatibility patch records these interface decisions:
   is mounted immediately after `ops-host`; the package remains available for
   migration and explicit administrative use.
 
+- **Document gate (new in 0.1.7-rc.2).** `dsh web` now refuses `index.html`
+  unless the browser first presents the per-process launch token it prints at
+  startup (`dsh web: http://127.0.0.1:3080/?token=…`), exchanging it for an
+  authority-bound signed `dsh-auth-<hash>` cookie. Two facts decide the
+  deployment: the token is **per-process** (fresh random bytes on every boot),
+  and the cookie is bound to the authority that minted it (host **and** port),
+  so neither can be provisioned for ordinary visitors behind a reverse proxy —
+  there is no flag, environment variable, or config field that disables the
+  gate (the CLI exposes only `--host`, `--port`, `--trusted-host`, `--no-open`).
+  PhysicsOS therefore relaxes it in the compatibility patch for the authorities
+  the deployment **declares** in `trustedHosts` — the same list the `/api`
+  fence already uses (`--trusted-host` / `PHYSICOS_TRUSTED_HOSTS`). A token-less
+  document request whose `Host` is a declared authority is served directly;
+  loopback and undeclared hosts keep the stock gate, and a request that carries
+  the token keeps the stock exchange. The account boundary is unchanged: every
+  `/api` call still passes `apiPolicy` and needs a live product session. The
+  change lives in `overlays/harness/upstream-changes.patch`
+  (`packages/client/connection/src/api-request-trust.ts` and `rpc-host.ts`).
+  Because that list now gates the document itself, **adding or removing a
+  `PHYSICOS_TRUSTED_HOSTS` entry changes whether the public site is reachable**;
+  keep it identical to the reverse proxy's `server_name`.
+- The compose `app` command now passes `--no-open`. A container has no browser,
+  so the default handoff only spawns an opener that is certain to fail and logs
+  a warning to stderr. The launch URL still prints (`printUrl` stays true) and
+  is visible in `docker compose logs app`.
+- `/healthz` and `/readyz` are named routes registered ahead of the frontend
+  fallback, so the Docker healthcheck is **not** affected by the gate. A
+  loopback `GET /` without a cookie returns 401 by design — smoke-test the
+  document through the public origin instead (step 6).
+
 Rollback is application-first: restore the previous image digest and the
 submodule pointer/overlay pair from `47f943859bef60e4160492346772ded9b24f765a`
 before serving traffic, then reopen the preserved PostgreSQL/session volumes.
@@ -350,6 +380,24 @@ Record:
 
 ## 6. Deploy
 
+**Hard precondition for a Harness upgrade that bumps the session-log format**
+(the 0.1.7 promotion in particular). Before switching the primary Compose
+project, tag the previous image, take a filesystem-level backup of the sessions
+root (`/var/lib/physicsos/sessions`, `PHYSICSOS_SESSIONS_ROOT` inside
+`app_data`) **and** a `pg_dump`, and confirm both are readable.
+
+This is a precondition, not a nicety: the running deployment stores session logs
+in the oldest on-disk format (`{"type":"session","version":0,…}`). Harness
+0.1.7 ships the `v0 → v1 → v2 → v3 → v4` migration chain
+(`packages/session/session-format-v0-to-v1` … `-v3-to-v4`, with
+`catalog-migration.ts` selecting `historicalSessionFormatCatalog` for
+`version <= 3`), so 0.1.7 migrates those logs forward **in place**. After
+promotion the previous release (rollback image `14157e1`, submodule pinned at
+`47f9438`) would be reading already-migrated data. The rollback image is
+therefore a true rollback only **together with** the pre-promotion sessions-root
+and database backups. Never down-convert in place on rollback — restore from the
+backup.
+
 1. Verify the candidate digest and CI result for the same commit.
 2. Verify a successful backup before any schema migration.
 3. Start the dependencies and wait for healthy state:
@@ -375,9 +423,15 @@ docker compose ps app
 ```sh
 curl --fail --show-error http://127.0.0.1:3080/healthz
 curl --fail --show-error http://127.0.0.1:3080/readyz
-curl --fail --show-error --head http://127.0.0.1:3080/
+# The document is gated: a loopback GET/HEAD / without a cookie answers 401.
+# Check the document through the declared public origin instead.
+curl --fail --show-error --head "https://${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}/"
 docker compose logs --since=10m app
 ```
+
+   `docker compose logs app` must show the `dsh web: …` launch line. If the
+   public-origin document returns 401 (or the pre-0.1.7 "404"), the Host is not
+   in `PHYSICOS_TRUSTED_HOSTS` / `--trusted-host` — see section 4.
 
 7. Verify one authenticated read and one bounded write through the external
    reverse proxy. Confirm the resulting account/tenant scope and audit event.
@@ -572,6 +626,12 @@ partially restored database.
 
 Rollback is application-first. Database down-migrations are prohibited unless
 they are proven lossless and have their own tested procedure.
+
+For the 0.1.7 promotion specifically, the previous image alone is **not** a
+rollback: 0.1.7 migrated session logs forward in place (`v0 → … → v4`), so the
+rollback image would read migrated data. Restore the sessions root and the
+database from the backups taken under the section 6 precondition before
+serving traffic, and never down-convert in place.
 
 To deploy the previous image digest:
 
