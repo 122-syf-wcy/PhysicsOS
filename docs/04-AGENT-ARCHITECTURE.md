@@ -821,6 +821,12 @@ REFINE
 
 两个状态机不能混为一个。
 
+> **现状落点（0.1.7，`67e8444`）**：本节与 §25 描述的是设计意图；第二台状态机（Physics Workflow）目前比文字更薄、更分散，落点如下，勿当成已实现的转移表：
+>
+> - `packages/question-core/src/workflow.ts`（18 行）只是阶段**枚举**（`INPUT_RECEIVED … READY`、`UNSUPPORTED_MODEL`、`SOLVER_FAILED`、`VERIFICATION_FAILED` 等），**不是转移表**；实质行为在 `packages/question-core/src/question-runtime.ts`（约 2,134 行）。
+> - 目前唯一真正**持久化**的状态机是 paper-review 流水线：`overlays/harness/files/packages/physicsos/paper-host/src/domain.ts:277` 的 `z.enum(['spec','drafting','checking','review','approved','exported','failed'])`，配 `service.ts:852/868` 的 `markStage` / `failJob`，僵死进程恢复路径在 `index.ts:132`。
+> - 场景分支（实验 fork）在 `packages/physics-scene/src/scene-branch.ts`（82 行）与 `scene-runtime.ts`（约 4,839 行）。
+
 ---
 
 # 25. 为什么要两个状态机

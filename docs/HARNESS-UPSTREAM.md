@@ -12,14 +12,17 @@
 
 ## Pinned commit
 
-- SHA: `47f943859bef60e4160492346772ded9b24f765a`
+- SHA: `477b4f420553e8a52c2fbccc464d7561b239c443`
+- Upstream tag: `dsh-v0.1.7-rc.2`
 - Upstream branch: `master` (`origin/HEAD -> origin/master`)
 - Remote: `origin` → `https://github.com/deepseek-ai/deepseek-harness.git`
-- Checkout date: `2026-08-16`
-- Upstream message: `Merge pull request #2519 from deepseek-harness/feat/npm-public` (`2026-08-13`)
-- Upstream version field: `0.1.0-rc.5`
+- Upstream commit date: `2026-09-24`
+- Upstream message: `Merge pull request #5180 from deepseek-harness/rel/dsh-0.1.7-rc.2` (`2026-09-24`)
+- Upstream version field: `0.1.7-rc.2`
 
-主仓库记录的 submodule commit 即正式版本锁。
+主仓库记录的 submodule commit 即正式版本锁：`git ls-tree HEAD vendor/deepseek-harness` 与本表 SHA 一致。
+
+> 变更记录：`0.1.0-rc.5`（`47f9438…`，2026-08）→ `dsh-v0.1.7-rc.2`（`477b4f4…`，2026-09-24）。升级落点为 `overlays/harness/upstream-changes.patch`。
 
 ## Upstream requirements (from checkout, not guessed)
 
@@ -37,6 +40,9 @@ pnpm dsh web
 - Official Web URL: `http://127.0.0.1:3080`
 
 ## 初始 PHASE-01 upstream verification（历史基线）
+
+> 下表记录 **PHASE-01 pin**（`47f9438…` / `0.1.0-rc.5`，2026-08-16）的初始验证结果，仅作历史留档，
+> 不代表当前 pin。当前 pin（`477b4f4…` / `dsh-v0.1.7-rc.2`）的验证状态见「Pinned commit」与本分支提交记录。
 
 | Step              | Result       | Notes                                                                                                                                                                                                                  |
 | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -62,15 +68,31 @@ physics-runtime-bridge                 （Scene → Engine → Verifier → Obse
         ↓
 根仓库 PhysicsOS packages              （repository-relative file: dependencies）
 
-Harness Agent 链路：
+Harness Agent 链路（**生产路径**，实测 0.1.7 / `67e8444`）：
 
-@deepseek-ai/dsh-client-ui-physicsos
+Harness Agent Loop（vendor/deepseek-harness，pin；Agent Loop / Session / Tools 不改）
         ↓
-@physicsos/agent-runtime               （稳定 Contract，禁止 import Harness internal）
+Harness Tool Runtime（@deepseek-ai/dsh-tools）
         ↓
-@physicsos/agent-dsh-adapter           （唯一允许理解 Harness API）
+@deepseek-ai/dsh-tool-physicsos                 （overlays/harness/files/packages/physicsos/tool-physicsos/src/index.ts；
+        ↓                                        只做 ctx.tools 注册与转发，import Harness 的 defineTool）
+@physicsos/agent-tools                          （PhysicsToolRuntime：实验目录 / 题目运行时 / SceneCommand / 模拟 / 观测）
         ↓
-vendor/deepseek-harness                （pin；Agent Loop / Session / Tools 不改）
+PhysicsScene → Engine → Verifier                （数值唯一来源）
+
+桌面端另有宿主侧桥接 `apps/desktop/sidecar/bridge.mjs`，不经过下述 adapter 对。
+
+未接线（**不要当作生产链路**）：
+
+@physicsos/agent-runtime                （稳定 Contract，约 200 行；README 自述「PHASE-01 只提供类型与 contract test」）
+        ↓  仅被 @physicsos/agent-dsh-adapter import，除此之外无消费方
+@physicsos/agent-dsh-adapter            （唯一允许理解 Harness API；但仍是 PHASE-01 骨架）
+        ↓
+deepseek-harness-adapter.ts             （createSession / send / resume / cancel / getSession / forkSession 均
+                                          Promise.reject(new UnimplementedError(...))，无生产路径 import）
+
+> 上述 `agent-runtime` / `agent-dsh-adapter` 对是本仓库预置的稳定 Contract + 唯一 Harness 适配点，
+> 当前**尚未接入生产**：真实链路是 Harness tool runtime → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 引擎。
 
 Harness 模型 → 物理引擎链路（Phase 16 Tool Runtime）：
 
@@ -113,7 +135,8 @@ Harness 内核；`@physicsos/agent-tools` 本身不 import Harness。
 3. `git -C vendor/deepseek-harness fetch && git -C vendor/deepseek-harness checkout <new-sha>`
 4. 在 vendor 目录按官方命令重跑 `pnpm install`（submodule 下如 lefthook 再失败，仍用 `--ignore-scripts`，不要改 upstream）
 5. `pnpm run build` 与 `pnpm dsh web` smoke
-6. 只改 `@physicsos/agent-dsh-adapter` 与本文件
-7. 跑 adapter contract tests + Agent 相关回归（后续阶段）
-8. 更新本文件的 SHA / 日期 / 验证状态
-9. 提交主仓库 submodule pointer
+6. 升级落点是 `overlays/harness/upstream-changes.patch` 与本文件：本次 `dsh-v0.1.7-rc.2` 升级的 patch 为 **23 文件 / 3,309 行**，覆盖 `packages/client/connection`、`packages/bundle/web-app`、`apps/web`、`typert/protocol`、`core/session`、`session-format-v3-to-v4`、`ui-sidebar-browser`、voice-input 及构建配置等宿主包。`@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前仍是 PHASE-01 骨架（未接线，见上），本阶段不承担升级职责。
+7. 升级前须做 **on-box sessions 快照 + `pg_dump`**：0.1.7 会读旧 `format version: 0` 的 session 并以增量方式迁移（读取不改写原文件，仅写入产生 v4 文件），升级后写入的 v4 内容对旧版本不可见。细节见 `docs/10-DATA-STORAGE-ARCHITECTURE.md`。
+8. 跑 adapter contract tests + Agent 相关回归（后续阶段）
+9. 更新本文件的 SHA / 日期 / 验证状态
+10. 提交主仓库 submodule pointer
