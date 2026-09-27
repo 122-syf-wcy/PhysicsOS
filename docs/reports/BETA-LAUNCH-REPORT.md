@@ -1,7 +1,7 @@
 # PhysicsOS 公测上线报告
 
 - 报告日期：2026-09-27
-- 部署提交：`63c20e6e701b1dc1e4188e66903a82a18306f2cc`
+- 应用运行时提交：`63c20e6e701b1dc1e4188e66903a82a18306f2cc`
 - 正式地址：<https://physics.dongsiwei.com>
 - 部署目录：`/opt/physicsos`
 - 发布结论：**可以进入单副本、开放注册公测**。核心可用性、账号隔离、密钥权限、浏览器安全头和运维观测已经过实际生产复验；下文登记的项目仍不满足无限规模或长期无人值守生产的要求。
@@ -10,7 +10,7 @@
 
 ## 1. 交付范围
 
-本次发布提交 `63c20e6` 共改动 `114` 个文件，新增 `13,528` 行、删除 `297` 行，交付范围覆盖：
+本次应用交付提交 `63c20e6` 共改动 `114` 个文件，新增 `13,528` 行、删除 `297` 行，交付范围覆盖：
 
 - 账户、租户、角色、会话、设备注销、密码重置、TOTP 与管理员审计面。
 - 班级、成员、作业、提交、批改、完成率与出卷专区。
@@ -50,7 +50,8 @@ PhysicsOS app container
 | 应用监听 | 主机回环 `127.0.0.1:3080`，未裸露容器端口 |
 | Compose 服务 | `app`、`postgres`、`redis` 三容器均为 `healthy` |
 | 持久数据 | `app_data`、`postgres_data`、`redis_data` 命名卷 |
-| 生产提交 | `63c20e6e701b1dc1e4188e66903a82a18306f2cc` |
+| 应用运行时提交 | `63c20e6e701b1dc1e4188e66903a82a18306f2cc` |
+| 运维与文档 | 跟随 `origin/main`；后续文档、nginx 加固脚本更新不要求重建应用镜像 |
 | 管理员租户 | `PHYSICSOS-OPEN` |
 | 管理员账号 | `admin` |
 | 管理员密码来源 | `/opt/physicsos/.env.admin_password`，经 secret 注入，不在报告中记录明文 |
@@ -66,7 +67,7 @@ PhysicsOS app container
 
 ```sh
 ssh -i ~/.ssh/id_ed25519 root@38.76.190.3 \
-  'cd /opt/physicsos && git rev-parse HEAD && docker compose ps'
+  'cd /opt/physicsos && docker compose ps && docker compose images'
 
 curl -sS https://physics.dongsiwei.com/healthz
 curl -sS https://physics.dongsiwei.com/readyz
@@ -76,7 +77,7 @@ curl -sS -D - -o /dev/null https://physics.dongsiwei.com/readyz
 实测结果：
 
 ```text
-提交：63c20e6e701b1dc1e4188e66903a82a18306f2cc
+应用运行时提交：63c20e6e701b1dc1e4188e66903a82a18306f2cc
 app/postgres/redis：healthy
 GET /healthz：200 {"status":"ok"}
 GET /readyz：200 {"status":"ready","checks":{"postgres":{"status":"ok"},"redis":{"status":"ok"}}}
