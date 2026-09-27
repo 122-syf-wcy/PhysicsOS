@@ -9,10 +9,11 @@ ENV CI=true \
     PATH=/pnpm:${PATH}
 
 RUN apt-get update \
-    # python3/make/g++ compile the one native package that ships no Linux
-    # prebuild: node-pty (only darwin/win32 binaries are published). Everything
-    # else still installs with scripts disabled; only node-pty is rebuilt below.
-    && apt-get install --yes --no-install-recommends ca-certificates git python3 make g++ \
+    # python3/make/gcc/g++ compile the native packages that ship no Linux
+    # prebuild: node-pty (only darwin/win32 binaries are published) and the
+    # harness flock addon (`cc` builds the glibc Node-API module). Everything
+    # else still installs with scripts disabled; both are built below.
+    && apt-get install --yes --no-install-recommends ca-certificates git python3 make gcc g++ \
     && rm -rf /var/lib/apt/lists/* \
     # Install pnpm directly instead of through corepack: the PhysicsOS root pins
     # pnpm 11.9.0 while the vendored Harness pins 11.7.0, and a corepack-managed
@@ -45,6 +46,20 @@ RUN printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/p
     && pnpm install --frozen-lockfile \
     && pnpm -C vendor/deepseek-harness install --frozen-lockfile \
     && pnpm -C vendor/deepseek-harness rebuild node-pty
+
+# The JSONL session backend takes its cross-process write lock through the
+# native `flock` Node-API addon (@deepseek-ai/node-addon-system-<platform>-<arch>).
+# Those platform packages are WORKSPACE members (native/system/packages/*) whose
+# `bin/*.node` is gitignored build output: pnpm links the workspace directory
+# as-is, so an image that skips this ships a platform package with no addon — and
+# every new session's first durable write dies on a missing
+# `…/linux-x64/bin/glibc/system.node`, leaving a bare session.lock and no
+# transcript (the web host registers no console log exporter, so it fails
+# silently). `build:native-system` is the harness's own `test` prerequisite.
+# The trailing probe loads the addon and takes a real lock, so an image whose
+# addon is missing or unloadable fails the BUILD instead of losing transcripts.
+RUN pnpm -C vendor/deepseek-harness run build:native-system \
+    && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')"
 
 RUN pnpm -C vendor/deepseek-harness run build:lib \
     && pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-health-host run bundle \
