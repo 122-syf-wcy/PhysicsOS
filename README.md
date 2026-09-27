@@ -2,7 +2,7 @@
 
 > **开源公益项目**：面向初高中物理教学，公益定位。授权见 [`LICENSE`](./LICENSE)（Apache License 2.0，OSI 认证的开源许可，允许修改、分发与商业使用）。项目欢迎外部开发者共同维护，参与方式见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 >
-> **状态：公测准备中（public beta）**。账户体系、班级作业、出卷专区、学习记录同步、生产部署与桌面壳均已落地；接口与界面仍可能调整，请勿视作功能已完备。已完成与未完成范围见下文，界面会明确标记尚未接通的能力。
+> **状态：公测开放（public beta）**。正式入口为 <https://physics.dongsiwei.com>。账户体系、班级作业、出卷专区、学习记录跨设备同步、生产部署、模型号池与管理员运维面板均已上线；接口与界面仍会迭代，真实教学反馈会直接影响后续优先级。
 
 PhysicsOS 是一个面向初高中物理学习的公益可视化智能体，通过 AI 理解题目并结合物理引擎，将抽象物理过程转化为可交互、可观察、可计算、可验证的真实物理场景。
 
@@ -10,23 +10,27 @@ PhysicsOS 是一个面向初高中物理学习的公益可视化智能体，通�
 
 ## 界面截图
 
-以下截图取自真实服务器 + 真实浏览器的验收运行（`pnpm run test:acceptance`，浏览器门禁：console / pageerror / unhandled rejection / failed request / error response 全部为 0）。
+以下截图取自 2026-09-27 的正式生产站点，由
+`tests/acceptance/promo-shots.mjs` 使用真实浏览器登录后自动拍摄。
 
-| 登录门 | 出卷专区 |
+| 平台首页 | 实验中心 |
 | --- | --- |
-| ![登录门](docs/reports/screenshots/beta/01-login-gate.png) | ![出卷专区](docs/reports/screenshots/beta/02-paper-studio.png) |
+| ![平台首页](docs/reports/screenshots/promo/01-home.png) | ![实验中心](docs/reports/screenshots/promo/02-experiment-center.png) |
 
-| 班级教学（教师） | 我的班级（学生） |
+| 串联电路 | 凸透镜成像规律 |
 | --- | --- |
-| ![班级教学](docs/reports/screenshots/beta/03-class-teacher.png) | ![我的班级](docs/reports/screenshots/beta/04-class-student.png) |
+| ![串联电路](docs/reports/screenshots/promo/03-lab-series-circuit.png) | ![凸透镜成像规律](docs/reports/screenshots/promo/04-lab-convex-lens.png) |
 
-| 实验选择器（回旋加速器） | 回旋加速器实验 |
+| 探究液体内部的压强 | 探究晶体的熔化过程 |
 | --- | --- |
-| ![实验选择器](docs/reports/screenshots/beta/05-cyclotron-picker.png) | ![回旋加速器](docs/reports/screenshots/beta/06-cyclotron-lab.png) |
+| ![液体压强](docs/reports/screenshots/promo/05-lab-liquid-pressure.png) | ![晶体熔化](docs/reports/screenshots/promo/06-lab-melting.png) |
 
-| 管理后台 · 密码重置队列 | 学习记录 |
+| 资源库 | 学习记录 |
 | --- | --- |
-| ![密码重置队列](docs/reports/screenshots/beta/07-password-resets.png) | ![学习记录](docs/reports/screenshots/beta/08-learning-record.png) |
+| ![资源库](docs/reports/screenshots/promo/07-library.png) | ![学习记录](docs/reports/screenshots/promo/08-learning-record.png) |
+
+完整上线范围、生产复验和教师演示顺序见
+[`docs/reports/BETA-LAUNCH-REPORT.md`](./docs/reports/BETA-LAUNCH-REPORT.md)。
 
 ## 正式入口
 
@@ -62,14 +66,16 @@ vendor/deepseek-harness/apps/web
 
 ## 尚未完成
 
-- 实验室里的 AI 助教抽屉仍是确定性意图匹配（模型化回答见 backlog `AGENT_MODEL_BACKED_ANSWERS_BACKLOG`）；学生模式档位已映射到 `physics-student` 预设（`ui-physicsos/profiles.ts`）
-- 首页「打开场景」「模板」和实验「更多」菜单仍是禁用入口，需要完成闭环或移除
-- 学习记录、最近场景和个人配置的跨设备同步（当前个人数据仅本地 localStorage；服务端只有匿名聚合）
-- 纵波、波的反射 / 折射 / 衍射 / 多普勒效应，以及近代物理等后续领域
-- 班级、作业、提交、批改和学情看板
-- 可签名、可安装、可持续更新的 Desktop 壳层
-- 生产部署基础：根 CI/CD、Docker/Compose、数据库/共享限流、健康检查、备份恢复与可观测性
-- 图片/PDF/VLM 录题已经实现；真实卷库继续扩充仍需要可授权卷源与教师核验
+- 实验室 AI 助教抽屉仍以确定性意图匹配为主；模型化回答见 backlog
+  `AGENT_MODEL_BACKED_ANSWERS_BACKLOG`，会话 Agent 已使用 `physics-student` 预设
+- `web_search` 仍指向 DeepSeek 官方端点，未迁移到第三方模型网关
+- 第三方网关敏感词过滤仍需用真实题库采样；命中时可能返回 `500 / new_api_error`
+- 当前为单副本；扩容前必须把 `PHYSICSOS_SESSIONS_ROOT` 切到共享文件系统
+- Content-Security-Policy 暂缓，当前启用 HSTS、nosniff、X-Frame-Options、
+  Referrer-Policy 与 Permissions-Policy
+- 管理员 TOTP 已实现但当前生产账号尚未启用
+- 桌面端保留为可选壳，暂不投入签名、公证、商店发布和自动更新
+- 图片 / PDF / VLM 录题已经实现；真实卷库继续扩充仍需要可授权卷源与教师核验
 
 界面会明确标记尚未接通的能力，不用占位成功状态冒充完成。
 

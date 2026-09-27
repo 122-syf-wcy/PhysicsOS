@@ -81,6 +81,10 @@ if [[ -x "$PROJECT_DIR/scripts/deploy/secure-secrets.sh" ]]; then
   "$PROJECT_DIR/scripts/deploy/secure-secrets.sh"
 fi
 
+if [[ -x "$PROJECT_DIR/scripts/deploy/install-nginx-security-headers.sh" ]]; then
+  "$PROJECT_DIR/scripts/deploy/install-nginx-security-headers.sh"
+fi
+
 systemctl enable --now cron fail2ban
 systemctl restart cron fail2ban
 for attempt in {1..30}; do

@@ -598,6 +598,31 @@ The host SSH configuration is already compliant, so do not rewrite
 settings, add a validated drop-in, run `sshd -t`, reload SSH, and keep the
 existing key-based session open until a second key login succeeds.
 
+### 10.1.1 Browser security headers
+
+The public nginx site is hardened by
+`scripts/deploy/install-nginx-security-headers.sh`. The script is idempotent,
+backs up the site to `/var/backups/physicsos-operations/`, validates with
+`nginx -t`, and reloads only after validation succeeds. It adds:
+
+- HSTS (`Strict-Transport-Security`) with a one-year max age and subdomains
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- a restrictive `Permissions-Policy`
+
+Use `PHYSICSOS_HSTS_MODE=report` only for a controlled pre-HSTS check; the
+public-beta default is `enforce`. A Content-Security-Policy is intentionally
+not emitted until the app's inline styles, workers, WebSockets, and generated
+assets have a tested allowlist.
+
+Verify the live response from outside the host:
+
+```sh
+curl -sS -o /dev/null -D - https://physics.dongsiwei.com/readyz |
+  grep -Ei 'strict-transport-security|x-content-type-options|x-frame-options|referrer-policy|permissions-policy'
+```
+
 ### 10.2 Production self-check evidence
 
 The 2026-09-26 check returned:
@@ -661,6 +686,8 @@ rollback, resource limits, and ownership are all defined and tested.
       已种为 `SUPER_ADMIN`；公测期间不自助注册管理员。
 - [ ] TLS 反代已启用，且 `PHYSICOS_TRUSTED_PROXIES` 是该反代的精确 IP（含 IPv6
       写法如有）；未配置时不要对外暴露。
+- [ ] nginx 已运行 `scripts/deploy/install-nginx-security-headers.sh`，公网响应
+      含 HSTS 与四项基础安全头，且 `nginx -t` 通过。
 - [ ] `.env.image_api_key` 已设置；若有意关闭题图生成，已在 `compose.yml` 移除
       `image_api_key` secret 并记录该决定。
 - [ ] `docker compose up -d postgres redis` 后两者 healthy，`/readyz` 返回成功。

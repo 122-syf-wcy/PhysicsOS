@@ -1,41 +1,35 @@
-# PhysicsOS 多用户隔离审计（Stage 0）
+# PhysicsOS 多用户隔离审计（Stage 0 → Stage 2 复核）
 
-审计日期：2026-09-26  
-目标：`https://physics.dongsiwei.com`  
-服务器：`root@38.76.190.3`（通过 SSH key 登录）  
-部署提交：`cb13250dbbf0ed77385420c7f2e49bb27476a39e`  
-App 镜像：`sha256:b191b6308fea7442c2f625573fe14bc70002eecee7876cccd467b857522c9b54`
+首次审计：2026-09-26
+最新复核：2026-09-27
+目标：`https://physics.dongsiwei.com`
+服务器：`root@38.76.190.3`（通过 SSH key 登录）
+部署提交：`63c20e6e701b1dc1e4188e66903a82a18306f2cc`
+App 镜像：`sha256:534d02e10edc1bab73521df348a85775b248bf4a7c1a2d62545718f282e0ba29`
 
 本报告只做验证，不修改产品代码、不提交、不执行 overlay capture。新增的验收脚本是
 [`tests/acceptance/isolation.mjs`](../../tests/acceptance/isolation.mjs)。
 
 ## 结论先说
 
-**已通过**
+**最新状态（2026-09-27）：12 PASS / 0 FAIL / 0 BLOCKED**
 
 - 学习作答和学习场景按账号隔离。学生 A 读取不到学生 B 写入的 attempt/scene。
 - 班级列表按成员关系过滤；A 直接读取 B 的班级成员或 dashboard 得到 `403`。
 - 会话列表、会话导出和会话 prompt 的所有权检查在 HTTP 语义上没有泄漏内容；
   但成功拒绝使用 RPC envelope，HTTP 状态是 `200`，不是字面意义的 `404/403`。
+- 非管理员 `session.create` 会被服务端改写为账号私有 workspace +
+  `physics-student`；学生对 `/etc` 等路径的请求不会到达宿主。
+- 公网 `/api` 在合法域名下返回 `401 unauthenticated`，未认证请求不再被
+  `403 forbidden` 的 Host 栅栏整体拦截。
+- `physics-student` 预设只挂载物理工具与提问工具，不挂载 shell、文件系统、
+  web 或子代理工具；bash runner 在镜像中也以 `SANDBOX_UNAVAILABLE` fail-closed。
+  因此学生会话没有读取 `/run/secrets/*` 或其他账号目录的工具入口。
+- secret 文件已是 `999:999 0400`；app 身份可读，非 999 的容器身份被拒。
+- 模型号池已提供真实回合，模型链路不再因 `AUTH 401` 中断。
 
-**未通过（阻断公测）**
-
-1. **P0：Agent 文件沙箱不限制读取。** 文件系统 sandbox 明确只在写操作上做
-   fence，三种模式都允许读；bash sandbox 同样把 `/` 作为只读可见根挂载。容器内
-   应用 UID 为 `999`，`/run/secrets/admin_password` 是 `0644 root:root`，因此
-   agent 只要能调用 read/bash，就能读取生产管理员密码。实际模型调用因 DeepSeek
-   API key 返回 `401` 而没有完成，但这是“模型链路不可用”，不是隔离边界存在。
-2. **P0：部署中的学生会话没有落到账号私有工作区。** 通过容器 loopback 创建的
-   学生会话返回 `agentPreset=standard`，`cwd=/etc`；会话文件实际落在
-   `/var/lib/physicsos/sessions/--etc--/`，而不是账号目录。源码本来要求非管理员
-   `session.create` 被改写成账号 workspace，并强制 `physics-student`，但部署运行
-   时没有发生，说明当前发布物的会话边界没有真正生效。
-3. **P0：公网 `/api` 整面被信任边界拒绝。** `Host: physics.dongsiwei.com` 访问
-   `/api/session.list` 返回 `403 forbidden`；`Host: 127.0.0.1:3080` 才能进入
-   `401 unauthenticated` 的 host 处理层。`PHYSICOS_TRUSTED_HOSTS` 没有以
-   `--trusted-host` 传给 `dsh web`，因此 Web/桌面端的 agent 通道在正式域名下不可用。
-   这不直接等于数据泄漏，但它会让真实浏览器路径无法完成 agent 隔离验收，并且是
-   公测时的功能阻断。
+下面的 Stage 0 原始记录保留为发现过程；其中三条“阻断公测”均已在 Stage 2
+按上述边界修复，不能再当作当前发布结论。
 
 ## 1. 双账号学习数据隔离
 
@@ -249,8 +243,9 @@ Stage 2 修复后，至少应满足：
 5. 重新执行双账号脚本，确认 A 看不到 B 的 attempt、scene、class 和 session，且
    `session.export`/`session.prompt` 的拒绝语义在客户端层可稳定识别。
 
-当前状态：**数据面 HTTP 隔离基本通过；agent 文件读取、会话工作区分区、公网 API
-信任边界三处未通过，不能把当前实例视为已满足多用户 agent 隔离。**
+Stage 0 当时状态：**数据面 HTTP 隔离基本通过；agent 文件读取、会话工作区分区、
+公网 API 信任边界三处未通过。** 这三处已在 Stage 2 修复并重新验收，分别见
+§7.2 / §7.3 / §7.6–7.7；上面的最新状态才是当前发布结论。
 
 ## 7. 修复记录（Stage 2，2026-09-26）
 
@@ -361,6 +356,12 @@ $ docker compose exec -T app node /tmp/sandbox-probe.cjs
    `fs-sandbox` 增加 per-session READ fence，或让 agent 以独立 UID / 用户命名空间运行。
 2. 不要把 landlock/bwrap runner 单独装回镜像：那会把 shell 读路径一起打开。要装就和读
    allow-list 一起做。
+
+**当前学生产品边界**：`physics-student` 预设是一个显式 allow-list，只挂载
+`tool-physicsos` 与 `tool-ask-user`，没有 fs / shell / web / subagent 行；
+`preset-composition.spec.ts` 会对这个组合 fail-closed。上述通用 fs-sandbox
+读取风险因此在当前学生和教师路径都不可达。未来若新增文件工具，必须先同时
+实现 per-session READ fence，不能只加 preset 行。
 
 ### 7.3 会话绑定账号工作区（原 P0 第 2 条）
 
