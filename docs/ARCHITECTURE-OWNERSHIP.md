@@ -7,7 +7,7 @@
 ## 结论
 
 **Agent 运行时按设计来自上游，不做自研；物理域、结果校验、题目语义与多租户产品层是自有。**
-具体地：PhysicsOS 不重写 Harness 的 Agent Loop / Session / Tools（`README.md:159`），把 Harness 当作 Agent 基础设施；在它之下，自有代码提供上游没有的三类能力——物理引擎与数值校验、题目语义解析与判分、以及承载这些能力的多租户产品宿主（账号、加密模型密钥池、签名插件、论文流水线）。因此「只是给 DeepSeek Harness 换皮的 UI」不成立：`packages/` 下有 84,540 行自有 `.ts`（31 个包），overlay 下另有 36,620 行产品宿主与 49,565 行产品 UI `.ts`，均为上游不含的代码。反过来，「Agent 运行时自研」同样不成立——`packages/agent-runtime` 与 `packages/agent-dsh-adapter` 目前是零消费者骨架，见第 4 节。
+具体地：PhysicsOS 不重写 Harness 的 Agent Loop / Session / Tools（`README.md:159`），把 Harness 当作 Agent 基础设施；在它之下，自有代码提供上游没有的三类能力——物理引擎与数值校验、题目语义解析与判分、以及承载这些能力的多租户产品宿主（账号、加密模型密钥池、签名插件、论文流水线）。因此「只是给 DeepSeek Harness 换皮的 UI」不成立：`packages/` 下有 84,540 行自有 `.ts`（31 个包），overlay 下另有 36,620 行产品宿主与 49,565 行产品 UI `.ts`，均为上游不含的代码。反过来，「Agent 运行时自研」同样不成立——我们不自建、也不维护独立 Agent runtime（**Harness 是 Agent 宿主**）；曾经的 `packages/agent-runtime` 与 `packages/agent-dsh-adapter` 零消费者骨架已于 2026-09-27 退役删除（ADR-0002），见第 4 节。
 
 ## 1. 规模测量表
 
@@ -70,11 +70,10 @@ wc -l < overlays/harness/upstream-changes.patch                 # 3383
 
 本节记录**未成立**的部分。
 
-- **`packages/agent-runtime` 与 `packages/agent-dsh-adapter` 是零消费者骨架。**
-  - `packages/agent-runtime` 的 `src/` 非测试代码 196 行（另 `contract.test.ts` 47 行）；全仓唯一消费者是 `packages/agent-dsh-adapter`，无生产路径 import。核：`git grep -ln '@physicsos/agent-runtime' HEAD -- packages overlays apps`。
-  - `packages/agent-dsh-adapter/src/deepseek-harness-adapter.ts` 是 PHASE-01 骨架：`createSession` / `send` / `resume` / `cancel` 等方法直接 `return Promise.reject(new UnimplementedError(...))`（第 32 / 37 / 42 / 47 行）。核：`git grep -ln '@physicsos/agent-dsh-adapter' HEAD -- packages overlays apps`（除包自身外无命中）。
-  - 处置记录见 `docs/adr/0002-agent-runtime-adapter-disposition.md`（**状态：提议**，推荐退役）。
-  - 真正在跑的 Agent 链是上游循环：Harness Agent Loop → Harness Tool Runtime → `tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+- **`packages/agent-runtime` 与 `packages/agent-dsh-adapter` 曾是零消费者骨架（已于 2026-09-27 退役删除）。**
+  - 退役前：`packages/agent-runtime` 的 `src/` 非测试代码 196 行（另 `contract.test.ts` 47 行）；全仓唯一消费者是 `packages/agent-dsh-adapter`，无生产路径 import。`packages/agent-dsh-adapter/src/deepseek-harness-adapter.ts` 是 PHASE-01 骨架：`createSession` / `send` / `resume` / `cancel` 等方法直接 `return Promise.reject(new UnimplementedError(...))`。
+  - 处置记录见 `docs/adr/0002-agent-runtime-adapter-disposition.md`（**状态：已采纳并已执行**，方案 (b) 退役）。2026-09-27 已删除两个目录及其 workspace 成员与 `pnpm-lock.yaml` importer 引用；除包自身外全仓零命中 import，`apps/desktop` 与其余 `packages/**` 均无依赖。
+  - 真正在跑的 Agent 链是上游循环：Harness Agent Loop → Harness Tool Runtime → `tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。**Harness 是 Agent 宿主，PhysicsOS 不自建独立 Agent runtime。**
 - **论文流水线目前调用裸模型，尚未接引擎（进行中）。**
   - `paper-host/src/draft.ts` 的 `callModel` 直接走 `ctx.llm.stream`（第 90 / 92 行）；另有独立的二次求解 `paper-host/src/solve.ts`。
   - `paper-host` 包当前 **0 处** import `@physicsos/agent-tools`。核：`git grep -ln '@physicsos/agent-tools' HEAD -- overlays/harness/files/packages/physicsos/paper-host/`（无输出）。

@@ -77,8 +77,6 @@ PhysicsOS Windows Desktop
                         ↓
                   Physics Agent
                         │
-                  Agent Runtime
-                        │
                DeepSeek Harness
 ```
 
@@ -177,25 +175,21 @@ Renderer 只把已经得到的物理状态绘制出来。
 
 ## 3.6 Agent Runtime 与 Harness 隔离
 
-业务代码只依赖：
+Harness 是 Agent 宿主；PhysicsOS 不自建独立 Agent runtime。模型与 Harness 提供理解与操作：
 
 ```text
-PhysicsAgentRuntime API
+DeepSeek Harness
 ```
 
-DeepSeek Harness 通过 Adapter 接入：
+业务代码通过集成层接入，而不是自有的 Agent runtime：
 
 ```text
 PhysicsOS
     ↓
-PhysicsAgentRuntime
-    ↓
-DSH Adapter
-    ↓
 DeepSeek Harness
 ```
 
-> **状态标记（未接线 / 非生产链路）**：链中的 `PhysicsAgentRuntime` / `DSH Adapter` 对应的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+> **已退役（ADR-0002，2026-09-27）**：链中曾有的 `PhysicsAgentRuntime` / `DSH Adapter`（对应已删除的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter`）已退役，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。我们自己的 runtime 是物理世界 runtime（Scene → Engine → Verifier），不是 agent loop。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 ---
 
@@ -275,8 +269,6 @@ physics-os/
 │   ├── question-parser/
 │   ├── question-engine/
 │
-│   ├── agent-runtime/
-│   ├── agent-dsh-adapter/
 │   ├── agent-tools/
 │   ├── agent-prompt/
 │   ├── agent-context/
@@ -323,7 +315,7 @@ physics-os/
 └── scripts/
 ```
 
-> **状态标记（未接线 / 非生产链路）**：结构中的 `agent-runtime/` 与 `agent-dsh-adapter/` 为设计稿包位；当前 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` **未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。真实在线的是 `agent-tools/`（`@physicsos/agent-tools` → 物理引擎 / verifier）。
+> **已退役（ADR-0002，2026-09-27）**：结构中原有的 `agent-runtime/` 与 `agent-dsh-adapter/` 设计稿包位（`@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter`）已退役删除，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。Harness 是 Agent 宿主，PhysicsOS 不自建独立 Agent runtime；真实在线的是 `agent-tools/`（`@physicsos/agent-tools` → 物理引擎 / verifier）。
 
 ---
 
@@ -572,13 +564,7 @@ Revision
 
 ## 9.4 Agent State
 
-由：
-
-```text
-PhysicsAgentRuntime
-```
-
-管理：
+Agent state（Session / Run / Turn / Tool Call / Agent Status / Streaming）由 Harness 宿主管理：
 
 ```text
 Session
@@ -589,7 +575,7 @@ Agent Status
 Streaming
 ```
 
-> **状态标记（未接线 / 非生产链路）**：`PhysicsAgentRuntime`（`@physicsos/agent-runtime`）目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以上为设计稿。
+> **已退役（ADR-0002，2026-09-27）**：设计稿中原由 `PhysicsAgentRuntime`（`@physicsos/agent-runtime`）承担的 Agent state 管理已退役删除，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。Harness 是 Agent 宿主，PhysicsOS 不自建独立 Agent runtime。
 
 ---
 
@@ -1542,6 +1528,8 @@ Question Pattern
 
 # 45. Physics Agent Runtime
 
+> **已退役（ADR-0002，2026-09-27）**：`PhysicsAgentRuntime`（`@physicsos/agent-runtime`）已退役删除，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。Harness 是 Agent 宿主；PhysicsOS 不自建独立 Agent runtime。以下「角色」划分仍作为设计参考——它们不是常驻运行时，而是表达为 Harness 上的 Prompt + Tool Scope + Context + Workflow（见 §46）。
+
 统一抽象：
 
 ```text
@@ -1556,8 +1544,6 @@ PhysicsAgentRuntime
 ├── Tutor Role
 └── Diagnostic Role
 ```
-
-> **状态标记（未接线 / 非生产链路）**：`PhysicsAgentRuntime`（`@physicsos/agent-runtime`）目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下为设计稿。
 
 ---
 
@@ -1583,9 +1569,9 @@ Workflow
 
 # 47. PhysicsAgentRuntime API
 
-上层只依赖统一接口。
+> **已退役（ADR-0002，2026-09-27）**：本接口及其 `@physicsos/agent-runtime` 包已退役删除，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。Harness 是 Agent 宿主；PhysicsOS 不自建独立 Agent runtime。以下接口仅作历史设计记录。
 
-> **状态标记（未接线 / 非生产链路）**：该接口及其 `@physicsos/agent-runtime` 包目前**未接线**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下为设计稿。
+上层只依赖统一接口。
 
 ```ts
 interface AgentRuntime {
@@ -1603,31 +1589,23 @@ interface AgentRuntime {
 
 # 48. DeepSeek Harness Adapter
 
-在 PhysicsOS Agent/Domain 包中，只有：
+> **已退役（ADR-0002，2026-09-27）**：曾作为「PhysicsOS Agent/Domain 中唯一允许依赖 Harness 的包」的 `agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与配套的 `agent-runtime`（`@physicsos/agent-runtime`）已退役删除，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；其方法曾是 `Promise.reject(new UnimplementedError(...))` 骨架，无生产路径 import。
+
+Harness 是 Agent 宿主；PhysicsOS 不自建独立 Agent runtime。二者的集成边界是 Harness 工作区内的工具插件：
 
 ```text
-agent-dsh-adapter
+Harness tool runtime
+     ↓
+dsh-tool-physicsos                    （overlays/harness/files/packages/physicsos/tool-physicsos）
+     ↓
+@physicsos/agent-tools
+     ↓
+PhysicsScene → Engine → Verifier      （物理世界 runtime：数值唯一来源）
 ```
-
-允许直接依赖 DeepSeek Harness Agent Runtime。
 
 正式 UI 叠加层 `vendor/deepseek-harness/packages/client/ui-physicsos` 是展示集成边界，可以依赖已声明的 Harness 客户端 layout/sidebar/conversation slot contract；不得依赖 Harness Agent 内部实现，也不得把 Harness 类型扩散进 PhysicsOS Domain。
 
 其他 PhysicsOS 领域模块禁止直接 import Harness。
-
-结构：
-
-```text
-Physics Agent
-     ↓
-AgentRuntime Contract
-     ↓
-DSH Adapter
-     ↓
-DeepSeek Harness
-```
-
-> **状态标记（未接线 / 非生产链路）**：`agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与 `agent-runtime`（`@physicsos/agent-runtime`）目前**未接线**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；其方法均为 `Promise.reject(new UnimplementedError(...))` 骨架。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 ---
 

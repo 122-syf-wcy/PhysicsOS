@@ -817,7 +817,7 @@ revision
 
 ## Agent State
 
-Agent Runtime：
+Agent State（由 Harness 宿主维护，PhysicsOS 不自建独立 Agent runtime）：
 
 ```text
 session
@@ -1257,15 +1257,7 @@ vendor/deepseek-harness/packages/client/ui-physicsos
 
 它们可以依赖已声明的 Harness 客户端插件、layout、sidebar 与 conversation slot contract。
 
-PhysicsOS Agent/Domain 包中只有：
-
-```text
-agent-dsh-adapter
-```
-
-允许直接依赖 DeepSeek Harness Agent Runtime。
-
-> **状态标记（未接线 / 非生产链路）**：`agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与 `agent-runtime`（`@physicsos/agent-runtime`）目前**未接线**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+> **已退役（ADR-0002，2026-09-27）**：曾「PhysicsOS Agent/Domain 中唯一允许直接依赖 DeepSeek Harness Agent Runtime」的 `agent-dsh-adapter`（`@physicsos/agent-dsh-adapter`）与 `agent-runtime`（`@physicsos/agent-runtime`）已退役删除，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。Harness 是 Agent 宿主；PhysicsOS 不自建独立 Agent runtime，自己的 runtime 是物理世界 runtime（Scene → Engine → Verifier）。真实生产链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 禁止：
 

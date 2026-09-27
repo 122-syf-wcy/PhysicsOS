@@ -109,7 +109,7 @@ docs/
 UI/
 ```
 
-> **追记（2026-09-27）**：`packages/agent-runtime` / `packages/agent-dsh-adapter` 自 PHASE-01 起即为**未接线（非生产链路）**骨架，至今**无生产消费者**，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下是当时的历史记录。
+> **追记（2026-09-27）**：`packages/agent-runtime` / `packages/agent-dsh-adapter` 自 PHASE-01 起即为**未接线（非生产链路）**骨架、**无生产消费者**；二者已于 2026-09-27 退役删除（ADR-0002 已采纳并执行），见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。以下是当时的历史记录。
 
 技术锁定（npm 查询 + Harness 兼容，不是文档旧版本猜测）：
 
@@ -129,7 +129,7 @@ UI/
 | `@physicsos/ui`                | tokens / primitives / domain components          | 完成                   |
 | `@physicsos/web`               | 产品 UI                                          | UI + fixture           |
 
-> **追记（2026-09-27）**：上表中 `@physicsos/agent-runtime` 与 `@physicsos/agent-dsh-adapter` 至今仍**未接线（非生产链路）**、无生产消费者，状态为「提议退役」，见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；后者方法均为 `Promise.reject(new UnimplementedError(...))` 骨架。真实生产 Agent 链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
+> **追记（2026-09-27）**：上表中 `@physicsos/agent-runtime` 与 `@physicsos/agent-dsh-adapter` 始终**未接线（非生产链路）**、无生产消费者，已于 2026-09-27 退役删除（ADR-0002 已采纳并执行），见 `docs/adr/0002-agent-runtime-adapter-disposition.md`；后者方法均为 `Promise.reject(new UnimplementedError(...))` 骨架，无生产路径 import。真实生产 Agent 链路是 Harness 工具运行时 → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 物理引擎 / verifier。
 
 业务组件未出现 `window.__TAURI__`。  
 `apps/web` 未 import `@deepseek-ai/*`。

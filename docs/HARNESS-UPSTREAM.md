@@ -80,19 +80,13 @@ Harness Tool Runtime（@deepseek-ai/dsh-tools）
         ↓
 PhysicsScene → Engine → Verifier                （数值唯一来源）
 
-桌面端另有宿主侧桥接 `apps/desktop/sidecar/bridge.mjs`，不经过下述 adapter 对。
+桌面端另有宿主侧桥接 `apps/desktop/sidecar/bridge.mjs`。
 
-未接线（**不要当作生产链路**）：
-
-@physicsos/agent-runtime                （稳定 Contract，约 200 行；README 自述「PHASE-01 只提供类型与 contract test」）
-        ↓  仅被 @physicsos/agent-dsh-adapter import，除此之外无消费方
-@physicsos/agent-dsh-adapter            （唯一允许理解 Harness API；但仍是 PHASE-01 骨架）
-        ↓
-deepseek-harness-adapter.ts             （createSession / send / resume / cancel / getSession / forkSession 均
-                                          Promise.reject(new UnimplementedError(...))，无生产路径 import）
-
-> 上述 `agent-runtime` / `agent-dsh-adapter` 对是本仓库预置的稳定 Contract + 唯一 Harness 适配点，
-> 当前**尚未接入生产**：真实链路是 Harness tool runtime → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 引擎。
+> **已退役（ADR-0002，2026-09-27）**：曾经存在的 `@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter`
+> 适配对（PHASE-01 骨架、零生产消费者）已删除。**Harness 是 Agent 宿主（Agent host）；PhysicsOS 不自建、
+> 也不维护独立的 Agent runtime**——模型与 Harness 提供理解与操作，我们自己的 runtime 是物理世界 runtime
+> （Scene → Engine → Verifier），不是 agent loop。真实链路是 Harness tool runtime →
+> `dsh-tool-physicsos` → `@physicsos/agent-tools` → 引擎。见 `docs/adr/0002-agent-runtime-adapter-disposition.md`。
 
 Harness 模型 → 物理引擎链路（Phase 16 Tool Runtime）：
 
@@ -135,7 +129,7 @@ Harness 内核；`@physicsos/agent-tools` 本身不 import Harness。
 3. `git -C vendor/deepseek-harness fetch && git -C vendor/deepseek-harness checkout <new-sha>`
 4. 在 vendor 目录按官方命令重跑 `pnpm install`（submodule 下如 lefthook 再失败，仍用 `--ignore-scripts`，不要改 upstream）
 5. `pnpm run build` 与 `pnpm dsh web` smoke
-6. 升级落点是 `overlays/harness/upstream-changes.patch` 与本文件：本次 `dsh-v0.1.7-rc.2` 升级的 patch 为 **23 文件 / 3,309 行**，覆盖 `packages/client/connection`、`packages/bundle/web-app`、`apps/web`、`typert/protocol`、`core/session`、`session-format-v3-to-v4`、`ui-sidebar-browser`、voice-input 及构建配置等宿主包。`@physicsos/agent-runtime` / `@physicsos/agent-dsh-adapter` 目前仍是 PHASE-01 骨架（未接线，见上），本阶段不承担升级职责。
+6. 升级落点是 `overlays/harness/upstream-changes.patch` 与本文件：本次 `dsh-v0.1.7-rc.2` 升级的 patch 为 **23 文件 / 3,309 行**，覆盖 `packages/client/connection`、`packages/bundle/web-app`、`apps/web`、`typert/protocol`、`core/session`、`session-format-v3-to-v4`、`ui-sidebar-browser`、voice-input 及构建配置等宿主包。
 7. 升级前须做 **on-box sessions 快照 + `pg_dump`**：0.1.7 会读旧 `format version: 0` 的 session 并以增量方式迁移（读取不改写原文件，仅写入产生 v4 文件），升级后写入的 v4 内容对旧版本不可见。细节见 `docs/10-DATA-STORAGE-ARCHITECTURE.md`。
 8. 跑 adapter contract tests + Agent 相关回归（后续阶段）
 9. 更新本文件的 SHA / 日期 / 验证状态

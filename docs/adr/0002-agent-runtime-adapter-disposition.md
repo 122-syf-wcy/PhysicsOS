@@ -1,9 +1,10 @@
 # ADR-0002：agent-runtime 与 agent-dsh-adapter 的处置
 
-- 状态：提议
-- 日期：2026-09-27
+- 状态：已采纳（已执行，2026-09-27）
+- 日期：2026-09-27（提议）；2026-09-27（采纳并执行退役）
 - 决策人：PhysicsOS maintainers
-- 相关文档 / PR：`packages/agent-runtime`、`packages/agent-dsh-adapter`、`docs/HARNESS-UPSTREAM.md`、`docs/04-AGENT-ARCHITECTURE.md`
+- 相关文档 / PR：`docs/HARNESS-UPSTREAM.md`、`docs/04-AGENT-ARCHITECTURE.md`、`docs/ARCHITECTURE-OWNERSHIP.md`
+- 执行记录：2026-09-27 按方案 (b) 完成退役，删除 `packages/agent-runtime`、`packages/agent-dsh-adapter`（原 `packages/agent-runtime` 与 `packages/agent-dsh-adapter` 目录已不存在）。
 
 ## 背景
 
@@ -44,8 +45,12 @@
 
 ## 决定
 
-**推荐方案（b）：退役 `packages/agent-runtime` 与 `packages/agent-dsh-adapter` 两个 package，
+**采纳方案（b）：退役 `packages/agent-runtime` 与 `packages/agent-dsh-adapter` 两个 package，
 把文档链改为描述真实在线的 `tool-physicsos → @physicsos/agent-tools → 物理引擎 / verifier` 路径。**
+
+**边界声明（owner 2026-09-27 确认）：Harness 是 Agent 宿主（Agent host）；PhysicsOS 不自建、也不维护独立的
+Agent runtime。模型与 Harness 提供「理解与操作」，我们自己的 runtime 是物理世界 runtime
+（Scene → Engine → Verifier），不是 agent loop。**
 
 边界与范围：
 
@@ -53,8 +58,8 @@
   与 `tool-physicsos` 注册层，而不是一个重复的 `agent-runtime` 抽象。
 - `@physicsos/agent-tools` 已是 PhysicsOS 唯一拥有物理语义的 Agent 集成点，退役后它继续承担
   「PhysicsOS owns the physics domain」这一职责。
-- 明确不做：不在本轮执行退役（本 ADR 状态为**提议**）。本轮只做零风险、非破坏性的
-  包内文档纠偏（见「后果·已执行」）。
+- 已执行（2026-09-27）：按本 ADR 方案 (b) 删除两个 package 目录并清理全部引用，
+  文档同步纠正（见「后果·已执行」）。
 - 明确不做：不 fork/修改 Harness，不删除 `vendor/deepseek-harness`，不动
   `apps/desktop/sidecar/bridge.mjs`——bridge 是当前唯一可用的桌面 Agent 通道，继续保留。
 
@@ -69,13 +74,25 @@
   `agent-tools` → 引擎）。
 - 负面：失去一个「未来可替换 Agent Runtime」的潜在 seam。若日后确实需要接入非 Harness 的
   runtime，需重新引入契约层——届时按真实需求设计，而不是保留今日的猜想。
-- 需要跟进：退役是独立后续动作（本 ADR 被接受后另开 PR），步骤包括移除两个 workspace 包、
-  清理 `pnpm-workspace.yaml`/lockfile 引用、跑 `pnpm typecheck`/`test` 确认无破坏
-  （因无消费者，预期零破坏）；并同步改文档（见下）。
-- 已执行（本轮，非破坏性）：只纠偏包内文档，不改行为、不删包、不接线。
+- 已执行（2026-09-27）：退役完成。删除了 `packages/agent-runtime`（含 `src/` 与 `contract.test.ts`）
+  与 `packages/agent-dsh-adapter`（含 `deepseek-harness-adapter.ts` 骨架与 sidecar transport）两个
+  目录；清理了 workspace 成员引用（`pnpm-workspace.yaml` 用 `packages/*` 通配，自动生效）与
+  `pnpm-lock.yaml` 中的两个 importer 块。两个包的 `package.json` 依赖、tsconfig 项目引用、
+  全仓 import 均随目录删除而消失；`apps/desktop` 与其余 `packages/**` 均未依赖它们
+  （`grep -rn` 除包自身外零命中）。退役本身不引入错误：`lint` 与 `test:desktop` 通过；
+  `typecheck` 与 `test:core` 在同一工作区因并发进行中的 `packages/physics-core` 重构
+  （`VerificationResult` 新增字段）暂红，命中范围均为 `engine-*` / `agent-tools` 等消费方，
+  与本次退役无关。
+- 历史（本轮之前，非破坏性）：曾先只纠偏包内文档，不改行为、不删包、不接线。
 
-### 文档影响（本 ADR 被接受后需改）
+### 文档影响（已执行，2026-09-27）
 
+- 已执行：本节列出的所有文档（`docs/HARNESS-UPSTREAM.md`、`docs/04-AGENT-ARCHITECTURE.md`、
+  `docs/00-PRODUCT-OVERVIEW.md`、`docs/01-DEVELOPMENT-GUIDE.md`、`docs/02-ENGINEERING-STANDARDS.md`、
+  `docs/ARCHITECTURE-OWNERSHIP.md`、`docs/reports/PHASE-01-FOUNDATION-REPORT.md`）已按方案 (b) 纠正：
+  把「未接线 / 提议退役」标记改为「已退役（ADR-0002）」，并从链路图与包结构清单中移除该适配对，
+  保留真实链路（Harness tool runtime → `dsh-tool-physicsos` → `@physicsos/agent-tools` → 引擎），
+  历史报告保留原记录并加追记。以下为当时的待改清单，保留以存档：
 - `docs/HARNESS-UPSTREAM.md`：该文件已被 commit `fec8132` 重写，把这一对明确标为
   「未接线（**不要当作生产链路**）」（现第 85-95 行）——事实口径已正确。但在方案 (b) 下，
   这段「未接线」块（含第 87-92 行的 `@physicsos/agent-runtime → @physicsos/agent-dsh-adapter →
@@ -92,7 +109,7 @@
   「Physics Workflow State Machine」（3626 行）——真实的物理状态机在
   `overlays/harness/files/packages/physicsos/paper-host/src/domain.ts:277` 与
   `packages/physics-scene/src/scene-branch.ts`，不在 `agent-workflow`。
-- 次要引用（同样需要回填，非本轮范围）：`docs/00-PRODUCT-OVERVIEW.md:2483-2484`、
+- 次要引用（已回填）：`docs/00-PRODUCT-OVERVIEW.md:2483-2484`、
   `docs/01-DEVELOPMENT-GUIDE.md:276-277` 与 `:1599`、`docs/02-ENGINEERING-STANDARDS.md:1263`
   与 `:2434`、`docs/reports/PHASE-01-FOUNDATION-REPORT.md:103-104` 与 `:125-126`。
 
