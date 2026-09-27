@@ -195,10 +195,13 @@ agent-default-model:
 
 三个容易踩的坑：
 
-1. **secret 文件权限**：compose secret 以宿主机文件权限挂进容器，而 app 以非 root
-   用户运行。`0600 root:root` 会让容器起不来并打印
-   `secret file for DEEPSEEK_API_KEY_FILE is unreadable (EACCES)`；保持 `0644`
-   （与本目录其他 `.env.*` 一致）。
+1. **secret 文件权限**：每个 secret 都在 compose 里以长语法声明
+   `uid: '999'`、`gid: '999'`、`mode: '0400'`（复用 `x-secret-mount` 锚点），
+   Compose 据此改写挂载文件的属主与权限，宿主机文件因此可以保持 `0600`（或更
+   严格）而不必放宽到 `0644`。宿主机一侧 `scripts/deploy/secure-secrets.sh`
+   仍按同一不变量加固这些文件，作为纵深防线。若某个 secret 漏了这段声明，容器
+   会退回宿主机文件权限：`0600 root:root` 时 app（uid 999）起不来并打印
+   `secret file for PHYSICSOS_IMAGE_API_KEY_FILE is unreadable (EACCES)`。
 2. **`/api` 的域名信任栅栏只认 CLI 参数**：`PHYSICOS_TRUSTED_HOSTS` 本身不会被
    harness 读取，它必须同时出现在 compose 的
    `--trusted-host ${PHYSICOS_TRUSTED_HOSTS}` 里。漏传时公网的
@@ -632,7 +635,10 @@ For the 0.1.7 promotion specifically, the previous image alone is **not** a
 rollback: 0.1.7 migrated session logs forward in place (`v0 → … → v4`), so the
 rollback image would read migrated data. Restore the sessions root and the
 database from the backups taken under the section 6 precondition before
-serving traffic, and never down-convert in place.
+serving traffic, and never down-convert in place. A rollback of the image alone
+is also insufficient for the command: the new compose `app` command passes
+`--no-open`, which the previous image rejects with `unknown option '--no-open'`,
+so any rollback must revert the compose command together with the image digest.
 
 To deploy the previous image digest:
 
