@@ -530,7 +530,7 @@ read-back、目录浏览 403 的公网原始响应需要在统一 overlay captur
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `compose.yml`   | 新增 `DEEPSEEK_BASE_URL` 透传（默认 `https://api.fengshao1227.com/v1`）；app 增加 `command:`，把 `${PHYSICOS_TRUSTED_HOSTS}` 作为 `--trusted-host` 传给 CLI                                                                              |
 | 服务器 secret   | `/opt/physicsos/.env.deepseek_api_key` 换成对该端点有效的 key（`0644`，值不入库不入报告）                                                                                                                                                |
-| 运行时 settings | `/var/lib/physicsos/settings.yaml` 固定 `llm-deepseek.models`（`deepseek-v4.1-flash`, `maxTokens: 32768`）与 `agent-default-model`（`deepseek-official` / `deepseek-v4.1-flash` / `high`），详见 `docs/13-DEPLOYMENT-OPERATIONS.md` §3.3 |
+| 运行时 settings | `/var/lib/physicsos/settings.yaml` 使用 `llm-deepseek.models`（`deepseek-v4-flash`, 显示名「平台公益模型」）与 `agent-default-model`（`deepseek-official` / `deepseek-v4-flash` / `off`）；旧 `deepseek-v4.1-flash` 作为上游历史兼容型号保留，详见 `docs/13-DEPLOYMENT-OPERATIONS.md` §3.3 |
 
 ### 7.3 验证证据（命令与截断输出）
 

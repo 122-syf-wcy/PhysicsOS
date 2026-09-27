@@ -175,7 +175,7 @@ export interface ProbeResult {
 
 /** The smallest request that still proves the credential works. */
 const PROBE_PAYLOAD = {
-  model: 'deepseek-v4.1-flash',
+  model: 'deepseek-v4-flash',
   messages: [{ role: 'user', content: 'ping' }],
   max_tokens: 1,
   stream: false,

@@ -75,11 +75,18 @@ const startPool = async (store: PoolStore): Promise<string> => {
   return `http://127.0.0.1:${String(address.port)}/v1`
 }
 
-const chat = async (base: string): Promise<{ status: number; text: string; attempts: string | null }> => {
+const chat = async (
+  base: string,
+  body: Record<string, unknown> = {},
+): Promise<{ status: number; text: string; attempts: string | null }> => {
   const response = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [{ role: 'user', content: 'hi' }] }),
+    body: JSON.stringify({
+      model: 'deepseek-v4.1-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+      ...body,
+    }),
   })
   return {
     status: response.status,
@@ -105,6 +112,24 @@ describe('model pool proxy', () => {
     expect(result.text).toContain('"ok"')
     expect(result.attempts).toBe('1')
     expect(store.key(key.id)?.requestCount).toBe(1)
+  })
+
+  it('translates the off reasoning sentinel to the gateway-supported none value', async () => {
+    let seen: Record<string, unknown> = {}
+    const upstream = await startUpstream((body, res) => {
+      seen = body
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: 'ok' }))
+    })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'a', baseURL: upstream.url, priority: 10 })
+    await store.addKey(ADMIN, channel.id, { key: 'sk-fast-0000' })
+    const base = await startPool(store)
+
+    const result = await chat(base, { reasoning_effort: 'off' })
+    expect(result.status).toBe(200)
+    expect(seen.reasoning_effort).toBe('none')
   })
 
   it('fails over to the next key when the first answer is 401', async () => {

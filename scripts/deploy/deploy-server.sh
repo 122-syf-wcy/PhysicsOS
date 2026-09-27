@@ -74,6 +74,7 @@ echo
 say "运维加固与定时备份"
 "$DIR/scripts/deploy/install-operations.sh"
 "$DIR/scripts/deploy/backup-postgres.sh"
+"$DIR/scripts/deploy/configure-model.sh"
 
 say "完成"
 cat <<EOF

@@ -62,6 +62,8 @@ describe('the physics-student agent preset', () => {
     /* The Physics Constitution (docs/04 §105), in the words the model reads. */
     expect(persona.text).toContain('physics_simulate')
     expect(persona.text).toContain('physics_scene_command')
+    expect(persona.text).toContain('平台公益模型')
+    expect(persona.text).toContain('不要自称或介绍任何第三方模型名称')
     expect(persona.text).toContain('不把假设当事实')
     expect(persona.text).toContain('教学不得篡改真实结果')
     expect(persona.complete).toBe(false)

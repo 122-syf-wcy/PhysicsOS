@@ -168,7 +168,7 @@ key 失效时不需要重启 Harness。
 | 兜底上游         | `PHYSICSOS_MODEL_FALLBACK_BASE_URL`，默认 `https://api.fengshao1227.com/v1` | 只用于空池播种；后台新增任意通道后不再自动重加                                   |
 | key              | `.env.deepseek_api_key`（OpenAI 兼容 key）                                  | 仅作为空池兜底种子，由 `model-pool-host` 加密存入 `physicsos_model_pool`         |
 | 加密主密钥       | `.env.model_pool_secret`                                                    | 派生 AES-256-GCM 密钥；必须长期稳定，换掉后旧 key 会 `KEY_DECRYPT_FAILED`        |
-| 模型名           | `deepseek-v4.1-flash`                                                       | base 组合默认 `deepseek-v4-flash`，多数中转网关没有，会回 `model_not_found`      |
+| 模型名           | `deepseek-v4-flash`                                                         | 网关实测首字约 1 秒；旧的 `deepseek-v4.1-flash` 在高峰期可能等待 10–30 秒         |
 | 输出上限         | `maxTokens: 32768`                                                          | 推理模型先花 reasoning token；上限太小会 `content:null` + `finish_reason:length` |
 
 模型名与输出上限写在 `$DSH_HOME/settings.yaml`（容器内
@@ -178,16 +178,19 @@ key 失效时不需要重启 Harness。
 llm-deepseek:
   maxTokens: 32768
   models:
-    - id: deepseek-v4.1-flash
-      name: DeepSeek V4.1 Flash
+    - id: deepseek-v4-flash
+      name: 平台公益模型
       contextWindow: 1000000
       maxTokens: 32768
 
 agent-default-model:
   provider: deepseek-official
-  model: deepseek-v4.1-flash
-  reasoningEffort: high
+  model: deepseek-v4-flash
+  reasoningEffort: off
 ```
+
+`scripts/deploy/configure-model.sh` 会幂等写入这组设置，并只替换用户可见名称；
+内部模型 ID 与号池路由使用 `deepseek-v4-flash`；显示名称固定为“平台公益模型”。
 
 三个容易踩的坑：
 

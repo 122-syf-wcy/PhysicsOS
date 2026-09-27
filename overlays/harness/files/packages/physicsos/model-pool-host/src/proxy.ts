@@ -68,6 +68,17 @@ const readJsonBody = async (req: IncomingMessage): Promise<Record<string, unknow
   }
 }
 
+/**
+ * Translate Harness sentinels into the OpenAI-compatible vocabulary expected
+ * by current gateways. `off` means "do not spend reasoning tokens"; upstream
+ * enumerates that as `none`, not as the literal `off`.
+ */
+const normalizeUpstreamPayload = (
+  payload: Record<string, unknown>,
+): Record<string, unknown> => payload.reasoning_effort === 'off'
+  ? { ...payload, reasoning_effort: 'none' }
+  : payload
+
 const writeStream = async (
   res: ServerResponse,
   body: ReadableStream<Uint8Array> | null,
@@ -213,7 +224,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
         const result = await forwardChat({
           channel: candidate.channel,
           secret,
-          payload,
+          payload: normalizeUpstreamPayload(payload),
           timeoutMs: deps.attemptTimeoutMs,
           signal: abort.signal,
         })
