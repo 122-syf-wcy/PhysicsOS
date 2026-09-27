@@ -4,10 +4,17 @@
  * Owns the `physicsos_paper` storage domain (source intake, annotations,
  * verified blueprints, jobs, export bundles), serves the `/physicsos/paper`
  * REST surface on the webServer service, and drives the three long-running
- * steps: sectioned LLM drafting, checks + independent solving, and the
+ * steps: sectioned LLM drafting, checks + engine solving, and the
  * pandoc/LibreOffice export — all gated by the service layer's verified /
  * approved-hash rules. Nothing runs on boot: every generation step answers
  * an explicit HTTP call, so restarts never replay paid model calls.
+ *
+ * The model may propose, the engine decides: drafting (and repair/adaptation)
+ * are model calls that produce stems and a candidate answer, but the answer
+ * that lands in the paper is the PhysicsOS engine's, taken from
+ * `@physicsos/agent-tools` in the check stage and verified before it prints.
+ * A model answer that contradicts the engine, or a question the engine cannot
+ * cover, becomes an explicit finding — never a fabricated number.
  *
  * @module @deepseek-ai/dsh-paper-host
  */
@@ -20,12 +27,13 @@ import z from '@deepseek-ai/schemastery'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import {
   DEFAULT_BANK_POLICY, EXAM_BLUEPRINTS, planRow, questionFromBankItem, solveFindings,
-  type BankItem, type BankSelectionPolicy, type PaperJob, type PaperQuestion, type SpecRow,
+  type BankItem, type BankSelectionPolicy, type CheckFinding, type PaperJob, type PaperQuestion,
+  type SolveResult, type SpecRow,
 } from '@physicsos/question-paper'
 import { openPaperDomain, type PaperDomain } from './domain.ts'
 import { PaperService, PaperError } from './service.ts'
 import { adaptBankItem, draftSection, assembleDocument, repairQuestion } from './draft.ts'
-import { independentSolve } from './solve.ts'
+import { applyEngineAnswers, engineRefusalFindings, independentSolve } from './solve.ts'
 import { ingestBankText, type IngestInput } from './ingest.ts'
 import { transcribeQuestionImages, type TranscribeImage } from './transcribe.ts'
 import { exportPaper } from './export.ts'
@@ -38,9 +46,11 @@ export const inject = ['webServer', 'storageDomain', 'llm']
 
 /** Plugin config: model route and tool paths are deployment decisions. */
 export interface Config {
-  /** Provider route for drafting/solving calls. */
+  /** Provider route for the model calls that propose stems and candidate
+   *  answers — drafting, repair, adaptation, ingest and transcription. The
+   *  answer itself is decided by the engine, not by this route. */
   provider: string
-  /** Model id for drafting/solving calls. */
+  /** Model id for the proposing calls above; the engine decides the answer. */
   model: string
   /** Export root; bundles land under `<exportDir>/<jobId>/`. */
   exportDir: string
@@ -60,9 +70,9 @@ export interface Config {
     /** Pixel size passed to the API. */
     size?: string
   }
-  /** Pause between serial solve calls; rate-limited relays need the space. */
+  /** Spacing between the serial engine solves a check run performs. */
   solveDelayMs?: number
-  /** Per-attempt bound on one solve stream; slow reasoning models need more. */
+  /** Per-attempt bound on one engine solve; a hung call must not park the job in 'checking'. */
   solveTimeoutMs?: number
   /** Bank-assisted assembly tuning; unset keys take the domain defaults. */
   bankPolicy?: Partial<BankSelectionPolicy>
@@ -145,6 +155,23 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
     const route = { provider: config.provider, model: config.model }
 
     const bankPolicy: BankSelectionPolicy = { ...DEFAULT_BANK_POLICY, ...config.bankPolicy }
+
+    /* Engine verdicts become findings: a disagreement with the engine's
+       verified answer is a `solve-mismatch`; a question the engine could not
+       decide is an explicit `engine-mismatch` refusal. Neither is a silent pass. */
+    const engineFindingsFor = (solve: readonly SolveResult[]): CheckFinding[] => [
+      ...solveFindings(solve.filter(result => result.solvedAnswer !== '')),
+      ...engineRefusalFindings(solve),
+    ]
+
+    /* The engine's verified answer is what the paper carries: stamp it onto the
+       document as a new version before the check results close the stage. */
+    const applyEngine = async (jobId: string, solve: readonly SolveResult[]): Promise<void> => {
+      const job = service.getJob(jobId)
+      if (job.document === undefined) return
+      const corrected = applyEngineAnswers(job.document, solve)
+      if (corrected !== undefined) await service.commitEngineAnswers(jobId, corrected)
+    }
 
     const runDraft = async (jobId: string): Promise<void> => {
       await service.markStage(jobId, 'drafting')
@@ -245,8 +272,9 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${jobId} has no document`)
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const questions = job.document.sections.flatMap(section => section.items)
-        const solve = await independentSolve(ctx, route, questions, config.solveDelayMs, config.solveTimeoutMs)
-        await service.recordCheckResults(jobId, [...findings, ...solveFindings(solve)], solve)
+        const solve = await independentSolve(questions, config.solveDelayMs, config.solveTimeoutMs)
+        await applyEngine(jobId, solve)
+        await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(solve)], solve)
       } catch (error) {
         await service.failJob(jobId, error instanceof Error ? error.message : String(error))
         throw error
@@ -276,7 +304,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.commitDocument(jobId, nextDoc, `第${questionNo}题按审核意见修订`)
         await service.markStage(jobId, 'checking')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
-        const [solved] = await independentSolve(ctx, route, [{ ...revised }], config.solveDelayMs, config.solveTimeoutMs)
+        const [solved] = await independentSolve([{ ...revised }], config.solveDelayMs, config.solveTimeoutMs)
         if (solved === undefined) {
           throw new PaperError(500, 'SOLVE_FAILED', `第${questionNo}题独立重解没有产出记录`)
         }
@@ -284,7 +312,8 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         const merged = prior.some(r => r.questionNo === questionNo)
           ? prior.map(r => r.questionNo === questionNo ? solved : r)
           : [...prior, solved]
-        await service.recordCheckResults(jobId, [...findings, ...solveFindings(merged)], merged)
+        await applyEngine(jobId, merged)
+        await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: repair ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -355,7 +384,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.markStage(jobId, 'checking')
         await service.recordBankUsage(item.id, jobId, plan.mode === 'verbatim' ? 'verbatim' : 'adapted')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
-        const [solved] = await independentSolve(ctx, route, [{ ...replacement }], config.solveDelayMs, config.solveTimeoutMs)
+        const [solved] = await independentSolve([{ ...replacement }], config.solveDelayMs, config.solveTimeoutMs)
         if (solved === undefined) {
           throw new PaperError(500, 'SOLVE_FAILED', `第${questionNo}题独立重解没有产出记录`)
         }
@@ -363,7 +392,8 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         const merged = prior.some(r => r.questionNo === questionNo)
           ? prior.map(r => r.questionNo === questionNo ? solved : r)
           : [...prior, solved]
-        await service.recordCheckResults(jobId, [...findings, ...solveFindings(merged)], merged)
+        await applyEngine(jobId, merged)
+        await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: replace ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
         console.error(`[paper-host] replace ${jobId}#${questionNo} failed:`, error)
@@ -437,7 +467,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
              `unresolved` instead of parking the whole batch. */
           try {
             const [result] = await independentSolve(
-              ctx, route, [question], config.solveDelayMs, config.solveTimeoutMs)
+              [question], config.solveDelayMs, config.solveTimeoutMs)
             const check = result === undefined || result.solvedAnswer === '' ? 'unresolved'
               : result.consistent ? 'agreed' : 'mismatch'
             await service.noteBankTriage(

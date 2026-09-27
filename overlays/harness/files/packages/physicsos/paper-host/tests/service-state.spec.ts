@@ -121,4 +121,17 @@ describe('paper job state machine', () => {
     await expect(service.markStage('paper-state', 'drafting'))
       .rejects.toMatchObject({ status: 409, code: 'BAD_STATE' })
   })
+
+  it('stamps engine answers only inside the checking stage, as a new version', async () => {
+    const { service } = await seeded('review')
+
+    await expect(service.commitEngineAnswers('paper-state', document))
+      .rejects.toMatchObject({ status: 409, code: 'BAD_STATE' })
+
+    await service.markStage('paper-state', 'checking')
+    const updated = await service.commitEngineAnswers('paper-state', document)
+    expect(updated.status).toBe('checking')
+    expect(updated.versions).toHaveLength(2)
+    expect(updated.versions.at(-1)?.summary).toContain('引擎')
+  })
 })
