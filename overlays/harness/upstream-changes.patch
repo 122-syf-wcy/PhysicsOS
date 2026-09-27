@@ -217,6 +217,117 @@ index fdd4740b3c..969ccf07df 100644
      "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
      "@deepseek-ai/dsh-tool-ralph": "workspace:^",
      "@deepseek-ai/dsh-schedule": "workspace:^",
+diff --git a/apps/web/index.html b/apps/web/index.html
+index a14de72d40..da795e8268 100644
+--- a/apps/web/index.html
++++ b/apps/web/index.html
+@@ -4,8 +4,8 @@
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+     <link rel="manifest" href="/manifest.webmanifest" />
+-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+-    <title>DeepSeek Harness</title>
++    <link rel="icon" type="image/png" sizes="32x32" href="/physicsos/brand/physicsos-mark-32.png" />
++    <title>PhysicsOS</title>
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/apps/web/public/manifest.webmanifest b/apps/web/public/manifest.webmanifest
+index 20a428fee6..5cf6d631d7 100644
+--- a/apps/web/public/manifest.webmanifest
++++ b/apps/web/public/manifest.webmanifest
+@@ -1,15 +1,27 @@
+ {
+   "id": "/",
+-  "name": "DeepSeek Harness",
+-  "short_name": "DSH",
++  "name": "PhysicsOS",
++  "short_name": "PhysicsOS",
+   "start_url": "/",
+   "scope": "/",
+   "display": "fullscreen",
+   "icons": [
+     {
+-      "src": "/favicon.svg",
+-      "sizes": "any",
+-      "type": "image/svg+xml",
++      "src": "/physicsos/brand/physicsos-mark-32.png",
++      "sizes": "32x32",
++      "type": "image/png",
++      "purpose": "any"
++    },
++    {
++      "src": "/physicsos/brand/physicsos-mark-64.png",
++      "sizes": "64x64",
++      "type": "image/png",
++      "purpose": "any"
++    },
++    {
++      "src": "/physicsos/brand/physicsos-mark-128.png",
++      "sizes": "128x128",
++      "type": "image/png",
+       "purpose": "any"
+     }
+   ]
+diff --git a/apps/web/tests/pwa-manifest.e2e.ts b/apps/web/tests/pwa-manifest.e2e.ts
+index fe97e42da9..673291ce35 100644
+--- a/apps/web/tests/pwa-manifest.e2e.ts
++++ b/apps/web/tests/pwa-manifest.e2e.ts
+@@ -12,24 +12,39 @@ it('ships install metadata with the built web application', async () => {
+   const manifest: unknown = JSON.parse(await readFile(join(DIST_ROOT, 'manifest.webmanifest'), 'utf8'))
+   expect(manifest).toEqual({
+     id: '/',
+-    name: 'DeepSeek Harness',
+-    short_name: 'DSH',
++    name: 'PhysicsOS',
++    short_name: 'PhysicsOS',
+     start_url: '/',
+     scope: '/',
+     display: 'fullscreen',
+-    icons: [{
+-      src: '/favicon.svg',
+-      sizes: 'any',
+-      type: 'image/svg+xml',
+-      purpose: 'any',
+-    }],
++    icons: [
++      {
++        src: '/physicsos/brand/physicsos-mark-32.png',
++        sizes: '32x32',
++        type: 'image/png',
++        purpose: 'any',
++      },
++      {
++        src: '/physicsos/brand/physicsos-mark-64.png',
++        sizes: '64x64',
++        type: 'image/png',
++        purpose: 'any',
++      },
++      {
++        src: '/physicsos/brand/physicsos-mark-128.png',
++        sizes: '128x128',
++        type: 'image/png',
++        purpose: 'any',
++      },
++    ],
+   })
+ })
+-
+-it('ships a favicon that switches to a light mark under dark color scheme', async () => {
+-  const favicon = await readFile(join(DIST_ROOT, 'favicon.svg'), 'utf8')
+-  // The light fill must live inside the dark-scheme media query, so the icon
+-  // stays black in light mode and only turns white under a dark scheme.
+-  expect(favicon).toMatch(/@media \(prefers-color-scheme: dark\)\s*{\s*path\s*{[^}]*fill:\s*#fff/i)
+-  expect(favicon).toContain('fill="#000"')
++// The favicon and install name are part of the PhysicsOS brand contract.
++it('ships the PhysicsOS mark as the favicon', async () => {
++  const index = await readFile(join(DIST_ROOT, 'index.html'), 'utf8')
++  expect(index).toContain(
++    '<link rel="icon" type="image/png" sizes="32x32" href="/physicsos/brand/physicsos-mark-32.png" />',
++  )
++  const mark = await readFile(join(DIST_ROOT, 'physicsos/brand/physicsos-mark-32.png'))
++  expect(mark.byteLength).toBeGreaterThan(0)
+ })
 diff --git a/apps/web/tests/snapshots/cold-blank-session/sidebar.expected.md b/apps/web/tests/snapshots/cold-blank-session/sidebar.expected.md
 index d4d370892e..5035822d32 100644
 --- a/apps/web/tests/snapshots/cold-blank-session/sidebar.expected.md
@@ -1004,7 +1115,7 @@ index 81cedbbb42..426452f2ff 100644
      "@vitest/coverage-v8": "^4.1.8",
      "@yarnpkg/cli-dist": "4.17.1",
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index b06e63b54f..76c6f8fde3 100644
+index b06e63b54f..871328af11 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -32,6 +32,13 @@
@@ -1021,7 +1132,7 @@ index b06e63b54f..76c6f8fde3 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|code|both) opts a whole dsh
-@@ -56,16 +63,133 @@
+@@ -56,16 +63,129 @@
        config:
          root: !!js dshHomePath('storages')
  
@@ -1103,10 +1214,6 @@ index b06e63b54f..76c6f8fde3 100644
 +        redis:
 +          url: !!js process.env.REDIS_URL ?? 'redis://127.0.0.1:6379/0'
 +
-+    # 班级教学 host 面:班级、成员、作业、提交/回执、教师批改与完成率看板。
-+    - id: class-host
-+      name: '@deepseek-ai/dsh-class-host'
-+
 +    # 系统管理员的只读运维面板：磁盘/数据卷容量、目录分项、PostgreSQL/Redis
 +    # 连通性、账号会话聚合与 15 秒指标缓存。端点只接受 SUPER_ADMIN 会话；
 +    # 它按请求解析 auth-host 身份，因此行序可以放在 auth-host 之前。
@@ -1156,7 +1263,7 @@ index b06e63b54f..76c6f8fde3 100644
      # Browser Session export: `/export` command plus the shared download dialog.
      - id: session-log-download
        name: '@deepseek-ai/dsh-session-log-export'
-@@ -198,6 +322,9 @@
+@@ -198,6 +318,9 @@
      - id: ui-conversation
        name: '@deepseek-ai/dsh-client-ui-conversation'
  

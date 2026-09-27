@@ -11,7 +11,6 @@ export type PhysicsSurfaceId =
   | 'record'
   | 'paper'
   | 'library'
-  | 'class'
   | 'notice'
   | 'admin'
 

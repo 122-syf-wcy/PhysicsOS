@@ -1,0 +1,18 @@
+{
+  "brand": "PhysicsOS",
+  "selected": "orbital-lens",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "transparent": true,
+  "master": "physicsos-mark-1024.png",
+  "runtime": [
+    "/physicsos/brand/physicsos-mark-128.png",
+    "/physicsos/brand/physicsos-mark-64.png",
+    "/physicsos/brand/physicsos-mark-32.png"
+  ],
+  "usage": [
+    "sidebar wordmark and collapsed rail",
+    "home hero product mark",
+    "login gate wordmark and hero mark"
+  ]
+}

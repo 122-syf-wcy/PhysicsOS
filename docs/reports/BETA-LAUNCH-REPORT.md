@@ -13,7 +13,6 @@
 本次应用交付提交 `63c20e6` 共改动 `114` 个文件，新增 `13,528` 行、删除 `297` 行，交付范围覆盖：
 
 - 账户、租户、角色、会话、设备注销、密码重置、TOTP 与管理员审计面。
-- 班级、成员、作业、提交、批改、完成率与出卷专区。
 - 个人学习作答和保存场景的服务端同步、幂等写、分页与跨设备读取。
 - 力学、光学、热学、流体、电路、电磁、复合场、机械波和近代物理等实验与题库能力。
 - `physics-student` Agent 预设和七个 PhysicsOS 物理工具，模型数值来自物理引擎而非自由生成。
@@ -21,6 +20,7 @@
 - 管理员运维控制面板、磁盘/会话/工作区/PostgreSQL/Redis 指标、15 秒缓存和告警阈值。
 - 平台模型号池、AES-GCM key 加密、加权轮询、故障转移、冷却恢复和本机 OpenAI 兼容代理。
 - PostgreSQL、Redis、Compose、健康检查、CI、备份/恢复/回滚文档、开源协作与安全文档。
+- PhysicsOS 轨道透镜品牌标志、浏览器 favicon 与 PWA 安装图标；产品定位为个人物理实验与学习平台，不包含班级或作业管理。
 - Web 为公测主入口；Tauri 桌面壳保留为可选形态，本轮不做签名、公证和商店发布。
 
 ## 2. 部署拓扑与地址
@@ -136,7 +136,7 @@ SUMMARY pass=12 fail=0 blocked=0
 - 学生 B 创建的 session 返回 `agentPreset=physics-student`，`cwd` 被服务端绑定到
   `/var/lib/physicsos/physicsos-users/794ffc...`，调用方传入的 `/etc` 等路径不会保留。
 - 学生 A 的 `session.list` 为空，不能读到学生 B 的 session。
-- 学习作答、场景、班级列表、班级详情和会话导出均按账号所有权拒绝跨账号读取。
+- 学习作答、场景和会话导出均按账号所有权拒绝跨账号读取；班级作业 API 已从生产 composition 移除。
 - 普通角色的 `host.listDirectory` / `host.pickDirectory` / `host.createDirectory`
   返回 `403 HOST_FILESYSTEM_DENIED`。
 
@@ -228,7 +228,7 @@ pnpm build
 typecheck: exit 0
 lint:      exit 0
 Test Files  67 passed (67)
-Tests       879 passed (879)
+Tests       865 passed (865)
 
 Test Files  53 passed (53)
 Tests       418 passed (418)

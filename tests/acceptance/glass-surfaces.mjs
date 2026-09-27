@@ -184,20 +184,6 @@ if ((await menu.count()) > 0) {
   }
 }
 
-/* ---- 班级教学（教师角色） ---- */
-const teacherClass = page.getByRole('button', { name: '班级教学', exact: true }).first()
-check('超管侧栏显示班级教学入口', (await teacherClass.count()) > 0)
-if ((await teacherClass.count()) > 0) {
-  await teacherClass.click().catch(() => {})
-  const teacherSurface = page.locator('[data-physicsos-surface="teacher-classes"]')
-  const teacherOpened = await visible(teacherSurface, 15_000)
-  check('班级教学打开教师工作台', teacherOpened)
-  if (teacherOpened) {
-    await page.waitForTimeout(500)
-    await shot('13-class-teacher')
-  }
-}
-
 /* ---- 学习记录 ---- */
 await page.keyboard.press('Escape')
 const history = page.getByRole('button', { name: '学习记录' }).first()
@@ -213,7 +199,7 @@ await gate.waitFor({ state: 'visible', timeout: 25_000 })
 await page.waitForTimeout(500)
 await shot('10-auth-gate-again')
 
-/* ---- 班级教学（学生角色） ---- */
+/* ---- 学生侧栏不再提供班级/作业入口 ---- */
 let studentReady = true
 try {
   await registerStudent(page, { username: `acceptance_${Date.now().toString(36)}` })
@@ -229,18 +215,10 @@ try {
 }
 
 if (studentReady) {
-  const studentClass = page.getByRole('button', { name: '我的班级', exact: true }).first()
-  check('学生侧栏显示我的班级入口', (await studentClass.count()) > 0)
-  if ((await studentClass.count()) > 0) {
-    await studentClass.click().catch(() => {})
-    const studentSurface = page.locator('[data-physicsos-surface="student-classes"]')
-    const studentOpened = await visible(studentSurface, 15_000)
-    check('我的班级打开学生工作台', studentOpened)
-    if (studentOpened) {
-      await page.waitForTimeout(500)
-      await shot('14-class-student')
-    }
-  }
+  check(
+    '学生侧栏不显示班级/作业入口',
+    (await page.getByRole('button', { name: /班级教学|我的班级/ }).count()) === 0,
+  )
 
   /* ---- 实验选择器：回旋加速器已从“即将支持”升级为可选模板 ---- */
   const lab = page.getByRole('button', { name: '物理实验室', exact: true }).first()

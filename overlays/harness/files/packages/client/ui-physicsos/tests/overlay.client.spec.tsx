@@ -127,10 +127,11 @@ const renderSolved = (
   )
 
 describe('PhysicsOS overlay presentation', () => {
-  it('renders the blue geometric mark', () => {
+  it('renders the generated orbital-lens mark', () => {
     const { container } = render(<PhysicsOSMark />)
-    expect(container.querySelector('linearGradient')).toBeTruthy()
-    expect(container.querySelector('stop')).toBeTruthy()
+    const mark = container.querySelector('img')
+    expect(mark?.getAttribute('src')).toBe('/physicsos/brand/physicsos-mark-128.png')
+    expect(mark?.getAttribute('aria-hidden')).toBe('true')
   })
 
   it('renders the wide wordmark and returns Home', () => {
@@ -161,7 +162,8 @@ describe('PhysicsOS overlay presentation', () => {
       />,
     )
     expect(container.querySelector('button')).toBeNull()
-    expect(container.querySelector('svg')).toBeTruthy()
+    expect(container.querySelector('img')?.getAttribute('src'))
+      .toBe('/physicsos/brand/physicsos-mark-128.png')
   })
 
   it('keeps explore seats clickable with secondary copy', () => {
@@ -187,6 +189,8 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByRole('button', { name: '物理实验室' }).getAttribute('disabled')).toBeNull()
     /* Question intake lives in the conversation now; no 试题空间 rail item. */
     expect(screen.queryByRole('button', { name: '试题空间' })).toBeNull()
+    /* PhysicsOS is a personal learning product, not a classroom LMS. */
+    expect(screen.queryByRole('button', { name: /班级教学|我的班级/ })).toBeNull()
   })
 
   it('offers 出卷专区 to teaching roles only', () => {

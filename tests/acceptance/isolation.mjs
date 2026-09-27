@@ -5,9 +5,8 @@
  * This is deliberately a black-box HTTP probe: it creates two throwaway
  * students, logs in both plus the configured administrator, writes one
  * learning record and one scene as student B, and then checks that student A
- * cannot observe or address those resources. It also creates one class owned
- * by the administrator, adds B, and checks A cannot read B's class-facing
- * resources.
+ * cannot observe or address those resources. The retired class-teaching API is
+ * also probed to ensure it is no longer mounted in the product.
  *
  * The production deployment may sit behind a reverse proxy whose /api trust
  * fence rejects requests before the host handlers run. In that case the
@@ -238,82 +237,17 @@ record(
   { a: aScenes.body.slice(0, 500), b: bScenes.body.slice(0, 500) },
 )
 
-const classCreate = await call({
-  label: 'administrator creates class',
-  method: 'POST',
+const classProbe = await call({
+  label: 'class-teaching API is retired',
   path: '/physicsos/class/classes',
   cookie: adminCookie,
-  body: { name: `Isolation class ${suffix}`, description: 'Stage-0 isolation audit' },
 })
-const classId = classCreate.json?.item?.id
-if (classCreate.status !== 201 || typeof classId !== 'string') {
-  record(
-    'class setup succeeds',
-    'FAIL',
-    `POST /physicsos/class/classes returned ${String(classCreate.status)}`,
-    { status: classCreate.status, body: classCreate.body.slice(0, 800) },
-  )
-} else {
-  record('class setup succeeds', 'PASS', `created ${classId}`, { status: classCreate.status })
-
-  const addMember = await call({
-    label: 'administrator adds B to class',
-    method: 'POST',
-    path: `/physicsos/class/classes/${encodeURIComponent(classId)}/members`,
-    cookie: adminCookie,
-    body: { userKey: userKeyB },
-  })
-  record(
-    'class member setup succeeds',
-    addMember.status === 201 ? 'PASS' : 'FAIL',
-    `POST members returned ${String(addMember.status)}`,
-    { status: addMember.status, body: addMember.body.slice(0, 800) },
-  )
-
-  const aClasses = await call({
-    label: 'A lists classes',
-    path: '/physicsos/class/classes?limit=100',
-    cookie: studentA.cookie,
-  })
-  const bClasses = await call({
-    label: 'B lists classes',
-    path: '/physicsos/class/classes?limit=100',
-    cookie: studentB.cookie,
-  })
-  const aMembers = await call({
-    label: 'A reads B class members',
-    path: `/physicsos/class/classes/${encodeURIComponent(classId)}/members?limit=100`,
-    cookie: studentA.cookie,
-  })
-  const aDashboard = await call({
-    label: 'A reads B class dashboard',
-    path: `/physicsos/class/classes/${encodeURIComponent(classId)}/dashboard`,
-    cookie: studentA.cookie,
-  })
-
-  record(
-    'class list is membership-scoped',
-    aClasses.status === 200 &&
-      bClasses.status === 200 &&
-      !aClasses.body.includes(classId) &&
-      bClasses.body.includes(classId)
-      ? 'PASS'
-      : 'FAIL',
-    'A must not see B’s class; B must see it',
-    { a: aClasses.body.slice(0, 500), b: bClasses.body.slice(0, 500) },
-  )
-  record(
-    'foreign class detail is denied',
-    [403, 404].includes(aMembers.status) && [403, 404].includes(aDashboard.status)
-      ? 'PASS'
-      : 'FAIL',
-    `members=${String(aMembers.status)} dashboard=${String(aDashboard.status)}`,
-    {
-      members: aMembers.body.slice(0, 500),
-      dashboard: aDashboard.body.slice(0, 500),
-    },
-  )
-}
+record(
+  'class teaching and assignments are not mounted',
+  classProbe.status === 404 || classProbe.json === undefined ? 'PASS' : 'FAIL',
+  `GET /physicsos/class/classes returned ${String(classProbe.status)} ${classProbe.json === undefined ? '(non-API response)' : ''}`,
+  { status: classProbe.status, body: classProbe.body.slice(0, 500) },
+)
 
 let sessionId = suppliedSessionId
 const sessionCreate = await call({

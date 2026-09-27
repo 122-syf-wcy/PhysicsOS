@@ -12,12 +12,13 @@ App 镜像：`sha256:534d02e10edc1bab73521df348a85775b248bf4a7c1a2d62545718f282e
 
 ## 结论先说
 
-**最新状态（2026-09-27）：12 PASS / 0 FAIL / 0 BLOCKED**
+**最新状态（2026-09-27）：9 PASS / 0 FAIL / 0 BLOCKED**
 
 - 学习作答和学习场景按账号隔离。学生 A 读取不到学生 B 写入的 attempt/scene。
-- 班级列表按成员关系过滤；A 直接读取 B 的班级成员或 dashboard 得到 `403`。
 - 会话列表、会话导出和会话 prompt 的所有权检查在 HTTP 语义上没有泄漏内容；
   但成功拒绝使用 RPC envelope，HTTP 状态是 `200`，不是字面意义的 `404/403`。
+- 已退役的 `/physicsos/class/*` 不再挂载 class-host；该路径只落到前端 HTML
+  回退，不再返回班级、成员、作业或提交数据。
 - 非管理员 `session.create` 会被服务端改写为账号私有 workspace +
   `physics-student`；学生对 `/etc` 等路径的请求不会到达宿主。
 - 公网 `/api` 在合法域名下返回 `401 unauthenticated`，未认证请求不再被
@@ -240,8 +241,9 @@ Stage 2 修复后，至少应满足：
    的 session 目录和平台配置。
 4. 使用有效模型 key 重跑真实 agent prompt：读取 `/run/secrets/admin_password` 必须
    被 sandbox 拒绝，且事件流里不能出现 secret 内容或可推断的长度/内容。
-5. 重新执行双账号脚本，确认 A 看不到 B 的 attempt、scene、class 和 session，且
-   `session.export`/`session.prompt` 的拒绝语义在客户端层可稳定识别。
+5. 重新执行双账号脚本，确认 A 看不到 B 的 attempt、scene 和 session，且
+   `session.export`/`session.prompt` 的拒绝语义在客户端层可稳定识别；确认已退役
+   的班级 API 不再挂载。
 
 Stage 0 当时状态：**数据面 HTTP 隔离基本通过；agent 文件读取、会话工作区分区、
 公网 API 信任边界三处未通过。** 这三处已在 Stage 2 修复并重新验收，分别见

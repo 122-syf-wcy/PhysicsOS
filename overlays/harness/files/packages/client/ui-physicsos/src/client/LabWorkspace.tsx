@@ -29,8 +29,6 @@ import type { NoticeApi } from './notice-api.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
 import { NoticeBoard } from './NoticeBoard.tsx'
 import type { AuthState } from './auth-store.ts'
-import { ClassSurface } from './ClassSurface.tsx'
-import type { ClassApi } from './class-api.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { LearningRecordWorkspace } from './LearningRecordWorkspace.tsx'
 import { LibraryWorkspace } from './LibraryWorkspace.tsx'
@@ -92,8 +90,6 @@ export interface PhysicsSurfaceInjected {
   adminApi?: AdminApi
   /** `/physicsos/notice` client — absent in stripped test compositions. */
   noticeApi?: NoticeApi
-  /** `/physicsos/class` client — absent in stripped test compositions. */
-  classApi?: ClassApi
   /** `/physicsos/model-pool` client — absent in stripped test compositions. */
   modelPoolApi?: ModelPoolApi
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
@@ -134,7 +130,6 @@ export function PhysicsSurface({
   paperApi,
   adminApi,
   noticeApi,
-  classApi,
   modelPoolApi,
   useAuth,
 }: PhysicsSurfaceProps) {
@@ -246,13 +241,6 @@ export function PhysicsSurface({
         useWorkspaces={useWorkspaces}
       />
     )
-  }
-  /* 班级教学 is one surface with two faces: a teacher gets roster + assignment
-     publishing + review, a student gets their classes, due work, and receipts.
-     The host decides what each role may actually read or write. */
-  if (surface === 'class') {
-    if (classApi === undefined) return null
-    return <ClassSurface api={classApi} useAuth={useAuth} />
   }
   if (choosing) {
     /* A resumable scene means the chooser was opened OVER a running experiment

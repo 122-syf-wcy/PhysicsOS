@@ -11,7 +11,7 @@ The Compose stack runs three stateful roles:
 | Service    | Responsibility                                           | Persistent data         |
 | ---------- | -------------------------------------------------------- | ----------------------- |
 | `app`      | Harness Web/API host plus PhysicsOS host plugins         | `app_data` (`DSH_HOME`) |
-| `postgres` | Relational account, learning, class, and event storage   | `postgres_data`         |
+| `postgres` | Relational account, learning, and event storage           | `postgres_data`         |
 | `redis`    | Shared rate limits, queues, and short-lived coordination | `redis_data`            |
 
 The app publishes only to host loopback by default:

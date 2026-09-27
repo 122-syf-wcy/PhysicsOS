@@ -1,0 +1,10 @@
+{
+  "asset": "physicsos-orbital-lens-mark",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "use_case": "logo-brand",
+  "prompt": "A bold minimal geometric brand mark for PhysicsOS, an interactive personal physics laboratory. Primary request: an orbital lens symbol made from two crossing blue elliptical orbits wrapped around a small white particle core, with the negative space subtly implying the letter P without drawing a literal letter. Style: premium vector-like geometric logo, crisp edges, restrained engineering aesthetic. Composition: one centered square mark with generous margin, readable at 22 pixels, perfectly symmetrical, no text. Palette: vivid cobalt blue, cyan highlights, deep navy depth, white core. Background: perfectly flat uniform chroma-key green #00FF00 edge to edge, no gradient, no shadow, no floor. Constraints: one isolated logo mark only, hard clean silhouette, no typography, no letters, no watermark, no mockup, no extra objects.",
+  "chroma_source": "orbital-lens-chroma.png",
+  "alpha_source": "orbital-lens-alpha.png",
+  "master": "physicsos-mark-1024.png"
+}

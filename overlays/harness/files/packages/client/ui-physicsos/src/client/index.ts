@@ -13,7 +13,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
-import { createClassApi } from './class-api.ts'
 import { createLearningApi } from './learning-api.ts'
 import { createModelPoolApi } from './model-pool-api.ts'
 import { createNoticeApi } from './notice-api.ts'
@@ -140,9 +139,6 @@ export function apply(ctx: ClientContext): void {
   /* 账号同步通路: `/physicsos/learning` holds the signed-in student's own
      attempts and saved scenes, so two devices see the same record. */
   const learningApi = createLearningApi()
-  /* `/physicsos/class` serves both faces of the class surface; the host decides
-     what each role may read or write on every call. */
-  const classApi = createClassApi()
   const auth = createAuthController(authApi, globalThis.localStorage)
   void auth.boot()
 
@@ -550,7 +546,6 @@ export function apply(ctx: ClientContext): void {
         paperApi,
         adminApi,
         noticeApi,
-        classApi,
         modelPoolApi,
         openSurface: (
           id: Parameters<typeof surface.open>[0],
