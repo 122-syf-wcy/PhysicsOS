@@ -52,6 +52,12 @@ jobs:
       - name: Self-test commit message policy
         run: node scripts/ci/check-commit-message.mjs --self-test
 
+      - name: Self-test secret-leak gate
+        run: node packages/image-generation/src/scan-cli.ts --self-test
+
+      - name: Scan for leaked credentials
+        run: node packages/image-generation/src/scan-cli.ts
+
       - name: Check pull request title
         if: github.event_name == 'pull_request'
         env:

@@ -413,6 +413,8 @@ importers:
 
   packages/exam-standard: {}
 
+  packages/image-generation: {}
+
   packages/physics-composite-core:
     dependencies:
       '@physicsos/physics-core':

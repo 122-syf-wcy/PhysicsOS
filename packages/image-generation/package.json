@@ -1,0 +1,18 @@
+{
+  "name": "@physicsos/image-generation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Image-generation adapter (provider interface + Sunburst) for PhysicsOS concept assets. Credentials come from the environment only; output is reference material, never physics rendering.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "scan:secrets": "node src/scan-cli.ts",
+    "scan:secrets:self-test": "node src/scan-cli.ts --self-test",
+    "build": "tsc -p tsconfig.json --noEmit"
+  }
+}
