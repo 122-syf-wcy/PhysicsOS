@@ -72,6 +72,10 @@ services:
       # 直接拒绝启动，因此这里不会出现"没有管理员"的半配置生产实例。
       PHYSICSOS_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
       # 题图生成 key；缺失时 paper-host 静默退化为占位说明，所以按 secret 强校验。
+      # Canonical PHYSICSOS_* (two S) since 2026-09; the one-S PHYSICOS_* name is
+      # materialized too as a one-cycle alias, so either reader spelling works
+      # (docs/adr/0004-image-api-env-migration.md).
+      PHYSICSOS_IMAGE_API_KEY_FILE: /run/secrets/image_api_key
       PHYSICOS_IMAGE_API_KEY_FILE: /run/secrets/image_api_key
       # TLS 反代后的真实客户端 IP / Secure cookie 判断。非 secret：Compose 里
       # 显式给出默认空串，未配置时一律不信任转发头。
@@ -219,4 +223,6 @@ secrets:
   admin_password:
     file: ${PHYSICSOS_ADMIN_PASSWORD_FILE:-./.env.admin_password}
   image_api_key:
-    file: ${PHYSICOS_IMAGE_API_KEY_FILE:-./.env.image_api_key}
+    # Canonical name first; the one-S PHYSICOS_* name is a one-cycle alias
+    # (docs/adr/0004-image-api-env-migration.md), then the documented default.
+    file: ${PHYSICSOS_IMAGE_API_KEY_FILE:-${PHYSICOS_IMAGE_API_KEY_FILE:-./.env.image_api_key}}

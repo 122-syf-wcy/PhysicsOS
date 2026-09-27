@@ -251,7 +251,7 @@ index c98289bc3e..43b81f7bc7 100644
 +        imageApi:
 +          baseURL: https://image.haqiuhaqiu.xyz/v1
 +          model: gpt-image-2.5-sunburst
-+          apiKeyEnv: PHYSICOS_IMAGE_API_KEY
++          apiKeyEnv: PHYSICSOS_IMAGE_API_KEY
 +          size: 1024x1024
 +
 +    - id: notice-host

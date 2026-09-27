@@ -11,7 +11,7 @@ The Compose stack runs three stateful roles:
 | Service    | Responsibility                                           | Persistent data         |
 | ---------- | -------------------------------------------------------- | ----------------------- |
 | `app`      | Harness Web/API host plus PhysicsOS host plugins         | `app_data` (`DSH_HOME`) |
-| `postgres` | Relational account, learning, and event storage           | `postgres_data`         |
+| `postgres` | Relational account, learning, and event storage          | `postgres_data`         |
 | `redis`    | Shared rate limits, queues, and short-lived coordination | `redis_data`            |
 
 The app publishes only to host loopback by default:
@@ -76,7 +76,8 @@ secret managers may provide the same files at another path with
 `PHYSICSOS_POSTGRES_PASSWORD_FILE`, `PHYSICSOS_REDIS_PASSWORD_FILE`,
 `PHYSICSOS_DATABASE_URL_FILE`, `PHYSICSOS_REDIS_URL_FILE`,
 `PHYSICSOS_DEEPSEEK_API_KEY_FILE`, `PHYSICSOS_ADMIN_PASSWORD_FILE`, and
-`PHYSICOS_IMAGE_API_KEY_FILE`.
+`PHYSICSOS_IMAGE_API_KEY_FILE` (the one-S `PHYSICOS_IMAGE_API_KEY_FILE` is a
+one-cycle alias — see `docs/adr/0004-image-api-env-migration.md`).
 
 The seven names by role:
 
@@ -146,7 +147,7 @@ backends are intentionally fixed in both the image and Compose to
 | `REDIS_URL_FILE`                 | `PHYSICSOS_REDIS_URL_FILE`        | Materialized to `REDIS_URL`                |
 | `DEEPSEEK_API_KEY_FILE`          | `PHYSICSOS_DEEPSEEK_API_KEY_FILE` | Materialized to `DEEPSEEK_API_KEY`         |
 | `PHYSICSOS_ADMIN_PASSWORD_FILE`  | `PHYSICSOS_ADMIN_PASSWORD_FILE`   | Materialized to `PHYSICSOS_ADMIN_PASSWORD` |
-| `PHYSICOS_IMAGE_API_KEY_FILE`    | `PHYSICOS_IMAGE_API_KEY_FILE`     | Materialized to `PHYSICOS_IMAGE_API_KEY`   |
+| `PHYSICSOS_IMAGE_API_KEY_FILE`   | `PHYSICSOS_IMAGE_API_KEY_FILE`    | Materialized to `PHYSICSOS_IMAGE_API_KEY`  |
 | `PHYSICOS_TRUSTED_PROXIES`       | `PHYSICOS_TRUSTED_PROXIES`        | Forwarded-header trust list                |
 
 Validate the composed configuration without starting containers:
@@ -168,7 +169,7 @@ key 失效时不需要重启 Harness。
 | 兜底上游         | `PHYSICSOS_MODEL_FALLBACK_BASE_URL`，默认 `https://api.fengshao1227.com/v1` | 只用于空池播种；后台新增任意通道后不再自动重加                                   |
 | key              | `.env.deepseek_api_key`（OpenAI 兼容 key）                                  | 仅作为空池兜底种子，由 `model-pool-host` 加密存入 `physicsos_model_pool`         |
 | 加密主密钥       | `.env.model_pool_secret`                                                    | 派生 AES-256-GCM 密钥；必须长期稳定，换掉后旧 key 会 `KEY_DECRYPT_FAILED`        |
-| 模型名           | `deepseek-v4-flash`                                                         | 网关实测首字约 1 秒；旧的 `deepseek-v4.1-flash` 在高峰期可能等待 10–30 秒         |
+| 模型名           | `deepseek-v4-flash`                                                         | 网关实测首字约 1 秒；旧的 `deepseek-v4.1-flash` 在高峰期可能等待 10–30 秒        |
 | 输出上限         | `maxTokens: 32768`                                                          | 推理模型先花 reasoning token；上限太小会 `content:null` + `finish_reason:length` |
 
 模型名与输出上限写在 `$DSH_HOME/settings.yaml`（容器内
@@ -309,7 +310,7 @@ compatibility patch records these interface decisions:
   PhysicsOS image imports continue through the attachment/binary framing rather
   than base64 JSON substitution.
 - Model traffic remains `DEEPSEEK_BASE_URL -> 127.0.0.1:
-  ${PHYSICSOS_MODEL_POOL_PORT}` and the model-pool proxy remains the only
+${PHYSICSOS_MODEL_POOL_PORT}` and the model-pool proxy remains the only
   provider-selection layer.
 - `class-host` is not mounted in the production Web composition. `plugin-center`
   is mounted immediately after `ops-host`; the package remains available for
@@ -429,9 +430,9 @@ curl --fail --show-error --head "https://${PHYSICOS_TRUSTED_HOSTS:-physics.dongs
 docker compose logs --since=10m app
 ```
 
-   `docker compose logs app` must show the `dsh web: …` launch line. If the
-   public-origin document returns 401 (or the pre-0.1.7 "404"), the Host is not
-   in `PHYSICOS_TRUSTED_HOSTS` / `--trusted-host` — see section 4.
+`docker compose logs app` must show the `dsh web: …` launch line. If the
+public-origin document returns 401 (or the pre-0.1.7 "404"), the Host is not
+in `PHYSICOS_TRUSTED_HOSTS` / `--trusted-host` — see section 4.
 
 7. Verify one authenticated read and one bounded write through the external
    reverse proxy. Confirm the resulting account/tenant scope and audit event.

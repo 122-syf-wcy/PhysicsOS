@@ -62,6 +62,7 @@ ENV NODE_ENV=production \
     REDIS_URL_FILE=/run/secrets/redis_url \
     DEEPSEEK_API_KEY_FILE=/run/secrets/deepseek_api_key \
     PHYSICSOS_ADMIN_PASSWORD_FILE=/run/secrets/admin_password \
+    PHYSICSOS_IMAGE_API_KEY_FILE=/run/secrets/image_api_key \
     PHYSICOS_IMAGE_API_KEY_FILE=/run/secrets/image_api_key \
     PHYSICOS_TRUSTED_PROXIES="" \
     PHYSICSOS_SESSIONS_ROOT=/var/lib/physicsos/sessions \
