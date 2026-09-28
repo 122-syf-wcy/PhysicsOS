@@ -76,10 +76,16 @@ RUN --mount=type=cache,target=/pnpm/store,sharing=locked \
 # missing native addon — which is what an earlier revision of this file did.
 RUN pnpm -C vendor/deepseek-harness run build:native-system
 
+# `build:web` only, never the root `build` (= `build:core && build:web`).
+# Every root `packages/*` build script is `tsc -p tsconfig.json --noEmit`: a pure
+# typecheck that emits no artifact, so nothing downstream (the image, the client
+# bundle, the hosts) consumes it. It costs ~9 minutes per image build and buys
+# nothing the test suites do not already assert.
+# The health-host bundle is part of `build:hosts`, which `build:web` runs, so it
+# is not invoked separately either.
 RUN pnpm -C vendor/deepseek-harness run build:lib \
     && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')" \
-    && pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-health-host run bundle \
-    && pnpm build \
+    && pnpm run build:web \
     && rm -rf vendor/deepseek-harness/.git
 
 FROM ${NODE_IMAGE} AS runtime
