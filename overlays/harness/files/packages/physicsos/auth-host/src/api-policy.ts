@@ -847,7 +847,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       changed = true
     }
 
-    if (method === 'session.modelCatalog' && !admin(actor)) {
+    /* Every actor, administrators included: this catalog feeds the product's
+       own model seat, and the vendor serving the pool is not the operator's
+       either. Managing the pool happens on the surfaces that name it — the
+       models settings page (the llm namespaces) and the 模型通道 console. */
+    if (method === 'session.modelCatalog') {
       reduceModelCatalog(value)
       changed = true
     }

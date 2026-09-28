@@ -304,7 +304,7 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
-  it('shows a student one platform model and keeps the full catalog for an admin', async () => {
+  it('reduces the model catalog to one platform model for every actor', async () => {
     const catalog = () => ({
       default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
       routableProviders: ['deepseek-official'],
@@ -331,38 +331,30 @@ describe('PhysicsOS shared /api policy', () => {
     const studentResponse = await makePolicy().policy.wrapFetch(async () => rpc(catalog()))(
       request('session.modelCatalog'),
     )
-    expect(await studentResponse.json()).toEqual({
-      type: 'server-response',
-      rpcId: 'policy-test',
-      result: {
-        ok: true,
-        value: {
-          /* The default model, under the product's name: the id the client
-             submits for routing is untouched. */
-          default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
-          routableProviders: ['deepseek-official'],
-          groups: [{
-            id: 'deepseek-official',
-            name: 'PhysicsOS',
-            models: [{
-              id: 'deepseek-v4-pro',
-              name: '平台公益模型',
-              reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
-            }],
-          }],
-          failures: [],
-        },
-      },
-    })
+    /* The default model, under the product's name: the id the client submits
+       for routing is untouched. */
+    const reduced = {
+      default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+      routableProviders: ['deepseek-official'],
+      groups: [{
+        id: 'deepseek-official',
+        name: 'PhysicsOS',
+        models: [{
+          id: 'deepseek-v4-pro',
+          name: '平台公益模型',
+          reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+        }],
+      }],
+      failures: [],
+    }
+    expect((await studentResponse.json()).result.value).toEqual(reduced)
 
+    /* The same reduction for an administrator: the model seat is a product
+       surface, and the pool is managed on the surfaces that name it. */
     const adminResponse = await makePolicy({ actor: admin }).policy.wrapFetch(async () => rpc(catalog()))(
       request('session.modelCatalog', {}, 'admin'),
     )
-    expect(await adminResponse.json()).toEqual({
-      type: 'server-response',
-      rpcId: 'policy-test',
-      result: { ok: true, value: catalog() },
-    })
+    expect((await adminResponse.json()).result.value).toEqual(reduced)
   })
 
   it('keeps the full settings description for an admin', async () => {
