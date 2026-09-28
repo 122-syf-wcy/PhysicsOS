@@ -225,7 +225,7 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
-  it('returns only the onboarding namespace when a student describes settings', async () => {
+  it('returns the onboarding and official-plugin namespaces when a student describes settings', async () => {
     const response = await makePolicy().policy.wrapFetch(async () => rpc({
       writable: true,
       hasDocument: true,
@@ -246,6 +246,24 @@ describe('PhysicsOS shared /api policy', () => {
           secrets: [],
           revision: 2,
         },
+        /* The four official plugin pages register into the Plugins page only
+           while their namespace is served, so a student must receive these or
+           the page reads 「还没有安装任何插件。」. */
+        ...[
+          'bash-sandbox',
+          'pwsh-sandbox',
+          'agent-loop',
+          'subagent',
+          'subagent-model-selection-settings',
+          'web-search-deepseek',
+        ].map(ns => ({
+          ns,
+          schema: { type: 'object' },
+          value: {},
+          applies: 'live',
+          secrets: [],
+          revision: 1,
+        })),
       ],
     }))(request('settings.describe'))
     expect(await response.json()).toEqual({
@@ -256,14 +274,31 @@ describe('PhysicsOS shared /api policy', () => {
         value: {
           writable: true,
           hasDocument: true,
-          namespaces: [{
-            ns: 'ui-onboarding',
-            schema: { type: 'object' },
-            value: { welcomeNoticeVersion: '2026-08-13.1' },
-            applies: 'live',
-            secrets: [],
-            revision: 2,
-          }],
+          namespaces: [
+            {
+              ns: 'ui-onboarding',
+              schema: { type: 'object' },
+              value: { welcomeNoticeVersion: '2026-08-13.1' },
+              applies: 'live',
+              secrets: [],
+              revision: 2,
+            },
+            ...[
+              'bash-sandbox',
+              'pwsh-sandbox',
+              'agent-loop',
+              'subagent',
+              'subagent-model-selection-settings',
+              'web-search-deepseek',
+            ].map(ns => ({
+              ns,
+              schema: { type: 'object' },
+              value: {},
+              applies: 'live',
+              secrets: [],
+              revision: 1,
+            })),
+          ],
         },
       },
     })

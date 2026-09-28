@@ -254,6 +254,33 @@ const MODEL_BUDGET_EXCEEDED = 'MODEL_BUDGET_EXCEEDED'
 const DEPENDENCY_UNAVAILABLE = 'DEPENDENCY_UNAVAILABLE'
 const PENDING_RESPONSE_TTL_MS = 15 * 60 * 1000
 const ONBOARDING_SETTINGS_NAMESPACE = 'ui-onboarding'
+
+/**
+ * The namespaces a non-administrator may READ.
+ *
+ * Their settings pages — Shell, Agent loop, Subagent, Web search — register
+ * into the Plugins page only while the Host serves the namespace, so hiding
+ * every namespace except onboarding did not merely keep students out of the
+ * configuration: it emptied the Plugins page down to 「还没有安装任何插件。」.
+ *
+ * Nothing secret rides along. The controller answers every remote read under
+ * `redactSecrets`, so a `role('secret')` field arrives as `{ path, set }` and
+ * never as a value, and every write stays on
+ * {@link ADMIN_ONLY_METHODS}: `settings.describe` is the one settings method a
+ * non-administrator may call at all. The list is explicit rather than a
+ * denylist so a namespace added upstream is not readable by accident.
+ */
+const READABLE_SETTINGS_NAMESPACES: ReadonlySet<string> = new Set([
+  ONBOARDING_SETTINGS_NAMESPACE,
+  /* Shell: the bash and powershell executors. */
+  'bash-sandbox',
+  'pwsh-sandbox',
+  'agent-loop',
+  /* Subagent: recursion limits, and which model the children use. */
+  'subagent',
+  'subagent-model-selection-settings',
+  'web-search-deepseek',
+])
 const ONBOARDING_ACK_FIELD = 'welcomeNoticeVersion'
 
 /** Methods that can start or continue an agent turn and therefore spend model budget. */
@@ -772,7 +799,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       const namespaces = value['namespaces']
       value['namespaces'] = Array.isArray(namespaces)
         ? namespaces.filter(namespace =>
-          isRecord(namespace) && namespace['ns'] === ONBOARDING_SETTINGS_NAMESPACE)
+          isRecord(namespace) && READABLE_SETTINGS_NAMESPACES.has(String(namespace['ns'])))
         : []
       changed = true
     }
