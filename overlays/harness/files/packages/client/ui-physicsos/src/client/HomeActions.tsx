@@ -1,7 +1,7 @@
 import {
   IconBrowseOutlineMedium, IconChevronRightOutlineMedium, IconFolderOpenOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SnapshotStore, WorkspaceId } from './runtime-compat.ts'
+import type { SnapshotStore } from './runtime-compat.ts'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { fillComposerDraft } from './fill-draft.ts'
@@ -11,8 +11,6 @@ import { formatUpdatedAt, workspaceKnowledge } from './workspaceMeta.ts'
 import css from './HomeActions.module.css'
 
 export type HomeActionsInjected = {
-  /** Present where a create path exists; the hero entries never render one. */
-  startSession?: (workspaceId?: WorkspaceId) => void
   openSurface: (surface: 'home' | 'lab' | 'record', sceneRef?: PhysicsSceneRef) => void
   hooks: {
     recentExperiments: SnapshotStore<RecentExperimentsState>

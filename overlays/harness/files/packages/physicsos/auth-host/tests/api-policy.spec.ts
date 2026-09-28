@@ -71,6 +71,12 @@ const rpc = (value: unknown): Response => Response.json({
   result: { ok: true, value },
 })
 
+/** The `value` a wrapped response carried, typed for the assertions below. */
+const rpcValueOf = async (response: Response): Promise<unknown> => {
+  const body = await response.json() as { result?: { value?: unknown } }
+  return body.result?.value
+}
+
 const collect = async <T>(source: AsyncIterable<T>): Promise<T[]> => {
   const values: T[] = []
   for await (const value of source) values.push(value)
@@ -347,14 +353,14 @@ describe('PhysicsOS shared /api policy', () => {
       }],
       failures: [],
     }
-    expect((await studentResponse.json()).result.value).toEqual(reduced)
+    expect(await rpcValueOf(studentResponse)).toEqual(reduced)
 
     /* The same reduction for an administrator: the model seat is a product
        surface, and the pool is managed on the surfaces that name it. */
     const adminResponse = await makePolicy({ actor: admin }).policy.wrapFetch(async () => rpc(catalog()))(
       request('session.modelCatalog', {}, 'admin'),
     )
-    expect((await adminResponse.json()).result.value).toEqual(reduced)
+    expect(await rpcValueOf(adminResponse)).toEqual(reduced)
   })
 
   it('keeps the full settings description for an admin', async () => {
