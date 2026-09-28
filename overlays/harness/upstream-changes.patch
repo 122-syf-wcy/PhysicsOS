@@ -570,25 +570,32 @@ index 66d9844f17..7c954bbb8c 100644
      "src/browser-auth.ts",
      "src/client/random-uuid.ts",
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 942444d3b7..26e396a4d5 100644
+index 942444d3b7..2f44c10a4f 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
-@@ -314,6 +314,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
+@@ -314,6 +314,8 @@ export function apply(ctx: Context, config: Config = Config({})): void {
        'conversation.composer': { kind: 'chain', scope: 'session' },
        'conversation.composer.bar': { kind: 'single', scope: 'session-maybe' },
        'conversation.input.dock': { kind: 'list', scope: 'session' },
++      'conversation.composer.above': { kind: 'list', scope: 'session-maybe' },
 +      'conversation.composer.below': { kind: 'list', scope: 'session-maybe' },
        'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
        'conversation.hero.workspace': { kind: 'single', scope: 'root' },
        'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
 diff --git a/packages/client/ui-conversation/src/client/contract/slots.ts b/packages/client/ui-conversation/src/client/contract/slots.ts
-index 61f7d8ff8b..bfccb9db0d 100644
+index 61f7d8ff8b..167bfd5102 100644
 --- a/packages/client/ui-conversation/src/client/contract/slots.ts
 +++ b/packages/client/ui-conversation/src/client/contract/slots.ts
-@@ -197,6 +197,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -197,6 +197,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      'conversation.input.overlay': { kind: 'list'; scope: 'session' }
      /** Ambient entries below the composer card. */
      'conversation.composer.dock': { kind: 'list'; scope: 'session' }
++    /* Page-level product entries rendered ABOVE the composer card, outside it.
++       `conversation.input.dock` is `session`-scoped and therefore absent until a
++       Session (and its workspace) exists; a product front page has to render its
++       own head before that, so it needs a seat that binds to no Session either.
++       `session-maybe`, mirroring `conversation.composer.below`. */
++    'conversation.composer.above': { kind: 'list'; scope: 'session-maybe' }
 +    /* Page-level product entries rendered below the composer card, outside it.
 +       Distinct from `conversation.composer.dock`, which is ambient shell chrome
 +       (token stats, queue hints): this seat belongs to a business page that
@@ -599,21 +606,26 @@ index 61f7d8ff8b..bfccb9db0d 100644
      /** Compact controls at the left of the composer tool row. */
      'conversation.input.left': { kind: 'list'; scope: 'session' }
      /** Compact controls before the composer submit action. */
-@@ -233,6 +240,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -233,6 +246,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
          'conversation.composer': { kind: 'chain'; scope: 'session' }
          'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe' }
          'conversation.input.dock': { kind: 'list'; scope: 'session' }
++        'conversation.composer.above': { kind: 'list'; scope: 'session-maybe' }
 +        'conversation.composer.below': { kind: 'list'; scope: 'session-maybe' }
          'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
          'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
          'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
 diff --git a/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx b/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
-index 15bfdd8732..cb88ad571f 100644
+index 15bfdd8732..c30bdd8c39 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
-@@ -166,6 +166,12 @@ export function ConversationContent(props: ConversationContentProps) {
+@@ -165,7 +165,16 @@ export function ConversationContent(props: ConversationContentProps) {
+       {hero && <HeroShell t={t} renderSlot={renderSlot} />}
        {hero && heroWorkspaceRow}
        {zone !== undefined && renderSlot('conversation.input.dock', zone)}
++      {/* Product head above the composer, in the hero phase too: the dock above
++          needs a Session, and the front page has to render before one exists. */}
++      {hero && renderSlot('conversation.composer.above', {})}
        {inputBar}
 +      {/* Page-level product content under the composer. `conversation.composer
 +          .dock` renders only for the resident composer variant, so a business

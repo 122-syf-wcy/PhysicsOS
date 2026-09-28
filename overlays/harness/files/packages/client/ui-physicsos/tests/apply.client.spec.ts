@@ -78,6 +78,8 @@ async function bench() {
     children: {
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.input.dock': { kind: 'list', scope: 'session' },
+      'conversation.composer.above': { kind: 'list', scope: 'session-maybe' },
+      'conversation.composer.below': { kind: 'list', scope: 'session-maybe' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       /* Declared by the chat view in the real tree; the bench declares it so
@@ -127,7 +129,10 @@ describe('ui-physicsos apply', () => {
     expect(mainPanels.map(entry => entry.options.key))
       .toEqual(expect.arrayContaining(Object.values(PHYSICS_PANEL_IDS)))
     expect(b.slots.entries('conversation.hero.brand.mark')).toHaveLength(1)
-    expect(b.slots.entries('conversation.input.dock')).toHaveLength(1)
+    /* The front page rides the two product seats that bind to no Session, so it
+       survives a cold start as well as a blank Session. */
+    expect(b.slots.entries('conversation.composer.above')).toHaveLength(1)
+    expect(b.slots.entries('conversation.composer.below')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')[0]!.options.priority).toBe(-1)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(1)

@@ -333,10 +333,7 @@ describe('PhysicsOS overlay presentation', () => {
      under the composer, which HomeBelow renders. The page splits across two
      seats so the composer sits between the brand stage and the actions; both
      halves must disappear once the Session is engaged. */
-  const frontPageProps = (blank: boolean): HomeHeroProps => ({
-    useSession: <S,>(selector: (snapshot: { blank: boolean }) => S): S => selector({ blank }),
-    t,
-  }) as unknown as HomeHeroProps
+  const frontPageProps = (): HomeHeroProps => ({ t }) as unknown as HomeHeroProps
 
   const actionsProps = (
     blank: boolean,
@@ -353,7 +350,7 @@ describe('PhysicsOS overlay presentation', () => {
     const openSurface = vi.fn()
     render(
       <>
-        <HomeHero {...frontPageProps(true)} />
+        <HomeHero {...frontPageProps()} />
         <HomeBelow {...actionsProps(true, openSurface)} />
       </>,
     )
@@ -362,19 +359,19 @@ describe('PhysicsOS overlay presentation', () => {
     expect(openSurface).toHaveBeenCalledWith('lab')
   })
 
-  it('keeps the brand stage out of an engaged Session', () => {
+  it('leaves the hero gating to the shell, for both seats', () => {
     const { container } = render(
       <>
-        <HomeHero {...frontPageProps(false)} />
-        <HomeBelow {...actionsProps(false, vi.fn())} />
+        <HomeHero {...frontPageProps()} />
+        <HomeBelow {...actionsProps(true, vi.fn())} />
       </>,
     )
-    /* The brand stage self-gates on a blank Session. The actions seat does not:
-       the shell renders it only in its hero phase, which is the same condition
-       (a blank Session OR a cold start with no Session at all), so gating it
-       here as well would hide the front page from a visitor who has not picked
-       a workspace yet. */
-    expect(container.querySelector('[data-physicsos-home]')).toBeNull()
+    /* Neither seat self-gates: the shell renders them only in its hero phase,
+       which is the same condition for a blank Session and for a cold start with
+       no Session at all. Gating here as well would hide the front page from a
+       visitor who has not picked a workspace yet — the state that left the page
+       looking empty. */
+    expect(container.querySelector('[data-physicsos-home]')).not.toBeNull()
     expect(container.querySelector('[data-physicsos-home-actions]')).not.toBeNull()
   })
 

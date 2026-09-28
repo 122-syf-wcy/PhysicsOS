@@ -23,7 +23,7 @@ export type HomeHeroInjected = HomeActionsInjected
 
 /** Slot props for the brand stage above the hero composer. */
 export type HomeHeroProps =
-  Pick<PropsRuntime<'conversation.input.dock'>, 'useSession'>
+  PropsRuntime<'conversation.composer.above'>
   & PropsLocale<'physicsos'>
 
 /** Slot props for the quick actions under the hero composer. */
@@ -34,12 +34,15 @@ export type HomeBelowProps =
 
 /**
  * Render the product brand stage above the hero composer.
- * @param props - the current Session and copy.
- * @returns the brand stage, or nothing once the Session has content.
+ *
+ * The shell renders this seat only in its hero phase and binds it to no
+ * Session, so the brand stage is complete at a cold start too — the seat above
+ * it (`conversation.input.dock`) needs a Session, and a visitor who has not
+ * picked a workspace yet has none.
+ * @param props - product copy.
+ * @returns the brand stage.
  */
-export function HomeHero({ useSession, t }: HomeHeroProps) {
-  const blank = useSession(session => session.blank)
-  if (!blank) return null
+export function HomeHero({ t }: HomeHeroProps) {
   return (
     <div className={css.root} data-physicsos-home="">
       <HomeBrand t={t} />

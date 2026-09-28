@@ -410,8 +410,8 @@ export function apply(ctx: ClientContext): void {
     name: 'conversation.hero.brand.mark',
   }, HomeBrandMark))
 
-  ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
-    name: 'conversation.input.dock',
+  ctx.slots.inject('conversation.composer.above', () => ctx.slots.register({
+    name: 'conversation.composer.above',
     id: 'physicsos-home',
     order: 10,
     locale: NS,
