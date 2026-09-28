@@ -9,6 +9,17 @@
   margin-bottom: 16px;
 }
 
+/* The quick actions ride the page-level seat under the composer, so they keep
+   the hero's column shape without the trailing hero margin. */
+.below {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 16px;
+}
+
 @media (max-width: 720px) {
   .root {
     gap: 14px;

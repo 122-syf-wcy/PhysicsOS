@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HomeActions } from '../src/client/HomeActions.tsx'
-import { HomeHero, type HomeHeroProps } from '../src/client/HomeHero.tsx'
+import { HomeBelow, HomeHero, type HomeBelowProps, type HomeHeroProps } from '../src/client/HomeHero.tsx'
 import { PhysicsProfileSeat } from '../src/client/PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController, readStoredProfile } from '../src/client/profile-store.ts'
 import { STUDENT_PROFILES, TEACHER_PROFILES, runtimePresetOf } from '../src/client/profiles.ts'
@@ -330,23 +330,33 @@ describe('PhysicsOS overlay presentation', () => {
 
   /* `新建` is the shell's New Session control now (it starts a session, the
      way every other Harness product does). "新建物理实验" is a product creation
-     intent, so it lives with the other product entrances on the blank-Session
-     hero; the hero itself must disappear once the Session is engaged. */
-  const heroProps = (
+     intent, so it lives with the other product entrances — the actions seat
+     under the composer, which HomeBelow renders. The page splits across two
+     seats so the composer sits between the brand stage and the actions; both
+     halves must disappear once the Session is engaged. */
+  const frontPageProps = (blank: boolean): HomeHeroProps => ({
+    useSession: <S,>(selector: (snapshot: { blank: boolean }) => S): S => selector({ blank }),
+    t,
+  }) as unknown as HomeHeroProps
+
+  const actionsProps = (
     blank: boolean,
     openSurface: (id: 'home' | 'lab' | 'record', sceneRef?: never) => void,
-  ): HomeHeroProps => ({
+  ): HomeBelowProps => ({
     useSession: <S,>(selector: (snapshot: { blank: boolean }) => S): S => selector({ blank }),
     useRecentExperiments: (selector: (snapshot: { items: never[] }) => unknown) =>
       selector({ items: [] }),
     openSurface,
     t,
-  }) as unknown as HomeHeroProps
+  }) as unknown as HomeBelowProps
 
   it('shows the product front page on a blank Session and creates through the picker', () => {
     const openSurface = vi.fn()
     render(
-      <HomeHero {...heroProps(true, openSurface)} />,
+      <>
+        <HomeHero {...frontPageProps(true)} />
+        <HomeBelow {...actionsProps(true, openSurface)} />
+      </>,
     )
     expect(screen.getByText('探索一个物理世界')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
@@ -355,9 +365,13 @@ describe('PhysicsOS overlay presentation', () => {
 
   it('keeps the front page out of an engaged Session', () => {
     const { container } = render(
-      <HomeHero {...heroProps(false, vi.fn())} />,
+      <>
+        <HomeHero {...frontPageProps(false)} />
+        <HomeBelow {...actionsProps(false, vi.fn())} />
+      </>,
     )
     expect(container.querySelector('[data-physicsos-home]')).toBeNull()
+    expect(container.querySelector('[data-physicsos-home-actions]')).toBeNull()
   })
 
   it('offers only PhysicsOS profiles and selects the mapped Harness preset', async () => {

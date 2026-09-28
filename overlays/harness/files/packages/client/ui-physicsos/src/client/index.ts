@@ -20,9 +20,9 @@ import { createLearningApi } from './learning-api.ts'
 import { createModelPoolApi } from './model-pool-api.ts'
 import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
-import { createAuthController, isTeachingRole, type AuthState } from './auth-store.ts'
+import { createAuthController, type AuthState } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
-import { HomeHero } from './HomeHero.tsx'
+import { HomeBelow, HomeHero } from './HomeHero.tsx'
 import { HomeBrandMark } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceInjected } from './LabWorkspace.tsx'
@@ -35,9 +35,9 @@ import { SceneChatCard } from './SceneChatCard.tsx'
 import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-chat-node.ts'
 import { SidebarBrandMark, SidebarBrandName } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
+import { SidebarNav } from './SidebarNav.tsx'
 import {
-  AdminPanelIcon, LabPanelIcon, LibraryPanelIcon, NoticePanelIcon,
-  PaperPanelIcon, RecordPanelIcon, type PhysicsPanelIcon,
+  AdminPanelIcon, type PhysicsPanelIcon,
 } from './SidebarPanels.tsx'
 import { createPaperApi } from './paper-api.ts'
 import {
@@ -371,10 +371,23 @@ export function apply(ctx: ClientContext): void {
     label: () => ctx.locale.bind(NS)(label),
   }, Glyph))
 
-  registerPanelRow('lab', 'nav.lab', 10, LabPanelIcon)
-  registerPanelRow('notice', 'nav.notice', 30, NoticePanelIcon)
-  registerPanelRow('library', 'nav.library', 40, LibraryPanelIcon)
-  registerPanelRow('record', 'nav.history', 50, RecordPanelIcon)
+  /* The product rail below presents 首页 / 物理实验室 / 出卷专区 / 反馈 / 资源库
+     itself, and 学习记录 rides the sidebar foot, so none of them take a shell
+     panel row — a row would show the entry twice. Only 管理后台 keeps one, and
+     only for an administrator. */
+
+  /* The sectioned product rail: 主页 → 首页 (the blank-Session Conversation),
+     探索 → the surfaces the rail presents. The panel rows stay for whatever the
+     rail does not present (学习记录 above, 管理后台 below, the shell's own). */
+  ctx.slots.inject('sidebar.nav', () => ctx.slots.register({
+    name: 'sidebar.nav',
+    locale: NS,
+    inject: () => ({
+      hooks: { physicsSurface: surface.store, auth: auth.store },
+      /* 首页 is the Conversation: the surface store maps it back to no panel. */
+      openSurface: (id: Parameters<typeof surface.open>[0]) => { surface.open(id) },
+    }),
+  }, SidebarNav))
 
   /* 出卷专区 is a teacher surface and 管理后台 an administrator one — the host
      refuses both to the wrong role, so the row follows the account instead of
@@ -406,10 +419,6 @@ export function apply(ctx: ClientContext): void {
     }, 'ui-physicsos: role-gated panel row')
   }
 
-  registerRoleGatedRow(
-    state => isTeachingRole(state.user?.role),
-    () => registerPanelRow('paper', 'nav.paper', 20, PaperPanelIcon),
-  )
   registerRoleGatedRow(
     state => state.user?.role === 'SCHOOL_ADMIN' || state.user?.role === 'SUPER_ADMIN',
     () => registerPanelRow('admin', 'admin.title', 60, AdminPanelIcon),
@@ -456,8 +465,9 @@ export function apply(ctx: ClientContext): void {
   }, SidebarFooter))
 
   /* The blank-Session hero: the product mark leads the shell's headline, and
-     the brand stage plus quick actions ride the full-width entry above the
-     composer. */
+     the brand stage rides the full-width entry above the composer. The quick
+     actions ride `conversation.composer.below` instead, so the composer sits
+     between the brand stage and the actions — the order the page reads in. */
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
     name: 'conversation.hero.brand.mark',
   }, HomeBrandMark))
@@ -465,6 +475,13 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock',
     id: 'physicsos-home',
+    order: 10,
+    locale: NS,
+  }, HomeHero))
+
+  ctx.slots.inject('conversation.composer.below', () => ctx.slots.register({
+    name: 'conversation.composer.below',
+    id: 'physicsos-home-actions',
     order: 10,
     locale: NS,
     inject: () => ({
@@ -480,7 +497,7 @@ export function apply(ctx: ClientContext): void {
         else surface.open(id, sceneRef)
       },
     }),
-  }, HomeHero))
+  }, HomeBelow))
 
   const controller = createPhysicsProfileController(undefined, undefined, auth.userStorage)
 

@@ -68,6 +68,7 @@ async function bench() {
       'sidebar.brand.mark': { kind: 'single', scope: 'root' },
       'sidebar.brand.name': { kind: 'single', scope: 'root' },
       'sidebar.panellist': { kind: 'list', scope: 'root' },
+      'sidebar.nav': { kind: 'single', scope: 'root' },
       'sidebar.footer.action': { kind: 'list', scope: 'root' },
       'sidebar.workspaces': { kind: 'single', scope: 'root' },
     },
@@ -94,14 +95,16 @@ describe('ui-physicsos apply', () => {
     ])
   })
 
-  it('registers the product navigation as shell-owned panel rows', async () => {
+  it('registers the product rail and leaves the shell rows to the rest', async () => {
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(b.slots.entries('sidebar.panellist').map(entry => entry.options.id))
-      .toEqual(expect.arrayContaining([
-        'physicsos-lab', 'physicsos-notice', 'physicsos-library', 'physicsos-record',
-      ]))
+    /* The sectioned rail presents 首页 / 物理实验室 / 出卷专区 / 反馈 / 资源库
+       itself, and 学习记录 rides the sidebar foot, so no PhysicsOS surface
+       takes a shell panel row — a row would show the entry twice. The only row
+       left is the role-gated 管理后台, and this bench carries no role. */
+    expect(b.slots.entries('sidebar.nav')).toHaveLength(1)
+    expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
     await fiber.dispose()
   })
 
@@ -114,7 +117,9 @@ describe('ui-physicsos apply', () => {
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeTruthy()
     expect(b.slots.entries('sidebar.brand.mark')).toHaveLength(1)
     expect(b.slots.entries('sidebar.brand.name')).toHaveLength(1)
-    expect(b.slots.entries('sidebar.panellist').length).toBeGreaterThanOrEqual(4)
+    expect(b.slots.entries('sidebar.nav')).toHaveLength(1)
+    /* Only the role-gated 管理后台 row exists, and this bench has no role. */
+    expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
     expect(b.slots.entries('sidebar.footer.action')).toHaveLength(1)
     expect(b.slots.entries('sidebar.workspaces')).toHaveLength(1)
     const mainPanels = b.slots.entries('main')
