@@ -12,7 +12,6 @@ import type { AuthState } from './auth-store.ts'
 import css from './SidebarFooter.module.css'
 
 export type SidebarFooterInjected = {
-  startSession: () => void
   /** Open the 学习记录 surface. */
   openRecord?: () => void
   /** Open the 管理后台 surface — offered only to SCHOOL_ADMIN/SUPER_ADMIN. */

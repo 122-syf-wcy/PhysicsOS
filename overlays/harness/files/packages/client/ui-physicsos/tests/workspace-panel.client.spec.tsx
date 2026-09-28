@@ -2,33 +2,27 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  WorkspacePanel, WorkspacePickerTrigger, type WorkspacePanelProps,
-} from '../src/client/WorkspacePanel.tsx'
+import { WorkspacePanel, type WorkspacePanelProps } from '../src/client/WorkspacePanel.tsx'
 import { zh, type PhysicsosKey } from '../src/client/locales.ts'
 
 const t = (key: PhysicsosKey): string => zh[key] ?? key
 
-const workspace = (over: Partial<WorkspacePanelProps['useWorkspaces'] extends never ? never : {
-  workspaceId: string
-  title: string
-  path: string
-}> = {}) => ({
+const workspace = (over: { workspaceId: string; title: string } = {
   workspaceId: 'ws-1',
   title: 'a1b2c3d4e5f60718293a4b5c',
-  path: '/srv/physicsos-users/a1b2c3d4e5f60718293a4b5c',
-  ...over,
-})
+}) => over
 
-const mount = (items: ReturnType<typeof workspace>[] = [], names = ['我的工作区']) => {
+const mount = (
+  items: ReturnType<typeof workspace>[] = [],
+  options: { open?: boolean; selectedId?: string } = {},
+) => {
   const createWorkspace = vi.fn().mockImplementation(async (name: string) => ({
     id: 'ws-new',
     name,
   }))
   const renameWorkspace = vi.fn().mockResolvedValue(undefined)
-  const openWorkspace = vi.fn().mockResolvedValue(undefined)
-  const close = vi.fn()
-  const usePanel = <T,>(selector: (state: { open: boolean }) => T): T => selector({ open: true })
+  const onPick = vi.fn()
+  const onClose = vi.fn()
   const useWorkspaces = <T,>(
     selector: (state: {
       items: readonly ReturnType<typeof workspace>[]
@@ -38,20 +32,26 @@ const mount = (items: ReturnType<typeof workspace>[] = [], names = ['我的工�
 
   render(
     <WorkspacePanel
-      usePanel={usePanel}
-      useWorkspaces={useWorkspaces as never}
+      open={options.open ?? true}
+      selectedId={options.selectedId}
+      onPick={onPick}
+      onClose={onClose}
+      useWorkspaces={useWorkspaces as unknown as WorkspacePanelProps['useWorkspaces']}
       createWorkspace={createWorkspace}
       renameWorkspace={renameWorkspace}
-      openWorkspace={openWorkspace}
-      close={close}
       t={t as never}
     />,
   )
-  return { createWorkspace, renameWorkspace, openWorkspace, close, names }
+  return { createWorkspace, renameWorkspace, onPick, onClose }
 }
 
 describe('WorkspacePanel', () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+  it('renders nothing until the shell opens the seat', () => {
+    mount([workspace()], { open: false })
+    expect(screen.queryByText('我的工作区')).toBeNull()
+  })
 
   it('offers creation when the account has no workspace', async () => {
     const flow = mount([])
@@ -63,8 +63,26 @@ describe('WorkspacePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '创建并进入' }))
 
     await waitFor(() => { expect(flow.createWorkspace).toHaveBeenCalledWith('高一物理') })
-    await waitFor(() => { expect(flow.openWorkspace).toHaveBeenCalledWith('ws-new') })
-    expect(flow.close).toHaveBeenCalled()
+    /* Creating enters through the shell's own pick, so the chip's label and the
+       open Session can never disagree. */
+    await waitFor(() => { expect(flow.onPick).toHaveBeenCalledWith('ws-new') })
+    expect(flow.onClose).toHaveBeenCalled()
+  })
+
+  it("opens another workspace through the shell's pick and closes", async () => {
+    const flow = mount([
+      workspace({ workspaceId: 'ws-2', title: '高一物理' }),
+      workspace({ workspaceId: 'ws-1', title: '高二物理' }),
+    ], { selectedId: 'ws-1' })
+
+    /* The current workspace is marked, and its own Open is not offered. */
+    expect(screen.getByText('当前')).toBeTruthy()
+    const rows = screen.getAllByRole('button', { name: '打开' })
+    expect(rows).toHaveLength(1)
+
+    fireEvent.click(rows[0]!)
+    expect(flow.onPick).toHaveBeenCalledWith('ws-2')
+    expect(flow.onClose).toHaveBeenCalled()
   })
 
   it('shows only human names and can rename the current account workspace', async () => {
@@ -73,7 +91,7 @@ describe('WorkspacePanel', () => {
       expect(screen.getAllByText('我的工作区').length).toBeGreaterThanOrEqual(2)
     })
     expect(screen.queryByText(/a1b2c3d4e5f60718293a4b5c/)).toBeNull()
-    expect(screen.queryByText(/\/srv\/physicsos-users/)).toBeNull()
+    expect(screen.queryByText(/srv/)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: '重命名' }))
     const input = screen.getByDisplayValue('我的工作区')
@@ -87,26 +105,17 @@ describe('WorkspacePanel', () => {
     mount([workspace({ workspaceId: 'mine', title: '我的工作区' })])
     expect(screen.queryByText('另一个账号的工作区')).toBeNull()
   })
-})
 
-describe('WorkspacePickerTrigger', () => {
-  afterEach(() => { cleanup(); vi.restoreAllMocks() })
+  it('reports the account failure instead of hiding it', async () => {
+    const flow = mount([workspace({ workspaceId: 'ws-1', title: '高一物理' })])
+    flow.createWorkspace.mockRejectedValueOnce(new Error('workspace limit reached (20)'))
 
-  it('opens the product workspace panel instead of the directory browser', () => {
-    const openPanel = vi.fn()
-    const usePanel = <T,>(selector: (state: { open: boolean }) => T): T => selector({ open: false })
-    const useWorkspaces = <T,>(selector: (state: {
-      items: readonly ReturnType<typeof workspace>[]
-    }) => T): T => selector({ items: [workspace()] })
-    render(
-      <WorkspacePickerTrigger
-        usePanel={usePanel}
-        useWorkspaces={useWorkspaces as never}
-        openPanel={openPanel}
-        t={t as never}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: '我的工作区' }))
-    expect(openPanel).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: '新建工作区' }))
+    fireEvent.change(screen.getByPlaceholderText('例如：高一物理备课'), {
+      target: { value: '第三个' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '创建并进入' }))
+
+    expect(await screen.findByText('workspace limit reached (20)')).toBeTruthy()
   })
 })

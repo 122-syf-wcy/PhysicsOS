@@ -42,7 +42,7 @@ import {
   type PhysicsSceneRef, type PhysicsSurfaceNavigation,
 } from './surface-store.ts'
 import {
-  WorkspacePanel, WorkspacePickerTrigger, createWorkspacePanelController,
+  WorkspacePanel,
   type AccountWorkspaceRow,
 } from './WorkspacePanel.tsx'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
@@ -81,11 +81,9 @@ export type {
 } from './surface-store.ts'
 export { PHYSICS_PANEL_IDS } from './surface-store.ts'
 export type {
-  AccountWorkspaceRow, WorkspacePanelController, WorkspacePanelInjected,
-  WorkspacePanelProps, WorkspacePanelState, WorkspacePickerTriggerInjected,
-  WorkspacePickerTriggerProps,
+  AccountWorkspaceRow, WorkspacePanelInjected,
+  WorkspacePanelProps,
 } from './WorkspacePanel.tsx'
-export { createWorkspacePanelController } from './WorkspacePanel.tsx'
 export {
   STUDENT_PROFILES, TEACHER_PROFILES, isStudentProfile, runtimePresetOf,
 } from './profiles.ts'
@@ -132,8 +130,6 @@ export function apply(ctx: ClientContext): void {
    * 是幂等的（存在即返回，不会新建）。所以这里先确保它存在，再开会话，
    * 全程不碰本机目录选择器；失败时退回原行为，不影响单机版。
    */
-  const workspacePanel = createWorkspacePanelController()
-
   /* Product surfaces are global panels in the target shell, so navigation is
      two-way: the product asks the layout to select a panel, and a panellist
      click reports back into the surface store. */
@@ -141,14 +137,6 @@ export function apply(ctx: ClientContext): void {
     selectSurface: (next): void => {
       ctx.layout.selectPanel(next === 'home' ? null : PHYSICS_PANEL_IDS[next])
     },
-  }
-
-  const startSession = (workspaceId?: WorkspaceId): void => {
-    if (workspaceId !== undefined) {
-      ctx.uiWorkspace.startSession(workspaceId)
-      return
-    }
-    workspacePanel.open()
   }
 
   /* 账户体系 Auth V1: the cookie session resolves through /me; every per-user
@@ -210,13 +198,6 @@ export function apply(ctx: ClientContext): void {
     return { id: workspace.workspaceId, name }
   }
 
-  const openAccountWorkspace = async (id: string): Promise<void> => {
-    /* Connect and open in one navigation action: the Workspace UI owns the
-       main-view selection, the Workspace Controller owns the registration. */
-    const sessionId = await ctx.uiWorkspace.connectWorkspace(id as WorkspaceId)
-    ctx.uiWorkspace.openSession(sessionId)
-  }
-
   /* The student's attempt history: written by self-checks (the Lab's 自测 tab
      and golden-question cards), read by the 学习记录 surface. Persisted so the
      record survives a reload. Created before the scene card registers because
@@ -265,42 +246,24 @@ export function apply(ctx: ClientContext): void {
     }),
   }, SceneChatCard))
 
-  /* Account workspace manager: every normal entry that needs a workspace
-     opens this panel. The panel reads the auth-host-filtered feed and never
-     renders a host path, so the directory browser is not a product surface. */
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'physicsos-workspace-panel',
-    locale: NS,
-    inject: () => ({
-      hooks: {
-        panel: workspacePanel.store,
-        workspaces: ctx.workspaces.list,
-      },
-      createWorkspace: createAccountWorkspace,
-      renameWorkspace: async (id: string, name: string) => {
-        await ctx.workspaces.rename(id as WorkspaceId, name)
-      },
-      openWorkspace: openAccountWorkspace,
-      close: workspacePanel.close,
-    }),
-  }, WorkspacePanel))
-
-  /* Replace the upstream composer workspace picker. That picker's add action
-     is the route into `host.listDirectory`; this occupant keeps the same slot
-     but opens the account-scoped panel instead. */
+  /* The account workspace manager. It occupies the shell's own workspace seat:
+     the chip keeps the affordance and the label (it knows which Workspace the
+     Session is in), this renders the account-scoped list behind it, and every
+     action returns through the seat's `onPick`/`onClose`. The upstream occupant
+     is displaced on purpose — its add action is the route into the host
+     directory picker, and no student should browse server folders. */
   ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register({
     name: 'conversation.hero.workspace',
     priority: -1,
     locale: NS,
     inject: () => ({
-      hooks: {
-        panel: workspacePanel.store,
-        workspaces: ctx.workspaces.list,
+      hooks: { workspaces: ctx.workspaces.list },
+      createWorkspace: createAccountWorkspace,
+      renameWorkspace: async (id: string, name: string) => {
+        await ctx.workspaces.rename(id as WorkspaceId, name)
       },
-      openPanel: workspacePanel.open,
     }),
-  }, WorkspacePickerTrigger))
+  }, WorkspacePanel))
 
   /* The auth gate: one root-scoped overlay entry that covers the shell while
      the session is unresolved, and holds the login/register/forgot flow for
@@ -393,7 +356,6 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { auth: auth.store },
-      startSession: () => { startSession() },
       /* 学习记录 is a real surface now: attempts, mistakes, mastery. */
       openRecord: () => { surface.open('record') },
       /* 管理后台 — the menu only shows this for admin roles. */

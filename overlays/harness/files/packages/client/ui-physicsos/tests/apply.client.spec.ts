@@ -144,7 +144,6 @@ describe('ui-physicsos apply', () => {
     expect(b.slots.entries('shell.overlay').map(entry => entry.options.id))
       .toEqual(expect.arrayContaining([
         'physicsos-auth-gate',
-        'physicsos-workspace-panel',
         'physicsos-platform-notice',
       ]))
     /* The scene card: definition on the conversation registry, keyed renderer
@@ -170,16 +169,18 @@ describe('ui-physicsos apply', () => {
     })().hooks
     expect(hooks.physicsSurface.getSnapshot().surface).toBe('lab')
     expect(hooks.physicsSurface.getSnapshot().sceneRef?.sceneId).toBe(sceneRef.sceneId)
-    const footer = b.slots.entries('sidebar.footer.action')[0]!.inject as () => {
-      startSession: () => void
-    }
-    footer().startSession()
-    const panelEntry = b.slots.entries('shell.overlay')
-      .find(entry => entry.options.id === 'physicsos-workspace-panel')!
-    const panelInjected = (panelEntry.inject as () => {
-      hooks: { panel: { getSnapshot: () => { open: boolean } } }
+    /* The workspace seat owns the account's workspaces: it is the shell's own
+       chip that opens it, and both of its writes go through the account-scoped
+       feed rather than the host directory picker. */
+    const workspaceSeat = b.slots.entries('conversation.hero.workspace')[0]!
+    const seatInjected = (workspaceSeat.inject as () => {
+      createWorkspace: (name: string) => Promise<{ id: string }>
+      renameWorkspace: (id: string, name: string) => Promise<void>
+      hooks: { workspaces: { getSnapshot: () => unknown } }
     })()
-    expect(panelInjected.hooks.panel.getSnapshot().open).toBe(true)
+    expect(typeof seatInjected.createWorkspace).toBe('function')
+    expect(typeof seatInjected.renameWorkspace).toBe('function')
+    expect(seatInjected.hooks.workspaces).toBe(b.workspaces.list)
     await fiber.dispose()
     expect(document.title).toBe('DeepSeek Harness')
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeNull()
