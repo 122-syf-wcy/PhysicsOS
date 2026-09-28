@@ -92,6 +92,10 @@ export function GlassSelect({
 
   const selectedIndex = options.findIndex(option => option.value === value)
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined
+  /* A control with nothing to offer is not a control: it renders disabled and
+     opens nothing, so a click cannot produce an empty popover and read as a
+     broken dropdown. The owning form says why the list is empty. */
+  const inert = disabled === true || options.length === 0
 
   const reposition = useCallback(() => {
     const button = buttonRef.current
@@ -167,6 +171,7 @@ export function GlassSelect({
   }
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
+    if (inert) return
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
@@ -212,10 +217,10 @@ export function GlassSelect({
         aria-haspopup="listbox"
         aria-controls={open ? listId : undefined}
         aria-label={ariaLabel}
-        disabled={disabled}
+        disabled={inert}
         data-glass-select=""
         data-testid={testId}
-        onClick={() => { if (open) setOpen(false); else openList() }}
+        onClick={() => { if (inert) return; if (open) setOpen(false); else openList() }}
         onKeyDown={onKeyDown}
       >
         <span className={clsx(css.label, selected === undefined && css.placeholder)}>
