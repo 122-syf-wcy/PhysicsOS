@@ -49,7 +49,13 @@ RUN node scripts/overlay/harness-overlay.mjs apply
 # compile it: allowlist exactly that one build script (inside the image only, so
 # local macOS installs stay untouched), install with scripts enabled for the
 # vendored tree, and rebuild the package explicitly.
-RUN printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/pnpm-workspace.yaml \
+#
+# The store is a cache mount: every source change invalidates this layer (the
+# overlay is applied above it), and without the mount each rebuild re-downloaded
+# the whole ~1400-package closure — minutes of network per build for artefacts
+# that never changed.
+RUN --mount=type=cache,target=/pnpm/store,sharing=locked \
+    printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/pnpm-workspace.yaml \
     && pnpm install --frozen-lockfile \
     && pnpm -C vendor/deepseek-harness install --frozen-lockfile \
     && pnpm -C vendor/deepseek-harness rebuild node-pty
