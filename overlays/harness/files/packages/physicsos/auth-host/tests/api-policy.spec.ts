@@ -304,6 +304,67 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
+  it('shows a student one platform model and keeps the full catalog for an admin', async () => {
+    const catalog = () => ({
+      default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+      routableProviders: ['deepseek-official'],
+      groups: [{
+        id: 'deepseek-official',
+        name: 'DeepSeek',
+        models: [
+          {
+            id: 'deepseek-flash',
+            name: 'DeepSeek-V41-Flash',
+            reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+          },
+          {
+            id: 'deepseek-v4-pro',
+            name: 'DeepSeek-V4-Pro',
+            description: 'Stronger agentic coding.',
+            reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+          },
+        ],
+      }],
+      failures: [{ id: 'llm-pi-ai', name: 'Pi', message: 'unreachable' }],
+    })
+
+    const studentResponse = await makePolicy().policy.wrapFetch(async () => rpc(catalog()))(
+      request('session.modelCatalog'),
+    )
+    expect(await studentResponse.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'policy-test',
+      result: {
+        ok: true,
+        value: {
+          /* The default model, under the product's name: the id the client
+             submits for routing is untouched. */
+          default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+          routableProviders: ['deepseek-official'],
+          groups: [{
+            id: 'deepseek-official',
+            name: 'PhysicsOS',
+            models: [{
+              id: 'deepseek-v4-pro',
+              name: '平台公益模型',
+              reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+            }],
+          }],
+          failures: [],
+        },
+      },
+    })
+
+    const adminResponse = await makePolicy({ actor: admin }).policy.wrapFetch(async () => rpc(catalog()))(
+      request('session.modelCatalog', {}, 'admin'),
+    )
+    expect(await adminResponse.json()).toEqual({
+      type: 'server-response',
+      rpcId: 'policy-test',
+      result: { ok: true, value: catalog() },
+    })
+  })
+
   it('keeps the full settings description for an admin', async () => {
     const value = {
       writable: true,

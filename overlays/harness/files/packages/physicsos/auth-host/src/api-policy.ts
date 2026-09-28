@@ -281,6 +281,49 @@ const READABLE_SETTINGS_NAMESPACES: ReadonlySet<string> = new Set([
   'subagent-model-selection-settings',
   'web-search-deepseek',
 ])
+
+/** The one model name a student sees. */
+const PLATFORM_MODEL_NAME = '平台公益模型'
+
+/** The group header above it — the product, never the vendor serving the pool. */
+const PLATFORM_MODEL_GROUP_NAME = 'PhysicsOS'
+
+/**
+ * Reduce a model catalog to the one entry a student is shown.
+ *
+ * The catalog is discovered from whatever the platform's channels currently
+ * serve, so its ids and names name the upstream vendor (`deepseek-flash`,
+ * `DeepSeek-V4-Pro`) and change whenever the operator swaps a channel — none of
+ * which is the student's business, and all of which the student-facing persona
+ * is already forbidden to reveal. The deployment's default model is kept under
+ * the platform's own name, **with its ids untouched**: they are what the client
+ * submits for routing, and the pool behind them stays the operator's concern.
+ * @param value - the catalog value, mutated in place.
+ */
+const reduceModelCatalog = (value: Record<string, unknown>): void => {
+  const preferred = isRecord(value['default']) && typeof value['default']['model'] === 'string'
+    ? value['default']['model']
+    : undefined
+  const groups = value['groups']
+  if (!Array.isArray(groups)) return
+  const kept: Record<string, unknown>[] = []
+  for (const group of groups) {
+    if (kept.length > 0) break
+    if (!isRecord(group) || !Array.isArray(group['models'])) continue
+    const models = group['models'].filter(isRecord)
+    /* The default model is what unconfigured Sessions already use; a catalog
+       that names no match keeps its head so the seat is never empty. */
+    const chosen = models.find(model => model['id'] === preferred) ?? models[0]
+    if (chosen === undefined) continue
+    const entry: Record<string, unknown> = { ...chosen, name: PLATFORM_MODEL_NAME }
+    delete entry['description']
+    kept.push({ id: group['id'], name: PLATFORM_MODEL_GROUP_NAME, models: [entry] })
+  }
+  value['groups'] = kept
+  value['routableProviders'] = kept.map(group => group['id'])
+  /* A failure names the provider it could not reach. */
+  value['failures'] = []
+}
 const ONBOARDING_ACK_FIELD = 'welcomeNoticeVersion'
 
 /** Methods that can start or continue an agent turn and therefore spend model budget. */
@@ -801,6 +844,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         ? namespaces.filter(namespace =>
           isRecord(namespace) && READABLE_SETTINGS_NAMESPACES.has(String(namespace['ns'])))
         : []
+      changed = true
+    }
+
+    if (method === 'session.modelCatalog' && !admin(actor)) {
+      reduceModelCatalog(value)
       changed = true
     }
 
