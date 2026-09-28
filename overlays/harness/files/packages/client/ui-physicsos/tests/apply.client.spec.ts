@@ -166,11 +166,8 @@ describe('ui-physicsos apply', () => {
     expect(hooks.physicsSurface.getSnapshot().surface).toBe('lab')
     expect(hooks.physicsSurface.getSnapshot().sceneRef?.sceneId).toBe(sceneRef.sceneId)
     const footer = b.slots.entries('sidebar.footer.action')[0]!.inject as () => {
-      openHome: () => void
       startSession: () => void
     }
-    footer().openHome()
-    expect(b.workspaces.startSession).not.toHaveBeenCalled()
     footer().startSession()
     const panelEntry = b.slots.entries('shell.overlay')
       .find(entry => entry.options.id === 'physicsos-workspace-panel')!

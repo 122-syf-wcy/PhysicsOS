@@ -20,7 +20,7 @@ import { createLearningApi } from './learning-api.ts'
 import { createModelPoolApi } from './model-pool-api.ts'
 import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
-import { createAuthController, type AuthState } from './auth-store.ts'
+import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
 import { HomeBelow, HomeHero } from './HomeHero.tsx'
 import { HomeBrandMark } from './HomeBrand.tsx'
@@ -36,13 +36,10 @@ import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-
 import { SidebarBrandMark, SidebarBrandName } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
 import { SidebarNav } from './SidebarNav.tsx'
-import {
-  AdminPanelIcon, type PhysicsPanelIcon,
-} from './SidebarPanels.tsx'
 import { createPaperApi } from './paper-api.ts'
 import {
   PHYSICS_PANEL_IDS, createPhysicsSurfaceController,
-  type PhysicsSceneRef, type PhysicsSurfaceId, type PhysicsSurfaceNavigation,
+  type PhysicsSceneRef, type PhysicsSurfaceNavigation,
 } from './surface-store.ts'
 import {
   WorkspacePanel, WorkspacePickerTrigger, createWorkspacePanelController,
@@ -351,34 +348,11 @@ export function apply(ctx: ClientContext): void {
     inject: () => ({ hooks: { auth: auth.store } }),
   }, SidebarBrandName))
 
-  /**
-   * One global-panel row for one product surface. The shell renders the row
-   * (glyph, label, tooltip, active state, drawer behaviour); selecting it
-   * selects the matching `main` panel, which the layout bridge above turns
-   * back into the product surface.
-   */
-  const registerPanelRow = (
-    surfaceId: Exclude<PhysicsSurfaceId, 'home'>,
-    label: PhysicsosKey,
-    order: number,
-    Glyph: PhysicsPanelIcon,
-  ): (() => void) => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-    name: 'sidebar.panellist',
-    id: PHYSICS_PANEL_IDS[surfaceId],
-    order,
-    locale: NS,
-    /* Resolved lazily: the dictionary is registered by this plugin's own effect. */
-    label: () => ctx.locale.bind(NS)(label),
-  }, Glyph))
-
-  /* The product rail below presents 首页 / 物理实验室 / 出卷专区 / 反馈 / 资源库
-     itself, and 学习记录 rides the sidebar foot, so none of them take a shell
-     panel row — a row would show the entry twice. Only 管理后台 keeps one, and
-     only for an administrator. */
-
   /* The sectioned product rail: 主页 → 首页 (the blank-Session Conversation),
-     探索 → the surfaces the rail presents. The panel rows stay for whatever the
-     rail does not present (学习记录 above, 管理后台 below, the shell's own). */
+     探索 → the surfaces the rail presents. Every PhysicsOS surface is either on
+     the rail or on the sidebar foot (学习记录), and 管理后台 is offered by the
+     account menu — the same entry twice is worse than one obvious one, so no
+     surface takes a shell panel row. */
   ctx.slots.inject('sidebar.nav', () => ctx.slots.register({
     name: 'sidebar.nav',
     locale: NS,
@@ -388,41 +362,6 @@ export function apply(ctx: ClientContext): void {
       openSurface: (id: Parameters<typeof surface.open>[0]) => { surface.open(id) },
     }),
   }, SidebarNav))
-
-  /* 出卷专区 is a teacher surface and 管理后台 an administrator one — the host
-     refuses both to the wrong role, so the row follows the account instead of
-     offering a door that would not open. The panels themselves stay registered
-     (a surface may still be entered programmatically) and refuse themselves. */
-  const registerRoleGatedRow = (
-    allowed: (state: AuthState) => boolean,
-    register: () => () => void,
-  ): void => {
-    ctx.effect(() => {
-      let dispose: (() => void) | undefined
-      const sync = (): void => {
-        const wanted = allowed(auth.store.getSnapshot())
-        if (wanted && dispose === undefined) dispose = register()
-        else if (!wanted && dispose !== undefined) {
-          const stop = dispose
-          dispose = undefined
-          stop()
-        }
-      }
-      const stop = auth.store.subscribe(sync)
-      sync()
-      return () => {
-        stop()
-        const live = dispose
-        dispose = undefined
-        live?.()
-      }
-    }, 'ui-physicsos: role-gated panel row')
-  }
-
-  registerRoleGatedRow(
-    state => state.user?.role === 'SCHOOL_ADMIN' || state.user?.role === 'SUPER_ADMIN',
-    () => registerPanelRow('admin', 'admin.title', 60, AdminPanelIcon),
-  )
 
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
@@ -457,7 +396,6 @@ export function apply(ctx: ClientContext): void {
       startSession: () => { startSession() },
       /* 学习记录 is a real surface now: attempts, mistakes, mastery. */
       openRecord: () => { surface.open('record') },
-      openHome: () => { surface.open('home') },
       /* 管理后台 — the menu only shows this for admin roles. */
       openAdmin: () => { surface.open('admin') },
       logout: auth.logout,

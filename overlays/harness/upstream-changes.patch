@@ -570,22 +570,22 @@ index 66d9844f17..7c954bbb8c 100644
      "src/browser-auth.ts",
      "src/client/random-uuid.ts",
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
-index 942444d3b7..e76231689b 100644
+index 942444d3b7..26e396a4d5 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
 +++ b/packages/client/ui-conversation/src/client/apply.ts
 @@ -314,6 +314,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
        'conversation.composer': { kind: 'chain', scope: 'session' },
        'conversation.composer.bar': { kind: 'single', scope: 'session-maybe' },
        'conversation.input.dock': { kind: 'list', scope: 'session' },
-+      'conversation.composer.below': { kind: 'list', scope: 'session' },
++      'conversation.composer.below': { kind: 'list', scope: 'session-maybe' },
        'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
        'conversation.hero.workspace': { kind: 'single', scope: 'root' },
        'conversation.hero.agentPreset': { kind: 'single', scope: 'session-maybe' },
 diff --git a/packages/client/ui-conversation/src/client/contract/slots.ts b/packages/client/ui-conversation/src/client/contract/slots.ts
-index 61f7d8ff8b..591b47bb81 100644
+index 61f7d8ff8b..bfccb9db0d 100644
 --- a/packages/client/ui-conversation/src/client/contract/slots.ts
 +++ b/packages/client/ui-conversation/src/client/contract/slots.ts
-@@ -197,6 +197,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -197,6 +197,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      'conversation.input.overlay': { kind: 'list'; scope: 'session' }
      /** Ambient entries below the composer card. */
      'conversation.composer.dock': { kind: 'list'; scope: 'session' }
@@ -593,21 +593,22 @@ index 61f7d8ff8b..591b47bb81 100644
 +       Distinct from `conversation.composer.dock`, which is ambient shell chrome
 +       (token stats, queue hints): this seat belongs to a business page that
 +       owns the whole blank-Session surface and needs its own content under its
-+       own composer. */
-+    'conversation.composer.below': { kind: 'list'; scope: 'session' }
++       own composer. `session-maybe`, not `session`: the front page must render
++       at a cold start too, where no Session exists yet to bind a scope to. */
++    'conversation.composer.below': { kind: 'list'; scope: 'session-maybe' }
      /** Compact controls at the left of the composer tool row. */
      'conversation.input.left': { kind: 'list'; scope: 'session' }
      /** Compact controls before the composer submit action. */
-@@ -233,6 +239,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+@@ -233,6 +240,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
          'conversation.composer': { kind: 'chain'; scope: 'session' }
          'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe' }
          'conversation.input.dock': { kind: 'list'; scope: 'session' }
-+        'conversation.composer.below': { kind: 'list'; scope: 'session' }
++        'conversation.composer.below': { kind: 'list'; scope: 'session-maybe' }
          'conversation.hero.brand.mark': { kind: 'single'; scope: 'root' }
          'conversation.hero.workspace': { kind: 'single'; scope: 'root' }
          'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe' }
 diff --git a/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx b/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
-index 15bfdd8732..e13095f130 100644
+index 15bfdd8732..cb88ad571f 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/ConversationContent.tsx
 @@ -166,6 +166,12 @@ export function ConversationContent(props: ConversationContentProps) {
@@ -619,7 +620,7 @@ index 15bfdd8732..e13095f130 100644
 +          page that owns the blank-Session surface needs this seat to place its
 +          own content below its own composer. It rides the same session binding
 +          the dock above the composer uses. */}
-+      {zone !== undefined && renderSlot('conversation.composer.below', { session: zone.session })}
++      {hero && renderSlot('conversation.composer.below', {})}
      </div>
    )
 
@@ -639,6 +640,26 @@ index 4f450df3c9..fb6379f981 100644
  }
 
  /* macOS desktop: the frame goes transparent so window vibrancy reaches the
+diff --git a/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx b/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx
+index 183ed40fae..5ec855666c 100644
+--- a/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx
++++ b/packages/client/ui-plugin-manager/src/client/PluginManagerPage.tsx
+@@ -1176,7 +1176,14 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
+   const listed = state.packages.filter(pkg => !BUILTIN_PROFILE_BUNDLES.has(pkg.name)
+     && (pkg.installed || pkg.optional || pkg.error !== undefined))
+   const mine = listed.filter(pkg => pkg.installed || !pkg.optional)
+-  const official = listed.filter(pkg => pkg.optional && !pkg.installed)
++  /* PhysicsOS overlay: upstream's experimental bundles stay out of the Official
++     group. The product builds its own equivalent for any of those features it
++     wants, so offering upstream's half-product alongside ours would be two
++     competing versions of one thing. The packages are still listed once an
++     operator switches one on deliberately (they then appear under Installed),
++     so this hides the offer, never the control. */
++  const official = listed.filter(pkg => pkg.optional && !pkg.installed
++    && !pkg.name.startsWith('@deepseek-ai/dsh-experimental-'))
+   const loaded = state.status === 'ready' || state.status === 'error'
+   const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
+   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
 diff --git a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
 index bebfb96c53..230afcc99c 100644
 --- a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
@@ -693,6 +714,30 @@ index bebfb96c53..230afcc99c 100644
        loadURL: vi.fn(async (_url: string) => {}), getURL: vi.fn(() => state.url), getTitle: vi.fn(() => state.title),
        canGoBack: () => state.back, canGoForward: () => state.forward, clearHistory: vi.fn(),
        goBack: vi.fn(), goForward: vi.fn(), reload: vi.fn(), isLoading: () => state.loading,
+diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
+index ac1116f04c..2a8c72bf36 100644
+--- a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
++++ b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
+@@ -269,7 +269,9 @@
+   display: inline-flex;
+   align-items: center;
+   gap: 8px;
+-  height: 24px;
++  /* min-height, not height: the occupant may be a two-line wordmark (product
++     over tenant), and a fixed box would clip its second line. */
++  min-height: 24px;
+   min-width: 0;
+ }
+
+@@ -285,7 +287,7 @@
+   align-items: center;
+   gap: 6px;
+   min-width: 0;
+-  height: 24px;
++  min-height: 24px;
+   font-size: 18px;
+   font-weight: 600;
+   line-height: 24px;
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx b/packages/client/ui-sidebar/src/client/SidebarRoot.tsx
 index fed580320c..74ff88e827 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.tsx

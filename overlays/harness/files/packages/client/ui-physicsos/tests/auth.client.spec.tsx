@@ -328,7 +328,6 @@ describe('sidebar identity', () => {
       <SidebarFooter
         wide
         startSession={vi.fn()}
-        openHome={vi.fn()}
         logout={logout}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector(state)}
         t={t}
@@ -348,7 +347,6 @@ describe('sidebar identity', () => {
       <SidebarFooter
         wide
         startSession={vi.fn()}
-        openHome={vi.fn()}
         openAdmin={openAdmin}
         logout={vi.fn(async () => {})}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector({ status: 'authed', user: admin })}
@@ -365,7 +363,6 @@ describe('sidebar identity', () => {
       <SidebarFooter
         wide
         startSession={vi.fn()}
-        openHome={vi.fn()}
         openAdmin={openAdmin}
         logout={vi.fn(async () => {})}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector({ status: 'authed', user: USER })}

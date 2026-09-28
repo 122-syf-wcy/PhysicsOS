@@ -185,22 +185,21 @@ describe('PhysicsOS overlay presentation', () => {
     expect(mark?.getAttribute('class')).toContain('headline-mark')
   })
 
-  it('keeps unavailable footer destinations disabled', () => {
+  it('carries no footer rows for destinations that live elsewhere', () => {
     const startSession = vi.fn()
     render(
       <SidebarFooter
         wide
         startSession={startSession}
-        openHome={vi.fn()}
         logout={vi.fn(async () => {})}
         useAuth={selector => selector({ status: 'guest' })}
         t={t}
       />,
     )
-    /* 学习记录 is a live destination (the learning-record surface); the footer
-       carries no 资源库 row at all — the live entry lives in the nav rail. */
-    fireEvent.click(screen.getByRole('button', { name: '学习记录' }))
-    expect(screen.getByRole('button', { name: '学习记录' }).getAttribute('disabled')).toBeNull()
+    /* 学习记录 is an account-menu entry and 资源库 a nav-rail entry, so neither
+       is a row in the foot; this seat injected no record action, so the menu
+       does not offer 学习记录 either — absent, never dead. */
+    expect(screen.queryByRole('button', { name: '学习记录' })).toBeNull()
     expect(screen.queryByRole('button', { name: '资源库' })).toBeNull()
     expect(startSession).not.toHaveBeenCalled()
   })
@@ -363,15 +362,20 @@ describe('PhysicsOS overlay presentation', () => {
     expect(openSurface).toHaveBeenCalledWith('lab')
   })
 
-  it('keeps the front page out of an engaged Session', () => {
+  it('keeps the brand stage out of an engaged Session', () => {
     const { container } = render(
       <>
         <HomeHero {...frontPageProps(false)} />
         <HomeBelow {...actionsProps(false, vi.fn())} />
       </>,
     )
+    /* The brand stage self-gates on a blank Session. The actions seat does not:
+       the shell renders it only in its hero phase, which is the same condition
+       (a blank Session OR a cold start with no Session at all), so gating it
+       here as well would hide the front page from a visitor who has not picked
+       a workspace yet. */
     expect(container.querySelector('[data-physicsos-home]')).toBeNull()
-    expect(container.querySelector('[data-physicsos-home-actions]')).toBeNull()
+    expect(container.querySelector('[data-physicsos-home-actions]')).not.toBeNull()
   })
 
   it('offers only PhysicsOS profiles and selects the mapped Harness preset', async () => {

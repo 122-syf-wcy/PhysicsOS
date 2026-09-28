@@ -49,12 +49,14 @@ export function HomeHero({ useSession, t }: HomeHeroProps) {
 
 /**
  * Render the product quick actions under the hero composer.
- * @param props - the current Session, product quick actions, and copy.
- * @returns the examples and entry cards, or nothing once the Session has content.
+ *
+ * The shell renders this seat only in its hero phase, which is what a blank
+ * Session and a cold start (no Session yet) have in common — so the front page
+ * is complete before a workspace is picked, and no Session gate is needed here.
+ * @param props - product quick actions and copy.
+ * @returns the examples and entry cards.
  */
-export function HomeBelow({ useSession, useRecentExperiments, openSurface, t }: HomeBelowProps) {
-  const blank = useSession(session => session.blank)
-  if (!blank) return null
+export function HomeBelow({ useRecentExperiments, openSurface, t }: HomeBelowProps) {
   return (
     <div className={css.below} data-physicsos-home-actions="">
       <HomeActions useRecentExperiments={useRecentExperiments} openSurface={openSurface} t={t} />

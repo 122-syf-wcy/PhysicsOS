@@ -635,11 +635,18 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       return undefined
     }
 
+    /* Naming a session is what makes a call session-addressed. Not every
+       `session.*` method names one: the model catalog and the other read-only
+       descriptors take no sessionId at all, and requiring one refused them for
+       every non-administrator — which is why the model picker never opened for
+       a student. A call that names no session has nothing of anyone else's to
+       reach; one that names a session is still checked against the actor. */
     const sessionScoped = method.startsWith('session.') || method.startsWith('goal.') || method === 'skill.list'
-    if (sessionScoped && method !== 'session.create' && method !== 'session.list' && method !== 'session.search') {
-      const sessionId = sessionIdOf(payload)
-      if (sessionId === undefined || (!admin(actor) && !deps.store.owns(actor, 'session', sessionId))) {
-        return denyNotFound(rpcId, 'session', sessionId ?? '')
+    const sessionId = sessionIdOf(payload)
+    const addressesSession = sessionScoped && sessionId !== undefined && sessionId !== ''
+    if (addressesSession && method !== 'session.create' && method !== 'session.list' && method !== 'session.search') {
+      if (!admin(actor) && !deps.store.owns(actor, 'session', sessionId)) {
+        return denyNotFound(rpcId, 'session', sessionId)
       }
     }
 

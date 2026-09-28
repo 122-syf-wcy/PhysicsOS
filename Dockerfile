@@ -25,6 +25,13 @@ RUN apt-get update \
 WORKDIR /app
 COPY . .
 
+# The public client environment the web build embeds. `DSH_CLIENT_TITLE` is the
+# product title the client shows in the browser tab and in the shell's own
+# document-title projection; without it the shell falls back to its
+# locally-built-harness label ("DSH 本地构建"), which is wrong for a release
+# image. It is a public product name, not a secret, so an ENV is appropriate.
+ENV DSH_CLIENT_TITLE=PhysicsOS
+
 # The Docker context excludes VCS metadata. Initialize the pinned upstream tree
 # so its patch can be applied with the same 3-way semantics as local bootstrap.
 RUN git -C vendor/deepseek-harness init -q \

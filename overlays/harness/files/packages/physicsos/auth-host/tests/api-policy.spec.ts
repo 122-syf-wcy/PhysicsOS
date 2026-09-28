@@ -338,6 +338,17 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
+  it('dispatches a session method that names no session, for a student', async () => {
+    /* The model catalog and the other read-only descriptors carry no sessionId
+       at all. Requiring an owned session for them refused every
+       non-administrator, which is what closed the model picker. */
+    const next = vi.fn(async () => rpc({ models: [] }))
+    const { policy } = makePolicy()
+    const response = await policy.wrapFetch(next)(request('session.modelCatalog', {}))
+    expect(next).toHaveBeenCalledOnce()
+    expect(await response.json()).toMatchObject({ result: { ok: true } })
+  })
+
   it('forces a non-admin session into PhysicsOS scope and records ownership', async () => {
     const { policy, store } = makePolicy()
     const next = vi.fn(async (forwarded: Request) => {
