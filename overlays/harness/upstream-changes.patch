@@ -10,6 +10,22 @@ index 8b9dbbac17..babccc1865 100644
      "@deepseek-ai/dsh-tool-jobs": "workspace:*",
      "@deepseek-ai/dsh-tool-pwsh": "workspace:*",
      "@deepseek-ai/dsh-tool-pwsh-persistent": "workspace:*",
+diff --git a/apps/web/index.html b/apps/web/index.html
+index f5c2ffac06..0cab6def8a 100644
+--- a/apps/web/index.html
++++ b/apps/web/index.html
+@@ -4,9 +4,8 @@
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+     <link rel="manifest" href="/manifest.webmanifest" />
+-    <link rel="icon" type="image/svg+xml" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" />
+-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" media="(prefers-color-scheme: light)" />
+-    <title>DSH Local Build</title>
++    <link rel="icon" type="image/png" sizes="32x32" href="/physicsos/brand/physicsos-mark-32.png" />
++    <title>PhysicsOS</title>
+   </head>
+   <body>
+     <div id="root"></div>
 diff --git a/apps/web/public/manifest.webmanifest b/apps/web/public/manifest.webmanifest
 index 6592d6a700..c7bb323a22 100644
 --- a/apps/web/public/manifest.webmanifest
