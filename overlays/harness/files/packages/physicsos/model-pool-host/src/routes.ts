@@ -13,12 +13,28 @@ import type { ProbeResult } from './upstream.ts'
 
 const BODY_LIMIT = 256 * 1024
 
+/** The model roster one channel's upstream reports, as the console lists it. */
+export interface ChannelModelsResult {
+  readonly models: readonly string[]
+  /** The key the roster was read with, so the admin knows which one answered. */
+  readonly keyId: string
+}
+
 /** Collaborators of the admin routes. */
 export interface ModelPoolRouteDeps {
   readonly store: PoolStore
   /** Resolved per request: this host loads BEFORE auth-host declares it. */
   readonly identity: () => PhysicsosIdentity | undefined
   readonly probe: (keyId: string, signal: AbortSignal) => Promise<ProbeResult>
+  /**
+   * Read the channel's upstream model roster with one of its keys. Throws a
+   * {@link PoolError} carrying the upstream's words when the upstream refuses.
+   */
+  readonly listModels: (
+    channelId: string,
+    keyId: string | undefined,
+    signal: AbortSignal,
+  ) => Promise<ChannelModelsResult>
 }
 
 const send = (res: ServerResponse, status: number, body: unknown): void => {
@@ -140,6 +156,20 @@ export const modelPoolRoutes = (deps: ModelPoolRouteDeps) => async (
         return
       }
       throw new PoolError(405, 'METHOD_NOT_ALLOWED', 'channels/:id 只接受 PATCH/DELETE')
+    }
+
+    if (segments.length === 3 && segments[0] === 'channels' && segments[2] === 'models') {
+      if (method !== 'POST') throw new PoolError(405, 'METHOD_NOT_ALLOWED', 'channels/:id/models 只接受 POST')
+      const body = await readJson(req)
+      const controller = new AbortController()
+      res.on('close', () => { controller.abort() })
+      const result = await deps.listModels(
+        segment(segments, 1),
+        typeof body.keyId === 'string' && body.keyId !== '' ? body.keyId : undefined,
+        controller.signal,
+      )
+      send(res, 200, result)
+      return
     }
 
     if (segments.length === 3 && segments[0] === 'channels' && segments[2] === 'keys') {

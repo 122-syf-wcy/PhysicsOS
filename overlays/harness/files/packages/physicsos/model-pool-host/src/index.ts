@@ -27,9 +27,11 @@ import { PoolError } from './errors.ts'
 import { identityOf } from './identity.ts'
 import { WeightedRotation } from './pool.ts'
 import { startModelProxy } from './proxy.ts'
-import { modelPoolRoutes } from './routes.ts'
+import { modelPoolRoutes, type ChannelModelsResult } from './routes.ts'
 import { PoolStore } from './store.ts'
-import { classifyStatus, probeChat, type ProbeResult } from './upstream.ts'
+import {
+  classifyStatus, fetchUpstreamModels, probeChat, type ProbeResult,
+} from './upstream.ts'
 
 export * from './config.ts'
 export * from './crypto.ts'
@@ -142,6 +144,37 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
       return result
     }
 
+    /* The console's 「获取模型」: a channel's upstream roster, read with one of
+       its OWN keys. Reading needs no extra credential — the deployment always
+       has at least one key per enabled channel — and the refusal is rethrown
+       with the upstream's words so the admin can tell a wrong base URL from a
+       dead key. */
+    const listModels = async (
+      channelId: string,
+      keyId: string | undefined,
+      signal: AbortSignal,
+    ): Promise<ChannelModelsResult> => {
+      const channel = store.channel(channelId)
+      if (channel === undefined) throw new PoolError(404, 'NOT_FOUND', '通道不存在')
+      const candidates = store.keys().filter(key => key.channelId === channelId)
+      const key = keyId === undefined
+        ? candidates.find(candidate => candidate.enabled) ?? candidates[0]
+        : candidates.find(candidate => candidate.id === keyId)
+      if (key === undefined) {
+        throw new PoolError(400, 'MODEL_POOL_NO_KEY', '该通道还没有可用的 key，无法读取模型列表')
+      }
+      const result = await fetchUpstreamModels({
+        channel,
+        secret: store.openKey(key),
+        timeoutMs: normalized.testTimeoutMs,
+        signal,
+      })
+      if (!result.ok) {
+        throw new PoolError(502, 'MODEL_POOL_MODELS_UNAVAILABLE', result.message)
+      }
+      return { models: result.ids, keyId: key.id }
+    }
+
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/model-pool',
@@ -149,6 +182,7 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
         store,
         identity: () => identityOf(ctx),
         probe,
+        listModels,
       }),
     })
     yield () => proxy.close()

@@ -84,6 +84,10 @@ const api = (): ModelPoolApi => ({
   deleteKey: vi.fn().mockResolvedValue({ ok: true }),
   resetKey: vi.fn().mockResolvedValue({ key: state().channels[0]?.keys[0] }),
   testKey: vi.fn().mockResolvedValue(probe(true)),
+  listChannelModels: vi.fn().mockResolvedValue({
+    models: ['deepseek-v4.1-flash', 'deepseek-chat'],
+    keyId: 'key-1',
+  }),
   updateSettings: vi.fn().mockResolvedValue({ settings: state().settings }),
 })
 
@@ -160,6 +164,49 @@ describe('AdminModelPoolTab', () => {
     await waitFor(() => {
       expect(screen.queryByDisplayValue('sk-replacement-9999')).toBeNull()
     })
+  })
+
+  it("fetches a channel's upstream models and saves the ones the admin selects", async () => {
+    const client = api()
+    render(<AdminModelPoolTab api={client} t={t} />)
+    await waitFor(() => { expect(screen.getByText('主通道')).toBeTruthy() })
+
+    const card = screen.getByTestId('model-pool-channel-ch-1')
+    /* The card head's 编辑 precedes the key row's, which is the only one in the
+       card that opens the channel editor. */
+    fireEvent.click(within(card).getAllByRole('button', { name: '编辑' })[0]!)
+    fireEvent.click(within(card).getByRole('button', { name: '获取模型' }))
+
+    await waitFor(() => { expect(client.listChannelModels).toHaveBeenCalledWith('ch-1') })
+    const selected = await within(card).findByRole('button', { name: 'deepseek-v4.1-flash', pressed: true })
+    expect(selected).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'deepseek-chat', pressed: false })).toBeTruthy()
+
+    fireEvent.click(within(card).getByRole('button', { name: 'deepseek-chat' }))
+    fireEvent.click(within(card).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(client.updateChannel).toHaveBeenCalledWith('ch-1', {
+        name: '主通道',
+        baseURL: 'https://api.example.com/v1',
+        models: ['deepseek-v4.1-flash', 'deepseek-chat'],
+        priority: 10,
+        enabled: true,
+      })
+    })
+  })
+
+  it('shows the upstream refusal when the model list cannot be read', async () => {
+    const client = api()
+    vi.mocked(client.listChannelModels).mockRejectedValue(new Error('invalid api key'))
+    render(<AdminModelPoolTab api={client} t={t} />)
+    await waitFor(() => { expect(screen.getByText('主通道')).toBeTruthy() })
+
+    const card = screen.getByTestId('model-pool-channel-ch-1')
+    fireEvent.click(within(card).getAllByRole('button', { name: '编辑' })[0]!)
+    fireEvent.click(within(card).getByRole('button', { name: '获取模型' }))
+
+    await waitFor(() => { expect(within(card).getByText('invalid api key')).toBeTruthy() })
   })
 
   it('persists the routing policy as numbers', async () => {

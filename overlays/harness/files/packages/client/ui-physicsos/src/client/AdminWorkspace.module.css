@@ -890,6 +890,50 @@
   border-top: 1px dashed var(--dsw-alias-border-l2);
 }
 
+.poolModelPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.poolModelHint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-text-secondary);
+}
+
+.poolModelChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.poolModelChip,
+.poolModelChipActive {
+  border-radius: 999px;
+  border: 1px solid var(--physics-glass-border);
+  background: transparent;
+  color: var(--dsw-alias-text-secondary);
+  font-family: var(--dsw-font-family-mono, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.poolModelChip:hover {
+  color: var(--dsw-alias-text-primary);
+}
+
+.poolModelChipActive {
+  background: var(--physics-tint-verified);
+  border-color: var(--physics-ink-ok);
+  color: var(--physics-ink-ok);
+}
+
 .poolBadgeActive,
 .poolBadgeDisabled,
 .poolBadgeCooling {

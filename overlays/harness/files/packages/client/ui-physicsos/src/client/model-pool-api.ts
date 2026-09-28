@@ -90,6 +90,12 @@ export interface ModelPoolProbeResult {
   readonly message: string
 }
 
+/** The models one channel's upstream reports, and the key that read them. */
+export interface ModelPoolChannelModels {
+  readonly models: readonly string[]
+  readonly keyId: string
+}
+
 export interface ModelPoolChannelInput {
   readonly name: string
   readonly baseURL: string
@@ -175,6 +181,8 @@ export interface ModelPoolApi {
   deleteKey: (id: string) => Promise<{ ok: boolean }>
   resetKey: (id: string) => Promise<{ key: ModelPoolKeyView }>
   testKey: (id: string) => Promise<ModelPoolProbeResult>
+  /** Read the channel's upstream model roster with one of its keys. */
+  listChannelModels: (channelId: string, keyId?: string) => Promise<ModelPoolChannelModels>
   updateSettings: (patch: ModelPoolSettingsPatch) => Promise<{ settings: ModelPoolSettings }>
 }
 
@@ -194,6 +202,8 @@ export function createModelPoolApi(): ModelPoolApi {
     deleteKey: id => mutate(keyPath(id), 'DELETE', {}),
     resetKey: id => mutate(`${keyPath(id)}/reset`, 'POST', {}),
     testKey: id => mutate(`${keyPath(id)}/test`, 'POST', {}),
+    listChannelModels: (channelId, keyId) =>
+      mutate(`${channelPath(channelId)}/models`, 'POST', keyId === undefined ? {} : { keyId }),
     updateSettings: patch => mutate('/settings', 'PATCH', patch),
   }
 }

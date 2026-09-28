@@ -14,6 +14,11 @@ import type { ChannelRecord, KeyFailure } from './types.ts'
 
 const ERROR_BODY_LIMIT = 64 * 1024
 
+/* Some OpenAI-compatible gateways sit behind a CDN that rejects curl-like
+   clients before authentication. Keep the standard SDK identity so those
+   channels stay reachable without a per-channel header setting. */
+const UPSTREAM_USER_AGENT = 'OpenAI/Node 5.0.0'
+
 /** `POST {baseURL}/chat/completions`, tolerant of a trailing slash. */
 export const chatCompletionsURL = (baseURL: string): string =>
   `${baseURL.replace(/\/+$/, '')}/chat/completions`
@@ -126,11 +131,7 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
         'content-type': 'application/json',
         accept: 'text/event-stream, application/json',
         authorization: `Bearer ${input.secret}`,
-        /* Some OpenAI-compatible gateways sit behind a CDN that rejects
-           curl-like clients before authentication. Keep the standard SDK
-           identity so those channels stay reachable without a per-channel
-           header setting. */
-        'user-agent': 'OpenAI/Node 5.0.0',
+        'user-agent': UPSTREAM_USER_AGENT,
       },
       body: JSON.stringify(input.payload),
       signal: controller.signal,
@@ -228,9 +229,69 @@ export const probeChat = async (input: {
   }
 }
 
+/** One model-list read, with the refusal the console must be able to show. */
+export interface UpstreamModelsResult {
+  readonly ok: boolean
+  readonly status: number
+  readonly ids: readonly string[]
+  /** Key-free description of a refusal; empty on success. */
+  readonly message: string
+}
+
 /**
- * Read an upstream model list, for the console and for `/v1/models` when no
- * channel declares one.
+ * Read an upstream model list, reporting a refusal instead of hiding it.
+ *
+ * The admin console needs the reason ("invalid api key", "not found") to tell
+ * a mistyped base URL from a dead credential; routing does not care and uses
+ * {@link listUpstreamModels}, which flattens every refusal to an empty list.
+ * @param input - channel, credential, timeout, and abort signal.
+ * @returns the ids, or the upstream status and message.
+ */
+export const fetchUpstreamModels = async (input: {
+  readonly channel: ChannelRecord
+  readonly secret: string
+  readonly timeoutMs: number
+  readonly signal: AbortSignal
+}): Promise<UpstreamModelsResult> => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => { controller.abort() }, input.timeoutMs)
+  const link = (): void => { controller.abort() }
+  if (input.signal.aborted) link()
+  else input.signal.addEventListener('abort', link, { once: true })
+  try {
+    const response = await fetch(modelsURL(input.channel.baseURL), {
+      headers: { authorization: `Bearer ${input.secret}`, 'user-agent': UPSTREAM_USER_AGENT },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const body = await readBoundedText(response.body)
+      return {
+        ok: false,
+        status: response.status,
+        ids: [],
+        message: body === '' ? `HTTP ${String(response.status)}` : body,
+      }
+    }
+    const parsed: unknown = await response.json()
+    const data = (parsed as { data?: unknown }).data
+    const ids: string[] = []
+    if (Array.isArray(data)) {
+      for (const entry of data) {
+        const id = (entry as { id?: unknown }).id
+        if (typeof id === 'string' && id !== '') ids.push(id)
+      }
+    }
+    return { ok: true, status: response.status, ids: ids.slice(0, 200), message: '' }
+  } catch (error) {
+    return { ok: false, status: 502, ids: [], message: messagesOf(error) }
+  } finally {
+    clearTimeout(timer)
+    input.signal.removeEventListener('abort', link)
+  }
+}
+
+/**
+ * Read an upstream model list, for `/v1/models` when no channel declares one.
  * @param input - channel, credential, timeout, and abort signal.
  * @returns the model ids the upstream reports, or an empty list.
  */
@@ -240,29 +301,6 @@ export const listUpstreamModels = async (input: {
   readonly timeoutMs: number
   readonly signal: AbortSignal
 }): Promise<string[]> => {
-  const controller = new AbortController()
-  const timer = setTimeout(() => { controller.abort() }, input.timeoutMs)
-  const link = (): void => { controller.abort() }
-  input.signal.addEventListener('abort', link, { once: true })
-  try {
-    const response = await fetch(modelsURL(input.channel.baseURL), {
-      headers: { authorization: `Bearer ${input.secret}` },
-      signal: controller.signal,
-    })
-    if (!response.ok) return []
-    const parsed: unknown = await response.json()
-    const data = (parsed as { data?: unknown }).data
-    if (!Array.isArray(data)) return []
-    const ids: string[] = []
-    for (const entry of data) {
-      const id = (entry as { id?: unknown }).id
-      if (typeof id === 'string' && id !== '') ids.push(id)
-    }
-    return ids.slice(0, 200)
-  } catch {
-    return []
-  } finally {
-    clearTimeout(timer)
-    input.signal.removeEventListener('abort', link)
-  }
+  const result = await fetchUpstreamModels(input)
+  return result.ok ? [...result.ids] : []
 }

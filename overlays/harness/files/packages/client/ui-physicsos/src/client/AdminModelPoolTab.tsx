@@ -128,6 +128,11 @@ const statusClass = (key: ModelPoolKeyView): string | undefined => {
 const ChannelEditor = ({
   draft,
   busy,
+  models,
+  modelError,
+  fetching,
+  canFetch,
+  onFetchModels,
   onChange,
   onSave,
   onCancel,
@@ -135,50 +140,107 @@ const ChannelEditor = ({
 }: {
   readonly draft: ChannelDraft
   readonly busy: boolean
+  /** The upstream roster, once 获取模型 has read it. */
+  readonly models?: readonly string[] | undefined
+  /** The upstream's refusal, shown verbatim. */
+  readonly modelError?: string | undefined
+  readonly fetching: boolean
+  /** False while the channel has no key to read the roster with. */
+  readonly canFetch: boolean
+  readonly onFetchModels: () => void
   readonly onChange: (next: ChannelDraft) => void
   readonly onSave: () => void
   readonly onCancel: () => void
   readonly t: (key: PhysicsosKey) => string
-}) => (
-  <div className={css.poolEditor} data-testid="model-pool-channel-editor">
-    <div className={css.poolFieldGrid}>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.name')}</span>
-        <input className={css.input} value={draft.name}
-          onChange={(event) => { onChange({ ...draft, name: event.target.value }) }} />
-      </label>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.baseURL')}</span>
-        <input className={css.input} value={draft.baseURL}
-          onChange={(event) => { onChange({ ...draft, baseURL: event.target.value }) }} />
-      </label>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.models')}</span>
-        <input className={css.input} value={draft.models}
-          placeholder={t('admin.modelPool.channel.modelsHint')}
-          onChange={(event) => { onChange({ ...draft, models: event.target.value }) }} />
-      </label>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.priority')}</span>
-        <input className={css.input} type="number" min={1} max={1000} value={draft.priority}
-          onChange={(event) => { onChange({ ...draft, priority: event.target.value }) }} />
-      </label>
-    </div>
-    <div className={css.poolInline}>
-      <label className={css.checkbox}>
-        <input type="checkbox" checked={draft.enabled}
-          onChange={(event) => { onChange({ ...draft, enabled: event.target.checked }) }} />
-        {t('admin.modelPool.channel.enabled')}
-      </label>
-      <div className={css.actions}>
-        <button type="button" className={css.ghost} disabled={busy}
-          onClick={onCancel}>{t('admin.modelPool.cancel')}</button>
-        <button type="button" className={css.primary} disabled={busy}
-          onClick={onSave}>{t('admin.modelPool.save')}</button>
+}) => {
+  const selected = new Set(parseModels(draft.models))
+  const toggleModel = (id: string): void => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    onChange({ ...draft, models: [...next].join(', ') })
+  }
+  return (
+    <div className={css.poolEditor} data-testid="model-pool-channel-editor">
+      <div className={css.poolFieldGrid}>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.name')}</span>
+          <input className={css.input} value={draft.name}
+            onChange={(event) => { onChange({ ...draft, name: event.target.value }) }} />
+        </label>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.baseURL')}</span>
+          <input className={css.input} value={draft.baseURL}
+            onChange={(event) => { onChange({ ...draft, baseURL: event.target.value }) }} />
+        </label>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.models')}</span>
+          <input className={css.input} value={draft.models}
+            placeholder={t('admin.modelPool.channel.modelsHint')}
+            onChange={(event) => { onChange({ ...draft, models: event.target.value }) }} />
+        </label>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.priority')}</span>
+          <input className={css.input} type="number" min={1} max={1000} value={draft.priority}
+            onChange={(event) => { onChange({ ...draft, priority: event.target.value }) }} />
+        </label>
+      </div>
+      {/* 获取模型: the upstream's own roster, one click per model. Typing an id
+          by hand was guesswork the moment the allow-list became load-bearing —
+          a channel restricted to a model the upstream does not serve answers
+          503 to every request, and the console said nothing about it. */}
+      <div className={css.poolModelPicker}>
+        <div className={css.actions}>
+          <button type="button" className={css.ghost} disabled={busy || fetching || !canFetch}
+            aria-busy={fetching}
+            onClick={onFetchModels}>
+            {t(fetching ? 'admin.modelPool.channel.fetching' : 'admin.modelPool.channel.fetchModels')}
+          </button>
+          {models !== undefined && (
+            <span className={css.poolModelHint}>
+              {t('admin.modelPool.channel.modelsLoaded').replace('{count}', String(models.length))}
+            </span>
+          )}
+        </div>
+        {!canFetch && <small className={css.poolModelHint}>{t('admin.modelPool.channel.modelsNeedKey')}</small>}
+        {modelError !== undefined && <small className={css.poolKeyError}>{modelError}</small>}
+        {models !== undefined && (
+          models.length === 0
+            ? <small className={css.poolModelHint}>{t('admin.modelPool.channel.modelsEmpty')}</small>
+            : (
+              <div className={css.poolModelChips}>
+                {models.map(id => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={selected.has(id) ? css.poolModelChipActive : css.poolModelChip}
+                    aria-pressed={selected.has(id)}
+                    data-model-id={id}
+                    onClick={() => { toggleModel(id) }}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            )
+        )}
+      </div>
+      <div className={css.poolInline}>
+        <label className={css.checkbox}>
+          <input type="checkbox" checked={draft.enabled}
+            onChange={(event) => { onChange({ ...draft, enabled: event.target.checked }) }} />
+          {t('admin.modelPool.channel.enabled')}
+        </label>
+        <div className={css.actions}>
+          <button type="button" className={css.ghost} disabled={busy}
+            onClick={onCancel}>{t('admin.modelPool.cancel')}</button>
+          <button type="button" className={css.primary} disabled={busy}
+            onClick={onSave}>{t('admin.modelPool.save')}</button>
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
+}
 
 export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.ReactNode {
   const [state, setState] = useState<ModelPoolState | undefined>()
@@ -188,6 +250,8 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
   const [newKeys, setNewKeys] = useState<Record<string, KeyDraft>>({})
   const [keyEdits, setKeyEdits] = useState<Record<string, KeyDraft>>({})
   const [probes, setProbes] = useState<Record<string, ModelPoolProbeResult>>({})
+  const [modelLists, setModelLists] = useState<Record<string, readonly string[]>>({})
+  const [modelErrors, setModelErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [notice, setNotice] = useState<string | undefined>()
@@ -242,6 +306,23 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
       if (!ok) return
       setChannelEdits(current => omitRecord(current, id))
     })
+  }
+
+  /* 获取模型 reads the roster with a key of THIS channel and keeps the answer
+     beside the draft; selecting a chip only edits the draft, so the allow-list
+     lands through the editor's own 保存 like every other field. */
+  const fetchModels = (channelId: string): void => {
+    setBusy(`channel:models:${channelId}`)
+    setModelErrors(current => omitRecord(current, channelId))
+    void api.listChannelModels(channelId).then(
+      (result) => { setModelLists(current => ({ ...current, [channelId]: result.models })) },
+      (cause: unknown) => {
+        setModelErrors(current => ({
+          ...current,
+          [channelId]: cause instanceof Error ? cause.message : t('admin.modelPool.error'),
+        }))
+      },
+    ).finally(() => { setBusy(undefined) })
   }
 
   const addChannel = (): void => {
@@ -397,6 +478,9 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
         <ChannelEditor
           draft={newChannel}
           busy={busy === 'channel:new'}
+          fetching={false}
+          canFetch={false}
+          onFetchModels={() => {}}
           onChange={setNewChannel}
           onSave={addChannel}
           onCancel={() => { setNewChannel(emptyChannel()) }}
@@ -446,6 +530,11 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
               <ChannelEditor
                 draft={draft}
                 busy={busy === `channel:edit:${channel.id}`}
+                models={modelLists[channel.id]}
+                modelError={modelErrors[channel.id]}
+                fetching={busy === `channel:models:${channel.id}`}
+                canFetch={channel.keys.length > 0}
+                onFetchModels={() => { fetchModels(channel.id) }}
                 onChange={(next) => { setChannelEdits(current => ({ ...current, [channel.id]: next })) }}
                 onSave={() => { saveChannel(channel.id, draft) }}
                 onCancel={() => {
