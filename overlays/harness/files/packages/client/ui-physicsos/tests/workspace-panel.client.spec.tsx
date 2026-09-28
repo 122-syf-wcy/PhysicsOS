@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkspacePanel, type WorkspacePanelProps } from '../src/client/WorkspacePanel.tsx'
+import type { WorkspaceId } from '../src/client/runtime-compat.ts'
 import { zh, type PhysicsosKey } from '../src/client/locales.ts'
 
 const t = (key: PhysicsosKey): string => zh[key] ?? key
@@ -14,7 +15,7 @@ const workspace = (over: { workspaceId: string; title: string } = {
 
 const mount = (
   items: ReturnType<typeof workspace>[] = [],
-  options: { open?: boolean; selectedId?: string } = {},
+  options: { open?: boolean; selectedId?: WorkspaceId } = {},
 ) => {
   const createWorkspace = vi.fn().mockImplementation(async (name: string) => ({
     id: 'ws-new',
@@ -40,6 +41,12 @@ const mount = (
       createWorkspace={createWorkspace}
       renameWorkspace={renameWorkspace}
       t={t as never}
+      /* The seat's root-scope standard hooks; the panel reads none of them. */
+      usePanelInfo={(() => undefined) as never}
+      useSessions={(() => undefined) as never}
+      useSessionStatus={(() => undefined) as never}
+      useSessionRetainInfo={(() => undefined) as never}
+      useResource={(() => undefined) as never}
     />,
   )
   return { createWorkspace, renameWorkspace, onPick, onClose }
@@ -73,7 +80,7 @@ describe('WorkspacePanel', () => {
     const flow = mount([
       workspace({ workspaceId: 'ws-2', title: '高一物理' }),
       workspace({ workspaceId: 'ws-1', title: '高二物理' }),
-    ], { selectedId: 'ws-1' })
+    ], { selectedId: 'ws-1' as WorkspaceId })
 
     /* The current workspace is marked, and its own Open is not offered. */
     expect(screen.getByText('当前')).toBeTruthy()

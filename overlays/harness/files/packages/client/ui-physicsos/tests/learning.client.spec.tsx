@@ -551,7 +551,6 @@ describe('sidebar 学习记录 entry', () => {
     render(
       <SidebarFooter
         wide
-        startSession={vi.fn()}
         openRecord={openRecord}
         logout={vi.fn(async () => {})}
         useAuth={selector => selector({

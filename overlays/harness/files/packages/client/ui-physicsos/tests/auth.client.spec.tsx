@@ -327,7 +327,6 @@ describe('sidebar identity', () => {
     const { getByLabelText, getByText } = render(
       <SidebarFooter
         wide
-        startSession={vi.fn()}
         logout={logout}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector(state)}
         t={t}
@@ -346,7 +345,6 @@ describe('sidebar identity', () => {
     const { getByLabelText, getByText, queryByText, unmount } = render(
       <SidebarFooter
         wide
-        startSession={vi.fn()}
         openAdmin={openAdmin}
         logout={vi.fn(async () => {})}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector({ status: 'authed', user: admin })}
@@ -362,7 +360,6 @@ describe('sidebar identity', () => {
     const student = render(
       <SidebarFooter
         wide
-        startSession={vi.fn()}
         openAdmin={openAdmin}
         logout={vi.fn(async () => {})}
         useAuth={<S,>(selector: (state: AuthState) => S): S => selector({ status: 'authed', user: USER })}

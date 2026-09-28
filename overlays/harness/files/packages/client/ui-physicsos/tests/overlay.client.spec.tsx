@@ -186,11 +186,9 @@ describe('PhysicsOS overlay presentation', () => {
   })
 
   it('carries no footer rows for destinations that live elsewhere', () => {
-    const startSession = vi.fn()
     render(
       <SidebarFooter
         wide
-        startSession={startSession}
         logout={vi.fn(async () => {})}
         useAuth={selector => selector({ status: 'guest' })}
         t={t}
@@ -201,7 +199,6 @@ describe('PhysicsOS overlay presentation', () => {
        does not offer 学习记录 either — absent, never dead. */
     expect(screen.queryByRole('button', { name: '学习记录' })).toBeNull()
     expect(screen.queryByRole('button', { name: '资源库' })).toBeNull()
-    expect(startSession).not.toHaveBeenCalled()
   })
 
   it('renders the home brand copy', () => {
@@ -212,7 +209,6 @@ describe('PhysicsOS overlay presentation', () => {
   })
 
   it('lists recent real scenes as a compact row and restores one on click', () => {
-    const startSession = vi.fn()
     const template = findExperimentTemplate('magnetic-circular')
     if (template === undefined) throw new Error('magnetic-circular template missing')
     const ref = createExperimentSceneRef(template, '磁场实验')
@@ -241,7 +237,6 @@ describe('PhysicsOS overlay presentation', () => {
     const openSurface = vi.fn()
     render(
       <HomeActions
-        startSession={startSession}
         openSurface={openSurface}
         useRecentExperiments={useRecentExperiments}
         t={t}
@@ -259,17 +254,14 @@ describe('PhysicsOS overlay presentation', () => {
     expect(openSurface).toHaveBeenLastCalledWith('lab', { sceneId: ref.sceneId, scene: ref.scene })
     expect(screen.getByRole('button', { name: '打开场景' }).getAttribute('disabled')).not.toBeNull()
     expect(screen.getByRole('button', { name: '浏览实验模板' }).getAttribute('disabled')).not.toBeNull()
-    expect(startSession).not.toHaveBeenCalled()
   })
 
   it('shows the empty physics-world state', () => {
-    const startSession = vi.fn()
     const openSurface = vi.fn()
     const useRecentExperiments = ((selector: (s: { items: never[] }) => unknown) =>
       selector({ items: [] })) as never
     render(
       <HomeActions
-        startSession={startSession}
         openSurface={openSurface}
         useRecentExperiments={useRecentExperiments}
         t={t}
@@ -283,7 +275,6 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByText(/PhysicsOS 会为你建立对应的物理世界/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '创建物理实验' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
-    expect(startSession).not.toHaveBeenCalled()
   })
 
   it('derives knowledge labels without claiming Engine output', () => {
