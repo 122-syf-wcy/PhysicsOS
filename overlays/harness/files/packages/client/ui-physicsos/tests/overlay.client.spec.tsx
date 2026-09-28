@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HomeActions } from '../src/client/HomeActions.tsx'
-import { HomeHero, homeElection, type HomeHeroProps } from '../src/client/HomeHero.tsx'
+import { HomeHero, type HomeHeroProps } from '../src/client/HomeHero.tsx'
 import { PhysicsProfileSeat } from '../src/client/PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController, readStoredProfile } from '../src/client/profile-store.ts'
 import { STUDENT_PROFILES, TEACHER_PROFILES, runtimePresetOf } from '../src/client/profiles.ts'
@@ -210,116 +210,81 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByText('PhysicsOS')).toBeTruthy()
     expect(screen.getByText('探索一个物理世界')).toBeTruthy()
     expect(screen.getByText('描述一个物理现象、创建实验，或直接输入一道试题。')).toBeTruthy()
-    /* The one-line promise rides the wordmark, not a second headline. */
-    expect(screen.getByText('把物理题变成可以运行的物理世界')).toBeTruthy()
   })
 
-  /* The recent-scene fixture the 继续探索 cases share: one REAL stored scene,
-     built once so the card and the assertion name the same scene identity. */
-  const recentEntry = (kind: 'experiment' | 'question' = 'question') => {
+  it('lists recent real scenes as a compact row and restores one on click', () => {
+    const startSession = vi.fn()
     const template = findExperimentTemplate('magnetic-circular')
     if (template === undefined) throw new Error('magnetic-circular template missing')
-    const { sceneId, scene } = createExperimentSceneRef(template, '磁场实验')
-    return {
-      sceneId,
-      scene,
-      title: '磁场实验',
-      domain: 'magnetic',
-      kind,
-      updatedAt: '2026-08-01T00:00:00.000Z',
-    }
-  }
-  const recentHook = (items: unknown[]) =>
-    ((selector: (s: { items: unknown[] }) => unknown) => selector({ items })) as never
-
-  it('offers the two product modules and routes each to its surface', () => {
+    const ref = createExperimentSceneRef(template, '磁场实验')
+    const useRecentExperiments = ((
+      selector: (s: {
+        items: {
+          sceneId: string
+          title: string
+          domain: string
+          kind: string
+          updatedAt: string
+          scene: unknown
+        }[]
+      }) => unknown,
+    ) =>
+      selector({
+        items: [{
+          sceneId: ref.sceneId,
+          title: '磁场实验',
+          domain: 'magnetic',
+          kind: 'experiment',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+          scene: ref.scene,
+        }],
+      })) as never
     const openSurface = vi.fn()
     render(
       <HomeActions
+        startSession={startSession}
         openSurface={openSurface}
-        useRecentExperiments={recentHook([])}
+        useRecentExperiments={useRecentExperiments}
         t={t}
       />,
     )
-    /* Named for the product modules they are, not for one-off actions. */
-    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
-    fireEvent.click(screen.getByRole('button', { name: '题目空间' }))
+    fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
+    fireEvent.click(screen.getByRole('button', { name: '题目练习' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开场景' }))
+    fireEvent.click(screen.getByRole('button', { name: '浏览实验模板' }))
+    expect(screen.getByText('电磁学 / 磁场与洛伦兹力 · 实验')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /磁场实验/ }))
     expect(openSurface).toHaveBeenNthCalledWith(1, 'lab')
     expect(openSurface).toHaveBeenNthCalledWith(2, 'record')
+    /* The recent row restores the REAL stored scene, not a session. */
+    expect(openSurface).toHaveBeenLastCalledWith('lab', { sceneId: ref.sceneId, scene: ref.scene })
+    expect(screen.getByRole('button', { name: '打开场景' }).getAttribute('disabled')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '浏览实验模板' }).getAttribute('disabled')).not.toBeNull()
+    expect(startSession).not.toHaveBeenCalled()
   })
 
-  it('lists real scenes in 继续探索 with type, knowledge point and verified state', () => {
+  it('shows the empty physics-world state', () => {
+    const startSession = vi.fn()
     const openSurface = vi.fn()
-    const entry = recentEntry('question')
+    const useRecentExperiments = ((selector: (s: { items: never[] }) => unknown) =>
+      selector({ items: [] })) as never
     render(
       <HomeActions
+        startSession={startSession}
         openSurface={openSurface}
-        useRecentExperiments={recentHook([entry])}
+        useRecentExperiments={useRecentExperiments}
         t={t}
       />,
     )
-    expect(screen.getByText('继续探索')).toBeTruthy()
-    expect(screen.getByText('电磁学 / 磁场与洛伦兹力')).toBeTruthy()
-    /* A question-sourced scene carries its solution's verification. */
-    expect(screen.getByText('已验证')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '磁场实验' }))
-    /* The card restores the REAL stored scene, not a session. */
-    expect(openSurface).toHaveBeenCalledWith('lab', { sceneId: entry.sceneId, scene: entry.scene })
-  })
-
-  it('never claims verification for a plain experiment scene', () => {
-    const openSurface = vi.fn()
-    const entry = recentEntry('experiment')
-    render(
-      <HomeActions
-        openSurface={openSurface}
-        useRecentExperiments={recentHook([entry])}
-        t={t}
-      />,
-    )
-    expect(screen.getByText('待验证')).toBeTruthy()
-    expect(screen.queryByText('已验证')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '磁场实验' }))
-    expect(openSurface).toHaveBeenCalledWith('lab', { sceneId: entry.sceneId, scene: entry.scene })
-  })
-
-  it('shows the empty 继续探索 state with a creation shortcut', () => {
-    const openSurface = vi.fn()
-    render(
-      <HomeActions
-        openSurface={openSurface}
-        useRecentExperiments={recentHook([])}
-        t={t}
-      />,
-    )
-    expect(screen.getByText('继续探索')).toBeTruthy()
-    expect(screen.getByText('还没有物理世界，先创建一个实验吧。')).toBeTruthy()
+    expect(screen.getByText('正电粒子垂直进入匀强磁场')).toBeTruthy()
+    expect(screen.getByText('比较不同角度的平抛轨迹')).toBeTruthy()
+    expect(screen.getByText('为什么洛伦兹力不做功？')).toBeTruthy()
+    expect(screen.getByText('最近空间')).toBeTruthy()
+    expect(screen.getByText('还没有创建物理世界')).toBeTruthy()
+    expect(screen.getByText(/PhysicsOS 会为你建立对应的物理世界/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '创建物理实验' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
-  })
-
-  it('recommends experiments under 今日物理挑战 without a conversation row', () => {
-    const openSurface = vi.fn()
-    render(
-      <HomeActions
-        openSurface={openSurface}
-        useRecentExperiments={recentHook([])}
-        t={t}
-      />,
-    )
-    expect(screen.getByText('今日物理挑战')).toBeTruthy()
-    expect(screen.getByText('推荐实验')).toBeTruthy()
-    /* The classic set leads on an empty record: 力 → 电 → 磁. */
-    const picks = ['平抛运动', '平行板电场偏转', '磁场中的带电粒子运动']
-    for (const label of picks) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
-    }
-    fireEvent.click(screen.getByRole('button', { name: picks[2]! }))
-    /* Opening a recommendation hands the Lab a freshly stamped REAL scene. */
-    expect(openSurface).toHaveBeenCalledTimes(1)
-    const [surface, ref] = openSurface.mock.calls[0] as [string, { sceneId: string }]
-    expect(surface).toBe('lab')
-    expect(typeof ref.sceneId).toBe('string')
+    expect(startSession).not.toHaveBeenCalled()
   })
 
   it('derives knowledge labels without claiming Engine output', () => {
@@ -363,81 +328,36 @@ describe('PhysicsOS overlay presentation', () => {
     })
   })
 
-  /* Home is the blank-Session Conversation panel, so the product stands in for
-     the composer through the chain's overlay seam. `homeElection` is the pure
-     selector that decides when: it is the ONLY thing that can put the product
-     page on screen, which is why the engaged-Session case is asserted on the
-     selector rather than on a rendered tree. */
-  const election = (owner: unknown) => homeElection(owner as Parameters<typeof homeElection>[0])
-
-  const homeProps = (
+  /* `新建` is the shell's New Session control now (it starts a session, the
+     way every other Harness product does). "新建物理实验" is a product creation
+     intent, so it lives with the other product entrances on the blank-Session
+     hero; the hero itself must disappear once the Session is engaged. */
+  const heroProps = (
+    blank: boolean,
     openSurface: (id: 'home' | 'lab' | 'record', sceneRef?: never) => void,
-    overrides: Partial<{
-      submitPrompt: (text: string) => Promise<{ ok: true } | { ok: false; error: string }>
-      items: unknown[]
-    }> = {},
   ): HomeHeroProps => ({
+    useSession: <S,>(selector: (snapshot: { blank: boolean }) => S): S => selector({ blank }),
+    useRecentExperiments: (selector: (snapshot: { items: never[] }) => unknown) =>
+      selector({ items: [] }),
     openSurface,
-    submitPrompt: overrides.submitPrompt ?? (async () => ({ ok: true as const })),
-    useRecentExperiments: (selector: (snapshot: { items: unknown[] }) => unknown) =>
-      selector({ items: overrides.items ?? [] }),
     t,
   }) as unknown as HomeHeroProps
 
-  it('elects Home only for a blank Session, and never over a pending interaction', () => {
-    expect(election({ session: { blank: true }, pendingInteraction: undefined }))
-      .toEqual({ home: true })
-    expect(election({ session: { blank: false }, pendingInteraction: undefined })).toBeNull()
-    expect(election({ session: undefined, pendingInteraction: undefined })).toBeNull()
-    expect(election({ session: { blank: true }, pendingInteraction: { kind: 'approval' } }))
-      .toBeNull()
-  })
-
-  it('renders the product front page with exactly one input', () => {
+  it('shows the product front page on a blank Session and creates through the picker', () => {
     const openSurface = vi.fn()
-    const { container } = render(<HomeHero {...homeProps(openSurface)} />)
-    expect(container.querySelector('[data-physicsos-home]')).not.toBeNull()
+    render(
+      <HomeHero {...heroProps(true, openSurface)} />,
+    )
     expect(screen.getByText('探索一个物理世界')).toBeTruthy()
-    /* ONE input, not two: the only text field on Home is the hero input. */
-    const fields = container.querySelectorAll('input, textarea')
-    expect(fields).toHaveLength(1)
-    expect(fields[0]?.getAttribute('type')).toBe('text')
-    for (const example of ['正电粒子垂直进入匀强磁场', '比较不同角度的平抛轨迹', '为什么洛伦兹力不做功？']) {
-      expect(screen.getByRole('button', { name: example })).toBeTruthy()
-    }
-    fireEvent.click(screen.getByRole('button', { name: '物理实验室' }))
+    fireEvent.click(screen.getByRole('button', { name: '新建物理实验' }))
     expect(openSurface).toHaveBeenCalledWith('lab')
   })
 
-  it('keeps every internal identity off the first level', () => {
-    const { container } = render(<HomeHero {...homeProps(vi.fn())} />)
-    const text = container.textContent ?? ''
-    for (const forbidden of [
-      '工作区', '探索模式', '解题模式', '引导模式', '新会话', 'Workspace', 'workspace',
-    ]) {
-      expect(text, forbidden).not.toContain(forbidden)
-    }
-    /* No folder id / raw host path reaches the surface. */
-    expect(text).not.toMatch(/[0-9a-f]{24,}/)
-    expect(text).not.toMatch(/\/(Users|home|tmp|var)\//)
-  })
-
-  it('submits the hero input through the tutor and clears it on success', async () => {
-    const submitPrompt = vi.fn(async () => ({ ok: true as const }))
-    render(<HomeHero {...homeProps(vi.fn(), { submitPrompt })} />)
-    const input = screen.getByRole('textbox') as HTMLInputElement
-    fireEvent.change(input, { target: { value: '正电粒子垂直进入匀强磁场' } })
-    fireEvent.click(screen.getByRole('button', { name: /开始探索/ }))
-    await waitFor(() => { expect(submitPrompt).toHaveBeenCalledWith('正电粒子垂直进入匀强磁场') })
-    await waitFor(() => { expect(input.value).toBe('') })
-  })
-
-  it('surfaces a failure instead of silently dropping the prompt', async () => {
-    const submitPrompt = vi.fn(async () => ({ ok: false as const, error: '没能创建学习会话' }))
-    render(<HomeHero {...homeProps(vi.fn(), { submitPrompt })} />)
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: '一道题' } })
-    fireEvent.click(screen.getByRole('button', { name: /开始探索/ }))
-    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('没能创建学习会话') })
+  it('keeps the front page out of an engaged Session', () => {
+    const { container } = render(
+      <HomeHero {...heroProps(false, vi.fn())} />,
+    )
+    expect(container.querySelector('[data-physicsos-home]')).toBeNull()
   })
 
   it('offers only PhysicsOS profiles and selects the mapped Harness preset', async () => {

@@ -1,16 +1,12 @@
-/* The frame is centred on the hero copy and CLIPPED by the hero band
-   (HomeHero.module.css .hero owns the 240–300px height): with the page's short
-   hero the old 640px-tall frame used to spill its formula marks down over
-   继续探索, which read as stray chrome on the content. */
 .root {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: -96px;
   z-index: -1;
-  width: min(900px, 150%);
+  width: min(960px, 160%);
   height: auto;
   aspect-ratio: 960 / 640;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 

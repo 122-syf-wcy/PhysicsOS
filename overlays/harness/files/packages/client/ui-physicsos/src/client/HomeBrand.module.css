@@ -1,7 +1,7 @@
-/* Home hero copy block. A glass plate with the product name, its one-line
-   promise, the page title and a supporting sentence — copy only. The plate
-   carries no fixed height: the hero section in HomeHero.module.css owns the
-   240–300px band and this block sits inside it. */
+/* Home hero. One stage: copy on the left, a live collision playground with the
+   mascot on the right. The stage's height is a single custom property so the
+   mascot's CSS placement and the playground's collider (HomePlayground.tsx,
+   MASCOT_ANCHOR) agree on where the body sphere is. */
 
 .root {
   position: relative;
@@ -14,9 +14,11 @@
 }
 
 .stage {
+  --stage-h: clamp(210px, 23vw, 262px);
+
   position: relative;
   width: min(100%, 860px);
-  padding: clamp(16px, 2.2vw, 22px) clamp(18px, 2.6vw, 30px);
+  height: var(--stage-h);
   overflow: hidden;
   border: 1px solid var(--physics-glass-border);
   border-radius: 26px;
@@ -26,20 +28,26 @@
   box-shadow:
     0 18px 44px rgba(61, 85, 111, 0.12),
     var(--physics-glass-inset);
-  animation: hero-stage-in var(--physics-motion-entrance, 460ms)
-    var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation: hero-stage-in var(--physics-motion-entrance, 460ms) var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.playground {
+  z-index: 0;
 }
 
 /* ---- copy: the focal point --------------------------------------------- */
 
 .copy {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: clamp(20px, 3.4vw, 34px);
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  text-align: center;
+  gap: 10px;
+  max-width: 54%;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .product {
@@ -62,18 +70,9 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* The one-line promise: the product's promise, kept quiet beside the wordmark. */
-.promise {
-  padding-left: 9px;
-  border-left: 1px solid var(--physics-glass-border-soft);
-  color: var(--physics-ink-muted);
-  font-size: 12px;
-  line-height: 18px;
-}
-
 .tagline {
   margin: 0;
-  font-size: clamp(24px, 2.4vw, 32px);
+  font-size: clamp(26px, 2.6vw, 34px);
   font-weight: 620;
   line-height: 1.14;
   letter-spacing: -0.015em;
@@ -84,7 +83,7 @@
 
 .support {
   margin: 0;
-  max-width: 34em;
+  max-width: 30em;
   color: var(--dsw-alias-label-secondary);
   font-size: 14px;
   font-weight: 400;
@@ -93,7 +92,8 @@
   animation-delay: 240ms;
 }
 
-/* A soft glass wash behind the copy keeps it legible over the atmosphere. */
+/* A soft glass wash behind the copy keeps it legible when a ball drifts under
+   it, without boxing the text in. */
 .copy::before {
   content: '';
   position: absolute;
@@ -102,6 +102,65 @@
   border-radius: 28px;
   background: radial-gradient(70% 80% at 30% 50%, rgba(251, 253, 255, 0.92), rgba(251, 253, 255, 0));
   pointer-events: none;
+}
+
+/* ---- mascot --------------------------------------------------------------- */
+
+/* Placement must match MASCOT_PLACEMENT in HomePlayground.tsx (height 0.92,
+   bottom 0, right 0.06 of the stage height) so the balls bounce off the figure
+   where it actually stands. */
+.mascot {
+  position: absolute;
+  right: calc(var(--stage-h) * 0.06);
+  bottom: 0;
+  z-index: 1;
+  height: calc(var(--stage-h) * 0.92);
+  animation: hero-mascot-in 720ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 120ms;
+}
+
+/* The figure stands on the stage floor: a soft contact shadow under her feet
+   (the cut-out itself carries none). */
+.mascot::after {
+  content: '';
+  position: absolute;
+  right: 6%;
+  bottom: 1%;
+  left: 8%;
+  z-index: -1;
+  height: 7%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(71, 95, 138, 0.22), rgba(71, 95, 138, 0) 70%);
+}
+
+.heroMeta {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 999px;
+  background: var(--physics-glass-fill);
+  color: var(--physics-ink);
+  font-family: var(--ds-font-family-code, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  line-height: 12px;
+  backdrop-filter: blur(14px) saturate(140%);
+  pointer-events: none;
+}
+
+.heroMetaDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2f9e5a;
+  box-shadow: 0 0 0 3px rgba(47, 158, 90, 0.12);
+  animation: hero-live-pulse 2.4s ease-in-out infinite;
 }
 
 /* ---- motion -------------------------------------------------------------- */
@@ -130,15 +189,55 @@
   }
 }
 
+@keyframes hero-mascot-in {
+  0% {
+    opacity: 0;
+    transform: translate(28px, 10px) scale(0.92);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(-3px, -2px) scale(1.015);
+  }
+
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hero-live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(47, 158, 90, 0.12);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(47, 158, 90, 0.04);
+  }
+}
+
 @media (max-width: 720px) {
   .stage {
+    --stage-h: 236px;
+
     border-radius: 20px;
   }
 
-  .product {
-    flex-wrap: wrap;
-    justify-content: center;
-    row-gap: 4px;
+  .copy {
+    top: 22px;
+    max-width: calc(100% - 40px);
+    transform: none;
+  }
+
+  .mascot {
+    right: calc(var(--stage-h) * 0.02);
+    height: calc(var(--stage-h) * 0.62);
+  }
+
+  .heroMeta {
+    right: 10px;
+    bottom: 9px;
   }
 }
 
@@ -154,7 +253,12 @@
   .stage,
   .product,
   .tagline,
-  .support {
+  .support,
+  .mascot {
+    animation: none;
+  }
+
+  .heroMetaDot {
     animation: none;
   }
 }
@@ -170,14 +274,33 @@
   padding-top: 18px;
 }
 
+:global([data-phase='hero'] [data-composer-card]) {
+  border-style: solid;
+  border-color: var(--physics-glass-border);
+  border-radius: 26px;
+  background: var(--physics-glass-fill);
+  box-shadow: 0 20px 48px rgba(65, 93, 122, 0.14), var(--physics-glass-inset);
+  backdrop-filter: blur(22px) saturate(130%);
+  animation: hero-copy-in 520ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 220ms;
+}
+
+:global([data-phase='hero'] [data-composer-card])::after {
+  display: none;
+}
+
+:global([data-phase='hero'] [data-composer-card] button) {
+  border-radius: 12px;
+}
+
 /* The hero stage is a glass plate, so it cannot keep a baked light gradient:
    under the host's dark theme that became the one white rectangle left on the
    page. Keep the same blue topology, flip the base and the copy wash, and
    soften the shadow to the dark-surface ramp. */
 :global(body[data-ds-dark-theme]) .stage {
-  /* These are scoped to the hero plate: the grid and body inks are read by
-     experiment artwork and any hero canvas, while real experiment canvases keep
-     the fixed-light physics sheet. */
+  /* These are scoped to the hero canvas: the grid and body inks are read by
+     HomePlayground when it paints, while real experiment canvases keep the
+     fixed-light physics sheet. */
   --physics-grid-minor: rgba(148, 163, 184, 0.1);
   --physics-grid-major: rgba(148, 163, 184, 0.2);
   --physics-body-fill: #334155;
@@ -203,4 +326,10 @@
     color-mix(in srgb, var(--dsw-alias-bg-base, #1d1d20) 94%, transparent),
     color-mix(in srgb, var(--dsw-alias-bg-base, #1d1d20) 0%, transparent)
   );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global([data-phase='hero'] [data-composer-card]) {
+    animation: none;
+  }
 }

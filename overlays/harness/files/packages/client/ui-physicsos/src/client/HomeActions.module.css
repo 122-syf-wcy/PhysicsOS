@@ -1,100 +1,105 @@
-/* Home content below the hero: primary entry cards, 继续探索, 今日物理挑战.
-   Everything rides the shared glass material (--physics-glass-*) so the page
-   reads as one product surface rather than a stack of widgets. */
-
 .root {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 24px;
   width: 100%;
-  min-width: 0;
+  max-width: var(--dsh-composer-card-max-width);
+  margin: 8px auto 0;
+  padding: 0 var(--dsh-composer-side-clearance);
+  box-sizing: border-box;
 }
 
-/* ---- primary entry cards -------------------------------------------------- */
-
-.entries {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.entry {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+.example {
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 999px;
+  background: var(--physics-glass-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.example:hover {
+  background: var(--physics-glass-fill-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.example:focus-visible,
+.portal:focus-visible,
+.action:focus-visible,
+.emptyCta:focus-visible,
+.recentItem:focus-visible {
+  outline: 2px solid var(--physicsos-focus, #3b82f6);
+  outline-offset: 2px;
+}
+
+.portals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.portal {
+  display: grid;
+  grid-template-rows: 132px auto;
   min-width: 0;
-  padding: 14px;
+  padding: 0;
+  overflow: hidden;
   border: 1px solid var(--physics-glass-border);
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--physics-glass-fill);
   box-shadow: var(--physics-glass-shadow), var(--physics-glass-inset);
   backdrop-filter: blur(18px) saturate(125%);
   color: var(--dsw-alias-label-primary);
   text-align: left;
   cursor: pointer;
-  transition: transform 160ms var(--physics-ease, ease), box-shadow 160ms ease, border-color 160ms ease;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
-.entry:hover {
-  border-color: color-mix(in srgb, var(--physicsos-focus, #3b82f6) 45%, transparent);
+.portal:hover {
+  border-color: color-mix(in srgb, var(--physicsos-focus) 45%, transparent);
   box-shadow: var(--physics-glass-shadow-raised), var(--physics-glass-inset);
   transform: translateY(-2px);
 }
 
-.entry:focus-visible,
-.challengeCard:focus-visible,
-.recentCard:focus-visible,
-.emptyCta:focus-visible {
-  outline: 2px solid var(--physicsos-focus, #3b82f6);
-  outline-offset: 2px;
-}
-
-/* The art well and the icon well keep the card's own subject tint. The plate
-   fills its frame (cover, not centre-crop): the illustration's middle is its
-   palest band, so a centred image read as an empty block. */
 .portalImage {
-  display: grid;
-  place-items: center;
-  width: 96px;
-  height: 72px;
-  overflow: hidden;
-  border: 1px solid var(--physics-glass-border);
-  border-radius: 14px;
+  display: block;
+  width: 100%;
+  height: 132px;
+  object-fit: cover;
+  object-position: center 56%;
+  border-bottom: 1px solid var(--physics-glass-border);
   background: var(--physics-glass-plate);
 }
 
-.portalImage > *,
-.challengeArt > *,
-.recentArt > * {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.entryLab .portalImage {
-  background: var(--physics-subject-magnetic-tint, #f1ebfd);
-}
-
-.entryQuestion .portalImage {
-  background: var(--physics-subject-mechanics-tint, #e7f4ec);
-}
-
-.entryBody {
+.portalBody {
   display: grid;
-  gap: 4px;
-  min-width: 0;
+  gap: 5px;
+  padding: 14px 15px 13px;
 }
 
-.entryTitle {
+.portalTitle {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 22px;
+  line-height: 20px;
 }
 
 .portalIcon {
@@ -108,201 +113,103 @@
   color: var(--dsw-static-blue-600);
 }
 
-.entryQuestion .portalIcon {
-  background: rgba(231, 244, 236, 0.85);
-  color: var(--physics-subject-mechanics, #2f9e5a);
+:global(body[data-ds-dark-theme]) .portalIcon {
+  background: color-mix(in srgb, var(--dsw-static-blue-500) 18%, transparent);
+  color: var(--dsw-static-blue-300, #93c5fd);
 }
 
-.entryTagline {
+:global(body[data-ds-dark-theme]) .portalImage,
+:global(body[data-ds-dark-theme]) .emptyImage {
+  filter: brightness(0.58) saturate(0.84) contrast(0.94);
+}
+
+.portalDescription {
+  min-height: 36px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
 }
 
-.entryAction {
-  display: inline-flex;
+.portalMeta {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  color: var(--physics-ink-link);
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.portalMeta svg {
+  flex: none;
+  color: var(--dsw-static-blue-600);
+}
+
+.utilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 15px;
+  background: var(--physics-glass-fill);
+  box-shadow: var(--physics-glass-inset);
+  backdrop-filter: blur(14px) saturate(120%);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--physics-glass-fill-strong);
+}
+
+.action:disabled {
+  color: var(--physics-ink-muted);
+  cursor: not-allowed;
+}
+
+.recentTitle {
+  margin: 0 0 8px;
+  color: var(--physics-ink);
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
 }
 
-.entryAction svg {
-  flex: none;
-  transition: transform 240ms var(--physics-ease-emphasized, ease);
-}
-
-.entry:hover .entryAction svg {
-  transform: translateX(3px);
-}
-
-/* ---- sections ------------------------------------------------------------- */
-
-.section {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-.sectionHead {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.sectionTitle {
-  margin: 0;
-  color: var(--physics-ink-strong);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-
-.sectionTag {
-  color: var(--physics-ink-muted);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-/* ---- 继续探索 ------------------------------------------------------------- */
-
-.recentList {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.recentCard {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--physics-glass-border);
-  border-radius: 18px;
-  background: var(--physics-glass-fill);
-  box-shadow: var(--physics-glass-inset);
-  color: var(--dsw-alias-label-primary);
-  text-align: left;
-  cursor: pointer;
-  transition: transform 160ms var(--physics-ease, ease), box-shadow 160ms ease, border-color 160ms ease;
-}
-
-.recentCard:hover {
-  border-color: color-mix(in srgb, var(--physicsos-focus, #3b82f6) 40%, transparent);
-  box-shadow: var(--physics-glass-shadow), var(--physics-glass-inset);
-  transform: translateY(-2px);
-}
-
-/* The scene preview: real per-template artwork, never a placeholder image. */
-.recentArt {
-  display: block;
-  height: 76px;
-  overflow: hidden;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 12px;
-  background: var(--physics-glass-plate);
-}
-
-.recentBody {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.recentTop {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-
-.recentName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-}
-
-.recentKind {
-  flex: none;
-  margin-left: auto;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--physics-tint-accent);
-  color: var(--physics-tint-accent-ink);
-  font-size: 10px;
-  line-height: 16px;
-}
-
-.recentKnowledge {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.recentFoot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.verified {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 18px;
-}
-
-.verified::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentcolor;
-}
-
-.verifiedOk {
-  background: var(--physics-tint-verified);
-  color: var(--physics-ink-ok);
-}
-
-.verifiedPending {
-  background: var(--physics-tint-warning);
-  color: var(--physics-ink-warn);
-}
-
-.recentTime {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.recentEmpty {
+.empty {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding: 18px;
-  border: 1px dashed var(--physics-glass-border-soft);
-  border-radius: 18px;
-  background: var(--physics-glass-fill);
+  gap: 6px;
+  padding: 4px 2px 0;
+}
+
+.emptyImage {
+  width: min(520px, 100%);
+  aspect-ratio: 3 / 1;
+  margin-bottom: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
 }
 
 .emptyBody {
@@ -314,10 +221,11 @@
 }
 
 .emptyCta {
+  margin-top: 4px;
   height: 32px;
   padding: 0 12px;
   border: 1px solid color-mix(in srgb, var(--dsw-static-blue-500) 16%, var(--dsw-alias-border-l2));
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--physics-tint-accent);
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
@@ -329,116 +237,53 @@
   background: var(--physics-tint-accent-strong);
 }
 
-/* ---- 今日物理挑战 --------------------------------------------------------- */
-
-.challengeList {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.challengeCard {
+.recentItem {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 1px;
   align-items: center;
-  gap: 12px;
   width: 100%;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--physics-glass-border);
-  border-radius: 18px;
-  background: var(--physics-glass-fill);
-  box-shadow: var(--physics-glass-inset);
+  min-height: 44px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
   color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
-  transition: transform 160ms var(--physics-ease, ease), box-shadow 160ms ease, border-color 160ms ease;
 }
 
-.challengeCard:hover {
-  border-color: color-mix(in srgb, var(--physicsos-focus, #3b82f6) 40%, transparent);
-  box-shadow: var(--physics-glass-shadow), var(--physics-glass-inset);
-  transform: translateY(-2px);
+.recentItem:hover {
+  background: var(--physics-glass-fill);
 }
 
-.challengeArt {
-  display: grid;
-  place-items: center;
-  width: 84px;
-  height: 64px;
-  overflow: hidden;
-  border: 1px solid var(--physics-glass-border-soft);
-  border-radius: 12px;
-  background: var(--physics-glass-plate);
+@media (max-width: 720px) {
+  .portal {
+    grid-template-rows: 112px auto;
+    border-radius: 18px;
+  }
+
+  .portalImage {
+    height: 112px;
+  }
 }
 
-.challengeBody {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.challengeReason {
-  justify-self: start;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: var(--physics-glass-fill-strong);
-  color: var(--physics-ink-muted);
-  font-size: 10px;
-  line-height: 16px;
-}
-
-.challengeTitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-}
-
-.challengeMeta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.challengeCta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--physics-ink-link);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-/* ---- dark theme ----------------------------------------------------------- */
-
-:global(body[data-ds-dark-theme]) .portalIcon {
-  background: color-mix(in srgb, var(--dsw-static-blue-500) 18%, transparent);
-  color: var(--dsw-static-blue-300, #93c5fd);
-}
-
-:global(body[data-ds-dark-theme]) .entryQuestion .portalIcon {
-  background: color-mix(in srgb, var(--physics-subject-mechanics, #2f9e5a) 22%, transparent);
-  color: var(--dsw-static-green-400, #4ed17e);
-}
-
-:global(body[data-ds-dark-theme]) .portalImage,
-:global(body[data-ds-dark-theme]) .recentArt,
-:global(body[data-ds-dark-theme]) .challengeArt {
-  filter: brightness(0.58) saturate(0.84) contrast(0.94);
-}
-
-/* ---- entrance -------------------------------------------------------------
-   The cards rise in after the hero, top to bottom, so the page assembles in
-   reading order instead of popping in as one block. */
+/* ---- entrance ---------------------------------------------------------------
+   Everything under the composer rises in after it, top to bottom, so the page
+   assembles in reading order instead of popping in as one block. */
 
 @keyframes home-rise-in {
   from {
@@ -452,67 +297,114 @@
   }
 }
 
-.entries {
-  animation: home-rise-in 460ms var(--physics-ease-emphasized, ease) both;
-  animation-delay: 120ms;
+.examples {
+  animation: home-rise-in 460ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 300ms;
 }
 
-.section {
-  animation: home-rise-in 480ms var(--physics-ease-emphasized, ease) both;
-  animation-delay: 200ms;
+.portal {
+  animation: home-rise-in 520ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 360ms;
 }
 
-.section:nth-of-type(3) {
-  animation-delay: 280ms;
+.portal:nth-child(2) {
+  animation-delay: 430ms;
+}
+
+.utilities {
+  animation: home-rise-in 460ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 500ms;
+}
+
+.recent {
+  animation: home-rise-in 460ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: 560ms;
+}
+
+/* The portal photo eases up under the hand; the chevron leads the way. */
+.portalImage {
+  transition: transform 600ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.portal:hover .portalImage {
+  transform: scale(1.035);
+}
+
+.portalMeta svg {
+  transition: transform 240ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.portal:hover .portalMeta svg {
+  transform: translateX(3px);
+}
+
+.example {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 160ms var(--physics-ease-emphasized, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.example:active {
+  transform: scale(0.97);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .entry,
-  .recentCard,
-  .challengeCard,
-  .entryAction svg {
+  .portal,
+  .portalImage,
+  .portalMeta svg,
+  .example {
     transition: none;
   }
 
-  .entries,
-  .section {
+  .examples,
+  .portal,
+  .utilities,
+  .recent {
     animation: none;
   }
 
-  .entry:hover,
-  .recentCard:hover,
-  .challengeCard:hover,
-  .entry:hover .entryAction svg {
+  .portal:hover,
+  .portal:hover .portalImage,
+  .portal:hover .portalMeta svg {
     transform: none;
   }
 }
 
-/* ---- responsive ----------------------------------------------------------- */
+.recentItem > svg {
+  grid-row: 1 / span 2;
+  color: var(--dsw-alias-label-secondary);
+}
 
-@media (max-width: 1100px) {
-  .recentList {
+.recentName {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.recentMeta {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.recentTime {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .portals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 900px) {
-  .entries,
-  .challengeList {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 560px) {
-  .recentList {
-    grid-template-columns: 1fr;
-  }
-
-  .entry {
-    grid-template-columns: 72px minmax(0, 1fr);
-  }
-
-  .portalImage {
-    width: 72px;
-    height: 60px;
   }
 }

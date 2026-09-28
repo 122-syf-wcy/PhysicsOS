@@ -24,8 +24,7 @@
 }
 
 .header {
-  /* CONTENT tier: feedback is a form surface. The cap lives in chrome.ts. */
-  max-width: var(--physics-tier-content);
+  max-width: 1040px;
   margin: 0 auto 18px;
 }
 

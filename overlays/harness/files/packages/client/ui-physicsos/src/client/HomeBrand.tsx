@@ -2,6 +2,8 @@ import clsx from 'clsx'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { HomeAtmosphere } from './HomeAtmosphere.tsx'
+import { HomePlayground } from './HomePlayground.tsx'
+import { Mascot } from './Mascot.tsx'
 import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import css from './HomeBrand.module.css'
 
@@ -25,27 +27,31 @@ export function HomeBrandMark({ size, className }: HomeBrandMarkProps) {
 }
 
 /**
- * Hero copy: the product name and one-line promise lead, then the page title
- * and its supporting sentence. Copy only — the single Home input and the entry
- * cards are the page's own modules (`HomeHero.tsx` / `HomeActions.tsx`), so the
- * brand block never owns an interactive control and stays reusable as chrome.
+ * Hero brand: one stage.
  *
- * @param props - product copy.
- * @returns the brand copy block.
+ * The copy (mark, tagline, prompt) is the single focal point on the left; the
+ * right half is a live elastic-collision playground with the mascot floating in
+ * it as a collider. One element to read, one to play with — no stacked photo,
+ * caption and copy competing for the eye.
  */
 export function HomeBrand({ t }: HomeBrandProps) {
   return (
     <div className={css.root}>
       <HomeAtmosphere />
       <div className={css.stage}>
+        <HomePlayground className={css.playground} />
         <div className={css.copy}>
           <div className={css.product}>
             <PhysicsOSMark size={26} className={css.mark} />
             <span className={css.name}>{t('brand.name')}</span>
-            <span className={css.promise}>{t('home.promise')}</span>
           </div>
           <h1 className={css.tagline}>{t('brand.tagline')}</h1>
           <p className={css.support}>{t('brand.support')}</p>
+        </div>
+        <Mascot pose="wave" size={172} className={css.mascot} />
+        <div className={css.heroMeta} aria-hidden="true">
+          <span className={css.heroMetaDot} />
+          <span>LIVE PHYSICS</span>
         </div>
       </div>
     </div>

@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply, inject, PHYSICS_PANEL_IDS } from '@deepseek-ai/dsh-client-ui-physicsos/client'
 import {
   createExperimentSceneRef, findExperimentTemplate,
@@ -14,45 +12,6 @@ afterEach(() => {
   document.title = ''
   vi.unstubAllGlobals()
 })
-
-/** The composer-chain owner the Home election reads: a Session at a given
-    blankness with the pending-interaction seat empty. */
-type ChainOwner = Pick<ComposerChainProps, 'session' | 'pendingInteraction'>
-
-/** `StoredEntry.select` as the slot registry hands it to a test: the inspection
-    view erases the owner to `never` on purpose, so a caller must supply the
-    contract itself. `ChainOwner` is the same slice the registration site checks
-    `homeElection` against, which keeps the two ends of the link tied together. */
-type ChainSelect = (owner: ChainOwner) => unknown
-
-/**
- * Build a real chain owner. Home's election reads exactly `session.blank` and
- * the pending-interaction seat, so the fixture is a full `SessionSnapshot`
- * (taken from the contract the slot hands the selector) rather than a loose
- * literal: an upstream rename of `blank` must fail this test, not silently
- * elect Home for every Session.
- * @param blank - whether the Session is still blank.
- * @returns the owner props the composer chain passes to a selector.
- */
-function chainOwner(blank: boolean): ChainOwner {
-  const session: NonNullable<ComposerChainProps['session']> = {
-    sessionId: SessionId('session-1'),
-    pendingSubmissions: [],
-    running: false,
-    subagent: null,
-    removed: false,
-    openState: 'open',
-    openError: null,
-    hasMore: false,
-    loadingOlder: false,
-    promptError: null,
-    blank,
-    lastAgentError: null,
-    promptAttempted: false,
-    awaitingFirstTurn: false,
-  }
-  return { session, pendingInteraction: undefined }
-}
 
 async function bench() {
   const ctx = new Context()
@@ -117,8 +76,7 @@ async function bench() {
     name: 'conversation',
     children: {
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
-      /* Home stands in for the whole composer while the Session is blank. */
-      'conversation.composer': { kind: 'chain', scope: 'session' },
+      'conversation.input.dock': { kind: 'list', scope: 'session' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       /* Declared by the chat view in the real tree; the bench declares it so
@@ -164,16 +122,7 @@ describe('ui-physicsos apply', () => {
     expect(mainPanels.map(entry => entry.options.key))
       .toEqual(expect.arrayContaining(Object.values(PHYSICS_PANEL_IDS)))
     expect(b.slots.entries('conversation.hero.brand.mark')).toHaveLength(1)
-    /* The Home page claims the composer chain, and only for a blank Session. */
-    const homes = b.slots.entries('conversation.composer')
-    expect(homes).toHaveLength(1)
-    expect(homes[0]!.options.priority).toBe(100)
-    const elect = homes[0]!.select as ChainSelect | undefined
-    expect(typeof elect).toBe('function')
-    expect(elect!(chainOwner(true)))
-      .toEqual({ home: true })
-    expect(elect!(chainOwner(false)))
-      .toBeNull()
+    expect(b.slots.entries('conversation.input.dock')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')[0]!.options.priority).toBe(-1)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(1)
