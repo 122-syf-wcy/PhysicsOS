@@ -385,6 +385,27 @@ describe('PhysicsOS shared /api policy', () => {
     expect(await rpcValueOf(adminResponse)).toEqual(reduced)
   })
 
+  it('answers an envelope when the Host throws, keeping a contention refusal actionable', async () => {
+    /* The front door must never leave the web server's bare 400: it carries no
+       rpcId, no code, and no reason, so every caller reads it as a dead
+       transport. A contention throw keeps the code the client's blank-Session
+       reuse is built to handle. */
+    const policy = makePolicy().policy
+    const contended = await policy.wrapFetch(async () => {
+      throw new Error('SessionAlreadyOwnedError: session is already owned by a live writer')
+    })(request('session.create', { args: { request: { workspaceId: 'ws-1' } } }))
+    expect(await contended.json()).toMatchObject({
+      result: { ok: false, error: { code: 'session/writer-held' } },
+    })
+
+    const broken = await policy.wrapFetch(async () => {
+      throw new Error('boom')
+    })(request('session.create', { args: { request: { workspaceId: 'ws-1' } } }))
+    expect(await broken.json()).toMatchObject({
+      result: { ok: false, error: { code: 'gateway/internal', message: expect.stringContaining('boom') } },
+    })
+  })
+
   it('keeps the full settings description for an admin', async () => {
     const value = {
       writable: true,

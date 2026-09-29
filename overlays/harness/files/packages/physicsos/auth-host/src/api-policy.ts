@@ -1069,7 +1069,27 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
       const rewritten = await rewriteRequest(actor, request, method, body)
       if (rewritten.response !== undefined) return rewritten.response
-      const response = await next(rewritten.request)
+      let response: Response
+      try {
+        response = await next(rewritten.request)
+      } catch (error) {
+        /* This front door always answers an envelope. A Host-side throw would
+           otherwise leave the web server's last-resort guard writing a bare
+           400 — no rpcId, no code, no reason — which every caller reads as a
+           transport failure it cannot act on. The Host's own words ride the
+           message so the reason survives to the client. */
+        const reason = error instanceof Error ? error.message : String(error)
+        /* A contention refusal that reached us as a throw rather than as the
+           Host's own envelope: the client's blank-Session reuse knows exactly
+           one such code (`session/writer-held`) and replaces the blank on it,
+           so classify the ownership wording instead of burying it in a generic
+           code — otherwise New Session fails for a condition it is built to
+           handle. */
+        if (/writer|owned|already|held|占用|锁定/i.test(reason)) {
+          return rpcError(rpcId, 'session/writer-held', reason, {})
+        }
+        return rpcError(rpcId, 'gateway/internal', `请求处理失败：${reason}`, {})
+      }
       return rewriteResponse(actor, method, body, response)
     },
     scopeEvents: (req, events) => {
