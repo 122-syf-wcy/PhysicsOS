@@ -401,9 +401,11 @@ describe('PhysicsOS shared /api policy', () => {
     const broken = await policy.wrapFetch(async () => {
       throw new Error('boom')
     })(request('session.create', { args: { request: { workspaceId: 'ws-1' } } }))
-    expect(await broken.json()).toMatchObject({
-      result: { ok: false, error: { code: 'gateway/internal', message: expect.stringContaining('boom') } },
-    })
+    const brokenBody = await broken.json() as {
+      result?: { error?: { code?: string; message?: string } }
+    }
+    expect(brokenBody.result?.error?.code).toBe('gateway/internal')
+    expect(brokenBody.result?.error?.message).toContain('boom')
   })
 
   it('keeps the full settings description for an admin', async () => {

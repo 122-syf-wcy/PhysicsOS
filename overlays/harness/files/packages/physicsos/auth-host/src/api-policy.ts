@@ -977,7 +977,17 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   }
 
   return {
-    authorizeRequest: req => deps.actorFromRequest(req as IncomingMessage) !== null,
+    authorizeRequest: (req) => {
+      /* Fail closed, and audibly: a storage failure while resolving the cookie
+         must refuse the request rather than throw into the web server's
+         last-resort guard, whose bare 400 no client can read. */
+      try {
+        return deps.actorFromRequest(req as IncomingMessage) !== null
+      } catch (error) {
+        console.warn(`api-policy: authorizeRequest failed: ${String(error)}`)
+        return false
+      }
+    },
     admitUpgrade: (req) => {
       const actor = deps.actorFromRequest(req as IncomingMessage)
       if (actor === null) return null
@@ -1049,48 +1059,45 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       if (body === undefined) return next(request)
       const rpcId = rpcIdOf(body)
       const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
-      if (actor.credential?.kind === 'api-token'
-        && actor.credential.scope === 'read'
-        && !READ_ONLY_METHODS.has(method)) {
-        return rpcError(
-          rpcId,
-          'TOKEN_SCOPE_REQUIRED',
-          '该令牌只有只读权限',
-          { requiredScope: 'write' },
-          403,
-        )
-      }
-
-      const denied = authorizeMethod(actor, method, payload, rpcId)
-      if (denied !== undefined) return denied
-
-      const budgetDenied = await chargeModelBudget(actor, method, rpcId)
-      if (budgetDenied !== undefined) return budgetDenied
-
-      const rewritten = await rewriteRequest(actor, request, method, body)
-      if (rewritten.response !== undefined) return rewritten.response
-      let response: Response
       try {
-        response = await next(rewritten.request)
+        if (actor.credential?.kind === 'api-token'
+          && actor.credential.scope === 'read'
+          && !READ_ONLY_METHODS.has(method)) {
+          return rpcError(
+            rpcId,
+            'TOKEN_SCOPE_REQUIRED',
+            '该令牌只有只读权限',
+            { requiredScope: 'write' },
+            403,
+          )
+        }
+
+        const denied = authorizeMethod(actor, method, payload, rpcId)
+        if (denied !== undefined) return denied
+
+        const budgetDenied = await chargeModelBudget(actor, method, rpcId)
+        if (budgetDenied !== undefined) return budgetDenied
+
+        const rewritten = await rewriteRequest(actor, request, method, body)
+        if (rewritten.response !== undefined) return rewritten.response
+        const response = await next(rewritten.request)
+        return await rewriteResponse(actor, method, body, response)
       } catch (error) {
-        /* This front door always answers an envelope. A Host-side throw would
+        /* This front door answers an envelope. A throw anywhere below would
            otherwise leave the web server's last-resort guard writing a bare
            400 — no rpcId, no code, no reason — which every caller reads as a
-           transport failure it cannot act on. The Host's own words ride the
-           message so the reason survives to the client. */
+           dead transport it cannot act on, and which leaves the operator with
+           nothing to look at either. */
         const reason = error instanceof Error ? error.message : String(error)
-        /* A contention refusal that reached us as a throw rather than as the
-           Host's own envelope: the client's blank-Session reuse knows exactly
-           one such code (`session/writer-held`) and replaces the blank on it,
-           so classify the ownership wording instead of burying it in a generic
-           code — otherwise New Session fails for a condition it is built to
-           handle. */
+        console.warn(`api-policy: ${method} failed: ${reason}`)
+        /* A contention refusal is the one failure the client's blank-Session
+           reuse is built to handle, so it keeps that code; everything else
+           carries its own words. */
         if (/writer|owned|already|held|占用|锁定/i.test(reason)) {
           return rpcError(rpcId, 'session/writer-held', reason, {})
         }
         return rpcError(rpcId, 'gateway/internal', `请求处理失败：${reason}`, {})
       }
-      return rewriteResponse(actor, method, body, response)
     },
     scopeEvents: (req, events) => {
       const actor = deps.actorFromRequest(req)
