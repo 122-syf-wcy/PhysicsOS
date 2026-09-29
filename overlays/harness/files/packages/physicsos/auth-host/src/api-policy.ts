@@ -1090,10 +1090,14 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
            nothing to look at either. */
         const reason = error instanceof Error ? error.message : String(error)
         console.warn(`api-policy: ${method} failed: ${reason}`)
-        /* A contention refusal is the one failure the client's blank-Session
-           reuse is built to handle, so it keeps that code; everything else
-           carries its own words. */
-        if (/writer|owned|already|held|占用|锁定/i.test(reason)) {
+        /* One refusal class belongs to the client's blank-Session reuse: the
+           Session it wanted is unusable — held by a writer, or gone from the
+           Host entirely (the reuse scans the client's own list, so a Session
+           the registry still names but the log no longer loads lands here).
+           Both mean "replace the blank", which is the code that says so. */
+        const unusableBlank = /writer|owned|already|held|占用|锁定/i.test(reason)
+          || (method === 'session.create' && /not found/i.test(reason))
+        if (unusableBlank) {
           return rpcError(rpcId, 'session/writer-held', reason, {})
         }
         return rpcError(rpcId, 'gateway/internal', `请求处理失败：${reason}`, {})

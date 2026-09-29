@@ -398,6 +398,16 @@ describe('PhysicsOS shared /api policy', () => {
       result: { ok: false, error: { code: 'session/writer-held' } },
     })
 
+    /* A blank the Host no longer holds is the same instruction to the client:
+       replace it. The reuse scans the client's own list, so this arrives as a
+       throw rather than as a business envelope. */
+    const stale = await policy.wrapFetch(async () => {
+      throw new Error('session "session-gone" not found')
+    })(request('session.create', { args: { request: { workspaceId: 'ws-1', sessionId: 'session-gone' } } }))
+    expect(await stale.json()).toMatchObject({
+      result: { ok: false, error: { code: 'session/writer-held' } },
+    })
+
     const broken = await policy.wrapFetch(async () => {
       throw new Error('boom')
     })(request('session.create', { args: { request: { workspaceId: 'ws-1' } } }))
