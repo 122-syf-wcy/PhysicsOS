@@ -3,7 +3,7 @@ import {
   cooldownMsFor,
   explainMiss,
   isEligible,
-  matchesModel,
+  upstreamModelOf,
   selectCandidates,
   WeightedRotation,
   type Candidate,
@@ -116,27 +116,29 @@ describe('eligibility and cooldown', () => {
 })
 
 describe('selection', () => {
-  it('filters by the model allow-list and explains an empty result', () => {
-    const channels = [channel('a', 10, ['deepseek-v4.1-flash']), channel('b', 20, [])]
+  it('takes every enabled channel and resolves each one’s upstream alias', () => {
+    const channels = [channel('a', 10, ['minimax-m3']), channel('b', 20, [])]
     const narrow = channels[0]
     const wide = channels[1]
     if (narrow === undefined || wide === undefined) throw new Error('fixture missing')
-    expect(matchesModel(narrow, 'deepseek-v4.1-flash')).toBe(true)
-    expect(matchesModel(narrow, 'gpt-5')).toBe(false)
-    expect(matchesModel(wide, 'gpt-5')).toBe(true)
+    /* A declared list names the UPSTREAM's ids, not a filter on what the
+       platform may ask for: channel 'a' answers anything, under its alias. */
+    expect(upstreamModelOf(narrow, 'deepseek-v4.1-flash')).toBe('minimax-m3')
+    /* An undeclared channel passes the caller's own name through. */
+    expect(upstreamModelOf(wide, 'deepseek-v4.1-flash')).toBe('deepseek-v4.1-flash')
 
     const keys = [key('a1', 'a'), key('b1', 'b')]
     const selection = selectCandidates({
       channels,
       keys,
-      model: 'gpt-5',
+      model: 'deepseek-v4.1-flash',
       nowMs: 0,
       settings,
       rotation: new WeightedRotation({ random: () => 0 }),
     })
-    expect(order(selection)).toEqual(['b1'])
-    const miss = explainMiss({ channels: [narrow], keys, model: 'gpt-5', nowMs: 0, settings })
-    expect(miss?.code).toBe('MODEL_POOL_MODEL_UNAVAILABLE')
+    /* Priority decides the order; both channels are candidates, whatever the
+       caller named. */
+    expect(order(selection)).toEqual(['a1', 'b1'])
   })
 
   it('reports an empty pool, a disabled pool, and an all-cooling pool separately', () => {
@@ -148,7 +150,7 @@ describe('selection', () => {
       model: 'm',
       nowMs: 0,
       settings,
-    })?.code).toBe('MODEL_POOL_MODEL_UNAVAILABLE')
+    })?.code).toBe('MODEL_POOL_NO_KEY')
     expect(explainMiss({
       channels: [channel('a', 10)],
       keys: [key('a1', 'a', { status: 'cooldown', cooldownUntil: 999_999 })],

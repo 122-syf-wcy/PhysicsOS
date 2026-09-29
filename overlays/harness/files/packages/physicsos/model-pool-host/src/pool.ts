@@ -48,13 +48,21 @@ export const cooldownMsFor = (streak: number, settings: SettingsRecord): number 
 }
 
 /**
- * Whether a channel serves a model.
+ * The model name a request is forwarded with.
+ *
+ * A channel that declares models names the ids its upstream answers to: the
+ * first one is the ALIAS the pool sends in place of whatever the platform asked
+ * for. That is what lets one public model (平台公益模型) sit in front of a pool
+ * whose upstreams — and their model names — change without the product
+ * changing with them. A channel that declares none passes the caller's own
+ * model through untouched: the operator is saying its upstream speaks the
+ * platform's names.
  * @param channel - the stored channel.
  * @param model - the model the caller asked for.
- * @returns whether the channel accepts the request.
+ * @returns the model id to put on the wire.
  */
-export const matchesModel = (channel: ChannelRecord, model: string): boolean =>
-  channel.models.length === 0 || channel.models.includes(model)
+export const upstreamModelOf = (channel: ChannelRecord, model: string): string =>
+  channel.models[0] ?? model
 
 /** Optional injection points for the router's process-local tie-breaker. */
 export interface WeightedRotationOptions {
@@ -162,6 +170,7 @@ export class WeightedRotation {
 export interface SelectionInput {
   readonly channels: readonly ChannelRecord[]
   readonly keys: readonly KeyRecord[]
+  /** What the caller asked for; named in refusals, never a routing filter. */
   readonly model: string
   readonly nowMs: number
   readonly settings: SettingsRecord
@@ -183,7 +192,9 @@ export const selectCandidates = (input: SelectionInput): Candidate[] => {
   const eligible: Candidate[] = []
   for (const channel of input.channels) {
     if (!channel.enabled) continue
-    if (!matchesModel(channel, input.model)) continue
+    /* Every enabled channel takes the request: a declared list names the
+       upstream's own model ids (see {@link upstreamModelOf}), never a filter
+       on what the platform may ask for. */
     for (const key of byChannel.get(channel.id) ?? []) {
       if (isEligible(key, input.nowMs, input.settings)) eligible.push({ channel, key })
     }
@@ -193,7 +204,7 @@ export const selectCandidates = (input: SelectionInput): Candidate[] => {
 
 /** A refusal that did not come from an upstream — the proxy answers these directly. */
 export interface SelectionMiss {
-  readonly code: 'MODEL_POOL_EMPTY' | 'MODEL_POOL_MODEL_UNAVAILABLE' | 'MODEL_POOL_ALL_COOLING'
+  readonly code: 'MODEL_POOL_EMPTY' | 'MODEL_POOL_NO_KEY' | 'MODEL_POOL_ALL_COOLING'
   readonly message: string
 }
 
@@ -218,20 +229,13 @@ export const explainMiss = (
     if (bucket === undefined) byChannel.set(key.channelId, [key])
     else bucket.push(key)
   }
-  const covered = channels.filter(channel => matchesModel(channel, input.model))
-  if (covered.length === 0) {
-    return {
-      code: 'MODEL_POOL_MODEL_UNAVAILABLE',
-      message: `没有通道声明模型 ${input.model}，请在管理后台补充或调整通道模型列表`,
-    }
-  }
-  const usable = covered.some(channel =>
+  const usable = channels.some(channel =>
     (byChannel.get(channel.id) ?? []).some(key => key.enabled),
   )
   if (!usable) {
     return {
-      code: 'MODEL_POOL_MODEL_UNAVAILABLE',
-      message: `模型 ${input.model} 的通道没有启用中的 key`,
+      code: 'MODEL_POOL_NO_KEY',
+      message: '平台模型池的通道没有启用中的 key，请在管理后台「模型通道」补一个',
     }
   }
   return {

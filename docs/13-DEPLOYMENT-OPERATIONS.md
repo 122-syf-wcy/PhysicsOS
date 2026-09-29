@@ -238,7 +238,8 @@ docker compose exec -T app cat /var/lib/physicsos/settings.yaml
 | 冷却     | 401/403 认证失败立即冷却；429/5xx/传输失败达到 `failureThreshold` 后冷却                                                                    |
 | 退避     | `cooldownBaseMs` 起指数增长，受 `cooldownMaxMs` 限制；`autoRecover=true` 时到期自动恢复                                                     |
 | 流式     | 只会在上游响应头返回前重试；流已经开始后不重放，避免重复内容                                                                                |
-| 全不可用 | 明确返回 HTTP 503 与 `MODEL_POOL_EXHAUSTED`、`MODEL_POOL_EMPTY`、`MODEL_POOL_MODEL_UNAVAILABLE` 或 `MODEL_POOL_ALL_COOLING`，不伪造模型回复 |
+| 模型别名 | 通道里的模型名是**上游**的名字，转发时替换平台侧名字；留空则原样透传。选路不按模型名过滤 |
+| 全不可用 | 明确返回 HTTP 503 与 `MODEL_POOL_EXHAUSTED`、`MODEL_POOL_EMPTY`、`MODEL_POOL_NO_KEY` 或 `MODEL_POOL_ALL_COOLING`，不伪造模型回复 |
 
 #### 日常操作
 

@@ -116,7 +116,7 @@ describe('AdminModelPoolTab', () => {
     fireEvent.change(screen.getByLabelText('上游 Base URL'), {
       target: { value: 'https://backup.example.com/v1' },
     })
-    fireEvent.change(screen.getByLabelText('模型列表'), {
+    fireEvent.change(screen.getByLabelText('上游模型（别名）'), {
       target: { value: 'deepseek-v4.1-flash, deepseek-chat' },
     })
     fireEvent.change(screen.getByLabelText('优先级'), { target: { value: '20' } })

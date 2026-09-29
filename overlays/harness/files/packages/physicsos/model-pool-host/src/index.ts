@@ -25,7 +25,7 @@ import { deriveCipherKey } from './crypto.ts'
 import { openModelPoolDomain } from './domain.ts'
 import { PoolError } from './errors.ts'
 import { identityOf } from './identity.ts'
-import { WeightedRotation } from './pool.ts'
+import { upstreamModelOf, WeightedRotation } from './pool.ts'
 import { startModelProxy } from './proxy.ts'
 import { modelPoolRoutes, type ChannelModelsResult } from './routes.ts'
 import { PoolStore } from './store.ts'
@@ -129,7 +129,10 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
       const result = await probeChat({
         channel,
         secret: store.openKey(record),
-        ...(channel.models[0] === undefined ? {} : { model: channel.models[0] }),
+        /* The same model the pool would forward: the channel's alias when it
+           declares one, and (for an unrestricted channel, whose upstream speaks
+           the platform's names) the probe's own fallback when it does not. */
+        model: upstreamModelOf(channel, ''),
         timeoutMs: normalized.testTimeoutMs,
         signal,
       })

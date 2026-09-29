@@ -45,7 +45,7 @@ const mount = (
       usePanelInfo={(() => undefined) as never}
       useSessions={(() => undefined) as never}
       useSessionStatus={(() => undefined) as never}
-      useSessionRetainInfo={(() => undefined) as never}
+      useSessionRetainInfo={() => undefined}
       useResource={(() => undefined) as never}
     />,
   )

@@ -152,8 +152,8 @@
       ],
       "entry": "packages/physicsos/model-pool-host/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "5a50c638500c0b8ed74f716f75066410014d77010e5892a34abe9607c5319be2",
-      "signature": "ed25519:RmkQ/STQHpLQYO2KhmLYBTKtpc56FBcUa8mGHQFlKnJhB3YTvNidbjBZMFfR+hnJ1sm5KO02CBlUi+RDEzDeAg==",
+      "sha256": "d2c0f0bd61f42a45674a75a1574bc2023ca4d84bc758b69afc251c26b5df577a",
+      "signature": "ed25519:XROTMz6ZIjcJ3SS9QwIu2kY+0qKZ9AflxVqF6pagYdH9Z2IKmQhzDzw+Kh9rHMRJJzsz2fhdQuwXMY8y9s0tAA==",
       "description": "Encrypted model-channel rotation, failover, and local OpenAI proxy."
     },
     {

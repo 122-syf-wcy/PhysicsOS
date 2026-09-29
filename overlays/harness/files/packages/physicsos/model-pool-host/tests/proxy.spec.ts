@@ -178,8 +178,32 @@ describe('model pool proxy', () => {
 
     const result = await chat(base)
     expect(result.status).toBe(503)
-    expect(result.text).toContain('MODEL_POOL_MODEL_UNAVAILABLE')
+    expect(result.text).toContain('MODEL_POOL_NO_KEY')
     expect(upstream.hits()).toBe(0)
+  })
+
+  it("forwards a channel's own model id in place of the platform's name", async () => {
+    const received: Record<string, unknown>[] = []
+    const upstream = await startUpstream((body, res) => {
+      received.push(body)
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ choices: [] }))
+    })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    /* The platform asks for its own model; this upstream only answers to
+       `minimax-m3`, which is what the channel declares. */
+    const channel = await store.createChannel(ADMIN, {
+      name: 'a', baseURL: upstream.url, models: ['minimax-m3'], priority: 10,
+    })
+    await store.addKey(ADMIN, channel.id, { key: 'sk-alias-0001' })
+    const base = await startPool(store)
+
+    const result = await chat(base)
+    expect(result.status).toBe(200)
+    expect(received[0]?.model).toBe('minimax-m3')
+    /* Everything else in the payload rides through untouched. */
+    expect(received[0]?.messages).toEqual([{ role: 'user', content: 'hi' }])
   })
 
   it('does not retry a client error the upstream answered with 400', async () => {

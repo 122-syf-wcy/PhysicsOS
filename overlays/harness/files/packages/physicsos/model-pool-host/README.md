@@ -27,7 +27,8 @@ Harness ──▶ http://127.0.0.1:<PHYSICSOS_MODEL_POOL_PORT>/v1
 | 冷却 | 连续失败 `failureThreshold=3` 次，或任一 401/403，立即进入冷却；`cooldownBaseMs=30s` 起指数退避，上限 `cooldownMaxMs=30min`。 |
 | 恢复 | `autoRecover=true` 时冷却到期自动回到服务；设为 false 需管理员在后台「恢复」。 |
 | 流式 | 只在「响应头之前」重试。已经开始输出的流不会被重放，避免重复内容。 |
-| 全挂 | 返回 HTTP 503 + `MODEL_POOL_EXHAUSTED`（或 `MODEL_POOL_EMPTY` / `MODEL_POOL_MODEL_UNAVAILABLE` / `MODEL_POOL_ALL_COOLING`），带中文原因。 |
+| 模型别名 | 通道的「模型列表」写的是**上游自己的模型名**；转发时用第一个替换平台侧的名字（如平台统一叫「平台公益模型」而上游只认 `minimax-m3`）。留空则原样透传调用方的模型名。选路不再按模型名过滤：任何启用通道都是候选，由 `priority` 决定先后。 |
+| 全挂 | 返回 HTTP 503 + `MODEL_POOL_EXHAUSTED`（或 `MODEL_POOL_EMPTY` / `MODEL_POOL_NO_KEY` / `MODEL_POOL_ALL_COOLING`），带中文原因。 |
 | 审计 | `channel.create/update/delete`、`key.create/update/delete/reset`、`settings.update`，只记尾号和参数，不记 key 值。 |
 
 ## 后台接口（仅 SUPER_ADMIN）

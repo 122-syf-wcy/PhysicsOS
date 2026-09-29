@@ -12,7 +12,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { PoolError } from './errors.ts'
-import { explainMiss, selectCandidates, type WeightedRotation } from './pool.ts'
+import { explainMiss, selectCandidates, upstreamModelOf, type WeightedRotation } from './pool.ts'
 import type { PoolStore } from './store.ts'
 import { forwardChat, isRetryable, listUpstreamModels } from './upstream.ts'
 import type { KeyFailure } from './types.ts'
@@ -224,7 +224,9 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
         const result = await forwardChat({
           channel: candidate.channel,
           secret,
-          payload: normalizeUpstreamPayload(payload),
+          /* The channel's own model id goes on the wire; the platform's model
+             name is a product-facing label, not something an upstream knows. */
+          payload: normalizeUpstreamPayload({ ...payload, model: upstreamModelOf(candidate.channel, model) }),
           timeoutMs: deps.attemptTimeoutMs,
           signal: abort.signal,
         })
