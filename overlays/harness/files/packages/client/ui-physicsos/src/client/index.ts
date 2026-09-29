@@ -27,6 +27,7 @@ import { HomeBrandMark } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceInjected } from './LabWorkspace.tsx'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
+import { shouldReturnToConversation } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
@@ -467,9 +468,16 @@ export function apply(ctx: ClientContext): void {
        touches through the physics tools into the session's `physicsScenes`
        projection, which rides the session list rows. The first value seen for
        a session only becomes the active scene; a later revision opens the Lab. */
+    /* Whether the Lab is showing because the agent opened it: set when a live
+       revision sends the reader there, cleared the moment they go elsewhere. */
+    let labAutoOpened = false
+    let wasRunning = false
     const agentScenes = createAgentSceneSync({
       adoptScene: (ref) => { surface.open(surface.store.getSnapshot().surface, ref) },
-      showScene: (ref) => { surface.open('lab', ref) },
+      showScene: (ref) => {
+        labAutoOpened = true
+        surface.open('lab', ref)
+      },
     })
     const mirrorAgentScene = (): void => {
       const active = currentSessionId()
@@ -477,6 +485,18 @@ export function apply(ctx: ClientContext): void {
         ? undefined
         : scope.sessions.list.getSnapshot().byId[active]
       agentScenes.apply(active, summary?.projectionValues?.['physicsScenes'])
+      /* The Lab is a working view, not the answer's home: once the turn stops,
+         a Lab the agent opened closes itself so the student reads the reply and
+         its scene card. A Lab the student opened stays open. */
+      const running = summary?.running === true
+      const current = surface.store.getSnapshot().surface
+      if (shouldReturnToConversation({ autoOpened: labAutoOpened, wasRunning, running, surface: current })) {
+        surface.open('home')
+        labAutoOpened = false
+      } else if (current !== 'lab') {
+        labAutoOpened = false
+      }
+      wasRunning = running
     }
     scope.effect(() => {
       mirrorAgentScene()

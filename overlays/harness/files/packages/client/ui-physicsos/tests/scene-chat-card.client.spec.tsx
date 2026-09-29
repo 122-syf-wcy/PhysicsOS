@@ -242,10 +242,13 @@ describe('physics scene chat card', () => {
      a unit run: driving the Definitions directly never touches the registry. */
   it('declares a view target and its node builder together, or neither', () => {
     for (const definition of [physicsSceneCardDefinition, physicsSceneTurnDefinition]) {
-      expect(definition.target === undefined).toBe(definition.buildViewNode === undefined)
+      /* `Object.hasOwn` rather than reading the members: the properties are
+         what the rule is about, and reading a method off its object to compare
+         it is exactly the unbound reference the linter refuses. */
+      expect(Object.hasOwn(definition, 'target')).toBe(Object.hasOwn(definition, 'buildViewNode'))
     }
-    expect(physicsSceneTurnDefinition.target).toBeUndefined()
-    expect(physicsSceneTurnDefinition.buildLocationData).toBeDefined()
+    expect(Object.hasOwn(physicsSceneTurnDefinition, 'target')).toBe(false)
+    expect(Object.hasOwn(physicsSceneTurnDefinition, 'buildLocationData')).toBe(true)
   })
 
   it('ignores unrelated events and stays total across the interface', () => {
