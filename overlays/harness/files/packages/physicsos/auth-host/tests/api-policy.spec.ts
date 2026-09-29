@@ -310,45 +310,67 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
-  it('reduces the model catalog to one platform model for every actor', async () => {
+  it('reduces the model catalog to the routed provider’s one platform model', async () => {
+    /* Two providers answer to the platform's model id — the production shape
+       (an Anthropic-protocol provider and the OpenAI-protocol pool route) — and
+       the Session routes through the SECOND one. Keeping the first would leave
+       the picker unable to resolve the live selection, and it would fall back to
+       printing `provider/model` at the reader. */
     const catalog = () => ({
-      default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
-      routableProviders: ['deepseek-official'],
-      groups: [{
-        id: 'deepseek-official',
-        name: 'DeepSeek',
-        models: [
-          {
-            id: 'deepseek-flash',
-            name: 'DeepSeek-V41-Flash',
-            reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
-          },
-          {
-            id: 'deepseek-v4-pro',
-            name: 'DeepSeek-V4-Pro',
-            description: 'Stronger agentic coding.',
-            reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
-          },
-        ],
-      }],
+      default: { provider: 'physicsos-pool', model: 'deepseek-v4.1-flash' },
+      routableProviders: ['deepseek-official', 'physicsos-pool'],
+      groups: [
+        {
+          id: 'deepseek-official',
+          name: 'DeepSeek',
+          models: [
+            {
+              id: 'deepseek-v4.1-flash',
+              name: 'DeepSeek-V4.1-Flash',
+              reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+            },
+            {
+              id: 'deepseek-v4-pro',
+              name: 'DeepSeek-V4-Pro',
+              description: 'Stronger agentic coding.',
+              reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+            },
+          ],
+        },
+        {
+          id: 'physicsos-pool',
+          name: '平台公益模型',
+          models: [{
+            id: 'deepseek-v4.1-flash',
+            name: '平台公益模型',
+            reasoning: {
+              efforts: [{ id: 'off', name: 'Off' }, { id: 'high', name: 'High' }],
+              defaultEffort: 'off',
+            },
+          }],
+        },
+      ],
       failures: [{ id: 'llm-pi-ai', name: 'Pi', message: 'unreachable' }],
     })
 
     const studentResponse = await makePolicy().policy.wrapFetch(async () => rpc(catalog()))(
       request('session.modelCatalog'),
     )
-    /* The default model, under the product's name: the id the client submits
-       for routing is untouched. */
+    /* The routed provider and model id survive untouched — the client submits
+       them — under the product's own group and model name. */
     const reduced = {
-      default: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
-      routableProviders: ['deepseek-official'],
+      default: { provider: 'physicsos-pool', model: 'deepseek-v4.1-flash' },
+      routableProviders: ['physicsos-pool'],
       groups: [{
-        id: 'deepseek-official',
+        id: 'physicsos-pool',
         name: 'PhysicsOS',
         models: [{
-          id: 'deepseek-v4-pro',
+          id: 'deepseek-v4.1-flash',
           name: '平台公益模型',
-          reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+          reasoning: {
+            efforts: [{ id: 'off', name: 'Off' }, { id: 'high', name: 'High' }],
+            defaultEffort: 'off',
+          },
         }],
       }],
       failures: [],

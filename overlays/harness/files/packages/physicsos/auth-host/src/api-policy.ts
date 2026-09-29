@@ -301,26 +301,37 @@ const PLATFORM_MODEL_GROUP_NAME = 'PhysicsOS'
  * @param value - the catalog value, mutated in place.
  */
 const reduceModelCatalog = (value: Record<string, unknown>): void => {
-  const preferred = isRecord(value['default']) && typeof value['default']['model'] === 'string'
-    ? value['default']['model']
-    : undefined
+  const selection = isRecord(value['default']) ? value['default'] : {}
+  const preferred = typeof selection['model'] === 'string' ? selection['model'] : undefined
+  /* The group the Session actually routes through, not merely the first one
+     that carries a model with that id: several providers may answer to the same
+     platform id, and keeping a different one leaves the picker unable to resolve
+     the current selection — it then falls back to showing the raw
+     `provider/model` pair the product must never show. */
+  const routed = typeof selection['provider'] === 'string' ? selection['provider'] : undefined
   const groups = value['groups']
   if (!Array.isArray(groups)) return
+  const usable = groups.filter(isRecord).filter(group => Array.isArray(group['models']))
+  const modelIn = (group: Record<string, unknown>): Record<string, unknown> | undefined => {
+    const models = (group['models'] as unknown[]).filter(isRecord)
+    return models.find(model => model['id'] === preferred) ?? models[0]
+  }
+  const group = usable.find(candidate => candidate['id'] === routed) ?? usable[0]
+  if (group === undefined) {
+    value['groups'] = []
+    value['routableProviders'] = []
+    value['failures'] = []
+    return
+  }
+  const chosen = modelIn(group)
   const kept: Record<string, unknown>[] = []
-  for (const group of groups) {
-    if (kept.length > 0) break
-    if (!isRecord(group) || !Array.isArray(group['models'])) continue
-    const models = group['models'].filter(isRecord)
-    /* The default model is what unconfigured Sessions already use; a catalog
-       that names no match keeps its head so the seat is never empty. */
-    const chosen = models.find(model => model['id'] === preferred) ?? models[0]
-    if (chosen === undefined) continue
+  if (chosen !== undefined) {
     const entry: Record<string, unknown> = { ...chosen, name: PLATFORM_MODEL_NAME }
     delete entry['description']
     kept.push({ id: group['id'], name: PLATFORM_MODEL_GROUP_NAME, models: [entry] })
   }
   value['groups'] = kept
-  value['routableProviders'] = kept.map(group => group['id'])
+  value['routableProviders'] = kept.map(entry => entry['id'])
   /* A failure names the provider it could not reach. */
   value['failures'] = []
 }
