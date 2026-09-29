@@ -43,22 +43,22 @@
   "build:hosts": "pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-auth-host --filter @deepseek-ai/dsh-paper-host --filter @deepseek-ai/dsh-notice-host --filter @deepseek-ai/dsh-update-host --filter @deepseek-ai/dsh-learning-host --filter @deepseek-ai/dsh-class-host --filter @deepseek-ai/dsh-shared-state-host --filter @deepseek-ai/dsh-health-host --filter @deepseek-ai/dsh-ops-host --filter @deepseek-ai/dsh-plugin-center --filter @deepseek-ai/dsh-model-pool-host run bundle"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.10.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "eslint": "^10.8.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.4",
-    "globals": "^17.11.0",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
     "jsdom": "^27.0.1",
-    "prettier": "^3.9.6",
-    "turbo": "^2.10.10",
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.3",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^4.1.10"
   }
 }

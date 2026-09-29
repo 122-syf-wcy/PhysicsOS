@@ -16,9 +16,9 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "katex": "^0.18.4",
+    "katex": "^0.18.9",
     "lucide-react": "^0.544.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.7.0"
   },
   "peerDependencies": {
     "react": "^19.2.8",
