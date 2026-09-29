@@ -65,6 +65,7 @@ vendor/deepseek-harness/apps/web
 - Question Space：80 道内置题（磁场 10、电场 19、力学 6、复合场 21、光学 6、电路 6、电磁感应 6、机械波 6），真实 Question Runtime、Engine、Verifier 与 Observation 链
 - Question → Lab：题目使用同一个 `PhysicsScene` revision 打开实验室（题面事实不可被实验污染）
 - 基于 `requestAnimationFrame` 的连续动画；磁场微观周期使用稳定展示时钟，力学逐帧读取 Engine `stateAt`
+- **平台公益模型**：用户侧只暴露一个公共模型（`平台公益模型`），背后是管理员可随时增删的**模型通道与号池**（`/physicsos/model-pool`）——通道声明上游模型别名、按优先级分层轮换、key 加权轮转与失效冷却，换号池或换 key 不影响用户看到的模型名；额度来自公益站 token，见「[致谢](#致谢)」
 - 桌面、窄桌面和手机布局；手机导航完成后自动收起侧栏
 - Harness 会话里的模型可以真正调用物理引擎：Agent 预设「物理学习模式」（`physics-student`）挂载 `@deepseek-ai/dsh-tool-physicsos`，模型通过 `physics_solve_question / physics_create_experiment / physics_scene_command / physics_simulate / physics_observe` 等七个工具开实验、解题、改条件、模拟与校验，数值全部来自引擎（`node tests/agent/headless-physics-acceptance.mjs` 端到端门禁）
 
@@ -183,6 +184,22 @@ node scripts/overlay/harness-overlay.mjs capture   # vendor/deepseek-harness →
 ```
 
 说明见 `overlays/harness/README.md`。
+
+## 致谢
+
+平台的**公益模型额度**来自下列公益站——本项目的「平台公益模型」号池接的就是它们的 token。
+一个公益教学项目能跑起来，靠的是这些站点：
+
+| 公益站 | 地址 |
+| --- | --- |
+| 黑与白公益站 | <https://ai.hybgzs.com/panel> |
+| 咕咕嘎嘎公益站 | <https://api.fengshao1227.com/> |
+| lucky API 公益站 | <https://new.lucky0625.qzz.io/> |
+| luckyg 公益站 | <https://luckyg.131518.xyz/> |
+
+这些站点各自独立运营，与 PhysicsOS 没有隶属关系：可用模型、额度与稳定性由它们自行决定，
+本项目不对其可用性作任何承诺，也请勿把这里的地址当作稳定的生产依赖。
+如果你是其一的运营者并希望调整署名或链接方式，开个 issue 即可。
 
 ## 许可与用途
 

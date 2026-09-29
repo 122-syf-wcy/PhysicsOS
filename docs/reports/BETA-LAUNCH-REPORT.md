@@ -204,7 +204,8 @@ node tests/acceptance/promo-shots.mjs
 | [`05-lab-liquid-pressure.png`](./screenshots/promo/05-lab-liquid-pressure.png) | 探究液体内部压强 |
 | [`06-lab-melting.png`](./screenshots/promo/06-lab-melting.png) | 探究晶体熔化过程 |
 | [`07-library.png`](./screenshots/promo/07-library.png) | 资源库 |
-| [`08-learning-record.png`](./screenshots/promo/08-learning-record.png) | 学习记录与活动热力图 |
+| [`08-learning-record.png`](./screenshots/promo/08-learning-record.png) | 学习记录与活动热力图（该账号尚未自测，故为空状态） |
+| [`09-solved-question.png`](./screenshots/promo/09-solved-question.png) | 已解题的卡片：引擎校验逐条通过 + 同一场景的可交互实验台 |
 
 ## 4. 本地门禁与测试数
 
@@ -313,7 +314,8 @@ git apply --reverse --check：通过
 5. 用 `05-lab-liquid-pressure.png` 演示液体深度与压强的关系。
 6. 用 `06-lab-melting.png` 演示晶体熔化过程中的温度平台与状态变化。
 7. 用 `07-library.png` 展示题库和实验资源。
-8. 用 `08-learning-record.png` 展示学习记录、活动热力图和薄弱点回顾。
+8. 用 `08-learning-record.png` 展示学习记录与活动热力图。注意这张取决账号状态：演示账号没做过自测时为**空状态**（0 次练习），要演示非空效果需先在该账号的解题卡片里完成一次自测。
+9. 用 `09-solved-question.png` 收尾：一道题的完整回答——结论由引擎给出并逐条校验（重力分量、支持力、场景结构），右侧是同一个 `PhysicsScene` 在实验台里的可交互形态。
 
 所有图片均取自真实生产站点，不包含管理员密码或后台 secret。
 
