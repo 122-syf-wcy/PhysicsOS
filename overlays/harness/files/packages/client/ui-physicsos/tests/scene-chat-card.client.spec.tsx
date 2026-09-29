@@ -236,6 +236,18 @@ describe('physics scene chat card', () => {
     expect(turnDataOf([entry(1, 'turn/start', { turn: 2 })])).toBeNull()
   })
 
+  /* The registry refuses a Definition declaring `target` without
+     `buildViewNode` — and that refusal fails the whole plugin's activation,
+     which takes the client down. Mirroring the rule here is what catches it in
+     a unit run: driving the Definitions directly never touches the registry. */
+  it('declares a view target and its node builder together, or neither', () => {
+    for (const definition of [physicsSceneCardDefinition, physicsSceneTurnDefinition]) {
+      expect(definition.target === undefined).toBe(definition.buildViewNode === undefined)
+    }
+    expect(physicsSceneTurnDefinition.target).toBeUndefined()
+    expect(physicsSceneTurnDefinition.buildLocationData).toBeDefined()
+  })
+
   it('ignores unrelated events and stays total across the interface', () => {
     expect(physicsSceneCardDefinition.match(
       entry(1, 'turn/start', { turn: 1 }).event,

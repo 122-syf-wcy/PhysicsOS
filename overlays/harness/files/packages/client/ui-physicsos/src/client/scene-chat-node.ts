@@ -168,7 +168,10 @@ const publishedOf = (card: PhysicsSceneCardState): PhysicsSceneCardData => ({
  */
 export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsSceneTurnState> = {
   kind: 'physics-scene-turn',
-  target: 'chat',
+  /* No `target`: this Definition publishes Turn data for the turn-tail seat and
+     builds no view node of its own. The registry enforces the pairing — a
+     `target` requires `buildViewNode`, and declaring one without the other
+     fails the plugin's activation, which takes the whole client down. */
   match: (event) => {
     if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
     if (event.type === 'physics/scene' && typeof event.data.turn === 'number') {
