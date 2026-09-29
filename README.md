@@ -12,8 +12,8 @@ PhysicsOS 是一个面向初高中物理学习的公益可视化智能体，通�
 
 ## 界面截图
 
-以下截图取自 2026-09-27 的正式生产站点，由
-`tests/acceptance/promo-shots.mjs` 使用真实浏览器登录后自动拍摄。
+以下截图取自 2026-09-30 的正式生产站点，由
+`tests/acceptance/promo-shots.mjs` 使用真实浏览器登录后自动拍摄（账号为专用演示账号，非管理员账号）。
 
 | 平台首页 | 实验中心 |
 | --- | --- |
@@ -27,9 +27,11 @@ PhysicsOS 是一个面向初高中物理学习的公益可视化智能体，通�
 | --- | --- |
 | ![液体压强](docs/reports/screenshots/promo/05-lab-liquid-pressure.png) | ![晶体熔化](docs/reports/screenshots/promo/06-lab-melting.png) |
 
-| 资源库 | 学习记录 |
+| 资源库 | 解题卡片 |
 | --- | --- |
-| ![资源库](docs/reports/screenshots/promo/07-library.png) | ![学习记录](docs/reports/screenshots/promo/08-learning-record.png) |
+| ![资源库](docs/reports/screenshots/promo/07-library.png) | ![解题卡片](docs/reports/screenshots/promo/09-solved-question.png) |
+
+最后一张是一道题的完整回答：结论由力学引擎给出并逐条校验（重力分量、支持力、场景结构），右侧是同一个 `PhysicsScene` 在实验台里的可交互形态——**AI 讲题、引擎给结果、场景可复现**是这条链路的全部主张。
 
 完整上线范围、生产复验和教师演示顺序见
 [`docs/reports/BETA-LAUNCH-REPORT.md`](./docs/reports/BETA-LAUNCH-REPORT.md)。
@@ -80,6 +82,15 @@ vendor/deepseek-harness/apps/web
 - 图片 / PDF / VLM 录题已经实现；真实卷库继续扩充仍需要可授权卷源与教师核验
 
 界面会明确标记尚未接通的能力，不用占位成功状态冒充完成。
+
+## 参与贡献
+
+公测阶段最需要的是**真实使用反馈**与**小而准的改动**：
+
+- **报问题 / 提需求**：用 [issue 模板](https://github.com/122-syf-wcy/PhysicsOS/issues/new/choose)（问题报告 / 功能请求 / 提问）。请写清复现步骤、期望与实际结果；界面问题附截图、物理问题附题干原文。
+- **提 PR**：先读 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。一个 PR 聚焦一个主题，并跑过 `pnpm typecheck && pnpm lint && pnpm test`；只改 Web 覆盖层时可用「验证」里的 `:web` 变体（更快）。
+- **想找入手点**：上面的「尚未完成」与「已知问题」就是当前 backlog。领域引擎与黄金题最容易上手——每个领域引擎都带独立测试，改完直接 `pnpm test:web` 验证。
+- **安全问题**：不要开公开 issue，按 [`SECURITY.md`](./SECURITY.md) 私下上报。
 
 ## 已知问题
 
