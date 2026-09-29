@@ -27,10 +27,10 @@ export function SceneTurnCard({
   turn, t, openSceneInLab, recordAttempt, endTurnHygiene,
 }: SceneTurnCardProps): React.ReactNode {
   const data = turn.data.get(PHYSICS_SCENE_TURN_KEY)
-  /* This seat mounts when the turn is closed — the one reliable "the turn is
-     over" signal the client has, since the session list does not tick on the
-     running flag. That is the moment the Lab the agent opened should close and
-     its scaffolding scenes should leave 最近空间. */
+  /* The turn closed — this seat only exists once `turn/end` is in the log. That
+     is a fallback trigger for the Lab hygiene: the primary one is the
+     Conversation binding's `openTurn`, which also fires while the Lab has
+     replaced this Conversation and this seat is unmounted. */
   useEffect(() => { endTurnHygiene?.() }, [endTurnHygiene])
   if (data === undefined) return null
   return (

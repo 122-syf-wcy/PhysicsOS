@@ -27,7 +27,7 @@ import { HomeBrandMark } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceInjected } from './LabWorkspace.tsx'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
-import { intermediatesToPrune } from './lab-return.ts'
+import { intermediatesToPrune, watchTurnEdges } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
@@ -240,23 +240,26 @@ export function apply(ctx: ClientContext): void {
   let labAutoOpened = false
   let turnScenes: string[] = []
 
+  /* The end of a turn's Lab visit. The Lab is a working view, not the answer's
+     home, and the scenes built on the way are scaffolding: close the Lab the
+     agent opened and drop those scenes, keep the last, and leave a reader's own
+     Lab and scenes alone. Declared once so the seat's mount effect compares one
+     identity instead of a fresh closure on every render. */
+  const endTurnHygiene = (): void => {
+    if (labAutoOpened && surface.store.getSnapshot().surface === 'lab') {
+      surface.open('home')
+    }
+    labAutoOpened = false
+    for (const sceneId of intermediatesToPrune(turnScenes)) surface.removeRecent(sceneId)
+    turnScenes = []
+  }
+
   /* The card's own face — the Lab handover, the self-check record, and the end
      of a turn's Lab visit — shared by the conversation-flow card and the
      turn-tail seat. */
   const sceneCardFace = () => ({
     openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
-    /* The turn-tail seat mounts when the turn closes. The Lab is a working
-       view, not the answer's home, and the scenes built on the way are
-       scaffolding: close the Lab the agent opened and drop those scenes, keep
-       the last, and leave a reader's own Lab and scenes alone. */
-    endTurnHygiene: () => {
-      if (labAutoOpened && surface.store.getSnapshot().surface === 'lab') {
-        surface.open('home')
-      }
-      labAutoOpened = false
-      for (const sceneId of intermediatesToPrune(turnScenes)) surface.removeRecent(sceneId)
-      turnScenes = []
-    },
+    endTurnHygiene,
     recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
       learningRecord.record(attempt)
       reportLearning(attempt)
@@ -506,6 +509,49 @@ export function apply(ctx: ClientContext): void {
       const stop = scope.sessions.list.subscribe(mirrorAgentScene)
       return () => { stop() }
     }, 'ui-physicsos: mirror agent scenes')
+
+    /* The turn's own end closes the Lab the agent opened. The turn-tail seat
+       cannot be that trigger: the Lab replaces the Conversation surface, so the
+       seat is unmounted exactly while the Lab it should close is on screen. The
+       Conversation binding's `openTurn` publishes turn changes without an active
+       View, so this runs wherever the reader is looking. */
+    let watchedSession: SessionId | undefined
+    let stopTurnWatch: (() => void) | undefined
+    const watchTurn = (): void => {
+      const active = currentSessionId()
+      if (active === watchedSession) return
+      stopTurnWatch?.()
+      stopTurnWatch = undefined
+      watchedSession = active
+      if (active === undefined) return
+      const binding = ((): ReturnType<typeof ctx.uiConversation.binding> | undefined => {
+        try {
+          return ctx.uiConversation.binding(active)
+        } catch {
+          /* Not bound yet or already released: the list ticks again. */
+          return undefined
+        }
+      })()
+      if (binding === undefined) {
+        watchedSession = undefined
+        return
+      }
+      stopTurnWatch = watchTurnEdges(
+        () => binding.openTurn.getSnapshot(),
+        listener => binding.openTurn.subscribe(listener),
+        /* A turn that opens inherits nothing from the last one's Lab visit. */
+        () => {
+          labAutoOpened = false
+          turnScenes = []
+        },
+        endTurnHygiene,
+      )
+    }
+    scope.effect(() => {
+      watchTurn()
+      const stop = scope.sessions.list.subscribe(watchTurn)
+      return () => { stop(); stopTurnWatch?.() }
+    }, 'ui-physicsos: close the Lab at turn end')
 
     /* Practice hand-off: a golden question's stem reaches the tutor agent as one
        queued prompt on the student's current session — the tutor, never the UI,
