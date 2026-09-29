@@ -236,21 +236,28 @@ export function apply(ctx: ClientContext): void {
     'ui-physicsos: scene turn definition',
   )
   /* The Lab visit one turn makes: whether the agent opened it (rather than the
-     reader), and the scenes it built on the way. */
+     reader), and the worlds it built on the way. */
   let labAutoOpened = false
-  let turnScenes: string[] = []
+  let turnScenes: PhysicsSceneRef[] = []
 
-  /* The end of a turn's Lab visit. The Lab is a working view, not the answer's
-     home, and the scenes built on the way are scaffolding: close the Lab the
-     agent opened and drop those scenes, keep the last, and leave a reader's own
-     Lab and scenes alone. Declared once so the seat's mount effect compares one
-     identity instead of a fresh closure on every render. */
+  /* The end of a turn's Lab visit.
+   *
+   * The agent's visits never entered 最近空间 — they are working views, not
+   * artifacts (see `openTransient`) — so there is nothing of this turn's to
+   * remove. This closes the Lab the agent opened, drops any entry an older
+   * build recorded for these same scenes, and remembers the one world the
+   * answer belongs to: the last one the turn built. Declared once so the seat's
+   * mount effect compares one identity instead of a fresh closure per render. */
   const endTurnHygiene = (): void => {
     if (labAutoOpened && surface.store.getSnapshot().surface === 'lab') {
       surface.open('home')
     }
     labAutoOpened = false
-    for (const sceneId of intermediatesToPrune(turnScenes)) surface.removeRecent(sceneId)
+    const final = turnScenes[turnScenes.length - 1]
+    for (const sceneId of intermediatesToPrune(turnScenes.map(ref => ref.sceneId))) {
+      surface.removeRecent(sceneId)
+    }
+    if (final !== undefined) surface.remember(final)
     turnScenes = []
   }
 
@@ -490,11 +497,11 @@ export function apply(ctx: ClientContext): void {
        projection, which rides the session list rows. The first value seen for
        a session only becomes the active scene; a later revision opens the Lab. */
     const agentScenes = createAgentSceneSync({
-      adoptScene: (ref) => { surface.open(surface.store.getSnapshot().surface, ref) },
+      adoptScene: (ref) => { surface.openTransient(surface.store.getSnapshot().surface, ref) },
       showScene: (ref) => {
         labAutoOpened = true
-        turnScenes.push(ref.sceneId)
-        surface.open('lab', ref)
+        turnScenes.push(ref)
+        surface.openTransient('lab', ref)
       },
     })
     const mirrorAgentScene = (): void => {

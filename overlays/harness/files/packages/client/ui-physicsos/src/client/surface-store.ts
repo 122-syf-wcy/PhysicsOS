@@ -136,6 +136,22 @@ export interface PhysicsSurfaceController {
   /** Real scenes the student opened, newest first, for the sidebar 最近空间. */
   recent: SnapshotStore<RecentExperimentsState>
   open: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
+  /**
+   * Show a scene without adding it to 最近空间.
+   *
+   * The agent's own visits are working views, not artifacts a reader restores:
+   * the baseline it adopts on (re)load, and every revision it builds on the way
+   * to an answer. Recording those is what filled 最近空间 with the scaffolding
+   * of one question — three attempts at the same model, all kept. Only
+   * {@link remember} writes an entry, once the turn knows which world the
+   * answer belongs to.
+   */
+  openTransient: (surface: PhysicsSurfaceId, sceneRef: PhysicsSceneRef) => void
+  /**
+   * Add a scene to 最近空间 without navigating: the world a turn's answer
+   * belongs to, recorded once when that turn ends.
+   */
+  remember: (sceneRef: PhysicsSceneRef) => void
   /** Open the Lab assembling a circuit: the build bench, not the reading bench. */
   openBuilder: (sceneRef: PhysicsSceneRef) => void
   /** Open the Lab on the experiment chooser, keeping the active scene resumable. */
@@ -285,6 +301,13 @@ export function createPhysicsSurfaceController(
     })
   }
 
+  /* Show a scene without remembering it: one surface swap, shared by the
+     reader's own opens and the agent's working visits. */
+  const show = (surface: PhysicsSurfaceId, sceneRef: PhysicsSceneRef): void => {
+    store.set({ surface, sceneRef })
+    navigation?.selectSurface(surface)
+  }
+
   return {
     store,
     recent,
@@ -302,6 +325,8 @@ export function createPhysicsSurfaceController(
       navigation?.selectSurface(surface)
       if (sceneRef !== undefined) record(sceneRef)
     },
+    openTransient: show,
+    remember: record,
     openBuilder: (sceneRef) => {
       store.set({ surface: 'lab', sceneRef, buildMode: true })
       navigation?.selectSurface('lab')
