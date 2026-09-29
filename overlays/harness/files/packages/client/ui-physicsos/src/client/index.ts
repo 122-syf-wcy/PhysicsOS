@@ -27,7 +27,7 @@ import { HomeBrandMark } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceInjected } from './LabWorkspace.tsx'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
-import { intermediatesToPrune, shouldReturnToConversation } from './lab-return.ts'
+import { intermediatesToPrune } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
@@ -235,10 +235,28 @@ export function apply(ctx: ClientContext): void {
     () => ctx.uiConversation.events.register(physicsSceneTurnDefinition),
     'ui-physicsos: scene turn definition',
   )
-  /* The card's own face — the Lab handover and the self-check record — shared
-     by the conversation-flow card and the turn-tail seat. */
+  /* The Lab visit one turn makes: whether the agent opened it (rather than the
+     reader), and the scenes it built on the way. */
+  let labAutoOpened = false
+  let turnScenes: string[] = []
+
+  /* The card's own face — the Lab handover, the self-check record, and the end
+     of a turn's Lab visit — shared by the conversation-flow card and the
+     turn-tail seat. */
   const sceneCardFace = () => ({
     openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
+    /* The turn-tail seat mounts when the turn closes. The Lab is a working
+       view, not the answer's home, and the scenes built on the way are
+       scaffolding: close the Lab the agent opened and drop those scenes, keep
+       the last, and leave a reader's own Lab and scenes alone. */
+    endTurnHygiene: () => {
+      if (labAutoOpened && surface.store.getSnapshot().surface === 'lab') {
+        surface.open('home')
+      }
+      labAutoOpened = false
+      for (const sceneId of intermediatesToPrune(turnScenes)) surface.removeRecent(sceneId)
+      turnScenes = []
+    },
     recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
       learningRecord.record(attempt)
       reportLearning(attempt)
@@ -468,14 +486,6 @@ export function apply(ctx: ClientContext): void {
        touches through the physics tools into the session's `physicsScenes`
        projection, which rides the session list rows. The first value seen for
        a session only becomes the active scene; a later revision opens the Lab. */
-    /* Whether the Lab is showing because the agent opened it: set when a live
-       revision sends the reader there, cleared the moment they go elsewhere. */
-    let labAutoOpened = false
-    let wasRunning = false
-    /* The scenes the agent opened in the turn in flight: solving a question
-       builds several (a first attempt, a corrected one, a variant used to check
-       a relation), and only the last belongs in 最近空间. */
-    let turnScenes: string[] = []
     const agentScenes = createAgentSceneSync({
       adoptScene: (ref) => { surface.open(surface.store.getSnapshot().surface, ref) },
       showScene: (ref) => {
@@ -490,24 +500,6 @@ export function apply(ctx: ClientContext): void {
         ? undefined
         : scope.sessions.list.getSnapshot().byId[active]
       agentScenes.apply(active, summary?.projectionValues?.['physicsScenes'])
-      /* The Lab is a working view, not the answer's home: once the turn stops,
-         a Lab the agent opened closes itself so the student reads the reply and
-         its scene card. A Lab the student opened stays open. */
-      const running = summary?.running === true
-      const current = surface.store.getSnapshot().surface
-      if (shouldReturnToConversation({ autoOpened: labAutoOpened, wasRunning, running, surface: current })) {
-        surface.open('home')
-        labAutoOpened = false
-      } else if (current !== 'lab') {
-        labAutoOpened = false
-      }
-      /* The turn is over: what it built on the way is scaffolding, and only its
-         last scene stays in 最近空间. */
-      if (wasRunning && !running) {
-        for (const sceneId of intermediatesToPrune(turnScenes)) surface.removeRecent(sceneId)
-        turnScenes = []
-      }
-      wasRunning = running
     }
     scope.effect(() => {
       mirrorAgentScene()

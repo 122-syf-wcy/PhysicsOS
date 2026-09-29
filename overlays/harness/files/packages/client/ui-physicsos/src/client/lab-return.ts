@@ -1,33 +1,13 @@
 /**
- * When the Lab closes itself.
+ * The turn's scene hygiene.
  *
  * The agent mirroring opens the Lab on every live scene revision so the student
- * watches the world being built — but the Lab is not where the answer lands: the
- * closing message and the scene card wait in the conversation. Once the turn
- * stops, the app therefore returns to the conversation on its own, and only when
- * IT opened the Lab: a reader who went there deliberately stays there.
- *
- * Pure and framework-free so the rule is testable without a live session.
+ * watches the world being built, and it builds several worlds on the way: a
+ * first attempt, a corrected one, a variant opened only to check a relation.
+ * The ending turn closes that visit and keeps only the scene the answer belongs
+ * to. Pure and framework-free: the caller supplies the surface actions, and this
+ * decides what deserves to survive.
  */
-
-/** One observation of the two facts the rule needs. */
-export interface LabReturnState {
-  /** The Lab is showing because the agent mirroring opened it, not the reader. */
-  readonly autoOpened: boolean
-  /** Whether the session had a turn running at the previous observation. */
-  readonly wasRunning: boolean
-  readonly running: boolean
-  /** The surface the app is showing right now. */
-  readonly surface: string
-}
-
-/**
- * Whether the app should close the Lab back to the conversation now.
- * @param state - the current observation.
- * @returns true only for the moment a turn ends on an auto-opened Lab.
- */
-export const shouldReturnToConversation = (state: LabReturnState): boolean =>
-  state.autoOpened && state.wasRunning && !state.running && state.surface === 'lab'
 
 /**
  * Which of one turn's scenes 最近空间 should drop once the turn is over.

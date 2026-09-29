@@ -9,6 +9,7 @@
  * was solved in.
  */
 
+import { useEffect } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 /* Type-only: pulls the Chat target's SlotMap entry and the turn-tail seat's
    owner props (`turn`, `seq`, `openFile`). */
@@ -23,9 +24,14 @@ export type SceneTurnCardProps =
 
 /** Render this Turn's newest scene beside its answer, or nothing when it had none. */
 export function SceneTurnCard({
-  turn, t, openSceneInLab, recordAttempt,
+  turn, t, openSceneInLab, recordAttempt, endTurnHygiene,
 }: SceneTurnCardProps): React.ReactNode {
   const data = turn.data.get(PHYSICS_SCENE_TURN_KEY)
+  /* This seat mounts when the turn is closed — the one reliable "the turn is
+     over" signal the client has, since the session list does not tick on the
+     running flag. That is the moment the Lab the agent opened should close and
+     its scaffolding scenes should leave 最近空间. */
+  useEffect(() => { endTurnHygiene?.() }, [endTurnHygiene])
   if (data === undefined) return null
   return (
     <SceneCardBody

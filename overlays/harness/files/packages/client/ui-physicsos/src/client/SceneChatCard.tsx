@@ -53,6 +53,11 @@ export interface SceneChatCardInjected {
   /** Hand the card's scene to the Lab — the same verb 最近空间 rows use. */
   openSceneInLab: (ref: PhysicsSceneRef) => void
   /**
+   * Close an agent-opened Lab and drop the turn's scaffolding scenes. Called
+   * once per turn by the turn-tail seat, which only mounts after the turn ends.
+   */
+  endTurnHygiene?: () => void
+  /**
    * Write a self-check answer into the learning record. Absent where no
    * learning-record store exists; the self-check block hides itself then.
    */
