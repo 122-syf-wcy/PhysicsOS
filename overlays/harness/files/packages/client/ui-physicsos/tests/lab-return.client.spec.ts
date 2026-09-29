@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldReturnToConversation } from '../src/client/lab-return.ts'
+import { intermediatesToPrune, shouldReturnToConversation } from '../src/client/lab-return.ts'
 
 const state = (over: Partial<Parameters<typeof shouldReturnToConversation>[0]> = {}) => ({
   autoOpened: true,
@@ -27,5 +27,20 @@ describe('the Lab closing itself', () => {
   it('never pulls the reader off another surface', () => {
     expect(shouldReturnToConversation(state({ surface: 'record' }))).toBe(false)
     expect(shouldReturnToConversation(state({ surface: 'home' }))).toBe(false)
+  })
+})
+
+describe('the intermediates a turn leaves behind', () => {
+  it('keeps the final scene and drops the ones the turn used on the way', () => {
+    expect(intermediatesToPrune(['a', 'b', 'c'])).toEqual(['a', 'b'])
+  })
+
+  it('collapses a scene the list recorded twice', () => {
+    expect(intermediatesToPrune(['a', 'b', 'a', 'c'])).toEqual(['a', 'b'])
+  })
+
+  it('drops nothing for a turn that produced one scene, or none', () => {
+    expect(intermediatesToPrune(['only'])).toEqual([])
+    expect(intermediatesToPrune([])).toEqual([])
   })
 })

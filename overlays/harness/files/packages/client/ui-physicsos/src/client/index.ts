@@ -27,7 +27,7 @@ import { HomeBrandMark } from './HomeBrand.tsx'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { PhysicsSurface, type PhysicsSurfaceInjected } from './LabWorkspace.tsx'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
-import { shouldReturnToConversation } from './lab-return.ts'
+import { intermediatesToPrune, shouldReturnToConversation } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
@@ -472,10 +472,15 @@ export function apply(ctx: ClientContext): void {
        revision sends the reader there, cleared the moment they go elsewhere. */
     let labAutoOpened = false
     let wasRunning = false
+    /* The scenes the agent opened in the turn in flight: solving a question
+       builds several (a first attempt, a corrected one, a variant used to check
+       a relation), and only the last belongs in 最近空间. */
+    let turnScenes: string[] = []
     const agentScenes = createAgentSceneSync({
       adoptScene: (ref) => { surface.open(surface.store.getSnapshot().surface, ref) },
       showScene: (ref) => {
         labAutoOpened = true
+        turnScenes.push(ref.sceneId)
         surface.open('lab', ref)
       },
     })
@@ -495,6 +500,12 @@ export function apply(ctx: ClientContext): void {
         labAutoOpened = false
       } else if (current !== 'lab') {
         labAutoOpened = false
+      }
+      /* The turn is over: what it built on the way is scaffolding, and only its
+         last scene stays in 最近空间. */
+      if (wasRunning && !running) {
+        for (const sceneId of intermediatesToPrune(turnScenes)) surface.removeRecent(sceneId)
+        turnScenes = []
       }
       wasRunning = running
     }
