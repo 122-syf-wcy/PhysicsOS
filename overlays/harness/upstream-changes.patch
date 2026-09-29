@@ -62,6 +62,19 @@ index 6592d6a700..c7bb323a22 100644
        "purpose": "any"
      }
    ]
+diff --git a/apps/web/tests/preview-boot.e2e.ts b/apps/web/tests/preview-boot.e2e.ts
+index f8bafcb699..02fe6e60fa 100644
+--- a/apps/web/tests/preview-boot.e2e.ts
++++ b/apps/web/tests/preview-boot.e2e.ts
+@@ -304,7 +304,7 @@ async function bootPreview(origin: string, browser: Browser): Promise<void> {
+       SNAPSHOT_MODE,
+     )
+     await page.getByRole('button', { name: 'Start Preview' }).click()
+-    await page.getByText('Loading plugins…', { exact: true }).waitFor({ timeout: 10_000 })
++    await page.getByText('正在准备物理世界…', { exact: true }).waitFor({ timeout: 10_000 })
+     const bootLine = await within(treeActive, BOOT_TIMEOUT_MS, `preview boot: the worker never reported "${TREE_ACTIVE}"`)
+     // The activated tree ran bodies lowered against the contract this
+     // checkout's packer emits; a dist built before a contract change would
 diff --git a/apps/web/tests/pwa-manifest.e2e.ts b/apps/web/tests/pwa-manifest.e2e.ts
 index 2cfc21e2c9..16c7dc460c 100644
 --- a/apps/web/tests/pwa-manifest.e2e.ts
@@ -123,6 +136,32 @@ index 2cfc21e2c9..16c7dc460c 100644
 +  const mark = await readFile(join(DIST_ROOT, 'physicsos/brand/physicsos-mark-32.png'))
 +  expect(mark.byteLength).toBeGreaterThan(0)
  })
+diff --git a/apps/web/tests/settings-chrome.e2e.ts b/apps/web/tests/settings-chrome.e2e.ts
+index 14278995c4..59974e68d7 100644
+--- a/apps/web/tests/settings-chrome.e2e.ts
++++ b/apps/web/tests/settings-chrome.e2e.ts
+@@ -329,7 +329,7 @@ describe('web e2e: settings modal and General preferences', () => {
+     let reload: ReturnType<Page['reload']> | undefined
+     try {
+       reload = page.reload({ waitUntil: 'domcontentloaded' })
+-      const loading = page.getByText('Loading plugins…', { exact: true })
++      const loading = page.getByText('正在准备物理世界…', { exact: true })
+       await loading.waitFor({ timeout: 10_000 })
+       const state = await loading.evaluate((element) => {
+         const boot = element.parentElement?.parentElement
+diff --git a/apps/web/tests/smoke-real.e2e.ts b/apps/web/tests/smoke-real.e2e.ts
+index 77acfed00a..781c3d8215 100644
+--- a/apps/web/tests/smoke-real.e2e.ts
++++ b/apps/web/tests/smoke-real.e2e.ts
+@@ -727,7 +727,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || notReady.length > 0)('web smoke
+   it('cold start: loading page settles into the three-column frame', async () => {
+     onTestFailed(() => saveFailureShot(page, 'w5-cold-start'))
+     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+-    expect(await page.locator('text=Failed to load plugins').count()).toBe(0)
++    expect(await page.locator('text=插件加载失败').count()).toBe(0)
+     const template = await page.locator('[class*="frame"]').evaluate(el => getComputedStyle(el).gridTemplateColumns)
+     expect(template.split(' ').length).toBe(3)
+     await screen(page, '01-cold-start')
 diff --git a/package.json b/package.json
 index 81a370d4c4..597a1441de 100644
 --- a/package.json
@@ -815,6 +854,106 @@ index 603c143fa7..dac91c4d60 100644
        'sidebar.workspaces': { kind: 'single', scope: 'root' },
        'sidebar.settings': { kind: 'single', scope: 'root' },
        'sidebar.footer.action': { kind: 'list', scope: 'root' },
+diff --git a/packages/client/web/src/boot-page.ts b/packages/client/web/src/boot-page.ts
+index 23b27ad4bc..05cbf1dc1b 100644
+--- a/packages/client/web/src/boot-page.ts
++++ b/packages/client/web/src/boot-page.ts
+@@ -34,10 +34,12 @@ export class BootPage {
+     this.root = div(css.boot)
+     this.root.dataset.dshBoot = ''
+     this.card = div(css.card)
+-    this.wordmark = div(css.wordmark, 'HARNESS')
++    /* PhysicsOS overlay: the splash is the product's first frame, so it carries
++       the product's name and voice rather than the vendored kernel's. */
++    this.wordmark = div(css.wordmark, 'PhysicsOS')
+     this.spinner = div(css.spinner)
+     this.spinner.dataset.dshBootSpinner = ''
+-    this.hint = div(css.hint, 'Loading plugins…')
++    this.hint = div(css.hint, '正在准备物理世界…')
+     this.card.append(this.wordmark, this.spinner, this.hint)
+     this.root.append(this.card)
+     container.append(this.root)
+@@ -89,7 +91,7 @@ export class BootPage {
+       return
+     }
+     const report = div(css.failed)
+-    report.append(div(css.failedTitle, 'Failed to load plugins'))
++    report.append(div(css.failedTitle, '插件加载失败'))
+     for (const id of failed) report.append(div(css.failedItem, id))
+     if (this.failure !== undefined) report.append(div(css.failedItem, this.failure))
+     this.card.replaceChildren(this.wordmark, report)
+diff --git a/packages/client/web/tests/boot-page.client.spec.ts b/packages/client/web/tests/boot-page.client.spec.ts
+index 33612e8a47..ca2b91d44d 100644
+--- a/packages/client/web/tests/boot-page.client.spec.ts
++++ b/packages/client/web/tests/boot-page.client.spec.ts
+@@ -14,8 +14,8 @@ describe('BootPage', () => {
+   it('draws the loading skeleton before any plugin state arrives', () => {
+     const { el } = mount()
+     expect(el.firstElementChild?.getAttribute('data-dsh-boot')).toBe('')
+-    expect(el.textContent).toContain('HARNESS')
+-    expect(el.textContent).toContain('Loading plugins…')
++    expect(el.textContent).toContain('PhysicsOS')
++    expect(el.textContent).toContain('正在准备物理世界…')
+   })
+
+   it('keeps loading while entries are active or loading', () => {
+@@ -29,8 +29,8 @@ describe('BootPage', () => {
+     expect(el.querySelector('[data-dsh-boot-spinner]')).toBe(spinner)
+     page.setState('b', 'active')
+     expect(spinner?.style.getPropertyValue('--dsh-boot-arc')).toBe('288deg')
+-    expect(el.textContent).toContain('Loading plugins…')
+-    expect(el.textContent).not.toContain('Failed to load plugins')
++    expect(el.textContent).toContain('正在准备物理世界…')
++    expect(el.textContent).not.toContain('插件加载失败')
+   })
+
+   it('lists failed entries', () => {
+@@ -41,7 +41,7 @@ describe('BootPage', () => {
+     expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-layout')
+     expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-tool')
+     expect(el.textContent).not.toContain('ok')
+-    expect(el.textContent).not.toContain('Loading plugins…')
++    expect(el.textContent).not.toContain('正在准备物理世界…')
+   })
+
+   it('shows the complete sweep report', () => {
+@@ -50,7 +50,7 @@ describe('BootPage', () => {
+     page.fail(report)
+     page.setState('a', 'active')
+     expect(el.textContent).toContain(report)
+-    expect(el.textContent).not.toContain('Loading plugins…')
++    expect(el.textContent).not.toContain('正在准备物理世界…')
+   })
+
+   it('detaches on disposal', () => {
+diff --git a/packages/client/web/tests/boot.client.spec.ts b/packages/client/web/tests/boot.client.spec.ts
+index e5e632941a..d41ddf47c8 100644
+--- a/packages/client/web/tests/boot.client.spec.ts
++++ b/packages/client/web/tests/boot.client.spec.ts
+@@ -64,8 +64,8 @@ describe('bootstrap failure rendering', () => {
+     const failure = vi.fn()
+     await entry.run(failure)
+     expect(failure).toHaveBeenCalledWith(new Error('web boot: window.__ModuleLoader__ bootstrap facade is missing'))
+-    expect(container.textContent).toContain('Loading plugins')
+-    expect(container.textContent).not.toContain('Failed to load plugins')
++    expect(container.textContent).toContain('正在准备物理世界')
++    expect(container.textContent).not.toContain('插件加载失败')
+     expect(container.querySelector('[data-dsh-boot-spinner]')).not.toBeNull()
+     await entry.dispose()
+   })
+@@ -92,10 +92,10 @@ describe('bootstrap failure rendering', () => {
+         expect(report).toHaveBeenCalledOnce()
+         expect(String(report.mock.calls[0]![0])).toContain('broken')
+         expect(container.querySelector('[data-dsh-boot-spinner]')).not.toBeNull()
+-        expect(container.textContent).not.toContain('Failed to load plugins')
++        expect(container.textContent).not.toContain('插件加载失败')
+       } else {
+         expect(report).not.toHaveBeenCalled()
+-        expect(container.textContent).toContain('Failed to load plugins')
++        expect(container.textContent).toContain('插件加载失败')
+         expect(container.textContent).toContain('broken')
+       }
+     } finally {
 diff --git a/packages/core/session/src/known-event-types.ts b/packages/core/session/src/known-event-types.ts
 index adaca29255..7c2caa5da4 100644
 --- a/packages/core/session/src/known-event-types.ts
