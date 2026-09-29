@@ -526,6 +526,25 @@ describe('PhysicsOS shared /api policy', () => {
     expect(store.claims).toEqual(['workspace:workspace-student', 'session:new-session'])
   })
 
+  it('opens an administrator’s Session in the product preset too', async () => {
+    const { policy } = makePolicy({ actor: admin })
+    /* The operator's workspace stays their own — only the preset is defaulted —
+       so their own testing session behaves like a student's. */
+    const next = vi.fn(async (_request: Request) => rpc({ sessionId: 'admin-session', agentPreset: 'physics-student' }))
+    const response = await policy.wrapFetch(next)(request('session.create', {
+      args: { request: { workspaceId: 'ops-workspace' } },
+    }, 'admin'))
+    const [forwarded] = next.mock.calls[0] as [Request]
+    const body = await forwarded.clone().json() as { payload?: { args?: { request?: Record<string, unknown> } } }
+    expect(body.payload?.args?.request).toMatchObject({
+      workspaceId: 'ops-workspace',
+      agentPreset: 'physics-student',
+    })
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { sessionId: 'admin-session' } },
+    })
+  })
+
   it('refuses the response when the enforced preset did not survive the rewrite', async () => {
     const { policy } = makePolicy()
     // The host answers with the deployment default: the rewritten request never

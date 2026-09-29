@@ -821,6 +821,14 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       delete payload['sessionId']
       payload['workspaceId'] = workspace.id
       payload['agentPreset'] = STUDENT_PRESET
+    } else if (method === 'session.create' && payload['agentPreset'] === undefined) {
+      /* The operator's own Sessions open in the product's mode too. Leaving
+         them on the installation's default preset is what made an administrator
+         see a worse product than a student: that preset carries no physics
+         tools, so the tutor answered 「环境无法执行命令」 and derived numbers by
+         hand instead of running the engine. A later `agentPreset.select` — which
+         an administrator is free to make — still wins. */
+      payload['agentPreset'] = STUDENT_PRESET
     }
 
     if (method === 'session.create' || method === 'session.fork'
