@@ -32,6 +32,7 @@ import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
 import { SceneChatCard } from './SceneChatCard.tsx'
+import { SceneTurnCard } from './SceneTurnCard.tsx'
 import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-chat-node.ts'
 import { SidebarBrandMark, SidebarBrandName } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
@@ -233,18 +234,32 @@ export function apply(ctx: ClientContext): void {
     () => ctx.uiConversation.events.register(physicsSceneTurnDefinition),
     'ui-physicsos: scene turn definition',
   )
+  /* The card's own face — the Lab handover and the self-check record — shared
+     by the conversation-flow card and the turn-tail seat. */
+  const sceneCardFace = () => ({
+    openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
+    recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
+      learningRecord.record(attempt)
+      reportLearning(attempt)
+    },
+  })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'physics-scene-card',
     locale: NS,
-    inject: () => ({
-      openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
-      recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
-        learningRecord.record(attempt)
-        reportLearning(attempt)
-      },
-    }),
+    inject: sceneCardFace,
   }, SceneChatCard))
+
+  /* The same card at the closing end of each Turn. A `physics/scene` event is
+     not a message, so its node has no place in the conversation surface and
+     never draws; the Turn's own data is where the card can sit beside the
+     answer it belongs to. */
+  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
+    name: 'conversation.chat.turnTail',
+    id: 'physicsos-scene-turn',
+    locale: NS,
+    inject: sceneCardFace,
+  }, SceneTurnCard))
 
   /* The account workspace manager. It occupies the shell's own workspace seat:
      the chip keeps the affordance and the label (it knows which Workspace the

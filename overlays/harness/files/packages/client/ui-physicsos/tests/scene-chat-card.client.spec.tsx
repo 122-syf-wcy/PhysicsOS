@@ -182,8 +182,29 @@ describe('physics scene chat card', () => {
     expect(cards.map(c => c.anchorSeq)).toEqual([1.8, 2.8])
   })
 
-  it('docks one turn-scoped card directly above the closing answer', () => {
-    const value = snapshot([
+  /* The turn card renders from the Turn's own published data (the turn-tail
+     seat), not from a view node: a `physics/scene` event is not a message, so a
+     node built for it has no place on the conversation surface. */
+  const turnDataOf = (
+    events: readonly DurableEntry[],
+  ): ReturnType<NonNullable<typeof physicsSceneTurnDefinition.buildLocationData>> => {
+    const startEvent = events[0]
+    if (startEvent === undefined) throw new Error('fixture missing turn/start')
+    let state = physicsSceneTurnDefinition.start({} as never, {
+      ...startEvent, role: 'start', location: { kind: 'session' },
+    } as never, {} as never)
+    for (const event of events.slice(1)) {
+      state = physicsSceneTurnDefinition.update({ state } as never, {
+        ...event, role: 'update', location: { kind: 'session' },
+      } as never)
+    }
+    return physicsSceneTurnDefinition.buildLocationData!(
+      { state } as never, 'turn', null,
+    )
+  }
+
+  it('publishes the newest scene of the turn as the turn-tail seat\'s data', () => {
+    const published = turnDataOf([
       entry(1, 'turn/start', { turn: 1 }),
       sceneEvent(2, 'solved', 0, ref.sceneId, 1),
       sceneEvent(3, 'solved', 0, 'scene-second', 1),
@@ -191,33 +212,28 @@ describe('physics scene chat card', () => {
       assistantMessage(5, 1),
       entry(6, 'turn/end', { turn: 1, reason: 'completed' }),
     ])
-
-    const cards = [...value.nodes.values()].filter(n => n.kind === 'physics-scene-card')
-    /* Three snapshots across two scenes still publish their per-scene
-       nodes (1.8 and the folded 3.8), but the turn card anchored just above
-       the answer message (seq 5) supersedes both in the same answer block —
-       the renderer keeps only it visible. */
-    /* Nodes iterate in context-creation order: the turn context starts at
-       turn/start, so its card lists first. */
-    expect(cards.map(c => c.anchorSeq)).toEqual([4.9, 1.8, 3.8])
-    const winner = cards.find(c => c.anchorSeq === 4.9)
-    const data = winner?.data as PhysicsSceneCardData
-    expect(data.sceneId).toBe('scene-second')
-    expect(data.revision).toBe(1)
-    expect(data.cause).toBe('command')
+    expect(published).toMatchObject({
+      kind: 'turn',
+      turn: 1,
+      key: 'physics-scene-turn',
+      value: { sceneId: 'scene-second', revision: 1, cause: 'command' },
+    })
   })
 
-  it('keeps the turn card at the work site while the turn is open', () => {
-    const value = snapshot([
+  it('publishes live while the turn is still open', () => {
+    const published = turnDataOf([
       entry(1, 'turn/start', { turn: 1 }),
       sceneEvent(2, 'solved', 0, ref.sceneId, 1),
       sceneEvent(3, 'command', 1, ref.sceneId, 1),
     ])
-
-    const cards = [...value.nodes.values()].filter(n => n.kind === 'physics-scene-card')
-    /* Open turn: the turn card rides the latest snapshot at seq - 0.1; the
-       per-scene fallback sits one step below and stays hidden behind it. */
-    expect(cards.map(c => c.anchorSeq)).toEqual([2.9, 2.8])
+    expect(published).toMatchObject({
+      kind: 'turn',
+      turn: 1,
+      key: 'physics-scene-turn',
+      value: { sceneId: ref.sceneId, revision: 1, cause: 'command' },
+    })
+    /* A turn that published nothing has nothing to dock. */
+    expect(turnDataOf([entry(1, 'turn/start', { turn: 2 })])).toBeNull()
   })
 
   it('ignores unrelated events and stays total across the interface', () => {

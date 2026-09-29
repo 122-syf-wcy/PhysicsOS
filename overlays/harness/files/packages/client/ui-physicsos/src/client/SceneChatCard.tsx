@@ -59,9 +59,15 @@ export interface SceneChatCardInjected {
   recordAttempt?: (attempt: SelfCheckAttemptInput) => void
 }
 
-/** Slot props for the inline scene card. */
+/** Slot props for the inline scene card in the conversation flow. */
 export type SceneChatCardProps =
   Pick<PropsRuntime<'conversation.chat.node', 'physics-scene-card'>, 'node' | 'useSession' | 'useChat'>
+  & InjectFace<SceneChatCardInjected>
+  & PropsLocale<'physicsos'>
+
+/** Props of the card body, shared by both entry points. */
+export type SceneCardBodyProps =
+  & { readonly data: PhysicsSceneCardData }
   & InjectFace<SceneChatCardInjected>
   & PropsLocale<'physicsos'>
 
@@ -73,34 +79,9 @@ const SUMMARY_INTERVAL_MS = 250
    lands in the same answer block (before the next user message). */
 const ANSWER_BOUNDARY = new Set(['user', 'steering'])
 
-export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, recordAttempt, useChat,
-}: SceneChatCardProps) {
-  const data: PhysicsSceneCardData = node.data
-  /* Supersede rule reads the Chat target's materialized Nodes (the Session
-     snapshot carries no `chat` slice any more). */
-  const superseded = useChat((snapshot) => {
-    let horizon = Number.POSITIVE_INFINITY
-    for (const candidate of snapshot.nodes.values()) {
-      if (
-        ANSWER_BOUNDARY.has(candidate.kind)
-        && candidate.anchorSeq > node.anchorSeq
-        && candidate.anchorSeq < horizon
-      ) {
-        horizon = candidate.anchorSeq
-      }
-    }
-    for (const candidate of snapshot.nodes.values()) {
-      if (
-        candidate.kind === 'physics-scene-card'
-        && candidate.anchorSeq > node.anchorSeq
-        && candidate.anchorSeq < horizon
-      ) {
-        return true
-      }
-    }
-    return false
-  })
+export const SceneCardBody = memo(function SceneCardBody({
+  data, t, openSceneInLab, recordAttempt,
+}: SceneCardBodyProps) {
   /* The snapshot invariant guarantees `scene` is the whole PhysicsScene at
      this revision (`scene.id === sceneId`, `scene.revision === revision`). */
   const scene = data.scene as unknown as PhysicsScene
@@ -113,8 +94,6 @@ export const SceneChatCard = memo(function SceneChatCard({
        materialization. */
     [runtimeKey],
   )
-
-  if (superseded) return null
 
   return (
     <div className={css.card} data-scene-card={data.sceneId}>
@@ -578,3 +557,37 @@ function CardCanvas({
     />
   )
 }
+
+/**
+ * The conversation-flow entry point: one card per scene node, yielding to a
+ * newer scene card in the same answer block. Its turn-tail counterpart
+ * ({@link SceneTurnCard}) needs no such rule — it IS the turn's final card.
+ */
+export const SceneChatCard = memo(function SceneChatCard({
+  node, t, openSceneInLab, recordAttempt, useChat,
+}: SceneChatCardProps) {
+  const superseded = useChat((snapshot) => {
+    let horizon = Number.POSITIVE_INFINITY
+    for (const candidate of snapshot.nodes.values()) {
+      if (
+        ANSWER_BOUNDARY.has(candidate.kind)
+        && candidate.anchorSeq > node.anchorSeq
+        && candidate.anchorSeq < horizon
+      ) {
+        horizon = candidate.anchorSeq
+      }
+    }
+    for (const candidate of snapshot.nodes.values()) {
+      if (
+        candidate.kind === 'physics-scene-card'
+        && candidate.anchorSeq > node.anchorSeq
+        && candidate.anchorSeq < horizon
+      ) {
+        return true
+      }
+    }
+    return false
+  })
+  if (superseded) return null
+  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab} {...recordAttempt === undefined ? {} : { recordAttempt }} />
+})

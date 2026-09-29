@@ -39,7 +39,39 @@ export const ELECTRIC_ENGINE_ID = 'engine-electric'
 export const ELECTRIC_ENGINE_VERSION = '1.0.0'
 export const UNIFORM_ELECTRIC_PARTICLE_MODEL = 'charged_particle_uniform_electric_field'
 
+/**
+ * Fallback span for a scene that declares no `timeline.endTime` — only used
+ * when the model itself offers no scale (no field, no motion).
+ */
 const DEFAULT_DURATION_SECONDS = 5
+
+/** The metre a default span is measured against: one lab-scale field region. */
+const DEFAULT_SPAN_LENGTH = 1
+
+/**
+ * The span a scene gets when it declares none.
+ *
+ * A flat five seconds is right for a macroscopic demo and absurd for the
+ * atomic-scale particle a parsed question usually carries: with q = 1.6e-19 C
+ * and m = 1.67e-27 kg in a 2 kV/m field the particle accelerates at 1.9e11
+ * m/s², so five seconds of integration puts it 2.5e12 m away and every readout
+ * on the panel becomes noise. The magnetic engine already answers this way —
+ * its default span is the motion's own period — so this derives the time to
+ * cross one field region: at rest that is `sqrt(2L/a)`, otherwise `L/|v|`,
+ * whichever is shorter. Both regimes then land on their own timescale.
+ * @param model - the resolved particle model.
+ * @returns seconds to simulate.
+ */
+const defaultSpanSeconds = (model: UniformElectricParticleModel): number => {
+  const speed = Math.hypot(model.velocity.x, model.velocity.y, model.velocity.z)
+  const acceleration = Math.hypot(model.acceleration.x, model.acceleration.y, model.acceleration.z)
+  const crossing = speed > 0 ? DEFAULT_SPAN_LENGTH / speed : Number.POSITIVE_INFINITY
+  const fromRest = speed === 0 && acceleration > 0
+    ? Math.sqrt((2 * DEFAULT_SPAN_LENGTH) / acceleration)
+    : Number.POSITIVE_INFINITY
+  const span = Math.min(crossing, fromRest)
+  return Number.isFinite(span) && span > 0 ? span : DEFAULT_DURATION_SECONDS
+}
 const DEFAULT_TRAJECTORY_SEGMENTS = 120
 const ASSUMPTIONS = [
   'uniform electric field',
@@ -428,7 +460,7 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       request.options.startTime === undefined ? 0 : canonicalValue(request.options.startTime)
     const sceneDuration =
       scene.timeline.endTime === undefined
-        ? DEFAULT_DURATION_SECONDS
+        ? defaultSpanSeconds(model)
         : canonicalValue(scene.timeline.endTime)
     const endTime =
       request.options.endTime === undefined

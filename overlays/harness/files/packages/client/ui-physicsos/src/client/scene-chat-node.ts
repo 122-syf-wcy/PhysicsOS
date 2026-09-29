@@ -21,7 +21,6 @@ import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/t
 import type {
   ChatConversationViewNode, ConversationLocation, ConversationNodeDefinition,
 } from './runtime-compat.ts'
-import { isAppendSurfaceEvent } from './runtime-compat.ts'
 
 /** One frozen scene snapshot as the chat card renders it. */
 export interface PhysicsSceneCardData {
@@ -45,6 +44,25 @@ declare module '@deepseek-ai/dsh-client-ui-chat/client' {
     'physics-scene-card': PhysicsSceneCardData
   }
 }
+
+declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+  interface ConversationTurnDataMap {
+    /**
+     * Newest scene this turn published, read by the turn-tail seat
+     * ({@link SceneTurnCard}). A scene event is not a message, so it has no
+     * place in the conversation surface of its own — the turn's own data is
+     * where a card can dock beside the answer it belongs to.
+     */
+    'physics-scene-turn': PhysicsSceneCardData
+  }
+}
+
+/**
+ * The Turn-data key the scene card publishes and the turn-tail seat reads. The
+ * assembler requires a published key to equal its Definition's `kind`, so this
+ * is the turn Definition's kind by construction.
+ */
+export const PHYSICS_SCENE_TURN_KEY = 'physics-scene-turn'
 
 interface PhysicsSceneCardState extends PhysicsSceneCardData {
   readonly seq: number
@@ -127,16 +145,26 @@ interface PhysicsSceneTurnState {
   readonly turn: number
   /** Newest scene snapshot this turn published. */
   readonly card: PhysicsSceneCardState | undefined
-  /** Closing Assistant message seq — the card docks right above it. */
-  readonly answerSeq: number | undefined
-  readonly ended: boolean
+  /** The same snapshot as the Turn publishes it to the turning card's seat. */
+  readonly published: PhysicsSceneCardData | undefined
 }
 
+/** The card payload without the node-placement fields the seat does not use. */
+const publishedOf = (card: PhysicsSceneCardState): PhysicsSceneCardData => ({
+  sceneId: card.sceneId,
+  revision: card.revision,
+  title: card.title,
+  domain: card.domain,
+  cause: card.cause,
+  commandType: card.commandType,
+  solve: card.solve,
+  scene: card.scene,
+})
+
 /**
- * Per-turn scene card: one chat node per turn, showing the newest scene the
- * turn produced. While the turn is open the card follows the latest scene
- * event (live progress); on `turn/end` it docks above the closing Assistant
- * message, next to the answer it verifies.
+ * Per-turn scene card data: the newest scene the turn produced, published as
+ * the Turn's own data so the `conversation.chat.turnTail` seat can render the
+ * card beside the answer it verifies.
  */
 export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsSceneTurnState> = {
   kind: 'physics-scene-turn',
@@ -146,19 +174,13 @@ export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsScene
     if (event.type === 'physics/scene' && typeof event.data.turn === 'number') {
       return { id: String(event.data.turn), role: 'update' }
     }
-    if (event.type === 'turn/end') return { id: String(event.data.turn), role: 'update' }
-    /* Only appended assistant messages anchor the dock: a compaction
-       replacement carries a message the surface no longer renders. */
-    if (event.type === 'assistant/message' && isAppendSurfaceEvent(event)) {
-      return { id: String(event.data.turn), role: 'update' }
-    }
     return null
   },
   start: (_context, match) => {
     if (match.event.type !== 'turn/start') {
       throw new Error('physics-scene-turn start requires turn/start')
     }
-    return { turn: match.event.data.turn, card: undefined, answerSeq: undefined, ended: false }
+    return { turn: match.event.data.turn, card: undefined, published: undefined }
   },
   update: (context, match) => {
     const event = match.event
@@ -168,26 +190,31 @@ export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsScene
       const card = next.solve === undefined && context.state.card?.solve !== undefined
         ? { ...next, solve: context.state.card.solve }
         : next
-      return { ...context.state, card }
+      return { ...context.state, card, published: publishedOf(card) }
     }
-    if (event.type === 'assistant/message') {
-      return { ...context.state, answerSeq: event.seq }
-    }
-    if (event.type === 'turn/end') return { ...context.state, ended: true }
     return context.state
   },
-  publication: match =>
-    match.event.type === 'assistant/message' ? 'none' : 'immediate',
-  buildViewNode: (context) => {
-    const card = context.state?.card
-    if (card === undefined || context.state === undefined) return null
-    /* Open turn: the card lives where the tool call left it, so work in
-       progress stays visible. Closed turn: dock it directly above the
-       answer message (anchored at its event seq). */
-    const anchorSeq = context.state.ended && context.state.answerSeq !== undefined
-      ? context.state.answerSeq - 0.1
-      : card.seq - 0.1
-    return viewNode(context, card, anchorSeq)
+  /* The card is rendered by the `conversation.chat.turnTail` seat from this
+     Turn data, not as a view node: a `physics/scene` event carries no place in
+     the conversation surface, so a node built for it stays unresolved and never
+     draws (see `core/session/surface.ts` — only message-producing types may
+     join that surface). Publishing into the Turn puts the card where the answer
+     is, which is where the reader looks for it. */
+  buildLocationData: (context, scope, previous) => {
+    const published = context.state?.published
+    if (scope !== 'turn' || context.state === undefined || published === undefined) return null
+    if (previous?.kind === 'turn'
+      && previous.turn === context.state.turn
+      && previous.key === PHYSICS_SCENE_TURN_KEY
+      && previous.value.sceneId === published.sceneId
+      && previous.value.revision === published.revision
+      && previous.value.solve === published.solve) return previous
+    return {
+      kind: 'turn',
+      turn: context.state.turn,
+      key: PHYSICS_SCENE_TURN_KEY,
+      value: published,
+    }
   },
 }
 
