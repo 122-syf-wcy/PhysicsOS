@@ -93,6 +93,8 @@ export const solvedCardData = (questionId: string): PhysicsSceneCardData => {
 /** Minimal Chat-target snapshot the card's supersede selector reads. */
 export const cardSession = () => {
   const nodes = new Map()
-  return (selector: (snapshot: { nodes: typeof nodes }) => unknown) =>
-    selector({ nodes })
+  const turns = new Map()
+  return (
+    selector: (snapshot: { nodes: typeof nodes; timeline: { turns: typeof turns } }) => unknown,
+  ) => selector({ nodes, timeline: { turns } })
 }

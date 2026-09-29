@@ -14,7 +14,7 @@ import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/c
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import {
   isPhysicsSceneEvent, physicsSceneCardDefinition, physicsSceneTurnDefinition,
-  type PhysicsSceneCardData,
+  PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData,
 } from '../src/client/scene-chat-node.ts'
 import {
   createExperimentSceneRef, findExperimentTemplate,
@@ -106,10 +106,17 @@ function node(value: ChatSnapshot, kind: string): ChatConversationViewNode | und
 }
 
 /** Minimal Chat-target snapshot the card's supersede selector reads. */
-const useChatOf = (nodes: readonly { key: string; kind: string; anchorSeq: number }[]) => {
+const useChatOf = (
+  nodes: readonly { key: string; kind: string; anchorSeq: number }[],
+  turns: ReadonlyMap<number, unknown> = new Map(),
+) => {
   const map = new Map(nodes.map(candidate => [candidate.key, candidate]))
-  return (selector: (snapshot: { nodes: typeof map }) => unknown) =>
-    selector({ nodes: map })
+  return (
+    selector: (snapshot: {
+      nodes: typeof map
+      timeline: { turns: ReadonlyMap<number, unknown> }
+    }) => unknown,
+  ) => selector({ nodes: map, timeline: { turns } })
 }
 
 const cardProps = (
@@ -117,17 +124,19 @@ const cardProps = (
   openSceneInLab = vi.fn(),
   nodes: readonly { key: string; kind: string; anchorSeq: number }[] = [],
   recordAttempt?: (attempt: SelfCheckAttemptInput) => void,
+  turn?: { readonly number: number; readonly state: unknown },
 ) => ({
   node: {
     key: 'physics-scene-card:test',
     kind: 'physics-scene-card',
     anchorSeq: 1.9,
     data,
+    location: turn === undefined ? { kind: 'session' } : { kind: 'turn', turn: { turn: turn.number } },
   },
   t,
   openSceneInLab,
   ...(recordAttempt === undefined ? {} : { recordAttempt }),
-  useChat: useChatOf(nodes),
+  useChat: useChatOf(nodes, turn === undefined ? new Map() : new Map([[turn.number, turn.state]])),
 }) as unknown as Parameters<typeof SceneChatCard>[0]
 
 describe('physics scene chat card', () => {
@@ -336,6 +345,38 @@ describe('physics scene chat card', () => {
       { key: 'physics-scene-card:newer', kind: 'physics-scene-card', anchorSeq: 3.9 },
     ])} />)
     expect(kept.container.querySelector('[data-scene-card]')).not.toBeNull()
+  })
+
+  it('yields to the Turn card once its Turn has closed', () => {
+    const data: PhysicsSceneCardData = {
+      sceneId: ref.sceneId,
+      revision: ref.scene.revision,
+      title: '斜抛运动',
+      domain: 'mechanics',
+      cause: 'solved',
+      commandType: undefined,
+      solve: undefined,
+      scene: ref.scene as never,
+    }
+    const turnData = new Map([[PHYSICS_SCENE_TURN_KEY, { sceneId: ref.sceneId }]])
+    /* The Turn card is drawn from `turn/end`, so once the Turn closes it owns
+       this answer and the per-scene card must go — otherwise the reader sees
+       the same scene twice. */
+    const yielded = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
+      { number: 1, state: { turn: 1, status: 'closed', data: turnData } })} />)
+    expect(yielded.container.querySelector('[data-scene-card]')).toBeNull()
+
+    /* While the Turn runs the Turn card does not exist yet: the inline card is
+       the only thing showing the world being built, so it stays. */
+    const kept = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
+      { number: 1, state: { turn: 1, status: 'open', data: turnData } })} />)
+    expect(kept.container.querySelector('[data-scene-card]')).not.toBeNull()
+
+    /* A closed Turn that published no scene leaves this card alone: it is the
+       fallback for logs whose scenes carry no turn number. */
+    const unowned = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
+      { number: 1, state: { turn: 1, status: 'closed', data: new Map() } })} />)
+    expect(unowned.container.querySelector('[data-scene-card]')).not.toBeNull()
   })
 
   it('shows the unsupported note for a scene no domain runtime accepts', () => {

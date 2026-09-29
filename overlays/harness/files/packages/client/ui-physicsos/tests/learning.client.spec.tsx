@@ -578,7 +578,7 @@ describe('sidebar 学习记录 entry', () => {
 const renderSolvedCard = (questionId: string, recordAttempt?: (a: SelfCheckAttemptInput) => void) =>
   render(
     <SceneChatCard {...({
-      node: { key: 'card:test', kind: 'physics-scene-card', anchorSeq: 1.9, data: solvedCardData(questionId) },
+      node: { key: 'card:test', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data: solvedCardData(questionId) },
       t,
       openSceneInLab: vi.fn(),
       ...(recordAttempt === undefined ? {} : { recordAttempt }),
@@ -627,7 +627,7 @@ describe('solved-card self-checks (the migrated practice loop)', () => {
     }
     const view = render(
       <SceneChatCard {...({
-        node: { key: 'card:plain', kind: 'physics-scene-card', anchorSeq: 1.9, data: plain },
+        node: { key: 'card:plain', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data: plain },
         t,
         openSceneInLab: vi.fn(),
         useChat: cardSession(),

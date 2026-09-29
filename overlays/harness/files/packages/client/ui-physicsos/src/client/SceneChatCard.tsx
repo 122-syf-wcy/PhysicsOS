@@ -39,7 +39,7 @@ import { VerifiedResult } from './VerifiedResult.tsx'
 import { LabSelfCheckCard } from './LabSelfCheckCard.tsx'
 import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import { QUESTION_KNOWLEDGE, selfChecksOfQuestion } from '@physicsos/question-core'
-import type { PhysicsSceneCardData } from './scene-chat-node.ts'
+import { PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData } from './scene-chat-node.ts'
 import type { PhysicsSceneRef } from './surface-store.ts'
 import { IconPhysicsLab } from './icons/physics-icons.tsx'
 import { TimelineScrubber } from './TimelineScrubber.tsx'
@@ -564,14 +564,26 @@ function CardCanvas({
 }
 
 /**
- * The conversation-flow entry point: one card per scene node, yielding to a
- * newer scene card in the same answer block. Its turn-tail counterpart
- * ({@link SceneTurnCard}) needs no such rule — it IS the turn's final card.
+ * The conversation-flow entry point: one card per scene node, yielding to the
+ * Turn's own card once that Turn has closed, and to a newer scene card in the
+ * same answer block while it is still running.
  */
 export const SceneChatCard = memo(function SceneChatCard({
   node, t, openSceneInLab, recordAttempt, useChat,
 }: SceneChatCardProps) {
   const superseded = useChat((snapshot) => {
+    /* The Turn card covers this answer once the Turn closes. This card is what
+       a log gets when the Turn's boundaries are not loaded, so it yields
+       wherever the Turn published a scene of its own — but only at `closed`:
+       the Turn card is built from `turn/end` and is not drawn at all while the
+       Turn runs, so yielding earlier would blank the scene mid-solve. */
+    const placed = node.location.kind === 'turn' || node.location.kind === 'step'
+      ? node.location.turn.turn
+      : undefined
+    const turn = placed === undefined ? undefined : snapshot.timeline.turns.get(placed)
+    if (turn !== undefined
+      && turn.status === 'closed'
+      && turn.data.get(PHYSICS_SCENE_TURN_KEY) !== undefined) return true
     let horizon = Number.POSITIVE_INFINITY
     for (const candidate of snapshot.nodes.values()) {
       if (

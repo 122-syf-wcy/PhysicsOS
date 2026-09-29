@@ -402,7 +402,7 @@ describe('wave solved cards', () => {
     const { container } = render(
       <SceneChatCard {...({
         node: {
-          key: 'card:wave-rope', kind: 'physics-scene-card', anchorSeq: 1.9,
+          key: 'card:wave-rope', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
           data: solvedCardData('wave-01-speed-from-wavelength-frequency'),
         },
         t,
@@ -423,7 +423,7 @@ describe('wave solved cards', () => {
     const { container } = render(
       <SceneChatCard {...({
         node: {
-          key: 'card:wave-interference', kind: 'physics-scene-card', anchorSeq: 1.9,
+          key: 'card:wave-interference', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
           data: solvedCardData('wave-03-interference-constructive'),
         },
         t,

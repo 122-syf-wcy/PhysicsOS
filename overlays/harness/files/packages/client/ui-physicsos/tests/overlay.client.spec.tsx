@@ -121,7 +121,7 @@ const renderSolved = (
   render(
     <SceneChatCard {...({
       node: {
-        key: `card:${questionId}`, kind: 'physics-scene-card', anchorSeq: 1.9,
+        key: `card:${questionId}`, kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
         data: solvedCardData(questionId),
       },
       t,
