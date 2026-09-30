@@ -233,6 +233,158 @@ index 7c7a29b66a..87ebb16351 100644
      pending.deliveries.add(client)
      client.deliveries.set(pending.id, pending)
      client.queue.push(pending.frame)
+diff --git a/packages/api/workspace-controller/src/index.ts b/packages/api/workspace-controller/src/index.ts
+index 0b23517921..16ed0902e5 100644
+--- a/packages/api/workspace-controller/src/index.ts
++++ b/packages/api/workspace-controller/src/index.ts
+@@ -193,7 +193,78 @@ export class WorkspaceController extends TypertRemoteService {
+    */
+   @Remote({ mode: 'stream' })
+   follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {
+-    return this.feed.follow(signal)
++    /* PhysicsOS tenancy seam: the stock feed streams the whole registry —
++       every account's Workspace titles included. A Peer carrying workspace
++       admission sees only its own rows; absent admission keeps the stock
++       behaviour (single-operator installs, in-process carriers). */
++    const admission = workspaceAdmissionOf(this.ctx)
++    const source = this.feed.follow(signal)
++    return admission === undefined ? source : scopeWorkspaceFrames(source, admission)
++  }
++}
++
++/** Resource scoping the carrier threads onto the invoking Peer. */
++interface WorkspaceAdmission {
++  ownsWorkspace(workspaceId: string): boolean
++  ownsSession(sessionId: string): boolean
++}
++
++function workspaceAdmissionOf(ctx: Context): WorkspaceAdmission | undefined {
++  const admission = ctx.invocation?.peer.workspaceAdmission
++  if (typeof admission !== 'object' || admission === null) return undefined
++  const candidate = admission as Partial<WorkspaceAdmission>
++  if (typeof candidate.ownsWorkspace !== 'function' || typeof candidate.ownsSession !== 'function') {
++    return undefined
++  }
++  const { ownsWorkspace, ownsSession } = candidate
++  return {
++    ownsWorkspace: (id: string) => ownsWorkspace.call(admission, id),
++    ownsSession: (id: string) => ownsSession.call(admission, id),
++  }
++}
++
++export async function* scopeWorkspaceFrames(
++  source: AsyncIterable<WorkspaceFollowFrame>,
++  admission: WorkspaceAdmission,
++): AsyncIterable<WorkspaceFollowFrame> {
++  for await (const frame of source) {
++    switch (frame.type) {
++      case 'baseline': {
++        yield {
++          type: 'baseline',
++          value: {
++            items: frame.value.items.filter(item => admission.ownsWorkspace(item.workspaceId)),
++            archivedSessionIds: frame.value.archivedSessionIds.filter(id => admission.ownsSession(id)),
++            pinnedSessionIds: frame.value.pinnedSessionIds.filter(id => admission.ownsSession(id)),
++          },
++        }
++        break
++      }
++      case 'upsert': {
++        if (admission.ownsWorkspace(frame.workspace.workspaceId)) yield frame
++        break
++      }
++      case 'remove': {
++        /* A row this Peer never received needs no removal echo. */
++        if (admission.ownsWorkspace(frame.workspaceId)) yield frame
++        break
++      }
++      case 'order': {
++        const workspaceIds = frame.workspaceIds.filter(id => admission.ownsWorkspace(id))
++        if (workspaceIds.length > 0) yield { type: 'order', workspaceIds }
++        break
++      }
++      case 'archived': {
++        const archivedSessionIds = frame.archivedSessionIds.filter(id => admission.ownsSession(id))
++        if (archivedSessionIds.length > 0) yield { type: 'archived', archivedSessionIds }
++        break
++      }
++      case 'pinned': {
++        const pinnedSessionIds = frame.pinnedSessionIds.filter(id => admission.ownsSession(id))
++        if (pinnedSessionIds.length > 0) yield { type: 'pinned', pinnedSessionIds }
++        break
++      }
++    }
+   }
+ }
+
+diff --git a/packages/api/workspace-controller/tests/follow-scope.host.spec.ts b/packages/api/workspace-controller/tests/follow-scope.host.spec.ts
+new file mode 100644
+index 0000000000..3911cc7ec9
+--- /dev/null
++++ b/packages/api/workspace-controller/tests/follow-scope.host.spec.ts
+@@ -0,0 +1,62 @@
++import { describe, expect, it } from 'vitest'
++import { SessionId } from '@deepseek-ai/dsh-session/types'
++import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
++import type { WorkspaceFollowFrame } from '../src/types.ts'
++import { scopeWorkspaceFrames } from '../src/index.ts'
++
++const admission = {
++  ownsWorkspace: (id: string) => id.startsWith('own-'),
++  ownsSession: (id: string) => id.startsWith('sess-own-'),
++}
++
++const drain = async (frames: WorkspaceFollowFrame[]): Promise<WorkspaceFollowFrame[]> => {
++  async function* source(): AsyncIterable<WorkspaceFollowFrame> { yield* frames }
++  return await collect(scopeWorkspaceFrames(source(), admission))
++}
++
++async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
++  const out: T[] = []
++  for await (const item of stream) out.push(item)
++  return out
++}
++
++const view = (id: string) => ({ workspaceId: id as unknown as WorkspaceId, title: id, path: `/w/${id}`, sessionIds: [] }) as never
++
++describe('workspace follow tenancy scoping', () => {
++  it('filters the baseline to owned workspaces and their sessions', async () => {
++    const out = await drain([{
++      type: 'baseline',
++      value: {
++        items: [view('own-a'), view('foreign-b'), view('own-c')],
++        archivedSessionIds: [SessionId('sess-own-1'), SessionId('sess-foreign-2')],
++        pinnedSessionIds: [SessionId('sess-foreign-3')],
++      },
++    }])
++    expect(out).toEqual([{
++      type: 'baseline',
++      value: {
++        items: [view('own-a'), view('own-c')],
++        archivedSessionIds: [SessionId('sess-own-1')],
++        pinnedSessionIds: [],
++      },
++    }])
++  })
++
++  it('keeps owned upserts and drops foreign ones', async () => {
++    const out = await drain([
++      { type: 'upsert', workspace: view('own-a') },
++      { type: 'upsert', workspace: view('foreign-b') },
++    ])
++    expect(out).toEqual([{ type: 'upsert', workspace: view('own-a') }])
++  })
++
++  it('drops removals, orders, archives and pins that name nothing owned', async () => {
++    const out = await drain([
++      { type: 'remove', workspaceId: 'foreign-b' as unknown as WorkspaceId },
++      { type: 'order', workspaceIds: ['foreign-b', 'own-a'] as unknown as WorkspaceId[] },
++      { type: 'archived', archivedSessionIds: [SessionId('sess-foreign-2')] },
++      { type: 'pinned', pinnedSessionIds: [SessionId('sess-foreign-3')] },
++    ])
++    expect(out).toEqual([{ type: 'order', workspaceIds: ['own-a'] }])
++  })
++})
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
 index c98289bc3e..01eb9b66a0 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
@@ -473,14 +625,14 @@ index 5691180d96..9ad3d3cdab 100644
  const COOKIE_PAYLOAD_VERSION = 1
  const STORED_SECRET_VERSION = 1
 diff --git a/packages/client/connection/src/index.ts b/packages/client/connection/src/index.ts
-index 647174f743..8d0fc7f87a 100644
+index 647174f743..d6a52bf82e 100644
 --- a/packages/client/connection/src/index.ts
 +++ b/packages/client/connection/src/index.ts
 @@ -37,6 +37,7 @@ export type {
    ServerResponse,
  } from './rpc.ts'
  export type { PeerId, PeerScope, RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
-+export type { HostApiPolicy, RemoteEventAdmission } from './api-policy.ts'
++export type { HostApiPolicy, HostPeerAdmission, HostWorkspaceAdmission, RemoteEventAdmission } from './api-policy.ts'
  export { RpcId, transportError } from './rpc.ts'
  export { OperatorPeer } from './operator-peer.ts'
  export {
@@ -497,7 +649,7 @@ index 647174f743..8d0fc7f87a 100644
        kind: 'prefix',
        path: API_PATH,
 diff --git a/packages/client/connection/src/rpc-host.ts b/packages/client/connection/src/rpc-host.ts
-index 0f98bc1f19..917b5bdffa 100644
+index 0f98bc1f19..bbe50fc200 100644
 --- a/packages/client/connection/src/rpc-host.ts
 +++ b/packages/client/connection/src/rpc-host.ts
 @@ -10,9 +10,10 @@ import {
@@ -513,7 +665,7 @@ index 0f98bc1f19..917b5bdffa 100644
  import { OperatorPeer } from './operator-peer.ts'
  import type {
    PeerAdmission,
-@@ -103,17 +104,44 @@ export class HostConnectionService extends Service implements HostConnectionHand
+@@ -103,17 +104,53 @@ export class HostConnectionService extends Service implements HostConnectionHand
    /** Apply the configured Host/Origin fence, then browser authentication. */
    requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
      if (!isTrustedApiRequest(request, this.trustedHosts)) return 403
@@ -534,12 +686,21 @@ index 0f98bc1f19..917b5bdffa 100644
 +    )
 +    if (admission === null) return { rejection: 403 }
 +    if (admission === undefined) return { peer: this.operator }
++    /* PhysicsOS tenancy seam: the policy answers either the stock event
++       predicate or a face that also carries per-resource stream scoping;
++       both thread onto the peer the gateway hands to Remote services. */
++    const eventAdmission = typeof admission === 'function'
++      ? admission
++      : admission.remoteEventAdmission
 +    return {
 +      peer: {
 +        id: this.operator.id,
 +        ctx: this.operator.ctx,
 +        dispose: () => Promise.resolve(),
-+        remoteEventAdmission: admission,
++        ...(eventAdmission === undefined ? {} : { remoteEventAdmission: eventAdmission }),
++        ...(typeof admission === 'object' && admission.workspaceAdmission !== undefined
++          ? { workspaceAdmission: admission.workspaceAdmission }
++          : {}),
 +      },
 +    }
    }
@@ -560,7 +721,7 @@ index 0f98bc1f19..917b5bdffa 100644
      return this.browserAuth.authorizeIndex(request, response)
    }
 
-@@ -129,6 +157,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
+@@ -129,6 +166,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
     */
    createSharedFetchHandler(
      channel: '/api',
@@ -568,7 +729,7 @@ index 0f98bc1f19..917b5bdffa 100644
    ): ConnectionFetchHandler {
      return {
        requestBodyMode: ({ method, url }) => {
-@@ -136,15 +165,19 @@ export class HostConnectionService extends Service implements HostConnectionHand
+@@ -136,15 +174,19 @@ export class HostConnectionService extends Service implements HostConnectionHand
          return route?.methods.has(method) === true ? route.requestBody : 'buffered'
        },
        fetch: (request) => {
@@ -1019,10 +1180,10 @@ index 20b9c732ed..86039129f6 100644
    'request/context',
    'request/header',
 diff --git a/packages/typert/protocol/src/types.ts b/packages/typert/protocol/src/types.ts
-index ec2a88c4f9..0969be63ea 100644
+index ec2a88c4f9..f2ce9a7c66 100644
 --- a/packages/typert/protocol/src/types.ts
 +++ b/packages/typert/protocol/src/types.ts
-@@ -382,6 +382,14 @@ export type PeerId = Branded<'PeerId'>
+@@ -382,6 +382,24 @@ export type PeerId = Branded<'PeerId'>
  export interface PeerScope {
    readonly id: PeerId
    readonly ctx: Context
@@ -1034,6 +1195,16 @@ index ec2a88c4f9..0969be63ea 100644
 +    event: string,
 +    args: readonly unknown[],
 +  ) => boolean
++  /**
++   * Optional application policy for stream-carried Workspace frames on this
++   * Peer. Absent streams the stock registry view; a scoped Peer receives only
++   * baseline and increment frames for Workspaces — and their archived or
++   * pinned Sessions — the admission owns.
++   */
++  readonly workspaceAdmission?: {
++    ownsWorkspace(workspaceId: string): boolean
++    ownsSession(sessionId: string): boolean
++  }
    /**
     * Tear down every registration made through `ctx`.
     * @returns settles once the scope has quiesced; racing calls share one completion.

@@ -545,6 +545,58 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
+  it('leaves the preset alone when an administrator reuses a Session', async () => {
+    const { policy } = makePolicy({ actor: admin })
+    /* Reuse is how 「打开工作区」 resumes the blank Session the shell picked:
+       `create` cannot change an existing Session's preset, and forcing one is
+       what made every reuse fail with `agent-preset/conflict`. */
+    /* The client seeds its request with the currently selected preset; the
+       policy strips it because `create` cannot change a live Session's. */
+    const next = vi.fn(async (_request: Request) => rpc({ sessionId: 'reused-session' }))
+    const response = await policy.wrapFetch(next)(request('session.create', {
+      args: { request: { workspaceId: 'ops-workspace', sessionId: 'reused-session', agentPreset: 'physics-student' } },
+    }, 'admin'))
+    const [forwarded] = next.mock.calls[0] as [Request]
+    const body = await forwarded.clone().json() as { payload?: { args?: { request?: Record<string, unknown> } } }
+    expect(body.payload?.args?.request).toEqual({
+      workspaceId: 'ops-workspace',
+      sessionId: 'reused-session',
+    })
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { sessionId: 'reused-session' } },
+    })
+  })
+
+  it('scopes an upgraded connection to the workspaces its account owns', () => {
+    const owned = makeStore({ workspace: ['workspace-student'], session: ['session-student'] })
+    const { policy } = makePolicy({ actor: admin, store: owned })
+    const admission = policy.admitUpgrade({ headers: {} } as never)
+    /* The operator is a user of the product picker too: the workspace scope is
+       ownership-based for every role, while remote events stay unscoped so
+       approvals keep flowing. */
+    expect(admission?.remoteEventAdmission).toBeUndefined()
+    expect(admission?.workspaceAdmission?.ownsWorkspace('workspace-student')).toBe(true)
+    expect(admission?.workspaceAdmission?.ownsWorkspace('foreign')).toBe(false)
+
+    const face = makePolicy({ store: owned }).policy.admitUpgrade({ headers: {} } as never)
+    expect(face?.remoteEventAdmission).toBeTypeOf('function')
+    expect(face?.remoteEventAdmission?.('x', [])).toBe(false)
+    expect(face?.workspaceAdmission?.ownsSession('session-student')).toBe(true)
+    expect(face?.workspaceAdmission?.ownsSession('session-other')).toBe(false)
+  })
+
+  it('answers workspace.initializeDefault with the account workspace', async () => {
+    const { policy, store } = makePolicy()
+    const next = vi.fn(async (_request: Request) => rpc({
+      workspace: { workspaceId: 'shared-default', title: 'default' },
+    }))
+    const response = await policy.wrapFetch(next)(request('workspace.initializeDefault', {}))
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { workspace: { workspaceId: workspace.id, title: workspace.title } } },
+    })
+    expect(store.claims).toEqual([`workspace:${workspace.id}`])
+  })
+
   it('refuses the response when the enforced preset did not survive the rewrite', async () => {
     const { policy } = makePolicy()
     // The host answers with the deployment default: the rewritten request never

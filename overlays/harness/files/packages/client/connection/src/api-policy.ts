@@ -6,8 +6,9 @@ import type { ConnectionFetchHandler } from './rpc.ts'
  *
  * `wrapFetch` covers every HTTP method and both the Gateway and API Proxy
  * dispatch paths. `admitUpgrade` is evaluated once per WebSocket upgrade and
- * returns the predicate that decides which forwarded Remote events that
- * connection may receive.
+ * returns the scoping that connection receives: remote-event frames pass the
+ * admission predicate, stream-carried Workspace frames pass the workspace
+ * scoping. A bare predicate is the legacy single-field form.
  */
 export interface HostApiPolicy {
   /** Whether this deployment authenticated the request through its own account layer. */
@@ -19,7 +20,7 @@ export interface HostApiPolicy {
   ) => ConnectionFetchHandler['fetch']
   readonly admitUpgrade?: (
     request: Pick<IncomingMessage, 'headers'>,
-  ) => RemoteEventAdmission | null | undefined
+  ) => HostPeerAdmission | null | undefined
 }
 
 /** Whether one forwarded Remote event is visible on an admitted connection. */
@@ -27,6 +28,18 @@ export type RemoteEventAdmission = (
   event: string,
   args: readonly unknown[],
 ) => boolean
+
+/** Resource scoping one admitted connection receives, threaded onto its Peer. */
+export interface HostWorkspaceAdmission {
+  ownsWorkspace(workspaceId: string): boolean
+  ownsSession(sessionId: string): boolean
+}
+
+/** Per-connection admission a deployment may return from `admitUpgrade`. */
+export interface HostPeerAdmission {
+  readonly remoteEventAdmission?: RemoteEventAdmission
+  readonly workspaceAdmission?: HostWorkspaceAdmission
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

@@ -153,6 +153,23 @@ export interface ApiPolicyModelBudget {
   readonly maxBuckets: number
 }
 
+/** Per-connection resource scoping the carrier threads onto the peer. */
+export interface ApiPolicyWorkspaceAdmission {
+  ownsWorkspace(workspaceId: string): boolean
+  ownsSession(sessionId: string): boolean
+}
+
+/**
+ * What an upgraded connection may receive: remote-event frames pass the
+ * admission predicate, stream-carried Workspace frames pass the workspace
+ * scoping. Either field may be absent — an absent scope is the carrier's
+ * stock behaviour, not a denial.
+ */
+export interface ApiPolicyPeerAdmission {
+  remoteEventAdmission?(event: string, args: readonly unknown[]): boolean
+  workspaceAdmission?: ApiPolicyWorkspaceAdmission
+}
+
 /** Host seams the pure policy needs. */
 export interface ApiPolicyDeps {
   actorFromCookie(cookie: string | undefined, authorization?: string): ApiPolicyActor | null
@@ -551,7 +568,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   scopeEvents(req: IncomingMessage, events: EventsApi): Promise<EventsApi | undefined>
   admitUpgrade(
     req: Pick<IncomingMessage, 'headers'>,
-  ): ((event: string, args: readonly unknown[]) => boolean) | null | undefined
+  ): ApiPolicyPeerAdmission | null | undefined
 } {
   const pendingResponses = new Map<string, { expiresAt: number }>()
   const approvalResponseKeys = new Map<string, string>()
@@ -821,14 +838,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       delete payload['sessionId']
       payload['workspaceId'] = workspace.id
       payload['agentPreset'] = STUDENT_PRESET
-    } else if (method === 'session.create' && payload['agentPreset'] === undefined) {
-      /* The operator's own Sessions open in the product's mode too. Leaving
+    } else if (method === 'session.create') {
+      /* Reuse calls (`sessionId` present) keep the Session's own preset —
+         `create` cannot change an existing Session's preset, and the client
+         seeds its request with the currently selected one, so letting it
+         through made every 「打开工作区」 reuse fail with
+         `agent-preset/conflict` while the composer stayed inert. */
+      if (payload['sessionId'] !== undefined) delete payload['agentPreset']
+      /* Fresh creates for the operator open in the product's mode too. Leaving
          them on the installation's default preset is what made an administrator
          see a worse product than a student: that preset carries no physics
          tools, so the tutor answered 「环境无法执行命令」 and derived numbers by
          hand instead of running the engine. A later `agentPreset.select` — which
          an administrator is free to make — still wins. */
-      payload['agentPreset'] = STUDENT_PRESET
+      else if (payload['agentPreset'] === undefined) payload['agentPreset'] = STUDENT_PRESET
     }
 
     if (method === 'session.create' || method === 'session.fork'
@@ -922,6 +945,17 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       changed = true
     }
 
+    if (method === 'workspace.initializeDefault') {
+      /* The stock answer is the installation's shared default Workspace (or
+         none). Surfacing either to a hosted account seeds the client model
+         with a row it cannot own; the account's ensured Workspace is the only
+         default this product has. */
+      const workspace = await deps.ensureWorkspace(actor)
+      await deps.store.claim(actor, 'workspace', workspace.id)
+      value['workspace'] = privateWorkspaceView(workspace)
+      changed = true
+    }
+
     if (method === 'agentPreset.list' && Array.isArray(value['presets']) && !admin(actor)) {
       value['presets'] = value['presets'].filter(preset =>
         isRecord(preset) && preset['id'] === STUDENT_PRESET)
@@ -999,14 +1033,33 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     admitUpgrade: (req) => {
       const actor = deps.actorFromRequest(req as IncomingMessage)
       if (actor === null) return null
-      if (admin(actor)) return () => true
+      /* Every connection — the operator's included — sees the Workspaces its
+         account owns in the product's picker. Registry-wide troubleshooting is
+         an admin-console concern; streaming the whole registry to the operator
+         is how a picker full of indistinguishable 「我的工作区」 rows appeared. */
+      /* Every connection — the operator's included — sees the Workspaces its
+         account owns in the product's picker. Registry-wide troubleshooting is
+         an admin-console concern; streaming the whole registry to the operator
+         is how a picker full of indistinguishable 「我的工作区」 rows appeared. */
+      const workspaceAdmission = {
+        ownsWorkspace: (id: string): boolean => deps.store.owns(actor, 'workspace', id),
+        ownsSession: (id: string): boolean => ownsSession(actor, id),
+      }
+      if (admin(actor)) {
+        /* Remote events stay unscoped for the operator so approvals and
+           account-wide questions keep flowing. */
+        return { workspaceAdmission }
+      }
       /* Only session-scoped events cross to ordinary accounts. Dropping
          account-independent catalog and settings chatter is deliberate: the
          old transport scoped every frame, and a global fallback would expose
          another learner's activity. */
-      return (_event, args) => {
-        const sessionId = remoteSessionId(args)
-        return sessionId !== undefined && ownsSession(actor, sessionId)
+      return {
+        workspaceAdmission,
+        remoteEventAdmission: (_event: string, args: readonly unknown[]) => {
+          const sessionId = remoteSessionId(args)
+          return sessionId !== undefined && ownsSession(actor, sessionId)
+        },
       }
     },
     wrapFetch: next => async (request) => {
