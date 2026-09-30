@@ -52,9 +52,15 @@ const loadDotEnv = () => {
 
 loadDotEnv()
 
-const BASE = (process.env.PHYSICSOS_IMAGE_PRIMARY_BASE_URL ?? '').replace(/\/+$/, '')
-const KEY = process.env.PHYSICSOS_IMAGE_PRIMARY_API_KEY ?? ''
-const MODEL = process.env.PHYSICSOS_IMAGE_PRIMARY_MODEL ?? 'gpt-image-2'
+const BASE = (process.env.PHYSICSOS_IMAGE_PRIMARY_BASE_URL
+  ?? process.env.PHYSICSOS_IMAGE_API_BASE
+  ?? 'https://image.haqiuhaqiu.xyz/v1').replace(/\/+$/, '')
+const KEY = process.env.PHYSICSOS_IMAGE_PRIMARY_API_KEY
+  ?? process.env.PHYSICSOS_IMAGE_API_KEY
+  ?? ''
+const MODEL = process.env.PHYSICSOS_IMAGE_PRIMARY_MODEL
+  ?? process.env.PHYSICSOS_IMAGE_API_MODEL
+  ?? 'gpt-image-2.5-sunburst'
 
 /** Credentials are only needed to generate, not to list templates. */
 const assertCredentials = () => {
@@ -94,6 +100,26 @@ const PALETTE = {
 
 /** subject → what the miniature scene shows (mirrors the SVG artwork motifs). */
 const ASSETS = {
+  /* -------------------------------------------------- 补充集（2026-09-30） --
+   * These close the reproducibility gap: every RASTER_ART id in use now has a
+   * prompt, and the four new wave templates get art in the same language. */
+  buoyancy: ['fluid', 'A rounded wooden block floating half-submerged in calm water, one thin dotted line marking the waterline, a slim upward arrow from its base and a slim downward arrow from its top.'],
+  cyclotron: ['composite', 'Two flat semicircular dee electrodes with a slim gap between them, one tiny glossy sphere spiralling outward across the gap, faint concentric dotted arcs marking its widening path.'],
+  electromagnet: ['induction', 'A clean cylindrical coil of copper-toned winding around a soft iron core, one slim magnetic field arrow leaving each flat end, a small compass sphere nearby aligning to the line.'],
+  incline: ['mechanics', 'A smooth triangular wedge ramp with a small rounded block resting on its slope, one slim arrow along the slope and one perpendicular into the surface.'],
+  lab: ['mechanics', 'A tidy study bench: one beaker of pale liquid, one small balance scale, one slim ruler and one glossy sphere arranged in a row on a calm surface.'],
+  motor: ['induction', 'A minimal rectangular coil pivoted between two slim pole faces, one curved arrow showing its rotation and straight faint field lines crossing the gap.'],
+  noise: ['acoustics', 'A slim tuning-fork silhouette with two faint concentric ripple rings spreading from its tips, evenly spaced and gently fading.'],
+  pinhole: ['optics', 'A dark box with one tiny hole on the left and an inverted tiny arrow image projected on its right inner wall, two crossing faint rays through the hole.'],
+  question: ['mechanics', 'A single sheet of paper with faint ruled lines floating flat, one small glossy sphere resting on it, generous calm space around both.'],
+  thermometer: ['thermal', 'A slim glass thermometer with a clean column of warm red tone rising mid-scale, resting at a gentle angle on a calm surface.'],
+  transformer: ['induction', 'Two coils of different winding count facing each other across a shared closed ring core, one faint dotted flux loop following the ring.'],
+  'wave-diffraction': ['wave', 'A flat barrier with one slim opening, semicircular ripple rings spreading beyond it while straight wavefronts arrive from the left.'],
+  'wave-doppler': ['wave', 'A small moving sphere with tightly packed ripple rings ahead of it and widely spaced rings behind it, one slim arrow showing its motion.'],
+  'wave-longitudinal': ['wave', 'A horizontal row of small glossy spheres with alternating dense and sparse clusters, faint dashed lines marking one compression and one rarefaction band.'],
+  'wave-reflection-refraction': ['optics', 'One incident ray meeting a calm water surface, a reflected ray bouncing up and a refracted ray bending closer to the vertical below the surface.'],
+  'photoelectric-effect': ['optics', 'A clean metal plate receiving three small photon dots from the left, one freed glossy electron sphere leaving its surface to the right with a slim arrow.'],
+
   'circular-orbit': [
     'mechanics',
     'A small glossy sphere held in a clean circular orbit around a larger matte sphere on a calm pastel surface, one slim arrow following the circle and one pointing straight inward toward the larger sphere.',
@@ -424,7 +450,10 @@ const call = async (pathname, init = {}, timeoutMs = 300_000) => {
     controller.abort()
   }, timeoutMs)
   try {
-    const response = await fetch(`${BASE}${pathname}`, {
+    const url = BASE.endsWith('/v1') && pathname.startsWith('/v1/')
+      ? `${BASE}${pathname.slice('/v1'.length)}`
+      : `${BASE}${pathname}`
+    const response = await fetch(url, {
       ...init,
       headers: {
         Authorization: `Bearer ${KEY}`,
@@ -484,8 +513,16 @@ const generate = async (id) => {
   /* Route 1: the gateway's own async pipeline (disabled until object storage
      is configured server-side; costs nothing to try and self-heals the day
      the operator flips it on). */
-  const asyncSubmit = await call('/v1/images/generations/async', { method: 'POST', body }, 60_000)
   let item
+  /* Route 0 (2026-09-30): the sunburst endpoint is a plain OpenAI-compatible
+   * sync /v1/images/generations that answers b64_json directly — when BASE
+   * already carries /v1, the gateway-only async route is a guaranteed 404, so
+   * probe it only on non-/v1 bases. */
+  const asyncEligible = !BASE.endsWith('/v1')
+  let asyncSubmit = { status: 0 }
+  if (asyncEligible) {
+    asyncSubmit = await call('/v1/images/generations/async', { method: 'POST', body }, 60_000)
+  }
   if (asyncSubmit.status === 202 && typeof asyncSubmit.json?.task_id === 'string') {
     const settled = await pollTask(asyncSubmit.json.task_id)
     if (settled.failed !== undefined) throw new Error(`async route: ${settled.failed}`)

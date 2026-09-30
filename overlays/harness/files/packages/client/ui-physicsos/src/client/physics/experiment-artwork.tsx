@@ -1690,7 +1690,10 @@ const RASTER_ART: ReadonlySet<string> = new Set([
   'induction-double-bar-momentum',
   'induction-double-bar-force',
   'induction-flux-change',
-])
+  'wave-diffraction',
+  'wave-doppler',
+  'wave-longitudinal',
+  'wave-reflection-refraction',])
 
 /** The scene artwork itself: a generated plate when one exists, else a
    * transparent 120x68 stage painted in currentColor. */

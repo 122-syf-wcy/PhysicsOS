@@ -132,6 +132,34 @@ export interface RendererProps {
  * lives here, above any hook, the way `FluidRenderer` dispatches to the
  * pressure rigs and `MechanicsRenderer` to the lever.
  */
+
+/** Per-segment fading gradient for predicted trajectories: the road ahead
+ * dims with distance so the crisp history and its runner carry the eye. */
+function TrajectoryFadeDefs({ view, projection }: RendererProps) {
+  const gradients = view.trajectories
+    .filter(trajectory => trajectory.kind === 'predicted' && trajectory.points.length > 1)
+    .map(trajectory => {
+      const first = trajectory.points[0]
+      const last = trajectory.points[trajectory.points.length - 1]
+      if (first === undefined || last === undefined) return null
+      return (
+        <linearGradient
+          key={`fade-${trajectory.id}`}
+          id={`trajectory-fade-${projection.uid}-${trajectory.id}`}
+          gradientUnits="userSpaceOnUse"
+          x1={projection.px(first)}
+          y1={projection.py(first)}
+          x2={projection.px(last)}
+          y2={projection.py(last)}
+        >
+          <stop offset="0%" stopColor="var(--physics-trajectory-predicted)" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="var(--physics-trajectory-predicted)" stopOpacity="0.12" />
+        </linearGradient>
+      )
+    })
+  return <>{gradients}</>
+}
+
 function MagneticDomainRenderer(props: RendererProps) {
   if (props.view.currentRig !== undefined) {
     return <CurrentRenderer view={props.view} projection={props.projection} />
@@ -174,6 +202,7 @@ function MagneticRenderer({ view, projection }: RendererProps) {
     <>
       <defs>
         <ArrowMarkers uid={projection.uid} />
+        <TrajectoryFadeDefs view={view} projection={projection} />
         <radialGradient id={glowId} cx="34%" cy="30%" r="72%">
           <stop offset="0%" stopColor={particle?.sign === 'negative' ? '#9dc4ff' : '#ffb4a6'} />
           <stop offset="55%" stopColor={particle?.sign === 'negative' ? '#3b82f6' : '#ea6a5c'} />
@@ -192,6 +221,12 @@ function MagneticRenderer({ view, projection }: RendererProps) {
       {view.visible.trajectory === true
         ? view.trajectories.map((trajectory) => {
           const marker = trajectory.points[Math.floor(trajectory.points.length / 4)]
+          /* The runner dot marks where the body IS: the last history point at
+             this frame. Predicted segments have no runner — they are the road
+             ahead, not something moving. */
+          const runner = trajectory.kind === 'history'
+            ? trajectory.points[trajectory.points.length - 1]
+            : undefined
           return (
             <g key={`${trajectory.id}:${trajectory.kind}`}>
               <path
@@ -211,6 +246,14 @@ function MagneticRenderer({ view, projection }: RendererProps) {
                 >
                   {trajectory.direction === 'clockwise' ? '↻' : '↺'}
                 </text>
+              )}
+              {runner === undefined ? null : (
+                <circle
+                  className={css.trajectoryRunner}
+                  cx={projection.px(runner)}
+                  cy={projection.py(runner)}
+                  r={4}
+                />
               )}
             </g>
           )
@@ -358,6 +401,7 @@ function ElectricRenderer({ view, projection }: RendererProps) {
     <>
       <defs>
         <ArrowMarkers uid={projection.uid} />
+        <TrajectoryFadeDefs view={view} projection={projection} />
         <radialGradient id={glowId} cx="34%" cy="30%" r="72%">
           <stop offset="0%" stopColor={particle?.sign === 'negative' ? '#9dc4ff' : '#ffb4a6'} />
           <stop offset="55%" stopColor={particle?.sign === 'negative' ? '#3b82f6' : '#ea6a5c'} />
@@ -386,6 +430,9 @@ function ElectricRenderer({ view, projection }: RendererProps) {
               trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
             }
             d={trajectory.path}
+            {...trajectory.kind === 'predicted'
+              ? { stroke: `url(#trajectory-fade-${projection.uid}-${trajectory.id})` }
+              : {}}
           />
         ))
         : null}
@@ -394,6 +441,23 @@ function ElectricRenderer({ view, projection }: RendererProps) {
         vectors={view.vectors.filter(vector => view.visible[vector.observable] === true)}
         projection={projection}
       />
+
+      {/* The runner: a crisp dot on the last history point, above path and
+          vectors, so the eye tracks the body rather than the road. */}
+      {view.visible.trajectory === true
+        ? (() => {
+          const history = view.trajectories.find(trajectory => trajectory.kind === 'history')
+          const point = history?.points[(history?.points.length ?? 1) - 1]
+          return point === undefined ? null : (
+            <circle
+              className={css.trajectoryRunner}
+              cx={projection.px(point)}
+              cy={projection.py(point)}
+              r={4}
+            />
+          )
+        })()
+        : null}
 
       {view.particles.map((item) => {
         const cx = projection.px(item.at)
@@ -437,6 +501,7 @@ function ElectricPointChargeRenderer({ view, projection }: RendererProps) {
     <>
       <defs>
         <ArrowMarkers uid={projection.uid} />
+        <TrajectoryFadeDefs view={view} projection={projection} />
         <radialGradient id={positiveGlowId} cx="34%" cy="30%" r="72%">
           <stop offset="0%" stopColor="#ffd6cc" />
           <stop offset="55%" stopColor="#ea6a5c" />
@@ -598,6 +663,7 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
     <>
       <defs>
         <ArrowMarkers uid={projection.uid} />
+        <TrajectoryFadeDefs view={view} projection={projection} />
         <radialGradient id={glowId} cx="34%" cy="30%" r="72%">
           <stop offset="0%" stopColor={particle?.sign === 'negative' ? '#9dc4ff' : '#ffb4a6'} />
           <stop offset="55%" stopColor={particle?.sign === 'negative' ? '#3b82f6' : '#ea6a5c'} />
@@ -711,8 +777,25 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
               trajectory.kind === 'history' ? css.trajectoryHistory : css.trajectoryPredicted
             }
             d={projection.path(trajectory.points)}
+            {...trajectory.kind === 'predicted'
+              ? { stroke: `url(#trajectory-fade-${projection.uid}-${trajectory.id})` }
+              : {}}
           />
         ))
+        : null}
+      {view.visible.trajectory === true
+        ? (() => {
+          const history = view.trajectories.find(trajectory => trajectory.kind === 'history')
+          const point = history?.points[(history?.points.length ?? 1) - 1]
+          return point === undefined ? null : (
+            <circle
+              className={css.trajectoryRunner}
+              cx={projection.px(point)}
+              cy={projection.py(point)}
+              r={4}
+            />
+          )
+        })()
         : null}
 
       {/* Vectors */}
@@ -912,6 +995,7 @@ function CompositeRenderer({ view, projection }: RendererProps) {
     <>
       <defs>
         <ArrowMarkers uid={projection.uid} />
+        <TrajectoryFadeDefs view={view} projection={projection} />
         <radialGradient id={glowId} cx="34%" cy="30%" r="72%">
           <stop offset="0%" stopColor={particle?.sign === 'negative' ? '#9dc4ff' : '#ffb4a6'} />
           <stop offset="55%" stopColor={particle?.sign === 'negative' ? '#3b82f6' : '#ea6a5c'} />
@@ -1099,6 +1183,7 @@ function MechanicsRenderer({ view, projection }: RendererProps) {
     <>
       <defs>
         <ArrowMarkers uid={projection.uid} />
+        <TrajectoryFadeDefs view={view} projection={projection} />
       </defs>
 
       {view.incline === undefined ? null : (

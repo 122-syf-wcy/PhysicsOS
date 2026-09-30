@@ -75,6 +75,15 @@
   fill: none;
 }
 
+/* The body's current position on its history: a crisp ink dot with a soft
+   halo, drawn last so it rides above the path, vectors and guides. */
+.trajectoryRunner {
+  fill: var(--physics-trajectory);
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--physics-trajectory) 45%, transparent));
+}
+
 .trajectoryPredicted {
   stroke: var(--physics-trajectory-predicted);
   stroke-width: 1.5;
