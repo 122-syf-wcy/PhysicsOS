@@ -205,6 +205,8 @@ node scripts/overlay/harness-overlay.mjs capture   # vendor/deepseek-harness →
 本项目不对其可用性作任何承诺，也请勿把这里的地址当作稳定的生产依赖。
 如果你是其一的运营者并希望调整署名或链接方式，开个 issue 即可。
 
+项目已在 [LINUX DO](https://linux.do) 社区发布并认可，欢迎社区的朋友来试用与反馈。
+
 ## 许可与用途
 
 - 自有代码与文档：[`LICENSE`](./LICENSE)，**Apache License 2.0**（OSI 认证的开源许可），允许使用、修改、分发与商业使用，需保留版权、许可与 NOTICE 声明。
