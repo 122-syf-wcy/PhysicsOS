@@ -149,7 +149,9 @@ test(
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       webHost.stdout.resume()
-      webHost.stderr.resume()
+      webHost.stderr.on('data', (chunk) => {
+        process.stderr.write(`[webHost] ${String(chunk)}`)
+      })
       const registration = await registerWhenReady(baseUrl, {
         schoolId: 'PHYSICSOS-OPEN',
         username: `bridge_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -209,6 +211,9 @@ test(
         60_000,
         'terminal run event',
       )
+      if (terminal.event.type !== 'run_completed') {
+        process.stderr.write(`[terminal] ${JSON.stringify(terminal.event)}\n`)
+      }
       assert.equal(terminal.event.type, 'run_completed')
       const text = sidecar.frames
         .filter((frame) => frame.event?.runId === runId && frame.event.type === 'text_delta')

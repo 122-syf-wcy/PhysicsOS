@@ -136,7 +136,7 @@ jobs:
           pnpm run test:desktop > /tmp/desktop-test.log 2>&1
           code=$?
           if [ "$code" -ne 0 ]; then
-            awk '/AssertionError|timed out|did not become ready|Error \(/{hit=1} hit{print; n++} n>13{exit}' \
+            awk '/AssertionError|timed out|did not become ready|Error \(|\\[webHost\\]|\\[terminal\\]/{hit=1} hit{print; n++} n>13{exit}' \
               /tmp/desktop-test.log | while IFS= read -r line; do echo "::error::desktop: $line"; done
             tail -80 /tmp/desktop-test.log
           fi
