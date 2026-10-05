@@ -998,6 +998,10 @@ overlay/vendor `physics/` 与改动文件逐字节一致,`apply` 幂等。
 **2024 年贵州省中考物理卷**(省级统一命题首年,90 分,22 题)已录入:`scripts/ingest-gz-2024-physics.mjs` 登录后登记原卷 + 22 条考点标注 + 8 道选择题(含官方答案与解析);题干与答案取自两处独立公开转录页并交叉核对(唯一差异是第 12 题 `8:2` 与 `4:1`,同一比值)。全部落 **pending**,由教师在出卷专区核验后进入组卷池。已在隔离服务器上端到端验证(sources=1 / annotations=22 / bank=8)。
 对真实实例执行:`node scripts/ingest-gz-2024-physics.mjs --username <教师账号> --password <密码>`。
 
+**2025 年贵州省中考物理卷**(省级统一第二年,90 分,22 题)已录入:`scripts/ingest-gz-2025-physics.mjs` 登记原卷 + 22 条考点标注 + 7 道选择题(6 单选 + 1 多选,含官方答案与解析)。来源为 czwlzx 公开 word 版(0 点券)文本层逐题转录,同页 3 张扫描图覆盖第 1–15 题与文本层逐字一致;可推导答案(选择全部、18、21、22 等)经物理复核与源答案一致,江南汇教育网的含解析版条目作独立流通佐证(会员墙,未逐题对照)。全部落 **pending**。已对本地 dev 实例端到端验证(sources +1 / annotations=22 / bank=7)。
+对真实实例执行:`node scripts/ingest-gz-2025-physics.mjs --base https://… --username <教师账号> --password <密码>`。
+结构发现:2025 卷与 2024 卷相比,选择 8 题(2 多选)→7 题(1 多选)、简答 2→3 题,总分与题量不变;`ZK_PHYSICS` 蓝图已按 2025 实测口径更新并在注释中记录差异。
+
 ### 液态玻璃 + GlassSelect
 
 - `chrome.ts` 新增 liquid glass 材质 token:模糊(`--physics-glass-blur`)、镜面高光(带 sheen 渐变)、亮边 rim、抬升阴影、弹层密度、**环境光**(没有可折射的底色,玻璃只会是灰盒子 —— 这正是四个新页面此前"没质感"的原因)。
