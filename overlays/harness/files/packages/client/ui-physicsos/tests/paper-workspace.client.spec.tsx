@@ -91,17 +91,16 @@ describe('PaperWorkspace', () => {
     expect((await screen.findAllByText('1')).length).toBeGreaterThan(0)
   })
 
-  it('shows the builder steps, one step at a time, with the live summary', async () => {
+  it('shows the builder on one screen with the advanced fold, and the live summary', async () => {
     render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
-    /* The step rail names every step… */
-    for (const label of ['基本信息', '内容范围', '题型结构', '难度', '生成约束']) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
-    }
-    /* …but exactly one step's form is mounted at a time. */
+    /* No step rail any more: the required inputs and the fold all mount at
+       once, so a teacher can create a paper without paging through a wizard. */
+    expect(screen.queryByRole('button', { name: '基本信息' })).toBeNull()
     expect(await screen.findByTestId('blueprint')).toBeTruthy()
     expect(document.querySelector('[data-paper-step="basic"]')).toBeTruthy()
-    expect(document.querySelector('[data-paper-step="scope"]')).toBeNull()
-    expect(document.querySelector('[data-paper-step="difficulty"]')).toBeNull()
+    expect(document.querySelector('[data-paper-step="scope"]')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="advanced"]')).toBeTruthy()
+    expect(screen.getByText('高级设置（卷型 · 难度 · 排除内容）')).toBeTruthy()
 
     /* The summary column is present and never claims a result that has not
        been computed. */
@@ -112,12 +111,10 @@ describe('PaperWorkspace', () => {
     expect(screen.getByText('考试规范校验')).toBeTruthy()
   })
 
-  it('switches the visible form when another step is chosen', async () => {
+  it('keeps kind, difficulty and exclusions inside the advanced fold', async () => {
     render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '难度' }))
     expect(await screen.findByText('难度系数（贵州中高考标准档）')).toBeTruthy()
-    expect(document.querySelector('[data-paper-step="difficulty"]')).toBeTruthy()
-    expect(document.querySelector('[data-paper-step="basic"]')).toBeNull()
+    expect(document.querySelector('[data-paper-step="advanced"]')).toBeTruthy()
     const seg = (label: string) => screen.getByText((_content, el) => el?.textContent === label)
     expect(seg('基础 55%')).toBeTruthy()
     expect(seg('中档 35%')).toBeTruthy()

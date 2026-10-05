@@ -20,7 +20,9 @@ import type {
   Subject,
 } from './paper.ts'
 
-/* 中考·物理 90 分（物化合卷 150 分 / 150 分钟，2023 起省级统一命题）。 */
+/* 中考·物理 90 分（物化合卷 150 分 / 150 分钟，2023 起省级统一命题）。
+ * 22 题结构按 2024 年省卷实测录入（scripts/ingest-gz-2024-physics.mjs，
+ * 双源交叉核对）：单选 6 + 多选 2 + 填空 4 + 作图 3 + 简答 2 + 实验 3 + 计算 2。 */
 const ZK_PHYSICS: ExamBlueprint = {
   id: 'gz-zk-physics',
   level: 'zhongkao',
@@ -31,7 +33,7 @@ const ZK_PHYSICS: ExamBlueprint = {
   sections: [
     {
       title: '一、选择题',
-      note: '第 1–6 题单项选择，每题 3 分；第 7 题多项选择，全对得 3 分，漏选得 1 分，错选不得分。',
+      note: '第 1–6 题单项选择，每题 3 分；第 7–8 题多项选择，全对得 3 分，漏选得 1 分，错选不得分。',
       slots: [
         { kind: 'choice-single', score: 3 },
         { kind: 'choice-single', score: 3 },
@@ -40,15 +42,16 @@ const ZK_PHYSICS: ExamBlueprint = {
         { kind: 'choice-single', score: 3 },
         { kind: 'choice-single', score: 3 },
         { kind: 'choice-multi', score: 3 },
+        { kind: 'choice-multi', score: 3 },
       ],
     },
     {
       title: '二、填空题',
-      note: '每空 2 分。',
+      note: '共 4 题 10 分，按空给分。',
       slots: [
-        { kind: 'blank', score: 3 },
-        { kind: 'blank', score: 3 },
         { kind: 'blank', score: 2 },
+        { kind: 'blank', score: 2 },
+        { kind: 'blank', score: 4 },
         { kind: 'blank', score: 2 },
       ],
     },
@@ -63,7 +66,6 @@ const ZK_PHYSICS: ExamBlueprint = {
     {
       title: '四、简答题',
       slots: [
-        { kind: 'short-answer', score: 3 },
         { kind: 'short-answer', score: 3 },
         { kind: 'short-answer', score: 3 },
       ],
@@ -90,7 +92,9 @@ const ZK_PHYSICS: ExamBlueprint = {
   policyLabel: '依据已核实政策编制的训练卷',
 }
 
-/* 高考·物理选择性考试 100 分 / 75 分钟（贵州自主命题）。 */
+/* 高考·物理选择性考试 100 分 / 75 分钟。2024 起贵州采用教育部统一命题的
+ * 新课标卷：单选 7×4 + 多选 3×6 + 实验 2 题约 15 分 + 计算 3 题约 39 分，
+ * 无选考模块；个别年份非选择题分值略有调整，以总分 100 严格对账。 */
 const GK_PHYSICS: ExamBlueprint = {
   id: 'gz-gk-physics',
   level: 'gaokao',
@@ -101,21 +105,22 @@ const GK_PHYSICS: ExamBlueprint = {
   sections: [
     {
       title: '一、单项选择题',
+      note: '每题 4 分，共 28 分。',
       slots: Array.from({ length: 7 }, () => ({ kind: 'choice-single' as const, score: 4 })),
     },
     {
       title: '二、多项选择题',
-      note: '每题 4 分，全部选对得 4 分，选对但不全得 2 分，有错选得 0 分。',
-      slots: Array.from({ length: 3 }, () => ({ kind: 'choice-multi' as const, score: 4 })),
+      note: '每题 6 分，共 18 分；全部选对得 6 分，选对但不全得 3 分，有错选得 0 分。',
+      slots: Array.from({ length: 3 }, () => ({ kind: 'choice-multi' as const, score: 6 })),
     },
     {
       title: '三、非选择题',
-      note: '实验题 2 题、计算题 3 题。',
+      note: '实验题 2 题（约 15 分）、计算题 3 题（约 39 分）。计算题须写出必要的公式与过程，只写结果不得分。',
       slots: [
-        { kind: 'experiment', score: 10 },
-        { kind: 'experiment', score: 12 },
+        { kind: 'experiment', score: 6 },
+        { kind: 'experiment', score: 9 },
         { kind: 'calculation', score: 12 },
-        { kind: 'calculation', score: 12 },
+        { kind: 'calculation', score: 13 },
         { kind: 'calculation', score: 14 },
       ],
     },

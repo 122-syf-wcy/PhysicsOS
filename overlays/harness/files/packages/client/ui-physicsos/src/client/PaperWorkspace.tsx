@@ -377,15 +377,11 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
  * a workbench rather than a page of stacked cards; the nav is the only place a
  * teacher has to look to know where they are.
  */
-const PAPER_STEPS = [
-  { id: 'basic', label: '基本信息' },
-  { id: 'scope', label: '内容范围' },
-  { id: 'structure', label: '题型结构' },
-  { id: 'difficulty', label: '难度' },
-  { id: 'constraints', label: '生成约束' },
-] as const
-type PaperStepId = (typeof PAPER_STEPS)[number]['id']
-
+/*
+ * The builder is one screen, not a wizard: template + taught chapters are the
+ * only required inputs, the section structure rides under the template, and
+ * kind/difficulty/exclude live behind an 高级设置 fold with sane defaults.
+ */
 function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
   blueprints: BlueprintRow[]
   api: PaperApi
@@ -393,7 +389,6 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
   onError: (message: string) => void
   onReview: () => void
 }) {
-  const [step, setStep] = useState<PaperStepId>('basic')
   const [blueprintId, setBlueprintId] = useState('')
   const [kind, setKind] = useState<string>('unit')
   const [chapters, setChapters] = useState('')
@@ -438,35 +433,23 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
       )}
       <div className={css.workbench}>
         <div className={css.workbenchMain}>
-          <nav className={css.stepNav} aria-label="出卷步骤">
-            {PAPER_STEPS.map((s, i) => (
-              <button key={s.id} type="button"
-                className={clsx(css.stepNavItem, step === s.id && css.stepNavActive)}
-                aria-current={step === s.id ? 'step' : undefined}
-                onClick={() => { setStep(s.id) }}>
-                <span className={css.stepNavNo} aria-hidden="true">{i + 1}</span>
-                <span className={css.stepNavLabel}>{s.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div className={css.stepForm}>
-            {step === 'basic' && (
-              <div className={css.stepCard} data-paper-step="basic">
-                <h3 className={css.stepCardTitle}>基本信息</h3>
-                <div className={css.field}><span>结构模板（已核验）</span>
-                  <GlassSelect
-                    value={blueprintId}
-                    ariaLabel="结构模板"
-                    testId="blueprint"
-                    placeholder="— 选择 —"
-                    options={blueprints.map(b => ({
-                      value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
-                    }))}
-                    onChange={setBlueprintId}
-                  />
-                </div>
-                {blueprint !== undefined && (
+          <div className={css.stepForm} data-paper-form="quick">
+            <div className={css.stepCard} data-paper-step="basic">
+              <h3 className={css.stepCardTitle}>试卷结构</h3>
+              <div className={css.field}><span>结构模板（已核验）</span>
+                <GlassSelect
+                  value={blueprintId}
+                  ariaLabel="结构模板"
+                  testId="blueprint"
+                  placeholder="— 选择 —"
+                  options={blueprints.map(b => ({
+                    value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
+                  }))}
+                  onChange={setBlueprintId}
+                />
+              </div>
+              {blueprint !== undefined && (
+                <>
                   <div className={css.bpInfo}>
                     {blueprint.sections.map((s, i) => (
                       <span key={i} className={css.bpSection}>
@@ -474,7 +457,32 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
                       </span>
                     ))}
                   </div>
-                )}
+                  <ul className={css.structureList} aria-label="题型结构与给分规则">
+                    {blueprint.sections.map((s, i) => (
+                      <li key={i} className={css.structureRow}>
+                        <span className={css.structureTitle}>{s.title}</span>
+                        <span className={css.structureMeta}>
+                          {s.slots.length} 题 · {s.slots.reduce((n, x) => n + x.score, 0)} 分
+                        </span>
+                        {s.note !== undefined && <span className={css.structureNote}>{s.note}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <div className={css.stepCard} data-paper-step="scope">
+              <h3 className={css.stepCardTitle}>内容范围</h3>
+              <label className={css.field}>已教章节（分号或换行分隔）
+                <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
+                  placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={6} />
+              </label>
+            </div>
+
+            <details className={css.stepCard} data-paper-step="advanced">
+              <summary className={css.advancedSummary}>高级设置（卷型 · 难度 · 排除内容）</summary>
+              <div className={css.advancedBody}>
                 <div className={css.field}><span>卷型</span>
                   <GlassSelect
                     value={kind}
@@ -484,43 +492,6 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
                     onChange={setKind}
                   />
                 </div>
-              </div>
-            )}
-
-            {step === 'scope' && (
-              <div className={css.stepCard} data-paper-step="scope">
-                <h3 className={css.stepCardTitle}>内容范围</h3>
-                <label className={css.field}>已教章节（分号或换行分隔）
-                  <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
-                    placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={6} />
-                </label>
-              </div>
-            )}
-
-            {step === 'structure' && (
-              <div className={css.stepCard} data-paper-step="structure">
-                <h3 className={css.stepCardTitle}>题型结构</h3>
-                {blueprint === undefined
-                  ? <p className={css.empty}>先回到「基本信息」选择试卷结构模板。</p>
-                  : (
-                    <ul className={css.structureList}>
-                      {blueprint.sections.map((s, i) => (
-                        <li key={i} className={css.structureRow}>
-                          <span className={css.structureTitle}>{s.title}</span>
-                          <span className={css.structureMeta}>
-                            {s.slots.length} 题 · {s.slots.reduce((n, x) => n + x.score, 0)} 分
-                          </span>
-                          {s.note !== undefined && <span className={css.structureNote}>{s.note}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-              </div>
-            )}
-
-            {step === 'difficulty' && (
-              <div className={css.stepCard} data-paper-step="difficulty">
-                <h3 className={css.stepCardTitle}>难度</h3>
                 <div className={css.field}><span>难度系数（贵州中高考标准档）</span>
                   <GlassSelect
                     value={presetKey}
@@ -533,23 +504,12 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
                   />
                 </div>
                 <MixBar mix={preset.mix} />
-              </div>
-            )}
-
-            {step === 'constraints' && (
-              <div className={css.stepCard} data-paper-step="constraints">
-                <h3 className={css.stepCardTitle}>生成约束</h3>
                 <label className={css.field}>排除内容（分号或换行分隔）
                   <textarea value={exclude} onChange={(e) => { setExclude(e.target.value) }}
                     placeholder="如：电功率综合计算" rows={5} />
                 </label>
-                <dl className={css.constraintList}>
-                  <div><dt>目标年份</dt><dd>2027 届</dd></div>
-                  <div><dt>教材版本</dt><dd>人教版</dd></div>
-                  <div><dt>结构模板</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
-                </dl>
               </div>
-            )}
+            </details>
           </div>
         </div>
 
@@ -562,6 +522,8 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
               <div><dt>总分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
               <div><dt>题量</dt><dd>{blueprint === undefined ? '—' : `${totalQuestions} 题`}</dd></div>
               <div><dt>卷型</dt><dd>{KIND_LABEL[kind] ?? kind}</dd></div>
+              <div><dt>目标年份</dt><dd>2027 届</dd></div>
+              <div><dt>教材版本</dt><dd>人教版</dd></div>
               <div><dt>知识覆盖</dt><dd>{chapterCount === 0 ? '未填写' : `${chapterCount} 章`}</dd></div>
               <div><dt>难度目标</dt><dd>{coefficientLabel(mixCoefficient(preset.mix))}</dd></div>
             </dl>

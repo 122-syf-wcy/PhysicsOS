@@ -12,6 +12,7 @@ import type {
   BankItem, PaperDocument, PaperJob, PaperQuestion, SpecRow,
 } from '@physicsos/question-paper'
 import { paperQuestionSchema } from './domain.ts'
+import { blueprintById } from '@physicsos/question-paper'
 import { z } from 'zod'
 
 /** Model route the deployment configures for drafting and solving. */
@@ -151,7 +152,7 @@ const SYSTEM = `你是贵州省初高中学业水平考试的资深命题教师�
 - 计算题：给定数据必须真实可算、量级合理；basic 题不超过两步运算；结果保留位数符合中学惯例（一般两位有效数字或整数）。
 - 实验题：必须是课标要求的实验，写明操作、现象、结论或数据处理要求；不得杜撰实验名称。
 - 主观题小问由易到难递进，后问可引用前问结果。
-- 答案：result 是最终结论；steps 每步有公式或依据；gradingPoints 分值合计必须等于 score；equivalents 列出可接受的等价表述。
+- 答案：result 是最终结论；steps 按评卷惯例组织——公式 → 代入数据 → 运算结果 → 单位，最后写"答：…"；计算/综合题只写最后结果不得分，步骤缺失即扣分；gradingPoints 分值合计必须等于 score；equivalents 列出可接受的等价表述。
 - 数据表：题干中的实验/测量数据表一律用 Markdown 表格（| 列 | 列 | 加分隔行）书写，禁止 LaTeX array/tabular 环境——导出端无法将其渲染为表格。
 - 题图：题干写"图中未画出"或不要求看图时不得配 figure；配图的 figure.caption 须与题干表述一致。
 - 禁止：超出已教范围、条件不足或无解、表述歧义、编造数据。
@@ -180,6 +181,11 @@ export async function draftSection(
   exemplars: readonly BankItem[] = [],
 ): Promise<PaperQuestion[]> {
   const request = job.request
+  /* The blueprint's own grading rules for this section (multi-choice partial
+     credit, "answer-only scores zero") ride along so the drafted questions
+     and their gradingPoints follow the real marking convention. */
+  const sectionNote = blueprintById(job.blueprintId)
+    ?.sections.find(section => section.title === sectionTitle)?.note
   const prompt = [
     `学段：${request.level === 'zhongkao' ? '初中（中考）' : '高中（高考选择性考试）'}`,
     `学科：${request.subjects.join('+')}　卷型：${request.kind}　教材：${request.textbook}`,
@@ -188,6 +194,7 @@ export async function draftSection(
     request.exclude.length > 0 ? `排除内容：${request.exclude.join('；')}` : '',
     '',
     `本次命制板块：${sectionTitle}`,
+    sectionNote !== undefined ? `板块给分规则：${sectionNote}` : '',
     '双向细目表：',
     ...rows.map(row =>
       `  第${row.questionNo}题 ${row.kind} ${row.score}分 考点[${row.knowledge.join('、') || '自定'}] 能力${row.ability} 难度${row.difficulty}`),

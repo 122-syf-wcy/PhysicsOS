@@ -666,6 +666,39 @@
   text-align: right;
 }
 
+/* 高级设置折叠：原生 details/summary，默认收起保持一屏表单。 */
+.advancedSummary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--dsw-alias-label-primary);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.advancedSummary::-webkit-details-marker {
+  display: none;
+}
+
+.advancedSummary::before {
+  content: '▸';
+  color: var(--dsw-alias-label-secondary);
+  transition: transform 0.15s ease;
+}
+
+details[open] > .advancedSummary::before {
+  transform: rotate(90deg);
+}
+
+.advancedBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+
 .stepCard {
   background-color: var(--physics-glass-fill-strong);
   background-image: var(--physics-glass-sheen);
