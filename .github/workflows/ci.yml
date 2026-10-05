@@ -112,8 +112,14 @@ jobs:
           overlays/harness/files/packages/physicsos/health-host/tests
           scripts/healthcheck.mjs
 
-      - name: Typecheck, lint, and test
-        run: pnpm run test:ci
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm run test
 
       - name: Build
         run: pnpm build
