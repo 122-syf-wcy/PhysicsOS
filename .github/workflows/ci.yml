@@ -74,6 +74,11 @@ jobs:
       - name: Install Harness
         run: pnpm -C vendor/deepseek-harness install --frozen-lockfile --ignore-scripts
 
+      - name: Build native host addon
+        run: >-
+          pnpm -C vendor/deepseek-harness --filter
+          @deepseek-ai/node-addon-system-workspace run build:native --host-addon-only
+
       - name: Validate Compose
         run: docker compose config --quiet
 
