@@ -21,8 +21,10 @@ import type {
 } from './paper.ts'
 
 /* 中考·物理 90 分（物化合卷 150 分 / 150 分钟，2023 起省级统一命题）。
- * 22 题结构按 2024 年省卷实测录入（scripts/ingest-gz-2024-physics.mjs，
- * 双源交叉核对）：单选 6 + 多选 2 + 填空 4 + 作图 3 + 简答 2 + 实验 3 + 计算 2。 */
+ * 22 题结构按 2025 年省卷实测录入（scripts/ingest-gz-2025-physics.mjs，
+ * word 文本层与扫描图互证）：单选 6 + 多选 1 + 填空 4 + 作图 3 + 简答 3 +
+ * 实验 3 + 计算 2。与 2024 卷（选择 8 题含 2 多选、简答 2 题）相比，仅选择
+ * 与简答两个板块互有增减，总分与题量不变——组卷按最新省卷口径。 */
 const ZK_PHYSICS: ExamBlueprint = {
   id: 'gz-zk-physics',
   level: 'zhongkao',
@@ -33,7 +35,7 @@ const ZK_PHYSICS: ExamBlueprint = {
   sections: [
     {
       title: '一、选择题',
-      note: '第 1–6 题单项选择，每题 3 分；第 7–8 题多项选择，全对得 3 分，漏选得 1 分，错选不得分。',
+      note: '第 1–6 题单项选择，每题 3 分；第 7 题多项选择，全对得 3 分，漏选得 1 分，错选不得分。',
       slots: [
         { kind: 'choice-single', score: 3 },
         { kind: 'choice-single', score: 3 },
@@ -41,7 +43,6 @@ const ZK_PHYSICS: ExamBlueprint = {
         { kind: 'choice-single', score: 3 },
         { kind: 'choice-single', score: 3 },
         { kind: 'choice-single', score: 3 },
-        { kind: 'choice-multi', score: 3 },
         { kind: 'choice-multi', score: 3 },
       ],
     },
@@ -51,8 +52,8 @@ const ZK_PHYSICS: ExamBlueprint = {
       slots: [
         { kind: 'blank', score: 2 },
         { kind: 'blank', score: 2 },
-        { kind: 'blank', score: 4 },
         { kind: 'blank', score: 2 },
+        { kind: 'blank', score: 4 },
       ],
     },
     {
@@ -66,6 +67,7 @@ const ZK_PHYSICS: ExamBlueprint = {
     {
       title: '四、简答题',
       slots: [
+        { kind: 'short-answer', score: 3 },
         { kind: 'short-answer', score: 3 },
         { kind: 'short-answer', score: 3 },
       ],
