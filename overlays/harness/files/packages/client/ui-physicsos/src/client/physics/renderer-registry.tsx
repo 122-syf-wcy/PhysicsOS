@@ -138,7 +138,7 @@ export interface RendererProps {
 function TrajectoryFadeDefs({ view, projection }: RendererProps) {
   const gradients = view.trajectories
     .filter(trajectory => trajectory.kind === 'predicted' && trajectory.points.length > 1)
-    .map(trajectory => {
+    .map((trajectory) => {
       const first = trajectory.points[0]
       const last = trajectory.points[trajectory.points.length - 1]
       if (first === undefined || last === undefined) return null
@@ -447,7 +447,7 @@ function ElectricRenderer({ view, projection }: RendererProps) {
       {view.visible.trajectory === true
         ? (() => {
           const history = view.trajectories.find(trajectory => trajectory.kind === 'history')
-          const point = history?.points[(history?.points.length ?? 1) - 1]
+          const point = history?.points[history.points.length - 1]
           return point === undefined ? null : (
             <circle
               className={css.trajectoryRunner}
@@ -786,7 +786,7 @@ function ElectricRegionRenderer({ view, projection }: RendererProps) {
       {view.visible.trajectory === true
         ? (() => {
           const history = view.trajectories.find(trajectory => trajectory.kind === 'history')
-          const point = history?.points[(history?.points.length ?? 1) - 1]
+          const point = history?.points[history.points.length - 1]
           return point === undefined ? null : (
             <circle
               className={css.trajectoryRunner}

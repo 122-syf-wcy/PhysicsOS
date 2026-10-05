@@ -1693,7 +1693,7 @@ const RASTER_ART: ReadonlySet<string> = new Set([
   'wave-diffraction',
   'wave-doppler',
   'wave-longitudinal',
-  'wave-reflection-refraction',])
+  'wave-reflection-refraction'])
 
 /** The scene artwork itself: a generated plate when one exists, else a
    * transparent 120x68 stage painted in currentColor. */

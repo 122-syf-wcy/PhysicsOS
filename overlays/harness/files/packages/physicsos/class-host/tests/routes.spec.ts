@@ -12,6 +12,11 @@ import { classRoutes } from '../src/routes.ts'
 import type { classDomain } from '../src/domain.ts'
 import type { IdentityActor, IdentityRole, PhysicsosIdentity } from '../src/identity.ts'
 
+// 相对时间常量：硬编码截止日期会随日历过期，使“按时提交”的 late 判定翻转（时间炸弹）。
+const futureDueAt = new Date(Date.now() + 7 * 86_400_000).toISOString()
+// 第二份作业的更晚截止（原用例相差 2 天），保持“两个不同截止”的排序语义。
+const laterDueAt = new Date(Date.now() + 9 * 86_400_000).toISOString()
+
 const table = <T>() => {
   const map = new Map<string, T>()
   return {
@@ -191,7 +196,7 @@ describe('class workflow — the gate', () => {
     const refused = await json('STUDENT', `/classes/${classId}/assignments`, {
       title: '越权作业',
       target: { kind: 'paper', id: 'paper-1' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     expect(refused.status).toBe(403)
 
@@ -199,7 +204,7 @@ describe('class workflow — the gate', () => {
       title: '力学综合练习',
       instructions: '完成第一至第五题',
       target: { kind: 'paper', id: 'paper-physics-01' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     expect(assignment.status).toBe(201)
     const assignmentBody = (await assignment.json()) as {
@@ -217,7 +222,7 @@ describe('class workflow — the gate', () => {
       classId,
       schoolId: 'GZU',
       title: '力学综合练习',
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
       target: { kind: 'paper', id: 'paper-physics-01' },
       createdBy: 'GZU:teacher',
     })
@@ -241,7 +246,7 @@ describe('class workflow — the gate', () => {
     const badTarget = await json('TEACHER', `/classes/${classId}/assignments`, {
       title: '未知资源',
       target: { kind: 'video', id: 'video-1' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     expect(badTarget.status).toBe(400)
 
@@ -260,7 +265,7 @@ describe('class workflow — the gate', () => {
     const assignment = await json('TEACHER', `/classes/${classId}/assignments`, {
       title: '实验报告',
       target: { kind: 'experiment', id: 'mechanics-average-speed' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     const assignmentId = ((await assignment.json()) as { item: { id: string } }).item.id
     const submissionPath = `/classes/${classId}/assignments/${assignmentId}/submission`
@@ -311,7 +316,7 @@ describe('class workflow — the gate', () => {
     })
     expect(submittedBody.receipt).toMatchObject({
       assignmentId,
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
       status: 'submitted',
       late: false,
     })
@@ -333,7 +338,7 @@ describe('class workflow — the gate', () => {
     const assignment = await json('TEACHER', `/classes/${classId}/assignments`, {
       title: '限长作业',
       target: { kind: 'paper', id: 'paper-limit' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     const assignmentId = ((await assignment.json()) as { item: { id: string } }).item.id
 
@@ -355,7 +360,7 @@ describe('class workflow — the gate', () => {
     const assignment = await json('TEACHER', `/classes/${classId}/assignments`, {
       title: '电磁感应作业',
       target: { kind: 'paper', id: 'paper-induction-01' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     const assignmentId = ((await assignment.json()) as { item: { id: string } }).item.id
     const base = `/classes/${classId}/assignments/${assignmentId}`
@@ -408,13 +413,13 @@ describe('class workflow — the gate', () => {
     const first = await json('TEACHER', `/classes/${classId}/assignments`, {
       title: '作业一',
       target: { kind: 'paper', id: 'paper-1' },
-      dueAt: '2026-10-01T12:00:00.000Z',
+      dueAt: futureDueAt,
     })
     const firstId = ((await first.json()) as { item: { id: string } }).item.id
     await json('TEACHER', `/classes/${classId}/assignments`, {
       title: '作业二',
       target: { kind: 'experiment', id: 'mechanics-average-speed' },
-      dueAt: '2026-10-03T12:00:00.000Z',
+      dueAt: laterDueAt,
     })
     await json(
       'STUDENT',
@@ -555,7 +560,7 @@ describe('class workflow — the gate', () => {
       const assignment = await json('TEACHER', `/classes/${classId}/assignments`, {
         title: '跨站提交测试',
         target: { kind: 'paper', id: 'paper-csrf' },
-        dueAt: '2026-10-01T12:00:00.000Z',
+        dueAt: futureDueAt,
       })
       const assignmentId = ((await assignment.json()) as { item: { id: string } }).item.id
 

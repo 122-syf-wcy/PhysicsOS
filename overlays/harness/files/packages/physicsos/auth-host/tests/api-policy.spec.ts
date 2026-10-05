@@ -570,16 +570,16 @@ describe('PhysicsOS shared /api policy', () => {
   it('scopes an upgraded connection to the workspaces its account owns', () => {
     const owned = makeStore({ workspace: ['workspace-student'], session: ['session-student'] })
     const { policy } = makePolicy({ actor: admin, store: owned })
-    const admission = policy.admitUpgrade({ headers: {} } as never)
+    const admission = policy.admitUpgrade({ headers: {} })
     /* The operator is a user of the product picker too: the workspace scope is
        ownership-based for every role, while remote events stay unscoped so
        approvals keep flowing. */
-    expect(admission?.remoteEventAdmission).toBeUndefined()
+    expect(admission?.remoteEventAdmission === undefined).toBe(true)
     expect(admission?.workspaceAdmission?.ownsWorkspace('workspace-student')).toBe(true)
     expect(admission?.workspaceAdmission?.ownsWorkspace('foreign')).toBe(false)
 
-    const face = makePolicy({ store: owned }).policy.admitUpgrade({ headers: {} } as never)
-    expect(face?.remoteEventAdmission).toBeTypeOf('function')
+    const face = makePolicy({ store: owned }).policy.admitUpgrade({ headers: {} })
+    expect(typeof face?.remoteEventAdmission).toBe('function')
     expect(face?.remoteEventAdmission?.('x', [])).toBe(false)
     expect(face?.workspaceAdmission?.ownsSession('session-student')).toBe(true)
     expect(face?.workspaceAdmission?.ownsSession('session-other')).toBe(false)

@@ -21,6 +21,9 @@ import * as storageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as authHost from '../../auth-host/src/index.ts'
 import * as classHost from '../src/index.ts'
 
+// 相对时间常量：硬编码截止日期会随日历过期，使“按时提交”的 late 判定翻转（时间炸弹）。
+const futureDueAt = new Date(Date.now() + 7 * 86_400_000).toISOString()
+
 let root: string | undefined
 let context: Context | undefined
 
@@ -189,7 +192,7 @@ describe('real Loader composition — the class workflow gate', () => {
         {
           title: '磁场综合练习',
           target: { kind: 'paper', id: 'paper-composition-01' },
-          dueAt: '2026-10-01T12:00:00.000Z',
+          dueAt: futureDueAt,
         },
         teacherCookie,
       )
