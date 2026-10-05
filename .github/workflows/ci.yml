@@ -118,8 +118,20 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Test
-        run: pnpm run test
+      - name: Test core
+        run: pnpm run test:core
+
+      - name: Test web
+        run: pnpm run test:web
+
+      - name: Test agent
+        run: pnpm run test:agent
+
+      - name: Test deploy
+        run: pnpm run test:deploy
+
+      - name: Test desktop
+        run: pnpm run test:desktop
 
       - name: Build
         run: pnpm build
