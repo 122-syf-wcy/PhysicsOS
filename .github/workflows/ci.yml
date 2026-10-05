@@ -131,7 +131,16 @@ jobs:
         run: pnpm run test:deploy
 
       - name: Test desktop
-        run: pnpm run test:desktop
+        run: |
+          set +e
+          pnpm run test:desktop > /tmp/desktop-test.log 2>&1
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            grep -E "not ok|✖|✗|# fail|Error |error:|timed out|did not become ready" /tmp/desktop-test.log \
+              | tail -15 | while IFS= read -r line; do echo "::error::desktop: $line"; done
+            tail -80 /tmp/desktop-test.log
+          fi
+          exit "$code"
 
       - name: Build
         run: pnpm build
