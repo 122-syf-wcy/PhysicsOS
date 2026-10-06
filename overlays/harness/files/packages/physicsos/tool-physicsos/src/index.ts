@@ -34,7 +34,14 @@ import {
   type PhysicsToolName,
   type SceneDescription,
 } from '@physicsos/agent-tools'
-import type { PhysicsSceneSnapshot, PhysicsSceneSnapshotCause, PhysicsSceneSolveSummary, PhysicsScenesProjection } from './types.ts'
+import type {
+  PhysicsSceneSnapshot,
+  PhysicsSceneSnapshotCause,
+  PhysicsSceneSolveSummary,
+  PhysicsScenesProjection,
+  PhysicsSolveTrace,
+  PhysicsSolveTracesProjection,
+} from './types.ts'
 
 // The `physics/scene` event and `physicsScenes` projection-key declarations
 // live in src/types.ts (their one home); this re-export projects the type face
@@ -118,7 +125,59 @@ const physicsScenesProjectionSchema: ZodType<PhysicsScenesProjection> = zod.obje
   })),
 })
 
+/** Wire schema of the `physicsSolveTraces` projection. */
+const physicsSolveTracesProjectionSchema: ZodType<PhysicsSolveTracesProjection> = zod.object({
+  traces: zod.array(zod.object({
+    turn: zod.number().optional(),
+    status: zod.union([zod.literal('solved'), zod.literal('rejected')]),
+    workflowState: zod.string(),
+    domain: zod.string().optional(),
+    model: zod.string().optional(),
+    goldenQuestionId: zod.string().optional(),
+    attempt: zod.number().optional(),
+    sceneId: zod.string().optional(),
+    reusedScene: zod.boolean().optional(),
+    verification: zod.object({
+      status: zod.string(),
+      passed: zod.number(),
+      total: zod.number(),
+      failed: zod.array(zod.object({
+        id: zod.string(),
+        message: zod.string().optional(),
+      })),
+    }).optional(),
+    answers: zod.array(zod.object({
+      key: zod.string(),
+      value: zod.string(),
+      unit: zod.string(),
+    })),
+    issues: zod.array(zod.object({
+      code: zod.string(),
+      severity: zod.string(),
+    })),
+    retryGuidance: zod.array(zod.object({ code: zod.string() })),
+    durationMs: zod.number(),
+  })),
+})
+
 const EMPTY_PROJECTION: PhysicsScenesProjection = { latest: null, scenes: {} }
+const EMPTY_SOLVE_TRACES: PhysicsSolveTracesProjection = { traces: [] }
+
+/**
+ * The turn a physics event should ride: read back off the session's open
+ * `turn/start`, newest first. Shared by the scene mirror and the solve trace
+ * so both dock at the answer that produced them.
+ */
+const currentTurnOf = (exec: ToolRunContext): number | undefined => {
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing open-turn lookup; projection migration deferred.
+  const events = exec.agent?.session.snapshotEvents()
+  if (events === undefined) return undefined
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index]
+    if (event?.type === 'turn/start') return event.data.turn
+  }
+  return undefined
+}
 
 /**
  * Fold one `physics/scene` event into the projection (last-wins per scene id,
@@ -134,6 +193,23 @@ export const foldPhysicsScene = (
 ): PhysicsScenesProjection => ({
   latest: snapshot.sceneId,
   scenes: { ...state.scenes, [snapshot.sceneId]: snapshot },
+})
+
+/** Newest solve traces kept per session — a bounded tail, not an unbounded log. */
+export const SOLVE_TRACES_CAP = 50
+
+/**
+ * Fold one `physics/solve-trace` event into the projection (append, then trim
+ * to the newest {@link SOLVE_TRACES_CAP}). Exported for the companion tests.
+ * @param state - previous projection value.
+ * @param trace - the appended trace.
+ * @returns the next projection value (a new object; state is never mutated).
+ */
+export const foldPhysicsSolveTrace = (
+  state: PhysicsSolveTracesProjection,
+  trace: PhysicsSolveTrace,
+): PhysicsSolveTracesProjection => ({
+  traces: [...state.traces, trace].slice(-SOLVE_TRACES_CAP),
 })
 
 /**
@@ -162,8 +238,9 @@ export function apply(ctx: Context, config: Config): void {
 
   // The unit child activates only when a projection registry is composed
   // (headless assemblies without the seam stay unaffected). Fold: every
-  // `physics/scene` upserts its scene and becomes `latest`; every other event
-  // returns the same state reference.
+  // `physics/scene` upserts its scene and becomes `latest`; every
+  // `physics/solve-trace` appends to the capped attempt tail; every other
+  // event returns the same state reference.
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     projectionCtx.sessionProjections.register<'physicsScenes', PhysicsScenesProjection>({
       key: 'physicsScenes',
@@ -171,6 +248,14 @@ export function apply(ctx: Context, config: Config): void {
       init: () => EMPTY_PROJECTION,
       apply: (state, event) => (event.type === 'physics/scene' ? foldPhysicsScene(state, event.data) : state),
       wire: { viewSchema: physicsScenesProjectionSchema, view: state => state },
+      stateVersion: 1,
+    })
+    projectionCtx.sessionProjections.register<'physicsSolveTraces', PhysicsSolveTracesProjection>({
+      key: 'physicsSolveTraces',
+      stateSchema: physicsSolveTracesProjectionSchema,
+      init: () => EMPTY_SOLVE_TRACES,
+      apply: (state, event) => (event.type === 'physics/solve-trace' ? foldPhysicsSolveTrace(state, event.data) : state),
+      wire: { viewSchema: physicsSolveTracesProjectionSchema, view: state => state },
       stateVersion: 1,
     })
   })
@@ -192,16 +277,7 @@ export function apply(ctx: Context, config: Config): void {
     /* The snapshot rides the owning turn so the chat card can dock at the
        answer: the tool call's own events carry the turn, this one does not —
        read it back off the open turn/start. */
-    // oxlint-disable-next-line typescript/no-deprecated -- Existing open-turn lookup; projection migration deferred.
-    const events = exec.agent.session.snapshotEvents()
-    let turn: number | undefined
-    for (let index = events.length - 1; index >= 0; index--) {
-      const event = events[index]
-      if (event?.type === 'turn/start') {
-        turn = event.data.turn
-        break
-      }
-    }
+    const turn = currentTurnOf(exec)
     const snapshot: PhysicsSceneSnapshot = {
       sceneId: description.sceneId,
       revision: description.revision,
@@ -264,7 +340,9 @@ export function apply(ctx: Context, config: Config): void {
     output: { schema: ANY_OBJECT, render: renderFor('physics_solve_question') },
     execute: (args, exec) => {
       const runtime = runtimeFor(exec)
+      const startedAt = Date.now()
       const solved = guarded(() => runtime.solveQuestion(args.text, args.questionId))
+      const durationMs = Date.now() - startedAt
       if (solved.scene !== undefined) {
         publish(exec, runtime, solved.scene, 'solved', {
           solve: {
@@ -293,6 +371,38 @@ export function apply(ctx: Context, config: Config): void {
             ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
           },
         })
+      }
+      /* Every attempt — solved or rejected — leaves a trace: the scene mirror
+         only carries READY solves, so without this a rejected attempt (parse
+         failure, verification failure) would vanish from the session log the
+         moment the model re-asks. */
+      if (exec.agent !== undefined) {
+        const failedChecks = (solved.verification?.checks ?? [])
+          .filter(check => !check.passed)
+          .map(check => ({ id: check.id, ...(check.message === undefined ? {} : { message: check.message }) }))
+        const verificationSummary = solved.verification === undefined ? undefined : {
+          status: solved.verification.status,
+          passed: solved.verification.checks.length - failedChecks.length,
+          total: solved.verification.checks.length,
+          failed: failedChecks,
+        }
+        const trace: PhysicsSolveTrace = {
+          ...(currentTurnOf(exec) === undefined ? {} : { turn: currentTurnOf(exec) }),
+          status: solved.status,
+          workflowState: solved.workflowState,
+          ...(solved.domain === undefined ? {} : { domain: solved.domain }),
+          ...(solved.model === undefined ? {} : { model: solved.model }),
+          ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
+          ...(solved.attempt === undefined ? {} : { attempt: solved.attempt }),
+          ...(solved.scene === undefined ? {} : { sceneId: solved.scene.sceneId }),
+          ...(solved.reusedScene === true ? { reusedScene: true } : {}),
+          ...(verificationSummary === undefined ? {} : { verification: verificationSummary }),
+          answers: solved.answers.map(answer => ({ key: answer.key, value: answer.value, unit: answer.unit })),
+          issues: solved.issues.map(issue => ({ code: issue.code, severity: issue.severity })),
+          retryGuidance: (solved.retryGuidance ?? []).map(hint => ({ code: hint.code })),
+          durationMs,
+        }
+        exec.agent.session.append('physics/solve-trace', trace)
       }
       return Promise.resolve(solved as unknown as AnyObject)
     },

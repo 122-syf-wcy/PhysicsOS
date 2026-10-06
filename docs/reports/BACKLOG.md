@@ -1002,6 +1002,18 @@ overlay/vendor `physics/` 与改动文件逐字节一致,`apply` 幂等。
 对真实实例执行:`node scripts/ingest-gz-2025-physics.mjs --base https://… --username <教师账号> --password <密码>`。
 结构发现:2025 卷与 2024 卷相比,选择 8 题(2 多选)→7 题(1 多选)、简答 2→3 题,总分与题量不变;`ZK_PHYSICS` 蓝图已按 2025 实测口径更新并在注释中记录差异。
 
+### 解题链路可信度四件套(2026-10-05)
+
+以「金标准题最小突变」方法实测暴露并修复了三个反事实盲区,补上自纠错闭环与结构化运行日志:
+
+- **反事实守卫**(`packages/agent-tools/tests/counterfactual-guard.test.ts`):速度选择器题声称「沿直线通过」但 v≠E/B 时,以前静默 solved(32/33 通过、状态仍 passed)——现在 `question-runtime` 在声称与 `velocity_selection_condition` 检查矛盾时发 `PASSAGE_CLAIM_CONTRADICTED` 警告;电路题声称「电流表读数为 X A」与欧姆定律矛盾时,解析器新增电流表读数模式把声称值读进 IR,引擎计算值不变并交叉核对发 `STATED_READING_INCONSISTENT` 警告(答案永远以引擎为准)。已知缺口(质谱仪「测得半径」、运动学声称末速度尚不入 IR)以 docs 用例钉住,修复后迁移为守卫。
+- **自纠错闭环**(`physics-tool-runtime.ts` + `render.ts` + persona 第 9 条):rejected 结果携带结构化 `retryGuidance`(按 PARSE_FAILED/AMBIGUOUS/INVALID_SEMANTICS/UNSUPPORTED_MODEL/VERIFICATION_FAILED 给出确定性改写指引);同一规范化题面第 2 次拒收后发 `STOP_RETRY_SAME_STEM`(确定性管线,原样重试无意义),persona 同步改为「按修正建议最多重试一次」。
+- **结构化运行日志**(vendor `tool-physicsos`):新增 `physics/solve-trace` 会话事件——每次 solve(solved 与 rejected 都算)落 {workflowState、domain、验证摘要、答案、issues、retryGuidance、attempt、耗时};`physicsScenes` 投影只收 READY 求解,rejected 以前在会话日志里不留痕。投影 `physicsSolveTraces` 追加式折叠,封顶 50 条。已知事件表与持久化目录经 `gen-persistence-catalog` 重生成;插件清单(tool-physicsos 入口摘要+签名)经 `scripts/plugin/sign-physicsos-manifest.mjs` 重签。本次 capture 还把上一轮漏 capture 的 persistence 目录文档段补进了 `upstream-changes.patch`。
+- **真题回归集**(`packages/agent-tools/tests/real-exam-regression.test.ts`):2025 贵州中考 10 道逐字题干(概念/简答)钉死「诚实拒收、绝不编数字」契约 + 重试指引必须存在 + 同题重试收到停止信号;另守卫可计算题仍走引擎全链路,防止拒收断言一刀切。
+
+验证:question-core 445 / agent-tools 64 / vendor agent 460 / web 937 全绿;typecheck、lint、prettier(本轮文件)全过;`verify-persistence-catalog` up to date。
+
+
 ### 液态玻璃 + GlassSelect
 
 - `chrome.ts` 新增 liquid glass 材质 token:模糊(`--physics-glass-blur`)、镜面高光(带 sheen 渐变)、亮边 rim、抬升阴影、弹层密度、**环境光**(没有可折射的底色,玻璃只会是灰盒子 —— 这正是四个新页面此前"没质感"的原因)。

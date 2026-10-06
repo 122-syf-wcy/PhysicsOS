@@ -12,8 +12,8 @@
       ],
       "entry": "packages/physicsos/tool-physicsos/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "0aab55d5d07e277a17506ae0d776713595f1a83a50375fc919cdf2c4cbbaeabe",
-      "signature": "ed25519:NM+GsDxHoND3sAJMbTva0IPS4WSlGQ5FUl2I4U9VddEqE5nguaTFMTAAj8CTPpFcA9441KtHCxcXfUkE6ExMCA==",
+      "sha256": "f8432c3a4787335601375efb8bddf8704bd0ca726504dc8122f57017ab7eefa6",
+      "signature": "ed25519:azuQ+jNJ1wgUT9e6J6fIkFsPefYCLwJfKQI9fRNURb8p/PsnC/yuIR8FL5noX46RoI1J/PFhr/zJoFw73HZcDA==",
       "description": "PhysicsOS experiments, simulation, observation, and question-solving tools."
     },
     {

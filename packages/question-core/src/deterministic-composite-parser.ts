@@ -55,8 +55,11 @@ const COEXIST_SIGNAL =
 /** Explicit "neglect gravity" wording, which removes g from the model. */
 const IGNORE_GRAVITY_SIGNAL = /不计重力|忽略重力|重力不计|不考虑重力/i
 
-/** The apparatus outcome a selector question describes. */
-const UNDEFLECTED_SIGNAL =
+/** The apparatus outcome a selector question describes. Exported because the
+ * runtime cross-checks it against the selection condition: when the stem CLAIMS
+ * undeflected passage the claim must actually hold (v = E/B), otherwise the
+ * counterfactual guard raises a contradiction warning. */
+export const UNDEFLECTED_SIGNAL =
   /不(?:发生)?偏转|沿(?:着)?直线|直线(?:通过|飞过|穿过|运动)|恰好(?:能)?通过|匀速(?:直线)?通过/
 
 /**
@@ -500,11 +503,7 @@ export const DeterministicCompositeQuestionParser: QuestionParserProvider = {
     }
 
     const confidence =
-      isCompositeQuestionText(text) &&
-      knowns.length >= 3 &&
-      targets.length > 0
-        ? 0.95
-        : 0.2
+      isCompositeQuestionText(text) && knowns.length >= 3 && targets.length > 0 ? 0.95 : 0.2
     return { ir, issues, confidence }
   },
 }

@@ -52,7 +52,11 @@ import {
 } from '@physicsos/physics-verifier'
 
 import type { QuestionDocument } from './question-document.ts'
-import type { PhysicsSemanticIR, SemanticValidationResult } from './semantic-ir.ts'
+import type {
+  PhysicsSemanticIR,
+  QuestionParseIssue,
+  SemanticValidationResult,
+} from './semantic-ir.ts'
 import type { QuestionSolution, QuestionSolutionStep } from './question-solution.ts'
 import { attachSubstitutions } from './solution-substitution.ts'
 import type { QuestionWorkflowState } from './workflow.ts'
@@ -81,6 +85,7 @@ import {
 } from './deterministic-modern-parser.ts'
 import {
   DeterministicCompositeQuestionParser,
+  UNDEFLECTED_SIGNAL,
   isCompositeQuestionText,
   isCyclotronQuestionText,
 } from './deterministic-composite-parser.ts'
@@ -447,6 +452,12 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     }
   }
 
+  /* Counterfactual guard: a stem may CLAIM an outcome the engine disproves.
+     These are warnings, not gates — the asked quantities can still be correct —
+     but the contradiction must reach the issues list (agent render, solve trace)
+     instead of passing silently. See tests/counterfactual-questions.test.ts. */
+  const postWarnings = collectClaimContradictions(text, ir, simulation, isCompositeModel)
+
   let observations:
     | ObservationRuntimeState
     | MechanicsObservationRuntimeState
@@ -490,13 +501,86 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
   return {
     document,
     ir,
-    validation,
+    validation:
+      postWarnings.length === 0
+        ? validation
+        : { ...validation, issues: [...validation.issues, ...postWarnings] },
     scene,
     simulation,
     observations,
     solution,
     workflowState: 'READY',
   }
+}
+
+/** Relative tolerance for "stated reading agrees with the engine" — 2% absorbs
+ * display rounding in a stem without excusing a wrong claim. */
+const READING_RELATIVE_TOLERANCE = 0.02
+
+const derivedScalar = (simulation: SimulationResult, key: string): number | undefined => {
+  for (const quantity of simulation.derivedQuantities) {
+    if (quantity.key !== key || 'vector' in quantity.value) continue
+    return quantity.value.value
+  }
+  return undefined
+}
+
+/**
+ * Warnings for stems whose stated claims the simulated physics disproves.
+ * Today this covers the two claim shapes the counterfactual suite exercises:
+ *
+ * - a selector stem that claims undeflected passage while v ≠ E/B (the
+ *   apparatus check `velocity_selection_condition` is a readout by design —
+ *   偏大/偏小 questions legitimately deflect — but a stem that CLAIMS straight
+ *   passage and defies it is self-contradictory);
+ * - a circuit stem that states an ammeter reading the network's own laws
+ *   refute (the scene builder ignores stated readings, so the engine computes
+ *   truth from the topology — the mismatch is the signal).
+ *
+ * Stated-measurement claims of other shapes (e.g. a spectrometer's 「测得
+ * 半径 r = …」) are known gaps, pinned in the counterfactual suite rather
+ * than half-checked here.
+ */
+function collectClaimContradictions(
+  text: string,
+  ir: PhysicsSemanticIR,
+  simulation: SimulationResult,
+  isCompositeModel: boolean,
+): QuestionParseIssue[] {
+  const warnings: QuestionParseIssue[] = []
+
+  if (isCompositeModel && UNDEFLECTED_SIGNAL.test(text)) {
+    const selection = simulation.verification.checks.find(
+      (check) => check.id === 'velocity_selection_condition',
+    )
+    if (selection !== undefined && !selection.passed) {
+      warnings.push({
+        code: 'PASSAGE_CLAIM_CONTRADICTED',
+        severity: 'warning',
+        message:
+          '题面声称粒子不偏转/沿直线通过，但 v ≠ E/B：电场力与洛伦兹力不能抵消，粒子在该速度下必然偏转。请核对题面数值；答案以引擎计算的受力为准。',
+      })
+    }
+  }
+
+  if (ir.domain === 'circuit') {
+    const statedCurrent = ir.knowns.find((known) => known.key === 'current')
+    const computedCurrent = derivedScalar(simulation, 'main_current')
+    if (
+      statedCurrent !== undefined &&
+      computedCurrent !== undefined &&
+      Math.abs(statedCurrent.value - computedCurrent) >
+        READING_RELATIVE_TOLERANCE * Math.max(Math.abs(computedCurrent), 1e-12)
+    ) {
+      warnings.push({
+        code: 'STATED_READING_INCONSISTENT',
+        severity: 'warning',
+        message: `题面声称的电流表读数 ${statedCurrent.value} A 与电路定律计算值 ${computedCurrent} A 矛盾（欧姆定律 I = U/R）。答案以引擎计算值为准；请核对题面。`,
+      })
+    }
+  }
+
+  return warnings
 }
 
 const COMPOSITE_MODEL_IDS: ReadonlySet<string> = new Set([

@@ -154,6 +154,22 @@ export interface QuestionIssue {
   readonly severity: string
 }
 
+/**
+ * One concrete, code-generated instruction for rewriting a rejected stem.
+ * This is the deterministic half of the self-correction loop: the runtime
+ * cannot re-ask the model, but it can tell the model exactly WHAT to fix so
+ * its single retry (persona rule) lands on a parseable stem far more often
+ * than the old "说明哪里需要补全" line did.
+ */
+export interface SolveRetryHint {
+  /** Stable machine code, e.g. RETRY_REWRITE_STEM / STOP_RETRY_SAME_STEM. */
+  readonly code: string
+  /** Why this hint applies — names the failing stage or issue. */
+  readonly reason: string
+  /** The concrete rewrite instruction the model should follow once. */
+  readonly fix: string
+}
+
 export interface SolveQuestionResult {
   readonly status: 'solved' | 'rejected'
   readonly workflowState: string
@@ -171,6 +187,10 @@ export interface SolveQuestionResult {
   readonly goldenQuestionId?: string
   /** True when the same normalized text was already solved and the existing scene is reused. */
   readonly reusedScene?: boolean
+  /** 1-based count of solves for this normalized stem within this runtime. */
+  readonly attempt?: number
+  /** Rejected only: deterministic rewrite instructions for one retry. */
+  readonly retryGuidance?: readonly SolveRetryHint[]
 }
 
 export interface CommandResult {
@@ -294,6 +314,86 @@ export const verifiedQuantityOf = (scalar: ToolScalar): VerifiedQuantity | null 
 const verifierIdFor = (engineId: string): string =>
   engineId === 'engine-magnetic' ? PHYSICS_VERIFIER_ID : engineVerifierId(engineId)
 
+/* ------------------------------------------------------ retry guidance -- */
+
+/** How many times the same normalized stem may be rejected before the runtime
+ * tells the model to stop: the pipeline is deterministic, so attempt 3 of an
+ * unchanged text cannot differ from attempt 2. */
+const MAX_IDENTICAL_STEM_ATTEMPTS = 2
+
+/**
+ * Deterministic rewrite instructions for a rejected solve, by failing stage.
+ * The persona allows exactly one retry; these hints are what makes that retry
+ * productive instead of a re-run of the same text.
+ */
+const retryGuidanceFor = (
+  workflowState: string,
+  issues: readonly QuestionIssue[],
+  attempt: number,
+): readonly SolveRetryHint[] => {
+  if (attempt >= MAX_IDENTICAL_STEM_ATTEMPTS) {
+    return [
+      {
+        code: 'STOP_RETRY_SAME_STEM',
+        reason: `同一题面已被拒收 ${attempt - 1} 次，求解管线是确定性的，原样重试结果不会改变。`,
+        fix: '不要再原样重试，也不要自行计算。向学生如实说明未通过的原因，并请学生核对或补全题面。',
+      },
+    ]
+  }
+  const hints: SolveRetryHint[] = []
+  switch (workflowState) {
+    case 'PARSE_FAILED':
+      hints.push({
+        code: 'RETRY_REWRITE_STEM',
+        reason: '解析器没有识别出这道题的题型。',
+        fix: '把题面改写成完整中文陈述句：交代研究对象、全部已知量（数值+单位）和所求量，例如「质量为 2 kg 的物体在光滑水平面上受 10 N 水平拉力由静止开始运动，求 3 s 末的速度」。改写后重试一次。',
+      })
+      break
+    case 'AMBIGUOUS':
+      hints.push({
+        code: 'RETRY_RESOLVE_AMBIGUITY',
+        reason: '题面存在歧义，解析器列出了待定选项。',
+        fix: '按上面每条歧义的选项，与学生确认一种情况，把明确后的说法代入题面再重试一次。',
+      })
+      break
+    case 'INVALID_SEMANTICS':
+      hints.push({
+        code: 'RETRY_COMPLETE_KNOWN_VALUES',
+        reason: '已读到的已知量不满足该模型的求解条件（见缺失项）。',
+        fix: '对照上方缺失/无效的量，把题面补全到模型要求的全部已知量（数值+单位）后重试一次。',
+      })
+      break
+    case 'UNSUPPORTED_MODEL':
+      hints.push({
+        code: 'DO_NOT_COMPUTE_UNSUPPORTED',
+        reason: '该题型当前引擎不支持自动求解。',
+        fix: '不要自行估算，也不要改写重试。向学生说明该题型暂不支持自动求解，改用支持的题型练习。',
+      })
+      return hints
+    case 'VERIFICATION_FAILED':
+      hints.push({
+        code: 'RETRY_CHECK_PARAMETERS',
+        reason: '引擎算出了结果但未通过守恒/一致性校验，通常是题面参数超出模型适用范围或彼此矛盾。',
+        fix: '对照下方校验失败的检查项，核对题面数值是否合理（单位、数量级、边界）后重试一次；仍失败则如实告知学生，不要给出未通过校验的数字。',
+      })
+      break
+    default:
+      hints.push({
+        code: 'RETRY_REVIEW_ISSUES',
+        reason: `求解在 ${workflowState} 阶段被拒收。`,
+        fix: '按上方原因逐条修正题面后重试一次；仍失败则如实告知学生，不要自行计算。',
+      })
+  }
+  if (issues.some((issue) => issue.severity === 'ambiguity')) {
+    hints.push({
+      code: 'RETRY_STATE_CHOSEN_OPTION',
+      reason: '题面含歧义项时解析器不会替学生选边。',
+      fix: '重试的题面里把选定的那一种情况直接写成陈述（例如「沿斜面向上」），不要保留「向上还是向下」的问句。',
+    })
+  }
+  return hints
+}
+
 /**
  * Refuse to hand a surface a physics number with nothing behind it. Every method
  * that returns engine-derived values routes them through here, so a bare number
@@ -386,6 +486,9 @@ export const DEFAULT_MAX_SCENES = 64
 export class PhysicsToolRuntime {
   private readonly scenes = new Map<string, LiveScene>()
   private readonly solvedQuestions = new Map<string, SolveQuestionResult>()
+  /** Solve attempts per normalized stem — drives the one-retry discipline
+   * (identical text retried after a rejection cannot change the outcome). */
+  private readonly solveAttempts = new Map<string, number>()
   private readonly maxScenes: number
   private serial = 0
 
@@ -508,8 +611,10 @@ export class PhysicsToolRuntime {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           } as unknown as QuestionDocument)
+    const attempt = this.solveAttempts.get(dedupeKey) ?? 0
+    this.solveAttempts.set(dedupeKey, attempt + 1)
     const result = processQuestion(document)
-    const solved = this.solveResultOf(result, String(document.id), golden?.id)
+    const solved = this.solveResultOf(result, String(document.id), golden?.id, attempt + 1)
     if (solved.status === 'solved') this.solvedQuestions.set(dedupeKey, solved)
     return solved
   }
@@ -518,6 +623,7 @@ export class PhysicsToolRuntime {
     result: QuestionRuntimeResult,
     questionId: string,
     goldenQuestionId?: string,
+    attempt?: number,
   ): SolveQuestionResult {
     const ir = result.ir
     const knowns: QuestionKnown[] = (ir?.knowns ?? []).map((known) => ({
@@ -560,6 +666,8 @@ export class PhysicsToolRuntime {
         steps: [],
         issues: fallback,
         ...(goldenQuestionId === undefined ? {} : { goldenQuestionId }),
+        ...(attempt === undefined ? {} : { attempt }),
+        retryGuidance: retryGuidanceFor(result.workflowState, fallback, attempt ?? 1),
       }
     }
 
@@ -623,6 +731,7 @@ export class PhysicsToolRuntime {
       issues,
       scene: this.describe(String(scene.id), live),
       ...(goldenQuestionId === undefined ? {} : { goldenQuestionId }),
+      ...(attempt === undefined ? {} : { attempt }),
     }
   }
 

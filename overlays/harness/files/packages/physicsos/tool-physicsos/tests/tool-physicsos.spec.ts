@@ -11,7 +11,7 @@ import { PHYSICS_TOOL_NAMES } from '@physicsos/agent-tools'
 import { deriveVerificationLevel } from '@physicsos/physics-core'
 
 import * as plugin from '../src/index.ts'
-import type { PhysicsSceneSnapshot, PhysicsScenesProjection } from '../src/types.ts'
+import type { PhysicsSceneSnapshot, PhysicsScenesProjection, PhysicsSolveTrace, PhysicsSolveTracesProjection } from '../src/types.ts'
 
 /**
  * Drives the REAL plugin body on a real `ToolRuntime`: every call goes through
@@ -258,18 +258,20 @@ describe('dsh-tool-physicsos', () => {
  * agent's session log, and the `physicsScenes` projection folds them so the
  * browser Lab can mount the scene without reaching into the host process.
  */
+async function benchWithSession(): Promise<{ ctx: Context; session: Session; agent: Agent }> {
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(plugin, { sceneScope: 'session', maxScenes: 64 })
+  const session = ctx.sessions.create()
+  const agent = { id: session.id, session } as unknown as Agent
+  return { ctx, session, agent }
+}
+
 describe('dsh-tool-physicsos scene mirroring', () => {
-  async function bench(): Promise<{ ctx: Context; session: Session; agent: Agent }> {
-    const ctx = new Context()
-    await ctx.plugin(SessionStore)
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(plugin, { sceneScope: 'session', maxScenes: 64 })
-    const session = ctx.sessions.create()
-    const agent = { id: session.id, session } as unknown as Agent
-    return { ctx, session, agent }
-  }
+  const bench = benchWithSession
 
   const snapshots = (session: Session): PhysicsSceneSnapshot[] =>
     session.snapshotEvents().flatMap(event => (event.type === 'physics/scene' ? [event.data] : []))
@@ -418,5 +420,87 @@ describe('dsh-tool-physicsos scene mirroring', () => {
     const state3 = plugin.foldPhysicsScene(state2, a1)
     expect(state3).toEqual({ latest: 'a', scenes: { a: a1, b } })
     expect(state0).toEqual({ latest: null, scenes: {} })
+  })
+})
+
+/**
+ * Solve tracing: every `physics_solve_question` attempt — solved OR rejected —
+ * appends a `physics/solve-trace` event with run-level diagnostics, and the
+ * `physicsSolveTraces` projection folds them into a bounded newest-last tail.
+ * The scene mirror only carries READY solves; the trace is what keeps rejected
+ * attempts (parse failures, verification failures) visible in the session log.
+ */
+describe('dsh-tool-physicsos solve tracing', () => {
+  const bench = benchWithSession
+
+  const traces = (session: Session): PhysicsSolveTrace[] =>
+    session.snapshotEvents().flatMap(event => (event.type === 'physics/solve-trace' ? [event.data] : []))
+
+  const projectionOf = (ctx: Context, session: Session): PhysicsSolveTracesProjection | undefined =>
+    ctx.sessionProjections.snapshot(session).values.physicsSolveTraces
+
+  it('appends a solved trace with the engine verdict and folds it into physicsSolveTraces', async () => {
+    const { ctx, session, agent } = await bench()
+    expect(projectionOf(ctx, session)).toEqual({ traces: [] })
+
+    const solved = value<{ scene?: { sceneId: string } }>(await call(ctx, 'physics_solve_question', {
+      text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求：1. 洛伦兹力大小 2. 轨道半径 3. 运动周期 4. 判断运动方向 5. 显示运动轨迹',
+    }, { agent }))
+    const published = traces(session)
+    expect(published).toHaveLength(1)
+    const trace = published[0]!
+    expect(trace).toMatchObject({
+      status: 'solved',
+      workflowState: 'READY',
+      domain: 'magnetic',
+      goldenQuestionId: '01-proton-basic',
+      attempt: 1,
+      sceneId: solved.scene!.sceneId,
+    })
+    expect(trace.verification).toMatchObject({ status: 'passed', failed: [] })
+    expect(trace.verification!.passed).toBe(trace.verification!.total)
+    expect(trace.verification!.total).toBeGreaterThan(0)
+    expect(trace.answers.length).toBeGreaterThan(0)
+    expect(trace.retryGuidance).toHaveLength(0)
+    expect(trace.durationMs).toBeGreaterThanOrEqual(0)
+    /* Lossless JSON: what the log carries is what the wire receives. */
+    expect(JSON.parse(JSON.stringify(trace))).toEqual(trace)
+
+    expect(projectionOf(ctx, session)?.traces).toEqual([trace])
+  })
+
+  it('appends a rejected trace with retry-guidance codes — rejected attempts stay in the log too', async () => {
+    const { ctx, session, agent } = await bench()
+    const result = value<{ status: string }>(await call(ctx, 'physics_solve_question', {
+      text: '声音的音调是由什么决定的？请说明。', // 概念题：解析器必须拒收而不是编数字
+    }, { agent }))
+    expect(result.status).toBe('rejected')
+    const trace = traces(session)[0]!
+    expect(trace.status).toBe('rejected')
+    expect(trace.workflowState).toBe('PARSE_FAILED')
+    expect(trace.verification).toBeUndefined()
+    expect(trace.answers).toHaveLength(0)
+    expect(trace.retryGuidance.map(hint => hint.code)).toContain('RETRY_REWRITE_STEM')
+    expect(trace.issues.length).toBeGreaterThan(0)
+    expect(projectionOf(ctx, session)?.traces).toHaveLength(1)
+  })
+
+  it('folds traces newest-last and caps the tail at SOLVE_TRACES_CAP', () => {
+    const base: PhysicsSolveTrace = {
+      status: 'rejected',
+      workflowState: 'PARSE_FAILED',
+      answers: [],
+      issues: [],
+      retryGuidance: [],
+      durationMs: 1,
+    }
+    let state = { traces: [] }
+    for (let index = 0; index < plugin.SOLVE_TRACES_CAP + 2; index += 1) {
+      state = plugin.foldPhysicsSolveTrace(state, { ...base, workflowState: `attempt-${index}` })
+    }
+    expect(state.traces).toHaveLength(plugin.SOLVE_TRACES_CAP)
+    expect(state.traces[0]!.workflowState).toBe('attempt-2')
+    const newest = state.traces[plugin.SOLVE_TRACES_CAP - 1]!
+    expect(newest.workflowState).toBe(`attempt-${plugin.SOLVE_TRACES_CAP + 1}`)
   })
 })
