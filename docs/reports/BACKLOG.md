@@ -1002,6 +1002,17 @@ overlay/vendor `physics/` 与改动文件逐字节一致,`apply` 幂等。
 对真实实例执行:`node scripts/ingest-gz-2025-physics.mjs --base https://… --username <教师账号> --password <密码>`。
 结构发现:2025 卷与 2024 卷相比,选择 8 题(2 多选)→7 题(1 多选)、简答 2→3 题,总分与题量不变;`ZK_PHYSICS` 蓝图已按 2025 实测口径更新并在注释中记录差异。
 
+### 出卷专区「AI 起草」修复与工作过程可视化(2026-10-05)
+
+用户实测:点击「AI 起草 + 自动检查」无反应、确认细目表步骤多余、看不到 AI 在干什么。三个问题一次收口:
+
+- **无反应的根因是两层**:客户端把 `/draft` 与 `/check` 背靠背连发,而服务端状态机里 check 只能在起草完成(状态到 checking)后跑——提前跑会以 NO_DOCUMENT 把任务打成 failed;且点击后 activeJob 从不刷新、failed 状态又不触发轮询,UI 整个冻住。现在客户端按「draft → 轮询到 checking → 才发 check → 轮询到终态」编排,activeJob 全程实时更新。
+- **确认细目表不再是独立步骤**:单一「AI 起草 + 自动检查」按钮自动确认细目表(failed 重试同路,重确认照旧重置修订预算);细目表降级为只读信息块,阶段条从「AI 起草」起步。
+- **AI 工作过程可视化(grokbot 式小人物)**:paper-host 各驱动埋 `job.progress` 遥测(规划题库/逐板块起草/逐题改编/组卷/规范检查/引擎逐题复核/导出逐题图——每张题图约 70 s 也要点名);客户端 AiWorker 面板用纯 CSS 小机器人按阶段换状态(思考/执笔/放大镜检查/画笔配图/挫败),配阶段清单、done/total 进度条与计时。导出同样走 runner 驱动可视化。
+- `PaperJob.progress` 为可选字段,旧任务行无此字段照常读;zod 行校验 stage 开放字符串。测试新增:一键编排顺序(confirmSpec→runDraft→轮询→runChecks 恰一次)、小人物遥测渲染;fake timer 用例须防假时钟泄漏(afterEach 兜底 useRealTimers)。
+
+验证:question-paper 42 / paper-host 39 / web 939 / vendor agent 460 全绿;typecheck×2、build:lib、oxlint、prettier 全过;插件清单重签(paper-host 入口变更)。
+
 ### 解题链路可信度四件套(2026-10-05)
 
 以「金标准题最小突变」方法实测暴露并修复了三个反事实盲区,补上自纠错闭环与结构化运行日志:

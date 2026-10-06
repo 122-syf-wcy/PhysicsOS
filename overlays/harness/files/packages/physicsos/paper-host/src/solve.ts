@@ -108,6 +108,8 @@ const answersAgree = (a: string, b: string): boolean => {
  * @param delayMs - spacing between serial solves; retained for the serial contract.
  * @param timeoutMs - per-attempt deadline; default `SOLVE_TIMEOUT_MS`.
  * @param runtime - the physics runtime; defaults to the shared process runtime.
+ * @param onProgress - optional per-question telemetry hook (done count, total,
+ *   the question number about to be solved); fires before each solve.
  * @returns one SolveResult per question; refusals and failures report as inconsistent.
  */
 export async function independentSolve(
@@ -115,12 +117,14 @@ export async function independentSolve(
   delayMs = 0,
   timeoutMs = SOLVE_TIMEOUT_MS,
   runtime: PhysicsToolRuntime = sharedRuntime,
+  onProgress?: (done: number, total: number, questionNo: number) => void,
 ): Promise<SolveResult[]> {
   const results: SolveResult[] = []
   let first = true
-  for (const question of questions) {
+  for (const [index, question] of questions.entries()) {
     if (!first && delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs))
     first = false
+    onProgress?.(index, questions.length, question.number)
     const draftAnswer = question.answer?.result ?? ''
     let lastError: Error | undefined
     for (let attempt = 0; attempt < 2; attempt++) {

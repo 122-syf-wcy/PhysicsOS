@@ -160,48 +160,57 @@ interface ImageGenerationResponse {
 }
 
 /** Generate one PNG per `figure.ref` into `dir`; failures leave the caption
- *  placeholder in place rather than failing the export. */
-async function generateFigures(tools: ExportTools, doc: PaperDocument, dir: string): Promise<Map<string, string>> {
+ *  placeholder in place rather than failing the export.
+ *  @param onProgress - telemetry per figure (done, total, figure ref) — at
+ *  ~70 s per image this is the export's long pole, so the UI names each drawing. */
+async function generateFigures(
+  tools: ExportTools,
+  doc: PaperDocument,
+  dir: string,
+  onProgress?: (done: number, total: number, ref: string) => void,
+): Promise<Map<string, string>> {
   const files = new Map<string, string>()
   const api = tools.imageApi
   if (api === undefined) return files
   const key = process.env[api.apiKeyEnv]
   if (key === undefined || key === '') return files
-  for (const section of doc.sections) {
-    for (const question of section.items) {
-      const figure = question.figure
-      if (figure === undefined) continue
-      const name = `fig-${figure.ref}.png`
-      /* Re-export reuses images already on disk — regenerating costs ~70 s
-         per figure; delete the file to force a redraw. */
-      try {
-        await access(join(dir, name))
-        files.set(figure.ref, name)
-        continue
-      } catch { /* not generated yet */ }
-      try {
-        const res = await fetch(`${api.baseURL}/images/generations`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-          body: JSON.stringify({
-            model: api.model, n: 1, size: api.size ?? '1024x1024',
-            prompt: (figure.caption ?? figure.ref) + FIGURE_STYLE,
-          }),
-          signal: AbortSignal.timeout(180_000),
-        })
-        if (!res.ok) continue
-        const body = await res.json() as ImageGenerationResponse
-        const first = body.data?.[0]
-        if (first?.b64_json !== undefined) {
-          await writeFile(join(dir, name), Buffer.from(first.b64_json, 'base64'))
-        } else if (first?.url !== undefined) {
-          const image = await fetch(first.url, { signal: AbortSignal.timeout(60_000) })
-          if (!image.ok) continue
-          await writeFile(join(dir, name), Buffer.from(await image.arrayBuffer()))
-        } else continue
-        files.set(figure.ref, name)
-      } catch { /* placeholder stands */ }
-    }
+  const figures = doc.sections.flatMap(section => section.items)
+    .flatMap(question => (question.figure === undefined ? [] : [question.figure]))
+  let done = 0
+  for (const figure of figures) {
+    onProgress?.(done, figures.length, figure.ref)
+    const name = `fig-${figure.ref}.png`
+    /* Re-export reuses images already on disk — regenerating costs ~70 s
+       per figure; delete the file to force a redraw. */
+    try {
+      await access(join(dir, name))
+      files.set(figure.ref, name)
+      done += 1
+      continue
+    } catch { /* not generated yet */ }
+    try {
+      const res = await fetch(`${api.baseURL}/images/generations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: api.model, n: 1, size: api.size ?? '1024x1024',
+          prompt: (figure.caption ?? figure.ref) + FIGURE_STYLE,
+        }),
+        signal: AbortSignal.timeout(180_000),
+      })
+      if (!res.ok) continue
+      const body = await res.json() as ImageGenerationResponse
+      const first = body.data?.[0]
+      if (first?.b64_json !== undefined) {
+        await writeFile(join(dir, name), Buffer.from(first.b64_json, 'base64'))
+      } else if (first?.url !== undefined) {
+        const image = await fetch(first.url, { signal: AbortSignal.timeout(60_000) })
+        if (!image.ok) continue
+        await writeFile(join(dir, name), Buffer.from(await image.arrayBuffer()))
+      } else continue
+      files.set(figure.ref, name)
+      done += 1
+    } catch { /* placeholder stands */ }
   }
   return files
 }
@@ -217,12 +226,15 @@ async function generateFigures(tools: ExportTools, doc: PaperDocument, dir: stri
  */
 export async function exportPaper(
   tools: ExportTools, jobId: string, doc: PaperDocument, solves?: readonly SolveResult[],
+  onProgress?: (stage: string, done: number, total: number, detail?: string) => void,
 ): Promise<ExportFileSet> {
   const dir = join(tools.exportDir, jobId)
   await mkdir(dir, { recursive: true })
   const reference = await ensureReferenceDocx(tools)
 
-  const figures = await generateFigures(tools, doc, dir)
+  const figures = await generateFigures(tools, doc, dir, (done, total, ref) => {
+    onProgress?.('figure', done, total, `AI 生成题图 ${ref}`)
+  })
   const paperMd = join(dir, '试卷.md')
   const answerMd = join(dir, '答案解析.md')
   await writeFile(paperMd, renderPaperMarkdown(doc, figures), 'utf8')

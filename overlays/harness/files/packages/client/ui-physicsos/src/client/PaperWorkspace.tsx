@@ -116,9 +116,10 @@ function StatusChip({ status }: { status: string }) {
 
 /** Pipeline stage of a job: which phase the teacher-facing workflow is in. */
 const STAGE_OF_STATUS: Record<string, number> = {
-  spec: 0, drafting: 1, checking: 2, review: 3, approved: 4, exported: 4, failed: 0,
+  spec: 0, drafting: 0, checking: 1, review: 2, approved: 3, exported: 3, failed: 0,
 }
-const STAGE_LABELS = ['细目表', 'AI 起草', '自动检查', '逐题审核', '定稿导出'] as const
+/* 细目表不再是独立阶段：AI 起草会自动确认细目表（见 JobDetail.driveAi）。 */
+const STAGE_LABELS = ['AI 起草', '自动检查', '逐题审核', '定稿导出'] as const
 
 /** Horizontal stage rail — shows where a job sits in the generation pipeline. */
 function StageRail({ status }: { readonly status: string }) {
@@ -348,6 +349,7 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
           jobs={draftJobs} activeJob={activeJob} reviewer={reviewer}
           api={api} openJob={openJob} run={run}
           onJobUpdate={setActiveJob}
+          notify={setNotice}
         />
       )}
       {tab === 'final' && (
@@ -541,7 +543,8 @@ function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
               </li>
             </ul>
             <p className={css.summaryHint}>
-              双向细目表确认后 AI 起草；物理验证通过、考试规范校验到达
+              点击「AI 起草 + 自动检查」一键完成：细目表自动确认并起草，过程实时可见；
+              物理验证通过、考试规范校验到达
               <code className={css.code}>READY_FOR_TEACHER_REVIEW</code> 再由教研复核。
             </p>
           </div>
@@ -581,7 +584,7 @@ function MixBar({ mix }: { readonly mix: DifficultyMix }) {
 
 /* --------------------------------------------------------- 草稿与审核 -- */
 
-function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }: {
+function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, notify }: {
   jobs: PaperJobWire[]
   activeJob: PaperJobWire | undefined
   reviewer: string
@@ -589,6 +592,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }
   openJob: (id: string) => Promise<void>
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  notify: (message: string | undefined) => void
 }) {
   return (
     <section className={css.panel}>
@@ -626,21 +630,216 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
             : <JobDetail job={activeJob} reviewer={reviewer} api={api}
-              run={run} onJobUpdate={onJobUpdate} />}
+              run={run} onJobUpdate={onJobUpdate} notify={notify} />}
         </div>
       </div>
     </section>
   )
 }
 
-function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
+/* ------------------------------------------------- AI 工作过程可视化 -- */
+
+/** Mascot moods — which animation the little worker plays. */
+type WorkerMood = 'think' | 'write' | 'check' | 'paint' | 'sad'
+
+/** Pipeline phases the checklist renders, in order. */
+const PHASE_LABELS = ['题库规划', 'AI 起草', '规范检查', '引擎复核', '题图生成'] as const
+const PHASE_OF_STAGE: Record<string, number> = {
+  plan: 0, draft: 1, adapt: 1, assemble: 1, check: 2, solve: 3, figure: 4, export: 4,
+}
+const MOOD_OF_STAGE: Record<string, WorkerMood> = {
+  plan: 'think', draft: 'write', adapt: 'write', assemble: 'write',
+  check: 'check', solve: 'check', figure: 'paint', export: 'paint',
+}
+const DEFAULT_DETAIL: readonly string[] = [
+  '正在规划题库供给', '正在思考命题', '正在逐项规范检查', '物理引擎逐题复核', 'AI 正在绘制题图',
+]
+
+const fmtElapsed = (ms: number): string => {
+  const total = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+/**
+ * Live view of WHAT the AI pipeline is doing: a little CSS mascot in the
+ * spirit of grokbot's status figure (thinking / writing / checking /
+ * painting), a phase checklist driven by the job's `progress` telemetry
+ * (which section is being drafted, which question the engine is re-solving,
+ * which figure is being drawn), and an elapsed timer. Pure presentational —
+ * the drivers themselves live in paper-host.
+ */
+function AiWorker({ job, runnerActive, since }: {
+  readonly job: PaperJobWire
+  runnerActive: boolean
+  since: number
+}) {
+  const inAsyncStage = job.status === 'drafting' || job.status === 'checking'
+    || (job.status === 'approved' && job.progress?.stage === 'figure')
+  const visible = runnerActive || inAsyncStage
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!visible) return
+    const timer = setInterval(() => { setNow(Date.now()) }, 1000)
+    return () => { clearInterval(timer) }
+  }, [visible])
+  if (!visible) return null
+
+  const progress = job.progress
+  const failed = job.status === 'failed'
+  const mood: WorkerMood = failed ? 'sad'
+    : progress !== undefined ? MOOD_OF_STAGE[progress.stage] ?? 'think'
+      : job.status === 'checking' ? 'check' : 'think'
+  const phase = progress !== undefined
+    ? PHASE_OF_STAGE[progress.stage] ?? 1
+    : job.status === 'checking' ? 2 : 1
+  const total = progress?.total ?? 0
+  const done = Math.min(progress?.done ?? 0, total)
+  const ratio = total > 0 ? done / total : 0
+  const detail = progress?.detail ?? DEFAULT_DETAIL[phase] ?? ''
+
+  return (
+    <div className={clsx(css.workerPanel, failed && css.workerFailed)} role="status"
+      aria-live="polite"
+      aria-label={`AI 工作中：${PHASE_LABELS[phase] ?? ''} ${detail}`}>
+      <div className={css.mascot} data-mood={mood} aria-hidden="true">
+        <span className={css.mascotAntenna}><i /></span>
+        <div className={css.mascotHead}>
+          <span className={css.mascotEye} />
+          <span className={css.mascotEye} />
+          <span className={css.mascotMouth} />
+        </div>
+        <div className={css.mascotBody}>
+          <span className={css.mascotArmL} />
+          <span className={css.mascotArmR} />
+        </div>
+        <span className={css.mascotTool} />
+        <span className={css.mascotDots}><i /><i /><i /></span>
+      </div>
+      <div className={css.workerBody}>
+        <p className={css.workerTitle}>
+          {failed ? '本次未完成' : `AI 工作中 · ${PHASE_LABELS[phase] ?? ''}`}
+          <span className={css.workerTimer}>{fmtElapsed(now - since)}</span>
+        </p>
+        <p className={css.workerDetail}>
+          {failed ? (job.lastError ?? '阶段失败，可重试') : (
+            <>
+              {detail}
+              {total > 0 && `（${done}/${total}）`}
+              <span className={css.workerEllipsis} aria-hidden="true"><i /><i /><i /></span>
+            </>
+          )}
+        </p>
+        {total > 0 && !failed && (
+          <span className={css.workerBar} role="img" aria-label={`进度 ${done}/${total}`}>
+            <span className={css.workerBarFill} style={{ width: `${ratio * 100}%` }} />
+          </span>
+        )}
+        <ol className={css.workerPhases}>
+          {PHASE_LABELS.map((label, i) => (
+            <li key={label}
+              className={clsx(css.workerPhase,
+                i < phase && css.workerPhaseDone,
+                i === phase && !failed && css.workerPhaseActive,
+                i === phase && failed && css.workerPhaseFailed)}>
+              {i < phase ? '✓' : i === phase ? (failed ? '✗' : '●') : '○'} {label}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  )
+}
+
+function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
   job: PaperJobWire
   reviewer: string
   api: PaperApi
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  notify: (message: string | undefined) => void
 }) {
   const reload = () => run(async () => { onJobUpdate(await api.getJob(job.id)) })
+  /* ---- AI 流水线编排（客户端状态机）----
+     服务端约定：POST /draft 与 /check 都立即 202，真正的工作在后台推进
+     （drafting → drafting 结束时置 checking；check 从 checking 走到 review）。
+     背靠背连发两者会竞态——check 可能在起草完成前以 NO_DOCUMENT 把任务打成
+     failed。正确顺序是：draft → 轮询到 checking → 才发 check → 轮询到终态。
+     runner 由本组件持有：activeJob 的刷新、轮询与可视化都由它驱动，页面中途
+     刷新时退回旧的 3s 状态轮询兜底。 */
+  const [runnerActive, setRunnerActive] = useState(false)
+  const [runnerSince, setRunnerSince] = useState(0)
+  const runnerRef = useRef<{ jobId: string; cancelled: boolean } | null>(null)
+  useEffect(() => () => {
+    if (runnerRef.current !== null) runnerRef.current.cancelled = true
+  }, [])
+  const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
+
+  const driveAi = () => {
+    if (runnerRef.current !== null) return
+    const handle = { jobId: job.id, cancelled: false }
+    runnerRef.current = handle
+    setRunnerActive(true)
+    setRunnerSince(Date.now())
+    void (async () => {
+      try {
+        let latest = await api.getJob(handle.jobId)
+        /* 细目表自动确认：确认步不再需要教师操作（spec/failed 都从这里重试）。 */
+        if (latest.status === 'spec' || latest.status === 'failed') {
+          latest = await api.confirmSpec(latest.id, latest.specTable)
+        }
+        onJobUpdate(latest)
+        await api.runDraft(latest.id)
+        let checkFired = false
+        const deadline = Date.now() + 45 * 60_000
+        while (!handle.cancelled && Date.now() < deadline) {
+          await sleep(2500)
+          latest = await api.getJob(handle.jobId)
+          onJobUpdate(latest)
+          if (latest.status === 'checking' && !checkFired) {
+            /* 起草驱动完成（进入 checking）——现在才是发检查的正确时机。 */
+            checkFired = true
+            await api.runChecks(latest.id)
+            continue
+          }
+          if (latest.status === 'review' || latest.status === 'approved'
+            || latest.status === 'exported' || latest.status === 'failed') break
+        }
+      } catch (e) {
+        notify(err(e))
+      } finally {
+        runnerRef.current = null
+        setRunnerActive(false)
+        void reload()
+      }
+    })()
+  }
+
+  /* 导出同样长跑（每张题图 ~70 s）——同 runner 模式驱动可视化与轮询。 */
+  const driveExport = () => {
+    if (runnerRef.current !== null) return
+    const handle = { jobId: job.id, cancelled: false }
+    runnerRef.current = handle
+    setRunnerActive(true)
+    setRunnerSince(Date.now())
+    void (async () => {
+      try {
+        await api.runExport(handle.jobId)
+        const deadline = Date.now() + 45 * 60_000
+        while (!handle.cancelled && Date.now() < deadline) {
+          await sleep(2500)
+          const latest = await api.getJob(handle.jobId)
+          onJobUpdate(latest)
+          if (latest.status === 'exported') break
+        }
+      } catch (e) {
+        notify(err(e))
+      } finally {
+        runnerRef.current = null
+        setRunnerActive(false)
+        void reload()
+      }
+    })()
+  }
   /* 退回修改 modal: the suggestion goes to the model, which revises the
      question in place; the new version lands as status 'draft' again. */
   const [repairTarget, setRepairTarget] = useState<number | null>(null)
@@ -704,13 +903,18 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
       </p>
       <StageRail status={job.status} />
       {job.status === 'failed' && job.lastError !== undefined && (
-        <p className={css.errorNote}>起草/检查失败：{job.lastError}（可在下方重新确认细目表后重试）</p>
+        <p className={css.errorNote}>起草/检查失败：{job.lastError}（点击「重新 AI 起草」可自动重新确认细目表并重试）</p>
       )}
+      <AiWorker job={job} runnerActive={runnerActive} since={runnerSince} />
 
-      {/* 细目表确认 — 'failed' jobs retry through the same confirm step. */}
-      {(job.status === 'spec' || job.status === 'failed') && (
-        <div className={css.block}>
-          <h3>双向细目表（{job.specTable.length} 题 / {job.specTable.reduce((n, r) => n + r.score, 0)} 分 · {jobRating(job)}）</h3>
+      {/* 细目表 — 只读信息：确认不再是独立步骤，AI 起草自动采用当前细目表。
+          'failed' 任务重试也走同一张表（重确认会重置修订预算）。 */}
+      {(job.status === 'spec' || job.status === 'failed') && job.specTable.length > 0 && (
+        <details className={css.block} open={!runnerActive}>
+          <summary className={css.specSummary}>
+            双向细目表（{job.specTable.length} 题 / {job.specTable.reduce((n, r) => n + r.score, 0)} 分 · {jobRating(job)}）
+            <span className={css.specSummaryHint}>只读 · AI 起草时自动采用</span>
+          </summary>
           <table className={css.table}>
             <thead><tr><th>题号</th><th>板块</th><th>题型</th><th>分值</th><th>考点</th><th>能力</th><th>题库供给</th></tr></thead>
             <tbody>
@@ -733,32 +937,21 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
               })}
             </tbody>
           </table>
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { onJobUpdate(await api.confirmSpec(job.id, job.specTable)) }) }}>
-            确认细目表
-          </button>
-        </div>
+        </details>
       )}
 
-      {/* 阶段动作 */}
+      {/* 阶段动作 — 一个按钮完成「确认细目表 → 起草 → 检查」，编排见 driveAi */}
       <div className={css.actions}>
-        {job.status !== 'spec' && job.status !== 'drafting' && job.status !== 'checking'
-          && job.status !== 'approved' && job.status !== 'exported' && (
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { await api.runDraft(job.id); await api.runChecks(job.id) }) }}>
-            AI 起草 + 自动检查
-          </button>
-        )}
-        {job.status === 'spec' && job.specTable.length > 0 && (
-          <button type="button" className={css.primary}
-            onClick={() => {
-              void run(async () => {
-                await api.confirmSpec(job.id, job.specTable)
-                await api.runDraft(job.id)
-                await api.runChecks(job.id)
-              })
-            }}>
-            确认细目表并开始起草
+        {(job.status === 'spec' || job.status === 'failed' || job.status === 'review') && job.specTable.length > 0 && (
+          <button type="button" className={css.primary} disabled={runnerActive}
+            onClick={driveAi}>
+            {runnerActive
+              ? 'AI 工作中…'
+              : job.status === 'failed'
+                ? '重新 AI 起草 + 自动检查'
+                : job.status === 'review'
+                  ? '重新起草（覆盖当前草稿）'
+                  : 'AI 起草 + 自动检查'}
           </button>
         )}
       </div>
@@ -880,9 +1073,9 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
       )}
       {job.status === 'approved' && (
         <div className={css.actions}>
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { await api.runExport(job.id); onJobUpdate(await api.getJob(job.id)) }) }}>
-            导出 A4 试卷 + 答案解析（PDF/Word）
+          <button type="button" className={css.primary} disabled={runnerActive}
+            onClick={driveExport}>
+            {runnerActive ? 'AI 生成题图中…' : '导出 A4 试卷 + 答案解析（PDF/Word）'}
           </button>
         </div>
       )}

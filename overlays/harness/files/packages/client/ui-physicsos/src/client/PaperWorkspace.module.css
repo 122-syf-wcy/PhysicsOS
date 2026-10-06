@@ -1532,3 +1532,366 @@ details[open] > .advancedSummary::before {
   white-space: pre-wrap;
   color: var(--physics-ink, var(--dsw-alias-label-primary));
 }
+
+/* ------------------------------------------------ AI 工作过程可视化 --
+   The little worker: a pure-CSS mascot (grokbot-style status figure) whose
+   mood follows the pipeline's progress telemetry — thinking while planning,
+   writing while drafting, inspecting while the engine re-solves, painting
+   while figures draw. Transform/opacity animations only, alias tokens for
+   both light and dark hosts. */
+
+.workerPanel {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 14px 0 4px;
+  padding: 14px 18px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 14px;
+  background-color: var(--physics-glass-fill-strong, rgba(255, 255, 255, 0.82));
+  background-image: var(--physics-glass-sheen);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+}
+
+.workerFailed {
+  border-color: var(--dsw-static-red-500, #e5484d);
+}
+
+.workerBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.workerTitle {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--dsw-alias-label-primary);
+}
+
+.workerTimer {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.workerDetail {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The trailing "..." that breathes while a model call is in flight. */
+.workerEllipsis {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
+.workerEllipsis i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.2;
+  animation: workerDot 1.2s infinite ease-in-out;
+}
+
+.workerEllipsis i:nth-child(2) { animation-delay: 0.2s; }
+.workerEllipsis i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes workerDot {
+  0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+.workerBar {
+  display: block;
+  margin-top: 8px;
+  height: 5px;
+  border-radius: 4px;
+  background-color: var(--dsw-alias-fill-t2, rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+}
+
+.workerBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background-color: var(--physics-ink-link, var(--dsw-static-blue-500));
+  transition: width 0.6s ease;
+}
+
+.workerPhases {
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  list-style: none;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.workerPhaseDone { color: var(--dsw-alias-label-secondary); }
+
+.workerPhaseActive {
+  color: var(--physics-ink-link, var(--dsw-static-blue-500));
+  font-weight: 600;
+}
+
+.workerPhaseActive::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: workerPulse 1.2s infinite ease-in-out;
+}
+
+.workerPhaseFailed { color: var(--dsw-static-red-500, #e5484d); font-weight: 600; }
+
+@keyframes workerPulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* ---- the mascot itself (all inside one relative box) ---- */
+
+.mascot {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 76px;
+  animation: mascotBob 2.6s infinite ease-in-out;
+}
+
+@keyframes mascotBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.mascotAntenna {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background-color: var(--dsw-alias-label-tertiary);
+}
+
+.mascotAntenna i {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background-color: var(--physics-ink-link, var(--dsw-static-blue-500));
+  animation: workerPulse 1.6s infinite ease-in-out;
+}
+
+.mascotHead {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 36px;
+  height: 30px;
+  margin-left: -18px;
+  border-radius: 10px;
+  border: 2px solid var(--dsw-alias-label-primary);
+  background-color: var(--dsw-alias-bg-base, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.3s ease;
+}
+
+.mascotEye {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-label-primary);
+  animation: mascotBlink 4s infinite;
+}
+
+@keyframes mascotBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+.mascotMouth {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  width: 10px;
+  height: 4px;
+  margin-left: -5px;
+  border: 1.5px solid var(--dsw-alias-label-primary);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.mascotBody {
+  position: absolute;
+  top: 41px;
+  left: 50%;
+  width: 40px;
+  height: 26px;
+  margin-left: -20px;
+  border-radius: 9px;
+  border: 2px solid var(--dsw-alias-label-primary);
+  background-color: var(--dsw-alias-bg-base, #fff);
+}
+
+.mascotArmL,
+.mascotArmR {
+  position: absolute;
+  top: 44px;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background-color: var(--dsw-alias-label-primary);
+  transform-origin: center;
+}
+
+.mascotArmL { left: 4px; }
+.mascotArmR { right: 4px; }
+
+/* The held tool — a pencil while writing, a lens while checking, a brush
+   while painting. Hidden unless the mood calls for it. */
+.mascotTool {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+/* The thinking dots float above the head. */
+.mascotDots {
+  position: absolute;
+  top: -8px;
+  right: 2px;
+  display: none;
+  gap: 3px;
+}
+
+.mascotDots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-label-tertiary);
+  animation: workerDot 1.2s infinite ease-in-out;
+}
+
+.mascotDots i:nth-child(2) { animation-delay: 0.2s; }
+.mascotDots i:nth-child(3) { animation-delay: 0.4s; }
+
+/* ---- moods ---- */
+
+/* think: eyes up, dots floating, slow lean. */
+.mascot[data-mood='think'] .mascotDots { display: inline-flex; }
+.mascot[data-mood='think'] .mascotEye { transform: translateY(-1.5px); }
+.mascot[data-mood='think'] .mascotHead { animation: mascotLean 3s infinite ease-in-out; }
+
+@keyframes mascotLean {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-3deg); }
+  70% { transform: rotate(3deg); }
+}
+
+/* write: quick small bounces, right arm scribbles, pencil in hand. */
+.mascot[data-mood='write'] { animation-duration: 1.1s; }
+.mascot[data-mood='write'] .mascotArmR { animation: mascotScribble 0.35s infinite ease-in-out; }
+
+@keyframes mascotScribble {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  50% { transform: rotate(-14deg) translateX(-2px); }
+}
+
+.mascot[data-mood='write'] .mascotTool {
+  opacity: 1;
+  border-radius: 2px;
+  background:
+    linear-gradient(135deg, transparent 46%, var(--dsw-alias-label-primary) 46%, var(--dsw-alias-label-primary) 54%, transparent 54%),
+    var(--physics-ink-link, var(--dsw-static-blue-500));
+  transform: rotate(40deg);
+}
+
+/* check: the head sweeps as if reading rows, lens over the eye. */
+.mascot[data-mood='check'] .mascotHead { animation: mascotSweep 2.2s infinite ease-in-out; }
+
+@keyframes mascotSweep {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+}
+
+.mascot[data-mood='check'] .mascotTool {
+  opacity: 1;
+  border: 2px solid var(--dsw-alias-label-primary);
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+}
+
+/* paint: gentle sway, brush flicks. */
+.mascot[data-mood='paint'] { animation-duration: 1.8s; }
+.mascot[data-mood='paint'] .mascotArmR { animation: mascotFlick 0.9s infinite ease-in-out; }
+
+@keyframes mascotFlick {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-22deg); }
+}
+
+.mascot[data-mood='paint'] .mascotTool {
+  opacity: 1;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--physics-ink-link, var(--dsw-static-blue-500)) 0 40%, var(--dsw-alias-label-primary) 40%);
+  transform: rotate(45deg);
+  transform-origin: bottom center;
+}
+
+/* sad: tilt, no bounce. */
+.mascot[data-mood='sad'] { animation: none; transform: rotate(-6deg); }
+.mascot[data-mood='sad'] .mascotMouth { transform: rotate(180deg) translateY(1px); border-top: 1.5px solid var(--dsw-alias-label-primary); border-bottom: none; border-radius: 8px 8px 0 0; }
+.mascot[data-mood='sad'] .mascotAntenna i { animation: none; opacity: 0.35; }
+
+/* 细目表降级为只读信息块后的 summary 行。 */
+.specSummary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.specSummary::-webkit-details-marker { display: none; }
+
+.specSummaryHint {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+}

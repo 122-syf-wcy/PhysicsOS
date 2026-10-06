@@ -182,13 +182,16 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         }
         /* Bank-assisted assembly: plan every row first and stamp it for
            audit, then each row is served verbatim → adapt → generate. */
+        await service.reportProgress(jobId, 'plan', 0, 1, '规划题库供给')
         const plans = service.bankPlanFor(job.specTable, job.request, bankPolicy, job.schoolId)
         await service.stampBankPlan(jobId, plans)
         const planByNo = new Map(plans.map(plan => [plan.row.questionNo, plan]))
 
         const drafted = new Map<string, PaperQuestion[]>()
         let lastError: Error | undefined
-        for (const [sectionTitle, rows] of rowsBySection(job)) {
+        const sections = [...rowsBySection(job)]
+        for (const [sectionIndex, [sectionTitle, rows]] of sections.entries()) {
+          await service.reportProgress(jobId, 'draft', sectionIndex, sections.length, `起草「${sectionTitle}」`)
           const byNo = new Map<number, PaperQuestion>()
           const genRows: SpecRow[] = []
           const exemplars = new Map<string, BankItem>()
@@ -199,6 +202,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
               byNo.set(row.questionNo, questionFromBankItem(row, plan.item))
             } else if (plan?.mode === 'adapt' && plan.item !== undefined) {
               try {
+                await service.reportProgress(jobId, 'adapt', sectionIndex, sections.length, `改编题库题（第${row.questionNo}题）`)
                 byNo.set(row.questionNo, await adaptBankItem(ctx, route, job, plan.item, row))
               } catch (error) {
                 /* A failed adaptation degrades to generation — the row is
@@ -246,6 +250,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           drafted.set(sectionTitle, items)
         }
         const titles = [...rowsBySection(job).keys()]
+        await service.reportProgress(jobId, 'assemble', sections.length, sections.length, '组卷提交')
         await service.commitDocument(jobId, assembleDocument(job, titles, drafted), 'AI 起草')
         /* Usage lands only after the document commits — a failed draft
            must not consume freshness. Ledger follows the committed
@@ -270,9 +275,15 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       try {
         const job = service.getJob(jobId)
         if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${jobId} has no document`)
+        await service.reportProgress(jobId, 'check', 0, 1, '规范与覆盖检查')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const questions = job.document.sections.flatMap(section => section.items)
-        const solve = await independentSolve(questions, config.solveDelayMs, config.solveTimeoutMs)
+        const solve = await independentSolve(
+          questions, config.solveDelayMs, config.solveTimeoutMs, undefined,
+          (done, total, questionNo) => {
+            void service.reportProgress(jobId, 'solve', done, total, `物理引擎复核第 ${questionNo} 题`)
+          },
+        )
         await applyEngine(jobId, solve)
         await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(solve)], solve)
       } catch (error) {
@@ -492,6 +503,9 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         jobId,
         document,
         job.solveReport,
+        (stage, done, total, detail) => {
+          void service.reportProgress(jobId, stage, done, total, detail)
+        },
       )
       await service.recordExport(jobId, files)
       return { files }

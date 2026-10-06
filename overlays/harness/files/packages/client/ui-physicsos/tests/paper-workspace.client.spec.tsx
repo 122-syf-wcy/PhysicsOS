@@ -80,7 +80,10 @@ const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
 })
 
 describe('PaperWorkspace', () => {
-  afterEach(() => { cleanup() })
+  /* Fake-timer tests must never leak the mocked clock into their neighbours:
+     a hung `findBy*` under a frozen clock aborts the test before its own
+     finally, so real timers are restored here as well. */
+  afterEach(() => { cleanup(); vi.useRealTimers() })
 
   it('renders the pipeline stepper with counts and the sources tab', async () => {
     render(<PaperWorkspace api={stubApi([job(), job({ id: 'p2', status: 'exported' })])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
@@ -144,8 +147,103 @@ describe('PaperWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
     fireEvent.click(await screen.findByText(/月考·bp-gz|paper-1|bp-gz/))
     expect(await screen.findByRole('list', { name: '任务阶段' })).toBeTruthy()
-    expect(screen.getByText('细目表')).toBeTruthy()
+    /* 细目表不再是独立阶段——起草自动确认,stage rail 从 AI 起草开始。 */
+    expect(screen.getByText('AI 起草')).toBeTruthy()
     expect(screen.getByText('逐题审核')).toBeTruthy()
+    expect(screen.queryByText(/^细目表$/)).toBeNull()
+  })
+
+  it('one AI button auto-confirms the spec table, drafts, and only checks after drafting lands', async () => {
+    vi.useFakeTimers()
+    try {
+      /* spec-stage job with a spec table: the old flow demanded a manual
+         确认细目表 first; the one-button flow folds it in, and — the race the
+         old client shipped — must NOT fire /check before /draft finishes.
+         Synchronous queries only: a frozen fake clock never advances the
+         polling inside `findBy*`. */
+      const sequence: string[] = []
+      const specJob = job({
+        status: 'spec',
+        specTable: [{
+          questionNo: 1, sectionTitle: '选择题', kind: 'choice-single', score: 3,
+          knowledge: ['内能'], ability: '识记', difficulty: 'basic',
+        }] as never,
+      })
+      const api = stubApi([specJob])
+      api.bankPlan = vi.fn().mockResolvedValue([])
+      api.confirmSpec = vi.fn().mockImplementation(() => {
+        sequence.push('confirmSpec')
+        return Promise.resolve({ ...specJob, status: 'spec' })
+      })
+      api.runDraft = vi.fn().mockImplementation(() => {
+        sequence.push('runDraft')
+        return Promise.resolve({ status: 'drafting' })
+      })
+      api.runChecks = vi.fn().mockImplementation(() => {
+        sequence.push('runChecks')
+        return Promise.resolve({ status: 'checking' })
+      })
+      const getJob = vi.fn().mockImplementation(() => {
+        /* Status schedule shared by every caller (openJob, the runner's own
+           first fetch, the runner poll and the 3s backup poll): spec ×2 →
+           drafting ×2 → checking ×3 → review. The wide checking band keeps
+           the runChecks transition deterministic regardless of which poll
+           consumes which slot. */
+        const schedule = ['spec', 'spec', 'drafting', 'drafting', 'checking', 'checking', 'checking', 'review']
+        const calls = getJob.mock.calls.length
+        const status = schedule[calls - 1] ?? 'review'
+        sequence.push(`poll:${status}`)
+        return Promise.resolve({ ...specJob, status })
+      })
+      api.getJob = getJob
+      render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByText(/bp-gz/))
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByRole('button', { name: /AI 起草 \+ 自动检查/ }))
+      /* Flush the runner's promise chain (its own getJob → confirmSpec →
+         runDraft) across microtask ticks before asserting. */
+      for (let i = 0; i < 20 && !sequence.includes('runDraft'); i += 1) {
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(sequence).toEqual(['poll:spec', 'poll:spec', 'confirmSpec', 'runDraft'])
+      /* Draft lands on the polls (drafting → checking); /check may only fire
+         after a poll observed 'checking'. */
+      for (let ms = 0; ms < 10_000; ms += 500) {
+        await vi.advanceTimersByTimeAsync(500)
+        if (sequence.includes('runChecks')) break
+      }
+      expect(sequence.indexOf('runDraft')).toBeGreaterThan(sequence.indexOf('confirmSpec'))
+      const firstChecking = sequence.indexOf('poll:checking')
+      expect(firstChecking).toBeGreaterThan(-1)
+      expect(sequence.slice(0, firstChecking)).not.toContain('runChecks')
+      expect(api.runChecks).toHaveBeenCalledTimes(1)
+      /* The runner exits on the terminal poll, not earlier. */
+      for (let ms = 0; ms < 10_000 && !sequence.includes('poll:review'); ms += 500) {
+        await vi.advanceTimersByTimeAsync(500)
+      }
+      expect(sequence.includes('poll:review')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the working mascot with live progress telemetry while drafting', async () => {
+    const drafting = job({
+      status: 'drafting',
+      progress: { stage: 'draft', detail: '起草「三、实验题」', done: 2, total: 6, updatedAt: '2026-10-05T00:00:00Z' },
+    })
+    render(<PaperWorkspace api={stubApi([drafting])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    fireEvent.click(await screen.findByText(/bp-gz/))
+    const status = await screen.findByRole('status')
+    expect(status.getAttribute('aria-label')).toContain('AI 起草')
+    expect(screen.getByText(/起草「三、实验题」（2\/6）/)).toBeTruthy()
+    /* The mascot wears its mood and the phase rail marks the live phase. */
+    expect(document.querySelector('[data-mood="write"]')).toBeTruthy()
+    expect(screen.getByText('● AI 起草')).toBeTruthy()
   })
 
   it('submits region, school, kind and featured with a new source paper', async () => {

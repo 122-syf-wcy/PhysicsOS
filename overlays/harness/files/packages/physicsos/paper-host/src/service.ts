@@ -903,6 +903,36 @@ export class PaperService {
   }
 
   /**
+   * Publish live driver telemetry onto the job row so the workspace can show
+   * WHAT the pipeline is doing (planning, drafting section i/n, solving
+   * question k/m, drawing figure j/m) instead of a bare stage label. Best
+   * effort by design: a put failure must never fail the pipeline itself.
+   * @param id - the job id.
+   * @param stage - machine phase (plan | draft | adapt | assemble | check | solve | figure | export).
+   * @param done - completed steps within the phase.
+   * @param total - total steps in the phase.
+   * @param detail - one human line describing the current step.
+   */
+  async reportProgress(
+    id: string,
+    stage: string,
+    done: number,
+    total: number,
+    detail?: string,
+  ): Promise<void> {
+    try {
+      const job = this.requireJob(id)
+      await this.domain.table('jobs').put(id, {
+        ...job,
+        progress: { stage, ...(detail === undefined ? {} : { detail }), done, total, updatedAt: now() },
+        updatedAt: now(),
+      })
+    } catch {
+      /* telemetry only — the driver keeps going */
+    }
+  }
+
+  /**
    * Bump the repair-round counter; beyond 2 the job stays a draft.
    * @param id - the job id.
    * @returns the new round count.

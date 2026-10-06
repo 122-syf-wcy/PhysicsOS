@@ -274,6 +274,15 @@ const paperJob = z.object({
   })).optional(),
   repairRounds: z.number().int().nonnegative(),
   lastError: z.string().optional(),
+  /* Live driver telemetry (what the pipeline is doing right now). The stage
+     string is open — a new driver phase must not strand stored rows at open. */
+  progress: z.object({
+    stage: z.string(),
+    detail: z.string().optional(),
+    done: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    updatedAt: z.string(),
+  }).optional(),
   status: z.enum(['spec', 'drafting', 'checking', 'review', 'approved', 'exported', 'failed']),
   createdAt: z.string(),
   updatedAt: z.string(),
