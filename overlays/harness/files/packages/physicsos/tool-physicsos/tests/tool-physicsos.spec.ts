@@ -494,7 +494,7 @@ describe('dsh-tool-physicsos solve tracing', () => {
       retryGuidance: [],
       durationMs: 1,
     }
-    let state = { traces: [] }
+    let state: PhysicsSolveTracesProjection = { traces: [] }
     for (let index = 0; index < plugin.SOLVE_TRACES_CAP + 2; index += 1) {
       state = plugin.foldPhysicsSolveTrace(state, { ...base, workflowState: `attempt-${index}` })
     }
