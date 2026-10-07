@@ -199,16 +199,34 @@ export function applyEngineAnswers(
  * not pass. `engine-mismatch` at error severity makes the gap explicit and
  * adjudicable, so an unsupported question surfaces as a refusal rather than a
  * number or a silent pass.
+ *
+ * Severity follows the question's kind, not the refusal: a CONCEPT choice
+ * question is outside the engine's scope by design (the honesty contract —
+ * it must refuse rather than improvise), so its refusal is a warning the
+ * reviewer reads, never a blocker; an experiment/calculation refusal means a
+ * question that SHOULD be re-solvable wasn't (missing knowns, unparseable
+ * stem) and stays an error.
  * @param solve - the engine solve report.
+ * @param kindByNo - question number → kind, from the document being checked.
  * @returns one finding per undecided question.
  */
-export function engineRefusalFindings(solve: readonly SolveResult[]): CheckFinding[] {
+export function engineRefusalFindings(
+  solve: readonly SolveResult[],
+  kindByNo: ReadonlyMap<number, string>,
+): CheckFinding[] {
   return solve
     .filter(result => result.solvedAnswer === '')
-    .map(result => ({
-      questionNo: result.questionNo,
-      severity: 'error' as const,
-      code: 'engine-mismatch' as const,
-      detail: result.note ?? '引擎无法判定本题',
-    }))
+    .map((result) => {
+      const kind = kindByNo.get(result.questionNo)
+      const conceptual = kind === 'choice-single' || kind === 'choice-multi'
+        || kind === 'short-answer' || kind === 'drawing'
+      return {
+        questionNo: result.questionNo,
+        severity: conceptual ? 'warning' as const : 'error' as const,
+        code: 'engine-mismatch' as const,
+        detail: conceptual
+          ? `概念/主观题型，引擎按设计不复核。${result.note ?? ''}`
+          : result.note ?? '引擎无法判定本题',
+      }
+    })
 }

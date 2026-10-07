@@ -162,8 +162,9 @@ interface ImageGenerationResponse {
 /** Generate one PNG per `figure.ref` into `dir`; failures leave the caption
  *  placeholder in place rather than failing the export.
  *  @param onProgress - telemetry per figure (done, total, figure ref) — at
- *  ~70 s per image this is the export's long pole, so the UI names each drawing. */
-async function generateFigures(
+ *  ~70 s per image this is the export's long pole, so the UI names each drawing.
+ *  Also called at check time so reviewers see the drawings before export. */
+export async function generateFigures(
   tools: ExportTools,
   doc: PaperDocument,
   dir: string,

@@ -77,6 +77,33 @@ const QUESTION_KIND_LABEL: Record<string, string> = {
   'short-answer': '简答题', experiment: '实验题', calculation: '计算题',
 }
 const kindLabel = (kind: string): string => QUESTION_KIND_LABEL[kind] ?? kind
+
+/**
+ * One question's figure: the AI-generated PNG once the check stage has drawn
+ * it (served from the job's export dir), falling back to the caption
+ * placeholder while it is pending or the draw failed. `onError` flips the
+ * fallback locally — no per-figure existence probe.
+ */
+function FigureBlock({ job, api, figureRef, caption }: {
+  job: PaperJobWire
+  api: PaperApi
+  figureRef: string
+  caption: string
+}) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <p className={css.figure}>[题图：{caption}]</p>
+  return (
+    <figure className={css.figureBlock}>
+      <img
+        src={api.fileUrl(job.id, `fig-${figureRef}.png`)}
+        alt={`题图：${caption}`}
+        loading="lazy"
+        onError={() => { setFailed(true) }}
+      />
+      {caption !== '' && <figcaption>{caption}</figcaption>}
+    </figure>
+  )
+}
 const KINDS = ['unit', 'weekly', 'monthly', 'midterm', 'final', 'mock'] as const
 
 const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
@@ -602,10 +629,13 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
   onJobUpdate: (job: PaperJobWire) => void
   notify: (message: string | undefined) => void
 }) {
+  /* The list folds away so long stems get the full width — the split is the
+     #1 complaint about reading drafted questions on this screen. */
+  const [listCollapsed, setListCollapsed] = useState(false)
   return (
     <section className={css.panel}>
       <div className={css.split}>
-        <aside className={css.jobList}>
+        <aside className={clsx(css.jobList, listCollapsed && css.jobListCollapsed)}>
           {jobs.length === 0 && <Empty text="暂无进行中的试卷任务" />}
           {jobs.map((job) => {
             const items = job.document?.sections.flatMap(s => s.items) ?? []
@@ -635,6 +665,13 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
           })}
         </aside>
         <div className={css.jobDetail}>
+          <button type="button"
+            className={css.jobListToggle}
+            aria-expanded={!listCollapsed}
+            title={listCollapsed ? '展开任务列表' : '收起任务列表'}
+            onClick={() => { setListCollapsed(v => !v) }}>
+            {listCollapsed ? '「 任务列表' : '收起列表 »'}
+          </button>
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
             : <JobDetail job={activeJob} reviewer={reviewer} api={api}
@@ -1023,7 +1060,10 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
                 {q.subQuestions !== undefined && q.subQuestions.map(s => (
                   <p key={s.no} className={css.sub}>（{s.no}）（{s.score} 分）<Rich text={s.text} /></p>
                 ))}
-                {q.figure !== undefined && <p className={css.figure}>[题图：{q.figure.caption ?? q.figure.ref}]</p>}
+                {q.figure !== undefined && (
+                  <FigureBlock job={job} api={api}
+                    figureRef={q.figure.ref} caption={q.figure.caption ?? q.figure.ref} />
+                )}
                 {q.answer !== undefined && (
                   <div className={css.answer}>
                     <p><b>答案：</b><Rich text={q.answer.result} /></p>

@@ -36,7 +36,7 @@ import { adaptBankItem, draftSection, assembleDocument, repairQuestion } from '.
 import { applyEngineAnswers, engineRefusalFindings, independentSolve } from './solve.ts'
 import { ingestBankText, type IngestInput } from './ingest.ts'
 import { transcribeQuestionImages, type TranscribeImage } from './transcribe.ts'
-import { exportPaper } from './export.ts'
+import { exportPaper, generateFigures } from './export.ts'
 import { paperRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
 import { access } from 'node:fs/promises'
@@ -159,9 +159,12 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
     /* Engine verdicts become findings: a disagreement with the engine's
        verified answer is a `solve-mismatch`; a question the engine could not
        decide is an explicit `engine-mismatch` refusal. Neither is a silent pass. */
-    const engineFindingsFor = (solve: readonly SolveResult[]): CheckFinding[] => [
+    const engineFindingsFor = (
+      solve: readonly SolveResult[],
+      kindByNo: ReadonlyMap<number, string> = new Map(),
+    ): CheckFinding[] => [
       ...solveFindings(solve.filter(result => result.solvedAnswer !== '')),
-      ...engineRefusalFindings(solve),
+      ...engineRefusalFindings(solve, kindByNo),
     ]
 
     /* The engine's verified answer is what the paper carries: stamp it onto the
@@ -285,7 +288,30 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           },
         )
         await applyEngine(jobId, solve)
-        await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(solve)], solve)
+        await service.recordCheckResults(jobId,
+          [...findings, ...engineFindingsFor(solve, new Map(questions.map(q => [q.number, q.kind])))],
+          solve)
+        /* Figures for questions that declared one — generated HERE, not only
+           at export, so the reviewer sees the actual drawing next to each
+           question. Best-effort: no image endpoint or a failed draw leaves
+           the caption placeholder and never fails the check stage. Files
+           land in the job's export dir under the export's own names, so the
+           later export reuses them (generateFigures skips existing). */
+        if (config.imageApi !== undefined
+          && questions.some(question => question.figure !== undefined)) {
+          await service.reportProgress(jobId, 'figure', 0, 1, 'AI 生成题图（预览）')
+          try {
+            await generateFigures(
+              { pandoc: config.pandoc, soffice: undefined, exportDir: config.exportDir, imageApi: config.imageApi },
+              jobId, job.document,
+              (done, total, ref) => {
+                void service.reportProgress(jobId, 'figure', done, total, `AI 生成题图 ${ref}`)
+              },
+            )
+          } catch (error) {
+            ctx.logger.warn(`paper-host: figure pre-generation failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
       } catch (error) {
         await service.failJob(jobId, error instanceof Error ? error.message : String(error))
         throw error
@@ -496,19 +522,27 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
     }
 
     const runExport = async (jobId: string): Promise<{ files: import('./export.ts').ExportFileSet }> => {
-      const { document, job } = service.requireApprovedDocument(jobId)
-      const soffice = await binaryPresent(config.soffice)
-      const files = await exportPaper(
-        { pandoc: config.pandoc, soffice, exportDir: config.exportDir, imageApi: config.imageApi },
-        jobId,
-        document,
-        job.solveReport,
-        (stage, done, total, detail) => {
-          void service.reportProgress(jobId, stage, done, total, detail)
-        },
-      )
-      await service.recordExport(jobId, files)
-      return { files }
+      try {
+        const { document, job } = service.requireApprovedDocument(jobId)
+        const soffice = await binaryPresent(config.soffice)
+        const files = await exportPaper(
+          { pandoc: config.pandoc, soffice, exportDir: config.exportDir, imageApi: config.imageApi },
+          jobId,
+          document,
+          job.solveReport,
+          (stage, done, total, detail) => {
+            void service.reportProgress(jobId, stage, done, total, detail)
+          },
+        )
+        await service.recordExport(jobId, files)
+        return { files }
+      } catch (error) {
+        /* A raw tool failure (missing pandoc/unzip/soffice, pandoc exit) used
+           to surface as an opaque INTERNAL 500; name the failing step instead. */
+        if (error instanceof PaperError) throw error
+        throw new PaperError(500, 'EXPORT_FAILED',
+          `导出失败：${error instanceof Error ? error.message : String(error)}`)
+      }
     }
 
     yield ctx.webServer.register({

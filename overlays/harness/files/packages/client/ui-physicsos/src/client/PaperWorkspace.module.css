@@ -1895,3 +1895,56 @@ details[open] > .advancedSummary::before {
   font-weight: 500;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* ---- 左栏折叠 + 题图预览(2026-10-07) ---- */
+
+.jobListCollapsed {
+  display: none;
+}
+
+.jobListToggle {
+  align-self: flex-start;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base, #fff);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.jobListToggle:hover {
+  color: var(--physics-ink-link, var(--dsw-static-blue-500));
+  border-color: var(--physics-ink-link, var(--dsw-static-blue-500));
+}
+
+/* The detail column is a flex column in .split; keep the toggle pinned to the
+   top-left of the reading area regardless of JobDetail's own layout. */
+.jobDetail > .jobListToggle {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.figureBlock {
+  margin: 10px 0;
+  padding: 8px;
+  border: 1px solid var(--physics-glass-border-soft, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-base, #fff);
+  text-align: center;
+}
+
+.figureBlock img {
+  max-width: 100%;
+  max-height: 340px;
+  border-radius: 6px;
+}
+
+.figureBlock figcaption {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}

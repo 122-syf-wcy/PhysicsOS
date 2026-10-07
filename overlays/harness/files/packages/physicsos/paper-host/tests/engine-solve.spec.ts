@@ -82,7 +82,7 @@ describe('independentSolve: the engine decides', () => {
 
     const [agreed] = await independentSolve([question(SUPPORTED_STEM, engineAnswer)], 0, 120_000, runtime)
     expect(agreed!.consistent).toBe(true)
-    expect(engineRefusalFindings([agreed!])).toEqual([])
+    expect(engineRefusalFindings([agreed!], new Map())).toEqual([])
     expect(solveFindings([agreed!])).toEqual([])
 
     /* A model answer that contradicts the engine is flagged, not accepted. */
@@ -93,7 +93,7 @@ describe('independentSolve: the engine decides', () => {
     expect(mismatches).toHaveLength(1)
     expect(mismatches[0]).toMatchObject({ questionNo: 1, code: 'solve-mismatch', severity: 'error' })
     /* The engine did decide it, so it is a disagreement, not a refusal. */
-    expect(engineRefusalFindings([contradicted!])).toEqual([])
+    expect(engineRefusalFindings([contradicted!], new Map())).toEqual([])
   })
 
   it('surfaces an unsupported question as an explicit refusal, never a number', async () => {
@@ -104,9 +104,12 @@ describe('independentSolve: the engine decides', () => {
     expect(result!.consistent).toBe(false)
     expect(result!.note).toContain('UNSUPPORTED_MODEL')
 
-    const refusals = engineRefusalFindings([result!])
+    const refusals = engineRefusalFindings([result!], new Map([[1, 'experiment']]))
     expect(refusals).toHaveLength(1)
     expect(refusals[0]).toMatchObject({ questionNo: 1, code: 'engine-mismatch', severity: 'error' })
+    /* A CONCEPT kind the engine refuses by design is a warning, not a blocker. */
+    expect(engineRefusalFindings([result!], new Map([[1, 'choice-single']]))[0])
+      .toMatchObject({ severity: 'warning' })
 
     /* No number is stamped onto the paper for a refused question. */
     const doc = documentOf('光子能量 E = 10.2 eV')
@@ -127,7 +130,7 @@ describe('independentSolve: the engine decides', () => {
     expect(result!.solvedAnswer).toBe('')
     expect(result!.consistent).toBe(false)
     expect(result!.note).toContain('独立解题失败')
-    expect(engineRefusalFindings([result!])[0]).toMatchObject({ code: 'engine-mismatch' })
+    expect(engineRefusalFindings([result!], new Map([[1, 'calculation']]))[0]).toMatchObject({ code: 'engine-mismatch' })
   })
 })
 

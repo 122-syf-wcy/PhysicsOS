@@ -87,10 +87,14 @@ const BATCH_REVIEW_LIMIT = 500
 
 /** Downloadable file whitelist — nothing else under the export dir serves. */
 const FILE_NAMES = new Set(['试卷.pdf', '试卷.docx', '答案解析.pdf', '答案解析.docx'])
+/** Question figures pre-generated at check time (`fig-<ref>.png`), served so
+ *  the review UI can show the actual drawing next to each question. */
+const FIGURE_NAME = /^fig-[A-Za-z0-9_.-]+\.png$/
 
 const MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.png': 'image/png',
 }
 
 const send = (res: ServerResponse, status: number, body: unknown): void => {
@@ -685,7 +689,7 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         const jobId = segment(seg, 1)
         jobForActor(jobId)
         const name = decodeURIComponent(seg[3] ?? '')
-        if (!FILE_NAMES.has(name)) throw new PaperError(404, 'NO_FILE', 'no such export file')
+        if (!FILE_NAMES.has(name) && !FIGURE_NAME.test(name)) throw new PaperError(404, 'NO_FILE', 'no such export file')
         const file = join(deps.exportDir, segment(seg, 1), normalize(name))
         const content = await readFile(file).catch(() => undefined)
         if (content === undefined) throw new PaperError(404, 'NO_FILE', `file '${name}' not produced`)

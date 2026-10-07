@@ -12,7 +12,7 @@ import type {
   BankItem, PaperDocument, PaperJob, PaperQuestion, SpecRow,
 } from '@physicsos/question-paper'
 import { paperQuestionSchema } from './domain.ts'
-import { blueprintById } from '@physicsos/question-paper'
+import { blueprintById, mixCoefficient } from '@physicsos/question-paper'
 import { z } from 'zod'
 
 /** Model route the deployment configures for drafting and solving. */
@@ -155,6 +155,7 @@ const SYSTEM = `你是贵州省初高中学业水平考试的资深命题教师�
 
 命题纪律（逐条遵守）：
 - 贴合细目表：每题的 kind/score/knowledge/ability/difficulty 必须与细目表完全一致，knowledge 数组必须覆盖细目表该题全部考点，不得自行增减或替换考点。
+- 可计算题必须机器可复核：experiment / calculation（含含计算的填空）题，题干必须包含一行「已知：」，把求解所需的全部已知量写成「符号 = 数值 单位」的逗号列表（如「已知：m = 2 kg，g = 10 m/s²，v = 3 m/s」），纯数数值、不带文字修饰；常数（g、c 等）也必须显式给出。平台的物理引擎会仅凭题干文本独立重解每道可计算题，已知量缺失或埋在叙述里都会被判为无法复核并阻断整卷。
 - 选择题：干扰项必须是学生真实易错的概念混淆或计算偏差，不得凑数；各选项量纲与单位一致；不得使用"以上都对/以上都不对"式兜底项；单选答案唯一，多选至少两项正确。
 - 计算题：给定数据必须真实可算、量级合理；basic 题不超过两步运算；结果保留位数符合中学惯例（一般两位有效数字或整数）。
 - 实验题：必须是课标要求的实验，写明操作、现象、结论或数据处理要求；不得杜撰实验名称。
@@ -199,6 +200,10 @@ export async function draftSection(
     `考试目标年份：${request.targetYear}`,
     request.chapters.length > 0 ? `已教范围：${request.chapters.join('；')}` : '',
     request.exclude.length > 0 ? `排除内容：${request.exclude.join('；')}` : '',
+    /* The coefficient the teacher targeted, restated in model terms: actual
+       solve-step counts and trap density inside each difficulty tier should
+       lean toward this P-value, or the check stage reports the drift. */
+    `全卷目标难度系数：${mixCoefficient(request.difficulty).toFixed(2)}（预期得分率，越高越容易）。在遵守各行难度档位的前提下，控制实际解题步数、数据复杂度与陷阱密度，使整卷实际难度向该系数靠拢。`,
     '',
     `本次命制板块：${sectionTitle}`,
     sectionNote !== undefined ? `板块给分规则：${sectionNote}` : '',
