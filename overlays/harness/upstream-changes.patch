@@ -12311,7 +12311,7 @@ index 0000000000..3911cc7ec9
 +  })
 +})
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c98289bc3e..01eb9b66a0 100644
+index c98289bc3e..171f5d6b54 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -29,6 +29,12 @@
@@ -12327,7 +12327,7 @@ index c98289bc3e..01eb9b66a0 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh
-@@ -47,6 +53,84 @@
+@@ -47,6 +53,88 @@
      - id: subagent-model-selection-settings
        name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -12373,7 +12373,11 @@ index c98289bc3e..01eb9b66a0 100644
 +    - id: paper-host
 +      name: '@deepseek-ai/dsh-paper-host'
 +      config:
-+        provider: luckyg
++        # 号池路由（llm-pi-ai 的 physicsos-pool，与 agent 聊天同一条模型层）。
++        # 早期写成 luckyg——一个从未注册过适配器的 provider id，AI 起草在
++        # 线上必然 NO_ADAPTER；生产已由数据卷 profile patch 热修，这里改对
++        # 默认值，让全新部署也直接可用。
++        provider: physicsos-pool
 +        model: deepseek-v4.1-flash
 +        solveDelayMs: 9000
 +        solveTimeoutMs: 240000
@@ -12412,7 +12416,7 @@ index c98289bc3e..01eb9b66a0 100644
      - id: message-feedback
        name: '@deepseek-ai/dsh-message-feedback'
        config:
-@@ -302,6 +386,9 @@
+@@ -302,6 +390,9 @@
      - id: ui-conversation
        name: '@deepseek-ai/dsh-client-ui-conversation'
 
