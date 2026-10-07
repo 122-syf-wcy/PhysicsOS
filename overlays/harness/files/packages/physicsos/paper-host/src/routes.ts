@@ -88,8 +88,11 @@ const BATCH_REVIEW_LIMIT = 500
 /** Downloadable file whitelist — nothing else under the export dir serves. */
 const FILE_NAMES = new Set(['试卷.pdf', '试卷.docx', '答案解析.pdf', '答案解析.docx'])
 /** Question figures pre-generated at check time (`fig-<ref>.png`), served so
- *  the review UI can show the actual drawing next to each question. */
-const FIGURE_NAME = /^fig-[A-Za-z0-9_.-]+\.png$/
+ *  the review UI can show the actual drawing next to each question. Model refs
+ *  may carry any non-separator character (e.g. `fig:15`); only path
+ *  separators are excluded — `normalize` plus the job-id scoping contain the
+ *  rest. */
+const FIGURE_NAME = /^fig-[^/\\]+\.png$/
 
 const MIME: Record<string, string> = {
   '.pdf': 'application/pdf',

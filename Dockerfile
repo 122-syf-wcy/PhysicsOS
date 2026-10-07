@@ -108,14 +108,15 @@ ENV NODE_ENV=production \
     PHYSICSOS_DATABASE_SSL=false
 
 # pandoc + LibreOffice 只在 runtime 安装：builder 阶段不需要它们，A4 导出也
-# 不再是 docx 降级。fonts-noto-cjk 保证中文 PDF 不出现豆腐块。unzip 供导出端
-# 解包 pandoc 参考模板做 A4 样式定制（缺失时导出必 500：参考模板构建即败）。
+# 不再是 docx 降级。fonts-noto-cjk 保证中文 PDF 不出现豆腐块。unzip/zip 供导
+# 出端解包并重打包 pandoc 参考模板做 A4 样式定制（缺一时导出即败）。
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         pandoc \
         libreoffice-writer \
         fonts-noto-cjk \
         unzip \
+        zip \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system physicsos \
     && useradd --system --gid physicsos --home-dir /var/lib/physicsos physicsos \
