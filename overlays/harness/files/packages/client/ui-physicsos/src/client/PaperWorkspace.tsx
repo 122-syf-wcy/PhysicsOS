@@ -69,6 +69,14 @@ const EVIDENCE_LABEL: Record<string, string> = {
 const PLAN_LABEL: Record<string, string> = {
   verbatim: '原题', adapt: '改编', adapted: '改编', generate: 'AI 起草', generated: 'AI 起草', gap: '缺口',
 }
+/* Question-kind enum → 考试卷面上的题型叫法。Spec rows, review lists and the
+   bank all render kinds through this map — a raw `choice-single` in the 题型
+   column reads as a wrong question type to a teacher. */
+const QUESTION_KIND_LABEL: Record<string, string> = {
+  'choice-single': '单选题', 'choice-multi': '多选题', blank: '填空题', drawing: '作图题',
+  'short-answer': '简答题', experiment: '实验题', calculation: '计算题',
+}
+const kindLabel = (kind: string): string => QUESTION_KIND_LABEL[kind] ?? kind
 const KINDS = ['unit', 'weekly', 'monthly', 'midterm', 'final', 'mock'] as const
 
 const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
@@ -922,7 +930,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
                 const plan = planByNo.get(row.questionNo)
                 return (
                   <tr key={row.questionNo}>
-                    <td>{row.questionNo}</td><td className={css.cellText}>{row.sectionTitle}</td><td>{row.kind}</td>
+                    <td>{row.questionNo}</td><td className={css.cellText}>{row.sectionTitle}</td><td>{kindLabel(row.kind)}</td>
                     <td>{row.score}</td><td className={css.cellText}>{row.knowledge.join('、')}</td><td>{row.ability}</td>
                     <td>
                       {plan === undefined
@@ -996,7 +1004,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
             <details key={q.number} className={css.question} open={q.status !== 'approved'}>
               <summary>
                 <span className={css.qNo}>第 {q.number} 题</span>
-                <span className={css.qMeta}>{q.kind} · {q.score} 分 · {q.knowledge.join('、')}</span>
+                <span className={css.qMeta}>{kindLabel(q.kind)} · {q.score} 分 · {q.knowledge.join('、')}</span>
                 {q.provenance !== undefined && (
                   <span className={clsx(css.chip, css[`plan-${q.provenance.mode === 'verbatim' ? 'verbatim' : q.provenance.mode === 'adapted' ? 'adapt' : 'generate'}`])}
                     title={q.provenance.sourceLabel ?? q.provenance.bankItemId ?? 'AI 起草'}>
@@ -1592,11 +1600,6 @@ function BankPanel({ items, reviewer, api, run, onError }: {
     if (modes.length === 0) throw new Error('至少保留一种使用方式')
     await api.updateBankItem(item.id, { reuseModes: modes })
   })
-
-  const kindLabel = (kind: string): string => ({
-    'choice-single': '单选', 'choice-multi': '多选', blank: '填空', drawing: '作图',
-    'short-answer': '简答', experiment: '实验', calculation: '计算',
-  } as Record<string, string>)[kind] ?? kind
 
   const itemCard = (item: BankItemRow) => {
     const open = expanded === item.id

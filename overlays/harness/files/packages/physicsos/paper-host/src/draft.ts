@@ -98,7 +98,14 @@ export async function callModel(ctx: Context, route: PaperModelRoute, system: st
       content: [{ type: 'text', text: prompt }],
       source: { kind: 'user' },
     })],
-    maxTokens: 16000,
+    /* 32768, not 16000: reasoning models (deepseek-v4.1-flash) bill their
+       thinking against the same completion budget — a full 高考 非选择题
+       section spent all 16000 tokens on reasoning_content and returned zero
+       text characters ("no JSON in model output (0 chars)"), failing the
+       draft after both repair rounds. 32768 is the adapter's own shipped cap
+       for this model family and leaves the JSON several times the headroom
+       of the biggest section observed. */
+    maxTokens: 32768,
     temperature: 0.4,
   })) {
     assembler.push(chunk)
