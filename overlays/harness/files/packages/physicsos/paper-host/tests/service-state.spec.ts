@@ -122,3 +122,24 @@ describe('paper job state machine', () => {
       .rejects.toMatchObject({ status: 409, code: 'BAD_STATE' })
   })
 })
+
+
+describe('paper insert serialization', () => {
+  it('serializes check-and-insert across services sharing a domain', async () => {
+    const domain = makeFakeDomain()
+    const originalTable = domain.table.bind(domain)
+    let release!: () => void
+    const waiting = new Promise<void>((resolve) => { release = resolve })
+    const delayed = { table: (name: string) => {
+      const table = originalTable(name as 'blueprints')
+      return { ...table, put: async (id: string, row: never) => { await waiting; await table.put(id, row) } }
+    } } as unknown as PaperDomain
+    const input = { id: 'concurrent-blueprint', level: 'zhongkao', subject: 'physics', title: 'first', totalScore: 90, minutes: 120, sections: [], basedOn: [] } as const
+    const first = new PaperService(delayed).addBlueprint(input)
+    const second = new PaperService(delayed).addBlueprint({ ...input, title: 'second' })
+    release()
+    const results = await Promise.allSettled([first, second])
+    expect(results.map(result => result.status)).toEqual(['fulfilled', 'rejected'])
+    expect(domain.table('blueprints').get(input.id)?.title).toBe('first')
+  })
+})

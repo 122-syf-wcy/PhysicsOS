@@ -308,6 +308,10 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     this.recompute()
   }
 
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     const scene = this.sceneRuntime.getScene()
     const title = scene.metadata.title ?? '复合场中的带电粒子'

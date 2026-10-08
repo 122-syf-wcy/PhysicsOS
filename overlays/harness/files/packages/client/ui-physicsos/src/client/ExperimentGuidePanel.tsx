@@ -8,7 +8,7 @@
  * output, so the panel only ever displays it.
  */
 
-import { useEffect, useRef } from 'react'
+import { useModalFocus } from './use-modal-focus.ts'
 import clsx from 'clsx'
 import { IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -27,21 +27,7 @@ export interface ExperimentGuidePanelProps {
 }
 
 export function ExperimentGuidePanel({ meta, title, t, onClose }: ExperimentGuidePanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
-    panelRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      previouslyFocused?.focus()
-    }
-  }, [onClose])
+  const panelRef = useModalFocus<HTMLDivElement>(true, onClose)
 
   return (
     <div className={css.reportOverlay} data-physicsos-guide="true">

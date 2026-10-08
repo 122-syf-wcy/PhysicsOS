@@ -171,6 +171,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  private simulationCache: { key: string; simulation: SimulationResult } | undefined
   /**
    * In-flight schematic drag: the component's painted position while the
    * pointer is down. Preview only — the layout lands on the scene when the
@@ -229,7 +230,8 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      const key = `${String(scene.id)}:${scene.revision}`
+      const simulation = this.simulationCache?.key === key ? this.simulationCache.simulation : this.engine.simulate(
         scene,
         createCircuitSimulationRequest(
           scene,
@@ -237,6 +239,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
           `circuit-lab-trace-${String(scene.id)}-${scene.revision}`,
         ),
       )
+      this.simulationCache = { key, simulation }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -285,6 +288,9 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    // The builder's next structural edit must start from committed facts,
+    // including inspector values and switch/slider changes made on the bench.
+    if (this.draft !== null) this.draft = draftFromScene(this.sceneRuntime.getScene())
     /* A parameter change makes the previous sweep position physically stale;
        a placement move does not — nothing it rewrites feeds the solver. */
     if (rewind) {
@@ -303,6 +309,10 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     return this.sliderPreview === undefined
       ? placed
       : sceneWithSliderPreview(placed, this.sliderPreview)
+  }
+
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
   }
 
   getSnapshot(): WorkspaceSnapshot {

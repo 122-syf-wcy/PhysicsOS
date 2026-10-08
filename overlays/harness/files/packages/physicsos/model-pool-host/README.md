@@ -27,6 +27,7 @@ Harness ──▶ http://127.0.0.1:<PHYSICSOS_MODEL_POOL_PORT>/v1
 | 冷却 | 连续失败 `failureThreshold=3` 次，或任一 401/403，立即进入冷却；`cooldownBaseMs=30s` 起指数退避，上限 `cooldownMaxMs=30min`。 |
 | 恢复 | `autoRecover=true` 时冷却到期自动回到服务；设为 false 需管理员在后台「恢复」。 |
 | 流式 | 只在「响应头之前」重试。已经开始输出的流不会被重放，避免重复内容。 |
+| 通道地址 | 只填域名（如 `https://gateway.example`）时，聊天和模型列表统一使用 `/v1`；显式 `/v1` 或 `/api/openai` 等路径保留，不重复添加版本前缀。此规则也适用于已经保存的通道。 |
 | 全挂 | 返回 HTTP 503 + `MODEL_POOL_EXHAUSTED`（或 `MODEL_POOL_EMPTY` / `MODEL_POOL_MODEL_UNAVAILABLE` / `MODEL_POOL_ALL_COOLING`），带中文原因。 |
 | 审计 | `channel.create/update/delete`、`key.create/update/delete/reset`、`settings.update`，只记尾号和参数，不记 key 值。 |
 
@@ -42,7 +43,7 @@ Harness ──▶ http://127.0.0.1:<PHYSICSOS_MODEL_POOL_PORT>/v1
 | POST | `/channels/:id/keys` | 新增 key（明文只在请求体内，落库即加密） |
 | PATCH / DELETE | `/keys/:id` | 修改（含换 key）/ 删除 |
 | POST | `/keys/:id/reset` | 清零失败计数、解除冷却 |
-| POST | `/keys/:id/test` | 发一条 `max_tokens=1` 的最小请求，回报延迟与错误 |
+| POST | `/keys/:id/test` | 使用通道首个模型发送 `max_tokens=1` 的流式请求；验证内容和 `finish_reason`，回报完整流延迟与错误。工具调用和其他思考配置需单独验证。 |
 | PATCH | `/settings` | 重试次数、失败阈值、冷却基数与上限、自动恢复 |
 
 ## 配置
@@ -68,3 +69,17 @@ Harness ──▶ http://127.0.0.1:<PHYSICSOS_MODEL_POOL_PORT>/v1
 ```sh
 ./node_modules/.bin/vitest run packages/physicsos/model-pool-host/tests
 ```
+
+
+The attempt timeout covers headers and the full response body. A key is marked
+healthy only after the body completes and streamed responses pass SSE validation.
+HTTP 200 HTML or JSON errors cannot pass the streaming probe. Missing finish
+reasons and malformed SSE produce an explicit `MODEL_POOL_INVALID_STREAM` error
+without fabricating an answer or completion marker. Once downstream headers are
+committed, a broken or stalled transport destroys that response; it never retries
+a second paid upstream request. Client cancellation and caller HTTP errors do not
+count toward key cooldown.
+
+Origin-only channel addresses default to the OpenAI-compatible `/v1` convention.
+This is a routing default, not a claim about any particular gateway's supported
+paths; explicit version or custom prefixes are preserved.

@@ -1,5 +1,6 @@
 mod platform;
 mod sidecar;
+mod startup_state;
 mod updater;
 mod web_host;
 
@@ -8,7 +9,7 @@ use serde_json::Value;
 use sidecar::{sidecar_start, sidecar_status, sidecar_stop, SidecarState};
 use tauri::Manager;
 use updater::{update_check, update_install, UpdateState};
-use web_host::WebHostState;
+use web_host::{web_host_retry, web_host_status, WebHostState};
 
 #[tauri::command]
 async fn sidecar_request(
@@ -28,28 +29,23 @@ pub fn run() {
         .manage(UpdateState::default())
         .manage(WebHostState::default())
         .setup(|app| {
-            /* 服务器模式：设了 PHYSICSOS_DESKTOP_SERVER_URL（构建期 option_env!
-               或运行期环境变量）就直接连共享服务器，不再启动本机 Harness——
-               账号、数据、模型调用都在服务器侧。 */
-            let server_url = std::env::var("PHYSICSOS_DESKTOP_SERVER_URL")
-                .ok()
-                .or_else(|| option_env!("PHYSICSOS_DESKTOP_SERVER_URL").map(str::to_string));
-            if let Some(raw) = server_url {
-                let url = raw
-                    .parse::<tauri::Url>()
-                    .map_err(std::io::Error::other)?;
-                let window = app
-                    .get_webview_window("main")
-                    .ok_or_else(|| std::io::Error::other("main window is missing"))?;
-                window.navigate(url).map_err(std::io::Error::other)?;
+            if let Some(window) = app.get_webview_window("main") {
                 window.show()?;
-                return Ok(());
             }
-            if !cfg!(debug_assertions) || std::env::var_os("PHYSICSOS_DESKTOP_WEB_HOST").is_some() {
+            if !cfg!(debug_assertions)
+                || std::env::var_os("PHYSICSOS_DESKTOP_WEB_HOST").is_some()
+                || std::env::var_os("PHYSICSOS_DESKTOP_SERVER_URL").is_some()
+                || option_env!("PHYSICSOS_DESKTOP_SERVER_URL").is_some()
+            {
                 let state = app.state::<WebHostState>();
+                // Expected startup failures are stored for the visible startup
+                // page; they must not abort the desktop application's setup.
                 web_host::start(app.handle(), &state).map_err(std::io::Error::other)?;
-            } else if let Some(window) = app.get_webview_window("main") {
-                window.show()?;
+            } else if let (Some(window), Some(url)) = (
+                app.get_webview_window("main"),
+                app.config().build.dev_url.clone(),
+            ) {
+                window.navigate(url).map_err(std::io::Error::other)?;
             }
             Ok(())
         })
@@ -64,6 +60,8 @@ pub fn run() {
             sidecar_request,
             sidecar_stop,
             sidecar_status,
+            web_host_status,
+            web_host_retry,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build PhysicsOS desktop shell");

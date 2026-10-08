@@ -1,7 +1,7 @@
 # PhysicsOS Shared State Host
 
 `@deepseek-ai/dsh-shared-state-host` owns the two pieces of runtime state that
-must be shared when PhysicsOS runs more than one application replica:
+require atomic coordination in PhysicsOS:
 
 - `rateLimit` — atomic fixed-window counters keyed by a namespaced caller key;
 - `once` — one-time claims used for approval responses, idempotent writes, and
@@ -85,9 +85,11 @@ request. The apiproxy receipt integration should resolve
 `physicsosOnceLedger` in its composition and replace the process-local
 `pendingResponses` map used by the `/api/respond` policy.
 
-With one replica the memory backend is sufficient. With more than one replica,
-the Redis backend is required: each replica must use the same key prefix and
-Redis database. If Redis is unavailable, backend calls throw instead of
+PhysicsOS currently supports one application writer per database/schema because
+business domains cache process-local snapshots. Redis provides durable/shared
+counters and claims; it does not make those snapshots safe for multiple writers.
+The PostgreSQL storage backend enforces a session lease and stops on lease loss.
+With one replica the memory backend is sufficient for local development. If Redis is unavailable, backend calls throw instead of
 falling back to a per-process counter or claim table. Auth turns that into its
 dependency-unavailable response; apiproxy should similarly fail closed rather
 than accepting a response it cannot verify.

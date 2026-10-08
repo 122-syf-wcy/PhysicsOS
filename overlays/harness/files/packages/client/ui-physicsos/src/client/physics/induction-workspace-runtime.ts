@@ -216,6 +216,10 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
     this.recompute()
   }
 
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     const scene = this.sceneRuntime.getScene()
     const title = scene.metadata.title ?? '电磁感应实验'

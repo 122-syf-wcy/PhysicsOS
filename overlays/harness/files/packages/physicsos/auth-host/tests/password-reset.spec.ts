@@ -253,3 +253,41 @@ describe('password reset lifecycle', () => {
     })
   })
 })
+
+
+it('restores a reset token after a failed password write so it can be redeemed again', async () => {
+  const { domain, service } = await serviceFor()
+  await register(service)
+  await service.requestPasswordReset({ username: 'reset-user' })
+  const issued = await service.issuePasswordReset(admin, service.listPasswordResets(admin).requests[0]!.id)
+  const hash = passwordResetTokenHash(issued.token)
+  const original = domain.table('password_reset_tokens').get(hash)
+  const users = domain.table('users')
+  const put = users.put.bind(users)
+  users.put = async () => { throw new Error('password write failed') }
+  await expect(service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' })).rejects.toThrow('password write failed')
+  expect(domain.table('password_reset_tokens').get(hash)).toEqual(original)
+  users.put = put
+  await expect(service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' })).resolves.toBeUndefined()
+})
+
+
+it('preserves administrator cancellation when a concurrent password write rolls back', async () => {
+  const { domain, service } = await serviceFor()
+  await register(service)
+  await service.requestPasswordReset({ username: 'reset-user' })
+  const requestId = service.listPasswordResets(admin).requests[0]!.id
+  const issued = await service.issuePasswordReset(admin, requestId)
+  let release!: () => void
+  let started!: () => void
+  const entered = new Promise<void>((resolve) => { started = resolve })
+  const blocked = new Promise<void>((resolve) => { release = resolve })
+  domain.table('users').put = async () => { started(); await blocked; throw new Error('failed') }
+  const resetting = service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' }).catch((error: unknown) => error)
+  await entered
+  const cancelling = service.cancelPasswordReset(admin, requestId)
+  release()
+  await resetting
+  await cancelling
+  expect(typeof domain.table('password_reset_tokens').get(passwordResetTokenHash(issued.token))?.revokedAt).toBe('string')
+})

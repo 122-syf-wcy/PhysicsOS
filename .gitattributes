@@ -9,3 +9,5 @@
 
 UI/**/*.png filter=lfs diff=lfs merge=lfs -text
 docs/**/*.png filter=lfs diff=lfs merge=lfs -text
+# Unified patches contain a single-space context marker on blank lines.
+overlays/harness/upstream-changes.patch whitespace=-blank-at-eol

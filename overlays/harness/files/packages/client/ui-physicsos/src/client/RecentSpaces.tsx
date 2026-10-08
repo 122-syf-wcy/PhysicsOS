@@ -1,3 +1,4 @@
+import { sceneRefOf } from './surface-store.ts'
 import { useMemo } from 'react'
 import type { SessionId, SessionSummary, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -71,7 +72,7 @@ export function RecentSpaces({
                 type="button"
                 className={css.item}
                 onClick={() => {
-                  openSurface('lab', { sceneId: entry.sceneId, scene: entry.scene })
+                  openSurface('lab', sceneRefOf(entry))
                 }}
               >
                 {entry.kind === 'question'

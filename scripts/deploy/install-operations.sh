@@ -4,6 +4,19 @@ set -euo pipefail
 
 PROJECT_DIR=${PHYSICSOS_DIR:-/opt/physicsos}
 BACKUP_SCRIPT="$PROJECT_DIR/scripts/deploy/backup-postgres.sh"
+FULL_BACKUP_KEY=${PHYSICSOS_BACKUP_KEY_FILE:-}
+FULL_BACKUP_NODE=
+if [[ -n "$FULL_BACKUP_KEY" ]]; then
+  # Full backups run on the host (Docker CLI + host files); validate before
+  # changing apt packages, SSH protection, or the existing cron schedule.
+  FULL_BACKUP_NODE=$(command -v node) || { printf 'install-operations: full backups require host Node.js >=24.7\n' >&2; exit 1; }
+  "$FULL_BACKUP_NODE" -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major<24 || (major===24 && minor<7)) process.exit(1)' || { printf 'install-operations: full backups require host Node.js >=24.7\n' >&2; exit 1; }
+  [[ -s "$FULL_BACKUP_KEY" ]] || { printf 'install-operations: backup encryption key is missing\n' >&2; exit 1; }
+  safe_path_pattern='^/[A-Za-z0-9_./ -]+$'
+  for value in "$PROJECT_DIR" "$FULL_BACKUP_KEY" "$FULL_BACKUP_NODE" "${PHYSICSOS_BACKUP_OFFSITE_DIR:-}"; do
+    [[ -z "$value" || "$value" =~ $safe_path_pattern ]] || { printf 'install-operations: invalid backup path\n' >&2; exit 1; }
+  done
+fi
 CRON_FILE=/etc/cron.d/physicsos-postgres-backup
 LOGROTATE_FILE=/etc/logrotate.d/physicsos-postgres-backup
 FAIL2BAN_JAIL=/etc/fail2ban/jail.d/physicsos-sshd.local
@@ -46,12 +59,25 @@ chmod 0644 "$FAIL2BAN_JAIL.tmp"
 mv "$FAIL2BAN_JAIL.tmp" "$FAIL2BAN_JAIL"
 
 backup_existing "$CRON_FILE"
+if [[ -n "$FULL_BACKUP_KEY" ]]; then
+  cat >"$CRON_FILE.tmp" <<EOF
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+PHYSICSOS_DIR="$PROJECT_DIR"
+PHYSICSOS_BACKUP_KEY_FILE="$FULL_BACKUP_KEY"
+PHYSICSOS_BACKUP_OFFSITE_DIR="${PHYSICSOS_BACKUP_OFFSITE_DIR:-}"
+15 2 * * * root "$FULL_BACKUP_NODE" "$PROJECT_DIR/scripts/deploy/backup-scheduled.mjs" >>/var/log/physicsos-postgres-backup.log 2>&1
+EOF
+else
 cat >"$CRON_FILE.tmp" <<EOF
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=""
 15 2 * * * root PHYSICSOS_DIR=$PROJECT_DIR $BACKUP_SCRIPT >>/var/log/physicsos-postgres-backup.log 2>&1
 EOF
+  printf 'install-operations: PostgreSQL-only backup retained; configure PHYSICSOS_BACKUP_KEY_FILE to schedule full encrypted backups\n'
+fi
 chmod 0644 "$CRON_FILE.tmp"
 mv "$CRON_FILE.tmp" "$CRON_FILE"
 

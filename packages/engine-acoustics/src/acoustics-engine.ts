@@ -1,3 +1,5 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   check,
   invalidModelCondition,
@@ -316,9 +318,12 @@ export class AcousticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     const model = resolveAcousticModel(scene)
     const { oneWayTime, roundTripTime } = echoTimingOf(model)
 
-    const states = Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) =>
-      stateOf(model, (index / TRAJECTORY_SEGMENTS) * roundTripTime),
-    )
+    const { startTime, endTime } = simulationTimeRange(request.options, roundTripTime)
+    const states = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
+    ).map((time) => stateOf(model, time))
 
     const events: PhysicsEventLike[] = [
       {
@@ -350,7 +355,7 @@ export class AcousticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       sceneId: scene.id,
       sceneRevision: scene.revision,
       states,
-      events,
+      events: eventsInSimulationRange(events, startTime, endTime),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

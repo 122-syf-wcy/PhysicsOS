@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PhysicsOS · 启动</title>
+    <link rel="stylesheet" href="./startup.css" />
+  </head>
+  <body data-phase="starting">
+    <main>
+      <span class="brand">PhysicsOS</span>
+      <div class="orbit" aria-hidden="true">φ</div>
+      <h1>你的物理实验室</h1>
+      <p id="message" role="status" aria-live="polite">正在启动 PhysicsOS…</p>
+      <button id="retry" type="button" hidden>重新启动</button>
+      <details id="diagnostics" hidden>
+        <summary>查看启动诊断</summary>
+        <pre id="logs"></pre>
+      </details>
+    </main>
+    <script type="module" src="./startup.js"></script>
+  </body>
+</html>

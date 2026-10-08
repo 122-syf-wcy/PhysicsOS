@@ -47,6 +47,7 @@ export type SelfCheckAttemptInput = Omit<StudentAttempt, 'id' | 'at'>
 
 const STORAGE_KEY = 'physicsos.learning-record'
 const ATTEMPT_LIMIT = 200
+const OUTBOX_KEY = 'physicsos.learning-record.outbox'
 
 type RecordStorage = Pick<Storage, 'getItem' | 'setItem'>
 type LearningRecordSync = Pick<LearningApi, 'listAttempts' | 'putAttempt'>
@@ -81,6 +82,8 @@ export interface LearningRecordController {
   record: (attempt: Omit<StudentAttempt, 'id' | 'at'>) => StudentAttempt
   /** Migrate local attempts, upload unsynced rows, then merge server pages. */
   sync: () => Promise<void>
+  /** Notify the lifecycle-owned retry loop after a background upload fails. */
+  onSyncNeeded: (listener: () => void) => () => void
 }
 
 let attemptSerial = 0
@@ -93,7 +96,38 @@ export function createLearningRecordController(
   storage?: RecordStorage,
   remote?: LearningRecordSync,
 ): LearningRecordController {
+  const syncNeeded = new Set<() => void>()
   const store = createSnapshotStore<LearningRecordState>({ attempts: readStored(storage) })
+  // Missing outbox means legacy local history that has not been acknowledged.
+  // Full rows survive the 200-row presentation cap until the server accepts them.
+  const pending = new Map<string, StudentAttempt>()
+  try {
+    const raw = storage?.getItem(OUTBOX_KEY)
+    const rows: unknown = raw == null ? store.getSnapshot().attempts : JSON.parse(raw)
+    if (Array.isArray(rows)) for (const candidate of rows as unknown[]) {
+      if (typeof candidate !== 'object' || candidate === null) continue
+      const row = candidate as Partial<StudentAttempt>
+      if (typeof row.id === 'string' && typeof row.questionId === 'string' && Array.isArray(row.knowledge)) pending.set(row.id, row as StudentAttempt)
+    }
+  } catch {
+    for (const row of store.getSnapshot().attempts) pending.set(row.id, row)
+  }
+  const persistPending = (): void => {
+    try { storage?.setItem(OUTBOX_KEY, JSON.stringify([...pending.values()])) } catch { /* Memory remains usable. */ }
+  }
+  persistPending()
+  const uploading = new Map<string, Promise<void>>()
+  const upload = (attempt: StudentAttempt): Promise<void> => {
+    const existing = uploading.get(attempt.id)
+    if (existing !== undefined) return existing
+    if (remote === undefined) return Promise.resolve()
+    const job = remote.putAttempt(attempt).then(() => {
+      pending.delete(attempt.id)
+      persistPending()
+    }).finally(() => { uploading.delete(attempt.id) })
+    uploading.set(attempt.id, job)
+    return job
+  }
   const persist = (attempts: readonly StudentAttempt[]): void => {
     try {
       storage?.setItem(STORAGE_KEY, JSON.stringify(attempts))
@@ -117,8 +151,11 @@ export function createLearningRecordController(
   const sync = (): Promise<void> => {
     if (remote === undefined) return Promise.resolve()
     activeSync ??= (async () => {
-      for (const attempt of store.getSnapshot().attempts) {
-        await remote.putAttempt(attempt)
+      const failures: unknown[] = []
+      // Bound each reconciliation; a permanently rejected row cannot starve
+      // later rows, and edits created during this pass have their own upload.
+      for (const attempt of [...pending.values()].slice(0, ATTEMPT_LIMIT)) {
+        try { await upload(attempt) } catch (error) { failures.push(error) }
       }
       const remoteAttempts: StudentAttempt[] = []
       const seenCursors = new Set<string>()
@@ -134,6 +171,8 @@ export function createLearningRecordController(
       const attempts = merge([remoteAttempts, store.getSnapshot().attempts])
       store.set({ attempts })
       persist(attempts)
+      if (failures.length > 0) throw failures[0]
+      if (pending.size > 0) throw new Error('Learning sync has more pending rows')
     })().finally(() => {
       activeSync = undefined
     })
@@ -148,14 +187,20 @@ export function createLearningRecordController(
         at: new Date().toISOString(),
       }
       const attempts = [attempt, ...store.getSnapshot().attempts].slice(0, ATTEMPT_LIMIT)
+      pending.set(attempt.id, attempt)
+      persistPending()
       store.set({ attempts })
       persist(attempts)
-      void remote?.putAttempt(attempt).catch(() => {
-        /* Local-first: the next explicit sync retries this row. */
+      void upload(attempt).catch(() => {
+        for (const listener of syncNeeded) listener()
       })
       return attempt
     },
     sync,
+    onSyncNeeded: (listener) => {
+      syncNeeded.add(listener)
+      return () => { syncNeeded.delete(listener) }
+    },
   }
 }
 

@@ -18,8 +18,8 @@ pnpm --dir apps/desktop dev
 
 ## Local unsigned package
 
-`build:local` deliberately uses the committed `web/` fallback. That page is a
-development smoke target, not a release artifact.
+`build:local` uses the committed `web/` assets as a development smoke target.
+Packaged releases additionally include the shared frontend and local host.
 
 ```sh
 pnpm run desktop:build
@@ -68,10 +68,10 @@ builds `@deepseek-ai/dsh-web-frontend`, verifies
 `frontendDist = "../web-release"`.
 
 At runtime, the release shell starts the packaged Harness `web` host on a
-loopback port, waits for its readiness line, and navigates the main window to
-that origin. This is what injects `window.__DSH_BOOT__` and its client plugin
-manifest. The static `web-release/` copy remains part of the bundle, while the
-window is hidden until the host is ready.
+loopback port, waits for its readiness line and authentication route, and
+navigates the main window to that origin. This is what injects `window.__DSH_BOOT__` and its client plugin
+manifest. The static `web-release/` copy and startup assets remain in the bundle;
+the window displays startup progress or actionable failure diagnostics throughout.
 
 Provide the production updater public key and endpoint through the environment:
 
@@ -271,3 +271,22 @@ Release signing also needs `TAURI_SIGNING_PRIVATE_KEY` and
 Developer ID certificate plus notarization credentials; Windows distribution
 needs its code-signing certificate. Publish the signed `.sig` and matching
 `latest.json` to the configured endpoint after all platform artifacts exist.
+
+
+Desktop startup shows a local loading screen immediately. The local host has a
+30-second deadline and must answer the authentication route before the window
+navigates into the lab. Failure or a later host exit returns to the startup
+screen with bounded recent stdout/stderr diagnostics and a restart button.
+Restart kills/reaps the previous child; generation checks ignore late readiness
+or exit events from older attempts. Output continues to drain after readiness.
+
+The packaged release contains `startup.html`, `startup.js`, and `startup.css`
+alongside the real frontend. Server mode accepts only HTTP(S) URLs without
+embedded credentials; remote reachability remains the webview/network's concern.
+
+Run `node --test web/*.test.mjs sidecar/*.test.mjs` from this directory after
+building the complete pinned Harness host and client graph. The live bridge
+suite requires that build and fails with retained process diagnostics when it
+is absent or boot fails. It uses a temporary home and local mock model only.
+Native lifecycle checks run with `cargo test --offline --manifest-path
+src-tauri/Cargo.toml --lib`.

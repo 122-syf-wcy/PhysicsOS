@@ -221,6 +221,10 @@ export class PressureWorkspaceRuntime implements WorkspaceRuntime {
     this.recompute()
   }
 
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     const scene = this.sceneRuntime.getScene()
     const title = scene.metadata.title ?? '压强实验'

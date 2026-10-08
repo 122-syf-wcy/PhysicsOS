@@ -10,7 +10,7 @@
     "package:sidecar": "node ../../scripts/desktop/package-sidecar.mjs",
     "build:config": "node ../../scripts/desktop/validate-release-config.mjs --local",
     "build:release-config": "node ../../scripts/desktop/validate-release-config.mjs --release",
-    "test": "node --test ../../scripts/desktop/*.test.mjs && node --test sidecar/*.test.mjs",
+    "test": "node --test ../../scripts/desktop/*.test.mjs && node --test web/*.test.mjs && node --test sidecar/*.test.mjs",
     "test:sidecar": "node --test sidecar/*.test.mjs"
   },
   "devDependencies": {

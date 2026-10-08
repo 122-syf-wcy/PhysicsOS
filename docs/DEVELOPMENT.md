@@ -54,6 +54,9 @@ node scripts/overlay/harness-overlay.mjs apply
 
 # vendor → overlay（在 vendor 里改了上游已跟踪文件后，由维护者执行）
 node scripts/overlay/harness-overlay.mjs capture
+
+# 只读校验所有源文件与上游补丁
+node scripts/overlay/harness-overlay.mjs verify
 ```
 
 只在 vendor 里手改代码、不 `capture` 回写，下一次 `apply` 就会覆盖它。升级 upstream pin 的流程见 [`HARNESS-UPSTREAM.md`](./HARNESS-UPSTREAM.md)。
@@ -187,3 +190,9 @@ git -C vendor/deepseek-harness status --short
 ### 改了代码但浏览器 / 测试没变化
 
 先确认改的是 `overlays/harness/files/**` 并在 vendor 里重新构建（`lib/`、`dist/` 是生成物）；再确认 `apply` 之后没有旧产物残留。历史上 `link:` 桥接就是为了避免 browser bundle 与测试读到两份源码，相关说明见 [`HARNESS-UI-OVERLAY.md`](./HARNESS-UI-OVERLAY.md)。
+
+## 依赖与增量回归
+
+每个 worktree 单独安装根与 Harness 工作区，禁止跨 checkout 复用 node_modules 符号链接。`pnpm verify:dependencies` 检查正式 React 与测试渲染器的实例及真实路径。`pnpm test:tooling` 验证 overlay 和部署工具，`pnpm test:upstream` 覆盖被修改的上游连接、会话与模块加载接口，`pnpm test:storage` 使用 `PHYSICSOS_TEST_POSTGRES_URL` 指向隔离测试库。
+
+`apply` 在 Git 元数据中记录自己管理的文件，后续可同步源文件删除；如果待删除文件包含 vendor 内的本地修改则拒绝操作。构建产物不属于清理范围。`capture` 包含已暂存和未暂存的上游修改，避免丢失三方应用补丁产生的暂存内容。

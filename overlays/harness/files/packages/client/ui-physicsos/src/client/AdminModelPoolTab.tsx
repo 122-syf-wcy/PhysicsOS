@@ -155,6 +155,7 @@ const ChannelEditor = ({
           onChange={(event) => { onChange({ ...draft, priority: event.target.value }) }} />
       </label>
     </div>
+    <p className={css.cardMeta}>{t('admin.modelPool.channel.baseURLHint')}</p>
     <div className={css.poolInline}>
       <label className={css.checkbox}>
         <input type="checkbox" checked={draft.enabled}

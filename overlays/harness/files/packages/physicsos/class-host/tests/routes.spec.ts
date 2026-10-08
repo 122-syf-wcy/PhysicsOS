@@ -3,7 +3,7 @@
  * server. Identity is stubbed at the same seam as the notice host; the real
  * cookie -> session resolver is exercised by `composition.spec.ts`.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -65,6 +65,8 @@ let server: Server
 let base: string
 
 beforeAll(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-25T08:00:00.000Z'))
   const service = new ClassService(makeDomain())
   const identity = stubIdentity()
   const handler = classRoutes({ service, identity: () => identity })
@@ -594,3 +596,5 @@ describe('class workflow — the gate', () => {
     })
   })
 })
+
+afterAll(() => { vi.useRealTimers() })

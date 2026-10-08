@@ -1,3 +1,4 @@
+import { simulationTimeRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -438,7 +439,7 @@ export class OpticsEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
     const startedAt = new Date().toISOString()
     /* Imaging is static: the single state at t = 0 is the whole run. */
     const result = resolveOpticalImaging(scene)
-    const states = [stateOf(scene, 0)]
+    const states = [stateOf(scene, simulationTimeRange(request.options).startTime)]
     const verification = buildVerification(scene, result)
 
     return {

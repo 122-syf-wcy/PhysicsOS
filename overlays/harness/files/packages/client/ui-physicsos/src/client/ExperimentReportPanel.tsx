@@ -8,7 +8,8 @@
  * shows facts; it never recomputes them.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo } from 'react'
+import { useModalFocus } from './use-modal-focus.ts'
 import clsx from 'clsx'
 import { IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 
@@ -75,23 +76,7 @@ const printReport = (html: string): void => {
 
 export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReportPanelProps) {
   const report = useMemo(() => buildExperimentReport(snapshot), [snapshot])
-  const panelRef = useRef<HTMLDivElement>(null)
-  /* Modal semantics: move focus into the dialog on open, return it on close, and
-     let Esc dismiss the report like any other overlay. */
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
-    panelRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      previouslyFocused?.focus()
-    }
-  }, [onClose])
+  const panelRef = useModalFocus<HTMLDivElement>(true, onClose)
 
   return (
     <div className={css.reportOverlay} data-physicsos-report={snapshot.domain}>

@@ -102,6 +102,10 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
     return rows
   }
 
+  getScene(): PhysicsScene {
+    return this.bridge.getSnapshot().scene
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     return this.toWorkspace(this.bridge.getSnapshot())
   }

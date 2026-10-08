@@ -22,15 +22,14 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import os, { tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import process, { stdout } from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isolatedHarnessEnvironment } from '../../scripts/dev/isolated-harness.mjs'
 
 /**
  * Whether an auth rejection is the documented guest answer rather than a fault.
@@ -103,15 +102,13 @@ const argon2Works = () => {
  * Boot a throwaway harness server for suites that need a known-good account.
  *
  * The developer's own home is left completely alone: a temp `DSH_HOME` is built
- * out of symlinks to the shared `profiles/` and `settings.yaml` (the profile
- * carries a 300 MB `node_modules`, so copying is not an option) over an EMPTY
- * `storages/`. That gives a freshly seeded tenant roster and a SUPER_ADMIN whose
+ * from the checked-out Harness defaults over an EMPTY `storages/`. No personal
+ * profiles, settings, environment files or credentials are read. A local mock
+ * model gives deterministic responses. This creates a SUPER_ADMIN whose
  * password this process chose, on its own port — so an acceptance run cannot
  * depend on, or damage, whatever state the dev server happens to be in.
  *
- * The one thing that is NOT shared is `.credentials.yaml`: DSH Desktop 2.x
- * rewrites it as a nested `{version, records, refs}` document that this pinned
- * harness cannot parse, so the flat reference map is rebuilt here.
+ * Provider and storage environment settings are isolated from the parent.
  *
  * @returns the base URL, the home path, and a `stop()` that tears both down.
  */
@@ -126,28 +123,8 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
 
   const home = mkdtempSync(path.join(tmpdir(), 'dsh-accept-'))
   mkdirSync(path.join(home, 'storages'), { recursive: true })
-  for (const name of ['profiles', 'settings.yaml', '.env', '.anonymous-user-id']) {
-    const source = path.join(os.homedir(), '.dsh', name)
-    if (existsSync(source)) symlinkSync(source, path.join(home, name))
-  }
-
-  const credentials = path.join(os.homedir(), '.dsh', '.credentials.yaml')
-  if (existsSync(credentials)) {
-    const text = readFileSync(credentials, 'utf8')
-    // Nested document (DSH Desktop 2.x): the `refs:` block is the flat map.
-    const refsBlock = /^refs:\n((?:[ \t]+.*\n?)*)/m.exec(text)
-    const body =
-      refsBlock === null
-        ? text
-        : refsBlock[1]
-            .split('\n')
-            .map((line) => /^\s+([A-Za-z_][A-Za-z0-9_]*):\s*(\S+)\s*$/.exec(line))
-            .filter((match) => match !== null)
-            .map((match) => `${match[1]}: "${match[2]}"\n`)
-            .join('')
-    const target = path.join(home, '.credentials.yaml')
-    writeFileSync(target, body, { mode: 0o600 })
-  }
+  const { startMockLlmServer } = await import(pathToFileURL(path.join(HARNESS, 'packages/test-support/llm-mock-server/lib/index.js')).href)
+  const mock = await startMockLlmServer({ sequence: ['success'], successText: '本地验收模型响应', chunkDelayMs: 1 })
 
   const base = `http://127.0.0.1:${port}`
   const child = spawn(
@@ -155,32 +132,49 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
     ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', '--port', String(port)],
     {
       cwd: HARNESS,
-      env: { ...process.env, DSH_HOME: home, PHYSICSOS_ADMIN_PASSWORD: ACCEPTANCE_ADMIN_PASSWORD },
-      stdio: ['ignore', 'ignore', 'ignore'],
+      env: isolatedHarnessEnvironment(process.env, home, mock.baseURL, ACCEPTANCE_ADMIN_PASSWORD),
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
   )
 
+  let diagnostics = ''
+  let spawnFailure
+  const capture = chunk => { diagnostics = (diagnostics + chunk.toString()).slice(-16_384) }
+  child.stdout.on('data', capture)
+  child.stderr.on('data', capture)
+  child.on('error', error => { spawnFailure = error })
+  let stopping
   const stop = () => {
-    if (child.exitCode === null) child.kill('SIGTERM')
-    rmSync(home, { recursive: true, force: true })
+    stopping ??= (async () => {
+      if (child.exitCode === null && child.signalCode === null) {
+        const exited = new Promise(resolve => child.once('exit', resolve))
+        child.kill('SIGTERM')
+        const timer = setTimeout(() => { child.kill('SIGKILL') }, 5000)
+        await exited
+        clearTimeout(timer)
+      }
+      await mock.close()
+      rmSync(home, { recursive: true, force: true })
+    })()
+    return stopping
   }
 
   const deadline = Date.now() + 90_000
   for (;;) {
-    if (child.exitCode !== null) {
-      stop()
-      throw new Error(`isolated dsh web exited with code ${child.exitCode} before becoming ready`)
+    if (spawnFailure || child.exitCode !== null || child.signalCode !== null) {
+      await stop()
+      throw new Error(`isolated dsh web exited before becoming ready: ${spawnFailure?.message ?? child.exitCode}\n${diagnostics}`)
     }
     try {
-      const response = await fetch(`${base}/physicsos/auth/me`)
+      const response = await fetch(`${base}/physicsos/auth/me`, { signal: AbortSignal.timeout(2000) })
       /* 401 is the ready signal: the route is mounted and answering guests. */
       if (response.status === 401) break
     } catch {
       /* not listening yet */
     }
     if (Date.now() > deadline) {
-      stop()
-      throw new Error(`isolated dsh web on ${base} did not become ready within 90s`)
+      await stop()
+      throw new Error(`isolated dsh web on ${base} did not become ready within 90s\n${diagnostics}`)
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }

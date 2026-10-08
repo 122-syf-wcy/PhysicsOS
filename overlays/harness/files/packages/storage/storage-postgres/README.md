@@ -2,7 +2,7 @@
 
 PostgreSQL backend for the [storage hub](../storage/README.md): registers as
 backend `postgres` and serves the `kv` facet through one bounded `pg`
-connection pool.
+connection pool plus one dedicated writer-guard connection.
 
 ## Storage model
 
@@ -42,6 +42,20 @@ interface Config {
 `ssl: 'require'` enables TLS while accepting the server certificate without
 additional CA configuration. Invalid configuration fails during plugin
 construction rather than at the first query.
+
+## Single-writer deployment
+
+Business domains currently cache a snapshot in each process. Deploy exactly one
+application replica per database/schema. Before any domain opens, a dedicated
+PostgreSQL session acquires an advisory lock for that schema. Another app writer
+fails startup; independent schemas remain independent.
+
+The owning session sends a read-only heartbeat every second with a two-second
+deadline. Socket loss, heartbeat failure, or deadline expiry stops the process
+with exit code 1, so cached reads cannot continue after ownership loss. Restart
+must acquire a new lock and load a fresh snapshot. Normal shutdown drains units
+and the pool before closing the exact owning session; it never deletes a shared
+lease key or unlocks a successor. Redis counters do not change this restriction.
 
 ## Lifecycle and errors
 

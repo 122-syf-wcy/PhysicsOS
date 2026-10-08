@@ -21,14 +21,15 @@ import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
 import { HomeActions } from './HomeActions.tsx'
 import { HomeBrand } from './HomeBrand.tsx'
+import { startSyncRetry } from './sync-retry.ts'
 import { createLearningRecordController } from './learning-record-store.ts'
-import { PhysicsSurface } from './LabWorkspace.tsx'
+import { OptionalPhysicsSurface as PhysicsSurface } from './optional-surfaces.tsx'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
-import { SceneChatCard } from './SceneChatCard.tsx'
+import { OptionalSceneChatCard as SceneChatCard } from './optional-surfaces.tsx'
 import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-chat-node.ts'
 import { SidebarBrand } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
@@ -191,19 +192,20 @@ export function apply(ctx: ClientContext): void {
 
   /* 登录后对账一次:本地作答与最近场景先落盘,再把账号维度的那一份并回来。
      尽力而为 —— 离线或会话过期时本地记录照常可用,下一次登录再补一次。 */
-  const syncLearning = (): void => {
-    void learningRecord.sync().catch(() => {})
-    void surface.sync().catch(() => {})
-  }
-  let syncedUserId = auth.store.getSnapshot().user?.id
   ctx.effect(() => {
-    if (auth.store.getSnapshot().status === 'authed') syncLearning()
-    return auth.store.subscribe(() => {
+    const retry = startSyncRetry(async () => {
+      if (auth.store.getSnapshot().status !== 'authed') return
+      await Promise.all([learningRecord.sync(), surface.sync()])
+    })
+    const stopDirty = learningRecord.onSyncNeeded(retry.run)
+    let syncedUserId = auth.store.getSnapshot().user?.id
+    const unsubscribe = auth.store.subscribe(() => {
       const userId = auth.store.getSnapshot().user?.id
       if (userId === undefined || userId === syncedUserId) return
       syncedUserId = userId
-      syncLearning()
+      retry.run()
     })
+    return () => { unsubscribe(); stopDirty(); retry.dispose() }
   }, 'ui-physicsos: learning sync')
 
   /* The inline scene card: every physics/scene snapshot the agent publishes
@@ -557,6 +559,7 @@ export function apply(ctx: ClientContext): void {
           else surface.open('lab', sceneRef)
         },
         /* Toolbar 切换实验: chooser over the running scene, resumable. */
+        updateScene: surface.updateScene,
         openExperimentPicker: () => { surface.openExperimentPicker() },
         /* 实验中心 → 自由搭建: open the Lab assembling a circuit, not reading one. */
         openBuilder: (sceneRef: Parameters<typeof surface.openBuilder>[0]) => {

@@ -1,3 +1,4 @@
+import { assertVerifiedSimulation } from '@physicsos/physics-core'
 import {
   derivedScalar,
   derivedVector,
@@ -225,13 +226,7 @@ export const observeMechanicsScene = (
   input: MechanicsObservationInput,
 ): MechanicsObservationRuntimeState => {
   const { scene, simulation } = input
-  if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
-    throw new PhysicsOSError(
-      'OBSERVATION_SCENE_REVISION_MISMATCH',
-      'Observation input must reference the same scene revision as the simulation.',
-      { details: { sceneId: scene.id, simulationSceneId: simulation.sceneId } },
-    )
-  }
+  assertVerifiedSimulation(scene, simulation)
 
   const body = scene.bodies[0]
   if (!body) {

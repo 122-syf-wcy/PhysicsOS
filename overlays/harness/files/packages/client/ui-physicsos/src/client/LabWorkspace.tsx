@@ -11,19 +11,9 @@ import { useMemo } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import {
-  isCurrentScene,
-  isEnergyScene,
-  isLeverScene,
-  isNoiseScene,
-  isLightScene,
-  isPressureScene,
-  isThermometerScene,
-  isTransformerScene,
-  type PhysicsScene,
-} from '@physicsos/physics-scene'
+import type { PhysicsScene } from '@physicsos/physics-scene'
 
-import { AdminWorkspace } from './AdminWorkspace.tsx'
+import { OptionalAdminWorkspace as AdminWorkspace } from './optional-surfaces.tsx'
 import type { AdminApi } from './auth-api.ts'
 import type { NoticeApi } from './notice-api.ts'
 import type { ModelPoolApi } from './model-pool-api.ts'
@@ -41,30 +31,6 @@ import { FREE_BUILD_SCENE_ID, draftToScene, starterDraft } from './physics/circu
 import { createExperimentSceneRef, findExperimentTemplate } from './physics/experiment-templates.ts'
 import { experimentMetaOf } from './physics/experiment-summaries.ts'
 import { artTemplateIdOfSceneId } from './physics/experiment-artwork.tsx'
-import { createAcousticsWorkspaceRuntime } from './physics/acoustics-workspace-runtime.ts'
-import { createCircuitWorkspaceRuntime } from './physics/circuit-workspace-runtime.ts'
-import { createFluidWorkspaceRuntime } from './physics/fluid-workspace-runtime.ts'
-import { createPressureWorkspaceRuntime } from './physics/pressure-workspace-runtime.ts'
-import { createCurrentWorkspaceRuntime } from './physics/current-workspace-runtime.ts'
-import { createEnergyWorkspaceRuntime } from './physics/energy-workspace-runtime.ts'
-import { createLightWorkspaceRuntime } from './physics/light-workspace-runtime.ts'
-import { createTransformerWorkspaceRuntime } from './physics/transformer-workspace-runtime.ts'
-import { createThermometerWorkspaceRuntime } from './physics/thermometer-workspace-runtime.ts'
-import { createNoiseWorkspaceRuntime } from './physics/noise-workspace-runtime.ts'
-import { createThermalWorkspaceRuntime } from './physics/thermal-workspace-runtime.ts'
-import { createCompositeWorkspaceRuntime } from './physics/composite-workspace-runtime.ts'
-import { createElectricWorkspaceRuntime } from './physics/electric-workspace-runtime.ts'
-import { createMagneticWorkspaceRuntime } from './physics/magnetic-workspace-runtime.ts'
-import { createMechanicsWorkspaceRuntime } from './physics/mechanics-workspace-runtime.ts'
-import { createModernPhysicsWorkspaceRuntime } from './physics/modern-workspace-runtime.ts'
-import {
-  createCollisionWorkspaceRuntime,
-  isCollisionSceneInput,
-} from './physics/collision-workspace-runtime.ts'
-import { createLeverWorkspaceRuntime } from './physics/lever-workspace-runtime.ts'
-import { createOpticsWorkspaceRuntime } from './physics/optics-workspace-runtime.ts'
-import { createInductionWorkspaceRuntime } from './physics/induction-workspace-runtime.ts'
-import { createWaveWorkspaceRuntime } from './physics/wave-workspace-runtime.ts'
 import type { WorkspaceRuntime } from './physics/workspace-runtime.ts'
 import type {
   PhysicsSceneRef,
@@ -72,6 +38,8 @@ import type {
   PhysicsSurfaceId,
   RecentExperimentsState,
 } from './surface-store.ts'
+import { buildWorkspaceRuntime } from './physics/build-workspace-runtime.ts'
+export { buildWorkspaceRuntime } from './physics/build-workspace-runtime.ts'
 import css from './LabWorkspace.module.css'
 
 /** Registration-side face for {@link PhysicsSurface}. */
@@ -94,6 +62,7 @@ export interface PhysicsSurfaceInjected {
   modelPoolApi?: ModelPoolApi
   openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Open the Lab assembling a circuit from scratch (实验中心 → 自由搭建). */
+  updateScene?: (scene: PhysicsScene) => void
   openBuilder?: (sceneRef: PhysicsSceneRef) => void
   /** Open the experiment chooser while keeping the active scene resumable. */
   openExperimentPicker?: () => void
@@ -122,6 +91,7 @@ export function PhysicsSurface({
   t,
   openSurface,
   openBuilder,
+  updateScene,
   openExperimentPicker,
   recordAttempt,
   practiceQuestion,
@@ -151,15 +121,14 @@ export function PhysicsSurface({
   const domain: SupportedSceneDomain | 'unsupported' =
     scene === undefined ? 'magnetic' : domainOfScene(scene)
 
-  /* Keyed on scene identity: a different revision is a different physical world,
-     so the runtime is rebuilt rather than mutated behind the shell's back. */
+  /* Only an explicit scene handover replaces the runtime. Discrete write-backs
+     update the saved revision while the same runtime and its clock stay alive. */
   const runtimeKey =
-    scene === undefined ? 'lab-empty' : `${domain}:${String(scene.id)}:${scene.revision}`
+    scene === undefined ? 'lab-empty' : String(surfaceState.sceneGeneration ?? `${domain}:${String(scene.id)}:${scene.revision}`)
   const runtime = useMemo<WorkspaceRuntime | null>(
-    () => (choosing ? null : buildWorkspaceRuntime(domain, scene)),
-    /* runtimeKey encodes domain + scene identity; `scene` itself is a fresh object
-       on every store read, which would rebuild the runtime on every render. */
-    [runtimeKey, choosing],
+    () => buildWorkspaceRuntime(domain, scene, surfaceState.sceneRef?.originScene),
+    /* Persisting an edit and opening the picker must not recreate this runtime. */
+    [runtimeKey],
   )
 
   if (surface === 'home') return null
@@ -298,6 +267,7 @@ export function PhysicsSurface({
     <PhysicsWorkspace
       key={runtimeKey}
       runtime={runtime}
+      {...(updateScene === undefined ? {} : { onSceneChange: updateScene })}
       t={t}
       {...(surfaceState.buildMode === true ? { buildMode: true } : {})}
       {...(openExperimentPicker === undefined ? {} : { onSwitchExperiment: openExperimentPicker })}
@@ -327,83 +297,3 @@ const freeBuildRef = (): PhysicsSceneRef => ({
   sceneId: FREE_BUILD_SCENE_ID,
   scene: draftToScene(starterDraft(), { sceneId: FREE_BUILD_SCENE_ID }),
 })
-
-/* Exported for the chat scene card, which mounts the same domain runtimes the
-   Lab does — one dispatch site, so a card can never disagree with the Lab on
-   which engine a scene runs on. */
-export const buildWorkspaceRuntime = (
-  domain: SupportedSceneDomain | 'unsupported',
-  scene: PhysicsScene | undefined,
-): WorkspaceRuntime | null => {
-  /* Every domain is matched explicitly and the switch has no default, so a newly
-     added domain is a compile error here rather than silently being solved by
-     the wrong engine — the engine would then reject the scene at canHandle and
-     the surface would fail with a message about magnetism. */
-  switch (domain) {
-    case 'unsupported':
-      return null
-    case 'mechanics':
-      if (scene !== undefined && isLeverScene(scene)) return createLeverWorkspaceRuntime(scene)
-      /* The energy rig is the mechanics domain's third bench — a ramp with no
-         bodies — so the bench picks the adapter here too. */
-      if (scene !== undefined && isEnergyScene(scene)) return createEnergyWorkspaceRuntime(scene)
-      if (scene !== undefined && isCollisionSceneInput(scene))
-        return createCollisionWorkspaceRuntime(scene)
-      return scene === undefined ? null : createMechanicsWorkspaceRuntime(scene)
-    case 'electric':
-      return scene === undefined ? null : createElectricWorkspaceRuntime(scene)
-    case 'circuit':
-      return scene === undefined ? null : createCircuitWorkspaceRuntime(scene)
-    case 'optics':
-      /* The optics domain carries two benches — the imaging bench and the
-         pinhole rig — and the bench picks the adapter. */
-      if (scene === undefined) return null
-      return isLightScene(scene)
-        ? createLightWorkspaceRuntime(scene)
-        : createOpticsWorkspaceRuntime(scene)
-    case 'acoustics':
-      /* The acoustics domain carries two benches — the echo range and the noise
-         rig — and the bench picks the adapter. */
-      if (scene === undefined) return null
-      return isNoiseScene(scene)
-        ? createNoiseWorkspaceRuntime(scene)
-        : createAcousticsWorkspaceRuntime(scene)
-    case 'fluid':
-      /* The fluid domain carries two benches — the buoyancy tank and the three
-         pressure rigs — and they share a canvas but not a runtime, so the bench
-         picks the adapter the same way the lever branch above picks its own. */
-      if (scene === undefined) return null
-      return isPressureScene(scene)
-        ? createPressureWorkspaceRuntime(scene)
-        : createFluidWorkspaceRuntime(scene)
-    case 'thermal':
-      /* The thermal domain carries two benches — the heating benches and the
-         thermometer — and the bench picks the adapter. */
-      if (scene === undefined) return null
-      return isThermometerScene(scene)
-        ? createThermometerWorkspaceRuntime(scene)
-        : createThermalWorkspaceRuntime(scene)
-    case 'induction':
-      /* The induction domain carries two benches — the EMF rigs and the
-         transformer — and the bench picks the adapter. */
-      if (scene === undefined) return null
-      return isTransformerScene(scene)
-        ? createTransformerWorkspaceRuntime(scene)
-        : createInductionWorkspaceRuntime(scene)
-    case 'wave':
-      return scene === undefined ? null : createWaveWorkspaceRuntime(scene)
-    case 'composite':
-      return scene === undefined ? null : createCompositeWorkspaceRuntime(scene)
-    case 'modern':
-      return scene === undefined ? null : createModernPhysicsWorkspaceRuntime(scene)
-    case 'magnetic':
-      /* The magnetic domain carries two benches — the Lorentz particle scene and
-         the current-magnetic rigs — and they share a canvas but not a runtime,
-         so the bench picks the adapter here the same way the fluid branch above
-         picks between the tank and the pressure rigs. */
-      if (scene === undefined) return null
-      return isCurrentScene(scene)
-        ? createCurrentWorkspaceRuntime(scene)
-        : createMagneticWorkspaceRuntime(scene)
-  }
-}

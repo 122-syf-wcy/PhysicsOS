@@ -1,5 +1,7 @@
 import type { IsoDateTime, SceneId, SimulationId, PhysicsEventId } from '@physicsos/shared'
 import type { Quantity } from '@physicsos/physics-units'
+import { canonicalValue } from '@physicsos/physics-units'
+import { PhysicsOSError } from '@physicsos/shared'
 
 import type { PhysicsDomain, TraceContext } from './common.ts'
 import type { DerivedQuantity, Measurement, SimulationState } from './simulation-state.ts'
@@ -27,6 +29,16 @@ export interface PhysicsEventLike {
   time?: number
 }
 
+/** Timed events describe occurrences in the requested inclusive scene-time window. */
+export const eventsInSimulationRange = <T extends PhysicsEventLike>(
+  events: readonly T[],
+  startTime: number,
+  endTime: number,
+): T[] =>
+  events.filter(
+    (event) => event.time === undefined || (event.time >= startTime && event.time <= endTime),
+  )
+
 /** docs/03 §77 */
 export interface SimulationOptions {
   startTime?: Quantity<'time'>
@@ -40,6 +52,28 @@ export interface SimulationOptions {
   }
   maxIterations?: number
   randomSeed?: number
+}
+
+/** Absolute scene-time range. Static models omit the fallback and sample once at startTime. */
+export const simulationTimeRange = (
+  options: SimulationOptions,
+  defaultEndTime?: number,
+): { startTime: number; endTime: number } => {
+  const startTime = options.startTime === undefined ? 0 : canonicalValue(options.startTime)
+  const endTime =
+    options.endTime === undefined ? (defaultEndTime ?? startTime) : canonicalValue(options.endTime)
+  if (
+    !Number.isFinite(startTime) ||
+    !Number.isFinite(endTime) ||
+    startTime < 0 ||
+    endTime < startTime
+  ) {
+    throw new PhysicsOSError(
+      'INVALID_SIMULATION_RANGE',
+      'Simulation range must satisfy 0 <= startTime <= endTime.',
+    )
+  }
+  return { startTime, endTime }
 }
 
 /** docs/03 §76 */

@@ -27,7 +27,13 @@ env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
   publish-image:
+    needs: verify
     name: Publish container image
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -41,7 +47,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ needs.verify.outputs.commit }}
           submodules: recursive
 
       - name: Normalize image name

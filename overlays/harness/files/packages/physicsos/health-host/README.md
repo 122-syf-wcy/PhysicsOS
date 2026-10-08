@@ -4,7 +4,7 @@
 server:
 
 - `GET /healthz` is process liveness and never touches a dependency.
-- `GET /readyz` checks PostgreSQL and Redis over TCP and returns `503` until
+- `GET /readyz` authenticates to PostgreSQL and Redis, runs `SELECT 1` / `PING`, and returns `503` until
   every configured dependency answers.
 
 Production secret wiring uses two files:

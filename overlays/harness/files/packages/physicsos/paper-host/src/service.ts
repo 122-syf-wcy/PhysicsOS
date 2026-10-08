@@ -31,6 +31,10 @@ export class PaperError extends Error {
   }
 }
 
+// Domains expose process-local snapshots. Serialize creation across every service
+// sharing that snapshot, including writes whose durable put has not settled yet.
+const creationQueues = new WeakMap<PaperDomain, Promise<unknown>>()
+
 const now = (): string => new Date().toISOString()
 
 const recordInSchoolScope = (recordSchoolId: string | null | undefined, schoolId: string | null | undefined): boolean =>
@@ -58,6 +62,15 @@ export interface JobCreateInput {
 export class PaperService {
   constructor(private readonly domain: PaperDomain) {}
 
+  private async createExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = creationQueues.get(this.domain) ?? Promise.resolve()
+    const pending = previous.catch(() => undefined).then(operation)
+    creationQueues.set(this.domain, pending)
+    try { return await pending } finally {
+      if (creationQueues.get(this.domain) === pending) creationQueues.delete(this.domain)
+    }
+  }
+
   /* ----------------------------------------------------- source intake -- */
 
   /**
@@ -66,12 +79,14 @@ export class PaperService {
    * @returns the stored source row.
    */
   async addSource(input: Omit<SourcePaper, 'status' | 'enteredAt'>): Promise<SourcePaper> {
-    if (this.domain.table('source_papers').get(input.id) !== undefined) {
-      throw new PaperError(409, 'DUPLICATE_SOURCE', `source '${input.id}' already exists`)
-    }
-    const record: SourcePaper = { ...input, status: 'pending', enteredAt: now() }
-    await this.domain.table('source_papers').put(record.id, record)
-    return record
+    return this.createExclusive(async () => {
+      if (this.domain.table('source_papers').get(input.id) !== undefined) {
+        throw new PaperError(409, 'DUPLICATE_SOURCE', `source '${input.id}' already exists`)
+      }
+      const record: SourcePaper = { ...input, status: 'pending', enteredAt: now() }
+      await this.domain.table('source_papers').put(record.id, record)
+      return record
+    })
   }
 
   /**
@@ -88,13 +103,16 @@ export class PaperService {
    * @returns the stored annotation row.
    */
   async addAnnotation(input: Omit<KnowledgeAnnotation, 'status'>): Promise<KnowledgeAnnotation> {
-    const source = this.domain.table('source_papers').get(input.sourcePaperId)
-    if (source === undefined) {
-      throw new PaperError(404, 'SOURCE_NOT_FOUND', `source '${input.sourcePaperId}' not found`)
-    }
-    const record: KnowledgeAnnotation = { ...input, status: 'pending' }
-    await this.domain.table('annotations').put(record.id, record)
-    return record
+    return this.createExclusive(async () => {
+      if (this.domain.table('annotations').get(input.id) !== undefined) throw new PaperError(409, 'DUPLICATE_ANNOTATION', 'annotation already exists')
+      const source = this.domain.table('source_papers').get(input.sourcePaperId)
+      if (source === undefined) {
+        throw new PaperError(404, 'SOURCE_NOT_FOUND', `source '${input.sourcePaperId}' not found`)
+      }
+      const record: KnowledgeAnnotation = { ...input, status: 'pending' }
+      await this.domain.table('annotations').put(record.id, record)
+      return record
+    })
   }
 
   /**
@@ -200,9 +218,12 @@ export class PaperService {
    * @returns the stored blueprint row.
    */
   async addBlueprint(input: Omit<ExamBlueprint, 'status'>): Promise<ExamBlueprint> {
-    const record: ExamBlueprint = { ...input, status: 'pending' }
-    await this.domain.table('blueprints').put(record.id, record)
-    return record
+    return this.createExclusive(async () => {
+      if (this.domain.table('blueprints').get(input.id) !== undefined || blueprintById(input.id) !== undefined) throw new PaperError(409, 'DUPLICATE_BLUEPRINT', 'blueprint already exists')
+      const record: ExamBlueprint = { ...input, status: 'pending' }
+      await this.domain.table('blueprints').put(record.id, record)
+      return record
+    })
   }
 
   /* ------------------------------------------------------ question bank -- */
@@ -219,22 +240,25 @@ export class PaperService {
    * @returns the stored bank item.
    */
   async addBankItem(input: Omit<BankItem, 'status' | 'enteredAt' | 'stemHash' | 'id'> & { id?: string }): Promise<BankItem> {
-    const stemHash = stemFingerprint(input.stem)
-    const existing = [...this.domain.table('bank_items').entries()]
-      .find(([, item]) => item.stemHash === stemHash)
-    if (existing !== undefined) {
-      throw new PaperError(409, 'DUPLICATE_ITEM',
-        `same stem already in bank as '${existing[0]}' (${existing[1].sourceLabel ?? 'no source'})`)
-    }
-    const record: BankItem = {
-      ...input,
-      id: input.id ?? `bank-${stemHash.slice(0, 12)}`,
-      stemHash,
-      status: 'pending',
-      enteredAt: now(),
-    }
-    await this.domain.table('bank_items').put(record.id, record)
-    return record
+    return this.createExclusive(async () => {
+      const stemHash = stemFingerprint(input.stem)
+      const existing = [...this.domain.table('bank_items').entries()]
+        .find(([, item]) => item.stemHash === stemHash)
+      if (existing !== undefined) {
+        throw new PaperError(409, 'DUPLICATE_ITEM',
+          `same stem already in bank as '${existing[0]}' (${existing[1].sourceLabel ?? 'no source'})`)
+      }
+      const record: BankItem = {
+        ...input,
+        id: input.id ?? `bank-${stemHash.slice(0, 12)}`,
+        stemHash,
+        status: 'pending',
+        enteredAt: now(),
+      }
+      if (this.domain.table('bank_items').get(record.id) !== undefined) throw new PaperError(409, 'DUPLICATE_ITEM', 'bank item already exists')
+      await this.domain.table('bank_items').put(record.id, record)
+      return record
+    })
   }
 
   /**
@@ -245,27 +269,30 @@ export class PaperService {
   async ingestBankItems(
     drafts: readonly Omit<BankItem, 'id' | 'status' | 'enteredAt' | 'stemHash' | 'verifiedBy'>[],
   ): Promise<{ created: BankItem[]; duplicates: string[] }> {
-    const created: BankItem[] = []
-    const duplicates: string[] = []
-    for (const draft of drafts) {
-      const stemHash = stemFingerprint(draft.stem)
-      const existing = [...this.domain.table('bank_items').entries()]
-        .find(([, item]) => item.stemHash === stemHash)
-      if (existing !== undefined) {
-        duplicates.push(`${draft.sourceLabel ?? '无来源'} T${draft.stem.slice(0, 12)}… → 已在库 '${existing[0]}'`)
-        continue
+    return this.createExclusive(async () => {
+      const created: BankItem[] = []
+      const duplicates: string[] = []
+      for (const draft of drafts) {
+        const stemHash = stemFingerprint(draft.stem)
+        const existing = [...this.domain.table('bank_items').entries()]
+          .find(([, item]) => item.stemHash === stemHash)
+        if (existing !== undefined) {
+          duplicates.push(`${draft.sourceLabel ?? '无来源'} T${draft.stem.slice(0, 12)}… → 已在库 '${existing[0]}'`)
+          continue
+        }
+        const record: BankItem = {
+          ...draft,
+          id: `bank-${stemHash.slice(0, 12)}-${created.length}`,
+          stemHash,
+          status: 'pending',
+          enteredAt: now(),
+        }
+        if (this.domain.table('bank_items').get(record.id) !== undefined) { duplicates.push(record.id); continue }
+        await this.domain.table('bank_items').put(record.id, record)
+        created.push(record)
       }
-      const record: BankItem = {
-        ...draft,
-        id: `bank-${stemHash.slice(0, 12)}-${created.length}`,
-        stemHash,
-        status: 'pending',
-        enteredAt: now(),
-      }
-      await this.domain.table('bank_items').put(record.id, record)
-      created.push(record)
-    }
-    return { created, duplicates }
+      return { created, duplicates }
+    })
   }
 
   /**

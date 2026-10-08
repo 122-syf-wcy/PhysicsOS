@@ -78,7 +78,7 @@ pnpm build
 
 ```sh
 pnpm run test:desktop      # 改动 apps/desktop/** 或桌面适配器时
-pnpm run test:acceptance   # 改动界面、登录、班级、实验等用户流程时
+pnpm run test:acceptance   # 改动界面、登录、出卷、实验等用户流程时
 ```
 
 只跑单个包或单个 spec 的方式见 [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md)。如果某项门禁因环境原因无法运行，请在 PR 里写明具体命令、报错与原因，不要默认跳过。

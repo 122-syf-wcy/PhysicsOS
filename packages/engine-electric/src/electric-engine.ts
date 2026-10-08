@@ -1,3 +1,4 @@
+import { simulationTimeRange } from '@physicsos/physics-core'
 import { add, dot, isFiniteVector, magnitude, scale, type Vector3 } from '@physicsos/physics-math'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
@@ -497,7 +498,7 @@ export class ElectricEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       simulationId: request.simulationId,
       sceneId: scene.id,
       sceneRevision: scene.revision,
-      states: [pointChargeState(model, 0)],
+      states: [pointChargeState(model, simulationTimeRange(request.options).startTime)],
       events: [],
       measurements: [],
       derivedQuantities: pointChargeDerived(model),

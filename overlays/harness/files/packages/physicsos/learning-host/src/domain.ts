@@ -48,20 +48,24 @@ const personalAttempt = attemptPayload.extend({
   updatedAt: timestamp,
 })
 
+const sceneFacts = z
+  .object({
+    schemaVersion: z.literal('physics-scene/1.0'),
+    id: identifier,
+    revision: z.number().int().nonnegative(),
+    dimension: z.enum(['2d', '3d']),
+  })
+  .loose()
+
 const scenePayload = z.object({
   sceneId: identifier,
   title: z.string().min(1).max(300),
   domain: z.string().min(1).max(64),
   kind: z.enum(['experiment', 'question']),
   updatedAt: timestamp,
-  scene: z
-    .object({
-      schemaVersion: z.literal('physics-scene/1.0'),
-      id: identifier,
-      revision: z.number().int().nonnegative(),
-      dimension: z.enum(['2d', '3d']),
-    })
-    .loose(),
+  scene: sceneFacts,
+  originScene: sceneFacts.optional(),
+  buildMode: z.literal(true).optional(),
 })
 
 export const sceneEntryWire = scenePayload

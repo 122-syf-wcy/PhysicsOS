@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
 import type { KvUnitDescriptor } from '@deepseek-ai/dsh-storage'
 import { runKvBackendContract } from '../../storage/tests/contract.ts'
 import { Pool } from 'pg'
 import * as StoragePostgres from '../src/index.ts'
+import * as Schema from '../src/schema.ts'
 import { Config, PostgresStorageBackend, recordTableName } from '../src/index.ts'
 
 const SPECIFIC_DESCRIPTOR: KvUnitDescriptor = {
@@ -114,6 +115,59 @@ if (!availability.ok) {
   })
 
   describe('postgres backend specifics', () => {
+    it('refuses a second writer for one schema and permits a successor after close', async () => {
+      const schema = await freshSchema()
+      const first = backendAt(schema)
+      const unit = await first.kv.open(SPECIFIC_DESCRIPTOR)
+      await unit.putRecord('records', 'owned', { school: 'A' })
+      const second = backendAt(schema)
+      await expect(second.kv.open(SPECIFIC_DESCRIPTOR)).rejects.toThrow(/writer/i)
+      await second.close()
+      expect((await unit.loadAll()).tables.records).toEqual({ owned: { school: 'A' } })
+      await first.close()
+      const successor = backendAt(schema)
+      expect((await (await successor.kv.open(SPECIFIC_DESCRIPTOR)).loadAll()).tables.records).toEqual({ owned: { school: 'A' } })
+    })
+
+    it('requests process termination and rejects storage access if the owning session is killed', async () => {
+      const backend = backendAt(await freshSchema())
+      const unit = await backend.kv.open(SPECIFIC_DESCRIPTOR)
+      const pool = adminPool
+      if (pool === undefined) throw new Error('test database unavailable')
+      const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      try {
+        // Serial suite, fresh isolated database: target only its writer session.
+        const result = await pool.query<{ pid: number }>(
+          "SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND application_name = 'physicsos-storage-writer'",
+        )
+        expect(result.rows).toHaveLength(1)
+        const owner = result.rows[0]
+        if (owner === undefined) throw new Error('writer session missing')
+        await pool.query('SELECT pg_terminate_backend($1)', [owner.pid])
+        await vi.waitFor(() => { expect(exit).toHaveBeenCalledWith(1) })
+        await expect(unit.putRecord('records', 'stale', 1)).rejects.toThrow(/writer/i)
+        await expect(unit.loadAll()).rejects.toThrow(/writer/i)
+      } finally {
+        await backend.close()
+        exit.mockRestore()
+        stderr.mockRestore()
+      }
+    })
+
+    it('releases ownership immediately if schema initialization fails', async () => {
+      const schema = await freshSchema()
+      const initialize = vi.spyOn(Schema, 'initializeSchema').mockRejectedValueOnce(new Error('schema unavailable'))
+      const failed = backendAt(schema)
+      try {
+        await expect(failed.kv.open(SPECIFIC_DESCRIPTOR)).rejects.toThrow('schema unavailable')
+      } finally { initialize.mockRestore() }
+      // Recovery must work without requiring a disposer for the failed startup.
+      const successor = backendAt(schema)
+      await expect(successor.kv.open(SPECIFIC_DESCRIPTOR)).resolves.toBeDefined()
+      await expect(failed.close()).resolves.toBeUndefined()
+    })
+
     it('resolves config defaults and rejects invalid config loudly', () => {
       const defaults = new Config({ connectionString: availability.url })
       expect(defaults.schema).toBe('public')

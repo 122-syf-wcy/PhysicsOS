@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { inspectClientDependencies } from './check-workspace-dependencies.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..', '..')
@@ -184,7 +185,7 @@ function checkSecretFiles() {
     '.env.admin_password',
     '.env.image_api_key',
   ]
-  let entries = []
+  let entries
   try {
     entries = readdirSync(repoRoot).filter((name) => name === '.env' || name.startsWith('.env.'))
   } catch {
@@ -210,6 +211,11 @@ checkVersions()
 checkDocker()
 const vendorReady = checkVendor()
 checkOverlay(vendorReady)
+if (vendorReady) {
+  const dependencies = inspectClientDependencies(repoRoot)
+  if (dependencies.errors.length) fail('React 依赖隔离', dependencies.errors.join('；'))
+  else pass('React 依赖隔离', '正式 UI 和测试共享当前工作区内的同一实例')
+}
 checkRust()
 checkSecretFiles()
 

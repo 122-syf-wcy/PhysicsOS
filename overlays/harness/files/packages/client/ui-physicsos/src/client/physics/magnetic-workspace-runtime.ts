@@ -309,6 +309,10 @@ export class MagneticWorkspaceRuntime implements WorkspaceRuntime {
     }
   }
 
+  getScene(): PhysicsScene {
+    return this.bridge.getSnapshot().scene
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     return this.toWorkspace(this.bridge.getSnapshot())
   }

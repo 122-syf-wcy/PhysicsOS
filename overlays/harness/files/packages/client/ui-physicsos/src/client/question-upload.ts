@@ -1,3 +1,5 @@
+import { loadPdfModule } from './optional-modules.ts'
+
 /**
  * 题目图片/PDF 上传读取 — one file, two routes:
  *
@@ -105,7 +107,7 @@ export async function readQuestionPdf(file: File): Promise<Exclude<QuestionUploa
   if (file.size > MAX_PDF_BYTES) {
     throw new QuestionUploadError('FILE_TOO_LARGE', `PDF 超过 ${MAX_PDF_BYTES / 1024 / 1024}MB 上限。`)
   }
-  const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist')
+  const { getDocument, GlobalWorkerOptions } = await loadPdfModule()
   /* The static file server only maps .js to text/javascript — a .mjs worker
      URL arrives as application/octet-stream and module-worker MIME checking
      refuses it (pdf.js then falls back to a fake worker on the main thread). */

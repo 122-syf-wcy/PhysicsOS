@@ -73,3 +73,7 @@ export {
   type ModelSupport,
   type PhysicsEngine,
 } from './engine.ts'
+
+export { assertVerifiedSimulation } from './verified-simulation.ts'
+
+export { simulationTimeRange, eventsInSimulationRange } from './simulation.ts'

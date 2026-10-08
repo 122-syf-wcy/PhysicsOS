@@ -72,7 +72,7 @@ vendor/deepseek-harness/apps/web
   `AGENT_MODEL_BACKED_ANSWERS_BACKLOG`，会话 Agent 已使用 `physics-student` 预设
 - `web_search` 仍指向 DeepSeek 官方端点，未迁移到第三方模型网关
 - 第三方网关敏感词过滤仍需用真实题库采样；命中时可能返回 `500 / new_api_error`
-- 当前为单副本；扩容前必须把 `PHYSICSOS_SESSIONS_ROOT` 切到共享文件系统
+- 当前为单副本；PostgreSQL 写入租约会拒绝第二个应用写入者。扩容需要同时解决业务缓存一致性与共享会话存储
 - Content-Security-Policy 暂缓，当前启用 HSTS、nosniff、X-Frame-Options、
   Referrer-Policy 与 Permissions-Policy
 - 管理员 TOTP 已实现但当前生产账号尚未启用

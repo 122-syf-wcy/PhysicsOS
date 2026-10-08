@@ -19,7 +19,7 @@ export interface Config {
   readonly cooldownBaseMs?: number
   readonly cooldownMaxMs?: number
   readonly autoRecover?: boolean
-  /** Header-phase timeout for one attempt. A stream that already started is not cut. */
+  /** Total deadline for an attempt, including its response stream. */
   readonly attemptTimeoutMs?: number
   readonly testTimeoutMs?: number
   /** Seeded platform channel, used only while the pool has no channels at all. */

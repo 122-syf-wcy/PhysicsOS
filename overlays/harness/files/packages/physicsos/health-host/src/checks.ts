@@ -1,5 +1,6 @@
 import { open } from 'node:fs/promises'
-import { connect } from 'node:net'
+import { Client } from 'pg'
+import { RedisConnection, DEFAULT_CONFIG } from '@deepseek-ai/dsh-shared-state-host'
 
 /** Hard cap for a secret file. Secret URL files are expected to hold one short URL. */
 export const MAX_SECRET_BYTES = 8192
@@ -59,7 +60,7 @@ async function readSecret(path: string): Promise<string> {
   }
 }
 
-function parseSecretUrl(raw: string, defaultPort: number): { host: string; port: number } {
+function parseSecretUrl(raw: string, defaultPort: number): URL {
   let url: URL
   try {
     url = new URL(raw)
@@ -72,45 +73,52 @@ function parseSecretUrl(raw: string, defaultPort: number): { host: string; port:
     throw failure('SECRET_URL_INVALID')
   }
 
-  const hostname =
-    url.hostname.startsWith('[') && url.hostname.endsWith(']')
-      ? url.hostname.slice(1, -1)
-      : url.hostname
   const port = url.port === '' ? defaultPort : Number(url.port)
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw failure('SECRET_URL_INVALID')
   }
-  return { host: hostname, port }
+  return url
 }
 
-function probeTcp(host: string, port: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const socket = connect({ host, port })
-    const finish = (error?: Error): void => {
-      if (settled) return
-      settled = true
-      signal.removeEventListener('abort', onAbort)
-      socket.destroy()
-      if (error === undefined) resolve()
-      else reject(error)
-    }
-    const onAbort = (): void => {
-      finish(failure('ABORTED'))
-    }
-
-    signal.addEventListener('abort', onAbort, { once: true })
-    socket.once('connect', () => {
-      finish()
+async function probeProtocol(raw: string, url: URL, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted()
+  if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+    const client = new Client({
+      connectionString: raw,
+      connectionTimeoutMillis: DEFAULT_HEALTH_TIMEOUT_MS,
+      query_timeout: DEFAULT_HEALTH_TIMEOUT_MS,
+      application_name: 'physicsos-readiness',
     })
-    socket.once('error', (error) => {
-      finish(failure(safeFailureCode(error), error))
-    })
-  })
+    // end() destroys an in-flight connection/query on abort. Never allow an
+    // idle client error to become an uncaught process exception.
+    client.on('error', () => {})
+    const abort = (): void => { void client.end().catch(() => {}) }
+    signal.addEventListener('abort', abort, { once: true })
+    try {
+      await client.connect()
+      signal.throwIfAborted()
+      await client.query('SELECT 1')
+    } finally {
+      signal.removeEventListener('abort', abort)
+      await client.end().catch(() => {})
+    }
+    return
+  }
+  const client = new RedisConnection({ ...DEFAULT_CONFIG.redis, url: raw, maxRetries: 0 })
+  const abort = (): void => { void client.close().catch(() => {}) }
+  signal.addEventListener('abort', abort, { once: true })
+  try {
+    // RedisConnection authenticates and SELECTs the URL database first.
+    if (await client.command(['PING']) !== 'PONG') throw failure('PROTOCOL_ERROR')
+    signal.throwIfAborted()
+  } finally {
+    signal.removeEventListener('abort', abort)
+    await client.close()
+  }
 }
 
 /**
- * Build a TCP readiness probe from a secret file containing a PostgreSQL or
+ * Build an authenticated, read-only protocol readiness probe from a secret file containing a PostgreSQL or
  * Redis URL. The file is read for every request so secret rotation is picked
  * up without a restart.
  * @param options - check name, secret file path, and protocol default port.
@@ -122,7 +130,7 @@ export function fileBackedUrlCheck(options: FileBackedUrlCheckOptions): Readines
     async run(signal) {
       const raw = await readSecret(options.path)
       const endpoint = parseSecretUrl(raw, options.defaultPort)
-      await probeTcp(endpoint.host, endpoint.port, signal)
+      await probeProtocol(raw, endpoint, signal)
     },
   }
 }

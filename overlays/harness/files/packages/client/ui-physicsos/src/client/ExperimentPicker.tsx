@@ -1,3 +1,4 @@
+import { sceneRefOf } from './surface-store.ts'
 /**
  * Experiment library home.
  *
@@ -268,7 +269,7 @@ export function ExperimentPicker({
           kind: lastScene.kind,
           state: 'stored',
           onOpen: () => {
-            openSurface('lab', { sceneId: lastScene.sceneId, scene: lastScene.scene })
+            openSurface('lab', sceneRefOf(lastScene))
           },
         }
         : undefined

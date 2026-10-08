@@ -8,7 +8,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { Pool } from 'pg'
+import { Client, Pool } from 'pg'
 import type { PoolConfig } from 'pg'
 import { StorageError, UNIT_NAME_RE, storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
 import type { KvFacet, KvUnit, KvUnitDescriptor, StorageBackend } from '@deepseek-ai/dsh-storage'
@@ -21,6 +21,7 @@ import {
   POSTGRES_UNITS_TABLE,
 } from './schema.ts'
 import { PostgresKvUnit } from './unit.ts'
+import { PostgresWriterLease } from './writer-lease.ts'
 
 /** Cordis plugin name. */
 export const name = 'storage-postgres'
@@ -108,9 +109,11 @@ export class PostgresStorageBackend implements StorageBackend {
   private readonly pool: Pool
   private readonly schema: string
   private readonly ready: Promise<void>
+  private readonly writer: PostgresWriterLease
   /** Open (or still-opening) units by name; presence is the double-open guard. */
   private readonly units = new Map<string, Promise<PostgresKvUnit>>()
   private closing: Promise<void> | undefined
+  private poolClosing: Promise<void> | undefined
 
   /**
    * @param config - Validated plugin configuration.
@@ -134,8 +137,39 @@ export class PostgresStorageBackend implements StorageBackend {
     this.pool.on('error', () => {
       // No shared state is published here: each query owns its own rejection.
     })
-    this.ready = initializeSchema(this.pool, this.schema)
+    this.writer = new PostgresWriterLease(new Client({
+      application_name: 'physicsos-storage-writer',
+      connectionString: validated.connectionString,
+      connectionTimeoutMillis: 2_000,
+      query_timeout: 2_000,
+      keepAlive: true,
+      ssl,
+    }), this.schema, (error) => {
+      // Snapshot readers live above the storage API, so rejecting new writes
+      // alone is insufficient. A lost lease requires a fresh process/snapshot.
+      process.stderr.write(`${error.message}\n`)
+      process.exit(1)
+    })
+    this.ready = this.initialize()
     this.ready.catch(() => {})
+  }
+
+  private async initialize(): Promise<void> {
+    try {
+      await this.writer.acquire()
+      await initializeSchema(this.pool, this.schema)
+    } catch (error) {
+      // Startup failures have no guaranteed disposer. Release this session and
+      // every pooled socket before making the failed readiness visible.
+      await this.writer.close()
+      await this.closePool()
+      throw error
+    }
+  }
+
+  private closePool(): Promise<void> {
+    this.poolClosing ??= this.pool.end()
+    return this.poolClosing
   }
 
   private openUnit(descriptor: KvUnitDescriptor): Promise<KvUnit> {
@@ -163,6 +197,7 @@ export class PostgresStorageBackend implements StorageBackend {
 
   private async materializeUnit(descriptor: KvUnitDescriptor): Promise<PostgresKvUnit> {
     await this.ready
+    this.writer.assertHeld()
     const unitsTable = qualifiedTable(this.schema, POSTGRES_UNITS_TABLE)
     const client = await this.pool.connect()
     try {
@@ -212,7 +247,7 @@ export class PostgresStorageBackend implements StorageBackend {
 
     return new PostgresKvUnit(this.pool, this.schema, descriptor, () => {
       this.units.delete(descriptor.name)
-    })
+    }, () => { this.writer.assertHeld() })
   }
 
   /**
@@ -236,7 +271,8 @@ export class PostgresStorageBackend implements StorageBackend {
       const unit = await pending.catch(() => undefined)
       await unit?.close()
     }
-    await this.pool.end()
+    await this.closePool()
+    await this.writer.close()
   }
 }
 

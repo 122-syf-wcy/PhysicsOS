@@ -5,9 +5,63 @@ import {
   type VerificationIssue,
   type VerificationResult,
   type SimulationResult,
+  toCanonicalVector,
+  withinTolerance,
 } from '@physicsos/physics-core'
 import { magnitude, add, scale, type Vector3 } from '@physicsos/physics-math'
 import { validateScene, type PhysicsScene } from '@physicsos/physics-scene'
+import { canonicalValue } from '@physicsos/physics-units'
+
+/** Read the prescribed constant acceleration from scene inputs, never engine output. */
+const prescribedAcceleration = (scene: PhysicsScene): Vector3 | undefined => {
+  const body = scene.bodies[0]
+  if (body === undefined) return undefined
+  if (
+    scene.constraints.some((c) => c.type === 'spring' || c.type === 'rope') ||
+    scene.observableDefinitions.some((o) =>
+      ['orbit', 'friction_surface'].includes(String(o.parameters?.['kind'])),
+    )
+  )
+    return undefined
+  const gravityField = scene.fields.find((f) => f.type === 'uniform_gravity')
+  const gravity =
+    gravityField?.type === 'uniform_gravity'
+      ? toCanonicalVector(gravityField.acceleration).vectorSI
+      : { x: 0, y: -9.8, z: 0 }
+  if (scene.observableDefinitions.some((o) => o.parameters?.['kind'] === 'ground')) {
+    return { x: 0, y: -Math.abs(gravity.y), z: 0 }
+  }
+  const incline = scene.observableDefinitions.find((o) => o.parameters?.['kind'] === 'incline')
+  if (incline !== undefined) {
+    const angle = (Number(incline.parameters?.['angle'] ?? 30) * Math.PI) / 180
+    const friction = scene.forces.find((f) => f.type === 'friction' && f.targetId === body.id)
+    const mu =
+      friction?.model === 'kinetic_friction' ? (body.material?.frictionCoefficient ?? 0) : 0
+    const a = Math.max(0, magnitude(gravity) * (Math.sin(angle) - mu * Math.cos(angle)))
+    return { x: a * Math.cos(angle), y: -a * Math.sin(angle), z: 0 }
+  }
+  const custom = scene.forces.filter((f) => f.type === 'custom' && f.targetId === body.id)
+  if (custom.length > 0) {
+    let acceleration = custom.reduce(
+      (a, f) =>
+        f.vector === undefined
+          ? a
+          : add(a, scale(toCanonicalVector(f.vector).vectorSI, 1 / canonicalValue(body.mass))),
+      { x: 0, y: 0, z: 0 },
+    )
+    if (scene.forces.some((f) => f.type === 'gravity' && f.targetId === body.id))
+      acceleration = add(acceleration, gravity)
+    if (scene.forces.some((f) => f.type === 'normal' && f.targetId === body.id))
+      acceleration = add(acceleration, scale(gravity, -1))
+    return acceleration
+  }
+  return body.acceleration === undefined
+    ? { x: 0, y: 0, z: 0 }
+    : toCanonicalVector(body.acceleration).vectorSI
+}
+
+const vectorMatches = (actual: Vector3, expected: Vector3): boolean =>
+  (['x', 'y', 'z'] as const).every((axis) => withinTolerance(actual[axis], expected[axis]))
 
 export const MECHANICS_VERIFIER_ASSUMPTIONS = [
   'analytical solver',
@@ -202,5 +256,103 @@ export function verifyMechanicsSimulation(
       details: { bodyId, stateCount: simulation.states.length },
     }),
   )
+  if (statesContainBody && scene.bodies[0] !== undefined) {
+    const body = scene.bodies[0]
+    try {
+      const initialPosition = toCanonicalVector(body.position).vectorSI
+      const initialVelocity = toCanonicalVector(body.velocity).vectorSI
+      const acceleration = prescribedAcceleration(scene)
+      let finite = true
+      let kinematics = true
+      let accelerationMatches = true
+      let previousTime = -Infinity
+      for (const state of simulation.states) {
+        const time = canonicalValue(state.time)
+        const object = state.objects.find((o) => o.id === body.id)!
+        const position = toCanonicalVector(object.position!).vectorSI
+        const velocity = toCanonicalVector(object.velocity!).vectorSI
+        finite &&=
+          Number.isFinite(time) &&
+          time >= 0 &&
+          time >= previousTime &&
+          [...Object.values(position), ...Object.values(velocity)].every(Number.isFinite)
+        previousTime = time
+        if (acceleration !== undefined) {
+          kinematics &&=
+            vectorMatches(velocity, add(initialVelocity, scale(acceleration, time))) &&
+            vectorMatches(
+              position,
+              add(
+                add(initialPosition, scale(initialVelocity, time)),
+                scale(acceleration, 0.5 * time * time),
+              ),
+            )
+          accelerationMatches &&=
+            object.acceleration !== undefined &&
+            vectorMatches(toCanonicalVector(object.acceleration).vectorSI, acceleration)
+        }
+      }
+      checks.push(
+        check('mechanics_numeric_states', 'numerical', finite, {
+          message: 'All states must be finite and ordered in scene time.',
+        }),
+      )
+      if (acceleration !== undefined) {
+        const first = simulation.states[0]!
+        const last = simulation.states.at(-1)!
+        const endTime = canonicalValue(last.time)
+        const startTime = canonicalValue(first.time)
+        const finalVelocity = add(initialVelocity, scale(acceleration, endTime))
+        const displacement = add(
+          scale(initialVelocity, endTime - startTime),
+          scale(acceleration, 0.5 * (endTime * endTime - startTime * startTime)),
+        )
+        const summaryMatches = simulation.derivedQuantities.every(({ key, value }) => {
+          if (key === 'final_velocity' || key === 'velocity_magnitude') {
+            return (
+              'value' in value && withinTolerance(canonicalValue(value), magnitude(finalVelocity))
+            )
+          }
+          if (key === 'displacement')
+            return (
+              'vector' in value && vectorMatches(toCanonicalVector(value).vectorSI, displacement)
+            )
+          if (key === 'acceleration')
+            return (
+              'vector' in value && vectorMatches(toCanonicalVector(value).vectorSI, acceleration)
+            )
+          if (key === 'net_force')
+            return (
+              'vector' in value &&
+              vectorMatches(
+                toCanonicalVector(value).vectorSI,
+                scale(acceleration, canonicalValue(body.mass)),
+              )
+            )
+          return true
+        })
+        checks.push(
+          check('mechanics_summary_consistency', 'numerical', summaryMatches, {
+            message:
+              'Summary velocity, displacement, acceleration and force must agree with the sampled window.',
+          }),
+          check('mechanics_kinematic_consistency', 'numerical', kinematics, {
+            message:
+              'Every sampled position and velocity must satisfy the scene initial conditions and acceleration.',
+          }),
+          check('mechanics_prescribed_acceleration', 'numerical', accelerationMatches, {
+            message:
+              'Every sampled acceleration must match the independently resolved scene forces.',
+          }),
+        )
+      }
+    } catch (error) {
+      checks.push(
+        check('mechanics_numeric_states', 'numerical', false, {
+          message: error instanceof Error ? error.message : 'Invalid numeric mechanics state.',
+        }),
+      )
+    }
+  }
   return summarizeVerification(checks, sceneVerification.warnings, sceneVerification.errors)
 }

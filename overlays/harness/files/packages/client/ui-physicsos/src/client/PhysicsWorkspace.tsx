@@ -109,6 +109,7 @@ const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
 const SUMMARY_INTERVAL_MS = 250
 
 export interface PhysicsWorkspaceProps {
+  readonly onSceneChange?: (scene: import('@physicsos/physics-scene').PhysicsScene) => void
   readonly runtime: WorkspaceRuntime
   readonly t: Translate
   /** Rendered in the toolbar's overflow area; the Lab passes its template menu. */
@@ -155,6 +156,7 @@ export interface PhysicsWorkspaceProps {
  */
 export function PhysicsWorkspace({
   runtime,
+  onSceneChange,
   t,
   toolbarExtra,
   onSwitchExperiment,
@@ -217,11 +219,16 @@ export function PhysicsWorkspace({
       user actions so the canvas and the panels agree immediately. */
   const commit = useCallback(
     (next: WorkspaceSnapshot) => {
+      const previous = summaryRef.current
       frameSource.set(next)
       summaryRef.current = next
       setSnapshot(next)
+      if (previous.sceneRevision !== next.sceneRevision || previous.branch !== next.branch) {
+        const scene = runtime.getScene?.()
+        if (scene !== undefined) onSceneChange?.(scene)
+      }
     },
-    [frameSource],
+    [frameSource, runtime, onSceneChange],
   )
 
   /* The animation loop is the renderer's independent update loop (#123): every
@@ -280,6 +287,7 @@ export function PhysicsWorkspace({
      control under focus. */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || document.querySelector('[role="dialog"][aria-modal="true"]') !== null) return
       const target = event.target
       if (target instanceof HTMLElement) {
         const tag = target.tagName

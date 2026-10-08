@@ -205,7 +205,7 @@ function stateAtForModel(model: MechanicsModel, t: number): SimulationState {
   }
 }
 
-function computeDerivedAtTime(model: MechanicsModel, t: number): DerivedQuantity[] {
+function computeDerivedAtTime(model: MechanicsModel, t: number, startTime = 0): DerivedQuantity[] {
   const derived: DerivedQuantity[] = []
   const assumptions = ['analytical solver', 'constant forces']
 
@@ -295,19 +295,22 @@ function computeDerivedAtTime(model: MechanicsModel, t: number): DerivedQuantity
     derived.push({
       key: 'displacement',
       targetId: model.bodyId,
-      value: quantityVector(scale(model.velocity, t), 'm', 'length'),
-      formula: { expression: 's = vt' },
+      value: quantityVector(scale(model.velocity, t - startTime), 'm', 'length'),
+      formula: { expression: 'Δx = v(t_end - t_start)' },
       assumptions,
     })
   }
 
   if (model.modelId === 'uniformly_accelerated_motion') {
-    const disp = add(scale(model.velocity, t), scale(model.acceleration, 0.5 * t * t))
+    const disp = add(
+      scale(model.velocity, t - startTime),
+      scale(model.acceleration, 0.5 * (t * t - startTime * startTime)),
+    )
     derived.push({
       key: 'displacement',
       targetId: model.bodyId,
       value: quantityVector(disp, 'm', 'length'),
-      formula: { expression: 's = v0*t + 0.5*a*t²' },
+      formula: { expression: 'Δx = v0(t_end - t_start) + 0.5a(t_end² - t_start²)' },
       assumptions,
     })
     const finalV = add(model.velocity, scale(model.acceleration, t))
@@ -682,7 +685,7 @@ function buildVerification(
         const v0 = toCanonicalVector(first.objects[0].velocity).vectorSI
         const v1 = toCanonicalVector(last.objects[0].velocity).vectorSI
         const dv = magnitude(add(v1, scale(v0, -1)))
-        const expectedDv = magnitude(scale(model.acceleration, last.time.value))
+        const expectedDv = magnitude(scale(model.acceleration, last.time.value - first.time.value))
         checks.push(
           check('velocity_change', 'numerical', Math.abs(dv - expectedDv) < 0.1, {
             message: `Velocity change matches a*t.`,
@@ -731,16 +734,14 @@ function buildVerification(
         },
       ),
     )
-    if (states.length > 0) {
-      const last = states[states.length - 1]
-      if (last?.objects[0]?.position) {
-        const y = toCanonicalVector(last.objects[0].position).vectorSI.y
-        checks.push(
-          check('impact_y', 'boundary', Math.abs(y - model.groundY) < 0.5, {
-            message: `Impact y ≈ groundY (${y} vs ${model.groundY}).`,
-          }),
-        )
-      }
+    const impactState = states.find((state) => withinTolerance(state.time.value, model.flightTime))
+    if (impactState?.objects[0]?.position) {
+      const y = toCanonicalVector(impactState.objects[0].position).vectorSI.y
+      checks.push(
+        check('impact_y', 'boundary', Math.abs(y - model.groundY) < 0.5, {
+          message: `Impact y ≈ groundY (${y} vs ${model.groundY}).`,
+        }),
+      )
     }
   }
 
@@ -1038,8 +1039,16 @@ export class MechanicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
 
     const startTime = request.options.startTime ? canonicalValue(request.options.startTime) : 0
     const endTime = request.options.endTime ? canonicalValue(request.options.endTime) : duration
-    if (endTime < startTime) {
-      throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'endTime must be >= startTime.')
+    if (
+      !Number.isFinite(startTime) ||
+      !Number.isFinite(endTime) ||
+      startTime < 0 ||
+      endTime < startTime
+    ) {
+      throw new PhysicsOSError(
+        'INVALID_SIMULATION_RANGE',
+        'Simulation range must satisfy 0 <= startTime <= endTime.',
+      )
     }
 
     const trajectoryTimes = trajectorySampleTimes(
@@ -1049,16 +1058,22 @@ export class MechanicsEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     )
 
     const states = trajectoryTimes.map((t) => stateAtForModel(model, t))
-    const derivedQuantities = computeDerivedAtTime(model, endTime - startTime)
+    const derivedQuantities = computeDerivedAtTime(model, endTime, startTime)
     const verification = buildVerification(model, scene, states)
 
     const events: PhysicsEventLike[] = []
-    if (model.modelId === 'projectile_motion' && model.flightTime > 0) {
+    if (
+      model.modelId === 'projectile_motion' &&
+      model.flightTime > 0 &&
+      model.flightTime >= startTime &&
+      model.flightTime <= endTime
+    ) {
       events.push({
         eventId: asPhysicsEventId(`event-impact-${model.bodyId}`),
         sceneId: scene.id,
         revision: scene.revision,
         type: 'GroundImpact',
+        time: model.flightTime,
       })
     }
 

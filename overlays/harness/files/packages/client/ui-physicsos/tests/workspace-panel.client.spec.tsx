@@ -112,3 +112,22 @@ describe('WorkspacePickerTrigger', () => {
     expect(openPanel).toHaveBeenCalledTimes(1)
   })
 })
+
+
+it('owns initial focus and traps Tab, then restores focus on close', () => {
+  const trigger = document.createElement('button')
+  document.body.append(trigger)
+  trigger.focus()
+  mount([])
+  const dialog = screen.getByRole('dialog')
+  expect(dialog.contains(document.activeElement)).toBe(true)
+  const buttons = dialog.querySelectorAll<HTMLButtonElement>('button:not([disabled])')
+  const first = buttons[0]!
+  first.focus()
+  fireEvent.keyDown(first, { key: 'Tab', shiftKey: true })
+  expect(dialog.contains(document.activeElement)).toBe(true)
+  expect(document.activeElement).not.toBe(first)
+  cleanup()
+  expect(document.activeElement).toBe(trigger)
+  trigger.remove()
+})

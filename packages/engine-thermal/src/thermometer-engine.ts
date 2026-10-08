@@ -1,3 +1,4 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -410,6 +411,8 @@ export class ThermometerEngine implements PhysicsEngine<PhysicsScene, PhysicsEve
     const startedAt = new Date().toISOString()
     const model = resolveThermometerModel(scene)
 
+    const range = simulationTimeRange(request.options)
+
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,
@@ -417,16 +420,20 @@ export class ThermometerEngine implements PhysicsEngine<PhysicsScene, PhysicsEve
       sceneRevision: scene.revision,
       /* One state: the column stands where the temperature puts it, so a longer
          run would be the same reading at a different clock. */
-      states: [stateOf(model, 0)],
-      events: [
-        {
-          eventId: asPhysicsEventId(`event-thermometer-ready-${model.benchId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'ThermometerReady',
-          time: 0,
-        },
-      ],
+      states: [stateOf(model, range.startTime)],
+      events: eventsInSimulationRange(
+        [
+          {
+            eventId: asPhysicsEventId(`event-thermometer-ready-${model.benchId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'ThermometerReady',
+            time: 0,
+          },
+        ],
+        range.startTime,
+        range.endTime,
+      ),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

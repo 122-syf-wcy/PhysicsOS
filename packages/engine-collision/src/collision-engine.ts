@@ -1,3 +1,4 @@
+import { simulationTimeRange } from '@physicsos/physics-core'
 import {
   check,
   summarizeVerification,
@@ -321,15 +322,14 @@ export class CollisionEngine implements PhysicsEngine<PhysicsScene, CollisionPhy
 
     const model = collisionModelOf(scene) ?? 'elastic_collision'
     const resolved = resolveCollisionScene(scene)
-    const startTime = request.options.startTime ? canonicalValue(request.options.startTime) : 0
-    const endTime = request.options.endTime
-      ? canonicalValue(request.options.endTime)
-      : DEFAULT_DURATION_SECONDS
-    if (endTime < startTime) {
-      throw new PhysicsOSError('INVALID_SIMULATION_RANGE', 'endTime must be >= startTime.')
-    }
-
-    const simulation = simulateCollision(resolved, { startTime, endTime })
+    const { startTime, endTime } = simulationTimeRange(request.options, DEFAULT_DURATION_SECONDS)
+    const simulation = simulateCollision(resolved, {
+      startTime,
+      endTime,
+      ...(request.options.outputSampleRate === undefined
+        ? {}
+        : { outputSampleRate: request.options.outputSampleRate }),
+    })
     const states = simulation.states
     const events = simulation.events
 

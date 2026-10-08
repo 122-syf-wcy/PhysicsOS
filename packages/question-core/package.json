@@ -30,6 +30,7 @@
     "@physicsos/engine-wave": "file:../engine-wave",
     "@physicsos/engine-modern": "file:../engine-modern",
     "@physicsos/physics-observation": "file:../physics-observation",
-    "@physicsos/physics-verifier": "file:../physics-verifier"
+    "@physicsos/physics-verifier": "file:../physics-verifier",
+    "@physicsos/physics-runtime": "file:../physics-runtime"
   }
 }

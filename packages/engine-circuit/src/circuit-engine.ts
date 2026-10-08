@@ -1,3 +1,4 @@
+import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   check,
   invalidModelCondition,
@@ -537,9 +538,10 @@ export class CircuitEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLi
     const startedAt = new Date().toISOString()
     const times =
       endTime > startTime
-        ? Array.from(
-            { length: SWEEP_SAMPLES + 1 },
-            (_, index) => startTime + ((endTime - startTime) * index) / SWEEP_SAMPLES,
+        ? trajectorySampleTimes(
+            startTime,
+            endTime,
+            trajectoryStorageSampleCount(request.options, SWEEP_SAMPLES + 1),
           )
         : [startTime]
     const states = times.map((t) => stateOf(scene, t))

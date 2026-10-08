@@ -218,7 +218,7 @@ export interface AuthServiceDeps {
   resetDelivery?: PasswordResetDelivery
   /** Injectable clock for expiry tests and deterministic deployments. */
   now?: () => Date
-  /** Optional shared lock for invite consumption across app instances. */
+  /** Optional shared reservation for invite consumption; snapshots still require a single writer. */
   onceLedger?: InviteClaimLedger
   /** Client handoff path; defaults to `/?reset_token=<token>`. */
   resetPath?: (token: string) => string
@@ -319,6 +319,10 @@ const localDate = (at: Date): string => {
  * and login, cookie sessions, attempt limiting, the admin surface, device
  * registration/revocation, and the anonymous learning-aggregate channel.
  */
+// Credential mutations share the domain's single-process snapshot. Keep the
+// reservation through persistence and compensation, across service instances.
+const credentialQueues = new WeakMap<AuthDomain, Promise<unknown>>()
+
 export class AuthService {
   private readonly limiter: LimiterBackend
   private readonly policies: Record<LimiterName, LimiterPolicy>
@@ -365,6 +369,15 @@ export class AuthService {
     this.now = deps.now ?? (() => new Date())
     this.resetPath = deps.resetPath ?? passwordResetPath
     this.onceLedger = deps.onceLedger
+  }
+
+  private async credentialMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = credentialQueues.get(this.domain) ?? Promise.resolve()
+    const pending = previous.catch(() => undefined).then(operation)
+    credentialQueues.set(this.domain, pending)
+    try { return await pending } finally {
+      if (credentialQueues.get(this.domain) === pending) credentialQueues.delete(this.domain)
+    }
   }
 
   private get schools() { return this.domain.table('schools') }
@@ -556,7 +569,7 @@ export class AuthService {
    * write chain makes the read-modify-write operation non-interleaving; a
    * rollback restores the exact prior count if the account write fails.
    */
-  private async consumeInvite(rawCode: string, schoolId: string): Promise<InviteRecord> {
+  private async consumeInvite(rawCode: string, schoolId: string, writeUser: () => Promise<void>): Promise<InviteRecord> {
     const codeHash = hashOpaqueCredential(rawCode)
     const lockKey = `invite-consume:${codeHash}`
     let locked = false
@@ -572,16 +585,26 @@ export class AuthService {
         throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '邀请码服务暂时不可用，请稍后再试')
       }
     }
+    let prior: InviteRecord | undefined
+    let consumed = false
     try {
-      return await this.invites.update(codeHash, (row) => {
+      const updated = await this.invites.update(codeHash, (row) => {
         const unusable = row.schoolId !== schoolId
           || row.disabledAt !== undefined
           || row.usedCount >= row.maxUses
           || (row.expiresAt !== undefined && Date.parse(row.expiresAt) <= this.now().getTime())
         if (unusable) throw new AuthError(400, 'INVALID_INVITE_CODE', '邀请码无效或已失效')
+        prior = row
         return { ...row, usedCount: row.usedCount + 1 }
       })
+      consumed = true
+      await writeUser()
+      return updated
     } catch (error) {
+      if (consumed && prior !== undefined) {
+        await this.invites.put(codeHash, prior)
+        throw error
+      }
       if (error instanceof AuthError) throw error
       throw new AuthError(503, 'DEPENDENCY_UNAVAILABLE', '邀请码服务暂时不可用，请稍后再试')
     } finally {
@@ -641,45 +664,42 @@ export class AuthService {
       throw new AuthError(400, 'SCHOOL_NOT_FOUND', '未找到该学校，请核对学校名称')
     }
 
-    const key = userKey(school.id, username)
-    if (this.users.get(key) !== undefined) {
-      throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
-    }
+    const resolvedSchool = school
+    return this.credentialMutation(async () => {
+      const key = userKey(resolvedSchool.id, username)
+      if (this.users.get(key) !== undefined) {
+        throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
+      }
 
-    const now = new Date().toISOString()
-    const invite = input.data.inviteCode === undefined
-      ? undefined
-      : await this.consumeInvite(input.data.inviteCode, school.id)
-    const record: UserRecord = {
-      id: `u_${crypto.randomBytes(9).toString('base64url')}`,
-      schoolId: school.id,
-      username: username.toLowerCase(),
-      passwordHash: hashPassword(password),
-      displayName,
-      role: 'STUDENT',
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    }
-    try {
-      await this.users.put(key, record)
-    } catch (error) {
-      if (invite !== undefined) await this.invites.put(invite.id, invite)
-      throw error
-    }
-    if (invite !== undefined) {
-      await this.audit(
-        { userKey: key, schoolId: school.id, username: record.username, role: record.role },
-        'invite.use',
-        invite.id,
-        school.id,
-        { usedCount: invite.usedCount + 1 },
-      )
-    }
-    if (input.data.deviceId !== undefined) {
-      await this.touchDevice(record, input.data.deviceId)
-    }
-    return this.issueSession(record, school, false, ip, userAgent, input.data.deviceId)
+      const now = new Date().toISOString()
+      const record: UserRecord = {
+        id: `u_${crypto.randomBytes(9).toString('base64url')}`,
+        schoolId: resolvedSchool.id,
+        username: username.toLowerCase(),
+        passwordHash: hashPassword(password),
+        displayName,
+        role: 'STUDENT',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      }
+      const invite = input.data.inviteCode === undefined
+        ? (await this.users.put(key, record), undefined)
+        : await this.consumeInvite(input.data.inviteCode, resolvedSchool.id, () => this.users.put(key, record))
+      if (invite !== undefined) {
+        await this.audit(
+          { userKey: key, schoolId: resolvedSchool.id, username: record.username, role: record.role },
+          'invite.use',
+          invite.id,
+          resolvedSchool.id,
+          { usedCount: invite.usedCount },
+        )
+      }
+      if (input.data.deviceId !== undefined) {
+        await this.touchDevice(record, input.data.deviceId)
+      }
+      return this.issueSession(record, resolvedSchool, false, ip, userAgent, input.data.deviceId)
+    })
   }
 
   /**
@@ -1282,28 +1302,33 @@ export class AuthService {
     await this.allow('passwordReset', `forgot:ip:${sourceIp}`)
     await this.allow('passwordReset', `forgot:account:${username.toLowerCase()}`)
 
-    const candidates = this.loginCandidates(username, schoolId)
-    const only = candidates.length === 1 ? candidates[0] : undefined
-    if (only === undefined) return
-    const { record, school } = only
-    const ownerKey = userKey(school.id, record.username)
+    const prepared = await this.credentialMutation(async () => {
+      const candidates = this.loginCandidates(username, schoolId)
+      const only = candidates.length === 1 ? candidates[0] : undefined
+      if (only === undefined) return
+      const { record, school } = only
+      const ownerKey = userKey(school.id, record.username)
 
-    /* A newer recovery request invalidates every older token and open queue row. */
-    await this.supersedeOpenResetRequests(ownerKey)
+      /* A newer recovery request invalidates every older token and open queue row. */
+      await this.supersedeOpenResetRequests(ownerKey)
 
-    const request: ResetRequest = {
-      id: `rr_${crypto.randomBytes(9).toString('base64url')}`,
-      schoolId: school.id,
-      username: record.username,
-      at: this.now().toISOString(),
-      status: 'pending',
-      delivery: this.resetDelivery.mode,
-      ...(ip !== undefined ? { ip } : {}),
-    }
-    await this.resets.put(request.id, request)
-    if (this.resetDelivery.mode !== 'direct') return
+      const request: ResetRequest = {
+        id: `rr_${crypto.randomBytes(9).toString('base64url')}`,
+        schoolId: school.id,
+        username: record.username,
+        at: this.now().toISOString(),
+        status: 'pending',
+        delivery: this.resetDelivery.mode,
+        ...(ip !== undefined ? { ip } : {}),
+      }
+      await this.resets.put(request.id, request)
+      if (this.resetDelivery.mode !== 'direct') return
 
-    const issued = await this.issueResetToken(request)
+      const issued = await this.issueResetToken(request)
+      return { request, ownerKey, record, school, issued }
+    })
+    if (prepared === undefined) return
+    const { request, ownerKey, record, school, issued } = prepared
     try {
       await this.resetDelivery.deliver({
         requestId: request.id,
@@ -1316,11 +1341,16 @@ export class AuthService {
         resetPath: this.resetPath(issued.token),
       })
     } catch {
-      await this.revokeResetToken(issued.request.tokenHash)
-      await this.resets.put(request.id, {
-        ...issued.request,
-        status: 'delivery_failed',
-        deliveryError: 'delivery adapter failed',
+      await this.credentialMutation(async () => {
+        const current = this.resets.get(request.id)
+        // Delivery may finish after an admin cancellation or token redemption.
+        if (current?.status !== 'active' || current.tokenHash !== issued.request.tokenHash) return
+        await this.revokeResetToken(issued.request.tokenHash)
+        await this.resets.put(request.id, {
+          ...current,
+          status: 'delivery_failed',
+          deliveryError: 'delivery adapter failed',
+        })
       })
     }
   }
@@ -1371,30 +1401,32 @@ export class AuthService {
     actor: AdminActor,
     requestId: string,
   ): Promise<{ request: PasswordResetQueueRow; token: string; expiresAt: string; resetPath: string }> {
-    this.requireAdmin(actor)
-    const request = this.loadManagedReset(actor, requestId)
-    if (request.status === 'used' || request.status === 'cancelled' || request.status === 'superseded') {
-      throw new AuthError(400, 'BAD_REQUEST', '该重置请求已结束')
-    }
-    if (request.status === 'active' && request.expiresAt !== undefined
-      && Date.parse(request.expiresAt) <= this.now().getTime()) {
-      await this.resets.put(request.id, { ...request, status: 'expired' })
-      throw new AuthError(400, 'BAD_REQUEST', '该重置请求已过期')
-    }
-    const target = this.users.get(userKey(request.schoolId, request.username))
-    if (target === undefined || target.status !== 'active') {
-      throw new AuthError(404, 'NOT_FOUND', '账号不存在或已停用')
-    }
-    const issued = await this.issueResetToken(request, actor.userKey)
-    await this.audit(actor, 'password_reset.issue', request.id, request.schoolId, {
-      username: request.username,
+    return this.credentialMutation(async () => {
+      this.requireAdmin(actor)
+      const request = this.loadManagedReset(actor, requestId)
+      if (request.status === 'used' || request.status === 'cancelled' || request.status === 'superseded') {
+        throw new AuthError(400, 'BAD_REQUEST', '该重置请求已结束')
+      }
+      if (request.status === 'active' && request.expiresAt !== undefined
+        && Date.parse(request.expiresAt) <= this.now().getTime()) {
+        await this.resets.put(request.id, { ...request, status: 'expired' })
+        throw new AuthError(400, 'BAD_REQUEST', '该重置请求已过期')
+      }
+      const target = this.users.get(userKey(request.schoolId, request.username))
+      if (target === undefined || target.status !== 'active') {
+        throw new AuthError(404, 'NOT_FOUND', '账号不存在或已停用')
+      }
+      const issued = await this.issueResetToken(request, actor.userKey)
+      await this.audit(actor, 'password_reset.issue', request.id, request.schoolId, {
+        username: request.username,
+      })
+      return {
+        request: this.toPasswordResetRow(issued.request),
+        token: issued.token,
+        expiresAt: issued.request.expiresAt ?? '',
+        resetPath: this.resetPath(issued.token),
+      }
     })
-    return {
-      request: this.toPasswordResetRow(issued.request),
-      token: issued.token,
-      expiresAt: issued.request.expiresAt ?? '',
-      resetPath: this.resetPath(issued.token),
-    }
   }
 
   /**
@@ -1404,22 +1436,24 @@ export class AuthService {
    * @returns the cancelled queue row.
    */
   async cancelPasswordReset(actor: AdminActor, requestId: string): Promise<PasswordResetQueueRow> {
-    this.requireAdmin(actor)
-    const request = this.loadManagedReset(actor, requestId)
-    if (request.status === 'used') throw new AuthError(400, 'BAD_REQUEST', '密码已经重置')
-    const now = this.now().toISOString()
-    await this.revokeResetToken(request.tokenHash, now)
-    const cancelled: ResetRequest = {
-      ...request,
-      status: 'cancelled',
-      cancelledAt: now,
-      decidedBy: actor.userKey,
-    }
-    await this.resets.put(cancelled.id, cancelled)
-    await this.audit(actor, 'password_reset.cancel', request.id, request.schoolId, {
-      username: request.username,
+    return this.credentialMutation(async () => {
+      this.requireAdmin(actor)
+      const request = this.loadManagedReset(actor, requestId)
+      if (request.status === 'used') throw new AuthError(400, 'BAD_REQUEST', '密码已经重置')
+      const now = this.now().toISOString()
+      await this.revokeResetToken(request.tokenHash, now)
+      const cancelled: ResetRequest = {
+        ...request,
+        status: 'cancelled',
+        cancelledAt: now,
+        decidedBy: actor.userKey,
+      }
+      await this.resets.put(cancelled.id, cancelled)
+      await this.audit(actor, 'password_reset.cancel', request.id, request.schoolId, {
+        username: request.username,
+      })
+      return this.toPasswordResetRow(cancelled)
     })
-    return this.toPasswordResetRow(cancelled)
   }
 
   /**
@@ -1437,65 +1471,56 @@ export class AuthService {
     await this.allow('passwordReset', `reset:ip:${sourceIp}`)
     await this.allow('passwordReset', `reset:token:${hash}`)
 
-    const token = this.resetTokens.get(hash)
-    const now = this.now()
-    if (token === undefined || token.usedAt !== undefined || token.revokedAt !== undefined
-      || Date.parse(token.expiresAt) <= now.getTime()) {
-      if (token !== undefined && Date.parse(token.expiresAt) <= now.getTime()
-        && token.revokedAt === undefined) {
-        await this.revokeResetToken(hash, now.toISOString())
-        const request = this.resets.get(token.requestId)
-        if (request !== undefined) {
-          await this.resets.put(request.id, { ...request, status: 'expired' })
+    return this.credentialMutation(async () => {
+      const token = this.resetTokens.get(hash)
+      const now = this.now()
+      if (token === undefined || token.usedAt !== undefined || token.revokedAt !== undefined
+        || Date.parse(token.expiresAt) <= now.getTime()) {
+        if (token !== undefined && Date.parse(token.expiresAt) <= now.getTime()
+          && token.revokedAt === undefined) {
+          await this.revokeResetToken(hash, now.toISOString())
+          const request = this.resets.get(token.requestId)
+          if (request !== undefined) {
+            await this.resets.put(request.id, { ...request, status: 'expired' })
+          }
         }
+        throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
       }
-      throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
-    }
-    if (!this.claimResetToken(hash)) {
-      throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
-    }
+      const record = this.users.get(token.userKey)
+      const school = this.schools.get(token.schoolId)
+      if (record === undefined || school === undefined
+        || record.status !== 'active' || school.status !== 'active') {
+        throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
+      }
 
-    /* Claim before the first await: two local requests cannot both redeem the
-       same token. A shared multi-instance store must expose the same CAS. */
-    await this.resetTokens.put(hash, { ...token, usedAt: now.toISOString() })
-    this.claimedResetTokens.delete(hash)
-    const record = this.users.get(token.userKey)
-    const school = this.schools.get(token.schoolId)
-    if (record === undefined || school === undefined
-      || record.status !== 'active' || school.status !== 'active') {
-      throw new AuthError(400, 'INVALID_RESET_TOKEN', '重置链接无效或已过期')
-    }
-
-    await this.users.put(token.userKey, {
-      ...record,
-      passwordHash: hashPassword(input.data.newPassword),
-      updatedAt: now.toISOString(),
+      // Do password hashing before reserving the token; restore the exact token
+      // if the durable password write fails, with the mutation lock still held.
+      const next = { ...record, passwordHash: hashPassword(input.data.newPassword), updatedAt: now.toISOString() }
+      await this.resetTokens.put(hash, { ...token, usedAt: now.toISOString() })
+      try {
+        await this.users.put(token.userKey, next)
+      } catch (error) {
+        await this.resetTokens.put(hash, token)
+        throw error
+      }
+      await this.revokeUserSessions(record)
+      await this.supersedeOpenResetRequests(token.userKey, token.requestId)
+      const request = this.resets.get(token.requestId)
+      if (request !== undefined) {
+        await this.resets.put(request.id, {
+          ...request,
+          status: 'used',
+          usedAt: now.toISOString(),
+        })
+      }
+      await this.audit(
+        { userKey: 'system:password-reset', schoolId: token.schoolId, username: 'system', role: 'STUDENT' },
+        'password_reset.use',
+        token.requestId,
+        token.schoolId,
+        { username: token.username },
+      )
     })
-    await this.revokeUserSessions(record)
-    await this.supersedeOpenResetRequests(token.userKey, token.requestId)
-    const request = this.resets.get(token.requestId)
-    if (request !== undefined) {
-      await this.resets.put(request.id, {
-        ...request,
-        status: 'used',
-        usedAt: now.toISOString(),
-      })
-    }
-    await this.audit(
-      { userKey: 'system:password-reset', schoolId: token.schoolId, username: 'system', role: 'STUDENT' },
-      'password_reset.use',
-      token.requestId,
-      token.schoolId,
-      { username: token.username },
-    )
-  }
-
-  private readonly claimedResetTokens = new Set<string>()
-
-  private claimResetToken(hash: string): boolean {
-    if (this.claimedResetTokens.has(hash)) return false
-    this.claimedResetTokens.add(hash)
-    return true
   }
 
   private async revokeResetToken(
@@ -2024,28 +2049,30 @@ export class AuthService {
 
   /** Disable one invite without ever exposing its hash or raw code. */
   async disableInvite(actor: AdminActor, inviteId: string): Promise<InviteRow> {
-    this.requireAdmin(actor)
-    const found = [...this.invites.entries()].find(([, row]) => row.id === inviteId)
-    if (found === undefined) throw new AuthError(404, 'NOT_FOUND', '邀请码不存在')
-    const [key, row] = found
-    if (actor.role !== 'SUPER_ADMIN' && row.schoolId !== actor.schoolId) {
-      throw new AuthError(403, 'FORBIDDEN', '无权管理其他学校')
-    }
-    const disabled = row.disabledAt === undefined
-      ? {
-        ...row,
-        disabledAt: this.now().toISOString(),
-        disabledBy: actor.userKey,
+    return this.credentialMutation(async () => {
+      this.requireAdmin(actor)
+      const found = [...this.invites.entries()].find(([, row]) => row.id === inviteId)
+      if (found === undefined) throw new AuthError(404, 'NOT_FOUND', '邀请码不存在')
+      const [key, row] = found
+      if (actor.role !== 'SUPER_ADMIN' && row.schoolId !== actor.schoolId) {
+        throw new AuthError(403, 'FORBIDDEN', '无权管理其他学校')
       }
-      : row
-    if (row.disabledAt === undefined) {
-      await this.invites.put(key, disabled)
-      await this.audit(actor, 'invite.disable', row.id, row.schoolId)
-    }
-    return this.toInviteRow(
-      disabled,
-      this.schools.get(disabled.schoolId)?.name ?? disabled.schoolId,
-    )
+      const disabled = row.disabledAt === undefined
+        ? {
+          ...row,
+          disabledAt: this.now().toISOString(),
+          disabledBy: actor.userKey,
+        }
+        : row
+      if (row.disabledAt === undefined) {
+        await this.invites.put(key, disabled)
+        await this.audit(actor, 'invite.disable', row.id, row.schoolId)
+      }
+      return this.toInviteRow(
+        disabled,
+        this.schools.get(disabled.schoolId)?.name ?? disabled.schoolId,
+      )
+    })
   }
 
   private toInviteRow(row: InviteRecord, schoolName: string): InviteRow {

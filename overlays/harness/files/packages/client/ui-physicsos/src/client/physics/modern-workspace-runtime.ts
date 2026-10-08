@@ -79,6 +79,10 @@ export class ModernPhysicsWorkspaceRuntime implements WorkspaceRuntime {
     ]
   }
 
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     const scene = this.sceneRuntime.getScene()
     const title = scene.metadata.title ?? '光电效应'

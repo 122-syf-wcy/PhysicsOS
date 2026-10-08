@@ -23,6 +23,7 @@ import type {
   TimelineEvent,
   VerificationCheckView,
 } from './scene-visual-model.ts'
+import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CircuitDraft, TerminalRef } from './circuit-builder.ts'
 
 /** Everything the shell needs to render one frame. Plain data only. */
@@ -61,6 +62,8 @@ export interface WorkspaceSnapshot {
 
 /** Imperative surface the shell drives; every method returns the next frame. */
 export interface WorkspaceRuntime {
+  /** Current committed facts; previews and animation never alter this scene. */
+  getScene?(): PhysicsScene
   getSnapshot(): WorkspaceSnapshot
   editParameter(id: string, value: number): WorkspaceSnapshot
   setChoice(id: string, value: string): WorkspaceSnapshot

@@ -110,16 +110,16 @@ scene-question-001  revision 4          ← 题目世界（不被实验修改）
 ```ts
 canHandle(scene): ModelSupport      // 前提不满足要说清哪一条
 validate(scene): VerificationResult
-stateAt(scene, t): SimulationState  // 解析解，不做数值积分
+stateAt(scene, t): SimulationState  // 当前时刻状态；求解方式由模型决定
 simulate(scene, request): SimulationResult
 ```
 
 `SimulationRequest` 必须引用被仿真的**精确 revision**，否则拒绝执行；
 这保证「解答」与「场景」永远同版本。
 
-已实现：`engine-magnetic`（匀强磁场圆周运动）、
-`engine-mechanics`（5 个模型）、`engine-electric`（匀强电场粒子运动；
-点电荷模型在 `ELECTRIC_FIELD_RUNTIME_PACK_V1` 中加入）。
+当前引擎能力由 `packages/physics-runtime` 的共享注册表维护，题目和 Agent 使用同一分派及验证路径。新增引擎必须通过请求范围、采样、revision 与入口一致性测试。现代物理光电效应也通过该注册表进入 Agent。
+
+状态使用场景的绝对时间；末时刻物理量按 `endTime` 求值，区间累计量按两端状态差计算。观察入口拒绝验证失败或 scene/revision 不匹配的结果。
 
 ---
 

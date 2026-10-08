@@ -23,7 +23,7 @@ import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 
 import { STEP_FRACTION, useAnimationClock } from './animation-clock.ts'
-import { buildWorkspaceRuntime } from './LabWorkspace.tsx'
+import { buildWorkspaceRuntime } from './physics/build-workspace-runtime.ts'
 import { domainOfScene } from './physics/domain-of-scene.ts'
 import { useEventEffects } from './physics/event-effects.ts'
 import { createFrameSource, useFrameSource, type FrameSource } from './physics/frame-source.ts'

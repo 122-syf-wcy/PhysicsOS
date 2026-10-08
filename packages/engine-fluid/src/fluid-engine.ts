@@ -1,3 +1,5 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   check,
   invalidModelCondition,
@@ -376,9 +378,12 @@ export class FluidEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
     const model = resolveFluidModel(scene)
     const { floats, settleTime } = equilibriumOf(model)
 
-    const states = Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) =>
-      stateOf(model, (index / TRAJECTORY_SEGMENTS) * settleTime),
-    )
+    const { startTime, endTime } = simulationTimeRange(request.options, settleTime)
+    const states = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
+    ).map((time) => stateOf(model, time))
 
     const events: PhysicsEventLike[] = [
       {
@@ -418,7 +423,7 @@ export class FluidEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       sceneId: scene.id,
       sceneRevision: scene.revision,
       states,
-      events,
+      events: eventsInSimulationRange(events, startTime, endTime),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

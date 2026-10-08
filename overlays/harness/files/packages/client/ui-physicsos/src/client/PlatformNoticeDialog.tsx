@@ -8,6 +8,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type { AuthState } from './auth-store.ts'
 import type { NoticeApi, PlatformNoticeRow } from './notice-api.ts'
 import css from './PlatformDialog.module.css'
+import { useModalFocus } from './use-modal-focus.ts'
 
 export interface PlatformNoticeDialogInjected {
   readonly api: NoticeApi
@@ -59,6 +60,8 @@ export function PlatformNoticeDialog({
     return () => { live = false }
   }, [api, status, userId])
 
+  const panelRef = useModalFocus<HTMLElement>(notice !== undefined)
+
   if (notice === undefined) return null
 
   const acknowledge = async (): Promise<void> => {
@@ -78,6 +81,8 @@ export function PlatformNoticeDialog({
     <div className={css.backdrop} data-physicsos-platform-notice="">
       <section
         className={css.dialog}
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

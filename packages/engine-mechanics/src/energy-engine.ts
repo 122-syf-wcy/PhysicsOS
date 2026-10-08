@@ -1,3 +1,4 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -400,6 +401,8 @@ export class EnergyEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
     const startedAt = new Date().toISOString()
     const model = resolveEnergyModel(scene)
 
+    const range = simulationTimeRange(request.options)
+
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,
@@ -407,16 +410,20 @@ export class EnergyEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
       sceneRevision: scene.revision,
       /* One state: the ledger is a function of the geometry, so a run of states
          would be the same numbers repeated at different clocks. */
-      states: [stateOf(model, 0)],
-      events: [
-        {
-          eventId: asPhysicsEventId(`event-energy-ledger-${model.benchId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'EnergyLedgerSettled',
-          time: 0,
-        },
-      ],
+      states: [stateOf(model, range.startTime)],
+      events: eventsInSimulationRange(
+        [
+          {
+            eventId: asPhysicsEventId(`event-energy-ledger-${model.benchId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'EnergyLedgerSettled',
+            time: 0,
+          },
+        ],
+        range.startTime,
+        range.endTime,
+      ),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

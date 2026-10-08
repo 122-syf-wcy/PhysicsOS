@@ -1,5 +1,5 @@
+import { assertVerifiedSimulation } from '@physicsos/physics-core'
 import { derivedScalar, type SimulationResult } from '@physicsos/physics-core'
-import { PhysicsOSError } from '@physicsos/shared'
 import type { ObservableDefinition, PhysicsScene } from '@physicsos/physics-scene'
 import { validateQuantity, type Quantity } from '@physicsos/physics-units'
 
@@ -41,18 +41,7 @@ export const observeModernPhysicsScene = (
   input: ModernObservationInput,
 ): ModernObservationRuntimeState => {
   const { scene, simulation } = input
-  if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
-    throw new PhysicsOSError(
-      'OBSERVATION_SCENE_REVISION_MISMATCH',
-      'Modern-physics observation requires the same scene revision as the simulation.',
-    )
-  }
-  if (simulation.verification.status === 'failed') {
-    throw new PhysicsOSError(
-      'OBSERVATION_UNVERIFIED_SIMULATION',
-      'Modern-physics observations require a verified simulation.',
-    )
-  }
+  assertVerifiedSimulation(scene, simulation)
 
   const observations: ModernPhysicsObservation[] = []
   for (const definition of scene.observableDefinitions.filter((entry) => entry.visible)) {

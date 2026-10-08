@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -63,6 +64,14 @@ function isExcluded(absolutePath) {
   return absolutePath.endsWith('.tsbuildinfo')
 }
 
+function isGeneratedCompanion(relativePath) {
+  const source = relativePath.replace(/\.(?:d\.ts|js)(?:\.map)?$/, '')
+  return (
+    source !== relativePath &&
+    ['.ts', '.tsx'].some((extension) => existsSync(path.join(vendorRoot, source + extension)))
+  )
+}
+
 function git(args, options = {}) {
   /* The upstream patch is well past the 1 MiB default `maxBuffer` once
      untracked files ride along; without this the capture dies with ENOBUFS. */
@@ -73,6 +82,51 @@ function git(args, options = {}) {
   })
   if (result.error) throw result.error
   return result
+}
+
+const digest = (bytes) => createHash('sha256').update(bytes).digest('hex')
+
+async function inventory(root) {
+  const files = {}
+  async function visit(relativePath) {
+    if (isExcluded(relativePath)) return
+    const absolute = path.join(root, relativePath)
+    if (!existsSync(absolute)) return
+    if ((await stat(absolute)).isDirectory()) {
+      for (const child of await readdir(absolute)) await visit(path.join(relativePath, child))
+    } else {
+      files[relativePath] = digest(await readFile(absolute))
+    }
+  }
+  for (const relativePath of OVERLAY_PATHS) await visit(relativePath)
+  return files
+}
+
+function manifestPath() {
+  const result = git([
+    '-C',
+    vendorRoot,
+    'rev-parse',
+    '--git-path',
+    'physicsos-overlay-manifest.json',
+  ])
+  if (result.status !== 0) throw new Error('cannot locate overlay manifest in vendor Git metadata')
+  return path.resolve(vendorRoot, result.stdout.trim())
+}
+
+async function verify() {
+  const source = await inventory(filesRoot)
+  const target = await inventory(vendorRoot)
+  const drift = [...new Set([...Object.keys(source), ...Object.keys(target)])].filter(
+    (key) => source[key] !== target[key],
+  )
+  if (drift.length > 0)
+    throw new Error(`overlay drift (${drift.length} files):\n${drift.join('\n')}`)
+  if (existsSync(patchFile) && (await readFile(patchFile, 'utf8')).trim()) {
+    const check = git(['-C', vendorRoot, 'apply', '--reverse', '--check', patchFile])
+    if (check.status !== 0) throw new Error(`upstream patch differs from vendor:\n${check.stderr}`)
+  }
+  console.log(`verified ${Object.keys(source).length} overlay files and upstream patch`)
 }
 
 async function copyTree(from, to, { clean }) {
@@ -111,6 +165,7 @@ async function capture() {
   if (untracked.status !== 0) throw new Error(`git ls-files failed: ${untracked.stderr}`)
   const added = untracked.stdout.split('\n').filter((line) => {
     if (line === '' || line.endsWith('AGENTS.md')) return false
+    if (isExcluded(line) || isGeneratedCompanion(line)) return false
     /* Paths already carried wholesale by OVERLAY_PATHS are copied as files;
        inlining them here too would duplicate every line and balloon the patch. */
     return !OVERLAY_PATHS.some((root) => line === root || line.startsWith(`${root}/`))
@@ -122,7 +177,19 @@ async function capture() {
 
   let diff
   try {
-    diff = git(['-C', vendorRoot, 'diff', '--', '.', ':(exclude)**/AGENTS.md'])
+    const tracked = git(['-C', vendorRoot, 'ls-files'])
+    if (tracked.status !== 0) throw new Error(`git ls-files failed: ${tracked.stderr}`)
+    const generated = tracked.stdout.split('\n').filter(isGeneratedCompanion)
+    diff = git([
+      '-C',
+      vendorRoot,
+      'diff',
+      'HEAD',
+      '--',
+      '.',
+      ':(exclude)**/AGENTS.md',
+      ...generated.map((file) => `:(exclude)${file}`),
+    ])
     if (diff.status !== 0) throw new Error(`git diff failed: ${diff.stderr}`)
   } finally {
     if (added.length > 0) {
@@ -142,6 +209,26 @@ async function apply() {
     )
   }
 
+  const expected = await inventory(filesRoot)
+  const manifest = manifestPath()
+  const previous = existsSync(manifest) ? JSON.parse(await readFile(manifest, 'utf8')) : {}
+  const deleted = Object.keys(previous).filter((relativePath) => {
+    const safe =
+      !relativePath.split(/[\\/]/).includes('..') &&
+      OVERLAY_PATHS.some((root) => relativePath === root || relativePath.startsWith(`${root}/`))
+    if (!safe) throw new Error('invalid managed path in overlay manifest')
+    return expected[relativePath] === undefined
+  })
+  // Check all stale files before deleting any. Never discard edits made in vendor.
+  for (const relativePath of deleted) {
+    const target = path.join(vendorRoot, relativePath)
+    if (existsSync(target) && digest(await readFile(target)) !== previous[relativePath]) {
+      throw new Error(`refusing to remove locally modified overlay file: ${relativePath}`)
+    }
+  }
+  for (const relativePath of deleted) await rm(path.join(vendorRoot, relativePath), { force: true })
+  const saveManifest = () => writeFile(manifest, `${JSON.stringify(expected, null, 2)}\n`, 'utf8')
+
   for (const relativePath of OVERLAY_PATHS) {
     const source = path.join(filesRoot, relativePath)
     if (!existsSync(source)) {
@@ -154,12 +241,14 @@ async function apply() {
 
   const patch = existsSync(patchFile) ? await readFile(patchFile, 'utf8') : ''
   if (patch.trim().length === 0) {
+    await saveManifest()
     console.log('no upstream patch to apply')
     return
   }
 
   const alreadyApplied = git(['-C', vendorRoot, 'apply', '--reverse', '--check', patchFile])
   if (alreadyApplied.status === 0) {
+    await saveManifest()
     console.log('upstream-changes.patch already applied')
     return
   }
@@ -173,6 +262,7 @@ async function apply() {
     )
   }
   console.log('applied upstream-changes.patch')
+  await saveManifest()
 }
 
 const mode = process.argv[2]
@@ -180,8 +270,9 @@ const mode = process.argv[2]
 try {
   if (mode === 'capture') await capture()
   else if (mode === 'apply') await apply()
+  else if (mode === 'verify') await verify()
   else {
-    console.error('usage: node scripts/overlay/harness-overlay.mjs <apply|capture>')
+    console.error('usage: node scripts/overlay/harness-overlay.mjs <apply|capture|verify>')
     process.exit(2)
   }
 } catch (error) {

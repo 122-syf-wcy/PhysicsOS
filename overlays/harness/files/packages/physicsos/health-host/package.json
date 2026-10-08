@@ -29,5 +29,12 @@
   "scripts": {
     "bundle": "tsc -b tsconfig.json && tsdown"
   },
-  "license": "PolyForm-Noncommercial-1.0.0"
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dependencies": {
+    "pg": "^8.23.0",
+    "@deepseek-ai/dsh-shared-state-host": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  }
 }

@@ -1,3 +1,4 @@
+import { assertVerifiedSimulation } from '@physicsos/physics-core'
 /**
  * Composite-field observation.
  *
@@ -215,20 +216,7 @@ export const observeCompositeScene = (
   input: CompositeObservationInput,
 ): CompositeObservationRuntimeState => {
   const { scene, simulation } = input
-  if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
-    throw new PhysicsOSError(
-      'OBSERVATION_SCENE_REVISION_MISMATCH',
-      'Observation input must reference the same scene revision as the simulation.',
-      {
-        details: {
-          sceneId: scene.id,
-          simulationSceneId: simulation.sceneId,
-          sceneRevision: scene.revision,
-          simulationSceneRevision: simulation.sceneRevision,
-        },
-      },
-    )
-  }
+  assertVerifiedSimulation(scene, simulation)
 
   const particle = scene.particles[0]
   if (particle === undefined) {

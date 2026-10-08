@@ -61,15 +61,11 @@ say "构建镜像（首次约 10-15 分钟）"
 docker compose build
 
 say "启动"
-docker compose up -d
-sleep 45
+docker compose up -d --wait --wait-timeout 180
 docker compose ps
 
 say "自检"
-curl -fsS --max-time 10 http://127.0.0.1:3080/healthz || true
-echo
-curl -fsS --max-time 10 http://127.0.0.1:3080/readyz || true
-echo
+docker compose exec -T app node scripts/deploy/wait-for-ready.mjs http://127.0.0.1:3080/readyz
 
 say "运维加固与定时备份"
 "$DIR/scripts/deploy/install-operations.sh"

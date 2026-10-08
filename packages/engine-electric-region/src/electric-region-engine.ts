@@ -1,3 +1,4 @@
+import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   add,
   dot,
@@ -683,41 +684,27 @@ const buildVerification = (
       const k0 = 0.5 * model.mass * magnitude(v0) ** 2
       const k1 = 0.5 * model.mass * magnitude(v1) ** 2
       const dK = k1 - k0
-      // Work by field: only computed over the inside-field portion.
-      let wField = 0
-      // Kinetic energy the plate absorbs on impact (velocity zeroes after a hit),
-      // so ΔK reflects that loss on top of the field's work.
-      let plateAbsorbed = 0
-      const endTime = canonicalValue(lastState.time)
-      if (phases.exitTime !== null && endTime >= phases.exitTime) {
-        const tInside = phases.exitTime - phases.enterTime
-        const dispInside = {
-          x: model.velocity.x * tInside,
-          y: model.velocity.y * tInside + 0.5 * model.acceleration.y * tInside * tInside,
+      // Compare cumulative work/absorbed energy at both window endpoints.
+      const ledgerAt = (time: number): { work: number; absorbed: number } => {
+        const stop = Math.min(time, phases.exitTime ?? Infinity, phases.hitTime ?? Infinity)
+        const insideTime = Math.max(0, stop - phases.enterTime)
+        const displacement = {
+          x: model.velocity.x * insideTime,
+          y: model.velocity.y * insideTime + 0.5 * model.acceleration.y * insideTime * insideTime,
           z: 0,
         }
-        wField = dot(model.force, dispInside)
-      } else if (phases.hitTime !== null && endTime >= phases.hitTime) {
-        const tIn = phases.hitTime - phases.enterTime
-        const dispInside = {
-          x: model.velocity.x * tIn,
-          y: model.velocity.y * tIn + 0.5 * model.acceleration.y * tIn * tIn,
-          z: 0,
+        return {
+          work: dot(model.force, displacement),
+          absorbed:
+            phases.hitTime !== null && time >= phases.hitTime && phases.hit !== null
+              ? 0.5 * model.mass * magnitude(phases.hit.velocity) ** 2
+              : 0,
         }
-        wField = dot(model.force, dispInside)
-        if (phases.hit !== null) {
-          plateAbsorbed = 0.5 * model.mass * magnitude(phases.hit.velocity) ** 2
-        }
-      } else if (endTime > phases.enterTime) {
-        // Still inside field.
-        const tIn = endTime - phases.enterTime
-        const dispInside = {
-          x: model.velocity.x * tIn,
-          y: model.velocity.y * tIn + 0.5 * model.acceleration.y * tIn * tIn,
-          z: 0,
-        }
-        wField = dot(model.force, dispInside)
       }
+      const initial = ledgerAt(canonicalValue(firstState.time))
+      const final = ledgerAt(canonicalValue(lastState.time))
+      const wField = final.work - initial.work
+      const plateAbsorbed = final.absorbed - initial.absorbed
       checks.push(
         check('energy_consistency', 'conservation', Math.abs(dK + plateAbsorbed - wField) < 1e-15, {
           message: 'W = ΔK verified.',
@@ -731,11 +718,11 @@ const buildVerification = (
   // simulated window must produce a transition event. A trajectory that never
   // enters the region (or whose crossing lies outside the window, including an
   // empty window with no sampled states) produces none legitimately.
-  const finalState = states.at(-1)
-  const crossedInWindow =
-    finalState !== undefined &&
-    Number.isFinite(phases.enterTime) &&
-    phases.enterTime <= canonicalValue(finalState.time)
+  const firstTime = states[0] === undefined ? Infinity : canonicalValue(states[0].time)
+  const lastTime = states.at(-1) === undefined ? -Infinity : canonicalValue(states.at(-1)!.time)
+  const crossedInWindow = [phases.enterTime, phases.exitTime, phases.hitTime].some(
+    (time) => time !== null && Number.isFinite(time) && time >= firstTime && time <= lastTime,
+  )
   checks.push(
     check('events_present', 'trajectory', !crossedInWindow || events.length > 0, {
       message:
@@ -987,9 +974,10 @@ export class ElectricRegionEngine implements PhysicsEngine<PhysicsScene, Physics
     }
 
     // Sample trajectory.
-    const times = Array.from(
-      { length: DEFAULT_TRAJECTORY_SEGMENTS + 1 },
-      (_, index) => startTime + ((endTime - startTime) * index) / DEFAULT_TRAJECTORY_SEGMENTS,
+    const times = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, DEFAULT_TRAJECTORY_SEGMENTS + 1),
     )
     const states = times.map((t) => stateAtForModel(model, t))
 

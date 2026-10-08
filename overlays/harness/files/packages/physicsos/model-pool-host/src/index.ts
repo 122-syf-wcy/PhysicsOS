@@ -132,7 +132,7 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
         signal,
       })
       if (result.ok) await store.markSuccess(keyId)
-      else {
+      else if (!signal.aborted && classifyStatus(result.status) !== 'client') {
         await store.markFailure(keyId, {
           kind: classifyStatus(result.status),
           status: result.status,

@@ -1,3 +1,4 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -482,6 +483,8 @@ export class LightEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
     const startedAt = new Date().toISOString()
     const model = resolveLightModel(scene)
 
+    const range = simulationTimeRange(request.options)
+
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,
@@ -489,16 +492,20 @@ export class LightEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       sceneRevision: scene.revision,
       /* One state: the apparatus does not move, so a longer run would be the same
          picture at a different clock. */
-      states: [stateOf(model, 0)],
-      events: [
-        {
-          eventId: asPhysicsEventId(`event-light-image-${model.benchId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'LightImageFormed',
-          time: 0,
-        },
-      ],
+      states: [stateOf(model, range.startTime)],
+      events: eventsInSimulationRange(
+        [
+          {
+            eventId: asPhysicsEventId(`event-light-image-${model.benchId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'LightImageFormed',
+            time: 0,
+          },
+        ],
+        range.startTime,
+        range.endTime,
+      ),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

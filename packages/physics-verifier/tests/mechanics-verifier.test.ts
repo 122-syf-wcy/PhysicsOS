@@ -86,3 +86,48 @@ describe('mechanics verifier', () => {
     expect(invalidPosition.passed).toBe(false)
   })
 })
+
+describe('independent mechanics result verification', () => {
+  it('rejects numerical corruption even when the engine claims verification passed', () => {
+    const scene = createScene()
+    const result = new MechanicsEngine().simulate(
+      scene,
+      createMechanicsSimulationRequest(scene, 'corrupt', 'corrupt'),
+    )
+    result.states[1]!.objects[0]!.position!.vector.x += 1
+    expect(result.verification.status).toBe('passed')
+    expect(verifyMechanicsSimulation(scene, result).status).toBe('failed')
+  })
+  it('rejects a forged acceleration that disagrees with the scene input', () => {
+    const scene = createScene()
+    const result = new MechanicsEngine().simulate(
+      scene,
+      createMechanicsSimulationRequest(scene, 'corrupt-a', 'corrupt-a'),
+    )
+    result.states[1]!.objects[0]!.acceleration!.vector.x += 2
+    expect(verifyMechanicsSimulation(scene, result).status).toBe('failed')
+  })
+  it('accepts absolute state times for a nonzero simulation window', () => {
+    const scene = createScene()
+    const request = createMechanicsSimulationRequest(scene, 'subrange', 'subrange')
+    request.options = {
+      startTime: { value: 1, unit: 's', dimension: 'time' },
+      endTime: { value: 2, unit: 's', dimension: 'time' },
+      outputSampleRate: 5,
+    }
+    expect(
+      verifyMechanicsSimulation(scene, new MechanicsEngine().simulate(scene, request)).status,
+    ).toBe('passed')
+  })
+})
+
+it('rejects a summary final velocity that disagrees with the verified trajectory', () => {
+  const scene = createScene()
+  const result = new MechanicsEngine().simulate(
+    scene,
+    createMechanicsSimulationRequest(scene, 'summary', 'summary'),
+  )
+  const final = result.derivedQuantities.find((value) => value.key === 'final_velocity')!
+  if ('value' in final.value) final.value.value += 2
+  expect(verifyMechanicsSimulation(scene, result).status).toBe('failed')
+})

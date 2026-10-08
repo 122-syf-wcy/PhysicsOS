@@ -1,3 +1,4 @@
+import { sceneRefOf } from './surface-store.ts'
 import {
   IconBrowseOutline16, IconChevronRightOutline14, IconFolderOpen16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -143,7 +144,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
                     type="button"
                     className={css.recentItem}
                     onClick={() => {
-                      openSurface('lab', { sceneId: entry.sceneId, scene: entry.scene })
+                      openSurface('lab', sceneRefOf(entry))
                     }}
                   >
                     <IconFolderOpen16 size={16} />

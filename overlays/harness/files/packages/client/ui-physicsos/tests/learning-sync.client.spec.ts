@@ -14,6 +14,9 @@ import {
   type RecentExperimentEntry,
 } from '../src/client/surface-store.ts'
 import type { LearningApi } from '../src/client/learning-api.ts'
+import { draftToScene, starterDraft } from '../src/client/physics/circuit-builder.ts'
+import { createCircuitWorkspaceRuntime } from '../src/client/physics/circuit-workspace-runtime.ts'
+import { buildWorkspaceRuntime } from '../src/client/LabWorkspace.tsx'
 
 const localAttempt = (id: string, at: string): StudentAttempt => ({
   id,
@@ -216,4 +219,179 @@ describe('client personal learning sync', () => {
       'local-scene',
     ])
   })
+})
+
+
+it('acknowledges uploaded attempts durably and never reuploads unchanged history', async () => {
+  const { storage } = memoryStorage({ 'physicsos.learning-record': JSON.stringify([localAttempt('old', '2026-09-26T08:00:00.000Z')]) })
+  const remote = api()
+  const put = vi.spyOn(remote, 'putAttempt')
+  const first = createLearningRecordController(storage, remote)
+  await first.sync()
+  await first.sync()
+  const reloaded = createLearningRecordController(storage, remote)
+  await reloaded.sync()
+  expect(put).toHaveBeenCalledTimes(1)
+})
+
+it('a rejected row does not stop other pending rows from uploading', async () => {
+  const rows = [localAttempt('bad', '2026-09-26T09:00:00.000Z'), localAttempt('good', '2026-09-26T08:00:00.000Z')]
+  const { storage } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
+  const remote = api()
+  const put = remote.putAttempt
+  remote.putAttempt = async (item) => { if (item.id === 'bad') throw new Error('bad row'); return put(item) }
+  const controller = createLearningRecordController(storage, remote)
+  await expect(controller.sync()).rejects.toThrow()
+  expect(remote.attempts.has('good')).toBe(true)
+})
+
+it('persists edited scenes and revisions through picker, resume and reload', () => {
+  const { storage } = memoryStorage()
+  const controller = createPhysicsSurfaceController(storage)
+  const original = remoteScene('editable', '2026-09-26T08:00:00.000Z').scene
+  controller.open('lab', { sceneId: String(original.id), scene: original })
+  const edited = structuredClone(original)
+  edited.revision = 1
+  edited.bodies[0]!.mass.value = 2
+  controller.updateScene(edited)
+  controller.openExperimentPicker()
+  controller.open('lab')
+  expect(controller.store.getSnapshot().sceneRef?.scene).toEqual(edited)
+  const reloaded = createPhysicsSurfaceController(storage)
+  expect(reloaded.recent.getSnapshot().items[0]?.scene).toEqual(edited)
+})
+
+it('retains edited free-build facts and mode after picker, resume and reload', () => {
+  const { storage } = memoryStorage()
+  const controller = createPhysicsSurfaceController(storage)
+  const scene = draftToScene(starterDraft(), { sceneId: 'free-build' })
+  const runtime = createCircuitWorkspaceRuntime(scene)
+  controller.openBuilder({ sceneId: String(scene.id), scene })
+  runtime.editParameter('emf', 2)
+  controller.updateScene(runtime.getScene())
+  controller.openExperimentPicker()
+  controller.open('lab')
+  expect(controller.store.getSnapshot().buildMode).toBe(true)
+  const restored = createPhysicsSurfaceController(storage).recent.getSnapshot().items[0]!
+  expect(restored.buildMode).toBe(true)
+  expect(restored.scene.revision).toBe(1)
+  const source = restored.scene.circuits[0]?.components.find(component => component.type === 'voltage_source')
+  expect(source?.voltage.value).toBe(2)
+})
+
+
+it('restores original question facts after a fork has been saved and reloaded', () => {
+  const { storage } = memoryStorage()
+  const original = remoteScene('question-scene', '2026-09-26T08:00:00.000Z').scene
+  original.metadata.sourceQuestionId = 'q1' as NonNullable<typeof original.metadata.sourceQuestionId>
+  const controller = createPhysicsSurfaceController(storage)
+  controller.open('lab', { sceneId: String(original.id), scene: original })
+  const runtime = buildWorkspaceRuntime('mechanics', original)!
+  runtime.editParameter('mass', 2)
+  const edited = runtime.getScene!()
+  expect(edited.metadata.lineage).toBeDefined()
+  controller.updateScene(edited)
+  const saved = createPhysicsSurfaceController(storage).recent.getSnapshot().items[0]!
+  expect(saved.originScene).toEqual(original)
+  const restoredRuntime = buildWorkspaceRuntime('mechanics', saved.scene, saved.originScene)!
+  restoredRuntime.restoreOrigin!()
+  expect(restoredRuntime.getScene!()).toEqual(original)
+})
+
+
+it('serializes remote saves so a slow older write cannot replace the latest revision', async () => {
+  const remote = api()
+  let release: (() => void) | undefined
+  let first = true
+  let finished: (() => void) | undefined
+  const firstFinished = new Promise<void>((resolve) => { finished = resolve })
+  const put = remote.putScene
+  remote.putScene = async (entry) => {
+    if (first) {
+      first = false
+      await new Promise<void>((resolve) => { release = resolve })
+      const result = await put(entry)
+      finished?.()
+      return result
+    }
+    return put(entry)
+  }
+  const controller = createPhysicsSurfaceController(undefined, remote)
+  const original = remoteScene('ordered', '2026-09-26T08:00:00.000Z').scene
+  controller.open('lab', { sceneId: String(original.id), scene: original })
+  await vi.waitFor(() => { expect(release).toBeDefined() })
+  const edited = structuredClone(original)
+  edited.revision = 1
+  edited.bodies[0]!.mass.value = 2
+  controller.updateScene(edited)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  release?.()
+  await firstFinished
+  await vi.waitFor(() => { expect(remote.scenes.get('ordered')?.scene).toEqual(edited) })
+})
+
+
+const deferred = () => {
+  let complete: (() => void) | undefined
+  const promise = new Promise<void>((resolve) => { complete = resolve })
+  return { promise, resolve: () => { complete?.() } }
+}
+
+it('reads each scene at queued write time when another scene delays reconciliation', async () => {
+  const a = remoteScene('A', '2026-09-26T09:00:00.000Z')
+  const b = remoteScene('B', '2026-09-26T08:00:00.000Z')
+  const { storage } = memoryStorage({ 'physicsos.recent-scenes': JSON.stringify([a, b]) })
+  const remote = api()
+  const enteredA = deferred()
+  const releaseA = deferred()
+  const savedB = deferred()
+  const writes: string[] = []
+  const put = remote.putScene
+  remote.putScene = async (entry) => {
+    writes.push(`${entry.sceneId}:${entry.scene.revision}`)
+    if (entry.sceneId === 'A') { enteredA.resolve(); await releaseA.promise }
+    const saved = await put(entry)
+    if (entry.sceneId === 'B') savedB.resolve()
+    return saved
+  }
+  const controller = createPhysicsSurfaceController(storage, remote)
+  const syncing = controller.sync()
+  await enteredA.promise
+  const edited = structuredClone(b.scene)
+  edited.revision = 1
+  edited.bodies[0]!.mass.value = 2
+  controller.open('lab', { sceneId: 'B', scene: edited })
+  await savedB.promise
+  releaseA.resolve()
+  await syncing
+  expect(writes).not.toContain('B:0')
+  expect(remote.scenes.get('B')?.scene).toEqual(edited)
+  expect(controller.recent.getSnapshot().items.find(item => item.sceneId === 'B')?.scene).toEqual(edited)
+})
+
+it('does not resurrect a scene deleted and acknowledged during another scene upload', async () => {
+  const a = remoteScene('A', '2026-09-26T09:00:00.000Z')
+  const b = remoteScene('B', '2026-09-26T08:00:00.000Z')
+  const { storage, values } = memoryStorage({ 'physicsos.recent-scenes': JSON.stringify([a, b]) })
+  const remote = api()
+  remote.scenes.set('B', b)
+  const enteredA = deferred()
+  const releaseA = deferred()
+  const put = remote.putScene
+  remote.putScene = async (entry) => {
+    if (entry.sceneId === 'A') { enteredA.resolve(); await releaseA.promise }
+    return put(entry)
+  }
+  const controller = createPhysicsSurfaceController(storage, remote)
+  const syncing = controller.sync()
+  await enteredA.promise
+  controller.removeRecent('B')
+  await vi.waitFor(() => {
+    expect(remote.scenes.has('B')).toBe(false)
+    expect(values.get('physicsos.recent-scenes.deleted')).toBe('[]')
+  })
+  releaseA.resolve()
+  await syncing
+  expect(remote.scenes.has('B')).toBe(false)
+  expect(controller.recent.getSnapshot().items.some(item => item.sceneId === 'B')).toBe(false)
 })

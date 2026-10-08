@@ -600,3 +600,28 @@ describe('paper routes — identity gate', () => {
     }
   })
 })
+
+
+describe('paper creation collisions', () => {
+  it('preserves the original school records when another teacher reuses their IDs', async () => {
+    for (const schoolId of ['COLLISION-A', 'COLLISION-B']) {
+      expect((await post('/sources', { ...validSource, id: `collision-source-${schoolId}` }, 'TEACHER', schoolId)).status).toBe(201)
+    }
+    const annotation = { id: 'collision-note', questionNo: '1', subject: 'physics', kind: 'choice-single', score: 3,
+      knowledgePrimary: '声音', knowledgeSecondary: [], ability: '理解', answerSource: 'web-public', reviewer: 'teacher' }
+    const blueprint = { id: 'collision-blueprint', level: 'zhongkao', subject: 'physics', title: 'original', totalScore: 90, minutes: 120, sections: [], basedOn: [] }
+    const bank = { id: 'collision-bank', level: 'zhongkao', subject: 'physics', kind: 'choice-single', knowledge: ['声音'], ability: '理解', difficulty: 'basic', score: 3,
+      stem: 'original collision test stem', options: ['A', 'B'], answer: { result: 'A', steps: [], gradingPoints: [] }, answerTier: 'web-public', anomalies: [], reuseModes: ['adapt'], enteredBy: 'teacher' }
+    const cases = [
+      { path: '/blueprints', otherPath: '/blueprints', body: blueprint, changed: { ...blueprint, title: 'overwritten' }, table: 'blueprints' },
+      { path: '/bank/items', otherPath: '/bank/items', body: bank, changed: { ...bank, stem: 'different stem same id' }, table: 'bank_items' },
+      { path: '/sources/collision-source-COLLISION-A/annotations', otherPath: '/sources/collision-source-COLLISION-B/annotations', body: annotation, changed: { ...annotation, questionNo: '2' }, table: 'annotations' },
+    ] as const
+    for (const entry of cases) {
+      expect((await post(entry.path, entry.body, 'TEACHER', 'COLLISION-A')).status).toBe(201)
+      const original = fakeDomain.table(entry.table).get(entry.body.id)
+      expect((await post(entry.otherPath, entry.changed, 'TEACHER', 'COLLISION-B')).status).toBe(409)
+      expect(fakeDomain.table(entry.table).get(entry.body.id)).toEqual(original)
+    }
+  })
+})

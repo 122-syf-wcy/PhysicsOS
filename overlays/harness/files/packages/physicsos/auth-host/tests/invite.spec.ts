@@ -275,3 +275,59 @@ describe('admin invite lifecycle', () => {
     expect(claims.size).toBe(0)
   })
 })
+
+
+describe('invite write failure recovery', () => {
+  it('restores the exact hashed invite row before admitting a concurrent registration', async () => {
+    const harness = await makeHarness('invite')
+    const actor = { userKey: 'PHYSICSOS-OPEN:admin', schoolId: 'PHYSICSOS-OPEN', username: 'admin', role: 'SUPER_ADMIN' as const }
+    const { invites } = await harness.service.createInvites(actor, { schoolId: 'GZU', count: 1, maxUses: 1 })
+    const invite = invites[0]!
+    const originalEntries = [...harness.domain.table('invites').entries()]
+    const users = harness.domain.table('users')
+    const originalPut = users.put.bind(users)
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    const blocked = new Promise<void>((resolve) => { release = resolve })
+    users.put = async (key, row) => {
+      if (row.username === 'failing-user') { entered(); await blocked; throw new Error('durable user write failed') }
+      await originalPut(key, row)
+    }
+    const body = { schoolId: 'GZU', username: 'failing-user', displayName: '用户', password: 'test-password', inviteCode: invite.code }
+    const first = harness.service.register(body)
+    const firstResult = first.catch((error: unknown) => error)
+    await started
+    const second = harness.service.register({ ...body, username: 'next-user' })
+    const secondResult = second.catch((error: unknown) => error)
+    release()
+    expect(await firstResult).toMatchObject({ message: 'durable user write failed' })
+    expect(await secondResult).toMatchObject({ user: { username: 'next-user' } })
+    const entries = [...harness.domain.table('invites').entries()]
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toEqual([originalEntries[0]![0], { ...originalEntries[0]![1], usedCount: 1 }])
+    expect(harness.domain.table('users').get('GZU:failing-user')).toBeUndefined()
+  })
+})
+
+
+it('keeps an administrator disable when an overlapping registration is rolled back', async () => {
+  const harness = await makeHarness('invite')
+  const actor = { userKey: 'PHYSICSOS-OPEN:admin', schoolId: 'PHYSICSOS-OPEN', username: 'admin', role: 'SUPER_ADMIN' as const }
+  const { invites } = await harness.service.createInvites(actor, { schoolId: 'GZU', count: 1, maxUses: 1 })
+  let release!: () => void
+  let started!: () => void
+  const entered = new Promise<void>((resolve) => { started = resolve })
+  const blocked = new Promise<void>((resolve) => { release = resolve })
+  harness.domain.table('users').put = async () => { started(); await blocked; throw new Error('failed') }
+  const registration = harness.service.register({ schoolId: 'GZU', username: 'failed-user', displayName: '用户', password: 'test-password', inviteCode: invites[0]!.code }).catch((error: unknown) => error)
+  await entered
+  const disabling = harness.service.disableInvite(actor, invites[0]!.id)
+  release()
+  await registration
+  await disabling
+  const rows = [...harness.domain.table('invites').entries()]
+  expect(rows).toHaveLength(1)
+  expect(rows[0]![1]).toMatchObject({ usedCount: 0, disabledBy: actor.userKey })
+  expect(typeof rows[0]![1].disabledAt).toBe('string')
+})

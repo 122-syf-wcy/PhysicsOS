@@ -18,11 +18,23 @@ export type PhysicsSurfaceId =
 export interface PhysicsSceneRef {
   sceneId: string
   scene: PhysicsScene
+  originScene?: PhysicsScene
+  buildMode?: true
 }
+
+/** Keep persisted authoring/provenance state when opening a recent scene. */
+export const sceneRefOf = (entry: PhysicsSceneRef): PhysicsSceneRef => ({
+  sceneId: entry.sceneId,
+  scene: entry.scene,
+  ...(entry.originScene === undefined ? {} : { originScene: entry.originScene }),
+  ...(entry.buildMode === true ? { buildMode: true } : {}),
+})
 
 /** Snapshot the sidebar and workspace overlay subscribe to. */
 export interface PhysicsSurfaceState {
   surface: PhysicsSurfaceId
+  /** Changes only on an explicit handover, never a write-back. */
+  sceneGeneration?: number
   /** The active scene. Survives surface switches so returning to the Lab resumes it. */
   sceneRef?: PhysicsSceneRef
   /**
@@ -54,6 +66,8 @@ export interface RecentExperimentEntry {
   readonly kind: 'experiment' | 'question'
   readonly updatedAt: string
   readonly scene: PhysicsScene
+  readonly originScene?: PhysicsScene
+  readonly buildMode?: true
 }
 
 /** Snapshot the sidebar recent-space list subscribes to. */
@@ -97,6 +111,7 @@ export interface PhysicsSurfaceController {
   recent: SnapshotStore<RecentExperimentsState>
   open: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
   /** Open the Lab assembling a circuit: the build bench, not the reading bench. */
+  updateScene: (scene: PhysicsScene) => void
   openBuilder: (sceneRef: PhysicsSceneRef) => void
   /** Open the Lab on the experiment chooser, keeping the active scene resumable. */
   openExperimentPicker: () => void
@@ -119,6 +134,7 @@ export function createPhysicsSurfaceController(
   storage?: SceneStorage,
   remote?: SavedSceneSync,
 ): PhysicsSurfaceController {
+  let generation = 0
   const store = createSnapshotStore<PhysicsSurfaceState>({ surface: 'home' })
   const recent = createSnapshotStore<RecentExperimentsState>({
     items: readStoredScenes(storage),
@@ -134,6 +150,9 @@ export function createPhysicsSurfaceController(
     }
   }
   const deleted = readDeleted()
+  // A server delete can be acknowledged while this sync still holds an older
+  // remote page. Keep its tombstone until that reconciliation has completed.
+  const removedDuringSync = new Set<string>()
 
   const persistItems = (items: readonly RecentExperimentEntry[]): void => {
     recent.set({ items })
@@ -156,7 +175,7 @@ export function createPhysicsSurfaceController(
     const byId = new Map<string, RecentExperimentEntry>()
     for (const group of groups) {
       for (const entry of group) {
-        if (deleted.has(entry.sceneId)) continue
+        if (deleted.has(entry.sceneId) || removedDuringSync.has(entry.sceneId)) continue
         const current = byId.get(entry.sceneId)
         if (current === undefined || current.updatedAt <= entry.updatedAt)
           byId.set(entry.sceneId, entry)
@@ -166,10 +185,30 @@ export function createPhysicsSurfaceController(
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.sceneId.localeCompare(a.sceneId))
       .slice(0, RECENT_SCENES_LIMIT)
   }
+  const writes = new Map<string, Promise<unknown>>()
+  const enqueue = <T>(sceneId: string, write: () => Promise<T>): Promise<T> => {
+    const previous = writes.get(sceneId) ?? Promise.resolve()
+    const job = previous.catch(() => {}).then(write)
+    writes.set(sceneId, job)
+    void job.finally(() => {
+      if (writes.get(sceneId) === job) writes.delete(sceneId)
+    }).catch(() => {})
+    return job
+  }
+  const saveNewest = (sceneId: string, known?: RecentExperimentEntry) =>
+    enqueue(sceneId, async () => {
+      if (remote === undefined || deleted.has(sceneId) || removedDuringSync.has(sceneId)) return undefined
+      // An earlier scene's upload or this scene's queue may have yielded long
+      // enough for a new edit. Capture facts only when the write actually runs.
+      const latest = recent.getSnapshot().items.find(item => item.sceneId === sceneId)
+      if (latest === undefined || (known !== undefined && latest.updatedAt <= known.updatedAt)) return undefined
+      return remote.putScene(latest)
+    })
   let activeSync: Promise<void> | undefined
   const sync = (): Promise<void> => {
     if (remote === undefined) return Promise.resolve()
     activeSync ??= (async () => {
+      await Promise.allSettled([...writes.values()])
       for (const sceneId of deleted) {
         await remote.deleteScene(sceneId)
         deleted.delete(sceneId)
@@ -189,21 +228,16 @@ export function createPhysicsSurfaceController(
       }
 
       const remoteById = new Map(remoteItems.map(entry => [entry.sceneId, entry]))
-      const uploadNewest = async (items: readonly RecentExperimentEntry[]): Promise<void> => {
-        for (const entry of items) {
-          if (deleted.has(entry.sceneId)) continue
-          const server = remoteById.get(entry.sceneId)
-          if (server === undefined || entry.updatedAt > server.updatedAt) {
-            const saved = await remote.putScene(entry)
-            remoteById.set(entry.sceneId, saved.item)
-          }
-        }
+      const sceneIds = recent.getSnapshot().items.map(entry => entry.sceneId)
+      for (const sceneId of sceneIds) {
+        const saved = await saveNewest(sceneId, remoteById.get(sceneId))
+        if (saved !== undefined) remoteById.set(sceneId, saved.item)
       }
-      await uploadNewest(recent.getSnapshot().items)
       const items = merge([remoteItems, [...remoteById.values()], recent.getSnapshot().items])
       persistItems(items)
     })().finally(() => {
       activeSync = undefined
+      removedDuringSync.clear()
     })
     return activeSync
   }
@@ -215,15 +249,23 @@ export function createPhysicsSurfaceController(
       title: scene.metadata.title ?? sceneRef.sceneId,
       domain: domainOfScene(scene),
       kind: scene.metadata.sourceQuestionId === undefined ? 'experiment' : 'question',
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date(Math.max(
+        Date.now(),
+        Date.parse(recent.getSnapshot().items.find(item => item.sceneId === sceneRef.sceneId)?.updatedAt ?? '') + 1 || 0,
+      )).toISOString(),
       scene,
+      ...(sceneRef.originScene === undefined ? {} : { originScene: sceneRef.originScene }),
+      ...(sceneRef.buildMode === true ? { buildMode: true } : {}),
     }
+    deleted.delete(entry.sceneId)
+    removedDuringSync.delete(entry.sceneId)
+    persistDeleted()
     const entryItems = [
       entry,
       ...recent.getSnapshot().items.filter(existing => existing.sceneId !== entry.sceneId),
     ].slice(0, RECENT_SCENES_LIMIT)
     persistItems(entryItems)
-    void remote?.putScene(entry).catch(() => {
+    if (remote !== undefined) void saveNewest(entry.sceneId).catch(() => {
       /* Local-first: the next sync compares timestamps and retries. */
     })
   }
@@ -237,33 +279,45 @@ export function createPhysicsSurfaceController(
          replaces it. The picker flag is deliberately dropped on every open, so
          choosing a template (or resuming) closes the chooser — and build mode
          is dropped with it, because reading a template is not assembling one. */
-      const active = sceneRef ?? store.getSnapshot().sceneRef
+      const previous = store.getSnapshot()
+      const active = sceneRef ?? previous.sceneRef
       store.set({
         surface,
+        sceneGeneration: sceneRef === undefined ? previous.sceneGeneration ?? generation : ++generation,
         ...(active === undefined ? {} : { sceneRef: active }),
+        ...(active?.buildMode === true || (sceneRef === undefined && previous.buildMode === true) ? { buildMode: true } : {}),
       })
       if (sceneRef !== undefined) record(sceneRef)
     },
-    openBuilder: (sceneRef) => {
-      store.set({ surface: 'lab', sceneRef, buildMode: true })
+    updateScene: (scene) => {
+      const current = store.getSnapshot()
+      const previous = current.sceneRef
+      if (previous === undefined || (previous.scene.id === scene.id && previous.scene.revision === scene.revision)) return
+      const originScene = previous.originScene ?? (previous.scene.metadata.sourceQuestionId === undefined ? undefined : previous.scene)
+      const sceneRef: PhysicsSceneRef = {
+        sceneId: String(scene.id), scene,
+        ...(originScene === undefined ? {} : { originScene }),
+        ...(current.buildMode === true ? { buildMode: true } : {}),
+      }
+      store.set({ ...current, sceneRef })
+      record(sceneRef)
+    },
+    openBuilder: (ref) => {
+      const sceneRef: PhysicsSceneRef = { ...ref, buildMode: true }
+      store.set({ surface: 'lab', sceneRef, sceneGeneration: ++generation, buildMode: true })
       record(sceneRef)
     },
     openExperimentPicker: () => {
-      const active = store.getSnapshot().sceneRef
-      store.set({
-        surface: 'lab',
-        experimentPicker: true,
-        ...(active === undefined ? {} : { sceneRef: active }),
-      })
+      store.set({ ...store.getSnapshot(), surface: 'lab', experimentPicker: true })
     },
     removeRecent: (sceneId) => {
       const items = recent.getSnapshot().items.filter(entry => entry.sceneId !== sceneId)
       if (items.length === recent.getSnapshot().items.length) return
       deleted.add(sceneId)
+      if (activeSync !== undefined) removedDuringSync.add(sceneId)
       persistDeleted()
       persistItems(items)
-      void remote
-        ?.deleteScene(sceneId)
+      if (remote !== undefined) void enqueue(sceneId, () => remote.deleteScene(sceneId))
         .then(() => {
           deleted.delete(sceneId)
           persistDeleted()

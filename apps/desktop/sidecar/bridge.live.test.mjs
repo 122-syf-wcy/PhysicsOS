@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { test } from 'node:test'
+import { observeChild, registerWhenReady, stopChild } from './test-process.mjs'
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
 const bridgeEntry = fileURLToPath(new URL('./bridge.mjs', import.meta.url))
@@ -79,47 +80,15 @@ function createLineClient(input, output, errorStream) {
   }
 }
 
-async function registerWhenReady(baseUrl, credentials) {
-  let lastStatus
-  for (let attempt = 0; attempt < 400; attempt += 1) {
-    try {
-      const response = await fetch(`${baseUrl}/physicsos/auth/register`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(credentials),
-      })
-      lastStatus = response.status
-      if (response.ok) return response
-      if (response.status !== 404 && response.status !== 405) {
-        throw new Error(
-          `registration failed with HTTP ${String(response.status)}: ${await response.text()}`,
-        )
-      }
-    } catch (error) {
-      if (lastStatus !== undefined && lastStatus !== 404 && lastStatus !== 405) throw error
-    }
-    await delay(100)
-  }
-  throw new Error(`Harness register route did not become ready (last HTTP ${String(lastStatus)})`)
-}
-
-async function stopChild(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  child.kill('SIGTERM')
-  await new Promise((resolve) => child.once('exit', resolve))
-}
-
 test(
   'bridges a real local Harness session and mock-model prompt turn',
   { timeout: 120_000 },
-  async (t) => {
+  async () => {
     if (typeof WebSocket !== 'function') {
-      t.skip('the live bridge test needs Node with a global WebSocket implementation')
-      return
+      assert.fail('the live bridge test requires Node >= 24 with WebSocket')
     }
     if (!existsSync(cliEntry) || !existsSync(mockEntry)) {
-      t.skip('the vendored Harness build output is not present; run the Harness host build first')
-      return
+      assert.fail('build the pinned Harness host graph before the live bridge test')
     }
 
     const { startMockLlmServer } = await import(pathToFileURL(mockEntry).href)
@@ -148,14 +117,17 @@ test(
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      webHost.stdout.resume()
-      webHost.stderr.resume()
-      const registration = await registerWhenReady(baseUrl, {
-        schoolId: 'PHYSICSOS-OPEN',
-        username: `bridge_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
-        displayName: 'Bridge Student',
-        password,
-      })
+      const webObserver = observeChild(webHost)
+      const registration = await registerWhenReady(
+        baseUrl,
+        {
+          schoolId: 'PHYSICSOS-OPEN',
+          username: `bridge_student_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+          displayName: 'Bridge Student',
+          password,
+        },
+        webObserver,
+      )
       const cookie = (
         registration.headers.getSetCookie?.() ?? [registration.headers.get('set-cookie')]
       )

@@ -256,6 +256,10 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     return this.computed?.runSeconds ?? 1
   }
 
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
+  }
+
   getSnapshot(): WorkspaceSnapshot {
     const scene = this.sceneRuntime.getScene()
     const title = scene.metadata.title ?? '机械波实验'

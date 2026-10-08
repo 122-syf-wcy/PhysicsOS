@@ -138,6 +138,8 @@ const sceneSignature = (scene: {
   readonly kind: 'experiment' | 'question'
   readonly updatedAt: string
   readonly scene: Readonly<Record<string, unknown>>
+  readonly originScene?: Readonly<Record<string, unknown>> | undefined
+  readonly buildMode?: true | undefined
 }): string =>
   JSON.stringify({
     sceneId: scene.sceneId,
@@ -146,6 +148,8 @@ const sceneSignature = (scene: {
     kind: scene.kind,
     updatedAt: scene.updatedAt,
     scene: scene.scene,
+    originScene: scene.originScene,
+    buildMode: scene.buildMode,
   })
 
 export class LearningService {
@@ -215,7 +219,7 @@ export class LearningService {
     if (!parsed.success || parsed.data.sceneId !== id) {
       throw new LearningError(400, 'BAD_REQUEST', '实验场景格式无效')
     }
-    if (Buffer.byteLength(JSON.stringify(parsed.data.scene), 'utf8') > MAX_SCENE_BYTES) {
+    if (Buffer.byteLength(JSON.stringify([parsed.data.scene, parsed.data.originScene]), 'utf8') > MAX_SCENE_BYTES) {
       throw new LearningError(413, 'PAYLOAD_TOO_LARGE', '实验场景过大')
     }
     const key = savedSceneKey(actor.userKey, id)

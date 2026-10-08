@@ -1,6 +1,7 @@
 /** Account workspace picker and manager — no host paths, no filesystem tree. */
 
 import { useState } from 'react'
+import { useModalFocus } from './use-modal-focus.ts'
 import type { FormEvent } from 'react'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -80,6 +81,8 @@ export function WorkspacePanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
 
+  const panelRef = useModalFocus<HTMLElement>(open, busy ? undefined : close)
+
   if (!open) return null
 
   const run = async (job: () => Promise<void>): Promise<void> => {
@@ -119,6 +122,8 @@ export function WorkspacePanel({
     <div className={css.backdrop} data-physicsos-workspace-panel="">
       <section
         className={css.dialog}
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="physicsos-workspace-title"

@@ -11,7 +11,7 @@ The Compose stack runs three stateful roles:
 | Service    | Responsibility                                           | Persistent data         |
 | ---------- | -------------------------------------------------------- | ----------------------- |
 | `app`      | Harness Web/API host plus PhysicsOS host plugins         | `app_data` (`DSH_HOME`) |
-| `postgres` | Relational account, learning, and event storage           | `postgres_data`         |
+| `postgres` | Relational account, learning, and event storage          | `postgres_data`         |
 | `redis`    | Shared rate limits, queues, and short-lived coordination | `redis_data`            |
 
 The app publishes only to host loopback by default:
@@ -29,9 +29,10 @@ starts the app only after both dependencies are healthy.
 
 The supported public-beta topology is a **single `app` replica**. Session logs
 live under `DSH_HOME` (`PHYSICSOS_SESSIONS_ROOT`, default
-`dshHomePath('sessions')` inside the `app_data` volume). A second replica sees
-only the sessions it wrote itself unless that root points at a shared
-filesystem, so scale the app out only after that change has been tested.
+`dshHomePath('sessions')` inside the `app_data` volume). Business records are cached in each process; a dedicated PostgreSQL advisory-lock
+session rejects a second writer. Sharing session files alone does not make
+replicas coherent. Keep one app until database reads, cache invalidation,
+concurrent writes, and shared session storage have a tested multi-process design.
 
 ## 2. Prerequisites
 
@@ -168,7 +169,7 @@ key 失效时不需要重启 Harness。
 | 兜底上游         | `PHYSICSOS_MODEL_FALLBACK_BASE_URL`，默认 `https://api.fengshao1227.com/v1` | 只用于空池播种；后台新增任意通道后不再自动重加                                   |
 | key              | `.env.deepseek_api_key`（OpenAI 兼容 key）                                  | 仅作为空池兜底种子，由 `model-pool-host` 加密存入 `physicsos_model_pool`         |
 | 加密主密钥       | `.env.model_pool_secret`                                                    | 派生 AES-256-GCM 密钥；必须长期稳定，换掉后旧 key 会 `KEY_DECRYPT_FAILED`        |
-| 模型名           | `deepseek-v4-flash`                                                         | 网关实测首字约 1 秒；旧的 `deepseek-v4.1-flash` 在高峰期可能等待 10–30 秒         |
+| 模型名           | `deepseek-v4-flash`                                                         | 网关实测首字约 1 秒；旧的 `deepseek-v4.1-flash` 在高峰期可能等待 10–30 秒        |
 | 输出上限         | `maxTokens: 32768`                                                          | 推理模型先花 reasoning token；上限太小会 `content:null` + `finish_reason:length` |
 
 模型名与输出上限写在 `$DSH_HOME/settings.yaml`（容器内
@@ -698,3 +699,11 @@ rollback, resource limits, and ownership are all defined and tested.
       PostgreSQL + Redis + `app_data` 三件套并校验 manifest。
 - [ ] 仍是单副本；若已多副本，`PHYSICSOS_SESSIONS_ROOT` 指向共享文件系统并验证过
       跨副本会话可见。
+
+## Reliability repair additions (2026-10-08)
+
+- PostgreSQL now holds one dedicated advisory-lock session per schema before loading cached business records. A second application writer is rejected and losing the owning session stops the process. Keep one app replica; sharing the sessions filesystem is insufficient for scaling while domain snapshots remain process-local.
+- Readiness checks authenticate and execute PostgreSQL/Redis protocol requests. Deployment waits for Compose health and validates readiness using the application's bundled Node; it does not depend on host Node. Failure returns nonzero before reporting completion.
+- Release image publication waits for verification of the exact resolved commit, including patched upstream, PostgreSQL, headless Agent, and real browser journeys.
+- Full encrypted backup and isolated restore procedures are in [restore-drill.md](./restore-drill.md). Set a stable private backup key file to enable full-backup cron; this path requires host Node.js >=24.7 and is preflighted before operations configuration changes. Existing PostgreSQL-only scheduling is explicitly labelled until full backup is configured.
+- The model-pool key test now verifies a complete basic streamed response from the configured model. HTTP 200, HTML fallback, error JSON, and incomplete SSE no longer pass. Origin-only OpenAI-compatible Base URLs default to `/v1`; explicit custom paths stay intact.

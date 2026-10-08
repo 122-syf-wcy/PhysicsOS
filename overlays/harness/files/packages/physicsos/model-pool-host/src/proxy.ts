@@ -16,6 +16,7 @@ import { explainMiss, selectCandidates, type WeightedRotation } from './pool.ts'
 import type { PoolStore } from './store.ts'
 import { forwardChat, isRetryable, listUpstreamModels } from './upstream.ts'
 import type { KeyFailure } from './types.ts'
+import { ChatStreamValidator } from './chat-stream.ts'
 
 const CHAT_PATH = '/v1/chat/completions'
 const MODELS_PATH = '/v1/models'
@@ -26,7 +27,7 @@ const MODELS_CACHE_MS = 60_000
 export interface ProxyDeps {
   readonly store: PoolStore
   readonly rotation: WeightedRotation
-  /** Header-phase timeout for one upstream attempt. */
+  /** Total deadline for one upstream attempt, including the response stream. */
   readonly attemptTimeoutMs: number
   readonly nowMs?: () => number
   readonly log?: (line: string) => void
@@ -82,20 +83,31 @@ const normalizeUpstreamPayload = (
 const writeStream = async (
   res: ServerResponse,
   body: ReadableStream<Uint8Array> | null,
+  signal: AbortSignal,
+  streaming: boolean,
 ): Promise<void> => {
+  const validator = streaming ? new ChatStreamValidator() : undefined
   if (body === null) {
+    validator?.finish()
     res.end()
     return
   }
   const reader = body.getReader()
+  const write = async (chunk: string | Uint8Array): Promise<void> => {
+    if (!res.write(chunk)) await once(res, 'drain', { signal })
+  }
   try {
     for (;;) {
       const next = await reader.read()
       if (next.done) break
       if (res.writableEnded || res.destroyed) break
-      if (!res.write(Buffer.from(next.value))) await once(res, 'drain')
+      const frames = validator === undefined ? [next.value] : validator.push(next.value)
+      for (const frame of frames) await write(frame)
     }
+    signal.throwIfAborted()
+    for (const frame of validator?.finish() ?? []) await write(frame)
   } finally {
+    await reader.cancel().catch(() => undefined)
     reader.releaseLock()
   }
   if (!res.writableEnded && !res.destroyed) res.end()
@@ -151,6 +163,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
       return
     }
     const abort = new AbortController()
+    const cancelled = (): boolean => abort.signal.aborted || res.destroyed
     res.on('close', () => {
       if (!res.writableEnded) abort.abort(new Error('client disconnected'))
     })
@@ -209,6 +222,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
     let lastFailure: KeyFailure | undefined
     let attempt = 0
     for (const candidate of candidates) {
+      if (cancelled()) return
       if (attempt >= budget) break
       attempt += 1
       let secret: string
@@ -228,35 +242,55 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
           timeoutMs: deps.attemptTimeoutMs,
           signal: abort.signal,
         })
+        if (cancelled()) {
+          if (result.ok) {
+            await result.body?.cancel().catch(() => undefined)
+            result.dispose()
+          }
+          return
+        }
         if (result.ok) {
-          await deps.store.markSuccess(candidate.key.id)
           res.writeHead(result.status, {
             'content-type': result.contentType,
             'cache-control': 'no-store',
             'x-model-pool-attempts': String(attempt),
           })
           try {
-            await writeStream(res, result.body)
+            await writeStream(res, result.body, result.signal, payload.stream === true)
+            if (!cancelled()) await deps.store.markSuccess(candidate.key.id)
           } finally {
             result.dispose()
           }
           return
         }
         lastFailure = result.failure
-        await deps.store.markFailure(candidate.key.id, result.failure)
         if (!isRetryable(result.failure.kind)) {
           openAiError(res, result.failure.status, 'MODEL_POOL_UPSTREAM_REFUSED', result.failure.message)
           return
         }
+        await deps.store.markFailure(candidate.key.id, result.failure)
       } catch (error) {
+        // Headers commit the attempt. A partial stream must be observably
+        // truncated, never replayed against another key or ended as success.
+        if (cancelled()) return
+        if (res.headersSent) {
+          const invalid = error instanceof PoolError && error.code === 'MODEL_POOL_INVALID_STREAM'
+          const message = error instanceof PoolError ? error.message : 'Upstream stream interrupted'
+          await deps.store.markFailure(candidate.key.id, { kind: invalid ? 'server' : 'transport', status: 502, message })
+          if (invalid && payload.stream === true) {
+            // An error event is not a model answer or a fabricated finish marker.
+            res.end(`data: ${JSON.stringify({ error: { code: error.code, type: 'physicsos_model_pool', message } })}\n\n`)
+          } else res.destroy()
+          return
+        }
         const failure = error as PoolError
         lastFailure = {
           kind: 'transport',
           status: failure.status,
           message: failure.message,
         }
-        await deps.store.markFailure(candidate.key.id, lastFailure)
         if (failure.code === 'MODEL_POOL_CLIENT_ABORTED') return
+        await deps.store.markFailure(candidate.key.id, lastFailure)
       }
     }
 
@@ -286,7 +320,7 @@ export const startModelProxy = async (
       if (!res.headersSent) {
         openAiError(res, 500, 'INTERNAL', error instanceof Error ? error.message : String(error))
       } else {
-        res.end()
+        res.destroy()
       }
     })
   })

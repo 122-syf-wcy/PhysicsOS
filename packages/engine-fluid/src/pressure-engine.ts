@@ -1,3 +1,4 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -538,6 +539,8 @@ export class PressureEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     const startedAt = new Date().toISOString()
     const model = resolvePressureModel(scene)
 
+    const range = simulationTimeRange(request.options)
+
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,
@@ -545,16 +548,20 @@ export class PressureEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
       sceneRevision: scene.revision,
       /* One state, because nothing about this apparatus depends on the clock.
          A trajectory longer than a single instant would be an invented curve. */
-      states: [stateOf(model, 0)],
-      events: [
-        {
-          eventId: asPhysicsEventId(`event-pressure-settled-${model.benchId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'PressureReadingSettled',
-          time: 0,
-        },
-      ],
+      states: [stateOf(model, range.startTime)],
+      events: eventsInSimulationRange(
+        [
+          {
+            eventId: asPhysicsEventId(`event-pressure-settled-${model.benchId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'PressureReadingSettled',
+            time: 0,
+          },
+        ],
+        range.startTime,
+        range.endTime,
+      ),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

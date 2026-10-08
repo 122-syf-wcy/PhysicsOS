@@ -76,3 +76,20 @@ describe('recommendExperiments', () => {
     }
   })
 })
+
+const evidence = (questionId: string, correct: boolean) => ({ questionId, selfCheckId: 'check', correct, knowledge: ['em-lorentz'] })
+
+it('recovers mastery after three recent correct questions despite older mistakes', () => {
+  const picks = recommendExperiments({ attempts: [evidence('q4', true), evidence('q3', true), evidence('q2', true), evidence('q1', false)] })
+  expect(picks.some(pick => pick.reason === 'weakness')).toBe(false)
+})
+
+it('a new mistake reopens a recovered weakness', () => {
+  const picks = recommendExperiments({ attempts: [evidence('q5', false), evidence('q4', true), evidence('q3', true), evidence('q2', true), evidence('q1', false)] })
+  expect(picks[0]).toMatchObject({ reason: 'weakness', nodeId: 'em-lorentz' })
+})
+
+it('repeating the same correct question cannot manufacture mastery recovery', () => {
+  const picks = recommendExperiments({ attempts: [{ ...evidence('q2', true), selfCheckId: 'c3' }, { ...evidence('q2', true), selfCheckId: 'c2' }, evidence('q2', true), evidence('q1', false)] })
+  expect(picks[0]).toMatchObject({ reason: 'weakness', nodeId: 'em-lorentz' })
+})

@@ -1,3 +1,4 @@
+import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import { canonicalValue, quantity } from '@physicsos/physics-units'
 import {
   quantityVector,
@@ -38,6 +39,7 @@ export interface CollisionSimulationOptions {
   readonly subDt?: number
   readonly startTime?: number
   readonly endTime?: number
+  readonly outputSampleRate?: number
 }
 
 export interface CollisionSimulation {
@@ -319,26 +321,31 @@ export const simulateCollision = (
   const states: SimulationState[] = []
   const wall = { count: 0, firstAt: null as number | null }
 
-  const time = startTime
-  states.push(stateOf(scene, time))
-
-  const totalDuration = Math.max(0, endTime - startTime)
-  const totalSubsteps = Math.ceil(totalDuration / subDt)
-  let nextSample = startTime + dt
-
-  for (let step = 0; step < totalSubsteps; step += 1) {
-    const t = startTime + (step + 1) * subDt
-    substep(scene, subDt, t, events, wall)
-    if (t >= nextSample - 1e-12) {
-      states.push(stateOf(scene, t))
-      nextSample += dt
+  // Initial conditions belong to scene time zero. Advance to a later window
+  // without storing the discarded prefix, then land precisely on every sample.
+  let time = 0
+  const advanceTo = (target: number): void => {
+    while (time < target) {
+      const step = Math.min(subDt, target - time)
+      if (step <= 0) break
+      const nextTime = Math.min(target, time + step)
+      substep(scene, nextTime - time, nextTime, events, wall)
+      time = nextTime
     }
   }
-
-  /* Make sure the final state lands exactly on endTime's sample. */
-  const last = states[states.length - 1]
-  if (last === undefined || Math.abs(last.time.value - endTime) > dt / 2) {
-    states.push(stateOf(scene, endTime))
+  advanceTo(startTime)
+  events.length = 0
+  wall.firstAt = null
+  wall.count = 0
+  const count = trajectoryStorageSampleCount(
+    options.outputSampleRate === undefined ? {} : { outputSampleRate: options.outputSampleRate },
+    Math.ceil((endTime - startTime) / dt) + 1,
+  )
+  const times =
+    endTime === startTime ? [startTime] : trajectorySampleTimes(startTime, endTime, count)
+  for (const sampleTime of times) {
+    advanceTo(sampleTime)
+    states.push(stateOf(scene, sampleTime))
   }
 
   return { states, events, firstWallContactAt: wall.firstAt }

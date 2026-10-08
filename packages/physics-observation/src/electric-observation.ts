@@ -1,3 +1,4 @@
+import { assertVerifiedSimulation } from '@physicsos/physics-core'
 import {
   derivedScalar,
   derivedVector,
@@ -175,18 +176,7 @@ export const observeElectricScene = (
   input: ElectricObservationInput,
 ): ElectricObservationRuntimeState => {
   const { scene, simulation } = input
-  if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
-    throw new PhysicsOSError(
-      'OBSERVATION_SCENE_REVISION_MISMATCH',
-      'Observation input must reference the same scene revision as the simulation.',
-    )
-  }
-  if (simulation.verification.status === 'failed') {
-    throw new PhysicsOSError(
-      'OBSERVATION_UNVERIFIED_SIMULATION',
-      'Electric observations require a simulation that passed verification.',
-    )
-  }
+  assertVerifiedSimulation(scene, simulation)
 
   if (isPointChargeScene(scene)) {
     return observePointChargeScene(input)

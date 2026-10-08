@@ -29,7 +29,8 @@ describe('Tauri desktop configuration', () => {
     assert.match(config.build.beforeDevCommand, /\bpnpm\b/)
     assert.equal(config.build.devUrl, 'http://127.0.0.1:3080')
     assert.equal(config.app.withGlobalTauri, true)
-    assert.equal(config.app.windows[0].visible, false)
+    assert.equal(config.app.windows[0].visible, true)
+    assert.equal(config.app.windows[0].url, 'startup.html')
     assert.equal(config.bundle.macOS?.signingIdentity, undefined)
     assert.equal(config.bundle.windows?.certificateThumbprint, undefined)
   })
@@ -51,9 +52,11 @@ describe('Tauri desktop configuration', () => {
     assert.match(localPackage, /--no-bundle/)
   })
 
-  it('has a standalone web fallback for a buildable production shell', () => {
-    assert.match(read('web/index.html'), /<div id="app"><\/div>/)
-    assert.match(read('web/index.html'), /Development fallback/)
+  it('ships an accessible startup screen with a retry path', () => {
+    assert.match(read('web/startup.html'), /role="status"/)
+    assert.match(read('web/startup.html'), /id="retry"/)
+    assert.match(read('web/startup.js'), /web_host_retry/)
+    assert.match(read('web/startup.js'), /web_host_status/)
   })
 
   it('packages the real frontend and a resolveable sidecar for release builds', () => {
@@ -72,6 +75,8 @@ describe('Tauri desktop configuration', () => {
     assert.equal(packageRelease.includes('vendor/deepseek-harness/apps/web/dist'), true)
     assert.match(packageRelease, /pnpm_config_verify_deps_before_run/)
     assert.match(packageRelease, /skip-sidecar-build/)
+    for (const asset of ['startup.html', 'startup.js', 'startup.css'])
+      assert.equal(packageRelease.includes(asset), true)
     assert.match(packageRelease, /resources: \{ 'resources\/agent-sidecar\/': 'agent-sidecar\/' \}/)
     assert.match(packageSidecar, /pnpm_config_verify_deps_before_run/)
     assert.equal(packageSidecar.includes('collectHarnessCliSidecar'), true)

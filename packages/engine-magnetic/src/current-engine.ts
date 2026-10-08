@@ -1,3 +1,4 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -972,6 +973,8 @@ export class CurrentFieldEngine implements PhysicsEngine<PhysicsScene, PhysicsEv
     const startedAt = new Date().toISOString()
     const model = resolveCurrentModel(scene)
 
+    const range = simulationTimeRange(request.options)
+
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,
@@ -979,16 +982,20 @@ export class CurrentFieldEngine implements PhysicsEngine<PhysicsScene, PhysicsEv
       sceneRevision: scene.revision,
       /* One state, because nothing about this apparatus depends on the clock.
          A trajectory longer than a single instant would be an invented curve. */
-      states: [stateOf(model, 0)],
-      events: [
-        {
-          eventId: asPhysicsEventId(`event-current-field-settled-${model.benchId}`),
-          sceneId: scene.id,
-          revision: scene.revision,
-          type: 'CurrentFieldSettled',
-          time: 0,
-        },
-      ],
+      states: [stateOf(model, range.startTime)],
+      events: eventsInSimulationRange(
+        [
+          {
+            eventId: asPhysicsEventId(`event-current-field-settled-${model.benchId}`),
+            sceneId: scene.id,
+            revision: scene.revision,
+            type: 'CurrentFieldSettled',
+            time: 0,
+          },
+        ],
+        range.startTime,
+        range.endTime,
+      ),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

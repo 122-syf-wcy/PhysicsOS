@@ -9,7 +9,6 @@
  */
 
 import type { StudentAttempt } from '../learning-record-store.ts'
-import { knowledgeMasteryOf } from '../learning-record-store.ts'
 import {
   findExperimentTemplate,
   type ExperimentTemplate,
@@ -103,7 +102,7 @@ export const CLASSIC_EXPERIMENT_IDS: readonly string[] = [
  */
 export interface RecommendationInput {
   /** The student's self-check history (newest first, as the record stores it). */
-  readonly attempts: readonly Pick<StudentAttempt, 'correct' | 'knowledge'>[]
+  readonly attempts: readonly (Pick<StudentAttempt, 'correct' | 'knowledge'> & Partial<Pick<StudentAttempt, 'questionId' | 'selfCheckId'>>)[]
   /**
    * Template ids to keep OFF the classic fill — typically the 最近使用 rail,
    * so discovery cards do not repeat what the student just ran. Weakness picks
@@ -139,8 +138,26 @@ export function recommendExperiments(input: RecommendationInput): readonly Exper
     picks.push({ template, reason, ...(nodeId === undefined ? {} : { nodeId }) })
   }
 
-  const weakNodes = knowledgeMasteryOf(attempts)
-    .filter(node => node.correct < node.total)
+  // Newest answer per question is evidence; repeated clicks cannot add
+  // mastery. Ten distinct questions bound historical influence; three recent
+  // correct questions recover a node, and any new wrong answer reopens it.
+  const nodes = new Map<string, { nodeId: string; total: number; correct: number; streak: number; seen: Set<string> }>()
+  attempts.forEach((attempt, index) => {
+    const check = attempt.questionId ?? `legacy-${index}`
+    for (const nodeId of attempt.knowledge) {
+      const node = nodes.get(nodeId) ?? { nodeId, total: 0, correct: 0, streak: 0, seen: new Set<string>() }
+      if (node.total >= 10 || node.seen.has(check)) continue
+      node.seen.add(check)
+      if (attempt.correct) {
+        node.correct += 1
+        if (node.streak === node.total) node.streak += 1
+      }
+      node.total += 1
+      nodes.set(nodeId, node)
+    }
+  })
+  const weakNodes = [...nodes.values()]
+    .filter(node => node.correct < node.total && node.streak < 3)
     .sort((a, b) =>
       (b.total - b.correct) - (a.total - a.correct)
       || a.correct / a.total - b.correct / b.total)

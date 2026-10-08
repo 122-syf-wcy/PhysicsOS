@@ -1,3 +1,5 @@
+import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
 import {
   check,
   invalidModelCondition,
@@ -372,9 +374,12 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
     const totalTime = leverRunDuration()
     const moments = momentsOf(model)
 
-    const states = Array.from({ length: TRAJECTORY_SEGMENTS + 1 }, (_, index) =>
-      stateOf(model, (index / TRAJECTORY_SEGMENTS) * totalTime),
-    )
+    const { startTime, endTime } = simulationTimeRange(request.options, totalTime)
+    const states = trajectorySampleTimes(
+      startTime,
+      endTime,
+      trajectoryStorageSampleCount(request.options, TRAJECTORY_SEGMENTS + 1),
+    ).map((time) => stateOf(model, time))
 
     const events: PhysicsEventLike[] = moments.balanced
       ? [
@@ -409,7 +414,7 @@ export class LeverEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike
       sceneId: scene.id,
       sceneRevision: scene.revision,
       states,
-      events,
+      events: eventsInSimulationRange(events, startTime, endTime),
       measurements: [],
       derivedQuantities: derivedOf(model),
       verification: buildVerification(scene, model),

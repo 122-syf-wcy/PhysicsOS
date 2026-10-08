@@ -1891,6 +1891,208 @@ index 8e16ec834a..94b83db23b 100644
      "src/api-request-trust.ts",
      "src/http-bridge.ts",
      "src/index.ts",
+diff --git a/packages/client/modules/src/client/manifest.ts b/packages/client/modules/src/client/manifest.ts
+index 3f30074fe1..244ae8d919 100644
+--- a/packages/client/modules/src/client/manifest.ts
++++ b/packages/client/modules/src/client/manifest.ts
+@@ -160,7 +160,11 @@ export interface DshWindow {
+   /** Host-composed entry graph, injected before the shell bundle runs; wire-boundary raw until {@link parseBootManifest}. */
+   __DSH_BOOT__?: unknown
+   /** Bundle registration sink; installed once per page by the {@link ClientModuleSystem} constructor. */
+-  __ModuleLoader__?: { load(handoff: ClientPluginHandoff): void }
++  __ModuleLoader__?: {
++    load(handoff: ClientPluginHandoff): void
++    /** Load an independently bundled optional artifact of an enabled plugin. */
++    importChunk?(pluginId: string, file: string): Promise<unknown>
++  }
+   /**
+    * Kernel handoff slot: the shell kernel stores the instance here right
+    * after construction (before cordis exists) so the `./client` wrapper
+diff --git a/packages/client/modules/src/client/system.ts b/packages/client/modules/src/client/system.ts
+index 2dc12675db..7f0cce9763 100644
+--- a/packages/client/modules/src/client/system.ts
++++ b/packages/client/modules/src/client/system.ts
+@@ -68,6 +68,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
+   /** Materialization re-entrancy guard: factory-form CJS cannot deliver partial exports, so a cycle is fatal. */
+   private readonly materializing = new Set<string>()
+   private readonly graphRows = new Map<string, BootModuleRow>()
++  private readonly optionalOwners = new Map<string, string>()
+   private readonly loadBundle: (url: string) => Promise<void>
+ 
+   /**
+@@ -86,6 +87,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
+     const win = globalThis as DshWindow
+     if (win.__ModuleLoader__ !== undefined) throw new Error('client-modules: window.__ModuleLoader__ already installed (double boot?)')
+     win.__ModuleLoader__ = {
++      importChunk: (pluginId, file) => this.importChunk(pluginId, file),
+       load: (handoff: ClientPluginHandoff): void => {
+         // Registration is keyed by the handoff id; a duplicate means a bundle
+         // executed twice without an invalidate — always a bug, always loud.
+@@ -182,6 +184,33 @@ export class ClientModuleSystem implements ClientModuleLoader {
+     this.statics.set(id, module)
+   }
+ 
++  /**
++   * Load a standalone optional artifact using its enabled parent's URL and revision.
++   * Each artifact must register `<pluginId>/<file>` and inline its private imports;
++   * platform externals still resolve to the shell's singleton module table.
++   * @param pluginId - Enabled parent from the boot graph.
++   * @param file - A basename matching optional-[a-z0-9-]+.js.
++   * @returns The optional factory's memoized exports.
++   */
++  async importChunk(pluginId: string, file: string): Promise<unknown> {
++    if (!/^optional-[a-z0-9-]+\.js$/.test(file)) {
++      throw new Error('client-modules: invalid optional artifact filename')
++    }
++    const parent = this.graphRows.get(pluginId)
++    if (parent === undefined) throw new Error(`client-modules: optional parent "${pluginId}" is not a graph entry`)
++    const id = `${pluginId}/${file}`
++    const existing = this.loadCache.get(id)
++    if (existing !== undefined) return existing.exports
++    const parentUrl = new URL(parent.url, 'http://client-modules.invalid')
++    parentUrl.pathname = parentUrl.pathname.replace(/\/client\.js$/, `/${file}`)
++    const url = parent.url.startsWith('/')
++      ? `${parentUrl.pathname}${parentUrl.search}`
++      : parentUrl.href
++    this.optionalOwners.set(id, pluginId)
++    await this.arrive({ ...parent, id, url })
++    return this.materialize(id).exports
++  }
++
+   async prefetch(id: string): Promise<void> {
+     if (this.statics.has(id)) return
+     const row = this.graphRows.get(id)
+@@ -190,6 +219,12 @@ export class ClientModuleSystem implements ClientModuleLoader {
+   }
+ 
+   invalidate(id: string): void {
++    for (const [optional, parent] of this.optionalOwners) {
++      if (parent !== id) continue
++      this.factories.delete(optional)
++      this.loadCache.delete(optional)
++      this.optionalOwners.delete(optional)
++    }
+     this.factories.delete(id)
+     this.loadCache.delete(id)
+   }
+diff --git a/packages/client/modules/src/index.ts b/packages/client/modules/src/index.ts
+index aa0ff5d59d..4b804ad84c 100644
+--- a/packages/client/modules/src/index.ts
++++ b/packages/client/modules/src/index.ts
+@@ -436,7 +436,13 @@ export class ClientModuleRegistry extends Service {
+     const clientPath = pathname.startsWith(prefix) && pathname.endsWith(suffix)
+       ? this.clientPath(pathname.slice(prefix.length, -suffix.length))
+       : undefined
+-    const path = clientPath === undefined ? undefined : `${clientPath}${isSourceMap ? '.map' : ''}`
++    const optional = /^\/plugins\/(.+)\/(optional-[a-z0-9-]+\.js)$/.exec(pathname)
++    const optionalParent = optional === null ? undefined : this.clientPath(optional[1]!)
++    const path = clientPath !== undefined
++      ? `${clientPath}${isSourceMap ? '.map' : ''}`
++      : optionalParent !== undefined && optional !== null
++        ? join(dirname(optionalParent), optional[2]!)
++        : undefined
+     if (path === undefined) {
+       res.writeHead(404)
+       res.end()
+diff --git a/packages/client/modules/tests/loader.client.spec.ts b/packages/client/modules/tests/loader.client.spec.ts
+index b8fe75f7dc..fbedc682f1 100644
+--- a/packages/client/modules/tests/loader.client.spec.ts
++++ b/packages/client/modules/tests/loader.client.spec.ts
+@@ -61,6 +61,55 @@ function bench(
+ }
+ 
+ describe('lazy CJS arrival', () => {
++  it('loads an optional artifact only on demand and shares the platform instance', async () => {
++    const fetched: string[] = []
++    const react = { singleton: true }
++    const loader = new ClientModuleSystem({
++      modules: [row('@fixture/lab')], staticModules: { react },
++      loadBundle: async (url) => {
++        fetched.push(url)
++        win.__ModuleLoader__?.load({
++          id: '@fixture/lab/optional-paper.js', factory: require => ({ react: require('react') }),
++        })
++      },
++    })
++    expect(fetched).toEqual([])
++    const [first, second] = await Promise.all([
++      loader.importChunk('@fixture/lab', 'optional-paper.js'),
++      loader.importChunk('@fixture/lab', 'optional-paper.js'),
++    ])
++    expect(first).toBe(second)
++    expect(first).toEqual({ react })
++    expect(fetched).toEqual(['/plugins/@fixture/lab/optional-paper.js?rev=0'])
++    loader.invalidate('@fixture/lab')
++    await loader.importChunk('@fixture/lab', 'optional-paper.js')
++    expect(fetched).toHaveLength(2)
++  })
++
++  it('rejects unknown parents and paths outside optional artifacts without fetching', async () => {
++    const fetch = vi.fn()
++    const loader = new ClientModuleSystem({ modules: [row('lab')], staticModules: {}, loadBundle: fetch })
++    for (const file of ['../index.js', 'index.js', 'optional-foo.js/../../secret', 'optional-%2e%2e.js']) {
++      await expect(loader.importChunk('lab', file)).rejects.toThrow(/optional artifact/)
++    }
++    await expect(loader.importChunk('unknown', 'optional-paper.js')).rejects.toThrow(/graph entry/)
++    expect(fetch).not.toHaveBeenCalled()
++  })
++
++  it('allows a failed optional download to retry without poisoning the module cache', async () => {
++    let attempts = 0
++    const loader = new ClientModuleSystem({
++      modules: [row('lab')], staticModules: {},
++      loadBundle: async () => {
++        attempts += 1
++        if (attempts === 1) throw new Error('offline')
++        win.__ModuleLoader__?.load({ id: 'lab/optional-pdf.js', factory: () => ({ ready: true }) })
++      },
++    })
++    await expect(loader.importChunk('lab', 'optional-pdf.js')).rejects.toThrow('offline')
++    await expect(loader.importChunk('lab', 'optional-pdf.js')).resolves.toEqual({ ready: true })
++  })
++
+   it('prefetch loads and registers but does not run the factory', async () => {
+     const ran: string[] = []
+     const b = bench([row('a')], { a: () => { ran.push('a'); return {} } })
+diff --git a/packages/client/modules/tests/node-half.client.spec.ts b/packages/client/modules/tests/node-half.client.spec.ts
+index 9fbe144bcc..c9afc26e13 100644
+--- a/packages/client/modules/tests/node-half.client.spec.ts
++++ b/packages/client/modules/tests/node-half.client.spec.ts
+@@ -69,6 +69,34 @@ function construct(packageNames: string[]): ClientModuleRegistry {
+ }
+ 
+ describe('client bundle activation', () => {
++  it('serves only optional JavaScript artifacts beside an active plugin entry', async () => {
++    const packageName = '@fixture/optional'
++    const clientPath = writePackage(packageName)
++    mkdirSync(dirname(clientPath), { recursive: true })
++    writeFileSync(clientPath, 'module.exports = {}\n')
++    writeFileSync(join(dirname(clientPath), 'optional-paper.js'), '/* optional artifact */')
++    writeFileSync(join(dirname(clientPath), 'index.js'), '/* host-only artifact */')
++    const { route } = constructWithRoute([packageName])
++    for (const [url, expected] of [
++      [`/plugins/${packageName}/optional-paper.js?rev=1`, 200],
++      [`/plugins/${packageName}/index.js`, 404],
++      [`/plugins/@fixture/disabled/optional-paper.js`, 404],
++      [`/plugins/${packageName}/optional-missing.js`, 404],
++      [`/plugins/${packageName}/optional-paper.js%2f..%2findex.js`, 404],
++    ] as const) {
++      let status = 0
++      let body = ''
++      const response = {
++        writeHead(code: number) { status = code; return response },
++        end(chunk?: Uint8Array) { body = chunk === undefined ? '' : Buffer.from(chunk).toString(); return response },
++      } as unknown as ServerResponse
++      await route.handler({ method: 'GET', url } as IncomingMessage, response)
++      expect(status, url).toBe(expected)
++      if (expected === 200) expect(body).toBe('/* optional artifact */')
++      else expect(body).not.toContain('host-only')
++    }
++  })
++
+   it('allows sibling dsh roles', () => {
+     const currentName = '@fixture/current-client-field'
+     const clientPath = writePackage(currentName, {
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
 index f57caea9e5..e4209f7ca2 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts
@@ -3899,267 +4101,6 @@ index 5a812806da..d7e76666a5 100644
    {
      name: 'SessionReferenceCandidate',
      declaration: 'export interface SessionReferenceCandidate {\n    sessionId: SessionId;\n    label: string;\n    cwd?: string;\n    createdAt: number;\n}',
-diff --git a/packages/runtime-diagnostics/invariants/src/index.d.ts b/packages/runtime-diagnostics/invariants/src/index.d.ts
-new file mode 100644
-index 0000000000..6e8d23e65d
---- /dev/null
-+++ b/packages/runtime-diagnostics/invariants/src/index.d.ts
-@@ -0,0 +1,83 @@
-+/**
-+ * Configurable registry for package-owned runtime invariant contributions.
-+ * Every workspace package registers checks from a `./invariant` companion;
-+ * ordinary package entrypoints stay independent of diagnostics.
-+ *
-+ * @module @deepseek-ai/dsh-invariants
-+ */
-+import { Context, Service } from '@deepseek-ai/cordis';
-+import type { Inject } from '@deepseek-ai/cordis';
-+import type Schema from '@deepseek-ai/schemastery';
-+/** Runtime invariant selection configured on the service plugin. */
-+export interface Config {
-+    /** Global switch; defaults to `true`. */
-+    readonly enabled?: boolean;
-+    /** Case-sensitive JavaScript regex sources that admit package names; empty admits all. */
-+    readonly package_allowlist?: string[];
-+    /** Case-sensitive JavaScript regex sources that exclude package names after allowlist matching. */
-+    readonly package_blocklist?: string[];
-+}
-+/**
-+ * Throw a package-attributed invariant failure.
-+ * @param message - violated package contract without the standard prefix.
-+ * @returns never because reporting a violation throws.
-+ */
-+export type InvariantFailure = (message: string) => never;
-+/** Install one package's checks into the registration's child context. */
-+export interface InvariantInstaller {
-+    /**
-+     * Install the package contribution.
-+     * @param ctx - child context owned by this invariant registration.
-+     * @param fail - reporter bound to the registering package name.
-+     * @returns nothing, or a promise settling after asynchronous checks finish.
-+     */
-+    (ctx: Context, fail: InvariantFailure): void | Promise<void>;
-+    /** Services the child installer fiber may access. */
-+    readonly inject?: Inject;
-+}
-+/** Thrown when a package-owned runtime invariant is violated. */
-+export declare class InvariantError extends Error {
-+    /** Stable machine-readable invariant failure code. */
-+    readonly code: "INVARIANT";
-+    /** Full npm package name that owns the violated invariant. */
-+    readonly packageName: string;
-+    /**
-+     * Construct a package-attributed invariant failure.
-+     * @param packageName - full npm package name that registered the check.
-+     * @param message - violated contract, without the standard error prefix.
-+     */
-+    constructor(packageName: string, message: string);
-+}
-+declare module '@deepseek-ai/cordis' {
-+    interface Context {
-+        invariants: InvariantRegistry;
-+    }
-+}
-+/** Package-owned invariant registry with global and regex-based selection. */
-+export declare class InvariantRegistry extends Service {
-+    static Config: Schema<Config>;
-+    private readonly enabled;
-+    private readonly ownerCtx;
-+    private readonly packageAllowlist;
-+    private readonly packageBlocklist;
-+    private readonly registrations;
-+    /**
-+     * Create and install the invariant registry.
-+     * @param ctx - Cordis context that owns the service.
-+     * @param config - global enablement and package-name regex filters.
-+     */
-+    constructor(ctx: Context, config?: Config);
-+    /** Return whether one full package name passes the configured filters. */
-+    private selected;
-+    /**
-+     * Register one package's invariant installer. The package name is reserved
-+     * even when filtering disables its checks. Enabled installers run in a child
-+     * fiber; failure disposes that fiber and releases the reservation.
-+     * @param packageName - full npm package name that owns the contribution.
-+     * @param installer - listener or startup-check installer for the child context.
-+     * @returns an effect-scoped disposer for the registration.
-+     */
-+    register(packageName: string, installer: InvariantInstaller): () => void;
-+}
-+export default InvariantRegistry;
-+//# sourceMappingURL=index.d.ts.map
-\ No newline at end of file
-diff --git a/packages/runtime-diagnostics/invariants/src/index.d.ts.map b/packages/runtime-diagnostics/invariants/src/index.d.ts.map
-new file mode 100644
-index 0000000000..1d1005cefa
---- /dev/null
-+++ b/packages/runtime-diagnostics/invariants/src/index.d.ts.map
-@@ -0,0 +1 @@
-+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,OAAO,EAAE,OAAO,EAAE,OAAO,EAAE,MAAM,qBAAqB,CAAA;AACtD,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,qBAAqB,CAAA;AAEjD,OAAO,KAAK,MAAM,MAAM,0BAA0B,CAAA;AAElD,oEAAoE;AACpE,MAAM,WAAW,MAAM;IACrB,yCAAyC;IACzC,QAAQ,CAAC,OAAO,CAAC,EAAE,OAAO,CAAA;IAC1B,0FAA0F;IAC1F,QAAQ,CAAC,iBAAiB,CAAC,EAAE,MAAM,EAAE,CAAA;IACrC,mGAAmG;IACnG,QAAQ,CAAC,iBAAiB,CAAC,EAAE,MAAM,EAAE,CAAA;CACtC;AAED;;;;GAIG;AACH,MAAM,MAAM,gBAAgB,GAAG,CAAC,OAAO,EAAE,MAAM,KAAK,KAAK,CAAA;AAEzD,0EAA0E;AAC1E,MAAM,WAAW,kBAAkB;IACjC;;;;;OAKG;IACH,CAAC,GAAG,EAAE,OAAO,EAAE,IAAI,EAAE,gBAAgB,GAAG,IAAI,GAAG,OAAO,CAAC,IAAI,CAAC,CAAA;IAC5D,qDAAqD;IACrD,QAAQ,CAAC,MAAM,CAAC,EAAE,MAAM,CAAA;CACzB;AAOD,iEAAiE;AACjE,qBAAa,cAAe,SAAQ,KAAK;IACvC,sDAAsD;IACtD,QAAQ,CAAC,IAAI,EAAG,WAAW,CAAS;IACpC,8DAA8D;IAC9D,QAAQ,CAAC,WAAW,EAAE,MAAM,CAAA;IAE5B;;;;OAIG;gBACS,WAAW,EAAE,MAAM,EAAE,OAAO,EAAE,MAAM;CAKjD;AAED,OAAO,QAAQ,qBAAqB,CAAC;IACnC,UAAU,OAAO;QACf,UAAU,EAAE,iBAAiB,CAAA;KAC9B;CACF;AAqBD,8EAA8E;AAC9E,qBAAa,iBAAkB,SAAQ,OAAO;IAC5C,MAAM,CAAC,MAAM,EAAE,MAAM,CAAC,MAAM,CAAC,CAI3B;IAEF,OAAO,CAAC,QAAQ,CAAC,OAAO,CAAS;IACjC,OAAO,CAAC,QAAQ,CAAC,QAAQ,CAAS;IAClC,OAAO,CAAC,QAAQ,CAAC,gBAAgB,CAAmB;IACpD,OAAO,CAAC,QAAQ,CAAC,gBAAgB,CAAmB;IACpD,OAAO,CAAC,QAAQ,CAAC,aAAa,CAAoB;IAElD;;;;OAIG;gBACS,GAAG,EAAE,OAAO,EAAE,MAAM,GAAE,MAAW;IAQ7C,0EAA0E;IAC1E,OAAO,CAAC,QAAQ;IAOhB;;;;;;;OAOG;IACH,QAAQ,CAAC,WAAW,EAAE,MAAM,EAAE,SAAS,EAAE,kBAAkB,GAAG,MAAM,IAAI;CA8DzE;AAED,eAAe,iBAAiB,CAAA"}
-\ No newline at end of file
-diff --git a/packages/runtime-diagnostics/invariants/src/index.js b/packages/runtime-diagnostics/invariants/src/index.js
-new file mode 100644
-index 0000000000..46e73c1615
---- /dev/null
-+++ b/packages/runtime-diagnostics/invariants/src/index.js
-@@ -0,0 +1,148 @@
-+/**
-+ * Configurable registry for package-owned runtime invariant contributions.
-+ * Every workspace package registers checks from a `./invariant` companion;
-+ * ordinary package entrypoints stay independent of diagnostics.
-+ *
-+ * @module @deepseek-ai/dsh-invariants
-+ */
-+import { Service } from '@deepseek-ai/cordis';
-+import z from '@deepseek-ai/schemastery';
-+/** Thrown when a package-owned runtime invariant is violated. */
-+export class InvariantError extends Error {
-+    /** Stable machine-readable invariant failure code. */
-+    code = 'INVARIANT';
-+    /** Full npm package name that owns the violated invariant. */
-+    packageName;
-+    /**
-+     * Construct a package-attributed invariant failure.
-+     * @param packageName - full npm package name that registered the check.
-+     * @param message - violated contract, without the standard error prefix.
-+     */
-+    constructor(packageName, message) {
-+        super(`invariant violated by "${packageName}": ${message}`);
-+        this.name = 'InvariantError';
-+        this.packageName = packageName;
-+    }
-+}
-+/** Compile and validate one package-filter list. */
-+function compilePatterns(field, values) {
-+    const seen = new Set();
-+    return values.map((value) => {
-+        if (value.length === 0 || value.trim() !== value) {
-+            throw new Error(`invariants: ${field} entries must be non-blank and have no surrounding whitespace`);
-+        }
-+        if (seen.has(value)) {
-+            throw new Error(`invariants: ${field} contains duplicate regex ${JSON.stringify(value)}`);
-+        }
-+        seen.add(value);
-+        try {
-+            return new RegExp(value);
-+        }
-+        catch (cause) {
-+            throw new Error(`invariants: ${field} contains invalid regex ${JSON.stringify(value)}`, { cause });
-+        }
-+    });
-+}
-+/** Package-owned invariant registry with global and regex-based selection. */
-+export class InvariantRegistry extends Service {
-+    static Config = z.object({
-+        enabled: z.boolean().default(true),
-+        package_allowlist: z.array(z.string()).default([]),
-+        package_blocklist: z.array(z.string()).default([]),
-+    });
-+    enabled;
-+    ownerCtx;
-+    packageAllowlist;
-+    packageBlocklist;
-+    registrations = new Set();
-+    /**
-+     * Create and install the invariant registry.
-+     * @param ctx - Cordis context that owns the service.
-+     * @param config - global enablement and package-name regex filters.
-+     */
-+    constructor(ctx, config = {}) {
-+        super(ctx, 'invariants');
-+        this.ownerCtx = ctx;
-+        this.enabled = config.enabled ?? true;
-+        this.packageAllowlist = compilePatterns('package_allowlist', config.package_allowlist ?? []);
-+        this.packageBlocklist = compilePatterns('package_blocklist', config.package_blocklist ?? []);
-+    }
-+    /** Return whether one full package name passes the configured filters. */
-+    selected(packageName) {
-+        if (!this.enabled)
-+            return false;
-+        if (this.packageAllowlist.length > 0
-+            && !this.packageAllowlist.some(pattern => pattern.test(packageName)))
-+            return false;
-+        return !this.packageBlocklist.some(pattern => pattern.test(packageName));
-+    }
-+    /**
-+     * Register one package's invariant installer. The package name is reserved
-+     * even when filtering disables its checks. Enabled installers run in a child
-+     * fiber; failure disposes that fiber and releases the reservation.
-+     * @param packageName - full npm package name that owns the contribution.
-+     * @param installer - listener or startup-check installer for the child context.
-+     * @returns an effect-scoped disposer for the registration.
-+     */
-+    register(packageName, installer) {
-+        if (packageName.length === 0 || packageName.trim() !== packageName || /\s/.test(packageName)) {
-+            throw new Error('invariants: packageName must be non-blank and contain no whitespace');
-+        }
-+        if (this.registrations.has(packageName)) {
-+            throw new Error(`invariants: package "${packageName}" is already registered`);
-+        }
-+        // Service method tracing binds `this.ctx` to the caller. This explicit
-+        // origin keeps registrations and their child fibers owned by the service;
-+        // companion disposal is covered independently by the returned disposer.
-+        const ctx = this.ownerCtx;
-+        const registrations = this.registrations;
-+        registrations.add(packageName);
-+        let registration;
-+        try {
-+            registration = ctx.effect(async () => {
-+                if (!this.selected(packageName)) {
-+                    return () => {
-+                        registrations.delete(packageName);
-+                    };
-+                }
-+                const installInvariant = (childCtx) => (installer(childCtx, (message) => {
-+                    throw new InvariantError(packageName, message);
-+                }));
-+                try {
-+                    const child = ctx.plugin(installer.inject === undefined
-+                        ? installInvariant
-+                        : Object.assign(installInvariant, { inject: installer.inject }));
-+                    try {
-+                        await child;
-+                    }
-+                    catch (error) {
-+                        await child.dispose();
-+                        throw error;
-+                    }
-+                    return async () => {
-+                        try {
-+                            await child.dispose();
-+                        }
-+                        finally {
-+                            registrations.delete(packageName);
-+                        }
-+                    };
-+                }
-+                catch (error) {
-+                    registrations.delete(packageName);
-+                    throw error;
-+                }
-+            }, `invariants.register(${JSON.stringify(packageName)})`);
-+        }
-+        catch (error) {
-+            registrations.delete(packageName);
-+            throw error;
-+        }
-+        // Cordis attaches setup thenability and async teardown to this callable;
-+        // the service contract intentionally exposes only the conventional disposer.
-+        // oxlint-disable-next-line typescript/no-misused-promises -- the extra runtime shape stays private.
-+        return registration;
-+    }
-+}
-+export default InvariantRegistry;
-+//# sourceMappingURL=index.js.map
-\ No newline at end of file
-diff --git a/packages/runtime-diagnostics/invariants/src/index.js.map b/packages/runtime-diagnostics/invariants/src/index.js.map
-new file mode 100644
-index 0000000000..09837051aa
---- /dev/null
-+++ b/packages/runtime-diagnostics/invariants/src/index.js.map
-@@ -0,0 +1 @@
-+{"version":3,"file":"index.js","sourceRoot":"","sources":["index.ts"],"names":[],"mappings":"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"}
-\ No newline at end of file
 diff --git a/packages/session/session-persistence-jsonl/src/format.ts b/packages/session/session-persistence-jsonl/src/format.ts
 index 2923b9e09b..3779e196f6 100644
 --- a/packages/session/session-persistence-jsonl/src/format.ts
@@ -5155,11 +5096,14 @@ index 0000000000..218a7b6847
 +  })
 +})
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 1490a0f9f7..7f636cba75 100644
+index 1490a0f9f7..1aa8383db4 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
-@@ -7,6 +7,21 @@ settings:
+@@ -5,8 +5,24 @@ settings:
+   excludeLinksFromLockfile: false
+ 
  overrides:
++  micromark-util-types: 2.0.3
    '@deepseek-ai/cosmokit': link:vendor/cosmokit
    '@deepseek-ai/schemastery': link:vendor/schemastery
 +  brace-expansion@>=5.0.0 <5.0.9: 5.0.9
@@ -5180,7 +5124,7 @@ index 1490a0f9f7..7f636cba75 100644
  
  patchedDependencies:
    node-pty@1.1.0: 7a0c04f1f49d798a9ffe2f7f414c01064a44ca2489772d0c3e1235ab336755e6
-@@ -26,10 +41,10 @@ importers:
+@@ -26,10 +42,10 @@ importers:
          version: 5.10.0(eslint@10.5.0(jiti@2.7.0))
        '@testing-library/dom':
          specifier: ^10.4.1
@@ -5193,7 +5137,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/js-yaml':
          specifier: ^4.0.9
          version: 4.0.9
-@@ -42,12 +57,15 @@ importers:
+@@ -42,12 +58,15 @@ importers:
        '@types/node':
          specifier: ^22.20.0
          version: 22.20.0
@@ -5211,7 +5155,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@yarnpkg/cli-dist':
          specifier: 4.17.1
          version: 4.17.1
-@@ -64,8 +82,8 @@ importers:
+@@ -64,8 +83,8 @@ importers:
          specifier: ^3.0.1
          version: 3.0.1
        js-yaml:
@@ -5222,7 +5166,7 @@ index 1490a0f9f7..7f636cba75 100644
        jscpd:
          specifier: ^5.0.12
          version: 5.0.12
-@@ -121,8 +139,8 @@ importers:
+@@ -121,8 +140,8 @@ importers:
          specifier: ^6.1.1
          version: 6.1.1(typescript@6.0.3)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
        vitest:
@@ -5233,7 +5177,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    apps/cli:
      dependencies:
-@@ -267,6 +285,9 @@ importers:
+@@ -267,6 +286,9 @@ importers:
        '@deepseek-ai/dsh-tool-jobs':
          specifier: workspace:^
          version: link:../../packages/jobs/tool-jobs
@@ -5243,7 +5187,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-tool-pwsh':
          specifier: workspace:^
          version: link:../../packages/shell/tool-pwsh
-@@ -304,8 +325,8 @@ importers:
+@@ -304,8 +326,8 @@ importers:
          specifier: ^15.0.0
          version: 15.0.0
        js-yaml:
@@ -5254,7 +5198,7 @@ index 1490a0f9f7..7f636cba75 100644
        node-addon-require-builtin:
          specifier: ^0.1.4
          version: 0.1.4
-@@ -411,8 +432,8 @@ importers:
+@@ -411,8 +433,8 @@ importers:
          specifier: ^6.0.0
          version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
        vitest:
@@ -5265,7 +5209,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    examples:
      dependencies:
-@@ -904,8 +925,8 @@ importers:
+@@ -904,8 +926,8 @@ importers:
          specifier: link:../../../vendor/schemastery
          version: link:../../../vendor/schemastery
        sharp:
@@ -5276,7 +5220,7 @@ index 1490a0f9f7..7f636cba75 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -923,8 +944,8 @@ importers:
+@@ -923,8 +945,8 @@ importers:
    packages/boot/app-boot:
      dependencies:
        js-yaml:
@@ -5287,7 +5231,7 @@ index 1490a0f9f7..7f636cba75 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -1267,6 +1288,12 @@ importers:
+@@ -1267,6 +1289,12 @@ importers:
        '@deepseek-ai/dsh-app-boot':
          specifier: workspace:^
          version: link:../../boot/app-boot
@@ -5300,7 +5244,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-client-connection':
          specifier: workspace:^
          version: link:../../client/connection
-@@ -1324,6 +1351,9 @@ importers:
+@@ -1324,6 +1352,9 @@ importers:
        '@deepseek-ai/dsh-client-ui-permission-presets':
          specifier: workspace:^
          version: link:../../client/ui-permission-presets
@@ -5310,7 +5254,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:^
          version: link:../../client/ui-plan
-@@ -1381,6 +1411,9 @@ importers:
+@@ -1381,6 +1412,9 @@ importers:
        '@deepseek-ai/dsh-cordis-host-runner':
          specifier: workspace:^
          version: link:../../extensions/cordis-host-runner
@@ -5320,7 +5264,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-host-apiproxy':
          specifier: workspace:^
          version: link:../../host/apiproxy
-@@ -1402,9 +1435,24 @@ importers:
+@@ -1402,9 +1436,24 @@ importers:
        '@deepseek-ai/dsh-host-webserver':
          specifier: workspace:^
          version: link:../../host/webserver
@@ -5345,7 +5289,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-session-log-export':
          specifier: workspace:^
          version: link:../../session-query/session-log-export
-@@ -1414,6 +1462,9 @@ importers:
+@@ -1414,6 +1463,9 @@ importers:
        '@deepseek-ai/dsh-session-stats':
          specifier: workspace:^
          version: link:../../session/session-stats
@@ -5355,7 +5299,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-storage':
          specifier: workspace:^
          version: link:../../storage/storage
-@@ -1423,6 +1474,12 @@ importers:
+@@ -1423,6 +1475,12 @@ importers:
        '@deepseek-ai/dsh-storage-json':
          specifier: workspace:^
          version: link:../../storage/storage-json
@@ -5368,7 +5312,16 @@ index 1490a0f9f7..7f636cba75 100644
        '@deepseek-ai/dsh-web-frontend':
          specifier: workspace:^
          version: link:../../../apps/web
-@@ -1946,7 +2003,7 @@ importers:
+@@ -1490,7 +1548,7 @@ importers:
+         version: link:../../runtime-diagnostics/invariants
+       '@types/ws':
+         specifier: ^8.18.1
+-        version: 8.18.1
++        version: 8.18.2
+ 
+   packages/client/hmr:
+     dependencies:
+@@ -1946,7 +2004,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5377,7 +5330,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -1976,7 +2033,7 @@ importers:
+@@ -1976,7 +2034,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5386,7 +5339,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2024,7 +2081,7 @@ importers:
+@@ -2024,7 +2082,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5395,7 +5348,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2170,7 +2227,7 @@ importers:
+@@ -2170,7 +2228,7 @@ importers:
          version: link:../../typert/protocol
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5404,7 +5357,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2283,6 +2340,139 @@ importers:
+@@ -2283,6 +2341,139 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
  
@@ -5544,7 +5497,36 @@ index 1490a0f9f7..7f636cba75 100644
    packages/client/ui-plan:
      devDependencies:
        '@deepseek-ai/cordis':
-@@ -2569,7 +2759,7 @@ importers:
+@@ -2353,7 +2544,7 @@ importers:
+         version: 3.0.0
+       micromark-core-commonmark:
+         specifier: ^2.0.3
+-        version: 2.0.3
++        version: 2.0.4
+       micromark-extension-gfm:
+         specifier: ^3.0.0
+         version: 3.0.0
+@@ -2362,7 +2553,7 @@ importers:
+         version: 3.1.0
+       micromark-factory-space:
+         specifier: ^2.0.1
+-        version: 2.0.1
++        version: 2.1.0
+       micromark-util-character:
+         specifier: ^2.1.1
+         version: 2.1.1
+@@ -2376,8 +2567,8 @@ importers:
+         specifier: ^2.0.1
+         version: 2.0.1
+       micromark-util-types:
+-        specifier: ^2.0.2
+-        version: 2.0.2
++        specifier: 2.0.3
++        version: 2.0.3
+       react:
+         specifier: ^18.2.0
+         version: 18.3.1
+@@ -2569,7 +2760,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5553,7 +5535,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2700,7 +2890,7 @@ importers:
+@@ -2700,7 +2891,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5562,7 +5544,7 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -2859,7 +3049,7 @@ importers:
+@@ -2859,7 +3050,7 @@ importers:
          version: link:../../runtime-diagnostics/invariants
        '@testing-library/react':
          specifier: ^16.1.0
@@ -5571,25 +5553,11 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/react':
          specifier: ~18.3.1
          version: 18.3.31
-@@ -5416,68 +5606,386 @@ importers:
-         version: link:../../subprocess/subprocess-local
-       '@deepseek-ai/dsh-timeout':
-         specifier: workspace:^
--        version: link:../../util/timeout
--      typescript:
--        specifier: ^6.0.3
--        version: 6.0.3
--      typescript-language-server:
--        specifier: ^5.0.0
--        version: 5.3.0
-+        version: link:../../util/timeout
-+      typescript:
-+        specifier: ^6.0.3
-+        version: 6.0.3
-+      typescript-language-server:
-+        specifier: ^5.0.0
-+        version: 5.3.0
-+
+@@ -5424,60 +5615,389 @@ importers:
+         specifier: ^5.0.0
+         version: 5.3.0
+ 
+-  packages/lsp/tool-lsp:
 +  packages/lsp/tool-lsp:
 +    dependencies:
 +      '@deepseek-ai/schemastery':
@@ -5747,7 +5715,18 @@ index 1490a0f9f7..7f636cba75 100644
 +        specifier: workspace:^
 +        version: link:../../storage/storage-json
 +
-+  packages/physicsos/health-host: {}
++  packages/physicsos/health-host:
++    dependencies:
++      '@deepseek-ai/dsh-shared-state-host':
++        specifier: workspace:^
++        version: link:../shared-state-host
++      pg:
++        specifier: ^8.23.0
++        version: 8.23.0
++    devDependencies:
++      '@types/pg':
++        specifier: ^8.23.1
++        version: 8.23.1
 +
 +  packages/physicsos/learning-host:
 +    dependencies:
@@ -5892,8 +5871,7 @@ index 1490a0f9f7..7f636cba75 100644
 +      '@deepseek-ai/cordis':
 +        specifier: workspace:^
 +        version: link:../../../vendor/cordis
- 
--  packages/lsp/tool-lsp:
++
 +  packages/physicsos/tool-physicsos:
      dependencies:
        '@deepseek-ai/schemastery':
@@ -5985,7 +5963,7 @@ index 1490a0f9f7..7f636cba75 100644
        zod:
          specifier: ^4.4.3
          version: 4.4.3
-@@ -5485,27 +5993,18 @@ importers:
+@@ -5485,27 +6005,18 @@ importers:
        '@deepseek-ai/cordis':
          specifier: workspace:^
          version: link:../../../vendor/cordis
@@ -6021,7 +5999,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    packages/plan/plan-mode:
      dependencies:
-@@ -5556,8 +6055,8 @@ importers:
+@@ -5556,8 +6067,8 @@ importers:
          specifier: link:../../../vendor/schemastery
          version: link:../../../vendor/schemastery
        js-yaml:
@@ -6032,7 +6010,7 @@ index 1490a0f9f7..7f636cba75 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -6943,6 +7442,28 @@ importers:
+@@ -6943,6 +7454,28 @@ importers:
          specifier: workspace:^
          version: link:../storage
  
@@ -6061,7 +6039,7 @@ index 1490a0f9f7..7f636cba75 100644
    packages/storage/storage-sqlite:
      dependencies:
        '@deepseek-ai/schemastery':
-@@ -7634,8 +8155,8 @@ importers:
+@@ -7634,8 +8167,8 @@ importers:
          specifier: workspace:*
          version: link:../loader-smoke
        vitest:
@@ -6072,7 +6050,7 @@ index 1490a0f9f7..7f636cba75 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -7678,13 +8199,13 @@ importers:
+@@ -7678,13 +8211,13 @@ importers:
      dependencies:
        '@testing-library/dom':
          specifier: ^10.4.1
@@ -6090,7 +6068,7 @@ index 1490a0f9f7..7f636cba75 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -8704,8 +9225,8 @@ importers:
+@@ -8704,8 +9237,8 @@ importers:
          specifier: link:../cosmokit
          version: link:../cosmokit
        js-yaml:
@@ -6101,7 +6079,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    vendor/loader:
      dependencies:
-@@ -8777,10 +9298,10 @@ importers:
+@@ -8777,10 +9310,10 @@ importers:
          version: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vitepress:
          specifier: ^1.6.4
@@ -6114,7 +6092,7 @@ index 1490a0f9f7..7f636cba75 100644
  
  packages:
  
-@@ -9776,11 +10297,11 @@ packages:
+@@ -9776,11 +10309,11 @@ packages:
        '@modelcontextprotocol/sdk':
          optional: true
  
@@ -6129,7 +6107,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    '@humanfs/core@0.19.2':
      resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
-@@ -9815,160 +10336,160 @@ packages:
+@@ -9815,160 +10348,160 @@ packages:
      resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
      engines: {node: '>=18'}
  
@@ -6342,7 +6320,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=20.9.0'}
      cpu: [x64]
      os: [win32]
-@@ -10114,6 +10635,81 @@ packages:
+@@ -10114,6 +10647,81 @@ packages:
      resolution: {integrity: sha512-Mmjg4anFBD5OzbPnGJOA0jPPN8645ERhQk38HQLpSenx1ox9bfdPkmAzUnNjeQtqQGFLtKe13J20RtLBmUKMZA==}
      hasBin: true
  
@@ -6424,7 +6402,7 @@ index 1490a0f9f7..7f636cba75 100644
    '@napi-rs/wasm-runtime@1.1.5':
      resolution: {integrity: sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q==}
      peerDependencies:
-@@ -11117,8 +11713,8 @@ packages:
+@@ -11117,8 +11725,8 @@ packages:
    '@tanstack/virtual-core@3.17.7':
      resolution: {integrity: sha512-bp+v10y65sp2H7WpWfIMyxTNfl8ZVfxFTLRjPIFRryi6FV/J33z4IS53WO4pTk36KlvJ4iLiQz+oaydDC1xbcA==}
  
@@ -6435,7 +6413,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=18'}
  
    '@testing-library/react@16.3.2':
-@@ -11310,6 +11906,9 @@ packages:
+@@ -11310,6 +11918,9 @@ packages:
    '@types/node@26.1.2':
      resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
  
@@ -6445,7 +6423,18 @@ index 1490a0f9f7..7f636cba75 100644
    '@types/picomatch@3.0.2':
      resolution: {integrity: sha512-n0i8TD3UDB7paoMMxA3Y65vUncFJXjcUf7lQY7YyKGl6031FNjfsLs6pdLFCy2GNFxItPJG8GvvpbZc2skH7WA==}
  
-@@ -11371,20 +11970,20 @@ packages:
+@@ -11345,8 +11956,8 @@ packages:
+   '@types/web-bluetooth@0.0.21':
+     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
+ 
+-  '@types/ws@8.18.1':
+-    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
++  '@types/ws@8.18.2':
++    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
+ 
+   '@typescript-eslint/types@8.61.0':
+     resolution: {integrity: sha512-9QTQpZ5Iin4CdIodfbDQFSeiSJKidgYJYug1P9CC2xWgUTvlmixViqDZNciMjwLBZyJnG4tGmPl97rVAFb1AJg==}
+@@ -11371,20 +11982,20 @@ packages:
        vite: ^5.0.0 || ^6.0.0
        vue: ^3.2.25
  
@@ -6474,7 +6463,7 @@ index 1490a0f9f7..7f636cba75 100644
      peerDependencies:
        msw: ^2.4.9
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -11394,20 +11993,20 @@ packages:
+@@ -11394,20 +12005,20 @@ packages:
        vite:
          optional: true
  
@@ -6505,7 +6494,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    '@vscode/ripgrep-darwin-arm64@1.18.0':
      resolution: {integrity: sha512-r3ktHSvbFycQNF6sl7sNDPocpsI7J+mEzh1IaZFkY0spm3k2Z9t8hPAeOK7+p0l6p6/swkQC14XWX01low+94Q==}
-@@ -11685,9 +12284,9 @@ packages:
+@@ -11685,9 +12296,9 @@ packages:
    brace-expansion@2.1.2:
      resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
  
@@ -6518,7 +6507,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    browserslist@4.28.6:
      resolution: {integrity: sha512-FQBYNK15VMslhLHpA7+n+n1GOlF1kId2xcCg7/j95f24AOF6VDYMNH4mFxF7KuaTdv627faazpOAjFzMrfJOUw==}
-@@ -11789,8 +12388,8 @@ packages:
+@@ -11789,8 +12400,8 @@ packages:
      resolution: {integrity: sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA==}
      engines: {node: '>= 0.6'}
  
@@ -6529,7 +6518,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=18'}
  
    convert-source-map@2.0.0:
-@@ -12264,8 +12863,8 @@ packages:
+@@ -12264,8 +12875,8 @@ packages:
    fast-levenshtein@2.0.6:
      resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
  
@@ -6540,7 +6529,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    fast-xml-builder@1.2.0:
      resolution: {integrity: sha512-00aAWieqff+ZJhsXA4g1g7M8k+7AYoMUUHF+/zFb5U6Uv/P0Vl4QZo84/IcufzYalLuEj9928bXN9PbbFzMF0Q==}
-@@ -12442,8 +13041,8 @@ packages:
+@@ -12442,8 +13053,8 @@ packages:
    hast-util-whitespace@3.0.0:
      resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
  
@@ -6551,7 +6540,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=16.9.0'}
  
    hookable@5.5.3:
-@@ -12517,8 +13116,8 @@ packages:
+@@ -12517,8 +13128,8 @@ packages:
      resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
      engines: {node: '>=12'}
  
@@ -6562,7 +6551,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>= 12'}
  
    ipaddr.js@1.9.1:
-@@ -12597,8 +13196,8 @@ packages:
+@@ -12597,8 +13208,8 @@ packages:
    js-tokens@4.0.0:
      resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
  
@@ -6573,7 +6562,7 @@ index 1490a0f9f7..7f636cba75 100644
      hasBin: true
  
    jscpd-darwin-arm64@5.0.12:
-@@ -12953,8 +13552,8 @@ packages:
+@@ -12953,8 +13564,8 @@ packages:
    mdn-data@2.27.1:
      resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
  
@@ -6584,7 +6573,50 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>= 0.8'}
  
    merge-descriptors@2.0.0:
-@@ -13088,17 +13687,17 @@ packages:
+@@ -12964,8 +13575,8 @@ packages:
+   mermaid@11.16.0:
+     resolution: {integrity: sha512-Zvm3kbstgdpvIJPPItlL7fppIZ3kibvc1oZIGxdvk9t6UFz6flv+Jw7FtRGKwfcI8OckmH04LqG6LlS6X4B1pA==}
+ 
+-  micromark-core-commonmark@2.0.3:
+-    resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
++  micromark-core-commonmark@2.0.4:
++    resolution: {integrity: sha512-wxEeE8v8XVvOrxn1TZj74qYhAtTQsSqufHVS3uNVyT1MupXxhyaHk8/9xDNPh9BmL77QNDgWTkZ3RsYHB2ry7w==}
+ 
+   micromark-extension-gfm-autolink-literal@2.1.0:
+     resolution: {integrity: sha512-oOg7knzhicgQ3t4QCjCWgTmfNhvQbDDnJeVu9v81r7NltNCVmhPy1fJRX27pISafdjL+SVc4d3l48Gb6pbRypw==}
+@@ -12997,8 +13608,8 @@ packages:
+   micromark-factory-label@2.0.1:
+     resolution: {integrity: sha512-VFMekyQExqIW7xIChcXn4ok29YE3rnuyveW3wZQWWqF4Nv9Wk5rgJ99KzPvHjkmPXF93FXIbBp6YdW3t71/7Vg==}
+ 
+-  micromark-factory-space@2.0.1:
+-    resolution: {integrity: sha512-zRkxjtBxxLd2Sc0d+fbnEunsTj46SWXgXciZmHq0kDYGnck/ZSGj9/wULTV95uoeYiK5hRXP2mJ98Uo4cq/LQg==}
++  micromark-factory-space@2.1.0:
++    resolution: {integrity: sha512-fS8hnLIjnjvdQIj39Geug8wWsR0HrYZ43KShKxNfwT7t2LOHo/LbWZEzEaSOjwtjdCsjoE6syHhonEzW0zv0+Q==}
+ 
+   micromark-factory-title@2.0.1:
+     resolution: {integrity: sha512-5bZ+3CjhAd9eChYTHsjy6TGxpOFSKgKKJPJxr293jTbfry2KDoWkhBb6TcPVB4NmzaPhMs1Frm9AZH7OD4Cjzw==}
+@@ -13024,6 +13635,9 @@ packages:
+   micromark-util-decode-string@2.0.1:
+     resolution: {integrity: sha512-nDV/77Fj6eH1ynwscYTOsbK7rR//Uj0bZXBwJZRfaLEJ1iGBR6kIfNmlNqaqJf649EP0F3NWNdeJi03elllNUQ==}
+ 
++  micromark-util-edit-map@1.0.0:
++    resolution: {integrity: sha512-Pa2ljlsEL6sVwFaYeyrOLSYbQt73JvGbPOYFq+9AElXiSnfI5Q4465RRZ1sHv7lDjDOnGRDDaqPXqClqWK/q1Q==}
++
+   micromark-util-encode@2.0.1:
+     resolution: {integrity: sha512-c3cVx2y4KqUnwopcO9b/SCdo2O67LwJJ/UyqGfbigahfegL9myoEFoDYZgkT7f36T0bLrM9hZTAaAyH+PCAXjw==}
+ 
+@@ -13045,8 +13659,8 @@ packages:
+   micromark-util-symbol@2.0.1:
+     resolution: {integrity: sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q==}
+ 
+-  micromark-util-types@2.0.2:
+-    resolution: {integrity: sha512-Yw0ECSpJoViF1qTU4DC6NwtC4aWGt1EkzaQB8KPPyCRR8z9TWeV0HbEFGTO+ZY1wB22zmxnJqhPyTpOVCpeHTA==}
++  micromark-util-types@2.0.3:
++    resolution: {integrity: sha512-oxB2Ik03hI0gv+VNn9tnh1t1YEe9MDPptViAEgfdf3YQHsn0pzGTgCdlSCJXcwhqm8phaEuM7zeEu3QQzVBrPg==}
+ 
+   micromark@4.0.2:
+     resolution: {integrity: sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==}
+@@ -13088,17 +13702,17 @@ packages:
    ms@2.1.3:
      resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
  
@@ -6607,7 +6639,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    node-addon-api@7.1.1:
      resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
-@@ -13320,9 +13919,47 @@ packages:
+@@ -13320,9 +13934,47 @@ packages:
    pathe@2.0.3:
      resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
  
@@ -6655,7 +6687,7 @@ index 1490a0f9f7..7f636cba75 100644
    picocolors@1.1.1:
      resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
  
-@@ -13353,10 +13990,26 @@ packages:
+@@ -13353,10 +14005,26 @@ packages:
    points-on-path@0.2.1:
      resolution: {integrity: sha512-25ClnWWuw7JbWZcgqY/gJ4FQWadKxGWk+3kR/7kD0tCaDtPPMj7oHu2ToLaVhfpnHrZzYby2w6tUA0eOIuUg8g==}
  
@@ -6684,7 +6716,7 @@ index 1490a0f9f7..7f636cba75 100644
    preact@10.29.7:
      resolution: {integrity: sha512-DCHYrK/B10yUD3ZjLfhZ3WIE/9Vf9VFUODcRE2dRomTYDpJk6z6L9wecSfhfE6M9ZTHUdyQkoC46arIDhEV84Q==}
      peerDependencies:
-@@ -13383,12 +14036,12 @@ packages:
+@@ -13383,12 +14051,12 @@ packages:
    property-information@7.2.0:
      resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
  
@@ -6701,7 +6733,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>= 0.10'}
  
    publint@0.3.21:
-@@ -13403,8 +14056,8 @@ packages:
+@@ -13403,8 +14071,8 @@ packages:
    pure-rand@8.4.0:
      resolution: {integrity: sha512-IoM8YF/jY0hiugFo/wOWqfmarlE6J0wc6fDK1PhftMk7MGhVZl88sZimmqBBFomLOCSmcCCpsfj7wXASCpvK9A==}
  
@@ -6712,7 +6744,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=0.6'}
  
    quansync@1.0.0:
-@@ -13578,8 +14231,8 @@ packages:
+@@ -13578,8 +14246,8 @@ packages:
    setprototypeof@1.2.0:
      resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
  
@@ -6723,7 +6755,18 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=20.9.0'}
      peerDependencies:
        '@types/node': '*'
-@@ -13653,6 +14306,10 @@ packages:
+@@ -13637,6 +14305,10 @@ packages:
+     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
+     engines: {node: '>=0.10.0'}
+ 
++  source-map-js@1.2.2:
++    resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
++    engines: {node: '>=0.10.0'}
++
+   space-separated-tokens@2.0.2:
+     resolution: {integrity: sha512-PEGlAwrG8yXGXRjW32fGbg66JAlOAwbObuqVoJpv/mRgoWDQfgH1wDPvtzWyUSNAXBGSk8h755YDbbcEy3SH2Q==}
+ 
+@@ -13653,6 +14325,10 @@ packages:
      resolution: {integrity: sha512-1POYv7uv2gXoyGFpBCmpDVSNV74IfsWlDW216UPjbWufNf+bSU6GdbDsxdcxtfwb4xlI3yxzOTKClUosxARYrQ==}
      engines: {node: '>=0.10.0'}
  
@@ -6734,7 +6777,7 @@ index 1490a0f9f7..7f636cba75 100644
    stackback@0.0.2:
      resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
  
-@@ -13869,8 +14526,8 @@ packages:
+@@ -13869,8 +14545,8 @@ packages:
    undici-types@8.3.0:
      resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
  
@@ -6745,7 +6788,7 @@ index 1490a0f9f7..7f636cba75 100644
      engines: {node: '>=20.18.1'}
  
    unicorn-magic@0.3.0:
-@@ -14060,27 +14717,27 @@ packages:
+@@ -14060,27 +14736,27 @@ packages:
      hasBin: true
      peerDependencies:
        markdown-it-mathjax3: ^4
@@ -6782,7 +6825,7 @@ index 1490a0f9f7..7f636cba75 100644
        happy-dom: '*'
        jsdom: '*'
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -14210,6 +14867,10 @@ packages:
+@@ -14210,6 +14886,10 @@ packages:
    xmlchars@2.2.0:
      resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
  
@@ -6793,7 +6836,7 @@ index 1490a0f9f7..7f636cba75 100644
    yallist@3.1.1:
      resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
  
-@@ -15204,7 +15865,7 @@ snapshots:
+@@ -15204,7 +15884,7 @@ snapshots:
      dependencies:
        google-auth-library: 10.7.0
        p-retry: 4.6.2
@@ -6802,7 +6845,7 @@ index 1490a0f9f7..7f636cba75 100644
        ws: 8.21.0
      optionalDependencies:
        '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-@@ -15213,9 +15874,9 @@ snapshots:
+@@ -15213,9 +15893,9 @@ snapshots:
        - supports-color
        - utf-8-validate
  
@@ -6814,7 +6857,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    '@humanfs/core@0.19.2':
      dependencies:
-@@ -15247,108 +15908,108 @@ snapshots:
+@@ -15247,108 +15927,108 @@ snapshots:
  
    '@img/colour@1.1.0': {}
  
@@ -6961,7 +7004,7 @@ index 1490a0f9f7..7f636cba75 100644
      optional: true
  
    '@isaacs/cliui@8.0.2':
-@@ -15463,7 +16124,7 @@ snapshots:
+@@ -15463,7 +16143,7 @@ snapshots:
  
    '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
      dependencies:
@@ -6970,7 +7013,7 @@ index 1490a0f9f7..7f636cba75 100644
        ajv: 8.20.0
        ajv-formats: 3.0.1(ajv@8.20.0)
        content-type: 1.0.5
-@@ -15473,7 +16134,7 @@ snapshots:
+@@ -15473,7 +16153,7 @@ snapshots:
        eventsource-parser: 3.1.0
        express: 5.2.1
        express-rate-limit: 8.5.2(express@5.2.1)
@@ -6979,7 +7022,7 @@ index 1490a0f9f7..7f636cba75 100644
        jose: 6.2.3
        json-schema-typed: 8.0.2
        pkce-challenge: 5.0.1
-@@ -15505,6 +16166,54 @@ snapshots:
+@@ -15505,6 +16185,54 @@ snapshots:
        - supports-color
        - zod
  
@@ -7034,7 +7077,7 @@ index 1490a0f9f7..7f636cba75 100644
    '@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
      dependencies:
        '@emnapi/core': 1.10.0
-@@ -16192,7 +16901,7 @@ snapshots:
+@@ -16192,7 +16920,7 @@ snapshots:
  
    '@tanstack/virtual-core@3.17.7': {}
  
@@ -7043,7 +7086,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        '@babel/code-frame': 7.29.7
        '@babel/runtime': 7.29.7
-@@ -16203,10 +16912,10 @@ snapshots:
+@@ -16203,10 +16931,10 @@ snapshots:
        picocolors: 1.1.1
        pretty-format: 27.5.1
  
@@ -7056,7 +7099,7 @@ index 1490a0f9f7..7f636cba75 100644
        react: 18.3.1
        react-dom: 18.3.1(react@18.3.1)
      optionalDependencies:
-@@ -16423,6 +17132,12 @@ snapshots:
+@@ -16423,6 +17151,12 @@ snapshots:
      dependencies:
        undici-types: 8.3.0
  
@@ -7069,7 +7112,16 @@ index 1490a0f9f7..7f636cba75 100644
    '@types/picomatch@3.0.2': {}
  
    '@types/prop-types@15.7.15': {}
-@@ -16481,10 +17196,10 @@ snapshots:
+@@ -16451,7 +17185,7 @@ snapshots:
+ 
+   '@types/web-bluetooth@0.0.21': {}
+ 
+-  '@types/ws@8.18.1':
++  '@types/ws@8.18.2':
+     dependencies:
+       '@types/node': 22.20.0
+ 
+@@ -16481,10 +17215,10 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
  
@@ -7082,7 +7134,7 @@ index 1490a0f9f7..7f636cba75 100644
        ast-v8-to-istanbul: 1.0.4
        istanbul-lib-coverage: 3.2.2
        istanbul-lib-report: 3.0.1
-@@ -16493,62 +17208,62 @@ snapshots:
+@@ -16493,62 +17227,62 @@ snapshots:
        obug: 2.1.3
        std-env: 4.1.0
        tinyrainbow: 3.1.0
@@ -7164,7 +7216,7 @@ index 1490a0f9f7..7f636cba75 100644
        convert-source-map: 2.0.0
        tinyrainbow: 3.1.0
  
-@@ -16625,7 +17340,7 @@ snapshots:
+@@ -16625,7 +17359,7 @@ snapshots:
        '@vue/shared': 3.5.39
        estree-walker: 2.0.2
        magic-string: 0.30.21
@@ -7173,7 +7225,7 @@ index 1490a0f9f7..7f636cba75 100644
        source-map-js: 1.2.1
  
    '@vue/compiler-ssr@3.5.39':
-@@ -16707,7 +17422,7 @@ snapshots:
+@@ -16707,7 +17441,7 @@ snapshots:
    accepts@2.0.0:
      dependencies:
        mime-types: 3.0.2
@@ -7182,7 +7234,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    acorn-jsx@5.3.2(acorn@8.17.0):
      dependencies:
-@@ -16731,7 +17446,7 @@ snapshots:
+@@ -16731,7 +17465,7 @@ snapshots:
    ajv@8.20.0:
      dependencies:
        fast-deep-equal: 3.1.3
@@ -7191,7 +7243,7 @@ index 1490a0f9f7..7f636cba75 100644
        json-schema-traverse: 1.0.0
        require-from-string: 2.0.2
  
-@@ -16811,12 +17526,12 @@ snapshots:
+@@ -16811,12 +17545,12 @@ snapshots:
    body-parser@2.3.0:
      dependencies:
        bytes: 3.1.2
@@ -7206,7 +7258,7 @@ index 1490a0f9f7..7f636cba75 100644
        raw-body: 3.0.2
        type-is: 2.1.0
      transitivePeerDependencies:
-@@ -16828,7 +17543,7 @@ snapshots:
+@@ -16828,7 +17562,7 @@ snapshots:
      dependencies:
        balanced-match: 1.0.2
  
@@ -7215,7 +7267,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        balanced-match: 4.0.4
  
-@@ -16904,7 +17619,7 @@ snapshots:
+@@ -16904,7 +17638,7 @@ snapshots:
  
    content-type@1.0.5: {}
  
@@ -7224,7 +7276,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    convert-source-map@2.0.0: {}
  
-@@ -17204,7 +17919,7 @@ snapshots:
+@@ -17204,7 +17938,7 @@ snapshots:
        openapi-fetch: 0.14.1
        platform: 1.3.6
        tar: 7.5.22
@@ -7233,7 +7285,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    eastasianwidth@0.2.0: {}
  
-@@ -17460,7 +18175,7 @@ snapshots:
+@@ -17460,7 +18194,7 @@ snapshots:
    express-rate-limit@8.5.2(express@5.2.1):
      dependencies:
        express: 5.2.1
@@ -7242,7 +7294,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    express@5.2.1:
      dependencies:
-@@ -17483,8 +18198,8 @@ snapshots:
+@@ -17483,8 +18217,8 @@ snapshots:
        on-finished: 2.4.1
        once: 1.4.0
        parseurl: 1.3.3
@@ -7253,7 +7305,7 @@ index 1490a0f9f7..7f636cba75 100644
        range-parser: 1.3.0
        router: 2.2.0
        send: 1.2.1
-@@ -17507,7 +18222,7 @@ snapshots:
+@@ -17507,7 +18241,7 @@ snapshots:
  
    fast-levenshtein@2.0.6: {}
  
@@ -7262,7 +7314,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    fast-xml-builder@1.2.0:
      dependencies:
-@@ -17716,7 +18431,7 @@ snapshots:
+@@ -17716,7 +18450,7 @@ snapshots:
      dependencies:
        '@types/hast': 3.0.5
  
@@ -7271,7 +7323,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    hookable@5.5.3: {}
  
-@@ -17782,7 +18497,7 @@ snapshots:
+@@ -17782,7 +18516,7 @@ snapshots:
  
    internmap@2.0.3: {}
  
@@ -7280,7 +7332,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    ipaddr.js@1.9.1: {}
  
-@@ -17841,7 +18556,7 @@ snapshots:
+@@ -17841,7 +18575,7 @@ snapshots:
  
    js-tokens@4.0.0: {}
  
@@ -7289,7 +7341,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        argparse: 2.0.1
  
-@@ -17889,7 +18604,7 @@ snapshots:
+@@ -17889,7 +18623,7 @@ snapshots:
        saxes: 6.0.0
        symbol-tree: 3.2.4
        tough-cookie: 6.0.1
@@ -7298,7 +7350,16 @@ index 1490a0f9f7..7f636cba75 100644
        w3c-xmlserializer: 5.0.0
        webidl-conversions: 8.0.1
        whatwg-mimetype: 5.0.0
-@@ -18266,7 +18981,7 @@ snapshots:
+@@ -18157,7 +18891,7 @@ snapshots:
+       micromark-util-decode-string: 2.0.1
+       micromark-util-normalize-identifier: 2.0.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+       unist-util-stringify-position: 4.0.0
+     transitivePeerDependencies:
+       - supports-color
+@@ -18266,7 +19000,7 @@ snapshots:
  
    mdn-data@2.27.1: {}
  
@@ -7307,7 +7368,228 @@ index 1490a0f9f7..7f636cba75 100644
  
    merge-descriptors@2.0.0: {}
  
-@@ -18503,7 +19218,7 @@ snapshots:
+@@ -18294,42 +19028,43 @@ snapshots:
+       ts-dedent: 2.3.0
+       uuid: 14.0.1
+ 
+-  micromark-core-commonmark@2.0.3:
++  micromark-core-commonmark@2.0.4:
+     dependencies:
+       decode-named-character-reference: 1.3.0
+       devlop: 1.1.0
+       micromark-factory-destination: 2.0.1
+       micromark-factory-label: 2.0.1
+-      micromark-factory-space: 2.0.1
++      micromark-factory-space: 2.1.0
+       micromark-factory-title: 2.0.1
+       micromark-factory-whitespace: 2.0.1
+       micromark-util-character: 2.1.1
+       micromark-util-chunked: 2.0.1
+       micromark-util-classify-character: 2.0.1
++      micromark-util-edit-map: 1.0.0
+       micromark-util-html-tag-name: 2.0.1
+       micromark-util-normalize-identifier: 2.0.1
+       micromark-util-resolve-all: 2.0.1
+       micromark-util-subtokenize: 2.1.0
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm-autolink-literal@2.1.0:
+     dependencies:
+       micromark-util-character: 2.1.1
+       micromark-util-sanitize-uri: 2.0.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm-footnote@2.1.0:
+     dependencies:
+       devlop: 1.1.0
+-      micromark-core-commonmark: 2.0.3
+-      micromark-factory-space: 2.0.1
++      micromark-core-commonmark: 2.0.4
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-normalize-identifier: 2.0.1
+       micromark-util-sanitize-uri: 2.0.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm-strikethrough@2.1.0:
+     dependencies:
+@@ -18338,27 +19073,27 @@ snapshots:
+       micromark-util-classify-character: 2.0.1
+       micromark-util-resolve-all: 2.0.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm-table@2.1.1:
+     dependencies:
+       devlop: 1.1.0
+-      micromark-factory-space: 2.0.1
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm-tagfilter@2.0.0:
+     dependencies:
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm-task-list-item@2.1.0:
+     dependencies:
+       devlop: 1.1.0
+-      micromark-factory-space: 2.0.1
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-gfm@3.0.0:
+     dependencies:
+@@ -18369,54 +19104,54 @@ snapshots:
+       micromark-extension-gfm-tagfilter: 2.0.0
+       micromark-extension-gfm-task-list-item: 2.1.0
+       micromark-util-combine-extensions: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-extension-math@3.1.0:
+     dependencies:
+       '@types/katex': 0.16.8
+       devlop: 1.1.0
+       katex: 0.16.47
+-      micromark-factory-space: 2.0.1
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-factory-destination@2.0.1:
+     dependencies:
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-factory-label@2.0.1:
+     dependencies:
+       devlop: 1.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+-  micromark-factory-space@2.0.1:
++  micromark-factory-space@2.1.0:
+     dependencies:
+       micromark-util-character: 2.1.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-factory-title@2.0.1:
+     dependencies:
+-      micromark-factory-space: 2.0.1
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-factory-whitespace@2.0.1:
+     dependencies:
+-      micromark-factory-space: 2.0.1
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-util-character@2.1.1:
+     dependencies:
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-util-chunked@2.0.1:
+     dependencies:
+@@ -18426,12 +19161,12 @@ snapshots:
+     dependencies:
+       micromark-util-character: 2.1.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-util-combine-extensions@2.0.1:
+     dependencies:
+       micromark-util-chunked: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-util-decode-numeric-character-reference@2.0.2:
+     dependencies:
+@@ -18444,6 +19179,10 @@ snapshots:
+       micromark-util-decode-numeric-character-reference: 2.0.2
+       micromark-util-symbol: 2.0.1
+ 
++  micromark-util-edit-map@1.0.0:
++    dependencies:
++      micromark-util-types: 2.0.3
++
+   micromark-util-encode@2.0.1: {}
+ 
+   micromark-util-html-tag-name@2.0.1: {}
+@@ -18454,7 +19193,7 @@ snapshots:
+ 
+   micromark-util-resolve-all@2.0.1:
+     dependencies:
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-util-sanitize-uri@2.0.1:
+     dependencies:
+@@ -18467,11 +19206,11 @@ snapshots:
+       devlop: 1.1.0
+       micromark-util-chunked: 2.0.1
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+ 
+   micromark-util-symbol@2.0.1: {}
+ 
+-  micromark-util-types@2.0.2: {}
++  micromark-util-types@2.0.3: {}
+ 
+   micromark@4.0.2:
+     dependencies:
+@@ -18479,8 +19218,8 @@ snapshots:
+       debug: 4.4.3
+       decode-named-character-reference: 1.3.0
+       devlop: 1.1.0
+-      micromark-core-commonmark: 2.0.3
+-      micromark-factory-space: 2.0.1
++      micromark-core-commonmark: 2.0.4
++      micromark-factory-space: 2.1.0
+       micromark-util-character: 2.1.1
+       micromark-util-chunked: 2.0.1
+       micromark-util-combine-extensions: 2.0.1
+@@ -18491,7 +19230,7 @@ snapshots:
+       micromark-util-sanitize-uri: 2.0.1
+       micromark-util-subtokenize: 2.1.0
+       micromark-util-symbol: 2.0.1
+-      micromark-util-types: 2.0.2
++      micromark-util-types: 2.0.3
+     transitivePeerDependencies:
+       - supports-color
+ 
+@@ -18503,7 +19242,7 @@ snapshots:
  
    minimatch@10.2.5:
      dependencies:
@@ -7316,7 +7598,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    minimatch@9.0.9:
      dependencies:
-@@ -18523,11 +19238,13 @@ snapshots:
+@@ -18523,11 +19262,13 @@ snapshots:
  
    ms@2.1.3: {}
  
@@ -7332,7 +7614,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    node-addon-api@7.1.1: {}
  
-@@ -18782,8 +19499,47 @@ snapshots:
+@@ -18782,8 +19523,47 @@ snapshots:
  
    pathe@2.0.3: {}
  
@@ -7380,7 +7662,7 @@ index 1490a0f9f7..7f636cba75 100644
    picocolors@1.1.1: {}
  
    picomatch@4.0.4: {}
-@@ -18807,12 +19563,22 @@ snapshots:
+@@ -18807,11 +19587,21 @@ snapshots:
        path-data-parser: 0.1.0
        points-on-curve: 0.2.0
  
@@ -7390,8 +7672,9 @@ index 1490a0f9f7..7f636cba75 100644
 -      nanoid: 3.3.12
 +      nanoid: 3.3.18
        picocolors: 1.1.1
-       source-map-js: 1.2.1
- 
+-      source-map-js: 1.2.1
++      source-map-js: 1.2.2
++
 +  postgres-array@2.0.0: {}
 +
 +  postgres-bytea@1.0.1: {}
@@ -7401,11 +7684,10 @@ index 1490a0f9f7..7f636cba75 100644
 +  postgres-interval@1.2.0:
 +    dependencies:
 +      xtend: 4.0.2
-+
+ 
    preact@10.29.7: {}
  
-   prelude-ls@1.2.1: {}
-@@ -18831,7 +19597,7 @@ snapshots:
+@@ -18831,7 +19621,7 @@ snapshots:
  
    property-information@7.2.0: {}
  
@@ -7414,7 +7696,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        '@protobufjs/aspromise': 1.1.2
        '@protobufjs/base64': 1.1.2
-@@ -18845,7 +19611,7 @@ snapshots:
+@@ -18845,7 +19635,7 @@ snapshots:
        '@types/node': 22.20.0
        long: 5.3.2
  
@@ -7423,7 +7705,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        forwarded: 0.2.0
        ipaddr.js: 1.9.1
-@@ -18861,7 +19627,7 @@ snapshots:
+@@ -18861,7 +19651,7 @@ snapshots:
  
    pure-rand@8.4.0: {}
  
@@ -7432,7 +7714,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        es-define-property: 1.0.1
        side-channel: 1.1.1
-@@ -19103,37 +19869,37 @@ snapshots:
+@@ -19103,37 +19893,37 @@ snapshots:
  
    setprototypeof@1.2.0: {}
  
@@ -7496,7 +7778,16 @@ index 1490a0f9f7..7f636cba75 100644
        '@types/node': 22.20.0
  
    shebang-command@2.0.0:
-@@ -19215,6 +19981,8 @@ snapshots:
+@@ -19202,6 +19992,8 @@ snapshots:
+ 
+   source-map-js@1.2.1: {}
+ 
++  source-map-js@1.2.2: {}
++
+   space-separated-tokens@2.0.2: {}
+ 
+   spdx-exceptions@2.5.0: {}
+@@ -19215,6 +20007,8 @@ snapshots:
  
    speakingurl@14.0.1: {}
  
@@ -7505,7 +7796,7 @@ index 1490a0f9f7..7f636cba75 100644
    stackback@0.0.2: {}
  
    statuses@2.0.2: {}
-@@ -19370,8 +20138,8 @@ snapshots:
+@@ -19370,8 +20164,8 @@ snapshots:
  
    type-is@2.1.0:
      dependencies:
@@ -7516,7 +7807,7 @@ index 1490a0f9f7..7f636cba75 100644
        mime-types: 3.0.2
  
    typebox@1.1.38: {}
-@@ -19396,7 +20164,7 @@ snapshots:
+@@ -19396,7 +20190,7 @@ snapshots:
  
    undici-types@8.3.0: {}
  
@@ -7525,7 +7816,7 @@ index 1490a0f9f7..7f636cba75 100644
  
    unicorn-magic@0.3.0: {}
  
-@@ -19473,7 +20241,7 @@ snapshots:
+@@ -19473,7 +20267,7 @@ snapshots:
    vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0):
      dependencies:
        esbuild: 0.21.5
@@ -7534,7 +7825,7 @@ index 1490a0f9f7..7f636cba75 100644
        rollup: 4.62.2
      optionalDependencies:
        '@types/node': 25.9.3
-@@ -19485,7 +20253,7 @@ snapshots:
+@@ -19485,7 +20279,7 @@ snapshots:
        esbuild: 0.25.12
        fdir: 6.5.0(picomatch@4.0.4)
        picomatch: 4.0.4
@@ -7543,7 +7834,7 @@ index 1490a0f9f7..7f636cba75 100644
        rollup: 4.62.2
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -19500,7 +20268,7 @@ snapshots:
+@@ -19500,7 +20294,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -7552,7 +7843,7 @@ index 1490a0f9f7..7f636cba75 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -19515,7 +20283,7 @@ snapshots:
+@@ -19515,7 +20309,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -7561,7 +7852,7 @@ index 1490a0f9f7..7f636cba75 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -19526,14 +20294,14 @@ snapshots:
+@@ -19526,14 +20320,14 @@ snapshots:
        tsx: 4.22.4
        yaml: 2.9.0
  
@@ -7579,7 +7870,7 @@ index 1490a0f9f7..7f636cba75 100644
      dependencies:
        '@docsearch/css': 3.8.2
        '@docsearch/js': 3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
-@@ -19554,7 +20322,7 @@ snapshots:
+@@ -19554,7 +20348,7 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
      optionalDependencies:
@@ -7588,7 +7879,7 @@ index 1490a0f9f7..7f636cba75 100644
      transitivePeerDependencies:
        - '@algolia/client-search'
        - '@types/node'
-@@ -19583,15 +20351,15 @@ snapshots:
+@@ -19583,15 +20377,15 @@ snapshots:
        - typescript
        - universal-cookie
  
@@ -7612,7 +7903,7 @@ index 1490a0f9f7..7f636cba75 100644
        es-module-lexer: 2.1.0
        expect-type: 1.3.0
        magic-string: 0.30.21
-@@ -19606,52 +20374,22 @@ snapshots:
+@@ -19606,52 +20400,22 @@ snapshots:
        vite: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
        why-is-node-running: 2.3.0
      optionalDependencies:
@@ -7675,7 +7966,7 @@ index 1490a0f9f7..7f636cba75 100644
        es-module-lexer: 2.1.0
        expect-type: 1.3.0
        magic-string: 0.30.21
-@@ -19668,20 +20406,20 @@ snapshots:
+@@ -19668,20 +20432,20 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -7705,7 +7996,7 @@ index 1490a0f9f7..7f636cba75 100644
        es-module-lexer: 2.1.0
        expect-type: 1.3.0
        magic-string: 0.30.21
-@@ -19697,8 +20435,8 @@ snapshots:
+@@ -19697,8 +20461,8 @@ snapshots:
        why-is-node-running: 2.3.0
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
@@ -7716,7 +8007,7 @@ index 1490a0f9f7..7f636cba75 100644
        jsdom: 29.1.1
      transitivePeerDependencies:
        - msw
-@@ -19781,6 +20519,8 @@ snapshots:
+@@ -19781,6 +20545,8 @@ snapshots:
  
    xmlchars@2.2.0: {}
  
@@ -7726,11 +8017,15 @@ index 1490a0f9f7..7f636cba75 100644
  
    yallist@5.0.0: {}
 diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
-index e8d8ee5bec..9b786be6c8 100644
+index e8d8ee5bec..f89827b96f 100644
 --- a/pnpm-workspace.yaml
 +++ b/pnpm-workspace.yaml
-@@ -27,6 +27,23 @@ linkWorkspacePackages: true
+@@ -25,8 +25,27 @@ packages:
+ linkWorkspacePackages: true
+ 
  overrides:
++  # Markdown extension augmentations must target the same declaration identity.
++  micromark-util-types: 2.0.3
    '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
    '@deepseek-ai/schemastery': 'link:vendor/schemastery'
 +  # Security floor for transitive production dependencies. Keep these as
@@ -7850,10 +8145,19 @@ index d38b4743c5..2a7c32264b 100644
    'packages/bundle/headless': { kind: 'none', reason: 'The one-shot runner submits the task as an ordinary user message; prompts and tools belong to the composed base and headless bundles.' },
    'packages/llm/llm': { kind: 'none', reason: 'The adapter registry forwards already-assembled requests unchanged.' },
 diff --git a/tsconfig.base.json b/tsconfig.base.json
-index 16d69db6db..bb2cbf866f 100644
+index 16d69db6db..a86bd3d779 100644
 --- a/tsconfig.base.json
 +++ b/tsconfig.base.json
-@@ -67,6 +67,7 @@
+@@ -28,6 +28,8 @@
+     // not declaration path aliases, keep each package/vendor source compiled
+     // under its own tsconfig boundary.
+     "paths": {
++      "@physicsos/physics-runtime": ["../../packages/physics-runtime/src/index.ts"],
++      "@deepseek-ai/dsh-shared-state-host": ["./packages/physicsos/shared-state-host/src/index.ts"],
+       "@deepseek-ai/cordis": ["./vendor/cordis/src"],
+       "@deepseek-ai/cosmokit": ["./vendor/cosmokit/src"],
+       "@deepseek-ai/schemastery": ["./vendor/schemastery/src"],
+@@ -67,6 +69,7 @@
        "@deepseek-ai/dsh-agent-presets/types": ["./packages/preset/agent-presets/src/types.ts"],
        "@deepseek-ai/dsh-pwsh-local": ["./packages/shell/pwsh-local/src/index.ts"],
        "@deepseek-ai/dsh-tool-pwsh": ["./packages/shell/tool-pwsh/src/index.ts"],

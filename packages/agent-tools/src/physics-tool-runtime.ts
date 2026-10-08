@@ -17,6 +17,7 @@ import type {
   SimulationState,
   VerificationResult,
 } from '@physicsos/physics-core'
+import { assertVerifiedSimulation } from '@physicsos/physics-core'
 import {
   SceneRuntime,
   createSceneCommand,
@@ -24,7 +25,7 @@ import {
   type SceneCommand,
   type SceneCommandType,
 } from '@physicsos/physics-scene'
-import { asQuestionId } from '@physicsos/shared'
+import { asQuestionId, asSceneId } from '@physicsos/shared'
 import {
   createGoldenQuestionDocument,
   GOLDEN_QUESTIONS,
@@ -356,6 +357,9 @@ export class PhysicsToolRuntime {
       const oldest = this.scenes.keys().next().value
       if (oldest === undefined) break
       this.scenes.delete(oldest)
+      for (const [key, solved] of this.solvedQuestions) {
+        if (solved.scene?.sceneId === oldest) this.solvedQuestions.delete(key)
+      }
     }
     this.scenes.set(sceneId, live)
     return live
@@ -426,7 +430,7 @@ export class PhysicsToolRuntime {
       cached !== undefined &&
       cached.status === 'solved' &&
       cached.scene !== undefined &&
-      this.scenes.has(cached.scene.sceneId)
+      this.scenes.get(cached.scene.sceneId)?.runtime.getScene().revision === cached.scene.revision
     ) {
       return { ...cached, reusedScene: true }
     }
@@ -503,13 +507,18 @@ export class PhysicsToolRuntime {
 
     // Older scene builders do not stamp the question on the scene; the tool
     // knows which document it just processed, so the link never goes missing.
-    const scene: PhysicsScene =
+    let scene: PhysicsScene =
       result.scene.metadata.sourceQuestionId === undefined
         ? {
             ...result.scene,
             metadata: { ...result.scene.metadata, sourceQuestionId: asQuestionId(questionId) },
           }
         : result.scene
+    // A repeated source question starts from its original givens. Preserve any
+    // existing edited exploration under its current id instead of overwriting it.
+    if (this.scenes.has(String(scene.id))) {
+      scene = { ...scene, id: asSceneId(this.nextId(String(scene.id))) }
+    }
     const live = this.register(scene)
     const answers: QuestionAnswer[] = Object.entries(result.solution.results).map(
       ([key, answer]) => ({
@@ -735,6 +744,13 @@ export class PhysicsToolRuntime {
       throw new ToolRuntimeError('INVALID_TIME', '时间必须是非负有限秒数。')
     }
     const scene = live.runtime.getScene()
+    const simulated = simulateScene(
+      scene,
+      live.engine,
+      this.nextId('observe'),
+      this.nextId('observe-trace'),
+    )
+    assertVerifiedSimulation(scene, simulated.simulation)
     const state: SimulationState = live.engine.engine.stateAt(scene, {
       value: time,
       unit: 's',

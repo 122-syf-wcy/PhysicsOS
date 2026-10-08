@@ -300,3 +300,28 @@ describe('engine-collision · scene factory validity', () => {
     expect(scene.boundaries).toHaveLength(1)
   })
 })
+
+it('samples a nonzero window after advancing the scene from its initial time', () => {
+  const scene = createCollisionScene({
+    bodies: [
+      { id: 'a', mass: 1, position: [-2, 0], velocity: [1, 0] },
+      { id: 'b', mass: 1, position: [2, 0], velocity: [-1, 0] },
+    ],
+  })
+  const result = engine.simulate(scene, {
+    schemaVersion: 'simulation-request/1.0',
+    simulationId: 'window' as never,
+    sceneId: scene.id,
+    sceneRevision: scene.revision,
+    options: {
+      startTime: { value: 0.1, unit: 's', dimension: 'time' },
+      endTime: { value: 0.203, unit: 's', dimension: 'time' },
+      outputSampleRate: 7,
+    },
+    trace: { traceId: 'window' as never },
+  })
+  expect(result.states[0]!.objects[0]!.position!.vector.x).toBeCloseTo(-1.9, 8)
+  expect(result.states.at(-1)!.objects[0]!.position!.vector.x).toBeCloseTo(-1.797, 8)
+  expect(result.states.at(-1)!.time.value).toBe(0.203)
+  expect(result.states).toHaveLength(7)
+})

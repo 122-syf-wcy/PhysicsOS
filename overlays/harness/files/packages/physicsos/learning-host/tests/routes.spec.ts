@@ -241,6 +241,14 @@ describe('learning host routes', () => {
     ).toBe(400)
   })
 
+  it('round-trips origin facts and free-build mode with saved scenes', async () => {
+    const payload = { ...sceneEntry('branch', '2026-09-26T08:00:00.000Z'), originScene: scene('origin'), buildMode: true }
+    const saved = await call('PUT', '/physicsos/learning/scenes/branch', 'student-a', payload)
+    expect(saved.status).toBe(200)
+    const restored = await call('GET', '/physicsos/learning/scenes', 'student-a')
+    expect(await restored.json()).toMatchObject({ items: [{ originScene: scene('origin'), buildMode: true }] })
+  })
+
   it('serves saved scenes across devices and removes them idempotently', async () => {
     const created = await call(
       'PUT',

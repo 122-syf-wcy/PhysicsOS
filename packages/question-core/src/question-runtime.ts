@@ -1,27 +1,9 @@
-import type {
-  DerivedQuantity,
-  FormulaRef,
-  PhysicsEngine,
-  SimulationRequest,
-  SimulationResult,
-} from '@physicsos/physics-core'
+import type { DerivedQuantity, FormulaRef, SimulationResult } from '@physicsos/physics-core'
 import type { Quantity } from '@physicsos/physics-units'
 import type { QuantityVector } from '@physicsos/physics-core'
 import type { PhysicsScene } from '@physicsos/physics-scene'
-import { createElectricSimulationRequest } from '@physicsos/engine-electric'
-import { createElectricRegionSimulationRequest } from '@physicsos/engine-electric-region'
-import { createMechanicsSimulationRequest, MechanicsEngine } from '@physicsos/engine-mechanics'
-import { createCircuitSimulationRequest, CircuitEngine } from '@physicsos/engine-circuit'
+import { resolveOpticalImaging } from '@physicsos/engine-optics'
 import {
-  createOpticsSimulationRequest,
-  OpticsEngine,
-  resolveOpticalImaging,
-} from '@physicsos/engine-optics'
-import { createInductionSimulationRequest, InductionEngine } from '@physicsos/engine-induction'
-import { createWaveSimulationRequest, WaveEngine } from '@physicsos/engine-wave'
-import {
-  ModernPhysicsEngine,
-  createModernSimulationRequest,
   observeModernPhysicsScene,
   type ModernObservationRuntimeState,
 } from '@physicsos/engine-modern'
@@ -43,13 +25,7 @@ import {
   type InductionObservationRuntimeState,
   type WaveObservationRuntimeState,
 } from '@physicsos/physics-observation'
-import { createMagneticSimulationRequest } from '@physicsos/engine-magnetic'
-import { createCompositeSimulationRequest } from '@physicsos/engine-composite'
-import {
-  reportCompositeSelection,
-  verifyCompositeApparatus,
-  verifyMagneticScene,
-} from '@physicsos/physics-verifier'
+import { reportCompositeSelection, verifyCompositeApparatus } from '@physicsos/physics-verifier'
 
 import type { QuestionDocument } from './question-document.ts'
 import type { PhysicsSemanticIR, SemanticValidationResult } from './semantic-ir.ts'
@@ -98,7 +74,7 @@ import { buildOpticsSceneFromIR } from './optics-scene-builder.ts'
 import { buildInductionSceneFromIR } from './induction-scene-builder.ts'
 import { buildWaveSceneFromIR } from './wave-scene-builder.ts'
 import { buildModernPhysicsSceneFromIR } from './modern-scene-builder.ts'
-import { selectEngine } from './engine-selector.ts'
+import { questionEngine, simulateScene } from '@physicsos/physics-runtime'
 
 export interface QuestionRuntimeResult {
   document: QuestionDocument
@@ -285,8 +261,6 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
   const docId = String(document.id)
   const isCompositeModel = COMPOSITE_MODEL_IDS.has(ir.model)
   let scene: PhysicsScene
-  let engine: PhysicsEngine<PhysicsScene>
-  let request: SimulationRequest
 
   if (ir.domain === 'mechanics') {
     const buildResult = buildMechanicsSceneFromIR(ir, {
@@ -294,48 +268,36 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
       questionId: docId,
     })
     scene = buildResult.scene
-    engine = new MechanicsEngine() as unknown as PhysicsEngine<PhysicsScene>
-    request = createMechanicsSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else if (ir.domain === 'circuit') {
     const buildResult = buildCircuitSceneFromIR(ir, {
       sceneId: 'question-' + docId,
       questionId: docId,
     })
     scene = buildResult.scene
-    engine = new CircuitEngine() as unknown as PhysicsEngine<PhysicsScene>
-    request = createCircuitSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else if (ir.domain === 'optics') {
     const buildResult = buildOpticsSceneFromIR(ir, {
       sceneId: 'question-' + docId,
       questionId: docId,
     })
     scene = buildResult.scene
-    engine = new OpticsEngine() as unknown as PhysicsEngine<PhysicsScene>
-    request = createOpticsSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else if (ir.domain === 'induction') {
     const buildResult = buildInductionSceneFromIR(ir, {
       sceneId: 'question-' + docId,
       questionId: docId,
     })
     scene = buildResult.scene
-    engine = new InductionEngine() as unknown as PhysicsEngine<PhysicsScene>
-    request = createInductionSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else if (ir.domain === 'wave') {
     const buildResult = buildWaveSceneFromIR(ir, {
       sceneId: 'question-' + docId,
       questionId: docId,
     })
     scene = buildResult.scene
-    engine = new WaveEngine() as unknown as PhysicsEngine<PhysicsScene>
-    request = createWaveSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else if (ir.domain === 'modern_physics') {
     const buildResult = buildModernPhysicsSceneFromIR(ir, {
       sceneId: 'question-' + docId,
       questionId: docId,
     })
     scene = buildResult.scene
-    engine = new ModernPhysicsEngine() as unknown as PhysicsEngine<PhysicsScene>
-    request = createModernSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   } else {
     /* Composite is matched on the MODEL, not the domain: a crossed-field question
        can be tagged electromagnetic/electric/magnetic, and only the composite
@@ -350,33 +312,9 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
             : buildElectricSceneFromIR(ir, { sceneId: 'question-' + docId, questionId: docId })
         : buildSceneFromIR(ir, { sceneId: 'question-' + docId, questionId: docId })
     scene = buildResult.scene
-    const engineSelection = selectEngine(ir)
-    if (!engineSelection.engine) {
-      return {
-        document,
-        ir,
-        validation,
-        scene,
-        simulation: null,
-        observations: null,
-        solution: null,
-        workflowState: 'UNSUPPORTED_MODEL',
-        ...(engineSelection.reason === undefined ? {} : { error: engineSelection.reason }),
-      }
-    }
-    engine = engineSelection.engine
-    /* Bounded (parallel-plate) scenes use the region engine's request builder;
-       all other electric scenes use the unbounded electric request. */
-    const isBoundedElectricRequest =
-      ir.domain === 'electric' && ir.model === 'charged_particle_bounded_electric_field'
-    request = isCompositeModel
-      ? createCompositeSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
-      : ir.domain === 'electric'
-        ? isBoundedElectricRequest
-          ? createElectricRegionSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
-          : createElectricSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
-        : createMagneticSimulationRequest(scene, 'sim-' + docId, 'trace-' + docId)
   }
+
+  const entry = questionEngine(ir.domain, ir.model)
 
   /* The ElectricRegionEngine models the bounded field directly — it requires the
      scene's regions, boundaries, and region-bound field to be intact, because
@@ -384,8 +322,8 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
      Do NOT strip them (the earlier workaround fed a regionless scene to the
      unbounded engine, which cannot model bounded fields or produce transition
      events). */
-  const support = engine.canHandle(scene)
-  if (!support.supported) {
+  const support = entry?.engine.canHandle(scene)
+  if (!entry || !support?.supported) {
     return {
       document,
       ir,
@@ -399,7 +337,7 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
     }
   }
 
-  let simulation = engine.simulate(scene, request)
+  let simulation = simulateScene(scene, entry, 'sim-' + docId, 'trace-' + docId).simulation
 
   if (isCompositeModel) {
     /* The apparatus checks (selection condition, deflection radius) live in the
@@ -417,21 +355,6 @@ export function processQuestion(document: QuestionDocument): QuestionRuntimeResu
         ],
       },
     }
-  } else if (
-    ir.domain !== 'electric' &&
-    ir.domain !== 'mechanics' &&
-    ir.domain !== 'circuit' &&
-    ir.domain !== 'optics' &&
-    ir.domain !== 'induction' &&
-    ir.domain !== 'wave' &&
-    ir.domain !== 'modern_physics'
-  ) {
-    /* The magnetic engine reports VERIFICATION_PENDING with zero checks — the
-       external Physics Verifier owns its verification (same call the Lab bridge
-       makes). Substituting the verifier's result gives the question the real
-       named checks (speed_conservation, period_consistency, …) instead of an
-       empty list. */
-    simulation = { ...simulation, verification: verifyMagneticScene(scene, simulation) }
   }
 
   if (simulation.verification.status === 'failed') {

@@ -85,6 +85,10 @@ if (!existsSync(`${frontendDist}/index.html`)) {
 rmSync(desktopFrontendDist, { recursive: true, force: true })
 mkdirSync(desktopFrontendDist, { recursive: true })
 cpSync(frontendDist, desktopFrontendDist, { recursive: true, dereference: true })
+// Native startup/error UI must be available before the local host can answer.
+for (const asset of ['startup.html', 'startup.js', 'startup.css']) {
+  cpSync(`${desktopRoot}web/${asset}`, `${desktopFrontendDist}/${asset}`)
+}
 
 run(process.execPath, [
   `${repoRoot}scripts/desktop/package-sidecar.mjs`,

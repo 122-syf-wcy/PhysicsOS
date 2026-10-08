@@ -35,6 +35,7 @@
     "@physicsos/engine-lever": "file:../engine-lever",
     "@physicsos/engine-induction": "file:../engine-induction",
     "@physicsos/engine-wave": "file:../engine-wave",
-    "@physicsos/question-core": "file:../question-core"
+    "@physicsos/question-core": "file:../question-core",
+    "@physicsos/physics-runtime": "file:../physics-runtime"
   }
 }

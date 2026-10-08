@@ -5,7 +5,7 @@
  * class, and API-proxy planes: fixed-window rate-limit counters and one-time
  * claim ledgers. The memory backends are the single-process reference
  * implementation; the Redis backends are selected by configuration for
- * multi-replica deployments.
+ * shared counters. Business snapshots still require one application writer.
  */
 
 import type { Context } from '@deepseek-ai/cordis'

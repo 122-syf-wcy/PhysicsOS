@@ -84,6 +84,9 @@ export interface BuiltSnapshot {
  * @param input - the caller-supplied fields.
  * @returns the built snapshot.
  */
+type StaticPanels = Pick<BuiltSnapshot, 'tree' | 'charts' | 'table' | 'derivation' | 'verification' | 'events' | 'trajectoryTimes'>
+const staticPanels = new WeakMap<SimulationResult, StaticPanels>()
+
 export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
   const { scene, model, simulation, state, clock, status, modelId } = input
   /* Readings follow the playhead: a key the engine also writes per-state
@@ -97,9 +100,21 @@ export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
     ...simulation.derivedQuantities.filter(entry => !frameKeys.has(entry.key)),
   ]
 
-  const trajectoryTimes = simulation.states
-    .filter(s => bodyStateOf(s, model.bodyId)?.position !== undefined)
-    .map(s => s.time.value)
+  let panels = staticPanels.get(simulation)
+  if (panels === undefined) {
+    panels = {
+      tree: treeOf(scene, modelId),
+      charts: chartsOf(modelId, simulation, model),
+      table: tableOf(simulation, model),
+      derivation: derivationOf(modelId, model),
+      verification: verificationOf(input.verification, simulation),
+      events: eventsOf(modelId, model),
+      trajectoryTimes: simulation.states
+        .filter(s => bodyStateOf(s, model.bodyId)?.position !== undefined)
+        .map(s => s.time.value),
+    }
+    staticPanels.set(simulation, panels)
+  }
 
   /* One mechanics visual path for the Lab and for Question Space: the shared
      observation-driven bridge. Building a second view here would let the two
@@ -118,15 +133,9 @@ export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
     modelId,
     status,
     view,
-    tree: treeOf(scene, modelId),
+    ...panels,
     inspector: inspectorOf(scene, modelId, dq),
-    charts: chartsOf(modelId, simulation, model),
-    table: tableOf(simulation, model),
-    derivation: derivationOf(modelId, model),
-    verification: verificationOf(input.verification, simulation),
-    events: eventsOf(modelId, model),
     clock,
-    trajectoryTimes,
   }
 }
 

@@ -26,24 +26,37 @@ const builtDay = [
   String(builtAt.getDate()).padStart(2, '0'),
 ].join('-')
 
-/**
- * question-upload.ts loads pdf.js through `import()` so jsdom tests and
- * image-only sessions never evaluate it. The client artifact must stay ONE
- * file: the loader's require only resolves the module table (plugin ids),
- * never relative emitted chunks — so dynamic imports fold back into
- * client.js and still evaluate lazily.
- */
+/** Each optional entry is its own inline factory. No relative require/chunk graph. */
+const optionalEntries = ['workspace', 'admin', 'pdf'] as const
+const pluginId = '@deepseek-ai/dsh-client-ui-physicsos'
+
 export default (inlineConfig: Pick<UserConfig, 'env'>): UserConfig[] =>
-  base(inlineConfig).map((config) => {
-    if (!String(config.name ?? '').endsWith('/client')) return config
-    return {
+  base(inlineConfig).flatMap((config) => {
+    if (!String(config.name ?? '').endsWith('/client')) return [config]
+    const client: UserConfig = {
       ...config,
       define: {
         ...config.define,
         __PHYSICSOS_VERSION__: JSON.stringify(version),
         __PHYSICSOS_BUILT_AT__: JSON.stringify(builtAt.toISOString()),
         __PHYSICSOS_BUILT_DAY__: JSON.stringify(builtDay),
+        __PHYSICSOS_OPTIONAL_BUNDLES__: 'true',
       },
       outputOptions: { ...config.outputOptions, inlineDynamicImports: true },
     }
+    return [client, ...optionalEntries.map((name): UserConfig => {
+      const file = `optional-${name}.js`
+      return {
+        ...client,
+        name: `${pluginId}/${file}`,
+        entry: { [name]: `src/client/optional/${name}.ts` },
+        // Parent-owned CSS tags keep unload/HMR cleanup coherent.
+        sourcemap: false,
+        outputOptions: {
+          ...client.outputOptions,
+          entryFileNames: file,
+          banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(`${pluginId}/${file}`)}, factory: require => {`,
+        },
+      }
+    })]
   })

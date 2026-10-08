@@ -204,6 +204,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  private simulationCache: { key: string; simulation: SimulationResult } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -228,7 +229,8 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
+      const key = `${String(scene.id)}:${scene.revision}`
+      const simulation = this.simulationCache?.key === key ? this.simulationCache.simulation : this.engine.simulate(
         scene,
         createElectricSimulationRequest(
           scene,
@@ -236,6 +238,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
           `electric-lab-trace-${String(scene.id)}-${scene.revision}`,
         ),
       )
+      this.simulationCache = { key, simulation }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -277,7 +280,8 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
       this.computed = undefined
       return
     }
-    const simulation = electricRegionEngine.simulate(
+    const key = `${String(scene.id)}:${scene.revision}`
+    const simulation = this.simulationCache?.key === key ? this.simulationCache.simulation : electricRegionEngine.simulate(
       scene,
       createElectricRegionSimulationRequest(
         scene,
@@ -285,6 +289,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
         `electric-region-trace-${String(scene.id)}-${scene.revision}`,
       ),
     )
+    this.simulationCache = { key, simulation }
     if (simulation.verification.status === 'failed') {
       this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
       this.computed = undefined
@@ -332,6 +337,10 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
     this.currentTime = 0
     this.running = false
     this.recompute()
+  }
+
+  getScene(): PhysicsScene {
+    return this.sceneRuntime.getScene()
   }
 
   getSnapshot(): WorkspaceSnapshot {

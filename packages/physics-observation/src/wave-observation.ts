@@ -1,3 +1,4 @@
+import { assertVerifiedSimulation } from '@physicsos/physics-core'
 import { derivedScalar, type SimulationResult, type SimulationState } from '@physicsos/physics-core'
 import { PhysicsOSError } from '@physicsos/shared'
 import { waveBenchOf, type ObservableDefinition, type PhysicsScene } from '@physicsos/physics-scene'
@@ -176,18 +177,7 @@ const verdictOf = (sign: number): WaveInterferenceVerdict =>
  */
 export const observeWaveScene = (input: WaveObservationInput): WaveObservationRuntimeState => {
   const { scene, simulation } = input
-  if (scene.id !== simulation.sceneId || scene.revision !== simulation.sceneRevision) {
-    throw new PhysicsOSError(
-      'OBSERVATION_SCENE_REVISION_MISMATCH',
-      'Observation input must reference the same scene revision as the simulation.',
-    )
-  }
-  if (simulation.verification.status === 'failed') {
-    throw new PhysicsOSError(
-      'OBSERVATION_UNVERIFIED_SIMULATION',
-      'Wave observations require a simulation that passed verification.',
-    )
-  }
+  assertVerifiedSimulation(scene, simulation)
 
   const bench = waveBenchOf(scene)
   if (bench === undefined) {

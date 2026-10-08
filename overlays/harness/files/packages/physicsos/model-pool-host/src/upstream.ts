@@ -11,16 +11,24 @@
 import { PoolError } from './errors.ts'
 import { redactSecrets } from './crypto.ts'
 import type { ChannelRecord, KeyFailure } from './types.ts'
+import { ChatStreamValidator } from './chat-stream.ts'
 
 const ERROR_BODY_LIMIT = 64 * 1024
 
-/** `POST {baseURL}/chat/completions`, tolerant of a trailing slash. */
-export const chatCompletionsURL = (baseURL: string): string =>
-  `${baseURL.replace(/\/+$/, '')}/chat/completions`
+const upstreamURL = (baseURL: string, endpoint: string): string => {
+  const url = new URL(baseURL)
+  const prefix = url.pathname.replace(/\/+$/, '') || '/v1'
+  url.pathname = `${prefix}/${endpoint}`
+  return url.toString()
+}
 
-/** `GET {baseURL}/models`, tolerant of a trailing slash. */
+/** Chat route; origin-only addresses default to `/v1`, explicit paths stay intact. */
+export const chatCompletionsURL = (baseURL: string): string =>
+  upstreamURL(baseURL, 'chat/completions')
+
+/** Model route using the same base-path rule as chat and the key probe. */
 export const modelsURL = (baseURL: string): string =>
-  `${baseURL.replace(/\/+$/, '')}/models`
+  upstreamURL(baseURL, 'models')
 
 /**
  * Classify an upstream HTTP status.
@@ -47,6 +55,7 @@ export interface ForwardSuccess {
   readonly status: number
   readonly contentType: string
   readonly body: ReadableStream<Uint8Array> | null
+  readonly signal: AbortSignal
   /** Detach the client-abort link once the body has been consumed. */
   readonly dispose: () => void
 }
@@ -115,6 +124,7 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
   }, input.timeoutMs)
 
   const detach = (): void => {
+    clearTimeout(timer)
     input.signal.removeEventListener('abort', link)
   }
 
@@ -138,13 +148,21 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
   } catch (error) {
     clearTimeout(timer)
     detach()
+    if (!input.signal.aborted && controller.signal.reason instanceof PoolError) throw controller.signal.reason
     throw new PoolError(
       input.signal.aborted ? 499 : 502,
       input.signal.aborted ? 'MODEL_POOL_CLIENT_ABORTED' : 'MODEL_POOL_UPSTREAM_UNREACHABLE',
       messagesOf(error),
     )
   }
-  clearTimeout(timer)
+
+  const streaming = (input.payload as { stream?: unknown } | null)?.stream === true
+  if (response.ok && streaming && response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'text/event-stream') {
+    await response.body?.cancel().catch(() => undefined)
+    detach()
+    const message = `HTTP ${String(response.status)} 未返回 text/event-stream，通道不支持本次流式请求或返回了网关错误`
+    return { ok: false, failure: { kind: 'server', status: 502, message }, upstreamBody: message }
+  }
 
   if (!response.ok) {
     const upstreamBody = await readBoundedText(response.body)
@@ -165,6 +183,7 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
     status: response.status,
     contentType: response.headers.get('content-type') ?? 'application/json; charset=utf-8',
     body: response.body,
+    signal: controller.signal,
     dispose: detach,
   }
 }
@@ -177,16 +196,17 @@ export interface ProbeResult {
   readonly message: string
 }
 
-/** The smallest request that still proves the credential works. */
+/** A short streaming request; success proves this model's basic SSE path. */
 const PROBE_PAYLOAD = {
-  model: 'deepseek-v4-flash',
+  model: 'deepseek-v4.1-flash',
   messages: [{ role: 'user', content: 'ping' }],
   max_tokens: 1,
-  stream: false,
+  stream: true,
+  stream_options: { include_usage: true },
 } as const
 
 /**
- * Send a one-token request with one key and report the round trip.
+ * Consume a one-token SSE request and report the complete round trip.
  * @param input - channel, credential, model, timeout, and abort signal.
  * @returns the probe outcome with latency; the message is always key-free.
  */
@@ -198,9 +218,8 @@ export const probeChat = async (input: {
   readonly signal: AbortSignal
 }): Promise<ProbeResult> => {
   const started = Date.now()
-  const payload = input.model === undefined || input.model === ''
-    ? PROBE_PAYLOAD
-    : { ...PROBE_PAYLOAD, model: input.model }
+  const model = input.model?.trim() || input.channel.models[0] || PROBE_PAYLOAD.model
+  const payload = { ...PROBE_PAYLOAD, model }
   try {
     const result = await forwardChat({
       channel: input.channel,
@@ -209,16 +228,34 @@ export const probeChat = async (input: {
       timeoutMs: input.timeoutMs,
       signal: input.signal,
     })
-    const latencyMs = Date.now() - started
     if (result.ok) {
-      await result.body?.cancel().catch(() => undefined)
-      result.dispose()
-      return { ok: true, status: result.status, latencyMs, message: '连通正常' }
+      const validator = new ChatStreamValidator(true)
+      const reader = result.body?.getReader()
+      try {
+        if (reader !== undefined) {
+          for (;;) {
+            const next = await reader.read()
+            if (next.done) break
+            validator.push(next.value)
+          }
+        }
+        result.signal.throwIfAborted()
+        validator.finish()
+      } catch (error) {
+        if (input.signal.aborted) throw new PoolError(499, 'MODEL_POOL_CLIENT_ABORTED', '探测已取消')
+        if (result.signal.reason instanceof PoolError) throw result.signal.reason
+        throw error
+      } finally {
+        await reader?.cancel().catch(() => undefined)
+        reader?.releaseLock()
+        result.dispose()
+      }
+      return { ok: true, status: result.status, latencyMs: Date.now() - started, message: `流式探测通过（${redactSecrets(model)}）；已验证内容和 finish_reason，工具调用及其他思考配置需另行验证` }
     }
     return {
       ok: false,
       status: result.failure.status,
-      latencyMs,
+      latencyMs: Date.now() - started,
       message: result.failure.message,
     }
   } catch (error) {

@@ -32,6 +32,10 @@ services:
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:24.7.0-bookworm-slim}
     restart: unless-stopped
+    # storage-domain keeps process-local snapshots. The PostgreSQL writer lease
+    # also rejects a second app process; a shared filesystem alone is insufficient.
+    deploy:
+      replicas: 1
     init: true
     depends_on:
       postgres:

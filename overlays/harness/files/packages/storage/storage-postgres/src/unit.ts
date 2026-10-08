@@ -61,6 +61,7 @@ export class PostgresKvUnit implements KvUnit {
     schema: string,
     private readonly descriptor: KvUnitDescriptor,
     private readonly onClose: () => void,
+    private readonly assertWriter: () => void = () => {},
   ) {
     for (const table of descriptor.tables) {
       this.tables.set(table, qualifiedTable(schema, recordTableName(descriptor.name, table)))
@@ -174,6 +175,7 @@ export class PostgresKvUnit implements KvUnit {
   }
 
   private ensureOpen(): void {
+    this.assertWriter()
     if (this.closed) {
       throw new StorageError('closed', `kv unit '${this.descriptor.name}' is closed`)
     }
