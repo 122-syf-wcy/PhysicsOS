@@ -1,14 +1,81 @@
 import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { createServer } from 'node:http'
 import { mkdtemp, writeFile, readFile, mkdir, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes, createCipheriv, hkdfSync } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
-import { encryptFile, decryptFile, validateModelKeys, modelKeyTable } from './backup-lib.mjs'
+import { spawn, spawnSync } from 'node:child_process'
+import {
+  encryptFile,
+  decryptFile,
+  validateModelKeys,
+  modelKeyTable,
+  RESTORE_READINESS_SCRIPT,
+} from './backup-lib.mjs'
 import { backupFull } from './backup-full.mjs'
 import { restoreFull } from './restore-full.mjs'
+
+for (const [name, contentType, body, expectedCode] of [
+  ['HTML', 'text/html', '<html>fixture-secret</html>', 1],
+  ['not-ready JSON', 'application/json', '{"status":"starting","secret":"fixture-secret"}', 1],
+  ['ready JSON', 'application/json', '{"status":"ready"}', 0],
+  ['stalled JSON body', 'application/json', null, 1],
+]) {
+  test(`container readiness probe handles HTTP 200 ${name} without logging bodies`, async (t) => {
+    let requests = 0
+    const server = createServer((_request, response) => {
+      requests += 1
+      response.writeHead(200, { 'content-type': contentType })
+      if (body === null) response.write('{"status":')
+      else response.end(body)
+    })
+    await new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+    t.after(
+      () =>
+        new Promise((resolve) => {
+          server.close(resolve)
+          server.closeAllConnections()
+        }),
+    )
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(
+        process.execPath,
+        [
+          '--input-type=commonjs',
+          '-e',
+          RESTORE_READINESS_SCRIPT,
+          `http://127.0.0.1:${server.address().port}/readyz`,
+          body === null ? '500' : '2000',
+        ],
+        { timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      const stdout = []
+      const stderr = []
+      child.stdout.on('data', (chunk) => stdout.push(chunk))
+      child.stderr.on('data', (chunk) => stderr.push(chunk))
+      child.once('error', reject)
+      child.once('close', (code, signal) =>
+        resolve({
+          code,
+          signal,
+          stdout: Buffer.concat(stdout).toString(),
+          stderr: Buffer.concat(stderr).toString(),
+        }),
+      )
+    })
+    assert.equal(requests, 1)
+    assert.equal(result.signal, null, 'the probe must finish within its own timeout')
+    assert.equal(result.code, expectedCode)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr, '')
+  })
+}
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'physicsos-backup-test-'))
@@ -113,6 +180,12 @@ async function dockerFixture(t, running = ['app', 'postgres', 'redis']) {
     calls.push(args)
     const command = args.join(' ')
     if (state.fail && command.includes(state.fail)) throw new Error('fixture Docker failure')
+    if (args.includes(RESTORE_READINESS_SCRIPT)) {
+      assert.equal(args[args.indexOf(RESTORE_READINESS_SCRIPT) - 1], '-e')
+      assert.equal(args.at(-2), 'http://127.0.0.1:3080/readyz')
+      assert.ok(Number(args.at(-1)) >= 1 && Number(args.at(-1)) <= 2000)
+      assert.ok(options.timeoutMs >= 1 && options.timeoutMs <= 5000)
+    }
     let output = ''
     if (command.includes('config --format json')) output = JSON.stringify(config)
     else if (command.includes('ps --status running --services')) output = running.join('\n')
@@ -253,7 +326,7 @@ test('isolated restore validates counts, sessions and readiness with isolated vo
   )
   assert.equal(config.services.postgres.ports, undefined)
   assert.ok(f.calls.some((a) => a.join(' ').includes('pg_restore')))
-  assert.ok(f.calls.some((a) => a.join(' ').includes('healthcheck.mjs')))
+  assert.ok(f.calls.some((a) => a.includes(RESTORE_READINESS_SCRIPT)))
 })
 
 test('tampered backup fails authentication before creating any Docker resource', async (t) => {
@@ -325,7 +398,10 @@ test('authenticated archive with a mismatched manifest checksum is rejected befo
   assert.equal(f.calls.length, 0)
 })
 
-for (const failure of ['-xpf', 'healthcheck.mjs']) {
+for (const [failure, marker] of [
+  ['archive import', '-xpf'],
+  ['readiness probe', RESTORE_READINESS_SCRIPT],
+]) {
   test(`restore failure at ${failure} tears down only its newly created isolated project`, async (t) => {
     const f = await dockerFixture(t)
     const artifact = join(f.root, 'full.pbackup')
@@ -334,7 +410,7 @@ for (const failure of ['-xpf', 'healthcheck.mjs']) {
       { docker: f.docker },
     )
     f.calls.length = 0
-    f.state.fail = failure
+    f.state.fail = marker
     const targetDir = join(f.root, 'restore')
     await assert.rejects(
       restoreFull(

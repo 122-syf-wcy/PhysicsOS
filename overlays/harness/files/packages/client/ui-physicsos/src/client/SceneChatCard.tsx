@@ -11,14 +11,16 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronLeftOutline14,
-  IconChevronRightOutline14,
-  IconPauseOutline16,
-  IconPlayOutline16,
-  IconRefreshOutline16,
+  IconChevronLeftOutlineMedium,
+  IconChevronRightOutlineMedium,
+  IconPauseOutlineMedium,
+  IconPlayOutlineMedium,
+  IconRefreshOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+/* Type-only: pulls the Chat target's SlotMap entry, its `ChatNodeDataMap`
+   merge (the card's kind), and the Session-scoped `useChat` standard hook. */
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 
@@ -32,11 +34,12 @@ import { MathText } from './physics/MathText.tsx'
 import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
 import { drawnIds, highlightableIds } from './question-highlights.ts'
-import { VerificationList } from './workspace-parts.tsx'
+import { toVerifiedResult } from './physics/verified-result.ts'
+import { VerifiedResult } from './VerifiedResult.tsx'
 import { LabSelfCheckCard } from './LabSelfCheckCard.tsx'
 import type { SelfCheckAttemptInput } from './learning-record-store.ts'
 import { QUESTION_KNOWLEDGE, selfChecksOfQuestion } from '@physicsos/question-core'
-import type { PhysicsSceneCardData } from './scene-chat-node.ts'
+import { PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData } from './scene-chat-node.ts'
 import type { PhysicsSceneRef } from './surface-store.ts'
 import { IconPhysicsLab } from './icons/physics-icons.tsx'
 import { TimelineScrubber } from './TimelineScrubber.tsx'
@@ -50,15 +53,26 @@ export interface SceneChatCardInjected {
   /** Hand the card's scene to the Lab — the same verb 最近空间 rows use. */
   openSceneInLab: (ref: PhysicsSceneRef) => void
   /**
+   * Close an agent-opened Lab and drop the turn's scaffolding scenes. Called
+   * once per turn by the turn-tail seat, which only mounts after the turn ends.
+   */
+  endTurnHygiene?: () => void
+  /**
    * Write a self-check answer into the learning record. Absent where no
    * learning-record store exists; the self-check block hides itself then.
    */
   recordAttempt?: (attempt: SelfCheckAttemptInput) => void
 }
 
-/** Slot props for the inline scene card. */
+/** Slot props for the inline scene card in the conversation flow. */
 export type SceneChatCardProps =
-  PropsRuntime<'conversation.chat.node', 'physics-scene-card'>
+  Pick<PropsRuntime<'conversation.chat.node', 'physics-scene-card'>, 'node' | 'useSession' | 'useChat'>
+  & InjectFace<SceneChatCardInjected>
+  & PropsLocale<'physicsos'>
+
+/** Props of the card body, shared by both entry points. */
+export type SceneCardBodyProps =
+  & { readonly data: PhysicsSceneCardData }
   & InjectFace<SceneChatCardInjected>
   & PropsLocale<'physicsos'>
 
@@ -70,32 +84,9 @@ const SUMMARY_INTERVAL_MS = 250
    lands in the same answer block (before the next user message). */
 const ANSWER_BOUNDARY = new Set(['user', 'steering'])
 
-export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, recordAttempt, useSession,
-}: SceneChatCardProps) {
-  const data: PhysicsSceneCardData = node.data
-  const superseded = useSession((snapshot) => {
-    let horizon = Number.POSITIVE_INFINITY
-    for (const candidate of snapshot.chat.nodes.values()) {
-      if (
-        ANSWER_BOUNDARY.has(candidate.kind)
-        && candidate.anchorSeq > node.anchorSeq
-        && candidate.anchorSeq < horizon
-      ) {
-        horizon = candidate.anchorSeq
-      }
-    }
-    for (const candidate of snapshot.chat.nodes.values()) {
-      if (
-        candidate.kind === 'physics-scene-card'
-        && candidate.anchorSeq > node.anchorSeq
-        && candidate.anchorSeq < horizon
-      ) {
-        return true
-      }
-    }
-    return false
-  })
+export const SceneCardBody = memo(function SceneCardBody({
+  data, t, openSceneInLab, recordAttempt,
+}: SceneCardBodyProps) {
   /* The snapshot invariant guarantees `scene` is the whole PhysicsScene at
      this revision (`scene.id === sceneId`, `scene.revision === revision`). */
   const scene = data.scene as unknown as PhysicsScene
@@ -108,8 +99,6 @@ export const SceneChatCard = memo(function SceneChatCard({
        materialization. */
     [runtimeKey],
   )
-
-  if (superseded) return null
 
   return (
     <div className={css.card} data-scene-card={data.sceneId}>
@@ -144,6 +133,7 @@ export const SceneChatCard = memo(function SceneChatCard({
             domain,
             bodyId: scene.bodies[0]?.id,
             sceneTitle: data.title,
+            revision: data.revision,
             recordAttempt,
           })}
         />
@@ -165,6 +155,7 @@ function CardStage({
   domain,
   bodyId,
   sceneTitle,
+  revision,
   recordAttempt,
 }: {
   runtime: WorkspaceRuntime
@@ -173,6 +164,7 @@ function CardStage({
   domain?: string | undefined
   bodyId?: string | undefined
   sceneTitle?: string | undefined
+  revision?: number | undefined
   recordAttempt?: ((attempt: SelfCheckAttemptInput) => void) | undefined
 }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(() => runtime.getSnapshot())
@@ -258,6 +250,7 @@ function CardStage({
           activeToken={highlightToken}
           onToggle={toggleKnown}
           sceneTitle={sceneTitle ?? ''}
+          revision={revision}
           recordAttempt={recordAttempt}
           t={t}
         />
@@ -276,7 +269,7 @@ function CardStage({
             commit(runtime.setRunning(!running))
           }}
         >
-          {running ? <IconPauseOutline16 size={14} /> : <IconPlayOutline16 size={14} />}
+          {running ? <IconPauseOutlineMedium size={14} /> : <IconPlayOutlineMedium size={14} />}
         </button>
         <button
           type="button"
@@ -287,7 +280,7 @@ function CardStage({
             commit(runtime.step(-clock.total * STEP_FRACTION))
           }}
         >
-          <IconChevronLeftOutline14 size={13} />
+          <IconChevronLeftOutlineMedium size={13} />
         </button>
         <button
           type="button"
@@ -298,7 +291,7 @@ function CardStage({
             commit(runtime.step(clock.total * STEP_FRACTION))
           }}
         >
-          <IconChevronRightOutline14 size={13} />
+          <IconChevronRightOutlineMedium size={13} />
         </button>
         <button
           type="button"
@@ -309,7 +302,7 @@ function CardStage({
             commit(runtime.seek(0))
           }}
         >
-          <IconRefreshOutline16 size={13} />
+          <IconRefreshOutlineMedium size={13} />
         </button>
         <CardClock source={frameSource} scale={clockScale} />
         <div className={css.trackWrap}>
@@ -376,6 +369,7 @@ function SolveSection({
   activeToken,
   onToggle,
   sceneTitle,
+  revision,
   recordAttempt,
   t,
 }: {
@@ -388,10 +382,22 @@ function SolveSection({
   activeToken: string | null
   onToggle: (token: string, ids: readonly string[]) => void
   sceneTitle: string
+  revision: number | undefined
   recordAttempt: ((attempt: SelfCheckAttemptInput) => void) | undefined
   t: Translate
 }) {
-  const verified = solve.verification?.status
+  /* The verification block's ONE consumption point: the seam turns the answer's
+     own provenance into the view, and nothing below re-derives a level. The
+     engine/verifier names come from that provenance, never from `domain`. */
+  const primary = solve.answers[0]
+  const result = toVerifiedResult({
+    ...(primary === undefined
+      ? {}
+      : { value: primary.value, unit: primary.unit, provenance: primary.provenance }),
+    checks: verification,
+    ...(revision === undefined ? {} : { revision }),
+  })
+  const verified = result.level !== 'unverified'
   /* A golden question carries its self-check bank: answering in the card is
      the same practice loop Question Space ran, recorded identically. */
   const goldenId = solve.goldenQuestionId
@@ -402,9 +408,9 @@ function SolveSection({
         {t('sceneCard.solveTitle')}
         <span className={css.solveSummaryMeta}>
           {solve.knowns.length === 0 ? '' : t('sceneCard.solveKnownsCount', { count: solve.knowns.length })}
-          {verified === undefined ? '' : (
-            <span className={css.solveVerdict} data-status={verified}>{t('sceneCard.solveVerified')}</span>
-          )}
+          {verified ? (
+            <span className={css.solveVerdict} data-level={result.level}>{t('sceneCard.solveVerified')}</span>
+          ) : null}
         </span>
       </summary>
       {solve.knowns.length === 0 ? null : (
@@ -494,12 +500,12 @@ function SolveSection({
           </ol>
         </section>
       )}
-      {verification.length === 0 ? null : (
-        <section className={css.solveBlock} aria-label={t('sceneCard.solveVerification')}>
-          <h4 className={css.solveHeading}>{t('sceneCard.solveVerification')}</h4>
-          <VerificationList checks={verification} emptyLabel={t('sceneCard.solveVerification')} />
-        </section>
-      )}
+      {/* Always shown on a solved card: an unverified answer must say so, not
+          stay silent — that silence is what a re-skinned chat bot would do. */}
+      <section className={css.solveBlock} aria-label={t('sceneCard.solveVerification')}>
+        <h4 className={css.solveHeading}>{t('sceneCard.solveVerification')}</h4>
+        <VerifiedResult view={result} t={t} />
+      </section>
       {solve.issues.length === 0 ? null : (
         <section className={css.solveBlock} aria-label={t('sceneCard.solveIssues')}>
           <h4 className={css.solveHeading}>{t('sceneCard.solveIssues')}</h4>
@@ -556,3 +562,49 @@ function CardCanvas({
     />
   )
 }
+
+/**
+ * The conversation-flow entry point: one card per scene node, yielding to the
+ * Turn's own card once that Turn has closed, and to a newer scene card in the
+ * same answer block while it is still running.
+ */
+export const SceneChatCard = memo(function SceneChatCard({
+  node, t, openSceneInLab, recordAttempt, useChat,
+}: SceneChatCardProps) {
+  const superseded = useChat((snapshot) => {
+    /* The Turn card covers this answer once the Turn closes. This card is what
+       a log gets when the Turn's boundaries are not loaded, so it yields
+       wherever the Turn published a scene of its own — but only at `closed`:
+       the Turn card is built from `turn/end` and is not drawn at all while the
+       Turn runs, so yielding earlier would blank the scene mid-solve. */
+    const placed = node.location.kind === 'turn' || node.location.kind === 'step'
+      ? node.location.turn.turn
+      : undefined
+    const turn = placed === undefined ? undefined : snapshot.timeline.turns.get(placed)
+    if (turn !== undefined
+      && turn.status === 'closed'
+      && turn.data.get(PHYSICS_SCENE_TURN_KEY) !== undefined) return true
+    let horizon = Number.POSITIVE_INFINITY
+    for (const candidate of snapshot.nodes.values()) {
+      if (
+        ANSWER_BOUNDARY.has(candidate.kind)
+        && candidate.anchorSeq > node.anchorSeq
+        && candidate.anchorSeq < horizon
+      ) {
+        horizon = candidate.anchorSeq
+      }
+    }
+    for (const candidate of snapshot.nodes.values()) {
+      if (
+        candidate.kind === 'physics-scene-card'
+        && candidate.anchorSeq > node.anchorSeq
+        && candidate.anchorSeq < horizon
+      ) {
+        return true
+      }
+    }
+    return false
+  })
+  if (superseded) return null
+  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab} {...recordAttempt === undefined ? {} : { recordAttempt }} />
+})

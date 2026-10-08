@@ -9,6 +9,13 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FeedbackRow, FeedbackStatus, NoticeApi } from './notice-api.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { GlassSelect } from './GlassSelect.tsx'
+import {
+  AdminCard,
+  AdminCardMeta,
+  AdminEmpty,
+  AdminStats,
+  AdminToolbar,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminNoticeTabProps {
@@ -58,7 +65,7 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
   }
 
   if (error !== undefined && items === undefined) return <p className={css.error}>{error}</p>
-  if (items === undefined) return <p className={css.empty}>{t('admin.loading')}</p>
+  if (items === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
 
   const visible = status === '' ? items : items.filter(row => row.status === status)
 
@@ -66,17 +73,14 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
     <>
       {error !== undefined && <p className={css.error}>{error}</p>}
 
-      <div className={css.stats}>
-        {(['open', 'answered', 'closed'] as const).map(bucket => (
-          <span key={bucket} className={css.stat} data-stat={`feedback.${bucket}`}>
-            <strong>{items.filter(row => row.status === bucket).length}</strong>
-            {' '}
-            {t(`admin.notice.status.${bucket}`)}
-          </span>
-        ))}
-      </div>
+      <AdminStats items={(['open', 'answered', 'closed'] as const).map(bucket => ({
+        key: bucket,
+        dataStat: `feedback.${bucket}`,
+        value: items.filter(row => row.status === bucket).length,
+        label: t(`admin.notice.status.${bucket}`),
+      }))} />
 
-      <div className={css.toolbar}>
+      <AdminToolbar>
         <GlassSelect
           className={css.select}
           value={status}
@@ -90,47 +94,45 @@ export function AdminNoticeTab({ api, t }: AdminNoticeTabProps) {
           ]}
           onChange={(next) => { setStatus(next as FeedbackStatus | '') }}
         />
-      </div>
+      </AdminToolbar>
 
-      <div className={css.list}>
-        {visible.length === 0 && <p className={css.empty}>{t('admin.empty')}</p>}
-        {visible.map(row => (
-          <section key={row.id} className={css.card} data-feedback={row.id}>
-            <p className={css.cardMeta}>
-              {fmtTime(row.createdAt)} · {KIND_LABEL[row.kind]} · {row.authorKey}
-              {row.context === undefined ? '' : ` · ${row.context}`}
-            </p>
-            <p className={css.cardText}>{row.body}</p>
-            {row.reply !== undefined && (
-              <p className={css.cardMeta}>
-                {t('admin.notice.repliedBy')} {row.repliedBy} · {row.reply}
-              </p>
-            )}
-            <div className={css.formRow}>
-              <input
-                className={css.input}
-                placeholder={t('admin.notice.replyPlaceholder')}
-                value={drafts[row.id] ?? ''}
-                onChange={(event) => {
-                  setDrafts(current => ({ ...current, [row.id]: event.target.value }))
-                }}
-              />
-              <button
-                type="button" className={css.primary}
-                disabled={busy || (drafts[row.id] ?? '').trim() === ''}
-                onClick={() => {
-                  const text = (drafts[row.id] ?? '').trim()
-                  if (text === '') return
-                  run(() => api.replyFeedback(row.id, text)
-                    .then(() => { setDrafts(current => ({ ...current, [row.id]: '' })) }))
-                }}
-              >
-                {t('admin.notice.reply')}
-              </button>
-            </div>
-          </section>
-        ))}
-      </div>
+      {visible.length === 0 && <AdminEmpty>{t('admin.empty')}</AdminEmpty>}
+      {visible.map(row => (
+        <AdminCard key={row.id} data-feedback={row.id}>
+          <AdminCardMeta>
+            {fmtTime(row.createdAt)} · {KIND_LABEL[row.kind]} · {row.authorKey}
+            {row.context === undefined ? '' : ` · ${row.context}`}
+          </AdminCardMeta>
+          <p className={css.cardText}>{row.body}</p>
+          {row.reply !== undefined && (
+            <AdminCardMeta>
+              {t('admin.notice.repliedBy')} {row.repliedBy} · {row.reply}
+            </AdminCardMeta>
+          )}
+          <div className={css.formRow}>
+            <input
+              className={css.input}
+              placeholder={t('admin.notice.replyPlaceholder')}
+              value={drafts[row.id] ?? ''}
+              onChange={(event) => {
+                setDrafts(current => ({ ...current, [row.id]: event.target.value }))
+              }}
+            />
+            <button
+              type="button" className={css.primary}
+              disabled={busy || (drafts[row.id] ?? '').trim() === ''}
+              onClick={() => {
+                const text = (drafts[row.id] ?? '').trim()
+                if (text === '') return
+                run(() => api.replyFeedback(row.id, text)
+                  .then(() => { setDrafts(current => ({ ...current, [row.id]: '' })) }))
+              }}
+            >
+              {t('admin.notice.reply')}
+            </button>
+          </div>
+        </AdminCard>
+      ))}
     </>
   )
 }

@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../tsconfig.physicsos.json"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -18,7 +21,10 @@
       "path": "../ui-primitives"
     },
     {
-      "path": "../runtime"
+      "path": "../store"
+    },
+    {
+      "path": "../ui-renderer"
     },
     {
       "path": "../ui-layout"
@@ -27,13 +33,25 @@
       "path": "../ui-sidebar"
     },
     {
-      "path": "../ui-conversation"
+      "path": "../ui-conversation/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-chat/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/workspace-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/session"
     },
     {
       "path": "../../physicsos/tool-physicsos"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
       "path": "../../runtime-diagnostics/invariants"

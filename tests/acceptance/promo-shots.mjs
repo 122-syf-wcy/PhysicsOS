@@ -133,8 +133,81 @@ const junior = [
 ]
 for (const template of junior) await openJuniorTemplate(template)
 
+/* 学习记录 lives in the account menu (SidebarFooter), not as a nav row: the
+   sidebar foot has no room for another row. */
+const openLearningRecord = async () => {
+  const account = page.getByRole('button', { name: '账户菜单' }).first()
+  if ((await account.count()) === 0) {
+    console.warn('  (no account menu button)')
+    return false
+  }
+  await account.click()
+  const entry = page.getByRole('menuitem', { name: '学习记录' }).first()
+  try {
+    await entry.waitFor({ state: 'visible', timeout: 8000 })
+  } catch {
+    console.warn('  (no 学习记录 entry in the account menu)')
+    return false
+  }
+  await entry.click()
+  return true
+}
+
 if (await clickNav('资源库')) await shot('07-library')
-if (await clickNav('学习记录')) await shot('08-learning-record')
+if (await openLearningRecord()) {
+  await page.waitForTimeout(2600)
+  await shot('08-learning-record')
+}
+
+/* The product's central claim, on one screen: the answer, the engine's
+   verification verdict, and the interactive world it was solved in. Shot last
+   because it costs a real turn — the last shot asks a question and waits for
+   that turn to close. */
+const askAndShoot = async () => {
+  /* The shell binds the composer only with an active Session, and a fresh
+     account lands on "Choose a workspace to start". The sidebar's New Session
+     binds it; a workspace row's Open does not — that is a separate defect. */
+  const composerPhase = () => page.evaluate(() => document.querySelector('[data-composer-input]')?.getAttribute('data-phase') ?? 'none')
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if ((await composerPhase()) !== 'inert') break
+    const newSession = page.getByRole('button', { name: /新会话|New Session/ }).first()
+    if ((await newSession.count()) === 0) break
+    await newSession.click()
+    await page.waitForTimeout(6000)
+    const noticeAgain = page.getByRole('button', { name: /^继续$/ })
+    if (await noticeAgain.count()) await noticeAgain.first().click({ timeout: 10000 }).catch(() => {})
+  }
+  if (!(await clickNav('首页'))) return false
+  await page.waitForTimeout(1500)
+  const fillable = page.locator('[data-composer-input]').first()
+  try {
+    await fillable.waitFor({ state: 'visible', timeout: 20000 })
+  } catch {
+    console.warn('  (no composer for the solved-question shot)')
+    return false
+  }
+  const tailsBefore = await page.evaluate(() => document.querySelectorAll('[data-turn-tail]').length)
+  await fillable.fill('把一个 2 kg 的物体放在倾角 30° 的光滑斜面上，g 取 10 m/s²。求它沿斜面下滑的加速度和 2 s 末的速度大小。')
+  await page.waitForTimeout(600)
+  await page.evaluate(() => {
+    const send = [...document.querySelectorAll('button')].find(b => /发送消息|Send message/.test(b.getAttribute('aria-label') ?? ''))
+    if (send !== undefined) send.click()
+  })
+  for (let i = 0; i < 400; i += 1) {
+    await page.waitForTimeout(3000)
+    if (await page.evaluate(() => document.querySelectorAll('[data-turn-tail]').length) > tailsBefore) break
+  }
+  /* The turn-end hygiene returns the surface to the conversation by itself. */
+  await page.waitForTimeout(5000)
+  const noticeAgain = page.getByRole('button', { name: /^继续$/ })
+  if (await noticeAgain.count()) await noticeAgain.first().click({ timeout: 10000 }).catch(() => {})
+  await page.waitForTimeout(2000)
+  await page.evaluate(() => { window.scrollTo(0, 0) })
+  await page.waitForTimeout(800)
+  return true
+}
+
+if (await askAndShoot()) await shot('09-solved-question')
 
 await browser.close()
 console.log(`done -> ${OUT}`)

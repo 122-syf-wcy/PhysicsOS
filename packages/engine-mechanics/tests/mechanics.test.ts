@@ -4,7 +4,7 @@ import {
   processQuestion,
   GOLDEN_QUESTIONS,
 } from '../../question-core/src/index.ts'
-import { MechanicsEngine } from '../src/index.ts'
+import { MechanicsEngine, resolveMechanicsModel } from '../src/index.ts'
 import {
   createMechanicsScene as createScene,
   createMechanicsSimulationRequest as createReq,
@@ -429,6 +429,47 @@ describe('Derived-quantity regressions', () => {
     const maxH = result.derivedQuantities.find((d) => d.key === 'max_height')
     expect(maxH).toBeDefined()
     expect((maxH!.value as { value: number }).value).toBeCloseTo(20, 6)
+  })
+})
+
+describe('projectile apex is an engine-computed fact', () => {
+  it('resolves an apex at the analytic time t = vy0 / g for an upward launch', () => {
+    // y0 = 20, vy0 = 8, g = 10 → apex at t = 0.8 s.
+    const scene = createScene({
+      model: 'projectile_motion',
+      mass: 1,
+      position: vec3(0, 20, 0),
+      velocity: vec3(12, 8, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 0,
+    })
+    const model = resolveMechanicsModel(scene)
+    if (model.modelId !== 'projectile_motion') throw new Error('expected projectile model')
+    const apexTime = model.apexTime
+    if (apexTime === undefined) throw new Error('upward launch must have an apex')
+    expect(apexTime).toBeCloseTo(8 / 10, 9)
+    /* flightTime = (8 + √(64 + 2·10·20))/10 ≈ 2.954 s, so the midpoint is
+       1.477 s — a different instant from the real apex at 0.8 s. */
+    expect(model.flightTime / 2).toBeGreaterThan(apexTime + 0.5)
+  })
+
+  it('has no apex when the launch has no upward component (vy0 ≤ 0)', () => {
+    /* The leftward horizontal throw (vx < 0, vy0 = 0) is the case the old
+       view guard let slip: atan2(0, vx<0) = π > 0.01, so the view used to fall
+       through to flightTime / 2 and invent an apex. */
+    for (const [vx, vy] of [[10, 0], [-10, 0], [10, -5]] as const) {
+      const scene = createScene({
+        model: 'projectile_motion',
+        mass: 1,
+        position: vec3(0, 20, 0),
+        velocity: vec3(vx, vy, 0),
+        gravity: vec3(0, -10, 0),
+        groundY: 0,
+      })
+      const model = resolveMechanicsModel(scene)
+      if (model.modelId !== 'projectile_motion') throw new Error('expected projectile model')
+      expect(model.apexTime).toBeUndefined()
+    }
   })
 })
 

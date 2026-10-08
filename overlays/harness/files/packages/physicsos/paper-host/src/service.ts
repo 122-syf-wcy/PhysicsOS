@@ -742,6 +742,35 @@ export class PaperService {
   }
 
   /**
+   * Replace the document with the engine-corrected answers as a new version,
+   * inside the checking stage. The engine's number is what the paper carries,
+   * and minting a version keeps the approval hash bound to the reviewed
+   * content instead of silently editing the drafted one in place.
+   * @param id - the job id.
+   * @param document - the document carrying the engine's verified answers.
+   * @returns the updated job, still in `checking`.
+   */
+  async commitEngineAnswers(id: string, document: PaperDocument): Promise<PaperJob> {
+    const job = this.requireJob(id)
+    if (job.status !== 'checking') {
+      throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not checking`)
+    }
+    const next: PaperJob = {
+      ...job,
+      document,
+      versions: [...job.versions, {
+        version: job.versions.length + 1,
+        hash: documentHash(document),
+        at: now(),
+        summary: '引擎定案：答案取自 PhysicsOS 引擎',
+      }],
+      updatedAt: now(),
+    }
+    await this.domain.table('jobs').put(id, next)
+    return next
+  }
+
+  /**
    * Teacher verdict on one question of the current version.
    * @param id - the job id.
    * @param questionNo - the question's printed number.
@@ -898,6 +927,36 @@ export class PaperService {
       throw new PaperError(409, 'BAD_STATE', `job ${id} is '${job.status}', not running`)
     }
     await this.domain.table('jobs').put(id, { ...job, status: 'failed', lastError: message, updatedAt: now() })
+  }
+
+  /**
+   * Publish live driver telemetry onto the job row so the workspace can show
+   * WHAT the pipeline is doing (planning, drafting section i/n, solving
+   * question k/m, drawing figure j/m) instead of a bare stage label. Best
+   * effort by design: a put failure must never fail the pipeline itself.
+   * @param id - the job id.
+   * @param stage - machine phase (plan | draft | adapt | assemble | check | solve | figure | export).
+   * @param done - completed steps within the phase.
+   * @param total - total steps in the phase.
+   * @param detail - one human line describing the current step.
+   */
+  async reportProgress(
+    id: string,
+    stage: string,
+    done: number,
+    total: number,
+    detail?: string,
+  ): Promise<void> {
+    try {
+      const job = this.requireJob(id)
+      await this.domain.table('jobs').put(id, {
+        ...job,
+        progress: { stage, ...(detail === undefined ? {} : { detail }), done, total, updatedAt: now() },
+        updatedAt: now(),
+      })
+    } catch {
+      /* telemetry only — the driver keeps going */
+    }
   }
 
   /**

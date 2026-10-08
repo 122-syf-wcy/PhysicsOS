@@ -20,6 +20,11 @@ export default {
   },
   test: {
     environment: 'node',
-    include: [fileURLToPath(new URL('tests/**/*.spec.ts', import.meta.url))],
+    /* Resolve the specs (and their tsconfig `extends` chain) inside the vendor
+       tree: this config is executed from CI against the overlay copy, where an
+       overlay-relative include would leave vite unable to load a tsconfig. */
+    include: [
+      path.join(vendorRoot, 'packages/physicsos/health-host/tests/**/*.spec.ts'),
+    ],
   },
 }

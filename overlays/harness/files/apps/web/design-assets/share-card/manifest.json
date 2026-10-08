@@ -1,0 +1,12 @@
+{
+  "asset": "experiment-share-og.png",
+  "purpose": "分享卡 / OG 预览图底图（优化方案 §17 Shareable Experiment、P3 分享卡）",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz/v1",
+  "size": "1536x1024",
+  "quality": "high",
+  "background": "opaque",
+  "augment": false,
+  "prompt": "Wide social share card background for a physics learning platform. Flat deep vivid blue (#155EEF) field with a subtle darker navy vignette toward the lower right. Left-of-centre: a clean orbital atom mark made of three thin evenly spaced white elliptical orbits crossing at a small solid white circular nucleus, crisp uniform stroke weight, geometric and precise. From the lower left a single smooth white particle-trajectory curve sweeps up to the right, ending in one small bright white dot to suggest motion in a magnetic field. Keep the right half almost empty for text. Flat vector style, calm and scientific, restrained palette of blue, navy and white, no glow, no bloom, no drop shadow, no 3D bevel, no texture, no text, no letters, no numbers, no watermark, no photograph, no neon.",
+  "note": "右半留白供叠加文案；文案改动需等 P0 链路跑通后再进行（见 ROADMAP P0 收口第 5 条）"
+}

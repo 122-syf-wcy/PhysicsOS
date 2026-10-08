@@ -625,6 +625,39 @@ export const IconVerified = (props: PhysicsIconProps) => (
   </Glyph>
 )
 
+/** Unverified: a warning triangle with a bang. The honest state when no engine
+    verification reached the client; never drawn for a verified result. */
+export const IconUnverified = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M12 4.4 3.6 19.4h16.8z" />
+    <path d="M12 10v4.2" />
+    <path d="M12 17.1v0.01" />
+  </Glyph>
+)
+
+/** Engine computed: a processor die with a status node — the engine produced a
+    value but no physics check is claimed. */
+export const IconComputed = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <rect x="6.8" y="6.8" width="10.4" height="10.4" rx="2.4" />
+    <path d="M12 3.4v3.4M12 17.2v3.4M3.4 12h3.4M17.2 12h3.4" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+  </Glyph>
+)
+
+/** Strongly verified: the shield's mark is solid — corroboration, not one pass.
+    The fill carries the meaning (see the set's "no fill unless it means"). */
+export const IconVerifiedStrong = (props: PhysicsIconProps) => (
+  <Glyph {...props}>
+    <path d="M12 2.8 20 6v6.2c0 4.3-3.2 7.6-8 9-4.8-1.4-8-4.7-8-9V6z" />
+    <path
+      d="M8.4 12.1 10.9 14.6 16 9.5 14.6 8.1 11 11.7 9.8 10.5z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </Glyph>
+)
+
 /* --------------------------------------------------------- scene structure -- */
 
 /** Scene: stacked layers. */

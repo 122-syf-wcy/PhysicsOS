@@ -1,0 +1,13 @@
+{
+  "asset": "icon-concept-sheet.png",
+  "purpose": "icon-concept",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/generations",
+  "size": "1024x1024",
+  "pixels": "1024x1024",
+  "bytes": 852674,
+  "background": "opaque",
+  "revisedPrompt": null,
+  "prompt": "A single flat concept sheet presenting a unified line-icon system for the laboratory and experiment workspace of PhysicsOS, a desktop scientific physics workstation.\n\nVisual language: modern, restrained, precise, scientific-instrument feel, like high-end desktop engineering software rather than a childrens education app.\n\nPure warm-white background. A calm regular grid of clearly separated icon cells with generous spacing between every icon.\n\nEvery icon: consistent 1.75px optical stroke weight, rounded stroke caps, drawn on a 24x24 pixel grid, dark slate-blue linework with at most a small amount of ice-blue fill as accent.\n\nIcon subjects, one per cell: laboratory bench, experiment run, scene tree, inspector panel, timeline, play, pause, reset, measurement caliper, sensor probe, temperature, oscillation, circuit loop, lens, magnet, pendulum, spring, pressure gauge, recording, snapshot, observable eye, verification checkmark.\n\nRestrained palette of warm white, ice blue and physics blue only, low saturation.\n\nEach icon isolated and self-contained, flat front-facing two-dimensional vector icon, orthographic, no text, no letters, no numbers, no words, no watermark, no purple, no purple AI gradient, no neon, no glow, no bloom, no decorative gradient, no glassmorphism, no 3D bevel, no drop shadow, no dark theme, no dark marketing sidebar, no gaming HUD, no chatbot bubbles, no generic SaaS card, no colorful icon wall, no stock-photo hero, no photograph, no perspective distortion.",
+  "note": "概念稿，仅作后续 SVG 图标（16/20/24px，currentColor）的形状探索输入；不得裁切为工具栏图标，也不得进入物理渲染。"
+}

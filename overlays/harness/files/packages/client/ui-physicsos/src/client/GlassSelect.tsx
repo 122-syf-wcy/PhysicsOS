@@ -47,9 +47,14 @@ const POPOVER_GAP = 6
 /** Popover height cap; the list scrolls inside it. */
 const POPOVER_MAX_HEIGHT = 320
 
+/** Keeps the popover off the viewport edges once a long option widens it. */
+const VIEWPORT_MARGIN = 12
+
 interface Anchor {
   readonly left: number
-  readonly width: number
+  /** The button's width: the list is never narrower than the control it opens. */
+  readonly minWidth: number
+  readonly maxWidth: number
   readonly top?: number
   readonly bottom?: number
   readonly maxHeight: number
@@ -66,7 +71,8 @@ const anchorOf = (button: HTMLElement, listHeight: number): Anchor => {
   const maxHeight = Math.max(120, Math.min(POPOVER_MAX_HEIGHT, openBelow ? below : above))
   return {
     left: rect.left,
-    width: rect.width,
+    minWidth: rect.width,
+    maxWidth: Math.max(rect.width, window.innerWidth - 2 * VIEWPORT_MARGIN),
     maxHeight,
     ...openBelow
       ? { top: rect.bottom + POPOVER_GAP }
@@ -86,12 +92,22 @@ export function GlassSelect({
 
   const selectedIndex = options.findIndex(option => option.value === value)
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined
+  /* A control with nothing to offer is not a control: it renders disabled and
+     opens nothing, so a click cannot produce an empty popover and read as a
+     broken dropdown. The owning form says why the list is empty. */
+  const inert = disabled === true || options.length === 0
 
   const reposition = useCallback(() => {
     const button = buttonRef.current
     if (button === null) return
     const listHeight = listRef.current?.scrollHeight ?? POPOVER_MAX_HEIGHT
-    setAnchor(anchorOf(button, listHeight))
+    const next = anchorOf(button, listHeight)
+    /* The list is as wide as its longest option, so an option wider than the
+       button can push the popover past the right edge; pull it back once its
+       real width is known. */
+    const width = listRef.current?.getBoundingClientRect().width ?? next.minWidth
+    const rightmost = window.innerWidth - VIEWPORT_MARGIN - width
+    setAnchor({ ...next, left: Math.max(VIEWPORT_MARGIN, Math.min(next.left, rightmost)) })
   }, [])
 
   useLayoutEffect(() => {
@@ -155,6 +171,7 @@ export function GlassSelect({
   }
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
+    if (inert) return
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
@@ -200,10 +217,10 @@ export function GlassSelect({
         aria-haspopup="listbox"
         aria-controls={open ? listId : undefined}
         aria-label={ariaLabel}
-        disabled={disabled}
+        disabled={inert}
         data-glass-select=""
         data-testid={testId}
-        onClick={() => { if (open) setOpen(false); else openList() }}
+        onClick={() => { if (inert) return; if (open) setOpen(false); else openList() }}
         onKeyDown={onKeyDown}
       >
         <span className={clsx(css.label, selected === undefined && css.placeholder)}>
@@ -220,7 +237,8 @@ export function GlassSelect({
           aria-label={ariaLabel}
           style={{
             left: anchor.left,
-            width: anchor.width,
+            minWidth: anchor.minWidth,
+            maxWidth: anchor.maxWidth,
             maxHeight: anchor.maxHeight,
             ...anchor.top !== undefined ? { top: anchor.top } : {},
             ...anchor.bottom !== undefined ? { bottom: anchor.bottom } : {},

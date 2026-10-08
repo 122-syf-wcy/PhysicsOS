@@ -120,10 +120,10 @@ describe('Electric product slice', () => {
     }
     render(
       <SceneChatCard {...({
-        node: { key: 'card:electric', kind: 'physics-scene-card', anchorSeq: 1.9, data },
+        node: { key: 'card:electric', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data },
         t,
         openSceneInLab,
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
 

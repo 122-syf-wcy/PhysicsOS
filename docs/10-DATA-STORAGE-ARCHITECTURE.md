@@ -167,6 +167,16 @@ Conversation
 Compaction Events
 ```
 
+## 10.1 Session Format 与迁移（0.1.7，`67e8444` 实测）
+
+对生产备份的**只读**核对结论（34/34 生产 session log）：
+
+- 全部为磁盘 **`format version: 0`**；0.1.7 经 `historicalSessionFormatCatalog`（`vendor/deepseek-harness/packages/session/session-format-catalog`）读取旧格式。
+- 迁移是**增量**的：读取改写 **0** 个文件；只有强制写入才产生新的 `session.v4.jsonl.zstd`，原 `session.jsonl.zstd` **逐字节不变**。
+- v0→v4 保留 message / turn / step 计数（v0 的 chunk 行折叠进 v4 的 `assistant/attempt`）。
+
+**后果（须明说）**：上一版本仍能读迁移前的内容，但升级后写入落在 v4 文件，旧版本会忽略这些文件 —— 因此升级前的 **on-box sessions 快照 + `pg_dump` 是真正的前置条件**，不是形式。部署侧备份步骤见 `docs/13-DEPLOYMENT-OPERATIONS.md`。
+
 ---
 
 # 11. ID
@@ -473,6 +483,8 @@ Harness Session Store
 Object Storage metadata
 Critical Assets
 ```
+
+> 升级到 0.1.7 前，**Harness Session Store 的 on-box 快照 + `pg_dump` 是硬前置**：旧 release 读不了升级后写入的 `session.v4.jsonl.zstd`（见 §10.1）。只备份其中一个不足以回滚。
 
 ---
 

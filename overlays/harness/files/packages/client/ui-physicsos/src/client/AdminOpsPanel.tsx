@@ -17,6 +17,15 @@ import {
   IconHealth,
   IconRefresh,
 } from './icons/physics-icons.tsx'
+import {
+  AdminCard,
+  AdminCardActions,
+  AdminCardHead,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+  AdminTable,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminOpsPanelProps {
@@ -148,11 +157,11 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
 
   if (metrics === undefined) {
     return (
-      <section className={css.card} data-testid="ops-metrics">
-        <div className={css.cardHead}>
+      <AdminCard testId="ops-metrics">
+        <AdminCardHead>
           <div>
-            <h3 className={css.cardTitle}>{t('admin.ops.metrics.title')}</h3>
-            <p className={css.cardMeta}>{t('admin.ops.metrics.hint')}</p>
+            <AdminCardTitle>{t('admin.ops.metrics.title')}</AdminCardTitle>
+            <AdminCardMeta>{t('admin.ops.metrics.hint')}</AdminCardMeta>
           </div>
           <button type="button" className={css.ghost} disabled={loading}
             onClick={() => { void load(true) }}>
@@ -160,9 +169,9 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
             {' '}
             {loading ? t('admin.ops.metrics.loading') : t('admin.ops.metrics.refresh')}
           </button>
-        </div>
+        </AdminCardHead>
         {error === undefined
-          ? <p className={css.cardMeta}>{t('admin.ops.metrics.loading')}</p>
+          ? <AdminCardMeta>{t('admin.ops.metrics.loading')}</AdminCardMeta>
           : (
             <div className={css.opsEmpty}>
               <img
@@ -173,7 +182,7 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
               <p className={css.error}>{error}</p>
             </div>
           )}
-      </section>
+      </AdminCard>
     )
   }
 
@@ -183,13 +192,13 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
   const partial = metrics.partial || metrics.cache.partial
 
   return (
-    <section className={css.opsMetrics} data-testid="ops-metrics" data-partial={partial}>
-      <div className={css.cardHead}>
+    <AdminCard className={css.opsMetrics} testId="ops-metrics" data-partial={partial}>
+      <AdminCardHead>
         <div>
-          <h3 className={css.cardTitle}>{t('admin.ops.metrics.title')}</h3>
-          <p className={css.cardMeta}>{t('admin.ops.metrics.hint')}</p>
+          <AdminCardTitle>{t('admin.ops.metrics.title')}</AdminCardTitle>
+          <AdminCardMeta>{t('admin.ops.metrics.hint')}</AdminCardMeta>
         </div>
-        <div className={css.actions}>
+        <AdminCardActions>
           <button type="button" className={css.ghost}
             data-testid="ops-metrics-pause"
             onClick={() => { setPaused(value => !value) }}>
@@ -203,8 +212,8 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
             {' '}
             {loading ? t('admin.ops.metrics.loading') : t('admin.ops.metrics.refresh')}
           </button>
-        </div>
-      </div>
+        </AdminCardActions>
+      </AdminCardHead>
 
       {partial && <p className={css.note} data-testid="ops-metrics-partial">
         {t('admin.ops.metrics.partial')}
@@ -268,7 +277,7 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
 
       <div className={css.opsBreakdown}>
         <h4>{t('admin.ops.metrics.breakdown')}</h4>
-        <table className={css.opsTable}>
+        <AdminTable className={css.opsTable}>
           <tbody>
             <tr>
               <th>{t('admin.ops.metrics.sessionsDir')}</th>
@@ -291,13 +300,13 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
               <td>{metrics.disk.breakdown.redis.available ? t('admin.ops.metrics.available') : t('admin.ops.metrics.unavailable')}</td>
             </tr>
           </tbody>
-        </table>
+        </AdminTable>
       </div>
 
       <div className={css.opsAlerts} data-testid="ops-metrics-alerts">
         <h4>{t('admin.ops.metrics.alerts')}</h4>
         {metrics.alerts.length === 0
-          ? <p className={css.cardMeta}>{t('admin.ops.metrics.noAlerts')}</p>
+          ? <AdminEmpty>{t('admin.ops.metrics.noAlerts')}</AdminEmpty>
           : metrics.alerts.map(alert => (
             <p key={`${alert.severity}:${alert.code}`}
               className={alert.severity === 'critical' ? css.error : css.note}
@@ -316,6 +325,6 @@ export function AdminOpsPanel({ api, t }: AdminOpsPanelProps) {
         </span>
         <span className={css.dim}>{metrics.cache.hit ? t('admin.ops.metrics.cacheHit') : t('admin.ops.metrics.cacheMiss')}</span>
       </div>
-    </section>
+    </AdminCard>
   )
 }

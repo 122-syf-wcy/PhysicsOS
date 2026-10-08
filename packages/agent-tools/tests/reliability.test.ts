@@ -22,7 +22,46 @@ describe('question scene lifetime', () => {
     expect(runtime.describeScene(first.scene!.sceneId).revision).toBe(1)
     expect(runtime.sceneSnapshot(first.scene!.sceneId).bodies[0]!.mass.value).toBe(5)
     expect(again.scene!.revision).toBe(0)
+    expect(again.answers.length).toBeGreaterThan(0)
+    for (const answer of again.answers) {
+      expect(answer.provenance, answer.key).toMatchObject({
+        sceneId: again.scene!.sceneId,
+        sceneRevision: 0,
+      })
+    }
     expect(runtime.solveQuestion(question.text).reusedScene).toBe(true)
+  })
+  it('retains apparatus readouts in the provenance of a re-solved composite question', () => {
+    const runtime = new PhysicsToolRuntime()
+    const selector = GOLDEN_QUESTIONS.find((entry) => entry.id === 'comp-03-selector-too-fast')!
+    const first = runtime.solveQuestion(selector.text)
+    expect(first.status).toBe('solved')
+    const field = runtime.sceneSnapshot(first.scene!.sceneId).fields.find(
+      (entry) => entry.type === 'uniform_magnetic',
+    )!
+    expect(
+      runtime.applyCommand(first.scene!.sceneId, 'SetMagneticFieldStrength', {
+        fieldId: field.id,
+        strength: { value: 0.1, unit: 'T' },
+      }).ok,
+    ).toBe(true)
+
+    const again = runtime.solveQuestion(selector.text)
+    expect(again.status).toBe('solved')
+    expect(again.scene!.sceneId).not.toBe(first.scene!.sceneId)
+    expect(again.verification?.checks).toContainEqual(
+      expect.objectContaining({ id: 'velocity_selection_condition', passed: false }),
+    )
+    expect(again.answers.length).toBeGreaterThan(0)
+    for (const answer of again.answers) {
+      expect(answer.provenance, answer.key).toMatchObject({
+        sceneId: again.scene!.sceneId,
+        sceneRevision: 0,
+      })
+      expect(answer.provenance!.evidence, answer.key).toContainEqual(
+        expect.objectContaining({ id: 'velocity_selection_condition', passed: false }),
+      )
+    }
   })
   it('evicts solved answer entries with their scenes', () => {
     const runtime = new PhysicsToolRuntime({ maxScenes: 2 })

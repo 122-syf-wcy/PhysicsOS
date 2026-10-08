@@ -1,5 +1,5 @@
 import type { PhysicsSurfaceProps } from './LabWorkspace.tsx'
-import type { SceneChatCardProps } from './SceneChatCard.tsx'
+import type { SceneChatCardProps, SceneCardBodyProps } from './SceneChatCard.tsx'
 import type { AdminWorkspace } from './AdminWorkspace.tsx'
 import type { ComponentProps } from 'react'
 import { OptionalComponent } from './OptionalComponent.tsx'
@@ -7,6 +7,7 @@ import { loadWorkspaceModule, loadAdminModule } from './optional-modules.ts'
 
 const loadSurface = async () => ({ default: (await loadWorkspaceModule()).PhysicsSurface })
 const loadCard = async () => ({ default: (await loadWorkspaceModule()).SceneChatCard })
+const loadBody = async () => ({ default: (await loadWorkspaceModule()).SceneCardBody })
 const loadAdmin = async () => ({ default: (await loadAdminModule()).AdminWorkspace })
 
 /** Registration remains small: physical runtimes load when a workspace or card is shown. */
@@ -29,4 +30,9 @@ export function OptionalSceneChatCard(props: SceneChatCardProps) {
 
 export function OptionalAdminWorkspace(props: ComponentProps<typeof AdminWorkspace>) {
   return <OptionalComponent load={loadAdmin} componentProps={props} />
+}
+
+/** The turn-tail only mounts this after its published scene is present. */
+export function OptionalSceneCardBody(props: SceneCardBodyProps) {
+  return <OptionalComponent load={loadBody} componentProps={props} />
 }

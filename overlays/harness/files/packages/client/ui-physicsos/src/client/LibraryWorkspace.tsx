@@ -32,9 +32,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconSearchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ProductSurfaceBaseProps } from './surface-props.ts'
+import { IconSearchOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { knowledgeNodeOf, QUESTION_KNOWLEDGE, type GoldenQuestionDefinition } from '@physicsos/question-core'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 
@@ -86,9 +87,9 @@ export interface LibraryWorkspaceInjected {
   paperApi?: PaperApi
 }
 
-export type LibraryWorkspaceProps = PropsRuntime<'conversation.surface'> &
-  PropsLocale<'physicsos'> &
-  InjectFace<LibraryWorkspaceInjected>
+export type LibraryWorkspaceProps =
+  & ProductSurfaceBaseProps
+  & InjectFace<LibraryWorkspaceInjected>
 
 const STAGE_LABEL: Readonly<Record<ExperimentStage, PhysicsosKey>> = {
   junior: 'lab.template.stage.junior',
@@ -815,7 +816,7 @@ export function LibraryWorkspace({
         </div>
 
         <div className={css.searchField}>
-          <IconSearchOutline16 size={16} />
+          <IconSearchOutlineMedium size={16} />
           <input
             type="search"
             className={css.search}

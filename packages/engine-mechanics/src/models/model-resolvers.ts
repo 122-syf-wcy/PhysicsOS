@@ -299,6 +299,12 @@ export function resolveProjectileModel(scene: PhysicsScene): MechanicsModel {
 
   const launchAngle = Math.atan2(vy0, Math.abs(vx) > 0 ? vx : 1e-10)
 
+  /* Apex is the instant the vertical velocity crosses zero: t = vy0 / g. A
+     launch with no upward component (vy0 ≤ 0) never rises above its start, so
+     the trajectory has no apex — the field stays undefined rather than naming
+     an instant that does not exist. */
+  const apexTime = vy0 > 0 && g > 0 ? vy0 / g : undefined
+
   return {
     modelId: 'projectile_motion',
     bodyId: body.id,
@@ -315,6 +321,7 @@ export function resolveProjectileModel(scene: PhysicsScene): MechanicsModel {
     range,
     maxHeight,
     impactVelocity,
+    apexTime,
   }
 }
 

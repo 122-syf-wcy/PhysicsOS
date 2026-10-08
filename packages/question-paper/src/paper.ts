@@ -492,6 +492,21 @@ export interface PaperJob {
   readonly repairRounds: number
   /** Terminal error from the last failed async stage, surfaced to the UI. */
   readonly lastError?: string
+  /**
+   * Live telemetry from the async drivers (draft/check/export), written as
+   * each step advances so the UI can show WHAT the pipeline is doing — the
+   * thinking/writing/figure/solve phases — instead of a bare stage label.
+   * Absent on jobs that predate progress reporting or have not started.
+   */
+  readonly progress?: {
+    /** Machine phase: plan | draft | adapt | assemble | check | solve | figure | export. */
+    readonly stage: string
+    /** Human line for the current step, e.g. the section being drafted. */
+    readonly detail?: string
+    readonly done: number
+    readonly total: number
+    readonly updatedAt: string
+  }
   status: PaperJobStatus
   readonly createdAt: string
   readonly updatedAt: string

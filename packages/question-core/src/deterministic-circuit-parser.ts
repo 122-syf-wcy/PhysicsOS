@@ -128,8 +128,16 @@ const CIRCUIT_PATTERNS = {
     new RegExp(String.raw`(?:路端)?电压(?:为|是|=)?\s*(${NUMBER})\s*(V|mV|kV)?`, 'i'),
     new RegExp(String.raw`\bU\s*=\s*(${NUMBER})\s*(V|mV|kV)?`, 'i'),
   ],
-  /** Current: I = 0.5 A / 电流 0.3 A. */
+  /** Current: I = 0.5 A / 电流 0.3 A / 电流表读数为 0.4 A. The ammeter phrasing
+      comes first: the generic 电流 pattern cannot see past 表读数, and a stated
+      reading is exactly what the runtime's stated-vs-computed cross-check needs
+      in the IR — dropping it would let a contradictory reading pass as though
+      the stem never made the claim. */
   current: [
+    new RegExp(
+      String.raw`电流表(?:的)?(?:读数|示数)(?:为|是|=|达到)?\s*(${NUMBER})\s*(A|mA|μA|µA|uA)?`,
+      'i',
+    ),
     new RegExp(String.raw`电流(?:为|是|=)?\s*(${NUMBER})\s*(A|mA|μA|µA|uA)?`, 'i'),
     new RegExp(String.raw`\bI\s*=\s*(${NUMBER})\s*(A|mA|μA|µA|uA)?`, 'i'),
   ],

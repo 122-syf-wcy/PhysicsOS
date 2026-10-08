@@ -19,9 +19,65 @@
  */
 
 import type { IncomingMessage } from 'node:http'
-import type {
-  EventsApi, HostFrame, MuxFrame, RpcRequest,
-} from '@deepseek-ai/dsh-host-apiproxy/api'
+
+interface LegacyRpcRequest<T = unknown> {
+  readonly rpcId: string
+  readonly payload: T
+}
+
+interface LegacyEventsApi {
+  mux(
+    request: LegacyRpcRequest,
+    signal: AbortSignal,
+  ): AsyncIterable<LegacyRpcRequest>
+  host(
+    request: LegacyRpcRequest,
+    signal: AbortSignal,
+  ): AsyncIterable<LegacyRpcRequest>
+}
+
+type RpcRequest<T = unknown> = LegacyRpcRequest<T>
+type EventsApi = LegacyEventsApi
+
+type MuxFrame =
+  | { readonly type: 'stream/error' }
+  | { readonly type: 'question/requested'; readonly sessionId: string }
+  | {
+    readonly type: 'approval/requested'
+    readonly sessionId: string
+    readonly approvalId: string
+  }
+  | {
+    readonly type: 'question/resolved'
+    readonly sessionId: string
+    readonly questionRpcId: string
+  }
+  | {
+    readonly type: 'approval/resolved'
+    readonly sessionId: string
+    readonly approvalId: string
+  }
+
+type HostFrame =
+  | { readonly type: 'stream/error' }
+  | {
+    readonly type: 'host/session-added' | 'host/session-removed' | 'host/session-status' | 'host/agent-error'
+    readonly sessionId: string
+  }
+  | {
+    readonly type: 'host/workspace-changed'
+    readonly workspace: { readonly workspaceId: string }
+  }
+  | { readonly type: 'host/workspace-removed'; readonly workspaceId: string }
+  | {
+    readonly type: 'host/workspace-order-changed'
+    readonly workspaceIds: readonly string[]
+  }
+  | {
+    readonly type: 'host/archived-sessions-changed'
+    readonly archivedSessionIds: readonly string[]
+  }
+  | { readonly type: 'host/remote-event' }
 
 /** The account fields the API policy needs from auth-host. */
 export interface ApiPolicyActor {
@@ -95,6 +151,23 @@ export interface ApiPolicyModelBudget {
   readonly limit: number
   readonly windowMs: number
   readonly maxBuckets: number
+}
+
+/** Per-connection resource scoping the carrier threads onto the peer. */
+export interface ApiPolicyWorkspaceAdmission {
+  ownsWorkspace(workspaceId: string): boolean
+  ownsSession(sessionId: string): boolean
+}
+
+/**
+ * What an upgraded connection may receive: remote-event frames pass the
+ * admission predicate, stream-carried Workspace frames pass the workspace
+ * scoping. Either field may be absent — an absent scope is the carrier's
+ * stock behaviour, not a denial.
+ */
+export interface ApiPolicyPeerAdmission {
+  remoteEventAdmission?(event: string, args: readonly unknown[]): boolean
+  workspaceAdmission?: ApiPolicyWorkspaceAdmission
 }
 
 /** Host seams the pure policy needs. */
@@ -198,6 +271,87 @@ const MODEL_BUDGET_EXCEEDED = 'MODEL_BUDGET_EXCEEDED'
 const DEPENDENCY_UNAVAILABLE = 'DEPENDENCY_UNAVAILABLE'
 const PENDING_RESPONSE_TTL_MS = 15 * 60 * 1000
 const ONBOARDING_SETTINGS_NAMESPACE = 'ui-onboarding'
+
+/**
+ * The namespaces a non-administrator may READ.
+ *
+ * Their settings pages — Shell, Agent loop, Subagent, Web search — register
+ * into the Plugins page only while the Host serves the namespace, so hiding
+ * every namespace except onboarding did not merely keep students out of the
+ * configuration: it emptied the Plugins page down to 「还没有安装任何插件。」.
+ *
+ * Nothing secret rides along. The controller answers every remote read under
+ * `redactSecrets`, so a `role('secret')` field arrives as `{ path, set }` and
+ * never as a value, and every write stays on
+ * {@link ADMIN_ONLY_METHODS}: `settings.describe` is the one settings method a
+ * non-administrator may call at all. The list is explicit rather than a
+ * denylist so a namespace added upstream is not readable by accident.
+ */
+const READABLE_SETTINGS_NAMESPACES: ReadonlySet<string> = new Set([
+  ONBOARDING_SETTINGS_NAMESPACE,
+  /* Shell: the bash and powershell executors. */
+  'bash-sandbox',
+  'pwsh-sandbox',
+  'agent-loop',
+  /* Subagent: recursion limits, and which model the children use. */
+  'subagent',
+  'subagent-model-selection-settings',
+  'web-search-deepseek',
+])
+
+/** The one model name a student sees. */
+const PLATFORM_MODEL_NAME = '平台公益模型'
+
+/** The group header above it — the product, never the vendor serving the pool. */
+const PLATFORM_MODEL_GROUP_NAME = 'PhysicsOS'
+
+/**
+ * Reduce a model catalog to the one entry a student is shown.
+ *
+ * The catalog is discovered from whatever the platform's channels currently
+ * serve, so its ids and names name the upstream vendor (`deepseek-flash`,
+ * `DeepSeek-V4-Pro`) and change whenever the operator swaps a channel — none of
+ * which is the student's business, and all of which the student-facing persona
+ * is already forbidden to reveal. The deployment's default model is kept under
+ * the platform's own name, **with its ids untouched**: they are what the client
+ * submits for routing, and the pool behind them stays the operator's concern.
+ * @param value - the catalog value, mutated in place.
+ */
+const reduceModelCatalog = (value: Record<string, unknown>): void => {
+  const selection = isRecord(value['default']) ? value['default'] : {}
+  const preferred = typeof selection['model'] === 'string' ? selection['model'] : undefined
+  /* The group the Session actually routes through, not merely the first one
+     that carries a model with that id: several providers may answer to the same
+     platform id, and keeping a different one leaves the picker unable to resolve
+     the current selection — it then falls back to showing the raw
+     `provider/model` pair the product must never show. */
+  const routed = typeof selection['provider'] === 'string' ? selection['provider'] : undefined
+  const groups = value['groups']
+  if (!Array.isArray(groups)) return
+  const usable = groups.filter(isRecord).filter(group => Array.isArray(group['models']))
+  const modelIn = (group: Record<string, unknown>): Record<string, unknown> | undefined => {
+    const models = (group['models'] as unknown[]).filter(isRecord)
+    return models.find(model => model['id'] === preferred) ?? models[0]
+  }
+  const group = usable.find(candidate => candidate['id'] === routed) ?? usable[0]
+  if (group === undefined) {
+    value['groups'] = []
+    value['routableProviders'] = []
+    value['failures'] = []
+    return
+  }
+  const chosen = modelIn(group)
+  const kept: Record<string, unknown>[] = []
+  if (chosen !== undefined) {
+    const entry: Record<string, unknown> = { ...chosen, name: PLATFORM_MODEL_NAME }
+    delete entry['description']
+    kept.push({ id: group['id'], name: PLATFORM_MODEL_GROUP_NAME, models: [entry] })
+  }
+  value['groups'] = kept
+  value['routableProviders'] = kept.map(entry => entry['id'])
+  /* A failure names the provider it could not reach. */
+  value['failures'] = []
+}
 const ONBOARDING_ACK_FIELD = 'welcomeNoticeVersion'
 
 /** Methods that can start or continue an agent turn and therefore spend model budget. */
@@ -257,6 +411,27 @@ const isOnboardingMutation = (payload: Record<string, unknown>): boolean => {
 
 const isEnvelope = (value: unknown): value is ClientEnvelope =>
   isRecord(value) && value['type'] === 'client-request'
+
+/** Project either the legacy flat payload or the 0.1.7 named-argument payload. */
+const policyPayloadOf = (payload: Record<string, unknown>): Record<string, unknown> => {
+  const args = payload['args']
+  if (!isRecord(args)) return payload
+  const request = args['request']
+  return isRecord(request) ? request : args
+}
+
+/** Put a rewritten policy payload back into the envelope's original wire shape. */
+const withPolicyPayload = (
+  wirePayload: Record<string, unknown>,
+  policyPayload: Record<string, unknown>,
+): Record<string, unknown> => {
+  const args = wirePayload['args']
+  if (!isRecord(args)) return policyPayload
+  const request = args['request']
+  return isRecord(request)
+    ? { ...wirePayload, args: { ...args, request: policyPayload } }
+    : { ...wirePayload, args: policyPayload }
+}
 
 const rpcIdOf = (body: ClientEnvelope): string =>
   typeof body.rpcId === 'string' ? body.rpcId : 'invalid-request'
@@ -388,12 +563,31 @@ export function asOnceLedger(value: unknown): ApiPolicyOnceLedger | undefined {
  * @returns the shared `/api` policy.
  */
 export function createApiPolicy(deps: ApiPolicyDeps): {
+  authorizeRequest(req: Pick<IncomingMessage, 'headers'>): boolean
   wrapFetch(next: FetchLike): FetchLike
   scopeEvents(req: IncomingMessage, events: EventsApi): Promise<EventsApi | undefined>
+  admitUpgrade(
+    req: Pick<IncomingMessage, 'headers'>,
+  ): ApiPolicyPeerAdmission | null | undefined
 } {
   const pendingResponses = new Map<string, { expiresAt: number }>()
   const approvalResponseKeys = new Map<string, string>()
   const admin = (actor: ApiPolicyActor): boolean => actor.role === 'SUPER_ADMIN'
+  const ownsSession = (actor: ApiPolicyActor, id: string): boolean =>
+    deps.store.owns(actor, 'session', id)
+  const remoteSessionId = (args: readonly unknown[]): string | undefined => {
+    const first = args[0]
+    if (typeof first === 'string') return first
+    if (typeof first !== 'object' || first === null) return undefined
+    const record = first as Record<string, unknown>
+    if (typeof record['sessionId'] === 'string') return record['sessionId']
+    const agent = record['agent']
+    if (typeof agent === 'object' && agent !== null
+      && typeof (agent as Record<string, unknown>)['id'] === 'string') {
+      return (agent as Record<string, unknown>)['id'] as string
+    }
+    return undefined
+  }
   const pendingKey = (actor: ApiPolicyActor, rpcId: string): string =>
     `${actor.userKey}\u0000${rpcId}`
   const approvalKey = (actor: ApiPolicyActor, approvalId: string): string =>
@@ -539,11 +733,18 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       return undefined
     }
 
+    /* Naming a session is what makes a call session-addressed. Not every
+       `session.*` method names one: the model catalog and the other read-only
+       descriptors take no sessionId at all, and requiring one refused them for
+       every non-administrator — which is why the model picker never opened for
+       a student. A call that names no session has nothing of anyone else's to
+       reach; one that names a session is still checked against the actor. */
     const sessionScoped = method.startsWith('session.') || method.startsWith('goal.') || method === 'skill.list'
-    if (sessionScoped && method !== 'session.create' && method !== 'session.list' && method !== 'session.search') {
-      const sessionId = sessionIdOf(payload)
-      if (sessionId === undefined || (!admin(actor) && !deps.store.owns(actor, 'session', sessionId))) {
-        return denyNotFound(rpcId, 'session', sessionId ?? '')
+    const sessionId = sessionIdOf(payload)
+    const addressesSession = sessionScoped && sessionId !== undefined && sessionId !== ''
+    if (addressesSession && method !== 'session.create' && method !== 'session.list' && method !== 'session.search') {
+      if (!admin(actor) && !deps.store.owns(actor, 'session', sessionId)) {
+        return denyNotFound(rpcId, 'session', sessionId)
       }
     }
 
@@ -602,7 +803,8 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     method: string,
     body: ClientEnvelope,
   ): Promise<{ request: Request; response?: Response }> => {
-    const payload = isRecord(body.payload) ? { ...body.payload } : {}
+    const wirePayload = isRecord(body.payload) ? { ...body.payload } : {}
+    const payload = { ...policyPayloadOf(wirePayload) }
     const rpcId = rpcIdOf(body)
 
     if (method === 'workspace.create') {
@@ -636,6 +838,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       delete payload['sessionId']
       payload['workspaceId'] = workspace.id
       payload['agentPreset'] = STUDENT_PRESET
+    } else if (method === 'session.create') {
+      /* Reuse calls (`sessionId` present) keep the Session's own preset —
+         `create` cannot change an existing Session's preset, and the client
+         seeds its request with the currently selected one, so letting it
+         through made every 「打开工作区」 reuse fail with
+         `agent-preset/conflict` while the composer stayed inert. */
+      if (payload['sessionId'] !== undefined) delete payload['agentPreset']
+      /* Fresh creates for the operator open in the product's mode too. Leaving
+         them on the installation's default preset is what made an administrator
+         see a worse product than a student: that preset carries no physics
+         tools, so the tutor answered 「环境无法执行命令」 and derived numbers by
+         hand instead of running the engine. A later `agentPreset.select` — which
+         an administrator is free to make — still wins. */
+      else if (payload['agentPreset'] === undefined) payload['agentPreset'] = STUDENT_PRESET
     }
 
     if (method === 'session.create' || method === 'session.fork'
@@ -643,7 +859,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       const next = new Request(request.url, {
         method: request.method,
         headers: new Headers([...request.headers].filter(([name]) => name !== 'content-length')),
-        body: JSON.stringify({ ...body, payload }),
+        body: JSON.stringify({ ...body, payload: withPolicyPayload(wirePayload, payload) }),
         signal: request.signal,
       })
       return { request: next }
@@ -659,7 +875,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   ): Promise<Response> => {
     const parsed = await bodyOf(response)
     if (parsed === undefined) return response
-    const payload = isRecord(body.payload) ? body.payload : {}
+    const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
     const value = valueOf(parsed)
     if (!isRecord(value)) return response
     let changed = false
@@ -668,8 +884,17 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       const namespaces = value['namespaces']
       value['namespaces'] = Array.isArray(namespaces)
         ? namespaces.filter(namespace =>
-          isRecord(namespace) && namespace['ns'] === ONBOARDING_SETTINGS_NAMESPACE)
+          isRecord(namespace) && READABLE_SETTINGS_NAMESPACES.has(String(namespace['ns'])))
         : []
+      changed = true
+    }
+
+    /* Every actor, administrators included: this catalog feeds the product's
+       own model seat, and the vendor serving the pool is not the operator's
+       either. Managing the pool happens on the surfaces that name it — the
+       models settings page (the llm namespaces) and the 模型通道 console. */
+    if (method === 'session.modelCatalog') {
+      reduceModelCatalog(value)
       changed = true
     }
 
@@ -717,6 +942,17 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         value['archivedSessionIds'] = value['archivedSessionIds'].filter(id =>
           typeof id === 'string' && deps.store.owns(actor, 'session', id))
       }
+      changed = true
+    }
+
+    if (method === 'workspace.initializeDefault') {
+      /* The stock answer is the installation's shared default Workspace (or
+         none). Surfacing either to a hosted account seeds the client model
+         with a row it cannot own; the account's ensured Workspace is the only
+         default this product has. */
+      const workspace = await deps.ensureWorkspace(actor)
+      await deps.store.claim(actor, 'workspace', workspace.id)
+      value['workspace'] = privateWorkspaceView(workspace)
       changed = true
     }
 
@@ -783,6 +1019,49 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   }
 
   return {
+    authorizeRequest: (req) => {
+      /* Fail closed, and audibly: a storage failure while resolving the cookie
+         must refuse the request rather than throw into the web server's
+         last-resort guard, whose bare 400 no client can read. */
+      try {
+        return deps.actorFromRequest(req as IncomingMessage) !== null
+      } catch (error) {
+        console.warn(`api-policy: authorizeRequest failed: ${String(error)}`)
+        return false
+      }
+    },
+    admitUpgrade: (req) => {
+      const actor = deps.actorFromRequest(req as IncomingMessage)
+      if (actor === null) return null
+      /* Every connection — the operator's included — sees the Workspaces its
+         account owns in the product's picker. Registry-wide troubleshooting is
+         an admin-console concern; streaming the whole registry to the operator
+         is how a picker full of indistinguishable 「我的工作区」 rows appeared. */
+      /* Every connection — the operator's included — sees the Workspaces its
+         account owns in the product's picker. Registry-wide troubleshooting is
+         an admin-console concern; streaming the whole registry to the operator
+         is how a picker full of indistinguishable 「我的工作区」 rows appeared. */
+      const workspaceAdmission = {
+        ownsWorkspace: (id: string): boolean => deps.store.owns(actor, 'workspace', id),
+        ownsSession: (id: string): boolean => ownsSession(actor, id),
+      }
+      if (admin(actor)) {
+        /* Remote events stay unscoped for the operator so approvals and
+           account-wide questions keep flowing. */
+        return { workspaceAdmission }
+      }
+      /* Only session-scoped events cross to ordinary accounts. Dropping
+         account-independent catalog and settings chatter is deliberate: the
+         old transport scoped every frame, and a global fallback would expose
+         another learner's activity. */
+      return {
+        workspaceAdmission,
+        remoteEventAdmission: (_event: string, args: readonly unknown[]) => {
+          const sessionId = remoteSessionId(args)
+          return sessionId !== undefined && ownsSession(actor, sessionId)
+        },
+      }
+    },
     wrapFetch: next => async (request) => {
       const cookie = request.headers.get('cookie') ?? undefined
       const authorization = request.headers.get('authorization') ?? undefined
@@ -792,7 +1071,8 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       }
 
       const url = new URL(request.url)
-      const method = url.pathname.startsWith('/api/') ? url.pathname.slice('/api/'.length) : ''
+      const endpoint = url.pathname.startsWith('/api/') ? url.pathname.slice('/api/'.length) : ''
+      const method = endpoint.split('/').join('.')
       if (request.method === 'POST') {
         const origin = request.headers.get('origin')
         const host = request.headers.get('host')
@@ -839,29 +1119,50 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
       }
       if (body === undefined) return next(request)
       const rpcId = rpcIdOf(body)
-      const payload = isRecord(body.payload) ? body.payload : {}
-      if (actor.credential?.kind === 'api-token'
-        && actor.credential.scope === 'read'
-        && !READ_ONLY_METHODS.has(method)) {
-        return rpcError(
-          rpcId,
-          'TOKEN_SCOPE_REQUIRED',
-          '该令牌只有只读权限',
-          { requiredScope: 'write' },
-          403,
-        )
+      const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
+      try {
+        if (actor.credential?.kind === 'api-token'
+          && actor.credential.scope === 'read'
+          && !READ_ONLY_METHODS.has(method)) {
+          return rpcError(
+            rpcId,
+            'TOKEN_SCOPE_REQUIRED',
+            '该令牌只有只读权限',
+            { requiredScope: 'write' },
+            403,
+          )
+        }
+
+        const denied = authorizeMethod(actor, method, payload, rpcId)
+        if (denied !== undefined) return denied
+
+        const budgetDenied = await chargeModelBudget(actor, method, rpcId)
+        if (budgetDenied !== undefined) return budgetDenied
+
+        const rewritten = await rewriteRequest(actor, request, method, body)
+        if (rewritten.response !== undefined) return rewritten.response
+        const response = await next(rewritten.request)
+        return await rewriteResponse(actor, method, body, response)
+      } catch (error) {
+        /* This front door answers an envelope. A throw anywhere below would
+           otherwise leave the web server's last-resort guard writing a bare
+           400 — no rpcId, no code, no reason — which every caller reads as a
+           dead transport it cannot act on, and which leaves the operator with
+           nothing to look at either. */
+        const reason = error instanceof Error ? error.message : String(error)
+        console.warn(`api-policy: ${method} failed: ${reason}`)
+        /* One refusal class belongs to the client's blank-Session reuse: the
+           Session it wanted is unusable — held by a writer, or gone from the
+           Host entirely (the reuse scans the client's own list, so a Session
+           the registry still names but the log no longer loads lands here).
+           Both mean "replace the blank", which is the code that says so. */
+        const unusableBlank = /writer|owned|already|held|占用|锁定/i.test(reason)
+          || (method === 'session.create' && /not found/i.test(reason))
+        if (unusableBlank) {
+          return rpcError(rpcId, 'session/writer-held', reason, {})
+        }
+        return rpcError(rpcId, 'gateway/internal', `请求处理失败：${reason}`, {})
       }
-
-      const denied = authorizeMethod(actor, method, payload, rpcId)
-      if (denied !== undefined) return denied
-
-      const budgetDenied = await chargeModelBudget(actor, method, rpcId)
-      if (budgetDenied !== undefined) return budgetDenied
-
-      const rewritten = await rewriteRequest(actor, request, method, body)
-      if (rewritten.response !== undefined) return rewritten.response
-      const response = await next(rewritten.request)
-      return rewriteResponse(actor, method, body, response)
     },
     scopeEvents: (req, events) => {
       const actor = deps.actorFromRequest(req)
@@ -885,7 +1186,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           const claimedKeys = new Set<string>()
           try {
             for await (const frame of events.mux(request, signal)) {
-              const payload: MuxFrame = frame.payload
+              const payload = frame.payload as MuxFrame
               if (payload.type === 'stream/error') {
                 yield frame
                 continue
@@ -925,7 +1226,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           }
         },
         host: (request, signal) => mapFrames(events.host(request, signal), (frame) => {
-          const payload: HostFrame = frame.payload
+          const payload = frame.payload as HostFrame
           switch (payload.type) {
             case 'stream/error':
               return frame

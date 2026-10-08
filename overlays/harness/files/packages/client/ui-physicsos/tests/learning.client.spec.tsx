@@ -546,24 +546,29 @@ describe('学习记录 surface', () => {
 })
 
 describe('sidebar 学习记录 entry', () => {
-  it('opens the record surface instead of being disabled', () => {
+  it('opens the record surface from the account menu', () => {
     const openRecord = vi.fn()
     render(
       <SidebarFooter
         wide
-        startSession={vi.fn()}
         openRecord={openRecord}
-        openHome={vi.fn()}
         logout={vi.fn(async () => {})}
-        useAuth={selector => selector({ status: 'guest' })}
+        useAuth={selector => selector({
+          status: 'authed',
+          user: {
+            id: 'u_test1', schoolId: 'GZU', schoolName: '贵州大学',
+            username: '2023123456', displayName: '李明', role: 'STUDENT',
+          },
+        })}
         t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
       />,
     )
-    const button = screen.getByRole('button', { name: '学习记录' })
-    expect(button.getAttribute('disabled')).toBeNull()
-    fireEvent.click(button)
+    /* 学习记录 rides the account menu, not a footer row: the foot has no room
+       left for another row, and the menu is the one place that already belongs
+       to this account. */
+    expect(screen.queryByRole('button', { name: '学习记录' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '账户菜单' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '学习记录' }))
     expect(openRecord).toHaveBeenCalledOnce()
   })
 })
@@ -573,11 +578,11 @@ describe('sidebar 学习记录 entry', () => {
 const renderSolvedCard = (questionId: string, recordAttempt?: (a: SelfCheckAttemptInput) => void) =>
   render(
     <SceneChatCard {...({
-      node: { key: 'card:test', kind: 'physics-scene-card', anchorSeq: 1.9, data: solvedCardData(questionId) },
+      node: { key: 'card:test', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data: solvedCardData(questionId) },
       t,
       openSceneInLab: vi.fn(),
       ...(recordAttempt === undefined ? {} : { recordAttempt }),
-      useSession: cardSession(),
+      useChat: cardSession(),
     } as unknown as Parameters<typeof SceneChatCard>[0])} />,
   )
 
@@ -622,10 +627,10 @@ describe('solved-card self-checks (the migrated practice loop)', () => {
     }
     const view = render(
       <SceneChatCard {...({
-        node: { key: 'card:plain', kind: 'physics-scene-card', anchorSeq: 1.9, data: plain },
+        node: { key: 'card:plain', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' }, data: plain },
         t,
         openSceneInLab: vi.fn(),
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(view.queryByText('自测')).toBeNull()

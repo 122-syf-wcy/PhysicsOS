@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../host/plugin-inventory" },
+    { "path": "../../host/webserver" },
+    { "path": "../../util/package-manifest" },
+    { "path": "../../storage/storage" },
+    { "path": "../../storage/storage-domain" }
+  ]
+}

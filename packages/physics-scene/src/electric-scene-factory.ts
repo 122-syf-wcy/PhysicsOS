@@ -39,7 +39,6 @@ const DEFAULTS = {
   velocity: vec3(2, 0, 0),
   electricFieldStrength: 0.8,
   electricFieldDirection: 'down' as const,
-  duration: 5,
 } as const
 
 const directionVector = (direction: ElectricFieldDirection, strength: number): Vector3 => {
@@ -62,7 +61,12 @@ export const createElectricScene = (input: ElectricSceneInput = {}): PhysicsScen
   const sceneId = input.sceneId ?? DEFAULTS.sceneId
   const particleId = input.particleId ?? DEFAULTS.particleId
   const fieldId = input.fieldId ?? DEFAULTS.fieldId
-  const duration = input.duration ?? DEFAULTS.duration
+  /* No duration means the ENGINE decides how long to simulate: a flat default
+     here would override the engine's own timescale, and for the atomic-scale
+     particle a parsed question carries (q = 1.6e-19 C, m = 1.67e-27 kg) five
+     seconds of motion puts the particle 2.5e12 m away and turns every readout
+     into noise. */
+  const duration = input.duration
   const fieldStrength = Math.abs(input.electricFieldStrength ?? DEFAULTS.electricFieldStrength)
   const fieldDirection = input.electricFieldDirection ?? DEFAULTS.electricFieldDirection
   const visibility = input.observableVisibility ?? {}
@@ -76,7 +80,7 @@ export const createElectricScene = (input: ElectricSceneInput = {}): PhysicsScen
     timeline: {
       currentTime: quantity(0, 's', 'time'),
       startTime: quantity(0, 's', 'time'),
-      endTime: quantity(duration, 's', 'time'),
+      ...(duration === undefined ? {} : { endTime: quantity(duration, 's', 'time') }),
       state: 'idle',
       playbackRate: 1,
       simulationTimeStep: quantity(1 / 120, 's', 'time'),

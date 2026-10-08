@@ -1,9 +1,9 @@
 import { sceneRefOf } from './surface-store.ts'
 import {
-  IconBrowseOutline16, IconChevronRightOutline14, IconFolderOpen16,
+  IconBrowseOutlineMedium, IconChevronRightOutlineMedium, IconFolderOpenOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SnapshotStore, WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
 import { fillComposerDraft } from './fill-draft.ts'
 import { IconPhysicsLab, IconQuestionSheet } from './icons/physics-icons.tsx'
@@ -12,7 +12,6 @@ import { formatUpdatedAt, workspaceKnowledge } from './workspaceMeta.ts'
 import css from './HomeActions.module.css'
 
 export type HomeActionsInjected = {
-  startSession: (workspaceId?: WorkspaceId) => void
   openSurface: (surface: 'home' | 'lab' | 'record', sceneRef?: PhysicsSceneRef) => void
   hooks: {
     recentExperiments: SnapshotStore<RecentExperimentsState>
@@ -20,7 +19,6 @@ export type HomeActionsInjected = {
 }
 
 export type HomeActionsProps =
-  & PropsRuntime<'conversation.hero.actions'>
   & InjectFace<HomeActionsInjected>
   & PropsLocale<'physicsos'>
 
@@ -63,7 +61,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
             <span className={css.portalDescription}>{t('home.lab.description')}</span>
             <span className={css.portalMeta}>
               {t('home.lab.meta')}
-              <IconChevronRightOutline14 size={14} />
+              <IconChevronRightOutlineMedium size={14} />
             </span>
           </span>
         </button>
@@ -89,7 +87,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
             <span className={css.portalDescription}>{t('home.questions.description')}</span>
             <span className={css.portalMeta}>
               {t('home.questions.meta').replace('{count}', String(GOLDEN_QUESTIONS.length))}
-              <IconChevronRightOutline14 size={14} />
+              <IconChevronRightOutlineMedium size={14} />
             </span>
           </span>
         </button>
@@ -101,7 +99,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
           disabled
           title={t('feature.unavailable')}
         >
-          <IconFolderOpen16 size={16} />
+          <IconFolderOpenOutlineMedium size={16} />
           <span>{t('action.openScene')}</span>
         </button>
         <button
@@ -110,7 +108,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
           disabled
           title={t('feature.unavailable')}
         >
-          <IconBrowseOutline16 size={16} />
+          <IconBrowseOutlineMedium size={16} />
           <span>{t('action.templates')}</span>
         </button>
       </div>
@@ -147,7 +145,7 @@ export function HomeActions({ useRecentExperiments, openSurface, t }: HomeAction
                       openSurface('lab', sceneRefOf(entry))
                     }}
                   >
-                    <IconFolderOpen16 size={16} />
+                    <IconFolderOpenOutlineMedium size={16} />
                     <span className={css.recentName}>{entry.title}</span>
                     <span className={css.recentMeta}>
                       {knowledge.subject}

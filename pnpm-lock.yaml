@@ -66,21 +66,6 @@ importers:
         specifier: ^2.8.4
         version: 2.11.5
 
-  packages/agent-dsh-adapter:
-    dependencies:
-      '@physicsos/agent-runtime':
-        specifier: workspace:*
-        version: link:../agent-runtime
-      '@physicsos/shared':
-        specifier: workspace:*
-        version: link:../shared
-
-  packages/agent-runtime:
-    dependencies:
-      '@physicsos/shared':
-        specifier: workspace:*
-        version: link:../shared
-
   packages/agent-tools:
     dependencies:
       '@physicsos/engine-acoustics':
@@ -428,6 +413,10 @@ importers:
       '@physicsos/shared':
         specifier: file:../shared
         version: link:../shared
+
+  packages/exam-standard: {}
+
+  packages/image-generation: {}
 
   packages/physics-composite-core:
     dependencies:

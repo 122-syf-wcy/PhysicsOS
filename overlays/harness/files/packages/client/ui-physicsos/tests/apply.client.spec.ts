@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { apply, inject } from '@deepseek-ai/dsh-client-ui-physicsos/client'
+import { apply, inject, PHYSICS_PANEL_IDS } from '@deepseek-ai/dsh-client-ui-physicsos/client'
 import {
   createExperimentSceneRef, findExperimentTemplate,
 } from '@deepseek-ai/dsh-client-ui-physicsos/src/client/physics/experiment-templates.ts'
@@ -16,14 +16,26 @@ afterEach(() => {
 async function bench() {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
-  const workspaces = { startSession: vi.fn() }
-  const layout = { toggleSidebar: vi.fn() }
-  /* conversation.surface registers inside ctx.inject(connection, sessions,
-     workspaces) — its upload hand-off genuinely needs them, so the bench must
-     stand them up even though the assertions only count slot entries. */
+  const workspaces = {
+    startSession: vi.fn(),
+    create: vi.fn(async () => ({ workspaceId: 'ws-1' })),
+    rename: vi.fn(async () => undefined),
+    list: { getSnapshot: () => ({ items: [], state: 'ready' }), subscribe: () => () => {} },
+  }
+  const uiWorkspace = {
+    connectWorkspace: vi.fn(async () => 'session-1'),
+    openSession: vi.fn(),
+    startSession: vi.fn(),
+    archiveSession: vi.fn(async () => undefined),
+  }
+  const panelInfo = {
+    getSnapshot: () => ({ activePanelId: null }),
+    subscribe: () => () => {},
+  }
+  const layout = { toggleSidebar: vi.fn(), selectPanel: vi.fn(), panelInfo }
   const sessions = {
     list: {
-      getSnapshot: () => ({ current: undefined, byId: {} }),
+      getSnapshot: () => ({ ids: [], byId: {} }),
       subscribe: () => () => {},
     },
     scope: () => undefined,
@@ -32,16 +44,19 @@ async function bench() {
   const connection = { api: { agentPresets: { select: vi.fn() } } }
   const conversationEvents = { register: vi.fn(() => () => {}) }
   ctx.provide('workspaces', workspaces as never)
+  ctx.provide('uiWorkspace', uiWorkspace as never)
   ctx.provide('layout', layout as never)
   ctx.provide('sessions', sessions as never)
   ctx.provide('connection', connection as never)
   ctx.provide('conversationEvents', conversationEvents as never)
+  ctx.provide('uiConversation', { events: conversationEvents } as never)
   ctx.provide('locale', new LocaleRuntime(ctx))
   const slots = ctx.get('slots') as SlotRegistry
   slots.register({
     name: 'root',
     children: {
       sidebar: { kind: 'single', scope: 'root' },
+      main: { kind: 'keyed', scope: 'root' },
       conversation: { kind: 'single', scope: 'session-maybe' },
       'settings.onboarding': { kind: 'list', scope: 'root' },
       'shell.overlay': { kind: 'list', scope: 'root' },
@@ -50,9 +65,10 @@ async function bench() {
   slots.register({
     name: 'sidebar',
     children: {
-      'sidebar.brand': { kind: 'single', scope: 'root' },
-      'sidebar.nav': { kind: 'list', scope: 'root' },
-      'sidebar.new': { kind: 'single', scope: 'root' },
+      'sidebar.brand.mark': { kind: 'single', scope: 'root' },
+      'sidebar.brand.name': { kind: 'single', scope: 'root' },
+      'sidebar.panellist': { kind: 'list', scope: 'root' },
+      'sidebar.nav': { kind: 'single', scope: 'root' },
       'sidebar.footer.action': { kind: 'list', scope: 'root' },
       'sidebar.workspaces': { kind: 'single', scope: 'root' },
     },
@@ -60,11 +76,12 @@ async function bench() {
   slots.register({
     name: 'conversation',
     children: {
-      'conversation.hero.brand': { kind: 'single', scope: 'root' },
-      'conversation.hero.actions': { kind: 'single', scope: 'root' },
+      'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
+      'conversation.input.dock': { kind: 'list', scope: 'session' },
+      'conversation.composer.above': { kind: 'list', scope: 'session-maybe' },
+      'conversation.composer.below': { kind: 'list', scope: 'session-maybe' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
-      'conversation.surface': { kind: 'single', scope: 'root' },
       /* Declared by the chat view in the real tree; the bench declares it so
          the deferred keyed registration fires and can be counted. */
       'conversation.chat.node': { kind: 'keyed', scope: 'session' },
@@ -76,43 +93,20 @@ async function bench() {
 describe('ui-physicsos apply', () => {
   it('declares only the services it uses', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'workspaces', 'layout', 'sessions', 'conversationEvents',
+      'slots', 'locale', 'workspaces', 'uiWorkspace', 'layout', 'sessions', 'uiConversation',
     ])
   })
 
-  it('closes the navigation drawer after selecting a surface on a narrow viewport', async () => {
-    vi.stubGlobal('innerWidth', 390)
+  it('registers the product rail and leaves the shell rows to the rest', async () => {
     const b = await bench()
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    const nav = b.slots.entries('sidebar.nav')[0]!.inject as () => {
-      openSurface: (id: 'home' | 'lab' | 'questions', drawerOpen: boolean) => void
-    }
-
-    /* The narrow sidebar rests collapsed to a rail. A tap there navigates and
-       must leave the rail alone — toggling would open the drawer over the
-       surface the tap just asked for. */
-    nav().openSurface('questions', false)
-    expect(b.layout.toggleSidebar).not.toHaveBeenCalled()
-
-    /* Tapping from the expanded drawer is the case that closes it. */
-    nav().openSurface('questions', true)
-    expect(b.layout.toggleSidebar).toHaveBeenCalledTimes(1)
-    await fiber.dispose()
-  })
-
-  it('leaves a wide sidebar alone, which has its own collapse control', async () => {
-    vi.stubGlobal('innerWidth', 1440)
-    const b = await bench()
-    const fiber = b.ctx.plugin({ inject: [...inject], apply })
-    await fiber.await()
-    const nav = b.slots.entries('sidebar.nav')[0]!.inject as () => {
-      openSurface: (id: 'home' | 'lab' | 'questions', drawerOpen: boolean) => void
-    }
-
-    nav().openSurface('lab', true)
-
-    expect(b.layout.toggleSidebar).not.toHaveBeenCalled()
+    /* The sectioned rail presents 首页 / 物理实验室 / 出卷专区 / 反馈 / 资源库
+       itself, and 学习记录 rides the sidebar foot, so no PhysicsOS surface
+       takes a shell panel row — a row would show the entry twice. The only row
+       left is the role-gated 管理后台, and this bench carries no role. */
+    expect(b.slots.entries('sidebar.nav')).toHaveLength(1)
+    expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
     await fiber.dispose()
   })
 
@@ -123,14 +117,22 @@ describe('ui-physicsos apply', () => {
     await fiber.await()
     expect(document.title).toBe('PhysicsOS')
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeTruthy()
-    expect(b.slots.entries('sidebar.brand')).toHaveLength(1)
+    expect(b.slots.entries('sidebar.brand.mark')).toHaveLength(1)
+    expect(b.slots.entries('sidebar.brand.name')).toHaveLength(1)
     expect(b.slots.entries('sidebar.nav')).toHaveLength(1)
-    expect(b.slots.entries('sidebar.new')).toHaveLength(1)
+    /* Only the role-gated 管理后台 row exists, and this bench has no role. */
+    expect(b.slots.entries('sidebar.panellist')).toHaveLength(0)
     expect(b.slots.entries('sidebar.footer.action')).toHaveLength(1)
     expect(b.slots.entries('sidebar.workspaces')).toHaveLength(1)
-    expect(b.slots.entries('conversation.surface')).toHaveLength(1)
-    expect(b.slots.entries('conversation.hero.brand')).toHaveLength(1)
-    expect(b.slots.entries('conversation.hero.actions')).toHaveLength(1)
+    const mainPanels = b.slots.entries('main')
+    expect(mainPanels).toHaveLength(6)
+    expect(mainPanels.map(entry => entry.options.key))
+      .toEqual(expect.arrayContaining(Object.values(PHYSICS_PANEL_IDS)))
+    expect(b.slots.entries('conversation.hero.brand.mark')).toHaveLength(1)
+    /* The front page rides the two product seats that bind to no Session, so it
+       survives a cold start as well as a blank Session. */
+    expect(b.slots.entries('conversation.composer.above')).toHaveLength(1)
+    expect(b.slots.entries('conversation.composer.below')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')).toHaveLength(1)
     expect(b.slots.entries('conversation.hero.agentPreset')[0]!.options.priority).toBe(-1)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(1)
@@ -142,7 +144,6 @@ describe('ui-physicsos apply', () => {
     expect(b.slots.entries('shell.overlay').map(entry => entry.options.id))
       .toEqual(expect.arrayContaining([
         'physicsos-auth-gate',
-        'physicsos-workspace-panel',
         'physicsos-platform-notice',
       ]))
     /* The scene card: definition on the conversation registry, keyed renderer
@@ -162,31 +163,27 @@ describe('ui-physicsos apply', () => {
     openSceneInLab(sceneRef)
     /* Opening a scene card lands in the Lab and records it in 最近空间 —
        observable via the physicsSurface store, not the fake workspaces. */
-    const surfaceEntry = b.slots.entries('conversation.surface')[0]!
+    const surfaceEntry = mainPanels.find(entry => entry.options.key === PHYSICS_PANEL_IDS.lab)!
     const hooks = (surfaceEntry.inject as () => {
       hooks: { physicsSurface: { getSnapshot: () => { surface: string; sceneRef?: { sceneId: string } } } }
     })().hooks
     expect(hooks.physicsSurface.getSnapshot().surface).toBe('lab')
     expect(hooks.physicsSurface.getSnapshot().sceneRef?.sceneId).toBe(sceneRef.sceneId)
-    const brand = b.slots.entries('sidebar.brand')[0]!.inject as () => { openHome: () => void }
-    brand().openHome()
-    expect(b.workspaces.startSession).not.toHaveBeenCalled()
-    const actions = b.slots.entries('conversation.hero.actions')[0]!.inject as () => {
-      startSession: (id?: string) => void
-    }
-    actions().startSession('ws-1')
-    expect(b.workspaces.startSession).toHaveBeenLastCalledWith('ws-1')
-    actions().startSession()
-    expect(b.workspaces.startSession).toHaveBeenCalledTimes(1)
-    const panelEntry = b.slots.entries('shell.overlay')
-      .find(entry => entry.options.id === 'physicsos-workspace-panel')!
-    const panelInjected = (panelEntry.inject as () => {
-      hooks: { panel: { getSnapshot: () => { open: boolean } } }
+    /* The workspace seat owns the account's workspaces: it is the shell's own
+       chip that opens it, and both of its writes go through the account-scoped
+       feed rather than the host directory picker. */
+    const workspaceSeat = b.slots.entries('conversation.hero.workspace')[0]!
+    const seatInjected = (workspaceSeat.inject as () => {
+      createWorkspace: (name: string) => Promise<{ id: string }>
+      renameWorkspace: (id: string, name: string) => Promise<void>
+      hooks: { workspaces: { getSnapshot: () => unknown } }
     })()
-    expect(panelInjected.hooks.panel.getSnapshot().open).toBe(true)
+    expect(typeof seatInjected.createWorkspace).toBe('function')
+    expect(typeof seatInjected.renameWorkspace).toBe('function')
+    expect(seatInjected.hooks.workspaces).toBe(b.workspaces.list)
     await fiber.dispose()
     expect(document.title).toBe('DeepSeek Harness')
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeNull()
-    expect(b.slots.entries('sidebar.brand')).toHaveLength(0)
+    expect(b.slots.entries('sidebar.brand.mark')).toHaveLength(0)
   })
 })

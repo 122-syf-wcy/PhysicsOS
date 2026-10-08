@@ -273,7 +273,16 @@
   min-width: 0;
 }
 
+.rowName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
 .rowTitle {
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -281,6 +290,19 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--physics-ink-strong);
+}
+
+/* The Workspace the Session is in right now — the row the list must not make
+   the reader guess about. */
+.rowBadge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--physics-tint-verified);
+  color: var(--physics-ink-ok);
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 500;
 }
 
 .rowMeta {

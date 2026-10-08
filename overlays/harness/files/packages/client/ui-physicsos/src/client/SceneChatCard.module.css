@@ -213,14 +213,14 @@
   line-height: 16px;
 }
 
-.solveVerdict[data-status='passed'] {
-  background: var(--physics-highlight);
+.solveVerdict[data-level='physics-verified'],
+.solveVerdict[data-level='strongly-verified'] {
+  background: color-mix(in srgb, var(--physics-verification-ok) 18%, transparent);
   color: var(--dsw-alias-label-primary);
 }
 
-.solveVerdict[data-status='failed'],
-.solveVerdict[data-status='error'] {
-  background: var(--dsw-alias-bg-module-platform);
+.solveVerdict[data-level='engine-computed'] {
+  background: var(--physics-highlight);
   color: var(--dsw-alias-label-primary);
 }
 

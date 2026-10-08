@@ -1,13 +1,30 @@
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import clsx from 'clsx'
+import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { HomeAtmosphere } from './HomeAtmosphere.tsx'
 import { HomePlayground } from './HomePlayground.tsx'
 import { Mascot } from './Mascot.tsx'
 import { PhysicsOSMark } from './PhysicsOSMark.tsx'
 import css from './HomeBrand.module.css'
 
-export type HomeBrandProps =
-  & PropsRuntime<'conversation.hero.brand'>
-  & PropsLocale<'physicsos'>
+/** Props of the hero brand stage (the blank-Session front page). */
+export interface HomeBrandProps {
+  t: TranslateNS<'physicsos'>
+}
+
+/** Props of the hero brand-mark occupant the shell sizes itself. */
+export type HomeBrandMarkProps =
+  Pick<PropsRuntime<'conversation.hero.brand.mark'>, 'size' | 'className'>
+
+/**
+ * The product mark where the shell's blank-Session headline wants it: a square
+ * glyph leading the headline, not the whole stage.
+ * @param props - the shell's requested edge and its headline class.
+ * @returns the orbital-lens mark.
+ */
+export function HomeBrandMark({ size, className }: HomeBrandMarkProps) {
+  return <PhysicsOSMark size={size} className={clsx(className, css.heroMark)} />
+}
 
 /**
  * Hero brand: one stage.

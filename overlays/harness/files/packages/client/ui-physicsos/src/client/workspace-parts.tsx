@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutline14, IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineMedium, IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import { SCENE_TREE_ICONS } from './icons/physics-icons.tsx'
 import { MathText } from './physics/MathText.tsx'
@@ -124,10 +124,10 @@ function SceneTreeNodes({
                 <span className={css.treeIcon}>
                   {observable !== undefined ? (
                     <span className={clsx(css.checkbox, on && css.checkboxOn)}>
-                      <IconCheckOutline14 size={10} />
+                      <IconCheckOutlineMedium size={10} />
                     </span>
                   ) : node.kind === 'group' ? (
-                    <IconChevronDownOutline14 size={12} />
+                    <IconChevronDownOutlineMedium size={12} />
                   ) : (
                     <Icon size={13} />
                   )}
@@ -432,7 +432,7 @@ export function VerificationList({
           style={{ '--physics-row-index': String(Math.min(index, 8)) } as CSSProperties}
         >
           <span className={clsx(css.verificationMark, css[`verification_${check.status}`])}>
-            <IconCheckOutline14 size={11} />
+            <IconCheckOutlineMedium size={11} />
           </span>
           <span className={css.verificationLabel}>{check.label}</span>
           <span className={css.verificationStatus}>
@@ -449,7 +449,7 @@ export function VerificationList({
           style={{ '--physics-row-index': String(Math.min(laws.length, 8)) } as CSSProperties}
         >
           <span className={clsx(css.verificationMark, css[`verification_${structureStatus}`])}>
-            <IconCheckOutline14 size={11} />
+            <IconCheckOutlineMedium size={11} />
           </span>
           <span className={css.verificationLabel}>
             场景结构
@@ -461,7 +461,7 @@ export function VerificationList({
       {structure.failed.map(check => (
         <li key={check.id} className={clsx(css.verificationItem, css.verificationStructureDetail)} data-status={check.status}>
           <span className={clsx(css.verificationMark, css[`verification_${check.status}`])}>
-            <IconCheckOutline14 size={11} />
+            <IconCheckOutlineMedium size={11} />
           </span>
           <span className={css.verificationLabel}>{check.label}</span>
           <span className={css.verificationStatus}>未通过</span>

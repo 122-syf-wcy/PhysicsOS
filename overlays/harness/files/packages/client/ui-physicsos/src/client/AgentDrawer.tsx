@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { IconCloseOutline16, IconSendOutline14, IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseOutlineMedium, IconSendOutlineMedium, IconSparkleMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import {
   highlightLabel,
@@ -186,7 +186,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
           aria-label={t('lab.collapse')}
           onClick={onClose}
         >
-          <IconCloseOutline16 size={14} />
+          <IconCloseOutlineMedium size={14} />
         </button>
       </div>
 
@@ -294,7 +294,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
                   className={css.agentSuggestion}
                   onClick={() => { ask(suggestion.prompt) }}
                 >
-                  <IconSparkle16 size={12} />
+                  <IconSparkleMedium size={12} />
                   {suggestion.prompt}
                 </button>
               ))}
@@ -329,7 +329,7 @@ export function AgentDrawer({ snapshot, runtime, onSnapshot, onClose, t, recordA
             aria-label={t('lab.agent.send')}
             disabled={draft.trim().length === 0}
           >
-            <IconSendOutline14 size={13} />
+            <IconSendOutlineMedium size={13} />
           </button>
         </form>
       ) : null}

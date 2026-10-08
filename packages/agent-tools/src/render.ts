@@ -98,7 +98,9 @@ export const renderScene = (scene: SceneDescription): string => {
 export const renderSolve = (result: SolveQuestionResult): string => {
   const lines: string[] = []
   if (result.status === 'rejected') {
-    lines.push(`未能求解（${result.workflowState}）。`)
+    lines.push(
+      `未能求解（${result.workflowState}）${result.attempt === undefined ? '' : `，第 ${result.attempt} 次尝试`}。`,
+    )
     if (result.domain !== undefined)
       lines.push(`识别到的领域 / 模型：${result.domain} / ${result.model ?? '?'}`)
     if (result.knowns.length > 0) {
@@ -113,7 +115,16 @@ export const renderSolve = (result: SolveQuestionResult): string => {
     lines.push('原因：')
     for (const issue of result.issues)
       lines.push(`- [${issue.severity}] ${issue.code}：${issue.message}`)
-    lines.push('请不要自行估算答案；向学生说明题面哪里需要补全或改写。')
+    const stopRetry = result.retryGuidance?.some((hint) => hint.code === 'STOP_RETRY_SAME_STEM')
+    if (result.retryGuidance !== undefined && result.retryGuidance.length > 0) {
+      lines.push(stopRetry === true ? '请停止重试：' : '修正建议（改写题面后可重试一次）：')
+      for (const hint of result.retryGuidance) lines.push(`- ${hint.fix}`)
+    }
+    lines.push(
+      stopRetry === true
+        ? '求解管线是确定性的：同一题面再试结果相同。请不要自行估算答案，向学生如实说明。'
+        : '请不要自行估算答案；按修正建议改写题面后最多重试一次，仍失败就向学生说明题面需要人工补全。',
+    )
     return lines.join('\n')
   }
   lines.push(

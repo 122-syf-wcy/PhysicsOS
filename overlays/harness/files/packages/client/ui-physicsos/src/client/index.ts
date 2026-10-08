@@ -2,15 +2,18 @@
  * PhysicsOS Web Client overlay. Occupies declared sidebar / hero holes.
  * Does not replace ConversationRoot, Agent Loop, Session, or Tools.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext } from './runtime-compat.ts'
+import type { WorkspaceId } from './runtime-compat.ts'
 import type { PromptContentPart, RpcResult, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import type { PhysicsScene } from '@physicsos/physics-scene'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+/* Type-only: merges the renderer's `ctx.slots` service into the client Context. */
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { mountPhysicsOSChrome } from './chrome.ts'
 import { createAdminApi, createAuthApi } from './auth-api.ts'
 import { createLearningApi } from './learning-api.ts'
@@ -19,26 +22,31 @@ import { createNoticeApi } from './notice-api.ts'
 import { PlatformNoticeDialog, UpstreamOnboardingSink } from './PlatformNoticeDialog.tsx'
 import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
-import { HomeActions } from './HomeActions.tsx'
-import { HomeBrand } from './HomeBrand.tsx'
+import { HomeBelow, HomeHero } from './HomeHero.tsx'
+import { HomeBrandMark } from './HomeBrand.tsx'
 import { startSyncRetry } from './sync-retry.ts'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { OptionalPhysicsSurface as PhysicsSurface } from './optional-surfaces.tsx'
+import type { PhysicsSurfaceInjected } from './LabWorkspace.tsx'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
+import { intermediatesToPrune, watchTurnEdges } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
 import { PhysicsProfileSeat } from './PhysicsProfileSeat.tsx'
 import { createPhysicsProfileController } from './profile-store.ts'
 import { RecentSpaces } from './RecentSpaces.tsx'
 import { OptionalSceneChatCard as SceneChatCard } from './optional-surfaces.tsx'
+import { SceneTurnCard } from './SceneTurnCard.tsx'
 import { physicsSceneCardDefinition, physicsSceneTurnDefinition } from './scene-chat-node.ts'
-import { SidebarBrand } from './SidebarBrand.tsx'
+import { SidebarBrandMark, SidebarBrandName } from './SidebarBrand.tsx'
 import { SidebarFooter } from './SidebarFooter.tsx'
 import { SidebarNav } from './SidebarNav.tsx'
-import { SidebarNew } from './SidebarNew.tsx'
 import { createPaperApi } from './paper-api.ts'
-import { createPhysicsSurfaceController, type PhysicsSceneRef } from './surface-store.ts'
 import {
-  WorkspacePanel, WorkspacePickerTrigger, createWorkspacePanelController,
+  PHYSICS_PANEL_IDS, createPhysicsSurfaceController,
+  type PhysicsSceneRef, type PhysicsSurfaceNavigation,
+} from './surface-store.ts'
+import {
+  WorkspacePanel,
   type AccountWorkspaceRow,
 } from './WorkspacePanel.tsx'
 import { GOLDEN_QUESTIONS } from '@physicsos/question-core'
@@ -61,23 +69,25 @@ export type {
 } from './AdminPlatformNoticeTab.tsx'
 export type { PlatformNoticeDialogInjected, PlatformNoticeDialogProps } from './PlatformNoticeDialog.tsx'
 export type { HomeActionsInjected, HomeActionsProps } from './HomeActions.tsx'
-export type { HomeBrandProps } from './HomeBrand.tsx'
+export type { HomeHeroInjected, HomeHeroProps } from './HomeHero.tsx'
+export type { HomeBrandMarkProps, HomeBrandProps } from './HomeBrand.tsx'
 export type { PhysicsProfileLabelInjected, PhysicsProfileLabelProps } from './PhysicsProfileLabel.tsx'
 export type { PhysicsProfileSeatInjected, PhysicsProfileSeatProps } from './PhysicsProfileSeat.tsx'
-export type { SidebarBrandInjected, SidebarBrandProps } from './SidebarBrand.tsx'
+export type {
+  SidebarBrandInjected, SidebarBrandMarkProps, SidebarBrandNameProps,
+} from './SidebarBrand.tsx'
 export type { SidebarFooterInjected, SidebarFooterProps } from './SidebarFooter.tsx'
-export type { SidebarNavInjected, SidebarNavProps } from './SidebarNav.tsx'
-export type { SidebarNewInjected, SidebarNewProps } from './SidebarNew.tsx'
 export type { RecentSpacesInjected, RecentSpacesProps } from './RecentSpaces.tsx'
 export type { PhysicsSurfaceInjected, PhysicsSurfaceProps } from './LabWorkspace.tsx'
 export type { PhysicsProfileId } from './profiles.ts'
-export type { PhysicsSurfaceId } from './surface-store.ts'
 export type {
-  AccountWorkspaceRow, WorkspacePanelController, WorkspacePanelInjected,
-  WorkspacePanelProps, WorkspacePanelState, WorkspacePickerTriggerInjected,
-  WorkspacePickerTriggerProps,
+  PhysicsSurfaceController, PhysicsSurfaceId, PhysicsSurfaceNavigation,
+} from './surface-store.ts'
+export { PHYSICS_PANEL_IDS } from './surface-store.ts'
+export type {
+  AccountWorkspaceRow, WorkspacePanelInjected,
+  WorkspacePanelProps,
 } from './WorkspacePanel.tsx'
-export { createWorkspacePanelController } from './WorkspacePanel.tsx'
 export {
   STUDENT_PROFILES, TEACHER_PROFILES, isStudentProfile, runtimePresetOf,
 } from './profiles.ts'
@@ -95,7 +105,9 @@ const NS = 'physicsos'
 const PRODUCT_TITLE = 'PhysicsOS'
 
 /** Services required by the PhysicsOS overlay. */
-export const inject = ['slots', 'locale', 'workspaces', 'layout', 'sessions', 'conversationEvents']
+export const inject = [
+  'slots', 'locale', 'workspaces', 'uiWorkspace', 'layout', 'sessions', 'uiConversation',
+]
 
 /**
  * Register PhysicsOS brand, sidebar navigation, home workspace, and the
@@ -122,14 +134,13 @@ export function apply(ctx: ClientContext): void {
    * 是幂等的（存在即返回，不会新建）。所以这里先确保它存在，再开会话，
    * 全程不碰本机目录选择器；失败时退回原行为，不影响单机版。
    */
-  const workspacePanel = createWorkspacePanelController()
-
-  const startSession = (workspaceId?: WorkspaceId): void => {
-    if (workspaceId !== undefined) {
-      ctx.workspaces.startSession(workspaceId)
-      return
-    }
-    workspacePanel.open()
+  /* Product surfaces are global panels in the target shell, so navigation is
+     two-way: the product asks the layout to select a panel, and a panellist
+     click reports back into the surface store. */
+  const surfacePanels: PhysicsSurfaceNavigation = {
+    selectSurface: (next): void => {
+      ctx.layout.selectPanel(next === 'home' ? null : PHYSICS_PANEL_IDS[next])
+    },
   }
 
   /* 账户体系 Auth V1: the cookie session resolves through /me; every per-user
@@ -160,7 +171,7 @@ export function apply(ctx: ClientContext): void {
 
   /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
      under an account it lands in that user's namespace. */
-  const surface = createPhysicsSurfaceController(auth.userStorage, learningApi)
+  const surface = createPhysicsSurfaceController(auth.userStorage, learningApi, surfacePanels)
   const paperApi = createPaperApi()
   /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
      reads the role from the auth store; the host enforces it on every call. */
@@ -170,6 +181,18 @@ export function apply(ctx: ClientContext): void {
   /* 模型通道: platform-wide pool and its encrypted upstream credentials. */
   const modelPoolApi = createModelPoolApi()
 
+  /* The shell's panellist rows and the product's own navigation share one
+     selection: a row click lands here through the layout store, and the
+     active product surface follows it. */
+  ctx.effect(() => {
+    const sync = (): void => {
+      surface.adoptPanel(ctx.layout.panelInfo.getSnapshot().activePanelId)
+    }
+    const stop = ctx.layout.panelInfo.subscribe(sync)
+    sync()
+    return () => { stop() }
+  }, 'ui-physicsos: follow layout panel selection')
+
   const createAccountWorkspace = async (name: string): Promise<AccountWorkspaceRow> => {
     /* The host accepts only this virtual path: the title crosses the seam,
        while auth-host chooses and creates the real per-account directory. */
@@ -177,11 +200,6 @@ export function apply(ctx: ClientContext): void {
       path: `physicsos-workspace://${encodeURIComponent(name)}`,
     })
     return { id: workspace.workspaceId, name }
-  }
-
-  const openAccountWorkspace = async (id: string): Promise<void> => {
-    const sessionId = await ctx.workspaces.connectWorkspace(id as WorkspaceId)
-    ctx.sessions.open(sessionId)
   }
 
   /* The student's attempt history: written by self-checks (the Lab's 自测 tab
@@ -213,62 +231,86 @@ export function apply(ctx: ClientContext): void {
      card replays the published scene locally — the host's EventStore stays
      authoritative. */
   ctx.effect(
-    () => ctx.conversationEvents.register(physicsSceneCardDefinition),
+    () => ctx.uiConversation.events.register(physicsSceneCardDefinition),
     'ui-physicsos: scene card definition',
   )
   ctx.effect(
-    () => ctx.conversationEvents.register(physicsSceneTurnDefinition),
+    () => ctx.uiConversation.events.register(physicsSceneTurnDefinition),
     'ui-physicsos: scene turn definition',
   )
+  /* The Lab visit one turn makes: whether the agent opened it (rather than the
+     reader), and the worlds it built on the way. */
+  let labAutoOpened = false
+  let turnScenes: PhysicsSceneRef[] = []
+
+  /* The end of a turn's Lab visit.
+   *
+   * The agent's visits never entered 最近空间 — they are working views, not
+   * artifacts (see `openTransient`) — so there is nothing of this turn's to
+   * remove. This closes the Lab the agent opened, drops any entry an older
+   * build recorded for these same scenes, and remembers the one world the
+   * answer belongs to: the last one the turn built. Declared once so the seat's
+   * mount effect compares one identity instead of a fresh closure per render. */
+  const endTurnHygiene = (): void => {
+    if (labAutoOpened && surface.store.getSnapshot().surface === 'lab') {
+      surface.open('home')
+    }
+    labAutoOpened = false
+    const final = turnScenes[turnScenes.length - 1]
+    for (const sceneId of intermediatesToPrune(turnScenes.map(ref => ref.sceneId))) {
+      surface.removeRecent(sceneId)
+    }
+    if (final !== undefined) surface.remember(final)
+    turnScenes = []
+  }
+
+  /* The card's own face — the Lab handover, the self-check record, and the end
+     of a turn's Lab visit — shared by the conversation-flow card and the
+     turn-tail seat. */
+  const sceneCardFace = () => ({
+    openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
+    endTurnHygiene,
+    recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
+      learningRecord.record(attempt)
+      reportLearning(attempt)
+    },
+  })
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',
     key: 'physics-scene-card',
     locale: NS,
-    inject: () => ({
-      openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
-      recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
-        learningRecord.record(attempt)
-        reportLearning(attempt)
-      },
-    }),
+    inject: sceneCardFace,
   }, SceneChatCard))
 
-  /* Account workspace manager: every normal entry that needs a workspace
-     opens this panel. The panel reads the auth-host-filtered feed and never
-     renders a host path, so the directory browser is not a product surface. */
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'physicsos-workspace-panel',
+  /* The same card at the closing end of each Turn. A `physics/scene` event is
+     not a message, so its node has no place in the conversation surface and
+     never draws; the Turn's own data is where the card can sit beside the
+     answer it belongs to. */
+  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
+    name: 'conversation.chat.turnTail',
+    id: 'physicsos-scene-turn',
     locale: NS,
-    inject: () => ({
-      hooks: {
-        panel: workspacePanel.store,
-        workspaces: ctx.workspaces.list,
-      },
-      createWorkspace: createAccountWorkspace,
-      renameWorkspace: async (id: string, name: string) => {
-        await ctx.workspaces.rename(id as WorkspaceId, name)
-      },
-      openWorkspace: openAccountWorkspace,
-      close: workspacePanel.close,
-    }),
-  }, WorkspacePanel))
+    inject: sceneCardFace,
+  }, SceneTurnCard))
 
-  /* Replace the upstream composer workspace picker. That picker's add action
-     is the route into `host.listDirectory`; this occupant keeps the same slot
-     but opens the account-scoped panel instead. */
+  /* The account workspace manager. It occupies the shell's own workspace seat:
+     the chip keeps the affordance and the label (it knows which Workspace the
+     Session is in), this renders the account-scoped list behind it, and every
+     action returns through the seat's `onPick`/`onClose`. The upstream occupant
+     is displaced on purpose — its add action is the route into the host
+     directory picker, and no student should browse server folders. */
   ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register({
     name: 'conversation.hero.workspace',
     priority: -1,
     locale: NS,
     inject: () => ({
-      hooks: {
-        panel: workspacePanel.store,
-        workspaces: ctx.workspaces.list,
+      hooks: { workspaces: ctx.workspaces.list },
+      createWorkspace: createAccountWorkspace,
+      renameWorkspace: async (id: string, name: string) => {
+        await ctx.workspaces.rename(id as WorkspaceId, name)
       },
-      openPanel: workspacePanel.open,
     }),
-  }, WorkspacePickerTrigger))
+  }, WorkspacePanel))
 
   /* The auth gate: one root-scoped overlay entry that covers the shell while
      the session is unresolved, and holds the login/register/forgot flow for
@@ -304,48 +346,30 @@ export function apply(ctx: ClientContext): void {
     order: -200,
   }, UpstreamOnboardingSink))
 
-  ctx.slots.inject('sidebar.brand', () => ctx.slots.register({
-    name: 'sidebar.brand',
-    locale: NS,
-    inject: () => ({
-      hooks: { auth: auth.store },
-      openHome: () => { surface.open('home') },
-    }),
-  }, SidebarBrand))
+  /* The shell owns the brand row and its New Session shortcut; the product
+     supplies the mark and the wordmark (name over the school tenant). */
+  ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({
+    name: 'sidebar.brand.mark',
+  }, SidebarBrandMark))
 
-  ctx.slots.inject('sidebar.new', () => ctx.slots.register({
-    name: 'sidebar.new',
+  ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({
+    name: 'sidebar.brand.name',
     locale: NS,
-    inject: () => ({
-      startSession: () => { startSession() },
-      openSurface: (
-        id: 'lab' | 'home',
-        sceneRef?: { sceneId: string; scene: PhysicsScene },
-      ) => {
-        /* “新建物理实验” asks for a NEW experiment, so it lands on the picker
-           (the active scene stays resumable from inside it); a handover with a
-           scene continues that scene directly. */
-        if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
-        else surface.open(id, sceneRef)
-      },
-    }),
-  }, SidebarNew))
+    inject: () => ({ hooks: { auth: auth.store } }),
+  }, SidebarBrandName))
 
+  /* The sectioned product rail: 主页 → 首页 (the blank-Session Conversation),
+     探索 → the surfaces the rail presents. Every PhysicsOS surface is either on
+     the rail or on the sidebar foot (学习记录), and 管理后台 is offered by the
+     account menu — the same entry twice is worse than one obvious one, so no
+     surface takes a shell panel row. */
   ctx.slots.inject('sidebar.nav', () => ctx.slots.register({
     name: 'sidebar.nav',
-    id: 'physicsos-nav',
     locale: NS,
     inject: () => ({
       hooks: { physicsSurface: surface.store, auth: auth.store },
-      openSurface: (id: Parameters<typeof surface.open>[0], drawerOpen: boolean) => {
-        surface.open(id)
-        /* Below the layout shell's 1024px auto-collapse breakpoint the sidebar
-           is a drawer. Navigating from the open drawer closes it; a tap on the
-           resting rail must navigate without flipping the rail open, which is
-           why the caller reports the sidebar's state instead of this reading
-           the viewport alone. */
-        if (drawerOpen && window.innerWidth < 1024) ctx.layout.toggleSidebar()
-      },
+      /* 首页 is the Conversation: the surface store maps it back to no panel. */
+      openSurface: (id: Parameters<typeof surface.open>[0]) => { surface.open(id) },
     }),
   }, SidebarNav))
 
@@ -363,11 +387,11 @@ export function apply(ctx: ClientContext): void {
       removeRecent: (sceneId: string) => { surface.removeRecent(sceneId) },
       /* 历史对话 rows reopen the Harness session itself — the same verb the
          workspace browser uses; conversation state lives server-side. */
-      openSession: (sessionId: SessionId) => { ctx.sessions.open(sessionId) },
+      openSession: (sessionId: SessionId) => { ctx.uiWorkspace.openSession(sessionId) },
       /* Archive is Harness's session-removal verb (session logs are durable);
          the row hides when archivedSessionIds echoes back. */
       archiveSession: (sessionId: SessionId) => {
-        ctx.workspaces.archiveSession(sessionId)
+        ctx.uiWorkspace.archiveSession(sessionId)
           .catch((reason: unknown) => { console.warn('archive session failed:', reason) })
       },
     }),
@@ -379,26 +403,35 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { auth: auth.store },
-      startSession: () => { startSession() },
       /* 学习记录 is a real surface now: attempts, mistakes, mastery. */
       openRecord: () => { surface.open('record') },
-      openHome: () => { surface.open('home') },
       /* 管理后台 — the menu only shows this for admin roles. */
       openAdmin: () => { surface.open('admin') },
       logout: auth.logout,
     }),
   }, SidebarFooter))
 
-  ctx.slots.inject('conversation.hero.brand', () => ctx.slots.register({
-    name: 'conversation.hero.brand',
-    locale: NS,
-  }, HomeBrand))
+  /* The blank-Session hero: the product mark leads the shell's headline, and
+     the brand stage rides the full-width entry above the composer. The quick
+     actions ride `conversation.composer.below` instead, so the composer sits
+     between the brand stage and the actions — the order the page reads in. */
+  ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
+    name: 'conversation.hero.brand.mark',
+  }, HomeBrandMark))
 
-  ctx.slots.inject('conversation.hero.actions', () => ctx.slots.register({
-    name: 'conversation.hero.actions',
+  ctx.slots.inject('conversation.composer.above', () => ctx.slots.register({
+    name: 'conversation.composer.above',
+    id: 'physicsos-home',
+    order: 10,
+    locale: NS,
+  }, HomeHero))
+
+  ctx.slots.inject('conversation.composer.below', () => ctx.slots.register({
+    name: 'conversation.composer.below',
+    id: 'physicsos-home-actions',
+    order: 10,
     locale: NS,
     inject: () => ({
-      startSession,
       hooks: { recentExperiments: surface.recent },
       /* "新建物理实验" is a creation intent, so it lands on the picker rather
          than on the magnetic demo — the same chooser the sidebar uses. A recent
@@ -411,7 +444,7 @@ export function apply(ctx: ClientContext): void {
         else surface.open(id, sceneRef)
       },
     }),
-  }, HomeActions))
+  }, HomeBelow))
 
   const controller = createPhysicsProfileController(undefined, undefined, auth.userStorage)
 
@@ -425,7 +458,13 @@ export function apply(ctx: ClientContext): void {
     }),
   }, PhysicsProfileSeat))
 
-  ctx.inject(['connection', 'sessions', 'workspaces'], (scope: ClientContext) => {
+  /** The Session the main view currently holds, per the Controller's own
+      reference counts — the selection lives with the Workspace UI now. */
+  const currentSessionId = (): SessionId | undefined =>
+    Object.values(ctx.sessions.list.getSnapshot().byId)
+      .find(summary => (summary.retainedBy.mainView ?? 0) > 0)?.id
+
+  ctx.inject(['connection', 'sessions', 'workspaces', 'uiWorkspace'], (scope: ClientContext) => {
     const connection = scope.get('connection') as {
       api: {
         agentPresets: {
@@ -436,17 +475,18 @@ export function apply(ctx: ClientContext): void {
       }
     }
     controller.attach(connection.api, () => {
-      const state = scope.sessions.list.getSnapshot() as {
-        current?: string
-        byId: Record<string, { id: string; blank: boolean; agentPreset?: string }>
-      }
-      const summary = state.current === undefined ? undefined : state.byId[state.current]
+      const active = currentSessionId()
+      const summary = active === undefined
+        ? undefined
+        : scope.sessions.list.getSnapshot().byId[active]
       return summary === undefined
         ? undefined
         : {
           id: summary.id,
           blank: summary.blank,
-          ...summary.agentPreset === undefined ? {} : { agentPreset: summary.agentPreset },
+          ...typeof summary.projectionValues?.['agentPreset'] === 'string'
+            ? { agentPreset: summary.projectionValues['agentPreset'] }
+            : {},
         }
     })
 
@@ -460,16 +500,19 @@ export function apply(ctx: ClientContext): void {
        projection, which rides the session list rows. The first value seen for
        a session only becomes the active scene; a later revision opens the Lab. */
     const agentScenes = createAgentSceneSync({
-      adoptScene: (ref) => { surface.open(surface.store.getSnapshot().surface, ref) },
-      showScene: (ref) => { surface.open('lab', ref) },
+      adoptScene: (ref) => { surface.openTransient(surface.store.getSnapshot().surface, ref) },
+      showScene: (ref) => {
+        labAutoOpened = true
+        turnScenes.push(ref)
+        surface.openTransient('lab', ref)
+      },
     })
     const mirrorAgentScene = (): void => {
-      const state = scope.sessions.list.getSnapshot() as {
-        current?: string
-        byId: Record<string, { projectionValues?: Record<string, unknown> }>
-      }
-      const summary = state.current === undefined ? undefined : state.byId[state.current]
-      agentScenes.apply(state.current, summary?.projectionValues?.['physicsScenes'])
+      const active = currentSessionId()
+      const summary = active === undefined
+        ? undefined
+        : scope.sessions.list.getSnapshot().byId[active]
+      agentScenes.apply(active, summary?.projectionValues?.['physicsScenes'])
     }
     scope.effect(() => {
       mirrorAgentScene()
@@ -477,21 +520,64 @@ export function apply(ctx: ClientContext): void {
       return () => { stop() }
     }, 'ui-physicsos: mirror agent scenes')
 
+    /* The turn's own end closes the Lab the agent opened. The turn-tail seat
+       cannot be that trigger: the Lab replaces the Conversation surface, so the
+       seat is unmounted exactly while the Lab it should close is on screen. The
+       Conversation binding's `openTurn` publishes turn changes without an active
+       View, so this runs wherever the reader is looking. */
+    let watchedSession: SessionId | undefined
+    let stopTurnWatch: (() => void) | undefined
+    const watchTurn = (): void => {
+      const active = currentSessionId()
+      if (active === watchedSession) return
+      stopTurnWatch?.()
+      stopTurnWatch = undefined
+      watchedSession = active
+      if (active === undefined) return
+      const binding = ((): ReturnType<typeof ctx.uiConversation.binding> | undefined => {
+        try {
+          return ctx.uiConversation.binding(active)
+        } catch {
+          /* Not bound yet or already released: the list ticks again. */
+          return undefined
+        }
+      })()
+      if (binding === undefined) {
+        watchedSession = undefined
+        return
+      }
+      stopTurnWatch = watchTurnEdges(
+        () => binding.openTurn.getSnapshot(),
+        listener => binding.openTurn.subscribe(listener),
+        /* A turn that opens inherits nothing from the last one's Lab visit. */
+        () => {
+          labAutoOpened = false
+          turnScenes = []
+        },
+        endTurnHygiene,
+      )
+    }
+    scope.effect(() => {
+      watchTurn()
+      const stop = scope.sessions.list.subscribe(watchTurn)
+      return () => { stop(); stopTurnWatch?.() }
+    }, 'ui-physicsos: close the Lab at turn end')
+
     /* Practice hand-off: a golden question's stem reaches the tutor agent as one
        queued prompt on the student's current session — the tutor, never the UI,
        owns interpretation; the solved scene card streams back into the chat. */
     const submitToTutor = async (
       text: string,
     ): Promise<{ ok: true } | { ok: false; error: string }> => {
-      let sessionId = scope.sessions.list.getSnapshot().current
+      let sessionId = currentSessionId()
       if (sessionId === undefined) {
         /* startSession is asynchronous: the workspace connect resolves, then
-           sessions.open publishes the new current id. Wait briefly for it. */
-        scope.workspaces.startSession()
+           the Workspace UI takes the main-view reference. Wait briefly for it. */
+        scope.uiWorkspace.startSession()
         sessionId = await new Promise<SessionId | undefined>((resolve) => {
           const timer = setTimeout(() => { stop(); resolve(undefined) }, 8000)
           const stop = scope.sessions.list.subscribe(() => {
-            const current = scope.sessions.list.getSnapshot().current
+            const current = currentSessionId()
             if (current !== undefined) {
               clearTimeout(timer)
               stop()
@@ -530,10 +616,13 @@ export function apply(ctx: ClientContext): void {
       return result
     }
 
-    scope.slots.inject('conversation.surface', () => scope.slots.register({
-      name: 'conversation.surface',
-      locale: NS,
-      inject: () => ({
+    /* The product surfaces are global panels: 物理实验室 / 出卷专区 / 反馈 /
+       资源库 / 学习记录 / 管理后台 each occupy a `main` key, and the sidebar's
+       panellist rows select them. One component renders whichever surface the
+       store says is current, so scene hand-over and the picker survive every
+       switch. */
+    scope.slots.inject('main', function* () {
+      const injected = (): PhysicsSurfaceInjected => ({
         hooks: {
           physicsSurface: surface.store,
           learningRecord: learningRecord.store,
@@ -572,8 +661,16 @@ export function apply(ctx: ClientContext): void {
           reportLearning(attempt)
         },
         practiceQuestion,
-      }),
-    }, PhysicsSurface))
+      })
+      for (const panelId of Object.values(PHYSICS_PANEL_IDS)) {
+        yield scope.slots.register({
+          name: 'main',
+          key: panelId,
+          locale: NS,
+          inject: injected,
+        }, PhysicsSurface)
+      }
+    })
 
     scope.slots.inject('conversation.session.header.actions', () => scope.slots.register({
       name: 'conversation.session.header.actions',

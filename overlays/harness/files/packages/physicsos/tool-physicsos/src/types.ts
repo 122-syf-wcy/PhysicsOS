@@ -14,7 +14,10 @@
  * @module @deepseek-ai/dsh-tool-physicsos/types
  */
 
-import type { JsonValue } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+/* Type-only: the canonical provenance contract (`QuantityProvenance`) the
+   solved answers carry. Erased at build, so the snapshot stays plain data. */
+import type { QuantityProvenance } from '@physicsos/physics-core'
 
 /** Why a snapshot was published. */
 export type PhysicsSceneSnapshotCause = 'created' | 'solved' | 'command'
@@ -44,6 +47,14 @@ export interface PhysicsSceneSolveSummary {
     readonly symbol: string
     readonly value: string
     readonly unit: string
+    /**
+     * The engine's trace for this answer — engine id/version, scene revision,
+     * the verifier that signed off and the checks it ran — or null when no
+     * engine produced the value. The client derives the verified-result block
+     * from this ({@link QuantityProvenance}), never from the scene's domain or
+     * the bare number, so a surface can always say who computed the answer.
+     */
+    readonly provenance: QuantityProvenance | null
   }[]
   readonly steps: readonly {
     readonly index: number
@@ -110,6 +121,15 @@ declare module '@deepseek-ai/dsh-session/types' {
      * projection folds last-wins per id.
      */
     'physics/scene': PhysicsSceneSnapshot
+    /**
+     * One `physics_solve_question` run — solved OR rejected — appended after
+     * the tool result so every attempt leaves run-level diagnostics in the
+     * session log: pipeline state, engine verdict, answers, issues and the
+     * retry guidance the model was handed. The `physicsScenes` mirror only
+     * carries READY solves; this event is what makes rejected attempts
+     * (parse failures, verification failures) visible after the fact.
+     */
+    'physics/solve-trace': PhysicsSolveTrace
   }
 }
 
@@ -117,5 +137,52 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /** Scenes the agent touched in this session, folded from `physics/scene` events. */
     physicsScenes: PhysicsScenesProjection
+    /** Solve attempts (solved and rejected) in order, folded from `physics/solve-trace` events. */
+    physicsSolveTraces: PhysicsSolveTracesProjection
   }
+}
+
+/**
+ * One `physics_solve_question` attempt as a durable record: what the pipeline
+ * did with the stem, what the engine verified, which answers came out, which
+ * issues surfaced, and — for a rejection — the retry hints the model received.
+ * All fields are lossless JSON.
+ */
+export interface PhysicsSolveTrace {
+  /** Agent turn that produced the attempt; absent without an open turn. */
+  turn?: number
+  status: 'solved' | 'rejected'
+  /** Question Runtime workflow state (READY / PARSE_FAILED / …). */
+  workflowState: string
+  domain?: string
+  model?: string
+  /** Golden-bank id when the stem matched a built-in question. */
+  goldenQuestionId?: string
+  /** Attempt ordinal for this normalized stem within the session runtime. */
+  attempt?: number
+  /** Scene a READY solve registered; rejected attempts have none. */
+  sceneId?: string
+  /** True when the scene was reused from an identical earlier solve. */
+  reusedScene?: boolean
+  /** Engine verdict summary; absent when no simulation ran (parse-stage rejects). */
+  verification?: {
+    status: string
+    passed: number
+    total: number
+    failed: readonly { readonly id: string; readonly message?: string }[]
+  }
+  answers: readonly { readonly key: string; readonly value: string; readonly unit: string }[]
+  issues: readonly { readonly code: string; readonly severity: string }[]
+  /** Retry-hint codes the rejected result carried (empty for solved runs). */
+  retryGuidance: readonly { readonly code: string }[]
+  /** Wall-clock duration of the solve call, milliseconds. */
+  durationMs: number
+}
+
+/**
+ * The `physicsSolveTraces` projection's wire value: the session's solve
+ * attempts in order, newest last, capped by the fold.
+ */
+export interface PhysicsSolveTracesProjection {
+  traces: readonly PhysicsSolveTrace[]
 }

@@ -1,22 +1,19 @@
 import { useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconListPenOutline16, IconUserOutline16, Menu,
+  IconUserOutlineMedium, Menu,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarFooterActionOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { buildStamp } from './build-stamp.ts'
 import type { AuthState } from './auth-store.ts'
 import css from './SidebarFooter.module.css'
 
 export type SidebarFooterInjected = {
-  startSession: () => void
   /** Open the 学习记录 surface. */
   openRecord?: () => void
-  /** Open the 学习空间 (PhysicsOS home) surface. */
-  openHome: () => void
   /** Open the 管理后台 surface — offered only to SCHOOL_ADMIN/SUPER_ADMIN. */
   openAdmin?: () => void
   /** Revoke the server session and return to the auth gate. */
@@ -27,13 +24,12 @@ export type SidebarFooterInjected = {
 }
 
 export type SidebarFooterProps =
-  & PropsRuntime<'sidebar.footer.action'>
-  & SidebarFooterActionOwnerProps
+  SidebarFooterActionOwnerProps
   & InjectFace<SidebarFooterInjected>
   & PropsLocale<'physicsos'>
 
 /** Learning history and library seats above Settings, plus the account menu. */
-export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, useAuth, t }: SidebarFooterProps) {
+export function SidebarFooter({ wide, openRecord, openAdmin, logout, useAuth, t }: SidebarFooterProps) {
   const user = useAuth(state => state.user)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -45,7 +41,11 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
     { type: 'label', id: 'identity', text: `${user.displayName} · ${user.username}` },
     { type: 'label', id: 'school', text: user.schoolName },
     { type: 'separator', id: 'sep-1' },
-    { id: 'space', label: t('auth.menu.space') },
+    /* 学习记录 lives here rather than as its own row: the account menu is the
+       one place that already belongs to this user, and the sidebar foot has no
+       room left for another row. Offered only when the seat injected the
+       action, so an unavailable destination is absent rather than dead. */
+    ...(openRecord === undefined ? [] : [{ id: 'record', label: t('nav.history') } satisfies MenuEntry]),
     ...(isAdmin && openAdmin !== undefined
       ? [{ id: 'admin', label: t('auth.menu.admin') } satisfies MenuEntry]
       : []),
@@ -59,23 +59,13 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
 
   const onAccountSelect = (id: string): void => {
     setMenuOpen(false)
-    if (id === 'space') openHome()
+    if (id === 'record') openRecord?.()
     if (id === 'admin') openAdmin?.()
     if (id === 'logout') void logout()
   }
 
   return (
     <div className={clsx(css.root, !wide && css.rail)}>
-      <button
-        type="button"
-        className={css.item}
-        aria-label={t('nav.history')}
-        title={wide ? undefined : t('nav.history')}
-        onClick={() => { openRecord?.() }}
-      >
-        <IconListPenOutline16 size={wide ? 16 : 18} />
-        {wide && <span>{t('nav.history')}</span>}
-      </button>
       {user !== undefined && (
         <Menu
           open={menuOpen}
@@ -97,7 +87,7 @@ export function SidebarFooter({ wide, openRecord, openHome, openAdmin, logout, u
             >
               <span className={css.avatar} aria-hidden>
                 {user.avatarUrl === undefined
-                  ? (user.displayName.trim().charAt(0) || <IconUserOutline16 size={14} />)
+                  ? (user.displayName.trim().charAt(0) || <IconUserOutlineMedium size={14} />)
                   : <img src={user.avatarUrl} alt="" className={css.avatarImg} />}
               </span>
               {wide && <span className={css.accountName}>{user.displayName}</span>}

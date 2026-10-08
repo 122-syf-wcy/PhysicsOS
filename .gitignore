@@ -1,5 +1,9 @@
 # Dependencies
 node_modules/
+# Workspace package links are symlinks, which the `node_modules/` directory
+# pattern above does not match; ignore them by path so generated links into
+# another checkout are never committed.
+packages/*/node_modules
 .pnpm-store/
 
 # Build

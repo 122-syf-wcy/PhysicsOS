@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IncomingMessage } from 'node:http'
-import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import {
   createApiPolicy,
   type ApiPolicyActor,
@@ -71,6 +70,12 @@ const rpc = (value: unknown): Response => Response.json({
   rpcId: 'policy-test',
   result: { ok: true, value },
 })
+
+/** The `value` a wrapped response carried, typed for the assertions below. */
+const rpcValueOf = async (response: Response): Promise<unknown> => {
+  const body = await response.json() as { result?: { value?: unknown } }
+  return body.result?.value
+}
 
 const collect = async <T>(source: AsyncIterable<T>): Promise<T[]> => {
   const values: T[] = []
@@ -226,7 +231,7 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
-  it('returns only the onboarding namespace when a student describes settings', async () => {
+  it('returns the onboarding and official-plugin namespaces when a student describes settings', async () => {
     const response = await makePolicy().policy.wrapFetch(async () => rpc({
       writable: true,
       hasDocument: true,
@@ -247,6 +252,24 @@ describe('PhysicsOS shared /api policy', () => {
           secrets: [],
           revision: 2,
         },
+        /* The four official plugin pages register into the Plugins page only
+           while their namespace is served, so a student must receive these or
+           the page reads 「还没有安装任何插件。」. */
+        ...[
+          'bash-sandbox',
+          'pwsh-sandbox',
+          'agent-loop',
+          'subagent',
+          'subagent-model-selection-settings',
+          'web-search-deepseek',
+        ].map(ns => ({
+          ns,
+          schema: { type: 'object' },
+          value: {},
+          applies: 'live',
+          secrets: [],
+          revision: 1,
+        })),
       ],
     }))(request('settings.describe'))
     expect(await response.json()).toEqual({
@@ -257,17 +280,142 @@ describe('PhysicsOS shared /api policy', () => {
         value: {
           writable: true,
           hasDocument: true,
-          namespaces: [{
-            ns: 'ui-onboarding',
-            schema: { type: 'object' },
-            value: { welcomeNoticeVersion: '2026-08-13.1' },
-            applies: 'live',
-            secrets: [],
-            revision: 2,
-          }],
+          namespaces: [
+            {
+              ns: 'ui-onboarding',
+              schema: { type: 'object' },
+              value: { welcomeNoticeVersion: '2026-08-13.1' },
+              applies: 'live',
+              secrets: [],
+              revision: 2,
+            },
+            ...[
+              'bash-sandbox',
+              'pwsh-sandbox',
+              'agent-loop',
+              'subagent',
+              'subagent-model-selection-settings',
+              'web-search-deepseek',
+            ].map(ns => ({
+              ns,
+              schema: { type: 'object' },
+              value: {},
+              applies: 'live',
+              secrets: [],
+              revision: 1,
+            })),
+          ],
         },
       },
     })
+  })
+
+  it('reduces the model catalog to the routed provider’s one platform model', async () => {
+    /* Two providers answer to the platform's model id — the production shape
+       (an Anthropic-protocol provider and the OpenAI-protocol pool route) — and
+       the Session routes through the SECOND one. Keeping the first would leave
+       the picker unable to resolve the live selection, and it would fall back to
+       printing `provider/model` at the reader. */
+    const catalog = () => ({
+      default: { provider: 'physicsos-pool', model: 'deepseek-v4.1-flash' },
+      routableProviders: ['deepseek-official', 'physicsos-pool'],
+      groups: [
+        {
+          id: 'deepseek-official',
+          name: 'DeepSeek',
+          models: [
+            {
+              id: 'deepseek-v4.1-flash',
+              name: 'DeepSeek-V4.1-Flash',
+              reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+            },
+            {
+              id: 'deepseek-v4-pro',
+              name: 'DeepSeek-V4-Pro',
+              description: 'Stronger agentic coding.',
+              reasoning: { efforts: [{ id: 'high', name: 'High' }], defaultEffort: 'high' },
+            },
+          ],
+        },
+        {
+          id: 'physicsos-pool',
+          name: '平台公益模型',
+          models: [{
+            id: 'deepseek-v4.1-flash',
+            name: '平台公益模型',
+            reasoning: {
+              efforts: [{ id: 'off', name: 'Off' }, { id: 'high', name: 'High' }],
+              defaultEffort: 'off',
+            },
+          }],
+        },
+      ],
+      failures: [{ id: 'llm-pi-ai', name: 'Pi', message: 'unreachable' }],
+    })
+
+    const studentResponse = await makePolicy().policy.wrapFetch(async () => rpc(catalog()))(
+      request('session.modelCatalog'),
+    )
+    /* The routed provider and model id survive untouched — the client submits
+       them — under the product's own group and model name. */
+    const reduced = {
+      default: { provider: 'physicsos-pool', model: 'deepseek-v4.1-flash' },
+      routableProviders: ['physicsos-pool'],
+      groups: [{
+        id: 'physicsos-pool',
+        name: 'PhysicsOS',
+        models: [{
+          id: 'deepseek-v4.1-flash',
+          name: '平台公益模型',
+          reasoning: {
+            efforts: [{ id: 'off', name: 'Off' }, { id: 'high', name: 'High' }],
+            defaultEffort: 'off',
+          },
+        }],
+      }],
+      failures: [],
+    }
+    expect(await rpcValueOf(studentResponse)).toEqual(reduced)
+
+    /* The same reduction for an administrator: the model seat is a product
+       surface, and the pool is managed on the surfaces that name it. */
+    const adminResponse = await makePolicy({ actor: admin }).policy.wrapFetch(async () => rpc(catalog()))(
+      request('session.modelCatalog', {}, 'admin'),
+    )
+    expect(await rpcValueOf(adminResponse)).toEqual(reduced)
+  })
+
+  it('answers an envelope when the Host throws, keeping a contention refusal actionable', async () => {
+    /* The front door must never leave the web server's bare 400: it carries no
+       rpcId, no code, and no reason, so every caller reads it as a dead
+       transport. A contention throw keeps the code the client's blank-Session
+       reuse is built to handle. */
+    const policy = makePolicy().policy
+    const contended = await policy.wrapFetch(async () => {
+      throw new Error('SessionAlreadyOwnedError: session is already owned by a live writer')
+    })(request('session.create', { args: { request: { workspaceId: 'ws-1' } } }))
+    expect(await contended.json()).toMatchObject({
+      result: { ok: false, error: { code: 'session/writer-held' } },
+    })
+
+    /* A blank the Host no longer holds is the same instruction to the client:
+       replace it. The reuse scans the client's own list, so this arrives as a
+       throw rather than as a business envelope. */
+    const stale = await policy.wrapFetch(async () => {
+      throw new Error('session "session-gone" not found')
+    })(request('session.create', { args: { request: { workspaceId: 'ws-1', sessionId: 'session-gone' } } }))
+    expect(await stale.json()).toMatchObject({
+      result: { ok: false, error: { code: 'session/writer-held' } },
+    })
+
+    const broken = await policy.wrapFetch(async () => {
+      throw new Error('boom')
+    })(request('session.create', { args: { request: { workspaceId: 'ws-1' } } }))
+    const brokenBody = await broken.json() as {
+      result?: { error?: { code?: string; message?: string } }
+    }
+    expect(brokenBody.result?.error?.code).toBe('gateway/internal')
+    expect(brokenBody.result?.error?.message).toContain('boom')
   })
 
   it('keeps the full settings description for an admin', async () => {
@@ -339,6 +487,17 @@ describe('PhysicsOS shared /api policy', () => {
     })
   })
 
+  it('dispatches a session method that names no session, for a student', async () => {
+    /* The model catalog and the other read-only descriptors carry no sessionId
+       at all. Requiring an owned session for them refused every
+       non-administrator, which is what closed the model picker. */
+    const next = vi.fn(async () => rpc({ models: [] }))
+    const { policy } = makePolicy()
+    const response = await policy.wrapFetch(next)(request('session.modelCatalog', {}))
+    expect(next).toHaveBeenCalledOnce()
+    expect(await response.json()).toMatchObject({ result: { ok: true } })
+  })
+
   it('forces a non-admin session into PhysicsOS scope and records ownership', async () => {
     const { policy, store } = makePolicy()
     const next = vi.fn(async (forwarded: Request) => {
@@ -365,6 +524,77 @@ describe('PhysicsOS shared /api policy', () => {
     })
     expect(next).toHaveBeenCalledTimes(1)
     expect(store.claims).toEqual(['workspace:workspace-student', 'session:new-session'])
+  })
+
+  it('opens an administrator’s Session in the product preset too', async () => {
+    const { policy } = makePolicy({ actor: admin })
+    /* The operator's workspace stays their own — only the preset is defaulted —
+       so their own testing session behaves like a student's. */
+    const next = vi.fn(async (_request: Request) => rpc({ sessionId: 'admin-session', agentPreset: 'physics-student' }))
+    const response = await policy.wrapFetch(next)(request('session.create', {
+      args: { request: { workspaceId: 'ops-workspace' } },
+    }, 'admin'))
+    const [forwarded] = next.mock.calls[0] as [Request]
+    const body = await forwarded.clone().json() as { payload?: { args?: { request?: Record<string, unknown> } } }
+    expect(body.payload?.args?.request).toMatchObject({
+      workspaceId: 'ops-workspace',
+      agentPreset: 'physics-student',
+    })
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { sessionId: 'admin-session' } },
+    })
+  })
+
+  it('leaves the preset alone when an administrator reuses a Session', async () => {
+    const { policy } = makePolicy({ actor: admin })
+    /* Reuse is how 「打开工作区」 resumes the blank Session the shell picked:
+       `create` cannot change an existing Session's preset, and forcing one is
+       what made every reuse fail with `agent-preset/conflict`. */
+    /* The client seeds its request with the currently selected preset; the
+       policy strips it because `create` cannot change a live Session's. */
+    const next = vi.fn(async (_request: Request) => rpc({ sessionId: 'reused-session' }))
+    const response = await policy.wrapFetch(next)(request('session.create', {
+      args: { request: { workspaceId: 'ops-workspace', sessionId: 'reused-session', agentPreset: 'physics-student' } },
+    }, 'admin'))
+    const [forwarded] = next.mock.calls[0] as [Request]
+    const body = await forwarded.clone().json() as { payload?: { args?: { request?: Record<string, unknown> } } }
+    expect(body.payload?.args?.request).toEqual({
+      workspaceId: 'ops-workspace',
+      sessionId: 'reused-session',
+    })
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { sessionId: 'reused-session' } },
+    })
+  })
+
+  it('scopes an upgraded connection to the workspaces its account owns', () => {
+    const owned = makeStore({ workspace: ['workspace-student'], session: ['session-student'] })
+    const { policy } = makePolicy({ actor: admin, store: owned })
+    const admission = policy.admitUpgrade({ headers: {} })
+    /* The operator is a user of the product picker too: the workspace scope is
+       ownership-based for every role, while remote events stay unscoped so
+       approvals keep flowing. */
+    expect(admission?.remoteEventAdmission === undefined).toBe(true)
+    expect(admission?.workspaceAdmission?.ownsWorkspace('workspace-student')).toBe(true)
+    expect(admission?.workspaceAdmission?.ownsWorkspace('foreign')).toBe(false)
+
+    const face = makePolicy({ store: owned }).policy.admitUpgrade({ headers: {} })
+    expect(typeof face?.remoteEventAdmission).toBe('function')
+    expect(face?.remoteEventAdmission?.('x', [])).toBe(false)
+    expect(face?.workspaceAdmission?.ownsSession('session-student')).toBe(true)
+    expect(face?.workspaceAdmission?.ownsSession('session-other')).toBe(false)
+  })
+
+  it('answers workspace.initializeDefault with the account workspace', async () => {
+    const { policy, store } = makePolicy()
+    const next = vi.fn(async (_request: Request) => rpc({
+      workspace: { workspaceId: 'shared-default', title: 'default' },
+    }))
+    const response = await policy.wrapFetch(next)(request('workspace.initializeDefault', {}))
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { workspace: { workspaceId: workspace.id, title: workspace.title } } },
+    })
+    expect(store.claims).toEqual([`workspace:${workspace.id}`])
   })
 
   it('refuses the response when the enforced preset did not survive the rewrite', async () => {
@@ -685,8 +915,8 @@ describe('PhysicsOS shared /api policy', () => {
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
     const scoped =
-      await delivered.policy.scopeEvents(request, events as never) as unknown as ScopedEvents
-    const source = scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)
+      await delivered.policy.scopeEvents(request, events) as unknown as ScopedEvents
+    const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
     expect(await iterator.next()).toMatchObject({ value: { rpcId: 'question-rpc' } })
 
@@ -777,18 +1007,18 @@ describe('PhysicsOS shared /api policy', () => {
       },
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+    const scoped = await policy.scopeEvents(request, events) as unknown as ScopedEvents
 
-    expect((await collect(scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))
+    expect((await collect(scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)))
       .map(frame => frame.rpcId))
       .toEqual(['mux-owned'])
-    expect((await collect(scoped.host({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))
+    expect((await collect(scoped.host({ rpcId: 'test', payload: {} }, new AbortController().signal)))
       .map(frame => frame.rpcId))
       .toEqual(['host-session', 'host-workspace', 'host-order', 'host-archive'])
-    expect((await collect(scoped.host({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))[2]).toMatchObject({
+    expect((await collect(scoped.host({ rpcId: 'test', payload: {} }, new AbortController().signal)))[2]).toMatchObject({
       payload: { workspaceIds: ['owned-workspace'] },
     })
-    expect((await collect(scoped.host({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)))[3]).toMatchObject({
+    expect((await collect(scoped.host({ rpcId: 'test', payload: {} }, new AbortController().signal)))[3]).toMatchObject({
       payload: { archivedSessionIds: ['owned-session'] },
     })
   })

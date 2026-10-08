@@ -1,0 +1,13 @@
+{
+  "asset": "lab-ui-concept.png",
+  "purpose": "ui-concept",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz/v1/images/generations",
+  "size": "1536x1024",
+  "pixels": "1536x1024",
+  "bytes": 1018684,
+  "background": "opaque",
+  "revisedPrompt": null,
+  "prompt": "A single flat interface concept image of a desktop physics laboratory workspace, laid out as a real application screenshot with four cooperating regions: a large central simulation canvas showing only a clean coordinate grid and faint construction arcs and deliberately empty of any physics result, a narrow left scene tree listing plainly indented nested experiment nodes as unlabelled neutral placeholder bars, a right inspector panel of unlabelled neutral placeholder rows with small slider tracks, and a bottom horizontal timeline with evenly spaced small event markers.\n\nWarm white surfaces, thin ice-blue hairline borders, exactly one subdued physics-blue accent marking the active region, status conveyed only by small soft badges.\n\nCalm, precise, low-saturation, scientific-instrument aesthetic, generous whitespace, flat orthographic front view, flat vector style, no text, no letters, no numbers, no words, no watermark, no purple, no purple AI gradient, no neon, no glow, no bloom, no decorative gradient, no glassmorphism, no 3D bevel, no drop shadow, no dark theme, no dark marketing sidebar, no gaming HUD, no chatbot bubbles, no generic SaaS card, no colorful icon wall, no stock-photo hero, no photograph, no perspective distortion.",
+  "note": "实验工作台整体布局概念稿（画布 + 场景树 + 检查器 + 时间轴），仅作视觉参考；画布刻意留空，不承载任何物理结果。"
+}

@@ -8,11 +8,20 @@
  * cannot observe or address those resources. The retired class-teaching API is
  * also probed to ensure it is no longer mounted in the product.
  *
+ * Since 0.1.7-rc.2 the harness carrier reads the RPC endpoint from the URL
+ * path (`/api/<namespace>/<method>`) and the Gateway only accepts a payload
+ * shaped as exactly `{ args }`. The session probes below therefore use the
+ * slash endpoint (`/api/session/list`) and named arguments; the pre-0.1.7 dot
+ * form (`/api/session.list`) is no longer claimed and answers 404.
+ *
  * The production deployment may sit behind a reverse proxy whose /api trust
- * fence rejects requests before the host handlers run. In that case the
- * session assertions are reported as BLOCKED rather than being misrepresented
- * as passes. The corresponding server-side loopback evidence belongs in
- * docs/reports/ISOLATION-AUDIT.md.
+ * fence rejects requests before the host handlers run. That fence (a 401/403
+ * at the transport layer) is reported as BLOCKED and NAMED, but it no longer
+ * keeps the run green: a session probe that never ran leaves account isolation
+ * uncertified, so the summary prints `isolated=NO` and the exit code is 1.
+ * Anything other than that documented fence — most importantly a 404 from a
+ * stale wire form — is a hard FAIL. The corresponding server-side loopback
+ * evidence belongs in docs/reports/ISOLATION-AUDIT.md.
  *
  * Usage:
  *   PHYSICSOS_AUDIT_ADMIN_PASSWORD=... node tests/acceptance/isolation.mjs
@@ -100,11 +109,21 @@ const call = async ({ label, method = 'GET', path, cookie, body }) => {
 const auth = async (path, body) =>
   call({ label: `auth ${path}`, method: 'POST', path: `/physicsos/auth${path}`, body })
 
-const rpc = (rpcId, method, payload) => ({
+/**
+ * One 0.1.7 `client-request` envelope.
+ *
+ * The carrier derives the endpoint from the URL (`endpointFromPath`), so
+ * `method` must equal the SLASH endpoint in `path` (`session/list`), and the
+ * Gateway's `remoteRequest` accepts a payload shaped as exactly `{ args }` —
+ * the named wire object the descriptor declares (`{ _request: {} }` for
+ * `session/list`, `{ request: { … } }` for `session/create|prompt`). The
+ * pre-0.1.7 dot form with a flat payload is no longer claimed and 404s.
+ */
+const rpc = (rpcId, method, args) => ({
   type: 'client-request',
   rpcId,
   method,
-  payload,
+  payload: { args },
 })
 
 const createStudent = async (label) => {
@@ -249,15 +268,20 @@ record(
   { status: classProbe.status, body: classProbe.body.slice(0, 500) },
 )
 
+/* Session creation is the precondition for every isolation assertion below.
+   A 404 here once downgraded the whole session half of this audit to
+   `blocked` while the summary still read green — exactly the pre-0.1.7 dot
+   wire the carrier stopped claiming. Only the reverse-proxy trust fence
+   (a 401/403 at the transport layer) is a legitimate BLOCKED; any other
+   non-success is drift and FAILS, and either way the run is no longer green. */
 let sessionId = suppliedSessionId
 const sessionCreate = await call({
   label: 'B creates a session through the public API',
   method: 'POST',
-  path: '/api/session.create',
+  path: '/api/session/create',
   cookie: studentB.cookie,
-  body: rpc(`isolation-create-${suffix}`, 'session.create', {
-    agentPreset: 'standard',
-    cwd: '/etc',
+  body: rpc(`isolation-create-${suffix}`, 'session/create', {
+    request: { agentPreset: 'physics-student', cwd: '/etc' },
   }),
 })
 if (
@@ -269,29 +293,41 @@ if (
     status: sessionCreate.status,
     response: sessionCreate.body.slice(0, 800),
   })
-} else {
+} else if (sessionCreate.status === 401 || sessionCreate.status === 403) {
   record(
     'session setup reaches the host',
     'BLOCKED',
-    `public /api/session.create returned ${String(sessionCreate.status)}`,
+    `public /api/session/create was refused by the /api trust fence (${String(sessionCreate.status)}); session isolation is NOT exercised`,
+    { status: sessionCreate.status, body: sessionCreate.body.slice(0, 800) },
+  )
+} else {
+  record(
+    'session setup reaches the host',
+    'FAIL',
+    `POST /api/session/create returned ${String(sessionCreate.status)} — the wire form is not claimed, so session isolation was never exercised`,
     { status: sessionCreate.status, body: sessionCreate.body.slice(0, 800) },
   )
 }
 
+/* The isolation probes are exercised exactly when a session exists to probe —
+   one that was just created, or one named by PHYSICSOS_AUDIT_B_SESSION_ID. When
+   neither holds, the precondition failed and the else-branch below records the
+   assertions as FAIL rather than skipping them. */
+const sessionIsolationExercised = sessionId !== undefined
 if (sessionId !== undefined) {
   const bList = await call({
     label: 'B lists sessions',
     method: 'POST',
-    path: '/api/session.list',
+    path: '/api/session/list',
     cookie: studentB.cookie,
-    body: rpc(`isolation-b-list-${suffix}`, 'session.list', {}),
+    body: rpc(`isolation-b-list-${suffix}`, 'session/list', { _request: {} }),
   })
   const aList = await call({
     label: 'A lists sessions',
     method: 'POST',
-    path: '/api/session.list',
+    path: '/api/session/list',
     cookie: studentA.cookie,
-    body: rpc(`isolation-a-list-${suffix}`, 'session.list', {}),
+    body: rpc(`isolation-a-list-${suffix}`, 'session/list', { _request: {} }),
   })
   record(
     'session list is account-scoped',
@@ -307,6 +343,9 @@ if (sessionId !== undefined) {
     { b: bList.body.slice(0, 800), a: aList.body.slice(0, 800) },
   )
 
+  /* `session.export` is NOT an RPC endpoint: it is an exact Fetch route whose
+     path is literally `/api/session.export` (session-log-export/routes.ts), so
+     it keeps the dot form and is dispatched before the RPC interceptor. */
   const aExport = await call({
     label: 'A exports B session',
     path: `/api/session.export?sessionId=${encodeURIComponent(sessionId)}`,
@@ -315,20 +354,25 @@ if (sessionId !== undefined) {
   const aPrompt = await call({
     label: 'A prompts B session',
     method: 'POST',
-    path: '/api/session.prompt',
+    path: '/api/session/prompt',
     cookie: studentA.cookie,
-    body: rpc(`isolation-a-prompt-${suffix}`, 'session.prompt', {
-      sessionId,
-      mode: 'queue',
-      content: [{ type: 'text', text: 'isolation probe' }],
+    body: rpc(`isolation-a-prompt-${suffix}`, 'session/prompt', {
+      request: {
+        requestId: `isolation-a-prompt-request-${suffix}`,
+        sessionId,
+        mode: 'queue',
+        content: [{ type: 'text', text: 'isolation probe' }],
+      },
     }),
   })
+  /* A legitimate denial is the host's own `session-not-found` (HTTP 200 with a
+     `server-response` error envelope). A 404 is NOT a denial — it means the
+     route is unclaimed (drift), and must FAIL rather than slip through. */
   const denied = (result) =>
-    [403, 404].includes(result.status) ||
-    (result.status === 200 &&
-      (result.body.includes('session-not-found') ||
-        result.body.includes('"code":"FORBIDDEN"') ||
-        result.body.includes('"code":"NOT_FOUND"')))
+    result.status === 200 &&
+    (result.body.includes('session-not-found') ||
+      result.body.includes('"code":"FORBIDDEN"') ||
+      result.body.includes('"code":"NOT_FOUND"'))
   record(
     'foreign session export is denied',
     aExport.status === 403 ? 'BLOCKED' : denied(aExport) ? 'PASS' : 'FAIL',
@@ -338,15 +382,34 @@ if (sessionId !== undefined) {
   record(
     'foreign session prompt is denied',
     aPrompt.status === 403 ? 'BLOCKED' : denied(aPrompt) ? 'PASS' : 'FAIL',
-    `POST /api/session.prompt returned ${String(aPrompt.status)}`,
+    `POST /api/session/prompt returned ${String(aPrompt.status)}`,
     { status: aPrompt.status, body: aPrompt.body.slice(0, 800) },
   )
+} else {
+  /* The precondition failed: record the isolation assertions as FAIL rather
+     than skipping them, so the ledger and the summary can never look green
+     over an audit whose session half never ran. */
+  for (const name of [
+    'session list is account-scoped',
+    'foreign session export is denied',
+    'foreign session prompt is denied',
+  ]) {
+    record(name, 'FAIL', 'not exercised: no session was created to isolate', {
+      sessionIsolationExercised,
+    })
+  }
 }
 
 const failures = results.filter((result) => result.status === 'FAIL')
 const blocked = results.filter((result) => result.status === 'BLOCKED')
+const passes = results.filter((result) => result.status === 'PASS')
 process.stdout.write(
-  `\nSUMMARY pass=${String(results.length - failures.length - blocked.length)} fail=${String(failures.length)} blocked=${String(blocked.length)}\n`,
+  `\nSUMMARY pass=${String(passes.length)} fail=${String(failures.length)} blocked=${String(blocked.length)} isolated=${sessionIsolationExercised ? 'yes' : 'NO'}\n`,
 )
+if (!sessionIsolationExercised) {
+  process.stdout.write(
+    'ISOLATION NOT EXERCISED: the session probes never ran — this run does NOT certify account isolation.\n',
+  )
+}
 process.stdout.write(`${JSON.stringify(results, null, 2)}\n`)
-process.exitCode = failures.length === 0 ? 0 : 1
+process.exitCode = failures.length === 0 && sessionIsolationExercised ? 0 : 1

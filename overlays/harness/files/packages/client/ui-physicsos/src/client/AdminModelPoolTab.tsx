@@ -7,7 +7,6 @@
  * four-character tail only.
  */
 import { useCallback, useEffect, useState } from 'react'
-import clsx from 'clsx'
 
 import type {
   ModelPoolApi,
@@ -17,6 +16,16 @@ import type {
   ModelPoolState,
 } from './model-pool-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import {
+  AdminCard,
+  AdminCardActions,
+  AdminCardHead,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+  AdminStats,
+  AdminTable,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminModelPoolTabProps {
@@ -119,6 +128,11 @@ const statusClass = (key: ModelPoolKeyView): string | undefined => {
 const ChannelEditor = ({
   draft,
   busy,
+  models,
+  modelError,
+  fetching,
+  canFetch,
+  onFetchModels,
   onChange,
   onSave,
   onCancel,
@@ -126,51 +140,108 @@ const ChannelEditor = ({
 }: {
   readonly draft: ChannelDraft
   readonly busy: boolean
+  /** The upstream roster, once 获取模型 has read it. */
+  readonly models?: readonly string[] | undefined
+  /** The upstream's refusal, shown verbatim. */
+  readonly modelError?: string | undefined
+  readonly fetching: boolean
+  /** False while the channel has no key to read the roster with. */
+  readonly canFetch: boolean
+  readonly onFetchModels: () => void
   readonly onChange: (next: ChannelDraft) => void
   readonly onSave: () => void
   readonly onCancel: () => void
   readonly t: (key: PhysicsosKey) => string
-}) => (
-  <div className={css.poolEditor} data-testid="model-pool-channel-editor">
-    <div className={css.poolFieldGrid}>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.name')}</span>
-        <input className={css.input} value={draft.name}
-          onChange={(event) => { onChange({ ...draft, name: event.target.value }) }} />
-      </label>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.baseURL')}</span>
-        <input className={css.input} value={draft.baseURL}
-          onChange={(event) => { onChange({ ...draft, baseURL: event.target.value }) }} />
-      </label>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.models')}</span>
-        <input className={css.input} value={draft.models}
-          placeholder={t('admin.modelPool.channel.modelsHint')}
-          onChange={(event) => { onChange({ ...draft, models: event.target.value }) }} />
-      </label>
-      <label className={css.field}>
-        <span className={css.fieldLabel}>{t('admin.modelPool.channel.priority')}</span>
-        <input className={css.input} type="number" min={1} max={1000} value={draft.priority}
-          onChange={(event) => { onChange({ ...draft, priority: event.target.value }) }} />
-      </label>
-    </div>
-    <p className={css.cardMeta}>{t('admin.modelPool.channel.baseURLHint')}</p>
-    <div className={css.poolInline}>
-      <label className={css.checkbox}>
-        <input type="checkbox" checked={draft.enabled}
-          onChange={(event) => { onChange({ ...draft, enabled: event.target.checked }) }} />
-        {t('admin.modelPool.channel.enabled')}
-      </label>
-      <div className={css.actions}>
-        <button type="button" className={css.ghost} disabled={busy}
-          onClick={onCancel}>{t('admin.modelPool.cancel')}</button>
-        <button type="button" className={css.primary} disabled={busy}
-          onClick={onSave}>{t('admin.modelPool.save')}</button>
+}) => {
+  const selected = new Set(parseModels(draft.models))
+  const toggleModel = (id: string): void => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    onChange({ ...draft, models: [...next].join(', ') })
+  }
+  return (
+    <div className={css.poolEditor} data-testid="model-pool-channel-editor">
+      <div className={css.poolFieldGrid}>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.name')}</span>
+          <input className={css.input} value={draft.name}
+            onChange={(event) => { onChange({ ...draft, name: event.target.value }) }} />
+        </label>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.baseURL')}</span>
+          <input className={css.input} value={draft.baseURL}
+            onChange={(event) => { onChange({ ...draft, baseURL: event.target.value }) }} />
+        </label>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.models')}</span>
+          <input className={css.input} value={draft.models}
+            placeholder={t('admin.modelPool.channel.modelsHint')}
+            onChange={(event) => { onChange({ ...draft, models: event.target.value }) }} />
+        </label>
+        <label className={css.field}>
+          <span className={css.fieldLabel}>{t('admin.modelPool.channel.priority')}</span>
+          <input className={css.input} type="number" min={1} max={1000} value={draft.priority}
+            onChange={(event) => { onChange({ ...draft, priority: event.target.value }) }} />
+        </label>
+      </div>
+      <p className={css.cardMeta}>{t('admin.modelPool.channel.baseURLHint')}</p>
+      {/* 获取模型: the upstream's own roster, one click per model. Typing an id
+          by hand was guesswork the moment the allow-list became load-bearing —
+          a channel restricted to a model the upstream does not serve answers
+          503 to every request, and the console said nothing about it. */}
+      <div className={css.poolModelPicker}>
+        <div className={css.actions}>
+          <button type="button" className={css.ghost} disabled={busy || fetching || !canFetch}
+            aria-busy={fetching}
+            onClick={onFetchModels}>
+            {t(fetching ? 'admin.modelPool.channel.fetching' : 'admin.modelPool.channel.fetchModels')}
+          </button>
+          {models !== undefined && (
+            <span className={css.poolModelHint}>
+              {t('admin.modelPool.channel.modelsLoaded').replace('{count}', String(models.length))}
+            </span>
+          )}
+        </div>
+        {!canFetch && <small className={css.poolModelHint}>{t('admin.modelPool.channel.modelsNeedKey')}</small>}
+        {modelError !== undefined && <small className={css.poolKeyError}>{modelError}</small>}
+        {models !== undefined && (
+          models.length === 0
+            ? <small className={css.poolModelHint}>{t('admin.modelPool.channel.modelsEmpty')}</small>
+            : (
+              <div className={css.poolModelChips}>
+                {models.map(id => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={selected.has(id) ? css.poolModelChipActive : css.poolModelChip}
+                    aria-pressed={selected.has(id)}
+                    data-model-id={id}
+                    onClick={() => { toggleModel(id) }}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            )
+        )}
+      </div>
+      <div className={css.poolInline}>
+        <label className={css.checkbox}>
+          <input type="checkbox" checked={draft.enabled}
+            onChange={(event) => { onChange({ ...draft, enabled: event.target.checked }) }} />
+          {t('admin.modelPool.channel.enabled')}
+        </label>
+        <div className={css.actions}>
+          <button type="button" className={css.ghost} disabled={busy}
+            onClick={onCancel}>{t('admin.modelPool.cancel')}</button>
+          <button type="button" className={css.primary} disabled={busy}
+            onClick={onSave}>{t('admin.modelPool.save')}</button>
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
+}
 
 export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.ReactNode {
   const [state, setState] = useState<ModelPoolState | undefined>()
@@ -180,6 +251,8 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
   const [newKeys, setNewKeys] = useState<Record<string, KeyDraft>>({})
   const [keyEdits, setKeyEdits] = useState<Record<string, KeyDraft>>({})
   const [probes, setProbes] = useState<Record<string, ModelPoolProbeResult>>({})
+  const [modelLists, setModelLists] = useState<Record<string, readonly string[]>>({})
+  const [modelErrors, setModelErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [notice, setNotice] = useState<string | undefined>()
@@ -234,6 +307,23 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
       if (!ok) return
       setChannelEdits(current => omitRecord(current, id))
     })
+  }
+
+  /* 获取模型 reads the roster with a key of THIS channel and keeps the answer
+     beside the draft; selecting a chip only edits the draft, so the allow-list
+     lands through the editor's own 保存 like every other field. */
+  const fetchModels = (channelId: string): void => {
+    setBusy(`channel:models:${channelId}`)
+    setModelErrors(current => omitRecord(current, channelId))
+    void api.listChannelModels(channelId).then(
+      (result) => { setModelLists(current => ({ ...current, [channelId]: result.models })) },
+      (cause: unknown) => {
+        setModelErrors(current => ({
+          ...current,
+          [channelId]: cause instanceof Error ? cause.message : t('admin.modelPool.error'),
+        }))
+      },
+    ).finally(() => { setBusy(undefined) })
   }
 
   const addChannel = (): void => {
@@ -307,19 +397,17 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
   }
 
   if (state === undefined || policy === undefined) {
-    return (
-      <div className={css.poolRoot} data-admin-model-pool="">
-        <p className={error === undefined ? css.empty : css.error}>{error ?? t('admin.loading')}</p>
-      </div>
-    )
+    return error === undefined
+      ? <AdminEmpty>{t('admin.loading')}</AdminEmpty>
+      : <p className={css.error}>{error}</p>
   }
 
   return (
-    <div className={css.poolRoot} data-admin-model-pool="">
-      <div className={css.poolHeader}>
+    <>
+      <div className={css.poolHeader} data-admin-model-pool="">
         <div>
-          <h2 className={css.cardTitle}>{t('admin.modelPool.title')}</h2>
-          <p className={css.cardMeta}>{t('admin.modelPool.hint')}</p>
+          <AdminCardTitle>{t('admin.modelPool.title')}</AdminCardTitle>
+          <AdminCardMeta>{t('admin.modelPool.hint')}</AdminCardMeta>
         </div>
         <button type="button" className={css.ghost} disabled={busy !== undefined}
           onClick={() => { void load() }}>{t('admin.modelPool.refresh')}</button>
@@ -329,27 +417,30 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
       {error !== undefined && <p className={css.error} role="alert">{error}</p>}
       {notice !== undefined && <p className={css.note} role="status">{notice}</p>}
 
-      <div className={css.poolStats}>
-        <span className={css.stat}><strong>{state.stats.channels}</strong>{t('admin.modelPool.stats.channels')}</span>
-        <span className={css.stat}><strong>{state.stats.keys}</strong>{t('admin.modelPool.stats.keys')}</span>
-        <span className={css.stat}><strong>{state.stats.activeKeys}</strong>{t('admin.modelPool.stats.active')}</span>
-        <span className={clsx(css.stat, state.stats.cooldownKeys > 0 && css.statWarn)}>
-          <strong>{state.stats.cooldownKeys}</strong>{t('admin.modelPool.stats.cooldown')}
-        </span>
-        <span className={css.stat}><strong>{state.stats.disabledKeys}</strong>{t('admin.modelPool.stats.disabled')}</span>
-      </div>
+      <AdminStats items={[
+        { key: 'channels', value: state.stats.channels, label: t('admin.modelPool.stats.channels') },
+        { key: 'keys', value: state.stats.keys, label: t('admin.modelPool.stats.keys') },
+        { key: 'activeKeys', value: state.stats.activeKeys, label: t('admin.modelPool.stats.active') },
+        {
+          key: 'cooldownKeys',
+          value: state.stats.cooldownKeys,
+          label: t('admin.modelPool.stats.cooldown'),
+          warn: state.stats.cooldownKeys > 0,
+        },
+        { key: 'disabledKeys', value: state.stats.disabledKeys, label: t('admin.modelPool.stats.disabled') },
+      ]} />
 
-      <section className={css.card}>
-        <div className={css.cardHead}>
+      <AdminCard>
+        <AdminCardHead>
           <div>
-            <h3 className={css.cardTitle}>{t('admin.modelPool.settings.title')}</h3>
-            <p className={css.cardMeta}>{t('admin.modelPool.settings.hint')}</p>
+            <AdminCardTitle>{t('admin.modelPool.settings.title')}</AdminCardTitle>
+            <AdminCardMeta>{t('admin.modelPool.settings.hint')}</AdminCardMeta>
           </div>
           <button type="button" className={css.primary} disabled={busy === 'settings'}
             onClick={savePolicy}>
             {busy === 'settings' ? t('admin.modelPool.saving') : t('admin.modelPool.settings.save')}
           </button>
-        </div>
+        </AdminCardHead>
         <div className={css.poolFieldGrid}>
           <label className={css.field}>
             <span className={css.fieldLabel}>{t('admin.modelPool.settings.retryCount')}</span>
@@ -381,44 +472,47 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
             onChange={(event) => { setPolicy({ ...policy, autoRecover: event.target.checked }) }} />
           {t('admin.modelPool.settings.autoRecover')}
         </label>
-      </section>
+      </AdminCard>
 
-      <section className={css.card}>
-        <h3 className={css.cardTitle}>{t('admin.modelPool.channel.create')}</h3>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.modelPool.channel.create')}</AdminCardTitle>
         <ChannelEditor
           draft={newChannel}
           busy={busy === 'channel:new'}
+          fetching={false}
+          canFetch={false}
+          onFetchModels={() => {}}
           onChange={setNewChannel}
           onSave={addChannel}
           onCancel={() => { setNewChannel(emptyChannel()) }}
           t={t}
         />
-      </section>
+      </AdminCard>
 
-      {state.channels.length === 0 && <p className={css.empty}>{t('admin.modelPool.channel.empty')}</p>}
+      {state.channels.length === 0 && <AdminEmpty>{t('admin.modelPool.channel.empty')}</AdminEmpty>}
       {state.channels.map((channel) => {
         const editing = channelEdits[channel.id]
         const draft = editing ?? channelDraft(channel)
         const adding = newKeys[channel.id] ?? emptyKey()
         return (
-          <section key={channel.id} className={css.card} data-testid={`model-pool-channel-${channel.id}`}>
-            <div className={css.cardHead}>
+          <AdminCard key={channel.id} testId={`model-pool-channel-${channel.id}`}>
+            <AdminCardHead>
               <div className={css.cardBody}>
-                <h3 className={css.cardTitle}>{channel.name}</h3>
-                <p className={css.cardMeta}>
+                <AdminCardTitle>{channel.name}</AdminCardTitle>
+                <AdminCardMeta>
                   {channel.baseURL} · {t('admin.modelPool.channel.priority')} {channel.priority}
                   {' · '}
                   <span className={channel.enabled ? css.poolBadgeActive : css.poolBadgeDisabled}>
                     {channel.enabled ? t('admin.modelPool.status.enabled') : t('admin.modelPool.status.disabled')}
                   </span>
-                </p>
-                <p className={css.cardMeta}>
+                </AdminCardMeta>
+                <AdminCardMeta>
                   {channel.models.length === 0
                     ? t('admin.modelPool.channel.allModels')
                     : channel.models.join(', ')}
-                </p>
+                </AdminCardMeta>
               </div>
-              <div className={css.actions}>
+              <AdminCardActions>
                 <button type="button" className={css.ghost} disabled={busy !== undefined}
                   onClick={() => {
                     setChannelEdits(current => ({
@@ -431,12 +525,17 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
                     if (!globalThis.confirm(t('admin.modelPool.channel.deleteConfirm').replace('{name}', channel.name))) return
                     void execute(`channel:delete:${channel.id}`, () => api.deleteChannel(channel.id))
                   }}>{t('admin.modelPool.delete')}</button>
-              </div>
-            </div>
+              </AdminCardActions>
+            </AdminCardHead>
             {editing !== undefined && (
               <ChannelEditor
                 draft={draft}
                 busy={busy === `channel:edit:${channel.id}`}
+                models={modelLists[channel.id]}
+                modelError={modelErrors[channel.id]}
+                fetching={busy === `channel:models:${channel.id}`}
+                canFetch={channel.keys.length > 0}
+                onFetchModels={() => { fetchModels(channel.id) }}
                 onChange={(next) => { setChannelEdits(current => ({ ...current, [channel.id]: next })) }}
                 onSave={() => { saveChannel(channel.id, draft) }}
                 onCancel={() => {
@@ -446,122 +545,122 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
               />
             )}
 
-            <div className={css.poolKeyTableWrap}>
-              <table className={css.poolKeyTable}>
-                <thead>
-                  <tr>
-                    <th>{t('admin.modelPool.key.name')}</th>
-                    <th>{t('admin.modelPool.key.tail')}</th>
-                    <th>{t('admin.modelPool.key.status')}</th>
-                    <th>{t('admin.modelPool.key.weight')}</th>
-                    <th>{t('admin.modelPool.key.requests')}</th>
-                    <th>{t('admin.modelPool.key.failureRate')}</th>
-                    <th>{t('admin.modelPool.key.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {channel.keys.map((key) => {
-                    const keyEdit = keyEdits[key.id]
-                    const probe = probes[key.id]
-                    return (
-                      <tr key={key.id} data-testid={`model-pool-key-${key.id}`}>
-                        <td>
-                          {keyEdit === undefined
-                            ? key.label
-                            : (
-                              <input className={css.input} value={keyEdit.label}
+            <AdminTable className={css.poolKeyTable} minWidth={780}>
+              <thead>
+                <tr>
+                  <th>{t('admin.modelPool.key.name')}</th>
+                  <th>{t('admin.modelPool.key.tail')}</th>
+                  <th>{t('admin.modelPool.key.status')}</th>
+                  <th>{t('admin.modelPool.key.weight')}</th>
+                  <th>{t('admin.modelPool.key.requests')}</th>
+                  <th>{t('admin.modelPool.key.failureRate')}</th>
+                  <th>{t('admin.modelPool.key.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {channel.keys.map((key) => {
+                  const keyEdit = keyEdits[key.id]
+                  const probe = probes[key.id]
+                  return (
+                    <tr key={key.id} data-testid={`model-pool-key-${key.id}`}>
+                      <td>
+                        {keyEdit === undefined
+                          ? key.label
+                          : (
+                            <input className={css.input} value={keyEdit.label}
+                              onChange={(event) => {
+                                setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, label: event.target.value } }))
+                              }} />
+                          )}
+                        <small className={css.poolKeyMeta}>
+                          {t('admin.modelPool.key.lastUsed')} {fmtTime(key.lastUsedAt)}
+                        </small>
+                        {key.lastError !== null && <small className={css.poolKeyError}>{key.lastError}</small>}
+                      </td>
+                      <td><code>•••• {key.keyTail}</code></td>
+                      <td><span className={statusClass(key)}>{t(statusKey(key))}</span></td>
+                      <td>
+                        {keyEdit === undefined
+                          ? key.weight
+                          : (
+                            <input className={css.input} type="number" min={1} max={1000} value={keyEdit.weight}
+                              onChange={(event) => {
+                                setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, weight: event.target.value } }))
+                              }} />
+                          )}
+                      </td>
+                      <td>{key.requestCount}</td>
+                      <td>{fmtPercent(key.failureRate)}</td>
+                      <td>
+                        <div className={css.poolKeyActions}>
+                          <button type="button" className={css.ghost} disabled={busy !== undefined}
+                            onClick={() => {
+                              void execute(`key:reset:${key.id}`, () => api.resetKey(key.id))
+                            }}>{t('admin.modelPool.key.reset')}</button>
+                          <button type="button" className={css.ghost} disabled={busy !== undefined}
+                            onClick={() => {
+                              setBusy(`key:test:${key.id}`)
+                              setError(undefined)
+                              void api.testKey(key.id).then(
+                                (result) => { setProbes(current => ({ ...current, [key.id]: result })) },
+                                (cause: unknown) => { setError(cause instanceof Error ? cause.message : String(cause)) },
+                              ).finally(() => { setBusy(undefined) })
+                            }}>{t('admin.modelPool.key.test')}</button>
+                          <button type="button" className={css.ghost} disabled={busy !== undefined}
+                            onClick={() => {
+                              setKeyEdits(current => current[key.id] === undefined
+                                ? { ...current, [key.id]: keyDraft(key) }
+                                : current)
+                            }}>{t('admin.modelPool.key.edit')}</button>
+                          <button type="button" className={css.danger} disabled={busy !== undefined}
+                            onClick={() => {
+                              if (!globalThis.confirm(t('admin.modelPool.key.deleteConfirm').replace('{name}', key.label))) return
+                              void execute(`key:delete:${key.id}`, () => api.deleteKey(key.id))
+                            }}>{t('admin.modelPool.delete')}</button>
+                        </div>
+                        {keyEdit !== undefined && (
+                          <div className={css.poolKeyEdit}>
+                            <input className={css.input} type="password" placeholder={t('admin.modelPool.key.replace')}
+                              value={keyEdit.key}
+                              onChange={(event) => {
+                                setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, key: event.target.value } }))
+                              }} />
+                            <label className={css.checkbox}>
+                              <input type="checkbox" checked={keyEdit.enabled}
                                 onChange={(event) => {
-                                  setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, label: event.target.value } }))
+                                  setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, enabled: event.target.checked } }))
                                 }} />
-                            )}
-                          <small className={css.poolKeyMeta}>
-                            {t('admin.modelPool.key.lastUsed')} {fmtTime(key.lastUsedAt)}
-                          </small>
-                          {key.lastError !== null && <small className={css.poolKeyError}>{key.lastError}</small>}
-                        </td>
-                        <td><code>•••• {key.keyTail}</code></td>
-                        <td><span className={statusClass(key)}>{t(statusKey(key))}</span></td>
-                        <td>
-                          {keyEdit === undefined
-                            ? key.weight
-                            : (
-                              <input className={css.input} type="number" min={1} max={1000} value={keyEdit.weight}
-                                onChange={(event) => {
-                                  setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, weight: event.target.value } }))
-                                }} />
-                            )}
-                        </td>
-                        <td>{key.requestCount}</td>
-                        <td>{fmtPercent(key.failureRate)}</td>
-                        <td>
-                          <div className={css.poolKeyActions}>
-                            <button type="button" className={css.ghost} disabled={busy !== undefined}
-                              onClick={() => {
-                                void execute(`key:reset:${key.id}`, () => api.resetKey(key.id))
-                              }}>{t('admin.modelPool.key.reset')}</button>
-                            <button type="button" className={css.ghost} disabled={busy !== undefined}
-                              onClick={() => {
-                                setBusy(`key:test:${key.id}`)
-                                setError(undefined)
-                                void api.testKey(key.id).then(
-                                  (result) => { setProbes(current => ({ ...current, [key.id]: result })) },
-                                  (cause: unknown) => { setError(cause instanceof Error ? cause.message : String(cause)) },
-                                ).finally(() => { setBusy(undefined) })
-                              }}>{t('admin.modelPool.key.test')}</button>
-                            <button type="button" className={css.ghost} disabled={busy !== undefined}
-                              onClick={() => {
-                                setKeyEdits(current => current[key.id] === undefined
-                                  ? { ...current, [key.id]: keyDraft(key) }
-                                  : current)
-                              }}>{t('admin.modelPool.key.edit')}</button>
-                            <button type="button" className={css.danger} disabled={busy !== undefined}
-                              onClick={() => {
-                                if (!globalThis.confirm(t('admin.modelPool.key.deleteConfirm').replace('{name}', key.label))) return
-                                void execute(`key:delete:${key.id}`, () => api.deleteKey(key.id))
-                              }}>{t('admin.modelPool.delete')}</button>
-                          </div>
-                          {keyEdit !== undefined && (
-                            <div className={css.poolKeyEdit}>
-                              <input className={css.input} type="password" placeholder={t('admin.modelPool.key.replace')}
-                                value={keyEdit.key}
-                                onChange={(event) => {
-                                  setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, key: event.target.value } }))
-                                }} />
-                              <label className={css.checkbox}>
-                                <input type="checkbox" checked={keyEdit.enabled}
-                                  onChange={(event) => {
-                                    setKeyEdits(current => ({ ...current, [key.id]: { ...keyEdit, enabled: event.target.checked } }))
-                                  }} />
-                                {t('admin.modelPool.status.enabled')}
-                              </label>
-                              <div className={css.actions}>
-                                <button type="button" className={css.ghost}
-                                  onClick={() => {
-                                    setKeyEdits(current => omitRecord(current, key.id))
-                                  }}>{t('admin.modelPool.cancel')}</button>
-                                <button type="button" className={css.primary}
-                                  onClick={() => { saveKey(key) }}>{t('admin.modelPool.save')}</button>
-                              </div>
+                              {t('admin.modelPool.status.enabled')}
+                            </label>
+                            <div className={css.actions}>
+                              <button type="button" className={css.ghost}
+                                onClick={() => {
+                                  setKeyEdits(current => omitRecord(current, key.id))
+                                }}>{t('admin.modelPool.cancel')}</button>
+                              <button type="button" className={css.primary}
+                                onClick={() => { saveKey(key) }}>{t('admin.modelPool.save')}</button>
                             </div>
-                          )}
-                          {probe !== undefined && (
-                            <small className={probe.ok ? css.poolProbeOk : css.poolKeyError}>
-                              {probe.ok ? t('admin.modelPool.key.testOk') : t('admin.modelPool.key.testFailed')}
-                              {' '}{probe.status} · {probe.latencyMs} ms · {probe.message}
-                            </small>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {channel.keys.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className={css.empty}>{t('admin.modelPool.key.empty')}</td>
+                          </div>
+                        )}
+                        {probe !== undefined && (
+                          <small className={probe.ok ? css.poolProbeOk : css.poolKeyError}>
+                            {probe.ok ? t('admin.modelPool.key.testOk') : t('admin.modelPool.key.testFailed')}
+                            {' '}{probe.status} · {probe.latencyMs} ms · {probe.message}
+                          </small>
+                        )}
+                      </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  )
+                })}
+                {channel.keys.length === 0 && (
+                  <tr>
+                    <td colSpan={7}>
+                      <AdminEmpty>{t('admin.modelPool.key.empty')}</AdminEmpty>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </AdminTable>
 
             <div className={css.poolAddKey}>
               <span className={css.fieldLabel}>{t('admin.modelPool.key.add')}</span>
@@ -592,13 +691,13 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
                   onClick={() => { addKey(channel.id) }}>{t('admin.modelPool.key.addButton')}</button>
               </div>
             </div>
-          </section>
+          </AdminCard>
         )
       })}
 
       {state.audit.length > 0 && (
-        <section className={css.card}>
-          <h3 className={css.cardTitle}>{t('admin.modelPool.audit')}</h3>
+        <AdminCard>
+          <AdminCardTitle>{t('admin.modelPool.audit')}</AdminCardTitle>
           <ul className={css.poolAudit}>
             {state.audit.map(row => (
               <li key={row.id}>
@@ -609,8 +708,8 @@ export function AdminModelPoolTab({ api, t }: AdminModelPoolTabProps): React.Rea
               </li>
             ))}
           </ul>
-        </section>
+        </AdminCard>
       )}
-    </div>
+    </>
   )
 }

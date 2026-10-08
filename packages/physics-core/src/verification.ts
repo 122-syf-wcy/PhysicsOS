@@ -1,3 +1,5 @@
+import { deriveVerificationLevel, type VerificationLevel } from './provenance.ts'
+
 /** docs/03 §85 */
 export type VerificationStatus = 'passed' | 'passed_with_warnings' | 'failed'
 
@@ -39,6 +41,13 @@ export interface VerificationResult {
   checks: VerificationCheck[]
   warnings: VerificationIssue[]
   errors: VerificationIssue[]
+  /**
+   * The strongest level the PASSED checks actually support, derived (never
+   * defaulted) by {@link deriveVerificationLevel}. Stamped by
+   * {@link summarizeVerification}; absent on hand-built structural results that
+   * carry no checks, in which case consumers re-derive from {@link checks}.
+   */
+  level?: VerificationLevel
 }
 
 export const check = (
@@ -85,7 +94,7 @@ export const summarizeVerification = (
   const status: VerificationStatus =
     allErrors.length > 0 ? 'failed' : warnings.length > 0 ? 'passed_with_warnings' : 'passed'
 
-  return { status, checks: [...checks], warnings: [...warnings], errors: allErrors }
+  return { status, checks: [...checks], warnings: [...warnings], errors: allErrors, level: deriveVerificationLevel(checks) }
 }
 
 export const verificationPassed = (result: VerificationResult): boolean =>

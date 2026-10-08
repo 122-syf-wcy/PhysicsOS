@@ -43,11 +43,9 @@ const mount = (input: {
   })
   const ackPlatformNotice = vi.fn().mockResolvedValue({ acknowledgedVersion: 4 })
   const api = { getPlatformNotice, ackPlatformNotice } as unknown as NoticeApi
-  render(<PlatformNoticeDialog api={api} useAuth={authed} useSessions={neverHook} useWorkspaces={neverHook} t={t as never} />)
+  render(<PlatformNoticeDialog api={api} useAuth={authed} t={t as never} />)
   return { getPlatformNotice, ackPlatformNotice }
 }
-
-const neverHook = (() => { throw new Error('unused hook') }) as never
 
 describe('PlatformNoticeDialog', () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks() })

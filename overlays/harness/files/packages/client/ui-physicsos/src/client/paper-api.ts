@@ -166,6 +166,8 @@ export interface PaperJobWire {
   readonly bankPlan?: readonly { questionNo: number; mode: 'verbatim' | 'adapt' | 'generate' | 'gap'; bankItemId?: string; candidates: number }[]
   readonly repairRounds: number
   readonly lastError?: string
+  /** Live driver telemetry — what the pipeline is doing right now. */
+  readonly progress?: { stage: string; detail?: string; done: number; total: number; updatedAt: string }
   readonly approval?: {
     versionHash: string
     reviewer: string

@@ -77,7 +77,8 @@ secret managers may provide the same files at another path with
 `PHYSICSOS_POSTGRES_PASSWORD_FILE`, `PHYSICSOS_REDIS_PASSWORD_FILE`,
 `PHYSICSOS_DATABASE_URL_FILE`, `PHYSICSOS_REDIS_URL_FILE`,
 `PHYSICSOS_DEEPSEEK_API_KEY_FILE`, `PHYSICSOS_ADMIN_PASSWORD_FILE`, and
-`PHYSICOS_IMAGE_API_KEY_FILE`.
+`PHYSICSOS_IMAGE_API_KEY_FILE` (the one-S `PHYSICOS_IMAGE_API_KEY_FILE` is a
+one-cycle alias — see `docs/adr/0004-image-api-env-migration.md`).
 
 The seven names by role:
 
@@ -147,7 +148,7 @@ backends are intentionally fixed in both the image and Compose to
 | `REDIS_URL_FILE`                 | `PHYSICSOS_REDIS_URL_FILE`        | Materialized to `REDIS_URL`                |
 | `DEEPSEEK_API_KEY_FILE`          | `PHYSICSOS_DEEPSEEK_API_KEY_FILE` | Materialized to `DEEPSEEK_API_KEY`         |
 | `PHYSICSOS_ADMIN_PASSWORD_FILE`  | `PHYSICSOS_ADMIN_PASSWORD_FILE`   | Materialized to `PHYSICSOS_ADMIN_PASSWORD` |
-| `PHYSICOS_IMAGE_API_KEY_FILE`    | `PHYSICOS_IMAGE_API_KEY_FILE`     | Materialized to `PHYSICOS_IMAGE_API_KEY`   |
+| `PHYSICSOS_IMAGE_API_KEY_FILE`   | `PHYSICSOS_IMAGE_API_KEY_FILE`    | Materialized to `PHYSICSOS_IMAGE_API_KEY`  |
 | `PHYSICOS_TRUSTED_PROXIES`       | `PHYSICOS_TRUSTED_PROXIES`        | Forwarded-header trust list                |
 
 Validate the composed configuration without starting containers:
@@ -195,10 +196,13 @@ agent-default-model:
 
 三个容易踩的坑：
 
-1. **secret 文件权限**：compose secret 以宿主机文件权限挂进容器，而 app 以非 root
-   用户运行。`0600 root:root` 会让容器起不来并打印
-   `secret file for DEEPSEEK_API_KEY_FILE is unreadable (EACCES)`；保持 `0644`
-   （与本目录其他 `.env.*` 一致）。
+1. **secret 文件权限**：每个 secret 都在 compose 里以长语法声明
+   `uid: '999'`、`gid: '999'`、`mode: '0400'`（复用 `x-secret-mount` 锚点），
+   Compose 据此改写挂载文件的属主与权限，宿主机文件因此可以保持 `0600`（或更
+   严格）而不必放宽到 `0644`。宿主机一侧 `scripts/deploy/secure-secrets.sh`
+   仍按同一不变量加固这些文件，作为纵深防线。若某个 secret 漏了这段声明，容器
+   会退回宿主机文件权限：`0600 root:root` 时 app（uid 999）起不来并打印
+   `secret file for PHYSICSOS_IMAGE_API_KEY_FILE is unreadable (EACCES)`。
 2. **`/api` 的域名信任栅栏只认 CLI 参数**：`PHYSICOS_TRUSTED_HOSTS` 本身不会被
    harness 读取，它必须同时出现在 compose 的
    `--trusted-host ${PHYSICOS_TRUSTED_HOSTS}` 里。漏传时公网的
@@ -228,14 +232,15 @@ docker compose exec -T app cat /var/lib/physicsos/settings.yaml
 
 #### 策略语义
 
-| 行为     | 生产语义                                                                                                                                    |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 轮询     | 先按 `priority` 从小到大的通道分档，档内按 key 权重轮询；单次请求仍返回完整候选链用于故障转移                                               |
-| 重试     | `retryCount` 默认 2，最多尝试候选 key 数量个；400/404/422 等客户端错误不换 key                                                              |
-| 冷却     | 401/403 认证失败立即冷却；429/5xx/传输失败达到 `failureThreshold` 后冷却                                                                    |
-| 退避     | `cooldownBaseMs` 起指数增长，受 `cooldownMaxMs` 限制；`autoRecover=true` 时到期自动恢复                                                     |
-| 流式     | 只会在上游响应头返回前重试；流已经开始后不重放，避免重复内容                                                                                |
-| 全不可用 | 明确返回 HTTP 503 与 `MODEL_POOL_EXHAUSTED`、`MODEL_POOL_EMPTY`、`MODEL_POOL_MODEL_UNAVAILABLE` 或 `MODEL_POOL_ALL_COOLING`，不伪造模型回复 |
+| 行为     | 生产语义                                                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 轮询     | 先按 `priority` 从小到大的通道分档，档内按 key 权重轮询；单次请求仍返回完整候选链用于故障转移                                    |
+| 重试     | `retryCount` 默认 2，最多尝试候选 key 数量个；400/404/422 等客户端错误不换 key                                                   |
+| 冷却     | 401/403 认证失败立即冷却；429/5xx/传输失败达到 `failureThreshold` 后冷却                                                         |
+| 退避     | `cooldownBaseMs` 起指数增长，受 `cooldownMaxMs` 限制；`autoRecover=true` 时到期自动恢复                                          |
+| 流式     | 只会在上游响应头返回前重试；流已经开始后不重放，避免重复内容                                                                     |
+| 模型别名 | 通道里的模型名是**上游**的名字，转发时替换平台侧名字；留空则原样透传。选路不按模型名过滤                                         |
+| 全不可用 | 明确返回 HTTP 503 与 `MODEL_POOL_EXHAUSTED`、`MODEL_POOL_EMPTY`、`MODEL_POOL_NO_KEY` 或 `MODEL_POOL_ALL_COOLING`，不伪造模型回复 |
 
 #### 日常操作
 
@@ -286,6 +291,71 @@ deployed. Preserve the image digest and commit SHA together in the release
 record. The format gate is intentionally scoped to the deployment-owned paths
 until the repository-wide Prettier baseline is reconciled.
 
+### Harness `dsh-v0.1.7-rc.2` sync (2026-09-27)
+
+The pinned Harness moved from `47f943859bef60e4160492346772ded9b24f765a` to
+`477b4f420553e8a52c2fbccc464d7561b239c443` (`dsh-v0.1.7-rc.2`). The
+compatibility patch records these interface decisions:
+
+- `client-connection` now requires the `credentials` service and dispatches
+  shared `/api` calls through registered RPC interceptors; the removed
+  `apiProxy` fallback is not restored. PhysicsOS adds policy hooks for request
+  authorization, fetch rewriting, and forwarded-event admission. The auth-host
+  account/session/workspace ownership ledger remains the authority for `/api`;
+  cross-account reads and writes still fail closed.
+- Private workspace provisioning now uses the target `workspaceRegistry`
+  service. The old `apiProxy.workspace.create/rename` seam was removed upstream.
+- Session persistence now reads released V3 (`session.v3.jsonl` or
+  `session.v3.jsonl.zstd`) and publishes a verified V4 successor on an explicit
+  write. Existing V3/Zstd logs are not deleted or rewritten during read-only
+  access, and `physics/scene` is admitted by the historical V3-to-V4 converter.
+  Rollback requiring an older Harness must restore the pre-upgrade session
+  volume or keep writes stopped; do not down-convert in place.
+- Connection's multipart binary response path is retained. Paper uploads and
+  PhysicsOS image imports continue through the attachment/binary framing rather
+  than base64 JSON substitution.
+- Model traffic remains `DEEPSEEK_BASE_URL -> 127.0.0.1:
+${PHYSICSOS_MODEL_POOL_PORT}` and the model-pool proxy remains the only
+  provider-selection layer.
+- `class-host` is not mounted in the production Web composition. `plugin-center`
+  is mounted immediately after `ops-host`; the package remains available for
+  migration and explicit administrative use.
+
+- **Document gate (new in 0.1.7-rc.2).** `dsh web` now refuses `index.html`
+  unless the browser first presents the per-process launch token it prints at
+  startup (`dsh web: http://127.0.0.1:3080/?token=…`), exchanging it for an
+  authority-bound signed `dsh-auth-<hash>` cookie. Two facts decide the
+  deployment: the token is **per-process** (fresh random bytes on every boot),
+  and the cookie is bound to the authority that minted it (host **and** port),
+  so neither can be provisioned for ordinary visitors behind a reverse proxy —
+  there is no flag, environment variable, or config field that disables the
+  gate (the CLI exposes only `--host`, `--port`, `--trusted-host`, `--no-open`).
+  PhysicsOS therefore relaxes it in the compatibility patch for the authorities
+  the deployment **declares** in `trustedHosts` — the same list the `/api`
+  fence already uses (`--trusted-host` / `PHYSICOS_TRUSTED_HOSTS`). A token-less
+  document request whose `Host` is a declared authority is served directly;
+  loopback and undeclared hosts keep the stock gate, and a request that carries
+  the token keeps the stock exchange. The account boundary is unchanged: every
+  `/api` call still passes `apiPolicy` and needs a live product session. The
+  change lives in `overlays/harness/upstream-changes.patch`
+  (`packages/client/connection/src/api-request-trust.ts` and `rpc-host.ts`).
+  Because that list now gates the document itself, **adding or removing a
+  `PHYSICOS_TRUSTED_HOSTS` entry changes whether the public site is reachable**;
+  keep it identical to the reverse proxy's `server_name`.
+- The compose `app` command now passes `--no-open`. A container has no browser,
+  so the default handoff only spawns an opener that is certain to fail and logs
+  a warning to stderr. The launch URL still prints (`printUrl` stays true) and
+  is visible in `docker compose logs app`.
+- `/healthz` and `/readyz` are named routes registered ahead of the frontend
+  fallback, so the Docker healthcheck is **not** affected by the gate. A
+  loopback `GET /` without a cookie returns 401 by design — smoke-test the
+  document through the public origin instead (step 6).
+
+Rollback is application-first: restore the previous image digest and the
+submodule pointer/overlay pair from `47f943859bef60e4160492346772ded9b24f765a`
+before serving traffic, then reopen the preserved PostgreSQL/session volumes.
+Never delete existing session logs during rollback.
+
 ## 5. Build and release
 
 Build locally:
@@ -316,6 +386,24 @@ Record:
 
 ## 6. Deploy
 
+**Hard precondition for a Harness upgrade that bumps the session-log format**
+(the 0.1.7 promotion in particular). Before switching the primary Compose
+project, tag the previous image, take a filesystem-level backup of the sessions
+root (`/var/lib/physicsos/sessions`, `PHYSICSOS_SESSIONS_ROOT` inside
+`app_data`) **and** a `pg_dump`, and confirm both are readable.
+
+This is a precondition, not a nicety: the running deployment stores session logs
+in the oldest on-disk format (`{"type":"session","version":0,…}`). Harness
+0.1.7 ships the `v0 → v1 → v2 → v3 → v4` migration chain
+(`packages/session/session-format-v0-to-v1` … `-v3-to-v4`, with
+`catalog-migration.ts` selecting `historicalSessionFormatCatalog` for
+`version <= 3`), so 0.1.7 migrates those logs forward **in place**. After
+promotion the previous release (rollback image `14157e1`, submodule pinned at
+`47f9438`) would be reading already-migrated data. The rollback image is
+therefore a true rollback only **together with** the pre-promotion sessions-root
+and database backups. Never down-convert in place on rollback — restore from the
+backup.
+
 1. Verify the candidate digest and CI result for the same commit.
 2. Verify a successful backup before any schema migration.
 3. Start the dependencies and wait for healthy state:
@@ -341,9 +429,15 @@ docker compose ps app
 ```sh
 curl --fail --show-error http://127.0.0.1:3080/healthz
 curl --fail --show-error http://127.0.0.1:3080/readyz
-curl --fail --show-error --head http://127.0.0.1:3080/
+# The document is gated: a loopback GET/HEAD / without a cookie answers 401.
+# Check the document through the declared public origin instead.
+curl --fail --show-error --head "https://${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}/"
 docker compose logs --since=10m app
 ```
+
+`docker compose logs app` must show the `dsh web: …` launch line. If the
+public-origin document returns 401 (or the pre-0.1.7 "404"), the Host is not
+in `PHYSICOS_TRUSTED_HOSTS` / `--trusted-host` — see section 4.
 
 7. Verify one authenticated read and one bounded write through the external
    reverse proxy. Confirm the resulting account/tenant scope and audit event.
@@ -538,6 +632,15 @@ partially restored database.
 
 Rollback is application-first. Database down-migrations are prohibited unless
 they are proven lossless and have their own tested procedure.
+
+For the 0.1.7 promotion specifically, the previous image alone is **not** a
+rollback: 0.1.7 migrated session logs forward in place (`v0 → … → v4`), so the
+rollback image would read migrated data. Restore the sessions root and the
+database from the backups taken under the section 6 precondition before
+serving traffic, and never down-convert in place. A rollback of the image alone
+is also insufficient for the command: the new compose `app` command passes
+`--no-open`, which the previous image rejects with `unknown option '--no-open'`,
+so any rollback must revert the compose command together with the image digest.
 
 To deploy the previous image digest:
 

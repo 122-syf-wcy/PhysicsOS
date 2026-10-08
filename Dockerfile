@@ -9,10 +9,11 @@ ENV CI=true \
     PATH=/pnpm:${PATH}
 
 RUN apt-get update \
-    # python3/make/g++ compile the one native package that ships no Linux
-    # prebuild: node-pty (only darwin/win32 binaries are published). Everything
-    # else still installs with scripts disabled; only node-pty is rebuilt below.
-    && apt-get install --yes --no-install-recommends ca-certificates git python3 make g++ \
+    # python3/make/gcc/g++ compile the native packages that ship no Linux
+    # prebuild: node-pty (only darwin/win32 binaries are published) and the
+    # harness flock addon (`cc` builds the glibc Node-API module). Everything
+    # else still installs with scripts disabled; both are built below.
+    && apt-get install --yes --no-install-recommends ca-certificates git python3 make gcc g++ \
     && rm -rf /var/lib/apt/lists/* \
     # Install pnpm directly instead of through corepack: the PhysicsOS root pins
     # pnpm 11.9.0 while the vendored Harness pins 11.7.0, and a corepack-managed
@@ -23,6 +24,13 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY . .
+
+# The public client environment the web build embeds. `DSH_CLIENT_TITLE` is the
+# product title the client shows in the browser tab and in the shell's own
+# document-title projection; without it the shell falls back to its
+# locally-built-harness label ("DSH 本地构建"), which is wrong for a release
+# image. It is a public product name, not a secret, so an ENV is appropriate.
+ENV DSH_CLIENT_TITLE=PhysicsOS
 
 # The Docker context excludes VCS metadata. Initialize the pinned upstream tree
 # so its patch can be applied with the same 3-way semantics as local bootstrap.
@@ -41,14 +49,43 @@ RUN node scripts/overlay/harness-overlay.mjs apply
 # compile it: allowlist exactly that one build script (inside the image only, so
 # local macOS installs stay untouched), install with scripts enabled for the
 # vendored tree, and rebuild the package explicitly.
-RUN printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/pnpm-workspace.yaml \
+#
+# The store is a cache mount: every source change invalidates this layer (the
+# overlay is applied above it), and without the mount each rebuild re-downloaded
+# the whole ~1400-package closure — minutes of network per build for artefacts
+# that never changed.
+RUN --mount=type=cache,target=/pnpm/store,sharing=locked \
+    printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/pnpm-workspace.yaml \
     && pnpm install --frozen-lockfile \
     && pnpm -C vendor/deepseek-harness install --frozen-lockfile \
     && pnpm -C vendor/deepseek-harness rebuild node-pty
 
+# The JSONL session backend takes its cross-process write lock through the
+# native `flock` Node-API addon (@deepseek-ai/node-addon-system-<platform>-<arch>).
+# Those platform packages are WORKSPACE members (native/system/packages/*) whose
+# `bin/*.node` is gitignored build output: pnpm links the workspace directory
+# as-is, so an image that skips this ships a platform package with no addon — and
+# every new session's first durable write dies on a missing
+# `…/linux-x64/bin/glibc/system.node`, leaving a bare session.lock and no
+# transcript (the web host registers no console log exporter, so it fails
+# silently). `build:native-system` is the harness's own `test` prerequisite.
+# The trailing probe loads the addon and takes a real lock, so an image whose
+# addon is missing or unloadable fails the BUILD instead of losing transcripts.
+# It must run AFTER `build:lib`: the addon's JS entry (`entry/lib/flock.js`) is
+# `tsc -b` output, so probing first fails on a missing module rather than on a
+# missing native addon — which is what an earlier revision of this file did.
+RUN pnpm -C vendor/deepseek-harness run build:native-system
+
+# `build:web` only, never the root `build` (= `build:core && build:web`).
+# Every root `packages/*` build script is `tsc -p tsconfig.json --noEmit`: a pure
+# typecheck that emits no artifact, so nothing downstream (the image, the client
+# bundle, the hosts) consumes it. It costs ~9 minutes per image build and buys
+# nothing the test suites do not already assert.
+# The health-host bundle is part of `build:hosts`, which `build:web` runs, so it
+# is not invoked separately either.
 RUN pnpm -C vendor/deepseek-harness run build:lib \
-    && pnpm -C vendor/deepseek-harness --filter @deepseek-ai/dsh-health-host run bundle \
-    && pnpm build \
+    && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')" \
+    && pnpm run build:web \
     && rm -rf vendor/deepseek-harness/.git
 
 FROM ${NODE_IMAGE} AS runtime
@@ -62,6 +99,7 @@ ENV NODE_ENV=production \
     REDIS_URL_FILE=/run/secrets/redis_url \
     DEEPSEEK_API_KEY_FILE=/run/secrets/deepseek_api_key \
     PHYSICSOS_ADMIN_PASSWORD_FILE=/run/secrets/admin_password \
+    PHYSICSOS_IMAGE_API_KEY_FILE=/run/secrets/image_api_key \
     PHYSICOS_IMAGE_API_KEY_FILE=/run/secrets/image_api_key \
     PHYSICOS_TRUSTED_PROXIES="" \
     PHYSICSOS_SESSIONS_ROOT=/var/lib/physicsos/sessions \
@@ -70,12 +108,15 @@ ENV NODE_ENV=production \
     PHYSICSOS_DATABASE_SSL=false
 
 # pandoc + LibreOffice 只在 runtime 安装：builder 阶段不需要它们，A4 导出也
-# 不再是 docx 降级。fonts-noto-cjk 保证中文 PDF 不出现豆腐块。
+# 不再是 docx 降级。fonts-noto-cjk 保证中文 PDF 不出现豆腐块。unzip/zip 供导
+# 出端解包并重打包 pandoc 参考模板做 A4 样式定制（缺一时导出即败）。
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         pandoc \
         libreoffice-writer \
         fonts-noto-cjk \
+        unzip \
+        zip \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system physicsos \
     && useradd --system --gid physicsos --home-dir /var/lib/physicsos physicsos \

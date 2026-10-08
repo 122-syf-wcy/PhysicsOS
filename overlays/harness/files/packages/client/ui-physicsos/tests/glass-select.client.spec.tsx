@@ -85,6 +85,26 @@ describe('GlassSelect — liquid-glass combobox', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  it('renders an empty list as a disabled control that opens nothing', () => {
+    render(
+      <GlassSelect
+        value=""
+        options={[]}
+        onChange={vi.fn()}
+        placeholder="— 选择 —"
+        ariaLabel="结构模板"
+      />,
+    )
+    const button = screen.getByRole('combobox', { name: '结构模板' })
+    expect(button.hasAttribute('disabled')).toBe(true)
+    expect(button.textContent).toContain('— 选择 —')
+
+    fireEvent.click(button)
+    expect(screen.queryByRole('listbox')).toBeNull()
+    fireEvent.keyDown(button, { key: 'ArrowDown' })
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
   it('renders the placeholder when the value matches no option', () => {
     render(
       <GlassSelect

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IncomingMessage } from 'node:http'
-import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import {
   createApiPolicy,
   type ApiPolicyActor,
@@ -255,8 +254,8 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
-    const source = scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)
+    const scoped = await policy.scopeEvents(request, events) as unknown as ScopedEvents
+    const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
 
     expect(await iterator.next()).toMatchObject({ value: { rpcId: 'question-rpc' } })
@@ -282,9 +281,9 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const scopedRequest = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await first.scopeEvents(scopedRequest, events as never) as unknown as ScopedEvents
+    const scoped = await first.scopeEvents(scopedRequest, events) as unknown as ScopedEvents
 
-    const source = scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)
+    const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
     expect(await iterator.next()).toMatchObject({ value: { rpcId: 'question-rpc' } })
     expect(ledger.claims.has(`${student.userKey}\u0000question-rpc`)).toBe(true)
@@ -334,11 +333,11 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const request = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(request, events as never) as unknown as ScopedEvents
+    const scoped = await policy.scopeEvents(request, events) as unknown as ScopedEvents
 
     const frames: string[] = []
     for await (const frame of scoped.mux(
-      { rpcId: RpcId('test'), payload: {} },
+      { rpcId: 'test', payload: {} },
       new AbortController().signal,
     )) {
       frames.push(frame.rpcId)
@@ -363,8 +362,8 @@ describe('PhysicsOS /api one-time response ledger', () => {
       host: async function * () {},
     }
     const scopedRequest = { headers: { cookie: 'physicsos_session=student' } } as IncomingMessage
-    const scoped = await policy.scopeEvents(scopedRequest, events as never) as unknown as ScopedEvents
-    const source = scoped.mux({ rpcId: RpcId('test'), payload: {} }, new AbortController().signal)
+    const scoped = await policy.scopeEvents(scopedRequest, events) as unknown as ScopedEvents
+    const source = scoped.mux({ rpcId: 'test', payload: {} }, new AbortController().signal)
     const iterator = source[Symbol.asyncIterator]()
     await iterator.next()
     await iterator.return?.()

@@ -7,7 +7,10 @@
  * `parseMathSymbol` because SVG labels never carry fractions or radicals.
  */
 
-import { renderTexToReact } from '@deepseek-ai/dsh-client-ui-primitives'
+/* KaTeX rendering lives in a PhysicsOS-local helper: the primitives package
+   does not export `renderTexToReact` from its root, and its `./src/*` face
+   cannot be imported with a `.tsx` extension from another package's build. */
+import { renderTexToReact } from './katex.tsx'
 import { toTexExpression } from './math-symbol.ts'
 import css from './MathText.module.css'
 

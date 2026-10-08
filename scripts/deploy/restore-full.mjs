@@ -18,6 +18,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL, URL } from 'node:url'
 import {
   COUNTS_SQL,
+  RESTORE_READINESS_SCRIPT,
   composeArgs,
   decryptFile,
   dockerCommand,
@@ -392,6 +393,7 @@ export async function restoreFull(options, dependencies = {}) {
     let ready = false
     do {
       try {
+        const remainingMs = Math.max(1, deadline - Date.now())
         await docker(
           [
             ...compose,
@@ -399,10 +401,13 @@ export async function restoreFull(options, dependencies = {}) {
             '-T',
             'app',
             'node',
-            'scripts/healthcheck.mjs',
+            '--input-type=commonjs',
+            '-e',
+            RESTORE_READINESS_SCRIPT,
             'http://127.0.0.1:3080/readyz',
+            String(Math.min(2000, remainingMs)),
           ],
-          { timeoutMs: Math.min(5000, Math.max(1, deadline - Date.now())) },
+          { timeoutMs: Math.min(5000, remainingMs) },
         )
         ready = true
         break

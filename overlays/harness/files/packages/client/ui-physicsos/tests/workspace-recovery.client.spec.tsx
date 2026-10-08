@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { createMechanicsScene } from '@physicsos/physics-scene'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
@@ -57,4 +57,18 @@ it('background playback yields to modal dialogs and already handled keyboard eve
   expect(runtime.getSnapshot().clock.time).toBe(0)
   fireEvent.keyDown(document, { key: 'ArrowRight' })
   expect(runtime.getSnapshot().clock.time).toBeGreaterThan(0)
+})
+
+
+it('never paints a green workspace badge when a claimed verified frame has no checks', () => {
+  const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({ model: 'uniform_linear_motion' }))
+  const snapshot = { ...runtime.getSnapshot(), status: 'verified' as const, verification: [] }
+  const read = vi.spyOn(runtime, 'getSnapshot').mockReturnValue(snapshot)
+  try {
+    const { container } = render(<PhysicsWorkspace runtime={runtime} t={t} />)
+    expect(container.querySelector('[data-physicsos-surface="lab"]')?.getAttribute('data-verification-status')).toBe('warning')
+    expect(container.querySelector('[data-status="verified"]')).toBeNull()
+  } finally {
+    read.mockRestore()
+  }
 })

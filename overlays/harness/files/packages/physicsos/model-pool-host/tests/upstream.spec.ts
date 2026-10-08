@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createServer, type ServerResponse } from 'node:http'
+import { createServer, type IncomingHttpHeaders, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { chatCompletionsURL, listUpstreamModels, modelsURL, probeChat } from '../src/upstream.ts'
 import type { ChannelRecord } from '../src/types.ts'
@@ -7,11 +7,11 @@ import type { ChannelRecord } from '../src/types.ts'
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => { while (cleanup.length > 0) await cleanup.pop()?.() })
 
-const channelWith = async (respond: (body: Record<string, unknown>, res: ServerResponse, path: string) => void): Promise<ChannelRecord> => {
+const channelWith = async (respond: (body: Record<string, unknown>, res: ServerResponse, path: string, headers: IncomingHttpHeaders) => void): Promise<ChannelRecord> => {
   const server = createServer((req, res) => {
     const chunks: Buffer[] = []
     req.on('data', chunk => chunks.push(chunk as Buffer))
-    req.on('end', () => { respond(JSON.parse(Buffer.concat(chunks).toString() || '{}') as Record<string, unknown>, res, req.url ?? '') })
+    req.on('end', () => { respond(JSON.parse(Buffer.concat(chunks).toString() || '{}') as Record<string, unknown>, res, req.url ?? '', req.headers) })
   })
   await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
   cleanup.push(async () => { server.closeAllConnections(); await new Promise<void>((resolve) => { server.close(() => { resolve() }) }) })
@@ -56,6 +56,31 @@ describe('OpenAI-compatible upstream paths', () => {
     expect((await probe(rootChannel)).ok).toBe(true)
     expect(await listUpstreamModels({ channel: rootChannel, secret: 'sk-only-local-fixture', timeoutMs: 1000, signal: new AbortController().signal })).toEqual(['deepseek-v4.1-flash'])
     expect(paths).toEqual(['/v1/chat/completions', '/v1/models'])
+  })
+})
+
+describe('merged upstream alias and protocol behavior', () => {
+  it('uses the SDK identity and /v1 for a channel alias without weakening stream validation', async () => {
+    const seen: { path: string; model: unknown; stream: unknown; agent: string | undefined }[] = []
+    const channel = await channelWith((body, res, path, headers) => {
+      seen.push({ path, model: body.model, stream: body.stream, agent: headers['user-agent'] })
+      if (path === '/v1/models') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end('{"data":[{"id":"provider-chat"}]}')
+        return
+      }
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.end('data: {"choices":[{"index":0,"delta":{"content":"pong"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+    })
+    const aliased = { ...channel, baseURL: new URL(channel.baseURL).origin, models: ['provider-chat'] }
+    const result = await probe(aliased)
+    expect(result.ok).toBe(true)
+    expect(result.message).toContain('provider-chat')
+    expect(await listUpstreamModels({ channel: aliased, secret: 'sk-only-local-fixture', timeoutMs: 1000, signal: new AbortController().signal })).toEqual(['provider-chat'])
+    expect(seen).toEqual([
+      { path: '/v1/chat/completions', model: 'provider-chat', stream: true, agent: 'OpenAI/Node 5.0.0' },
+      { path: '/v1/models', model: undefined, stream: undefined, agent: 'OpenAI/Node 5.0.0' },
+    ])
   })
 })
 

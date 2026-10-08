@@ -17,6 +17,19 @@ const patchFile = path.join(overlayRoot, 'upstream-changes.patch')
 const OVERLAY_PATHS = [
   'packages/client/ui-physicsos',
   'packages/client/ui-settings-models/src/client/protocol.ts',
+  /* PhysicsOS-authored additions to upstream-owned trees. These are brand-new
+     files upstream never had, so they belong here (copied by `apply`) and NOT
+     in upstream-changes.patch: a create-hunk cannot be re-applied once the file
+     already exists in the vendored working tree. */
+  'packages/client/connection/src/api-policy.ts',
+  'packages/bundle/web-app/presets/physics-student.patch.yml',
+  'tsconfig.physicsos.json',
+  /* The branded document shell. Upstream ships its own index.html whose title is
+     rewritten by the vite build from `DSH_CLIENT_TITLE` (defaulting to
+     "DSH Local Build"); we replace the file outright so the served document is
+     branded regardless of build env. Overlay, not a patch hunk: a full-file
+     replacement re-applied as a patch drifts the moment either side changes. */
+  'apps/web/index.html',
   'apps/web/public/physicsos',
   /* Generated-image source material (prompt manifests + alternates) kept out
      of public/ so dist stays lean; mirrored like the shipped assets. */
@@ -51,6 +64,8 @@ const OVERLAY_PATHS = [
   'packages/physicsos/shared-state-host',
   /* Read-only administrator operations metrics (capacity, dependencies, cache). */
   'packages/physicsos/ops-host',
+  /* Administrator plugin catalog and verified preinstalled-plugin controls. */
+  'packages/physicsos/plugin-center',
   /* 平台模型通道池：本机 OpenAI 兼容代理 + 多通道/多 key 轮训与故障转移。 */
   'packages/physicsos/model-pool-host',
   'apps/cli/config/agent-presets/physics-student',
@@ -198,8 +213,41 @@ async function capture() {
     }
   }
   await mkdir(overlayRoot, { recursive: true })
-  await writeFile(patchFile, diff.stdout, 'utf8')
-  console.log(`captured upstream-changes.patch (${diff.stdout.length} bytes)`)
+  /* Git represents an unchanged blank line as a single-space context row.
+     Emitting it as an empty row keeps `git diff --check` clean; git apply
+     accepts the same patch shape. */
+  const normalizedDiff = diff.stdout.replace(/^ $/gm, '')
+  await writeFile(patchFile, normalizedDiff, 'utf8')
+  console.log(`captured upstream-changes.patch (${normalizedDiff.length} bytes)`)
+}
+
+/* Tracked upstream files the patch rewrites, taken from its `diff --git` lines.
+   Used only to restore a drifted vendored tree to the pinned upstream before a
+   retry; overlay-authored files are never patch targets (see OVERLAY_PATHS). */
+function patchTargets(patchText) {
+  const targets = []
+  for (const line of patchText.split('\n')) {
+    const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line)
+    if (match) targets.push(match[2])
+  }
+  return targets
+}
+
+/* The vendored tree is a derived build artifact: it must equal the pinned
+   upstream HEAD plus this patch. If it drifted (a stale apply, a hand edit, a
+   pin bump) `git apply` cannot reconcile it, so restore the files the patch
+   owns to HEAD and let the patch rebuild them. Overlay-authored files and
+   `node_modules`/`lib` build output are untouched. */
+function restorePatchTargets(patchText) {
+  const tracked = patchTargets(patchText).filter(
+    (target) => git(['-C', vendorRoot, 'cat-file', '-e', `HEAD:${target}`]).status === 0,
+  )
+  if (tracked.length === 0) return
+  const restored = git(['-C', vendorRoot, 'checkout', 'HEAD', '--', ...tracked])
+  if (restored.status !== 0) {
+    throw new Error(`failed to reset overlay-managed files to HEAD: ${restored.stderr}`)
+  }
+  console.log(`reset ${tracked.length} overlay-managed upstream file(s) to HEAD`)
 }
 
 async function apply() {
@@ -246,6 +294,11 @@ async function apply() {
     return
   }
 
+  /* Plain `git apply` (never `--3way`, which stages into the vendored index and
+     would hide every change from `capture`'s worktree-vs-index diff). */
+  const applyPatch = (options) =>
+    git(['-C', vendorRoot, 'apply', '--whitespace=nowarn', patchFile], options)
+
   const alreadyApplied = git(['-C', vendorRoot, 'apply', '--reverse', '--check', patchFile])
   if (alreadyApplied.status === 0) {
     await saveManifest()
@@ -253,10 +306,17 @@ async function apply() {
     return
   }
 
-  const applied = git(['-C', vendorRoot, 'apply', '--3way', '--whitespace=nowarn', patchFile], {
-    stdio: 'inherit',
-  })
-  if (applied.status !== 0) {
+  const first = applyPatch({ stdio: 'ignore' })
+  if (first.status === 0) {
+    console.log('applied upstream-changes.patch')
+    return
+  }
+
+  /* First attempt failed: the vendored tree drifted from the pinned upstream.
+     Restore the patch-owned files to HEAD, then re-apply. */
+  restorePatchTargets(patch)
+  const retried = applyPatch({ stdio: 'inherit' })
+  if (retried.status !== 0) {
     throw new Error(
       'failed to apply overlays/harness/upstream-changes.patch; resolve conflicts in vendor/deepseek-harness manually',
     )

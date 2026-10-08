@@ -18,6 +18,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { AdminApi, DeviceRow, RiskSignalRow } from './auth-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import {
+  AdminCard,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+  AdminTable,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminDeviceTabProps {
@@ -72,16 +79,16 @@ export function AdminDeviceTab({ api, isSuper, t }: AdminDeviceTabProps) {
     return <p className={css.error}>{error}</p>
   }
   if (rows === undefined) {
-    return <p className={css.cardMeta}>{t('admin.loading')}</p>
+    return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
   }
 
   return (
-    <div className={css.list}>
+    <>
       {error !== undefined && <p className={css.error}>{error}</p>}
 
-      <section className={css.card}>
-        <h3 className={css.cardTitle}>{t('admin.devices.title')}</h3>
-        <p className={css.cardMeta}>{t('admin.devices.hint')}</p>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.devices.title')}</AdminCardTitle>
+        <AdminCardMeta>{t('admin.devices.hint')}</AdminCardMeta>
         <div className={css.formRow}>
           <input
             className={css.input}
@@ -91,13 +98,13 @@ export function AdminDeviceTab({ api, isSuper, t }: AdminDeviceTabProps) {
             onChange={(event) => { setQuery(event.target.value) }}
           />
         </div>
-      </section>
+      </AdminCard>
 
-      <section className={css.card} data-testid="device-list">
+      <AdminCard testId="device-list">
         {rows.length === 0
-          ? <p className={css.cardMeta}>{t('admin.devices.empty')}</p>
+          ? <AdminEmpty>{t('admin.devices.empty')}</AdminEmpty>
           : (
-            <table className={css.deviceTable}>
+            <AdminTable>
               <thead>
                 <tr>
                   <th>{t('admin.devices.col.device')}</th>
@@ -153,15 +160,15 @@ export function AdminDeviceTab({ api, isSuper, t }: AdminDeviceTabProps) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </AdminTable>
           )}
-      </section>
+      </AdminCard>
 
-      <section className={css.card} data-testid="device-risk">
-        <h3 className={css.cardTitle}>{t('admin.devices.risk.title')}</h3>
-        <p className={css.cardMeta}>{t('admin.devices.risk.hint')}</p>
+      <AdminCard testId="device-risk">
+        <AdminCardTitle>{t('admin.devices.risk.title')}</AdminCardTitle>
+        <AdminCardMeta>{t('admin.devices.risk.hint')}</AdminCardMeta>
         {risk.length === 0
-          ? <p className={css.cardMeta}>{t('admin.devices.risk.empty')}</p>
+          ? <AdminEmpty>{t('admin.devices.risk.empty')}</AdminEmpty>
           : (
             <ul>
               {risk.map(signal => (
@@ -176,7 +183,7 @@ export function AdminDeviceTab({ api, isSuper, t }: AdminDeviceTabProps) {
               ))}
             </ul>
           )}
-      </section>
-    </div>
+      </AdminCard>
+    </>
   )
 }

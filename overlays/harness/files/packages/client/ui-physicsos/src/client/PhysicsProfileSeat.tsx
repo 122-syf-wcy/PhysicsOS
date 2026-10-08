@@ -4,9 +4,9 @@
  */
 
 import { useState } from 'react'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconChevronDownOutline14, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconChevronDownOutlineMedium, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ProfileIcon } from './ProfileIcons.tsx'
 import { STUDENT_PROFILES, type PhysicsProfileId } from './profiles.ts'
@@ -36,8 +36,7 @@ export interface PhysicsProfileSeatInjected {
 
 /** Slot props for the Home profile chip. */
 export type PhysicsProfileSeatProps =
-  PropsRuntime<'conversation.hero.agentPreset'>
-  & PropsLocale<'physicsos'>
+  PropsLocale<'physicsos'>
   & InjectFace<PhysicsProfileSeatInjected>
 
 /**
@@ -85,7 +84,7 @@ export function PhysicsProfileSeat({
         >
           <ProfileIcon id={current.id} />
           {t(NAME[current.id])}
-          <IconChevronDownOutline14 className={css.chevron} />
+          <IconChevronDownOutlineMedium className={css.chevron} />
         </button>
       )}
     />

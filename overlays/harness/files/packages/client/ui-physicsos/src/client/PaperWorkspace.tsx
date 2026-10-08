@@ -11,7 +11,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ProductSurfaceBaseProps } from './surface-props.ts'
+import type { PhysicsSceneRef, PhysicsSurfaceId } from './surface-store.ts'
 import type {
   AnnotationRow, BankItemRow, BankPlanRow, BlueprintRow, ExportBundleRow, PaperApi, PaperJobWire, SourcePaperRow,
 } from './paper-api.ts'
@@ -33,12 +35,16 @@ export interface PaperWorkspaceInjected {
   readonly api: PaperApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
+  /**
+   * Leave the studio for the home surface. Optional: a stripped test
+   * composition (or a host that never elected the seat) then renders no way
+   * out rather than a control that does nothing.
+   */
+  openSurface?: (id: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
 }
 
 export type PaperWorkspaceProps =
-  PropsRuntime<'conversation.surface'> &
-  PropsLocale<'physicsos'> &
-  InjectFace<PaperWorkspaceInjected>
+  ProductSurfaceBaseProps & InjectFace<PaperWorkspaceInjected>
 
 const KIND_LABEL: Record<string, string> = {
   unit: '单元测试', weekly: '周考', monthly: '月考',
@@ -63,9 +69,63 @@ const EVIDENCE_LABEL: Record<string, string> = {
 const PLAN_LABEL: Record<string, string> = {
   verbatim: '原题', adapt: '改编', adapted: '改编', generate: 'AI 起草', generated: 'AI 起草', gap: '缺口',
 }
+/* Question-kind enum → 考试卷面上的题型叫法。Spec rows, review lists and the
+   bank all render kinds through this map — a raw `choice-single` in the 题型
+   column reads as a wrong question type to a teacher. */
+const QUESTION_KIND_LABEL: Record<string, string> = {
+  'choice-single': '单选题', 'choice-multi': '多选题', blank: '填空题', drawing: '作图题',
+  'short-answer': '简答题', experiment: '实验题', calculation: '计算题',
+}
+const kindLabel = (kind: string): string => QUESTION_KIND_LABEL[kind] ?? kind
+
+/**
+ * One question's figure: the AI-generated PNG once the check stage has drawn
+ * it (served from the job's export dir), falling back to the caption
+ * placeholder while it is pending or the draw failed. `onError` flips the
+ * fallback locally — no per-figure existence probe.
+ */
+function FigureBlock({ job, api, figureRef, caption }: {
+  job: PaperJobWire
+  api: PaperApi
+  figureRef: string
+  caption: string
+}) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <p className={css.figure}>[题图：{caption}]</p>
+  return (
+    <figure className={css.figureBlock}>
+      <img
+        src={api.fileUrl(job.id, `fig-${figureRef}.png`)}
+        alt={`题图：${caption}`}
+        loading="lazy"
+        onError={() => { setFailed(true) }}
+      />
+      {caption !== '' && <figcaption>{caption}</figcaption>}
+    </figure>
+  )
+}
 const KINDS = ['unit', 'weekly', 'monthly', 'midterm', 'final', 'mock'] as const
 
 const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
+
+/**
+ * The nearest ancestor that is a real laid-out box.
+ *
+ * `display: contents` slot wrappers report a zero rect, so they cannot size
+ * the surface; the column that holds them can. Used when the studio is a global
+ * panel mounted straight into the shell's centre column, where there is no
+ * transcript scrollport to anchor the cover to.
+ */
+const nearestLaidOutAncestor = (el: HTMLElement): HTMLElement | null => {
+  let node: HTMLElement | null = el.parentElement
+  while (node !== null) {
+    if (getComputedStyle(node).display !== 'contents' && node.getBoundingClientRect().width > 0) {
+      return node
+    }
+    node = node.parentElement
+  }
+  return null
+}
 
 /**
  * Estimated difficulty rating for a job — score-weighted over the confirmed
@@ -91,9 +151,10 @@ function StatusChip({ status }: { status: string }) {
 
 /** Pipeline stage of a job: which phase the teacher-facing workflow is in. */
 const STAGE_OF_STATUS: Record<string, number> = {
-  spec: 0, drafting: 1, checking: 2, review: 3, approved: 4, exported: 4, failed: 0,
+  spec: 0, drafting: 0, checking: 1, review: 2, approved: 3, exported: 3, failed: 0,
 }
-const STAGE_LABELS = ['细目表', 'AI 起草', '自动检查', '逐题审核', '定稿导出'] as const
+/* 细目表不再是独立阶段：AI 起草会自动确认细目表（见 JobDetail.driveAi）。 */
+const STAGE_LABELS = ['AI 起草', '自动检查', '逐题审核', '定稿导出'] as const
 
 /** Horizontal stage rail — shows where a job sits in the generation pipeline. */
 function StageRail({ status }: { readonly status: string }) {
@@ -153,7 +214,7 @@ export function PaperWorkspace(props: PaperWorkspaceProps) {
   return <PaperStudio {...props} />
 }
 
-function PaperStudio({ api }: PaperWorkspaceProps) {
+function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
   const [tab, setTab] = useState<Tab>('new')
   const [sources, setSources] = useState<SourcePaperRow[]>([])
   const [annotations, setAnnotations] = useState<AnnotationRow[]>([])
@@ -201,22 +262,26 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
 
   /* The cover is position:fixed over the whole conversation column — header
      tabs, scroll body, and composer alike, none of which belong to this
-     workflow. The scroll body's parent owns that full rect; we pin the
-     scroll, lock it, and track the rect while mounted. */
+     workflow. It is sized to an ancestor, so it fills that column instead of
+     shrink-to-fit at the top-left.
+
+     The column is normally the transcript scrollport's parent. The shell also
+     mounts a global panel directly in its centre column with NO scrollport in
+     the chain: the old search then walked to `null` and the cover fell back to
+     shrink-to-fit — a ~60%-wide box pinned left, which is the dead region on
+     the right. So take the scrollport when it exists, and otherwise the
+     nearest laid-out ancestor (skipping `display: contents` slot wrappers). */
   const coverRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const cover = coverRef.current
     if (cover === null) return
     let node: HTMLElement | null = cover.parentElement
-    /* The marker, not overflow state: a short conversation never overflows,
-       so scrollHeight > clientHeight misses the body and the cover would
-       stay shrink-to-fit at top-left instead of covering the column. */
     while (node !== null && !node.hasAttribute('data-conversation-scroll')) {
       node = node.parentElement
     }
-    if (node === null) return
     const scroller = node
-    const host = scroller.parentElement ?? scroller
+    const host = scroller?.parentElement ?? nearestLaidOutAncestor(cover)
+    if (host === null) return
     const fit = () => {
       const rect = host.getBoundingClientRect()
       cover.style.top = `${rect.top}px`
@@ -227,6 +292,9 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
     const observer = new ResizeObserver(fit)
     observer.observe(host)
     fit()
+    /* A global panel is its own column: there is no transcript scroll to
+       lock, and nothing to restore on teardown. */
+    if (scroller === null) return () => { observer.disconnect() }
     const previousOverflow = scroller.style.overflowY
     scroller.scrollTop = 0
     scroller.style.overflowY = 'hidden'
@@ -245,8 +313,19 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
   return (
     <div ref={coverRef} className={css.root} data-physicsos-surface="paper">
       <header className={css.hero}>
+        {openSurface === undefined ? null : (
+          /* Desktop-like leave control, first in the row so the eye lands on
+             it before the title. A plain text button: the surface's own icon
+             set has no back glyph, and every other control here (the step
+             rail, the notice dismiss) is a text button — an icon would be the
+             odd one out. Its accessible name is the localised label. */
+          <button type="button" className={css.back} onClick={() => { openSurface('home') }}>
+            <span className={css.backArrow} aria-hidden="true">←</span>
+            {t('paper.backToHome')}
+          </button>
+        )}
         <div className={css.heroText}>
-          <h1 className={css.title}>出卷专区</h1>
+          <h1 className={css.title}>贵州高考物理 · 出卷工作台</h1>
           <p className={css.subtitle}>贵州本土 · 2027 届 — 初中理综 / 高中物理 · 单元 · 周考 · 月考 · 期中 · 期末 · 模拟</p>
         </div>
         <label className={css.reviewer}>
@@ -297,6 +376,7 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
           api={api}
           onCreated={(job) => { setActiveJob(job); setTab('jobs'); void refresh() }}
           onError={setNotice}
+          onReview={() => { setTab('jobs') }}
         />
       )}
       {tab === 'jobs' && (
@@ -304,6 +384,7 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
           jobs={draftJobs} activeJob={activeJob} reviewer={reviewer}
           api={api} openJob={openJob} run={run}
           onJobUpdate={setActiveJob}
+          notify={setNotice}
         />
       )}
       {tab === 'final' && (
@@ -328,11 +409,22 @@ function PaperStudio({ api }: PaperWorkspaceProps) {
 
 /* ------------------------------------------------------------- 新建试卷 -- */
 
-function NewPaperPanel({ blueprints, api, onCreated, onError }: {
+/**
+ * The builder's steps, in order. One is visible at a time so the form reads as
+ * a workbench rather than a page of stacked cards; the nav is the only place a
+ * teacher has to look to know where they are.
+ */
+/*
+ * The builder is one screen, not a wizard: template + taught chapters are the
+ * only required inputs, the section structure rides under the template, and
+ * kind/difficulty/exclude live behind an 高级设置 fold with sane defaults.
+ */
+function NewPaperPanel({ blueprints, api, onCreated, onError, onReview }: {
   blueprints: BlueprintRow[]
   api: PaperApi
   onCreated: (job: PaperJobWire) => void
   onError: (message: string) => void
+  onReview: () => void
 }) {
   const [blueprintId, setBlueprintId] = useState('')
   const [kind, setKind] = useState<string>('unit')
@@ -345,6 +437,10 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
 
   const blueprint = blueprints.find(b => b.id === blueprintId)
 
+  const splits = (text: string) => text.split(/[;；\n]/).map(s => s.trim()).filter(Boolean)
+  const chapterCount = splits(chapters).length
+  const totalQuestions = blueprint?.sections.reduce((n, s) => n + s.slots.length, 0) ?? 0
+
   const create = async () => {
     if (blueprint === undefined) { onError('请先选择试卷结构模板'); return }
     setBusy(true)
@@ -355,8 +451,8 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
         kind: kind,
         totalScore: blueprint.totalScore,
         minutes: blueprint.minutes,
-        chapters: chapters.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
-        exclude: exclude.split(/[;；\n]/).map(s => s.trim()).filter(Boolean),
+        chapters: splits(chapters),
+        exclude: splits(exclude),
         difficulty: { basic: preset.mix.basic, medium: preset.mix.medium, hard: preset.mix.hard },
         targetYear: 2027,
         textbook: '人教版',
@@ -372,91 +468,131 @@ function NewPaperPanel({ blueprints, api, onCreated, onError }: {
           暂无已核验的试卷结构。请先在「真题资料库」录入并核验对应年份的真题，再回到这里。
         </p>
       )}
-      <div className={css.wizard}>
-        <div className={css.wizardMain}>
-          <div className={css.stepCard}>
-            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>1</span>选择试卷结构</h3>
-            <div className={css.field}><span>结构模板（已核验）</span>
-              <GlassSelect
-                value={blueprintId}
-                ariaLabel="结构模板"
-                testId="blueprint"
-                placeholder="— 选择 —"
-                options={blueprints.map(b => ({
-                  value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
-                }))}
-                onChange={setBlueprintId}
-              />
-            </div>
-            {blueprint !== undefined && (
-              <div className={css.bpInfo}>
-                {blueprint.sections.map((s, i) => (
-                  <span key={i} className={css.bpSection}>
-                    {s.title} · {s.slots.length} 题
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className={css.stepCard}>
-            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>2</span>划定考试范围</h3>
-            <div className={css.fieldRow}>
-              <div className={css.field}><span>卷型</span>
+      <div className={css.workbench}>
+        <div className={css.workbenchMain}>
+          <div className={css.stepForm} data-paper-form="quick">
+            <div className={css.stepCard} data-paper-step="basic">
+              <h3 className={css.stepCardTitle}>试卷结构</h3>
+              <div className={css.field}><span>结构模板（已核验）</span>
                 <GlassSelect
-                  value={kind}
-                  ariaLabel="卷型"
-                  testId="paper-kind"
-                  options={KINDS.map(k => ({ value: k, label: KIND_LABEL[k] ?? k }))}
-                  onChange={setKind}
+                  value={blueprintId}
+                  ariaLabel="结构模板"
+                  testId="blueprint"
+                  placeholder="— 选择 —"
+                  options={blueprints.map(b => ({
+                    value: b.id, label: `${b.title}（${b.totalScore} 分 / ${b.minutes} 分钟）`,
+                  }))}
+                  onChange={setBlueprintId}
                 />
               </div>
+              {blueprint !== undefined && (
+                <>
+                  <div className={css.bpInfo}>
+                    {blueprint.sections.map((s, i) => (
+                      <span key={i} className={css.bpSection}>
+                        {s.title} · {s.slots.length} 题
+                      </span>
+                    ))}
+                  </div>
+                  <ul className={css.structureList} aria-label="题型结构与给分规则">
+                    {blueprint.sections.map((s, i) => (
+                      <li key={i} className={css.structureRow}>
+                        <span className={css.structureTitle}>{s.title}</span>
+                        <span className={css.structureMeta}>
+                          {s.slots.length} 题 · {s.slots.reduce((n, x) => n + x.score, 0)} 分
+                        </span>
+                        {s.note !== undefined && <span className={css.structureNote}>{s.note}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
-            <label className={css.field}>已教章节（分号或换行分隔）
-              <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
-                placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={2} />
-            </label>
-            <label className={css.field}>排除内容
-              <textarea value={exclude} onChange={(e) => { setExclude(e.target.value) }}
-                placeholder="如：电功率综合计算" rows={2} />
-            </label>
-          </div>
 
-          <div className={css.stepCard}>
-            <h3 className={css.stepCardTitle}><span className={css.stepBadge}>3</span>设定难度配比</h3>
-            <div className={css.field}><span>难度系数（贵州中高考标准档）</span>
-              <GlassSelect
-                value={presetKey}
-                ariaLabel="难度系数"
-                testId="difficulty-preset"
-                options={DIFFICULTY_PRESETS.map(p => ({
-                  value: p.key, label: `${p.label} — 系数 ≈${mixCoefficient(p.mix).toFixed(2)}`,
-                }))}
-                onChange={setPresetKey}
-              />
+            <div className={css.stepCard} data-paper-step="scope">
+              <h3 className={css.stepCardTitle}>内容范围</h3>
+              <label className={css.field}>已教章节（分号或换行分隔）
+                <textarea value={chapters} onChange={(e) => { setChapters(e.target.value) }}
+                  placeholder="人教版九年级·第十三章 内能；第十四章 内能的利用" rows={6} />
+              </label>
             </div>
-            <MixBar mix={preset.mix} />
+
+            <details className={css.stepCard} data-paper-step="advanced">
+              <summary className={css.advancedSummary}>高级设置（卷型 · 难度 · 排除内容）</summary>
+              <div className={css.advancedBody}>
+                <div className={css.field}><span>卷型</span>
+                  <GlassSelect
+                    value={kind}
+                    ariaLabel="卷型"
+                    testId="paper-kind"
+                    options={KINDS.map(k => ({ value: k, label: KIND_LABEL[k] ?? k }))}
+                    onChange={setKind}
+                  />
+                </div>
+                <div className={css.field}><span>难度系数（贵州中高考标准档）</span>
+                  <GlassSelect
+                    value={presetKey}
+                    ariaLabel="难度系数"
+                    testId="difficulty-preset"
+                    options={DIFFICULTY_PRESETS.map(p => ({
+                      value: p.key, label: `${p.label} — 系数 ≈${mixCoefficient(p.mix).toFixed(2)}`,
+                    }))}
+                    onChange={setPresetKey}
+                  />
+                </div>
+                <MixBar mix={preset.mix} />
+                <label className={css.field}>排除内容（分号或换行分隔）
+                  <textarea value={exclude} onChange={(e) => { setExclude(e.target.value) }}
+                    placeholder="如：电功率综合计算" rows={5} />
+                </label>
+              </div>
+            </details>
           </div>
         </div>
 
-        <aside className={css.wizardSide}>
+        <aside className={css.workbenchSide} aria-label="试卷摘要">
           <div className={css.summaryCard}>
             <h3 className={css.summaryTitle}>试卷摘要</h3>
             <dl className={css.summaryList}>
-              <div><dt>结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
-              <div><dt>满分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
+              <div><dt>规范 Profile</dt><dd>{blueprint === undefined ? '未选择' : blueprint.policyLabel ?? '未标注'}</dd></div>
+              <div><dt>试卷结构</dt><dd>{blueprint?.title ?? '未选择'}</dd></div>
+              <div><dt>总分 / 时长</dt><dd>{blueprint === undefined ? '—' : `${blueprint.totalScore} 分 / ${blueprint.minutes} 分钟`}</dd></div>
+              <div><dt>题量</dt><dd>{blueprint === undefined ? '—' : `${totalQuestions} 题`}</dd></div>
               <div><dt>卷型</dt><dd>{KIND_LABEL[kind] ?? kind}</dd></div>
-              <div><dt>章节范围</dt><dd>{chapters.trim() === '' ? '未填写' : `${chapters.split(/[;；\n]/).filter(s => s.trim() !== '').length} 章`}</dd></div>
+              <div><dt>目标年份</dt><dd>2027 届</dd></div>
+              <div><dt>教材版本</dt><dd>人教版</dd></div>
+              <div><dt>知识覆盖</dt><dd>{chapterCount === 0 ? '未填写' : `${chapterCount} 章`}</dd></div>
               <div><dt>难度目标</dt><dd>{coefficientLabel(mixCoefficient(preset.mix))}</dd></div>
             </dl>
-            {blueprint?.policyLabel !== undefined && <p className={css.policy}>{blueprint.policyLabel}</p>}
-            <button type="button" className={css.primary} disabled={busy || blueprint === undefined}
-              onClick={() => { void create() }}>
-              {busy ? '创建中…' : '生成双向细目表'}
-            </button>
-            <p className={css.summaryHint}>确认细目表后进入 AI 起草与逐题审核</p>
+            {/* Two runtimes the paper is judged by, neither of which has run
+                yet. Rendered as the honest pending state — never a result that
+                has not been computed. */}
+            <ul className={css.statusList}>
+              <li className={css.statusRow}>
+                <span className={css.statusName}>物理验证<em className={css.statusEn}>Physics Verification</em></span>
+                <span className={clsx(css.statusPill, css.statusPending)}>待生成</span>
+              </li>
+              <li className={css.statusRow}>
+                <span className={css.statusName}>考试规范校验<em className={css.statusEn}>Exam Compliance</em></span>
+                <span className={clsx(css.statusPill, css.statusPending)}>待检查</span>
+              </li>
+            </ul>
+            <p className={css.summaryHint}>
+              点击「AI 起草 + 自动检查」一键完成：细目表自动确认并起草，过程实时可见；
+              物理验证通过、考试规范校验到达
+              <code className={css.code}>READY_FOR_TEACHER_REVIEW</code> 再由教研复核。
+            </p>
           </div>
         </aside>
+
+        <div className={css.workbenchActions}>
+          <button type="button" className={css.primary} disabled={busy || blueprint === undefined}
+            onClick={() => { void create() }}>
+            {busy ? '创建中…' : '生成双向细目表'}
+          </button>
+          <button type="button" className={css.miniBtn} onClick={onReview}>前往审核</button>
+          {blueprint === undefined && <span className={css.actionHint}>请先选择试卷结构模板</span>}
+        </div>
       </div>
     </section>
   )
@@ -483,7 +619,7 @@ function MixBar({ mix }: { readonly mix: DifficultyMix }) {
 
 /* --------------------------------------------------------- 草稿与审核 -- */
 
-function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }: {
+function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, notify }: {
   jobs: PaperJobWire[]
   activeJob: PaperJobWire | undefined
   reviewer: string
@@ -491,11 +627,15 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }
   openJob: (id: string) => Promise<void>
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  notify: (message: string | undefined) => void
 }) {
+  /* The list folds away so long stems get the full width — the split is the
+     #1 complaint about reading drafted questions on this screen. */
+  const [listCollapsed, setListCollapsed] = useState(false)
   return (
     <section className={css.panel}>
       <div className={css.split}>
-        <aside className={css.jobList}>
+        <aside className={clsx(css.jobList, listCollapsed && css.jobListCollapsed)}>
           {jobs.length === 0 && <Empty text="暂无进行中的试卷任务" />}
           {jobs.map((job) => {
             const items = job.document?.sections.flatMap(s => s.items) ?? []
@@ -525,24 +665,226 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate }
           })}
         </aside>
         <div className={css.jobDetail}>
+          <button type="button"
+            className={css.jobListToggle}
+            aria-expanded={!listCollapsed}
+            title={listCollapsed ? '展开任务列表' : '收起任务列表'}
+            onClick={() => { setListCollapsed(v => !v) }}>
+            {listCollapsed ? '「 任务列表' : '收起列表 »'}
+          </button>
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
             : <JobDetail job={activeJob} reviewer={reviewer} api={api}
-              run={run} onJobUpdate={onJobUpdate} />}
+              run={run} onJobUpdate={onJobUpdate} notify={notify} />}
         </div>
       </div>
     </section>
   )
 }
 
-function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
+/* ------------------------------------------------- AI 工作过程可视化 -- */
+
+/** Mascot moods — which animation the little worker plays. */
+type WorkerMood = 'think' | 'write' | 'check' | 'paint' | 'sad'
+
+/** Pipeline phases the checklist renders, in order. */
+const PHASE_LABELS = ['题库规划', 'AI 起草', '规范检查', '引擎复核', '题图生成'] as const
+const PHASE_OF_STAGE: Record<string, number> = {
+  plan: 0, draft: 1, adapt: 1, assemble: 1, check: 2, solve: 3, figure: 4, export: 4,
+}
+const MOOD_OF_STAGE: Record<string, WorkerMood> = {
+  plan: 'think', draft: 'write', adapt: 'write', assemble: 'write',
+  check: 'check', solve: 'check', figure: 'paint', export: 'paint',
+}
+const DEFAULT_DETAIL: readonly string[] = [
+  '正在规划题库供给', '正在思考命题', '正在逐项规范检查', '物理引擎逐题复核', 'AI 正在绘制题图',
+]
+
+const fmtElapsed = (ms: number): string => {
+  const total = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+/**
+ * Live view of WHAT the AI pipeline is doing: a little CSS mascot in the
+ * spirit of grokbot's status figure (thinking / writing / checking /
+ * painting), a phase checklist driven by the job's `progress` telemetry
+ * (which section is being drafted, which question the engine is re-solving,
+ * which figure is being drawn), and an elapsed timer. Pure presentational —
+ * the drivers themselves live in paper-host.
+ */
+function AiWorker({ job, runnerActive, since }: {
+  readonly job: PaperJobWire
+  runnerActive: boolean
+  since: number
+}) {
+  const inAsyncStage = job.status === 'drafting' || job.status === 'checking'
+    || (job.status === 'approved' && job.progress?.stage === 'figure')
+  const visible = runnerActive || inAsyncStage
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!visible) return
+    const timer = setInterval(() => { setNow(Date.now()) }, 1000)
+    return () => { clearInterval(timer) }
+  }, [visible])
+  if (!visible) return null
+
+  const progress = job.progress
+  const failed = job.status === 'failed'
+  const mood: WorkerMood = failed ? 'sad'
+    : progress !== undefined ? MOOD_OF_STAGE[progress.stage] ?? 'think'
+      : job.status === 'checking' ? 'check' : 'think'
+  const phase = progress !== undefined
+    ? PHASE_OF_STAGE[progress.stage] ?? 1
+    : job.status === 'checking' ? 2 : 1
+  const total = progress?.total ?? 0
+  const done = Math.min(progress?.done ?? 0, total)
+  const ratio = total > 0 ? done / total : 0
+  const detail = progress?.detail ?? DEFAULT_DETAIL[phase] ?? ''
+
+  return (
+    <div className={clsx(css.workerPanel, failed && css.workerFailed)} role="status"
+      aria-live="polite"
+      aria-label={`AI 工作中：${PHASE_LABELS[phase] ?? ''} ${detail}`}>
+      <div className={css.mascot} data-mood={mood} aria-hidden="true">
+        <span className={css.mascotAntenna}><i /></span>
+        <div className={css.mascotHead}>
+          <span className={css.mascotEye} />
+          <span className={css.mascotEye} />
+          <span className={css.mascotMouth} />
+        </div>
+        <div className={css.mascotBody}>
+          <span className={css.mascotArmL} />
+          <span className={css.mascotArmR} />
+        </div>
+        <span className={css.mascotTool} />
+        <span className={css.mascotDots}><i /><i /><i /></span>
+      </div>
+      <div className={css.workerBody}>
+        <p className={css.workerTitle}>
+          {failed ? '本次未完成' : `AI 工作中 · ${PHASE_LABELS[phase] ?? ''}`}
+          <span className={css.workerTimer}>{fmtElapsed(now - since)}</span>
+        </p>
+        <p className={css.workerDetail}>
+          {failed ? (job.lastError ?? '阶段失败，可重试') : (
+            <>
+              {detail}
+              {total > 0 && `（${done}/${total}）`}
+              <span className={css.workerEllipsis} aria-hidden="true"><i /><i /><i /></span>
+            </>
+          )}
+        </p>
+        {total > 0 && !failed && (
+          <span className={css.workerBar} role="img" aria-label={`进度 ${done}/${total}`}>
+            <span className={css.workerBarFill} style={{ width: `${ratio * 100}%` }} />
+          </span>
+        )}
+        <ol className={css.workerPhases}>
+          {PHASE_LABELS.map((label, i) => (
+            <li key={label}
+              className={clsx(css.workerPhase,
+                i < phase && css.workerPhaseDone,
+                i === phase && !failed && css.workerPhaseActive,
+                i === phase && failed && css.workerPhaseFailed)}>
+              {i < phase ? '✓' : i === phase ? (failed ? '✗' : '●') : '○'} {label}
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  )
+}
+
+function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
   job: PaperJobWire
   reviewer: string
   api: PaperApi
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  notify: (message: string | undefined) => void
 }) {
   const reload = () => run(async () => { onJobUpdate(await api.getJob(job.id)) })
+  /* ---- AI 流水线编排（客户端状态机）----
+     服务端约定：POST /draft 与 /check 都立即 202，真正的工作在后台推进
+     （drafting → drafting 结束时置 checking；check 从 checking 走到 review）。
+     背靠背连发两者会竞态——check 可能在起草完成前以 NO_DOCUMENT 把任务打成
+     failed。正确顺序是：draft → 轮询到 checking → 才发 check → 轮询到终态。
+     runner 由本组件持有：activeJob 的刷新、轮询与可视化都由它驱动，页面中途
+     刷新时退回旧的 3s 状态轮询兜底。 */
+  const [runnerActive, setRunnerActive] = useState(false)
+  const [runnerSince, setRunnerSince] = useState(0)
+  const runnerRef = useRef<{ jobId: string; cancelled: boolean } | null>(null)
+  useEffect(() => () => {
+    if (runnerRef.current !== null) runnerRef.current.cancelled = true
+  }, [])
+  const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
+
+  const driveAi = () => {
+    if (runnerRef.current !== null) return
+    const handle = { jobId: job.id, cancelled: false }
+    runnerRef.current = handle
+    setRunnerActive(true)
+    setRunnerSince(Date.now())
+    void (async () => {
+      try {
+        let latest = await api.getJob(handle.jobId)
+        /* 细目表自动确认：确认步不再需要教师操作（spec/failed 都从这里重试）。 */
+        if (latest.status === 'spec' || latest.status === 'failed') {
+          latest = await api.confirmSpec(latest.id, latest.specTable)
+        }
+        onJobUpdate(latest)
+        await api.runDraft(latest.id)
+        let checkFired = false
+        const deadline = Date.now() + 45 * 60_000
+        while (!handle.cancelled && Date.now() < deadline) {
+          await sleep(2500)
+          latest = await api.getJob(handle.jobId)
+          onJobUpdate(latest)
+          if (latest.status === 'checking' && !checkFired) {
+            /* 起草驱动完成（进入 checking）——现在才是发检查的正确时机。 */
+            checkFired = true
+            await api.runChecks(latest.id)
+            continue
+          }
+          if (latest.status === 'review' || latest.status === 'approved'
+            || latest.status === 'exported' || latest.status === 'failed') break
+        }
+      } catch (e) {
+        notify(err(e))
+      } finally {
+        runnerRef.current = null
+        setRunnerActive(false)
+        void reload()
+      }
+    })()
+  }
+
+  /* 导出同样长跑（每张题图 ~70 s）——同 runner 模式驱动可视化与轮询。 */
+  const driveExport = () => {
+    if (runnerRef.current !== null) return
+    const handle = { jobId: job.id, cancelled: false }
+    runnerRef.current = handle
+    setRunnerActive(true)
+    setRunnerSince(Date.now())
+    void (async () => {
+      try {
+        await api.runExport(handle.jobId)
+        const deadline = Date.now() + 45 * 60_000
+        while (!handle.cancelled && Date.now() < deadline) {
+          await sleep(2500)
+          const latest = await api.getJob(handle.jobId)
+          onJobUpdate(latest)
+          if (latest.status === 'exported') break
+        }
+      } catch (e) {
+        notify(err(e))
+      } finally {
+        runnerRef.current = null
+        setRunnerActive(false)
+        void reload()
+      }
+    })()
+  }
   /* 退回修改 modal: the suggestion goes to the model, which revises the
      question in place; the new version lands as status 'draft' again. */
   const [repairTarget, setRepairTarget] = useState<number | null>(null)
@@ -606,13 +948,18 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
       </p>
       <StageRail status={job.status} />
       {job.status === 'failed' && job.lastError !== undefined && (
-        <p className={css.errorNote}>起草/检查失败：{job.lastError}（可在下方重新确认细目表后重试）</p>
+        <p className={css.errorNote}>起草/检查失败：{job.lastError}（点击「重新 AI 起草」可自动重新确认细目表并重试）</p>
       )}
+      <AiWorker job={job} runnerActive={runnerActive} since={runnerSince} />
 
-      {/* 细目表确认 — 'failed' jobs retry through the same confirm step. */}
-      {(job.status === 'spec' || job.status === 'failed') && (
-        <div className={css.block}>
-          <h3>双向细目表（{job.specTable.length} 题 / {job.specTable.reduce((n, r) => n + r.score, 0)} 分 · {jobRating(job)}）</h3>
+      {/* 细目表 — 只读信息：确认不再是独立步骤，AI 起草自动采用当前细目表。
+          'failed' 任务重试也走同一张表（重确认会重置修订预算）。 */}
+      {(job.status === 'spec' || job.status === 'failed') && job.specTable.length > 0 && (
+        <details className={css.block} open={!runnerActive}>
+          <summary className={css.specSummary}>
+            双向细目表（{job.specTable.length} 题 / {job.specTable.reduce((n, r) => n + r.score, 0)} 分 · {jobRating(job)}）
+            <span className={css.specSummaryHint}>只读 · AI 起草时自动采用</span>
+          </summary>
           <table className={css.table}>
             <thead><tr><th>题号</th><th>板块</th><th>题型</th><th>分值</th><th>考点</th><th>能力</th><th>题库供给</th></tr></thead>
             <tbody>
@@ -620,7 +967,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
                 const plan = planByNo.get(row.questionNo)
                 return (
                   <tr key={row.questionNo}>
-                    <td>{row.questionNo}</td><td className={css.cellText}>{row.sectionTitle}</td><td>{row.kind}</td>
+                    <td>{row.questionNo}</td><td className={css.cellText}>{row.sectionTitle}</td><td>{kindLabel(row.kind)}</td>
                     <td>{row.score}</td><td className={css.cellText}>{row.knowledge.join('、')}</td><td>{row.ability}</td>
                     <td>
                       {plan === undefined
@@ -635,32 +982,21 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
               })}
             </tbody>
           </table>
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { onJobUpdate(await api.confirmSpec(job.id, job.specTable)) }) }}>
-            确认细目表
-          </button>
-        </div>
+        </details>
       )}
 
-      {/* 阶段动作 */}
+      {/* 阶段动作 — 一个按钮完成「确认细目表 → 起草 → 检查」，编排见 driveAi */}
       <div className={css.actions}>
-        {job.status !== 'spec' && job.status !== 'drafting' && job.status !== 'checking'
-          && job.status !== 'approved' && job.status !== 'exported' && (
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { await api.runDraft(job.id); await api.runChecks(job.id) }) }}>
-            AI 起草 + 自动检查
-          </button>
-        )}
-        {job.status === 'spec' && job.specTable.length > 0 && (
-          <button type="button" className={css.primary}
-            onClick={() => {
-              void run(async () => {
-                await api.confirmSpec(job.id, job.specTable)
-                await api.runDraft(job.id)
-                await api.runChecks(job.id)
-              })
-            }}>
-            确认细目表并开始起草
+        {(job.status === 'spec' || job.status === 'failed' || job.status === 'review') && job.specTable.length > 0 && (
+          <button type="button" className={css.primary} disabled={runnerActive}
+            onClick={driveAi}>
+            {runnerActive
+              ? 'AI 工作中…'
+              : job.status === 'failed'
+                ? '重新 AI 起草 + 自动检查'
+                : job.status === 'review'
+                  ? '重新起草（覆盖当前草稿）'
+                  : 'AI 起草 + 自动检查'}
           </button>
         )}
       </div>
@@ -705,7 +1041,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
             <details key={q.number} className={css.question} open={q.status !== 'approved'}>
               <summary>
                 <span className={css.qNo}>第 {q.number} 题</span>
-                <span className={css.qMeta}>{q.kind} · {q.score} 分 · {q.knowledge.join('、')}</span>
+                <span className={css.qMeta}>{kindLabel(q.kind)} · {q.score} 分 · {q.knowledge.join('、')}</span>
                 {q.provenance !== undefined && (
                   <span className={clsx(css.chip, css[`plan-${q.provenance.mode === 'verbatim' ? 'verbatim' : q.provenance.mode === 'adapted' ? 'adapt' : 'generate'}`])}
                     title={q.provenance.sourceLabel ?? q.provenance.bankItemId ?? 'AI 起草'}>
@@ -724,7 +1060,10 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
                 {q.subQuestions !== undefined && q.subQuestions.map(s => (
                   <p key={s.no} className={css.sub}>（{s.no}）（{s.score} 分）<Rich text={s.text} /></p>
                 ))}
-                {q.figure !== undefined && <p className={css.figure}>[题图：{q.figure.caption ?? q.figure.ref}]</p>}
+                {q.figure !== undefined && (
+                  <FigureBlock job={job} api={api}
+                    figureRef={q.figure.ref} caption={q.figure.caption ?? q.figure.ref} />
+                )}
                 {q.answer !== undefined && (
                   <div className={css.answer}>
                     <p><b>答案：</b><Rich text={q.answer.result} /></p>
@@ -782,9 +1121,9 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate }: {
       )}
       {job.status === 'approved' && (
         <div className={css.actions}>
-          <button type="button" className={css.primary}
-            onClick={() => { void run(async () => { await api.runExport(job.id); onJobUpdate(await api.getJob(job.id)) }) }}>
-            导出 A4 试卷 + 答案解析（PDF/Word）
+          <button type="button" className={css.primary} disabled={runnerActive}
+            onClick={driveExport}>
+            {runnerActive ? 'AI 生成题图中…' : '导出 A4 试卷 + 答案解析（PDF/Word）'}
           </button>
         </div>
       )}
@@ -1301,11 +1640,6 @@ function BankPanel({ items, reviewer, api, run, onError }: {
     if (modes.length === 0) throw new Error('至少保留一种使用方式')
     await api.updateBankItem(item.id, { reuseModes: modes })
   })
-
-  const kindLabel = (kind: string): string => ({
-    'choice-single': '单选', 'choice-multi': '多选', blank: '填空', drawing: '作图',
-    'short-answer': '简答', experiment: '实验', calculation: '计算',
-  } as Record<string, string>)[kind] ?? kind
 
   const itemCard = (item: BankItemRow) => {
     const open = expanded === item.id

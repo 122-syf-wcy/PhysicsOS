@@ -38,6 +38,7 @@ export {
   PhysicsToolRuntime,
   ToolRuntimeError,
   createPhysicsToolRuntime,
+  verifiedQuantityOf,
   type CommandResult,
   type ExperimentListing,
   type PhysicsToolRuntimeOptions,

@@ -4,14 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ChatConversationViewNode, ChatSnapshot, ConversationEventInput,
   ConversationNodeDefinition, ConversationViewDefinition,
-} from '@deepseek-ai/dsh-client-runtime/client'
-import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-runtime/client'
-import { commandDefinition } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation-nodes/command.ts'
-import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation-nodes/chat-snapshot-builder.ts'
+} from '../src/client/runtime-compat.ts'
+import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
+/* These business Definitions moved to the Chat target package in 0.1.7; the
+   card's kind is a renderer of that target, so its test assembles through the
+   same Definitions the Chat view registers. */
+import { commandDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/command.ts'
+import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import {
   isPhysicsSceneEvent, physicsSceneCardDefinition, physicsSceneTurnDefinition,
-  type PhysicsSceneCardData,
+  PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData,
 } from '../src/client/scene-chat-node.ts'
 import {
   createExperimentSceneRef, findExperimentTemplate,
@@ -79,16 +82,19 @@ class TestViewDefinitions {
   }
 }
 
-function entry(seq: number, type: string, data: unknown): ConversationEventInput {
+type DurableEntry = Extract<ConversationEventInput, { readonly type: 'event' }>
+
+function entry(seq: number, type: string, data: unknown): DurableEntry {
   return {
-    event: { seq, time: 1_700_000_000_000 + seq, type, data } as ConversationEventInput['event'],
-    view: undefined,
+    type: 'event',
+    event: { seq, time: 1_700_000_000_000 + seq, type, data } as DurableEntry['event'],
   }
 }
 
 function snapshot(entries: readonly ConversationEventInput[], hasMore = false): ChatSnapshot {
   const assembler = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
   assembler.replaceWindow(entries, hasMore)
+  assembler.activateTarget('chat')
   assembler.flush()
   const value = assembler.snapshot('chat') as ChatSnapshot | undefined
   if (value === undefined) throw new Error('chat view was not registered')
@@ -99,11 +105,18 @@ function node(value: ChatSnapshot, kind: string): ChatConversationViewNode | und
   return value.nodes.values().find(candidate => candidate.kind === kind)
 }
 
-/** Minimal chat snapshot the card's supersede selector reads. */
-const useSessionOf = (nodes: readonly { key: string; kind: string; anchorSeq: number }[]) => {
+/** Minimal Chat-target snapshot the card's supersede selector reads. */
+const useChatOf = (
+  nodes: readonly { key: string; kind: string; anchorSeq: number }[],
+  turns: ReadonlyMap<number, unknown> = new Map(),
+) => {
   const map = new Map(nodes.map(candidate => [candidate.key, candidate]))
-  return (selector: (snapshot: { chat: { nodes: typeof map } }) => unknown) =>
-    selector({ chat: { nodes: map } })
+  return (
+    selector: (snapshot: {
+      nodes: typeof map
+      timeline: { turns: ReadonlyMap<number, unknown> }
+    }) => unknown,
+  ) => selector({ nodes: map, timeline: { turns } })
 }
 
 const cardProps = (
@@ -111,17 +124,19 @@ const cardProps = (
   openSceneInLab = vi.fn(),
   nodes: readonly { key: string; kind: string; anchorSeq: number }[] = [],
   recordAttempt?: (attempt: SelfCheckAttemptInput) => void,
+  turn?: { readonly number: number; readonly state: unknown },
 ) => ({
   node: {
     key: 'physics-scene-card:test',
     kind: 'physics-scene-card',
     anchorSeq: 1.9,
     data,
+    location: turn === undefined ? { kind: 'session' } : { kind: 'turn', turn: { turn: turn.number } },
   },
   t,
   openSceneInLab,
   ...(recordAttempt === undefined ? {} : { recordAttempt }),
-  useSession: useSessionOf(nodes),
+  useChat: useChatOf(nodes, turn === undefined ? new Map() : new Map([[turn.number, turn.state]])),
 }) as unknown as Parameters<typeof SceneChatCard>[0]
 
 describe('physics scene chat card', () => {
@@ -176,8 +191,29 @@ describe('physics scene chat card', () => {
     expect(cards.map(c => c.anchorSeq)).toEqual([1.8, 2.8])
   })
 
-  it('docks one turn-scoped card directly above the closing answer', () => {
-    const value = snapshot([
+  /* The turn card renders from the Turn's own published data (the turn-tail
+     seat), not from a view node: a `physics/scene` event is not a message, so a
+     node built for it has no place on the conversation surface. */
+  const turnDataOf = (
+    events: readonly DurableEntry[],
+  ): ReturnType<NonNullable<typeof physicsSceneTurnDefinition.buildLocationData>> => {
+    const startEvent = events[0]
+    if (startEvent === undefined) throw new Error('fixture missing turn/start')
+    let state = physicsSceneTurnDefinition.start({} as never, {
+      ...startEvent, role: 'start', location: { kind: 'session' },
+    } as never, {} as never)
+    for (const event of events.slice(1)) {
+      state = physicsSceneTurnDefinition.update({ state } as never, {
+        ...event, role: 'update', location: { kind: 'session' },
+      } as never)
+    }
+    return physicsSceneTurnDefinition.buildLocationData!(
+      { state } as never, 'turn', null,
+    )
+  }
+
+  it('publishes the newest scene of the turn as the turn-tail seat\'s data', () => {
+    const published = turnDataOf([
       entry(1, 'turn/start', { turn: 1 }),
       sceneEvent(2, 'solved', 0, ref.sceneId, 1),
       sceneEvent(3, 'solved', 0, 'scene-second', 1),
@@ -185,33 +221,43 @@ describe('physics scene chat card', () => {
       assistantMessage(5, 1),
       entry(6, 'turn/end', { turn: 1, reason: 'completed' }),
     ])
-
-    const cards = [...value.nodes.values()].filter(n => n.kind === 'physics-scene-card')
-    /* Three snapshots across two scenes still publish their per-scene
-       nodes (1.8 and the folded 3.8), but the turn card anchored just above
-       the answer message (seq 5) supersedes both in the same answer block —
-       the renderer keeps only it visible. */
-    /* Nodes iterate in context-creation order: the turn context starts at
-       turn/start, so its card lists first. */
-    expect(cards.map(c => c.anchorSeq)).toEqual([4.9, 1.8, 3.8])
-    const winner = cards.find(c => c.anchorSeq === 4.9)
-    const data = winner?.data as PhysicsSceneCardData
-    expect(data.sceneId).toBe('scene-second')
-    expect(data.revision).toBe(1)
-    expect(data.cause).toBe('command')
+    expect(published).toMatchObject({
+      kind: 'turn',
+      turn: 1,
+      key: 'physics-scene-turn',
+      value: { sceneId: 'scene-second', revision: 1, cause: 'command' },
+    })
   })
 
-  it('keeps the turn card at the work site while the turn is open', () => {
-    const value = snapshot([
+  it('publishes live while the turn is still open', () => {
+    const published = turnDataOf([
       entry(1, 'turn/start', { turn: 1 }),
       sceneEvent(2, 'solved', 0, ref.sceneId, 1),
       sceneEvent(3, 'command', 1, ref.sceneId, 1),
     ])
+    expect(published).toMatchObject({
+      kind: 'turn',
+      turn: 1,
+      key: 'physics-scene-turn',
+      value: { sceneId: ref.sceneId, revision: 1, cause: 'command' },
+    })
+    /* A turn that published nothing has nothing to dock. */
+    expect(turnDataOf([entry(1, 'turn/start', { turn: 2 })])).toBeNull()
+  })
 
-    const cards = [...value.nodes.values()].filter(n => n.kind === 'physics-scene-card')
-    /* Open turn: the turn card rides the latest snapshot at seq - 0.1; the
-       per-scene fallback sits one step below and stays hidden behind it. */
-    expect(cards.map(c => c.anchorSeq)).toEqual([2.9, 2.8])
+  /* The registry refuses a Definition declaring `target` without
+     `buildViewNode` — and that refusal fails the whole plugin's activation,
+     which takes the client down. Mirroring the rule here is what catches it in
+     a unit run: driving the Definitions directly never touches the registry. */
+  it('declares a view target and its node builder together, or neither', () => {
+    for (const definition of [physicsSceneCardDefinition, physicsSceneTurnDefinition]) {
+      /* `Object.hasOwn` rather than reading the members: the properties are
+         what the rule is about, and reading a method off its object to compare
+         it is exactly the unbound reference the linter refuses. */
+      expect(Object.hasOwn(definition, 'target')).toBe(Object.hasOwn(definition, 'buildViewNode'))
+    }
+    expect(Object.hasOwn(physicsSceneTurnDefinition, 'target')).toBe(false)
+    expect(Object.hasOwn(physicsSceneTurnDefinition, 'buildLocationData')).toBe(true)
   })
 
   it('ignores unrelated events and stays total across the interface', () => {
@@ -299,6 +345,38 @@ describe('physics scene chat card', () => {
       { key: 'physics-scene-card:newer', kind: 'physics-scene-card', anchorSeq: 3.9 },
     ])} />)
     expect(kept.container.querySelector('[data-scene-card]')).not.toBeNull()
+  })
+
+  it('yields to the Turn card once its Turn has closed', () => {
+    const data: PhysicsSceneCardData = {
+      sceneId: ref.sceneId,
+      revision: ref.scene.revision,
+      title: '斜抛运动',
+      domain: 'mechanics',
+      cause: 'solved',
+      commandType: undefined,
+      solve: undefined,
+      scene: ref.scene as never,
+    }
+    const turnData = new Map([[PHYSICS_SCENE_TURN_KEY, { sceneId: ref.sceneId }]])
+    /* The Turn card is drawn from `turn/end`, so once the Turn closes it owns
+       this answer and the per-scene card must go — otherwise the reader sees
+       the same scene twice. */
+    const yielded = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
+      { number: 1, state: { turn: 1, status: 'closed', data: turnData } })} />)
+    expect(yielded.container.querySelector('[data-scene-card]')).toBeNull()
+
+    /* While the Turn runs the Turn card does not exist yet: the inline card is
+       the only thing showing the world being built, so it stays. */
+    const kept = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
+      { number: 1, state: { turn: 1, status: 'open', data: turnData } })} />)
+    expect(kept.container.querySelector('[data-scene-card]')).not.toBeNull()
+
+    /* A closed Turn that published no scene leaves this card alone: it is the
+       fallback for logs whose scenes carry no turn number. */
+    const unowned = render(<SceneChatCard {...cardProps(data, vi.fn(), [], undefined,
+      { number: 1, state: { turn: 1, status: 'closed', data: new Map() } })} />)
+    expect(unowned.container.querySelector('[data-scene-card]')).not.toBeNull()
   })
 
   it('shows the unsupported note for a scene no domain runtime accepts', () => {
@@ -391,5 +469,42 @@ describe('physics scene chat card', () => {
     expect(recordAttempt).toHaveBeenCalledOnce()
     expect(recordAttempt.mock.calls[0]![0].questionId).toBe('01-proton-basic')
     expect(recordAttempt.mock.calls[0]![0].correct).toBe(true)
+  })
+
+  it('mounts the verification block on the solved card, next to the answer', () => {
+    const data = solvedCardData('mech-01-uniform-acceleration')
+    const provenance = data.solve?.answers[0]?.provenance
+    if (provenance === undefined || provenance === null) throw new Error('fixture has no provenance')
+    const view = render(<SceneChatCard {...cardProps(data)} />)
+
+    /* One verification section, not a second copy beside it. */
+    expect(view.getAllByText('物理验证').length).toBe(1)
+    expect(view.getByText('物理已验证')).toBeTruthy()
+    expect(view.container.querySelector('[data-verification-level="physics-verified"]')).not.toBeNull()
+    /* The engine and verifier are named from the answer's OWN provenance, not
+       from the scene domain. */
+    expect(view.container.querySelector(`[data-engine="${provenance.engineId}"]`)).not.toBeNull()
+    expect(view.container.querySelector(`[data-verifier="${provenance.verifierId}"]`)).not.toBeNull()
+    expect(view.getByText('验证项')).toBeTruthy()
+    /* The primary answer reaches the block with its unit. */
+    expect(view.container.querySelector('[data-verified-value]')?.textContent).toContain('m/s')
+  })
+
+  it('falls back to the unverified state when the solve answers carry no provenance', () => {
+    const data = solvedCardData('mech-01-uniform-acceleration')
+    const solve = data.solve
+    if (solve === undefined) throw new Error('fixture has no solve')
+    /* A formatted answer and passing local checks are NOT provenance: without a
+       trace on the answer the block must warn, never show a check or name an
+       engine. */
+    const stripped = solve.answers.map(answer => ({ ...answer, provenance: null }))
+    const view = render(<SceneChatCard {...cardProps({ ...data, solve: { ...solve, answers: stripped } })} />)
+
+    expect(view.getByText('未验证')).toBeTruthy()
+    expect(view.container.textContent).not.toContain('物理已验证')
+    expect(view.container.querySelector('[data-verification-level="unverified"]')).not.toBeNull()
+    /* No engine or verifier is named without a trace. */
+    expect(view.container.querySelector('[data-engine]')).toBeNull()
+    expect(view.container.querySelector('[data-verifier]')).toBeNull()
   })
 })

@@ -33,6 +33,30 @@ export const REQUIRED_SECRETS = [
   'image_api_key',
 ]
 
+/** Runs in the restored image using only Node, independently of its bundled healthcheck. */
+export const RESTORE_READINESS_SCRIPT = `
+(async () => {
+  const timeoutMs = Number(process.argv[2] ?? 2000)
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) process.exit(1)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let ready = false
+  try {
+    const response = await fetch(process.argv[1], {
+      headers: { accept: 'application/json' },
+      redirect: 'error',
+      signal: controller.signal,
+    })
+    if (response.ok) ready = (await response.json())?.status === 'ready'
+  } catch {
+    ready = false
+  } finally {
+    clearTimeout(timer)
+  }
+  process.exit(ready ? 0 : 1)
+})()
+`
+
 /** Arguments never pass through a host shell; command failures never echo secret output. */
 export async function runCommand(command, args, options = {}) {
   const child = spawn(command, args, {

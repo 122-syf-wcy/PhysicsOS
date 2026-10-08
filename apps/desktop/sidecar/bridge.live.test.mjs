@@ -181,6 +181,9 @@ test(
         60_000,
         'terminal run event',
       )
+      if (terminal.event.type !== 'run_completed') {
+        process.stderr.write(`[terminal] ${JSON.stringify(terminal.event)}\n`)
+      }
       assert.equal(terminal.event.type, 'run_completed')
       const text = sidecar.frames
         .filter((frame) => frame.event?.runId === runId && frame.event.type === 'text_delta')

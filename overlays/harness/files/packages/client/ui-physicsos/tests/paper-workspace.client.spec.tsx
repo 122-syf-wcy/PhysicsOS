@@ -41,7 +41,9 @@ const useAuthAs = (role?: AuthUser['role']) => {
 const neverHook = (() => {
   throw new Error('unused hook')
 }) as never
-const t = (key: string): string => key
+/* Only the back control is localised; everything else is Chinese-only and the
+   keys pass straight through. */
+const t = (key: string): string => (key === 'paper.backToHome' ? '返回首页' : key)
 
 const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
   listSources: vi.fn().mockResolvedValue([]),
@@ -78,7 +80,10 @@ const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
 })
 
 describe('PaperWorkspace', () => {
-  afterEach(() => { cleanup() })
+  /* Fake-timer tests must never leak the mocked clock into their neighbours:
+     a hung `findBy*` under a frozen clock aborts the test before its own
+     finally, so real timers are restored here as well. */
+  afterEach(() => { cleanup(); vi.useRealTimers() })
 
   it('renders the pipeline stepper with counts and the sources tab', async () => {
     render(<PaperWorkspace api={stubApi([job(), job({ id: 'p2', status: 'exported' })])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
@@ -89,15 +94,31 @@ describe('PaperWorkspace', () => {
     expect((await screen.findAllByText('1')).length).toBeGreaterThan(0)
   })
 
-  it('shows the three-step wizard and summary card on the new-paper tab', async () => {
+  it('shows the builder on one screen with the advanced fold, and the live summary', async () => {
     render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
-    expect(await screen.findByText('选择试卷结构')).toBeTruthy()
-    expect(screen.getByText('划定考试范围')).toBeTruthy()
-    expect(screen.getByText('设定难度配比')).toBeTruthy()
+    /* No step rail any more: the required inputs and the fold all mount at
+       once, so a teacher can create a paper without paging through a wizard. */
+    expect(screen.queryByRole('button', { name: '基本信息' })).toBeNull()
+    expect(await screen.findByTestId('blueprint')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="basic"]')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="scope"]')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="advanced"]')).toBeTruthy()
+    expect(screen.getByText('高级设置（卷型 · 难度 · 排除内容）')).toBeTruthy()
+
+    /* The summary column is present and never claims a result that has not
+       been computed. */
     expect(screen.getByText('试卷摘要')).toBeTruthy()
-    const seg = (t: string) => screen.getByText(
-      (_content, el) => el?.textContent === t,
-    )
+    expect(screen.getByText('待生成')).toBeTruthy()
+    expect(screen.getByText('待检查')).toBeTruthy()
+    expect(screen.getByText('物理验证')).toBeTruthy()
+    expect(screen.getByText('考试规范校验')).toBeTruthy()
+  })
+
+  it('keeps kind, difficulty and exclusions inside the advanced fold', async () => {
+    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    expect(await screen.findByText('难度系数（贵州中高考标准档）')).toBeTruthy()
+    expect(document.querySelector('[data-paper-step="advanced"]')).toBeTruthy()
+    const seg = (label: string) => screen.getByText((_content, el) => el?.textContent === label)
     expect(seg('基础 55%')).toBeTruthy()
     expect(seg('中档 35%')).toBeTruthy()
     expect(seg('提高 10%')).toBeTruthy()
@@ -126,8 +147,103 @@ describe('PaperWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
     fireEvent.click(await screen.findByText(/月考·bp-gz|paper-1|bp-gz/))
     expect(await screen.findByRole('list', { name: '任务阶段' })).toBeTruthy()
-    expect(screen.getByText('细目表')).toBeTruthy()
+    /* 细目表不再是独立阶段——起草自动确认,stage rail 从 AI 起草开始。 */
+    expect(screen.getByText('AI 起草')).toBeTruthy()
     expect(screen.getByText('逐题审核')).toBeTruthy()
+    expect(screen.queryByText(/^细目表$/)).toBeNull()
+  })
+
+  it('one AI button auto-confirms the spec table, drafts, and only checks after drafting lands', async () => {
+    vi.useFakeTimers()
+    try {
+      /* spec-stage job with a spec table: the old flow demanded a manual
+         确认细目表 first; the one-button flow folds it in, and — the race the
+         old client shipped — must NOT fire /check before /draft finishes.
+         Synchronous queries only: a frozen fake clock never advances the
+         polling inside `findBy*`. */
+      const sequence: string[] = []
+      const specJob = job({
+        status: 'spec',
+        specTable: [{
+          questionNo: 1, sectionTitle: '选择题', kind: 'choice-single', score: 3,
+          knowledge: ['内能'], ability: '识记', difficulty: 'basic',
+        }] as never,
+      })
+      const api = stubApi([specJob])
+      api.bankPlan = vi.fn().mockResolvedValue([])
+      api.confirmSpec = vi.fn().mockImplementation(() => {
+        sequence.push('confirmSpec')
+        return Promise.resolve({ ...specJob, status: 'spec' })
+      })
+      api.runDraft = vi.fn().mockImplementation(() => {
+        sequence.push('runDraft')
+        return Promise.resolve({ status: 'drafting' })
+      })
+      api.runChecks = vi.fn().mockImplementation(() => {
+        sequence.push('runChecks')
+        return Promise.resolve({ status: 'checking' })
+      })
+      const getJob = vi.fn().mockImplementation(() => {
+        /* Status schedule shared by every caller (openJob, the runner's own
+           first fetch, the runner poll and the 3s backup poll): spec ×2 →
+           drafting ×2 → checking ×3 → review. The wide checking band keeps
+           the runChecks transition deterministic regardless of which poll
+           consumes which slot. */
+        const schedule = ['spec', 'spec', 'drafting', 'drafting', 'checking', 'checking', 'checking', 'review']
+        const calls = getJob.mock.calls.length
+        const status = schedule[calls - 1] ?? 'review'
+        sequence.push(`poll:${status}`)
+        return Promise.resolve({ ...specJob, status })
+      })
+      api.getJob = getJob
+      render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByText(/bp-gz/))
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByRole('button', { name: /AI 起草 \+ 自动检查/ }))
+      /* Flush the runner's promise chain (its own getJob → confirmSpec →
+         runDraft) across microtask ticks before asserting. */
+      for (let i = 0; i < 20 && !sequence.includes('runDraft'); i += 1) {
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(sequence).toEqual(['poll:spec', 'poll:spec', 'confirmSpec', 'runDraft'])
+      /* Draft lands on the polls (drafting → checking); /check may only fire
+         after a poll observed 'checking'. */
+      for (let ms = 0; ms < 10_000; ms += 500) {
+        await vi.advanceTimersByTimeAsync(500)
+        if (sequence.includes('runChecks')) break
+      }
+      expect(sequence.indexOf('runDraft')).toBeGreaterThan(sequence.indexOf('confirmSpec'))
+      const firstChecking = sequence.indexOf('poll:checking')
+      expect(firstChecking).toBeGreaterThan(-1)
+      expect(sequence.slice(0, firstChecking)).not.toContain('runChecks')
+      expect(api.runChecks).toHaveBeenCalledTimes(1)
+      /* The runner exits on the terminal poll, not earlier. */
+      for (let ms = 0; ms < 10_000 && !sequence.includes('poll:review'); ms += 500) {
+        await vi.advanceTimersByTimeAsync(500)
+      }
+      expect(sequence.includes('poll:review')).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the working mascot with live progress telemetry while drafting', async () => {
+    const drafting = job({
+      status: 'drafting',
+      progress: { stage: 'draft', detail: '起草「三、实验题」', done: 2, total: 6, updatedAt: '2026-10-05T00:00:00Z' },
+    })
+    render(<PaperWorkspace api={stubApi([drafting])} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    fireEvent.click(await screen.findByText(/bp-gz/))
+    const status = await screen.findByRole('status')
+    expect(status.getAttribute('aria-label')).toContain('AI 起草')
+    expect(screen.getByText(/起草「三、实验题」（2\/6）/)).toBeTruthy()
+    /* The mascot wears its mood and the phase rail marks the live phase. */
+    expect(document.querySelector('[data-mood="write"]')).toBeTruthy()
+    expect(screen.getByText('● AI 起草')).toBeTruthy()
   })
 
   it('submits region, school, kind and featured with a new source paper', async () => {
@@ -206,5 +322,42 @@ describe('PaperWorkspace role gate', () => {
       expect(await screen.findByRole('button', { name: /新建试卷/ }), role).toBeTruthy()
       view.unmount()
     }
+  })
+})
+
+/**
+ * The way out.
+ *
+ * The studio is a full-takeover surface: without a control that leaves it the
+ * only exit is the browser's history, which a screen-reader or keyboard user
+ * cannot be asked to find. It calls the shell's own `openSurface`, the same
+ * seat every other surface uses to return `home`.
+ */
+describe('PaperWorkspace back control', () => {
+  afterEach(() => { cleanup() })
+
+  it('leaves for the home surface, with a localised accessible name', () => {
+    const openSurface = vi.fn()
+    render(
+      <PaperWorkspace
+        api={stubApi()}
+        useAuth={useAuthAs('TEACHER')}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+        t={t}
+        openSurface={openSurface}
+      />,
+    )
+    const back = screen.getByRole('button', { name: '返回首页' })
+    fireEvent.click(back)
+    expect(openSurface).toHaveBeenCalledTimes(1)
+    expect(openSurface).toHaveBeenCalledWith('home')
+  })
+
+  it('renders no back control when the seat is absent, and nothing harmful', () => {
+    render(<PaperWorkspace api={stubApi()} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    expect(screen.queryByRole('button', { name: '返回首页' })).toBeNull()
+    /* The rest of the header is untouched — the title still anchors the page. */
+    expect(screen.getByRole('heading', { name: /出卷工作台/ })).toBeTruthy()
   })
 })

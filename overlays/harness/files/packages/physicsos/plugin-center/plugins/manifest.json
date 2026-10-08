@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "@deepseek-ai/dsh-tool-physicsos",
+      "name": "PhysicsOS 物理工具",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "tools.register",
+        "session.observe"
+      ],
+      "entry": "packages/physicsos/tool-physicsos/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "f8432c3a4787335601375efb8bddf8704bd0ca726504dc8122f57017ab7eefa6",
+      "signature": "ed25519:azuQ+jNJ1wgUT9e6J6fIkFsPefYCLwJfKQI9fRNURb8p/PsnC/yuIR8FL5noX46RoI1J/PFhr/zJoFw73HZcDA==",
+      "description": "PhysicsOS experiments, simulation, observation, and question-solving tools."
+    },
+    {
+      "id": "@deepseek-ai/dsh-auth-host",
+      "name": "PhysicsOS 账户体系",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "session.observe",
+        "storage.read",
+        "storage.write"
+      ],
+      "entry": "packages/physicsos/auth-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "39bab35086ce02dbbcf2960de0e42cfedd663e8f38197c34c781c537e37bad3a",
+      "signature": "ed25519:Os/8qSJBSftNtTfT4IwdnaM4USEKeyJDLnIqHp5LHVcqhVOwUU40+NGrjZtHJ/ZCi3+pGqxC8aqWDsR4g5IeBQ==",
+      "description": "School tenants, accounts, sessions, password reset, and audit ledger."
+    },
+    {
+      "id": "@deepseek-ai/dsh-paper-host",
+      "name": "PhysicsOS 出卷专区",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "filesystem.workspace.read",
+        "filesystem.workspace.write",
+        "model.invoke",
+        "process.document",
+        "storage.read",
+        "storage.write"
+      ],
+      "entry": "packages/physicsos/paper-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "dd12f1b4dc27e1bd071b85bbe7f186cb57225fe63fba24cfff634cba8ff7d7f3",
+      "signature": "ed25519:t/iQgEA77fqFwchMXlgmyoZ4K4AfxWNGKQoGghantLKbx2Gaj/D7TD/4+0GHlrlKikneWdzUVaFgL00oSrRrBw==",
+      "description": "Question-paper intake, drafting, verification, approval, and export."
+    },
+    {
+      "id": "@deepseek-ai/dsh-notice-host",
+      "name": "PhysicsOS 反馈与公告",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "storage.read",
+        "storage.write",
+        "ui.register"
+      ],
+      "entry": "packages/physicsos/notice-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "ebccdded8ed78ce0d4a05a34b3d6a888e17c8aa101c244a7d0b93bbb1808c40f",
+      "signature": "ed25519:0xGi9ZYl6AI8ml6cqogT9XhFTJCk68uIPxopPBzlRSAF7DttgnzVbyNvpVyGsofA9PQZrw3syBdEhQqETBPeAw==",
+      "description": "Student feedback intake and administrator announcements."
+    },
+    {
+      "id": "@deepseek-ai/dsh-update-host",
+      "name": "PhysicsOS 更新通道",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "storage.read",
+        "storage.write"
+      ],
+      "entry": "packages/physicsos/update-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "266a5ef94720d31b43f9b468b907e8c141257bd2a8826af4bb17e5b1f8668969",
+      "signature": "ed25519:3CK/c7FJrHIFrKka7PhcgP8Fwue5Kng//pTALPTIkwC+9+uqeueEww0QFC8vRSwZemBL+wvSP1MJtLe/01edCA==",
+      "description": "Signed desktop-update metadata publication, rollback, and yank."
+    },
+    {
+      "id": "@deepseek-ai/dsh-health-host",
+      "name": "PhysicsOS 健康检查",
+      "version": "0.1.0",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [],
+      "entry": "packages/physicsos/health-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "8ed63de5ad33ef4a7d31dd2db7ebcbdea97bef1fddd9e46f3afadde38e797e2a",
+      "signature": "ed25519:opCtPpLOwPTAL6E6US7xNmN8Q9X3pfkd7w1NZhHsm0Iu3c6TT1oLMXSxj3l9VTT2bOLmz9BIHyPOA0pbMTAABg==",
+      "description": "Liveness and fail-closed readiness probes."
+    },
+    {
+      "id": "@deepseek-ai/dsh-learning-host",
+      "name": "PhysicsOS 学习记录",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "storage.read",
+        "storage.write"
+      ],
+      "entry": "packages/physicsos/learning-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "58fdf6e8ba3398a469f240469549ca5c50b0438fc94a5aafc5eb478e9939a94d",
+      "signature": "ed25519:yyo33deCk09PYm8os/qLyyrCFv/GFjQbJWXhjg3+Nvkf2vYF40o2cn9FmiNtfEnP+U0QIS4l9OZems/EnlPjCg==",
+      "description": "Account-scoped attempts and saved-scene synchronization."
+    },
+    {
+      "id": "@deepseek-ai/dsh-shared-state-host",
+      "name": "PhysicsOS 共享状态",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "network.redis"
+      ],
+      "entry": "packages/physicsos/shared-state-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "c759b69b036eef00e579e1e667adf70153b93d41ea3f75eaafc3e2a3dd1b3c66",
+      "signature": "ed25519:D/tBwtb+3Xgs9H5ElME/e9A+MBmzUqwa6b40ACy43GMWQdUniT8WQu9nIV6u/0AfuFr6gmA745pUuk6phEuGCA==",
+      "description": "Atomic rate limits and one-time claims for multiple replicas."
+    },
+    {
+      "id": "@deepseek-ai/dsh-ops-host",
+      "name": "PhysicsOS 运维面板",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "filesystem.workspace.read",
+        "network.postgresql",
+        "network.redis"
+      ],
+      "entry": "packages/physicsos/ops-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "80fd95f540ee2ad920f3d3b6c2b46dea408d0a85e7f72b79cc99f5750fdee56f",
+      "signature": "ed25519:OeIazB2CMGKi2E7srKc61Ip6/yQDEChnRQXzVQWf28KaA8YPll9VdV7+x3dee/9EaHEVH4xW70w88G1zD7iVBw==",
+      "description": "Capacity, dependency, cache, and account health metrics."
+    },
+    {
+      "id": "@deepseek-ai/dsh-model-pool-host",
+      "name": "PhysicsOS 模型通道池",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "network.http",
+        "secrets.read",
+        "storage.read",
+        "storage.write"
+      ],
+      "entry": "packages/physicsos/model-pool-host/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "59a67783089c60a704e9a666d1d39bf072e23936c42da1e2c6d73fda04db0b27",
+      "signature": "ed25519:ZKJGtrSmdPB12jUaFjo9a1UkIMGg1XY7KehYNyJc8OOcVa286gcJTxzLg4Z/S4Yog2kFp4EoBFrjZxbG+SaSCw==",
+      "description": "Encrypted model-channel rotation, failover, and local OpenAI proxy."
+    },
+    {
+      "id": "@deepseek-ai/dsh-storage-postgres",
+      "name": "PhysicsOS PostgreSQL 存储",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "network.postgresql",
+        "storage.read",
+        "storage.write"
+      ],
+      "entry": "packages/storage/storage-postgres/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "543848d614d0a543410481e58d7773c3790989a11a86568e95640835ce3ddfbe",
+      "signature": "ed25519:tqhKi6xQFLCa2asuWUcfK6SKNqZfD5XKogHT2+5Tfnnj5eMo1oppL9V+7tpc3hiYqv1qsi6ffprxZAL7sfPdDA==",
+      "description": "PostgreSQL-backed domain and key-value storage."
+    },
+    {
+      "id": "@deepseek-ai/dsh-client-ui-physicsos",
+      "name": "PhysicsOS 客户端界面",
+      "version": "0.1.0-rc.5",
+      "harnessRange": ">=0.1.7-rc.2 <0.1.8",
+      "capabilities": [
+        "ui.register"
+      ],
+      "entry": "packages/client/ui-physicsos/src/index.ts",
+      "publisher": "PhysicsOS",
+      "sha256": "7ffb6f20e78b8bb69a5ab12f7ff9bef09f074df374cdec4722b4e1560b8d3770",
+      "signature": "ed25519:sd/eYgV9OWG9J27sdq/ivyutN5rw6cCc4upIsMiHf4xHAJs6h0QDYVdutR1zB7xohIenaApTyVak6zozoFvXCw==",
+      "description": "PhysicsOS product shell, experiments, administrator console, and tool views."
+    }
+  ]
+}

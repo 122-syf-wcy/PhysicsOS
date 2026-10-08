@@ -24,6 +24,14 @@ import clsx from 'clsx'
 import type { BankItemRow, PaperApi, SourcePaperRow } from './paper-api.ts'
 import type { PhysicsosKey } from './locales.ts'
 import { GlassSelect } from './GlassSelect.tsx'
+import {
+  AdminCard,
+  AdminCardHead,
+  AdminCardMeta,
+  AdminEmpty,
+  AdminStats,
+  AdminToolbar,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 type BankStatus = 'pending' | 'verified' | 'rejected'
@@ -176,34 +184,33 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
 
   const allVisibleSelected = visible.length > 0 && visible.every(item => selected.has(item.id))
 
+  /* `data-stat` names each bucket so a reader (a spec, a screenshot gate) can
+     ask for ONE of them: several of these counts are equal by coincidence, and
+     matching on the rendered digit is how a test grabs the wrong figure and
+     still passes. */
   return (
     <>
       {/* The collection's own numbers, above the view's: an operator needs to
           know how much of the bank is unverified before filtering to a subset. */}
-      <div className={css.stats}>
-        {/* `data-stat` names each bucket so a reader (a spec, a screenshot
-            gate) can ask for ONE of them: several of these counts are equal by
-            coincidence, and matching on the rendered digit is how a test grabs
-            the wrong figure and still passes. */}
-        <span className={css.stat} data-stat="total">
-          <strong>{counts.total}</strong> {t('admin.content.total')}
-        </span>
-        {STATUS_ORDER.map(key => (
-          <span key={key} className={css.stat} data-stat={key}>
-            <strong>{counts[key]}</strong> {t(`admin.content.status.${key}`)}
-          </span>
-        ))}
-        <span className={clsx(css.stat, counts.anomalies > 0 && css.statWarn)} data-stat="anomalies">
-          <strong>{counts.anomalies}</strong> {t('admin.content.anomalies')}
-        </span>
-        <span className={css.stat} data-stat="sources">
-          <strong>{sources.length}</strong> {t('admin.content.sources')}
-        </span>
-      </div>
+      <AdminStats items={[
+        { key: 'total', value: counts.total, label: t('admin.content.total') },
+        ...STATUS_ORDER.map(key => ({
+          key,
+          value: counts[key],
+          label: t(`admin.content.status.${key}`),
+        })),
+        {
+          key: 'anomalies',
+          value: counts.anomalies,
+          label: t('admin.content.anomalies'),
+          warn: counts.anomalies > 0,
+        },
+        { key: 'sources', value: sources.length, label: t('admin.content.sources') },
+      ]} />
 
       {error !== undefined && <p className={css.error}>{error}</p>}
 
-      <div className={css.toolbar}>
+      <AdminToolbar>
         <GlassSelect
           className={css.select}
           value={status}
@@ -245,9 +252,9 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
             onChange={(event) => { setOnlyAnomalies(event.target.checked) }} />
           {t('admin.content.onlyAnomalies')}
         </label>
-      </div>
+      </AdminToolbar>
 
-      <div className={css.toolbar}>
+      <AdminToolbar>
         <label className={css.checkbox}>
           <input
             type="checkbox"
@@ -281,23 +288,23 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
           onClick={selectAgreed}>
           {t('admin.content.selectAgreed')}（{agreedCount}）
         </button>
-      </div>
+      </AdminToolbar>
 
       {note !== undefined && <p className={css.note}>{note}</p>}
 
       {items === undefined
-        ? <p className={css.empty}>{t('admin.loading')}</p>
+        ? <AdminEmpty>{t('admin.loading')}</AdminEmpty>
         : visible.length === 0
-          ? <p className={css.empty}>{t('admin.content.empty')}</p>
+          ? <AdminEmpty>{t('admin.content.empty')}</AdminEmpty>
           : visible.slice(0, 200).map(item => (
-            <section key={item.id} className={css.card}>
-              <div className={css.cardHead}>
+            <AdminCard key={item.id}>
+              <AdminCardHead>
                 <label className={css.checkbox}>
                   <input type="checkbox" checked={selected.has(item.id)}
                     onChange={() => { toggle(item.id) }} />
                 </label>
                 <div className={css.cardBody}>
-                  <p className={css.cardMeta}>
+                  <AdminCardMeta>
                     <span className={css.action}>{item.kind}</span>
                     <span className={css.action}>{item.level === 'zhongkao' ? '中考' : '高考'}</span>
                     <span className={css.action}>{item.difficulty}</span>
@@ -306,13 +313,13 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
                       item.status === 'rejected' && css.actionBad)}>
                       {t(`admin.content.status.${item.status}`)}
                     </span>
-                  </p>
+                  </AdminCardMeta>
                   <p className={css.stem}>{previewOf(item.stem)}</p>
-                  <p className={css.cardMeta}>
+                  <AdminCardMeta>
                     {item.knowledge.join(' · ')}
                     {item.sourceLabel === undefined ? '' : ` · ${item.sourceLabel}`}
                     {' · '}{item.id}
-                  </p>
+                  </AdminCardMeta>
                   {/* The reason this tab exists: an anomaly is why an operator
                       opens a console at all, so it is on the card rather than a
                       detail they have to click into. */}
@@ -320,12 +327,12 @@ export function AdminContentTab({ api, reviewer, t }: AdminContentTabProps) {
                     <p className={css.anomaly}>{t('admin.content.anomaly')}：{item.anomalies.join('；')}</p>
                   )}
                 </div>
-              </div>
-            </section>
+              </AdminCardHead>
+            </AdminCard>
           ))}
 
       {visible.length > 200 && (
-        <p className={css.empty}>{t('admin.content.truncated')}（{visible.length}）</p>
+        <AdminEmpty>{t('admin.content.truncated')}（{visible.length}）</AdminEmpty>
       )}
     </>
   )

@@ -145,6 +145,7 @@ describe('exam blueprints', () => {
   it('中考 physics structure carries the real section grammar', () => {
     const zk = blueprintById('gz-zk-physics')!
     expect(zk.totalScore).toBe(90)
+    /* 2025 省卷实测 22 题：单选 6 + 多选 1 + 填空 4 + 作图 3 + 简答 3 + 实验 3 + 计算 2。 */
     expect(zk.sections.map((section) => section.slots.length)).toEqual([7, 4, 3, 3, 3, 2])
     expect(zk.sections[0]?.slots.at(-1)?.kind).toBe('choice-multi')
   })

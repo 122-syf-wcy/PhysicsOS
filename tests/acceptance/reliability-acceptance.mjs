@@ -74,7 +74,7 @@ try {
   }
 
   stdout.write('\nHome: optional feature payloads stay unloaded\n')
-  await page.goto(base, { waitUntil: 'networkidle', timeout: 60_000 })
+  await page.goto(server.authUrl ?? base, { waitUntil: 'networkidle', timeout: 60_000 })
   await loginUser(page, { username: ACCEPTANCE_ADMIN_USERNAME, password: ACCEPTANCE_ADMIN_PASSWORD })
   // This is a fresh account: wait for its asynchronous notice fetch/render
   // before dismissing it. A visible sidebar does not mean the notice is settled.

@@ -402,12 +402,12 @@ describe('wave solved cards', () => {
     const { container } = render(
       <SceneChatCard {...({
         node: {
-          key: 'card:wave-rope', kind: 'physics-scene-card', anchorSeq: 1.9,
+          key: 'card:wave-rope', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
           data: solvedCardData('wave-01-speed-from-wavelength-frequency'),
         },
         t,
         openSceneInLab: vi.fn(),
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('已验证')
@@ -423,12 +423,12 @@ describe('wave solved cards', () => {
     const { container } = render(
       <SceneChatCard {...({
         node: {
-          key: 'card:wave-interference', kind: 'physics-scene-card', anchorSeq: 1.9,
+          key: 'card:wave-interference', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
           data: solvedCardData('wave-03-interference-constructive'),
         },
         t,
         openSceneInLab: vi.fn(),
-        useSession: cardSession(),
+        useChat: cardSession(),
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('振动加强')

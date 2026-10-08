@@ -30,6 +30,12 @@ export interface ProjectileModel extends MechanicsModelBase {
   readonly range: number
   readonly maxHeight: number
   readonly impactVelocity: Vector3
+  /**
+   * s — time from launch to the trajectory's apex (the instant vy = 0),
+   * `vy0 / g`. Absent when the launch has no upward component (vy0 ≤ 0): the
+   * body only ever descends, so there is no apex and none is claimed.
+   */
+  readonly apexTime: number | undefined
 }
 
 export interface NewtonSecondLawModel extends MechanicsModelBase {

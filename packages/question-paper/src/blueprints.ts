@@ -20,7 +20,11 @@ import type {
   Subject,
 } from './paper.ts'
 
-/* 中考·物理 90 分（物化合卷 150 分 / 150 分钟，2023 起省级统一命题）。 */
+/* 中考·物理 90 分（物化合卷 150 分 / 150 分钟，2023 起省级统一命题）。
+ * 22 题结构按 2025 年省卷实测录入（scripts/ingest-gz-2025-physics.mjs，
+ * word 文本层与扫描图互证）：单选 6 + 多选 1 + 填空 4 + 作图 3 + 简答 3 +
+ * 实验 3 + 计算 2。与 2024 卷（选择 8 题含 2 多选、简答 2 题）相比，仅选择
+ * 与简答两个板块互有增减，总分与题量不变——组卷按最新省卷口径。 */
 const ZK_PHYSICS: ExamBlueprint = {
   id: 'gz-zk-physics',
   level: 'zhongkao',
@@ -44,12 +48,12 @@ const ZK_PHYSICS: ExamBlueprint = {
     },
     {
       title: '二、填空题',
-      note: '每空 2 分。',
+      note: '共 4 题 10 分，按空给分。',
       slots: [
-        { kind: 'blank', score: 3 },
-        { kind: 'blank', score: 3 },
         { kind: 'blank', score: 2 },
         { kind: 'blank', score: 2 },
+        { kind: 'blank', score: 2 },
+        { kind: 'blank', score: 4 },
       ],
     },
     {
@@ -90,7 +94,9 @@ const ZK_PHYSICS: ExamBlueprint = {
   policyLabel: '依据已核实政策编制的训练卷',
 }
 
-/* 高考·物理选择性考试 100 分 / 75 分钟（贵州自主命题）。 */
+/* 高考·物理选择性考试 100 分 / 75 分钟。2024 起贵州采用教育部统一命题的
+ * 新课标卷：单选 7×4 + 多选 3×6 + 实验 2 题约 15 分 + 计算 3 题约 39 分，
+ * 无选考模块；个别年份非选择题分值略有调整，以总分 100 严格对账。 */
 const GK_PHYSICS: ExamBlueprint = {
   id: 'gz-gk-physics',
   level: 'gaokao',
@@ -101,21 +107,22 @@ const GK_PHYSICS: ExamBlueprint = {
   sections: [
     {
       title: '一、单项选择题',
+      note: '每题 4 分，共 28 分。',
       slots: Array.from({ length: 7 }, () => ({ kind: 'choice-single' as const, score: 4 })),
     },
     {
       title: '二、多项选择题',
-      note: '每题 4 分，全部选对得 4 分，选对但不全得 2 分，有错选得 0 分。',
-      slots: Array.from({ length: 3 }, () => ({ kind: 'choice-multi' as const, score: 4 })),
+      note: '每题 6 分，共 18 分；全部选对得 6 分，选对但不全得 3 分，有错选得 0 分。',
+      slots: Array.from({ length: 3 }, () => ({ kind: 'choice-multi' as const, score: 6 })),
     },
     {
       title: '三、非选择题',
-      note: '实验题 2 题、计算题 3 题。',
+      note: '实验题 2 题（约 15 分）、计算题 3 题（约 39 分）。计算题须写出必要的公式与过程，只写结果不得分。',
       slots: [
-        { kind: 'experiment', score: 10 },
-        { kind: 'experiment', score: 12 },
+        { kind: 'experiment', score: 6 },
+        { kind: 'experiment', score: 9 },
         { kind: 'calculation', score: 12 },
-        { kind: 'calculation', score: 12 },
+        { kind: 'calculation', score: 13 },
         { kind: 'calculation', score: 14 },
       ],
     },

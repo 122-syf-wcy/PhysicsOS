@@ -51,25 +51,15 @@ export const inject = ['webServer', 'storageDomain']
 /** Cordis service name consumed by the browser connection's `/api` policy seam. */
 export const API_POLICY_SERVICE = 'apiPolicy'
 
-interface ApiProxyWorkspaceSeam {
-  readonly workspace: {
-    create(request: {
-      rpcId: string
-      payload: { path: string }
-    }): Promise<{
-      result:
-        | { ok: true; value: { workspace: { workspaceId: string; path: string; title?: string } } }
-        | { ok: false; error: { code: string; message: string } }
-    }>
-    rename(request: {
-      rpcId: string
-      payload: { workspaceId: string; title: string }
-    }): Promise<{
-      result:
-        | { ok: true; value: { workspace: { workspaceId: string; path: string; title?: string } } }
-        | { ok: false; error: { code: string; message: string } }
-    }>
-  }
+interface WorkspaceRecordSeam {
+  readonly id: string
+  readonly path: string
+  readonly title: string
+  setTitle(title: string): Promise<void>
+}
+
+interface WorkspaceRegistrySeam {
+  create(path: string, title?: string): Promise<WorkspaceRecordSeam>
 }
 
 /** Plugin config: session lifetimes and attempt budgets are deployment knobs. */
@@ -218,18 +208,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
      * answers with the readable title for this account's own views.
      */
     const adoptWorkspaceTitle = async (
-      apiProxy: ApiProxyWorkspaceSeam,
-      workspace: { workspaceId: string; path: string; title?: string },
-      digest: string,
+      workspace: WorkspaceRecordSeam,
       title: string,
     ): Promise<string> => {
       if (workspace.title === title) return title
       try {
-        const renamed = await apiProxy.workspace.rename({
-          rpcId: `physicsos-title-${digest}`,
-          payload: { workspaceId: workspace.workspaceId, title },
-        })
-        if (renamed.result.ok) return renamed.result.value.workspace.title ?? title
+        await workspace.setTitle(title)
       } catch {
         // A registry that refuses the rename keeps the digest; the account's own
         // views fall back to the readable default below.
@@ -252,22 +236,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         if (own.size >= limit) {
           throw new Error(`workspace limit reached (${String(limit)})`)
         }
-        const apiProxy = ctx.get('apiProxy') as ApiProxyWorkspaceSeam | undefined
-        if (apiProxy === undefined) throw new Error('apiProxy is not mounted')
+        const registry = ctx.get('workspaceRegistry') as WorkspaceRegistrySeam | undefined
+        if (registry === undefined) throw new Error('workspaceRegistry is not mounted')
         const digest = createHash('sha256').update(actor.userKey).digest('hex').slice(0, 32)
         const directory = requestedTitle === undefined ? digest : `${digest}-${randomUUID()}`
         const path = join(config.workspaceRoot ?? dshHomePath('physicsos-users'), directory)
         await mkdir(path, { recursive: true })
-        const response = await apiProxy.workspace.create({
-          rpcId: `physicsos-scope-${digest}-${randomUUID()}`,
-          payload: { path },
-        })
-        if (!response.result.ok) {
-          throw new Error(`private workspace failed: ${response.result.error.code} ${response.result.error.message}`)
-        }
-        const workspace = response.result.value.workspace
-        const displayTitle = await adoptWorkspaceTitle(apiProxy, workspace, digest, title)
-        return { id: workspace.workspaceId, path: workspace.path, title: displayTitle }
+        const workspace = await registry.create(path, title)
+        const displayTitle = await adoptWorkspaceTitle(workspace, title)
+        return { id: workspace.id, path: workspace.path, title: displayTitle }
       })()
       workspacePromises.set(key, pending)
       void pending.catch(() => {

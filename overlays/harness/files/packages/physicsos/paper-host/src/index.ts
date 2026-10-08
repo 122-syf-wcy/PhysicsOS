@@ -4,10 +4,17 @@
  * Owns the `physicsos_paper` storage domain (source intake, annotations,
  * verified blueprints, jobs, export bundles), serves the `/physicsos/paper`
  * REST surface on the webServer service, and drives the three long-running
- * steps: sectioned LLM drafting, checks + independent solving, and the
+ * steps: sectioned LLM drafting, checks + engine solving, and the
  * pandoc/LibreOffice export — all gated by the service layer's verified /
  * approved-hash rules. Nothing runs on boot: every generation step answers
  * an explicit HTTP call, so restarts never replay paid model calls.
+ *
+ * The model may propose, the engine decides: drafting (and repair/adaptation)
+ * are model calls that produce stems and a candidate answer, but the answer
+ * that lands in the paper is the PhysicsOS engine's, taken from
+ * `@physicsos/agent-tools` in the check stage and verified before it prints.
+ * A model answer that contradicts the engine, or a question the engine cannot
+ * cover, becomes an explicit finding — never a fabricated number.
  *
  * @module @deepseek-ai/dsh-paper-host
  */
@@ -20,15 +27,16 @@ import z from '@deepseek-ai/schemastery'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import {
   DEFAULT_BANK_POLICY, EXAM_BLUEPRINTS, planRow, questionFromBankItem, solveFindings,
-  type BankItem, type BankSelectionPolicy, type PaperJob, type PaperQuestion, type SpecRow,
+  type BankItem, type BankSelectionPolicy, type CheckFinding, type PaperJob, type PaperQuestion,
+  type SolveResult, type SpecRow,
 } from '@physicsos/question-paper'
 import { openPaperDomain, type PaperDomain } from './domain.ts'
 import { PaperService, PaperError } from './service.ts'
 import { adaptBankItem, draftSection, assembleDocument, repairQuestion } from './draft.ts'
-import { independentSolve } from './solve.ts'
+import { applyEngineAnswers, engineRefusalFindings, independentSolve } from './solve.ts'
 import { ingestBankText, type IngestInput } from './ingest.ts'
 import { transcribeQuestionImages, type TranscribeImage } from './transcribe.ts'
-import { exportPaper } from './export.ts'
+import { exportPaper, generateFigures } from './export.ts'
 import { paperRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
 import { access } from 'node:fs/promises'
@@ -38,9 +46,11 @@ export const inject = ['webServer', 'storageDomain', 'llm']
 
 /** Plugin config: model route and tool paths are deployment decisions. */
 export interface Config {
-  /** Provider route for drafting/solving calls. */
+  /** Provider route for the model calls that propose stems and candidate
+   *  answers — drafting, repair, adaptation, ingest and transcription. The
+   *  answer itself is decided by the engine, not by this route. */
   provider: string
-  /** Model id for drafting/solving calls. */
+  /** Model id for the proposing calls above; the engine decides the answer. */
   model: string
   /** Export root; bundles land under `<exportDir>/<jobId>/`. */
   exportDir: string
@@ -60,9 +70,9 @@ export interface Config {
     /** Pixel size passed to the API. */
     size?: string
   }
-  /** Pause between serial solve calls; rate-limited relays need the space. */
+  /** Spacing between the serial engine solves a check run performs. */
   solveDelayMs?: number
-  /** Per-attempt bound on one solve stream; slow reasoning models need more. */
+  /** Per-attempt bound on one engine solve; a hung call must not park the job in 'checking'. */
   solveTimeoutMs?: number
   /** Bank-assisted assembly tuning; unset keys take the domain defaults. */
   bankPolicy?: Partial<BankSelectionPolicy>
@@ -146,6 +156,26 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
 
     const bankPolicy: BankSelectionPolicy = { ...DEFAULT_BANK_POLICY, ...config.bankPolicy }
 
+    /* Engine verdicts become findings: a disagreement with the engine's
+       verified answer is a `solve-mismatch`; a question the engine could not
+       decide is an explicit `engine-mismatch` refusal. Neither is a silent pass. */
+    const engineFindingsFor = (
+      solve: readonly SolveResult[],
+      kindByNo: ReadonlyMap<number, string> = new Map(),
+    ): CheckFinding[] => [
+      ...solveFindings(solve.filter(result => result.solvedAnswer !== '')),
+      ...engineRefusalFindings(solve, kindByNo),
+    ]
+
+    /* The engine's verified answer is what the paper carries: stamp it onto the
+       document as a new version before the check results close the stage. */
+    const applyEngine = async (jobId: string, solve: readonly SolveResult[]): Promise<void> => {
+      const job = service.getJob(jobId)
+      if (job.document === undefined) return
+      const corrected = applyEngineAnswers(job.document, solve)
+      if (corrected !== undefined) await service.commitEngineAnswers(jobId, corrected)
+    }
+
     const runDraft = async (jobId: string): Promise<void> => {
       await service.markStage(jobId, 'drafting')
       try {
@@ -155,13 +185,16 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         }
         /* Bank-assisted assembly: plan every row first and stamp it for
            audit, then each row is served verbatim → adapt → generate. */
+        await service.reportProgress(jobId, 'plan', 0, 1, '规划题库供给')
         const plans = service.bankPlanFor(job.specTable, job.request, bankPolicy, job.schoolId)
         await service.stampBankPlan(jobId, plans)
         const planByNo = new Map(plans.map(plan => [plan.row.questionNo, plan]))
 
         const drafted = new Map<string, PaperQuestion[]>()
         let lastError: Error | undefined
-        for (const [sectionTitle, rows] of rowsBySection(job)) {
+        const sections = [...rowsBySection(job)]
+        for (const [sectionIndex, [sectionTitle, rows]] of sections.entries()) {
+          await service.reportProgress(jobId, 'draft', sectionIndex, sections.length, `起草「${sectionTitle}」`)
           const byNo = new Map<number, PaperQuestion>()
           const genRows: SpecRow[] = []
           const exemplars = new Map<string, BankItem>()
@@ -172,6 +205,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
               byNo.set(row.questionNo, questionFromBankItem(row, plan.item))
             } else if (plan?.mode === 'adapt' && plan.item !== undefined) {
               try {
+                await service.reportProgress(jobId, 'adapt', sectionIndex, sections.length, `改编题库题（第${row.questionNo}题）`)
                 byNo.set(row.questionNo, await adaptBankItem(ctx, route, job, plan.item, row))
               } catch (error) {
                 /* A failed adaptation degrades to generation — the row is
@@ -219,6 +253,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           drafted.set(sectionTitle, items)
         }
         const titles = [...rowsBySection(job).keys()]
+        await service.reportProgress(jobId, 'assemble', sections.length, sections.length, '组卷提交')
         await service.commitDocument(jobId, assembleDocument(job, titles, drafted), 'AI 起草')
         /* Usage lands only after the document commits — a failed draft
            must not consume freshness. Ledger follows the committed
@@ -243,10 +278,40 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       try {
         const job = service.getJob(jobId)
         if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${jobId} has no document`)
+        await service.reportProgress(jobId, 'check', 0, 1, '规范与覆盖检查')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const questions = job.document.sections.flatMap(section => section.items)
-        const solve = await independentSolve(ctx, route, questions, config.solveDelayMs, config.solveTimeoutMs)
-        await service.recordCheckResults(jobId, [...findings, ...solveFindings(solve)], solve)
+        const solve = await independentSolve(
+          questions, config.solveDelayMs, config.solveTimeoutMs, undefined,
+          (done, total, questionNo) => {
+            void service.reportProgress(jobId, 'solve', done, total, `物理引擎复核第 ${questionNo} 题`)
+          },
+        )
+        await applyEngine(jobId, solve)
+        await service.recordCheckResults(jobId,
+          [...findings, ...engineFindingsFor(solve, new Map(questions.map(q => [q.number, q.kind])))],
+          solve)
+        /* Figures for questions that declared one — generated HERE, not only
+           at export, so the reviewer sees the actual drawing next to each
+           question. Best-effort: no image endpoint or a failed draw leaves
+           the caption placeholder and never fails the check stage. Files
+           land in the job's export dir under the export's own names, so the
+           later export reuses them (generateFigures skips existing). */
+        if (config.imageApi !== undefined
+          && questions.some(question => question.figure !== undefined)) {
+          await service.reportProgress(jobId, 'figure', 0, 1, 'AI 生成题图（预览）')
+          try {
+            await generateFigures(
+              { pandoc: config.pandoc, soffice: undefined, exportDir: config.exportDir, imageApi: config.imageApi },
+              jobId, job.document,
+              (done, total, ref) => {
+                void service.reportProgress(jobId, 'figure', done, total, `AI 生成题图 ${ref}`)
+              },
+            )
+          } catch (error) {
+            ctx.logger.warn(`paper-host: figure pre-generation failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
       } catch (error) {
         await service.failJob(jobId, error instanceof Error ? error.message : String(error))
         throw error
@@ -276,7 +341,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.commitDocument(jobId, nextDoc, `第${questionNo}题按审核意见修订`)
         await service.markStage(jobId, 'checking')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
-        const [solved] = await independentSolve(ctx, route, [{ ...revised }], config.solveDelayMs, config.solveTimeoutMs)
+        const [solved] = await independentSolve([{ ...revised }], config.solveDelayMs, config.solveTimeoutMs)
         if (solved === undefined) {
           throw new PaperError(500, 'SOLVE_FAILED', `第${questionNo}题独立重解没有产出记录`)
         }
@@ -284,7 +349,8 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         const merged = prior.some(r => r.questionNo === questionNo)
           ? prior.map(r => r.questionNo === questionNo ? solved : r)
           : [...prior, solved]
-        await service.recordCheckResults(jobId, [...findings, ...solveFindings(merged)], merged)
+        await applyEngine(jobId, merged)
+        await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: repair ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
       }
@@ -355,7 +421,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         await service.markStage(jobId, 'checking')
         await service.recordBankUsage(item.id, jobId, plan.mode === 'verbatim' ? 'verbatim' : 'adapted')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
-        const [solved] = await independentSolve(ctx, route, [{ ...replacement }], config.solveDelayMs, config.solveTimeoutMs)
+        const [solved] = await independentSolve([{ ...replacement }], config.solveDelayMs, config.solveTimeoutMs)
         if (solved === undefined) {
           throw new PaperError(500, 'SOLVE_FAILED', `第${questionNo}题独立重解没有产出记录`)
         }
@@ -363,7 +429,8 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         const merged = prior.some(r => r.questionNo === questionNo)
           ? prior.map(r => r.questionNo === questionNo ? solved : r)
           : [...prior, solved]
-        await service.recordCheckResults(jobId, [...findings, ...solveFindings(merged)], merged)
+        await applyEngine(jobId, merged)
+        await service.recordCheckResults(jobId, [...findings, ...engineFindingsFor(merged)], merged)
       } catch (error) {
         ctx.logger.warn(`paper-host: replace ${jobId}#${questionNo} failed: ${error instanceof Error ? error.message : String(error)}`)
         console.error(`[paper-host] replace ${jobId}#${questionNo} failed:`, error)
@@ -437,7 +504,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
              `unresolved` instead of parking the whole batch. */
           try {
             const [result] = await independentSolve(
-              ctx, route, [question], config.solveDelayMs, config.solveTimeoutMs)
+              [question], config.solveDelayMs, config.solveTimeoutMs)
             const check = result === undefined || result.solvedAnswer === '' ? 'unresolved'
               : result.consistent ? 'agreed' : 'mismatch'
             await service.noteBankTriage(
@@ -455,16 +522,27 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
     }
 
     const runExport = async (jobId: string): Promise<{ files: import('./export.ts').ExportFileSet }> => {
-      const { document, job } = service.requireApprovedDocument(jobId)
-      const soffice = await binaryPresent(config.soffice)
-      const files = await exportPaper(
-        { pandoc: config.pandoc, soffice, exportDir: config.exportDir, imageApi: config.imageApi },
-        jobId,
-        document,
-        job.solveReport,
-      )
-      await service.recordExport(jobId, files)
-      return { files }
+      try {
+        const { document, job } = service.requireApprovedDocument(jobId)
+        const soffice = await binaryPresent(config.soffice)
+        const files = await exportPaper(
+          { pandoc: config.pandoc, soffice, exportDir: config.exportDir, imageApi: config.imageApi },
+          jobId,
+          document,
+          job.solveReport,
+          (stage, done, total, detail) => {
+            void service.reportProgress(jobId, stage, done, total, detail)
+          },
+        )
+        await service.recordExport(jobId, files)
+        return { files }
+      } catch (error) {
+        /* A raw tool failure (missing pandoc/unzip/soffice, pandoc exit) used
+           to surface as an opaque INTERNAL 500; name the failing step instead. */
+        if (error instanceof PaperError) throw error
+        throw new PaperError(500, 'EXPORT_FAILED',
+          `导出失败：${error instanceof Error ? error.message : String(error)}`)
+      }
     }
 
     yield ctx.webServer.register({

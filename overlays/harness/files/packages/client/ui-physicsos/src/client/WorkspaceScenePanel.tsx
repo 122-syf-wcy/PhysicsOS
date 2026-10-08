@@ -1,7 +1,7 @@
 /** Scene outline: a desktop track and a keyboard-accessible narrow-screen drawer. */
 import { useEffect, useRef, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconChevronLeftOutline14, IconCloseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronLeftOutlineMedium, IconCloseOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 
 import type { ResponsiveInspectorController } from './ResponsiveInspector.tsx'
 import css from './LabWorkspace.module.css'
@@ -83,7 +83,7 @@ export function WorkspaceScenePanel({
               title={collapseLabel}
               onClick={onCollapse}
             >
-              <IconChevronLeftOutline14 size={14} />
+              <IconChevronLeftOutlineMedium size={14} />
             </button>
           )}
           <button
@@ -93,7 +93,7 @@ export function WorkspaceScenePanel({
             aria-label={closeLabel}
             onClick={controller.close}
           >
-            <IconCloseOutline16 size={14} />
+            <IconCloseOutlineMedium size={14} />
           </button>
         </div>
         <div className={css.panelBody}>{children}</div>

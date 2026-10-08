@@ -24,6 +24,13 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { AdminApi, DashboardRow } from './auth-api.ts'
 import type { PhysicsosKey } from './locales.ts'
+import {
+  AdminCard,
+  AdminCardMeta,
+  AdminCardTitle,
+  AdminEmpty,
+  AdminStats,
+} from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
 export interface AdminDashboardTabProps {
@@ -74,82 +81,75 @@ export function AdminDashboardTab({ api, t }: AdminDashboardTabProps) {
   useEffect(load, [load])
 
   if (error !== undefined) return <p className={css.error}>{error}</p>
-  if (data === undefined) return <p className={css.empty}>{t('admin.loading')}</p>
+  if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
 
   return (
     <>
-      <div className={css.stats}>
-        <span className={css.stat} data-stat="schools">
-          <strong>{data.schools.total}</strong> {t('admin.dashboard.schools')}
-        </span>
-        <span className={css.stat} data-stat="schoolsActive">
-          <strong>{data.schools.active}</strong> {t('admin.dashboard.schoolsActive')}
-        </span>
-        <span className={css.stat} data-stat="users">
-          <strong>{data.users.total}</strong> {t('admin.dashboard.users')}
-        </span>
-        <span className={css.stat} data-stat="usersDisabled">
-          <strong>{data.users.disabled}</strong> {t('admin.dashboard.usersDisabled')}
-        </span>
-        <span className={css.stat} data-stat="sessions">
-          <strong>{data.sessions.live}</strong> {t('admin.dashboard.sessions')}
-        </span>
-        <span className={css.stat} data-stat="sessionsDistinct">
-          <strong>{data.sessions.distinctUsers}</strong> {t('admin.dashboard.sessionsDistinct')}
-        </span>
-      </div>
+      <AdminStats items={[
+        { key: 'schools', value: data.schools.total, label: t('admin.dashboard.schools') },
+        { key: 'schoolsActive', value: data.schools.active, label: t('admin.dashboard.schoolsActive') },
+        { key: 'users', value: data.users.total, label: t('admin.dashboard.users') },
+        { key: 'usersDisabled', value: data.users.disabled, label: t('admin.dashboard.usersDisabled') },
+        { key: 'sessions', value: data.sessions.live, label: t('admin.dashboard.sessions') },
+        {
+          key: 'sessionsDistinct',
+          value: data.sessions.distinctUsers,
+          label: t('admin.dashboard.sessionsDistinct'),
+        },
+      ]} />
 
       {/* Roles, because "100 users" answers nothing and "100 students, 4
           teachers" answers the question an operator actually has. */}
-      <div className={css.stats}>
-        {ROLE_ORDER.map(role => (
-          <span key={role} className={css.stat} data-stat={`role.${role}`}>
-            <strong>{data.users.byRole[role] ?? 0}</strong> {t(`admin.dashboard.role.${role}`)}
-          </span>
-        ))}
-      </div>
+      <AdminStats items={ROLE_ORDER.map(role => ({
+        key: role,
+        dataStat: `role.${role}`,
+        value: data.users.byRole[role] ?? 0,
+        label: t(`admin.dashboard.role.${role}`),
+      }))} />
 
-      <div className={css.dashboard}>
-        <section className={css.card}>
-          <h3 className={css.cardTitle}>{t('admin.dashboard.trend')}</h3>
-          <p className={css.cardMeta}>{t('admin.dashboard.trendHint')}</p>
-          <TrendStrip rows={data.activity} label={t('admin.dashboard.trend')} />
-        </section>
+      <AdminCard>
+        <AdminCardTitle>{t('admin.dashboard.trend')}</AdminCardTitle>
+        <AdminCardMeta>{t('admin.dashboard.trendHint')}</AdminCardMeta>
+        <TrendStrip rows={data.activity} label={t('admin.dashboard.trend')} />
+      </AdminCard>
 
-        {/* 第二层。有上报就画真实聚合;一条都没有时,说清楚是「还没有人
-            上报」而不是画一根 0% 的柱子假装正确率是零。 */}
-        <section className={css.card} data-gap="learning-analytics">
-          <h3 className={css.cardTitle}>{t('admin.dashboard.analytics')}</h3>
-          {!data.learning.available ? (
-            <p className={css.cardMeta}>{t('admin.dashboard.analyticsWhy')}</p>
-          ) : (
-            <>
-              <p className={css.cardMeta}>
-                {t('admin.dashboard.analyticsScope')} · {data.learning.days} {t('admin.dashboard.analyticsDays')}
-              </p>
-              <div className={css.stats}>
-                <span className={css.stat} data-stat="learningCorrect">
-                  <strong>{data.learning.correct}</strong> {t('admin.dashboard.analyticsCorrect')}
-                </span>
-                <span className={css.stat} data-stat="learningWrong">
-                  <strong>{data.learning.wrong}</strong> {t('admin.dashboard.analyticsWrong')}
-                </span>
-              </div>
-              <ul className={css.learningNodes} data-learning-nodes>
-                {data.learning.nodes.slice(0, 12).map(node => (
-                  <li key={node.knowledgeId} title={node.knowledgeId}
-                    data-knowledge={node.knowledgeId}>
-                    <span className={css.learningId}>{node.knowledgeId}</span>
-                    <span className={css.learningCounts}>
-                      {t('admin.dashboard.analyticsCorrect')} {node.correct} · {t('admin.dashboard.analyticsWrong')} {node.wrong}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-      </div>
+      {/* 第二层。有上报就画真实聚合;一条都没有时,说清楚是「还没有人
+          上报」而不是画一根 0% 的柱子假装正确率是零。 */}
+      <AdminCard data-gap="learning-analytics">
+        <AdminCardTitle>{t('admin.dashboard.analytics')}</AdminCardTitle>
+        {!data.learning.available ? (
+          <AdminCardMeta>{t('admin.dashboard.analyticsWhy')}</AdminCardMeta>
+        ) : (
+          <>
+            <AdminCardMeta>
+              {t('admin.dashboard.analyticsScope')} · {data.learning.days} {t('admin.dashboard.analyticsDays')}
+            </AdminCardMeta>
+            <AdminStats items={[
+              {
+                key: 'learningCorrect',
+                value: data.learning.correct,
+                label: t('admin.dashboard.analyticsCorrect'),
+              },
+              {
+                key: 'learningWrong',
+                value: data.learning.wrong,
+                label: t('admin.dashboard.analyticsWrong'),
+              },
+            ]} />
+            <ul className={css.learningNodes} data-learning-nodes>
+              {data.learning.nodes.slice(0, 12).map(node => (
+                <li key={node.knowledgeId} title={node.knowledgeId}
+                  data-knowledge={node.knowledgeId}>
+                  <span className={css.learningId}>{node.knowledgeId}</span>
+                  <span className={css.learningCounts}>
+                    {t('admin.dashboard.analyticsCorrect')} {node.correct} · {t('admin.dashboard.analyticsWrong')} {node.wrong}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </AdminCard>
     </>
   )
 }

@@ -241,6 +241,14 @@
   }
 }
 
+/* Hero brand mark: the shell hands the headline's own hitbox class in, so the
+   mark only has to round the square bitmap onto KaTeX-free hero chrome. */
+.heroMark {
+  display: block;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stage,
   .product,

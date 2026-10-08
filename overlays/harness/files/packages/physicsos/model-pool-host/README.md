@@ -28,7 +28,8 @@ Harness ──▶ http://127.0.0.1:<PHYSICSOS_MODEL_POOL_PORT>/v1
 | 恢复 | `autoRecover=true` 时冷却到期自动回到服务；设为 false 需管理员在后台「恢复」。 |
 | 流式 | 只在「响应头之前」重试。已经开始输出的流不会被重放，避免重复内容。 |
 | 通道地址 | 只填域名（如 `https://gateway.example`）时，聊天和模型列表统一使用 `/v1`；显式 `/v1` 或 `/api/openai` 等路径保留，不重复添加版本前缀。此规则也适用于已经保存的通道。 |
-| 全挂 | 返回 HTTP 503 + `MODEL_POOL_EXHAUSTED`（或 `MODEL_POOL_EMPTY` / `MODEL_POOL_MODEL_UNAVAILABLE` / `MODEL_POOL_ALL_COOLING`），带中文原因。 |
+| 模型别名 | 通道的「模型列表」写的是**上游自己的模型名**；转发时用第一个替换平台侧的名字（如平台统一叫「平台公益模型」而上游只认 `minimax-m3`）。留空则原样透传调用方的模型名。选路不再按模型名过滤：任何启用通道都是候选，由 `priority` 决定先后。 |
+| 全挂 | 返回 HTTP 503 + `MODEL_POOL_EXHAUSTED`（或 `MODEL_POOL_EMPTY` / `MODEL_POOL_NO_KEY` / `MODEL_POOL_ALL_COOLING`），带中文原因。 |
 | 审计 | `channel.create/update/delete`、`key.create/update/delete/reset`、`settings.update`，只记尾号和参数，不记 key 值。 |
 
 ## 后台接口（仅 SUPER_ADMIN）
@@ -40,6 +41,7 @@ Harness ──▶ http://127.0.0.1:<PHYSICSOS_MODEL_POOL_PORT>/v1
 | GET | `/state` | 通道 + key（脱敏）+ 统计 + 审计 + 策略，一屏渲染 |
 | POST | `/channels` | 新增通道 |
 | PATCH / DELETE | `/channels/:id` | 修改 / 删除通道（删除会连带删除其 key） |
+| POST | `/channels/:id/models` | 使用该通道的 key 读取上游模型列表，返回模型与所用 key ID；失败时保留脱敏后的上游原因。 |
 | POST | `/channels/:id/keys` | 新增 key（明文只在请求体内，落库即加密） |
 | PATCH / DELETE | `/keys/:id` | 修改（含换 key）/ 删除 |
 | POST | `/keys/:id/reset` | 清零失败计数、解除冷却 |

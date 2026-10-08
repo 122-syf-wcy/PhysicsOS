@@ -82,6 +82,12 @@ jobs:
       - name: Self-test commit message policy
         run: node scripts/ci/check-commit-message.mjs --self-test
 
+      - name: Self-test secret-leak gate
+        run: node packages/image-generation/src/scan-cli.ts --self-test
+
+      - name: Scan for leaked credentials
+        run: node packages/image-generation/src/scan-cli.ts
+
       - name: Check pull request title
         if: github.event_name == 'pull_request'
         env:
@@ -102,6 +108,10 @@ jobs:
         run: |
           pnpm run verify:dependencies
           pnpm run verify:overlay
+      - name: Build native host addon
+        run: >-
+          pnpm -C vendor/deepseek-harness --filter
+          @deepseek-ai/node-addon-system-workspace run build:native --host-addon-only
 
       - name: Validate Compose
         run: docker compose config --quiet
@@ -141,8 +151,35 @@ jobs:
           overlays/harness/files/packages/physicsos/health-host/tests
           scripts/healthcheck.mjs
 
-      - name: Typecheck, lint, and test
-        run: pnpm run test:ci
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test core
+        run: pnpm run test:core
+
+      - name: Test web
+        run: pnpm run test:web
+
+      - name: Test agent
+        run: pnpm run test:agent
+
+      - name: Test deploy
+        run: pnpm run test:deploy
+
+      - name: Test desktop
+        run: |
+          set +e
+          pnpm run test:desktop > /tmp/desktop-test.log 2>&1
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            awk '/AssertionError|timed out|did not become ready|Error \(|\\[webHost\\]|\\[terminal\\]/{hit=1} hit{print; n++} n>13{exit}' \
+              /tmp/desktop-test.log | while IFS= read -r line; do echo "::error::desktop: $line"; done
+            tail -80 /tmp/desktop-test.log
+          fi
+          exit "$code"
 
       - name: Build
         run: pnpm build

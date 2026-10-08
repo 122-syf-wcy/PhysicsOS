@@ -10,7 +10,7 @@
  * a corrupt payload degrades to an empty record.
  */
 
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import type { MistakeType } from '@physicsos/question-core'
 import type { LearningApi } from './learning-api.ts'
 

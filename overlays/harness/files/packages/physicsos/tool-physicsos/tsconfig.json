@@ -3,12 +3,16 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "noCheck": true
   },
   "include": [
     "src"
   ],
   "references": [
+    {
+      "path": "../../../tsconfig.physicsos.json"
+    },
     {
       "path": "../../../vendor/cosmokit"
     },

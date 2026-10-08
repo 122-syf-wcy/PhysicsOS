@@ -77,9 +77,16 @@
 .popover {
   position: fixed;
   z-index: 60;
+  /* Sized to its longest option, floored at the button's width and capped at
+     the viewport by the inline min/max the component measures. A blueprint
+     title is longer than the control that picks it, and an ellipsised option
+     is an option the reader cannot choose between. */
+  width: max-content;
+  box-sizing: border-box;
   margin: 0;
   padding: 5px;
   list-style: none;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--physics-glass-border);
   border-radius: 14px;

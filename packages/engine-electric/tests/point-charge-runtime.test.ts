@@ -122,6 +122,51 @@ describe('Electric Engine point-charge runtime', () => {
     expect(result.verification.status).toBe('passed')
   })
 
+  it('picks its own timescale when the scene declares no span', () => {
+    /* The particle a parsed question carries: q = 1.6e-19 C, m = 1.67e-27 kg,
+       E = 2 kV/m → a = 1.9e11 m/s². Five seconds of that would put it 2.5e12 m
+       away; the span must come from the motion instead. */
+    const scene = createElectricScene({
+      charge: 1.6e-19,
+      mass: 1.67e-27,
+      position: vec3(0, 0, 0),
+      velocity: vec3(0, 0, 0),
+      electricFieldStrength: 2000,
+      electricFieldDirection: 'right',
+      now: '2026-09-29T00:00:00.000Z',
+    })
+    expect(scene.timeline.endTime).toBeUndefined()
+
+    const engine = new ElectricEngine()
+    const result = engine.simulate(
+      scene,
+      createElectricSimulationRequest(scene, 'sim-span', 'trace-span'),
+    )
+    const span = result.states.at(-1)?.time.value ?? 0
+    /* Crossing one field region from rest: sqrt(2L/a) ≈ 3.2e-6 s. */
+    expect(span).toBeGreaterThan(1e-6)
+    expect(span).toBeLessThan(1e-5)
+    expect(result.verification.status).toBe('passed')
+  })
+
+  it('keeps a span the scene declares', () => {
+    const scene = createElectricScene({
+      charge: 2,
+      mass: 4,
+      velocity: vec3(1, 0, 0),
+      electricFieldStrength: 6,
+      electricFieldDirection: 'up',
+      duration: 2,
+      now: '2026-09-29T00:00:00.000Z',
+    })
+    const engine = new ElectricEngine()
+    const result = engine.simulate(
+      scene,
+      createElectricSimulationRequest(scene, 'sim-span-2', 'trace-span-2'),
+    )
+    expect(result.states.at(-1)?.time.value ?? 0).toBeCloseTo(2, 6)
+  })
+
   it('samplePotentialGrid reports zero potential at the midpoint of an unlike pair', () => {
     /* +2 μC at x = -0.1 and -2 μC at x = +0.1: V at the origin cancels (kq/r + k(-q)/r = 0). */
     const { scene } = runPointCharge(

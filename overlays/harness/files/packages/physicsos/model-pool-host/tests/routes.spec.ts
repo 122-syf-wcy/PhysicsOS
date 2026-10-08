@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { deriveCipherKey } from '../src/crypto.ts'
+import { PoolError } from '../src/errors.ts'
 import type { IdentityActor, IdentityRole, PhysicsosIdentity } from '../src/identity.ts'
 import { modelPoolRoutes } from '../src/routes.ts'
 import { PoolStore } from '../src/store.ts'
@@ -90,10 +91,12 @@ const handlerFor = (
   store: PoolStore,
   probe = vi.fn().mockResolvedValue({ ok: true, status: 200, latencyMs: 12, message: '连通正常' }),
   mounted = true,
+  listModels = vi.fn().mockResolvedValue({ models: ['deepseek-v4.1-flash'], keyId: 'key-1' }),
 ) => modelPoolRoutes({
   store,
   identity: () => (mounted ? identity(role) : undefined),
   probe,
+  listModels,
 })
 
 const parse = (res: ReturnType<typeof makeRes>): Record<string, unknown> =>
@@ -178,6 +181,48 @@ describe('model pool admin routes', () => {
     expect(res.status).toBe(200)
     expect(parse(res)).toMatchObject({ ok: false, status: 401, latencyMs: 88 })
     expect(probe).toHaveBeenCalledOnce()
+  })
+
+  it("lists a channel's upstream models, and passes a named key through", async () => {
+    const store = makeStore()
+    const listModels = vi.fn().mockResolvedValue({ models: ['a', 'b'], keyId: 'key-9' })
+    const handler = handlerFor('SUPER_ADMIN', store, undefined, true, listModels)
+    const channel = await store.createChannel({ userKey: 'PHYSICSOS-OPEN:admin' }, {
+      name: 'a',
+      baseURL: 'https://api.example.com/v1',
+    })
+
+    const res = makeRes()
+    await handler(
+      postReq(`/physicsos/model-pool/channels/${channel.id}/models`, { keyId: 'key-9' }),
+      res as unknown as ServerResponse,
+    )
+    expect(res.status).toBe(200)
+    expect(parse(res)).toEqual({ models: ['a', 'b'], keyId: 'key-9' })
+    expect(listModels).toHaveBeenCalledWith(channel.id, 'key-9', expect.anything())
+
+    const plain = makeRes()
+    await handler(
+      postReq(`/physicsos/model-pool/channels/${channel.id}/models`, {}),
+      plain as unknown as ServerResponse,
+    )
+    expect(listModels).toHaveBeenLastCalledWith(channel.id, undefined, expect.anything())
+  })
+
+  it('reports the upstream refusal when the roster cannot be read', async () => {
+    const store = makeStore()
+    const listModels = vi.fn().mockRejectedValue(
+      new PoolError(502, 'MODEL_POOL_MODELS_UNAVAILABLE', 'invalid api key'),
+    )
+    const handler = handlerFor('SUPER_ADMIN', store, undefined, true, listModels)
+
+    const res = makeRes()
+    await handler(
+      postReq('/physicsos/model-pool/channels/ch-1/models', {}),
+      res as unknown as ServerResponse,
+    )
+    expect(res.status).toBe(502)
+    expect(parse(res)).toMatchObject({ error: { code: 'MODEL_POOL_MODELS_UNAVAILABLE', message: 'invalid api key' } })
   })
 
   it('maps an unknown path to 404 and a bad method to 405', async () => {

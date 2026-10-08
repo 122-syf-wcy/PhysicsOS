@@ -12,8 +12,9 @@
  */
 
 import { useState } from 'react'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotStore } from './runtime-compat.ts'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ProductSurfaceBaseProps } from './surface-props.ts'
 import {
   GOLDEN_QUESTIONS,
   goldenQuestionDomain,
@@ -50,9 +51,9 @@ export interface LearningRecordInjected {
   openExperiment: (experimentId: string) => void
 }
 
-export type LearningRecordWorkspaceProps = PropsRuntime<'conversation.surface'> &
-  PropsLocale<'physicsos'> &
-  InjectFace<LearningRecordInjected>
+export type LearningRecordWorkspaceProps =
+  & ProductSurfaceBaseProps
+  & InjectFace<LearningRecordInjected>
 
 export const MISTAKE_LABELS: Readonly<Record<MistakeType, string>> = {
   concept: '概念错误',

@@ -13,7 +13,7 @@
 
 import { useState } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import { knowledgeNodeOf } from '@physicsos/question-core'
 import type {
   ExperimentSelfCheckSet,
@@ -120,7 +120,7 @@ export function LabSelfCheckCard({
             </div>
             {chosen === undefined ? null : chosen.correct === true ? (
               <div className={css.quizTakeaway} data-selfcheck-result="correct">
-                <IconCheckOutline14 size={12} />
+                <IconCheckOutlineMedium size={12} />
                 {item.takeaway}
               </div>
             ) : (

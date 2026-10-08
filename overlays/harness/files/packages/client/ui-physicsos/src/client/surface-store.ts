@@ -1,4 +1,5 @@
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 
 import type { LearningApi } from './learning-api.ts'
@@ -13,6 +14,45 @@ export type PhysicsSurfaceId =
   | 'library'
   | 'notice'
   | 'admin'
+
+/**
+ * Central-panel identity each product surface occupies in the layout shell.
+ *
+ * The target shell exposes global panels through the `main` keyed slot and the
+ * sidebar's `sidebar.panellist` rows, so every PhysicsOS surface that is not
+ * the Home conversation needs a stable panel id. `home` is deliberately absent:
+ * it IS the Conversation panel (`selectPanel(null)`).
+ */
+export const PHYSICS_PANEL_IDS = {
+  lab: 'physicsos-lab' as MainPanelId,
+  paper: 'physicsos-paper' as MainPanelId,
+  notice: 'physicsos-notice' as MainPanelId,
+  library: 'physicsos-library' as MainPanelId,
+  record: 'physicsos-record' as MainPanelId,
+  admin: 'physicsos-admin' as MainPanelId,
+} satisfies Record<Exclude<PhysicsSurfaceId, 'home'>, MainPanelId>
+
+const SURFACE_BY_PANEL: Readonly<Record<string, PhysicsSurfaceId>> = {
+  [PHYSICS_PANEL_IDS.lab]: 'lab',
+  [PHYSICS_PANEL_IDS.paper]: 'paper',
+  [PHYSICS_PANEL_IDS.notice]: 'notice',
+  [PHYSICS_PANEL_IDS.library]: 'library',
+  [PHYSICS_PANEL_IDS.record]: 'record',
+  [PHYSICS_PANEL_IDS.admin]: 'admin',
+}
+
+/**
+ * Interpret one shell panel selection as a product surface.
+ * @param panelId - active `main` key, or null for the Conversation.
+ * @returns the surface, undefined when the panel is not PhysicsOS's.
+ */
+export function physicsSurfaceOfPanel(
+  panelId: string | null | undefined,
+): PhysicsSurfaceId | undefined {
+  if (panelId === null) return 'home'
+  if (panelId === undefined) return undefined
+  return SURFACE_BY_PANEL[panelId]
+}
 
 /** Scene handover every entry point exchanges with the Lab. */
 export interface PhysicsSceneRef {
@@ -110,6 +150,22 @@ export interface PhysicsSurfaceController {
   /** Real scenes the student opened, newest first, for the sidebar 最近空间. */
   recent: SnapshotStore<RecentExperimentsState>
   open: (surface: PhysicsSurfaceId, sceneRef?: PhysicsSceneRef) => void
+  /**
+   * Show a scene without adding it to 最近空间.
+   *
+   * The agent's own visits are working views, not artifacts a reader restores:
+   * the baseline it adopts on (re)load, and every revision it builds on the way
+   * to an answer. Recording those is what filled 最近空间 with the scaffolding
+   * of one question — three attempts at the same model, all kept. Only
+   * {@link remember} writes an entry, once the turn knows which world the
+   * answer belongs to.
+   */
+  openTransient: (surface: PhysicsSurfaceId, sceneRef: PhysicsSceneRef) => void
+  /**
+   * Add a scene to 最近空间 without navigating: the world a turn's answer
+   * belongs to, recorded once when that turn ends.
+   */
+  remember: (sceneRef: PhysicsSceneRef) => void
   /** Open the Lab assembling a circuit: the build bench, not the reading bench. */
   updateScene: (scene: PhysicsScene) => void
   openBuilder: (sceneRef: PhysicsSceneRef) => void
@@ -119,6 +175,22 @@ export interface PhysicsSurfaceController {
   removeRecent: (sceneId: string) => void
   /** Merge account-backed scenes and migrate local-only entries. */
   sync: () => Promise<void>
+  /**
+   * Adopt a panel selection made outside this controller — a `sidebar.panellist`
+   * row click, or the Conversation returning to the front. Foreign panels are
+   * left alone, so another package's page never rewrites the product surface.
+   * @param panelId - the shell's active `main` key, or null for the Conversation.
+   */
+  adoptPanel: (panelId: string | null) => void
+}
+
+/** How the product surface reaches the layout shell. */
+export interface PhysicsSurfaceNavigation {
+  /**
+   * Ask the shell to show the panel a product surface occupies.
+   * @param surface - the surface the student navigated to.
+   */
+  selectSurface: (surface: PhysicsSurfaceId) => void
 }
 
 /**
@@ -133,6 +205,7 @@ export interface PhysicsSurfaceController {
 export function createPhysicsSurfaceController(
   storage?: SceneStorage,
   remote?: SavedSceneSync,
+  navigation?: PhysicsSurfaceNavigation,
 ): PhysicsSurfaceController {
   let generation = 0
   const store = createSnapshotStore<PhysicsSurfaceState>({ surface: 'home' })
@@ -270,6 +343,16 @@ export function createPhysicsSurfaceController(
     })
   }
 
+  /* Show a scene without remembering it: one surface swap, shared by the
+     reader's own opens and the agent's working visits. */
+  const show = (surface: PhysicsSurfaceId, sceneRef: PhysicsSceneRef): void => {
+    store.set({
+      surface, sceneRef, sceneGeneration: ++generation,
+      ...(sceneRef.buildMode === true ? { buildMode: true } : {}),
+    })
+    navigation?.selectSurface(surface)
+  }
+
   return {
     store,
     recent,
@@ -287,8 +370,11 @@ export function createPhysicsSurfaceController(
         ...(active === undefined ? {} : { sceneRef: active }),
         ...(active?.buildMode === true || (sceneRef === undefined && previous.buildMode === true) ? { buildMode: true } : {}),
       })
+      navigation?.selectSurface(surface)
       if (sceneRef !== undefined) record(sceneRef)
     },
+    openTransient: show,
+    remember: record,
     updateScene: (scene) => {
       const current = store.getSnapshot()
       const previous = current.sceneRef
@@ -305,10 +391,12 @@ export function createPhysicsSurfaceController(
     openBuilder: (ref) => {
       const sceneRef: PhysicsSceneRef = { ...ref, buildMode: true }
       store.set({ surface: 'lab', sceneRef, sceneGeneration: ++generation, buildMode: true })
+      navigation?.selectSurface('lab')
       record(sceneRef)
     },
     openExperimentPicker: () => {
       store.set({ ...store.getSnapshot(), surface: 'lab', experimentPicker: true })
+      navigation?.selectSurface('lab')
     },
     removeRecent: (sceneId) => {
       const items = recent.getSnapshot().items.filter(entry => entry.sceneId !== sceneId)
@@ -327,5 +415,14 @@ export function createPhysicsSurfaceController(
         })
     },
     sync,
+    adoptPanel: (panelId) => {
+      const surface = physicsSurfaceOfPanel(panelId)
+      if (surface === undefined) return
+      const current = store.getSnapshot()
+      /* Only the field the shell owns moves: an adopted panel never drops the
+         active scene, the picker flag, or build mode. */
+      if (current.surface === surface) return
+      store.set({ ...current, surface })
+    },
   }
 }

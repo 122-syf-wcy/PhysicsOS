@@ -3,7 +3,7 @@
  * The student UI never reads the Harness roster for labels.
  */
 
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import { isStudentProfile, runtimePresetOf, type PhysicsProfileId } from './profiles.ts'
 
 /** localStorage key for the last student profile. */
