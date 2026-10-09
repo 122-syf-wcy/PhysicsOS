@@ -133,6 +133,7 @@ COPY --from=builder --chown=physicsos:physicsos \
     ./overlays/harness/files/packages/physicsos/health-host
 COPY --from=builder --chown=physicsos:physicsos /app/scripts/healthcheck.mjs ./scripts/healthcheck.mjs
 COPY --from=builder --chown=physicsos:physicsos /app/scripts/deploy/wait-for-ready.mjs ./scripts/deploy/wait-for-ready.mjs
+COPY --from=builder --chown=physicsos:physicsos /app/scripts/deploy/migrate-json-postgres.mjs ./scripts/deploy/migrate-json-postgres.mjs
 COPY --from=builder --chown=physicsos:physicsos /app/scripts/docker-entrypoint.mjs ./scripts/docker-entrypoint.mjs
 
 USER physicsos

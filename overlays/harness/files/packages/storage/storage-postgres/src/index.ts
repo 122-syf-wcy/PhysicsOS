@@ -105,10 +105,11 @@ function validateDescriptor(descriptor: KvUnitDescriptor): void {
 export class PostgresStorageBackend implements StorageBackend {
   /** The key-value facet; the only shape this backend serves. */
   readonly kv: KvFacet = { open: (descriptor: KvUnitDescriptor) => this.openUnit(descriptor) }
+  /** Resolves after writer acquisition and schema setup; rejects on startup failure. */
+  readonly ready: Promise<void>
 
   private readonly pool: Pool
   private readonly schema: string
-  private readonly ready: Promise<void>
   private readonly writer: PostgresWriterLease
   /** Open (or still-opening) units by name; presence is the double-open guard. */
   private readonly units = new Map<string, Promise<PostgresKvUnit>>()
@@ -277,21 +278,26 @@ export class PostgresStorageBackend implements StorageBackend {
 }
 
 /**
- * Register the PostgreSQL backend as `postgres` on the storage hub. The
- * disposer unregisters the name first, then closes the backend.
+ * Acquire the writer and initialize its schema before publishing `postgres`.
+ * Startup failure closes the backend; disposal removes its registrations
+ * before closing it.
  * @param ctx - Plugin context (must inject `storage`).
  * @param config - Validated plugin configuration.
+ * @returns resolution after initialization and registration succeed.
  */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = new PostgresStorageBackend(config)
-  ctx.effect(() => {
-    const dispose = ctx.storage.backend.register('postgres', backend)
-    return async () => {
-      dispose()
-      await backend.close()
-    }
-  }, 'storage-postgres.registerBackend')
-  ctx.provide(storageBackendServiceKey('postgres'), backend)
+  try {
+    await backend.ready
+    ctx.effect(function* () {
+      yield () => backend.close()
+      yield ctx.storage.backend.register('postgres', backend)
+      yield ctx.provide(storageBackendServiceKey('postgres'), backend)
+    }, 'storage-postgres.registerBackend')
+  } catch (error) {
+    await backend.close()
+    throw error
+  }
 }
 
 export { recordTableName } from './schema.ts'

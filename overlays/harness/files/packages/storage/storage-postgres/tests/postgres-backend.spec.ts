@@ -130,16 +130,26 @@ if (!availability.ok) {
     })
 
     it('requests process termination and rejects storage access if the owning session is killed', async () => {
-      const backend = backendAt(await freshSchema())
+      const schema = await freshSchema()
+      const backend = backendAt(schema)
       const unit = await backend.kv.open(SPECIFIC_DESCRIPTOR)
+      const independent = await backendAt(await freshSchema()).kv.open(SPECIFIC_DESCRIPTOR)
       const pool = adminPool
       if (pool === undefined) throw new Error('test database unavailable')
       const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
       const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
       try {
-        // Serial suite, fresh isolated database: target only its writer session.
+        // Other suites may own independent schemas in this test database.
         const result = await pool.query<{ pid: number }>(
-          "SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND application_name = 'physicsos-storage-writer'",
+          `SELECT activity.pid
+           FROM pg_stat_activity AS activity
+           JOIN pg_locks AS lock ON lock.pid = activity.pid
+           WHERE activity.datname = current_database()
+             AND activity.application_name = 'physicsos-storage-writer'
+             AND lock.locktype = 'advisory' AND lock.granted AND lock.objsubid = 1
+             AND lock.classid = ((hashtextextended($1, 0) >> 32) & 4294967295)::oid
+             AND lock.objid = (hashtextextended($1, 0) & 4294967295)::oid`,
+          [`physicsos:single-writer:${schema}`],
         )
         expect(result.rows).toHaveLength(1)
         const owner = result.rows[0]
@@ -148,6 +158,7 @@ if (!availability.ok) {
         await vi.waitFor(() => { expect(exit).toHaveBeenCalledWith(1) })
         await expect(unit.putRecord('records', 'stale', 1)).rejects.toThrow(/writer/i)
         await expect(unit.loadAll()).rejects.toThrow(/writer/i)
+        await expect(independent.putRecord('records', 'retained', 1)).resolves.toBeUndefined()
       } finally {
         await backend.close()
         exit.mockRestore()
@@ -344,6 +355,72 @@ if (!availability.ok) {
       const closed = backend.close()
       await expect(pending).rejects.toMatchObject({ code: 'version-mismatch' })
       await closed
+    })
+
+    it.each([
+      { name: 'does not publish the backend until schema initialization succeeds', action: 'complete' },
+      { name: 'releases pending initialization without publishing when disposed', action: 'dispose' },
+    ] as const)('$name', async ({ action }) => {
+      const ctx = new Context()
+      await ctx.plugin(Storage)
+      const schema = await freshSchema()
+      let release!: () => void
+      let entered!: () => void
+      const blocked = new Promise<void>((resolve) => { release = resolve })
+      const started = new Promise<void>((resolve) => { entered = resolve })
+      const initializeSchema = Schema.initializeSchema
+      const initialize = vi.spyOn(Schema, 'initializeSchema').mockImplementationOnce(async (pool, name) => {
+        entered()
+        await blocked
+        await initializeSchema(pool, name)
+      })
+      const fiber = ctx.plugin(StoragePostgres, {
+        connectionString: availability.url,
+        schema,
+        maxConnections: 2,
+        ssl: false,
+      })
+      try {
+        await started
+        expect(ctx.storage.backend.names()).toEqual([])
+        expect(ctx.get(storageBackendServiceKey('postgres'))).toBeUndefined()
+        if (action === 'dispose') {
+          const disposed = fiber.dispose()
+          release()
+          await disposed
+          expect(ctx.storage.backend.names()).toEqual([])
+          expect(ctx.get(storageBackendServiceKey('postgres'))).toBeUndefined()
+          // Disposal during startup must release the exact schema's writer.
+          await expect(backendAt(schema).kv.open(SPECIFIC_DESCRIPTOR)).resolves.toBeDefined()
+        } else {
+          release()
+          await fiber
+          const backend = ctx.storage.backend.get('postgres')
+          expect(ctx.get(storageBackendServiceKey('postgres'))).toBe(backend)
+        }
+      } finally {
+        release()
+        initialize.mockRestore()
+        await fiber.dispose()
+      }
+    })
+
+    it('rejects plugin activation without publishing a backend when its writer cannot connect', async () => {
+      const ctx = new Context()
+      await ctx.plugin(Storage)
+      const fiber = ctx.plugin(StoragePostgres, {
+        connectionString: 'postgresql://127.0.0.1:1/physicsos?connect_timeout=1',
+        schema: 'public',
+        maxConnections: 1,
+        ssl: false,
+      })
+      try {
+        await expect(Promise.resolve(fiber).then(() => undefined)).rejects.toThrow(/connect/i)
+        expect(ctx.storage.backend.names()).toEqual([])
+        expect(ctx.get(storageBackendServiceKey('postgres'))).toBeUndefined()
+      } finally {
+        await fiber.dispose()
+      }
     })
 
     it('registers on the storage hub as backend postgres and closes on dispose', async () => {

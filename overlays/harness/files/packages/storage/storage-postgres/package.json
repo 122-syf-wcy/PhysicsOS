@@ -40,8 +40,15 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:~",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-storage": "workspace:^",
-    "@types/pg": "^8.23.1"
+    "@deepseek-ai/dsh-storage-domain": "workspace:*",
+    "@deepseek-ai/dsh-storage-json": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "@types/pg": "^8.23.1",
+    "js-yaml": "^4.2.0",
+    "zod": "^4.4.3"
   }
 }

@@ -168,8 +168,8 @@
       ],
       "entry": "packages/storage/storage-postgres/src/index.ts",
       "publisher": "PhysicsOS",
-      "sha256": "543848d614d0a543410481e58d7773c3790989a11a86568e95640835ce3ddfbe",
-      "signature": "ed25519:tqhKi6xQFLCa2asuWUcfK6SKNqZfD5XKogHT2+5Tfnnj5eMo1oppL9V+7tpc3hiYqv1qsi6ffprxZAL7sfPdDA==",
+      "sha256": "acb0b961533fe0555f67f1e6e8d9d979c7cbac14b37bf1a7505ea53c82d7c3d1",
+      "signature": "ed25519:7PFMpbIjyg1Nq6hUyk7uE2FQfRnatk5POGbPCE9OKs3i/FbgtVgDxtF86JUmefhjSX6bYjPB8qmlHamlhOHjBA==",
       "description": "PostgreSQL-backed domain and key-value storage."
     },
     {

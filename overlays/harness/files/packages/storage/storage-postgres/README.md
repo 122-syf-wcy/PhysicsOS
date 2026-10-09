@@ -59,6 +59,11 @@ lease key or unlocks a successor. Redis counters do not change this restriction.
 
 ## Lifecycle and errors
 
+Plugin activation waits for writer acquisition and schema initialization before
+publishing the backend. A failed or cancelled activation closes its connections
+without exposing a usable backend; disposal withdraws the service before
+releasing the registry entry, pool, and writer lease.
+
 Opening a missing unit creates its metadata row and record tables
 transactionally. A differing version stamp rejects with `version-mismatch`.
 An invalid JSON value or key in the medium rejects reads with

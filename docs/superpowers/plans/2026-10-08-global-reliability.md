@@ -72,3 +72,16 @@
 - User authorized all fixes based on the audit. Independent workstreams are parallelized by non-overlapping ownership; integration and shared mutations remain serialized.
 
 - Final: main test3031, upstream447, PostgreSQL26, headless16 checks, Rust14, browser journeys, typecheck/lint/build all pass. Four independent-review findings repaired and confirmed. Exact evidence and deployment limitations: `docs/reports/GLOBAL-RELIABILITY-2026-10-08.md`.
+
+## Release storage repair (2026-10-09)
+
+The restored release exposed an existing production routing regression after the Harness update: `PHYSICSOS_STORAGE_BACKEND=postgres` enables the PostgreSQL plugin, but the base domain configuration still selects JSON. The current JSON volume has 49 users and the current model channel; PostgreSQL last received business writes on 2026-09-27 and has 29 users. The current JSON snapshot is authoritative for this release. Do not merge the older PostgreSQL records into it.
+
+Repair the deployment route and the PostgreSQL initialization failure at their source. Migrate the stopped application's complete JSON snapshot into a new, previously absent schema in one transaction, preserving unit versions, every key/value, global records, ownership, and encrypted model keys. Keep both the original JSON volume and the old PostgreSQL schema. The importer must reject ambiguous layouts, unsupported record versions, existing destinations, and any failed read-back comparison. Session log files remain on the same persistent volume.
+
+- [x] Reproduce and fix the PostgreSQL initialization failure with focused server tests (29 backend checks and both real composition launch modes passed).
+- [x] Add the JSON-to-PostgreSQL importer, failure/rollback tests, and exact read-back checks (28 checks and the 2,591-record restored snapshot passed).
+- [ ] Verify the repaired runtime against the migrated restore copy, including one live writer lease, authentication, existing resources, a new session, restart, and browser journeys.
+- [ ] Integrate the verified commit into `main` and push after rechecking the remote tip.
+- [ ] Stop the old production app, capture a fresh encrypted backup, migrate the final stopped JSON snapshot, and switch only the app to the verified image/schema.
+- [ ] Verify public readiness, current account/model data, session persistence, and a real model turn. Record rollback constraints after PostgreSQL accepts new business writes.

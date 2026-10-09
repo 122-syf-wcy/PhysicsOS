@@ -12311,13 +12311,18 @@ index 0000000000..3911cc7ec9
 +  })
 +})
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c98289bc3e..171f5d6b54 100644
+index c98289bc3e..94fa68a490 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
-@@ -29,6 +29,12 @@
+@@ -29,6 +29,17 @@
      path: ':memory:'
      openAt: never
 
++# Route domains through the same backend selected for this deployment.
++- id: storage-domain
++  config:
++    backend: !!js process.env.PHYSICSOS_STORAGE_BACKEND ?? 'json'
++
 +# PhysicsOS stores sessions under its deployment data volume. Multi-replica
 +# deployments must point this at shared storage before adding replicas.
 +- id: session-persistence-jsonl
@@ -12327,7 +12332,7 @@ index c98289bc3e..171f5d6b54 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh
-@@ -47,6 +53,88 @@
+@@ -47,6 +58,88 @@
      - id: subagent-model-selection-settings
        name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -12416,7 +12421,7 @@ index c98289bc3e..171f5d6b54 100644
      - id: message-feedback
        name: '@deepseek-ai/dsh-message-feedback'
        config:
-@@ -302,6 +390,9 @@
+@@ -302,6 +395,9 @@
      - id: ui-conversation
        name: '@deepseek-ai/dsh-client-ui-conversation'
 
@@ -13527,7 +13532,7 @@ index ec2a88c4f9..f2ce9a7c66 100644
     * Tear down every registration made through `ctx`.
     * @returns settles once the scope has quiesced; racing calls share one completion.
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 36dc0506d3..126771cd55 100644
+index 36dc0506d3..2869c9718c 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -8,6 +8,23 @@ overrides:
@@ -14424,7 +14429,7 @@ index 36dc0506d3..126771cd55 100644
 
    packages/ssh/fs-ssh:
      dependencies:
-@@ -11986,6 +12550,28 @@ importers:
+@@ -11986,6 +12550,49 @@ importers:
          specifier: workspace:*
          version: link:../storage
 
@@ -14440,20 +14445,41 @@ index 36dc0506d3..126771cd55 100644
 +      '@deepseek-ai/cordis':
 +        specifier: workspace:^
 +        version: link:../../../vendor/cordis
++      '@deepseek-ai/cordis-plugin-include':
++        specifier: workspace:~
++        version: link:../../../vendor/include
++      '@deepseek-ai/cordis-plugin-loader':
++        specifier: workspace:~
++        version: link:../../../vendor/loader
 +      '@deepseek-ai/dsh-invariants':
 +        specifier: workspace:^
 +        version: link:../../runtime-diagnostics/invariants
 +      '@deepseek-ai/dsh-storage':
 +        specifier: workspace:^
 +        version: link:../storage
++      '@deepseek-ai/dsh-storage-domain':
++        specifier: workspace:*
++        version: link:../storage-domain
++      '@deepseek-ai/dsh-storage-json':
++        specifier: workspace:*
++        version: link:../storage-json
++      '@types/js-yaml':
++        specifier: ^4.0.9
++        version: 4.0.9
 +      '@types/pg':
 +        specifier: ^8.23.1
 +        version: 8.23.1
++      js-yaml:
++        specifier: 4.3.2
++        version: 4.3.2
++      zod:
++        specifier: ^4.4.3
++        version: 4.4.3
 +
    packages/storage/storage-sqlite:
      dependencies:
        '@deepseek-ai/schemastery':
-@@ -12853,11 +13439,11 @@ importers:
+@@ -12853,11 +13460,11 @@ importers:
          specifier: ^16.3.2
          version: 16.3.2(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
        js-yaml:
@@ -14469,7 +14495,7 @@ index 36dc0506d3..126771cd55 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13058,11 +13644,11 @@ importers:
+@@ -13058,11 +13665,11 @@ importers:
          specifier: workspace:*
          version: link:../../session/session-format
        js-yaml:
@@ -14485,7 +14511,7 @@ index 36dc0506d3..126771cd55 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13269,8 +13855,8 @@ importers:
+@@ -13269,8 +13876,8 @@ importers:
    packages/util/http-proxy:
      dependencies:
        undici:
@@ -14496,7 +14522,7 @@ index 36dc0506d3..126771cd55 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13416,8 +14002,8 @@ importers:
+@@ -13416,8 +14023,8 @@ importers:
          specifier: ^2.5.0
          version: 2.5.0
        undici:
@@ -14507,7 +14533,7 @@ index 36dc0506d3..126771cd55 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -14335,8 +14921,8 @@ importers:
+@@ -14335,8 +14942,8 @@ importers:
          specifier: link:../cosmokit
          version: link:../cosmokit
        js-yaml:
@@ -14518,7 +14544,7 @@ index 36dc0506d3..126771cd55 100644
 
    vendor/loader:
      dependencies:
-@@ -14414,10 +15000,10 @@ importers:
+@@ -14414,10 +15021,10 @@ importers:
          version: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vitepress:
          specifier: ^1.6.4
@@ -14531,7 +14557,7 @@ index 36dc0506d3..126771cd55 100644
        vue:
          specifier: 3.5.39
          version: 3.5.39(typescript@6.0.3)
-@@ -15513,11 +16099,11 @@ packages:
+@@ -15513,11 +16120,11 @@ packages:
        '@modelcontextprotocol/sdk':
          optional: true
 
@@ -14546,7 +14572,7 @@ index 36dc0506d3..126771cd55 100644
 
    '@humanfs/core@0.19.2':
      resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
-@@ -15552,160 +16138,160 @@ packages:
+@@ -15552,160 +16159,160 @@ packages:
      resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
      engines: {node: '>=18'}
 
@@ -14759,7 +14785,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=20.9.0'}
      cpu: [x64]
      os: [win32]
-@@ -15734,6 +16320,9 @@ packages:
+@@ -15734,6 +16341,9 @@ packages:
    '@jridgewell/sourcemap-codec@1.5.5':
      resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
@@ -14769,7 +14795,7 @@ index 36dc0506d3..126771cd55 100644
    '@jridgewell/trace-mapping@0.3.31':
      resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-@@ -15942,7 +16531,7 @@ packages:
+@@ -15942,7 +16552,7 @@ packages:
      engines: {node: '>=20'}
      peerDependencies:
        '@modelcontextprotocol/server': ^2.0.0
@@ -14778,7 +14804,7 @@ index 36dc0506d3..126771cd55 100644
      peerDependenciesMeta:
        hono:
          optional: true
-@@ -17287,6 +17876,9 @@ packages:
+@@ -17287,6 +17897,9 @@ packages:
    '@types/papaparse@5.5.2':
      resolution: {integrity: sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA==}
 
@@ -14788,7 +14814,7 @@ index 36dc0506d3..126771cd55 100644
    '@types/picomatch@3.0.2':
      resolution: {integrity: sha512-n0i8TD3UDB7paoMMxA3Y65vUncFJXjcUf7lQY7YyKGl6031FNjfsLs6pdLFCy2GNFxItPJG8GvvpbZc2skH7WA==}
 
-@@ -17358,6 +17950,9 @@ packages:
+@@ -17358,6 +17971,9 @@ packages:
    '@types/ws@8.18.1':
      resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
@@ -14798,7 +14824,7 @@ index 36dc0506d3..126771cd55 100644
    '@types/yauzl@2.10.3':
      resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
 
-@@ -17434,20 +18029,20 @@ packages:
+@@ -17434,20 +18050,20 @@ packages:
        vite: ^5.0.0 || ^6.0.0
        vue: ^3.2.25
 
@@ -14827,7 +14853,7 @@ index 36dc0506d3..126771cd55 100644
      peerDependencies:
        msw: ^2.4.9
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -17457,20 +18052,23 @@ packages:
+@@ -17457,20 +18073,23 @@ packages:
        vite:
          optional: true
 
@@ -14835,17 +14861,17 @@ index 36dc0506d3..126771cd55 100644
 -    resolution: {integrity: sha512-9GasEBxpZ1VYIpqHf/0+YGg121uSNwCKOJqIrTwWP/TB7DmFCiaBpNl3aPZzoLWfWkuqhbH8vJIVobZkvdo2cA==}
 +  '@vitest/pretty-format@4.1.11':
 +    resolution: {integrity: sha512-yiZzPbGTS9Sr/JpFl8zHrcIkAofNbFV6k21vIgQN/cY/oxZeXhJv5sc/MBJ5jFKWmWs+oJHw0UXLZjmf931+Vw==}
-
--  '@vitest/runner@4.1.8':
--    resolution: {integrity: sha512-EmVxeBAfMJvycdjd6Hm+RbFBbA9fKvo0Kx37hNpBYoYeavH3RNsBXWDooR1mgD52dCrxIIuP7UotpfiwOikvcg==}
++
 +  '@vitest/runner@4.1.11':
 +    resolution: {integrity: sha512-LztvUgdwMNJMIkj3hQnnxiC2Xy1zNxq928W/xhjCLaNCzqTZOudjwbQf6v9IntZGPw132i2Lq2rgTRZHD3JHNw==}
 
--  '@vitest/snapshot@4.1.8':
--    resolution: {integrity: sha512-acfZboRmAIf05DEKcBQy33VXojFJjtUdLyo7oOmV9kebb2xdU01UknNiPuPZoJZQyO7DF0gZdTGTpeAzET9QPQ==}
+-  '@vitest/runner@4.1.8':
+-    resolution: {integrity: sha512-EmVxeBAfMJvycdjd6Hm+RbFBbA9fKvo0Kx37hNpBYoYeavH3RNsBXWDooR1mgD52dCrxIIuP7UotpfiwOikvcg==}
 +  '@vitest/snapshot@4.1.11':
 +    resolution: {integrity: sha512-pN7ikn1ON7h8ee4gIAp4AzyK+zBtJPzVbqOgu5LCEh4VaJVbPQcgYQYJIMGQPXVeJJq1fnfazis7a5pFNPahog==}
-+
+
+-  '@vitest/snapshot@4.1.8':
+-    resolution: {integrity: sha512-acfZboRmAIf05DEKcBQy33VXojFJjtUdLyo7oOmV9kebb2xdU01UknNiPuPZoJZQyO7DF0gZdTGTpeAzET9QPQ==}
 +  '@vitest/spy@4.1.11':
 +    resolution: {integrity: sha512-apNa/prQy2qCeywhnixOHPRCgGNhvg7T4Dapfl1GahLp/R+uhBm5cPyFoNVyqsNd2h1nJxL6BqqdIjiABL60YA==}
 
@@ -14859,7 +14885,7 @@ index 36dc0506d3..126771cd55 100644
 
    '@vscode/ripgrep-darwin-arm64@1.18.0':
      resolution: {integrity: sha512-r3ktHSvbFycQNF6sl7sNDPocpsI7J+mEzh1IaZFkY0spm3k2Z9t8hPAeOK7+p0l6p6/swkQC14XWX01low+94Q==}
-@@ -17924,9 +18522,9 @@ packages:
+@@ -17924,9 +18543,9 @@ packages:
    brace-expansion@2.1.2:
      resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
 
@@ -14872,7 +14898,7 @@ index 36dc0506d3..126771cd55 100644
 
    brotli@1.3.3:
      resolution: {integrity: sha512-oTKjJdShmDuGW94SyyaoQvAjf30dZaHnjJ8uAF+u2/vGJkJbJPJAT1gDiOJP5v1Zb6f9KEyW/1HpuaWIXtGHPg==}
-@@ -18780,8 +19378,8 @@ packages:
+@@ -18780,8 +19399,8 @@ packages:
      resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
      engines: {node: '>=6'}
 
@@ -14883,7 +14909,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=12.0.0'}
 
    exponential-backoff@3.1.3:
-@@ -18832,8 +19430,8 @@ packages:
+@@ -18832,8 +19451,8 @@ packages:
    fast-sha256@1.3.0:
      resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
 
@@ -14894,7 +14920,7 @@ index 36dc0506d3..126771cd55 100644
 
    fast-xml-builder@1.2.0:
      resolution: {integrity: sha512-00aAWieqff+ZJhsXA4g1g7M8k+7AYoMUUHF+/zFb5U6Uv/P0Vl4QZo84/IcufzYalLuEj9928bXN9PbbFzMF0Q==}
-@@ -19120,8 +19718,8 @@ packages:
+@@ -19120,8 +19739,8 @@ packages:
      resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
      hasBin: true
 
@@ -14905,7 +14931,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=16.9.0'}
 
    hookable@5.5.3:
-@@ -19243,8 +19841,8 @@ packages:
+@@ -19243,8 +19862,8 @@ packages:
      resolution: {integrity: sha512-DRsRnQrbzdFjaQ1oe4C6/EIUymIOEix1qROEJTF9dbMq+M4Zrm6VaLp6SD/B9IsiEjPZuBSnWWFN+udajugdWA==}
      engines: {node: '>=20'}
 
@@ -14916,7 +14942,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>= 12'}
 
    ipaddr.js@1.9.1:
-@@ -19375,12 +19973,8 @@ packages:
+@@ -19375,12 +19994,8 @@ packages:
    js-tokens@4.0.0:
      resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -14931,7 +14957,7 @@ index 36dc0506d3..126771cd55 100644
      hasBin: true
 
    jsbi@4.3.2:
-@@ -19839,8 +20433,8 @@ packages:
+@@ -19839,8 +20454,8 @@ packages:
    mermaid@11.16.0:
      resolution: {integrity: sha512-Zvm3kbstgdpvIJPPItlL7fppIZ3kibvc1oZIGxdvk9t6UFz6flv+Jw7FtRGKwfcI8OckmH04LqG6LlS6X4B1pA==}
 
@@ -14942,7 +14968,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-extension-gfm-autolink-literal@2.1.0:
      resolution: {integrity: sha512-oOg7knzhicgQ3t4QCjCWgTmfNhvQbDDnJeVu9v81r7NltNCVmhPy1fJRX27pISafdjL+SVc4d3l48Gb6pbRypw==}
-@@ -19872,8 +20466,8 @@ packages:
+@@ -19872,8 +20487,8 @@ packages:
    micromark-factory-label@2.0.1:
      resolution: {integrity: sha512-VFMekyQExqIW7xIChcXn4ok29YE3rnuyveW3wZQWWqF4Nv9Wk5rgJ99KzPvHjkmPXF93FXIbBp6YdW3t71/7Vg==}
 
@@ -14953,7 +14979,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-factory-title@2.0.1:
      resolution: {integrity: sha512-5bZ+3CjhAd9eChYTHsjy6TGxpOFSKgKKJPJxr293jTbfry2KDoWkhBb6TcPVB4NmzaPhMs1Frm9AZH7OD4Cjzw==}
-@@ -19899,6 +20493,9 @@ packages:
+@@ -19899,6 +20514,9 @@ packages:
    micromark-util-decode-string@2.0.1:
      resolution: {integrity: sha512-nDV/77Fj6eH1ynwscYTOsbK7rR//Uj0bZXBwJZRfaLEJ1iGBR6kIfNmlNqaqJf649EP0F3NWNdeJi03elllNUQ==}
 
@@ -14963,7 +14989,7 @@ index 36dc0506d3..126771cd55 100644
    micromark-util-encode@2.0.1:
      resolution: {integrity: sha512-c3cVx2y4KqUnwopcO9b/SCdo2O67LwJJ/UyqGfbigahfegL9myoEFoDYZgkT7f36T0bLrM9hZTAaAyH+PCAXjw==}
 
-@@ -19920,8 +20517,8 @@ packages:
+@@ -19920,8 +20538,8 @@ packages:
    micromark-util-symbol@2.0.1:
      resolution: {integrity: sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q==}
 
@@ -14974,7 +15000,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark@4.0.2:
      resolution: {integrity: sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==}
-@@ -20016,8 +20613,8 @@ packages:
+@@ -20016,8 +20634,8 @@ packages:
    multistream@4.1.0:
      resolution: {integrity: sha512-J1XDiAmmNpRCBfIWJv+n0ymC4ABcf/Pl+5YvC5B/D2f/2+8PtHvCNxMPKiQcZyi922Hq69J2YOpb1pTywfifyw==}
 
@@ -14985,7 +15011,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
      hasBin: true
 
-@@ -20324,6 +20921,10 @@ packages:
+@@ -20324,6 +20942,10 @@ packages:
    pathe@2.0.3:
      resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
@@ -14996,7 +15022,7 @@ index 36dc0506d3..126771cd55 100644
    pdfjs-dist@6.3.289:
      resolution: {integrity: sha512-ZHjSVpDa3D6izMq8/04lvkhkATUmL9px6ChPaXc1k6nU2Mrhlg1/7F0bdUqCwUjw3NsPTfPZsMDUU6ZIcRaeQw==}
      engines: {node: '>=22.13.0 || >=24'}
-@@ -20341,6 +20942,40 @@ packages:
+@@ -20341,6 +20963,40 @@ packages:
    performance-now@2.1.0:
      resolution: {integrity: sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==}
 
@@ -15037,7 +15063,7 @@ index 36dc0506d3..126771cd55 100644
    picocolors@1.1.1:
      resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
-@@ -20395,10 +21030,26 @@ packages:
+@@ -20395,10 +21051,26 @@ packages:
      resolution: {integrity: sha512-rEwq/ZHlJIKw++XtLAO8PPuOQA/zaPJOZJ37BVuN97nLpMJeuDVLVGRwbFoBgLudgdTMP2hdRJP++H+8QOA3vg==}
      engines: {node: '>= 10.12'}
 
@@ -15066,7 +15092,7 @@ index 36dc0506d3..126771cd55 100644
    postject@1.0.0-alpha.6:
      resolution: {integrity: sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A==}
      engines: {node: '>=14.0.0'}
-@@ -20463,8 +21114,8 @@ packages:
+@@ -20463,8 +21135,8 @@ packages:
    property-information@7.2.0:
      resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
 
@@ -15077,7 +15103,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=12.0.0'}
 
    proxy-addr@2.0.8:
-@@ -20496,8 +21147,8 @@ packages:
+@@ -20496,8 +21168,8 @@ packages:
      resolution: {integrity: sha512-BbubeCEyTuQjVMakvJQ/Sxbc93F2pwmbsxONT/ZRrwU7Ua38d8unYTwXpTVLAKJ4BDuH9IGztCjQcd/N/39Dvg==}
      engines: {node: '>=16.0.0'}
 
@@ -15088,7 +15114,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=0.6'}
 
    quansync@1.0.0:
-@@ -20776,8 +21427,8 @@ packages:
+@@ -20776,8 +21448,8 @@ packages:
    setprototypeof@1.2.0:
      resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
 
@@ -15099,7 +15125,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=20.9.0'}
      peerDependencies:
        '@types/node': '*'
-@@ -20881,6 +21532,10 @@ packages:
+@@ -20881,6 +21553,10 @@ packages:
      resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
      engines: {node: '>=0.10.0'}
 
@@ -15110,7 +15136,7 @@ index 36dc0506d3..126771cd55 100644
    source-map-support@0.5.21:
      resolution: {integrity: sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==}
 
-@@ -20904,6 +21559,10 @@ packages:
+@@ -20904,6 +21580,10 @@ packages:
      resolution: {integrity: sha512-1POYv7uv2gXoyGFpBCmpDVSNV74IfsWlDW216UPjbWufNf+bSU6GdbDsxdcxtfwb4xlI3yxzOTKClUosxARYrQ==}
      engines: {node: '>=0.10.0'}
 
@@ -15121,7 +15147,7 @@ index 36dc0506d3..126771cd55 100644
    sprintf-js@1.1.3:
      resolution: {integrity: sha512-Oo+0REFV59/rz3gfJNKQiBlwfHaSESl1pcGyABQsnnIfWOFt6JNj5gCog2U6MLZ//IGYD+nA8nI+mTShREReaA==}
 
-@@ -21240,12 +21899,12 @@ packages:
+@@ -21240,12 +21920,12 @@ packages:
      resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
      engines: {node: '>=18.17'}
 
@@ -15138,7 +15164,7 @@ index 36dc0506d3..126771cd55 100644
      engines: {node: '>=22.19.0'}
 
    unicode-properties@1.4.1:
-@@ -21481,27 +22140,27 @@ packages:
+@@ -21481,27 +22161,27 @@ packages:
      hasBin: true
      peerDependencies:
        markdown-it-mathjax3: ^4
@@ -15175,7 +15201,7 @@ index 36dc0506d3..126771cd55 100644
        happy-dom: '*'
        jsdom: '*'
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -21678,6 +22337,10 @@ packages:
+@@ -21678,6 +22358,10 @@ packages:
    xmlchars@2.2.0:
      resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
@@ -15186,7 +15212,7 @@ index 36dc0506d3..126771cd55 100644
    y18n@5.0.8:
      resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
      engines: {node: '>=10'}
-@@ -22489,7 +23152,7 @@ snapshots:
+@@ -22489,7 +23173,7 @@ snapshots:
        semver: 7.8.5
        sumchecker: 3.0.1
      optionalDependencies:
@@ -15195,7 +15221,7 @@ index 36dc0506d3..126771cd55 100644
      transitivePeerDependencies:
        - supports-color
 
-@@ -22894,7 +23557,7 @@ snapshots:
+@@ -22894,7 +23578,7 @@ snapshots:
      dependencies:
        google-auth-library: 10.7.0
        p-retry: 4.6.2
@@ -15204,7 +15230,7 @@ index 36dc0506d3..126771cd55 100644
        ws: 8.21.0
      optionalDependencies:
        '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-@@ -22903,9 +23566,9 @@ snapshots:
+@@ -22903,9 +23587,9 @@ snapshots:
        - supports-color
        - utf-8-validate
 
@@ -15216,7 +15242,7 @@ index 36dc0506d3..126771cd55 100644
 
    '@humanfs/core@0.19.2':
      dependencies:
-@@ -22937,108 +23600,108 @@ snapshots:
+@@ -22937,108 +23621,108 @@ snapshots:
 
    '@img/colour@1.1.0': {}
 
@@ -15363,7 +15389,7 @@ index 36dc0506d3..126771cd55 100644
      optional: true
 
    '@isaacs/cliui@8.0.2':
-@@ -23070,6 +23733,8 @@ snapshots:
+@@ -23070,6 +23754,8 @@ snapshots:
 
    '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -15372,7 +15398,7 @@ index 36dc0506d3..126771cd55 100644
    '@jridgewell/trace-mapping@0.3.31':
      dependencies:
        '@jridgewell/resolve-uri': 3.1.2
-@@ -23273,16 +23938,16 @@ snapshots:
+@@ -23273,16 +23959,16 @@ snapshots:
      dependencies:
        zod: 4.4.3
 
@@ -15393,7 +15419,7 @@ index 36dc0506d3..126771cd55 100644
        ajv: 8.20.0
        ajv-formats: 3.0.1(ajv@8.20.0)
        content-type: 1.0.5
-@@ -23292,7 +23957,7 @@ snapshots:
+@@ -23292,7 +23978,7 @@ snapshots:
        eventsource-parser: 3.1.0
        express: 5.2.1
        express-rate-limit: 8.5.2(express@5.2.1)
@@ -15402,7 +15428,7 @@ index 36dc0506d3..126771cd55 100644
        jose: 6.2.3
        json-schema-typed: 8.0.2
        pkce-challenge: 5.0.1
-@@ -24408,6 +25073,12 @@ snapshots:
+@@ -24408,6 +25094,12 @@ snapshots:
      dependencies:
        '@types/node': 22.20.0
 
@@ -15415,7 +15441,7 @@ index 36dc0506d3..126771cd55 100644
    '@types/picomatch@3.0.2': {}
 
    '@types/picomatch@4.0.3': {}
-@@ -24470,6 +25141,10 @@ snapshots:
+@@ -24470,6 +25162,10 @@ snapshots:
      dependencies:
        '@types/node': 22.20.0
 
@@ -15426,7 +15452,7 @@ index 36dc0506d3..126771cd55 100644
    '@types/yauzl@2.10.3':
      dependencies:
        '@types/node': 22.20.0
-@@ -24538,10 +25213,10 @@ snapshots:
+@@ -24538,10 +25234,10 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
 
@@ -15439,7 +15465,7 @@ index 36dc0506d3..126771cd55 100644
        ast-v8-to-istanbul: 1.0.4
        istanbul-lib-coverage: 3.2.2
        istanbul-lib-report: 3.0.1
-@@ -24550,62 +25225,64 @@ snapshots:
+@@ -24550,62 +25246,64 @@ snapshots:
        obug: 2.1.3
        std-env: 4.1.0
        tinyrainbow: 3.1.0
@@ -15522,7 +15548,7 @@ index 36dc0506d3..126771cd55 100644
        convert-source-map: 2.0.0
        tinyrainbow: 3.1.0
 
-@@ -24682,7 +25359,7 @@ snapshots:
+@@ -24682,7 +25380,7 @@ snapshots:
        '@vue/shared': 3.5.39
        estree-walker: 2.0.2
        magic-string: 0.30.21
@@ -15531,7 +15557,7 @@ index 36dc0506d3..126771cd55 100644
        source-map-js: 1.2.1
 
    '@vue/compiler-ssr@3.5.39':
-@@ -24775,7 +25452,7 @@ snapshots:
+@@ -24775,7 +25473,7 @@ snapshots:
        progress: 2.0.3
        semver: 7.8.5
        tar-fs: 3.1.3
@@ -15540,7 +15566,7 @@ index 36dc0506d3..126771cd55 100644
        yargs: 16.2.2
      transitivePeerDependencies:
        - bare-abort-controller
-@@ -24813,7 +25490,7 @@ snapshots:
+@@ -24813,7 +25511,7 @@ snapshots:
 
    '@yarnpkg/parsers@3.1.0':
      dependencies:
@@ -15549,7 +15575,7 @@ index 36dc0506d3..126771cd55 100644
        tslib: 2.8.1
 
    abbrev@4.0.0: {}
-@@ -24853,7 +25530,7 @@ snapshots:
+@@ -24853,7 +25551,7 @@ snapshots:
    ajv@8.20.0:
      dependencies:
        fast-deep-equal: 3.1.3
@@ -15558,7 +15584,7 @@ index 36dc0506d3..126771cd55 100644
        json-schema-traverse: 1.0.0
        require-from-string: 2.0.2
 
-@@ -24925,7 +25602,7 @@ snapshots:
+@@ -24925,7 +25623,7 @@ snapshots:
        hosted-git-info: 4.1.0
        isbinaryfile: 5.0.7
        jiti: 2.7.0
@@ -15567,7 +15593,7 @@ index 36dc0506d3..126771cd55 100644
        json5: 2.2.3
        lazy-val: 1.0.5
        minimatch: 10.2.5
-@@ -25108,7 +25785,7 @@ snapshots:
+@@ -25108,7 +25806,7 @@ snapshots:
        http-errors: 2.0.1
        iconv-lite: 0.7.3
        on-finished: 2.4.1
@@ -15576,7 +15602,7 @@ index 36dc0506d3..126771cd55 100644
        raw-body: 3.0.2
        type-is: 2.1.0
      transitivePeerDependencies:
-@@ -25128,7 +25805,7 @@ snapshots:
+@@ -25128,7 +25826,7 @@ snapshots:
      dependencies:
        balanced-match: 1.0.2
 
@@ -15585,7 +15611,7 @@ index 36dc0506d3..126771cd55 100644
      dependencies:
        balanced-match: 4.0.4
 
-@@ -25185,7 +25862,7 @@ snapshots:
+@@ -25185,7 +25883,7 @@ snapshots:
        fs-extra: 10.1.0
        http-proxy-agent: 7.0.2
        https-proxy-agent: 7.0.6
@@ -15594,7 +15620,7 @@ index 36dc0506d3..126771cd55 100644
        sanitize-filename: 1.6.4
        source-map-support: 0.5.21
        stat-mode: 1.0.0
-@@ -25400,7 +26077,7 @@ snapshots:
+@@ -25400,7 +26098,7 @@ snapshots:
        mime-types: 2.1.35
        oauth-sign: 0.9.0
        performance-now: 2.1.0
@@ -15603,7 +15629,7 @@ index 36dc0506d3..126771cd55 100644
        safe-buffer: 5.2.1
        tough-cookie: 4.1.4
        tunnel-agent: 0.6.0
-@@ -25725,7 +26402,7 @@ snapshots:
+@@ -25725,7 +26423,7 @@ snapshots:
        app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
        builder-util: 26.15.3
        fs-extra: 10.1.0
@@ -15612,7 +15638,7 @@ index 36dc0506d3..126771cd55 100644
      transitivePeerDependencies:
        - electron-builder-squirrel-windows
        - supports-color
-@@ -25818,7 +26495,7 @@ snapshots:
+@@ -25818,7 +26516,7 @@ snapshots:
      dependencies:
        builder-util-runtime: 9.7.0
        fs-extra: 10.1.0
@@ -15621,7 +15647,7 @@ index 36dc0506d3..126771cd55 100644
        lazy-val: 1.0.5
        lodash.escaperegexp: 4.1.2
        lodash.isequal: 4.5.0
-@@ -26134,14 +26811,14 @@ snapshots:
+@@ -26134,14 +26832,14 @@ snapshots:
 
    expand-template@2.0.3: {}
 
@@ -15638,7 +15664,7 @@ index 36dc0506d3..126771cd55 100644
 
    express@5.2.1:
      dependencies:
-@@ -26165,7 +26842,7 @@ snapshots:
+@@ -26165,7 +26863,7 @@ snapshots:
        once: 1.4.0
        parseurl: 1.3.3
        proxy-addr: 2.0.8
@@ -15647,7 +15673,7 @@ index 36dc0506d3..126771cd55 100644
        range-parser: 1.3.0
        router: 2.2.0
        send: 1.2.1
-@@ -26209,7 +26886,7 @@ snapshots:
+@@ -26209,7 +26907,7 @@ snapshots:
 
    fast-sha256@1.3.0: {}
 
@@ -15656,7 +15682,7 @@ index 36dc0506d3..126771cd55 100644
 
    fast-xml-builder@1.2.0:
      dependencies:
-@@ -26579,7 +27256,7 @@ snapshots:
+@@ -26579,7 +27277,7 @@ snapshots:
 
    he@1.2.0: {}
 
@@ -15665,7 +15691,7 @@ index 36dc0506d3..126771cd55 100644
 
    hookable@5.5.3: {}
 
-@@ -26710,7 +27387,7 @@ snapshots:
+@@ -26710,7 +27408,7 @@ snapshots:
 
    into-stream@9.1.0: {}
 
@@ -15674,7 +15700,7 @@ index 36dc0506d3..126771cd55 100644
 
    ipaddr.js@1.9.1: {}
 
-@@ -26803,11 +27480,7 @@ snapshots:
+@@ -26803,11 +27501,7 @@ snapshots:
 
    js-tokens@4.0.0: {}
 
@@ -15687,7 +15713,7 @@ index 36dc0506d3..126771cd55 100644
      dependencies:
        argparse: 2.0.1
 
-@@ -26859,7 +27532,7 @@ snapshots:
+@@ -26859,7 +27553,7 @@ snapshots:
        saxes: 6.0.0
        symbol-tree: 3.2.4
        tough-cookie: 6.0.1
@@ -15696,7 +15722,7 @@ index 36dc0506d3..126771cd55 100644
        w3c-xmlserializer: 5.0.0
        webidl-conversions: 8.0.1
        whatwg-mimetype: 5.0.0
-@@ -27143,7 +27816,7 @@ snapshots:
+@@ -27143,7 +27837,7 @@ snapshots:
 
    magic-string@0.30.21:
      dependencies:
@@ -15705,7 +15731,7 @@ index 36dc0506d3..126771cd55 100644
 
    magicast@0.5.3:
      dependencies:
-@@ -27187,7 +27860,7 @@ snapshots:
+@@ -27187,7 +27881,7 @@ snapshots:
        micromark-util-decode-string: 2.0.1
        micromark-util-normalize-identifier: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -15714,7 +15740,7 @@ index 36dc0506d3..126771cd55 100644
        unist-util-stringify-position: 4.0.0
      transitivePeerDependencies:
        - supports-color
-@@ -27324,42 +27997,43 @@ snapshots:
+@@ -27324,42 +28018,43 @@ snapshots:
        ts-dedent: 2.3.0
        uuid: 14.0.1
 
@@ -15765,7 +15791,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-extension-gfm-strikethrough@2.1.0:
      dependencies:
-@@ -27368,27 +28042,27 @@ snapshots:
+@@ -27368,27 +28063,27 @@ snapshots:
        micromark-util-classify-character: 2.0.1
        micromark-util-resolve-all: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -15799,7 +15825,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-extension-gfm@3.0.0:
      dependencies:
-@@ -27399,54 +28073,54 @@ snapshots:
+@@ -27399,54 +28094,54 @@ snapshots:
        micromark-extension-gfm-tagfilter: 2.0.0
        micromark-extension-gfm-task-list-item: 2.1.0
        micromark-util-combine-extensions: 2.0.1
@@ -15866,7 +15892,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-util-chunked@2.0.1:
      dependencies:
-@@ -27456,12 +28130,12 @@ snapshots:
+@@ -27456,12 +28151,12 @@ snapshots:
      dependencies:
        micromark-util-character: 2.1.1
        micromark-util-symbol: 2.0.1
@@ -15881,7 +15907,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-util-decode-numeric-character-reference@2.0.2:
      dependencies:
-@@ -27474,6 +28148,10 @@ snapshots:
+@@ -27474,6 +28169,10 @@ snapshots:
        micromark-util-decode-numeric-character-reference: 2.0.2
        micromark-util-symbol: 2.0.1
 
@@ -15892,7 +15918,7 @@ index 36dc0506d3..126771cd55 100644
    micromark-util-encode@2.0.1: {}
 
    micromark-util-html-tag-name@2.0.1: {}
-@@ -27484,7 +28162,7 @@ snapshots:
+@@ -27484,7 +28183,7 @@ snapshots:
 
    micromark-util-resolve-all@2.0.1:
      dependencies:
@@ -15901,7 +15927,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark-util-sanitize-uri@2.0.1:
      dependencies:
-@@ -27497,11 +28175,11 @@ snapshots:
+@@ -27497,11 +28196,11 @@ snapshots:
        devlop: 1.1.0
        micromark-util-chunked: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -15915,7 +15941,7 @@ index 36dc0506d3..126771cd55 100644
 
    micromark@4.0.2(supports-color@9.4.0):
      dependencies:
-@@ -27509,8 +28187,8 @@ snapshots:
+@@ -27509,8 +28208,8 @@ snapshots:
        debug: 4.4.3(supports-color@9.4.0)
        decode-named-character-reference: 1.3.0
        devlop: 1.1.0
@@ -15926,7 +15952,7 @@ index 36dc0506d3..126771cd55 100644
        micromark-util-character: 2.1.1
        micromark-util-chunked: 2.0.1
        micromark-util-combine-extensions: 2.0.1
-@@ -27521,7 +28199,7 @@ snapshots:
+@@ -27521,7 +28220,7 @@ snapshots:
        micromark-util-sanitize-uri: 2.0.1
        micromark-util-subtokenize: 2.1.0
        micromark-util-symbol: 2.0.1
@@ -15935,7 +15961,7 @@ index 36dc0506d3..126771cd55 100644
      transitivePeerDependencies:
        - supports-color
 
-@@ -27547,7 +28225,7 @@ snapshots:
+@@ -27547,7 +28246,7 @@ snapshots:
 
    minimatch@10.2.5:
      dependencies:
@@ -15944,7 +15970,7 @@ index 36dc0506d3..126771cd55 100644
 
    minimatch@3.1.5:
      dependencies:
-@@ -27592,7 +28270,7 @@ snapshots:
+@@ -27592,7 +28291,7 @@ snapshots:
        once: 1.4.0
        readable-stream: 3.6.2
 
@@ -15953,7 +15979,7 @@ index 36dc0506d3..126771cd55 100644
 
    napi-build-utils@2.0.0: {}
 
-@@ -27893,6 +28571,10 @@ snapshots:
+@@ -27893,6 +28592,10 @@ snapshots:
 
    pathe@2.0.3: {}
 
@@ -15964,7 +15990,7 @@ index 36dc0506d3..126771cd55 100644
    pdfjs-dist@6.3.289:
      optionalDependencies:
        '@napi-rs/canvas': 1.0.8
-@@ -27905,6 +28587,41 @@ snapshots:
+@@ -27905,6 +28608,41 @@ snapshots:
 
    performance-now@2.1.0: {}
 
@@ -16006,7 +16032,7 @@ index 36dc0506d3..126771cd55 100644
    picocolors@1.1.1: {}
 
    picomatch@4.0.4: {}
-@@ -27956,11 +28673,21 @@ snapshots:
+@@ -27956,11 +28694,21 @@ snapshots:
      transitivePeerDependencies:
        - supports-color
 
@@ -16031,7 +16057,7 @@ index 36dc0506d3..126771cd55 100644
 
    postject@1.0.0-alpha.6:
      dependencies:
-@@ -28020,7 +28747,7 @@ snapshots:
+@@ -28020,7 +28768,7 @@ snapshots:
 
    property-information@7.2.0: {}
 
@@ -16040,7 +16066,7 @@ index 36dc0506d3..126771cd55 100644
      dependencies:
        '@protobufjs/aspromise': 1.1.2
        '@protobufjs/base64': 1.1.2
-@@ -28065,7 +28792,7 @@ snapshots:
+@@ -28065,7 +28813,7 @@ snapshots:
 
    pvutils@1.2.0: {}
 
@@ -16049,7 +16075,7 @@ index 36dc0506d3..126771cd55 100644
      dependencies:
        es-define-property: 1.0.1
        side-channel: 1.1.1
-@@ -28411,37 +29138,37 @@ snapshots:
+@@ -28411,37 +29159,37 @@ snapshots:
 
    setprototypeof@1.2.0: {}
 
@@ -16113,7 +16139,7 @@ index 36dc0506d3..126771cd55 100644
        '@types/node': 22.20.0
 
    shebang-command@2.0.0:
-@@ -28551,6 +29278,8 @@ snapshots:
+@@ -28551,6 +29299,8 @@ snapshots:
 
    source-map-js@1.2.1: {}
 
@@ -16122,7 +16148,7 @@ index 36dc0506d3..126771cd55 100644
    source-map-support@0.5.21:
      dependencies:
        buffer-from: 1.1.2
-@@ -28571,6 +29300,8 @@ snapshots:
+@@ -28571,6 +29321,8 @@ snapshots:
 
    speakingurl@14.0.1: {}
 
@@ -16131,7 +16157,7 @@ index 36dc0506d3..126771cd55 100644
    sprintf-js@1.1.3:
      optional: true
 
-@@ -28921,9 +29652,9 @@ snapshots:
+@@ -28921,9 +29673,9 @@ snapshots:
 
    undici@6.28.0: {}
 
@@ -16143,7 +16169,7 @@ index 36dc0506d3..126771cd55 100644
 
    unicode-properties@1.4.1:
      dependencies:
-@@ -28939,7 +29670,7 @@ snapshots:
+@@ -28939,7 +29691,7 @@ snapshots:
 
    union@0.5.0:
      dependencies:
@@ -16152,7 +16178,7 @@ index 36dc0506d3..126771cd55 100644
 
    unist-util-is@6.0.1:
      dependencies:
-@@ -29058,7 +29789,7 @@ snapshots:
+@@ -29058,7 +29810,7 @@ snapshots:
    vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0):
      dependencies:
        esbuild: 0.21.5
@@ -16161,7 +16187,7 @@ index 36dc0506d3..126771cd55 100644
        rollup: 4.62.2
      optionalDependencies:
        '@types/node': 25.9.3
-@@ -29070,7 +29801,7 @@ snapshots:
+@@ -29070,7 +29822,7 @@ snapshots:
        esbuild: 0.25.12
        fdir: 6.5.0(picomatch@4.0.4)
        picomatch: 4.0.4
@@ -16170,7 +16196,7 @@ index 36dc0506d3..126771cd55 100644
        rollup: 4.62.2
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29085,7 +29816,7 @@ snapshots:
+@@ -29085,7 +29837,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -16179,7 +16205,7 @@ index 36dc0506d3..126771cd55 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29100,7 +29831,7 @@ snapshots:
+@@ -29100,7 +29852,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -16188,7 +16214,7 @@ index 36dc0506d3..126771cd55 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29111,14 +29842,14 @@ snapshots:
+@@ -29111,14 +29863,14 @@ snapshots:
        tsx: 4.22.4
        yaml: 2.9.0
 
@@ -16206,7 +16232,7 @@ index 36dc0506d3..126771cd55 100644
      dependencies:
        '@docsearch/css': 3.8.2
        '@docsearch/js': 3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
-@@ -29139,7 +29870,7 @@ snapshots:
+@@ -29139,7 +29891,7 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
      optionalDependencies:
@@ -16215,7 +16241,7 @@ index 36dc0506d3..126771cd55 100644
      transitivePeerDependencies:
        - '@algolia/client-search'
        - '@types/node'
-@@ -29168,17 +29899,17 @@ snapshots:
+@@ -29168,17 +29920,17 @@ snapshots:
        - typescript
        - universal-cookie
 
@@ -16242,7 +16268,7 @@ index 36dc0506d3..126771cd55 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29193,23 +29924,23 @@ snapshots:
+@@ -29193,23 +29945,23 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -16276,7 +16302,7 @@ index 36dc0506d3..126771cd55 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29224,23 +29955,23 @@ snapshots:
+@@ -29224,23 +29976,23 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -16310,7 +16336,7 @@ index 36dc0506d3..126771cd55 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29254,8 +29985,8 @@ snapshots:
+@@ -29254,8 +30006,8 @@ snapshots:
        why-is-node-running: 2.3.0
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
@@ -16321,7 +16347,7 @@ index 36dc0506d3..126771cd55 100644
        happy-dom: 20.11.6
        jsdom: 29.1.1(@noble/hashes@2.3.0)
      transitivePeerDependencies:
-@@ -29383,6 +30114,8 @@ snapshots:
+@@ -29383,6 +30135,8 @@ snapshots:
 
    xmlchars@2.2.0: {}
 

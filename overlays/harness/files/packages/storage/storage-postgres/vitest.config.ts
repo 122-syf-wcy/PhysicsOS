@@ -14,12 +14,16 @@ export default {
   resolve: {
     alias: {
       '@deepseek-ai/cordis': path.join(vendorRoot, 'vendor/cordis/src/index.ts'),
+      '@deepseek-ai/cordis-plugin-include': path.join(vendorRoot, 'vendor/include/src/index.ts'),
+      '@deepseek-ai/cordis-plugin-loader': path.join(vendorRoot, 'vendor/loader/src/index.ts'),
       '@deepseek-ai/cosmokit': path.join(vendorRoot, 'vendor/cosmokit/src/index.ts'),
       '@deepseek-ai/dsh-invariants': path.join(
         vendorRoot,
         'packages/runtime-diagnostics/invariants/src/index.ts',
       ),
       '@deepseek-ai/dsh-storage': path.join(vendorRoot, 'packages/storage/storage/src/index.ts'),
+      '@deepseek-ai/dsh-storage-domain': path.join(vendorRoot, 'packages/storage/storage-domain/src/index.ts'),
+      '@deepseek-ai/dsh-storage-json': path.join(vendorRoot, 'packages/storage/storage-json/src/index.ts'),
       '@deepseek-ai/schemastery': path.join(vendorRoot, 'vendor/schemastery/src/index.ts'),
       '../../storage/tests/contract.ts': path.join(
         vendorRoot,
