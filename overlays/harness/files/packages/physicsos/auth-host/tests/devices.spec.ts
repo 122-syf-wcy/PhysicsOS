@@ -243,6 +243,7 @@ describe('远程注销 —— 命中机器本身,并让在线的会话失效', (
     expect(events.some(e => e.action === 'device.revoke' && e.target === HASH_A)).toBe(true)
   })
 
+  // Seven real Argon2 logins exceed 5 s in the 2-CPU test lane.
   it('注销是一台机器的事 —— 同一台机器上两个账号一起失效', async () => {
     /* 用一台全新设备,免得受前面用例影响:两个账号先后在同一台机器上登录(共享
        机房就是这样),然后注销这台机器 —— 两个账号都必须登不回来。 */
@@ -256,7 +257,7 @@ describe('远程注销 —— 命中机器本身,并让在线的会话失效', (
     expect((await sys.post('/devices/' + HASH_C + '/revoked', { revoked: false })).status).toBe(200)
     expect((await login('GZU', 'student1', { deviceId: HASH_C })).status).toBe(200)
     expect((await login('GZU', 'student3', { deviceId: HASH_C })).status).toBe(200)
-  })
+  }, 20_000)
 })
 
 describe('租户隔离', () => {
@@ -269,6 +270,7 @@ describe('租户隔离', () => {
     expect(body.devices.every(d => d.schoolId === 'GZU')).toBe(true)
   })
 
+  // Four real Argon2 logins approach 5 s before concurrent test contention.
   it('校管理员注销不了别校设备(404),超管可以(且全局生效)', async () => {
     const other = await loginCookie('GZNU', 'student2', { deviceId: HASH_D })
     expect(other).not.toBe('')
@@ -279,8 +281,9 @@ describe('租户隔离', () => {
     expect((await sup.post('/devices/' + HASH_D + '/revoked', { revoked: true })).status).toBe(200)
     expect((await login('GZNU', 'student2', { deviceId: HASH_D })).status).toBe(403)
     await sup.post('/devices/' + HASH_D + '/revoked', { revoked: false })
-  })
+  }, 20_000)
 
+  // Six real Argon2 logins exceed 5 s in the 2-CPU test lane.
   it('校管理员恢复不了平台级注销 —— 一把锁一把钥匙', async () => {
     const sys = asAdmin(await loginCookie('PHYSICSOS-OPEN', 'admin'))
     await loginCookie('GZU', 'student1', { deviceId: HASH_E })
@@ -292,7 +295,7 @@ describe('租户隔离', () => {
     expect((await login('GZU', 'student1', { deviceId: HASH_E })).status).toBe(403)
     expect((await sys.post('/devices/' + HASH_E + '/revoked', { revoked: false })).status).toBe(200)
     expect((await login('GZU', 'student1', { deviceId: HASH_E })).status).toBe(200)
-  })
+  }, 20_000)
 
   it('学生 / 教师够不到设备后台', async () => {
     const student = asAdmin(await loginCookie('GZU', 'student1'))
@@ -301,6 +304,7 @@ describe('租户隔离', () => {
 })
 
 describe('风控信号 —— 记录与展示,不自动封禁', () => {
+  // Four real Argon2 logins exceed 5 s in the 2-CPU test lane.
   it('同账号在 3 台以上设备出现时给出一条 account-multi-device', async () => {
     for (const deviceId of [HASH_F, HASH_G, HASH_H]) {
       await loginCookie('GZU', 'student3', { deviceId })
@@ -311,7 +315,7 @@ describe('风控信号 —— 记录与展示,不自动封禁', () => {
     }
     const hit = body.risk.find(r => r.kind === 'account-multi-device' && r.subject === 'GZU:student3')
     expect(hit?.count).toBeGreaterThanOrEqual(3)
-  })
+  }, 20_000)
 
   it('信号里只有计数,没有 IP —— 整段 JSON 里搜不到地址', async () => {
     const sys = asAdmin(await loginCookie('PHYSICSOS-OPEN', 'admin'))

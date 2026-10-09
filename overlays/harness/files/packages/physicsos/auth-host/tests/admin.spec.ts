@@ -198,6 +198,7 @@ describe('admin role matrix', () => {
 })
 
 describe('application approval flow', () => {
+  // Four logins and one real Argon2 hash exceed 5 s in the 2-CPU test lane.
   it('approves: creates the school, seeds its admin, audits, refuses replay', async () => {
     const applyRes = await post(auth, '/school-requests', { schoolName: '凯里一中', contact: 'd@example.com' })
     const { request } = await applyRes.json() as { request: SchoolRequestRecord }
@@ -234,7 +235,7 @@ describe('application approval flow', () => {
     const { events } = await auditRes.json() as { events: { action: string; actorKey: string }[] }
     expect(events.some(e => e.action === 'school_request.approve'
       && e.actorKey === 'PHYSICSOS-OPEN:admin')).toBe(true)
-  })
+  }, 20_000)
 
   it('rejects an application with a reason on the audit row', async () => {
     const applyRes = await post(auth, '/school-requests', { schoolName: '安顺二中', contact: 'e@example.com' })
@@ -328,6 +329,7 @@ describe('user administration', () => {
     expect((await post(admin, '/users/PHYSICSOS-OPEN:admin/status', { status: 'disabled' }, headers)).status).toBe(403)
   })
 
+  // Four password checks and one real Argon2 hash exceed 5 s in the 2-CPU test lane.
   it('reset-password kills live sessions and admits the new password', async () => {
     const cookie = await login('GZNU', 'student2')
     const superRes = await asSuper('/users/GZNU:student2/reset-password', { newPassword: 'rotated-pass-1' })
@@ -338,8 +340,9 @@ describe('user administration', () => {
     expect(oldLogin.status).toBe(401)
     const newLogin = await post(auth, '/login', { schoolId: 'GZNU', username: 'student2', password: 'rotated-pass-1' })
     expect(newLogin.status).toBe(200)
-  })
+  }, 20_000)
 
+  // Three real Argon2 logins approach 5 s before concurrent test contention.
   it('revoke-sessions ends the session but the account can re-login', async () => {
     const cookie = await login('GZNU', 'student2', 'rotated-pass-1')
     const res = await asSuper('/users/GZNU:student2/revoke-sessions', {})
@@ -348,7 +351,7 @@ describe('user administration', () => {
     expect((await post(auth, '/login', {
       schoolId: 'GZNU', username: 'student2', password: 'rotated-pass-1',
     })).status).toBe(200)
-  })
+  }, 20_000)
 })
 
 describe('school lifecycle + audit', () => {

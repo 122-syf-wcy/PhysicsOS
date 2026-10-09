@@ -9,6 +9,7 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { AuthService, DEFAULT_AUTH_CONFIG } from '../src/service.ts'
+import { InMemoryLimiterBackend } from '../src/limiter.ts'
 import { authRoutes } from '../src/routes.ts'
 import {
   ARGON2_AVAILABLE,
@@ -304,11 +305,12 @@ describe('auth routes — guards', () => {
     expect((await res.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED')
   })
 
+  // Five real Argon2 checks need contention headroom in the 2-CPU test lane.
   it('account attempt bucket locks out after the configured limit', async () => {
     const attempt = () => post('/login', { username: 'ratelimit-me', password: 'bad-password' })
     for (let i = 0; i < 5; i++) expect((await attempt()).status).toBe(401)
     expect((await attempt()).status).toBe(429)
-  })
+  }, 20_000)
 
   it('password/forgot answers a uniform receipt regardless of account existence', async () => {
     const exists = await post('/password/forgot', { username: '2023123456' })
@@ -354,24 +356,33 @@ describe('auth service abuse budgets', () => {
     expect(rows.every(([, row]) => !('userKey' in row))).toBe(true)
   })
 
+  // The controlled clock does not remove three production-cost Argon2 checks.
   it('bounds bucket cardinality and reclaims expired windows', async () => {
+    const limiter = new InMemoryLimiterBackend()
+    let now = 0
     const service = new AuthService(fakeDomain, {
       ...DEFAULT_AUTH_CONFIG,
       accountAttemptLimit: 100,
       ipAttemptLimit: 100,
       attemptBucketLimit: 2,
       attemptWindowMs: 1_000,
+    }, {
+      limiter: {
+        kind: limiter.kind,
+        consume: (policy, key) => limiter.consume(policy, key, now),
+      },
     })
     for (const username of ['bucket-a', 'bucket-b']) {
       await expect(service.login({ username, password: 'wrong-password' }, '192.0.2.8'))
         .rejects.toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' })
     }
+    now = 999
     await expect(service.login({ username: 'bucket-c', password: 'wrong-password' }, '192.0.2.8'))
       .rejects.toMatchObject({ status: 429, code: 'RATE_LIMITED' })
-    await new Promise(resolve => setTimeout(resolve, 1_050))
+    now = 1_000
     await expect(service.login({ username: 'bucket-d', password: 'wrong-password' }, '192.0.2.8'))
       .rejects.toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' })
-  })
+  }, 20_000)
 })
 
 /* Regression guard for a false-positive capability gate: `typeof

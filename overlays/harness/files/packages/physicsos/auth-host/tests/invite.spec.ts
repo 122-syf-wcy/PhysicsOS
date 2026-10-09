@@ -42,6 +42,7 @@ afterEach(async () => {
 })
 
 describe('invite registration modes', () => {
+  // Two fixture hashes and one registration hash need contention headroom.
   it('keeps open registration working without an invite code', async () => {
     const harness = await makeHarness('open')
     const response = await post(harness.auth, '/register', {
@@ -51,7 +52,7 @@ describe('invite registration modes', () => {
       password: 'open-pass-123',
     })
     expect(response.status).toBe(201)
-  })
+  }, 20_000)
 
   it('fails closed in invite mode when no code is supplied', async () => {
     const harness = await makeHarness('invite')
@@ -80,6 +81,7 @@ describe('invite registration modes', () => {
 })
 
 describe('admin invite lifecycle', () => {
+  // Two fixture hashes, one login and three registration hashes need contention headroom.
   it('generates hashed codes, lists masked rows, consumes once, disables, and audits each action', async () => {
     const harness = await makeHarness('invite')
     const cookie = await adminCookie(harness)
@@ -157,8 +159,9 @@ describe('admin invite lifecycle', () => {
     expect(events.filter(event => event.action === 'invite.create')).toHaveLength(2)
     expect(events.filter(event => event.action === 'invite.use')).toHaveLength(1)
     expect(events.filter(event => event.action === 'invite.disable')).toHaveLength(2)
-  })
+  }, 20_000)
 
+  // One fixture hash, one login and four registration hashes need contention headroom.
   it('binds a code to its school, enforces expiry, and atomically consumes its final use', async () => {
     let now = new Date('2026-01-01T00:00:00.000Z')
     const harness = await createSecurityHarness({
@@ -225,8 +228,9 @@ describe('admin invite lifecycle', () => {
     })
     expect(expired.status).toBe(400)
     expect((await expired.json() as { error: { code: string } }).error.code).toBe('INVALID_INVITE_CODE')
-  })
+  }, 20_000)
 
+  // One fixture hash, one login and one registration hash need contention headroom.
   it('uses the optional shared one-time ledger as a cross-instance invite lock', async () => {
     const claims = new Set<string>()
     const releases: string[] = []
@@ -273,11 +277,12 @@ describe('admin invite lifecycle', () => {
     expect(releases).toHaveLength(1)
     expect(releases[0]).toMatch(/^invite-consume:[a-f0-9]{64}$/)
     expect(claims.size).toBe(0)
-  })
+  }, 20_000)
 })
 
 
 describe('invite write failure recovery', () => {
+  // Two fixture hashes and two registration hashes need contention headroom.
   it('restores the exact hashed invite row before admitting a concurrent registration', async () => {
     const harness = await makeHarness('invite')
     const actor = { userKey: 'PHYSICSOS-OPEN:admin', schoolId: 'PHYSICSOS-OPEN', username: 'admin', role: 'SUPER_ADMIN' as const }
@@ -307,10 +312,11 @@ describe('invite write failure recovery', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0]).toEqual([originalEntries[0]![0], { ...originalEntries[0]![1], usedCount: 1 }])
     expect(harness.domain.table('users').get('GZU:failing-user')).toBeUndefined()
-  })
+  }, 20_000)
 })
 
 
+// Two fixture hashes and one registration hash need contention headroom.
 it('keeps an administrator disable when an overlapping registration is rolled back', async () => {
   const harness = await makeHarness('invite')
   const actor = { userKey: 'PHYSICSOS-OPEN:admin', schoolId: 'PHYSICSOS-OPEN', username: 'admin', role: 'SUPER_ADMIN' as const }
@@ -330,4 +336,4 @@ it('keeps an administrator disable when an overlapping registration is rolled ba
   expect(rows).toHaveLength(1)
   expect(rows[0]![1]).toMatchObject({ usedCount: 0, disabledBy: actor.userKey })
   expect(typeof rows[0]![1].disabledAt).toBe('string')
-})
+}, 20_000)

@@ -135,7 +135,10 @@ const argon2Works = () => {
  *   be handed to {@link openAcceptance} so the browser exchanges it for the
  *   transport cookie), the home path, and a `stop()` that tears both down.
  */
-export const startIsolatedServer = async ({ port = 3099 } = {}) => {
+export const startIsolatedServer = async ({
+  port = 3099,
+  compiled = process.env.ACCEPTANCE_COMPILED_CLI === '1',
+} = {}) => {
   if (!argon2Works()) {
     throw new Error(
       `this suite needs a node that can compute argon2id (got ${process.version});` +
@@ -151,7 +154,10 @@ export const startIsolatedServer = async ({ port = 3099 } = {}) => {
 
   const child = spawn(
     process.execPath,
-    ['--import', 'tsx/esm', 'apps/cli/src/bin.ts', 'web', '--port', String(port), '--no-open'],
+    [
+      ...(compiled ? ['apps/cli/lib/bin.js'] : ['--import', 'tsx/esm', 'apps/cli/src/bin.ts']),
+      'web', '--port', String(port), '--no-open',
+    ],
     {
       cwd: HARNESS,
       env: isolatedHarnessEnvironment(process.env, home, mock.baseURL, ACCEPTANCE_ADMIN_PASSWORD),

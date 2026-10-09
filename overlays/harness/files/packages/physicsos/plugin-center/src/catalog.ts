@@ -118,7 +118,7 @@ const metaText = (
   fallback: string,
 ): string => localizedText(meta?.[field], fallback)
 
-const assertUniqueIds = (entries: readonly PluginCenterEntry[]): void => {
+const assertUniqueIds = (entries: readonly { readonly id: string }[]): void => {
   const seen = new Set<string>()
   for (const entry of entries) {
     if (seen.has(entry.id)) {
@@ -127,6 +127,26 @@ const assertUniqueIds = (entries: readonly PluginCenterEntry[]): void => {
     seen.add(entry.id)
   }
 }
+
+/** Native inventory identities are Loader entries; package names may repeat. */
+const inventoryGroups = (snapshot: PluginInventorySnapshot): PluginInventoryEntry[][] => {
+  const ids = new Set<string>()
+  const groups = new Map<string, PluginInventoryEntry[]>()
+  for (const entry of snapshot.entries) {
+    if (ids.has(entry.entryId)) {
+      throw new PluginCenterError(500, 'DUPLICATE_PLUGIN_ID', `inventory entry id is duplicated: ${entry.entryId}`)
+    }
+    ids.add(entry.entryId)
+    const rows = groups.get(entry.moduleName)
+    if (rows === undefined) groups.set(entry.moduleName, [entry])
+    else rows.push(entry)
+  }
+  return [...groups.values()]
+}
+
+const runtimeStatus = (entries: readonly PluginInventoryEntry[]): PluginStatus =>
+  entries.some(entry => entry.fiberPhase === 'failed') ? 'failed'
+    : entries.some(entry => entry.enabled) ? 'enabled' : 'disabled'
 
 /**
  * Project upstream runtime inventory into the official half of the catalog.
@@ -137,23 +157,39 @@ const assertUniqueIds = (entries: readonly PluginCenterEntry[]): void => {
 export const officialCatalog = (
   snapshot: PluginInventorySnapshot,
   detailsOf?: (entry: PluginInventoryEntry) => OfficialPluginDetails | undefined,
-): PluginCenterEntry[] => snapshot.entries.map((entry) => {
-  const details = detailsOf?.(entry)
-  const description = details?.description
-    ?? metaText(entry.meta, 'description', '')
+): PluginCenterEntry[] => inventoryGroups(snapshot).map((instances) => {
+  const projected = instances.map((entry): PluginCenterEntry => {
+    const details = detailsOf?.(entry)
+    const description = details?.description
+      ?? metaText(entry.meta, 'description', '')
+    return {
+      id: entry.moduleName,
+      name: metaText(entry.meta, 'title', entry.moduleName),
+      version: details?.version ?? PINNED_HARNESS_VERSION,
+      source: 'official',
+      compatibility: details?.compatibility
+        ?? (entry.fiberPhase === 'failed' ? 'incompatible' : 'compatible'),
+      status: entry.fiberPhase === 'failed' ? 'failed' : entry.enabled ? 'enabled' : 'disabled',
+      capabilities: [...(details?.capabilities ?? [])],
+      ...(description === '' ? {} : { description }),
+      publisher: details?.publisher ?? 'DeepSeek',
+      harnessRange: details?.harnessRange ?? `=${PINNED_HARNESS_VERSION}`,
+      integrity: details?.integrity ?? 'verified',
+    }
+  })
+  const first = projected[0]
+  if (first === undefined) throw new PluginCenterError(500, 'EMPTY_PLUGIN_GROUP', 'empty plugin inventory group')
+  if (projected.some(entry => entry.version !== first.version
+    || entry.publisher !== first.publisher || entry.harnessRange !== first.harnessRange)) {
+    throw new PluginCenterError(500, 'DUPLICATE_PLUGIN_ID', `conflicting package metadata: ${first.id}`)
+  }
   return {
-    id: entry.moduleName,
-    name: metaText(entry.meta, 'title', entry.moduleName),
-    version: details?.version ?? PINNED_HARNESS_VERSION,
-    source: 'official',
-    compatibility: details?.compatibility
-      ?? (entry.fiberPhase === 'failed' ? 'incompatible' : 'compatible'),
-    status: entry.fiberPhase === 'failed' ? 'failed' : entry.enabled ? 'enabled' : 'disabled',
-    capabilities: [...(details?.capabilities ?? [])],
-    ...(description === '' ? {} : { description }),
-    publisher: details?.publisher ?? 'DeepSeek',
-    harnessRange: details?.harnessRange ?? `=${PINNED_HARNESS_VERSION}`,
-    integrity: details?.integrity ?? 'verified',
+    ...first,
+    status: runtimeStatus(instances),
+    compatibility: projected.some(entry => entry.compatibility === 'incompatible') ? 'incompatible'
+      : projected.some(entry => entry.compatibility === 'unknown') ? 'unknown' : 'compatible',
+    integrity: projected.some(entry => entry.integrity !== 'verified') ? 'missing' : 'verified',
+    capabilities: [...new Set(projected.flatMap(entry => entry.capabilities))].sort(),
   }
 })
 
@@ -162,14 +198,10 @@ export const physicsosCatalog = (
   entries: readonly ValidatedPluginManifestEntry[],
   inventory: PluginInventorySnapshot,
 ): PluginCenterEntry[] => {
-  const runtimeById = new Map(inventory.entries.map(entry => [entry.moduleName, entry]))
+  assertUniqueIds(entries)
+  const runtimeById = new Map(inventoryGroups(inventory).map(rows => [rows[0]?.moduleName, rows]))
   return entries.map((entry) => {
-    const runtime = runtimeById.get(entry.id)
-    const status: PluginStatus = runtime?.fiberPhase === 'failed'
-      ? 'failed'
-      : runtime?.enabled === true
-        ? 'enabled'
-        : 'disabled'
+    const status = runtimeStatus(runtimeById.get(entry.id) ?? [])
     return {
       id: entry.id,
       name: entry.name,
@@ -197,6 +229,10 @@ export const loadPluginCatalog = async (
     sources.official(),
     sources.physicsos(),
   ])
+  // Validate identities before filtering signed packages out of the official
+  // half, so malformed duplicate rows cannot disappear behind that override.
+  inventoryGroups(official)
+  assertUniqueIds(physicsos)
   const physicsosIds = new Set(physicsos.map(entry => entry.id))
   const entries = [
     ...officialCatalog({

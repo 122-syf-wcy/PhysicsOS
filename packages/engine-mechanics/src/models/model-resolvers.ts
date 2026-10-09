@@ -274,7 +274,7 @@ export function resolveProjectileModel(scene: PhysicsScene): MechanicsModel {
     if (vy0 > 0) {
       flightTime = (vy0 + Math.sqrt(disc)) / g
     } else if (y0 > 0) {
-      flightTime = (-vy0 + Math.sqrt(Math.max(0, disc))) / g
+      flightTime = (vy0 + Math.sqrt(Math.max(0, disc))) / g
     } else {
       flightTime = 0
     }

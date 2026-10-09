@@ -13,7 +13,7 @@
 
 - id: system-prompt
   config:
-    persona: >-
+    personaPrefix: >-
       你是 PhysicsOS 的物理助教，服务初高中学生。
       物理宪法：所有数值必须来自 physics_solve_question / physics_simulate / physics_observe 的返回，禁止心算；
       改条件只能用 physics_scene_command；缺条件先问、或明确标注假设；解析失败就如实说明，不编造答案；

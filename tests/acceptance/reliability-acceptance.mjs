@@ -80,7 +80,7 @@ try {
   // before dismissing it. A visible sidebar does not mean the notice is settled.
   await expect(page.locator('[data-physicsos-platform-notice]')).toBeVisible({ timeout: 15_000 })
   await dismissOnboarding()
-  await expect(page.getByRole('navigation', { name: 'PhysicsOS' })).toBeVisible()
+  await waitForShell(page)
   check('authenticated Home has no workspace/admin/pdf requests', optionalRequests.length === 0, optionalRequests.join(', '))
 
   stdout.write('\nLab: real edits survive picker, remote save and browser reload\n')

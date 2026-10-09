@@ -7,7 +7,9 @@ import type { ChannelRecord } from '../src/types.ts'
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => { while (cleanup.length > 0) await cleanup.pop()?.() })
 
-const channelWith = async (respond: (body: Record<string, unknown>, res: ServerResponse, path: string, headers: IncomingHttpHeaders) => void): Promise<ChannelRecord> => {
+const channelWith = async (
+  respond: (body: Record<string, unknown>, res: ServerResponse, path: string, headers: IncomingHttpHeaders) => void,
+): Promise<ChannelRecord> => {
   const server = createServer((req, res) => {
     const chunks: Buffer[] = []
     req.on('data', chunk => chunks.push(chunk as Buffer))

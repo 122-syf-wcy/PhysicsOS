@@ -80,6 +80,7 @@ describe('RFC 6238 TOTP vectors', () => {
 })
 
 describe('TOTP enrollment and login', () => {
+  // Two fixture hashes and two real Argon2 logins approach 5 s before contention.
   it('enrolls administrators and teachers, stores only hashes, and returns recovery codes once', async () => {
     const harness = await makeHarness()
     const teacherCookie = await loginCookie(harness, 'teacher1')
@@ -100,8 +101,9 @@ describe('TOTP enrollment and login', () => {
     expect(users[0]?.[1].totp?.secret).toBe(secret)
     for (const code of recoveryCodes) expect(stored).not.toContain(code.toLowerCase())
     expect(recoveryRows.every(([, row]) => row.codeHash.length === 64)).toBe(true)
-  })
+  }, 20_000)
 
+  // Two fixture hashes and four real Argon2 logins need contention headroom.
   it('challenges password login, allows ±1 step, and consumes a recovery code once', async () => {
     const harness = await makeHarness()
     const enrolledCookie = await loginCookie(harness, 'teacher1')
@@ -163,8 +165,9 @@ describe('TOTP enrollment and login', () => {
       code: recoveryCode,
     })
     expect(replayResponse.status).toBe(401)
-  })
+  }, 20_000)
 
+  // Two fixture hashes and four real Argon2 checks exceed 5 s in the 2-CPU test lane.
   it('verifies and disables with password plus TOTP, then returns ordinary login', async () => {
     const harness = await makeHarness()
     const cookie = await loginCookie(harness, 'teacher1')
@@ -192,5 +195,5 @@ describe('TOTP enrollment and login', () => {
       username: 'teacher1',
       password: 'bootstrap-pass',
     })).status).toBe(200)
-  })
+  }, 20_000)
 })

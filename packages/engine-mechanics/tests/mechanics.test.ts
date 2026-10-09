@@ -432,6 +432,37 @@ describe('Derived-quantity regressions', () => {
   })
 })
 
+describe('projectile landing at the configured ground', () => {
+  it.each([
+    { launch: 'upward', vy: 15, flightTime: 4, impactVy: -25 },
+    { launch: 'horizontal', vy: 0, flightTime: 2, impactVy: -20 },
+    { launch: 'downward', vy: -15, flightTime: 1, impactVy: -25 },
+  ])('ends the $launch launch on the configured ground', ({ vy, flightTime, impactVy }) => {
+    /* The launch is 20 m above a ground at y = 7 m. With g = 10 m/s²,
+       y - groundY = 20 + vy*t - 5*t² reaches zero at the stated times. */
+    const scene = createScene({
+      model: 'projectile_motion',
+      position: vec3(0, 27, 0),
+      velocity: vec3(10, vy, 0),
+      gravity: vec3(0, -10, 0),
+      groundY: 7,
+    })
+    const engine = new MechanicsEngine()
+    const simulation = engine.simulate(scene, createReq(scene, 'landing-sim', 'landing-trace'))
+    const landing = simulation.states.at(-1)
+
+    expect(landing?.time.value).toBeCloseTo(flightTime, 9)
+    expect(landing?.objects[0]?.position?.vector.y).toBeCloseTo(7, 9)
+    expect(landing?.objects[0]?.velocity?.vector.y).toBeCloseTo(impactVy, 9)
+    expect(simulation.events.find((event) => event.type === 'GroundImpact')?.time).toBeCloseTo(
+      flightTime,
+      9,
+    )
+    expect(simulation.verification.checks.find((check) => check.id === 'impact_y')?.passed).toBe(true)
+    expect(simulation.verification.status).toBe('passed')
+  })
+})
+
 describe('projectile apex is an engine-computed fact', () => {
   it('resolves an apex at the analytic time t = vy0 / g for an upward launch', () => {
     // y0 = 20, vy0 = 8, g = 10 → apex at t = 0.8 s.

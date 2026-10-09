@@ -18,6 +18,7 @@ import {
 } from './manifest.ts'
 import { pluginCenterRoutes } from './routes.ts'
 import { loadPluginTrustPublicKey } from './trust.ts'
+import { managedEntryFor } from './management.ts'
 
 export const name = 'plugin-center'
 export const inject = ['webServer', 'storageDomain']
@@ -121,8 +122,7 @@ export function apply(ctx: Context): () => Promise<void> {
       applyEnablement: async (entry: PluginCenterEntry, enabled: boolean): Promise<void> => {
         const managerService = ctx.get('pluginManager') as PluginManagerService | undefined
         if (managerService === undefined) return
-        const row = (await managerService.listPlugins())
-          .find(candidate => candidate.moduleName === entry.id)
+        const row = managedEntryFor(await managerService.listPlugins(), entry.id)
         if (row === undefined) return
         if (row.readOnlyReason !== undefined) {
           throw new Error(`plugin-center: ${entry.id} cannot be managed (${row.readOnlyReason})`)

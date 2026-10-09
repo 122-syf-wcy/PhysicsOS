@@ -108,6 +108,7 @@ describe('password reset lifecycle', () => {
     expect(JSON.stringify(tokens)).not.toContain(issued.token)
   })
 
+  // One registration hash, one reset hash and two logins need contention headroom.
   it('uses a reset token once, changes the password, and revokes every live session', async () => {
     const { service } = await serviceFor()
     const session = await register(service)
@@ -129,7 +130,7 @@ describe('password reset lifecycle', () => {
       token: issued.token,
       newPassword: 'another-password',
     }, '192.0.2.12')).rejects.toMatchObject({ status: 400, code: 'INVALID_RESET_TOKEN' })
-  })
+  }, 20_000)
 
   it('expires a token and invalidates the previous token when a newer one is issued', async () => {
     let now = new Date(10_000)
@@ -255,6 +256,7 @@ describe('password reset lifecycle', () => {
 })
 
 
+// One registration hash and two reset hashes need contention headroom.
 it('restores a reset token after a failed password write so it can be redeemed again', async () => {
   const { domain, service } = await serviceFor()
   await register(service)
@@ -269,7 +271,7 @@ it('restores a reset token after a failed password write so it can be redeemed a
   expect(domain.table('password_reset_tokens').get(hash)).toEqual(original)
   users.put = put
   await expect(service.submitPasswordReset({ token: issued.token, newPassword: 'new-password' })).resolves.toBeUndefined()
-})
+}, 20_000)
 
 
 it('preserves administrator cancellation when a concurrent password write rolls back', async () => {

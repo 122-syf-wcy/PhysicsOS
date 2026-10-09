@@ -12686,6 +12686,27 @@ index 0f98bc1f19..bbe50fc200 100644
        },
      }
    }
+diff --git a/packages/client/connection/tests/binary-rpc.host.spec.ts b/packages/client/connection/tests/binary-rpc.host.spec.ts
+index 05ec270545..a6a0058fa8 100644
+--- a/packages/client/connection/tests/binary-rpc.host.spec.ts
++++ b/packages/client/connection/tests/binary-rpc.host.spec.ts
+@@ -58,7 +58,15 @@ describe('Connection binary RPC', () => {
+         req.once('error', reject)
+         req.end(init.body as string)
+       }))
+-      expect(await rpc.call('/api', 'fixture/read', {})).toEqual({ ok: true, value: { data, bytes: data.length } })
++      const received = await rpc.call('/api', 'fixture/read', {}) as ConnectionRpcResult<{ data: Uint8Array; bytes: number }>
++      expect(received.ok).toBe(true)
++      if (received.ok) {
++        const { data: bytes, ...metadata } = received.value
++        expect({ ...received, value: metadata }).toEqual({ ok: true, value: { bytes: data.length } })
++        expect(bytes).toBeInstanceOf(Uint8Array)
++        // Native byte comparison avoids recursively enumerating the 1 MiB attachment.
++        expect(Buffer.from(bytes).equals(data)).toBe(true)
++      }
+       if (compression === 'gzip') {
+         expect(encoding).toBe('gzip')
+         expect(transferred).toBeLessThan(data.length / 10)
 diff --git a/packages/client/connection/tsconfig.host.json b/packages/client/connection/tsconfig.host.json
 index 66d9844f17..7c954bbb8c 100644
 --- a/packages/client/connection/tsconfig.host.json

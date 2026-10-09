@@ -141,7 +141,7 @@ function runHeadless(dshHome) {
   })
 }
 
-/** Newest session log under a DSH home, decoded frame by frame into events. */
+/** Newest canonical session generation under a DSH home, decoded into events. */
 function readSessionEvents(dshHome) {
   const root = path.join(dshHome, 'sessions')
   const files = []
@@ -149,7 +149,7 @@ function readSessionEvents(dshHome) {
     for (const entry of readdirSync(dir)) {
       const full = path.join(dir, entry)
       if (statSync(full).isDirectory()) walk(full)
-      else if (entry === 'session.jsonl.zstd') files.push(full)
+      else if (/^session(?:\.v[1-9]\d*)?\.jsonl\.zstd$/.test(entry)) files.push(full)
     }
   }
   walk(root)
@@ -166,10 +166,14 @@ function readSessionEvents(dshHome) {
     const end = index + 1 < starts.length ? starts[index + 1] : buffer.length
     text += zstdDecompressSync(buffer.subarray(start, end)).toString('utf8')
   })
-  return text
+  const events = text
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line))
+  const generation = Number(path.basename(file).match(/^session(?:\.v([1-9]\d*))?\./)?.[1] ?? 0)
+  if (events[0]?.type !== 'session' || events[0]?.version !== generation)
+    throw new Error(`session header does not match log generation ${generation}: ${file}`)
+  return events
 }
 
 const dshHome = mkdtempSync(path.join(tmpdir(), 'physicsos-agent-acceptance-'))
@@ -205,9 +209,14 @@ try {
       /^(bash|pwsh|read|write|edit|grep|glob|web_search|todo_write|str_replace)/.test(tool.name),
     ),
   )
+  const system = events.find((event) => event.type === 'system/message')?.data?.message
+  const systemText = (system?.content ?? [])
+    .filter((entry) => entry.type === 'text')
+    .map((entry) => entry.text)
+    .join('')
   check(
     'persona carries the Physics Constitution',
-    String(header?.data?.header?.system ?? '').includes('物理宪法'),
+    system?.role === 'system' && systemText.includes('物理宪法'),
   )
 
   const calls = events.filter((event) => event.type === 'tool/call')
@@ -217,13 +226,21 @@ try {
     calls.map((call) => call.data.name).join(', '),
   )
 
-  const result = events.find((event) => event.type === 'tool/result')
-  const block = result?.data?.message?.content?.find((entry) => entry.type === 'tool-result')
-  const resultText = (block?.content ?? [])
+  const toolResults = events.filter((event) => event.type === 'tool/result')
+  const message = toolResults[0]?.data?.message
+  const resultText = (message?.content ?? [])
     .filter((entry) => entry.type === 'text')
     .map((entry) => entry.text)
     .join('')
-  check('tool result is not an error', block !== undefined && block.isError === false)
+  check(
+    'one successful tool result belongs to the physics call',
+    toolResults.length === 1 &&
+      message?.role === 'tool' &&
+      message?.isError === false &&
+      message?.toolCallId === calls[0]?.data?.callId &&
+      message?.source?.kind === 'tool' &&
+      message?.source?.callId === message?.toolCallId,
+  )
   check(
     'Question Runtime solved it (magnetic model)',
     resultText.includes('已求解（magnetic / charged_particle_uniform_magnetic_field）'),
