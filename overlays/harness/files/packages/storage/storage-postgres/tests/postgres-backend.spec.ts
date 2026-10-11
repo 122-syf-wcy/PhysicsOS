@@ -7,7 +7,7 @@ import { runKvBackendContract } from '../../storage/tests/contract.ts'
 import { Pool } from 'pg'
 import * as StoragePostgres from '../src/index.ts'
 import * as Schema from '../src/schema.ts'
-import { Config, PostgresStorageBackend, recordTableName } from '../src/index.ts'
+import { Config, PostgresStorageBackend, acquireWriterWithRetry, recordTableName, WriterLeaseConflictError } from '../src/index.ts'
 
 const SPECIFIC_DESCRIPTOR: KvUnitDescriptor = {
   name: 'specimen',
@@ -112,6 +112,60 @@ if (!availability.ok) {
       backend: backendAt(schema),
       reopen: async () => backendAt(schema),
     }
+  })
+
+  describe('writer acquisition retry', () => {
+    class FakeWriter {
+      closes = 0
+      constructor(private readonly behavior: () => Promise<void>) {}
+      acquire(): Promise<void> {
+        return this.behavior()
+      }
+      async close(): Promise<void> {
+        this.closes += 1
+      }
+    }
+
+    it('retries a transient connection failure and returns the successor lease', async () => {
+      let calls = 0
+      const delays: number[] = []
+      const writers: FakeWriter[] = []
+      const winner = await acquireWriterWithRetry(() => {
+        calls += 1
+        const writer = new FakeWriter(async () => {
+          if (calls === 1) throw new Error('timeout expired')
+        })
+        writers.push(writer)
+        return writer
+      }, { attempts: 3, delayMs: (attempt) => { delays.push(attempt); return 0 } })
+      expect(calls).toBe(2)
+      expect(delays).toEqual([1])
+      expect(writers[0]?.closes).toBe(1)
+      expect(winner).toBe(writers[1])
+    })
+
+    it('never retries a live conflicting writer', async () => {
+      let calls = 0
+      const writers: FakeWriter[] = []
+      const failure = new WriterLeaseConflictError('Another PhysicsOS writer already owns this PostgreSQL schema; run one app replica')
+      await expect(acquireWriterWithRetry(() => {
+        calls += 1
+        const writer = new FakeWriter(async () => { throw failure })
+        writers.push(writer)
+        return writer
+      }, { attempts: 3, delayMs: () => 0 })).rejects.toBe(failure)
+      expect(calls).toBe(1)
+      expect(writers[0]?.closes).toBe(1)
+    })
+
+    it('rethrows the last connection failure after exhausting attempts', async () => {
+      let calls = 0
+      await expect(acquireWriterWithRetry(() => {
+        calls += 1
+        return new FakeWriter(async () => { throw new Error(`attempt ${String(calls)} failed`) })
+      }, { attempts: 3, delayMs: () => 0 })).rejects.toThrow(/attempt 3 failed/)
+      expect(calls).toBe(3)
+    })
   })
 
   describe('postgres backend specifics', () => {

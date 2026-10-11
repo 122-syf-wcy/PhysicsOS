@@ -21,7 +21,7 @@ import {
   POSTGRES_UNITS_TABLE,
 } from './schema.ts'
 import { PostgresKvUnit } from './unit.ts'
-import { PostgresWriterLease } from './writer-lease.ts'
+import { PostgresWriterLease, WriterLeaseConflictError } from './writer-lease.ts'
 
 /** Cordis plugin name. */
 export const name = 'storage-postgres'
@@ -73,6 +73,49 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
 
+/** Minimal lease shape {@link acquireWriterWithRetry} drives. */
+interface WriterLeaseLike {
+  acquire(): Promise<void>
+  close(): Promise<void>
+}
+
+/**
+ * Acquire one writer lease, retrying transient connection failures under a
+ * bounded schedule. A live conflicting writer is never retried: an accidental
+ * second replica must fail immediately instead of waiting for the first to
+ * exit. Every failed attempt closes its own connection before the next.
+ * @param createWriter - Builds a fresh lease for one attempt.
+ * @param options - Attempt count (default 3) and per-attempt delay schedule
+ * (default 1s, then 2s).
+ * @returns the acquired lease.
+ */
+export async function acquireWriterWithRetry<T extends WriterLeaseLike>(
+  createWriter: () => T,
+  options: { attempts?: number; delayMs?: (attempt: number) => number } = {},
+): Promise<T> {
+  const attempts = options.attempts ?? 3
+  if (!Number.isInteger(attempts) || attempts < 1) {
+    throw new RangeError('acquireWriterWithRetry attempts must be a positive integer')
+  }
+  const delayMs = options.delayMs ?? ((attempt: number) => attempt * 1_000)
+  let lastError: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const writer = createWriter()
+    try {
+      await writer.acquire()
+      return writer
+    } catch (error) {
+      await writer.close().catch(() => {})
+      if (error instanceof WriterLeaseConflictError) throw error
+      lastError = error
+      if (attempt < attempts) {
+        await new Promise<void>((resolve) => { setTimeout(resolve, delayMs(attempt)) })
+      }
+    }
+  }
+  throw lastError
+}
+
 function validateDescriptor(descriptor: KvUnitDescriptor): void {
   assertUnitIdentifier(descriptor.name, 'kv unit name')
   if (!Number.isSafeInteger(descriptor.version) || descriptor.version < 0) {
@@ -110,7 +153,10 @@ export class PostgresStorageBackend implements StorageBackend {
 
   private readonly pool: Pool
   private readonly schema: string
-  private readonly writer: PostgresWriterLease
+  private readonly connectionString: string
+  private readonly ssl: PoolConfig['ssl']
+  /** Acquired lease; replaced only while a startup attempt retries. */
+  private writer: PostgresWriterLease
   /** Open (or still-opening) units by name; presence is the double-open guard. */
   private readonly units = new Map<string, Promise<PostgresKvUnit>>()
   private closing: Promise<void> | undefined
@@ -124,6 +170,8 @@ export class PostgresStorageBackend implements StorageBackend {
     this.schema = validated.schema
     const ssl: PoolConfig['ssl'] =
       validated.ssl === 'require' ? { rejectUnauthorized: false } : validated.ssl
+    this.connectionString = validated.connectionString
+    this.ssl = ssl
     this.pool = new Pool({
       application_name: 'physicsos-storage-postgres',
       connectionString: validated.connectionString,
@@ -138,26 +186,34 @@ export class PostgresStorageBackend implements StorageBackend {
     this.pool.on('error', () => {
       // No shared state is published here: each query owns its own rejection.
     })
-    this.writer = new PostgresWriterLease(new Client({
+    this.writer = this.createWriter()
+    this.ready = this.initialize()
+    this.ready.catch(() => {})
+  }
+
+  /** Build one dedicated writer connection for a single acquisition attempt. */
+  private createWriter(): PostgresWriterLease {
+    return new PostgresWriterLease(new Client({
       application_name: 'physicsos-storage-writer',
-      connectionString: validated.connectionString,
-      connectionTimeoutMillis: 2_000,
+      connectionString: this.connectionString,
+      // A busy startup can stall the event loop past a tight budget, so the
+      // connect phase gets ten seconds; heartbeat probes keep their own 2s
+      // deadline through `query_timeout` and the lease timing.
+      connectionTimeoutMillis: 10_000,
       query_timeout: 2_000,
       keepAlive: true,
-      ssl,
+      ssl: this.ssl,
     }), this.schema, (error) => {
       // Snapshot readers live above the storage API, so rejecting new writes
       // alone is insufficient. A lost lease requires a fresh process/snapshot.
       process.stderr.write(`${error.message}\n`)
       process.exit(1)
     })
-    this.ready = this.initialize()
-    this.ready.catch(() => {})
   }
 
   private async initialize(): Promise<void> {
     try {
-      await this.writer.acquire()
+      this.writer = await acquireWriterWithRetry(() => this.createWriter())
       await initializeSchema(this.pool, this.schema)
     } catch (error) {
       // Startup failures have no guaranteed disposer. Release this session and
@@ -289,15 +345,29 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = new PostgresStorageBackend(config)
   try {
     await backend.ready
+  } catch (error) {
+    await backend.close()
+    throw error
+  }
+  try {
     ctx.effect(function* () {
       yield () => backend.close()
       yield ctx.storage.backend.register('postgres', backend)
       yield ctx.provide(storageBackendServiceKey('postgres'), backend)
     }, 'storage-postgres.registerBackend')
   } catch (error) {
+    // Shutdown or reload can dispose this fiber while the backend is still
+    // initializing; registration is then impossible and the backend must be
+    // released instead of surfacing an unhandled startup rejection.
     await backend.close()
-    throw error
+    if (!isInactiveEffect(error)) throw error
   }
 }
 
+/** Whether a Cordis `effect()` call was refused because this fiber is disposed. */
+function isInactiveEffect(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'INACTIVE_EFFECT'
+}
+
 export { recordTableName } from './schema.ts'
+export { PostgresWriterLease, WriterLeaseConflictError } from './writer-lease.ts'

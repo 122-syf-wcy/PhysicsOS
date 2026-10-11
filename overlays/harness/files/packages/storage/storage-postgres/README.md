@@ -60,9 +60,14 @@ lease key or unlocks a successor. Redis counters do not change this restriction.
 ## Lifecycle and errors
 
 Plugin activation waits for writer acquisition and schema initialization before
-publishing the backend. A failed or cancelled activation closes its connections
-without exposing a usable backend; disposal withdraws the service before
-releasing the registry entry, pool, and writer lease.
+publishing the backend. Writer acquisition retries transient connection
+failures three times with one- and two-second waits, and each attempt gets a
+ten-second connect budget so a busy startup cannot abort the authentication
+handshake; a live conflicting writer fails immediately instead of retrying. A
+failed, cancelled, or disposed-during-initialization activation closes
+its connections without exposing a usable
+backend; disposal withdraws the service before releasing the registry entry,
+pool, and writer lease.
 
 Opening a missing unit creates its metadata row and record tables
 transactionally. A differing version stamp rejects with `version-mismatch`.

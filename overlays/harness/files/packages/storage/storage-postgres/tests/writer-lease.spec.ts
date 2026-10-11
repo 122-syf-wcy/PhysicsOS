@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { PostgresWriterLease } from '../src/writer-lease.ts'
+import { PostgresWriterLease, WriterLeaseConflictError } from '../src/writer-lease.ts'
 
 class Connection extends EventEmitter {
   available = true
@@ -23,6 +23,14 @@ describe('single writer session lease', () => {
     await expect(lease.acquire()).rejects.toThrow(/writer/i)
     expect(client.stopped).toBe(true)
     expect(client.queries.some(sql => sql.includes('unlock'))).toBe(false)
+  })
+
+  it('reports a live conflicting writer as a typed conflict so startup stops retrying', async () => {
+    const client = new Connection()
+    client.available = false
+    const lease = new PostgresWriterLease(client, 'tenant', () => {})
+    await expect(lease.acquire()).rejects.toBeInstanceOf(WriterLeaseConflictError)
+    expect(client.stopped).toBe(true)
   })
 
   it('fails closed immediately when the owning session disappears', async () => {

@@ -1,3 +1,15 @@
+/**
+ * Another live process holds this database/schema's writer lease. Retrying
+ * cannot succeed while that owner is alive, so startup must stop here.
+ */
+export class WriterLeaseConflictError extends Error {
+  /** @param message - Conflict description surfaced at startup. */
+  constructor(message: string) {
+    super(message)
+    this.name = 'WriterLeaseConflictError'
+  }
+}
+
 /** A database/schema has one writer while storage-domain caches rows in memory. */
 export interface WriterConnection {
   connect(): Promise<unknown>
@@ -34,7 +46,7 @@ export class PostgresWriterLease {
         [`physicsos:single-writer:${this.schema}`],
       )
       if (result.rows[0]?.acquired !== true) {
-        throw new Error('Another PhysicsOS writer already owns this PostgreSQL schema; run one app replica')
+        throw new WriterLeaseConflictError('Another PhysicsOS writer already owns this PostgreSQL schema; run one app replica')
       }
       this.state = 'held'
       this.lastProbe = performance.now()
