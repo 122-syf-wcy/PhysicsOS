@@ -471,7 +471,8 @@ if (!availability.ok) {
         await new Promise(resolve => setTimeout(resolve, 1_500))
         expect(exit).not.toHaveBeenCalled()
         await expect(unit.putRecord('records', 'after-stall', 1)).resolves.toBeUndefined()
-        expect((await unit.loadAll()).tables.records['after-stall']).toBe(1)
+        const records: Record<string, unknown> = (await unit.loadAll()).tables['records'] ?? {}
+        expect(records['after-stall']).toBe(1)
       } finally {
         exit.mockRestore()
         stderr.mockRestore()
