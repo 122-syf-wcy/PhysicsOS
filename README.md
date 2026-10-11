@@ -1,5 +1,21 @@
 # PhysicsOS
 
+<p align="center">
+  <a href="https://physics.dongsiwei.com"><img alt="Website" src="https://img.shields.io/badge/Website-physics.dongsiwei.com-0ea5e9?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+  <img alt="Status" src="https://img.shields.io/badge/Status-Public_Beta-22c55e?style=for-the-badge">
+  <img alt="DeepSeek Harness" src="https://img.shields.io/badge/DeepSeek_Harness-0.1.7--rc.2-4f46e5?style=for-the-badge">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24-339933?style=for-the-badge&logo=nodedotjs&logoColor=white">
+  <img alt="pnpm" src="https://img.shields.io/badge/pnpm-11-f69220?style=for-the-badge&logo=pnpm&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6-3178c6?style=for-the-badge&logo=typescript&logoColor=white">
+</p>
+<p align="center">
+  <img alt="React" src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=black">
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24c8db?style=for-the-badge&logo=tauri&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-17-4169e1?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img alt="Redis" src="https://img.shields.io/badge/Redis-7-dc382d?style=for-the-badge&logo=redis&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/License-Apache--2.0-3b82f6?style=for-the-badge">
+</p>
+
 > **开源公益项目**：面向初高中物理教学，公益定位。授权见 [`LICENSE`](./LICENSE)（Apache License 2.0，OSI 认证的开源许可，允许修改、分发与商业使用）。项目欢迎外部开发者共同维护，参与方式见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 >
 > **状态：公测开放（public beta）**。正式入口为 <https://physics.dongsiwei.com>。账户体系、出卷专区、学习记录跨设备同步、生产部署、模型号池与管理员运维面板均已上线；接口与界面仍会迭代，真实教学反馈会直接影响后续优先级。
