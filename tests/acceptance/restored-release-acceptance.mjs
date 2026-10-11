@@ -147,6 +147,9 @@ try {
     const url = message.location().url
     const text = message.text()
     if (!authenticated && url && guestPath(url) && /401|403|unauthorized|forbidden/i.test(text)) return
+    // Pre-auth API refusals surface inside client bundles whose script URL is
+    // not a guest path; the refusal itself is expected guest traffic.
+    if (!authenticated && /HTTP 4(?:01|03)/.test(text)) return
     if (!authenticated && /WebSocket connection.*\/api\//.test(text)) return
     gate.consoleErrors++
   })

@@ -23,7 +23,6 @@ export class PostgresWriterLease {
   private state: 'new' | 'held' | 'lost' | 'closed' = 'new'
   private heartbeat: ReturnType<typeof setTimeout> | undefined
   private deadline: ReturnType<typeof setTimeout> | undefined
-  private lastProbe = 0
 
   constructor(
     private readonly connection: WriterConnection,
@@ -49,7 +48,6 @@ export class PostgresWriterLease {
         throw new WriterLeaseConflictError('Another PhysicsOS writer already owns this PostgreSQL schema; run one app replica')
       }
       this.state = 'held'
-      this.lastProbe = performance.now()
       this.schedule()
     } catch (error) {
       await this.close()
@@ -58,7 +56,8 @@ export class PostgresWriterLease {
   }
 
   assertHeld(): void {
-    if (this.state === 'held' && performance.now() - this.lastProbe > this.timing.intervalMs + this.timing.timeoutMs) this.lose()
+    // Loss is detected by the connection's own events and by unanswered
+    // probes; a slow request must never turn a busy event loop into a kill.
     if (this.state !== 'held') throw new Error('Postgres writer lease is unavailable')
   }
 
@@ -71,17 +70,25 @@ export class PostgresWriterLease {
 
   private async probe(): Promise<void> {
     if (!this.held()) return
-    this.deadline = setTimeout(() => { this.lose() }, this.timing.timeoutMs)
+    const state = { settled: false }
+    const alive = this.connection.query('SELECT 1 AS alive')
+    this.deadline = setTimeout(() => {
+      // A deadline timer fires late when a synchronous request (for example
+      // password verification) stalls the event loop. Give the queued probe
+      // response one loop turn to settle before treating the lease as lost;
+      // an unanswered probe still loses ownership on the next turn.
+      setTimeout(() => { if (!state.settled) this.lose() }, 0).unref()
+    }, this.timing.timeoutMs)
     this.deadline.unref()
     try {
-      await this.connection.query('SELECT 1 AS alive')
+      await alive
+      state.settled = true
+      clearTimeout(this.deadline)
       if (!this.held()) return
-      this.lastProbe = performance.now()
       this.schedule()
     } catch {
+      state.settled = true
       this.lose()
-    } finally {
-      clearTimeout(this.deadline)
     }
   }
 

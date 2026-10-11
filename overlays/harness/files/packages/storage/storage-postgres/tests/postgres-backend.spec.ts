@@ -459,6 +459,26 @@ if (!availability.ok) {
       }
     })
 
+    it('keeps a live writer lease across an event-loop stall longer than the heartbeat deadline', async () => {
+      const schema = await freshSchema()
+      const backend = backendAt(schema)
+      const unit = await backend.kv.open(SPECIFIC_DESCRIPTOR)
+      const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      try {
+        const until = performance.now() + 5_000
+        while (performance.now() < until) { /* a synchronous request stalled the loop */ }
+        await new Promise(resolve => setTimeout(resolve, 1_500))
+        expect(exit).not.toHaveBeenCalled()
+        await expect(unit.putRecord('records', 'after-stall', 1)).resolves.toBeUndefined()
+        expect((await unit.loadAll()).tables.records['after-stall']).toBe(1)
+      } finally {
+        exit.mockRestore()
+        stderr.mockRestore()
+        await backend.close()
+      }
+    }, 30_000)
+
     it('rejects plugin activation without publishing a backend when its writer cannot connect', async () => {
       const ctx = new Context()
       await ctx.plugin(Storage)

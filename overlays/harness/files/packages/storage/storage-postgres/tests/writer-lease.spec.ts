@@ -63,6 +63,19 @@ describe('single writer session lease', () => {
     } finally { vi.useRealTimers() }
   })
 
+  it('keeps ownership across an event-loop stall longer than the deadline', async () => {
+    const client = new Connection()
+    const lost = vi.fn()
+    const lease = new PostgresWriterLease(client, 'tenant', lost, { intervalMs: 10, timeoutMs: 20 })
+    await lease.acquire()
+    const until = Date.now() + 60
+    while (Date.now() < until) { /* block the loop past the heartbeat deadline */ }
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(lost).not.toHaveBeenCalled()
+    lease.assertHeld()
+    await lease.close()
+  })
+
   it('releases only by closing its session during normal shutdown', async () => {
     const client = new Connection()
     const lost = vi.fn()

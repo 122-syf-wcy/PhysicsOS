@@ -50,10 +50,14 @@ application replica per database/schema. Before any domain opens, a dedicated
 PostgreSQL session acquires an advisory lock for that schema. Another app writer
 fails startup; independent schemas remain independent.
 
-The owning session sends a read-only heartbeat every second with a two-second
-deadline. Socket loss, heartbeat failure, or deadline expiry stops the process
-with exit code 1, so cached reads cannot continue after ownership loss. Restart
-must acquire a new lock and load a fresh snapshot. Normal shutdown drains units
+The owning session sends a read-only heartbeat every second. A probe that
+neither answers within two seconds nor reports a socket error marks ownership
+lost; when the deadline itself fires late because a synchronous request stalled
+the event loop, the probe response still gets one loop turn to settle before
+the lease is dropped, so a slow login cannot kill a healthy writer. Socket
+loss, probe failure, or an unanswered probe stops the process with exit code 1,
+so cached reads cannot continue after ownership loss. Restart must acquire a
+new lock and load a fresh snapshot. Normal shutdown drains units
 and the pool before closing the exact owning session; it never deletes a shared
 lease key or unlocks a successor. Redis counters do not change this restriction.
 

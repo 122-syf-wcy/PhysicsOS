@@ -197,10 +197,10 @@ export class PostgresStorageBackend implements StorageBackend {
       application_name: 'physicsos-storage-writer',
       connectionString: this.connectionString,
       // A busy startup can stall the event loop past a tight budget, so the
-      // connect phase gets ten seconds; heartbeat probes keep their own 2s
-      // deadline through `query_timeout` and the lease timing.
+      // connect phase gets ten seconds; the lease's own deadline and grace
+      // turn bound every heartbeat probe without a client-side query timeout
+      // that could misfire on a stalled loop.
       connectionTimeoutMillis: 10_000,
-      query_timeout: 2_000,
       keepAlive: true,
       ssl: this.ssl,
     }), this.schema, (error) => {
