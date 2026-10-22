@@ -25,6 +25,7 @@ import { ThermometerRenderer } from './thermometer-renderer.tsx'
 import { NoiseRenderer } from './noise-renderer.tsx'
 import { LeverRenderer } from './lever-renderer.tsx'
 import { WaveRenderer } from './wave-renderer.tsx'
+import { ModernRenderer } from './modern-renderer.tsx'
 import type { ScenePoint, SceneVisualModel } from './scene-visual-model.ts'
 import {
   Angle,
@@ -1330,6 +1331,7 @@ export const RENDERERS = {
   thermal: ThermalDomainRenderer,
   induction: InductionDomainRenderer,
   wave: WaveRenderer,
+  modern: ModernRenderer,
 } as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
 
 export { CompositeRenderer, ElectricRenderer, MagneticRenderer, MechanicsRenderer }

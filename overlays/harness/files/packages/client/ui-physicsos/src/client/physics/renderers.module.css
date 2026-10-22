@@ -5,14 +5,14 @@
 .fieldGlyph {
   fill: var(--physics-field);
   font-size: 13px;
-  opacity: 0.62;
+  opacity: 0.42;
   user-select: none;
 }
 
 .electricFieldLattice {
   stroke: var(--physics-field);
   stroke-width: 1.1;
-  opacity: 0.42;
+  opacity: 0.3;
   fill: none;
 }
 
@@ -31,9 +31,9 @@
 
 .streamlinePath {
   stroke: var(--physics-field);
-  stroke-width: 1;
+  stroke-width: 1.25;
   stroke-linecap: round;
-  opacity: 0.5;
+  opacity: 0.65;
   fill: none;
 }
 
@@ -54,7 +54,7 @@
   stroke-width: 0.8;
   stroke-linecap: round;
   stroke-dasharray: 3 3;
-  opacity: 0.45;
+  opacity: 0.55;
   fill: none;
 }
 
@@ -70,7 +70,7 @@
    physical, so it is carried by dash pattern and opacity, not hue. */
 .trajectoryHistory {
   stroke: var(--physics-trajectory);
-  stroke-width: 2;
+  stroke-width: 2.25;
   stroke-linecap: round;
   fill: none;
 }
@@ -89,7 +89,7 @@
   stroke-width: 1.5;
   stroke-dasharray: 6 4;
   stroke-linecap: round;
-  opacity: 0.75;
+  opacity: 0.6;
   fill: none;
 }
 
@@ -140,7 +140,7 @@
 /* ---------- annotations ---------- */
 
 .annotation {
-  fill: var(--physics-canvas-text-muted);
+  fill: color-mix(in srgb, var(--physics-canvas-text) 72%, var(--physics-canvas-text-muted));
   font-size: 11.5px;
   paint-order: stroke fill;
   stroke: var(--physics-canvas-bg);
@@ -189,27 +189,24 @@
    field lattice inside. */
 .boundedFieldRegion {
   stroke: var(--physics-measurement);
-  stroke-width: 0.6;
+  stroke-width: 0.9;
   stroke-dasharray: 3 3;
-  opacity: 0.3;
+  opacity: 0.45;
   fill: none;
 }
 
 /* Composite-region atmosphere: a whisper of the field's own colour so the
    apparatus zones read at a glance. Opacity stays far below every vector. */
 .regionTintCrossed {
-  fill: rgba(56, 189, 248, 0.07);
-  opacity: 0.65;
+  fill: color-mix(in srgb, var(--physics-vector-electric-force) 5%, transparent);
 }
 
 .regionTintElectric {
-  fill: rgba(56, 189, 248, 0.055);
-  opacity: 0.65;
+  fill: color-mix(in srgb, var(--physics-vector-electric-force) 4%, transparent);
 }
 
 .regionTintMagnetic {
-  fill: rgba(99, 102, 241, 0.055);
-  opacity: 0.65;
+  fill: color-mix(in srgb, var(--physics-vector-magnetic-force) 4%, transparent);
 }
 
 /* ---------- circuit schematic ---------- */
@@ -278,7 +275,7 @@
 }
 
 .circuitAnnotation {
-  fill: var(--physics-canvas-text-muted);
+  fill: color-mix(in srgb, var(--physics-canvas-text) 65%, var(--physics-canvas-text-muted));
   font-size: 11px;
   paint-order: stroke fill;
   stroke: var(--physics-canvas-bg);
@@ -330,11 +327,11 @@
    Width exceeds the cable's so the beads sit proud of it. */
 .circuitChargeFlow {
   stroke: var(--physics-current-flow);
-  stroke-width: 3.2;
+  stroke-width: 2.7;
   stroke-linecap: round;
   fill: none;
   pointer-events: none;
-  filter: drop-shadow(0 0 2px var(--physics-current-flow-glow));
+  filter: drop-shadow(0 0 1px var(--physics-current-flow-glow));
 }
 
 /* Lamp light, three layers of one warm ramp. A single radial disc was the
@@ -345,10 +342,13 @@
 .circuitLampBloom {
   pointer-events: none;
   mix-blend-mode: screen;
+  /* Multiply the engine-driven opacity; a dim load must stay dim. */
+  filter: opacity(0.55);
 }
 
 .circuitLampGlow {
   pointer-events: none;
+  filter: opacity(0.72);
 }
 
 .circuitLampCore {
@@ -374,7 +374,7 @@
    rather than floating over the drawing. */
 .circuitPartSprite {
   pointer-events: none;
-  filter: drop-shadow(0 1px 1.2px rgb(20 26 36 / 22%));
+  filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--physics-body-stroke) 20%, transparent));
 }
 
 /* Draggable schematic part (circuit domain): the part grabs like a bench
@@ -470,14 +470,14 @@
    statement that no light actually travels there. */
 .opticalRay {
   stroke: var(--physics-optics-ray);
-  stroke-width: 1.8;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
   opacity: 0.92;
   /* Light reads as light: a warm halo, the same energy vocabulary the screen
      spot uses. A drop-shadow (like .highlightGroup) so geometry never shifts. */
-  filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--physics-optics-ray) 40%, transparent));
+  filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--physics-optics-ray) 24%, transparent));
 }
 
 .opticalRayHead {
@@ -530,16 +530,15 @@
 
 /* Convex lens: glass body plus the double-arrow symbol in force blue. */
 .lensBody {
-  fill: var(--physics-body-fill);
-  fill-opacity: 0.5;
+  fill: color-mix(in srgb, var(--physics-vector-force) 12%, var(--physics-canvas-bg));
+  fill-opacity: 0.75;
   stroke: var(--physics-vector-force);
-  stroke-width: 1;
-  opacity: 0.85;
+  stroke-width: 1.2;
 }
 
 .lensAxisLine {
   stroke: var(--physics-vector-force);
-  stroke-width: 2;
+  stroke-width: 1.2;
   stroke-linecap: round;
 }
 
@@ -585,7 +584,7 @@
   stroke: var(--physics-optics-ray-soft);
   stroke-width: 10;
   stroke-linecap: round;
-  opacity: 0.4;
+  opacity: 0.24;
 }
 
 .screenFoot {
@@ -614,7 +613,7 @@
 
 /* The speaker is a real object on the range; body ink like the candle. */
 .acousticSourceBody {
-  fill: var(--physics-body-fill);
+  fill: color-mix(in srgb, var(--physics-acoustics-wave-soft) 26%, var(--physics-canvas-bg));
   stroke: var(--physics-body-stroke);
   stroke-width: 2;
   stroke-linejoin: round;
@@ -647,12 +646,12 @@
 /* The reflector is a solid face: a filled body behind the reflecting edge. */
 .acousticWallFace {
   fill: var(--physics-body-fill);
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 .acousticWallPlate {
   stroke: var(--physics-body-stroke);
-  stroke-width: 3.4;
+  stroke-width: 2.6;
   stroke-linecap: round;
 }
 
@@ -675,7 +674,7 @@
 .acousticWavefront {
   fill: none;
   stroke: var(--physics-acoustics-wave-soft);
-  stroke-width: 1.6;
+  stroke-width: 1.8;
   stroke-linecap: round;
   opacity: 0.9;
 }
@@ -686,7 +685,7 @@
   stroke: var(--physics-acoustics-wave-soft);
   stroke-width: 1.4;
   stroke-dasharray: 6 4;
-  opacity: 0.9;
+  opacity: 0.6;
 }
 
 .acousticPathHead {
@@ -715,7 +714,7 @@
 .fluidTankWall {
   fill: none;
   stroke: var(--physics-body-stroke);
-  stroke-width: 3;
+  stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -739,7 +738,7 @@
 /* The meniscus: the liquid's own surface line, always drawn — the level the
    displaced volume is measured against. */
 .fluidSurface {
-  stroke: #7fb2d9;
+  stroke: var(--physics-fluid-liquid);
   stroke-width: 1.6;
 }
 
@@ -751,7 +750,7 @@
 }
 
 .fluidScaleDial {
-  fill: #fdfefe;
+  fill: var(--physics-canvas-bg);
   stroke: var(--physics-body-stroke);
   stroke-width: 1.2;
 }
@@ -788,7 +787,7 @@
    cross-section IS V_排. */
 .fluidBlockSubmerged {
   fill: var(--physics-fluid-liquid);
-  opacity: 0.42;
+  opacity: 0.28;
   stroke: none;
 }
 
@@ -843,7 +842,7 @@
 .pressureVesselWall {
   fill: none;
   stroke: var(--physics-body-stroke);
-  stroke-width: 3;
+  stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -855,7 +854,7 @@
 
 .pressureVesselLabel,
 .pressureGuideLabel {
-  fill: var(--physics-canvas-text-muted);
+  fill: var(--physics-canvas-text);
   font-size: 11.5px;
   paint-order: stroke fill;
   stroke: var(--physics-canvas-bg);
@@ -877,7 +876,7 @@
 .pressureTube {
   fill: color-mix(in srgb, var(--physics-canvas-bg) 70%, transparent);
   stroke: var(--physics-body-stroke);
-  stroke-width: 2.4;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -885,7 +884,7 @@
 /* Mercury is dense and opaque: the column takes the solid slate, the pool the
    paler one, so the standing height is never confused with the reservoir. */
 .pressureMercury {
-  fill: var(--physics-measurement);
+  fill: color-mix(in srgb, var(--physics-measurement) 78%, var(--physics-canvas-text));
   stroke: none;
 }
 
@@ -916,7 +915,7 @@
 /* The hemispheres are glass: filled just enough to read as a body, outlined so
    the joint between them stays the thing the eye lands on. */
 .pressureHemisphere {
-  fill: color-mix(in srgb, var(--physics-body-fill) 55%, transparent);
+  fill: color-mix(in srgb, var(--physics-body-fill) 75%, transparent);
   stroke: var(--physics-body-stroke);
   stroke-width: 2.2;
 }
@@ -956,7 +955,7 @@
   stroke: var(--physics-field);
   stroke-width: 1.1;
   stroke-dasharray: 5 4;
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
 /* The ring a probe sits on: solid, because this is the radius the reading and
@@ -964,7 +963,7 @@
 .currentProbeRing {
   fill: none;
   stroke: var(--physics-field);
-  stroke-width: 1.6;
+  stroke-width: 1.9;
 }
 
 /* Ink for the sense of the circulation — the drawn content of 安培定则. */
@@ -1018,7 +1017,8 @@
 .currentCoilLoop {
   fill: none;
   stroke: var(--physics-body-stroke);
-  stroke-width: 2.2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 /* A field line's halo: the same path laid down wider in the canvas colour
@@ -1043,7 +1043,7 @@
   stroke: var(--physics-field);
   stroke-width: 1.2;
   stroke-dasharray: 6 4;
-  opacity: 0.85;
+  opacity: 0.65;
   stroke-linejoin: round;
 }
 
@@ -1070,14 +1070,15 @@
   fill: var(--physics-magnetic-core);
   stroke: var(--physics-body-stroke);
   stroke-width: 1.4;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 /* The driven winding takes the source's ink... */
 .transformerPrimaryLoop {
   fill: none;
   stroke: var(--physics-induction-current);
-  stroke-width: 2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 /* ...and the output winding the measurement ink, so which side is driving is
@@ -1085,7 +1086,8 @@
 .transformerSecondaryLoop {
   fill: none;
   stroke: var(--physics-induction-rod);
-  stroke-width: 2;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 /* --------------------------------------------------- rectilinear light -- */
@@ -1110,14 +1112,14 @@
    same arrow: the picture's claim is the ratio between them. */
 .lightObject {
   stroke: var(--physics-body-stroke);
-  stroke-width: 3.4;
+  stroke-width: 2.6;
   stroke-linecap: round;
   fill: none;
 }
 
 .lightImage {
-  stroke: var(--physics-optics-ray);
-  stroke-width: 3.4;
+  stroke: var(--physics-optics-image);
+  stroke-width: 2.6;
   stroke-linecap: round;
   fill: none;
 }
@@ -1132,7 +1134,7 @@
 /* The boundary between two media, and the normal light is measured against. */
 .lightBoundary {
   stroke: var(--physics-body-stroke);
-  stroke-width: 2.6;
+  stroke-width: 2;
   stroke-linecap: round;
 }
 
@@ -1164,7 +1166,7 @@
 .noiseWavefront {
   fill: none;
   stroke: var(--physics-acoustics-wave);
-  stroke-width: 1.4;
+  stroke-width: 1.6;
 }
 
 /* The source and the listener. */
@@ -1174,7 +1176,7 @@
 }
 
 .noiseListener {
-  fill: var(--physics-canvas-bg);
+  fill: color-mix(in srgb, var(--physics-acoustics-wave-soft) 20%, var(--physics-canvas-bg));
   stroke: var(--physics-body-stroke);
   stroke-width: 2;
 }
@@ -1182,7 +1184,7 @@
 /* The barrier: solid, because it is a thing rather than a field. */
 .noiseBarrier {
   stroke: var(--physics-body-stroke);
-  stroke-width: 4;
+  stroke-width: 5;
   stroke-linecap: round;
 }
 
@@ -1203,7 +1205,7 @@
 
 /* The glass around it: open, so the tube reads as a tube. */
 .thermometerGlass {
-  fill: color-mix(in srgb, var(--physics-canvas-bg) 65%, transparent);
+  fill: color-mix(in srgb, var(--physics-body-fill) 20%, transparent);
   stroke: var(--physics-body-stroke);
   stroke-width: 1.6;
   stroke-linejoin: round;
@@ -1218,7 +1220,7 @@
 }
 
 .thermometerTickLabel {
-  fill: var(--physics-canvas-text-muted);
+  fill: var(--physics-canvas-text);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
@@ -1241,12 +1243,12 @@
 .energyRampBody {
   fill: var(--physics-incline-fill);
   stroke: none;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .energyRampSurface {
   stroke: var(--physics-body-stroke);
-  stroke-width: 3;
+  stroke-width: 2.2;
   stroke-linecap: round;
 }
 
@@ -1258,9 +1260,9 @@
 
 /* The ledger bar's frame: the total the cart started with. */
 .energyBarFrame {
-  fill: none;
+  fill: color-mix(in srgb, var(--physics-body-fill) 35%, var(--physics-canvas-bg));
   stroke: var(--physics-measurement);
-  stroke-width: 1.4;
+  stroke-width: 0.8;
 }
 
 /* Three inks, because the bar's argument is that the energy MOVED between them:
@@ -1282,7 +1284,7 @@
 /* The rotor seen end-on: the line joining the two sides that carry the force. */
 .motorCoil {
   stroke: var(--physics-body-stroke);
-  stroke-width: 3.2;
+  stroke-width: 3.6;
   stroke-linecap: round;
 }
 
@@ -1304,7 +1306,7 @@
 .motorSpin {
   fill: none;
   stroke: var(--physics-field);
-  stroke-width: 1.8;
+  stroke-width: 2.1;
 }
 
 .motorSpinHalo {
@@ -1348,7 +1350,7 @@
 .thermalBeakerWall {
   fill: none;
   stroke: var(--physics-body-stroke);
-  stroke-width: 3;
+  stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -1357,7 +1359,8 @@
    the phase change is visible on the apparatus and not only on the graph. */
 .thermalSampleSolid {
   fill: var(--physics-thermal-solid);
-  stroke: none;
+  stroke: color-mix(in srgb, var(--physics-body-stroke) 28%, transparent);
+  stroke-width: 0.8;
 }
 
 .thermalSampleLiquid {
@@ -1383,7 +1386,7 @@
 
 /* The thermometer tube: a frosted glass capsule the column lives inside. */
 .thermalTubeOuter {
-  fill: rgba(255, 255, 255, 0.72);
+  fill: color-mix(in srgb, var(--physics-canvas-bg) 88%, transparent);
   stroke: var(--physics-body-stroke);
   stroke-width: 1.6;
 }
@@ -1391,7 +1394,7 @@
 .thermalTick {
   stroke: var(--physics-body-stroke);
   stroke-width: 1;
-  opacity: 0.55;
+  opacity: 0.75;
 }
 
 /* The melted liquid's surface line — a level, not a fill edge. */
@@ -1403,7 +1406,7 @@
 
 .thermalColumn {
   stroke: var(--physics-thermal-heat);
-  stroke-width: 3.2;
+  stroke-width: 3.6;
   stroke-linecap: round;
 }
 
@@ -1453,11 +1456,11 @@
 .leverBeamTick {
   stroke: var(--physics-body-stroke);
   stroke-width: 1;
-  opacity: 0.55;
+  opacity: 0.8;
 }
 
 .leverFulcrum {
-  fill: var(--physics-body-fill);
+  fill: color-mix(in srgb, var(--physics-body-fill) 60%, var(--physics-measurement-soft));
   stroke: var(--physics-body-stroke);
   stroke-width: 2;
 }
@@ -1495,7 +1498,7 @@
 .leverMassSlot {
   stroke: var(--physics-body-stroke);
   stroke-width: 1.1;
-  opacity: 0.6;
+  opacity: 0.75;
 }
 
 /* ---------------------------------------------------------------- induction -- */
@@ -1503,9 +1506,9 @@
 /* The uniform field box: a soft outline with a faint tint so the region reads
    as a place, with ✕ marks (into page) on a grid. */
 .inductionFieldBox {
-  fill: rgba(91, 108, 197, 0.05);
+  fill: color-mix(in srgb, var(--physics-induction-field) 4%, transparent);
   stroke: var(--physics-induction-field);
-  stroke-width: 1.4;
+  stroke-width: 1;
   stroke-dasharray: 5 4;
   opacity: 0.8;
 }
@@ -1513,13 +1516,13 @@
 .inductionFieldMark {
   stroke: var(--physics-induction-field);
   stroke-width: 1.2;
-  opacity: 0.65;
+  opacity: 0.4;
 }
 
 /* The conducting rod: solid indigo, thicker than the field ink. */
 .inductionRod {
   stroke: var(--physics-induction-rod);
-  stroke-width: 5;
+  stroke-width: 5.5;
   stroke-linecap: round;
 }
 
@@ -1545,7 +1548,7 @@
 /* A soft under-stroke behind the rod so it reads as a bar resting ON the
    rails, not a hairline crossing them. */
 .inductionRodBed {
-  stroke: rgba(255, 255, 255, 0.9);
+  stroke: var(--physics-canvas-bg);
   stroke-width: 8;
   stroke-linecap: round;
 }
@@ -1618,7 +1621,7 @@
 /* The coil: a flat loop seen edge-on, drawn as connected arcs. */
 .inductionCoil {
   stroke: var(--physics-induction-rod);
-  stroke-width: 2.4;
+  stroke-width: 2.7;
   fill: none;
   stroke-linecap: round;
 }
@@ -1666,7 +1669,7 @@
 .waveRope,
 .waveString {
   stroke: var(--physics-wave-rope);
-  stroke-width: 2.6;
+  stroke-width: 2.8;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
@@ -1682,15 +1685,16 @@
   stroke-width: 1.2;
   stroke-dasharray: 4 4;
   fill: none;
+  opacity: 0.65;
 }
 
 /* Crests spreading from each source; fading so the picture stays legible when
    two families overlap. */
 .waveFront {
   stroke: var(--physics-wave-front);
-  stroke-width: 1.1;
+  stroke-width: 1.35;
   fill: none;
-  opacity: 0.55;
+  opacity: 0.62;
 }
 
 .waveFrontGroup {
@@ -1701,7 +1705,7 @@
 .waveNode {
   fill: var(--physics-canvas-bg);
   stroke: var(--physics-wave-node);
-  stroke-width: 1.8;
+  stroke-width: 2.2;
 }
 
 .waveAntinode {
@@ -1714,7 +1718,7 @@
 .waveMarker {
   fill: var(--physics-wave-marker);
   stroke: var(--physics-canvas-bg);
-  stroke-width: 1.4;
+  stroke-width: 2;
 }
 
 .waveMarkerGuide {
@@ -1783,7 +1787,7 @@
 }
 
 .wavePointLabel {
-  fill: var(--physics-canvas-text-muted);
+  fill: var(--physics-canvas-text);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   paint-order: stroke fill;
@@ -1856,4 +1860,75 @@
   stroke: var(--physics-canvas-bg);
   stroke-width: 2px;
   stroke-linejoin: round;
+}
+
+/* Apparatus surfaces share a small contact shadow; field and data marks stay flat. */
+.acousticSourceBody,
+.fluidScaleBody,
+.fluidBlockBody,
+.pressureBlock,
+.pressureProbeBody,
+.currentCoreBar,
+.currentArmature,
+.transformerCore,
+.energyCart,
+.thermalHeaterBody,
+.leverBeamBar,
+.leverMass,
+.waveClamp,
+.waveDriver {
+  filter: drop-shadow(0 1.5px 1.5px color-mix(in srgb, var(--physics-body-stroke) 15%, transparent));
+}
+
+/* Photoelectric effect is an apparatus schematic, without a distance scale. */
+.modernCathode {
+  fill: var(--physics-measurement-soft);
+  stroke: var(--physics-body-stroke);
+  stroke-width: 1.5;
+  filter: drop-shadow(2px 2px 2px color-mix(in srgb, var(--physics-body-stroke) 16%, transparent));
+}
+
+.modernCathodeFace {
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.modernPhoton,
+.modernElectronPath {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.modernPhoton {
+  stroke: var(--physics-optics-ray);
+}
+
+.modernPhotonHead {
+  fill: var(--physics-optics-ray);
+}
+
+.modernElectronPath {
+  stroke: var(--physics-trajectory);
+  stroke-dasharray: 6 4;
+}
+
+.modernElectronHead,
+.modernElectron {
+  fill: var(--physics-trajectory);
+}
+
+.modernElectron {
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 2;
+}
+
+.modernLabel {
+  fill: var(--physics-canvas-text);
+  font-size: 12px;
+  font-weight: 600;
+  paint-order: stroke fill;
+  stroke: var(--physics-canvas-bg);
+  stroke-width: 3px;
 }

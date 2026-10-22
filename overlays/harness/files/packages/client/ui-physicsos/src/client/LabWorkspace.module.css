@@ -5,6 +5,8 @@
    fixed-flex tracks and every panel scrolls internally. */
 
 .cover {
+  --lab-panel-border: color-mix(in srgb, var(--dsw-alias-border-l2) 84%, var(--dsw-alias-bg-base));
+  --lab-panel-shadow: 0 2px 8px -4px color-mix(in srgb, var(--dsw-alias-label-primary) 14%, transparent);
   position: absolute;
   inset: 0;
   z-index: 4;
@@ -33,9 +35,10 @@
   max-height: 45%;
   padding: 10px 14px;
   overflow: auto;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 1px solid var(--lab-panel-border);
   border-radius: 12px;
   background: var(--dsw-alias-bg-base);
+  box-shadow: var(--lab-panel-shadow);
 }
 
 .sceneIdentity {
@@ -50,9 +53,9 @@
 .title {
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 650;
-  line-height: 24px;
+  line-height: 26px;
   overflow-wrap: anywhere;
 }
 
@@ -89,10 +92,15 @@
 
 .saveState {
   grid-column: 1 / -1;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .toolGroup {
@@ -269,9 +277,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 1px solid var(--lab-panel-border);
   border-radius: 12px;
   background: var(--dsw-alias-bg-base);
+  box-shadow: var(--lab-panel-shadow);
   overflow: hidden;
 }
 
@@ -281,15 +290,16 @@
   justify-content: space-between;
   gap: 8px;
   flex: none;
-  min-height: 40px;
+  min-height: 44px;
   padding: 4px 10px 4px 14px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 1px solid var(--lab-panel-border);
+  background: color-mix(in srgb, var(--dsw-alias-bg-module-platform) 48%, var(--dsw-alias-bg-base));
 }
 
 .panelTitle {
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 18px;
 }
@@ -310,9 +320,16 @@
   border-bottom: 0;
   background: var(--dsw-alias-bg-base);
   overflow: hidden;
+  box-shadow: inset 0 1px 0 var(--dsw-alias-bg-base);
   /* The section remounts per experiment (keyed on the scene), so this fade
      only runs on an experiment switch, not on parameter edits. */
   animation: canvasIn 0.24s ease-out;
+}
+
+/* Static benches have no transport row to finish the canvas frame. */
+.stage:not(:has(.timeline)) .canvas {
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
 }
 
 @keyframes canvasIn {
@@ -358,8 +375,8 @@
   gap: 6px;
   flex: 1;
   min-width: 0;
-  min-height: 32px;
-  padding: 6px;
+  min-height: 34px;
+  padding: 7px 6px;
   border: none;
   border-radius: 7px;
   background: transparent;
@@ -411,7 +428,7 @@
 .treeValue {
   flex: 0 1 auto;
   max-width: 50%;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -461,17 +478,18 @@
 
 /* ---------- Inspector ---------- */
 
-/* Underline tabs under the panel head — the prototype's 属性/读数/校验 row. */
+/* Segmented 属性/读数/校验 tabs keep the selected inspector view distinct. */
 .inspectorTabBar {
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
-  gap: 4px;
+  gap: 3px;
   margin: 0 0 8px;
-  padding: 0 0 7px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-base);
+  padding: 3px;
+  border: 1px solid var(--lab-panel-border);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
 }
 
 .inspectorTab {
@@ -493,9 +511,10 @@
 }
 
 .inspectorTabActive {
-  background: var(--dsw-alias-state-business-tertiary);
+  background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-button-info-fill);
   font-weight: 600;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent);
 }
 
 .inspectorTabActive::after {
@@ -542,10 +561,10 @@
   display: flex;
   align-items: center;
   gap: 0;
-  height: 34px;
+  height: 36px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
-  background: var(--dsw-alias-bg-base);
+  background: color-mix(in srgb, var(--dsw-alias-bg-module-platform) 35%, var(--dsw-alias-bg-base));
   overflow: hidden;
 }
 
@@ -558,7 +577,7 @@
   flex: 1;
   min-width: 0;
   height: 100%;
-  padding: 0 8px;
+  padding: 0 10px;
   border: none;
   background: transparent;
   color: var(--dsw-alias-label-primary);
@@ -575,9 +594,9 @@
   flex: none;
   padding: 0 8px;
   border-left: 1px solid var(--dsw-alias-border-l2);
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 32px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 34px;
   background: var(--dsw-alias-bg-module-platform);
 }
 
@@ -610,8 +629,8 @@
 }
 
 .derivedUnit {
-  color: var(--dsw-alias-label-caption);
-  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
 }
 
 /* A magnitude with its vector folded beneath it: one fact, two readings. */
@@ -771,9 +790,10 @@
   flex-direction: column;
   flex: none;
   margin-top: 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 1px solid var(--lab-panel-border);
   border-radius: 12px;
   background: var(--dsw-alias-bg-base);
+  box-shadow: var(--lab-panel-shadow);
   overflow: hidden;
 }
 
@@ -790,6 +810,7 @@
   min-height: 40px;
   padding: 4px 8px;
   border-bottom: 1px solid transparent;
+  background: color-mix(in srgb, var(--dsw-alias-bg-module-platform) 35%, var(--dsw-alias-bg-base));
 }
 
 .dataPanelOpen .dataHead {

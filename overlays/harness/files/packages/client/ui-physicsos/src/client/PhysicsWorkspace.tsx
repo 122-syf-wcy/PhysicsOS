@@ -603,7 +603,7 @@ export function PhysicsWorkspace({
               <IconChevronDownOutlineMedium size={13} />
             </button>
           )}
-          <span className={css.saveState}>{snapshot.subtitle}</span>
+          <span className={css.saveState} title={snapshot.subtitle}>{snapshot.subtitle}</span>
         </div>
         <div className={css.toolGroup}>
           {snapshot.branch === undefined ? null : (

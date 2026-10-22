@@ -33,6 +33,7 @@ export type PhysicsDomainId =
   | 'thermal'
   | 'induction'
   | 'wave'
+  | 'modern'
 
 /**
  * Semantic role of a drawn quantity. This drives colour through the physics

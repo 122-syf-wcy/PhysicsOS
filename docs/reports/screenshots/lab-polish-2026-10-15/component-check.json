@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "convex-lens",
+      "controls": true,
+      "overflow": false
+    },
+    {
+      "id": "series-circuit",
+      "controls": true,
+      "overflow": false
+    },
+    {
+      "id": "projectile-horizontal",
+      "controls": true,
+      "overflow": false
+    },
+    {
+      "id": "wave-travelling",
+      "controls": true,
+      "overflow": false
+    },
+    {
+      "editValue": "20"
+    },
+    {
+      "width": 1086,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "overflow": false
+    }
+  ],
+  "errors": []
+}

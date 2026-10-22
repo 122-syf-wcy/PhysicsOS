@@ -633,10 +633,11 @@
   align-items: start;
   gap: 12px;
   min-width: 0;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 14px;
   background: var(--dsw-alias-bg-base);
+  box-shadow: 0 2px 6px -4px color-mix(in srgb, var(--dsw-alias-label-primary) 16%, transparent);
   color: var(--dsw-alias-label-primary);
   text-align: left;
   cursor: pointer;
@@ -676,9 +677,9 @@
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 21px;
+  line-height: 23px;
 }
 
 .entryName > span:first-child {

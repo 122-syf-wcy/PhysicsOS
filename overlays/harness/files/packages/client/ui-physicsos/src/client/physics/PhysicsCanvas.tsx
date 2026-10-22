@@ -27,6 +27,7 @@ import {
   type RendererProjection,
 } from './renderer-registry.tsx'
 import css from './PhysicsCanvas.module.css'
+import { layoutReadout } from './readout-layout.ts'
 
 /** Room for axes and gutters, in px. */
 const PAD = { left: 46, bottom: 36, top: 18, right: 24 } as const
@@ -366,18 +367,11 @@ export function PhysicsCanvas({
     return ghosts
   }, [interactive, clockTime, view.bodies, view.particles, scale, trajectoryTimes, trajectory, projection])
 
-  /* The readout card sizes itself to its widest line — CJK glyphs ~1em,
-     latin/digits ~0.62em at these sizes — and sits in viewBox coordinates. */
-  const readoutTextWidth = (line: string): number => {
-    let units = 0
-    for (const ch of line) units += ch.charCodeAt(0) > 0x2e80 ? 1 : 0.62
-    return units * 11.5
-  }
-  const readoutWidth =
-    view.overlay.readout.length === 0
-      ? 0
-      : Math.min(Math.max(...view.overlay.readout.map(readoutTextWidth)) + 24, plotWidth - 24)
-  const readoutHeight = 20 + view.overlay.readout.length * 16
+  /* Wrap long quantities at the available width instead of only shrinking
+     their background. The same layout also drives dragging bounds. */
+  const readout = layoutReadout(view.overlay.readout, plotWidth - 24)
+  const readoutWidth = readout.width
+  const readoutHeight = readout.height
   /* Render-time clamp too: a parked card must stay inside when the lines grow
      wider or the canvas shrinks after it was dragged. */
   const readoutOrigin =
@@ -654,14 +648,14 @@ export function PhysicsCanvas({
               height={readoutHeight}
               rx="8"
             />
-            {view.overlay.readout.map((line, index) => (
+            {readout.lines.map((line, index) => (
               <text
-                key={line}
-                className={index === 0 ? css.readoutTitle : css.readoutLine}
+                key={index}
+                className={line.title ? css.readoutTitle : css.readoutLine}
                 x={readoutOrigin.x + 12}
                 y={readoutOrigin.y + 19 + index * 16}
               >
-                {line}
+                {line.text}
               </text>
             ))}
           </g>

@@ -56,11 +56,13 @@
 .gridMinor {
   stroke: var(--physics-grid-minor);
   stroke-width: 0.65;
+  opacity: 0.65;
 }
 
 .gridMajor {
   stroke: var(--physics-grid-major);
   stroke-width: 0.9;
+  opacity: 0.8;
 }
 
 .axis {
@@ -88,9 +90,10 @@
 /* ---------- readout gutter ---------- */
 
 .readoutPanel {
-  fill: color-mix(in srgb, var(--physics-canvas-bg) 94%, transparent);
-  stroke: var(--physics-grid-major);
-  stroke-width: 0.8;
+  fill: var(--physics-canvas-bg);
+  stroke: color-mix(in srgb, var(--physics-axis) 32%, var(--physics-canvas-bg));
+  stroke-width: 1;
+  filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--physics-canvas-text) 9%, transparent));
 }
 
 .readoutTitle {
@@ -101,7 +104,7 @@
 }
 
 .readoutLine {
-  fill: var(--physics-canvas-text-muted);
+  fill: color-mix(in srgb, var(--physics-canvas-text) 78%, var(--physics-canvas-text-muted));
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }

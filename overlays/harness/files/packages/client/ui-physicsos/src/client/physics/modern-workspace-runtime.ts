@@ -89,12 +89,12 @@ export class ModernPhysicsWorkspaceRuntime implements WorkspaceRuntime {
     const title = scene.metadata.title ?? '光电效应'
     if (this.simulation === undefined) {
       return {
-        domain: 'modern' as unknown as WorkspaceSnapshot['domain'],
+        domain: 'modern',
         title,
         subtitle: scene.metadata.description ?? '真实近代物理 Runtime',
         status: 'failed',
         sceneRevision: scene.revision,
-        view: emptyVisualModel('modern' as unknown as WorkspaceSnapshot['domain']),
+        view: emptyVisualModel('modern'),
         ariaLabel: title,
         tree: this.treeOf(scene),
         inspector: [],
@@ -113,7 +113,7 @@ export class ModernPhysicsWorkspaceRuntime implements WorkspaceRuntime {
       }
     }
     return {
-      domain: 'modern' as unknown as WorkspaceSnapshot['domain'],
+      domain: 'modern',
       title,
       subtitle: scene.metadata.description ?? '真实近代物理 Runtime',
       status: runtimeStatusOf(this.simulation.verification),
