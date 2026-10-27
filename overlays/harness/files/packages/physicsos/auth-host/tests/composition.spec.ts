@@ -489,6 +489,7 @@ describe('real Loader composition', () => {
       username: 'reset-student',
       password: 'old-reset-pass',
       displayName: '重置学生',
+      email: 'reset-student@example.com',
     })
     expect(registered.status).toBe(201)
     const studentCookie = registered.headers.get('set-cookie')!.split(';')[0]!

@@ -205,6 +205,7 @@ describe('admin invite lifecycle', () => {
         username: 'concurrent-a',
         displayName: '并发甲',
         password: 'invite-pass-123',
+        email: 'concurrent-a@example.com',
         inviteCode: bound.code,
       }, '192.0.2.10'),
       harness.service.register({
@@ -212,6 +213,7 @@ describe('admin invite lifecycle', () => {
         username: 'concurrent-b',
         displayName: '并发乙',
         password: 'invite-pass-456',
+        email: 'concurrent-b@example.com',
         inviteCode: bound.code,
       }, '192.0.2.11'),
     ])
@@ -299,7 +301,10 @@ describe('invite write failure recovery', () => {
       if (row.username === 'failing-user') { entered(); await blocked; throw new Error('durable user write failed') }
       await originalPut(key, row)
     }
-    const body = { schoolId: 'GZU', username: 'failing-user', displayName: '用户', password: 'test-password', inviteCode: invite.code }
+    const body = {
+      schoolId: 'GZU', username: 'failing-user', displayName: '用户', password: 'test-password',
+      email: 'failing-user@example.com', inviteCode: invite.code,
+    }
     const first = harness.service.register(body)
     const firstResult = first.catch((error: unknown) => error)
     await started
@@ -326,7 +331,7 @@ it('keeps an administrator disable when an overlapping registration is rolled ba
   const entered = new Promise<void>((resolve) => { started = resolve })
   const blocked = new Promise<void>((resolve) => { release = resolve })
   harness.domain.table('users').put = async () => { started(); await blocked; throw new Error('failed') }
-  const registration = harness.service.register({ schoolId: 'GZU', username: 'failed-user', displayName: '用户', password: 'test-password', inviteCode: invites[0]!.code }).catch((error: unknown) => error)
+  const registration = harness.service.register({ schoolId: 'GZU', username: 'failed-user', displayName: '用户', password: 'test-password', email: 'failed-user@example.com', inviteCode: invites[0]!.code }).catch((error: unknown) => error)
   await entered
   const disabling = harness.service.disableInvite(actor, invites[0]!.id)
   release()
