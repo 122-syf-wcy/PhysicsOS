@@ -23,6 +23,7 @@ import {
   type LoginInput,
   type PasswordResetQueueRow,
   type RegisterInput,
+  type RegisterOutcome,
   type SchoolRow,
 } from './auth-api.ts'
 import type { AuthState } from './auth-store.ts'
@@ -42,7 +43,12 @@ import adminCss from './AdminWorkspace.module.css'
 export interface AuthGateInjected {
   hooks: { auth: SnapshotStore<AuthState> }
   login: (input: LoginInput) => Promise<void>
-  register: (input: RegisterInput) => Promise<void>
+  register: (input: RegisterInput) => Promise<RegisterOutcome>
+  /**
+   * Public school lookup for the combobox. Injected rather than imported so a
+   * test can drive the dropdown without a network.
+   */
+  searchSchools: (query: string) => Promise<{ schools: SchoolRow[] }>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
   resetPassword?: (input: { token: string; newPassword: string }) => Promise<{ ok: boolean }>
 }
@@ -125,7 +131,7 @@ function Field({ label, invalid, children }: { label: string; invalid?: boolean;
 }
 
 export function AuthGate({
-  useAuth, login, register, forgotPassword, resetPassword, t, resetToken,
+  useAuth, login, register, forgotPassword, resetPassword, searchSchools, t, resetToken,
 }: AuthGateProps) {
   const status = useAuth(state => state.status)
   const [token, setToken] = useState(() => readResetToken(resetToken))
@@ -144,6 +150,15 @@ export function AuthGate({
   const [busy, setBusy] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [email, setEmail] = useState('')
+  /* Live combobox results; `searched` distinguishes "still typing" from "the
+     roster really has nothing for this name", which is what turns the hint on. */
+  const [options, setOptions] = useState<SchoolRow[] | undefined>()
+  const [searched, setSearched] = useState(false)
+  /* Receipt for a registration parked behind a school application. */
+  const [pendingReview, setPendingReview] = useState<
+    Extract<RegisterOutcome, { kind: 'pending' }> | undefined
+  >()
 
   if (status === 'authed' && token === '') return null
 
@@ -153,6 +168,8 @@ export function AuthGate({
     setForgotSent(false)
     setResetSent(false)
     setCandidates(undefined)
+    setOptions(undefined)
+    setSearched(false)
     setSchoolPick('')
   }
 
@@ -187,6 +204,47 @@ export function AuthGate({
     return region === '' ? school.name : `${school.name}（${region}）`
   }
 
+  /* Debounced lookup: one request per typing pause, not per keystroke. The
+     cancellation flag keeps an older reply from overwriting a newer query. */
+  useEffect(() => {
+    if (view !== 'register') return
+    const needle = schoolName.trim()
+    if (needle.length < 1) {
+      setOptions(undefined)
+      setSearched(false)
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      void searchSchools(needle)
+        .then((result) => {
+          if (cancelled) return
+          setOptions(result.schools)
+          setSearched(true)
+        })
+        .catch(() => {
+          /* A lookup failure must not block registration: the roster path on
+             the host still answers, and an unlisted name parks for review. */
+          if (cancelled) return
+          setOptions([])
+          setSearched(true)
+        })
+    }, 250)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [schoolName, view, searchSchools])
+
+  const chooseSchool = (school: SchoolRow): void => {
+    setSchoolName(school.name)
+    setSchoolPick(school.id)
+    setOptions(undefined)
+    setSearched(false)
+    setCandidates(undefined)
+  }
+
+  /* The dropdown shows live search results, or the disambiguation candidates
+     the host returned for an ambiguous name. One list, two sources. */
+  const dropdown: SchoolRow[] | undefined = candidates ?? options
+
   const submitLogin = (event: FormEvent): void => {
     event.preventDefault()
     if (username.trim() === '' || password === '') { setError(t('auth.error.needCredentials')); return }
@@ -206,17 +264,28 @@ export function AuthGate({
     if (schoolName.trim() === '') { setError(t('auth.error.needSchool')); return }
     if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(username.trim())) { setError(t('auth.error.usernameFormat')); return }
     if (displayName.trim() === '') { setError(t('auth.error.needName')); return }
+    if (email.trim() === '') { setError(t('auth.error.needEmail')); return }
+    if (!/^[^@\s]+@[^@\s.]+\.[^@\s.]+$/.test(email.trim())) { setError(t('auth.error.emailFormat')); return }
     if (password.length < 8) { setError(t('auth.error.passwordShort')); return }
     if (password !== confirm) { setError(t('auth.error.passwordMismatch')); return }
     if (!terms) { setError(t('auth.error.needTerms')); return }
     void run(
-      () => register({
-        schoolName: schoolName.trim(),
-        ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
-        username: username.trim(),
-        displayName: displayName.trim(),
-        password,
-      }),
+      async () => {
+        const outcome = await register({
+          schoolName: schoolName.trim(),
+          ...(schoolPick === '' ? {} : { schoolId: schoolPick }),
+          username: username.trim(),
+          displayName: displayName.trim(),
+          password,
+          email: email.trim(),
+        })
+        /* Parked for review: there is no session, so show the receipt and let
+           the student go back to the login form. */
+        if (outcome.kind === 'pending') {
+          setPendingReview(outcome)
+          setBusy(false)
+        }
+      },
       (cause) => { showCandidates(cause, 'SCHOOL_AMBIGUOUS') },
     )
   }
@@ -242,6 +311,45 @@ export function AuthGate({
       setResetSent(true)
       setBusy(false)
     })
+  }
+
+  /* A registration parked behind a school application: no session exists, so
+     the gate becomes a receipt instead of the shell. */
+  if (pendingReview !== undefined) {
+    return (
+      <GateChrome t={t}>
+        <div className={css.form} data-physicsos-auth-view="pending">
+          <h2 className={css.formTitle}>{t('auth.pending.title')}</h2>
+          <p className={css.receipt}>{t('auth.pending.body')}</p>
+          <dl className={css.receiptList}>
+            <div>
+              <dt>{t('auth.school.label')}</dt>
+              <dd>{pendingReview.schoolName}</dd>
+            </div>
+            <div>
+              <dt>{t('auth.username.label')}</dt>
+              <dd>{pendingReview.username}</dd>
+            </div>
+            <div>
+              <dt>{t('auth.email.label')}</dt>
+              <dd>{pendingReview.email}</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            className={css.submit}
+            onClick={() => {
+              setPendingReview(undefined)
+              setPassword('')
+              setConfirm('')
+              switchView('login')
+            }}
+          >
+            {t('auth.pending.back')}
+          </button>
+        </div>
+      </GateChrome>
+    )
   }
 
   if (status === 'loading' && token === '') {
@@ -304,6 +412,17 @@ export function AuthGate({
               />
             </Field>
           )}
+          <Field label={t('auth.email.label')} invalid={error === t('auth.error.needEmail') || error === t('auth.error.emailFormat')}>
+            <input
+              className={css.input}
+              type="email"
+              autoComplete="email"
+              placeholder={t('auth.email.placeholder')}
+              value={email}
+              data-testid="register-email"
+              onChange={(event) => { setEmail(event.target.value) }}
+            />
+          </Field>
           <Field label={t('auth.password.label')}>
             {passwordField}
           </Field>
@@ -343,6 +462,9 @@ export function AuthGate({
               autoComplete="organization"
               placeholder={t('auth.school.registerPlaceholder')}
               value={schoolName}
+              role="combobox"
+              aria-expanded={dropdown !== undefined && dropdown.length > 0}
+              aria-controls="physicsos-school-options"
               onChange={(event) => {
                 setSchoolName(event.target.value)
                 setCandidates(undefined)
@@ -350,18 +472,34 @@ export function AuthGate({
               }}
             />
           </Field>
-          {candidates !== undefined && (
-            <Field label={t('auth.school.pick')}>
-              <GlassSelect
-                className={css.select}
-                value={schoolPick}
-                ariaLabel={t('auth.school.pick')}
-                testId="register-school"
-                placeholder={t('auth.school.pick')}
-                options={candidates.map(school => ({ value: school.id, label: candidateLabel(school) }))}
-                onChange={setSchoolPick}
-              />
-            </Field>
+          {/* Quick picks for what the student is typing. Selecting one pins the
+              tenant id, so the host never has to guess between same-name
+              schools. */}
+          {dropdown !== undefined && dropdown.length > 0 && (
+            <ul className={css.options} id="physicsos-school-options" data-testid="school-options">
+              {dropdown.map(school => (
+                <li key={school.id}>
+                  <button
+                    type="button"
+                    className={css.option}
+                    data-testid="school-option"
+                    data-school-id={school.id}
+                    aria-selected={schoolPick === school.id}
+                    onClick={() => { chooseSchool(school) }}
+                  >
+                    {candidateLabel(school)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* Nothing matched: submitting is still the right move — it opens an
+              application and parks the account until an admin approves. */}
+          {dropdown !== undefined && dropdown.length === 0 && searched
+            && schoolPick === '' && schoolName.trim().length >= 2 && (
+            <p className={css.hint} data-testid="school-not-found">
+              {t('auth.school.notFound')}
+            </p>
           )}
           <Field label={t('auth.username.label')}>
             <input

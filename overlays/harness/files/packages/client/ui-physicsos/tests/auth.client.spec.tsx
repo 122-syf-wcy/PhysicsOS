@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AdminApi, AuthApi, AuthUser } from '../src/client/auth-api.ts'
+import type { AdminApi, AuthApi, AuthUser, SchoolRow } from '../src/client/auth-api.ts'
 import type { NoticeApi } from '../src/client/notice-api.ts'
 import {
   createAuthController, migrateAnonymousProgress, namespacedStorage,
@@ -14,10 +14,10 @@ import { SidebarFooter } from '../src/client/SidebarFooter.tsx'
 import { zh } from '../src/client/locales.ts'
 
 /* Auth V1 client specs: controller lifecycle (boot/login/logout/namespace),
-   the gate's three views — login is account+password with the school only
-   surfacing through SCHOOL_REQUIRED disambiguation, register resolves a
-   free-text school name — and the sidebar identity surfaces, all against a
-   stub AuthApi, no network. */
+   the gate's views — login is account+password with the school only surfacing
+   through SCHOOL_REQUIRED disambiguation, register searches the roster for
+   quick picks and parks an unlisted school for administrator review — and the
+   sidebar identity surfaces, all against a stub AuthApi, no network. */
 
 afterEach(cleanup)
 beforeEach(() => { globalThis.localStorage.clear() })
@@ -44,7 +44,7 @@ const apiError = (
 }
 
 const stubApi = (overrides: Partial<AuthApi> = {}): AuthApi => ({
-  register: async () => ({ user: USER }),
+  register: async () => ({ kind: 'registered' as const, user: USER }),
   login: async () => ({ user: USER }),
   logout: async () => ({ ok: true }),
   me: async () => ({ user: USER }),
@@ -63,10 +63,39 @@ const unauthenticated = (): AuthApi =>
     },
   })
 
+/**
+ * Fill the registration form the way the UI drives it.
+ * @param container - the rendered gate.
+ * @param values - the fields to type; email defaults to a valid address.
+ */
+const fillRegister = (
+  container: HTMLElement,
+  values: { school?: string; username: string; displayName: string; email?: string; password?: string },
+): void => {
+  fireEvent.change(container.querySelector('input[autocomplete="organization"]')!, {
+    target: { value: values.school ?? '贵州大学' },
+  })
+  const inputs = [...container.querySelectorAll('input[type="text"]')]
+  fireEvent.change(inputs.find(el => (el as HTMLInputElement).autocomplete === 'username')!, {
+    target: { value: values.username },
+  })
+  fireEvent.change(inputs.find(el => (el as HTMLInputElement).autocomplete === 'name')!, {
+    target: { value: values.displayName },
+  })
+  fireEvent.change(container.querySelector('input[type="email"]')!, {
+    target: { value: values.email ?? `${values.username}@example.com` },
+  })
+  for (const input of container.querySelectorAll('input[type="password"]')) {
+    fireEvent.change(input, { target: { value: values.password ?? 'hunter2pass' } })
+  }
+  fireEvent.click(container.querySelector('input[type="checkbox"]')!)
+}
+
 const gateProps = (state: AuthState) => ({
   useAuth: <S,>(selector: (state: AuthState) => S): S => selector(state),
   login: vi.fn(async () => {}),
-  register: vi.fn(async () => {}),
+  register: vi.fn(async () => ({ kind: 'registered' as const, user: USER })),
+  searchSchools: vi.fn(async () => ({ schools: [] as SchoolRow[] })),
   forgotPassword: vi.fn(async () => ({ ok: true })),
   useSessions: neverHook,
   useWorkspaces: neverHook,
@@ -234,54 +263,106 @@ describe('AuthGate', () => {
     await waitFor(() => { expect(getByRole('alert').textContent).toBe('请先填写学校') })
   })
 
-  it('registers with a free-text schoolName', async () => {
+  it('registers with a free-text schoolName and a contact email', async () => {
     const props = gateProps({ status: 'guest' })
     const { getByText, container } = render(<AuthGate {...props} />)
     fireEvent.click(getByText('立即注册'))
-    const school = container.querySelector('input[autocomplete="organization"]')!
-    fireEvent.change(school, { target: { value: '贵州大学' } })
-    const inputs = [...container.querySelectorAll('input[type="text"]')]
-    const usernameInput = inputs.find(el => (el as HTMLInputElement).autocomplete === 'username')!
-    const nameInput = inputs.find(el => (el as HTMLInputElement).autocomplete === 'name')!
-    fireEvent.change(usernameInput, { target: { value: 's2024001' } })
-    fireEvent.change(nameInput, { target: { value: '李明' } })
-    for (const input of container.querySelectorAll('input[type="password"]')) {
-      fireEvent.change(input, { target: { value: 'hunter2pass' } })
-    }
-    fireEvent.click(container.querySelector('input[type="checkbox"]')!)
+    fillRegister(container, { username: 's2024001', displayName: '李明' })
     fireEvent.click(getByText('创建 PhysicsOS 账号'))
     await waitFor(() => {
       expect(props.register).toHaveBeenCalledWith({
-        schoolName: '贵州大学', username: 's2024001', displayName: '李明', password: 'hunter2pass',
+        schoolName: '贵州大学',
+        username: 's2024001',
+        displayName: '李明',
+        password: 'hunter2pass',
+        email: 's2024001@example.com',
       })
     })
   })
 
-  it('registers an unlisted school straight through — the gate has no apply step', async () => {
+  it('requires an email before submitting', async () => {
     const props = gateProps({ status: 'guest' })
-    const { getByText, queryByText, container } = render(<AuthGate {...props} />)
+    const { getByText, getByRole, container } = render(<AuthGate {...props} />)
     fireEvent.click(getByText('立即注册'))
-    expect(queryByText('找不到你的学校？申请开通')).toBeNull()
+    fillRegister(container, { username: 's2024002', displayName: '李明', email: '' })
+    fireEvent.click(getByText('创建 PhysicsOS 账号'))
+    await waitFor(() => {
+      expect(getByRole('alert').textContent).toContain('请填写邮箱')
+    })
+    expect(props.register).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed email before submitting', async () => {
+    const props = gateProps({ status: 'guest' })
+    const { getByText, getByRole, container } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    fillRegister(container, { username: 's2024003', displayName: '李明', email: 'not-an-address' })
+    fireEvent.click(getByText('创建 PhysicsOS 账号'))
+    await waitFor(() => {
+      expect(getByRole('alert').textContent).toContain('有效的邮箱')
+    })
+    expect(props.register).not.toHaveBeenCalled()
+  })
+
+  it('offers quick picks as the school name is typed, and pins the chosen tenant', async () => {
+    const props = gateProps({ status: 'guest' })
+    vi.mocked(props.searchSchools).mockResolvedValue({
+      schools: [{ id: 'GZU', name: '贵州大学', city: '贵阳市' }],
+    })
+    const { getByText, findByTestId, container } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    fireEvent.change(container.querySelector('input[autocomplete="organization"]')!, {
+      target: { value: '贵州' },
+    })
+    /* The lookup is debounced, so the option list appears after a pause. */
+    const option = await findByTestId('school-option')
+    expect(option.textContent).toContain('贵州大学（贵阳市）')
+    expect(props.searchSchools).toHaveBeenCalledWith('贵州')
+    fireEvent.click(option)
+    fillRegister(container, { school: '贵州大学', username: 's2024004', displayName: '李明' })
+    fireEvent.click(getByText('创建 PhysicsOS 账号'))
+    await waitFor(() => {
+      expect(props.register).toHaveBeenCalledWith(
+        expect.objectContaining({ schoolName: '贵州大学', schoolId: 'GZU' }),
+      )
+    })
+  })
+
+  it('shows the apply-for-review hint when the roster has no match', async () => {
+    const props = gateProps({ status: 'guest' })
+    vi.mocked(props.searchSchools).mockResolvedValue({ schools: [] })
+    const { getByText, findByTestId, container } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
     fireEvent.change(container.querySelector('input[autocomplete="organization"]')!, {
       target: { value: '贵阳一中' },
     })
-    const inputs = [...container.querySelectorAll('input[type="text"]')]
-    fireEvent.change(inputs.find(el => (el as HTMLInputElement).autocomplete === 'username')!, {
-      target: { value: 's2024001' },
+    const hint = await findByTestId('school-not-found')
+    expect(hint.textContent).toContain('审核')
+    expect(getByText('创建 PhysicsOS 账号')).toBeTruthy()
+  })
+
+  it('shows the review receipt when the school needs administrator approval', async () => {
+    const props = gateProps({ status: 'guest' })
+    vi.mocked(props.register).mockResolvedValue({
+      kind: 'pending',
+      requestId: 'sr_test',
+      schoolName: '贵阳一中',
+      username: 's2024005',
+      email: 's2024005@example.com',
     })
-    fireEvent.change(inputs.find(el => (el as HTMLInputElement).autocomplete === 'name')!, {
-      target: { value: '李明' },
-    })
-    for (const input of container.querySelectorAll('input[type="password"]')) {
-      fireEvent.change(input, { target: { value: 'hunter2pass' } })
-    }
-    fireEvent.click(container.querySelector('input[type="checkbox"]')!)
+    const { getByText, container } = render(<AuthGate {...props} />)
+    fireEvent.click(getByText('立即注册'))
+    fillRegister(container, { school: '贵阳一中', username: 's2024005', displayName: '李明' })
     fireEvent.click(getByText('创建 PhysicsOS 账号'))
     await waitFor(() => {
-      expect(props.register).toHaveBeenCalledWith({
-        schoolName: '贵阳一中', username: 's2024001', displayName: '李明', password: 'hunter2pass',
-      })
+      expect(container.querySelector('[data-physicsos-auth-view="pending"]')).toBeTruthy()
     })
+    /* The receipt names what was submitted and how the answer arrives. */
+    expect(getByText('申请已提交，等待管理员审核')).toBeTruthy()
+    expect(getByText('贵阳一中')).toBeTruthy()
+    expect(getByText('s2024005@example.com')).toBeTruthy()
+    fireEvent.click(getByText('返回登录'))
+    await waitFor(() => { expect(getByText('登录 PhysicsOS')).toBeTruthy() })
   })
 
   it('shows the forgot receipt after a reset request — username only', async () => {

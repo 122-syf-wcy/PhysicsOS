@@ -67,11 +67,20 @@ beforeAll(async () => {
 
 afterAll(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
 
+/** Registration carries a contact email; specs not about the address get one derived from the username. */
+const withRegistrationEmail = (path: string, body: unknown): unknown => {
+  if (!path.endsWith('/register') || typeof body !== 'object' || body === null) return body
+  const record = body as Record<string, unknown>
+  if (record.email !== undefined) return record
+  const username = typeof record.username === 'string' ? record.username : 'test'
+  return { ...record, email: `${username.toLowerCase()}@example.com` }
+}
+
 const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`${base}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withRegistrationEmail(path, body)),
   })
 
 const cookieOf = (res: Response): string => {
@@ -123,19 +132,69 @@ describe('auth routes — register/login lifecycle', () => {
     expect(user.role).toBe('STUDENT')
   })
 
-  it('provisions a tenant for an unlisted schoolName — registration is never a dead end', async () => {
-    const res = await post('/register', { ...account, schoolName: '不存在的学校', username: 'nobody01' })
-    expect(res.status).toBe(201)
-    const { user } = await res.json() as { user: { schoolId: string; schoolName: string } }
-    expect(user.schoolName).toBe('不存在的学校')
-    /* Deterministic id: the same spelling always lands on one tenant. */
-    expect(user.schoolId).toMatch(/^s_[A-Za-z0-9_-]{12}$/)
-    /* A second registration under the same name resolves to the same tenant
-       instead of forking a new one. */
-    const again = await post('/register', { ...account, schoolName: '不存在的学校', username: 'nobody01b' })
-    expect(again.status).toBe(201)
-    const second = await again.json() as { user: { schoolId: string } }
-    expect(second.user.schoolId).toBe(user.schoolId)
+  it('parks a registration for an unlisted school and opens one application for it', async () => {
+    const res = await post('/register', {
+      ...account, schoolName: '不存在的学校', username: 'nobody01', email: 'nobody01@example.com',
+    })
+    /* No session, no account: an administrator has not decided yet. */
+    expect(res.status).toBe(202)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    const body = await res.json() as {
+      pending: { requestId: string; schoolName: string; username: string; email: string }
+    }
+    expect(body.pending).toMatchObject({
+      schoolName: '不存在的学校', username: 'nobody01', email: 'nobody01@example.com',
+    })
+    expect(body.pending.requestId).toMatch(/^sr_/)
+
+    /* A second registrant for the same school joins that one application
+       instead of opening another. */
+    const again = await post('/register', {
+      ...account, schoolName: '不存在的学校', username: 'nobody01b', email: 'nobody01b@example.com',
+    })
+    expect(again.status).toBe(202)
+    const second = await again.json() as { pending: { requestId: string } }
+    expect(second.pending.requestId).toBe(body.pending.requestId)
+
+    /* The parked credential is real: login answers ACCOUNT_PENDING rather than
+       pretending the password is wrong. */
+    const login = await post('/login', { username: 'nobody01', password: account.password })
+    expect(login.status).toBe(403)
+    expect((await login.json() as { error: { code: string } }).error.code).toBe('ACCOUNT_PENDING')
+  })
+
+  it('requires a contact email on registration', async () => {
+    /* Raw fetch on purpose: the shared `post` helper fills in a default email,
+       which is exactly what this case must not have. */
+    const missing = await fetch(`${base}/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        schoolName: '贵州大学', username: 'noemail01', displayName: '无邮箱', password: 'hunter2pass',
+      }),
+    })
+    expect(missing.status).toBe(400)
+    const malformed = await post('/register', {
+      ...account, schoolName: '贵州大学', username: 'noemail02', email: 'not-an-address',
+    })
+    expect(malformed.status).toBe(400)
+  })
+
+  it('answers the public school combobox with ranked candidates', async () => {
+    const exact = await fetch(`${base}/schools?q=${encodeURIComponent('贵州师范')}`)
+    expect(exact.status).toBe(200)
+    const { schools } = await exact.json() as {
+      schools: { id: string; name: string; city?: string }[]
+    }
+    expect(schools.map(row => row.id)).toEqual(['GZNU'])
+    /* Region labels ride along so same-name schools stay distinguishable. */
+    const labelled = await fetch(`${base}/schools?q=${encodeURIComponent('贵州')}`)
+    const both = await labelled.json() as { schools: { id: string; city?: string }[] }
+    expect(both.schools.map(row => row.id).sort()).toEqual(['GZNU', 'GZU'])
+    expect(both.schools.find(row => row.id === 'GZU')?.city).toBe('贵阳市')
+    /* A blank query is not a roster dump. */
+    const blank = await fetch(`${base}/schools?q=`)
+    expect((await blank.json() as { schools: unknown[] }).schools).toEqual([])
   })
 
   it('answers SCHOOL_NOT_FOUND when the name only matches a disabled school', async () => {
@@ -346,10 +405,12 @@ describe('auth service abuse budgets', () => {
     for (const username of ['reglimit-a', 'reglimit-b']) {
       await expect(service.register({
         schoolName: '贵州大学', username, displayName: '注册测试', password: 'strong-pass-123',
+        email: `${username}@example.com`,
       }, sourceIp)).resolves.toMatchObject({ user: { role: 'STUDENT' } })
     }
     await expect(service.register({
       schoolName: '贵州大学', username: 'reglimit-c', displayName: '注册测试', password: 'strong-pass-123',
+      email: 'reglimit-c@example.com',
     }, sourceIp)).rejects.toMatchObject({ status: 429, code: 'RATE_LIMITED' })
   })
 

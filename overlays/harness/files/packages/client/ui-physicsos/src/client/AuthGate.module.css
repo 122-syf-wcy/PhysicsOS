@@ -315,3 +315,81 @@ select.input {
   0%, 100% { opacity: 0.25; transform: scale(0.9); }
   50% { opacity: 1; transform: scale(1.15); }
 }
+
+/* ---------- school combobox ---------- */
+
+/* The quick-pick list sits directly under the school input, sharing the input's
+   glass material so it reads as one control rather than a floating menu. */
+.options {
+  margin: -4px 0 0;
+  padding: 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 208px;
+  overflow-y: auto;
+  border-radius: 13px;
+  border: 1px solid var(--physics-glass-border-soft);
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent);
+}
+
+.option {
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.option:hover {
+  background-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent);
+}
+
+.option[aria-selected='true'] {
+  background-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);
+}
+
+/* "No match, submit anyway" — informative, not an error. */
+.hint {
+  margin: -4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---------- pending-review receipt ---------- */
+
+.receiptList {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.receiptList > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.receiptList dt {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.receiptList dd {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-all;
+  text-align: right;
+}

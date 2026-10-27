@@ -13,6 +13,17 @@ import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 
 const role = z.enum(['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'])
 
+/**
+ * An email address, normalized to lower case and trimmed.
+ *
+ * Deliberately a shape check, not RFC 5322: the only use is a delivery address
+ * for one decision mail, and a stricter parser rejects addresses QQ Mail's own
+ * web form accepts. Anything that cannot be delivered surfaces as the SMTP
+ * failure on the pending-registration row instead of as a registration error.
+ */
+export const emailWire = z.string().trim().toLowerCase().max(254)
+  .regex(/^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/, 'invalid email address')
+
 const school = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -23,6 +34,15 @@ const school = z.object({
   /** 区县 label when the roster source carries one. */
   county: z.string().optional(),
   status: z.enum(['active', 'disabled']),
+  /**
+   * `'pending'` marks a tenant a registration created while its school was
+   * still waiting for a SUPER_ADMIN decision. It is deliberately NOT a
+   * {@link status} value: `resolveSchoolByName` only ever matches `active`
+   * rows, and every session/credential check already refuses a non-active
+   * tenant, so a pending school is invisible to the login path for free.
+   * Cleared when an administrator approves the application.
+   */
+  reviewState: z.enum(['pending']).optional(),
   /** Set when this tenant was merged into a surviving tenant. */
   mergedInto: z.string().min(1).optional(),
   /** When {@link mergedInto} was recorded. */
@@ -40,6 +60,12 @@ const user = z.object({
   avatarUrl: z.string().optional(),
   role,
   status: z.enum(['active', 'disabled']),
+  /**
+   * Contact address the account registered with. Optional because rows created
+   * before registration asked for one (and admin-provisioned rows) have none;
+   * registration makes it required on the wire.
+   */
+  email: z.string().max(254).optional(),
   lastLoginAt: z.string().optional(),
   /** Enabled RFC 6238 secret; the pending field exists only between setup and verify. */
   totp: z.object({
@@ -175,7 +201,13 @@ const passwordResetToken = z.object({
 })
 
 /* A school's application to join PhysicsOS — the register view's 申请开通
-   submission lands here for a SUPER_ADMIN to approve or reject. */
+   submission lands here for a SUPER_ADMIN to approve or reject.
+
+   When the application comes from a registration (the common path), it also
+   carries the placeholder tenant that registration created: {@link schoolId}
+   points at a `status: 'disabled', reviewState: 'pending'` school row, which
+   approving flips to active. That is what makes "approve" a one-click action
+   instead of an operator inventing a tenant id. */
 const schoolRequest = z.object({
   id: z.string().min(1),
   schoolName: z.string().min(1),
@@ -183,9 +215,42 @@ const schoolRequest = z.object({
   status: z.enum(['pending', 'approved', 'rejected']),
   /** userKey of the submitter; anonymous submissions carry null. */
   requestedBy: z.string().nullable(),
+  /** Tenant this application created, when it came from a registration. */
+  schoolId: z.string().min(1).optional(),
+  /** Applicant email, so the decision can be mailed back. */
+  email: z.string().max(254).optional(),
   createdAt: z.string(),
   decidedAt: z.string().optional(),
   decidedBy: z.string().optional(),
+})
+
+/*
+ * One registration waiting on a school application.
+ *
+ * A student whose school is not in the roster cannot be created as a user yet —
+ * there is no tenant to key the account under — so the credential is parked
+ * here, password already hashed, until an administrator approves the school.
+ * Approval materializes the real `users` row and mails the applicant; rejection
+ * drops the row. Nothing in `users` ever carries a half-real account.
+ */
+const pendingRegistration = z.object({
+  id: z.string().min(1),
+  /** The application this registration is waiting on. */
+  requestId: z.string().min(1),
+  /** Placeholder tenant id the application created — becomes the real one. */
+  schoolId: z.string().min(1),
+  schoolName: z.string().min(1),
+  username: z.string().min(1),
+  displayName: z.string().min(1),
+  email: z.string().min(1).max(254),
+  /** Same argon2id PHC string a live account stores; never a plaintext. */
+  passwordHash: z.string().min(1),
+  status: z.enum(['pending', 'approved', 'rejected']),
+  createdAt: z.string(),
+  decidedAt: z.string().optional(),
+  decidedBy: z.string().optional(),
+  /** Why the approval mail could not be delivered, when it could not. */
+  deliveryError: z.string().max(200).optional(),
 })
 
 /* Append-only admin action ledger — every state-changing admin verb writes
@@ -327,6 +392,8 @@ export type ResetRequest = z.infer<typeof resetRequest>
 export type PasswordResetToken = z.infer<typeof passwordResetToken>
 /** One school-onboarding application row. */
 export type SchoolRequestRecord = z.infer<typeof schoolRequest>
+/** One registration parked until its school application is approved. */
+export type PendingRegistration = z.infer<typeof pendingRegistration>
 /** One attributed admin/write audit row. */
 export type AuditEvent = z.infer<typeof auditEvent>
 /** One durable school-merge journal row. */
@@ -352,6 +419,12 @@ export const registerWire = z.object({
   username: z.string().regex(/^[a-zA-Z0-9_.-]{3,32}$/),
   displayName: z.string().min(1).max(32),
   password: z.string().min(8).max(128),
+  /**
+   * Contact address. Required: a school application cannot be decided without
+   * a way to tell the applicant, and the approval mail is the only channel
+   * back to an account that does not exist yet.
+   */
+  email: emailWire,
   /** 首启登记的那台设备(哈希形状同上),注册即绑定。 */
   deviceId: deviceIdWire.optional(),
   inviteCode: z.string().regex(/^inv_[A-Za-z0-9_-]{20,128}$/).optional(),
@@ -431,18 +504,36 @@ export const passwordResetWire = z.object({
 export const schoolRequestWire = z.object({
   schoolName: z.string().min(2).max(64),
   contact: z.string().min(2).max(128),
+  /** Optional so a legacy caller still typechecks; the queue mails it when set. */
+  email: emailWire.optional(),
 })
 
 const schoolIdWire = z.string().regex(/^[A-Za-z0-9_-]{2,32}$/)
 
-/** SUPER_ADMIN approves an application and seeds its first school admin. */
+/**
+ * SUPER_ADMIN approves an application.
+ *
+ * `schoolId` is only needed when the application did NOT come from a
+ * registration (a legacy manual entry with no placeholder tenant); otherwise
+ * the tenant already exists and approval just flips it active. The optional
+ * `admin*` trio seeds a SCHOOL_ADMIN for that tenant — an operator convenience,
+ * no longer a requirement for letting the waiting students in.
+ */
 export const approveRequestWire = z.object({
-  schoolId: schoolIdWire,
+  schoolId: schoolIdWire.optional(),
   shortName: z.string().min(1).max(16).optional(),
-  adminUsername: registerWire.shape.username,
-  adminDisplayName: registerWire.shape.displayName,
-  adminPassword: registerWire.shape.password,
-})
+  adminUsername: registerWire.shape.username.optional(),
+  adminDisplayName: registerWire.shape.displayName.optional(),
+  adminPassword: registerWire.shape.password.optional(),
+}).refine(
+  data => data.adminUsername === undefined
+    && data.adminDisplayName === undefined
+    && data.adminPassword === undefined
+    || data.adminUsername !== undefined
+      && data.adminDisplayName !== undefined
+      && data.adminPassword !== undefined,
+  { message: 'adminUsername, adminDisplayName and adminPassword are all-or-none' },
+)
 
 /** Reject a school application; `reason` rides back to the applicant list. */
 export const rejectRequestWire = z.object({
@@ -577,6 +668,7 @@ export const authDomain = defineDomain({
     reset_requests: domainTable<string, ResetRequest>(resetRequest),
     password_reset_tokens: domainTable<string, PasswordResetToken>(passwordResetToken),
     school_requests: domainTable<string, SchoolRequestRecord>(schoolRequest),
+    pending_registrations: domainTable<string, PendingRegistration>(pendingRegistration),
     admin_audit: domainTable<string, AuditEvent>(auditEvent),
     school_merges: domainTable<string, SchoolMergeRecord>(schoolMerge),
     learning_counts: domainTable<string, LearningCount>(learningCount),

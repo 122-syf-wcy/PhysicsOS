@@ -26,6 +26,7 @@ import { ARGON2_AVAILABLE, ARGON2_UNAVAILABLE_REASON } from './passwords.ts'
 import { AuthService, DEFAULT_AUTH_CONFIG, type AuthServiceConfig } from './service.ts'
 import { seedBootstrapAdmins, type BootstrapAdmin } from './bootstrap.ts'
 import { seedSchools } from './schools.ts'
+import { createAccountNotifier } from './mail.ts'
 import { adminRoutes, authRoutes } from './routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
 import {
@@ -104,6 +105,7 @@ export const Config: z<Config> = z.object({
   applyAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.applyAttemptLimit),
   registrationAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.registrationAttemptLimit),
   learningAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.learningAttemptLimit),
+  lookupAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.lookupAttemptLimit),
   passwordResetAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.passwordResetAttemptLimit),
   passwordResetTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.passwordResetTtlMs),
   registrationMode: z.union(['open', 'invite', 'closed']).default(DEFAULT_AUTH_CONFIG.registrationMode),
@@ -150,10 +152,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       }
     const onceLedger = asOnceLedger(ctx.get(ONCE_LEDGER_SERVICE))
     const resetDelivery = asPasswordResetDelivery(ctx.get(PASSWORD_RESET_DELIVERY_SERVICE))
+    /* Mail is optional on purpose: a deployment without a mailbox still
+       approves accounts, it just records that the notice did not go out. */
+    const notifier = createAccountNotifier(process.env)
+    if (notifier === undefined) {
+      ctx.logger.warn('auth-host: PHYSICSOS_SMTP_USER/PASSWORD unset — approval notices will not be mailed')
+    } else {
+      ctx.logger.info(`auth-host: approval notices via ${notifier.kind}`)
+    }
     const service = new AuthService(domain, config as AuthServiceConfig, {
       ...(limiter === undefined ? {} : { limiter }),
       ...(resetDelivery === undefined ? {} : { resetDelivery }),
       ...(onceLedger === undefined ? {} : { onceLedger }),
+      ...(notifier === undefined ? {} : { notifier }),
     })
 
     const seeded = await seedSchools(

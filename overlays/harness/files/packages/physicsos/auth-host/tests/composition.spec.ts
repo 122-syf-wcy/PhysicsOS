@@ -343,6 +343,7 @@ describe('real Loader composition', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         schoolName: 'PhysicsOS 开放学校', username: 's2024001', password: 'hunter2-pass', displayName: 'Loader 学生',
+        email: 's2024001@example.com',
       }),
     })
     expect(registered.status).toBe(201)

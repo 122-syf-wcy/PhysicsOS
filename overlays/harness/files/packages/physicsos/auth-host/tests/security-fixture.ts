@@ -114,6 +114,22 @@ export const createSecurityHarness = async (options: {
 export const cookieOf = (response: Response): string =>
   /physicsos_session=([^;]*)/.exec(response.headers.get('set-cookie') ?? '')?.[1] ?? ''
 
+/**
+ * Registration requires a contact email now. Specs that are not about the
+ * address itself get a deterministic one, derived from the username, so the
+ * assertion under test stays the only thing the body carries.
+ * @param path - the request path.
+ * @param body - the caller's body.
+ * @returns the body with an email, when the path is registration.
+ */
+const withRegistrationEmail = (path: string, body: unknown): unknown => {
+  if (!path.endsWith('/register') || typeof body !== 'object' || body === null) return body
+  const record = body as Record<string, unknown>
+  if (record.email !== undefined) return record
+  const username = typeof record.username === 'string' ? record.username : 'test'
+  return { ...record, email: `${username.toLowerCase()}@example.com` }
+}
+
 export const post = (
   base: string,
   path: string,
@@ -122,7 +138,7 @@ export const post = (
 ): Promise<Response> => fetch(`${base}${path}`, {
   method: 'POST',
   headers: { 'content-type': 'application/json', ...headers },
-  body: JSON.stringify(body),
+  body: JSON.stringify(withRegistrationEmail(path, body)),
 })
 
 export const get = (

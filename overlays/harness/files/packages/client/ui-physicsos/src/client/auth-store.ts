@@ -10,7 +10,9 @@
  */
 
 import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
-import type { AuthApi, AuthApiError, AuthUser, LoginInput, RegisterInput } from './auth-api.ts'
+import type {
+  AuthApi, AuthApiError, AuthUser, LoginInput, RegisterInput, RegisterOutcome,
+} from './auth-api.ts'
 
 /** Auth principal used by the product surfaces and their test fixtures. */
 export type { AuthUser } from './auth-api.ts'
@@ -165,8 +167,12 @@ export interface AuthController {
   boot: () => Promise<void>
   /** Submit login; on success persists the identity hint and reloads. */
   login: (input: LoginInput) => Promise<void>
-  /** Submit registration; the host issues a session, then we reload. */
-  register: (input: RegisterInput) => Promise<void>
+  /**
+   * Submit registration. A resolved school enters the session and reloads; a
+   * school awaiting approval returns `pending` so the gate can show a receipt
+   * instead (there is no session to enter).
+   */
+  register: (input: RegisterInput) => Promise<RegisterOutcome>
   /** Revoke the server session, drop the identity hint, reload. */
   logout: () => Promise<void>
   /** The storage namespace the data controllers should use this boot. */
@@ -232,8 +238,11 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
       enterSession(user)
     },
     register: async (input) => {
-      const { user } = await api.register(input)
-      enterSession(user)
+      const outcome = await api.register(input)
+      /* A parked registration has no session — entering one would show an
+         empty signed-in shell whose /me then 401s. */
+      if (outcome.kind === 'registered') enterSession(outcome.user)
+      return outcome
     },
     logout: async () => {
       try {

@@ -9,7 +9,8 @@
 import crypto from 'node:crypto'
 import type {
   ApiTokenRecord, AuditEvent, AuthDomain, DeviceRecord, DeviceRevocation, InviteRecord,
-  LearningCount, School, ResetRequest, SchoolRequestRecord, SessionRecord, UserRecord,
+  LearningCount, PendingRegistration, School, ResetRequest, SchoolRequestRecord, SessionRecord,
+  UserRecord,
 } from './domain'
 import {
   approveRequestWire, auditExportWire, createApiTokenWire, createInvitesWire,
@@ -26,6 +27,7 @@ import {
   InMemoryLimiterBackend, type LimiterBackend, type LimiterName,
   type LimiterPolicy, type LimiterSnapshot,
 } from './limiter'
+import type { AccountNotifier } from './mail'
 import { newPasswordResetToken, passwordResetPath, passwordResetTokenHash } from './reset'
 import {
   QUEUE_PASSWORD_RESET_DELIVERY, type PasswordResetDelivery,
@@ -43,6 +45,9 @@ export type AuthErrorCode =
   | 'BAD_REQUEST' | 'SCHOOL_NOT_FOUND' | 'USERNAME_TAKEN' | 'SCHOOL_TAKEN'
   | 'SCHOOL_REQUIRED' | 'SCHOOL_AMBIGUOUS'
   | 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'UNAUTHENTICATED'
+  /* Registration parked behind a school application: the credential is right,
+     the account is not open yet. */
+  | 'ACCOUNT_PENDING'
   | 'FORBIDDEN' | 'NOT_FOUND' | 'DEVICE_REVOKED'
   | 'INVALID_RESET_TOKEN' | 'DEPENDENCY_UNAVAILABLE'
   | 'REGISTRATION_CLOSED' | 'INVITE_REQUIRED' | 'INVALID_INVITE_CODE'
@@ -89,6 +94,42 @@ export interface TwoFactorChallenge {
   twoFactorRequired: true
   challengeToken: string
   expiresAt: string
+}
+
+/**
+ * What a registration returns when the school is not in the roster yet.
+ *
+ * There is no session here on purpose: the account does not exist until an
+ * administrator approves the school, so the caller shows "waiting for review"
+ * instead of logging the student in to a tenant that may never be created.
+ */
+export interface PendingRegistrationResult {
+  pending: true
+  requestId: string
+  schoolName: string
+  username: string
+  email: string
+}
+
+/** One applicant waiting on a school application, as the admin queue shows it. */
+export interface SchoolRequestApplicant {
+  username: string
+  displayName: string
+  email: string
+  createdAt: string
+}
+
+/** An application row plus the registrations it is holding. */
+export interface SchoolRequestRow extends SchoolRequestRecord {
+  pendingCount: number
+  applicants: SchoolRequestApplicant[]
+}
+
+/** Outcome of approving one application. */
+export interface SchoolApprovalResult {
+  school: School
+  admin?: ReturnType<AuthService['toAdminRow']>
+  activated: { username: string; email: string; emailSent: boolean }[]
 }
 
 /** Registration policy; invite is intentionally fail-closed. */
@@ -222,6 +263,12 @@ export interface AuthServiceDeps {
   onceLedger?: InviteClaimLedger
   /** Client handoff path; defaults to `/?reset_token=<token>`. */
   resetPath?: (token: string) => string
+  /**
+   * Outbound notifications (account approved). Absent on a deployment with no
+   * mailbox: approval still activates the account and records that the mail
+   * did not go out, rather than failing the administrator's action.
+   */
+  notifier?: AccountNotifier
 }
 
 /** Management ceiling order — SUPER_ADMIN itself is never API-managed. */
@@ -246,6 +293,8 @@ export interface AuthServiceConfig {
   applyAttemptLimit: number
   /** Student registrations allowed per source IP within the window. Default 10. */
   registrationAttemptLimit?: number
+  /** Public school lookups allowed per source IP within the window. Default 240. */
+  lookupAttemptLimit?: number
   /** Learning reports allowed per account within the window. Default 120. */
   learningAttemptLimit?: number
   /** Forgot/reset attempts allowed by source or account within the window. Default 10. */
@@ -277,6 +326,11 @@ export const DEFAULT_AUTH_CONFIG: Required<AuthServiceConfig> = {
   applyAttemptLimit: 10,
   registrationAttemptLimit: 60,
   learningAttemptLimit: 120,
+  /* A combobox fires per keystroke burst, so this budget is deliberately much
+     looser than the application budget it shares a window with — generous
+     enough for typing a name, small enough that scraping the roster by
+     script is still bounded. */
+  lookupAttemptLimit: 240,
   passwordResetAttemptLimit: 10,
   passwordResetTtlMs: 30 * 60 * 1000,
   registrationMode: 'open',
@@ -299,6 +353,9 @@ const MAX_LOGIN_CANDIDATES = 16
 /** Registration candidates cap — a longer list is unusable in a picker; the
     user refines the typed name instead. Shortest names sort first. */
 const MAX_SCHOOL_CANDIDATES = 16
+
+/** Combobox page size — matches what a phone-height dropdown can show at once. */
+const MAX_SCHOOL_SEARCH = 20
 
 /**
  * 宿主本地时区的 `YYYY-MM-DD`。
@@ -330,12 +387,15 @@ export class AuthService {
   private readonly now: () => Date
   private readonly resetPath: (token: string) => string
   private readonly onceLedger: InviteClaimLedger | undefined
+  /** Account-decision notifications; undefined when the deployment has no mailbox. */
+  private readonly notifier: AccountNotifier | undefined
 
   constructor(
     private readonly domain: AuthDomain,
     readonly config: AuthServiceConfig = DEFAULT_AUTH_CONFIG,
     deps: AuthServiceDeps = {},
   ) {
+    this.notifier = deps.notifier
     const maxBuckets = config.attemptBucketLimit ?? DEFAULT_AUTH_CONFIG.attemptBucketLimit
     const policy = (name: LimiterName, limit: number): LimiterPolicy => ({
       name,
@@ -354,6 +414,10 @@ export class AuthService {
       learning: policy(
         'learning',
         config.learningAttemptLimit ?? DEFAULT_AUTH_CONFIG.learningAttemptLimit,
+      ),
+      lookup: policy(
+        'lookup',
+        config.lookupAttemptLimit ?? DEFAULT_AUTH_CONFIG.lookupAttemptLimit,
       ),
       passwordReset: policy(
         'passwordReset',
@@ -381,6 +445,7 @@ export class AuthService {
   }
 
   private get schools() { return this.domain.table('schools') }
+  private get pendingRegistrations() { return this.domain.table('pending_registrations') }
   private get users() { return this.domain.table('users') }
   private get invites() { return this.domain.table('invites') }
   private get apiTokens() { return this.domain.table('api_tokens') }
@@ -477,6 +542,29 @@ export class AuthService {
     return out
   }
 
+  /**
+   * The parked registration matching this credential pair, if any.
+   *
+   * Verification happens before disclosure so an attacker cannot enumerate
+   * "this username is mid-review" without the password.
+   * @param username - the typed account name.
+   * @param password - the typed password.
+   * @returns the matching pending row, or undefined.
+   */
+  private async pendingRegistrationFor(
+    username: string,
+    password: string,
+  ): Promise<PendingRegistration | undefined> {
+    const needle = username.toLowerCase()
+    const rows = [...this.pendingRegistrations.entries()]
+      .map(([, row]) => row)
+      .filter(row => row.status === 'pending' && row.username === needle)
+    for (const row of rows) {
+      if (await Promise.resolve(verifyPassword(password, row.passwordHash))) return row
+    }
+    return undefined
+  }
+
   /** Wire shape for a disambiguation candidate — region labels ride along so
       the picker can tell same-name schools apart. */
   private toCandidate(school: School): {
@@ -512,33 +600,170 @@ export class AuthService {
   }
 
   /**
-   * Create the tenant a free-text school name names, when the roster has no
-   * row for it — registration must never dead-end on "your school is not in
-   * the list". The id derives from the normalized name, so the same spelling
-   * always lands on one tenant and two concurrent first-registrations cannot
-   * fork it.
+   * Open (or reuse) the school application a registration needs, creating a
+   * placeholder tenant that approval later activates.
    *
-   * A name that exists in ANY status is never re-created: an administrator's
-   * disable, rename, or merge has to survive a retyped registration. Callers
-   * treat the thrown `SCHOOL_NOT_FOUND` as "this school is not open", which is
-   * the accurate answer for the disabled case.
+   * The placeholder is a real `schools` row with `status: 'disabled'` and
+   * `reviewState: 'pending'`, which buys three things for free: the id is
+   * deterministic from the normalized name (one spelling → one tenant, even
+   * under concurrent first registrations), every login/session path already
+   * refuses a non-active tenant, and approval is a status flip rather than a
+   * data migration.
+   *
+   * A same-name tenant the administrator owns is a decision, not a gap: an
+   * active one would have resolved earlier, and a disabled one without
+   * `reviewState` means "closed on purpose", so registration stays refused.
    * @param schoolName - the raw name the registrant typed.
-   * @returns the freshly persisted active tenant row.
+   * @param email - applicant address, also the application's contact.
+   * @returns the placeholder tenant and its pending application.
    */
-  private async provisionSchool(schoolName: string): Promise<School> {
+  private async openSchoolApplication(
+    schoolName: string,
+    email: string,
+  ): Promise<{ school: School; request: SchoolRequestRecord }> {
     const name = schoolName.trim().replaceAll(/\s+/g, ' ')
-    const existing = [...this.schools.entries()]
+    const normalized = name.toLowerCase()
+
+    const sameName = [...this.schools.entries()]
       .map(([, school]) => school)
-      .find(school => school.name.toLowerCase() === name.toLowerCase())
-    if (existing !== undefined) {
+      .filter(school => school.name.toLowerCase() === normalized && school.mergedInto === undefined)
+    const placeholder = sameName.find(school => school.reviewState === 'pending')
+    if (placeholder === undefined && sameName.length > 0) {
       throw new AuthError(400, 'SCHOOL_NOT_FOUND', '该学校当前未开放注册')
     }
-    const id = `s_${crypto.createHash('sha256').update(name.toLowerCase(), 'utf8')
-      .digest('base64url').slice(0, 12)}`
+
+    const pendingRequest = [...this.requests.entries()]
+      .map(([, request]) => request)
+      .find(request =>
+        request.status === 'pending'
+        && request.schoolName.trim().toLowerCase() === normalized)
+
     const now = this.now().toISOString()
-    const school: School = { id, name, status: 'active', createdAt: now, updatedAt: now }
-    await this.schools.put(id, school)
-    return school
+    const schoolId = placeholder?.id ?? `s_${crypto.createHash('sha256')
+      .update(normalized, 'utf8').digest('base64url').slice(0, 12)}`
+    const school: School = placeholder ?? {
+      id: schoolId,
+      name,
+      status: 'disabled',
+      reviewState: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    }
+    if (placeholder === undefined) await this.schools.put(schoolId, school)
+    if (pendingRequest !== undefined) return { school, request: pendingRequest }
+
+    const request: SchoolRequestRecord = {
+      id: `sr_${crypto.randomBytes(9).toString('base64url')}`,
+      schoolName: name,
+      contact: email,
+      status: 'pending',
+      requestedBy: null,
+      schoolId,
+      email,
+      createdAt: now,
+    }
+    await this.requests.put(request.id, request)
+    return { school, request }
+  }
+
+  /**
+   * Park a registration whose school is not in the roster.
+   *
+   * The password is hashed immediately and the plaintext never persists, so
+   * approval only has to materialize the row. Nothing is written to `users`:
+   * a school that may never be approved must not leave half-real accounts
+   * behind, and an administrator's roster stays exactly what they approved.
+   * @param input - validated registration fields.
+   * @returns the pending receipt the client shows instead of a session.
+   */
+  private async registerPending(
+    input: {
+      schoolName: string
+      username: string
+      displayName: string
+      password: string
+      email: string
+    },
+  ): Promise<PendingRegistrationResult> {
+    const { school, request } = await this.openSchoolApplication(input.schoolName, input.email)
+    const username = input.username.toLowerCase()
+    const now = this.now().toISOString()
+    return this.credentialMutation(async () => {
+      const key = userKey(school.id, username)
+      if (this.users.get(key) !== undefined) {
+        throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
+      }
+      const duplicate = [...this.pendingRegistrations.entries()]
+        .map(([, row]) => row)
+        .find(row => row.status === 'pending' && row.schoolId === school.id && row.username === username)
+      if (duplicate !== undefined) {
+        throw new AuthError(409, 'USERNAME_TAKEN', '该账号已提交，正在等待管理员审核')
+      }
+      const row: PendingRegistration = {
+        id: `pr_${crypto.randomBytes(9).toString('base64url')}`,
+        requestId: request.id,
+        schoolId: school.id,
+        schoolName: school.name,
+        username,
+        displayName: input.displayName,
+        email: input.email,
+        passwordHash: hashPassword(input.password),
+        status: 'pending',
+        createdAt: now,
+      }
+      await this.pendingRegistrations.put(row.id, row)
+      return {
+        pending: true as const,
+        requestId: request.id,
+        schoolName: school.name,
+        username,
+        email: input.email,
+      }
+    })
+  }
+
+  /**
+   * Budget one combobox lookup for a source address.
+   * @param ip - the caller's address, or undefined when unknown.
+   */
+  async allowPublicLookup(ip?: string): Promise<void> {
+    await this.allow('lookup', `lookup:${ip ?? 'unknown'}`, '查询过于频繁，请稍后再试')
+  }
+
+  /**
+   * Public school lookup for the registration combobox.
+   *
+   * Returns only what the picker needs to tell two schools apart — never the
+   * full roster, never a disabled tenant. Ranking is exact, then prefix, then
+   * substring, shortest name first, so typing 「贵阳一中」 surfaces
+   * 「贵阳市第一中学」 without the caller having to know the official name.
+   * @param query - the substring the student typed.
+   * @param limit - maximum rows (capped at {@link MAX_SCHOOL_SEARCH}).
+   * @returns the ranked candidates, or an empty list for a blank query.
+   */
+  searchSchools(query: unknown, limit = MAX_SCHOOL_SEARCH): ReturnType<AuthService['toCandidate']>[] {
+    const needle = typeof query === 'string' ? query.trim().toLowerCase() : ''
+    if (needle === '') return []
+    const cap = Math.min(Math.max(1, Math.trunc(limit)), MAX_SCHOOL_SEARCH)
+    return [...this.schools.entries()]
+      .map(([, school]) => school)
+      .filter(school => school.status === 'active' && school.mergedInto === undefined)
+      .map((school) => {
+        const name = school.name.toLowerCase()
+        const short = school.shortName?.toLowerCase() ?? ''
+        const rank = name === needle || short === needle
+          ? 0
+          : name.startsWith(needle) || short.startsWith(needle)
+            ? 1
+            : name.includes(needle) || short.includes(needle) ? 2 : -1
+        return { school, rank }
+      })
+      .filter(entry => entry.rank >= 0)
+      .sort((a, b) => a.rank - b.rank
+        || a.school.name.length - b.school.name.length
+        || a.school.name.localeCompare(b.school.name, 'zh-Hans-CN'))
+      .slice(0, cap)
+      .map(entry => this.toCandidate(entry.school))
   }
 
   /**
@@ -651,18 +876,27 @@ export class AuthService {
   /**
    * Register a student account under a school tenant, then issue its first
    * session — the caller just proved the password, so a second verify would
-   * only spend argon2 for nothing. The roster seeds resolve most names, and a
-   * name the roster lacks provisions its own tenant (see `provisionSchool`):
-   * registration is never a dead end for a school the deployment has not
-   * heard of, which is what a real student hitting a free-text school field
-   * needs. `role` is pinned server-side: teacher/admin enrolment is a future
-   * admin surface, not wire input.
+   * only spend argon2 for nothing.
+   *
+   * The roster resolves the school by name. When it cannot, the registration
+   * is parked against a school application instead and the caller gets
+   * {@link PendingRegistrationResult}: no session, no half-created account,
+   * and an administrator decides whether the school joins. `schoolId` from the
+   * combobox is the resolved answer for a same-name ambiguity, never a way to
+   * reach a tenant the roster would not match.
+   *
+   * `role` is pinned server-side: teacher/admin enrolment is an admin surface,
+   * not wire input.
    * @param body - the wire body (`registerWire`): credentials plus a school selector.
    * @param ip - the source IP for the register-path attempt ledger.
    * @param userAgent - the client UA stored on the session row.
    * @returns the fresh session token and public principal.
    */
-  async register(body: unknown, ip?: string, userAgent?: string): Promise<LoginResult> {
+  async register(
+    body: unknown,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<LoginResult | PendingRegistrationResult> {
     const input = registerWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
     const { username, displayName, password } = input.data
@@ -689,7 +923,19 @@ export class AuthService {
           .map(s => this.toCandidate(s))
         throw new AuthError(409, 'SCHOOL_AMBIGUOUS', '存在多所同名学校，请选择你的学校', { candidates })
       }
-      school = resolved.school ?? await this.provisionSchool(input.data.schoolName)
+      school = resolved.school
+      /* No roster match is not a dead end any more: it opens (or joins) a
+         school application and parks this registration until an administrator
+         decides. See `registerPending`. */
+      if (school === undefined) {
+        return this.registerPending({
+          schoolName: input.data.schoolName,
+          username,
+          displayName,
+          password,
+          email: input.data.email,
+        })
+      }
     }
     if (school === undefined) {
       throw new AuthError(400, 'SCHOOL_NOT_FOUND', '未找到该学校，请核对学校名称')
@@ -711,6 +957,7 @@ export class AuthService {
         displayName,
         role: 'STUDENT',
         status: 'active',
+        email: input.data.email,
         createdAt: now,
         updatedAt: now,
       }
@@ -777,6 +1024,17 @@ export class AuthService {
       }
     }
     if (matches.length === 0) {
+      /* A registration parked behind a school application has no `users` row,
+         so without this probe the student would be told their password is
+         wrong forever. Only a correct password earns the disclosure. */
+      const waiting = await this.pendingRegistrationFor(username, password)
+      if (waiting !== undefined) {
+        throw new AuthError(
+          403,
+          'ACCOUNT_PENDING',
+          `账号正在等待管理员审核（申请学校：${waiting.schoolName}），审核通过后会发邮件通知你`,
+        )
+      }
       throw new AuthError(401, 'INVALID_CREDENTIALS', '账号或密码不正确')
     }
     if (matches.length > 1) {
@@ -1707,6 +1965,7 @@ export class AuthService {
       contact: input.data.contact.trim(),
       status: 'pending',
       requestedBy,
+      ...(input.data.email === undefined ? {} : { email: input.data.email }),
       createdAt: new Date().toISOString(),
     }
     await this.requests.put(id, record)
@@ -1719,12 +1978,27 @@ export class AuthService {
    * @param status - optional `pending|approved|rejected` filter.
    * @returns the matching request rows, newest first.
    */
-  listSchoolRequests(actor: AdminActor, status?: string): SchoolRequestRecord[] {
+  listSchoolRequests(actor: AdminActor, status?: string): SchoolRequestRow[] {
     this.requireSuper(actor)
+    const waiting = [...this.pendingRegistrations.entries()]
+      .map(([, row]) => row)
+      .filter(row => row.status === 'pending')
     return [...this.requests.entries()]
       .map(([, request]) => request)
       .filter(request => status === undefined || request.status === status)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(request => {
+        const applicants = waiting
+          .filter(row => row.requestId === request.id)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          .map(row => ({
+            username: row.username,
+            displayName: row.displayName,
+            email: row.email,
+            createdAt: row.createdAt,
+          }))
+        return { ...request, pendingCount: applicants.length, applicants }
+      })
   }
 
   /**
@@ -1738,7 +2012,7 @@ export class AuthService {
    */
   async approveSchoolRequest(
     actor: AdminActor, requestId: string, body: unknown,
-  ): Promise<{ school: School; admin: AdminUserRow }> {
+  ): Promise<SchoolApprovalResult> {
     this.requireSuper(actor)
     const input = approveRequestWire.safeParse(body)
     if (!input.success) throw new AuthError(400, 'BAD_REQUEST', '请检查填写内容')
@@ -1746,35 +2020,140 @@ export class AuthService {
     if (request === undefined) throw new AuthError(404, 'NOT_FOUND', '申请不存在')
     if (request.status !== 'pending') throw new AuthError(400, 'BAD_REQUEST', '该申请已处理')
 
-    const { schoolId, shortName, adminUsername, adminDisplayName, adminPassword } = input.data
-    if (this.schools.get(schoolId) !== undefined) {
-      throw new AuthError(409, 'SCHOOL_TAKEN', '该学校标识已被使用')
-    }
-    const key = userKey(schoolId, adminUsername)
-    if (this.users.get(key) !== undefined) {
-      throw new AuthError(409, 'USERNAME_TAKEN', '该账号已被注册')
-    }
-
+    const { shortName, adminUsername, adminDisplayName, adminPassword } = input.data
     const now = new Date().toISOString()
-    const school: School = {
-      id: schoolId,
-      name: request.schoolName,
-      ...(shortName !== undefined ? { shortName } : {}),
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
+
+    /* Applications opened by a registration already own a placeholder tenant;
+       approval flips it active. A legacy manual request has none and needs the
+       operator to name one. */
+    let school: School
+    const placeholder = request.schoolId === undefined ? undefined : this.schools.get(request.schoolId)
+    if (placeholder !== undefined) {
+      school = {
+        ...placeholder,
+        status: 'active',
+        reviewState: undefined,
+        ...(shortName !== undefined ? { shortName } : {}),
+        updatedAt: now,
+      }
+    } else {
+      const schoolId = input.data.schoolId
+      if (schoolId === undefined) {
+        throw new AuthError(400, 'BAD_REQUEST', '该申请没有关联学校，请填写学校标识')
+      }
+      if (this.schools.get(schoolId) !== undefined) {
+        throw new AuthError(409, 'SCHOOL_TAKEN', '该学校标识已被使用')
+      }
+      school = {
+        id: schoolId,
+        name: request.schoolName,
+        ...(shortName !== undefined ? { shortName } : {}),
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      }
     }
-    await this.schools.put(schoolId, school)
-    const admin = await this.createUserRecord(
-      schoolId, adminUsername, adminDisplayName, adminPassword, 'SCHOOL_ADMIN',
-    )
+    /* `reviewState: undefined` must actually leave the row absent, not carry a
+       zod-optional hole into storage. */
+    if (school.reviewState === undefined) delete (school as { reviewState?: unknown }).reviewState
+    await this.schools.put(school.id, school)
+
+    const admin = adminUsername === undefined || adminDisplayName === undefined || adminPassword === undefined
+      ? undefined
+      : await this.createUserRecord(school.id, adminUsername, adminDisplayName, adminPassword, 'SCHOOL_ADMIN')
+
+    const activated = await this.activatePendingRegistrations(actor, request, school)
     await this.requests.put(requestId, {
-      ...request, status: 'approved', decidedAt: now, decidedBy: actor.userKey,
+      ...request, status: 'approved', decidedAt: now, decidedBy: actor.userKey, schoolId: school.id,
     })
-    await this.audit(actor, 'school_request.approve', requestId, schoolId, {
-      schoolId, adminUsername: admin.username,
+    await this.audit(actor, 'school_request.approve', requestId, school.id, {
+      schoolId: school.id,
+      ...(admin === undefined ? {} : { adminUsername: admin.username }),
+      activated: activated.length,
     })
-    return { school, admin: this.toAdminRow(admin, school) }
+    return {
+      school,
+      ...(admin === undefined ? {} : { admin: this.toAdminRow(admin, school) }),
+      activated,
+    }
+  }
+
+  /**
+   * Turn every parked registration of an approved application into a real
+   * account, then mail each applicant.
+   *
+   * Mailing is best effort by design: the account is already live, so a
+   * mailbox outage must not roll the approval back. The failure is recorded on
+   * the row instead, which is what lets an operator tell "approved but not
+   * notified" from "not approved".
+   * @param actor - the approving administrator.
+   * @param request - the application being approved.
+   * @param school - the tenant those registrations now belong to.
+   * @returns one entry per activated account, in creation order.
+   */
+  private async activatePendingRegistrations(
+    actor: AdminActor,
+    request: SchoolRequestRecord,
+    school: School,
+  ): Promise<{ username: string; email: string; emailSent: boolean }[]> {
+    const rows = [...this.pendingRegistrations.entries()]
+      .map(([, row]) => row)
+      .filter(row => row.status === 'pending' && row.requestId === request.id)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+    const activated: { username: string; email: string; emailSent: boolean }[] = []
+    for (const row of rows) {
+      const now = this.now().toISOString()
+      const key = userKey(school.id, row.username)
+      if (this.users.get(key) !== undefined) {
+        await this.pendingRegistrations.put(row.id, {
+          ...row,
+          status: 'rejected',
+          decidedAt: now,
+          decidedBy: actor.userKey,
+          deliveryError: '该账号已存在，未自动开通',
+        })
+        continue
+      }
+      const record: UserRecord = {
+        id: `u_${crypto.randomBytes(9).toString('base64url')}`,
+        schoolId: school.id,
+        username: row.username,
+        passwordHash: row.passwordHash,
+        displayName: row.displayName,
+        role: 'STUDENT',
+        status: 'active',
+        email: row.email,
+        createdAt: now,
+        updatedAt: now,
+      }
+      await this.users.put(key, record)
+
+      let deliveryError: string | undefined
+      if (this.notifier === undefined) {
+        deliveryError = '未配置发信邮箱，未发送通知'
+      } else {
+        try {
+          await this.notifier.notifyApproved({
+            to: row.email,
+            username: record.username,
+            displayName: record.displayName,
+            schoolName: school.name,
+          })
+        } catch (error) {
+          deliveryError = error instanceof Error ? error.message.slice(0, 200) : '发信失败'
+        }
+      }
+      await this.pendingRegistrations.put(row.id, {
+        ...row,
+        status: 'approved',
+        decidedAt: now,
+        decidedBy: actor.userKey,
+        ...(deliveryError === undefined ? {} : { deliveryError }),
+      })
+      activated.push({ username: record.username, email: row.email, emailSent: deliveryError === undefined })
+    }
+    return activated
   }
 
   /**
@@ -1793,15 +2172,37 @@ export class AuthService {
     const request = this.requests.get(requestId)
     if (request === undefined) throw new AuthError(404, 'NOT_FOUND', '申请不存在')
     if (request.status !== 'pending') throw new AuthError(400, 'BAD_REQUEST', '该申请已处理')
+    const now = this.now().toISOString()
     const rejected: SchoolRequestRecord = {
       ...request,
       status: 'rejected',
-      decidedAt: new Date().toISOString(),
+      decidedAt: now,
       decidedBy: actor.userKey,
     }
     await this.requests.put(requestId, rejected)
-    await this.audit(actor, 'school_request.reject', requestId, actor.schoolId,
-      input.data.reason === undefined ? undefined : { reason: input.data.reason })
+
+    /* The parked registrations never became accounts, so they are simply
+       closed. The placeholder tenant goes too — but only when it is still the
+       untouched placeholder (`reviewState: 'pending'` with no users), because
+       keeping it would permanently block that school name from being applied
+       for again. */
+    const rows = [...this.pendingRegistrations.entries()].map(([, row]) => row)
+      .filter(row => row.status === 'pending' && row.requestId === requestId)
+    for (const row of rows) {
+      await this.pendingRegistrations.put(row.id, {
+        ...row, status: 'rejected', decidedAt: now, decidedBy: actor.userKey,
+      })
+    }
+    const placeholder = request.schoolId === undefined ? undefined : this.schools.get(request.schoolId)
+    if (placeholder !== undefined && placeholder.reviewState === 'pending') {
+      const occupied = [...this.users.entries()]
+        .some(([, user]) => user.schoolId === placeholder.id)
+      if (!occupied) await this.schools.delete(placeholder.id)
+    }
+    await this.audit(actor, 'school_request.reject', requestId, actor.schoolId, {
+      ...(input.data.reason === undefined ? {} : { reason: input.data.reason }),
+      rejectedRegistrations: rows.length,
+    })
     return rejected
   }
 

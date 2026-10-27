@@ -24,6 +24,7 @@ export type LimiterName =
   | 'apply'
   | 'registration'
   | 'learning'
+  | 'lookup'
   | 'passwordReset'
   | 'totp'
 
