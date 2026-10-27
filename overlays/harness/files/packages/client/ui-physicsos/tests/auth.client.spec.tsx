@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AdminApi, AuthApi, AuthUser, SchoolRow } from '../src/client/auth-api.ts'
+import type {
+  AdminApi, AuthApi, AuthUser, RegisterOutcome, SchoolRow,
+} from '../src/client/auth-api.ts'
 import type { NoticeApi } from '../src/client/notice-api.ts'
 import {
   createAuthController, migrateAnonymousProgress, namespacedStorage,
@@ -46,6 +48,7 @@ const apiError = (
 const stubApi = (overrides: Partial<AuthApi> = {}): AuthApi => ({
   register: async () => ({ kind: 'registered' as const, user: USER }),
   login: async () => ({ user: USER }),
+  searchSchools: async () => ({ schools: [] }),
   logout: async () => ({ ok: true }),
   me: async () => ({ user: USER }),
   forgotPassword: async () => ({ ok: true }),
@@ -94,7 +97,7 @@ const fillRegister = (
 const gateProps = (state: AuthState) => ({
   useAuth: <S,>(selector: (state: AuthState) => S): S => selector(state),
   login: vi.fn(async () => {}),
-  register: vi.fn(async () => ({ kind: 'registered' as const, user: USER })),
+  register: vi.fn(async (): Promise<RegisterOutcome> => ({ kind: 'registered', user: USER })),
   searchSchools: vi.fn(async () => ({ schools: [] as SchoolRow[] })),
   forgotPassword: vi.fn(async () => ({ ok: true })),
   useSessions: neverHook,
