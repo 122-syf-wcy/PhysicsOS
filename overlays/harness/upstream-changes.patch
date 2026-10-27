@@ -12373,7 +12373,7 @@ index c98289bc3e..94fa68a490 100644
 +      config:
 +        trustedProxies: !!js "process.env.PHYSICOS_TRUSTED_PROXIES ? process.env.PHYSICOS_TRUSTED_PROXIES.split(',').map(value => value.trim()).filter(Boolean) : []"
 +        registrationMode: !!js process.env.PHYSICSOS_REGISTRATION_MODE ?? 'open'
-+        bootstrapAdmins: !!js "process.env.PHYSICSOS_ADMIN_PASSWORD ? [{ schoolId: 'PHYSICSOS-OPEN', username: 'admin', password: process.env.PHYSICSOS_ADMIN_PASSWORD, displayName: '平台管理员', role: 'SUPER_ADMIN' }] : []"
++        bootstrapAdmins: !!js "process.env.PHYSICSOS_ADMIN_PASSWORD ? [{ schoolId: 'PHYSICSOS-OPEN', username: process.env.PHYSICSOS_ADMIN_USERNAME || 'admin', password: process.env.PHYSICSOS_ADMIN_PASSWORD, displayName: '平台管理员', role: 'SUPER_ADMIN' }] : []"
 +
 +    - id: paper-host
 +      name: '@deepseek-ai/dsh-paper-host'

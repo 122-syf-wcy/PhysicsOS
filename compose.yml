@@ -84,6 +84,10 @@ services:
       # STUDENT。entrypoint 把 *_FILE materialize 成同名明文变量，文件缺失或为空
       # 直接拒绝启动，因此这里不会出现"没有管理员"的半配置生产实例。
       PHYSICSOS_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      # 引导 SUPER_ADMIN 的用户名（密码走上面那个 secret）。默认 admin；
+      # 改成别的名字后，旧名字不会再被种回来 —— 这正是「换掉默认管理员」
+      # 不依赖手工删库的原因。
+      PHYSICSOS_ADMIN_USERNAME: ${PHYSICSOS_ADMIN_USERNAME:-admin}
       # 题图生成 key；缺失时 paper-host 静默退化为占位说明，所以按 secret 强校验。
       # Canonical PHYSICSOS_* (two S) since 2026-09; the one-S PHYSICOS_* name is
       # materialized too as a one-cycle alias, so either reader spelling works
