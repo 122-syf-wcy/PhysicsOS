@@ -4,9 +4,17 @@ ARG NODE_IMAGE=node:24.7.0-bookworm-slim
 
 FROM ${NODE_IMAGE} AS builder
 
+# Prefer IPv4 in every node/pnpm process in this stage. Registries publish AAAA
+# records, and a build host without usable IPv6 egress (link-local only, no
+# global route) attempts the unreachable address first: each fetch then hangs
+# until its client abort instead of failing over to the IPv4 address that works.
+# The symptom is not a clean network error but a pnpm install that reliably dies
+# around the five-minute mark on every attempt, so pin the order where every
+# child process inherits it.
 ENV CI=true \
     PNPM_HOME=/pnpm \
-    PATH=/pnpm:${PATH}
+    PATH=/pnpm:${PATH} \
+    NODE_OPTIONS=--dns-result-order=ipv4first
 
 RUN apt-get update \
     # python3/make/gcc/g++ compile the native packages that ship no Linux
