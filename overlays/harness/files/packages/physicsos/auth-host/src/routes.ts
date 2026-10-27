@@ -104,10 +104,19 @@ const checkCsrf = (req: IncomingMessage, trustedProxies: readonly string[]): voi
   if (origin !== undefined) {
     try {
       const host = req.headers.host
-      const expected = host === undefined
-        ? ''
-        : new URL(`${requestScheme(req, trustedProxies)}://${host}`).origin
-      if (typeof origin !== 'string' || new URL(origin).origin !== expected) {
+      /* Host equality is the cross-site boundary: a browser stamps its own
+         Origin, so a foreign page cannot present this host. The scheme is
+         asserted only when the transport reported it reliably — a
+         TLS-terminating proxy whose exact peer IP is missing from
+         `trustedProxies` reports `http`, and demanding that scheme 403'd
+         every browser POST on a deployment behind such a proxy: registration,
+         login, and logout all died there while curl (which sends no Origin)
+         looked healthy. */
+      const originUrl = typeof origin === 'string' ? new URL(origin) : undefined
+      if (host === undefined || originUrl === undefined || originUrl.host !== host) {
+        throw new AuthError(403, 'BAD_REQUEST', '跨站请求被拒绝')
+      }
+      if (requestScheme(req, trustedProxies) === 'https' && originUrl.protocol !== 'https:') {
         throw new AuthError(403, 'BAD_REQUEST', '跨站请求被拒绝')
       }
     } catch (error) {

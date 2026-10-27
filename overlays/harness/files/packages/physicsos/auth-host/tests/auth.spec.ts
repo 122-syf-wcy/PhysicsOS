@@ -123,10 +123,19 @@ describe('auth routes — register/login lifecycle', () => {
     expect(user.role).toBe('STUDENT')
   })
 
-  it('answers SCHOOL_NOT_FOUND for an unlisted schoolName — the tenant list is fixed', async () => {
+  it('provisions a tenant for an unlisted schoolName — registration is never a dead end', async () => {
     const res = await post('/register', { ...account, schoolName: '不存在的学校', username: 'nobody01' })
-    expect(res.status).toBe(400)
-    expect((await res.json() as { error: { code: string } }).error.code).toBe('SCHOOL_NOT_FOUND')
+    expect(res.status).toBe(201)
+    const { user } = await res.json() as { user: { schoolId: string; schoolName: string } }
+    expect(user.schoolName).toBe('不存在的学校')
+    /* Deterministic id: the same spelling always lands on one tenant. */
+    expect(user.schoolId).toMatch(/^s_[A-Za-z0-9_-]{12}$/)
+    /* A second registration under the same name resolves to the same tenant
+       instead of forking a new one. */
+    const again = await post('/register', { ...account, schoolName: '不存在的学校', username: 'nobody01b' })
+    expect(again.status).toBe(201)
+    const second = await again.json() as { user: { schoolId: string } }
+    expect(second.user.schoolId).toBe(user.schoolId)
   })
 
   it('answers SCHOOL_NOT_FOUND when the name only matches a disabled school', async () => {
@@ -291,12 +300,17 @@ describe('auth routes — guards', () => {
     expect(res.status).toBe(403)
   })
 
-  it('does not accept a scheme mismatch based on an untrusted forwarded header', async () => {
+  it('accepts a same-host Origin when the proxy scheme is unknown', async () => {
+    /* Production shape: TLS ends at a reverse proxy whose exact peer IP is not
+       in `trustedProxies`, so `requestScheme` reports `http` while the browser
+       sends an https Origin. Host equality is the CSRF decision — before this,
+       every browser POST (register/login/logout) was 403 while curl, which
+       sends no Origin, looked healthy. */
     const origin = new URL(base).origin.replace(/^http:/, 'https:')
     const res = await post('/login', { username: 'x', password: 'y' }, {
       origin, 'x-forwarded-proto': 'https',
     })
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(401)
   })
 
   it('/me without a cookie answers 401 UNAUTHENTICATED', async () => {

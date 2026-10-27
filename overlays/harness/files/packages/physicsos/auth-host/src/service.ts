@@ -512,6 +512,36 @@ export class AuthService {
   }
 
   /**
+   * Create the tenant a free-text school name names, when the roster has no
+   * row for it — registration must never dead-end on "your school is not in
+   * the list". The id derives from the normalized name, so the same spelling
+   * always lands on one tenant and two concurrent first-registrations cannot
+   * fork it.
+   *
+   * A name that exists in ANY status is never re-created: an administrator's
+   * disable, rename, or merge has to survive a retyped registration. Callers
+   * treat the thrown `SCHOOL_NOT_FOUND` as "this school is not open", which is
+   * the accurate answer for the disabled case.
+   * @param schoolName - the raw name the registrant typed.
+   * @returns the freshly persisted active tenant row.
+   */
+  private async provisionSchool(schoolName: string): Promise<School> {
+    const name = schoolName.trim().replaceAll(/\s+/g, ' ')
+    const existing = [...this.schools.entries()]
+      .map(([, school]) => school)
+      .find(school => school.name.toLowerCase() === name.toLowerCase())
+    if (existing !== undefined) {
+      throw new AuthError(400, 'SCHOOL_NOT_FOUND', '该学校当前未开放注册')
+    }
+    const id = `s_${crypto.createHash('sha256').update(name.toLowerCase(), 'utf8')
+      .digest('base64url').slice(0, 12)}`
+    const now = this.now().toISOString()
+    const school: School = { id, name, status: 'active', createdAt: now, updatedAt: now }
+    await this.schools.put(id, school)
+    return school
+  }
+
+  /**
    * Consume one slot from the configured shared backend. Backend failures are
    * translated to an explicit 503 and never fall through to an unlimited path.
    */
@@ -621,11 +651,12 @@ export class AuthService {
   /**
    * Register a student account under a school tenant, then issue its first
    * session — the caller just proved the password, so a second verify would
-   * only spend argon2 for nothing. The tenant list is fixed by the roster
-   * seeds: an unlisted `schoolName` is a `SCHOOL_NOT_FOUND`, never a new
-   * tenant — name variants would otherwise fork one school per spelling.
-   * `role` is pinned server-side: teacher/admin enrolment is a future admin
-   * surface, not wire input.
+   * only spend argon2 for nothing. The roster seeds resolve most names, and a
+   * name the roster lacks provisions its own tenant (see `provisionSchool`):
+   * registration is never a dead end for a school the deployment has not
+   * heard of, which is what a real student hitting a free-text school field
+   * needs. `role` is pinned server-side: teacher/admin enrolment is a future
+   * admin surface, not wire input.
    * @param body - the wire body (`registerWire`): credentials plus a school selector.
    * @param ip - the source IP for the register-path attempt ledger.
    * @param userAgent - the client UA stored on the session row.
@@ -658,7 +689,7 @@ export class AuthService {
           .map(s => this.toCandidate(s))
         throw new AuthError(409, 'SCHOOL_AMBIGUOUS', '存在多所同名学校，请选择你的学校', { candidates })
       }
-      school = resolved.school
+      school = resolved.school ?? await this.provisionSchool(input.data.schoolName)
     }
     if (school === undefined) {
       throw new AuthError(400, 'SCHOOL_NOT_FOUND', '未找到该学校，请核对学校名称')
