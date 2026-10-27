@@ -68,12 +68,37 @@ overlay）会让 overlay 新增的 workspace 包没有 node_modules 链接，`bu
 
 ## 3. 部署面配置
 
-- `.env`：`PHYSICOS_TRUSTED_PROXIES=127.0.0.1,::1`、`PHYSICOS_TRUSTED_HOSTS=physics.dongsiwei.com`
+- `.env`：`PHYSICOS_TRUSTED_PROXIES=172.18.0.1`、`PHYSICOS_TRUSTED_HOSTS=physics.dongsiwei.com`
+
+  **这一项踩过一次坑，值得记住**：nginx 与 app 不同容器，app 看到的反代 peer 是
+  compose 网桥网关 `172.18.0.1`，不是文档示例里的 `127.0.0.1,::1`（那组只在
+  nginx 与 app 同宿主 loopback 时成立）。配错的表现很隐蔽——站点能用、注册也返回
+  201，只是会话 Cookie 少了 `Secure`（`cookies.ts` 依 `requestScheme` 决定），
+  并且 `clientAddress` 退回成代理地址、全站共用一个限流桶。用 `/me` 拿到的
+  `Set-Cookie` 第 4 个字段即可判定：`TRUE` 才是对的。
 - 七个 secret 由 `secure-secrets.sh` 落到 `999:999 0400`；`model_pool_secret` 首次生成后不可更换
 - nginx：TLS 终结 + `proxy_buffering off`（SSE）+ 1 小时读写超时 + gzip + 五项安全头
 - 运维：`install-operations.sh`（fail2ban + 每日 02:15 备份 + logrotate）、首次备份已成功
+- TLS：Let's Encrypt 已签发（到期 2027-01-25），`certbot renew --dry-run` 通过；
+  nginx 1.24 需用 `listen 443 ssl http2;`，`http2 on;` 是 1.25+ 语法；`certonly`
+  安装缺 `options-ssl-nginx.conf` / `ssl-dhparams.pem`，本机已补齐
 
-## 4. 待完成
+## 4. 上线验收（2026-10-27 完成）
 
-- DNS A 记录 `physics.dongsiwei.com` 从 `38.76.190.3` 改到 `107.151.246.59` 后，
-  运行 `/tmp/activate-tls.sh` 签证书并切换 TLS 站点
+DNS A 记录已切至 `107.151.246.59`，HTTPS 站点上线。实测：
+
+| 项 | 结果 |
+| --- | --- |
+| `GET /` | 200，34,628B，0.30s |
+| `GET /readyz` / `/healthz` | 200 / 200 |
+| HTTP → HTTPS | 301 |
+| TLS | HTTP/2 |
+| 注册：口语校名「贵阳六中」 | **201**（自动建租户，原为 400） |
+| 注册：花名册校名「贵阳市第三实验中学」 | 201 |
+| 注册：跨站 Origin | 403（安全未放宽） |
+| 未登录访问 `/physicsos/admin/dashboard` | 401 |
+| 会话 Cookie | 含 `Secure` + `HttpOnly` |
+| 证书续期 | `certbot renew --dry-run` 通过 |
+
+管理员账号为 `admin`（密码见服务器 `/opt/physicsos/.env.admin_password`，
+租户 `PHYSICSOS-OPEN`，登录后应立即改密）。
