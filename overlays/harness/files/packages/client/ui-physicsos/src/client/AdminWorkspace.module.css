@@ -28,6 +28,110 @@
   min-width: 0;
 }
 
+/* Split layout: a fixed rail of grouped tabs beside the content. This replaces
+   a flat strip that had to scroll horizontally once the console grew past ten
+   tabs — the operator could not see which sections even existed. */
+.pageSplit {
+  width: min(1240px, 100%);
+  gap: 20px;
+}
+
+.pageBody {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  min-width: 0;
+}
+
+.pageRail {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 4px 12px 4px 0;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+}
+
+.railGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.railGroupLabel {
+  padding: 8px 10px 5px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.railTab {
+  appearance: none;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--physics-motion-fast, 140ms) ease,
+    color var(--physics-motion-fast, 140ms) ease;
+}
+
+.railTab:hover {
+  background: var(--dsw-alias-bg-l2);
+  color: var(--physics-ink-strong);
+}
+
+.railTabActive {
+  background: var(--dsw-alias-bg-l2);
+  color: var(--dsw-alias-button-info-fill);
+  font-weight: 600;
+}
+
+/* Below the split breakpoint the rail becomes a horizontal strip again, but
+   grouped tabs mean it stays short enough to read. */
+@media (width <= 900px) {
+  .pageBody {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .pageRail {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+
+  .railGroup {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .railGroupLabel {
+    padding: 0 4px 0 0;
+  }
+
+  .railTab {
+    width: auto;
+    padding: 6px 10px;
+  }
+}
+
 .pageHeader {
   display: flex;
   flex-direction: column;

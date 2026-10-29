@@ -38,6 +38,9 @@ import {
 } from './AdminPrimitives.tsx'
 import css from './AdminWorkspace.module.css'
 
+/** Sidebar groups; order here is the order they render in the rail. */
+export type AdminTabGroup = 'overview' | 'people' | 'content' | 'system'
+
 type Tab =
   | 'requests'
   | 'schools'
@@ -104,33 +107,49 @@ export function AdminWorkspace({
     return <div className={css.root}><p className={css.empty}>{t('admin.forbidden')}</p></div>
   }
 
-  const tabs: { id: Tab; label: string }[] = [
+  /* Tabs are grouped rather than listed flat. A flat strip of a dozen entries
+     scrolls sideways, so an operator cannot see what exists without hunting;
+     four labelled groups fit in one column and name the mental model. */
+  const tabs: { id: Tab; label: string; group: AdminTabGroup }[] = [
     ...(isSuper ? [
-      { id: 'requests' as const, label: t('admin.tab.requests') },
-      { id: 'schools' as const, label: t('admin.tab.schools') },
+      { id: 'requests' as const, label: t('admin.tab.requests'), group: 'overview' as const },
+      { id: 'schools' as const, label: t('admin.tab.schools'), group: 'overview' as const },
     ] : []),
-    { id: 'dashboard' as const, label: t('admin.tab.dashboard') },
-    { id: 'users' as const, label: t('admin.tab.users') },
+    { id: 'dashboard' as const, label: t('admin.tab.dashboard'), group: 'overview' as const },
+    { id: 'users' as const, label: t('admin.tab.users'), group: 'people' as const },
     /* 密码重置队列 is the admin side of the self-service flow: students file a
        request from the login gate, an admin issues the one-time link here.
        School admins see their own tenant; SUPER_ADMIN sees every school. */
-    { id: 'resets' as const, label: t('admin.tab.resets') },
-    ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content') }]),
-    ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice') }]),
+    { id: 'resets' as const, label: t('admin.tab.resets'), group: 'people' as const },
+    { id: 'devices' as const, label: t('admin.tab.devices'), group: 'people' as const },
+    ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content'), group: 'content' as const }]),
+    ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice'), group: 'content' as const }]),
     ...(noticeApi === undefined || !isSuper
       ? []
-      : [{ id: 'platformNotice' as const, label: t('admin.tab.platformNotice') }]),
+      : [{ id: 'platformNotice' as const, label: t('admin.tab.platformNotice'), group: 'content' as const }]),
     ...(modelPoolApi === undefined || !isSuper
       ? []
-      : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool') }]),
-    ...(!isSuper ? [] : [{ id: 'plugins' as const, label: t('admin.tab.plugins') }]),
-    { id: 'ops' as const, label: t('admin.tab.ops') },
-    { id: 'devices' as const, label: t('admin.tab.devices') },
-    { id: 'audit' as const, label: t('admin.tab.audit') },
+      : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool'), group: 'system' as const }]),
+    ...(!isSuper ? [] : [{ id: 'plugins' as const, label: t('admin.tab.plugins'), group: 'system' as const }]),
+    { id: 'ops' as const, label: t('admin.tab.ops'), group: 'system' as const },
+    { id: 'audit' as const, label: t('admin.tab.audit'), group: 'system' as const },
   ]
   const fallback = tabs[0]
   if (fallback === undefined) throw new Error('AdminWorkspace: no tab is visible for this role')
   const active = tabs.some(item => item.id === tab) ? tab : fallback.id
+
+  /* Empty groups drop out, so a school admin never sees a heading with
+     nothing under it. */
+  const groups = ([
+    { key: 'overview', label: t('admin.group.overview') },
+    { key: 'people', label: t('admin.group.people') },
+    { key: 'content', label: t('admin.group.content') },
+    { key: 'system', label: t('admin.group.system') },
+  ] as const).map(spec => ({
+    key: spec.key,
+    label: spec.label,
+    tabs: tabs.filter(item => item.group === spec.key),
+  }))
 
   return (
     <div className={css.root} data-physicsos-surface="admin">
@@ -139,6 +158,7 @@ export function AdminWorkspace({
         tabs={tabs}
         activeTab={active}
         onTabChange={setTab}
+        groups={groups}
       >
         {active === 'requests' && isSuper && <RequestsTab api={api} t={t} />}
         {active === 'schools' && isSuper && <SchoolsTab api={api} t={t} />}

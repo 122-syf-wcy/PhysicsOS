@@ -22,42 +22,93 @@ export interface AdminPageProps<T extends string = string> {
   readonly tabs: readonly AdminPageTab<T>[]
   readonly activeTab: T
   readonly onTabChange: (id: T) => void
+  /**
+   * Optional grouping. When present, tabs render in a left rail under their
+   * group heading instead of one scrolling strip; a caller with only a few
+   * tabs can omit it and keep the flat strip.
+   */
+  readonly groups?: readonly AdminTabGroupSpec<T>[]
   readonly children: ReactNode
+}
+
+/** One sidebar section: an optional heading over the tabs it contains. */
+export interface AdminTabGroupSpec<T extends string = string> {
+  readonly key: string
+  readonly label?: ReactNode
+  readonly tabs: readonly AdminPageTab<T>[]
 }
 
 /**
  * The one page-level container for the administrator surface. Tabs render
- * content only; the header, tab strip, width, and vertical rhythm live here.
+ * content only; the header, rail, width, and vertical rhythm live here.
  */
 export function AdminPage<T extends string>({
   title,
   tabs,
   activeTab,
   onTabChange,
+  groups,
   children,
 }: AdminPageProps<T>): ReactNode {
-  return (
-    <div className={css.page} data-admin-page="">
-      <header className={css.pageHeader} data-admin-page-header="">
-        <h1 className={css.pageTitle}>{title}</h1>
-        <nav className={css.pageTabs} role="tablist">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              className={clsx(css.pageTab, activeTab === tab.id && css.pageTabActive)}
-              onClick={() => { onTabChange(tab.id) }}
-            >
-              {tab.label}
-            </button>
+  const rail = groups === undefined
+    ? null
+    : (
+        <nav className={css.pageRail} role="tablist" aria-orientation="vertical">
+          {groups.filter(group => group.tabs.length > 0).map(group => (
+            <div key={group.key} className={css.railGroup}>
+              {group.label !== undefined && (
+                <div className={css.railGroupLabel}>{group.label}</div>
+              )}
+              {group.tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  className={clsx(css.railTab, activeTab === tab.id && css.railTabActive)}
+                  onClick={() => { onTabChange(tab.id) }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
+      )
+
+  return (
+    <div className={clsx(css.page, rail !== null && css.pageSplit)} data-admin-page="">
+      <header className={css.pageHeader} data-admin-page-header="">
+        <h1 className={css.pageTitle}>{title}</h1>
+        {rail === null && (
+          <nav className={css.pageTabs} role="tablist">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                className={clsx(css.pageTab, activeTab === tab.id && css.pageTabActive)}
+                onClick={() => { onTabChange(tab.id) }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
-      <div className={css.pageContent} data-admin-page-content="">
-        {children}
-      </div>
+      {rail !== null ? (
+        <div className={css.pageBody}>
+          {rail}
+          <div className={css.pageContent} data-admin-page-content="">
+            {children}
+          </div>
+        </div>
+      ) : (
+        <div className={css.pageContent} data-admin-page-content="">
+          {children}
+        </div>
+      )}
     </div>
   )
 }
