@@ -323,6 +323,10 @@ export function apply(ctx: ClientContext): void {
       hooks: { auth: auth.store },
       login: auth.login,
       register: auth.register,
+      /* The combobox reads the roster through the same authenticated client —
+         it is a public route, but keeping one client means one place that knows
+         the `/physicsos/auth` prefix. */
+      searchSchools: authApi.searchSchools,
       forgotPassword: authApi.forgotPassword,
     }),
   }, AuthGate))

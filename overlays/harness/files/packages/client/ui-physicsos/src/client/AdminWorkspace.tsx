@@ -207,6 +207,37 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
     finally { setBusy(undefined) }
   }
 
+  /* One click is the whole happy path: an application opened by a registration
+     already owns its (pending) tenant, so approval flips it active and mails
+     the waiting students. The id/admin fields below are only for the legacy
+     hand-entered case and for seeding a school administrator. */
+  const approve = (request: SchoolRequestRow, advanced: boolean) => {
+    const extra = advanced
+      ? {
+        ...(form.schoolId !== undefined && form.schoolId !== '' ? { schoolId: form.schoolId } : {}),
+        ...(form.shortName !== undefined && form.shortName !== '' ? { shortName: form.shortName } : {}),
+        ...(form.adminUsername !== undefined && form.adminUsername !== ''
+          && form.adminDisplayName !== undefined && form.adminDisplayName !== ''
+          && form.adminPassword !== undefined && form.adminPassword !== ''
+          ? {
+            adminUsername: form.adminUsername,
+            adminDisplayName: form.adminDisplayName,
+            adminPassword: form.adminPassword,
+          }
+          : {}),
+      }
+      : {}
+    return act(request.id, async () => {
+      const result = await api.approveSchoolRequest(request.id, extra)
+      if (result.activated.length > 0) {
+        const mailed = result.activated.filter(row => row.emailSent).length
+        setNote(t('admin.requests.approvedActivated')
+          .replace('{n}', String(result.activated.length))
+          .replace('{m}', String(mailed)))
+      }
+    })
+  }
+
   if (error !== undefined) return <p className={css.error}>{error}</p>
   if (data === undefined) return <AdminEmpty>{t('admin.loading')}</AdminEmpty>
   if (data.length === 0) return <AdminEmpty>{t('admin.empty')}</AdminEmpty>
@@ -229,9 +260,17 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
               <button
                 type="button" className={css.primary}
                 disabled={busy === request.id}
-                onClick={() => { setExpanded(expanded === request.id ? undefined : request.id) }}
+                data-testid="approve-school-request"
+                onClick={() => { approve(request, false) }}
               >
                 {t('admin.requests.approve')}
+              </button>
+              <button
+                type="button" className={css.ghost}
+                disabled={busy === request.id}
+                onClick={() => { setExpanded(expanded === request.id ? undefined : request.id) }}
+              >
+                {t('admin.requests.advanced')}
               </button>
               <button
                 type="button" className={css.ghost}
@@ -242,6 +281,13 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
               </button>
             </AdminCardActions>
           </AdminCardHead>
+          {request.applicants.length > 0 && (
+            <AdminCardMeta data-testid="school-request-applicants">
+              {t('admin.requests.waiting').replace('{n}', String(request.pendingCount))}
+              {': '}
+              {request.applicants.map(row => `${row.displayName}(${row.username})`).join('、')}
+            </AdminCardMeta>
+          )}
           {expanded === request.id && (
             <div className={css.form}>
               <Field label={t('admin.requests.field.schoolId')}>
@@ -267,15 +313,7 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
               <button
                 type="button" className={css.primary}
                 disabled={busy === request.id}
-                onClick={() => {
-                  void act(request.id, () => api.approveSchoolRequest(request.id, {
-                    schoolId: form.schoolId ?? '',
-                    ...(form.shortName !== undefined && form.shortName !== '' ? { shortName: form.shortName } : {}),
-                    adminUsername: form.adminUsername ?? '',
-                    adminDisplayName: form.adminDisplayName ?? '',
-                    adminPassword: form.adminPassword ?? '',
-                  }))
-                }}
+                onClick={() => { approve(request, true) }}
               >
                 {t('admin.confirm.submit')}
               </button>

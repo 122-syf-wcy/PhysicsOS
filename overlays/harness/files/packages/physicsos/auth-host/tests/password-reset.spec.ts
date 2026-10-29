@@ -69,12 +69,19 @@ const serviceFor = async (
   }
 }
 
-const register = async (service: AuthService) => service.register({
-  schoolId: 'GZU',
-  username: 'reset-user',
-  displayName: '重置用户',
-  password: 'old-password',
-}, '192.0.2.10', 'vitest')
+/* A seeded `schoolId` always activates immediately, so the result is a session
+   — assert the narrow branch here instead of widening every caller. */
+const register = async (service: AuthService) => {
+  const result = await service.register({
+    schoolId: 'GZU',
+    username: 'reset-user',
+    displayName: '重置用户',
+    password: 'old-password',
+    email: 'reset-user@example.com',
+  }, '192.0.2.10', 'vitest')
+  if ('pending' in result) throw new Error('a seeded school must not park the registration')
+  return result
+}
 
 const admin = {
   userKey: 'GZU:admin',

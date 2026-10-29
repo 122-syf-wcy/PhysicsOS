@@ -72,12 +72,31 @@ export interface AuthUser {
 export interface RegisterInput {
   /** Free-text school the user typed; the host resolves it to a tenant. */
   readonly schoolName?: string
-  /** Disambiguation answer after `SCHOOL_AMBIGUOUS` — wins over schoolName. */
+  /** Answer picked from the combobox (`/schools`) or a `SCHOOL_AMBIGUOUS` reply. */
   readonly schoolId?: string
   readonly username: string
   readonly displayName: string
   readonly password: string
+  /** Contact address — the only channel back when the school needs approval. */
+  readonly email: string
 }
+
+/**
+ * The two outcomes of a registration.
+ *
+ * `pending` means the school is not in the roster: no account exists yet and no
+ * session was issued, because an administrator has to decide whether that
+ * school joins. The client shows a receipt instead of entering the app.
+ */
+export type RegisterOutcome =
+  | { readonly kind: 'registered'; readonly user: AuthUser }
+  | {
+    readonly kind: 'pending'
+    readonly requestId: string
+    readonly schoolName: string
+    readonly username: string
+    readonly email: string
+  }
 
 /** `/login` body — credentials plus the remember-device flag. */
 export interface LoginInput {
@@ -88,7 +107,15 @@ export interface LoginInput {
   readonly rememberDevice: boolean
 }
 
-/** A school application row — the register view's 申请开通 submission. */
+/** One registration held by an application, as the admin queue lists it. */
+export interface SchoolRequestApplicant {
+  readonly username: string
+  readonly displayName: string
+  readonly email: string
+  readonly createdAt: string
+}
+
+/** A school application row — the register view's submission. */
 export interface SchoolRequestRow {
   readonly id: string
   readonly schoolName: string
@@ -96,7 +123,13 @@ export interface SchoolRequestRow {
   readonly status: 'pending' | 'approved' | 'rejected'
   /** userKey of the submitter; null when anonymous. */
   readonly requestedBy: string | null
+  /** Tenant this application opened, when it came from a registration. */
+  readonly schoolId?: string
+  readonly email?: string
   readonly createdAt: string
+  /** How many registrations are parked behind this application. */
+  readonly pendingCount: number
+  readonly applicants: readonly SchoolRequestApplicant[]
 }
 
 /** An admin-facing user row — AuthUser plus lifecycle fields. */
@@ -347,13 +380,26 @@ export interface IssuedPasswordReset {
   readonly resetPath: string
 }
 
-/** `/school-requests/:id/approve` body — the approver-chosen tenant id and first admin. */
+/**
+ * `/school-requests/:id/approve` body — every field optional.
+ *
+ * An application opened by a registration already owns its tenant, so `{}` is
+ * the normal one-click approval. `schoolId` is for a legacy hand-entered
+ * request; the `admin*` trio optionally seeds a SCHOOL_ADMIN.
+ */
 export interface ApproveInput {
-  readonly schoolId: string
+  readonly schoolId?: string
   readonly shortName?: string
-  readonly adminUsername: string
-  readonly adminDisplayName: string
-  readonly adminPassword: string
+  readonly adminUsername?: string
+  readonly adminDisplayName?: string
+  readonly adminPassword?: string
+}
+
+/** What approval reports back — how many parked accounts went live, and whether the mail left. */
+export interface ApproveOutcome {
+  readonly school: SchoolRow
+  readonly admin?: AdminUserRow
+  readonly activated: readonly { username: string; email: string; emailSent: boolean }[]
 }
 
 /** `/users` create body — the host enforces role ceiling and tenant scope. */
@@ -369,7 +415,7 @@ export interface AdminCreateUserInput {
 /** The `/physicsos/admin` surface — every call is session+role-gated host-side. */
 export interface AdminApi {
   listSchoolRequests: (status?: string) => Promise<{ requests: SchoolRequestRow[] }>
-  approveSchoolRequest: (id: string, input: ApproveInput) => Promise<{ school: SchoolRow; admin: AdminUserRow }>
+  approveSchoolRequest: (id: string, input: ApproveInput) => Promise<ApproveOutcome>
   rejectSchoolRequest: (id: string, reason?: string) => Promise<{ request: SchoolRequestRow }>
   listSchools: () => Promise<{ schools: (SchoolRow & { status: string })[] }>
   createSchool: (input: { id: string; name: string; shortName?: string }) => Promise<{ school: SchoolRow }>
@@ -405,8 +451,14 @@ export interface AdminApi {
 
 /** The injected surface: plain callbacks returning wire data. */
 export interface AuthApi {
-  register: (input: RegisterInput) => Promise<{ user: AuthUser }>
+  register: (input: RegisterInput) => Promise<RegisterOutcome>
   login: (input: LoginInput) => Promise<{ user: AuthUser }>
+  /**
+   * Public school lookup backing the registration combobox.
+   * @param query - what the student has typed so far.
+   * @returns the ranked candidates for that substring.
+   */
+  searchSchools: (query: string) => Promise<{ schools: SchoolRow[] }>
   logout: () => Promise<{ ok: boolean }>
   me: () => Promise<{ user: AuthUser }>
   forgotPassword: (input: { username: string; schoolId?: string }) => Promise<{ ok: boolean }>
@@ -424,7 +476,18 @@ export interface AuthApi {
  */
 export function createAuthApi(): AuthApi {
   return {
-    register: input => post('/register', input),
+    register: async (input) => {
+      const body = await post<{
+        user?: AuthUser
+        pending?: { requestId: string; schoolName: string; username: string; email: string }
+      }>('/register', input)
+      /* 202 carries `pending` and no session cookie; 201 carries `user`. */
+      if (body.pending !== undefined) return { kind: 'pending', ...body.pending }
+      if (body.user === undefined) throw new Error('注册响应缺少账号信息')
+      return { kind: 'registered', user: body.user }
+    },
+    searchSchools: query =>
+      request(AUTH_BASE, `/schools?q=${encodeURIComponent(query)}`),
     login: input => post('/login', input),
     logout: () => post('/logout'),
     me: () => request(AUTH_BASE, '/me'),
