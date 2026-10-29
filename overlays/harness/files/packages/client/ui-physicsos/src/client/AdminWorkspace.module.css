@@ -44,15 +44,31 @@
   min-width: 0;
 }
 
+/* The rail is its own pane of the same glass as the cards: a raised sheet the
+   desk light passes through, not a column of text floating on the page. */
 .pageRail {
   position: sticky;
   top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
-  padding: 4px 12px 4px 0;
-  border-right: 1px solid var(--dsw-alias-border-l2);
+  padding: 10px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 16px;
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .pageRail {
+    background-color: var(--physics-glass-fill-strong);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 .railGroup {
@@ -94,8 +110,13 @@
   color: var(--physics-ink-strong);
 }
 
+/* The active row is a lit pebble inside the rail rather than a flat wash: a
+   brighter fill, the specular rim, and a short lift so it reads as raised
+   against the pane behind it. */
 .railTabActive {
-  background: var(--dsw-alias-bg-l2);
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), 0 6px 14px -8px rgba(30, 58, 95, 0.28);
   color: var(--dsw-alias-button-info-fill);
   font-weight: 600;
 }
@@ -132,11 +153,29 @@
   }
 }
 
+/* The header rides the same material as the rail, so the console reads as one
+   workbench rather than a title floating above a pile of glass cards. */
 .pageHeader {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  padding: 16px 20px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 18px;
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .pageHeader {
+    background-color: var(--physics-glass-fill-strong);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 .pageTitle {
