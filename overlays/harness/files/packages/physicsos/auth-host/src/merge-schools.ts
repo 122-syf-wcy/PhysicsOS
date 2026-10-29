@@ -245,6 +245,7 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
   const revocations = asMergeTable(auth.table('device_revocations'))
   const apiResources = asMergeTable(auth.table('api_resources'))
   const schoolRequests = asMergeTable(auth.table('school_requests'))
+  const pendingRegistrations = asMergeTable(auth.table('pending_registrations'))
 
   const classes = asMergeTable(classroom.table('classes'))
   const memberships = asMergeTable(classroom.table('memberships'))
@@ -503,6 +504,11 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
     // source tenant, the operator must resolve it rather than have the merge
     // guess whether the application is historical or still actionable.
     contextual('auth.school_requests', schoolRequests, () => undefined),
+    // A registration waiting on the source tenant is still actionable: the
+    // approver would open an account on a tenant the merge just retired. The
+    // merge therefore refuses and leaves the decision (approve, reject, or
+    // re-register) to the operator, exactly like a school application.
+    contextual('auth.pending_registrations', pendingRegistrations, () => undefined),
   )
 
   adapters.push(

@@ -362,4 +362,28 @@ describe('school tenant merge', () => {
 
     expect(await fixture.readUnit('physicsos_auth')).toBe(before)
   })
+
+  it('refuses a pending registration that would activate on the retired tenant', async () => {
+    fixture = await openMergeFixture()
+    await seedMergeData(fixture.stores)
+    await fixture.stores.auth.table('pending_registrations').put('registration-1', {
+      id: 'registration-1',
+      requestId: 'request-1',
+      schoolId: SOURCE_SCHOOL_ID,
+      schoolName: '贵州测试学校',
+      username: 'bob',
+      displayName: 'Bob',
+      email: 'bob@example.cn',
+      passwordHash: 'argon2id$v=19$m=65536,t=3,p=4$c2FsdA$aGFzaA',
+      status: 'pending',
+      createdAt: '2026-09-26T10:00:00.000Z',
+    })
+    const before = await fixture.readUnit('physicsos_auth')
+
+    await expect(mergeSchoolTenants(fixture.stores, options(true))).rejects.toMatchObject({
+      code: 'MERGE_UNHANDLED_REFERENCE',
+    })
+
+    expect(await fixture.readUnit('physicsos_auth')).toBe(before)
+  })
 })

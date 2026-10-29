@@ -69,6 +69,7 @@ const KNOWN_TABLES: Readonly<Record<
     'reset_requests',
     'password_reset_tokens',
     'school_requests',
+    'pending_registrations',
     'admin_audit',
     'school_merges',
     'learning_counts',
