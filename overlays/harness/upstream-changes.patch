@@ -13337,39 +13337,432 @@ index 603c143fa7..dac91c4d60 100644
        'sidebar.workspaces': { kind: 'single', scope: 'root' },
        'sidebar.settings': { kind: 'single', scope: 'root' },
        'sidebar.footer.action': { kind: 'list', scope: 'root' },
+diff --git a/packages/client/web/src/boot-page.module.css b/packages/client/web/src/boot-page.module.css
+index f154c42761..35be140a13 100644
+--- a/packages/client/web/src/boot-page.module.css
++++ b/packages/client/web/src/boot-page.module.css
+@@ -1,72 +1,245 @@
+ /* The framework-free boot page cannot depend on theme delivery succeeding. */
+ 
++/* A full-bleed white scene, not a themed card: it must look identical before
++   any theme/alias delivery runs. Dark mode keeps the white canvas on purpose —
++   the artwork is a lit campus morning, and a night variant would need a second
++   illustration for a page that lives for under a second. */
+ .boot {
+-  --dsh-boot-label-primary: #0f1115;
+-  --dsh-boot-label-secondary: #61666b;
+-  --dsh-boot-label-tertiary: #81858c;
+-  --dsh-boot-border: rgb(0 0 0 / 10%);
+-  --dsh-boot-brand: #0f1115;
++  --dsh-boot-ink: #16202e;
++  --dsh-boot-ink-soft: #55606f;
++  --dsh-boot-ink-faint: #8b95a3;
++  --dsh-boot-rule: rgb(22 32 46 / 14%);
++  --dsh-boot-accent-from: #22d3ee;
++  --dsh-boot-accent-to: #2f7bff;
+ 
++  position: relative;
+   height: 100%;
+-  display: grid;
+-  place-items: center;
+-  background: var(--dsw-alias-bg-base, var(--dsh-boot-bg, Canvas));
++  overflow: hidden;
++  background: #fff;
++  /* A text stack that reads as designed rather than system-default: a
++     geometric-ish grotesque for the wordmark where the OS has one, falling
++     back through the platform UI faces. No webfont — this page paints before
++     any network request could resolve. */
++  font-family: 'Avenir Next', 'Segoe UI Variable Display', 'Segoe UI',
++    -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC',
++    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
++  -webkit-font-smoothing: antialiased;
++  text-rendering: optimizeLegibility;
++}
++
++/* The cover arrives as a <picture> so each orientation gets its own crop; the
++   picture itself takes the full bleed and the img inside fills it. */
++.boot > picture {
++  position: absolute;
++  inset: 0;
++  display: block;
+ }
+ 
+-:global(body[data-ds-dark-theme]) .boot {
+-  --dsh-boot-label-primary: #f9fafb;
+-  --dsh-boot-label-secondary: #cfd3d6;
+-  --dsh-boot-label-tertiary: #adb2b8;
+-  --dsh-boot-border: rgb(255 255 255 / 12%);
+-  --dsh-boot-brand: #f9fafb;
++.cover {
++  width: 100%;
++  height: 100%;
++  object-fit: cover;
++  object-position: right center;
++  animation: cover-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+ }
+ 
++@keyframes cover-in {
++  from {
++    opacity: 0;
++    transform: scale(1.015);
++  }
++
++  to {
++    opacity: 1;
++    transform: none;
++  }
++}
++
++/* The copy column sits in the artwork's empty left half. It stacks above the
++   cover and, on phones, above the bottom white shelf. */
+ .card {
++  position: relative;
++  z-index: 2;
++  height: 100%;
++  box-sizing: border-box;
+   display: flex;
+   flex-direction: column;
+-  align-items: center;
+-  gap: 16px;
++  justify-content: center;
++  align-items: flex-start;
++  gap: 0;
++  padding: 0 max(7vw, 40px);
++  max-width: 640px;
+ }
+ 
+ .wordmark {
+-  font-size: 16px;
+-  line-height: 24px;
++  font-size: clamp(30px, 3.6vw, 46px);
++  line-height: 1.1;
+   font-weight: 600;
+-  letter-spacing: 0.08em;
+-  color: var(--dsw-alias-label-primary, var(--dsh-boot-label-primary));
++  letter-spacing: -0.021em;
++  color: var(--dsh-boot-ink);
++  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 80ms both;
+ }
+ 
+-.hint {
+-  font-size: 12px;
+-  line-height: 18px;
+-  color: var(--dsw-alias-label-tertiary, var(--dsh-boot-label-tertiary));
++/* A hairline rule under the mark, tinted with the brand gradient — the one
++   piece of colour in the copy column, so the eye lands on the name first. */
++.wordmark::after {
++  content: '';
++  display: block;
++  width: 44px;
++  height: 2px;
++  margin-top: 18px;
++  border-radius: 2px;
++  background: linear-gradient(90deg, var(--dsh-boot-accent-from), var(--dsh-boot-accent-to));
++}
++
++.tagline {
++  margin-top: 22px;
++  /* Wide enough that the sentence breaks at its own comma, not mid-word;
++     `text-wrap: balance` then keeps the two runs visually even. */
++  max-width: 26em;
++  font-size: clamp(14px, 1.18vw, 16px);
++  line-height: 1.85;
++  letter-spacing: 0.01em;
++  color: var(--dsh-boot-ink-soft);
++  text-wrap: balance;
++  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms both;
+ }
+ 
++@keyframes rise {
++  from {
++    opacity: 0;
++    transform: translateY(10px);
++  }
++
++  to {
++    opacity: 1;
++    transform: none;
++  }
++}
++
++/* Progress read-out. The width comes from the real plugin ratio
++   (--dsh-boot-progress); a light sweep travels across it so a slow plugin
++   never looks like a hang. */
+ .spinner {
+   position: relative;
+-  width: 20px;
+-  height: 20px;
+-  border-radius: 50%;
++  width: 132px;
++  height: 3px;
++  margin-top: 40px;
++  border-radius: 999px;
+   corner-shape: round;
+-  border: 2px solid var(--dsw-alias-border-l2, var(--dsh-boot-border));
+-  animation: spin 0.8s linear infinite;
++  background: rgb(22 32 46 / 8%);
++  overflow: hidden;
++  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 260ms both;
+ }
+ 
+-.spinner::after {
++.spinner::before {
+   content: '';
+   position: absolute;
+-  inset: -2px;
++  inset: 0 auto 0 0;
++  width: var(--dsh-boot-progress, 0%);
+   border-radius: inherit;
+-  background: conic-gradient(
+-    var(--dsw-alias-brand-primary, var(--dsh-boot-brand)) var(--dsh-boot-arc, 72deg),
+-    transparent 0
+-  );
+-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
+-  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
++  background: linear-gradient(90deg, var(--dsh-boot-accent-from), var(--dsh-boot-accent-to));
++  box-shadow: 0 0 8px rgb(60 150 255 / 35%);
++  transition: width 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+ }
+ 
+-@keyframes spin {
+-  to { transform: rotate(360deg); }
++.spinner::after {
++  content: '';
++  position: absolute;
++  inset: 0;
++  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 55%), transparent);
++  animation: sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
++}
++
++@keyframes sweep {
++  from {
++    transform: translateX(-100%);
++  }
++
++  to {
++    transform: translateX(100%);
++  }
++}
++
++.hint {
++  margin-top: 14px;
++  font-size: 12.5px;
++  line-height: 18px;
++  letter-spacing: 0.12em;
++  color: var(--dsh-boot-ink-faint);
++  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 320ms both;
++}
++
++/* Portrait viewports cannot split side-by-side. The portrait crop already
++   carries its own white headroom, so the copy goes there — above the figures
++   rather than over them — and the artwork needs no wash at all. */
++@media (width <= 860px) {
++  .cover {
++    object-position: 50% center;
++  }
++
++  .card {
++    justify-content: flex-start;
++    align-items: center;
++    max-width: none;
++    padding: max(12vh, 72px) 24px 0;
++    text-align: center;
++  }
++
++  .wordmark::after {
++    margin-inline: auto;
++  }
++
++  .tagline {
++    max-width: 22em;
++    font-size: 13.5px;
++    line-height: 1.8;
++  }
++
++  /* On a phone the live read-out belongs at the foot of the screen, away from
++     the copy block, so the artwork keeps the middle to itself. It sits on its
++     own white shelf because the artwork reaches the bottom edge there. */
++  .spinner {
++    position: fixed;
++    left: 50%;
++    bottom: calc(7vh + 30px);
++    transform: translateX(-50%);
++    margin-top: 0;
++  }
++
++  .hint {
++    position: fixed;
++    left: 50%;
++    bottom: 7vh;
++    transform: translateX(-50%);
++    margin-top: 0;
++  }
++
++  .boot::after {
++    content: '';
++    position: absolute;
++    inset: auto 0 0;
++    height: 22vh;
++    z-index: 0;
++    pointer-events: none;
++    background: linear-gradient(to bottom, rgb(255 255 255 / 0%) 0%, rgb(255 255 255 / 92%) 58%, #fff 100%);
++  }
++}
++
++/* Motion is decoration: the page is fully legible with all of it switched off,
++   and the progress bar still reports real plugin state. */
++@media (prefers-reduced-motion: reduce) {
++  .cover,
++  .wordmark,
++  .tagline,
++  .spinner,
++  .hint {
++    animation: none;
++  }
++
++  .spinner::after {
++    display: none;
++  }
+ }
+ 
+ .failed {
+@@ -80,7 +253,7 @@
+   font-size: 14px;
+   line-height: 22px;
+   font-weight: 600;
+-  color: var(--dsw-alias-label-primary, var(--dsh-boot-label-primary));
++  color: var(--dsh-boot-ink);
+ }
+ 
+ .failedItem {
+@@ -98,6 +271,6 @@
+   );
+   font-size: 12px;
+   line-height: 18px;
+-  color: var(--dsw-alias-label-secondary, var(--dsh-boot-label-secondary));
++  color: var(--dsh-boot-ink-soft);
+   white-space: pre-wrap;
+ }
 diff --git a/packages/client/web/src/boot-page.ts b/packages/client/web/src/boot-page.ts
-index 23b27ad4bc..05cbf1dc1b 100644
+index 23b27ad4bc..5e4379f221 100644
 --- a/packages/client/web/src/boot-page.ts
 +++ b/packages/client/web/src/boot-page.ts
-@@ -34,10 +34,12 @@ export class BootPage {
+@@ -14,11 +14,53 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
+   return el
+ }
+ 
++/**
++ * Create the cover picture. A `<picture>` rather than a bare `<img>` because
++ * the composition is orientation-specific: the wide art puts the figures right
++ * and the copy left, while a portrait viewport needs a crop that keeps all
++ * three characters. `source` swaps between them at the same breakpoint the
++ * stylesheet uses, so no script has to react to a resize.
++ * @param className - module class applied to the img.
++ * @param alt - accessible name; empty because the page states the product name in text.
++ * @returns the picture element carrying both orientations.
++ */
++function coverPicture(className: string, alt: string): HTMLPictureElement {
++  const picture = document.createElement('picture')
++
++  const portrait = document.createElement('source')
++  portrait.media = '(max-width: 860px)'
++  portrait.srcset = [
++    '/physicsos/splash/splash-portrait-720.webp 720w',
++    '/physicsos/splash/splash-portrait-1080.webp 1080w',
++  ].join(', ')
++  portrait.sizes = '100vw'
++
++  const wide = document.createElement('source')
++  wide.media = '(min-width: 861px)'
++  wide.srcset = [
++    '/physicsos/splash/splash-1280.webp 1280w',
++    '/physicsos/splash/splash-1920.webp 1920w',
++    '/physicsos/splash/splash-2560.webp 2560w',
++  ].join(', ')
++  wide.sizes = '100vw'
++
++  const fallback = document.createElement('img')
++  fallback.className = className
++  fallback.src = '/physicsos/splash/splash-1920.webp'
++  fallback.alt = alt
++  fallback.decoding = 'async'
++
++  picture.append(portrait, wide, fallback)
++  return picture
++}
++
+ /** Kernel-owned page mounted below the application's root element. */
+ export class BootPage {
+   private readonly root: HTMLDivElement
+   private readonly card: HTMLDivElement
++  private readonly cover: HTMLPictureElement
+   private readonly wordmark: HTMLDivElement
++  private readonly tagline: HTMLDivElement
+   private readonly spinner: HTMLDivElement
+   private readonly hint: HTMLDivElement
+   private readonly states = new Map<string, LoaderEntryState>()
+@@ -34,12 +76,23 @@ export class BootPage {
      this.root = div(css.boot)
      this.root.dataset.dshBoot = ''
      this.card = div(css.card)
 -    this.wordmark = div(css.wordmark, 'HARNESS')
-+    /* PhysicsOS overlay: the splash is the product's first frame, so it carries
-+       the product's name and voice rather than the vendored kernel's. */
++    /* The cover is the product's first frame. It is a plain <img> on purpose:
++       this page has to render while every client plugin — React included —
++       fails to load, so it cannot depend on the UI package that owns the
++       mascot components. The asset ships with the shell for the same reason. */
++    this.cover = coverPicture(css.cover ?? '', '')
 +    this.wordmark = div(css.wordmark, 'PhysicsOS')
++    /* The tagline is the product's one-line statement of purpose; it sits
++       right under the wordmark and above the live progress read-out. */
++    this.tagline = div(css.tagline, '如果物理是一束光，我想让它照到没有实验室的地方')
      this.spinner = div(css.spinner)
      this.spinner.dataset.dshBootSpinner = ''
 -    this.hint = div(css.hint, 'Loading plugins…')
+-    this.card.append(this.wordmark, this.spinner, this.hint)
+-    this.root.append(this.card)
 +    this.hint = div(css.hint, '正在准备物理世界…')
-     this.card.append(this.wordmark, this.spinner, this.hint)
-     this.root.append(this.card)
++    this.card.append(this.wordmark, this.tagline, this.spinner, this.hint)
++    /* The cover is a full-bleed background layer, so it belongs to the page,
++       not to the copy column — and the failure report removes it by replacing
++       the card's children only. */
++    this.root.append(this.cover, this.card)
      container.append(this.root)
-@@ -89,7 +91,7 @@ export class BootPage {
+     this.updateProgress()
+   }
+@@ -84,20 +137,25 @@ export class BootPage {
+     const failed = [...this.states].filter(([, state]) => state === 'failed').map(([id]) => id)
+     if (this.failure === undefined && failed.length === 0) {
+       if (this.spinner.parentElement !== this.card) {
+-        this.card.replaceChildren(this.wordmark, this.spinner, this.hint)
++        this.card.replaceChildren(this.wordmark, this.tagline, this.spinner, this.hint)
+       }
        return
      }
++    /* A failure report replaces the cover: the student needs the entry names,
++       and an illustration above them would only push the diagnosis down. */
      const report = div(css.failed)
 -    report.append(div(css.failedTitle, 'Failed to load plugins'))
 +    report.append(div(css.failedTitle, '插件加载失败'))
      for (const id of failed) report.append(div(css.failedItem, id))
      if (this.failure !== undefined) report.append(div(css.failedItem, this.failure))
      this.card.replaceChildren(this.wordmark, report)
+   }
+ 
+-  /** Grow the rotating arc monotonically as loader entries activate. */
++  /** Grow the progress sweep monotonically as loader entries activate. */
+   private updateProgress(): void {
+     const ratio = this.total === 0 ? 0 : Math.min(this.active.size / this.total, 1)
+     this.spinner.style.setProperty('--dsh-boot-arc', `${String(Math.round(72 + ratio * 216))}deg`)
++    /* The bar width is the same ratio in its own unit; keeping both means the
++       failed-state report and any CSS that only knows the bar still line up. */
++    this.spinner.style.setProperty('--dsh-boot-progress', `${String(Math.round(ratio * 100))}%`)
+   }
+ }
 diff --git a/packages/client/web/tests/boot-page.client.spec.ts b/packages/client/web/tests/boot-page.client.spec.ts
-index 33612e8a47..ca2b91d44d 100644
+index 33612e8a47..338bb76d53 100644
 --- a/packages/client/web/tests/boot-page.client.spec.ts
 +++ b/packages/client/web/tests/boot-page.client.spec.ts
-@@ -14,8 +14,8 @@ describe('BootPage', () => {
+@@ -14,8 +14,24 @@ describe('BootPage', () => {
    it('draws the loading skeleton before any plugin state arrives', () => {
      const { el } = mount()
      expect(el.firstElementChild?.getAttribute('data-dsh-boot')).toBe('')
@@ -13377,10 +13770,26 @@ index 33612e8a47..ca2b91d44d 100644
 -    expect(el.textContent).toContain('Loading plugins…')
 +    expect(el.textContent).toContain('PhysicsOS')
 +    expect(el.textContent).toContain('正在准备物理世界…')
++  })
++
++  it('serves a cover per orientation without a script watching the viewport', () => {
++    const { el } = mount()
++    const sources = [...el.querySelectorAll('picture > source')]
++    expect(sources.map(source => source.getAttribute('media'))).toEqual([
++      '(max-width: 860px)',
++      '(min-width: 861px)',
++    ])
++    // The portrait crop and the wide crop are different files: the wide art
++    // puts the figures right, so reusing it on a phone would cut two of them.
++    const portrait = sources[0]?.getAttribute('srcset') ?? ''
++    const wide = sources[1]?.getAttribute('srcset') ?? ''
++    expect(portrait).toContain('splash-portrait-')
++    expect(wide).toContain('splash-1920.webp')
++    expect(portrait).not.toBe(wide)
    })
-
+ 
    it('keeps loading while entries are active or loading', () => {
-@@ -29,8 +29,8 @@ describe('BootPage', () => {
+@@ -29,8 +45,8 @@ describe('BootPage', () => {
      expect(el.querySelector('[data-dsh-boot-spinner]')).toBe(spinner)
      page.setState('b', 'active')
      expect(spinner?.style.getPropertyValue('--dsh-boot-arc')).toBe('288deg')
@@ -13389,25 +13798,25 @@ index 33612e8a47..ca2b91d44d 100644
 +    expect(el.textContent).toContain('正在准备物理世界…')
 +    expect(el.textContent).not.toContain('插件加载失败')
    })
-
+ 
    it('lists failed entries', () => {
-@@ -41,7 +41,7 @@ describe('BootPage', () => {
+@@ -41,7 +57,7 @@ describe('BootPage', () => {
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-layout')
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-tool')
      expect(el.textContent).not.toContain('ok')
 -    expect(el.textContent).not.toContain('Loading plugins…')
 +    expect(el.textContent).not.toContain('正在准备物理世界…')
    })
-
+ 
    it('shows the complete sweep report', () => {
-@@ -50,7 +50,7 @@ describe('BootPage', () => {
+@@ -50,7 +66,7 @@ describe('BootPage', () => {
      page.fail(report)
      page.setState('a', 'active')
      expect(el.textContent).toContain(report)
 -    expect(el.textContent).not.toContain('Loading plugins…')
 +    expect(el.textContent).not.toContain('正在准备物理世界…')
    })
-
+ 
    it('detaches on disposal', () => {
 diff --git a/packages/client/web/tests/boot.client.spec.ts b/packages/client/web/tests/boot.client.spec.ts
 index e5e632941a..d41ddf47c8 100644

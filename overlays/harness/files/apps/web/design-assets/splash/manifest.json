@@ -1,0 +1,41 @@
+{
+  "brand": "PhysicsOS",
+  "purpose": "Startup / boot page cover",
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "https://image.haqiuhaqiu.xyz",
+  "master": "splash-campus-wide-master.png",
+  "master_size": "1672x941",
+  "scene": "sunlit Chinese high-school corridor; the figures fill the right ~45%, the left half left deliberately empty for the wordmark and tagline",
+  "style_lock": {
+    "name": "campus-watercolour-cartoon",
+    "note": "All future PhysicsOS character art follows this style: bright watercolour cartoon, large expressive eyes, soft rounded faces, clean fine linework, warm daylight, white-leaning background. Not photographic, not 3D matte, not Q-version chibi.",
+    "reuse_for": [
+      "home hero illustration",
+      "empty-state illustrations",
+      "onboarding panels",
+      "share cards"
+    ]
+  },
+  "character_sheet": {
+    "boy": "black short hair, slightly tousled; cream knit short-sleeve tee with a buttoned placket",
+    "girl": "long dark wavy hair with bangs; clear round glasses; navy striped top; dark knit cardigan",
+    "cat": "silver tabby; CREAM BACK PATCH (its signature mark, must never be dropped); white muzzle and chest; grey forehead tabby M; pink nose; big pointed ears with pink inner ear; amber round eyes; dark tail tip; pale blue collar"
+  },
+  "derivatives": {
+    "wide": [
+      "/physicsos/splash/splash-1280.webp",
+      "/physicsos/splash/splash-1920.webp",
+      "/physicsos/splash/splash-2560.webp"
+    ],
+    "portrait": [
+      "/physicsos/splash/splash-portrait-720.webp",
+      "/physicsos/splash/splash-portrait-1080.webp"
+    ],
+    "portrait_note": "Cropped from the same master and padded with white headroom so the bottom-anchored phone copy never lands on a face; regenerating the master means re-deriving these."
+  },
+  "copy": {
+    "wordmark": "PhysicsOS",
+    "tagline": "如果物理是一束光，我想让它照到没有实验室的地方",
+    "note": "Text is rendered by the shell in live text, never baked into the raster — the artwork must stay wordmark-free."
+  }
+}
