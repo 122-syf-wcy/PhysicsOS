@@ -12310,8 +12310,52 @@ index 0000000000..3911cc7ec9
 +    expect(out).toEqual([{ type: 'order', workspaceIds: ['own-a'] }])
 +  })
 +})
+diff --git a/packages/bundle/web-app/README.md b/packages/bundle/web-app/README.md
+index a798b7f506..d9d126cffb 100644
+--- a/packages/bundle/web-app/README.md
++++ b/packages/bundle/web-app/README.md
+@@ -63,7 +63,7 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the
+
+ ### Per-session agent setup
+
+-Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Creator's plugin-management tool is enabled only when the Host provides an editable profile.
++Each browser session selects a shipped preset (`physics-student` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Creator's plugin-management tool is enabled only when the Host provides an editable profile.
+
+ -----
+
+@@ -94,7 +94,7 @@ The URL line and browser handoff are readiness signals: supervisors RPC as soon
+ | [`src/index.ts`](src/index.ts) | The `web-app` glue plugin: dist resolution, LAN trust sampling, prompt sections, bash variable, URL line, browser handoff |
+ | [`src/startup.ts`](src/startup.ts) | The `web-startup` provider: `--host`, `--port`, `--trusted-host`, `--no-open`, `--help` |
+ | [`cordis.patch.yml`](cordis.patch.yml) | The web patch: restated base values, web host rows, browser roster, preset registry |
+-| [`presets/`](presets) | One `@deepseek-ai/dsh-agent-preset` declaration per shipped preset (`standard`, `ptc`, `minimal`, `cordis`), each its own patch file |
++| [`presets/`](presets) | One `@deepseek-ai/dsh-agent-preset` declaration per shipped preset (`physics-student`), each its own patch file |
+ | — | No runtime invariant companion is published; every contribution (frontend-static child plugin, prompt section, bashEnv registration) is registry-disposed with the fiber, and each owning registry's package carries that relation's invariant; the package holds no mutable state of its own to audit. |
+ | [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | Dist resolution, fallback seat, prompt sections, readiness |
+ | [`tests/startup.spec.ts`](tests/startup.spec.ts) | Command-line parsing over a real Loader tree |
+diff --git a/packages/bundle/web-app/README.zh.md b/packages/bundle/web-app/README.zh.md
+index 9ea8e7e868..47ad5cdd96 100644
+--- a/packages/bundle/web-app/README.zh.md
++++ b/packages/bundle/web-app/README.zh.md
+@@ -63,7 +63,7 @@ dsh --profile web --no-open --port 8080
+
+ ### 按会话的 agent 设置
+
+-每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，Creator 的插件管理工具才会启用。
++每个浏览器会话选择一个随发行版交付的 preset（默认 `physics-student`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，Creator 的插件管理工具才会启用。
+
+ -----
+
+@@ -94,7 +94,7 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发
+ | [`src/index.ts`](src/index.ts) | `web-app` 粘合插件：dist 解析、LAN 信任采样、提示词段落、bash 变量、URL 行、浏览器交接 |
+ | [`src/startup.ts`](src/startup.ts) | `web-startup` 提供方：`--host`、`--port`、`--trusted-host`、`--no-open`、`--help` |
+ | [`cordis.patch.yml`](cordis.patch.yml) | Web patch：重述的基础值、Web 宿主行、浏览器名录、preset 注册表 |
+-| [`presets/`](presets) | 每个随发行版交付的 preset（`standard`、`ptc`、`minimal`、`cordis`）各一条 `@deepseek-ai/dsh-agent-preset` 声明，各自一个补丁文件 |
++| [`presets/`](presets) | 每个随发行版交付的 preset（`physics-student`）各一条 `@deepseek-ai/dsh-agent-preset` 声明，各自一个补丁文件 |
+ | — | 不发布运行时不变式伴生入口；每项贡献（frontend-static 子插件、提示词段落、bashEnv 注册）都会随 fiber 由注册表释放，且每个所属注册表的包负责该关系的不变式；本包不持有需要审计的可变状态。 |
+ | [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | dist 解析、回退席位、提示词段落、就绪宣告 |
+ | [`tests/startup.spec.ts`](tests/startup.spec.ts) | 在真实 Loader 树上的命令行解析 |
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c98289bc3e..8c3cff6d3f 100644
+index c98289bc3e..eac75dc83d 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -29,6 +29,17 @@
@@ -12431,29 +12475,41 @@ index c98289bc3e..8c3cff6d3f 100644
      - id: ui-approval
        name: '@deepseek-ai/dsh-client-ui-approval'
 
+@@ -559,4 +655,4 @@
+     - id: agent-preset-registry
+       name: '@deepseek-ai/dsh-agent-preset-registry'
+       config:
+-        default: standard
++        default: physics-student
 diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
-index fb56be4231..85e40b6b62 100644
+index fb56be4231..15431a5c1b 100644
 --- a/packages/bundle/web-app/package.json
 +++ b/packages/bundle/web-app/package.json
-@@ -35,6 +35,7 @@
-     "presets/ptc.patch.yml",
-     "presets/minimal.patch.yml",
-     "presets/cordis.patch.yml",
+@@ -31,10 +31,7 @@
+     "lib/index.js",
+     "lib/startup.js",
+     "cordis.patch.yml",
+-    "presets/standard.patch.yml",
+-    "presets/ptc.patch.yml",
+-    "presets/minimal.patch.yml",
+-    "presets/cordis.patch.yml",
 +    "presets/physics-student.patch.yml",
      "lib/types/**/*.d.ts"
    ],
    "license": "MIT",
-@@ -45,7 +46,8 @@
-         "./presets/standard.patch.yml",
-         "./presets/ptc.patch.yml",
-         "./presets/minimal.patch.yml",
+@@ -42,10 +39,7 @@
+     "bundle": {
+       "patch": [
+         "./cordis.patch.yml",
+-        "./presets/standard.patch.yml",
+-        "./presets/ptc.patch.yml",
+-        "./presets/minimal.patch.yml",
 -        "./presets/cordis.patch.yml"
-+        "./presets/cordis.patch.yml",
 +        "./presets/physics-student.patch.yml"
        ]
      }
    },
-@@ -62,6 +64,7 @@
+@@ -62,6 +56,7 @@
      "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",
      "@deepseek-ai/dsh-api-workspace-files": "workspace:*",
      "@deepseek-ai/dsh-app-boot": "workspace:*",
@@ -12461,7 +12517,7 @@ index fb56be4231..85e40b6b62 100644
      "@deepseek-ai/dsh-client-connection": "workspace:*",
      "@deepseek-ai/dsh-client-file-upload": "workspace:*",
      "@deepseek-ai/dsh-client-hmr": "workspace:*",
-@@ -88,6 +91,7 @@
+@@ -88,6 +83,7 @@
      "@deepseek-ai/dsh-client-ui-open-in-app": "workspace:*",
      "@deepseek-ai/dsh-client-ui-permission-presets": "workspace:*",
      "@deepseek-ai/dsh-client-ui-plan": "workspace:*",
@@ -12469,7 +12525,7 @@ index fb56be4231..85e40b6b62 100644
      "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
      "@deepseek-ai/dsh-client-ui-reference": "workspace:*",
      "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
-@@ -132,9 +136,16 @@
+@@ -132,9 +128,16 @@
      "@deepseek-ai/dsh-host-open-in-app": "workspace:*",
      "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
      "@deepseek-ai/dsh-host-webserver": "workspace:*",
@@ -12486,7 +12542,7 @@ index fb56be4231..85e40b6b62 100644
      "@deepseek-ai/dsh-persona": "workspace:*",
      "@deepseek-ai/dsh-plan-mode": "workspace:*",
      "@deepseek-ai/dsh-plugin-manager": "workspace:*",
-@@ -143,7 +154,9 @@
+@@ -143,7 +146,9 @@
      "@deepseek-ai/dsh-session-reference": "workspace:*",
      "@deepseek-ai/dsh-session-stats": "workspace:*",
      "@deepseek-ai/dsh-session-turn-outline": "workspace:*",
@@ -12496,7 +12552,7 @@ index fb56be4231..85e40b6b62 100644
      "@deepseek-ai/dsh-subprocess": "workspace:*",
      "@deepseek-ai/dsh-terminal": "workspace:*",
      "@deepseek-ai/dsh-terminal-bash": "workspace:*",
-@@ -166,6 +179,7 @@
+@@ -166,6 +171,7 @@
      "@deepseek-ai/dsh-tool-todo": "workspace:*",
      "@deepseek-ai/dsh-tool-web": "workspace:*",
      "@deepseek-ai/dsh-tool-workflow": "workspace:*",

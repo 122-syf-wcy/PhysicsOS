@@ -10,7 +10,7 @@
 
 import { createHash } from 'node:crypto'
 import {
-  blueprintById, documentHash, planPaper, proposeSpecTable, runChecks, stemFingerprint,
+  EXAM_BLUEPRINTS, blueprintById, documentHash, planPaper, proposeSpecTable, runChecks, stemFingerprint,
   type BankItem, type BankSelectionPolicy, type BankUsage, type CheckFinding,
   type ExamBlueprint, type ExportBundle, type KnowledgeAnnotation, type KnowledgePoolEntry,
   type PaperApproval, type PaperDocument, type PaperJob, type PaperJobStatus,
@@ -188,8 +188,11 @@ export class PaperService {
    */
   listBlueprints(): ExamBlueprint[] {
     const stored = [...this.domain.table('blueprints').entries()].map(([, record]) => record)
-    /* Built-in templates register on first sight as pending rows. */
-    return stored
+    /* A built-in template has no row until someone verifies it; list it as
+       pending until then so the admin can verify it from the console. Once
+       verified, the stored row replaces it. */
+    const storedIds = new Set(stored.map(row => row.id))
+    return [...stored, ...EXAM_BLUEPRINTS.filter(row => !storedIds.has(row.id))]
   }
 
   /**

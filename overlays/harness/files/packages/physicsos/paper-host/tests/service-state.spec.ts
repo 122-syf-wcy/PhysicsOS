@@ -156,3 +156,19 @@ describe('paper insert serialization', () => {
     expect(domain.table('blueprints').get(input.id)?.title).toBe('first')
   })
 })
+
+describe('structure templates', () => {
+  it('lists built-in templates as pending until one is verified', async () => {
+    const service = new PaperService(makeFakeDomain())
+    expect(service.listBlueprints().map(row => [row.id, row.status])).toEqual([
+      ['gz-zk-physics', 'pending'],
+      ['gz-gk-physics', 'pending'],
+    ])
+    await service.verifyBlueprint('gz-zk-physics')
+    const rows = service.listBlueprints()
+    expect(rows.map(row => [row.id, row.status])).toEqual([
+      ['gz-zk-physics', 'verified'],
+      ['gz-gk-physics', 'pending'],
+    ])
+  })
+})
