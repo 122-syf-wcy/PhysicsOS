@@ -62,10 +62,26 @@ RUN node scripts/overlay/harness-overlay.mjs apply
 # overlay is applied above it), and without the mount each rebuild re-downloaded
 # the whole ~1400-package closure — minutes of network per build for artefacts
 # that never changed.
+#
+# `fetchTimeout` is the per-request budget for each tarball, body included, and
+# pnpm's default is 60s. This host reaches the registry at ~1.2–1.7 MB/s in
+# total; the vendored closure's large binaries (codex, sherpa-onnx, cua-driver,
+# libreoffice-kit-wasm, …) share that across parallel streams and cannot finish
+# in 60s, so every attempt aborts and restarts from zero. Three attempts plus
+# backoff is 60+10+60+60+60s, which is why the install always died ~250s in with
+# `error (23)` — DOMException.TIMEOUT_ERR from AbortSignal.timeout, not a disk
+# or curl write error. pnpm 11 only reads this setting as a top-level key of
+# pnpm-workspace.yaml: the `.npmrc` key, a nested `settings:` block and a
+# `--fetch-timeout` flag are all ignored or rejected.
+#
+# `--trust-lockfile` skips re-applying minimumReleaseAge/trustPolicy to all 1700
+# lockfile entries; that sweep alone cost 2m21s here. The lockfile is committed
+# and reviewed, which is the case the flag documents.
 RUN --mount=type=cache,target=/pnpm/store,sharing=locked \
-    printf 'onlyBuiltDependencies:\n  - node-pty\n' >> vendor/deepseek-harness/pnpm-workspace.yaml \
-    && pnpm install --frozen-lockfile \
-    && pnpm -C vendor/deepseek-harness install --frozen-lockfile \
+    printf 'onlyBuiltDependencies:\n  - node-pty\nfetchTimeout: 1800000\n' \
+        >> vendor/deepseek-harness/pnpm-workspace.yaml \
+    && pnpm install --frozen-lockfile --trust-lockfile \
+    && pnpm -C vendor/deepseek-harness install --frozen-lockfile --trust-lockfile \
     && pnpm -C vendor/deepseek-harness rebuild node-pty
 
 # The JSONL session backend takes its cross-process write lock through the

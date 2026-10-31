@@ -1332,6 +1332,6 @@ export const RENDERERS = {
   induction: InductionDomainRenderer,
   wave: WaveRenderer,
   modern: ModernRenderer,
-} as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement>
+} as const satisfies Record<SceneVisualModel['domain'], (props: RendererProps) => ReactElement | null>
 
 export { CompositeRenderer, ElectricRenderer, MagneticRenderer, MechanicsRenderer }
