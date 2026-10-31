@@ -1,6 +1,6 @@
 # PhysicsOS 发布手册
 
-发布只从已通过 CI 的 commit 或 tag 开始。生产部署、备份和恢复的完整操作以 [`13-DEPLOYMENT-OPERATIONS.md`](./13-DEPLOYMENT-OPERATIONS.md) 为准，本页只描述发布入口、签名材料和检查清单。
+发布只从已通过 CI 的 commit 或 tag 开始。生产部署、备份和恢复的完整操作以 [`13-DEPLOYMENT-OPERATIONS.md`](./13-DEPLOYMENT-OPERATIONS.md) 为准，本页只描述发布入口、签名材料和检查清单。日常在生产服务器上构建并切换镜像，照 [`FAST-DEPLOY.md`](./FAST-DEPLOY.md) 操作。
 
 ## 服务端镜像发布
 
