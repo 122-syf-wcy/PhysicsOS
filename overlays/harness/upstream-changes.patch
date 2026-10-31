@@ -12311,7 +12311,7 @@ index 0000000000..3911cc7ec9
 +  })
 +})
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c98289bc3e..94fa68a490 100644
+index c98289bc3e..8c3cff6d3f 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -29,6 +29,17 @@
@@ -13338,12 +13338,12 @@ index 603c143fa7..dac91c4d60 100644
        'sidebar.settings': { kind: 'single', scope: 'root' },
        'sidebar.footer.action': { kind: 'list', scope: 'root' },
 diff --git a/packages/client/web/src/boot-page.module.css b/packages/client/web/src/boot-page.module.css
-index f154c42761..35be140a13 100644
+index f154c42761..6540713fc1 100644
 --- a/packages/client/web/src/boot-page.module.css
 +++ b/packages/client/web/src/boot-page.module.css
-@@ -1,72 +1,245 @@
+@@ -1,72 +1,260 @@
  /* The framework-free boot page cannot depend on theme delivery succeeding. */
- 
+
 +/* A full-bleed white scene, not a themed card: it must look identical before
 +   any theme/alias delivery runs. Dark mode keeps the white canvas on purpose —
 +   the artwork is a lit campus morning, and a night variant would need a second
@@ -13360,12 +13360,9 @@ index f154c42761..35be140a13 100644
 +  --dsh-boot-rule: rgb(22 32 46 / 14%);
 +  --dsh-boot-accent-from: #22d3ee;
 +  --dsh-boot-accent-to: #2f7bff;
- 
+
 +  position: relative;
-   height: 100%;
--  display: grid;
--  place-items: center;
--  background: var(--dsw-alias-bg-base, var(--dsh-boot-bg, Canvas));
++  height: 100%;
 +  overflow: hidden;
 +  background: #fff;
 +  /* A text stack that reads as designed rather than system-default: a
@@ -13379,28 +13376,46 @@ index f154c42761..35be140a13 100644
 +  text-rendering: optimizeLegibility;
 +}
 +
++/* Lifted above the mounted application during the handoff, so the renderer
++   draws underneath and the page fades out instead of vanishing on the frame
++   React takes the mount point. */
++.floating {
++  position: fixed;
++  inset: 0;
++  z-index: 2147483000;
++  transition: opacity 520ms cubic-bezier(0.4, 0, 0.2, 1);
++}
++
++.leaving {
++  opacity: 0;
++  pointer-events: none;
++}
++
 +/* The cover arrives as a <picture> so each orientation gets its own crop; the
 +   picture itself takes the full bleed and the img inside fills it. */
 +.boot > picture {
 +  position: absolute;
 +  inset: 0;
 +  display: block;
++}
++
++.cover {
++  width: 100%;
+   height: 100%;
+-  display: grid;
+-  place-items: center;
+-  background: var(--dsw-alias-bg-base, var(--dsh-boot-bg, Canvas));
++  object-fit: cover;
++  object-position: right center;
++  animation: cover-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
  }
- 
+
 -:global(body[data-ds-dark-theme]) .boot {
 -  --dsh-boot-label-primary: #f9fafb;
 -  --dsh-boot-label-secondary: #cfd3d6;
 -  --dsh-boot-label-tertiary: #adb2b8;
 -  --dsh-boot-border: rgb(255 255 255 / 12%);
 -  --dsh-boot-brand: #f9fafb;
-+.cover {
-+  width: 100%;
-+  height: 100%;
-+  object-fit: cover;
-+  object-position: right center;
-+  animation: cover-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
- }
- 
 +@keyframes cover-in {
 +  from {
 +    opacity: 0;
@@ -13411,8 +13426,8 @@ index f154c42761..35be140a13 100644
 +    opacity: 1;
 +    transform: none;
 +  }
-+}
-+
+ }
+
 +/* The copy column sits in the artwork's empty left half. It stacks above the
 +   cover and, on phones, above the bottom white shelf. */
  .card {
@@ -13430,7 +13445,7 @@ index f154c42761..35be140a13 100644
 +  padding: 0 max(7vw, 40px);
 +  max-width: 640px;
  }
- 
+
  .wordmark {
 -  font-size: 16px;
 -  line-height: 24px;
@@ -13443,7 +13458,7 @@ index f154c42761..35be140a13 100644
 +  color: var(--dsh-boot-ink);
 +  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 80ms both;
  }
- 
+
 -.hint {
 -  font-size: 12px;
 -  line-height: 18px;
@@ -13471,8 +13486,8 @@ index f154c42761..35be140a13 100644
 +  color: var(--dsh-boot-ink-soft);
 +  text-wrap: balance;
 +  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms both;
- }
- 
++}
++
 +@keyframes rise {
 +  from {
 +    opacity: 0;
@@ -13483,8 +13498,8 @@ index f154c42761..35be140a13 100644
 +    opacity: 1;
 +    transform: none;
 +  }
-+}
-+
+ }
+
 +/* Progress read-out. The width comes from the real plugin ratio
 +   (--dsh-boot-progress); a light sweep travels across it so a slow plugin
 +   never looks like a hang. */
@@ -13504,7 +13519,7 @@ index f154c42761..35be140a13 100644
 +  overflow: hidden;
 +  animation: rise 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 260ms both;
  }
- 
+
 -.spinner::after {
 +.spinner::before {
    content: '';
@@ -13522,10 +13537,8 @@ index f154c42761..35be140a13 100644
 +  background: linear-gradient(90deg, var(--dsh-boot-accent-from), var(--dsh-boot-accent-to));
 +  box-shadow: 0 0 8px rgb(60 150 255 / 35%);
 +  transition: width 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
- }
- 
--@keyframes spin {
--  to { transform: rotate(360deg); }
++}
++
 +.spinner::after {
 +  content: '';
 +  position: absolute;
@@ -13542,8 +13555,10 @@ index f154c42761..35be140a13 100644
 +  to {
 +    transform: translateX(100%);
 +  }
-+}
-+
+ }
+
+-@keyframes spin {
+-  to { transform: rotate(360deg); }
 +.hint {
 +  margin-top: 14px;
 +  font-size: 12.5px;
@@ -13624,18 +13639,18 @@ index f154c42761..35be140a13 100644
 +    display: none;
 +  }
  }
- 
+
  .failed {
-@@ -80,7 +253,7 @@
+@@ -80,7 +268,7 @@
    font-size: 14px;
    line-height: 22px;
    font-weight: 600;
 -  color: var(--dsw-alias-label-primary, var(--dsh-boot-label-primary));
 +  color: var(--dsh-boot-ink);
  }
- 
+
  .failedItem {
-@@ -98,6 +271,6 @@
+@@ -98,6 +286,6 @@
    );
    font-size: 12px;
    line-height: 18px;
@@ -13644,13 +13659,13 @@ index f154c42761..35be140a13 100644
    white-space: pre-wrap;
  }
 diff --git a/packages/client/web/src/boot-page.ts b/packages/client/web/src/boot-page.ts
-index 23b27ad4bc..5e4379f221 100644
+index 23b27ad4bc..c9b4bfa6a8 100644
 --- a/packages/client/web/src/boot-page.ts
 +++ b/packages/client/web/src/boot-page.ts
-@@ -14,11 +14,53 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
+@@ -14,34 +14,142 @@ function div(className: string | undefined, text?: string): HTMLDivElement {
    return el
  }
- 
+
 +/**
 + * Create the cover picture. A `<picture>` rather than a bare `<img>` because
 + * the composition is orientation-specific: the wide art puts the figures right
@@ -13691,6 +13706,22 @@ index 23b27ad4bc..5e4379f221 100644
 +  return picture
 +}
 +
++/**
++ * Shortest time the page stays on screen. Plugin activation on a warm cache
++ * finishes in a few hundred milliseconds, which made the cover flash past
++ * before it could be read; the page is the product's first frame, so it holds
++ * long enough to register and lets the progress bar run its course.
++ */
++export const BOOT_PAGE_HOLD_MS = 2400
++
++/** Fade-out duration once the application has mounted underneath. */
++const BOOT_PAGE_LEAVE_MS = 520
++
++/** Resolve after `ms` milliseconds. */
++function wait(ms: number): Promise<void> {
++  return new Promise(resolve => setTimeout(resolve, ms))
++}
++
  /** Kernel-owned page mounted below the application's root element. */
  export class BootPage {
    private readonly root: HTMLDivElement
@@ -13701,7 +13732,22 @@ index 23b27ad4bc..5e4379f221 100644
    private readonly spinner: HTMLDivElement
    private readonly hint: HTMLDivElement
    private readonly states = new Map<string, LoaderEntryState>()
-@@ -34,12 +76,23 @@ export class BootPage {
+   private readonly active = new Set<string>()
+   private total = 0
+   private failure: string | undefined
++  private readonly startedAt = Date.now()
++  private readonly holdMs: number
++  private finished = false
++  private frame: ReturnType<typeof setTimeout> | undefined
+
+   /**
+    * Build and attach the boot page.
+    * @param container - Application mount point.
++   * @param holdMs - Minimum time on screen; see {@link BOOT_PAGE_HOLD_MS}.
+    */
+-  constructor(container: HTMLElement) {
++  constructor(container: HTMLElement, holdMs = BOOT_PAGE_HOLD_MS) {
++    this.holdMs = holdMs
      this.root = div(css.boot)
      this.root.dataset.dshBoot = ''
      this.card = div(css.card)
@@ -13728,8 +13774,71 @@ index 23b27ad4bc..5e4379f221 100644
 +    this.root.append(this.cover, this.card)
      container.append(this.root)
      this.updateProgress()
++    this.scheduleTick()
++  }
++
++  /**
++   * Hold until the minimum time on screen has passed, then fill the bar.
++   * Call once every client entry has activated, before the renderer mounts.
++   */
++  async complete(): Promise<void> {
++    const remaining = this.holdMs - (Date.now() - this.startedAt)
++    if (remaining > 0) await wait(remaining)
++    this.finished = true
++    this.hint.textContent = '准备就绪 100%'
++    this.updateProgress()
++    /* Let the bar's width transition land on 100% before the page leaves. */
++    if (this.holdMs > 0) await wait(380)
++  }
++
++  /**
++   * Hand the mount point to the renderer without a blank frame: the page is
++   * lifted out of the container into a fixed layer above it, then fades out
++   * once the application has drawn underneath.
++   */
++  float(): void {
++    this.root.classList.add(css.floating ?? '')
++    this.root.ownerDocument.body.append(this.root)
++  }
++
++  /** Fade the floated page out and remove it. */
++  async leave(): Promise<void> {
++    this.stopTick()
++    this.root.classList.add(css.leaving ?? '')
++    if (this.holdMs > 0) await wait(BOOT_PAGE_LEAVE_MS)
++    this.root.remove()
    }
-@@ -84,20 +137,25 @@ export class BootPage {
+
+   /**
+@@ -71,33 +179,63 @@ export class BootPage {
+    */
+   fail(message: string): void {
+     this.failure = message
++    this.stopTick()
+     this.render()
+   }
+
+   /** Detach the page before or after the UI renderer takes the mount point. */
+   dispose(): void {
++    this.stopTick()
+     this.root.remove()
+   }
+
++  /** Re-project the bar about every frame so it advances smoothly with time. */
++  private scheduleTick(): void {
++    this.frame = setTimeout(() => {
++      this.updateProgress()
++      if (!this.finished && this.failure === undefined) this.scheduleTick()
++    }, 50)
++  }
++
++  private stopTick(): void {
++    if (this.frame !== undefined) clearTimeout(this.frame)
++    this.frame = undefined
++  }
++
+   /** Redraw the state-dependent content below the wordmark. */
+   private render(): void {
      const failed = [...this.states].filter(([, state]) => state === 'failed').map(([id]) => id)
      if (this.failure === undefined && failed.length === 0) {
        if (this.spinner.parentElement !== this.card) {
@@ -13747,22 +13856,69 @@ index 23b27ad4bc..5e4379f221 100644
      if (this.failure !== undefined) report.append(div(css.failedItem, this.failure))
      this.card.replaceChildren(this.wordmark, report)
    }
- 
+
 -  /** Grow the rotating arc monotonically as loader entries activate. */
-+  /** Grow the progress sweep monotonically as loader entries activate. */
++  /**
++   * Grow the progress sweep monotonically. The bar shows the lesser of real
++   * plugin activation and an eased clock over the hold time, so a fast load
++   * still reads as a load and a slow one never runs ahead of the truth.
++   */
    private updateProgress(): void {
-     const ratio = this.total === 0 ? 0 : Math.min(this.active.size / this.total, 1)
+-    const ratio = this.total === 0 ? 0 : Math.min(this.active.size / this.total, 1)
++    const real = this.total === 0 ? 0 : Math.min(this.active.size / this.total, 1)
++    const t = this.holdMs <= 0 ? 1 : Math.min((Date.now() - this.startedAt) / this.holdMs, 1)
++    const clock = t >= 1 ? 1 : 0.96 * (1 - (1 - t) ** 3)
++    const ratio = this.finished ? 1 : Math.min(real, clock)
++    if (!this.finished && this.failure === undefined && this.hint.isConnected) {
++      this.hint.textContent = `正在准备物理世界… ${String(Math.round(ratio * 100))}%`
++    }
      this.spinner.style.setProperty('--dsh-boot-arc', `${String(Math.round(72 + ratio * 216))}deg`)
 +    /* The bar width is the same ratio in its own unit; keeping both means the
 +       failed-state report and any CSS that only knows the bar still line up. */
 +    this.spinner.style.setProperty('--dsh-boot-progress', `${String(Math.round(ratio * 100))}%`)
    }
  }
+diff --git a/packages/client/web/src/boot.ts b/packages/client/web/src/boot.ts
+index 6602223c4c..b167712d44 100644
+--- a/packages/client/web/src/boot.ts
++++ b/packages/client/web/src/boot.ts
+@@ -94,7 +94,10 @@ export class AppWebEntry {
+       // know that trap. It installs before the first mount, so the surface the
+       // renderer draws is the one the first frame measures.
+       this.stopDragRecall = installWindowDragRecall({ document: this.container.ownerDocument })
++      await this.page.complete()
++      this.page.float()
+       await mountClient(ctx, this.container)
++      await this.page.leave()
+     } catch (reason) {
+       console.error(reason)
+       if (onFailure !== undefined) onFailure(reason)
 diff --git a/packages/client/web/tests/boot-page.client.spec.ts b/packages/client/web/tests/boot-page.client.spec.ts
-index 33612e8a47..338bb76d53 100644
+index 33612e8a47..aaa08bfde5 100644
 --- a/packages/client/web/tests/boot-page.client.spec.ts
 +++ b/packages/client/web/tests/boot-page.client.spec.ts
-@@ -14,8 +14,24 @@ describe('BootPage', () => {
+@@ -1,21 +1,41 @@
+ // @vitest-environment jsdom
+-import { afterEach, describe, expect, it } from 'vitest'
++import { afterEach, describe, expect, it, vi } from 'vitest'
+ import { BootPage } from '../src/boot-page.ts'
+
+-afterEach(() => { document.body.innerHTML = '' })
++afterEach(() => {
++  vi.useRealTimers()
++  document.body.innerHTML = ''
++})
+
+-function mount() {
++/** Mount with no hold so the bar reports plugin activation directly. */
++function mount(holdMs = 0) {
+   const el = document.createElement('div')
+   document.body.append(el)
+-  return { el, page: new BootPage(el) }
++  return { el, page: new BootPage(el, holdMs) }
+ }
+
+ describe('BootPage', () => {
    it('draws the loading skeleton before any plugin state arrives', () => {
      const { el } = mount()
      expect(el.firstElementChild?.getAttribute('data-dsh-boot')).toBe('')
@@ -13787,9 +13943,9 @@ index 33612e8a47..338bb76d53 100644
 +    expect(wide).toContain('splash-1920.webp')
 +    expect(portrait).not.toBe(wide)
    })
- 
+
    it('keeps loading while entries are active or loading', () => {
-@@ -29,8 +45,8 @@ describe('BootPage', () => {
+@@ -29,8 +49,35 @@ describe('BootPage', () => {
      expect(el.querySelector('[data-dsh-boot-spinner]')).toBe(spinner)
      page.setState('b', 'active')
      expect(spinner?.style.getPropertyValue('--dsh-boot-arc')).toBe('288deg')
@@ -13797,26 +13953,53 @@ index 33612e8a47..338bb76d53 100644
 -    expect(el.textContent).not.toContain('Failed to load plugins')
 +    expect(el.textContent).toContain('正在准备物理世界…')
 +    expect(el.textContent).not.toContain('插件加载失败')
++  })
++
++  it('holds for the minimum time before filling the bar, then fades out over the app', async () => {
++    vi.useFakeTimers()
++    const { el, page } = mount(2000)
++    page.setTotal(1)
++    page.setState('a', 'active')
++    const spinner = el.querySelector<HTMLElement>('[data-dsh-boot-spinner]')
++    // Every entry is active, but the bar follows the clock until the hold ends.
++    expect(spinner?.style.getPropertyValue('--dsh-boot-progress')).toBe('0%')
++    let completed = false
++    const completing = page.complete().then(() => { completed = true })
++    await vi.advanceTimersByTimeAsync(1000)
++    expect(completed).toBe(false)
++    expect(parseInt(spinner?.style.getPropertyValue('--dsh-boot-progress') ?? '', 10)).toBeGreaterThan(0)
++    await vi.advanceTimersByTimeAsync(1400)
++    await completing
++    expect(spinner?.style.getPropertyValue('--dsh-boot-progress')).toBe('100%')
++    expect(el.textContent).toContain('100%')
++
++    page.float()
++    expect(el.querySelector('[data-dsh-boot]')).toBeNull()
++    expect(document.body.querySelector('[data-dsh-boot]')).not.toBeNull()
++    const leaving = page.leave()
++    await vi.advanceTimersByTimeAsync(600)
++    await leaving
++    expect(document.querySelector('[data-dsh-boot]')).toBeNull()
    })
- 
+
    it('lists failed entries', () => {
-@@ -41,7 +57,7 @@ describe('BootPage', () => {
+@@ -41,7 +88,7 @@ describe('BootPage', () => {
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-layout')
      expect(el.textContent).toContain('@deepseek-ai/dsh-client-ui-tool')
      expect(el.textContent).not.toContain('ok')
 -    expect(el.textContent).not.toContain('Loading plugins…')
 +    expect(el.textContent).not.toContain('正在准备物理世界…')
    })
- 
+
    it('shows the complete sweep report', () => {
-@@ -50,7 +66,7 @@ describe('BootPage', () => {
+@@ -50,7 +97,7 @@ describe('BootPage', () => {
      page.fail(report)
      page.setState('a', 'active')
      expect(el.textContent).toContain(report)
 -    expect(el.textContent).not.toContain('Loading plugins…')
 +    expect(el.textContent).not.toContain('正在准备物理世界…')
    })
- 
+
    it('detaches on disposal', () => {
 diff --git a/packages/client/web/tests/boot.client.spec.ts b/packages/client/web/tests/boot.client.spec.ts
 index e5e632941a..d41ddf47c8 100644
