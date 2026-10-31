@@ -169,12 +169,18 @@ export async function generateFigures(
   doc: PaperDocument,
   dir: string,
   onProgress?: (done: number, total: number, ref: string) => void,
+  onFailure?: (ref: string, reason: string) => void,
 ): Promise<Map<string, string>> {
   const files = new Map<string, string>()
   const api = tools.imageApi
   if (api === undefined) return files
   const key = process.env[api.apiKeyEnv]
   if (key === undefined || key === '') return files
+  /* The check stage draws figures before anything else has written to the job
+     directory, so it has to exist first: a missing directory made every
+     writeFile throw into the per-figure catch below, and the stage reported
+     progress with `done` stuck at zero and no visible error. */
+  await mkdir(dir, { recursive: true })
   const figures = doc.sections.flatMap(section => section.items)
     .flatMap(question => (question.figure === undefined ? [] : [question.figure]))
   let done = 0
@@ -211,7 +217,13 @@ export async function generateFigures(
       } else continue
       files.set(figure.ref, name)
       done += 1
-    } catch { /* placeholder stands */ }
+    } catch (error) {
+      /* A failed drawing leaves the caption placeholder in the paper, which is
+         the intended degradation — but it used to be silent, so a stage that
+         drew nothing reported progress with `done` at zero and no reason. Keep
+         the fallback and state why. */
+      onFailure?.(figure.ref, error instanceof Error ? error.message : String(error))
+    }
   }
   return files
 }

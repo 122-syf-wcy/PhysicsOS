@@ -309,6 +309,9 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
               (done, total, ref) => {
                 void service.reportProgress(jobId, 'figure', done, total, `AI 生成题图 ${ref}`)
               },
+              (ref, reason) => {
+                ctx.logger.warn(`paper-host: figure ${ref} not drawn, the caption stands (${reason})`)
+              },
             )
           } catch (error) {
             ctx.logger.warn(`paper-host: figure pre-generation failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`)
