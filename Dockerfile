@@ -107,9 +107,28 @@ RUN pnpm -C vendor/deepseek-harness run build:native-system
 # nothing the test suites do not already assert.
 # The health-host bundle is part of `build:hosts`, which `build:web` runs, so it
 # is not invoked separately either.
-RUN pnpm -C vendor/deepseek-harness run build:lib \
+#
+# `tsc -b` state is carried between builds in a cache mount. The harness is ~250
+# composite projects, and `COPY . .` above (plus .dockerignore dropping every
+# `lib/` and `*.tsbuildinfo`) used to hand each build a cold tree: the host and
+# client checks recompiled everything, ~14 of a ~24 minute build on this host.
+# With the previous build's outputs and buildinfo restored, `tsc -b` re-checks
+# only files whose content hash changed — measured here at 38s + 3s even with
+# every source mtime refreshed. Only the build-output paths .dockerignore already
+# excludes are saved, so a source directory that happens to be named `lib` is
+# never overwritten by a stale copy. tsdown and vite still bundle from source on
+# every build. The state is saved only after the whole step succeeds.
+RUN --mount=type=cache,target=/tsc-state,id=physicsos-harness-tsc-state \
+    if [ -f /tsc-state/state.tar ]; then tar -xf /tsc-state/state.tar -C vendor/deepseek-harness; fi \
+    && pnpm -C vendor/deepseek-harness run build:lib \
     && node --input-type=module -e "import {open} from 'node:fs/promises'; import {tryLockExclusive} from './vendor/deepseek-harness/native/system/packages/entry/lib/flock.js'; const h = await open('/tmp/flock-verify','w'); await tryLockExclusive(h.fd); await h.close(); console.log('native flock addon verified in image')" \
     && pnpm run build:web \
+    && cd vendor/deepseek-harness \
+    && { ls -d packages/*/*/lib vendor/*/lib apps/*/lib apps/*/*/lib native/*/packages/*/lib 2>/dev/null; \
+         find . -name node_modules -prune -o -name '*.tsbuildinfo' -not -path '*/lib/*' -print; } \
+        | tar -cf /tsc-state/state.tar.partial -T - \
+    && mv /tsc-state/state.tar.partial /tsc-state/state.tar \
+    && cd /app \
     && rm -rf vendor/deepseek-harness/.git
 
 FROM ${NODE_IMAGE} AS runtime
