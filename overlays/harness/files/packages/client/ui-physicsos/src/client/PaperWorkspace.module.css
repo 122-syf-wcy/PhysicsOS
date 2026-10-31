@@ -296,6 +296,11 @@
   box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
   backdrop-filter: var(--physics-glass-blur);
   -webkit-backdrop-filter: var(--physics-glass-blur);
+  /* A flex/grid child defaults to its content's minimum width, so the scroll
+     container below never gets a chance to scroll — the block itself grows past
+     its column instead. min-width: 0 lets it shrink and hand the overflow to
+     the scrollbar. */
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -1182,6 +1187,12 @@ details[open] > .advancedSummary::before {
   flex-direction: column;
   gap: 5px;
   line-height: 1.6;
+  /* A finding can quote an equation as one unbroken run of symbols and
+     subscripts. Without these it sets the column's minimum width and pushes
+     the text past the panel edge instead of wrapping. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .findingError { color: var(--dsw-alias-state-error-primary, #a03a30); }

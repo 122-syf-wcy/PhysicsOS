@@ -40,6 +40,7 @@ import { exportPaper, generateFigures } from './export.ts'
 import { paperRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
 import { access } from 'node:fs/promises'
+import { join } from 'node:path'
 
 export const name = 'paper-host'
 export const inject = ['webServer', 'storageDomain', 'llm']
@@ -303,7 +304,8 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           try {
             await generateFigures(
               { pandoc: config.pandoc, soffice: undefined, exportDir: config.exportDir, imageApi: config.imageApi },
-              jobId, job.document,
+              job.document,
+              join(config.exportDir, jobId),
               (done, total, ref) => {
                 void service.reportProgress(jobId, 'figure', done, total, `AI 生成题图 ${ref}`)
               },
