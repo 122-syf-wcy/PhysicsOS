@@ -81,6 +81,96 @@ path.write_text("\n".join(out) + "\n")
 print(f"physicsos security headers installed in {inserted} server block(s)")
 PY
 
+# Two things one flat header block cannot express:
+#
+#   1. The paper workbench previews exported PDFs in an <iframe> on this same
+#      origin, so those responses need SAMEORIGIN while everything else keeps
+#      DENY. nginx replaces the inherited add_header set for a matched
+#      location, so the location restates all five headers.
+#   2. Certbot's managed blocks sit outside the security-header markers, so a
+#      marker rewrite alone leaves this location stranded on re-runs.
+#
+# The block below is wrapped in its own markers for the same reason: re-running
+# replaces it instead of appending a second copy.
+SITE="$SITE" SERVER_NAME="$SERVER_NAME" HSTS_MAX_AGE="$HSTS_MAX_AGE" python3 - <<'PY'
+import os
+import re
+import sys
+from pathlib import Path
+
+path = Path(os.environ["SITE"])
+max_age = os.environ["HSTS_MAX_AGE"]
+text = path.read_text()
+
+start_marker = "# BEGIN PhysicsOS paper-preview location"
+end_marker = "# END PhysicsOS paper-preview location"
+
+# Drop any previous copy first, wherever it sits.
+lines = text.splitlines()
+kept, skipping = [], False
+for line in lines:
+    if line.strip() == start_marker:
+        skipping = True
+        continue
+    if line.strip() == end_marker:
+        skipping = False
+        continue
+    if not skipping:
+        kept.append(line)
+
+block = [
+    start_marker,
+    "location ~ ^/physicsos/paper/jobs/[^/]+/files/ {",
+    "    proxy_pass http://127.0.0.1:3080;",
+    "    proxy_http_version 1.1;",
+    "    proxy_set_header Host $host;",
+    "    proxy_set_header X-Real-IP $remote_addr;",
+    "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
+    "    proxy_set_header X-Forwarded-Proto $scheme;",
+    "    proxy_set_header X-Forwarded-Host $host;",
+    "",
+    f'    add_header Strict-Transport-Security "max-age={max_age}; includeSubDomains" always;',
+    '    add_header X-Content-Type-Options "nosniff" always;',
+    '    add_header X-Frame-Options "SAMEORIGIN" always;',
+    '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+    '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+    "    proxy_read_timeout 300s;",
+    "}",
+    end_marker,
+]
+
+# Insert as the last directive of the TLS server block. Walk forward, tracking
+# brace depth from the `server {` that owns a `listen 443`, and splice the block
+# before the brace that closes it at depth zero.
+depth = 0
+in_tls = False
+inserted = False
+for idx, line in enumerate(kept):
+    stripped = line.strip()
+    if not in_tls and re.match(r"^server\s*\{", stripped):
+        window = "\n".join(kept[idx:idx + 14])
+        if "listen 443" in window:
+            in_tls = True
+            depth = 1
+            continue
+    if in_tls:
+        if "{" in stripped:
+            depth += stripped.count("{")
+        if "}" in stripped:
+            depth -= stripped.count("}")
+            if depth == 0:
+                kept[idx:idx] = block
+                inserted = True
+                break
+
+if not inserted:
+    print(f"could not locate the https server block in {path}", file=sys.stderr)
+    raise SystemExit(1)
+
+path.write_text("\n".join(kept) + "\n")
+print("physicsos paper-preview location installed")
+PY
+
 nginx -t
 systemctl reload nginx
 printf 'install-nginx-security-headers: mode=%s backup=%s\n' "$MODE" "$BACKUP"
