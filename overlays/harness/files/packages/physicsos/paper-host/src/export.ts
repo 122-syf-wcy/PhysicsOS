@@ -152,8 +152,23 @@ async function ensureReferenceDocx(tools: ExportTools): Promise<string> {
  *   verification trail in the answer document.
  * @returns produced filenames, missing entries omitted.
  */
-const FIGURE_STYLE =
-  '。初中物理试卷题图，黑白线稿教材插图风格，白底黑线，构图简洁，标注清晰，无彩色，无水印，无多余文字'
+/* Style alone was not enough: the model drew a correct-looking electric field
+   figure whose centre O sat off the arc it belonged to, because nothing said
+   the construction had to be geometrically true. The clause below states the
+   constraints that make a diagram checkable, and names the constructions that
+   went wrong in review. */
+const FIGURE_STYLE = [
+  '。中学物理试卷题图，黑白线稿教材插图风格，白底黑线，构图简洁，标注清晰，无彩色，无水印，无多余文字。',
+  '作图必须几何正确，这是一张要学生照着算的示意图，不是装饰画：',
+  '圆周或圆弧必须用圆规式的真圆绘制，圆心到弧上任意一点的距离相等；标注圆心时，圆心必须正好落在弧的等距点上，半径线从圆心画出并垂直于弧；',
+  '直角画成直角，锐角按其标注的角度张开，角度弧标在角的顶点处；',
+  '平行线保持等间距，垂直的力或光线与参照线严格垂直；',
+  '同一物体上各力的箭头起点必须在同一作用点，方向按实际物理方向绘制；',
+  '电路用标准元件符号，导线横平竖直，连接点画实心圆点，交叉不相连的导线不画点；',
+  '光线与法线用虚线区分，入射角与折射角分别标在法线两侧；',
+  '带电粒子在磁场中的轨迹：画出完整的圆弧（不是随手弯的曲线），圆心用两条半径线交会定出，半径线以虚线从圆心连到轨迹的起点与终点；',
+  '磁场垂直纸面向外用 ⊙ 均匀排列、向里用 ⊗，符号铺满整个磁场区域并在边界用虚线标出宽度。',
+].join('')
 
 interface ImageGenerationResponse {
   data?: { b64_json?: string; url?: string }[]
