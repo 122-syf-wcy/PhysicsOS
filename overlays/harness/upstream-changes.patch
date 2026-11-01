@@ -17143,3 +17143,64 @@ index bbdbf3cac5..ba4b10c640 100644
      { "path": "./packages/feedback/message-feedback" },
      { "path": "./packages/workspace/workspace" },
      { "path": "./packages/session/session-title" },
+diff --git a/packages/client/ui-settings-models/src/client/store.ts b/packages/client/ui-settings-models/src/client/store.ts
+index 34a20107e3..67c502a9c8 100644
+--- a/packages/client/ui-settings-models/src/client/store.ts
++++ b/packages/client/ui-settings-models/src/client/store.ts
+@@ -192,14 +192,17 @@ export class ModelsSettingsStore {
+     if (!registered.ok) { this.failLoad(generation, registered.error.message); return }
+     if (!declared.ok) { this.failLoad(generation, declared.error.message); return }
+     const mirrored = this.describeFace.getSnapshot()
+-    if (mirrored.view === undefined) {
+-      this.failLoad(generation, mirrored.error ?? 'settings are unavailable in this browser')
+-      return
+-    }
++    /* The settings mirror only answers on loopback, because the write API it
++       backs can change the host's own configuration. A page served over the
++       public origin therefore gets no namespace views — but the providers the
++       host actually registered are still worth showing. Fall back to that
++       read-only directory instead of failing the whole section: on a deployed
++       site the model list is information, not something the visitor edits. */
++    const view = mirrored.view
+     const providers = joinProviderDirectory(registered.value, declared.value)
+-    const writable = mirrored.view.writable
+-    const views: readonly SettingsNamespaceView[] = mirrored.view.namespaces
+-    const namespaces = new Map(views.map(view => [view.ns, view]))
++    const writable = view === undefined ? false : view.writable
++    const views: readonly SettingsNamespaceView[] = view === undefined ? [] : view.namespaces
++    const namespaces = new Map(views.map(row => [row.ns, row]))
+     const rows: ProviderRow[] = providers.map((entry) => {
+       const namespace = namespaces.get(entry.settingsNs)
+       const configured = namespace !== undefined
+diff --git a/packages/client/ui-settings-models/tests/store.client.spec.ts b/packages/client/ui-settings-models/tests/store.client.spec.ts
+index 007ff68099..0acf38053b 100644
+--- a/packages/client/ui-settings-models/tests/store.client.spec.ts
++++ b/packages/client/ui-settings-models/tests/store.client.spec.ts
+@@ -294,7 +294,7 @@ describe('edge joins', () => {
+     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'settings down' })
+   })
+ 
+-  it('reports a terminally unavailable settings mirror precisely', async () => {
++  it('falls back to a read-only directory when the settings mirror is unavailable', async () => {
+     const { ctx } = api()
+     const store = new ModelsSettingsStore(
+       ctx,
+@@ -302,10 +302,14 @@ describe('edge joins', () => {
+       new SettingsDescribeMirror(ctx, 'memory'),
+     )
+     await store.load()
+-    expect(store.store.getSnapshot()).toMatchObject({
+-      status: 'error',
+-      error: 'settings are unavailable in this browser',
+-    })
++    /* A public deployment has no settings mirror (the write API it backs is
++       loopback-only), but the providers the host registered are still real:
++       the section lists them read-only instead of reporting a failure. */
++    const snapshot = store.store.getSnapshot()
++    expect(snapshot.status).toBe('ready')
++    expect(snapshot.error).toBeNull()
++    expect(snapshot.writable).toBe(false)
++    expect(snapshot.rows.length).toBeGreaterThan(0)
+   })
+ 
+   it('reuses a held settings view after its refresh fails', async () => {
