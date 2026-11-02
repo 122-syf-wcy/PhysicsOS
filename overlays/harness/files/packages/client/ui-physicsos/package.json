@@ -76,7 +76,8 @@
     "@deepseek-ai/dsh-session": "workspace:^",
     "clsx": "^2.0.0",
     "katex": "^0.16.47",
-    "pdfjs-dist": "6.2.108"
+    "pdfjs-dist": "6.2.108",
+    "three": "0.180.0"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-locale": "workspace:^",
@@ -110,7 +111,8 @@
     "@types/react-dom": "~18.3.0",
     "@deepseek-ai/cordis": "workspace:^",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "@types/three": "0.180.0"
   },
   "files": [
     "lib/index.js",

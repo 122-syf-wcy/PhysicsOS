@@ -6,19 +6,27 @@ export const NOTEBOOK_LIMIT = 100
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.length <= 40
   && value.every(item => typeof item === 'string' && item.length <= 500)
 
+type Reading = { readonly id: string; readonly value: number; readonly unit: string }
+
+function isReading(parameter: unknown): parameter is Reading {
+  if (parameter === null || typeof parameter !== 'object') return false
+  const reading = parameter as Record<string, unknown>
+  return typeof reading.id === 'string' && Number.isFinite(reading.value) && typeof reading.unit === 'string'
+}
+
 /** Treat saved metadata as untrusted input, including notebooks written by a newer client. */
 export function readNotebook(scene: PhysicsScene | undefined): readonly ExperimentObservation[] {
   const book = scene?.metadata.experimentNotebook
   if (book?.version !== 1 || !Array.isArray(book.entries)) return []
   return book.entries.filter((entry): entry is ExperimentObservation => {
     if (entry === null || typeof entry !== 'object') return false
-    return typeof entry.id === 'string' && typeof entry.sceneId === 'string'
-      && Number.isInteger(entry.sceneRevision) && entry.sceneRevision >= 0
-      && typeof entry.recordedAt === 'string' && Number.isFinite(Date.parse(entry.recordedAt))
-      && strings(entry.columns) && strings(entry.values) && entry.columns.length === entry.values.length
-      && Array.isArray(entry.parameters) && entry.parameters.length <= 40
-      && entry.parameters.every(parameter => parameter !== null && typeof parameter === 'object'
-        && typeof parameter.id === 'string' && Number.isFinite(parameter.value) && typeof parameter.unit === 'string')
+    const row = entry as Record<string, unknown>
+    return typeof row.id === 'string' && typeof row.sceneId === 'string'
+      && Number.isInteger(row.sceneRevision) && (row.sceneRevision as number) >= 0
+      && typeof row.recordedAt === 'string' && Number.isFinite(Date.parse(row.recordedAt))
+      && strings(row.columns) && strings(row.values) && row.columns.length === row.values.length
+      && Array.isArray(row.parameters) && row.parameters.length <= 40
+      && row.parameters.every(isReading)
   }).slice(-NOTEBOOK_LIMIT)
 }
 

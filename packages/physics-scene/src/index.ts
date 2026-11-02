@@ -44,6 +44,7 @@ export {
   type SceneAnnotation,
   type SceneDimension,
   type SceneLineage,
+  type ExperimentObservation,
   type SceneMetadata,
   type ShapeDefinition,
   type ThinLens,

@@ -396,7 +396,11 @@ export function createPhysicsSurfaceController(
       navigation?.selectSurface('lab')
       record(sceneRef)
     },
-    setRouteNotice: (routeNotice) => { store.set({ ...store.getSnapshot(), routeNotice }) },
+    setRouteNotice: (message) => {
+      // Clearing the notice must drop the key: exactOptionalPropertyTypes rejects `undefined`.
+      const { routeNotice: _cleared, ...rest } = store.getSnapshot()
+      store.set(message === undefined ? rest : { ...rest, routeNotice: message })
+    },
     openExperimentPicker: () => {
       store.set({ ...store.getSnapshot(), surface: 'lab', experimentPicker: true })
       navigation?.selectSurface('lab')

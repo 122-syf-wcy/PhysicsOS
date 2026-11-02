@@ -8,6 +8,7 @@
  * shows facts; it never recomputes them.
  */
 
+import type { ExperimentObservation } from '@physicsos/physics-scene'
 import { useMemo } from 'react'
 import { useModalFocus } from './use-modal-focus.ts'
 import clsx from 'clsx'
@@ -24,6 +25,7 @@ import css from './LabWorkspace.module.css'
 type Translate = (key: PhysicsosKey) => string
 
 export interface ExperimentReportPanelProps {
+  readonly observations?: readonly ExperimentObservation[]
   readonly snapshot: WorkspaceSnapshot
   readonly t: Translate
   readonly onClose: () => void
@@ -74,8 +76,8 @@ const printReport = (html: string): void => {
   document.body.appendChild(iframe)
 }
 
-export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReportPanelProps) {
-  const report = useMemo(() => buildExperimentReport(snapshot), [snapshot])
+export function ExperimentReportPanel({ snapshot, observations, t, onClose }: ExperimentReportPanelProps) {
+  const report = useMemo(() => buildExperimentReport(snapshot, new Date(), observations), [snapshot, observations])
   const panelRef = useModalFocus<HTMLDivElement>(true, onClose)
 
   return (
@@ -118,6 +120,7 @@ export function ExperimentReportPanel({ snapshot, t, onClose }: ExperimentReport
 
         <div className={css.reportBody}>
           <h3 className={css.reportName}>{report.title}</h3>
+          {report.measurements === undefined ? null : <section aria-label="测量记录"><h4>测量记录</h4><div style={{overflowX:'auto'}}><table><thead><tr>{report.measurements.columns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{report.measurements.rows.map(row => <tr key={row.step}>{row.values.map((value,index) => <td key={index}>{value}</td>)}</tr>)}</tbody></table></div></section>}
           <p className={css.reportGoal}>{report.goal}</p>
 
           <p className={css.sectionLabel}>{t('lab.report.parameters')}</p>

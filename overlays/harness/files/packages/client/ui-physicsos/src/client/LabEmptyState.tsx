@@ -8,6 +8,7 @@
  * screen is a chooser, not a workspace.
  */
 
+import css from './experiments/ExperimentPage.module.css'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 
 import { ExperimentPicker, type ExperimentPickerProps } from './ExperimentPicker.tsx'
@@ -18,6 +19,7 @@ type Translate = (key: PhysicsosKey) => string
 
 /** Props for {@link LabEmptyState}. */
 export interface LabEmptyStateProps {
+  readonly routeNotice?: string
   readonly t: Translate
   readonly openSurface: (
     id: PhysicsSurfaceId,
@@ -38,6 +40,7 @@ export interface LabEmptyStateProps {
  * sidebar "新建", the Home quick action and the Lab empty state are one chooser.
  */
 export function LabEmptyState({
+  routeNotice,
   t,
   openSurface,
   useRecentExperiments,
@@ -45,7 +48,8 @@ export function LabEmptyState({
   resume,
   onFreeBuild,
 }: LabEmptyStateProps) {
-  return (
+  return (<>
+    {routeNotice ? <div role="status" className={css.routeNotice}>{routeNotice}</div> : null}
     <ExperimentPicker
       t={t}
       openSurface={openSurface}
@@ -54,5 +58,5 @@ export function LabEmptyState({
       {...(resume === undefined ? {} : { resume })}
       {...(onFreeBuild === undefined ? {} : { onFreeBuild })}
     />
-  )
+  </>)
 }
