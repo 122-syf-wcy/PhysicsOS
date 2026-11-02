@@ -10,6 +10,9 @@
  * print-ready page (A4 styles inlined) for the 打印版 export.
  */
 
+import type { ExperimentObservation } from '@physicsos/physics-scene'
+import type { DataTableView } from './scene-visual-model.ts'
+import { notebookTable } from '../experiments/experiment-notebook.ts'
 import type { WorkspaceSnapshot } from './workspace-runtime.ts'
 
 /**
@@ -33,6 +36,7 @@ export interface ExperimentReport {
   readonly verification: readonly { label: string; status: string }[]
   /** One-line verdict derived from the verification outcome. */
   readonly conclusion: string
+  readonly measurements?: DataTableView
   readonly markdown: string
 }
 
@@ -65,6 +69,7 @@ const STATUS_TEXT: Record<string, string> = {
 export const buildExperimentReport = (
   snapshot: WorkspaceSnapshot,
   now = new Date(),
+  observations: readonly ExperimentObservation[] = [],
 ): ExperimentReport => {
   const parameters: ReportRow[] = snapshot.inspector.flatMap(section => [
     ...(section.parameters ?? []).map(parameter => ({
@@ -109,6 +114,7 @@ export const buildExperimentReport = (
   const markdownRows = (rows: readonly ReportRow[]): string =>
     rows.map(row => `| ${row.label} | ${row.value} |`).join('\n')
 
+  const measurements = observations.length > 0 ? notebookTable(observations) : undefined
   const markdown = [
     `# 实验报告：${title}`,
     '',
@@ -134,6 +140,7 @@ export const buildExperimentReport = (
     ...(events.length === 0
       ? []
       : ['## 实验过程（区域事件）', '', '| 事件 | 时刻 |', '|---|---|', markdownRows(events), '']),
+    ...(measurements === undefined ? [] : ['## 测量记录', '', `| ${measurements.columns.join(' | ')} |`, `| ${measurements.columns.map(() => '---').join(' | ')} |`, ...measurements.rows.map(row => `| ${row.values.join(' | ')} |`), '']),
     '## 物理验证',
     '',
     '| 检查 | 结果 |',
@@ -147,7 +154,7 @@ export const buildExperimentReport = (
     '（本报告由 PhysicsOS 从已验证的仿真结果生成，数值来自 Runtime，未经人工改写。）',
   ].join('\n')
 
-  return { title, goal, generatedAt, parameters, derived, events, verification, conclusion, markdown }
+  return { title, goal, generatedAt, parameters, derived, events, verification, conclusion, markdown, ...(measurements === undefined ? {} : { measurements }) }
 }
 
 /* ------------------------------------------------------------- print html -- */
@@ -232,6 +239,7 @@ export const experimentReportPrintHtml = (report: ExperimentReport): string => {
 ${tableHtml('实验参数', ['参数', '数值'], report.parameters)}
 ${tableHtml('引擎派生量', ['物理量', '数值'], report.derived)}
 ${tableHtml('实验过程（区域事件）', ['事件', '时刻'], report.events)}
+${report.measurements === undefined ? '' : `<h2>测量记录</h2><table><thead><tr>${report.measurements.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${report.measurements.rows.map(row => `<tr>${row.values.map(value => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
 <h2>物理验证</h2>
 <table>
 <thead><tr><th>检查</th><th>结果</th></tr></thead>

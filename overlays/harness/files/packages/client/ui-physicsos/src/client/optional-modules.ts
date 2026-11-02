@@ -22,3 +22,8 @@ export function loadPdfModule(): Promise<typeof import('./optional/pdf.ts')> {
   if (typeof __PHYSICSOS_OPTIONAL_BUNDLES__ !== 'undefined' && __PHYSICSOS_OPTIONAL_BUNDLES__) return importFactory('optional-pdf.js')
   return import('./optional/pdf.ts')
 }
+
+export function loadOptics3DModule(): Promise<typeof import('./optional/optics3d.ts')> {
+  if (typeof __PHYSICSOS_OPTIONAL_BUNDLES__ !== 'undefined' && __PHYSICSOS_OPTIONAL_BUNDLES__) return importFactory('optional-optics3d.js')
+  return import('./optional/optics3d.ts')
+}

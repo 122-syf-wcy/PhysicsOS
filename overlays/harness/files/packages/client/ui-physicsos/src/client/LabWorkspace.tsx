@@ -11,7 +11,9 @@ import { useMemo } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from './runtime-compat.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { PhysicsScene } from '@physicsos/physics-scene'
+import { opticalBenchOf, type PhysicsScene } from '@physicsos/physics-scene'
+import { ConvexLensPage } from './experiments/ConvexLensPage.tsx'
+import pageCss from './experiments/ExperimentPage.module.css'
 
 import { OptionalAdminWorkspace as AdminWorkspace } from './optional-surfaces.tsx'
 import type { AdminApi } from './auth-api.ts'
@@ -219,6 +221,7 @@ export function PhysicsSurface({
     const resumable = surfaceState.sceneRef
     return (
       <LabEmptyState
+        {...(surfaceState.routeNotice === undefined ? {} : { routeNotice: surfaceState.routeNotice })}
         t={t}
         openSurface={openSurface ?? (() => {})}
         useRecentExperiments={useRecentExperiments}
@@ -265,8 +268,13 @@ export function PhysicsSurface({
   const templateId = sceneId === undefined ? undefined : artTemplateIdOfSceneId(sceneId)
   const experimentMeta = templateId === undefined ? undefined : experimentMetaOf(templateId)
 
-  return (
-    <PhysicsWorkspace
+  const bench = scene === undefined ? undefined : opticalBenchOf(scene)
+  const element = bench?.elements[0]
+  const Workspace = domain === 'optics' && bench?.elements.length === 1 && element?.type === 'thin_lens' && element.focalLength.value > 0
+    ? ConvexLensPage : PhysicsWorkspace
+  return (<>
+    {surfaceState.routeNotice ? <div role="status" className={pageCss.routeNotice}>{surfaceState.routeNotice}</div> : null}
+    <Workspace
       key={runtimeKey}
       runtime={runtime}
       {...(updateScene === undefined ? {} : { onSceneChange: updateScene })}
@@ -285,7 +293,7 @@ export function PhysicsSurface({
       {...(recordAttempt === undefined ? {} : { recordAttempt })}
       {...(experimentMeta === undefined ? {} : { experimentMeta })}
     />
-  )
+  </>)
 }
 
 /**
