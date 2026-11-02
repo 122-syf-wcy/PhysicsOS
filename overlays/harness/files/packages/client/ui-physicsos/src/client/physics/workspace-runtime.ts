@@ -65,6 +65,10 @@ export interface WorkspaceRuntime {
   /** Current committed facts; previews and animation never alter this scene. */
   getScene?(): PhysicsScene
   getSnapshot(): WorkspaceSnapshot
+  /** Transient parameter preview; the committed scene is unchanged until release. */
+  previewParameter?(id: string, value: number): WorkspaceSnapshot
+  commitParameter?(id: string, value: number): WorkspaceSnapshot
+  cancelParameterPreview?(): WorkspaceSnapshot
   editParameter(id: string, value: number): WorkspaceSnapshot
   setChoice(id: string, value: string): WorkspaceSnapshot
   setObservable(key: ObservableKey, enabled: boolean): WorkspaceSnapshot

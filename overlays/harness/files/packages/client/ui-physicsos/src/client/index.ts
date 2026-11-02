@@ -24,6 +24,8 @@ import { createAuthController } from './auth-store.ts'
 import { AuthGate } from './AuthGate.tsx'
 import { HomeBelow, HomeHero } from './HomeHero.tsx'
 import { HomeBrandMark } from './HomeBrand.tsx'
+import { startExperimentNavigation } from './experiments/experiment-navigation.ts'
+import { loadWorkspaceModule } from './optional-modules.ts'
 import { startSyncRetry } from './sync-retry.ts'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { OptionalPhysicsSurface as PhysicsSurface } from './optional-surfaces.tsx'
@@ -172,6 +174,25 @@ export function apply(ctx: ClientContext): void {
   /* localStorage-backed so 最近空间 survives a reload with restorable scenes;
      under an account it lands in that user's namespace. */
   const surface = createPhysicsSurfaceController(auth.userStorage, learningApi, surfacePanels)
+  ctx.effect(() => {
+    let disposed = false
+    let starting = false
+    let stopNavigation: (() => void) | undefined
+    const start = (): void => {
+      if (auth.store.getSnapshot().status !== 'authed' || starting) return
+      starting = true
+      void surface.sync().catch(() => {}).then(() => {
+        if (disposed) return
+        stopNavigation = startExperimentNavigation({
+          surface, window,
+          loadCatalog: async () => (await loadWorkspaceModule()).experimentCatalog,
+        })
+      })
+    }
+    const stopAuth = auth.store.subscribe(start)
+    start()
+    return () => { disposed = true; stopAuth(); stopNavigation?.() }
+  }, 'ui-physicsos: independent experiment navigation')
   const paperApi = createPaperApi()
   /* 管理后台: same cookie session, `/physicsos/admin` prefix. The component
      reads the role from the auth store; the host enforces it on every call. */

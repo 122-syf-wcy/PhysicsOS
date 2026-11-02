@@ -49,8 +49,20 @@ export interface SceneLineage {
   forkedAt: IsoDateTime
 }
 
+/** A captured engine reading; presentation data, not a new physical condition. */
+export interface ExperimentObservation {
+  readonly id: string
+  readonly recordedAt: string
+  readonly sceneId: string
+  readonly sceneRevision: number
+  readonly columns: readonly string[]
+  readonly values: readonly string[]
+  readonly parameters: readonly { readonly id: string; readonly value: number; readonly unit: string }[]
+}
+
 /** docs/03 §25 */
 export interface SceneMetadata {
+  experimentNotebook?: { readonly version: 1; readonly entries: readonly ExperimentObservation[] }
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   createdBy?: ActorRef
