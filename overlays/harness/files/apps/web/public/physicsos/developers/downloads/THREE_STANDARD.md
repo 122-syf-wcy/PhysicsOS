@@ -11,7 +11,7 @@
 | resize | 同步画布、相机和分辨率，不重置实验条件 |
 | dispose | 取消 RAF，移除监听/Observer，释放控件与自有 GPU 资源 |
 
-> **这是一份接口责任约定**：公开 mount/update/resize/dispose SDK 尚未发布。仓库实现继续使用真实接口，不复制虚构 import。
+> **模板中的真实入口**：src/main.ts 调用 connectExperiment 与 mountLens，后者返回 update/dispose；ResizeObserver 处理尺寸。这里的代码随模板一起交付，不依赖一个不存在的 npm SDK。
 
 ## 直接操作，也能精确操作
 

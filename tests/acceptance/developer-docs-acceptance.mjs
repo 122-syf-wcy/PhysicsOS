@@ -81,6 +81,11 @@ try {
   await expect(page.locator('#sidebar')).toHaveAttribute('inert', '')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.goto(`${base}#/start`)
+  // On mobile the mascot is the only thing between the buttons and the cards;
+  // capture it decoded, not as the blank its lazy image leaves behind.
+  await expect
+    .poll(() => page.locator('.hero-mascot img').evaluate((image) => image.complete && image.naturalWidth > 0))
+    .toBe(true)
   await page.screenshot({
     path: join(out, 'home-mobile.png'),
     fullPage: false,

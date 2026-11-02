@@ -49,7 +49,7 @@
     "verify:dependencies": "node scripts/dev/check-workspace-dependencies.mjs",
     "test:acceptance:visual": "node tests/acceptance/glass-surfaces.mjs",
     "lint:tooling": "eslint scripts/overlay/*.mjs scripts/deploy/*.mjs scripts/dev/*.mjs",
-    "docs:developers:build": "node scripts/developers/generate.mjs",
+    "docs:developers:build": "node scripts/developers/prepare-template.mjs && node scripts/developers/generate.mjs",
     "docs:developers:check": "node --test scripts/developers/standards.test.mjs && node scripts/developers/generate.mjs --check"
   },
   "devDependencies": {

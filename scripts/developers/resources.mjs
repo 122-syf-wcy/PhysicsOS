@@ -8,11 +8,14 @@ export const manifestExample = {
   schemaVersion: 1,
   experimentId: 'convex-lens',
   version: '1.0.0',
-  entry: 'src/main.ts',
+  protocolVersion: 1,
+  packageType: 'browser-static',
+  entry: 'dist/index.html',
   renderer: 'three',
   theme: 'physicsos-warm-lab-v1',
   engine: { id: 'optics', contractVersion: 1 },
-  cover: 'assets/cover.webp',
+  parameters: 'parameters.json',
+  cover: 'dist/assets/cover.jpg',
   teaching: 'teaching.json',
   referenceCases: 'cases.json',
   assetLicenses: 'ASSET-LICENSES.json',
@@ -35,7 +38,10 @@ export const manifestSchema = {
     schemaVersion: { const: 1 },
     experimentId: { type: 'string', maxLength: 64, pattern: '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$' },
     version: { type: 'string', pattern: '^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$' },
-    entry: relativePath,
+    protocolVersion: { const: 1 },
+    packageType: { const: 'browser-static' },
+    entry: { const: 'dist/index.html' },
+    parameters: relativePath,
     renderer: { const: 'three' },
     theme: { const: 'physicsos-warm-lab-v1' },
     engine: {
@@ -73,7 +79,7 @@ export function styleKitFiles() {
       'README.md',
       `# PhysicsOS 代码风格工具包 v1.0
 
-这是代码一致性工具包，不是已经发布的实验 SDK。没有完整实验页面、引擎、打包或上传功能。
+这是辅助代码风格工具包。需要预览、构建与 ZIP 打包，请下载独立实验模板 physicsos-experiment-template-v1.zip。
 
 ## 开始
 
@@ -91,11 +97,10 @@ check 执行 Prettier、源码文件命名、ESLint 与 TypeScript，不代替�
 将实验代码放在 src/experiments/<experiment-id>/，将 AGENTS.md 复制到该目录。
 类型示例 lens-types.ts 只演示风格，不是公共平台契约。
 
-## 在已有 PhysicsOS 仓库中
+## 贡献方式
 
-不要覆盖项目现有配置。遵循根 AGENTS.md、CONTRIBUTING.md 与所在目录的工具规则。
-Web 源码修改 overlays/harness/files 后在 Harness 环境验证；当前贡献路径为 GitHub PR。
-包格式、公开 SDK、ZIP 上传审核尚在建设，不能把本工具包当作已接通的投稿客户端。
+贡献者独立制作实验文件，在对应实验页上传 ZIP，后台审核通过后自动同步。无需克隆 PhysicsOS 或修改主站源码。
+本工具包只做风格检查；上传审核与生产宿主接入尚未开放。独立实验模板已支持本地预览、构建与打包，不需要主仓库。
 
 ## 文件
 
@@ -137,7 +142,7 @@ experiment.schema.json / experiment.example.json：候选格式，不代表审�
       '.editorconfig',
       'root = true\n\n[*]\ncharset = utf-8\nend_of_line = lf\nindent_style = space\nindent_size = 2\ninsert_final_newline = true\ntrim_trailing_whitespace = true\n\n[*.md]\ntrim_trailing_whitespace = false\n',
     ],
-    ['.gitignore', 'node_modules/\ndist/\n*.tsbuildinfo\n.env\n.env.*\n'],
+    ['.gitignore', 'node_modules/\ndist/\nrelease/\n*.tsbuildinfo\n.env\n.env.*\n'],
     [
       'prettier.config.mjs',
       `export default {

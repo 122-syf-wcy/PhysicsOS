@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { zipBytes } from '../../developer-kit/experiment-template/tools/archive.mjs'
 import { downloadableResources, styleKitFiles } from './resources.mjs'
 
 const output = fileURLToPath(
@@ -72,3 +73,18 @@ await emit('physicsos-code-style-v1.zip', Buffer.concat([...local, directory, en
 console.log(
   `${check ? 'Verified' : 'Generated'} ${resources.size} documents and ${files.size}-file style kit`,
 )
+
+const template = new URL('../../developer-kit/experiment-template/', import.meta.url)
+const templateFiles = new Map()
+async function collectTemplate(directory = '') {
+  for (const item of await readdir(new URL(directory, template), { withFileTypes: true })) {
+    if (['node_modules', 'dist', 'release'].includes(item.name)) continue
+    const path = directory + item.name
+    if (item.isSymbolicLink()) throw new Error(`Unexpected template symlink: ${path}`)
+    if (item.isDirectory()) await collectTemplate(path + '/')
+    else templateFiles.set('physicsos-experiment-template-v1/' + path, await readFile(new URL(path, template)))
+  }
+}
+await collectTemplate()
+await emit('physicsos-experiment-template-v1.zip', zipBytes(templateFiles))
+console.log(`${check ? 'Verified' : 'Generated'} independent experiment template: ${templateFiles.size} files`)

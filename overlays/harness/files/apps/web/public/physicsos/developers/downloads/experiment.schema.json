@@ -7,10 +7,13 @@
     "schemaVersion",
     "experimentId",
     "version",
+    "protocolVersion",
+    "packageType",
     "entry",
     "renderer",
     "theme",
     "engine",
+    "parameters",
     "cover",
     "teaching",
     "referenceCases",
@@ -30,7 +33,16 @@
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
     },
+    "protocolVersion": {
+      "const": 1
+    },
+    "packageType": {
+      "const": "browser-static"
+    },
     "entry": {
+      "const": "dist/index.html"
+    },
+    "parameters": {
       "type": "string",
       "minLength": 1,
       "maxLength": 240,

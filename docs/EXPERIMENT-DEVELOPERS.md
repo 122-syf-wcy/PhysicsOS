@@ -24,6 +24,7 @@
 按项目环境约定执行：
 
 ```sh
+node scripts/developers/prepare-template.mjs
 node scripts/developers/generate.mjs
 node --test scripts/developers/standards.test.mjs
 ```
@@ -32,6 +33,6 @@ node --test scripts/developers/standards.test.mjs
 
 ## 实际状态
 
-文档、下载和一致性工具包已实现。公共实验 SDK、上传审核与自动发布尚在建设；不能将候选格式当成已经可用的上传 API。当前贡献渠道为 GitHub PR。
+文档、下载、独立实验模板与一致性工具包已实现。模板包含本地预览宿主、参考协议 v1、构建与 ZIP 打包，可直接在独立目录开发。生产站点的上传入口、资源隔离域、正式引擎适配、审核与自动发布尚在建设；不能把本地预览或打包成功当成已上线。正式接入前，实验文件投稿不通过 GitHub PR，也不伪造上传成功。
 
-工具包只负责代码一致性；不能代替物理行为测试、浏览器性能测量或维护者评审。已有仓库继续使用自己的配置，不覆盖根 package.json 与 lint/TypeScript 规则。
+工具包只负责代码一致性；不能代替物理行为测试、浏览器性能测量或维护者评审。实验模板采用独立配置，不覆盖主站 package.json 或要求贡献者运行主站构建。

@@ -80,6 +80,7 @@ function codeBlock(title, language, value) {
 }
 
 const downloadItems = [
+  ['physicsos-experiment-template-v1.zip', '独立实验模板', '自己的目录开发 · 独立预览 · 生成投稿 ZIP', 'ZIP'],
   ['physicsos-code-style-v1.zip', '代码风格工具包', '完整规范 + AGENTS.md + 可执行检查配置', 'ZIP'],
   ['AGENTS.md', '通用 AGENTS.md', '直接放入实验目录，或作为任务上下文', 'MD'],
   ['CODE_STYLE.md', '代码风格规范', '命名、类型、模块边界与格式规则', 'MD'],
@@ -191,30 +192,30 @@ function renderBlock(block) {
 function hero() {
   const container = element('div', 'hero')
   const top = element('div', 'hero-eyebrow')
-  top.append(element('span', 'small-dot'), element('span', '', 'PHYSICSOS · OPEN EXPERIMENTS'), element('span', 'version-pill', '规范 v1.0'))
+  top.append(element('span', 'small-dot'), element('span', '', 'PHYSICSOS · OPEN EXPERIMENTS'), element('span', 'version-pill', `规范 v${STANDARD_VERSION}`))
   const heading = element('h1')
   heading.append(document.createTextNode('一起，把物理'), element('br'), element('em', '', '做成看得见的实验。'))
-  const subtitle = element('p', 'hero-description', '写出不同的实验，遵循同一套好代码。\n从一份 AGENTS.md 开始，与你的开发助手一起贡献。')
+  const subtitle = element('p', 'hero-description', '下载模板，独立制作实验文件，上传并审核。\n无需修改主站源码，让你的作品成为实验的一部分。')
   const actions = element('div', 'hero-actions')
   actions.append(button('复制 AGENTS.md  ↗', () => { void copyText(agentInstructions()) }, 'button primary'), link('阅读代码规范  →', '#/code-style', 'button secondary'))
   const quick = element('div', 'quick-cards')
-  for (const [id, number, title, desc] of [['code-style', '01', '统一代码风格', '命名、类型、格式与边界'], ['agents', '02', '让 Agent 遵循规范', '按实验生成可复制的开发约定'], ['downloads', '03', '用工具落实标准', '下载配置，运行一致性检查']]) {
+  for (const [id, number, title, desc] of [['downloads', '01', '下载独立模板', '不克隆主站，自己的目录开发'], ['agents', '02', '按标准制作文件', '复制 AGENTS.md，统一代码与效果'], ['review', '03', '上传后审核同步', '最新通过版本成为默认效果']]) {
     const card = link('', `#/${id}`, 'quick-card')
     card.append(element('span', 'card-number', number), element('strong', '', title), element('small', '', desc), element('span', 'card-arrow', '↗'))
     quick.append(card)
   }
   const preview = element('div', 'hero-code')
   const tab = element('div', 'hero-code-head')
-  tab.append(element('span', 'file-tab', 'AGENTS.md'), element('span', '', '一份约定，人与 AI 共同遵守'))
+  tab.append(element('span', 'file-tab', 'AGENTS.md'), element('span', '', '独立制作文件，审核后同步展示'))
   const lines = element('div', 'hero-code-lines')
-  const content = ['# PhysicsOS 实验开发约定', '', '01  严格类型，清楚的模块边界', '02  引擎决定物理，三维负责呈现', '03  同一套交互与 Warm Lab 视觉', '04  提交真实测试与验收证据']
+  const content = ['# PhysicsOS 实验开发约定', '', '01  只开发独立实验文件包', '02  引擎决定物理，三维负责呈现', '03  同一套交互与 Warm Lab 视觉', '04  打包上传，审核后同步展示']
   content.forEach((text, index) => {
     const line = element('div')
     line.append(element('span', 'line-number', String(index + 1).padStart(2, '0')), element('span', index === 0 ? 'code-title' : '', text))
     lines.append(line)
   })
   const footer = element('div', 'hero-code-foot')
-  footer.append(element('span', 'check-dot', '✓'), element('span', '', 'TypeScript · React · Three.js · CSS Modules'), link('查看完整提示词 →', '#/agents'))
+  footer.append(element('span', 'check-dot', '✓'), element('span', '', 'TypeScript · Three.js · 实验文件 ZIP'), link('查看完整提示词 →', '#/agents'))
   preview.append(tab, lines, footer)
   const intro = element('div', 'hero-intro')
   const copy = element('div', 'hero-copy')

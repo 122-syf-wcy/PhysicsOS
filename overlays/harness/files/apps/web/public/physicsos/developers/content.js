@@ -9,20 +9,20 @@ const section = (id, title, blocks) => ({ id, title, blocks })
 
 export const documents = [
   {
-    id: 'start', group: '开始贡献', title: '从这里开始', subtitle: '用共同的约定，把每个独立实验做成同一个 PhysicsOS。', tag: '指南', file: 'GETTING_STARTED.md',
+    id: 'start', group: '开始贡献', title: '从这里开始', subtitle: '独立制作实验文件，上传到对应实验；审核通过后自动同步展示。', tag: '文件贡献', file: 'GETTING_STARTED.md',
     sections: [
-      section('path', '一条清晰的贡献路径', [
-        p('先让代码说同一种语言，再让不同的实验各自精彩。平台统一页面与物理能力，你专注于真实、清楚、可操作的三维装置。'),
-        list(['阅读代码规范，下载代码风格工具包。', '复制 AGENTS.md 到实验目录，或把生成的任务提示词交给你的开发助手。', '找到对应实验的场景工厂、WorkspaceRuntime 和已有行为测试，先复用，再扩展。', '实现纯三维装置，遵循 Warm Lab 视觉与生命周期标准。', '完成类型、lint、行为测试和桌面/手机检查，通过 GitHub PR 提交。']),
-        note('当前开放范围', '文档、AGENTS.md、格式配置与代码风格工具包可直接使用。公开实验 SDK、ZIP 投稿、审核后自动发布仍在建设；当前贡献通过仓库 PR。'),
+      section('path', '贡献的是实验文件，不是主站源码', [
+        p('你只需要自己的实验目录：下载模板、制作三维装置、打包 ZIP。平台负责加载与展示，后台审核通过后把最新版本设为该实验的默认效果。无需克隆 PhysicsOS、修改主站或提交 PR。'),
+        list(['下载独立实验模板，填写 experimentId 与版本。', '复制 AGENTS.md 到该目录，让开发助手只修改这个实验包。', '在独立预览器中制作三维装置，使用宿主快照与参数意图接口。', '运行检查、构建与打包，取得 release 目录中的 ZIP。', '在对应实验页上传文件与作者资料；审核通过后平台自动同步。']),
+        note('当前可用与待接入', '现在可下载模板、独立预览、检查并生成 ZIP。生产站点的上传、后台审核与自动发布尚未接通。本页先把文件协议和开发交付定下来，不提供假的上传成功，也不把文件贡献改成 PR。'),
       ]),
-      section('responsibility', '先分清谁负责什么', [table(['平台负责', '贡献者负责'], [['引擎、单位、场景命令、结果校验', '三维器材、场景、光照、材质'], ['页面、参数控件、记录、报告、作者展示', '器材拖动、选择、高亮、观察视角'], ['登录、权限、版本与发布流程', '教学内容、参考用例、素材许可']])]),
-      section('workflow', '在现有仓库中工作', [
-        code('克隆与准备 · 不包含生产凭据', 'shell', 'git clone https://github.com/你的用户名/PhysicsOS.git\ncd PhysicsOS\ngit submodule update --init --recursive\nnode scripts/overlay/harness-overlay.mjs apply\npnpm install\npnpm -C vendor/deepseek-harness install'),
-        p('Node.js ≥ 24.7；根工作区使用 packageManager 固定的 pnpm 版本，Harness 使用它自己的版本。项目维护者的构建/测试环境遵循项目 AGENTS.md；社区开发者不需要生产服务器权限。'),
-        note('源码位置', 'Web 自有代码以 overlays/harness/files 为真值，packages 存放领域包。overlay 应用进 vendor 后再构建；不能在生成结果里修好后忘记同步源码。'),
+      section('responsibility', '两边通过文件与协议连接', [table(['平台统一提供', '贡献者交付'], [['实验路由、登录、作者、审核与发布', '一个对应 experimentId 的版本化 ZIP'], ['物理引擎、参数、记录、报告', '读取快照的三维视图区与交互'], ['隔离加载、权限校验和历史回滚', '入口 HTML、编译脚本、模型、贴图、说明与参考用例']])]),
+      section('workflow', '只在自己的实验目录开发', [
+        code('下载模板并解压后 · 首次安装需联网', 'shell', 'npm install\nnpm run dev\n# 浏览器打开 http://127.0.0.1:4175\n# 修改 src 后，重新运行 npm run build 并刷新预览\n\nnpm run format:write\nnpm run check\nnpm run build\nnpm run pack'),
+        p('模板需要 Node.js ≥ 24.7，不需要 PhysicsOS 仓库或生产服务器权限。dev 会先构建再启动独立预览；它没有自动热更新。模板内 Three.js 从本地依赖打包，发布时不依赖 CDN。'),
+        note('产物在哪里', 'npm run pack 生成 release/convex-lens-1.0.0.zip。ZIP 根目录有 experiment.json，入口为 dist/index.html；平台解压后按清单直接加载。模板里的 preview 只供开发，不进入投稿 ZIP。'),
       ]),
-      section('first', '第一个贡献应该足够小', [p('建议从凸透镜的一种器材或一段交互开始：补全光屏拖动与取消、改进器材材质、修复手机标注遮挡。一个 PR 只解决一个可以验证的问题，不连带重写整个工作台。')]),
+      section('first', '先验证“文件可以独立工作”', [p('下载的模板已经演示宿主参数 → 消息快照 → 三维装置更新。它是最小开发骨架，不是完成的凸透镜成品；贡献者继续完善器材、拖动、光路、标注和手机体验。即使关闭主站，这个独立目录仍可启动自己的预览。')]),
     ],
   },
   {
@@ -31,7 +31,7 @@ export const documents = [
       section('rules', '一张表，约定日常代码', [table(['项目', '统一约定', '例子 / 说明'], styleRows)]),
       section('naming', '新代码统一命名，旧代码保持稳定', [
         code('推荐目录命名', 'text', 'convex-lens/\n  experiment-page.tsx\n  experiment-page.module.css\n  lens-renderer.ts\n  lens-interaction.ts\n  lens-assets.ts\n  types.ts\n  tests/\n    lens-interaction.test.ts'),
-        note('与已有代码的关系', 'docs/02-ENGINEERING-STANDARDS.md §40 要求 kebab-case 文件名；旧 Web 中存在 PascalCase 文件。新实验采用文档规则，既有文件不为本次贡献批量改名。组件导出仍然是 PascalCase。'),
+        note('文件内保持一致即可', '实验文件包是独立工程。统一采用 kebab-case、TypeScript 严格类型与具名导出；无需迁就或修改主站旧文件。基础模板是 Three.js + TypeScript，不依赖主站 React 实例。'),
       ]),
       section('types', '让类型表达边界', [
         code('先验证，再使用', 'typescript', "interface ScreenReading {\n  readonly distanceMeters: number\n  readonly isSharp: boolean\n}\n\nexport function isScreenReading(value: unknown): value is ScreenReading {\n  if (typeof value !== 'object' || value === null) return false\n  if (!('distanceMeters' in value) || !('isSharp' in value)) return false\n\n  return typeof value.distanceMeters === 'number'\n    && Number.isFinite(value.distanceMeters)\n    && typeof value.isSharp === 'boolean'\n}"),
@@ -42,23 +42,23 @@ export const documents = [
         p('异步结果返回时检查实例是否仍存在。不要在渲染函数里启动请求，不吞掉错误后显示成功，不把整个页面订阅到每一帧。'),
       ]),
       section('tools', '提示词约束意图，工具约束结果', [
-        table(['层级', '负责检查'], [['AGENTS.md', '范围、架构边界、物理事实、资源清理、交付方式'], ['Prettier', '缩进、引号、分号、换行与尾逗号'], ['ESLint / 仓库 oxlint', '类型使用、未处理 Promise、危险写法'], ['TypeScript', '契约、参数与空值边界'], ['测试与评审', '行为正确性、物理真实性、性能和体验']]),
-        p('独立工具包使用 ESLint；正式 Harness Web 继续使用现有 oxlint。格式化目标为 100 列，仓库 oxlint 有 140 列上限，两者不是相互替代。根 prettier 默认忽略 overlays，修改 Web 应使用仓库 Web lint，并按所在目录规则整理格式。'),
+        table(['层级', '负责检查'], [['AGENTS.md', '范围、架构边界、物理事实、资源清理、交付方式'], ['Prettier', '缩进、引号、分号、换行与尾逗号'], ['ESLint', '类型使用、未处理 Promise、危险写法'], ['TypeScript', '契约、参数与空值边界'], ['测试与评审', '行为正确性、物理真实性、性能和体验']]),
+        p('实验模板自带 Prettier、ESLint、TypeScript 与文件命名检查。模板命令作用于自己的目录，不调用主站 pnpm 或 overlay 构建。平台审核还要检查行为、源码与编译产物是否对应，格式通过不等于审核通过。'),
       ]),
     ],
   },
   {
     id: 'structure', group: '统一标准', title: '目录与模块边界', subtitle: '把计算、呈现与交互拆开，给后来接手的人留出空间。', tag: '架构', file: 'ARCHITECTURE.md',
     sections: [
-      section('source', '先找到真实源码', [table(['位置', '用途'], [['packages/engine-*', '物理求解与领域模型'], ['packages/physics-scene', '场景结构、命令、修订与来源'], ['overlays/harness/files/packages/client/ui-physicsos/src/client', '平台 UI 与运行时适配源码'], ['vendor/deepseek-harness', '上游源码与 overlay 应用结果；不是自有代码编辑入口']])]),
-      section('layers', '每个文件只回答一个问题', [table(['模块', '允许做', '不允许做'], [['experiment-page.tsx', '组合共享控件、教学内容和实验台', '另做账号、报告和第二套参数面板'], ['lens-renderer.ts', '把可视快照投影为三维装置', '导入求解器、自己推算物理量'], ['lens-interaction.ts', '拾取、坐标转换、preview/commit/cancel', '直接改 Scene 字段或数据库'], ['lens-assets.ts', '资源加载、引用计数与释放', '无归属的全局缓存'], ['领域引擎', '计算、可处理条件、校验结果', '引用 React、DOM 或 Three 对象']])]),
-      section('shared', '复用现有能力', [p('优先接入现有 WorkspaceRuntime、场景命令、实验指南、报告和学习记录。跨实验都需要的能力放到共享层，并为已有消费者保留兼容；只有某个实验使用的装置留在该实验目录。'),note('不要提前依赖尚未发布的 SDK', '当前仓库接口与未来公共 SDK 是两层契约。公开 SDK 仍在设计，文档中的生命周期结构仅表达约定，不代表已经存在的 npm 包。')]),
+      section('source', '这是一个独立目录', [table(['文件', '责任'], [['experiment.json', '目标实验、版本、入口、协议与依赖声明'], ['src/main.ts / protocol.ts', '初始化三维与校验宿主消息'], ['src/lens-renderer.ts', '根据只读快照显示器材，不引用平台源码'], ['public / dist', '静态入口与编译后的自包含浏览器文件'], ['preview / tools / tests', '本地宿主、构建校验打包、行为验证']])]),
+      section('layers', '每个模块只回答一个问题', [table(['模块', '允许做', '不允许做'], [['入口', '创建实验视图区、连接宿主、声明清理', '创建主站导航、登录或审核入口'], ['renderer', '把标准快照投影为三维装置', '导入主站内部求解器或自行宣称物理校验'], ['interaction', '拾取与 preview/commit/cancel 意图', '修改 parent.document、Cookie 或数据库'], ['assets', '本包资源加载与释放', '运行时 CDN、跨包路径、远端代码'], ['本地预览宿主', '提供标明来源的开发快照', '冒充已接入生产引擎或已完成审核']])]),
+      section('shared', '共享能力通过协议，不通过源码引用', [p('参数面板、物理求解、记录、报告与作者由宿主管理。实验包只通过固定消息协议接收快照和发送操作意图，不 import @physicsos 内部包。平台以后如何重构，只要保持协议兼容，已审核实验文件就仍能加载。'),note('协议状态', '模板实现了参考协议 v1 和本地宿主，便于开发和验证。生产引擎适配与文件审核服务还需平台实现，当前不把参考协议描述为已上线公共 SDK。')]),
     ],
   },
   {
     id: 'physics', group: '统一标准', title: '物理与状态', subtitle: '代码风格的核心，也包括“谁有权决定这个数字”。', tag: '架构红线', file: 'PHYSICS_STANDARD.md',
     sections: [
-      section('truth', '唯一事实源', [p('PhysicsScene Runtime 保存已提交的物理条件；引擎生成结果与校验。React、Three Object3D、图表和助教只展示或解释它们，不能各自维护一套质量、速度、焦距或时间。'),code('一条状态链', 'text', '参数操作 / 器材拖动\n  → 场景命令与校验\n  → 场景修订\n  → 引擎结果与可视快照\n  → 三维装置、读数、记录、报告')]),
+      section('truth', '唯一事实源', [p('正式宿主持有已提交条件，调用平台引擎生成快照与校验。实验包只接收它，不在 Three Object3D 或其他状态中另造一套计算。独立预览宿主提供标明 preview-fixture 的调试快照，不等于正式引擎验证。'),code('一条状态链', 'text', '参数操作 / 器材拖动\n  → 场景命令与校验\n  → 场景修订\n  → 引擎结果与可视快照\n  → 三维装置、读数、记录、报告')]),
       section('preview', '把预览与提交分开', [list(['pointermove：显示临时预览，不写持久化记录。', 'pointerup：提交一次有效命令，产生可追溯的场景修订。', 'pointercancel / Escape：恢复上次已提交条件。', '切换页面与卸载：取消未完成拖动，移除事件。', '从题目进入实验：变更题面条件时建立实验分支，保留恢复原题入口。'])]),
       section('units', '单位与时间要明确', [p('计算采用平台单位系统。场景坐标可以采用便于展示的尺度，但转换必须集中在桥接边界，说明原点、方向和比例。不得把显示时间当物理时间，不得通过改变物理结果来追求顺滑动画。'),note('三维呈现 ≠ 任意三维求解', '将薄透镜光路放入三维光具座是呈现升级；若改变空间模型或引入新力学自由度，需要扩展求解器和独立验证。')]),
       section('cases', '验算用例要独立给出', [table(['条件（cm）', '预期结果'], [['f=10，u=30', 'v=15；倒立、缩小、实像'], ['f=10，u=20', 'v=20；倒立、等大、实像'], ['f=10，u=15', 'v=30；倒立、放大、实像'], ['f=10，u=10', '无有限位置的像；出射光平行'], ['f=10，u=5', '虚像位于物体同侧；正立放大；光屏不能承接']]),p('测试期望来自独立参考值或推导，不调用被测函数来计算期望。临界值附近、非法参数与保存恢复同样要检查。')]),
@@ -67,7 +67,7 @@ export const documents = [
   {
     id: 'three', group: '统一标准', title: '三维与交互', subtitle: '统一生命周期、输入方式与性能边界，实验才能长期稳定运行。', tag: '3D ONLY', file: 'THREE_STANDARD.md',
     sections: [
-      section('lifecycle', '四个清楚的生命周期', [table(['阶段', '责任'], [['mount', '创建相机、renderer、controls、装置与监听；绑定资源所有权'], ['update', '消费已有快照，更新变换、读数、显示状态；不重建整页'], ['resize', '同步画布、相机和分辨率，不重置实验条件'], ['dispose', '取消 RAF，移除监听/Observer，释放控件与自有 GPU 资源']]),note('这是一份接口责任约定', '公开 mount/update/resize/dispose SDK 尚未发布。仓库实现继续使用真实接口，不复制虚构 import。')]),
+      section('lifecycle', '四个清楚的生命周期', [table(['阶段', '责任'], [['mount', '创建相机、renderer、controls、装置与监听；绑定资源所有权'], ['update', '消费已有快照，更新变换、读数、显示状态；不重建整页'], ['resize', '同步画布、相机和分辨率，不重置实验条件'], ['dispose', '取消 RAF，移除监听/Observer，释放控件与自有 GPU 资源']]),note('模板中的真实入口', 'src/main.ts 调用 connectExperiment 与 mountLens，后者返回 update/dispose；ResizeObserver 处理尺寸。这里的代码随模板一起交付，不依赖一个不存在的 npm SDK。')]),
       section('input', '直接操作，也能精确操作', [list(['统一三维入口，无二维切换；视角归位与复位实验分开。', '拖动器材时锁定相机；拖动空白才旋转，滚动/双指按约定缩放。', '同一参数支持拖动、数值输入与键盘；触摸目标至少 44 CSS px。', '标签避让器材与彼此，超出视野时保留真实读数，不把离屏物体硬贴到边界。', '加载失败与 context loss 提供重试和状态说明，保留已提交条件与记录。'])]),
       section('performance', '建议的首版验收预算', [table(['项目', '首版目标（需真机记录）'], [['像素比', '默认 DPR ≤ 1.5，按设备降低'], ['静态实验', '只在条件、视角或尺寸变化时绘制'], ['动态实验', '使用平台时钟；后台暂停；不每帧重渲染整页'], ['手机', '目标设备持续交互 ≥ 30fps；记录设备、浏览器、采样时段'], ['资源', '压缩模型与纹理；按实验加载；提交压缩体积与显存统计'], ['销毁', '连续进入/退出至少 10 次，无持续增长的 listener / renderer / GPU 资源']]),p('这些是规范目标，不是当前全部实验已经达到的指标。性能优化不能牺牲物理精度。大场景的预算需在评审中给出理由。')]),
     ],
@@ -83,18 +83,28 @@ export const documents = [
   {
     id: 'package', group: '贡献与发布', title: '实验包格式', subtitle: '先约定可审阅、可验证的格式，再开放自动上传。', tag: 'V1 草案', file: 'PACKAGE_SPEC.md',
     sections: [
-      section('status', '格式正在收敛，上传尚未开放', [note('明确边界', '本页是实验包 V1 草案。当前提供清单示例与 JSON Schema 供讨论和准备，不是已接通的上传协议。公开 SDK 和服务器包校验发布前，以仓库 PR 为准。')]),
-      section('tree', '建议的提交结构', [code('一个实验，一个贡献包', 'text', 'convex-lens/\n  experiment.json\n  src/\n    main.ts\n    lens-renderer.ts\n    lens-interaction.ts\n  assets/\n    apparatus.glb\n    cover.webp\n  teaching.json\n  cases.json\n  README.md\n  MODEL.md\n  ASSET-LICENSES.json\n  LICENSE'),p('main.ts 入口需等待 SDK 契约确定。源码包不包含 node_modules、密钥、会话或预装依赖；平台构建不执行投稿者任意安装脚本。')]),
-      section('manifest', '清单中需要表达的内容', [code('experiment.json · 候选结构', 'json', JSON.stringify({ schemaVersion: 1, experimentId: 'convex-lens', version: '1.0.0', entry: 'src/main.ts', renderer: 'three', theme: 'physicsos-warm-lab-v1', engine: { id: 'optics', contractVersion: 1 }, cover: 'assets/cover.webp', teaching: 'teaching.json', referenceCases: 'cases.json', assetLicenses: 'ASSET-LICENSES.json', license: 'Apache-2.0' }, null, 2)),p('SDK 版本范围待正式发布时加入必填契约，不填写一个不存在的版本。experimentId 必须与投稿入口对应；版本号冻结到具体产物摘要。作者主身份由登录账号绑定，不信任包里自填的用户 ID。')]),
-      section('validation', 'Schema 只是第一道检查', [p('下载包附带的 JSON Schema 检查字段与基本格式；解压路径、符号链接、资源 MIME、压缩炸弹、依赖与执行隔离必须由服务器单独验证。通过 JSON Schema 不代表物理正确、资源安全或已获审核。')]),
+      section('status', '平台加载的是已审核的文件包', [p('贡献者在本地编译，交付带源码的浏览器静态包。平台校验后在隔离域提供 dist/index.html，通过消息协议接入参数和快照。贡献者无需修改主仓库，主站也不需要为每次投稿重新构建。'),note('尚未开放生产投稿', '模板可以构建、校验、打包与本地预览。服务器上传、重建比对、审核与默认版本切换仍需实现。')]),
+      section('tree', 'ZIP 根目录固定', [code('提交产物 · 工具自动收集', 'text', 'experiment.json\ndist/\n  index.html\n  runtime/main.js\n  runtime/protocol.js\n  runtime/lens-renderer.js\n  vendor/three.module.js\n  vendor/three.core.js\n  assets/\nsrc/\n  main.ts\n  protocol.ts\n  lens-renderer.ts\nparameters.json\nteaching.json\ncases.json\nREADME.md\nMODEL.md\nASSET-LICENSES.json\nLICENSE'),p('ZIP 不要再套一层随机目录。src 用于审核，dist 用于实际运行，二者必须对应。node_modules、preview、.env 和本机数据不会进入 pack 的白名单；dist 内的隐藏文件、符号链接和超限资源会被拒绝。')]),
+      section('manifest', '实验包清单', [code('experiment.json · 参考文件协议 v1', 'json', JSON.stringify({schemaVersion:1, protocolVersion:1, packageType:'browser-static', experimentId:'convex-lens', version:'1.0.0', entry:'dist/index.html', renderer:'three', theme:'physicsos-warm-lab-v1', engine:{id:'optics',contractVersion:1}, parameters:'parameters.json', cover:'dist/assets/cover.jpg', teaching:'teaching.json', referenceCases:'cases.json', assetLicenses:'ASSET-LICENSES.json', license:'Apache-2.0'},null,2)),p('experimentId 必须匹配上传页；作者身份由登录账户绑定。入口和所有资源采用包内相对路径，不引用贡献者磁盘或外部脚本。版本和审核产物冻结；改一个文件就提交新版本。')]),
+      section('validation', '本地检查与服务器审核各自负责', [table(['本地工具已检查', '平台仍须检查'], [['必需文件、入口、清单基本字段、相对入口资源', '目标实验权限、完整 Schema、协议兼容与资源实际类型'], ['符号链接、隐藏文件、1000 文件/40 MiB 总量/20 MiB 单文件', '上传压缩体积、解压炸弹、路径冲突、隔离执行与完整依赖图'], ['格式、命名、类型、lint、基础打包测试', '源码与 dist 重建比对、物理参考用例、手机与性能验收']]),p('本地检查不是安全认证或审核通过。即便本地工具没有发现问题，服务端也必须重新验证同一份不可变 ZIP。')]),
+    ],
+  },
+  {
+    id: 'protocol', group: '贡献与发布', title: '宿主与实验协议', subtitle: '用固定消息交换状态，实验文件不依赖主站内部代码。', tag: '参考协议 v1', file: 'HOST_PROTOCOL.md',
+    sections: [
+      section('boundary', '视图区与平台分开运行', [p('平台加载清单 entry 指定的 HTML 到隔离 iframe。父页面提供参数、记录、报告、作者；包内页面只创建三维实验视图区。生产会在独立资源域运行，不能依赖 parent.document、同源存储或平台 Cookie。'),note('模板预览的身份', '独立预览器已实现参考握手和快照交互；它不是正式上传后台，也没有生产账号或引擎。不要自行写一个假 /upload 接口当成平台接入。')]),
+      section('handshake', '一次握手，一条专属通道', [list(['宿主为每次挂载生成随机 channel，并将精确 hostOrigin 与 channel 放入入口查询参数。channel 不是账号令牌。', '实验向精确 hostOrigin 发送 experiment/ready，包含 protocolVersion: 1 和 channel。', '宿主检查 event.source 为该 iframe、sandbox 不透明 origin、channel 与协议版本，创建 MessageChannel。', '宿主只向这个 iframe 发送 experiment/connect 并转移一个端口；实验检查 event.source === parent、精确宿主 origin、channel 后接受。', '由于 sandbox 使用不透明 origin，宿主这一次端口转移需 targetOrigin="*"；它只面向已绑定 iframe，不携带用户数据。后续状态通过 MessagePort，不能广播到 window。', '关闭或重新加载时关闭端口，旧通道不能影响新实例。'])]),
+      section('messages', '消息与方向', [table(['消息', '方向', '用途'], [['experiment/ready → experiment/connect → experiment/connected', '实验 ↔ 宿主', '握手及端口确认'], ['experiment/snapshot', '宿主 → 实验', '只读 revision、source、parameters、result'], ['parameter/preview', '实验 → 宿主', 'id/value，临时显示，不落库'], ['parameter/commit', '实验 → 宿主', 'id/value，校验后提交一次'], ['parameter/cancel', '实验 → 宿主', '取消当前预览']]),p('宿主必须限制参数 ID、数值范围、消息大小与频率；未知消息拒绝或忽略。实验必须验证快照类型与有限数值。作者、发布权限与学习记录不能由实验消息指定。')]),
+      section('snapshot', '凸透镜开发快照示例', [code('以 src/protocol.ts 为模板中的类型真值', 'json', JSON.stringify({revision:0,source:'preview-fixture',parameters:{objectDistanceCm:30,focalLengthCm:10,screenDistanceCm:15},result:{imageDistanceCm:15,imageHeightCm:-3,imageKind:'real',screenSharp:true}},null,2)),p('示例坐标单位是 cm，已在字段名中说明；平台内部单位由正式适配器转换。source=preview-fixture 明确表示开发数据。只有平台引擎实际生成的结果才能标记 platform-engine；展示该字段不构成独立的物理验证证明。')]),
+      section('future', '平台接入需要完成的工作', [p('上传与权限校验、资源隔离域、引擎适配器、审核预览、不可变发布与回滚、运行版本固定仍需主平台实现。贡献者只面向已文档化的文件与协议，不需要参与这些内部源码改动。')]),
     ],
   },
   {
     id: 'review', group: '贡献与发布', title: '提交与审核', subtitle: '让代码、结果和作者一起被看见，也让每一次发布可追溯。', tag: '当前 + 规划', file: 'SUBMISSION_REVIEW.md',
     sections: [
-      section('today', '当前：通过 Pull Request 贡献', [list(['从最新 main 创建聚焦的贡献分支。', '提交源码与资料，运行对应检查，附清楚的变更说明。', '包含典型/边界用例、桌面/手机截图与限制说明。', '由维护者评审，CI 通过后整合；不要自行绕过生产发布流程。']),code('正式 Web 检查', 'shell', 'pnpm typecheck:web\npnpm lint:web\npnpm test:web\npnpm build:web\ngit diff --check'),p('这些命令用于完整 PhysicsOS 仓库，不用于下载的独立风格工具包。修改领域引擎时补对应包测试；本机缺少依赖不代表服务器环境不可用。')]),
-      section('future', '规划：对应实验上传，审核后自动发布', [code('计划中的流程', 'text', '对应实验 → 贡献实验 → 上传 ZIP 与作者资料\n  → 自动校验 / 隔离构建\n  → 管理员交互预览 / 审核\n  → 通过后自动更新默认版本\n  → 实验页显示新效果与本次作者'),p('最新审核通过的版本直接成为默认效果，不新增普通用户社区版本选择器。历史版本保留作追溯与回滚。发布失败保留旧版；正在运行的实验继续固定原版本。')]),
-      section('evidence', '审核需要的证据', [table(['检查面', '材料'], [['代码一致性', '格式、命名、lint、类型检查结果'], ['物理可信', '引擎绑定、参考值、临界值、适用模型'], ['交互', '拖动提交/取消、键盘/触摸、复位与保存恢复'], ['三维稳定', '资源大小、性能数据、重复挂载、context loss'], ['作者与许可', '署名、GitHub、共同作者、每项素材来源']]),note('独立实验代码需要隔离', '未来投稿在隔离构建和受限实验视图区中运行，通过允许的消息协议调用平台能力。源码不能访问主站凭据、Cookie、其他用户记录或生产数据库。')]),
+      section('today', '投稿流程只围绕实验文件', [list(['在独立模板里完成开发与预览。', '运行 npm run check、npm run build、npm run pack。', '在对应实验页选择“上传实验”，提交生成的 ZIP、作者资料和版本说明。', '自动检查通过后进入后台审核，可退回修改。', '管理员通过后自动发布，新进入该实验的用户看到最新效果与作者。']),code('贡献者实际运行的命令', 'shell', 'npm run check\nnpm run build\nnpm run pack\n# 产物：release/convex-lens-1.0.0.zip'),note('接入状态', '前两步已由独立模板支持。正式页面上传、审核与自动同步尚待平台接通；没有用 PR 替代文件投稿，也没有隐藏的生产同步命令。')]),
+      section('future', '审核后同步的是发布指针', [code('平台负责的发布链路', 'text', '接收 ZIP → 隔离存储 → 解压校验 → 交互审核\n  → 冻结文件与内容摘要\n  → 更新对应 experimentId 的默认发布版本\n  → 主站加载新入口与资源、展示该版本作者'),p('最新审核通过版本直接替换默认效果；历史用于审计与回滚。更新不热替换正在运行的实验；审核失败或发布失败继续保留上一版。每个运行会话固定 releaseId 与 protocolVersion。')]),
+      section('evidence', '审核需要什么', [table(['检查面', '材料'], [['文件一致性', '源码与编译入口、清单、可重建依赖和资源摘要'], ['代码风格', 'format、命名、lint、typecheck 结果'], ['物理与交互', '引擎接口、参考用例、拖动取消/提交和模型限制'], ['三维稳定', '移动端、重复加载、资源释放、WebGL 失败提示'], ['作者与许可', '当前作者、GitHub、共同署名与素材许可']]),p('提交新版本不能跳过审核；上传成功只表示接收文件，不代表已经公开或替换线上效果。')]),
     ],
   },
   {
@@ -102,7 +112,7 @@ export const documents = [
     sections: [
       section('profile', '每份作品都有明确作者', [table(['字段', '说明'], [['显示名称', '公开署名；与登录账号绑定'], ['简介', '简短介绍与贡献范围，不发布联系方式或私人资料'], ['GitHub 个人主页', '用于展示个人链接与对应头像'], ['源码仓库', '单独填写；仓库组织不一定等于作者'], ['头像上传', '未提供 GitHub 时使用上传图片'], ['共同作者', '列出姓名、链接、分工与授权']])]),
       section('avatar', '头像显示优先级', [list(['提供 GitHub 个人主页 → 自动显示对应 GitHub 头像。', '未提供 GitHub → 使用上传头像。', '没有头像或加载失败 → 使用姓名缩写。']),p('GitHub 头像应缓存并统一裁切尺寸。链接仅代表填写了该地址，不代表身份已认证；完成 GitHub 绑定后才能出现认证标识。服务端仅通过受控 GitHub 接口获取资料，不能抓取任意头像 URL。')]),
-      section('credit', '署名与版本一起发布', [p('实验顶部展示当前默认版本主要作者，底部展示共同作者、仓库、许可证和版本。新作品审核通过后，默认效果与作者同时更新。既有作者的贡献历史和第三方素材署名仍保留。'),note('许可不是装饰字段', '自有代码与文档遵循仓库 Apache-2.0 规则。第三方模型、纹理和图片分别记录许可证、来源与是否修改；不把不兼容素材一并宣称为 Apache-2.0。')]),
+      section('credit', '署名与版本一起发布', [p('实验顶部展示当前默认版本主要作者，底部展示共同作者、仓库、许可证和版本。新作品审核通过后，默认效果与作者同时更新。既有作者的贡献历史和第三方素材署名仍保留。'),note('许可不是装饰字段', '平台模板代码采用 Apache-2.0；贡献文件须明确代码许可与授权。第三方模型、纹理和图片分别记录许可证、来源与是否修改；不把不兼容素材一并宣称为 Apache-2.0。')]),
     ],
   },
   {
@@ -115,9 +125,9 @@ export const documents = [
   {
     id: 'downloads', group: '开发工具', title: '规范与工具包', subtitle: '把规范、提示词和自动检查一起带回你的编辑器。', tag: '可下载', file: 'DOWNLOADS.md',
     sections: [
-      section('kit', '代码风格工具包', [p('ZIP 包含可执行的 Prettier、ESLint、TypeScript 和命名检查配置，附最小类型示例、全部 Markdown 文档和 AGENTS.md。它是代码一致性工具包，不包含完整实验 SDK、Three.js 样板或上传客户端。'),{ type: 'downloads' }]),
-      section('commands', '在独立工具包里验证', [code('解压后运行 · 首次安装需联网', 'shell', 'npm install\nnpm run format:write\nnpm run check'),p('Node.js ≥ 24.7。依赖使用精确版本；首次安装后保留生成的锁文件，之后使用 npm ci。工具包里的 check = 格式 + 文件命名 + ESLint + TypeScript；不等于完成物理测试或视觉验收。'),note('接入已有仓库时', '不要覆盖仓库现有 package.json、ESLint、TypeScript 配置。将新实验代码和必要规则按现有机制接入，继续执行项目 required checks。')]),
-      section('versions', '规范版本跟随贡献记录', [p('本页代码风格规范为 v1.0，包格式与公开 SDK 仍属候选设计。每次修改规范应更新版本和变更记录；旧投稿按其兼容版本复验，不静默改写已审核产物。')]),
+      section('kit', '独立实验模板', [p('优先下载独立实验模板 ZIP。里面有真实 TypeScript 三维入口、本地宿主、消息协议、风格检查、构建与打包工具。它可以离开 PhysicsOS 主仓库开发，不需要修改主站。模板是可运行骨架，直接拖动器材、完整光路等成品功能仍需贡献者完成。'),{type:'downloads'}]),
+      section('commands', '在自己的目录执行', [code('下载、解压、开发、打包', 'shell', 'npm install\nnpm run dev\n\n# 修改代码后构建并刷新\nnpm run build\n\n# 提交前\nnpm run format:write\nnpm run check\nnpm run build\nnpm run pack'),p('Node.js ≥24.7。首次安装后保留锁文件；后续使用 npm ci。发布 ZIP 为 release/<experimentId>-<version>.zip，已编译页面的依赖位于包内。'),note('工具包和实验模板不要混淆', '代码风格工具包仍可单独下载，用于格式与命名；只有独立实验模板包含 dev/build/pack 和本地预览。不要把主站内部构建命令用于独立实验包。')]),
+      section('versions', '文件协议与上线状态', [p('文档规范 v1.1 已改为文件投稿模式。参考协议 v1 在模板预览器中实现，生产接入尚未开放。不要虚构上传地址、发布凭据或 GitHub 自动部署；按对应实验上传并审核才是正式同步路径。')]),
     ],
   },
 ]
@@ -133,7 +143,7 @@ export function documentMarkdown(doc) {
       if (block.type === 'list') chunks.push(...block.items.map(text => `- ${text}`), '')
       if (block.type === 'code') chunks.push(`### ${block.title}`, '', '```' + block.language, block.value, '```', '')
       if (block.type === 'table') chunks.push(`| ${block.headers.join(' | ')} |`, `| ${block.headers.map(() => '---').join(' | ')} |`, ...block.rows.map(row => `| ${row.map(text => text.replaceAll('|', '\\|')).join(' | ')} |`), '')
-      if (block.type === 'downloads') chunks.push('下载项：physicsos-code-style-v1.zip、AGENTS.md、experiment.schema.json、experiment.example.json。', '')
+      if (block.type === 'downloads') chunks.push('下载项：physicsos-experiment-template-v1.zip、physicsos-code-style-v1.zip、AGENTS.md、experiment.schema.json、experiment.example.json。', '')
     }
   }
   return chunks.join('\n')
