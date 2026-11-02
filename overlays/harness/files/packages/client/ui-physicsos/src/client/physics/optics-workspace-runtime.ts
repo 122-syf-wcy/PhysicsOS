@@ -107,6 +107,7 @@ interface Computed {
  * The optics workspace runtime — see the module doc for its role.
  */
 export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
+  private previewRuntime: OpticsWorkspaceRuntime | undefined
   private sceneRuntime: SceneRuntime
   private readonly engine = new OpticsEngine()
   private rate = 1
@@ -186,7 +187,30 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
     return this.sceneRuntime.getScene()
   }
 
+  previewParameter(id: string, value: number): WorkspaceSnapshot {
+    if (!Number.isFinite(value) || value <= 0) return this.getSnapshot()
+    const preview = new OpticsWorkspaceRuntime(this.getScene())
+    const next = preview.editParameter(id, value)
+    if (next.status !== 'failed') this.previewRuntime = preview
+    return this.getSnapshot()
+  }
+
+  commitParameter(id: string, value: number): WorkspaceSnapshot {
+    this.previewRuntime = undefined
+    if (!Number.isFinite(value) || value <= 0) return this.getSnapshot()
+    return this.editParameter(id, value)
+  }
+
+  cancelParameterPreview(): WorkspaceSnapshot {
+    this.previewRuntime = undefined
+    return this.getSnapshot()
+  }
+
   getSnapshot(): WorkspaceSnapshot {
+    if (this.previewRuntime !== undefined) {
+      const { branch: _previewBranch, ...frame } = this.previewRuntime.getSnapshot()
+      return { ...frame, sceneRevision: this.getScene().revision }
+    }
     const scene = this.sceneRuntime.getScene()
     const title = scene.metadata.title ?? '几何光学实验'
     const badge = branchBadgeOf(scene)
@@ -497,6 +521,8 @@ export class OpticsWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   editParameter(id: string, value: number): WorkspaceSnapshot {
+    this.previewRuntime = undefined
+    if (!Number.isFinite(value)) return this.getSnapshot()
     const scene = this.sceneRuntime.getScene()
     const bench = opticalBenchOf(scene)
     const model = this.computed?.result.model

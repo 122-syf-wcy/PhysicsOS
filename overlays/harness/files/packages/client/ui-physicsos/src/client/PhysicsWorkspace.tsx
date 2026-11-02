@@ -29,7 +29,7 @@ import {
   IconSparkleMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
-import { STEP_FRACTION, useAnimationClock } from './animation-clock.ts'
+import { STEP_FRACTION } from './animation-clock.ts'
 import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import {
   ResponsiveInspector,
@@ -44,7 +44,7 @@ import { WorkspaceScenePanel } from './WorkspaceScenePanel.tsx'
 import { IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
 import { useEventEffects } from './physics/event-effects.ts'
-import { createFrameSource, useFrameSource, type FrameSource } from './physics/frame-source.ts'
+import { useFrameSource, type FrameSource } from './physics/frame-source.ts'
 import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
 import type { ComponentControlChannel, ComponentDragChannel } from './physics/renderer-registry.tsx'
 import type { ObservableKey } from './physics/scene-visual-model.ts'
@@ -76,6 +76,7 @@ import {
 } from './physics/circuit-builder.ts'
 import { GlassSelect } from './GlassSelect.tsx'
 import css from './LabWorkspace.module.css'
+import { useExperimentSession } from './experiments/use-experiment-session.ts'
 
 type Translate = (key: PhysicsosKey) => string
 
@@ -104,10 +105,6 @@ const failureMessage = (
 }
 
 const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
-
-/** Wall-clock interval at which the React tree refreshes its summary while the
-    animation loop publishes every frame to the renderer channel (#123). */
-const SUMMARY_INTERVAL_MS = 250
 
 export interface PhysicsWorkspaceProps {
   readonly onSceneChange?: (scene: import('@physicsos/physics-scene').PhysicsScene) => void
@@ -166,7 +163,7 @@ export function PhysicsWorkspace({
   buildMode,
   experimentMeta,
 }: PhysicsWorkspaceProps) {
-  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(() => runtime.getSnapshot())
+  const { snapshot, commit, frameSource } = useExperimentSession(runtime, onSceneChange)
   const [selected, setSelected] = useState('scene')
   /* The canvas owns the bench: the data strip stays a handle until asked.
      The tab still defaults to charts when they exist, so expanding lands
@@ -200,13 +197,6 @@ export function PhysicsWorkspace({
      it actually needs to reach the canvas. */
   const highlightRef = useRef<string | undefined>(undefined)
 
-  /* The renderer channel: the canvas subscribes to the latest frame directly.
-     Created once per workspace instance (the Lab remounts this shell per scene). */
-  const [frameSource] = useState(() => createFrameSource<WorkspaceSnapshot>(runtime.getSnapshot()))
-  /* Latest frame already reflected in React state, for change detection. */
-  const summaryRef = useRef(snapshot)
-  const lastSummaryAt = useRef(0)
-
   const clock = snapshot.clock
   const running = clock.running
   /* What this frame can actually back, read off the frame rather than the
@@ -221,56 +211,6 @@ export function PhysicsWorkspace({
   /* One unit for the whole timeline, chosen from the run window, so the moving
      clock and its total stay comparable — `3.75 µs / 10.00 µs`, never `1e-5s`. */
   const clockScale = timeScaleOf(clock.total)
-
-  /** Publish a frame to the renderer channel AND to React. Used by discrete
-      user actions so the canvas and the panels agree immediately. */
-  const commit = useCallback(
-    (next: WorkspaceSnapshot) => {
-      const previous = summaryRef.current
-      frameSource.set(next)
-      summaryRef.current = next
-      setSnapshot(next)
-      if (previous.sceneRevision !== next.sceneRevision || previous.branch !== next.branch) {
-        const scene = runtime.getScene?.()
-        if (scene !== undefined) onSceneChange?.(scene)
-      }
-    },
-    [frameSource, runtime, onSceneChange],
-  )
-
-  /* The animation loop is the renderer's independent update loop (#123): every
-     frame goes straight to the canvas channel; React only gets a throttled
-     summary, or an immediate refresh when Status / Selection / Panel Data /
-     revision actually changed. */
-  useAnimationClock(
-    running,
-    useCallback(
-      (elapsed: number) => {
-        const next = runtime.advance(elapsed)
-        frameSource.set(next)
-        const previous = summaryRef.current
-        const now = typeof performance === 'undefined' ? 0 : performance.now()
-        const significant =
-          next.status !== previous.status ||
-          next.sceneRevision !== previous.sceneRevision ||
-          next.clock.running !== previous.clock.running
-        if (significant || now - lastSummaryAt.current >= SUMMARY_INTERVAL_MS) {
-          lastSummaryAt.current = now
-          summaryRef.current = next
-          setSnapshot(next)
-        }
-      },
-      [runtime, frameSource],
-    ),
-  )
-
-  /* A new runtime instance (different scene) must not keep the previous frame. */
-  useEffect(() => {
-    const next = runtime.getSnapshot()
-    frameSource.set(next)
-    summaryRef.current = next
-    setSnapshot(next)
-  }, [runtime, frameSource])
 
   const highlight = useCallback(
     (id: string | undefined) => {

@@ -73,6 +73,7 @@ export const sceneRefOf = (entry: PhysicsSceneRef): PhysicsSceneRef => ({
 /** Snapshot the sidebar and workspace overlay subscribe to. */
 export interface PhysicsSurfaceState {
   surface: PhysicsSurfaceId
+  routeNotice?: string
   /** Changes only on an explicit handover, never a write-back. */
   sceneGeneration?: number
   /** The active scene. Survives surface switches so returning to the Lab resumes it. */
@@ -170,6 +171,7 @@ export interface PhysicsSurfaceController {
   updateScene: (scene: PhysicsScene) => void
   openBuilder: (sceneRef: PhysicsSceneRef) => void
   /** Open the Lab on the experiment chooser, keeping the active scene resumable. */
+  setRouteNotice: (message: string | undefined) => void
   openExperimentPicker: () => void
   /** Drop a scene from 最近空间; an active scene keeps running in the Lab. */
   removeRecent: (sceneId: string) => void
@@ -378,7 +380,7 @@ export function createPhysicsSurfaceController(
     updateScene: (scene) => {
       const current = store.getSnapshot()
       const previous = current.sceneRef
-      if (previous === undefined || (previous.scene.id === scene.id && previous.scene.revision === scene.revision)) return
+      if (previous === undefined || (previous.scene.id === scene.id && previous.scene.revision === scene.revision && previous.scene.metadata.experimentNotebook === scene.metadata.experimentNotebook)) return
       const originScene = previous.originScene ?? (previous.scene.metadata.sourceQuestionId === undefined ? undefined : previous.scene)
       const sceneRef: PhysicsSceneRef = {
         sceneId: String(scene.id), scene,
@@ -394,6 +396,7 @@ export function createPhysicsSurfaceController(
       navigation?.selectSurface('lab')
       record(sceneRef)
     },
+    setRouteNotice: (routeNotice) => { store.set({ ...store.getSnapshot(), routeNotice }) },
     openExperimentPicker: () => {
       store.set({ ...store.getSnapshot(), surface: 'lab', experimentPicker: true })
       navigation?.selectSurface('lab')
