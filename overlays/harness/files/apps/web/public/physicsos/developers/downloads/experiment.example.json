@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "experimentId": "convex-lens",
+  "version": "1.0.0",
+  "entry": "src/main.ts",
+  "renderer": "three",
+  "theme": "physicsos-warm-lab-v1",
+  "engine": {
+    "id": "optics",
+    "contractVersion": 1
+  },
+  "cover": "assets/cover.webp",
+  "teaching": "teaching.json",
+  "referenceCases": "cases.json",
+  "assetLicenses": "ASSET-LICENSES.json",
+  "license": "Apache-2.0"
+}

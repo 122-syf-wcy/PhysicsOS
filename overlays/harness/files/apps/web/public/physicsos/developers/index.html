@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="PhysicsOS 实验开发者文档。统一代码规范、三维交互与物理边界，一键复制 AGENTS.md，下载代码风格工具包。">
+    <title>实验开发者文档 · PhysicsOS</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/physicsos-mark-32.png">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳至正文</a>
+    <header class="topbar">
+      <button class="mobile-toggle" id="menu-toggle" type="button" aria-label="打开文档目录" aria-expanded="false" aria-controls="sidebar">☰</button>
+      <a class="brand" href="#/start" aria-label="PhysicsOS 开发者文档首页">
+        <img class="brand-site-icon" src="assets/physicsos-mark-128.png" width="34" height="34" alt="" aria-hidden="true">
+        <strong>Physics<span>OS</span></strong>
+      </a>
+      <span class="brand-separator"></span><span class="site-label">开发者文档</span>
+      <div class="search-wrap">
+        <label class="search-field" for="doc-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></svg><input id="doc-search" type="search" placeholder="搜索规范、接口与示例…" autocomplete="off" aria-label="搜索开发文档" aria-controls="search-results"><kbd>⌘ K</kbd></label>
+        <div class="search-results" id="search-results" hidden></div>
+      </div>
+      <nav class="top-links" aria-label="外部链接"><a href="https://physics.dongsiwei.com" target="_blank" rel="noopener noreferrer">返回实验室 ↗</a><a href="https://github.com/122-syf-wcy/PhysicsOS" target="_blank" rel="noopener noreferrer" class="github-link"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.46-1.11-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.93.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.82c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85V21c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>GitHub</a></nav>
+    </header>
+    <div class="layout">
+      <aside class="sidebar" id="sidebar"><div class="sidebar-label">EXPERIMENT DEVELOPERS</div><nav id="doc-nav" aria-label="文档目录"></nav><a class="sidebar-kit" href="downloads/physicsos-code-style-v1.zip" download><span class="kit-icon" aria-hidden="true">↧</span><span><strong>代码风格工具包</strong><small>规范、配置与 AGENTS.md</small></span><span aria-hidden="true">↗</span></a><div class="sidebar-version"><i></i><span>规范 v1.0</span><span>2026.11</span></div></aside>
+      <div class="mobile-backdrop" id="menu-backdrop" hidden></div>
+      <main id="main" tabindex="-1"></main>
+      <aside class="toc" aria-label="本页目录"><span>本页内容</span><nav id="toc-nav"></nav><div class="toc-help"><strong>一起完善标准</strong><p>发现文档缺漏或代码约定冲突？</p><a href="https://github.com/122-syf-wcy/PhysicsOS/issues/new" target="_blank" rel="noopener noreferrer">在 GitHub 提交反馈 ↗</a></div></aside>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="copy-dialog" aria-labelledby="copy-title"><div class="dialog-head"><h2 id="copy-title">手动复制内容</h2><button id="close-copy" aria-label="关闭复制窗口" type="button">×</button></div><p>浏览器未允许自动复制。内容已选中，按 Ctrl/Cmd + C 复制。</p><textarea id="copy-fallback" readonly aria-label="待复制内容"></textarea></dialog>
+    <noscript><div class="noscript">文档交互需要 JavaScript。你仍可下载 <a href="downloads/AGENTS.md">AGENTS.md</a>、<a href="downloads/CODE_STYLE.md">代码规范</a>和<a href="downloads/physicsos-code-style-v1.zip">完整工具包</a>。</div></noscript>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

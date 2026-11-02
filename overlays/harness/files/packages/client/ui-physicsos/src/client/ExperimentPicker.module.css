@@ -1019,3 +1019,23 @@
     transition: none;
   }
 }
+
+/* The contribution guide is a static public document, independent of a lab session. */
+.developerLink {
+  display: inline-block;
+  margin-top: 7px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  text-underline-offset: 3px;
+}
+
+.developerLink:hover {
+  color: var(--dsw-alias-button-info-fill);
+  text-decoration: underline;
+}
+
+.developerLink:focus-visible {
+  outline: 2px solid var(--dsw-alias-button-info-fill);
+  outline-offset: 3px;
+}
