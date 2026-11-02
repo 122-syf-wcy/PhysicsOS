@@ -93,39 +93,62 @@ export function sanitizeQuestion(raw: unknown): unknown {
  * @param prompt - the single user message.
  * @returns the joined text of all text blocks; throws on error/aborted finishes.
  */
+/* The upstream occasionally completes a request with `stop` and no content at
+   all — measured on the deployment's own provider at roughly one response in
+   three for a full system prompt. The framework's retry policy does cover
+   EMPTY_RESPONSE, but it retries the adapter call; the same prompt failing
+   repeatedly inside one section still loses the whole draft. Retrying here
+   keeps the attempt budget visible to the caller's error message and lets a
+   transient empty completion cost a few seconds instead of a failed section. */
+const EMPTY_RESPONSE_ATTEMPTS = 3
+const EMPTY_RESPONSE_BACKOFF_MS = 1_500
+
+const isRetryableEmpty = (message: string, code: string): boolean => code === 'EMPTY_RESPONSE'
+
 export async function callModel(ctx: Context, route: PaperModelRoute, system: string, prompt: string): Promise<string> {
-  const assembler = new BlockAssembler()
-  for await (const chunk of ctx.llm.stream({
-    provider: route.provider,
-    model: route.model,
-    system,
-    messages: [createUserMessage({
-      content: [{ type: 'text', text: prompt }],
-      source: { kind: 'user' },
-    })],
-    /* 32768, not 16000: reasoning models (deepseek-v4.1-flash) bill their
-       thinking against the same completion budget — a full 高考 非选择题
-       section spent all 16000 tokens on reasoning_content and returned zero
-       text characters ("no JSON in model output (0 chars)"), failing the
-       draft after both repair rounds. 32768 is the adapter's own shipped cap
-       for this model family and leaves the JSON several times the headroom
-       of the biggest section observed. */
-    maxTokens: 32768,
-    temperature: 0.4,
-  })) {
-    assembler.push(chunk)
+  let lastFailure = ''
+  for (let attempt = 1; attempt <= EMPTY_RESPONSE_ATTEMPTS; attempt += 1) {
+    const assembler = new BlockAssembler()
+    for await (const chunk of ctx.llm.stream({
+      provider: route.provider,
+      model: route.model,
+      system,
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: prompt }],
+        source: { kind: 'user' },
+      })],
+      /* 32768, not 16000: reasoning models (deepseek-v4.1-flash) bill their
+         thinking against the same completion budget — a full 高考 非选择题
+         section spent all 16000 tokens on reasoning_content and returned zero
+         text characters ("no JSON in model output (0 chars)"), failing the
+         draft after both repair rounds. 32768 is the adapter's own shipped cap
+         for this model family and leaves the JSON several times the headroom
+         of the biggest section observed. */
+      maxTokens: 32768,
+      temperature: 0.4,
+    })) {
+      assembler.push(chunk)
+    }
+    /* Adapter failures arrive as a terminal finish chunk, not a throw —
+       surface them instead of parsing an empty text as "no JSON". */
+    const finish = assembler.finish
+    if (finish.kind === 'aborted') throw new Error('model call aborted')
+    if (finish.kind === 'error') {
+      const detail = `model call failed: ${finish.failure.message} (${finish.failure.code}); `
+        + `prompt ${String(prompt.length)} chars, system ${String(system.length)} chars`
+      if (!isRetryableEmpty(finish.failure.message, finish.failure.code) || attempt === EMPTY_RESPONSE_ATTEMPTS) {
+        throw new Error(attempt > 1 ? `${detail}; after ${String(attempt)} attempts` : detail)
+      }
+      lastFailure = detail
+      await new Promise(resolve => setTimeout(resolve, EMPTY_RESPONSE_BACKOFF_MS * attempt))
+      continue
+    }
+    return assembler.blocks()
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map(block => block.text)
+      .join('')
   }
-  /* Adapter failures arrive as a terminal finish chunk, not a throw —
-     surface them instead of parsing an empty text as "no JSON". */
-  const finish = assembler.finish
-  if (finish.kind === 'error') {
-    throw new Error(`model call failed: ${finish.failure.message} (${finish.failure.code})`)
-  }
-  if (finish.kind === 'aborted') throw new Error('model call aborted')
-  return assembler.blocks()
-    .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-    .map(block => block.text)
-    .join('')
+  throw new Error(lastFailure)
 }
 
 /**
@@ -161,6 +184,22 @@ const SYSTEM = `你是贵州省初高中学业水平考试的资深命题教师�
 命题纪律（逐条遵守）：
 - 贴合细目表：每题的 kind/score/knowledge/ability/difficulty 必须与细目表完全一致，knowledge 数组必须覆盖细目表该题全部考点，不得自行增减或替换考点。
 - 可计算题必须机器可复核：experiment / calculation（含含计算的填空）题，题干必须包含一行「已知：」，把求解所需的全部已知量写成「符号 = 数值 单位」的逗号列表（如「已知：m = 2 kg，g = 10 m/s²，v = 3 m/s」），纯数数值、不带文字修饰；常数（g、c 等）也必须显式给出。平台的物理引擎会仅凭题干文本独立重解每道可计算题，已知量缺失或埋在叙述里都会被判为无法复核并阻断整卷。
+- 题型用词必须落在引擎能识别的范围内：引擎按题干中的关键词选择求解模型，用口语化情境（如「踢球做功」「电梯上升」）会让它读不出题型。可计算题请从下列模型里选一个来表述，并**在题干中保留该模型的关键词**：
+  · 斜面 / 摩擦：写成「倾角 θ 的斜面」「动摩擦因数 μ」；
+  · 抛体：写「平抛」「斜抛」「抛出」；
+  · 牛顿运动定律：写「合力」「加速度为 a」「牛顿第二定律」；
+  · 匀速直线：写「匀速直线运动」；匀变速：写「匀加速」「匀变速」「加速度」；
+  · 圆周运动：写「匀速圆周运动」「向心力」「半径为 r」；
+  · 万有引力：写「卫星」「轨道半径」「周期」；
+  · 功能关系：写「动能定理」「机械能守恒」「重力势能」时，题干须给出初末状态的速度与高度，不得只给「做功多少」；
+  · 动量：写「动量守恒」「碰撞」，并给出碰前碰后速度与质量；
+  · 电场 / 电路：写「匀强电场」「电动势」「内阻」「串联」「并联」；
+  · 磁场：写「匀强磁场」「洛伦兹力」「垂直纸面向里 / 外」并给出 B、q、m、v；
+  · 电磁感应：写「磁感应强度变化」「切割磁感线」「感应电动势」；
+  · 光学：写「折射」「入射角」「折射率」「凸透镜」「焦距」；
+  · 振动与波：写「简谐运动」「波长」「频率」「波速」。
+  若某道题的物理情境确实无法用上述模型表达（如需要学生做非标准建模），就把它写成计算题且**不要在答案里给出唯一数值**，改问定性结论；带虚构数值的开放式情境会被引擎判为无法复核。
+- 每个已知量都要能被引擎单独取用：符号用拉丁或希腊字母，不要写成「小球的质量」「木块速度」这样的中文描述；同一个量在全卷用同一个符号。
 - 选择题：干扰项必须是学生真实易错的概念混淆或计算偏差，不得凑数；各选项量纲与单位一致；不得使用"以上都对/以上都不对"式兜底项；单选答案唯一，多选至少两项正确。
 - 选择题答案格式：answer.result 只写选项字母本身（如 "C" 或 "AD"），禁止附带数值、单位或任何括号说明——数值与理由写进 steps。
 - 计算题：给定数据必须真实可算、量级合理；basic 题不超过两步运算；结果保留位数符合中学惯例（一般两位有效数字或整数）。

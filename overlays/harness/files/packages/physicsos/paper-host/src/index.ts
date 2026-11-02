@@ -41,6 +41,17 @@ import { paperRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
+import { appendFileSync } from 'node:fs'
+
+/* The web host routes process output through its own logger, which does not
+   reach the terminal during a local run — an async stage that dies silently
+   leaves no trace at all. Setting PHYSICSOS_PAPER_TRACE to a path turns on a
+   file sink for those stages; unset, every call is a no-op. */
+const TRACE_PATH = process.env.PHYSICSOS_PAPER_TRACE
+const trace = (line: string): void => {
+  if (TRACE_PATH === undefined || TRACE_PATH === '') return
+  try { appendFileSync(TRACE_PATH, `${new Date().toISOString()} ${line}\n`) } catch { /* tracing must never break a job */ }
+}
 
 export const name = 'paper-host'
 export const inject = ['webServer', 'storageDomain', 'llm']
@@ -221,10 +232,20 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           }
           if (genRows.length > 0) {
             try {
-              for (const q of await draftSection(
-                ctx, route, job, sectionTitle, genRows, undefined, [...exemplars.values()],
-              )) {
-                byNo.set(q.number, q)
+              /* Draft in small batches. One call returning a whole section's
+                 questions outgrew what the upstream will emit in a single
+                 completion: a seven-question 单项选择题 section came back cut
+                 mid-string at ~5.3k characters and the JSON parse failed, so
+                 the section never landed. Asking for a few questions at a time
+                 keeps every completion inside the response budget. */
+              const BATCH = 3
+              for (let start = 0; start < genRows.length; start += BATCH) {
+                const batch = genRows.slice(start, start + BATCH)
+                for (const q of await draftSection(
+                  ctx, route, job, sectionTitle, batch, undefined, [...exemplars.values()],
+                )) {
+                  byNo.set(q.number, q)
+                }
               }
             } catch (error) {
               /* Structural failure → one repair round with the error fed back. */
@@ -233,8 +254,9 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
               if (rounds > 2) throw new PaperError(422, 'DRAFT_FAILED',
                 `section '${sectionTitle}' still invalid after 2 repairs; last error: ${error instanceof Error ? error.message : String(error)}`)
               try {
+                const missing = genRows.filter(row => !byNo.has(row.questionNo))
                 for (const q of await draftSection(
-                  ctx, route, job, sectionTitle, genRows,
+                  ctx, route, job, sectionTitle, missing,
                   error instanceof Error ? error.message : String(error),
                   [...exemplars.values()],
                 )) {
@@ -269,6 +291,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
         }
         await service.markStage(jobId, 'checking')
       } catch (error) {
+        trace(`draft ${jobId} failed: ${error instanceof Error ? error.message : String(error)}`)
         await service.failJob(jobId, error instanceof Error ? error.message : String(error))
         throw error
       }
@@ -279,15 +302,18 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
       try {
         const job = service.getJob(jobId)
         if (job.document === undefined) throw new PaperError(409, 'NO_DOCUMENT', `job ${jobId} has no document`)
+        trace(`check ${jobId} — running document checks`)
         await service.reportProgress(jobId, 'check', 0, 1, '规范与覆盖检查')
         const findings = service.runJobChecks(jobId, bankPolicy.freshnessPapers)
         const questions = job.document.sections.flatMap(section => section.items)
+        trace(`check ${jobId} — ${String(findings.length)} findings, solving ${String(questions.length)} questions`)
         const solve = await independentSolve(
           questions, config.solveDelayMs, config.solveTimeoutMs, undefined,
           (done, total, questionNo) => {
             void service.reportProgress(jobId, 'solve', done, total, `物理引擎复核第 ${questionNo} 题`)
           },
         )
+        trace(`check ${jobId} — solve done`)
         await applyEngine(jobId, solve)
         await service.recordCheckResults(jobId,
           [...findings, ...engineFindingsFor(solve, new Map(questions.map(q => [q.number, q.kind])))],
@@ -318,6 +344,7 @@ export function apply(ctx: Context, config: Config): () => Promise<void> {
           }
         }
       } catch (error) {
+        trace(`check ${jobId} failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}`)
         await service.failJob(jobId, error instanceof Error ? error.message : String(error))
         throw error
       }
