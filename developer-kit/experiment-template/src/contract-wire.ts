@@ -79,7 +79,7 @@ function isRayPath(value: unknown): boolean {
   )
 }
 
-/** Validate bounded wire facts; production callers retain the platform-only default.
+/** Validate finite positive engine facts; writable-intent ranges do not limit snapshots.
  * @param value Untrusted received snapshot.
  * @param options Explicit local preview source allowance.
  * @returns Whether the value contains a usable snapshot.
@@ -104,11 +104,9 @@ export function isSnapshot(
     (value.source === 'platform-engine' ||
       (options.allowFixture === true && value.source === 'preview-fixture')) &&
     finite(parameters.objectDistanceCm) &&
-    parameters.objectDistanceCm >= 1 &&
-    parameters.objectDistanceCm <= 200 &&
+    parameters.objectDistanceCm > 0 &&
     finite(parameters.objectHeightCm) &&
-    parameters.objectHeightCm >= 1 &&
-    parameters.objectHeightCm <= 200 &&
+    parameters.objectHeightCm > 0 &&
     typeof value.visible.image === 'boolean' &&
     typeof value.visible.rays === 'boolean' &&
     Array.isArray(value.rays) &&
@@ -120,11 +118,9 @@ export function isSnapshot(
         (ray.extension === undefined || isRayPath(ray.extension)),
     ) &&
     finite(parameters.focalLengthCm) &&
-    parameters.focalLengthCm >= 1 &&
-    parameters.focalLengthCm <= 200 &&
+    parameters.focalLengthCm > 0 &&
     finite(parameters.screenDistanceCm) &&
-    parameters.screenDistanceCm >= 1 &&
-    parameters.screenDistanceCm <= 200 &&
+    parameters.screenDistanceCm > 0 &&
     (result.imageDistanceCm === null || finite(result.imageDistanceCm)) &&
     (result.imageHeightCm === null || finite(result.imageHeightCm)) &&
     (result.imageKind === 'real' ||

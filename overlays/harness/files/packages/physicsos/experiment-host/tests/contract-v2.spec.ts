@@ -164,8 +164,32 @@ describe('V2 canonical package contract', () => {
     expect(isSnapshot(frame)).toBe(true)
     expect(isSnapshot({ ...frame, source: 'preview-fixture' })).toBe(false)
     expect(isSnapshot({ ...frame, source: 'preview-fixture' }, { allowFixture: true })).toBe(true)
-    expect(isSnapshot({ ...frame, parameters: { ...frame.parameters, objectHeightCm: 201 } })).toBe(
+    expect(isSnapshot({ ...frame, parameters: { ...frame.parameters, objectHeightCm: 0 } })).toBe(
       false,
     )
   })
+  it.each([
+    { objectDistanceCm: 30, objectHeightCm: 0.5, imageDistanceCm: 15, imageHeightCm: -0.25, screenSharp: true },
+    { objectDistanceCm: 250, objectHeightCm: 4, imageDistanceCm: 125 / 12, imageHeightCm: -1 / 6, screenSharp: false },
+  ])('accepts finite positive authoritative facts at u=$objectDistanceCm h=$objectHeightCm', (value) => {
+    expect(isSnapshot({
+      revision: 2,
+      source: 'platform-engine',
+      parameters: {
+        objectDistanceCm: value.objectDistanceCm,
+        objectHeightCm: value.objectHeightCm,
+        focalLengthCm: 10,
+        screenDistanceCm: 15,
+      },
+      visible: { image: true, rays: true },
+      rays: [],
+      result: {
+        imageDistanceCm: value.imageDistanceCm,
+        imageHeightCm: value.imageHeightCm,
+        imageKind: 'real',
+        screenSharp: value.screenSharp,
+      },
+    })).toBe(true)
+  })
+
 })
