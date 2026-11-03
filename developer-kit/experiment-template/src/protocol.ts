@@ -23,9 +23,7 @@ export interface ExperimentConnection {
 /** Bind one revocable port and acknowledge V2 frames only after serialized rendering succeeds. */
 export function connectExperiment(
   onFrame: (frame: ExperimentSnapshot) => void | Promise<void>,
-  options: { protocolVersion?: 1 | 2 } = {},
 ): ExperimentConnection {
-  const protocolVersion = options.protocolVersion ?? 2
   const query = new URLSearchParams(location.search)
   const host = query.get('hostOrigin')
   const token = query.get('channel')
@@ -37,18 +35,40 @@ export function connectExperiment(
   let port: MessagePort | undefined
   let disposed = false
   let pendingError: RuntimeError | undefined
-  let rendering = Promise.resolve()
+  let rendering = false
+  let pendingFrame: { frameId: string; snapshot: ExperimentSnapshot } | undefined
   const reportError = (code: RuntimeError): void => {
-    if (disposed || protocolVersion !== 2) return
+    if (disposed) return
     if (port) port.postMessage({ type: 'experiment/error', protocolVersion: 2, code })
     else pendingError = code
+  }
+  // Full-state updates coalesce while a draw is blocked; the in-flight frame remains exact.
+  const renderPending = async (received: MessagePort): Promise<void> => {
+    while (!disposed && pendingFrame !== undefined) {
+      const current = pendingFrame
+      pendingFrame = undefined
+      const revision = current.snapshot.revision
+      try {
+        await onFrame(current.snapshot)
+        if (!disposed)
+          received.postMessage({
+            type: 'experiment/rendered',
+            protocolVersion: 2,
+            frameId: current.frameId,
+            revision,
+          })
+      } catch {
+        reportError('RENDER_FAILED')
+      }
+    }
+    rendering = false
   }
   const receive = (event: MessageEvent<unknown>): void => {
     if (disposed || event.source !== parent || event.origin !== host || !isRecord(event.data))
       return
     if (
       event.data.type !== 'experiment/connect' ||
-      event.data.protocolVersion !== protocolVersion ||
+      event.data.protocolVersion !== 2 ||
       event.data.channel !== token
     )
       return
@@ -59,40 +79,28 @@ export function connectExperiment(
     received.onmessage = (message: MessageEvent<unknown>): void => {
       const data = message.data
       if (disposed || !isRecord(data) || data.type !== 'experiment/snapshot') return
-      if (protocolVersion === 2 && data.protocolVersion !== 2) return
-      rendering = rendering.then(async () => {
-        if (disposed) return
-        if (
-          !isSnapshot(data.snapshot) ||
-          (protocolVersion === 2 &&
-            (typeof data.frameId !== 'string' ||
-              data.frameId.length === 0 ||
-              data.frameId.length > 160))
-        ) {
-          reportError('SNAPSHOT_INVALID')
-          return
-        }
-        const frame = data.snapshot
-        try {
-          await onFrame(frame)
-          if (!disposed && protocolVersion === 2)
-            received.postMessage({
-              type: 'experiment/rendered',
-              protocolVersion: 2,
-              frameId: data.frameId,
-              revision: frame.revision,
-            })
-        } catch {
-          reportError('RENDER_FAILED')
-        }
-      })
+      if (data.protocolVersion !== 2) return
+      if (
+        !isSnapshot(data.snapshot) ||
+        typeof data.frameId !== 'string' ||
+        data.frameId.length === 0 ||
+        data.frameId.length > 160
+      ) {
+        reportError('SNAPSHOT_INVALID')
+        return
+      }
+      pendingFrame = { frameId: data.frameId, snapshot: data.snapshot }
+      if (!rendering) {
+        rendering = true
+        void renderPending(received)
+      }
     }
     received.start()
-    received.postMessage({ type: 'experiment/connected', protocolVersion })
+    received.postMessage({ type: 'experiment/connected', protocolVersion: 2 })
     if (pendingError) reportError(pendingError)
   }
   addEventListener('message', receive)
-  parent.postMessage({ type: 'experiment/ready', protocolVersion, channel: token }, host)
+  parent.postMessage({ type: 'experiment/ready', protocolVersion: 2, channel: token }, host)
   return {
     send: (intent): void => {
       if (!disposed && isExperimentIntent(intent)) port?.postMessage(intent)
@@ -100,6 +108,7 @@ export function connectExperiment(
     reportError,
     dispose: (): void => {
       disposed = true
+      pendingFrame = undefined
       removeEventListener('message', receive)
       port?.close()
       port = undefined

@@ -83,7 +83,7 @@ test('rejects missing layer/height facts and malformed or excessive ray geometry
     assert.equal(isSnapshot(value), false)
 })
 
-function openConnection(onFrame, options) {
+function openConnection(onFrame) {
   const listeners = new Set()
   const parent = { postMessage() {} }
   Object.assign(globalThis, {
@@ -94,7 +94,7 @@ function openConnection(onFrame, options) {
   })
   const posted = []
   const port = { start() {}, close() {}, postMessage: (message) => posted.push(message) }
-  const connection = connectExperiment(onFrame, options)
+  const connection = connectExperiment(onFrame)
   for (const listener of listeners)
     listener({
       source: parent,
@@ -180,4 +180,81 @@ test('V2 reports rejected renderers and malformed snapshots with fixed error cod
     code: 'SNAPSHOT_INVALID',
   })
   fixture.connection.dispose()
+})
+
+test('V2 blocked-render bursts preserve the first frame and draw only the latest pending full state', async () => {
+  const seen = []
+  const completes = []
+  const fixture = openConnection((frame) => {
+    seen.push(frame.revision)
+    return new Promise((resolve) => completes.push(resolve))
+  })
+  fixture.message(snapshotMessage('frame-1', 1))
+  await flush()
+  for (let revision = 2; revision <= 100; revision++)
+    fixture.message(snapshotMessage(`frame-${revision}`, revision))
+  await flush()
+  assert.deepEqual(seen, [1])
+  completes[0]()
+  await flush()
+  assert.deepEqual(seen, [1, 100])
+  assert.deepEqual(fixture.posted.at(-1), {
+    type: 'experiment/rendered',
+    protocolVersion: 2,
+    frameId: 'frame-1',
+    revision: 1,
+  })
+  completes[1]()
+  await flush()
+  assert.deepEqual(
+    fixture.posted.filter((message) => message.type === 'experiment/rendered'),
+    [
+      { type: 'experiment/rendered', protocolVersion: 2, frameId: 'frame-1', revision: 1 },
+      { type: 'experiment/rendered', protocolVersion: 2, frameId: 'frame-100', revision: 100 },
+    ],
+  )
+  fixture.message(snapshotMessage('frame-101', 101))
+  fixture.message(snapshotMessage('frame-102', 102))
+  fixture.message(snapshotMessage('frame-103', 103))
+  await flush()
+  assert.deepEqual(seen, [1, 100, 101])
+  fixture.connection.dispose()
+  completes[2]()
+  await flush()
+  assert.deepEqual(seen, [1, 100, 101])
+  assert.equal(fixture.posted.filter((message) => message.type === 'experiment/rendered').length, 2)
+})
+
+test('V2 invalid envelopes report fixed errors immediately while another frame is blocked', async () => {
+  let complete
+  const seen = []
+  const fixture = openConnection((frame) => {
+    seen.push(frame.revision)
+    return new Promise((resolve) => {
+      complete = resolve
+    })
+  })
+  fixture.message(snapshotMessage('frame-1', 1))
+  await flush()
+  for (const malformed of [
+    { ...snapshotMessage('frame-2', 2), snapshot: {} },
+    snapshotMessage('', 2),
+    snapshotMessage('x'.repeat(161), 2),
+  ]) {
+    fixture.message(malformed)
+    await flush()
+    assert.deepEqual(fixture.posted.at(-1), {
+      type: 'experiment/error',
+      protocolVersion: 2,
+      code: 'SNAPSHOT_INVALID',
+    })
+  }
+  assert.deepEqual(seen, [1])
+  fixture.connection.dispose()
+  complete()
+  await flush()
+  assert.equal(
+    fixture.posted.some((message) => message.type === 'experiment/rendered'),
+    false,
+  )
 })
