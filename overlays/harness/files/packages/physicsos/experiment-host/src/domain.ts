@@ -10,11 +10,11 @@ const record = z.object({
   publishedAt: z.string().optional(), rejectionReason: z.string().optional(), avatarPath: z.string().optional(),
   assets: z.array(z.object({ name: z.string(), sha256: digest, size: z.number().int().min(0), contentType: z.string() })),
 })
-const state = z.object({
+export const experimentStateSchema = z.object({
   packages: z.array(record), activeId: z.string().nullable(), sequence: z.number().int().min(0),
   releases: z.array(z.object({ sequence: z.number().int().min(1), packageId: z.string(), action: z.enum(['approve', 'rollback']), actorKey: z.string(), createdAt: z.string() })),
 })
 export type ExperimentPackageRecord = z.infer<typeof record>
-export type ExperimentState = z.infer<typeof state>
-export const experimentDomain = defineDomain({ name: 'physicsos_experiments', version: 0, tables: { state: domainTable<string, ExperimentState>(state) } })
+export type ExperimentState = z.infer<typeof experimentStateSchema>
+export const experimentDomain = defineDomain({ name: 'physicsos_experiments', version: 0, tables: { state: domainTable<string, ExperimentState>(experimentStateSchema) } })
 export const openExperimentDomain = (ctx: { storageDomain: { open(spec: typeof experimentDomain): Promise<Domain<typeof experimentDomain>> } }): Promise<Domain<typeof experimentDomain>> => ctx.storageDomain.open(experimentDomain)

@@ -12,5 +12,6 @@ export async function host(root: string, options: { assetOrigin?: string; previe
   await ctx.plugin(storageDomain, { backend: 'json' })
   const domain = await openExperimentDomain(ctx)
   const service = new ExperimentService(domain, { root: join(root, 'files'), ...options })
+  await service.initialize()
   return { ctx, domain, service, close: async () => { await domain.close(); await ctx.fiber.dispose() } }
 }

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { ExperimentError, guard, auditWrites, type PhysicsosIdentity } from './identity.ts'
 import { ASSET_PREFIX, type ExperimentService } from './service.ts'
 import { inlineImportMapHashes } from './archive.ts'
+import { experimentWrapper } from './embed.ts'
 
 const JSON_LIMIT = Math.ceil(20 * 1024 * 1024 / 3) * 4 + 400_000
 export interface RouteDeps { service: ExperimentService; identity: () => PhysicsosIdentity | undefined }
@@ -88,8 +89,21 @@ export function experimentAssets({ service }: AssetDeps): (req: IncomingMessage,
       if (!url.pathname.startsWith(`${ASSET_PREFIX}/`)) { send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } }); return }
       if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
       if (req.method !== 'GET' && req.method !== 'HEAD') { send(res, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'method not allowed' } }); return }
-      const asset = await service.asset(url)
+      const embedded = url.pathname.startsWith(`${ASSET_PREFIX}/embed/`)
+      const raw = embedded ? new URL(url.pathname.replace(`${ASSET_PREFIX}/embed/`, `${ASSET_PREFIX}/`), requestOrigin(req, service.assetOrigin)) : url
+      const asset = await service.asset(raw)
       if (!asset) { send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } }); return }
+      if (embedded) {
+        if (!raw.pathname.endsWith('/dist/index.html') || !asset.contentType.startsWith('text/html')) { send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } }); return }
+        const wrapper = experimentWrapper(raw)
+        res.setHeader('content-security-policy', wrapper.csp)
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': wrapper.bytes.length, 'cache-control': asset.immutable ? 'public, max-age=31536000, immutable' : 'no-store' })
+        res.end(req.method === 'HEAD' ? undefined : wrapper.bytes); return
+      }
+      if (asset.contentType.startsWith('text/html') || asset.contentType === 'image/svg+xml') res.setHeader('vary', 'Sec-Fetch-Dest, Sec-Fetch-Site')
+      if (asset.contentType.startsWith('text/html') || (asset.contentType === 'image/svg+xml' && req.headers['sec-fetch-dest'] !== 'image')) {
+        if (req.headers['sec-fetch-dest'] !== 'iframe' || req.headers['sec-fetch-site'] !== 'same-origin') throw new ExperimentError(403, 'RAW_DOCUMENT_REFUSED', '请通过平台隔离预览入口打开实验')
+      }
       const scope = `${requestOrigin(req, service.assetOrigin)}${asset.scopePath}`
       const hashes = asset.contentType.startsWith('text/html') ? inlineImportMapHashes(asset.bytes) : []
       res.setHeader('content-security-policy', [

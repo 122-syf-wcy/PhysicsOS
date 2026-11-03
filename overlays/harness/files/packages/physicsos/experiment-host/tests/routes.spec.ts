@@ -1,5 +1,7 @@
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
+import { runInNewContext } from 'node:vm'
+import { parseFragment, type DefaultTreeAdapterMap } from 'parse5'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,7 +56,7 @@ describe('experiment REST and credential-free asset boundary', () => {
     const { base, call } = await setup()
     const { item } = await (await call('/convex-lens/packages', uploadBody())).json()
     const { entryUrl } = await (await call(`/packages/${item.id}/preview`)).json()
-    const response = await fetch(new URL(`${entryUrl}?hostOrigin=${encodeURIComponent(base)}&channel=handshake-test`, base))
+    const response = await fetch(new URL(`${entryUrl.replace('/embed/', '/')}?hostOrigin=${encodeURIComponent(base)}&channel=handshake-test-channel-123`, base), { headers: { 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'same-origin' } })
     expect(response.status).toBe(200)
     const csp = response.headers.get('content-security-policy')!
     expect(csp).toContain('sandbox allow-scripts')
@@ -66,7 +68,7 @@ describe('experiment REST and credential-free asset boundary', () => {
     expect(response.headers.get('set-cookie')).toBeNull()
     expect(response.headers.get('referrer-policy')).toBe('no-referrer')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
-    const module = await fetch(new URL('runtime/main.js', new URL(entryUrl, base)))
+    const module = await fetch(new URL('runtime/main.js', new URL(entryUrl.replace('/embed/', '/'), base)))
     expect(module.status).toBe(200)
     expect(module.headers.get('access-control-allow-origin')).toBe('*')
     expect(module.headers.get('cache-control')).toBe('no-store')
@@ -82,11 +84,97 @@ describe('experiment REST and credential-free asset boundary', () => {
     const archive = zip(Object.entries(files()).map(([name, data]) => ({ name, data: name === 'dist/index.html' ? `<script type="importmap">${map}</script>${data}` : data })))
     const { item } = await (await call('/convex-lens/packages', uploadBody(archive))).json()
     const { entryUrl } = await (await call(`/packages/${item.id}/preview`)).json()
-    const response = await fetch(new URL(entryUrl, base))
+    const response = await fetch(new URL(entryUrl.replace('/embed/', '/'), base), { headers: { 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'same-origin' } })
     expect(response.status).toBe(200)
     const csp = response.headers.get('content-security-policy')!
     expect(csp.includes(`'sha256-${createHash('sha256').update(map).digest('base64')}'`)).toBe(true)
     expect(csp.split(';').find(part => part.trim().startsWith('script-src '))).not.toContain('unsafe-inline')
+  })
+  it('returns trusted wrapper entry URLs and confines its frame-src to the exact raw entry', async () => {
+    const { base, call } = await setup()
+    const { item } = await (await call('/convex-lens/packages', uploadBody())).json()
+    const { entryUrl } = await (await call(`/packages/${item.id}/preview`)).json()
+    expect(entryUrl.startsWith('/physicsos/experiment-assets/embed/preview/')).toBe(true)
+    const raw = new URL(entryUrl.replace('/embed/', '/'), base)
+    const response = await fetch(new URL(entryUrl, base))
+    expect(response.status).toBe(200)
+    const csp = response.headers.get('content-security-policy')!
+    expect(csp.split(';').find(part => part.trim().startsWith('frame-src '))?.trim() === `frame-src ${raw.origin}${raw.pathname}`).toBe(true)
+    expect(csp.includes('sandbox allow-scripts allow-same-origin')).toBe(true)
+    expect(csp.includes("script-src 'self'")).toBe(false)
+    const html = await response.text()
+    expect(html.includes('sandbox="allow-scripts"')).toBe(true)
+    expect(html.includes('runtime/main.js')).toBe(false)
+    const script = trustedScript(html)
+    expect(csp.includes(`'sha256-${createHash('sha256').update(script).digest('base64')}'`)).toBe(true)
+    const approved = await (await call(`/packages/${item.id}/review`, { action: 'approve', expectedSha256: item.sha256 }, 'admin')).json()
+    expect(approved.item.entryUrl.startsWith('/physicsos/experiment-assets/embed/releases/')).toBe(true)
+  })
+  it('refuses executable raw HTML outside a same-origin iframe fetch', async () => {
+    const { base, call } = await setup()
+    const { item } = await (await call('/convex-lens/packages', uploadBody())).json()
+    const { entryUrl } = await (await call(`/packages/${item.id}/preview`)).json()
+    const raw = new URL(entryUrl.replace('/embed/', '/'), base)
+    for (const headers of [{}, { 'sec-fetch-dest': 'document' }, { 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'cross-site' }]) {
+      const response = await fetch(raw, { headers })
+      expect(response.status).toBe(403)
+      expect(response.headers.get('content-type')?.startsWith('application/json')).toBe(true)
+      expect((await response.json()).error.code).toBe('RAW_DOCUMENT_REFUSED')
+    }
+    const framed = await fetch(raw, { headers: { 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'same-origin' } })
+    expect(framed.status).toBe(200)
+    expect(framed.headers.get('vary')).toContain('Sec-Fetch-Dest')
+    expect(framed.headers.get('content-security-policy')?.includes('allow-same-origin')).toBe(false)
+  })
+  it('varies SVG image responses so cached images cannot bypass document refusal', async () => {
+    const { base, call } = await setup()
+    const { item } = await (await call('/convex-lens/packages', uploadBody())).json()
+    const { entryUrl } = await (await call(`/packages/${item.id}/preview`)).json()
+    const image = new URL('assets/icon.svg', new URL(entryUrl.replace('/embed/', '/'), base))
+    const response = await fetch(image, { headers: { 'sec-fetch-dest': 'image', 'sec-fetch-site': 'cross-site' } })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('vary')).toContain('Sec-Fetch-Dest')
+    expect((await fetch(image, { headers: { 'sec-fetch-dest': 'document' } })).status).toBe(403)
+  })
+  it('bridges one ready/connect exchange only for the exact inner and parent sources, origins and channel', async () => {
+    const { base, call } = await setup()
+    const { item } = await (await call('/convex-lens/packages', uploadBody())).json()
+    const { entryUrl } = await (await call(`/packages/${item.id}/preview`)).json()
+    expect(entryUrl.includes('/embed/')).toBe(true)
+    const url = new URL(entryUrl, base), channel = 'wrapper-handshake-channel-1234', hostOrigin = 'https://physics.example'
+    url.searchParams.set('channel', channel); url.searchParams.set('hostOrigin', hostOrigin)
+    const script = trustedScript(await (await fetch(url)).text())
+    const parentMessages: unknown[][] = [], innerMessages: unknown[][] = []
+    const parent = { postMessage: (...args: unknown[]) => parentMessages.push(args) }
+    const innerWindow = { postMessage: (...args: unknown[]) => innerMessages.push(args) }
+    const inner = { dataset: { rawEntry: new URL(entryUrl.replace('/embed/', '/'), base).href }, contentWindow: innerWindow, src: '' }
+    let listener: ((event: Record<string, unknown>) => void) | undefined
+    runInNewContext(script, { location: url, parent, URL, URLSearchParams, document: { getElementById: () => inner },
+      addEventListener: (_name: string, callback: typeof listener) => { listener = callback }, removeEventListener: () => {} })
+    const raw = new URL(inner.src)
+    expect(raw.searchParams.get('hostOrigin')).toBe(base)
+    expect(raw.searchParams.get('channel')).toBe(channel)
+    const ready = { type: 'experiment/ready', protocolVersion: 1, channel }
+    for (const event of [
+      { source: {}, origin: 'null', data: ready }, { source: innerWindow, origin: base, data: ready },
+      { source: innerWindow, origin: 'null', data: { ...ready, protocolVersion: 2 } },
+      { source: innerWindow, origin: 'null', data: { ...ready, channel: 'wrong' } },
+    ]) listener!(event)
+    expect(parentMessages).toEqual([])
+    listener!({ source: innerWindow, origin: 'null', data: ready })
+    listener!({ source: innerWindow, origin: 'null', data: ready })
+    expect(parentMessages).toEqual([[ready, hostOrigin]])
+    const connect = { type: 'experiment/connect', protocolVersion: 1, channel }, port = { testPort: true }
+    for (const event of [
+      { source: {}, origin: hostOrigin, data: connect, ports: [port] },
+      { source: parent, origin: 'https://other.example', data: connect, ports: [port] },
+      { source: parent, origin: hostOrigin, data: { ...connect, channel: 'wrong' }, ports: [port] },
+      { source: parent, origin: hostOrigin, data: connect, ports: [] },
+    ]) listener!(event)
+    expect(innerMessages).toEqual([])
+    listener!({ source: parent, origin: hostOrigin, data: connect, ports: [port] })
+    listener!({ source: parent, origin: hostOrigin, data: connect, ports: [port] })
+    expect(innerMessages).toEqual([[connect, '*', [port]]])
   })
   it('returns a sanitized 404 for unsupported paths and malformed JSON', async () => {
     const { base, call } = await setup()
@@ -97,3 +185,13 @@ describe('experiment REST and credential-free asset boundary', () => {
     expect((await bad.json()).error.code).toBe('BAD_REQUEST')
   })
 })
+
+function trustedScript(html: string): string {
+  const root = parseFragment(html), nodes: DefaultTreeAdapterMap['Node'][] = [root]
+  while (nodes.length) {
+    const node = nodes.pop()!
+    if ('tagName' in node && node.tagName === 'script') return node.childNodes.filter(child => child.nodeName === '#text').map(child => 'value' in child ? child.value : '').join('')
+    if ('childNodes' in node) nodes.push(...node.childNodes)
+  }
+  throw new Error('Trusted wrapper script missing')
+}

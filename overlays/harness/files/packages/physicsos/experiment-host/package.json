@@ -40,7 +40,8 @@
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
     "zod": "^4.4.3",
     "yauzl": "3.4.0",
-    "es-module-lexer": "2.1.0"
+    "es-module-lexer": "2.1.0",
+    "parse5": "8.0.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

@@ -7,6 +7,7 @@ import { posix } from 'node:path'
 import type { Readable } from 'node:stream'
 import { z } from 'zod'
 import { ExperimentError } from './identity.ts'
+import { scanHtml, cssReferences } from './html.ts'
 
 export const ZIP_LIMIT = 20 * 1024 * 1024
 export const EXPANDED_LIMIT = 40 * 1024 * 1024
@@ -49,21 +50,15 @@ function checkReference(owner: string, ref: string, assets: Map<string, Buffer>)
   const resolved = posix.normalize(posix.join(posix.dirname(owner), clean))
   if (!resolved.startsWith('dist/') || !assets.has(resolved)) throw invalid()
 }
-const scriptAttribute = (attributes: string, name: string): string | undefined => {
-  const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(attributes)
-  return match ? match[1] ?? match[2] ?? match[3] : undefined
-}
 function importMaps(bytes: Buffer): { contents: string; imports: Record<string, string> }[] {
   const maps: { contents: string; imports: Record<string, string> }[] = []
-  for (const match of bytes.toString('utf8').matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
-    const attributes = match[1] ?? '', contents = match[2] ?? ''
-    if (scriptAttribute(attributes, 'type')?.toLowerCase() !== 'importmap') continue
-    if (scriptAttribute(attributes, 'src')) throw invalid()
+  for (const script of scanHtml(bytes.toString('utf8')).scripts) {
+    if (script.attributes['src'] !== undefined) throw invalid()
     let value: unknown
-    try { value = JSON.parse(contents) } catch { throw invalid() }
+    try { value = JSON.parse(script.contents) } catch { throw invalid() }
     const parsed = z.object({ imports: z.record(z.string().min(1), z.string().min(1)) }).strict().safeParse(value)
-    if (!parsed.success || Object.keys(parsed.data.imports).length > FILE_COUNT_LIMIT) throw invalid()
-    maps.push({ contents, imports: parsed.data.imports })
+    if (!parsed.success || Object.keys(parsed.data.imports).length > FILE_COUNT_LIMIT || maps.length >= 16) throw invalid()
+    maps.push({ contents: script.contents, imports: parsed.data.imports })
   }
   return maps
 }
@@ -91,17 +86,12 @@ async function validateReferences(assets: Map<string, Buffer>): Promise<void> {
       }
     }
     if (ext === '.html' || ext === '.svg') {
-      for (const match of text.matchAll(/\b(?:src|href|xlink:href|poster)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)) references.push(match[1] ?? match[2] ?? match[3] ?? '')
-      // An alternate base or frame would undermine the package-relative graph.
-      if (/<\s*(?:base|iframe|frame|object|embed)\b/i.test(text)) throw invalid()
-      for (const match of text.matchAll(/\bsrcset\s*=\s*["']([^"']*)["']/gi)) {
-        for (const source of (match[1] ?? '').split(',')) references.push(source.trim().split(/\s+/)[0] ?? '')
-      }
+      const html = scanHtml(text)
+      if (html.forbiddenContainer) throw invalid()
+      references.push(...html.references)
+      for (const style of html.styles) references.push(...cssReferences(style))
     }
-    if (['.html', '.svg', '.css'].includes(ext)) {
-      for (const match of text.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s)]+))\s*\)/gi)) references.push(match[1] ?? match[2] ?? match[3] ?? '')
-      for (const match of text.matchAll(/@import\s+["']([^"']+)["']/gi)) references.push(match[1] ?? '')
-    }
+    if (ext === '.css') references.push(...cssReferences(text))
     if (ext === '.js' || ext === '.mjs') {
       const [imports] = parse(text)
       for (const entry of imports) if (entry.n !== undefined) references.push(entry.n)

@@ -7,8 +7,10 @@ import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { ExperimentError, type IdentityActor } from './identity.ts'
 import { assetContentType, validateArchive, ZIP_LIMIT, type ValidatedArchive } from './archive.ts'
 import type { experimentDomain, ExperimentPackageRecord, ExperimentState } from './domain.ts'
+import { prepareRecovery, readRecovery, clearRecovery } from './recovery.ts'
 
 export const ASSET_PREFIX = '/physicsos/experiment-assets'
+const embedPath = (raw: string): string => `${ASSET_PREFIX}/embed/${raw.slice(ASSET_PREFIX.length + 1)}`
 const sha256 = (bytes: Buffer): string => crypto.createHash('sha256').update(bytes).digest('hex')
 const badRequest = (): ExperimentError => new ExperimentError(400, 'BAD_REQUEST', '投稿资料或操作参数不符合要求')
 const base64 = /^[A-Za-z0-9+/]*(?:==|=)?$/
@@ -70,6 +72,9 @@ export class ExperimentService {
   private readonly root: string
   readonly assetOrigin: string | undefined
   private readonly previewTtlMs: number
+  private initialized = false
+  private fenced = false
+  private currentState: ExperimentState = { packages: [], activeId: null, sequence: 0, releases: [] }
   constructor(private readonly domain: Domain<typeof experimentDomain>, options: ExperimentOptions) {
     this.root = resolve(options.root)
     if (options.assetOrigin !== undefined) {
@@ -79,8 +84,49 @@ export class ExperimentService {
     }
     this.previewTtlMs = Math.min(15 * 60_000, Math.max(1, options.previewTtlMs ?? 10 * 60_000))
   }
-  private state(): ExperimentState { return this.domain.table('state').get('convex-lens') ?? { packages: [], activeId: null, sequence: 0, releases: [] } }
-  private serialize<T>(job: () => Promise<T>): Promise<T> { const next = this.tail.then(job); this.tail = next.then(() => {}, () => {}); return next }
+  /** Reconcile an interrupted or ambiguous write before mounting any routes. */
+  async initialize(): Promise<void> {
+    if (this.initialized && !this.fenced) return
+    this.fenced = true
+    const previous = await readRecovery(this.root)
+    if (previous) {
+      await this.domain.table('state').put('convex-lens', previous)
+      await clearRecovery(this.root)
+    }
+    this.currentState = this.domain.table('state').get('convex-lens') ?? { packages: [], activeId: null, sequence: 0, releases: [] }
+    this.initialized = true; this.fenced = false
+  }
+  private state(): ExperimentState {
+    if (!this.initialized || this.fenced) throw new ExperimentError(503, 'STATE_UNCERTAIN', '发布存储状态尚未恢复，请稍后重试')
+    return this.currentState
+  }
+  private serialize<T>(job: () => Promise<T>): Promise<T> {
+    const next = this.tail.then(() => { this.state(); return job() })
+    this.tail = next.then(() => {}, () => {}); return next
+  }
+  /** A rejected metadata promise can follow its durable rename. Never infer abort from rejection. */
+  private async persistState(next: ExperimentState): Promise<void> {
+    const previous = this.state()
+    try {
+      await prepareRecovery(this.root, previous)
+      await this.domain.table('state').put('convex-lens', next)
+      await clearRecovery(this.root)
+      // Reads keep the accepted prior snapshot until journal removal is durable.
+      this.currentState = next
+    } catch (error) {
+      this.fenced = true
+      try {
+        // Recreate the marker even if an ambiguous journal unlink already happened.
+        await prepareRecovery(this.root, previous)
+        await this.domain.table('state').put('convex-lens', previous)
+        await clearRecovery(this.root)
+        this.currentState = previous; this.fenced = false
+      } catch {
+        // The durable marker remains for initialize(); no subsequent write or read is allowed.
+      }
+      throw error
+    }
+  }
   private url(path: string): string { return `${this.assetOrigin ?? ''}${path}` }
   private releasePath(item: ExperimentPackageRecord): string { return `${ASSET_PREFIX}/releases/${item.id}/${item.sha256}/` }
   private view(item: ExperimentPackageRecord): PackageView {
@@ -89,7 +135,7 @@ export class ExperimentService {
     else if (item.avatarPath && item.status === 'approved') author.avatarUrl = this.url(`${this.releasePath(item)}${item.avatarPath}`)
     return { id: item.id, experimentId: item.experimentId, version: item.version, sha256: item.sha256, status: item.status, author, createdAt: item.createdAt,
       ...(item.note === undefined ? {} : { note: item.note }), ...(item.publishedAt === undefined ? {} : { publishedAt: item.publishedAt }),
-      ...(item.rejectionReason === undefined ? {} : { rejectionReason: item.rejectionReason }), ...(item.status === 'approved' ? { entryUrl: this.url(`${this.releasePath(item)}${item.entry}`) } : {}) }
+      ...(item.rejectionReason === undefined ? {} : { rejectionReason: item.rejectionReason }), ...(item.status === 'approved' ? { entryUrl: this.url(embedPath(`${this.releasePath(item)}${item.entry}`)) } : {}) }
   }
   private record(packageId: string): ExperimentPackageRecord {
     const item = this.state().packages.find(row => row.id === packageId)
@@ -102,6 +148,7 @@ export class ExperimentService {
     return { active: active ? this.view(active) : null, items: state.packages.filter(item => actor.role === 'SUPER_ADMIN' || item.status === 'approved' || item.authorKey === actor.userKey).slice().reverse().map(item => this.view(item)), canReview: actor.role === 'SUPER_ADMIN' }
   }
   async upload(actor: IdentityActor, body: unknown): Promise<PackageView> {
+    this.state()
     const parsed = uploadWire.safeParse(body)
     if (!parsed.success) throw badRequest()
     const input = parsed.data
@@ -132,9 +179,13 @@ export class ExperimentService {
           status: 'pending', entry: 'dist/index.html', createdAt: new Date().toISOString(),
           assets: [...validated.assets].map(([name, bytes]) => ({ name, sha256: sha256(bytes), size: bytes.length, contentType: assetContentType(name)! })) }
         const current = this.state()
-        await this.domain.table('state').put('convex-lens', { ...current, packages: [...current.packages, item] })
+        await this.persistState({ ...current, packages: [...current.packages, item] })
         return this.view(item)
-      } catch (error) { await rm(frozen ? final : stage, { force: true, recursive: true }).catch(() => {}); throw error }
+      } catch (error) {
+        // A finalized directory may already be referenced by renamed metadata, even after rejection.
+        if (!frozen) await rm(stage, { force: true, recursive: true }).catch(() => {})
+        throw error
+      }
     })
   }
   private async verify(item: ExperimentPackageRecord): Promise<void> {
@@ -149,11 +200,11 @@ export class ExperimentService {
     const item = this.record(packageId)
     if (actor.role !== 'SUPER_ADMIN' && item.authorKey !== actor.userKey) throw new ExperimentError(403, 'FORBIDDEN', '无权预览此实验包')
     await this.verify(item)
-    if (item.status === 'approved') return { entryUrl: this.url(`${this.releasePath(item)}${item.entry}`) }
+    if (item.status === 'approved') return { entryUrl: this.url(embedPath(`${this.releasePath(item)}${item.entry}`)) }
     for (const [token, preview] of this.previews) if (preview.expires <= Date.now()) this.previews.delete(token)
     const token = crypto.randomBytes(32).toString('hex')
     this.previews.set(token, { packageId: item.id, expires: Date.now() + this.previewTtlMs })
-    return { entryUrl: this.url(`${ASSET_PREFIX}/preview/${token}/${item.entry}`) }
+    return { entryUrl: this.url(embedPath(`${ASSET_PREFIX}/preview/${token}/${item.entry}`)) }
   }
   async review(actor: IdentityActor, packageId: string, body: unknown): Promise<PackageView> {
     this.requireAdmin(actor)
@@ -165,13 +216,13 @@ export class ExperimentService {
       const now = new Date().toISOString(), current = this.state()
       if (input.data.action === 'reject') {
         const updated: ExperimentPackageRecord = { ...item, status: 'rejected', ...(input.data.reason === undefined ? {} : { rejectionReason: input.data.reason }) }
-        await this.domain.table('state').put('convex-lens', { ...current, packages: current.packages.map(row => row.id === item.id ? updated : row) })
+        await this.persistState({ ...current, packages: current.packages.map(row => row.id === item.id ? updated : row) })
         return this.view(updated)
       }
       await this.verify(item)
       const updated: ExperimentPackageRecord = { ...item, status: 'approved', publishedAt: now }
       const sequence = current.sequence + 1
-      await this.domain.table('state').put('convex-lens', { packages: current.packages.map(row => row.id === item.id ? updated : row), activeId: item.id, sequence,
+      await this.persistState({ packages: current.packages.map(row => row.id === item.id ? updated : row), activeId: item.id, sequence,
         releases: [...current.releases, { sequence, packageId: item.id, action: 'approve', actorKey: actor.userKey, createdAt: now }] })
       return this.view(updated)
     })
@@ -185,7 +236,7 @@ export class ExperimentService {
       if (current.activeId !== input.data.expectedActiveId || item.status !== 'approved' || !current.releases.some(release => release.packageId === item.id)) throw new ExperimentError(409, 'VERSION_CONFLICT', '默认版本已改变或目标未发布')
       await this.verify(item)
       const sequence = current.sequence + 1
-      await this.domain.table('state').put('convex-lens', { ...current, activeId: item.id, sequence,
+      await this.persistState({ ...current, activeId: item.id, sequence,
         releases: [...current.releases, { sequence, packageId: item.id, action: 'rollback', actorKey: actor.userKey, createdAt: new Date().toISOString() }] })
       return this.view(item)
     })
