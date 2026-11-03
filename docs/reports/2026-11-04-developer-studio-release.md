@@ -35,3 +35,15 @@ GitHub main 与服务器 `/opt/physicsos` 检出均为 `33023a2`，它是本开�
 打包检查发现构建容器中三条临时/错误依赖链接（根目录 eslint、根目录及 experiment-host 的 zod），在制作镜像前修正。Zod 固定使用已安装的 4.6.7，需比对临时与正式位置内容并通过真实镜像启动检验。测试数据、生成凭据、缓存、.git、.env 文件均不进入增量包。
 
 预检数据库备份已通过 `pg_restore --list`：`/opt/physicsos/backups/postgres/20261104-studio-preflight`。候选 PostgreSQL 使用单独数据库 `physicsos_studio_20261104`；正式数据库不用于验收写入。最终镜像、切换恢复点、GitHub 提交和 HTTPS 验收待本记录补齐。
+
+## 镜像与 PostgreSQL 验证补记
+
+候选镜像 `physicsos-app:studio-32adcc1`，ID `sha256:d6f608e5a37ccbb45b0034e8064a67670045818d34ca96111001122f2885e061`。基础镜像标签 `physicsos-app:studio-base-33023a2` 保留。实际增量 3,305 项、64,588,670 字节。
+
+已在新镜像内逐项验证 3,260 个文件的 SHA-256，以及 45 条改变链接的精确目标、存在性和最终 /app 内解析路径；原生 flock 实际获取文件锁成功。Zod 临时依赖与正式 pnpm 4.6.7 目录逐文件内容摘要一致，再改为正式相对链接。
+
+候选容器 `physicsos-studio-candidate` 使用由生产备份恢复的独立数据库 `physicsos_studio_20261104`、独立文件目录和 memory 共享状态。完整提示词浏览器验收在该镜像和 PostgreSQL 副本上再次通过（`/tmp/physicsos-studio-postgres-browser.log`），没有向正式数据库写入验收内容。测试脚本支持 `PHYSICSOS_ACCEPTANCE_ADMIN` 选择候选账号，不改变默认测试账号或产品逻辑。
+
+独立审查范围 `fb56e23..32adcc1`，报告见 [审查记录](2026-11-04-developer-studio-review.md)：可合并，无 Critical/Important。一项 Minor 指出宿主上的链接比较本身不证明最终镜像链接完整性，已以上述容器内逐项验证补齐发布证据，没有将初步检查夸大为完整依赖证明。审查范围外的旧 V2/业务逻辑继续采用已有验收记录；正式切换和 HTTPS 验收由本轮执行者完成；不声称全量从零构建的逐字节可复现或全仓库审计。
+
+候选镜像真实重启后，PostgreSQL 中的当前版本、历史和草稿与验收存证一致（`/tmp/physicsos-studio-postgres-persistence.log`，通过）。最终依赖检查和候选验证均已完成，准备正式切换。

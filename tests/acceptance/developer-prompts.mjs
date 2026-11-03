@@ -17,7 +17,7 @@ const safeFailure = (error) =>
     .replace(/((?:cookie|authorization):)[^\n]*/gi, '$1 [redacted]')
     .replace(/\/preview\/[a-f0-9]{32,}/g, '/preview/[redacted]')
 const api = base + '/physicsos/developer-prompts'
-const login = async (context, username = 'admin') => {
+const login = async (context, username = process.env.PHYSICSOS_ACCEPTANCE_ADMIN ?? 'admin') => {
   const response = await context.post(`${base}/physicsos/auth/login`, {
     data: { username, schoolId: 'PHYSICSOS-OPEN', password },
   })
