@@ -65,6 +65,75 @@ describe('mechanics cart body', () => {
   })
 })
 
+describe('projectile initial-speed edits', () => {
+  it.each([
+    { angle: 90, velocity: { x: 0, y: 20, z: 0 }, expected: { x: 0, y: 25, z: 0 } },
+    {
+      angle: 30,
+      velocity: { x: 17.32050807568877, y: 10, z: 0 },
+      expected: { x: 21.65063509461097, y: 12.5, z: 0 },
+    },
+    { angle: 0, velocity: { x: 20, y: 0, z: 0 }, expected: { x: 25, y: 0, z: 0 } },
+  ])(
+    'keeps the $angle° launch direction when speed changes, including through zero',
+    ({ angle, velocity, expected }) => {
+      const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+        model: 'projectile_motion',
+        position: { x: 0, y: 20, z: 0 },
+        velocity,
+        groundY: 0,
+        now: '2026-08-21T00:00:00.000Z',
+      }))
+      for (const speed of [25, 0, 25]) {
+        const snapshot = runtime.editParameter('speed', speed)
+        const vector = runtime.getScene().bodies[0]!.velocity.vector
+        const parameters = snapshot.inspector.flatMap(section => section.parameters ?? [])
+        expect(snapshot.status).toBe('verified')
+        expect(parameters.find(row => row.id === 'speed')?.value).toBeCloseTo(speed, 9)
+        expect(vector.x).toBeCloseTo(speed === 0 ? 0 : expected.x, 9)
+        expect(vector.y).toBeCloseTo(speed === 0 ? 0 : expected.y, 9)
+        expect(vector.z).toBe(0)
+        expect(parameters.find(row => row.id === 'angle')?.value).toBeCloseTo(angle, 9)
+      }
+    },
+  )
+
+  it('keeps zero speed while selecting the direction for the next launch', () => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+      model: 'projectile_motion',
+      position: { x: 0, y: 20, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      now: '2026-08-21T00:00:00.000Z',
+    }))
+    const stopped = runtime.editParameter('angle', 30)
+    const parameters = stopped.inspector.flatMap(section => section.parameters ?? [])
+    expect(parameters.find(row => row.id === 'speed')?.value).toBe(0)
+    expect(parameters.find(row => row.id === 'angle')?.value).toBeCloseTo(30, 9)
+    expect(runtime.getScene().bodies[0]!.velocity.vector).toEqual({ x: 0, y: 0, z: 0 })
+    const launched = runtime.editParameter('speed', 25)
+    expect(launched.status).toBe('verified')
+    expect(runtime.getScene().bodies[0]!.velocity.vector.x).toBeCloseTo(21.65063509461097, 9)
+    expect(runtime.getScene().bodies[0]!.velocity.vector.y).toBeCloseTo(12.5, 9)
+  })
+
+  it('restores the original question launch direction before a zero-speed edit', () => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+      model: 'projectile_motion',
+      sourceQuestionId: 'vertical-speed-question',
+      velocity: { x: 0, y: 20, z: 0 },
+      now: '2026-08-21T00:00:00.000Z',
+    }))
+    expect(runtime.editParameter('angle', 30).branch?.canRestore).toBe(true)
+    runtime.restoreOrigin()
+    runtime.editParameter('speed', 0)
+    const relaunched = runtime.editParameter('speed', 25)
+    expect(relaunched.status).toBe('verified')
+    expect(runtime.getScene().bodies[0]!.velocity.vector).toEqual({ x: 0, y: 25, z: 0 })
+    expect(relaunched.events.find(event => event.id === 'apex')?.time)
+      .toBeCloseTo(2.5510204081632653, 9)
+  })
+})
+
 describe('P3-a mechanics expansion scenes', () => {
   it('force-composition draws indexed F₁ F₂ arrows plus the resultant', () => {
     const snapshot = createMechanicsWorkspaceRuntime(

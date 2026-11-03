@@ -142,6 +142,10 @@ declare module '@deepseek-ai/dsh-session/types' {
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    physicsScenes: PhysicsScenesProjection
+    physicsSolveTraces: PhysicsSolveTracesProjection
+  }
   interface SessionProjectionMap {
     /** Scenes the agent touched in this session, folded from `physics/scene` events. */
     physicsScenes: PhysicsScenesProjection

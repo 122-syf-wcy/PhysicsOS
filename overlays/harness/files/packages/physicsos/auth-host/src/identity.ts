@@ -75,6 +75,6 @@ export const createIdentityService = (service: AuthService): PhysicsosIdentity =
     if (resolved === null) return null
     return resolved.actor
   },
-  sessionOwnerKey: (sessionId) => service.sessionOwnerKey(sessionId),
+  sessionOwnerKey: sessionId => service.sessionOwnerKey(sessionId),
   record: (actor, action, target, detail) => service.auditAs(actor, action, target, detail),
 })

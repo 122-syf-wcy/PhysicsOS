@@ -42,7 +42,7 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
     if (ref === undefined || !bound || session === undefined) return
     const abort = new AbortController()
     let refresh: ReturnType<typeof setTimeout> | undefined
-    void questionCodeSceneSha256(scene).then(digest => {
+    void questionCodeSceneSha256(scene).then((digest) => {
       if (digest !== ref.sceneSha256) throw new Error('实验代码与本题条件不匹配，请重新生成本题实验。')
       if (abort.signal.aborted) throw new Error('aborted')
       return Promise.all([questionCodeApi.preview(ref, abort.signal), questionCodeApi.source(ref, abort.signal)])
@@ -50,6 +50,7 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
       if (abort.signal.aborted) return
       if (!sameQuestionCodeRef(ref, source.ref) || typeof preview.entryUrl !== 'string'
         || !Number.isFinite(preview.expiresAt) || preview.expiresAt <= Date.now()
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- Wire JSON can omit the advertised source object.
         || typeof source.source?.rendererJs !== 'string' || typeof source.source.stylesheet !== 'string')
         throw new Error('本题实验版本已变更，请重新载入。')
       const url = new URL(preview.entryUrl, location.origin)
@@ -64,16 +65,16 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
   }, [key, bound, session])
   const status = visualization !== undefined && visualization.ownerSessionId !== owner ? 'owner-mismatch'
     : !bound ? 'stale' : error ? 'failed'
-    : visualization?.status === 'generating' && (deadlineAt === undefined || deadlineAt <= now) ? 'interrupted'
-    : visualization?.status ?? 'historical'
+      : visualization?.status === 'generating' && (deadlineAt === undefined || deadlineAt <= now) ? 'interrupted'
+        : visualization?.status ?? 'historical'
   const ready = bound && ref !== undefined && loaded?.key === key && session !== undefined
   const title = error || (status === 'historical' ? '这段历史记录还没有本题代码实验'
     : status === 'generating' ? '正在生成本题实验'
-    : status === 'interrupted' ? '本题实验生成已中断，可重新生成'
-    : status === 'failed' ? '本题实验生成失败'
-    : status === 'owner-mismatch' ? '请在生成本题实验的学习会话中查看'
-    : status === 'stale' ? '题目条件已更新，请重新生成本题实验'
-    : (session === undefined ? '这个场景暂时无法连接物理引擎' : '正在载入本题实验'))
+      : status === 'interrupted' ? '本题实验生成已中断，可重新生成'
+        : status === 'failed' ? '本题实验生成失败'
+          : status === 'owner-mismatch' ? '请在生成本题实验的学习会话中查看'
+            : status === 'stale' ? '题目条件已更新，请重新生成本题实验'
+              : (session === undefined ? '这个场景暂时无法连接物理引擎' : '正在载入本题实验'))
   return <div className={css.codeCanvas} data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status}>
     {ready ? <CommunityExperimentFrame key={key} entryUrl={loaded.entryUrl} session={session}
       experimentId={ref.experimentId} protocolVersion={3} title={`${scene.metadata.title ?? ref.title} · 本题实验`}
@@ -83,13 +84,13 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
         <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
         <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
           : status === 'generating' ? '实验代码将使用本题的条件、对象与物理引擎。'
-          : '本题的条件、解题步骤和物理验证已保留。'}</p>
+            : '本题的条件、解题步骤和物理验证已保留。'}</p>
         {error && bound && ref !== undefined ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
       </div>}
     {regenerateQuestionCode !== undefined && status !== 'generating' && (status !== 'owner-mismatch') ? (
       <div className={css.codeActions}><button type="button" disabled={regenerating} onClick={() => {
         setRegenerating(true)
-        void Promise.resolve(regenerateQuestionCode(scene.id)).then(result => {
+        void Promise.resolve(regenerateQuestionCode(scene.id)).then((result) => {
           if (!result.ok) setError(result.error)
         }).catch(() => { setError('未能提交生成请求，请稍后重试。') }).finally(() => { setRegenerating(false) })
       }}>{regenerating ? '正在提交…' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}</button></div>

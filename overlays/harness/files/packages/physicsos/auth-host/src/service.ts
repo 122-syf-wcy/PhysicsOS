@@ -1993,7 +1993,7 @@ export class AuthService {
       .map(([, request]) => request)
       .filter(request => status === undefined || request.status === status)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map(request => {
+      .map((request) => {
         const applicants = waiting
           .filter(row => row.requestId === request.id)
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt))

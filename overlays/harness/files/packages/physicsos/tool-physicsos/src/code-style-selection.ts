@@ -18,7 +18,7 @@ export function codeStyleFor(snapshot: PhysicsSceneSnapshot, explicit?: string):
   const scene = snapshot.scene as unknown as Record<string, unknown>
   const metadata = scene.metadata as Record<string, unknown> | undefined
   for (const candidate of [metadata?.experimentId, metadata?.templateId]) if (typeof candidate === 'string' && candidate) return candidate
-  const title = String(metadata?.title ?? snapshot.title)
+  const title = typeof metadata?.title === 'string' ? metadata.title : snapshot.title
   const observations = scene.observableDefinitions as { parameters?: { kind?: string } }[] | undefined
   let recoveredModel: string | undefined
   if (snapshot.domain === 'mechanics') {
@@ -41,9 +41,10 @@ export function codeStyleFor(snapshot: PhysicsSceneSnapshot, explicit?: string):
   const model = snapshot.model ?? (typeof metadata?.model === 'string' ? metadata.model : recoveredModel)
   if (model === 'projectile_motion') {
     const bodies = scene.bodies as PhysicsScene['bodies'] | undefined
-    return (bodies?.[0]?.velocity?.vector?.y ?? 0) === 0 ? 'projectile-horizontal' : 'projectile-oblique'
+    return (bodies?.[0]?.velocity.vector.y ?? 0) === 0 ? 'projectile-horizontal' : 'projectile-oblique'
   }
-  if (model && MODEL_STYLES[model]) return MODEL_STYLES[model]!
+  const style = model === undefined ? undefined : MODEL_STYLES[model]
+  if (style !== undefined) return style
   const id = snapshot.sceneId
   for (const style of Object.values(MODEL_STYLES)) if (id.startsWith(`agent-${style}-`)) return style
   const fallback = DOMAIN_STYLES[snapshot.domain]

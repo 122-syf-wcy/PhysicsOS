@@ -32,17 +32,19 @@ export class PhysicsCodeProvider implements SubagentProvider {
     }
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}\n${marker}`
-    let isolated = false
+    const flags = { isolated: false }
     // Creation is serial and awaited before inbox release. A unique scoped persona
     // marker identifies this exact start, even when the same parent starts concurrently.
     const remove = this.ctx.on('agent/created', async ({ agent }) => {
       if (agent.session.header.parentSession !== request.parent.id) return undefined
       const assembly = await agent.ctx.systemPrompt.assemble({ scope: agent, agent })
       if (!assembly.sections.some(section => section.name === 'deployment:persona-prefix' && section.text.includes(marker))) return undefined
-      await this.ctx.get('agentPresets')!.mount(agent.ctx, CODE_PRESET_ID)
+      const presets = this.ctx.get('agentPresets')
+      if (presets === undefined) throw new Error('Code child requires the agent preset registry')
+      await presets.mount(agent.ctx, CODE_PRESET_ID)
       agent.ctx.tools.presentAs('native')
       agent.ctx.tools.restrict({ allow: [] })
-      agent.ctx.tools.guard(exec => {
+      agent.ctx.tools.guard((exec) => {
         if (exec.name !== 'structured_output') return 'Code child accepts only structured_output'
         const source = exec.arguments as Record<string, unknown>
         const limits = { title: 120, summary: 1000, rendererJs: 96000, stylesheet: 24000 }
@@ -55,14 +57,14 @@ export class PhysicsCodeProvider implements SubagentProvider {
       const names = agent.ctx.tools.schemas(agent).map(tool => tool.name)
       if (names.length !== 1 || names[0] !== 'structured_output') throw new Error('Code child tool isolation failed')
       agent.session.append('agent-preset/selected', { agentPreset: CODE_PRESET_ID })
-      isolated = true
+      flags.isolated = true
       return undefined
     }, { global: true })
     try {
       const parentLimit = request.parent.session.requestHeader()?.config.maxTokens ?? request.parent.options.maxTokens ?? 24000
       const maxTokens = Math.min(parentLimit, request.agentOptions?.maxTokens ?? 24000)
       const run = await startInProcessRun({ ...request, persona, toolFilter: { allow: [] }, agentOptions: { maxTokens } }, {})
-      if (!isolated) { await run.dispose(); throw new Error('Code child creation did not establish its restricted preset') }
+      if (!flags.isolated) { await run.dispose(); throw new Error('Code child creation did not establish its restricted preset') }
       return run
     } finally { remove() }
   }

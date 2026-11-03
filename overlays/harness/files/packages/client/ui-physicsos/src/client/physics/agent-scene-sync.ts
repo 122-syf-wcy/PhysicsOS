@@ -131,7 +131,7 @@ export function createAgentSceneSync(deps: AgentSceneSyncDeps): AgentSceneSync {
       if (validateScene(snapshot.scene).status === 'failed') return 'invalid'
       const ref: AgentSceneRef = { sceneId: snapshot.sceneId, scene: snapshot.visualization === undefined
         ? snapshot.scene : withQuestionCodeVisualization(snapshot.scene, snapshot.visualization),
-        ...(snapshot.visualization === undefined ? {} : { originScene: snapshot.scene }) }
+      ...(snapshot.visualization === undefined ? {} : { originScene: snapshot.scene }) }
       deps.adoptScene(ref)
       return 'adopted'
     },

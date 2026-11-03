@@ -856,19 +856,20 @@ export function PhysicsWorkspace({
               {/* The canvas is the renderer: it subscribes to the frame source
                   directly, so animation frames re-render only this subtree (#123). */}
               {questionCodeVisualization !== undefined && questionCodeScene !== undefined
-                ? <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
+                ? <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
+                  {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
                 : experimentId === undefined ? <CanvasFrame
-                source={frameSource}
-                ariaLabel={snapshot.ariaLabel}
-                onSeekTime={seek}
-                {...(componentDrag === undefined ? {} : { componentDrag })}
-                {...(componentControl === undefined ? {} : { componentControl })}
-                {...(componentWiring === undefined ? {} : { componentWiring })}
-              /> : <CommunityWorkspaceCanvas experimentId={experimentId} session={session}
-                fallback={<CanvasFrame source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
+                  source={frameSource}
+                  ariaLabel={snapshot.ariaLabel}
+                  onSeekTime={seek}
                   {...(componentDrag === undefined ? {} : { componentDrag })}
                   {...(componentControl === undefined ? {} : { componentControl })}
-                  {...(componentWiring === undefined ? {} : { componentWiring })} />} />}
+                  {...(componentWiring === undefined ? {} : { componentWiring })}
+                /> : <CommunityWorkspaceCanvas experimentId={experimentId} session={session}
+                  fallback={<CanvasFrame source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
+                    {...(componentDrag === undefined ? {} : { componentDrag })}
+                    {...(componentControl === undefined ? {} : { componentControl })}
+                    {...(componentWiring === undefined ? {} : { componentWiring })} />} />}
             </section>
 
             {/* The timeline row is only real where a run window exists. Hiding

@@ -7,7 +7,6 @@ import { PERSONA_PREFIX_SECTION } from '@deepseek-ai/dsh-persona'
 import { createScope, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { PHYSICS_TOOL_NAMES } from '@physicsos/agent-tools'
 
 import * as toolPhysicsos from '../src/index.ts'
 

@@ -176,6 +176,8 @@ export class MechanicsRuntimeBridge {
   private traceSequence = 0
   private highlighted: readonly string[] = []
   private snapshot!: MechanicsRuntimeSnapshot
+  /** Keep the selected launch direction while the velocity magnitude is zero. */
+  private launchDirection = { x: 1, y: 0, z: 0 }
   /** Simulation of the current scene revision, reused across clock frames. */
   private simulationCache: MechanicsSimulationCache | undefined
 
@@ -317,6 +319,7 @@ export class MechanicsRuntimeBridge {
     this.currentTime = 0
     this.running = false
     this.highlighted = []
+    this.launchDirection = { x: 1, y: 0, z: 0 }
     return this.recompute()
   }
 
@@ -340,7 +343,17 @@ export class MechanicsRuntimeBridge {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
     const current = body?.velocity.vector ?? { x: 0, y: 0, z: 0 }
-    const vector = axis === 'x' ? { x: value, y: current.y, z: 0 } : { x: current.x, y: value, z: 0 }
+    /* The projectile Inspector edits |v₀|, not an axis component. Rotation is
+       edited separately, so scale the whole vector along its launch direction. */
+    const vector = this.modelId() === 'projectile_motion'
+      ? {
+        x: value * this.launchDirection.x,
+        y: value * this.launchDirection.y,
+        z: value * this.launchDirection.z,
+      }
+      : axis === 'x'
+        ? { x: value, y: current.y, z: 0 }
+        : { x: current.x, y: value, z: 0 }
     return this.command('SetBodyVelocity', {
       bodyId: body?.id ?? 'body-1',
       velocity: { vector, unit: 'm/s', dimension: 'velocity' },
@@ -386,16 +399,23 @@ export class MechanicsRuntimeBridge {
     const scene = this.sceneRuntime.getScene()
     const body = scene.bodies[0]
     const current = body?.velocity.vector ?? { x: 1, y: 0, z: 0 }
-    const speed = Math.hypot(current.x, current.y) || 1
+    const projectile = this.modelId() === 'projectile_motion'
+    const magnitude = Math.hypot(current.x, current.y)
+    const speed = projectile ? magnitude : magnitude || 1
     const radians = (degrees * Math.PI) / 180
-    return this.command('SetBodyVelocity', {
+    const direction = { x: Math.cos(radians), y: Math.sin(radians), z: 0 }
+    const previousDirection = this.launchDirection
+    if (projectile) this.launchDirection = direction
+    const outcome = this.command('SetBodyVelocity', {
       bodyId: body?.id ?? 'body-1',
       velocity: {
-        vector: { x: speed * Math.cos(radians), y: speed * Math.sin(radians), z: 0 },
+        vector: { x: speed * direction.x, y: speed * direction.y, z: 0 },
         unit: 'm/s',
         dimension: 'velocity',
       },
     })
+    if (!outcome.result.ok) this.launchDirection = previousDirection
+    return outcome
   }
 
   /**
@@ -665,6 +685,15 @@ export class MechanicsRuntimeBridge {
   recompute(): MechanicsRuntimeSnapshot {
     const scene = this.sceneRuntime.getScene()
     const modelId = detectMechanicsModel(scene) ?? 'uniform_linear_motion'
+    const velocity = scene.bodies[0]?.velocity.vector
+    const initialSpeed = velocity === undefined ? 0 : Math.hypot(velocity.x, velocity.y, velocity.z)
+    if (modelId === 'projectile_motion' && velocity !== undefined && initialSpeed > 0) {
+      this.launchDirection = {
+        x: velocity.x / initialSpeed,
+        y: velocity.y / initialSpeed,
+        z: velocity.z / initialSpeed,
+      }
+    }
     try {
       const support = this.engine.canHandle(scene)
       if (!support.supported) {
@@ -739,6 +768,21 @@ export class MechanicsRuntimeBridge {
       })
       this.snapshot = {
         ...built,
+        /* At rest, velocity cannot encode θ. Show the selected direction that a
+           subsequent speed edit will use, without adding motion to the scene. */
+        inspector: modelId === 'projectile_motion' && initialSpeed === 0
+          ? built.inspector.map(section => section.parameters === undefined
+            ? section
+            : {
+              ...section,
+              parameters: section.parameters.map(row => row.id === 'angle'
+                ? {
+                  ...row,
+                  value: Math.atan2(this.launchDirection.y, this.launchDirection.x) * 180 / Math.PI,
+                }
+                : row),
+            })
+          : built.inspector,
         view:
           this.highlighted.length === 0
             ? built.view

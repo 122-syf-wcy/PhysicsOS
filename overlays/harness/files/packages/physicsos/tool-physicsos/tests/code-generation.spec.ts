@@ -25,7 +25,7 @@ function dependencies() {
   const states: PhysicsSceneSnapshot[] = []
   const dispose = vi.fn(async () => {})
   const create = vi.fn(async () => ({ status: 'ready' as const, artifactId: 'private-1', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: 2, sceneSha256: 'a'.repeat(64), experimentId: 'magnetic-circular', sha256: 'b'.repeat(64), title: '本题轨迹', childSessionId: 'child', createdAt: '2026-11-04T00:00:00Z' }))
-  const start = vi.fn(async () => ({ id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose }))
+  const start = vi.fn(async (_request: Parameters<CodeGenerationDependencies['start']>[0]) => ({ id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose }))
   const deps = { ownerSessionId: 'parent', snapshot: original, signal: new AbortController().signal, experimentId: 'magnetic-circular',
     context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3 prompt', publishedBody: 'current published body', styleVersion: 'V3', baseRenderer: 'base renderer', baseStylesheet: 'base CSS', allowedAssetPaths: [] }),
     start, create, current: () => latest, publish: (value: PhysicsSceneSnapshot) => { latest = value; states.push(value) },
@@ -43,7 +43,8 @@ describe('parent question code generation', () => {
     expect(h.states[1]?.cause).toBe('solved')
     expect(JSON.stringify(h.states)).not.toContain('rendererJs')
     expect(JSON.stringify(h.start.mock.calls)).toContain('latest V3 prompt')
-    expect((h.start.mock.calls[0]?.[0] as { prompt: { text: string }[] }).prompt[0]?.text).toContain('"value":3')
+    const delegated = h.start.mock.calls[0]?.[0]?.prompt[0]
+    expect(delegated?.type === 'text' ? delegated.text : undefined).toContain('"value":3')
     expect(h.dispose).toHaveBeenCalledTimes(1)
   })
   it.each([
@@ -51,7 +52,7 @@ describe('parent question code generation', () => {
     `// 本题专用
 export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";
 /* 题目说明 */`,
-  ])('rejects a renderer that only reexports the platform template', async rendererJs => {
+  ])('rejects a renderer that only reexports the platform template', async (rendererJs) => {
     const h = dependencies()
     h.start.mockImplementation(async () => ({ id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: { ...source, rendererJs }, output: [] }), dispose: h.dispose }))
     const result = await generateQuestionCode(h.deps)
@@ -110,7 +111,7 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
     session.append('physics/scene', { ...original, visualization })
     expect(ctx.sessionProjections.snapshot(session).values.physicsScenes?.scenes[original.sceneId]?.visualization).toEqual(visualization)
   })
-  it.each([-1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])('refuses unsafe deadline value %s before persistence', async deadlineAt => {
+  it.each([-1, 1.5, Number.POSITIVE_INFINITY, Number.NaN])('refuses unsafe deadline value %s before persistence', async (deadlineAt) => {
     const ctx = new Context(); contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
@@ -179,7 +180,7 @@ describe('the real code child provider', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(AgentPresets, { default: 'student' })
     await ctx.agentPresets.register({ id: 'student', plugins: [{ name: new URL('./fixtures/student-tools.js', import.meta.url).href }] })
-    const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async childCtx => { await ctx.agentPresets.mount(childCtx, 'student') } })
+    const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async (childCtx) => { await ctx.agentPresets.mount(childCtx, 'student') } })
     const parent = handle.agent
     const adapter = new MockAdapter([toolCallResponse('oversized', 'structured_output', { ...source, title: 'x'.repeat(121) }), toolCallResponse('result', 'structured_output', source)])
     ctx.llm.registerAdapter(['mock'], adapter)
@@ -205,14 +206,14 @@ describe('the real code child provider', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(AgentPresets, { default: 'student' })
     await ctx.agentPresets.register({ id: 'student', plugins: [{ name: new URL('./fixtures/student-tools.js', import.meta.url).href }] })
-    const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async childCtx => { await ctx.agentPresets.mount(childCtx, 'student') } })
+    const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async (childCtx) => { await ctx.agentPresets.mount(childCtx, 'student') } })
     const adapter = new MockAdapter(['hang-slow'])
     ctx.llm.registerAdapter(['mock'], adapter)
     const provider = new PhysicsCodeProvider(ctx)
     const h = dependencies()
     h.deps.timeoutMs = 100
     let childId: string | undefined
-    h.deps.start = async request => {
+    h.deps.start = async (request) => {
       const run = await provider.start({ ...request, parent: handle.agent, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: request.label }) })
       childId = String(run.id)
       return run
@@ -236,19 +237,26 @@ describe('the real code child provider', () => {
     const inputs: { scene: unknown }[] = []
     ctx.provide('questionCodeArtifacts', {
       context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3', publishedBody: 'editable prompt', styleVersion: 'latest', baseRenderer: 'base renderer', baseStylesheet: '', allowedAssetPaths: [] }),
-      create: async (input: { scene: { id: string; revision: number }; ownerSessionId: string; experimentId: string; childSessionId: string; source: typeof source }) => {
+      create: async (input: {
+        scene: { id: string; revision: number }
+        ownerSessionId: string
+        experimentId: string
+        childSessionId: string
+        source: typeof source
+      }) => {
         inputs.push(input)
         return { status: 'ready', artifactId: 'private', ownerSessionId: input.ownerSessionId, sceneId: input.scene.id, sceneRevision: input.scene.revision, sceneSha256: 'a'.repeat(64), sha256: 'b'.repeat(64), experimentId: input.experimentId, childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z' }
       },
     } as never)
     const startErrors: string[] = []
+    // oxlint-disable-next-line typescript/unbound-method -- The spy preserves the receiver through apply(this, args).
     const ordinaryStart = SubagentRuntime.prototype.start
-    const observeStart = vi.spyOn(SubagentRuntime.prototype, 'start').mockImplementation(async function (...args) {
+    const observeStart = vi.spyOn(SubagentRuntime.prototype, 'start').mockImplementation(async function (this: SubagentRuntime, ...args: Parameters<SubagentRuntime['start']>) {
       try { return await ordinaryStart.apply(this, args) }
       catch (error) { startErrors.push(String(error)); throw error }
     })
     await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
-    const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async childCtx => { await ctx.agentPresets.mount(childCtx, 'student') } })
+    const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async (childCtx) => { await ctx.agentPresets.mount(childCtx, 'student') } })
     const question = '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。'
     const adapter = new MockAdapter([toolCallResponse('solve', 'physics_solve_question', { text: question }), toolCallResponse('generated', 'structured_output', source), textResponse('本题结果来自物理引擎。')])
     ctx.llm.registerAdapter(['mock'], adapter)

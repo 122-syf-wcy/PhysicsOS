@@ -10,7 +10,15 @@ export const CODE_SOURCE_SCHEMA: ObjectJsonSchema = { type: 'object', additional
   title: { type: 'string', description: 'Required nonempty title, at most 120 characters.' }, summary: { type: 'string', description: 'At most 1000 characters.' },
   rendererJs: { type: 'string', description: 'Required nonempty ES module, at most 96000 characters.' }, stylesheet: { type: 'string', description: 'CSS, at most 24000 characters.' },
 }, required: ['title', 'summary', 'rendererJs', 'stylesheet'] }
-export interface CodeStyleContext { experimentId: string; developerPrompt: string; publishedBody: string; styleVersion: string; baseRenderer: string; baseStylesheet: string; allowedAssetPaths: string[] }
+export interface CodeStyleContext {
+  experimentId: string
+  developerPrompt: string
+  publishedBody: string
+  styleVersion: string
+  baseRenderer: string
+  baseStylesheet: string
+  allowedAssetPaths: string[]
+}
 export interface CodeGenerationDependencies {
   ownerSessionId: string
   snapshot: PhysicsSceneSnapshot
@@ -19,14 +27,25 @@ export interface CodeGenerationDependencies {
   instructions?: string
   timeoutMs?: number
   context(experimentId: string): Promise<CodeStyleContext>
-  start(request: Pick<SubagentStartRequest, 'prompt' | 'signal' | 'outputSchema' | 'maxDepth' | 'toolFilter' | 'label' | 'agentOptions'>): Promise<Pick<SubagentRun, 'id' | 'result' | 'dispose'>>
-  create(input: { ownerSessionId: string; scene: unknown; experimentId: string; childSessionId: string; source: CodeVisualizationSource }): Promise<CodeExperimentRef>
+  start(request: Pick<
+    SubagentStartRequest, 'prompt' | 'signal' | 'outputSchema' | 'maxDepth' | 'toolFilter' | 'label' | 'agentOptions'
+  >): Promise<Pick<SubagentRun, 'id' | 'result' | 'dispose'>>
+  create(input: {
+    ownerSessionId: string
+    scene: unknown
+    experimentId: string
+    childSessionId: string
+    source: CodeVisualizationSource
+  }): Promise<CodeExperimentRef>
   current(): PhysicsSceneSnapshot | undefined
   isCurrent?(): boolean
   publish(snapshot: PhysicsSceneSnapshot): void
 }
 function canonical(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (value === null || typeof value !== 'object') {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Unknown undefined/function/symbol values stringify to undefined.
+    return JSON.stringify(value) ?? 'null'
+  }
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']'
   return '{' + Object.keys(value).filter(key => (value as Record<string, unknown>)[key] !== undefined).sort().map(key => JSON.stringify(key) + ':' + canonical((value as Record<string, unknown>)[key])).join(',') + '}'
 }
@@ -69,25 +88,31 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
 export async function generateQuestionCode(deps: CodeGenerationDependencies): Promise<CodeVisualizationState> {
   const jobId = randomUUID(), original = deps.snapshot, expectedHash = sceneHash(original.scene)
   const controller = new AbortController()
-  const onAbort = () => controller.abort(deps.signal.reason)
+  const onAbort = (): void => { controller.abort(deps.signal.reason) }
   deps.signal.addEventListener('abort', onAbort, { once: true })
   if (deps.signal.aborted) onAbort()
   const timeoutMs = deps.timeoutMs ?? CODE_TIMEOUT_MS
   const deadlineAt = Date.now() + timeoutMs
-  const timer = setTimeout(() => controller.abort(Object.assign(new Error('Code generation timed out'), { code: 'GENERATION_TIMEOUT' })), timeoutMs)
+  const timer = setTimeout(() => {
+    controller.abort(Object.assign(new Error('Code generation timed out'), { code: 'GENERATION_TIMEOUT' }))
+  }, timeoutMs)
   const identity = { ownerSessionId: deps.ownerSessionId, sceneId: original.sceneId, sceneRevision: original.revision }
   const isCurrent = (): boolean => {
     const current = deps.current()
     return deps.isCurrent?.() !== false && current?.sceneId === original.sceneId && current.revision === original.revision
       && sceneHash(current.scene) === expectedHash && current.visualization?.status === 'generating' && current.visualization.jobId === jobId
   }
-  const append = (visualization: CodeVisualizationState) => deps.publish({ ...original, visualization })
+  const append = (visualization: CodeVisualizationState): void => { deps.publish({ ...original, visualization }) }
   append({ status: 'generating', jobId, deadlineAt, ...identity })
   let abortListener: (() => void) | undefined
   const wait = async <T>(work: Promise<T>): Promise<T> => {
     if (controller.signal.aborted) throw Object.assign(new Error('Generation aborted'), { code: codeOf(controller.signal.reason) === 'GENERATION_TIMEOUT' ? 'GENERATION_TIMEOUT' : 'GENERATION_ABORTED' })
     const aborted = new Promise<never>((_, reject) => {
-      abortListener = () => reject(Object.assign(new Error('Generation aborted'), { code: codeOf(controller.signal.reason) === 'GENERATION_TIMEOUT' ? 'GENERATION_TIMEOUT' : 'GENERATION_ABORTED' }))
+      abortListener = () => {
+        reject(Object.assign(new Error('Generation aborted'), {
+          code: codeOf(controller.signal.reason) === 'GENERATION_TIMEOUT' ? 'GENERATION_TIMEOUT' : 'GENERATION_ABORTED',
+        }))
+      }
       controller.signal.addEventListener('abort', abortListener, { once: true })
     })
     try { return await Promise.race([work, aborted]) }
@@ -106,7 +131,10 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
         if (source.rendererJs.trim() === style.baseRenderer.trim() || ONLY_REEXPORT.test(source.rendererJs)) throw Object.assign(new Error('Unchanged template renderer'), { code: 'INVALID_SOURCE' })
         if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
         if (controller.signal.aborted) throw Object.assign(new Error('Generation aborted'), { code: 'GENERATION_ABORTED' })
-        const ref = await wait(deps.create({ ownerSessionId: deps.ownerSessionId, scene: original.scene, experimentId: style.experimentId, childSessionId: String(run.id), source }))
+        const ref = await wait(deps.create({
+          ownerSessionId: deps.ownerSessionId, scene: original.scene, experimentId: style.experimentId,
+          childSessionId: String(run.id), source,
+        }))
         if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
         append(ref)
         return ref

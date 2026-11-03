@@ -122,19 +122,24 @@ export const SceneCardBody = memo(function SceneCardBody({
           className={css.open}
           disabled={data.visualization?.status !== 'ready'}
           onClick={() => {
-            openSceneInLab({ sceneId: data.sceneId, scene: data.visualization === undefined ? scene : withQuestionCodeVisualization(scene, data.visualization),
-              ...(data.visualization === undefined ? {} : { originScene: scene }) })
+            openSceneInLab({
+              sceneId: data.sceneId,
+              scene: data.visualization === undefined ? scene : withQuestionCodeVisualization(scene, data.visualization),
+              ...(data.visualization === undefined ? {} : { originScene: scene }),
+            })
           }}
         >
           在实验室中探索
         </button>
       </header>
       {runtime === null ? (
-        <><QuestionCodeCanvas scene={scene} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
+        <><QuestionCodeCanvas scene={scene}
+          {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
+          {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
           {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
-          {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={[]} domain={domain}
-            bodyId={scene.bodies[0]?.id} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
-            sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}</>
+        {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={[]} domain={domain}
+          bodyId={scene.bodies[0]?.id} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
+          sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}</>
       ) : (
         <CardStage
           key={runtimeKey}
@@ -287,7 +292,7 @@ function CardStage({
         </div>
         <span className={css.clockEnd}>{formatTimeIn(clock.total, clockScale)}</span>
         <select className={css.rate} aria-label={t('lab.rate')} value={clock.rate} disabled={failed || clock.total <= 0}
-          onChange={event => { commit(runtime.setRate(Number(event.target.value))) }}>
+          onChange={(event) => { commit(runtime.setRate(Number(event.target.value))) }}>
           {[0.25, 0.5, 1, 2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
         </select>
       </div>
@@ -570,5 +575,8 @@ export const SceneChatCard = memo(function SceneChatCard({
     return false
   })
   if (superseded) return null
-  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab} {...questionCodeOwner === undefined ? {} : { questionCodeOwner }} {...regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode }} {...recordAttempt === undefined ? {} : { recordAttempt }} />
+  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab}
+    {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
+    {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })}
+    {...(recordAttempt === undefined ? {} : { recordAttempt })} />
 })

@@ -293,7 +293,7 @@ describe('physics scene chat card', () => {
   it('uses the code experiment status shell for historical cards without generating on read', () => {
     const regenerateQuestionCode = vi.fn(async () => ({ ok: true as const }))
     const data = solvedCardData('mech-01-uniform-acceleration')
-    const view = render(<SceneCardBody {...({ data, t, openSceneInLab: vi.fn(), regenerateQuestionCode } as Parameters<typeof SceneCardBody>[0])} />)
+    const view = render(<SceneCardBody data={data} t={t} openSceneInLab={vi.fn()} regenerateQuestionCode={regenerateQuestionCode} />)
     expect(view.container.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
     expect(view.queryByRole('img')).toBeNull()
     expect(view.container.querySelector('[data-code-experiment-shell]')).not.toBeNull()

@@ -127,7 +127,7 @@ describe('Electric product slice', () => {
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
 
-    expect((screen.getByRole('button', { name: '在实验室中探索' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: '在实验室中探索' }).hasAttribute('disabled')).toBe(true)
     expect(openedScene).toBeUndefined()
     expect(screen.getByText('这段历史记录还没有本题代码实验')).toBeTruthy()
     expect(screen.getByText('物理验证')).toBeTruthy()

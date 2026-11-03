@@ -7,7 +7,6 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { PHYSICS_TOOL_NAMES } from '@physicsos/agent-tools'
 import { deriveVerificationLevel } from '@physicsos/physics-core'
 
 import * as plugin from '../src/index.ts'

@@ -292,7 +292,7 @@ export function apply(ctx: ClientContext): void {
      of a turn's Lab visit — shared by the conversation-flow card and the
      turn-tail seat. */
   const questionCodeOwner = createQuestionCodeOwnerStore()
-  let regenerateQuestionCode: QuestionCodeRegenerate = async () => ({ ok: false, error: '学习会话尚未就绪，请稍后重试。' })
+  let regenerateQuestionCode: QuestionCodeRegenerate = () => Promise.resolve({ ok: false, error: '学习会话尚未就绪，请稍后重试。' })
   const sceneCardFace = () => ({
     questionCodeOwner,
     regenerateQuestionCode: (sceneId: string) => regenerateQuestionCode(sceneId),

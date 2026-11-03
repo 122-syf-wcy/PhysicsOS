@@ -54,15 +54,16 @@ const executeFile = promisify(execFile)
 const hash = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex')
 /** Stable across object key ordering, while preserving every question field and array order. */
 export function canonicalQuestionJson(value: unknown): string {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- JSON.stringify(undefined) returns undefined at runtime.
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
   if (Array.isArray(value)) return '[' + value.map(canonicalQuestionJson).join(',') + ']'
   return (
     '{' +
     Object.keys(value)
-      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
+      .filter(key => (value as Record<string, unknown>)[key] !== undefined)
       .sort()
       .map(
-        (key) =>
+        key =>
           JSON.stringify(key) +
           ':' +
           canonicalQuestionJson((value as Record<string, unknown>)[key]),
@@ -95,7 +96,7 @@ const missing = (): ExperimentError =>
 const invalidSource = (): ExperimentError =>
   new ExperimentError(400, 'INVALID_SOURCE', '生成代码未通过封闭资源、元数据或语法检查。')
 const recordHash = (record: Omit<QuestionCodeRecord, 'sha256'> | QuestionCodeRecord): string => {
-  const { sha256: ignored, ...body } = record as QuestionCodeRecord
+  const { sha256: _ignored, ...body } = record as QuestionCodeRecord
   return hash(canonicalQuestionJson(body))
 }
 const project = (row: QuestionCodeRecord): CodeExperimentRef => ({
@@ -208,6 +209,12 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     if (!this.initialized || !this.secret)
       throw new ExperimentError(503, 'ARTIFACTS_UNAVAILABLE', '题目实验存储尚未就绪。')
   }
+  private signingKey(): Buffer {
+    this.requireReady()
+    const key = this.secret
+    if (key === undefined) throw new ExperimentError(503, 'ARTIFACTS_UNAVAILABLE', '题目实验存储尚未就绪。')
+    return key
+  }
   private owner(sessionId: string): string | undefined {
     return this.options.identity()?.sessionOwnerKey(sessionId)
   }
@@ -216,8 +223,8 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     if (
       recordHash(parsed) !== parsed.sha256 ||
       !experimentProfile(parsed.experimentId) ||
-      parsed.files.some((file) => !safeArchivePath(file.name)) ||
-      new Set(parsed.files.map((file) => file.name)).size !== parsed.files.length
+      parsed.files.some(file => !safeArchivePath(file.name)) ||
+      new Set(parsed.files.map(file => file.name)).size !== parsed.files.length
     )
       throw new ExperimentError(409, 'INTEGRITY_MISMATCH', '题目实验身份校验失败。')
     return parsed
@@ -237,8 +244,8 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
       throw new ExperimentError(409, 'ARTIFACT_REF_MISMATCH', '题目实验引用摘要不一致。')
     return project(row)
   }
-  async context(experimentId: string): Promise<QuestionCodeContext> {
-    return questionCodeContext(experimentId, this.options.prompts)
+  context(experimentId: string): Promise<QuestionCodeContext> {
+    return Promise.resolve().then(() => questionCodeContext(experimentId, this.options.prompts))
   }
   async create(input: CreateQuestionCodeInput): Promise<CodeExperimentRef> {
     const operation = this.tail.then(async () => {
@@ -272,13 +279,13 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
       files.set('public/assets/experiment.css', Buffer.from(source.stylesheet))
       files.set('dist/assets/experiment.css', Buffer.from(source.stylesheet))
       try {
-        const manifest = manifestV3Schema.parse(
-          JSON.parse(files.get('experiment.json')!.toString('utf8')),
-        )
+        const manifestBytes = files.get('experiment.json')
+        if (manifestBytes === undefined) throw invalidSource()
+        const manifest = manifestV3Schema.parse(JSON.parse(manifestBytes.toString('utf8')))
         if (validatePackageMetadataV3(files, manifest).length) throw new Error('metadata')
         await validatePackageResources(files, manifest)
         await init
-        if (!parse(source.rendererJs)[1].some((entry) => entry.n === 'renderFrame'))
+        if (!parse(source.rendererJs)[1].some(entry => entry.n === 'renderFrame'))
           throw new Error('Missing renderFrame export')
         const checkDir = await mkdtemp(join(this.root, 'checks', 'renderer-'))
         try {
@@ -376,7 +383,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
         nonce: randomBytes(12).toString('hex'),
       } satisfies Capability),
     ).toString('base64url')
-    const signature = createHmac('sha256', this.secret!)
+    const signature = createHmac('sha256', this.signingKey())
       .update('physicsos-question-code-v1:' + body)
       .digest('base64url')
     const path = `${ASSET_PREFIX}/embed/question/${body}.${signature}/dist/index.html`
@@ -389,7 +396,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   ): Promise<{ ref: CodeExperimentRef; source: CodeVisualizationSource }> {
     const row = this.authorized(actor, id, expectedSha256)
     const read = async (name: string): Promise<string> => {
-      const file = row.files.find((entry) => entry.name === name)
+      const file = row.files.find(entry => entry.name === name)
       if (!file) throw missing()
       return (await verifiedFile(join(this.root, 'blobs', file.sha256), file)).toString('utf8')
     }
@@ -416,7 +423,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
       !match[3].startsWith('dist/')
     )
       return undefined
-    const expected = createHmac('sha256', this.secret!)
+    const expected = createHmac('sha256', this.signingKey())
         .update('physicsos-question-code-v1:' + match[1])
         .digest(),
       supplied = Buffer.from(match[2], 'base64url')
@@ -443,7 +450,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     }
     if (capability.sha256 !== row.sha256 || this.owner(row.ownerSessionId) !== row.ownerKey)
       return undefined
-    const file = row.files.find((item) => item.name === match[3])
+    const file = row.files.find(item => item.name === match[3])
     if (!file) return undefined
     return {
       protocolVersion: 3,

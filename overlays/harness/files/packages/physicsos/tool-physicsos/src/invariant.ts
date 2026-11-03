@@ -49,7 +49,7 @@ function validateSnapshot(value: unknown, fail: InvariantFailure): void {
     const fields = code.status === 'ready' ? [...common, 'artifactId', 'sceneSha256', 'experimentId', 'sha256', 'title', 'childSessionId', 'createdAt'] : code.status === 'generating' ? [...common, 'jobId', 'deadlineAt'] : [...common, 'jobId', 'code', 'message']
     if (Object.keys(code).some(key => !fields.includes(key))) fail('physics/scene visualization cannot contain source code or capability URLs')
     if (code.status === 'ready') {
-      for (const key of ['sceneSha256', 'sha256']) if (typeof code[key] !== 'string' || !/^[a-f0-9]{64}$/.test(String(code[key]))) fail(`physics/scene visualization.${key} must be a SHA256 digest`)
+      for (const key of ['sceneSha256', 'sha256']) if (typeof code[key] !== 'string' || !/^[a-f0-9]{64}$/.test(code[key])) fail(`physics/scene visualization.${key} must be a SHA256 digest`)
       for (const key of ['artifactId', 'experimentId', 'title', 'childSessionId', 'createdAt']) if (typeof code[key] !== 'string' || !code[key]) fail(`physics/scene visualization.${key} must be a nonempty string`)
     } else if (code.status === 'generating') {
       if (typeof code.jobId !== 'string' || !code.jobId) fail('physics/scene generating visualization requires a job id')

@@ -286,7 +286,8 @@ export function PhysicsSurface({
       key={runtimeKey}
       runtime={runtime}
       {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
-      {...(questionCodeVisualization === undefined || questionCodeScene === undefined ? {} : { questionCodeVisualization, questionCodeScene })}
+      {...(questionCodeVisualization === undefined || questionCodeScene === undefined
+        ? {} : { questionCodeVisualization, questionCodeScene })}
       {...(templateId === undefined ? {} : { experimentId: templateId })}
       {...(updateScene === undefined ? {} : { onSceneChange: updateScene })}
       t={t}

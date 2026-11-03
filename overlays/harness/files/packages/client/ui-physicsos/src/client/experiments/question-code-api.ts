@@ -15,19 +15,23 @@ export function withQuestionCodeVisualization(scene: PhysicsScene, visualization
   return { ...scene, metadata: { ...scene.metadata, questionCodeVisualization: visualization } } as PhysicsScene
 }
 export function questionCodeVisualizationOf(scene: PhysicsScene | undefined): CodeVisualizationState | undefined {
-  const value = (scene?.metadata as (PhysicsScene['metadata'] & { questionCodeVisualization?: CodeVisualizationState }) | undefined)?.questionCodeVisualization
+  if (scene === undefined) return undefined
+  const metadata: PhysicsScene['metadata'] & { questionCodeVisualization?: unknown } = scene.metadata
+  const value = metadata.questionCodeVisualization
   if (value === undefined || value === null || typeof value !== 'object'
+    || !('status' in value) || typeof value.status !== 'string'
     || !['ready', 'generating', 'failed'].includes(value.status)) return undefined
-  return value
+  return value as CodeVisualizationState
 }
 const canonicalQuestionJson = (value: unknown): string => {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- JSON.stringify(undefined) returns undefined at runtime.
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
   if (Array.isArray(value)) return '[' + value.map(canonicalQuestionJson).join(',') + ']'
   return '{' + Object.keys(value).filter(key => (value as Record<string, unknown>)[key] !== undefined).sort()
     .map(key => JSON.stringify(key) + ':' + canonicalQuestionJson((value as Record<string, unknown>)[key])).join(',') + '}'
 }
 export function questionCodeSceneIdentity(scene: PhysicsScene): string {
-  const metadata = { ...scene.metadata } as PhysicsScene['metadata'] & { questionCodeVisualization?: CodeVisualizationState }
+  const metadata: PhysicsScene['metadata'] & { questionCodeVisualization?: unknown } = { ...scene.metadata }
   delete metadata.questionCodeVisualization
   return canonicalQuestionJson({ ...scene, metadata })
 }

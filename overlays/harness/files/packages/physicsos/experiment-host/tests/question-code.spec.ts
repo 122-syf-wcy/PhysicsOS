@@ -72,7 +72,7 @@ afterEach(async () => {
   if (server)
     await new Promise<void>((resolve) => {
       server!.closeAllConnections()
-      server!.close(() => resolve())
+      server!.close(() => { resolve() })
     })
   server = undefined
   await codes?.close()
@@ -159,7 +159,7 @@ describe('private question code artifacts', () => {
     server = createServer((req, res) => {
       void (req.url?.startsWith('/physicsos/experiment-assets') ? assets(req, res) : api(req, res))
     })
-    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve))
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
     const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`,
       path = `/physicsos/question-code/artifacts/${ref.artifactId}/preview`
     expect((await fetch(base + path)).status).toBe(401)
@@ -217,7 +217,7 @@ describe('private question code artifacts', () => {
       ).status,
     ).toBe(404)
     owner = contributor.userKey
-    await new Promise((resolve) => setTimeout(resolve, 1050))
+    await new Promise(resolve => setTimeout(resolve, 1050))
     expect(
       (
         await fetch(raw, {
@@ -235,7 +235,7 @@ describe('private question code artifacts', () => {
     await loaded!.close()
     loaded = await host(root)
     domain = await openQuestionCodeDomain(loaded.ctx)
-    codes = new QuestionCodeArtifactService(domain!, {
+    codes = new QuestionCodeArtifactService(domain, {
       root: join(root, 'private'),
       identity: () => identity,
       previewTtlMs: 1000,
@@ -249,8 +249,8 @@ describe('private question code artifacts', () => {
     const service = await setup(),
       ref = await create(service)
     const row = domain!.table('artifacts').get(ref.artifactId)!
-    const renderer = row.files.find((file) => file.name === 'src/renderer.js')!
-    const css = row.files.find((file) => file.name === 'public/assets/experiment.css')!
+    const renderer = row.files.find(file => file.name === 'src/renderer.js')!
+    const css = row.files.find(file => file.name === 'public/assets/experiment.css')!
     await unlink(join(root, 'private', 'blobs', renderer.sha256))
     await symlink(
       join(root, 'private', 'blobs', css.sha256),

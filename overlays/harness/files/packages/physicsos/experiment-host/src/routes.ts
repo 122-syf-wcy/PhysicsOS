@@ -120,7 +120,7 @@ export function experimentRoutes({
         const { buildExperimentTemplate, experimentDeveloperPrompt } =
           await import('./template-download.ts')
         if (download[2] === 'template') {
-          const artifact = await buildExperimentTemplate(download[1])
+          const artifact = buildExperimentTemplate(download[1])
           res.writeHead(200, {
             'content-type': 'application/zip',
             'content-length': artifact.bytes.length,
@@ -241,9 +241,9 @@ export function experimentAssets({
       const embedded = url.pathname.startsWith(`${ASSET_PREFIX}/embed/`)
       const raw = embedded
         ? new URL(
-            url.pathname.replace(`${ASSET_PREFIX}/embed/`, `${ASSET_PREFIX}/`),
-            requestOrigin(req, service.assetOrigin),
-          )
+          url.pathname.replace(`${ASSET_PREFIX}/embed/`, `${ASSET_PREFIX}/`),
+          requestOrigin(req, service.assetOrigin),
+        )
         : url
       const asset = raw.pathname.startsWith(`${ASSET_PREFIX}/question/`)
         ? await questionCodes?.asset(raw)

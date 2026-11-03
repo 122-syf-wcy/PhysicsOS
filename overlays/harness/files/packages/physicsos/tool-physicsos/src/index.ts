@@ -235,6 +235,7 @@ export const foldPhysicsSolveTrace = (
  */
 export function apply(ctx: Context, config: Config): void {
   const runtimes = new Map<string, PhysicsToolRuntime>()
+  const lookup = ctx.get.bind(ctx) as (service: string) => unknown
   ctx.inject(['subagents', 'agentPresets'], async (child) => {
     if (child.subagents.getProvider(CODE_PROVIDER_NAME) !== undefined) return
     const provider = new PhysicsCodeProvider(child)
@@ -332,18 +333,29 @@ export function apply(ctx: Context, config: Config): void {
     }
     return undefined
   }
-  const generate = async (exec: ToolRunContext, sceneId: string, experimentId?: string, instructions?: string): Promise<CodeVisualizationState> => {
+  const generate = async (
+    exec: ToolRunContext, sceneId: string, experimentId?: string, instructions?: string,
+  ): Promise<CodeVisualizationState> => {
     const parent = exec.agent
     if (parent === undefined) throw new HarnessError('题目代码实验需要当前对话。', 'SESSION_REQUIRED')
     if (parent.session.header.parentSession !== undefined) throw new HarnessError('题目代码生成只能由主对话发起。', 'GENERATION_DEPTH_LIMIT')
     const ownerSessionId = String(parent.id)
-    const identity = ctx.get('physicsosIdentity' as never) as { sessionOwnerKey(sessionId: string): string | undefined } | undefined
+    const identity = lookup('physicsosIdentity') as { sessionOwnerKey(sessionId: string): string | undefined } | undefined
     if (identity?.sessionOwnerKey(ownerSessionId) === undefined) throw new HarnessError('当前对话的账号身份不可用。', 'SESSION_OWNER_REQUIRED')
     const snapshot = persistedScene(exec, sceneId)
     if (snapshot === undefined) throw new HarnessError('当前对话没有这个题目场景。', 'SCENE_NOT_FOUND')
     const turn = currentTurnOf(exec)
-    type Artifacts = { context(id: string): Promise<CodeStyleContext>; create(input: { ownerSessionId: string; scene: unknown; experimentId: string; childSessionId: string; source: CodeVisualizationSource }): Promise<CodeExperimentRef> }
-    const artifacts = ctx.get('questionCodeArtifacts' as never) as Artifacts | undefined
+    type Artifacts = {
+      context(id: string): Promise<CodeStyleContext>
+      create(input: {
+        ownerSessionId: string
+        scene: unknown
+        experimentId: string
+        childSessionId: string
+        source: CodeVisualizationSource
+      }): Promise<CodeExperimentRef>
+    }
+    const artifacts = lookup('questionCodeArtifacts') as Artifacts | undefined
     const selected = codeStyleFor(snapshot, experimentId)
     return generateQuestionCode({
       ownerSessionId, snapshot, signal: exec.signal, experimentId: selected, instructions,
@@ -351,12 +363,17 @@ export function apply(ctx: Context, config: Config): void {
       isCurrent: () => currentTurnOf(exec) === turn && (ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')?.latest ?? sceneId) === sceneId,
       publish: value => parent.session.append('physics/scene', value),
       context: id => artifacts === undefined ? Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' })) : artifacts.context(id),
-      start: request => {
+      start: (request) => {
         const subagents = ctx.get('subagents')
         if (subagents === undefined) return Promise.reject(Object.assign(new Error('Code child unavailable'), { code: 'CHILD_UNAVAILABLE' }))
         return subagents.start(CODE_PROVIDER_NAME, { ...request, parent })
       },
-      create: input => artifacts!.create(input),
+      create: (input) => {
+        if (artifacts === undefined) {
+          return Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' }))
+        }
+        return artifacts.create(input)
+      },
     })
   }
   ctx.tools.register(defineTool({

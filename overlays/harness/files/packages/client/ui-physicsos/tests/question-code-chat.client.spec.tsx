@@ -16,7 +16,7 @@ import { solvedCardData } from './solved-card-fixture.client.ts'
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 const t = (key: string): string => (zh as Record<string, string>)[key] ?? key
-it.each([undefined, 1])('allows explicit recovery of a restored unfinished generation with deadline %s', async deadlineAt => {
+it.each([undefined, 1])('allows explicit recovery of a restored unfinished generation with deadline %s', async (deadlineAt) => {
   const solved = solvedCardData('mech-01-uniform-acceleration')
   const questionCodeOwner = createQuestionCodeOwnerStore(); questionCodeOwner.set('owner-chat')
   const regenerateQuestionCode = vi.fn(async () => ({ ok: true as const }))
@@ -106,7 +106,9 @@ it('renders exact question physics rather than template defaults, with independe
   expect(view.getByText('本题实验代码')).toBeTruthy()
   expect(view.container.textContent).toContain('exact question')
   fireEvent.click(view.getByRole('button', { name: '在实验室中探索' }))
-  expect(f.openSceneInLab).toHaveBeenCalledWith({ sceneId: scene.id, scene: withQuestionCodeVisualization(scene, f.ref), originScene: scene })
+  expect(f.openSceneInLab).toHaveBeenCalledWith({
+    sceneId: scene.id, scene: withQuestionCodeVisualization(scene, f.ref), originScene: scene,
+  })
   expect(f.fetch.mock.calls.every(([url]) => url.includes(`sha256=${f.ref.sha256}`))).toBe(true)
 })
 it('closes the private frame when the selected owning chat changes', async () => {
@@ -160,7 +162,8 @@ it('keeps the structured solution visible while generation has failed', () => {
 it('renews an expiring preview capability without generating new code or resetting the physical session', async () => {
   const f = await fixture(1250)
   const regenerateQuestionCode = vi.fn(async () => ({ ok: true as const }))
-  const view = render(<SceneCardBody data={f.data} questionCodeOwner={f.questionCodeOwner} openSceneInLab={f.openSceneInLab} t={t} regenerateQuestionCode={regenerateQuestionCode} />)
+  const view = render(<SceneCardBody data={f.data} questionCodeOwner={f.questionCodeOwner}
+    openSceneInLab={f.openSceneInLab} t={t} regenerateQuestionCode={regenerateQuestionCode} />)
   await waitFor(() => { expect(view.container.querySelector('iframe')?.getAttribute('src')).toContain('/physicsos/experiment-assets/embed/question/') })
   const height = view.getByRole('spinbutton', { name: /初始高度/ })
   fireEvent.change(height, { target: { value: '35' } }); fireEvent.blur(height)

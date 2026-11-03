@@ -21,13 +21,17 @@ export function QuestionCodeControls({ session, snapshot }: { session: Experimen
     {snapshot.inspector.map(section => <fieldset key={section.id}>
       <legend>{section.title}</legend>
       {(section.parameters ?? []).map(parameter => <ParameterEditor key={parameter.id} parameter={parameter} session={session} />)}
-      {(section.choices ?? []).map(choice => <label key={choice.id}>{choice.label}<select value={choice.value} onChange={event => {
+      {(section.choices ?? []).map(choice => <label key={choice.id}>{choice.label}<select value={choice.value} onChange={(event) => {
         applyUniversalContributionIntent(session, { type: 'choice/set', protocolVersion: 3, id: choice.id, value: event.target.value })
       }}>{choice.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>)}
-      {(section.derived ?? []).map(item => <p className={css.reading} key={item.id}><span>{item.label}</span><output>{item.value} {item.unit}</output></p>)}
+      {(section.derived ?? []).map(item => (
+        <p className={css.reading} key={item.id}>
+          <span>{item.label}</span><output>{item.value} {item.unit}</output>
+        </p>
+      ))}
     </fieldset>)}
     <details><summary>显示内容</summary>{Object.entries(snapshot.view.visible).map(([key, enabled]) => typeof enabled === 'boolean' ?
-      <label className={css.visibility} key={key}><input type="checkbox" checked={enabled} onChange={event => {
+      <label className={css.visibility} key={key}><input type="checkbox" checked={enabled} onChange={(event) => {
         applyUniversalContributionIntent(session, { type: 'observable/set', protocolVersion: 3, key, enabled: event.target.checked })
       }} />{labels.get(key) ?? (zh as Partial<Record<string, string>>)[`lab.observable.${key}`] ?? key}</label> : null)}</details>
   </aside>
