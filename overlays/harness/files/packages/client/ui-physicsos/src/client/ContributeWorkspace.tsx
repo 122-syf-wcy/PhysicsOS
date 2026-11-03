@@ -17,15 +17,22 @@ export function ContributeWorkspace({ t }: Pick<ProductSurfaceBaseProps, 't'>): 
           <span className={css.eyebrow}>{t('contribute.eyebrow')}</span>
           <h1 className={css.title}>{t('contribute.title')}</h1>
           <p className={css.subtitle}>{t('contribute.subtitle')}</p>
+          <a
+            className={css.action}
+            href="/physicsos/developers/index.html"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('contribute.openDocs')}
+          </a>
         </div>
-        <a
-          className={css.action}
-          href="/physicsos/developers/index.html"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {t('contribute.openDocs')}
-        </a>
+        <img
+          className={css.mascot}
+          src="/physicsos/developers/assets/studio/mascot-studio-480.webp"
+          width="240"
+          height="240"
+          alt=""
+        />
       </header>
       <div className={css.supported}>
         <strong>{t('contribute.supported')}</strong>

@@ -290,3 +290,30 @@ td { color: #6e805f; }
 .template-release-notice .button { margin-top: 10px; }
 .template-release-notice .prompt-content-sha { margin-top: 8px; font-size: 11px; overflow-wrap: anywhere; opacity: .8; }
 .download-item[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
+/* Developer studio: the same glass controls as the signed-in workspaces. */
+:root { --studio-glass: linear-gradient(155deg, #fffefb 0%, #ffffffbb 45%, #e3ece590 100%); --studio-rim: inset 0 1px 0 #fff, inset 0 0 0 1px #ffffff55; }
+.button, .copy-button, .dialog-head button, .mobile-toggle { appearance: none; border: 1px solid #d4e1d8; border-radius: 13px; background: var(--studio-glass); box-shadow: var(--studio-rim), 0 4px 10px -6px #284d3840; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: #355b48; transition: transform 160ms ease, box-shadow 160ms ease; }
+.button { min-height: 42px; font-size: 12px; padding: 11px 17px; gap: 7px; }
+.button:hover:not(:disabled), .copy-button:hover { transform: translateY(-1px); box-shadow: var(--studio-rim), 0 8px 18px -8px #284d3840; }
+.button.primary { color: #244f3e; border-color: #f3fff9; background: linear-gradient(155deg, #effff4, #c9e6d3 52%, #a6cbb7); box-shadow: var(--studio-rim), 0 8px 20px -8px #39765050; }
+.copy-button { min-height: 32px; font-size: 11px; padding: 6px 11px; border-radius: 10px; }
+.agent-builder { border-radius: 21px; border-color: #d8e4dc; box-shadow: var(--studio-rim), 0 14px 35px -25px #31534260; }
+.agent-form { padding: 25px; background: linear-gradient(145deg, #ffffffd9, #f1f6f0b0); }
+.agent-form label { font-size: 13px; color: #49634f; }
+.agent-form input, .agent-form select, .agent-form textarea { border-radius: 12px; padding: 13px 14px; font-size: 13px; border-color: #d4e1d8; box-shadow: inset 0 2px 4px #35533a04; background: #ffffffc4; }
+.agent-actions { padding: 16px 24px; gap: 10px; background: #edf4edd9; }
+.agent-meta { font-size: 11px; line-height: 1.7; }
+.agent-preview { padding: 24px; font-size: 12px; line-height: 1.85; background: #f9fbf7; color: #405c45; }
+.input-help { font-size: 11px; }
+.template-release-notice { border-radius: 16px; background: linear-gradient(130deg, #edf7ef, #f6faf3); border-color: #d7e7dc; }
+.download-list { border: 0; border-radius: 0; display: grid; gap: 10px; overflow: visible; }
+.download-item { border: 1px solid #dbe5db; border-radius: 15px; padding: 18px; background: var(--studio-glass); box-shadow: var(--studio-rim), 0 4px 10px -7px #345c3f33; }
+.download-item:last-child { border-bottom: 1px solid #dbe5db; }
+.download-item strong { font-size: 13px; }
+.download-item small { font-size: 11px; }
+.file-badge { border-radius: 11px; width: 42px; height: 44px; background: #eaf2e6; }
+@media (max-width: 640px) { .button { font-size: 12px; min-height: 42px; } .agent-form { padding: 19px; } .agent-actions { padding: 15px 18px; } .agent-actions .button { flex: 1 1 auto; } .agent-preview { padding: 18px; font-size: 11px; } .agent-meta { font-size: 10px; } }
+.studio-header { position: relative; padding-right: 158px; min-height: 178px; }
+.studio-mascot { position: absolute; right: -8px; top: -10px; width: 155px; height: 155px; object-fit: contain; }
+.doc-actions .text-button, .doc-actions .text-link { display: inline-flex; align-items: center; min-height: 38px; padding: 9px 13px; border: 1px solid #d4e1d8; border-radius: 12px; background: var(--studio-glass); box-shadow: var(--studio-rim), 0 4px 10px -7px #345c3f33; color: #355b48; font-size: 11px; }
+@media (max-width: 640px) { .studio-header { padding-right: 0; } .studio-mascot { width: 95px; height: 95px; opacity: .2; top: -7px; right: -5px; z-index: -1; } }

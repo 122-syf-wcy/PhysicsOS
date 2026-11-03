@@ -280,17 +280,53 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
         ) : null}
         <nav className={css.links} aria-label="贡献资源">
           <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
-            开发文档 ↗
+            <img
+              src="/physicsos/developers/assets/studio/icon-review.webp"
+              width="54"
+              height="54"
+              alt=""
+            />
+            <span>
+              <strong>开发文档 ↗</strong>
+              <small aria-hidden="true">了解规范与提交流程</small>
+            </span>
           </a>
-          <a href="/physicsos/developer-prompts/template" download="physicsos-experiment-template-v2.zip">
-            下载独立模板 ↓
+          <a
+            href="/physicsos/developer-prompts/template"
+            download="physicsos-experiment-template-v2.zip"
+          >
+            <img
+              src="/physicsos/developers/assets/studio/icon-upload.webp"
+              width="54"
+              height="54"
+              alt=""
+            />
+            <span>
+              <strong>下载独立模板 ↓</strong>
+              <small aria-hidden="true">从可运行的凸透镜样板开始</small>
+            </span>
           </a>
           <a href={`${DOCS}#/agents`} target="_blank" rel="noopener noreferrer">
-            复制 AGENTS.md ↗
+            <img
+              src="/physicsos/developers/assets/studio/icon-prompt.webp"
+              width="54"
+              height="54"
+              alt=""
+            />
+            <span>
+              <strong>复制 AGENTS.md ↗</strong>
+              <small aria-hidden="true">获取当前版本的开发提示词</small>
+            </span>
           </a>
         </nav>
         <form onSubmit={submit} className={css.form}>
-          <h3>提交一个新版本</h3>
+          <div className={`${css.wide} ${css.formHeading}`}>
+            <span aria-hidden="true">01</span>
+            <div>
+              <h3>提交一个新版本</h3>
+              <p>上传实验包，补充作者信息，审核通过后自动展示。</p>
+            </div>
+          </div>
           <div className={css.wide}>
             <ContributionFilePicker kind="zip" file={file} disabled={busy} onChange={setFile} />
           </div>
@@ -386,7 +422,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
             <article key={item.id} className={css.version} data-package-id={item.id}>
               <div className={css.sectionHeading}>
                 <ContributionAuthorBadge author={item.author} version={item.version} />
-                <span className={css.status}>
+                <span className={css.status} data-state={item.status}>
                   {catalog.active?.id === item.id ? '当前默认' : STATUS[item.status]}
                   {(item.protocolVersion ?? 1) === 1 ? <span> · 旧格式</span> : null}
                 </span>
@@ -410,20 +446,11 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                 >
                   预览 v{item.version}
                 </button>
-                {catalog.canReview &&
-                item.status === 'approved' &&
-                catalog.active &&
-                catalog.active.id !== item.id ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setRollback(item)
-                      }}
-                    >
-                      回滚到此版本
-                    </button>
-                  ) : null}
+                {catalog.canReview && item.status === 'approved' && catalog.active && catalog.active.id !== item.id && (
+                  <button type="button" disabled={busy} onClick={() => { setRollback(item) }}>
+                    回滚到此版本
+                  </button>
+                )}
               </div>
             </article>
           ))}

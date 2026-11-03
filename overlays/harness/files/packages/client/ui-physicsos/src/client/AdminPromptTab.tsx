@@ -1,6 +1,10 @@
 /** Editable Markdown stays separate from the platform's frozen compatibility contract. */
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import {
+  IconDownloadOutlineMedium,
+  IconRefreshOutlineMedium,
+} from '@deepseek-ai/dsh-client-ui-primitives'
+import {
   AdminCard,
   AdminCardHead,
   AdminCardTitle,
@@ -46,6 +50,7 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
   const live = useRef(true)
   const hasForm = useRef(false)
   const locked = useRef(false)
+  const markdownInput = useRef<HTMLInputElement>(null)
 
   const edit = (patch: Partial<Form>): void => {
     epoch.current++
@@ -192,36 +197,50 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
 
   return (
     <div className={styles.root} data-prompt-management="">
-      <AdminCard>
-        <AdminCardHead>
-          <div>
-            <AdminCardTitle>开发提示词</AdminCardTitle>
-            <AdminCardMeta>凸透镜实验 · 保存草稿后手动发布 · 已发布版本可回滚</AdminCardMeta>
+      <AdminCard className={styles.overview}>
+        <AdminCardHead className={styles.heading}>
+          <div className={styles.identity}>
+            <img
+              src="/physicsos/developers/assets/studio/icon-prompt.webp"
+              width="68"
+              height="68"
+              alt=""
+            />
+            <div>
+              <span className={styles.eyebrow}>开发者内容管理</span>
+              <AdminCardTitle className={styles.title}>开发提示词</AdminCardTitle>
+              <AdminCardMeta>凸透镜实验 · 保存草稿后手动发布 · 已发布版本可回滚</AdminCardMeta>
+            </div>
           </div>
           <button
             type="button"
-            className={css.ghost}
+            className={styles.button}
             disabled={busy}
             onClick={() => {
               void refresh()
             }}
           >
+            <IconRefreshOutlineMedium size={16} />
             刷新服务器版本
           </button>
         </AdminCardHead>
         {view && (
-          <p data-testid="prompt-current">
-            当前生效：{view.current.publishedAt === null ? '系统默认' : `v${view.current.version}`}{' '}
-            · 固定实验格式 V2
-          </p>
-        )}
-        {view && (
-          <a
-            className={`${css.ghost} ${styles.downloadLink}`}
-            href="/physicsos/developer-prompts/current.md"
-          >
-            下载当前已发布提示词
-          </a>
+          <div className={styles.current}>
+            <div data-testid="prompt-current">
+              <span className={styles.currentLabel}>
+                <i aria-hidden="true" />
+                当前生效
+              </span>
+              <strong>
+                {view.current.publishedAt === null ? '系统默认' : `v${view.current.version}`}
+              </strong>
+              <span className={styles.hint}>凸透镜成像规律 · 固定实验格式 V2</span>
+            </div>
+            <a className={styles.button} href="/physicsos/developer-prompts/current.md">
+              <IconDownloadOutlineMedium size={16} />
+              下载当前已发布提示词
+            </a>
+          </div>
         )}
         {error && (
           <p className={styles.error} role="alert">
@@ -238,8 +257,15 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
       {view && (
         <>
           <div className={styles.columns}>
-            <AdminCard>
-              <AdminCardTitle>提示词草稿</AdminCardTitle>
+            <AdminCard className={styles.panel}>
+              <div className={styles.sectionHead}>
+                <AdminCardTitle className={styles.sectionTitle}>
+                  <span aria-hidden="true">01</span>提示词草稿
+                </AdminCardTitle>
+                <span className={styles.badge} data-state={dirty ? 'editing' : 'saved'}>
+                  {dirty ? '待保存' : '草稿已保存'}
+                </span>
+              </div>
               <p className={styles.hint}>
                 编辑开发说明。实验协议、模板摘要和发布要求由系统补入完整预览。导入完整导出文件时只读取可编辑正文。
               </p>
@@ -269,6 +295,7 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                 <label className={css.field}>
                   <span>Markdown 正文</span>
                   <textarea
+                    aria-label="Markdown 正文"
                     className={`${css.input} ${styles.editor}`}
                     value={form.body}
                     onChange={(event) => {
@@ -277,15 +304,32 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                     spellCheck={false}
                   />
                 </label>
-                <label className={styles.upload}>
-                  <span>导入 Markdown</span>
+                <div className={styles.upload}>
+                  <span className={styles.fileGlyph} aria-hidden="true">
+                    MD
+                  </span>
+                  <div>
+                    <strong>导入 Markdown</strong>
+                    <span>先填写版本，选择文件后导入草稿</span>
+                  </div>
                   <input
+                    ref={markdownInput}
+                    aria-label="导入 Markdown"
+                    hidden
                     type="file"
                     accept=".md,.markdown,text/markdown"
                     disabled={busy}
                     onChange={upload}
                   />
-                </label>
+                  <button
+                    type="button"
+                    className={styles.button}
+                    disabled={busy}
+                    onClick={() => markdownInput.current?.click()}
+                  >
+                    选择 Markdown 文件
+                  </button>
+                </div>
                 <p className={styles.hint}>
                   正文最多 64 KiB，导入文件最多 128 KiB。提示词版本独立于实验包版本。
                 </p>
@@ -294,10 +338,10 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
               {view.bindingChanged && (
                 <p className={styles.error}>模板或固定规范已更新，请重新保存并核对预览后发布。</p>
               )}
-              <div className={`${css.actions} ${styles.actions}`}>
+              <div className={`${styles.actions} ${styles.publishActions}`}>
                 <button
                   type="button"
-                  className={css.ghost}
+                  className={styles.button}
                   disabled={busy || !!validation || (!dirty && !view.bindingChanged)}
                   onClick={() => {
                     void run(
@@ -310,7 +354,7 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                 </button>
                 <button
                   type="button"
-                  className={css.primary}
+                  className={`${styles.button} ${styles.primary}`}
                   disabled={busy || !!validation || dirty || !view.draft || view.bindingChanged}
                   onClick={() => {
                     void run(
@@ -323,15 +367,20 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                 </button>
               </div>
             </AdminCard>
-            <AdminCard>
-              <AdminCardTitle>完整提示词预览</AdminCardTitle>
+            <AdminCard className={`${styles.panel} ${styles.previewPanel}`}>
+              <div className={styles.sectionHead}>
+                <AdminCardTitle className={styles.sectionTitle}>
+                  <span aria-hidden="true">02</span>完整提示词预览
+                </AdminCardTitle>
+                <span className={styles.badge}>只读预览</span>
+              </div>
               <p className={styles.hint}>
                 下方内容与复制、下载一致；未保存的编辑不会影响当前发布版。
               </p>
-              <div className={`${css.actions} ${styles.actions}`}>
+              <div className={styles.actions}>
                 <button
                   type="button"
-                  className={css.ghost}
+                  className={styles.button}
                   disabled={!preview}
                   onClick={() => {
                     void copy()
@@ -339,23 +388,41 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                 >
                   复制完整提示词
                 </button>
-                <button type="button" className={css.ghost} disabled={!preview} onClick={download}>
+                <button
+                  type="button"
+                  className={styles.button}
+                  disabled={!preview}
+                  onClick={download}
+                >
+                  <IconDownloadOutlineMedium size={16} />
                   下载 Markdown
                 </button>
               </div>
-              <pre className={styles.preview} aria-label="完整提示词预览">
+              <div className={styles.previewCaption}>
+                <span>AGENTS.md</span>
+                <span>正文 + 固定实验规范</span>
+              </div>
+              <pre className={styles.preview} aria-label="完整提示词预览" tabIndex={0}>
                 {preview || '填写有效版本和正文后显示完整提示词。'}
               </pre>
             </AdminCard>
           </div>
-          <AdminCard>
-            <AdminCardTitle>发布历史</AdminCardTitle>
+          <AdminCard className={styles.panel}>
+            <div className={styles.sectionHead}>
+              <AdminCardTitle className={styles.sectionTitle}>
+                <span aria-hidden="true">03</span>发布历史
+              </AdminCardTitle>
+              <span className={styles.badge}>{view.versions.length} 个版本</span>
+            </div>
+            <p className={styles.hint}>
+              保留每次发布的完整内容，可下载、继续编辑或恢复为当前版本。
+            </p>
             {view.versions.length === 0 ? (
               <AdminEmpty>尚无后台发布记录，当前使用系统默认提示词。</AdminEmpty>
             ) : (
               <div className={styles.history}>
                 {[...view.versions].reverse().map(item => (
-                  <article key={item.id}>
+                  <article key={item.id} data-current={view.current.id === item.id}>
                     <div>
                       <strong>
                         v{item.version}
@@ -368,16 +435,16 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                       </small>
                       <p className={styles.digest}>SHA-256 {item.sha256}</p>
                     </div>
-                    <div className={`${css.actions} ${styles.actions}`}>
+                    <div className={styles.actions}>
                       <a
-                        className={`${css.ghost} ${styles.downloadLink}`}
+                        className={styles.button}
                         href={`/physicsos/developer-prompts/versions/${item.id}.md`}
                       >
                         下载此版本
                       </a>
                       <button
                         type="button"
-                        className={css.ghost}
+                        className={styles.button}
                         disabled={busy}
                         onClick={() => {
                           useVersion(item)
@@ -388,7 +455,7 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                       </button>
                       <button
                         type="button"
-                        className={css.ghost}
+                        className={styles.button}
                         disabled={busy || view.current.id === item.id}
                         onClick={() => {
                           void run(

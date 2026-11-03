@@ -102,3 +102,110 @@
     margin-left: 0;
   }
 }
+/* A quiet studio header gives the new workflow a clear starting point. */
+.header {
+  position: relative;
+  min-height: 228px;
+  padding: 26px 34px;
+  margin-bottom: 22px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 26px;
+  background-color: var(--physics-glass-fill);
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  overflow: hidden;
+}
+.icon {
+  align-self: flex-start;
+  margin-top: 10px;
+  color: var(--physics-ink-strong);
+  border: 1px solid var(--physics-glass-border-soft);
+  background: var(--physics-glass-fill);
+  box-shadow: var(--physics-glass-rim);
+}
+.title {
+  font-size: clamp(24px, 2.5vw, 32px);
+  letter-spacing: -0.6px;
+  margin: 7px 0 12px;
+}
+.subtitle {
+  max-width: 550px;
+}
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  margin-top: 18px;
+  font-weight: 550;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+.action:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+}
+.mascot {
+  width: clamp(150px, 19vw, 230px);
+  height: auto;
+  flex: none;
+  object-fit: contain;
+}
+.supported {
+  margin: 0 6px 18px;
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .header {
+    padding: 22px;
+    gap: 12px;
+  }
+  .icon {
+    display: none;
+  }
+  .mascot {
+    width: 165px;
+  }
+}
+@media (max-width: 700px) {
+  .header {
+    display: flex;
+    min-height: 0;
+    padding: 20px;
+    border-radius: 22px;
+  }
+  .headerCopy {
+    position: relative;
+    z-index: 1;
+  }
+  .mascot {
+    position: absolute;
+    right: -12px;
+    top: 7px;
+    width: 112px;
+    opacity: 0.25;
+  }
+  .subtitle {
+    max-width: 100%;
+  }
+  .title {
+    font-size: 24px;
+    padding-right: 28px;
+  }
+  .action {
+    margin-top: 15px;
+  }
+  .supported {
+    align-items: flex-start;
+    line-height: 1.7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .action {
+    transition: none;
+  }
+  .action:hover {
+    transform: none;
+  }
+}
+.action { box-sizing: border-box; }

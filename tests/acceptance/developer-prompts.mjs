@@ -115,7 +115,7 @@ try {
   const upload = async (path) => {
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
-      panel.getByLabel('导入 Markdown', { exact: true }).click(),
+      panel.getByRole('button', { name: '选择 Markdown 文件', exact: true }).click(),
     ])
     await chooser.setFiles(path)
     await expect(panel.getByRole('status')).toContainText('已导入草稿')

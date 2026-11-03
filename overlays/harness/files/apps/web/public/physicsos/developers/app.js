@@ -547,6 +547,15 @@ function renderPage() {
     )
     if (doc.id !== 'agents') actions.lastChild.download = doc.file
     header.append(actions)
+    if (doc.id === 'agents') {
+      header.classList.add('studio-header')
+      const art = element('img', 'studio-mascot')
+      art.src = 'assets/studio/mascot-studio-480.webp'
+      art.alt = ''
+      art.width = 160
+      art.height = 160
+      header.append(art)
+    }
     main.append(header)
   }
   const article = element('article', 'article')

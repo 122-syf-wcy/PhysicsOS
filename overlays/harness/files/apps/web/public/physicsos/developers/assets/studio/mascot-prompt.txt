@@ -1,0 +1,6 @@
+Use case: identity-preserve
+Asset type: PhysicsOS developer studio header illustration, one compact square vignette.
+Input image: identity and art-style reference. Keep this SAME girl and grey tabby kitten: dark wavy hair, warm brown eyes, cream cap with small animal badges, pale yellow T-shirt, brown shorts, cream socks and beige shoes, kitten with gold bell collar.
+Primary request: a fresh welcoming pose of the same girl standing beside her curious kitten, holding a small open laptop in one arm, presenting a delicate floating blue-sage glass convex lens and three tiny glass code tiles with the other hand. The devices are decorative props, no text or fake scientific measurements. Keep coherent natural hands and anatomy.
+Style: premium soft hand-painted watercolor illustration, warm expressive face, restrained detail, soft ice-blue and sage accents that harmonize with a liquid-glass interface. Preserve the existing character identity; do not make a new mascot.
+Composition: full body, full kitten, centered compact silhouette, clear margins, near-white plain background #fdfdfb fading to white at edges, no frame, no ground rectangle, very subtle contact shadow. No scenery, no extra characters, no words, letters, numbers, logo, watermark or UI screenshot. Keep the face and kitten legible when displayed at 220 pixels.
