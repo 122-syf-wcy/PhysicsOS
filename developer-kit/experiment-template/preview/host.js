@@ -6,6 +6,7 @@ let preview
 let revision = 0
 let port
 let token
+let frameSequence = 0
 const readout = document.querySelector('#readout')
 function snapshot() {
   const values = preview ?? params
@@ -25,7 +26,7 @@ function snapshot() {
 }
 function publish() {
   const data = snapshot()
-  port?.postMessage({ type: 'experiment/snapshot', snapshot: data })
+  port?.postMessage({ type: 'experiment/snapshot', protocolVersion: 2, frameId: `${token}:${++frameSequence}`, snapshot: data })
   readout.textContent = `开发快照 r${revision} · 像距 ${data.result.imageDistanceCm === null ? '∞' : data.result.imageDistanceCm.toFixed(2)} cm · ${data.result.imageKind}`
   document.querySelectorAll('input[type=number]').forEach(input => { input.value = data.parameters[input.name] })
   document.querySelectorAll('input[type=checkbox]').forEach(input => { input.checked = data.visible[input.name] })
@@ -45,13 +46,13 @@ function receive(data) {
 }
 addEventListener('message', event => {
   if (event.source !== frame.contentWindow || event.origin !== 'null' || port) return
-  if (event.data?.type !== 'experiment/ready' || event.data.protocolVersion !== 1 || event.data.channel !== token) return
+  if (event.data?.type !== 'experiment/ready' || event.data.protocolVersion !== 2 || event.data.channel !== token) return
   const channel = new MessageChannel()
   port = channel.port1
-  port.onmessage = event => { if (event.data?.type === 'experiment/connected') publish(); else receive(event.data) }
+  port.onmessage = event => { if (event.data?.type === 'experiment/connected' && event.data.protocolVersion === 2) publish(); else receive(event.data) }
   port.start()
   // Opaque sandbox origin needs '*', solely for this port bootstrap to this exact iframe.
-  frame.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion: 1, channel: token }, '*', [channel.port2])
+  frame.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion: 2, channel: token }, '*', [channel.port2])
 })
 function load() {
   port?.close(); port = undefined; preview = undefined

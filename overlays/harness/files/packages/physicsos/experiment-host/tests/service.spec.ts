@@ -222,6 +222,11 @@ describe('V1 migration and trusted persisted versions', () => {
       protocolVersion: 1,
       status: 'pending',
     })
+    const preview = await service.preview(admin, item.id)
+    const legacyAsset = await service.asset(
+      new URL(preview.entryUrl.replace('/embed/', '/'), 'https://physics.example'),
+    )
+    expect(legacyAsset?.protocolVersion).toBe(1)
     await service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 })
     const next = await service.upload(contributor, uploadBody())
     expect(next).toMatchObject({ schemaVersion: 2, protocolVersion: 2 })

@@ -73,6 +73,7 @@ export interface ExperimentOptions {
   previewTtlMs?: number
 }
 export interface Asset {
+  protocolVersion: 1 | 2
   bytes: Buffer
   contentType: string
   scopePath: string
@@ -530,6 +531,7 @@ export class ExperimentService {
     if (!item || !asset) return null
     try {
       return {
+        protocolVersion: item.protocolVersion ?? 1,
         bytes: await verifiedFile(join(this.root, item.id, name), asset),
         contentType: asset.contentType,
         scopePath,

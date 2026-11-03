@@ -46,8 +46,8 @@ describe('contributed lens files use the platform engine', () => {
     expect(frame.result.imageHeightCm).toBeCloseTo(-4.5)
     expect(frame.rays).toHaveLength(3)
     expect(frame.rays[0]?.points[0]).toEqual({ x: -30, y: 9 })
-    expect(frame.rays.map((ray) => ray.points)).toEqual(
-      engine.view.opticalRays?.map((ray) => ray.points),
+    expect(frame.rays.map(ray => ray.points)).toEqual(
+      engine.view.opticalRays?.map(ray => ray.points),
     )
     runtime.setObservable('image', false)
     runtime.setObservable('rays', false)
@@ -68,7 +68,7 @@ describe('contributed lens files use the platform engine', () => {
   it('previews without persistence, cancels, then commits one scene revision', () => {
     const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
     const saves: unknown[] = []
-    const session = createExperimentSession(runtime, (scene) => saves.push(scene))
+    const session = createExperimentSession(runtime, scene => saves.push(scene))
     expect(
       applyContributionIntent(session, {
         type: 'parameter/preview',
@@ -106,4 +106,28 @@ describe('contributed lens files use the platform engine', () => {
       expect(applyContributionIntent(session, data)).toBe(false)
     expect(runtime.getScene()).toEqual(original)
   })
+})
+
+it('preserves V1 safe extra fields while ignoring their values and still enforcing inspector bounds', () => {
+  const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+  const session = createExperimentSession(runtime)
+  expect(
+    applyContributionIntent(session, {
+      type: 'parameter/commit',
+      id: 'objectDistanceCm',
+      value: 15,
+      ignored: { command: 'navigate', url: '/admin' },
+    }),
+  ).toBe(true)
+  expect(runtime.getScene().revision).toBe(1)
+  expect(contributionSnapshot(runtime.getSnapshot()).parameters.objectDistanceCm).toBe(15)
+  expect(
+    applyContributionIntent(session, {
+      type: 'parameter/commit',
+      id: 'objectDistanceCm',
+      value: 1e9,
+      ignored: true,
+    }),
+  ).toBe(false)
+  expect(runtime.getScene().revision).toBe(1)
 })

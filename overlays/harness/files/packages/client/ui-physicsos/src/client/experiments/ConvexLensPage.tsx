@@ -162,7 +162,10 @@ export function ConvexLensPage({
               const url = new URL(window.location.href)
               url.hash = experimentHref('convex-lens')
               const clipboard = navigator.clipboard as Clipboard | undefined
-              if (clipboard === undefined) { setMessage('请从地址栏复制实验链接。'); return }
+              if (clipboard === undefined) {
+                setMessage('请从地址栏复制实验链接。')
+                return
+              }
               void clipboard.writeText(url.toString()).then(
                 () => {
                   setMessage('实验链接已复制，可分享给同学。')
@@ -300,6 +303,7 @@ export function ConvexLensPage({
               <CommunityExperimentFrame
                 key={release.id}
                 entryUrl={release.entryUrl}
+                protocolVersion={release.protocolVersion ?? 1}
                 session={session}
               />
             ) : (

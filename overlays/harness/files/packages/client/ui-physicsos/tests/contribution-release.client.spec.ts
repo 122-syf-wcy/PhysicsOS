@@ -43,3 +43,32 @@ it('previews another author approved release without a privileged draft API call
   )
   await expect(contributionPreviewUrl(published)).resolves.toBe(published.entryUrl)
 })
+
+it('shows bounded actionable metadata issue paths and suggestions on failed upload', async () => {
+  vi.stubGlobal(
+    'fetch',
+    async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'INVALID_METADATA',
+            message: '元数据不符合契约',
+            issues: [
+              {
+                code: 'INVALID_METADATA',
+                file: 'parameters.json',
+                path: 'parameters[0].unit',
+                message: '单位不符合契约',
+                suggestion: '恢复生成的 cm 单位',
+              },
+            ],
+          },
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      ),
+  )
+  const { contributionApi } = await import('../src/client/experiments/contribution-api.ts')
+  await expect(
+    contributionApi.upload({ zipBase64: 'AA==', author: { name: '作者' } }),
+  ).rejects.toThrow('parameters.json · parameters[0].unit：恢复生成的 cm 单位')
+})

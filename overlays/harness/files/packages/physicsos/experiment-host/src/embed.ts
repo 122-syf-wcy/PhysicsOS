@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 /** Platform-owned bootstrap only. Contributor text is never interpolated into this script. */
-const bootstrap = `(() => {
+const bootstrapFor = (protocolVersion: 1 | 2): string => `(() => {
   'use strict';
+  const protocolVersion = ${protocolVersion};
   const inner = document.getElementById('experiment');
   const query = new URLSearchParams(location.search);
   const hostOrigin = query.get('hostOrigin'), channel = query.get('channel');
@@ -18,17 +19,17 @@ const bootstrap = `(() => {
   let ready = false, connected = false;
   const receive = (event) => {
     const data = event.data;
-    if (!data || typeof data !== 'object' || Array.isArray(data) || data.protocolVersion !== 1 || data.channel !== channel) return;
+    if (!data || typeof data !== 'object' || Array.isArray(data) || data.protocolVersion !== protocolVersion || data.channel !== channel) return;
     if (event.source === inner.contentWindow && event.origin === 'null' && data.type === 'experiment/ready') {
       if (ready || connected) return;
       ready = true;
-      parent.postMessage({ type: 'experiment/ready', protocolVersion: 1, channel }, hostOrigin);
+      parent.postMessage({ type: 'experiment/ready', protocolVersion, channel }, hostOrigin);
       return;
     }
     if (event.source !== parent || event.origin !== hostOrigin || data.type !== 'experiment/connect' || !ready || connected || event.ports?.length !== 1) return;
     connected = true;
     removeEventListener('message', receive);
-    inner.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion: 1, channel }, '*', [event.ports[0]]);
+    inner.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion, channel }, '*', [event.ports[0]]);
   };
   addEventListener('message', receive);
   inner.src = raw.href;
@@ -43,7 +44,11 @@ const attribute = (text: string): string =>
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
-export function experimentWrapper(raw: URL): { bytes: Buffer; csp: string } {
+export function experimentWrapper(
+  raw: URL,
+  protocolVersion: 1 | 2 = 1,
+): { bytes: Buffer; csp: string } {
+  const bootstrap = bootstrapFor(protocolVersion)
   const csp = [
     'sandbox allow-scripts allow-same-origin',
     "default-src 'none'",

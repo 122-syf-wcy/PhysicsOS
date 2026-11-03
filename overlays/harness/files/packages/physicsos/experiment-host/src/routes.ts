@@ -216,7 +216,7 @@ export function experimentAssets({
           send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
           return
         }
-        const wrapper = experimentWrapper(raw)
+        const wrapper = experimentWrapper(raw, asset.protocolVersion)
         res.setHeader('content-security-policy', wrapper.csp)
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8',

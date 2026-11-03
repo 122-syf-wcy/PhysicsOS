@@ -6,19 +6,32 @@ import {
   contributionSnapshot,
   isContributionMessage,
 } from './contribution-protocol.ts'
+import { isSnapshot, isExperimentIntent } from './contract-wire.ts'
 import css from './ContributionPanel.module.css'
+
+export type CommunityFrameStatus = 'loading' | 'ready' | 'failed'
 
 interface Props {
   readonly entryUrl: string
   readonly session: ExperimentSession
   readonly title?: string
+  readonly protocolVersion?: 1 | 2
+  readonly onStatusChange?: (status: CommunityFrameStatus) => void
 }
 
 /** Only a trusted wrapper relays a revocable port to its opaque uploaded child. */
-export function CommunityExperimentFrame({ entryUrl, session, title = '社区三维实验' }: Props) {
+export function CommunityExperimentFrame({
+  entryUrl,
+  session,
+  title = '社区三维实验',
+  protocolVersion = 1,
+  onStatusChange,
+}: Props) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [attempt, setAttempt] = useState(0)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [status, setStatus] = useState<CommunityFrameStatus>('loading')
+  const statusCallback = useRef(onStatusChange)
+  statusCallback.current = onStatusChange
   useEffect(() => {
     const element = frame.current
     if (element === null) return
@@ -29,12 +42,35 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
     let count = 0
     let windowStart = performance.now()
     const token = randomUUID()
+    let sequence = 0
+    let firstFrame: { frameId: string; revision: number } | undefined
+    const updateStatus = (next: CommunityFrameStatus): void => {
+      setStatus(next)
+      statusCallback.current?.(next)
+    }
+    const fail = (): void => {
+      if (disposed) return
+      disposed = true
+      clearTimeout(timeout)
+      port?.close()
+      window.removeEventListener('message', receive)
+      session.cancelPreview()
+      updateStatus('failed')
+    }
     const publish = (): void => {
-      if (connected && !disposed)
-        port?.postMessage({
-          type: 'experiment/snapshot',
-          snapshot: contributionSnapshot(session.getSnapshot()),
-        })
+      if (!connected || disposed) return
+      const snapshot = contributionSnapshot(session.getSnapshot())
+      if (!isSnapshot(snapshot)) {
+        fail()
+        return
+      }
+      if (protocolVersion === 1) {
+        port?.postMessage({ type: 'experiment/snapshot', snapshot })
+        return
+      }
+      const frameId = `${token}:${++sequence}`
+      firstFrame ??= { frameId, revision: snapshot.revision }
+      port?.postMessage({ type: 'experiment/snapshot', protocolVersion: 2, frameId, snapshot })
     }
     const receive = (event: MessageEvent<unknown>): void => {
       if (
@@ -44,7 +80,7 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
         event.origin !== wrapperOrigin ||
         !isContributionMessage(event.data) ||
         event.data.type !== 'experiment/ready' ||
-        event.data.protocolVersion !== 1 ||
+        event.data.protocolVersion !== protocolVersion ||
         event.data.channel !== token
       )
         return
@@ -53,11 +89,16 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
       port.onmessage = (message: MessageEvent<unknown>): void => {
         if (disposed || !isContributionMessage(message.data)) return
         if (!connected) {
-          if (message.data.type !== 'experiment/connected' || message.data.protocolVersion !== 1)
+          if (
+            message.data.type !== 'experiment/connected' ||
+            message.data.protocolVersion !== protocolVersion
+          )
             return
           connected = true
-          clearTimeout(timeout)
-          setStatus('ready')
+          if (protocolVersion === 1) {
+            clearTimeout(timeout)
+            updateStatus('ready')
+          }
           publish()
           return
         }
@@ -67,25 +108,38 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
           count = 0
         }
         if (++count > 120) return
-        applyContributionIntent(session, message.data)
+        if (protocolVersion === 2 && message.data.protocolVersion === 2) {
+          if (
+            message.data.type === 'experiment/error' &&
+            (message.data.code === 'SNAPSHOT_INVALID' || message.data.code === 'RENDER_FAILED')
+          ) {
+            fail()
+            return
+          }
+          if (
+            message.data.type === 'experiment/rendered' &&
+            firstFrame !== undefined &&
+            message.data.frameId === firstFrame.frameId &&
+            message.data.revision === firstFrame.revision
+          ) {
+            clearTimeout(timeout)
+            updateStatus('ready')
+          }
+        }
+        if (protocolVersion === 1 || isExperimentIntent(message.data))
+          applyContributionIntent(session, message.data)
       }
       port.start()
       // The platform wrapper forwards this port only to its exact opaque child.
       element.contentWindow?.postMessage(
-        { type: 'experiment/connect', protocolVersion: 1, channel: token },
+        { type: 'experiment/connect', protocolVersion, channel: token },
         wrapperOrigin,
         [channel.port2],
       )
     }
     const unsubscribe = session.subscribe(publish)
-    const timeout = setTimeout(() => {
-      disposed = true
-      port?.close()
-      window.removeEventListener('message', receive)
-      session.cancelPreview()
-      setStatus('failed')
-    }, 15000)
-    setStatus('loading')
+    const timeout = setTimeout(fail, 15000)
+    updateStatus('loading')
     window.addEventListener('message', receive)
     try {
       const url = new URL(entryUrl, location.origin)
@@ -101,10 +155,7 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
       url.searchParams.set('channel', token)
       element.src = url.toString()
     } catch {
-      clearTimeout(timeout)
-      disposed = true
-      window.removeEventListener('message', receive)
-      setStatus('failed')
+      fail()
     }
     return () => {
       disposed = true
@@ -114,7 +165,7 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
       port?.close()
       session.cancelPreview()
     }
-  }, [entryUrl, session, attempt])
+  }, [entryUrl, session, attempt, protocolVersion])
   return (
     <div className={css.frameHost} data-community-status={status}>
       <iframe
@@ -130,12 +181,15 @@ export function CommunityExperimentFrame({ entryUrl, session, title = '社区三
           <span>
             {status === 'failed'
               ? '当前参数与记录已保留。检查网络和 WebGL 支持后重试。'
-              : '连接平台物理引擎…'}
+              : protocolVersion === 2
+                ? '等待实验渲染平台首帧…'
+                : '连接平台物理引擎…'}
           </span>
           {status === 'failed' ? (
             <button
               type="button"
               onClick={() => {
+                statusCallback.current?.('loading')
                 setAttempt(value => value + 1)
               }}
             >

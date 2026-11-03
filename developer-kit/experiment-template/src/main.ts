@@ -12,16 +12,16 @@ function send(intent: ExperimentIntent): void {
 }
 
 try {
-  // Mount first: a snapshot may arrive while the handshake is still completing.
-  const mounted = mountLens(host, send)
-  view = mounted
-  connection = connectExperiment((frame) => {
-    mounted.update(frame)
+  connection = connectExperiment(async (frame) => {
+    if (!view) throw new Error('Renderer unavailable')
+    await view.update(frame)
     status.textContent =
       frame.source === 'preview-fixture'
         ? '开发快照预览 · 非平台引擎验证结果'
         : '已连接平台物理快照'
   })
+  const mounted = mountLens(host, send, () => connection?.reportError('RENDER_FAILED'))
+  view = mounted
   addEventListener(
     'pagehide',
     () => {
@@ -30,8 +30,9 @@ try {
     },
     { once: true },
   )
-} catch (error: unknown) {
-  connection?.dispose()
+} catch {
+  connection?.reportError('RENDER_FAILED')
   view?.dispose()
-  status.textContent = error instanceof Error ? error.message : '三维实验暂不可用，请重试。'
+  status.textContent = '三维实验暂不可用，请重试。'
+  addEventListener('pagehide', () => connection?.dispose(), { once: true })
 }

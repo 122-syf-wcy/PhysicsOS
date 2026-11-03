@@ -5,8 +5,9 @@ import type { ExperimentIntent, ExperimentSnapshot } from './protocol.js'
 export function mountLens(
   host: HTMLElement,
   send: (intent: ExperimentIntent) => void,
+  onError?: () => void,
 ): {
-  update: (snapshot: ExperimentSnapshot) => void
+  update: (snapshot: ExperimentSnapshot) => Promise<void>
   dispose: () => void
 } {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
@@ -94,11 +95,30 @@ export function mountLens(
   let last: ExperimentSnapshot | undefined
   let disposed = false
   let scheduled: number | undefined
+  let renderPending: Promise<void> | undefined
+  let renderSettlement: { resolve: () => void; reject: (error: Error) => void } | undefined
+  let failed = false
+  const failRender = (): void => {
+    failed = true
+    host.dataset.error = '三维实验暂不可用，请重新载入实验。'
+    renderSettlement?.reject(new Error('Render failed'))
+    renderPending = undefined
+    renderSettlement = undefined
+    onError?.()
+  }
   const draw = (): void => {
-    if (disposed || document.hidden || scheduled !== undefined) return
+    if (disposed || failed || document.hidden || scheduled !== undefined) return
     scheduled = requestAnimationFrame(() => {
       scheduled = undefined
-      if (!disposed) renderer.render(scene, camera)
+      if (disposed || failed) return
+      try {
+        renderer.render(scene, camera)
+        renderSettlement?.resolve()
+        renderPending = undefined
+        renderSettlement = undefined
+      } catch {
+        failRender()
+      }
     })
   }
   const resize = (): void => {
@@ -131,7 +151,7 @@ export function mountLens(
   const lost = (event: Event): void => {
     event.preventDefault()
     send({ type: 'parameter/cancel' })
-    host.dataset.error = '三维上下文已丢失，请在预览器重新载入实验。'
+    failRender()
   }
   const visibility = (): void => {
     if (document.hidden && scheduled !== undefined) {
@@ -147,7 +167,8 @@ export function mountLens(
   document.addEventListener('visibilitychange', visibility)
   resize()
   return {
-    update: (snapshot): void => {
+    update: (snapshot): Promise<void> => {
+      if (disposed || failed) return Promise.reject(new Error('Renderer unavailable'))
       last = snapshot
       object.position.x = -snapshot.parameters.objectDistanceCm
       candle.scale.y = snapshot.parameters.objectHeightCm
@@ -195,11 +216,18 @@ export function mountLens(
           }
         }
       host.dataset.source = last.source
+      renderPending ??= new Promise<void>((resolve, reject) => {
+        renderSettlement = { resolve, reject }
+      })
       draw()
+      return renderPending
     },
     dispose: (): void => {
       if (disposed) return
       disposed = true
+      renderSettlement?.reject(new Error('Renderer disposed'))
+      renderSettlement = undefined
+      renderPending = undefined
       if (scheduled !== undefined) cancelAnimationFrame(scheduled)
       observer.disconnect()
       document.removeEventListener('visibilitychange', visibility)

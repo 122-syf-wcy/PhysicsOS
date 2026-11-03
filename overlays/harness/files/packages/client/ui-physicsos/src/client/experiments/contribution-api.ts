@@ -13,6 +13,8 @@ export interface ExperimentPackageView {
   readonly id: string
   readonly experimentId: string
   readonly version: string
+  readonly schemaVersion?: 1 | 2
+  readonly protocolVersion?: 1 | 2
   readonly sha256: string
   readonly status: 'pending' | 'approved' | 'rejected'
   readonly author: ContributionAuthor
@@ -39,18 +41,18 @@ export interface ContributionInput {
 export function contributionReleaseIdentity(item: ExperimentPackageView | null): ReleaseIdentity {
   return item === null
     ? {
-        kind: 'official',
-        id: 'physicsos-convex-lens-v1',
-        experimentId: 'convex-lens',
-        version: '1.0.0',
-      }
+      kind: 'official',
+      id: 'physicsos-convex-lens-v1',
+      experimentId: 'convex-lens',
+      version: '1.0.0',
+    }
     : {
-        kind: 'community',
-        id: item.id,
-        experimentId: item.experimentId,
-        version: item.version,
-        sha256: item.sha256,
-      }
+      kind: 'community',
+      id: item.id,
+      experimentId: item.experimentId,
+      version: item.version,
+      sha256: item.sha256,
+    }
 }
 
 export function selectContributionRelease(
@@ -59,7 +61,7 @@ export function selectContributionRelease(
 ): ExperimentPackageView | null | undefined {
   if (pinned?.kind === 'official') return null
   if (pinned === undefined) return catalog.active
-  return catalog.items.find((item) => item.id === pinned.id && item.sha256 === pinned.sha256)
+  return catalog.items.find(item => item.id === pinned.id && item.sha256 === pinned.sha256)
 }
 
 /** Approved assets are public; only drafts require the owner/admin preview capability. */
@@ -76,9 +78,9 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
     ...(body === undefined
       ? {}
       : {
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-        }),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
   })
   const data: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
@@ -93,7 +95,24 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
       typeof error.message === 'string'
         ? error.message
         : `请求失败（${response.status}），请重试。`
-    throw new Error(message)
+    const issues =
+      error !== null &&
+      typeof error === 'object' &&
+      'issues' in error &&
+      Array.isArray(error.issues)
+        ? error.issues.slice(0, 20)
+        : []
+    const bounded = (value: unknown, limit: number): string =>
+      typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, limit) : ''
+    const details = issues.flatMap((issue: unknown) => {
+      if (issue === null || typeof issue !== 'object' || Array.isArray(issue)) return []
+      const fields = issue as Record<string, unknown>
+      const file = bounded(fields.file, 120),
+        path = bounded(fields.path, 160)
+      const suggestion = bounded(fields.suggestion, 300)
+      return file && path && suggestion ? [`${file} · ${path}：${suggestion}`] : []
+    })
+    throw new Error([bounded(message, 500), ...details].join('\n'))
   }
   if (data === null || typeof data !== 'object' || Array.isArray(data))
     throw new Error('实验上传服务返回了无效响应，请刷新重试。')

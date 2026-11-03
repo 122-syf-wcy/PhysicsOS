@@ -4,7 +4,7 @@ import { createConvexLensScene } from '@physicsos/physics-scene'
 import { createOpticsWorkspaceRuntime } from '../physics/optics-workspace-runtime.ts'
 import { useExperimentSession } from './use-experiment-session.ts'
 import { LensControls } from './LensControls.tsx'
-import { CommunityExperimentFrame } from './CommunityExperimentFrame.tsx'
+import { CommunityExperimentFrame, type CommunityFrameStatus } from './CommunityExperimentFrame.tsx'
 import { ContributionFilePicker } from './ContributionFilePicker.tsx'
 import {
   contributionApi,
@@ -54,12 +54,26 @@ export function ContributionAuthorBadge({
   )
 }
 
-function CandidatePreview({ entryUrl }: { entryUrl: string }) {
+function CandidatePreview({
+  entryUrl,
+  protocolVersion,
+  onStatusChange,
+}: {
+  entryUrl: string
+  protocolVersion?: 1 | 2
+  onStatusChange: (status: CommunityFrameStatus) => void
+}) {
   const runtime = useMemo(() => createOpticsWorkspaceRuntime(createConvexLensScene()), [])
   const { session, snapshot } = useExperimentSession(runtime)
   return (
     <section className={css.preview} aria-label="候选实验预览">
-      <CommunityExperimentFrame entryUrl={entryUrl} session={session} title="候选三维实验" />
+      <CommunityExperimentFrame
+        entryUrl={entryUrl}
+        protocolVersion={protocolVersion ?? 1}
+        onStatusChange={onStatusChange}
+        session={session}
+        title="候选三维实验"
+      />
       <aside>
         <h3>验证实验条件</h3>
         <LensControls
@@ -90,7 +104,16 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
   const [bio, setBio] = useState('')
   const [github, setGithub] = useState('')
   const [note, setNote] = useState('')
-  const [preview, setPreview] = useState<{ item: ExperimentPackageView; entryUrl: string }>()
+  const [preview, setPreview] = useState<{
+    item: ExperimentPackageView
+    entryUrl: string
+    instance: number
+  }>()
+  const previewSequence = useRef(0)
+  const [previewStatus, setPreviewStatus] = useState<{
+    instance: number
+    status: CommunityFrameStatus
+  }>()
   const [reason, setReason] = useState('')
   const [rollback, setRollback] = useState<ExperimentPackageView>()
   const alive = useRef(true)
@@ -149,16 +172,24 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
     })
   }
   const openPreview = (item: ExperimentPackageView): void => {
+    const instance = ++previewSequence.current
+    setPreviewStatus({ instance, status: 'loading' })
     void run(async () => {
       const entryUrl = await contributionPreviewUrl(item)
       if (alive.current) {
-        setPreview({ item, entryUrl })
+        setPreview({ item, entryUrl, instance })
         setReason('')
       }
     })
   }
   const review = (action: 'approve' | 'reject'): void => {
-    if (preview === undefined) return
+    if (
+      preview === undefined ||
+      (action === 'approve' &&
+        preview.item.protocolVersion === 2 &&
+        (previewStatus?.instance !== preview.instance || previewStatus.status !== 'ready'))
+    )
+      return
     void run(async () => {
       if (action === 'reject' && !reason.trim()) throw new Error('请填写退回原因')
       const { item } = await contributionApi.review(
@@ -172,16 +203,16 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           ? '已发布。新打开的实验会自动使用此版本；正在进行的实验保持原版本。'
           : '已退回，贡献者可以查看原因并上传新修订。',
       )
-      setCatalog((current) =>
+      setCatalog(current =>
         current === undefined
           ? current
           : {
-              ...current,
-              active: action === 'approve' ? item : current.active,
-              items: current.items.map((row) => (row.id === item.id ? item : row)),
-            },
+            ...current,
+            active: action === 'approve' ? item : current.active,
+            items: current.items.map(row => (row.id === item.id ? item : row)),
+          },
       )
-      setPreview((current) => (current?.item.id === item.id ? { ...current, item } : current))
+      setPreview(current => (current?.item.id === item.id ? { ...current, item } : current))
       await refresh()
     })
   }
@@ -345,12 +376,13 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           {catalog?.items.length === 0 ? (
             <p className={css.muted}>还没有投稿。下载模板，开始你的第一个三维实验。</p>
           ) : null}
-          {catalog?.items.map((item) => (
+          {catalog?.items.map(item => (
             <article key={item.id} className={css.version} data-package-id={item.id}>
               <div className={css.sectionHeading}>
                 <ContributionAuthorBadge author={item.author} version={item.version} />
                 <span className={css.status}>
                   {catalog.active?.id === item.id ? '当前默认' : STATUS[item.status]}
+                  {(item.protocolVersion ?? 1) === 1 ? <span> · 旧格式</span> : null}
                 </span>
               </div>
               {item.author.bio ? <p>{item.author.bio}</p> : null}
@@ -376,16 +408,16 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                 item.status === 'approved' &&
                 catalog.active &&
                 catalog.active.id !== item.id ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      setRollback(item)
-                    }}
-                  >
-                    回滚到此版本
-                  </button>
-                ) : null}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setRollback(item)
+                      }}
+                    >
+                      回滚到此版本
+                    </button>
+                  ) : null}
               </div>
             </article>
           ))}
@@ -395,6 +427,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
             <div className={css.sectionHeading}>
               <h3>
                 预览 v{preview.item.version} · {preview.item.author.name}
+                {(preview.item.protocolVersion ?? 1) === 1 ? ' · 旧格式' : ''}
               </h3>
               <button
                 type="button"
@@ -419,10 +452,20 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                 </small>
               </div>
             ) : null}
-            <CandidatePreview key={preview.item.id} entryUrl={preview.entryUrl} />
+            <CandidatePreview
+              key={preview.instance}
+              entryUrl={preview.entryUrl}
+              protocolVersion={preview.item.protocolVersion ?? 1}
+              onStatusChange={(status) => {
+                setPreviewStatus({ instance: preview.instance, status })
+              }}
+            />
             {catalog?.canReview && preview.item.status === 'pending' ? (
               <div className={css.reviewActions}>
                 <p>核对装置、物理结果、手机操作和素材授权后发布。通过后自动替换当前默认版本。</p>
+                {preview.item.protocolVersion === 2 ? (
+                  <p>首帧兼容确认仅用于辅助审核；仍需核对源码、物理结果和授权。</p>
+                ) : null}
                 <label>
                   退回原因
                   <textarea
@@ -438,7 +481,12 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                   <button
                     type="button"
                     className={css.primary}
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      (preview.item.protocolVersion === 2 &&
+                        (previewStatus?.instance !== preview.instance ||
+                          previewStatus.status !== 'ready'))
+                    }
                     onClick={() => {
                       review('approve')
                     }}

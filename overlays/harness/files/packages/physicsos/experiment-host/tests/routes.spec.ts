@@ -349,6 +349,7 @@ describe('experiment REST and credential-free asset boundary', () => {
       hostOrigin = 'https://physics.example'
     url.searchParams.set('channel', channel)
     url.searchParams.set('hostOrigin', hostOrigin)
+    url.searchParams.set('protocolVersion', '1') // cannot downgrade the stored V2 package
     const script = trustedScript(await (await fetch(url)).text())
     const parentMessages: unknown[][] = [],
       innerMessages: unknown[][] = []
@@ -374,11 +375,11 @@ describe('experiment REST and credential-free asset boundary', () => {
     const raw = new URL(inner.src)
     expect(raw.searchParams.get('hostOrigin')).toBe(base)
     expect(raw.searchParams.get('channel')).toBe(channel)
-    const ready = { type: 'experiment/ready', protocolVersion: 1, channel }
+    const ready = { type: 'experiment/ready', protocolVersion: 2, channel }
     for (const event of [
       { source: {}, origin: 'null', data: ready },
       { source: innerWindow, origin: base, data: ready },
-      { source: innerWindow, origin: 'null', data: { ...ready, protocolVersion: 2 } },
+      { source: innerWindow, origin: 'null', data: { ...ready, protocolVersion: 1 } },
       { source: innerWindow, origin: 'null', data: { ...ready, channel: 'wrong' } },
     ])
       listener!(event)
@@ -386,7 +387,7 @@ describe('experiment REST and credential-free asset boundary', () => {
     listener!({ source: innerWindow, origin: 'null', data: ready })
     listener!({ source: innerWindow, origin: 'null', data: ready })
     expect(parentMessages).toEqual([[ready, hostOrigin]])
-    const connect = { type: 'experiment/connect', protocolVersion: 1, channel },
+    const connect = { type: 'experiment/connect', protocolVersion: 2, channel },
       port = { testPort: true }
     for (const event of [
       { source: {}, origin: hostOrigin, data: connect, ports: [port] },
