@@ -30,15 +30,15 @@
 - [x] Improve upload resource cards/header and review cards; polish public prompt/download controls and typography.
 - [x] Sync changed source into existing build container, format, run affected client tests/types/lint, bundle UI and Vite. Expected: pass.
 - [x] Run existing actual prompt and contribution workflow acceptance; inspect desktop/mobile/light/dark screenshots and file chooser keyboard interaction. Expected: unchanged workflows, visible glass controls, no horizontal overflow.
-- [ ] Commit only intended source/docs/artifacts; independent review of this task's diff and deployment packaging.
+- [x] Commit only intended source/docs/artifacts; independent review of this task's diff and deployment packaging.
 
 ### Task 2: Package, publish and verify production
 
 **Files:** Release report and reproducible artifact packaging instructions/script if required.
 **Interfaces:** Consumes validated Task 1 assets plus previously validated branch functionality; produces production image and GitHub main revision.
 
-- [ ] Reconcile remote main/server HEAD/running runtime with branch; verify resource headroom. Expected: no lost server changes.
-- [ ] Build candidate image on server from known runtime base and complete required compiled artifacts, preserving native/dependency links; validate in isolated candidate including production PostgreSQL storage path if feasible.
-- [ ] Retain image and database/file recovery points; push reviewed branch/main without force, synchronize server and switch app with health readiness checks. Expected: healthy app, existing data retained.
-- [ ] Verify HTTPS public pages, authenticated admin/upload UI, dynamic prompt/template download, sandbox framing and core existing routes. Expected: no console/network regression.
-- [ ] Commit/push report and screenshots; record actual revision, image, recovery paths and validation limits.
+- [x] Reconcile remote main/server HEAD/running runtime with branch; verify resource headroom. Expected: no lost server changes.
+- [x] Build candidate image on server from known runtime base and complete required compiled artifacts, preserving native/dependency links; validate in isolated candidate including production PostgreSQL storage path if feasible.
+- [x] Retain image and database/file recovery points; push reviewed branch/main without force, synchronize server and switch app with health readiness checks. Expected: healthy app, existing data retained.
+- [x] Verify HTTPS public pages, authenticated admin/upload UI, dynamic prompt/template download, sandbox framing and core existing routes. Expected: no console/network regression.
+- [x] Commit/push report and screenshots; record actual revision, image, recovery paths and validation limits.

@@ -1,6 +1,6 @@
 # 开发者界面美化与发布记录
 
-状态：界面实现与候选浏览器验收完成，正在进行正式镜像、PostgreSQL 候选验证和上线。用户本轮明确授权美化、生图、GitHub 提交和正式部署。
+状态：2026-11-04 已完成界面、生图、候选与正式站点验收，已上线并推送 GitHub main。用户本轮明确授权美化、生图、GitHub 提交和正式部署。
 
 ## 界面与素材
 
@@ -32,9 +32,9 @@ GitHub main 与服务器 `/opt/physicsos` 检出均为 `33023a2`，它是本开�
 
 清理可重建的 24 小时以前 BuildKit 缓存，释放 2.577 GB；保留所有生产/回滚镜像、数据卷和源码。运行文件清单对比采用实际现网镜像作为基础，增量约 65 MB，包含新功能的程序、浏览器产物和依赖，保留旧哈希资源。
 
-打包检查发现构建容器中三条临时/错误依赖链接（根目录 eslint、根目录及 experiment-host 的 zod），在制作镜像前修正。Zod 固定使用已安装的 4.6.7，需比对临时与正式位置内容并通过真实镜像启动检验。测试数据、生成凭据、缓存、.git、.env 文件均不进入增量包。
+打包检查发现构建容器中三条临时/错误依赖链接（根目录 eslint、根目录及 experiment-host 的 zod），在制作镜像前修正。Zod 固定使用已安装的 4.6.7，已比对临时与正式位置内容并通过真实镜像启动检验。测试数据、生成凭据、缓存、.git、.env 文件均不进入增量包。
 
-预检数据库备份已通过 `pg_restore --list`：`/opt/physicsos/backups/postgres/20261104-studio-preflight`。候选 PostgreSQL 使用单独数据库 `physicsos_studio_20261104`；正式数据库不用于验收写入。最终镜像、切换恢复点、GitHub 提交和 HTTPS 验收待本记录补齐。
+预检数据库备份已通过 `pg_restore --list`：`/opt/physicsos/backups/postgres/20261104-studio-preflight`。候选 PostgreSQL 使用单独数据库 `physicsos_studio_20261104`；正式数据库不用于验收写入。最终镜像、切换恢复点、GitHub 提交和 HTTPS 验收见下文。
 
 ## 镜像与 PostgreSQL 验证补记
 
@@ -46,4 +46,30 @@ GitHub main 与服务器 `/opt/physicsos` 检出均为 `33023a2`，它是本开�
 
 独立审查范围 `fb56e23..32adcc1`，报告见 [审查记录](2026-11-04-developer-studio-review.md)：可合并，无 Critical/Important。一项 Minor 指出宿主上的链接比较本身不证明最终镜像链接完整性，已以上述容器内逐项验证补齐发布证据，没有将初步检查夸大为完整依赖证明。审查范围外的旧 V2/业务逻辑继续采用已有验收记录；正式切换和 HTTPS 验收由本轮执行者完成；不声称全量从零构建的逐字节可复现或全仓库审计。
 
-候选镜像真实重启后，PostgreSQL 中的当前版本、历史和草稿与验收存证一致（`/tmp/physicsos-studio-postgres-persistence.log`，通过）。最终依赖检查和候选验证均已完成，准备正式切换。
+候选镜像真实重启后，PostgreSQL 中的当前版本、历史和草稿与验收存证一致（`/tmp/physicsos-studio-postgres-persistence.log`，通过）。最终依赖检查和候选验证均已完成，随后正式切换通过。
+
+
+## 正式发布结果
+
+- 正式入口：<https://physics.dongsiwei.com>；开发者文档：<https://physics.dongsiwei.com/physicsos/developers/index.html>。
+- GitHub `main` 与 `codex/experiment-contribution` 原子快进推送成功：`33023a2 → a4a629c`，包括本分支此前的实验上传/审核/自动展示、V2 格式和提示词后台管理。运行代码提交为 `32adcc1`；后续提交只补测试配置和交接记录。
+- 服务器 `/opt/physicsos` 已同步。实际运行 `physicsos-app:studio-32adcc1`，镜像 ID 与经过 PostgreSQL 验收的候选完全一致；`physicsos-app:local` 已指向同一镜像。app/postgres/redis 全部 healthy。
+- nginx 更新了实验上传 32 MB 请求上限及实验资源 iframe 规则，保留原出卷预览 SAMEORIGIN 规则；`nginx -t` 通过。
+- 正式 HTTPS 真实浏览器：管理员提示词界面与 ZIP 上传入口可见，图片加载正常；匿名管理 API 401，管理员读取成功；当前 MD 与公开正文一致，模板真实字节摘要匹配；会话 Cookie Secure/HttpOnly；出卷预览 SAMEORIGIN 与实验资源无继承 DENY 均通过；手机文档无横向溢出，无 pageerror。未在生产上传测试实验或发布测试提示词。
+- 最终日志：服务器 `/tmp/physicsos-studio-production-smoke.log`。部署验证未调用真实出卷或模型生成任务，不代表对无关业务的全量回归。GitHub Actions 状态未读取（本机 gh 未认证），不作 CI 通过声明。
+
+## 恢复点与保留项
+
+切换时仅停止 app；数据库和 Redis 保持运行。在 app 停止后生成并校验以下恢复点，再启动新镜像：
+
+| 恢复内容 | 服务器位置 |
+| --- | --- |
+| 切换前镜像 | `physicsos-app:rollback-studio-20261104`，ID `45c40254bef05b8218c586a538c45f246a653da2a8ebdbe210c31455271b95b8` |
+| 切换前 PostgreSQL | `/opt/physicsos/backups/postgres/20261104-studio-switch/postgres.dump`，约 473 KB，已验证 archive TOC |
+| 切换前文件 | `/opt/physicsos/backups/releases/20261104-studio/app-data.tar.gz`，约 16 MB，已验证目录与 SHA-256 |
+| nginx、Compose、环境配置及版本记录 | `/opt/physicsos/backups/releases/20261104-studio/`，仅管理员可读 |
+| 候选构建上下文、文件清单及隔离数据 | `/opt/physicsos-previews/studio-release-20261104/` |
+
+实际 secret 文件继续由既有挂载提供，抽查权限为 `0400 / 999:999`。Compose 对非 Swarm secret uid/gid/mode 的提示是已知行为，文件自身权限没有放宽。保留原工作区和开发分支，不提交 vendor 指针。候选测试容器在验收后停止，恢复资料保留。
+
+镜像回滚可在 `/opt/physicsos` 使用 `PHYSICSOS_APP_IMAGE=physicsos-app:rollback-studio-20261104 docker compose up -d --no-deps --no-build --wait app`，并将 `physicsos-app:local` 标签指回该镜像。数据库和文件恢复点分别保留；本次没有执行数据回滚。
