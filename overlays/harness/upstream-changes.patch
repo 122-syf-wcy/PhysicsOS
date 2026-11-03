@@ -12355,7 +12355,7 @@ index 9ea8e7e868..47ad5cdd96 100644
  | [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | dist 解析、回退席位、提示词段落、就绪宣告 |
  | [`tests/startup.spec.ts`](tests/startup.spec.ts) | 在真实 Loader 树上的命令行解析 |
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c98289bc3e..eac75dc83d 100644
+index c98289bc3e..6f9fff22f6 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -29,6 +29,17 @@
@@ -12376,7 +12376,7 @@ index c98289bc3e..eac75dc83d 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh
-@@ -47,6 +58,88 @@
+@@ -47,6 +58,94 @@
      - id: subagent-model-selection-settings
        name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -12439,6 +12439,12 @@ index c98289bc3e..eac75dc83d 100644
 +          apiKeyEnv: PHYSICSOS_IMAGE_API_KEY
 +          size: 1024x1024
 +
++    - id: experiment-host
++      name: '@deepseek-ai/dsh-experiment-host'
++      config:
++        packagesRoot: !!js dshHomePath('experiment-packages')
++        assetOrigin: !!js process.env.PHYSICSOS_EXPERIMENT_ASSET_ORIGIN
++
 +    - id: notice-host
 +      name: '@deepseek-ai/dsh-notice-host'
 +
@@ -12465,7 +12471,7 @@ index c98289bc3e..eac75dc83d 100644
      - id: message-feedback
        name: '@deepseek-ai/dsh-message-feedback'
        config:
-@@ -302,6 +395,9 @@
+@@ -302,6 +401,9 @@
      - id: ui-conversation
        name: '@deepseek-ai/dsh-client-ui-conversation'
 
@@ -12475,14 +12481,14 @@ index c98289bc3e..eac75dc83d 100644
      - id: ui-approval
        name: '@deepseek-ai/dsh-client-ui-approval'
 
-@@ -559,4 +655,4 @@
+@@ -559,4 +661,4 @@
      - id: agent-preset-registry
        name: '@deepseek-ai/dsh-agent-preset-registry'
        config:
 -        default: standard
 +        default: physics-student
 diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
-index fb56be4231..15431a5c1b 100644
+index fb56be4231..379c2375c7 100644
 --- a/packages/bundle/web-app/package.json
 +++ b/packages/bundle/web-app/package.json
 @@ -31,10 +31,7 @@
@@ -12560,6 +12566,16 @@ index fb56be4231..15431a5c1b 100644
      "@deepseek-ai/dsh-web-frontend": "workspace:*",
      "@deepseek-ai/dsh-workflow-ptc": "workspace:*",
      "@deepseek-ai/dsh-workspace": "workspace:*",
+@@ -176,7 +182,8 @@
+     "@deepseek-ai/dsh-api-account-controller": "workspace:*",
+     "@deepseek-ai/dsh-client-ui-settings-account": "workspace:*",
+     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
+-    "@deepseek-ai/dsh-client-ui-shortcuts": "workspace:*"
++    "@deepseek-ai/dsh-client-ui-shortcuts": "workspace:*",
++    "@deepseek-ai/dsh-experiment-host": "workspace:*"
+   },
+   "peerDependencies": {
+     "@deepseek-ai/cordis": "workspace:~",
 diff --git a/packages/client/connection/src/api-request-trust.ts b/packages/client/connection/src/api-request-trust.ts
 index 1065dfe876..e5f5995c26 100644
 --- a/packages/client/connection/src/api-request-trust.ts
@@ -13250,6 +13266,67 @@ index 183ed40fae..5ec855666c 100644
    const loaded = state.status === 'ready' || state.status === 'error'
    const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
    const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
+diff --git a/packages/client/ui-settings-models/src/client/store.ts b/packages/client/ui-settings-models/src/client/store.ts
+index 34a20107e3..67c502a9c8 100644
+--- a/packages/client/ui-settings-models/src/client/store.ts
++++ b/packages/client/ui-settings-models/src/client/store.ts
+@@ -192,14 +192,17 @@ export class ModelsSettingsStore {
+     if (!registered.ok) { this.failLoad(generation, registered.error.message); return }
+     if (!declared.ok) { this.failLoad(generation, declared.error.message); return }
+     const mirrored = this.describeFace.getSnapshot()
+-    if (mirrored.view === undefined) {
+-      this.failLoad(generation, mirrored.error ?? 'settings are unavailable in this browser')
+-      return
+-    }
++    /* The settings mirror only answers on loopback, because the write API it
++       backs can change the host's own configuration. A page served over the
++       public origin therefore gets no namespace views — but the providers the
++       host actually registered are still worth showing. Fall back to that
++       read-only directory instead of failing the whole section: on a deployed
++       site the model list is information, not something the visitor edits. */
++    const view = mirrored.view
+     const providers = joinProviderDirectory(registered.value, declared.value)
+-    const writable = mirrored.view.writable
+-    const views: readonly SettingsNamespaceView[] = mirrored.view.namespaces
+-    const namespaces = new Map(views.map(view => [view.ns, view]))
++    const writable = view === undefined ? false : view.writable
++    const views: readonly SettingsNamespaceView[] = view === undefined ? [] : view.namespaces
++    const namespaces = new Map(views.map(row => [row.ns, row]))
+     const rows: ProviderRow[] = providers.map((entry) => {
+       const namespace = namespaces.get(entry.settingsNs)
+       const configured = namespace !== undefined
+diff --git a/packages/client/ui-settings-models/tests/store.client.spec.ts b/packages/client/ui-settings-models/tests/store.client.spec.ts
+index 007ff68099..0acf38053b 100644
+--- a/packages/client/ui-settings-models/tests/store.client.spec.ts
++++ b/packages/client/ui-settings-models/tests/store.client.spec.ts
+@@ -294,7 +294,7 @@ describe('edge joins', () => {
+     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'settings down' })
+   })
+
+-  it('reports a terminally unavailable settings mirror precisely', async () => {
++  it('falls back to a read-only directory when the settings mirror is unavailable', async () => {
+     const { ctx } = api()
+     const store = new ModelsSettingsStore(
+       ctx,
+@@ -302,10 +302,14 @@ describe('edge joins', () => {
+       new SettingsDescribeMirror(ctx, 'memory'),
+     )
+     await store.load()
+-    expect(store.store.getSnapshot()).toMatchObject({
+-      status: 'error',
+-      error: 'settings are unavailable in this browser',
+-    })
++    /* A public deployment has no settings mirror (the write API it backs is
++       loopback-only), but the providers the host registered are still real:
++       the section lists them read-only instead of reporting a failure. */
++    const snapshot = store.store.getSnapshot()
++    expect(snapshot.status).toBe('ready')
++    expect(snapshot.error).toBeNull()
++    expect(snapshot.writable).toBe(false)
++    expect(snapshot.rows.length).toBeGreaterThan(0)
+   })
+
+   it('reuses a held settings view after its refresh fails', async () => {
 diff --git a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts b/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
 index bebfb96c53..230afcc99c 100644
 --- a/packages/client/ui-sidebar-browser/tests/electron-harness.client.ts
@@ -14180,7 +14257,7 @@ index ec2a88c4f9..f2ce9a7c66 100644
     * Tear down every registration made through `ctx`.
     * @returns settles once the scope has quiesced; racing calls share one completion.
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 36dc0506d3..2869c9718c 100644
+index 36dc0506d3..2254db3023 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -8,6 +8,23 @@ overrides:
@@ -14372,7 +14449,16 @@ index 36dc0506d3..2869c9718c 100644
        '@deepseek-ai/dsh-client-ui-plan':
          specifier: workspace:*
          version: link:../../client/ui-plan
-@@ -2572,6 +2601,9 @@ importers:
+@@ -2566,12 +2595,18 @@ importers:
+       '@deepseek-ai/dsh-cordis-host-runner':
+         specifier: workspace:*
+         version: link:../../extensions/cordis-host-runner
++      '@deepseek-ai/dsh-experiment-host':
++        specifier: workspace:*
++        version: link:../../physicsos/experiment-host
+       '@deepseek-ai/dsh-file-reference':
+         specifier: workspace:*
+         version: link:../../context/file-reference
        '@deepseek-ai/dsh-file-reference-local':
          specifier: workspace:*
          version: link:../../context/file-reference-local
@@ -14382,7 +14468,7 @@ index 36dc0506d3..2869c9718c 100644
        '@deepseek-ai/dsh-host-directory-picker-auto':
          specifier: workspace:*
          version: link:../../host/directory-picker-auto
-@@ -2596,18 +2628,36 @@ importers:
+@@ -2596,18 +2631,36 @@ importers:
        '@deepseek-ai/dsh-launch-environment':
          specifier: workspace:*
          version: link:../../util/launch-environment
@@ -14419,7 +14505,7 @@ index 36dc0506d3..2869c9718c 100644
        '@deepseek-ai/dsh-plugin-manager':
          specifier: workspace:*
          version: link:../../boot/plugin-manager
-@@ -2626,9 +2676,15 @@ importers:
+@@ -2626,9 +2679,15 @@ importers:
        '@deepseek-ai/dsh-session-turn-outline':
          specifier: workspace:*
          version: link:../../session/session-turn-outline
@@ -14435,7 +14521,7 @@ index 36dc0506d3..2869c9718c 100644
        '@deepseek-ai/dsh-subprocess':
          specifier: workspace:*
          version: link:../../subprocess/subprocess
-@@ -2695,6 +2751,9 @@ importers:
+@@ -2695,6 +2754,9 @@ importers:
        '@deepseek-ai/dsh-tool-workflow':
          specifier: workspace:*
          version: link:../../workflow/tool-workflow
@@ -14445,7 +14531,7 @@ index 36dc0506d3..2869c9718c 100644
        '@deepseek-ai/dsh-web-frontend':
          specifier: workspace:*
          version: link:../../../apps/web
-@@ -4151,6 +4210,154 @@ importers:
+@@ -4151,6 +4213,163 @@ importers:
          specifier: ^18.2.0
          version: 18.3.1
 
@@ -14469,6 +14555,9 @@ index 36dc0506d3..2869c9718c 100644
 +      '@deepseek-ai/dsh-session':
 +        specifier: workspace:^
 +        version: link:../../core/session
++      '@deepseek-ai/dsh-util-crypto':
++        specifier: workspace:^
++        version: link:../../util/crypto
 +      '@physicsos/engine-acoustics':
 +        specifier: link:../../../../../packages/engine-acoustics
 +        version: link:../../../../../packages/engine-acoustics
@@ -14550,6 +14639,9 @@ index 36dc0506d3..2869c9718c 100644
 +      pdfjs-dist:
 +        specifier: 6.2.108
 +        version: 6.2.108
++      three:
++        specifier: 0.180.0
++        version: 0.180.0
 +    devDependencies:
 +      '@deepseek-ai/cordis':
 +        specifier: workspace:^
@@ -14590,6 +14682,9 @@ index 36dc0506d3..2869c9718c 100644
 +      '@types/react-dom':
 +        specifier: ~18.3.0
 +        version: 18.3.7(@types/react@18.3.31)
++      '@types/three':
++        specifier: 0.180.0
++        version: 0.180.0
 +      react:
 +        specifier: ^18.2.0
 +        version: 18.3.1
@@ -14600,7 +14695,7 @@ index 36dc0506d3..2869c9718c 100644
    packages/client/ui-plan:
      devDependencies:
        '@deepseek-ai/cordis':
-@@ -4348,7 +4555,7 @@ importers:
+@@ -4348,7 +4567,7 @@ importers:
          version: 3.0.0
        micromark-core-commonmark:
          specifier: ^2.0.3
@@ -14609,7 +14704,7 @@ index 36dc0506d3..2869c9718c 100644
        micromark-extension-gfm:
          specifier: ^3.0.0
          version: 3.0.0
-@@ -4357,7 +4564,7 @@ importers:
+@@ -4357,7 +4576,7 @@ importers:
          version: 3.1.0
        micromark-factory-space:
          specifier: ^2.0.1
@@ -14618,7 +14713,7 @@ index 36dc0506d3..2869c9718c 100644
        micromark-util-character:
          specifier: ^2.1.1
          version: 2.1.1
-@@ -4371,8 +4578,8 @@ importers:
+@@ -4371,8 +4590,8 @@ importers:
          specifier: ^2.0.1
          version: 2.0.1
        micromark-util-types:
@@ -14629,7 +14724,7 @@ index 36dc0506d3..2869c9718c 100644
        react:
          specifier: ^18.2.0
          version: 18.3.1
-@@ -7144,8 +7351,8 @@ importers:
+@@ -7144,8 +7363,8 @@ importers:
          specifier: workspace:~
          version: link:../../../vendor/include
        js-yaml:
@@ -14640,7 +14735,7 @@ index 36dc0506d3..2869c9718c 100644
 
    packages/experimental/api-speech-to-text:
      dependencies:
-@@ -7742,7 +7949,7 @@ importers:
+@@ -7742,7 +7961,7 @@ importers:
          version: link:../../host/webserver
        '@types/ws':
          specifier: ^8.18.1
@@ -14649,7 +14744,7 @@ index 36dc0506d3..2869c9718c 100644
        playwright:
          specifier: ^1.49.0
          version: 1.61.1
-@@ -7908,8 +8115,8 @@ importers:
+@@ -7908,8 +8127,8 @@ importers:
          specifier: workspace:~
          version: link:../../../vendor/include
        js-yaml:
@@ -14660,7 +14755,7 @@ index 36dc0506d3..2869c9718c 100644
 
    packages/experimental/webworker-packer:
      dependencies:
-@@ -7932,8 +8139,8 @@ importers:
+@@ -7932,8 +8151,8 @@ importers:
          specifier: workspace:*
          version: link:../../session/session-format-v3-to-v4
        js-yaml:
@@ -14671,7 +14766,7 @@ index 36dc0506d3..2869c9718c 100644
        picomatch:
          specifier: ^4.0.4
          version: 4.0.4
-@@ -9818,7 +10025,7 @@ importers:
+@@ -9818,7 +10037,7 @@ importers:
          version: link:../../core/tools
        '@modelcontextprotocol/node':
          specifier: 2.0.0
@@ -14680,7 +14775,7 @@ index 36dc0506d3..2869c9718c 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9860,6 +10067,363 @@ importers:
+@@ -9860,6 +10079,412 @@ importers:
          specifier: workspace:*
          version: link:../../core/tools
 
@@ -14754,6 +14849,55 @@ index 36dc0506d3..2869c9718c 100644
 +      '@deepseek-ai/dsh-storage-json':
 +        specifier: workspace:^
 +        version: link:../../storage/storage-json
++
++  packages/physicsos/experiment-host:
++    dependencies:
++      '@deepseek-ai/dsh-home-paths':
++        specifier: workspace:^
++        version: link:../../util/home-paths
++      '@deepseek-ai/dsh-host-webserver':
++        specifier: workspace:^
++        version: link:../../host/webserver
++      '@deepseek-ai/dsh-storage':
++        specifier: workspace:^
++        version: link:../../storage/storage
++      '@deepseek-ai/dsh-storage-domain':
++        specifier: workspace:^
++        version: link:../../storage/storage-domain
++      '@deepseek-ai/schemastery':
++        specifier: link:../../../vendor/schemastery
++        version: link:../../../vendor/schemastery
++      es-module-lexer:
++        specifier: 2.1.0
++        version: 2.1.0
++      parse5:
++        specifier: 8.0.1
++        version: 8.0.1
++      yauzl:
++        specifier: 3.4.0
++        version: 3.4.0
++      zod:
++        specifier: ^4.4.3
++        version: 4.4.3
++    devDependencies:
++      '@deepseek-ai/cordis':
++        specifier: workspace:^
++        version: link:../../../vendor/cordis
++      '@deepseek-ai/cordis-plugin-include':
++        specifier: workspace:^
++        version: link:../../../vendor/include
++      '@deepseek-ai/cordis-plugin-loader':
++        specifier: workspace:^
++        version: link:../../../vendor/loader
++      '@deepseek-ai/dsh-invariants':
++        specifier: workspace:^
++        version: link:../../runtime-diagnostics/invariants
++      '@deepseek-ai/dsh-storage-json':
++        specifier: workspace:^
++        version: link:../../storage/storage-json
++      '@types/yauzl':
++        specifier: 2.10.3
++        version: 2.10.3
 +
 +  packages/physicsos/health-host:
 +    dependencies:
@@ -15044,7 +15188,7 @@ index 36dc0506d3..2869c9718c 100644
    packages/plan/plan-mode:
      dependencies:
        '@deepseek-ai/dsh-brand':
-@@ -9934,8 +10498,8 @@ importers:
+@@ -9934,8 +10559,8 @@ importers:
          specifier: ^4.0.9
          version: 4.0.9
        js-yaml:
@@ -15055,7 +15199,7 @@ index 36dc0506d3..2869c9718c 100644
 
    packages/preset/agent-preset-registry:
      dependencies:
-@@ -9946,8 +10510,8 @@ importers:
+@@ -9946,8 +10571,8 @@ importers:
          specifier: link:../../../vendor/schemastery
          version: link:../../../vendor/schemastery
        js-yaml:
@@ -15066,7 +15210,7 @@ index 36dc0506d3..2869c9718c 100644
        zod:
          specifier: ^4.4.3
          version: 4.4.3
-@@ -11818,8 +12382,8 @@ importers:
+@@ -11818,8 +12443,8 @@ importers:
          specifier: workspace:*
          version: link:../../core/tools
        sharp:
@@ -15077,7 +15221,7 @@ index 36dc0506d3..2869c9718c 100644
 
    packages/ssh/fs-ssh:
      dependencies:
-@@ -11986,6 +12550,49 @@ importers:
+@@ -11986,6 +12611,49 @@ importers:
          specifier: workspace:*
          version: link:../storage
 
@@ -15127,7 +15271,7 @@ index 36dc0506d3..2869c9718c 100644
    packages/storage/storage-sqlite:
      dependencies:
        '@deepseek-ai/schemastery':
-@@ -12853,11 +13460,11 @@ importers:
+@@ -12853,11 +13521,11 @@ importers:
          specifier: ^16.3.2
          version: 16.3.2(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
        js-yaml:
@@ -15143,7 +15287,7 @@ index 36dc0506d3..2869c9718c 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13058,11 +13665,11 @@ importers:
+@@ -13058,11 +13726,11 @@ importers:
          specifier: workspace:*
          version: link:../../session/session-format
        js-yaml:
@@ -15159,7 +15303,7 @@ index 36dc0506d3..2869c9718c 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13269,8 +13876,8 @@ importers:
+@@ -13269,8 +13937,8 @@ importers:
    packages/util/http-proxy:
      dependencies:
        undici:
@@ -15170,7 +15314,7 @@ index 36dc0506d3..2869c9718c 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -13416,8 +14023,8 @@ importers:
+@@ -13416,8 +14084,8 @@ importers:
          specifier: ^2.5.0
          version: 2.5.0
        undici:
@@ -15181,7 +15325,7 @@ index 36dc0506d3..2869c9718c 100644
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:~
-@@ -14335,8 +14942,8 @@ importers:
+@@ -14335,8 +15003,8 @@ importers:
          specifier: link:../cosmokit
          version: link:../cosmokit
        js-yaml:
@@ -15192,7 +15336,7 @@ index 36dc0506d3..2869c9718c 100644
 
    vendor/loader:
      dependencies:
-@@ -14414,10 +15021,10 @@ importers:
+@@ -14414,10 +15082,10 @@ importers:
          version: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vitepress:
          specifier: ^1.6.4
@@ -15205,7 +15349,17 @@ index 36dc0506d3..2869c9718c 100644
        vue:
          specifier: 3.5.39
          version: 3.5.39(typescript@6.0.3)
-@@ -15513,11 +16120,11 @@ packages:
+@@ -14896,6 +15564,9 @@ packages:
+     engines: {node: '>=22.19.0'}
+     hasBin: true
+
++  '@dimforge/rapier3d-compat@0.12.0':
++    resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
++
+   '@docsearch/css@3.8.2':
+     resolution: {integrity: sha512-y05ayQFyUmCXze79+56v/4HpycYF3uFqB78pLPrSV5ZKAlDuIAAJNhaRi8tTdRNXh05yxX/TyNnzD6LwSM89vQ==}
+
+@@ -15513,11 +16184,11 @@ packages:
        '@modelcontextprotocol/sdk':
          optional: true
 
@@ -15220,7 +15374,7 @@ index 36dc0506d3..2869c9718c 100644
 
    '@humanfs/core@0.19.2':
      resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
-@@ -15552,160 +16159,160 @@ packages:
+@@ -15552,160 +16223,160 @@ packages:
      resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
      engines: {node: '>=18'}
 
@@ -15433,7 +15587,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=20.9.0'}
      cpu: [x64]
      os: [win32]
-@@ -15734,6 +16341,9 @@ packages:
+@@ -15734,6 +16405,9 @@ packages:
    '@jridgewell/sourcemap-codec@1.5.5':
      resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
@@ -15443,7 +15597,7 @@ index 36dc0506d3..2869c9718c 100644
    '@jridgewell/trace-mapping@0.3.31':
      resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-@@ -15942,7 +16552,7 @@ packages:
+@@ -15942,7 +16616,7 @@ packages:
      engines: {node: '>=20'}
      peerDependencies:
        '@modelcontextprotocol/server': ^2.0.0
@@ -15452,7 +15606,38 @@ index 36dc0506d3..2869c9718c 100644
      peerDependenciesMeta:
        hono:
          optional: true
-@@ -17287,6 +17897,9 @@ packages:
+@@ -15959,10 +16633,12 @@ packages:
+
+   '@modelcontextprotocol/server-everything@2026.7.4':
+     resolution: {integrity: sha512-ydMW/M6rk9tK23b+U38trsNLHhd5eF+ntiv2Vr+RPMDhbiKY/IKrZU25ukvSXVPUBvy7TxTPWpeV4KcYcXg72w==}
++    deprecated: 'Date-based versions are no longer published. This package has resumed semantic versioning at 1.0.0: install the latest version.'
+     hasBin: true
+
+   '@modelcontextprotocol/server-filesystem@2026.7.10':
+     resolution: {integrity: sha512-Mmjg4anFBD5OzbPnGJOA0jPPN8645ERhQk38HQLpSenx1ox9bfdPkmAzUnNjeQtqQGFLtKe13J20RtLBmUKMZA==}
++    deprecated: 'Date-based versions are no longer published. This package has resumed semantic versioning at 1.0.0: install the latest version.'
+     hasBin: true
+
+   '@modelcontextprotocol/server@2.0.0':
+@@ -16940,6 +17616,7 @@ packages:
+   '@smithy/core@3.24.7':
+     resolution: {integrity: sha512-KoUi4M1f3BG6kzN1FnCwL7oyFptTbyBJKjR6yhSib+JHRdUmM1o+VwsFtJ66NZCkCzVfJMWRHJNo0R0jznp0Pg==}
+     engines: {node: '>=18.0.0'}
++    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
+
+   '@smithy/credential-provider-imds@4.3.9':
+     resolution: {integrity: sha512-ZlfJ/4Fa3jYb+3eaohPfG9utX9HmdhFNcFtpoGAhUhdynAOmGXtmigbi7eEiONKM+ykHw8RwKuDEb85Lx7t7fA==}
+@@ -17059,6 +17736,9 @@ packages:
+   '@trycua/cua-driver@0.28.0':
+     resolution: {integrity: sha512-n3ArFsQ9RzNQIiYpHJEjTGLIPPpnqXDJRp0sevRcrRThAG3H2Fh/gWooEb9k4ba3rNSAohUoPiG/EbdKLF1WRw==}
+
++  '@tweenjs/tween.js@23.1.3':
++    resolution: {integrity: sha512-vJmvvwFxYuGnF2axRtPYocag6Clbb5YS7kLL+SO/TeVFzHqDIWrNKYtcsPMibjDx9O+bu+psAy9NKfWklassUA==}
++
+   '@tybys/wasm-util@0.10.2':
+     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
+
+@@ -17287,6 +17967,9 @@ packages:
    '@types/papaparse@5.5.2':
      resolution: {integrity: sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA==}
 
@@ -15462,7 +15647,29 @@ index 36dc0506d3..2869c9718c 100644
    '@types/picomatch@3.0.2':
      resolution: {integrity: sha512-n0i8TD3UDB7paoMMxA3Y65vUncFJXjcUf7lQY7YyKGl6031FNjfsLs6pdLFCy2GNFxItPJG8GvvpbZc2skH7WA==}
 
-@@ -17358,6 +17971,9 @@ packages:
+@@ -17334,6 +18017,12 @@ packages:
+   '@types/spdx-expression-parse@4.0.0':
+     resolution: {integrity: sha512-odQzy87phelGS4inXOzjmusx4hoCVD0IbxUANxHzVkmTzMRTNnUPoq1urIl7S1qf09KcDWKLFIftPmLtgbsAHA==}
+
++  '@types/stats.js@0.17.4':
++    resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
++
++  '@types/three@0.180.0':
++    resolution: {integrity: sha512-ykFtgCqNnY0IPvDro7h+9ZeLY+qjgUWv+qEvUt84grhenO60Hqd4hScHE7VTB9nOQ/3QM8lkbNE+4vKjEpUxKg==}
++
+   '@types/tough-cookie@4.0.5':
+     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
+
+@@ -17352,12 +18041,18 @@ packages:
+   '@types/web-bluetooth@0.0.21':
+     resolution: {integrity: sha512-oIQLCGWtcFZy2JW77j9k8nHzAOpqMHLQejDA48XXMWH6tjCQHz5RCFz1bzsmROyL6PUm+LLnUiI4BCn221inxA==}
+
++  '@types/webxr@0.5.24':
++    resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
++
+   '@types/whatwg-mimetype@3.0.2':
+     resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
+
    '@types/ws@8.18.1':
      resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
@@ -15472,7 +15679,7 @@ index 36dc0506d3..2869c9718c 100644
    '@types/yauzl@2.10.3':
      resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
 
-@@ -17434,20 +18050,20 @@ packages:
+@@ -17434,20 +18129,20 @@ packages:
        vite: ^5.0.0 || ^6.0.0
        vue: ^3.2.25
 
@@ -15501,7 +15708,7 @@ index 36dc0506d3..2869c9718c 100644
      peerDependencies:
        msw: ^2.4.9
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -17457,20 +18073,23 @@ packages:
+@@ -17457,20 +18152,23 @@ packages:
        vite:
          optional: true
 
@@ -15533,7 +15740,17 @@ index 36dc0506d3..2869c9718c 100644
 
    '@vscode/ripgrep-darwin-arm64@1.18.0':
      resolution: {integrity: sha512-r3ktHSvbFycQNF6sl7sNDPocpsI7J+mEzh1IaZFkY0spm3k2Z9t8hPAeOK7+p0l6p6/swkQC14XWX01low+94Q==}
-@@ -17924,9 +18543,9 @@ packages:
+@@ -17623,6 +18321,9 @@ packages:
+   '@vueuse/shared@12.8.2':
+     resolution: {integrity: sha512-dznP38YzxZoNloI0qpEfpkms8knDtaoQ6Y/sfS0L7Yki4zh40LFHEhur0odJC6xTHG5dxWVPiUWBXn+wCG2s5w==}
+
++  '@webgpu/types@0.1.74':
++    resolution: {integrity: sha512-lgiI4hbuLcI9unnm2cL/tvCaQU45dp0xcLWJh5uB/9MBGvIA4F8XIk7nSiBeg+K4xWGYwgZKn80LmERI5CxoTA==}
++
+   '@xmldom/xmldom@0.8.15':
+     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
+     engines: {node: '>=10.0.0'}
+@@ -17924,9 +18625,9 @@ packages:
    brace-expansion@2.1.2:
      resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
 
@@ -15546,7 +15763,7 @@ index 36dc0506d3..2869c9718c 100644
 
    brotli@1.3.3:
      resolution: {integrity: sha512-oTKjJdShmDuGW94SyyaoQvAjf30dZaHnjJ8uAF+u2/vGJkJbJPJAT1gDiOJP5v1Zb6f9KEyW/1HpuaWIXtGHPg==}
-@@ -18780,8 +19399,8 @@ packages:
+@@ -18780,8 +19481,8 @@ packages:
      resolution: {integrity: sha512-XYfuKMvj4O35f/pOXLObndIRvyQ+/+6AhODh+OKWj9S9498pHHn/IMszH+gt0fBCRWMNfk1ZSp5x3AifmnI2vg==}
      engines: {node: '>=6'}
 
@@ -15557,7 +15774,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=12.0.0'}
 
    exponential-backoff@3.1.3:
-@@ -18832,8 +19451,8 @@ packages:
+@@ -18832,8 +19533,8 @@ packages:
    fast-sha256@1.3.0:
      resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
 
@@ -15568,7 +15785,7 @@ index 36dc0506d3..2869c9718c 100644
 
    fast-xml-builder@1.2.0:
      resolution: {integrity: sha512-00aAWieqff+ZJhsXA4g1g7M8k+7AYoMUUHF+/zFb5U6Uv/P0Vl4QZo84/IcufzYalLuEj9928bXN9PbbFzMF0Q==}
-@@ -19120,8 +19739,8 @@ packages:
+@@ -19120,8 +19821,8 @@ packages:
      resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
      hasBin: true
 
@@ -15579,7 +15796,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=16.9.0'}
 
    hookable@5.5.3:
-@@ -19243,8 +19862,8 @@ packages:
+@@ -19243,8 +19944,8 @@ packages:
      resolution: {integrity: sha512-DRsRnQrbzdFjaQ1oe4C6/EIUymIOEix1qROEJTF9dbMq+M4Zrm6VaLp6SD/B9IsiEjPZuBSnWWFN+udajugdWA==}
      engines: {node: '>=20'}
 
@@ -15590,7 +15807,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>= 12'}
 
    ipaddr.js@1.9.1:
-@@ -19375,12 +19994,8 @@ packages:
+@@ -19375,12 +20076,8 @@ packages:
    js-tokens@4.0.0:
      resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -15605,18 +15822,21 @@ index 36dc0506d3..2869c9718c 100644
      hasBin: true
 
    jsbi@4.3.2:
-@@ -19839,8 +20454,8 @@ packages:
+@@ -19839,8 +20536,11 @@ packages:
    mermaid@11.16.0:
      resolution: {integrity: sha512-Zvm3kbstgdpvIJPPItlL7fppIZ3kibvc1oZIGxdvk9t6UFz6flv+Jw7FtRGKwfcI8OckmH04LqG6LlS6X4B1pA==}
 
 -  micromark-core-commonmark@2.0.3:
 -    resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
++  meshoptimizer@0.22.0:
++    resolution: {integrity: sha512-IebiK79sqIy+E4EgOr+CAw+Ke8hAspXKzBd0JdgEmPHiAwmvEj2S4h1rfvo+o/BnfEYd/jAOg5IeeIjzlzSnDg==}
++
 +  micromark-core-commonmark@2.0.4:
 +    resolution: {integrity: sha512-wxEeE8v8XVvOrxn1TZj74qYhAtTQsSqufHVS3uNVyT1MupXxhyaHk8/9xDNPh9BmL77QNDgWTkZ3RsYHB2ry7w==}
 
    micromark-extension-gfm-autolink-literal@2.1.0:
      resolution: {integrity: sha512-oOg7knzhicgQ3t4QCjCWgTmfNhvQbDDnJeVu9v81r7NltNCVmhPy1fJRX27pISafdjL+SVc4d3l48Gb6pbRypw==}
-@@ -19872,8 +20487,8 @@ packages:
+@@ -19872,8 +20572,8 @@ packages:
    micromark-factory-label@2.0.1:
      resolution: {integrity: sha512-VFMekyQExqIW7xIChcXn4ok29YE3rnuyveW3wZQWWqF4Nv9Wk5rgJ99KzPvHjkmPXF93FXIbBp6YdW3t71/7Vg==}
 
@@ -15627,7 +15847,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark-factory-title@2.0.1:
      resolution: {integrity: sha512-5bZ+3CjhAd9eChYTHsjy6TGxpOFSKgKKJPJxr293jTbfry2KDoWkhBb6TcPVB4NmzaPhMs1Frm9AZH7OD4Cjzw==}
-@@ -19899,6 +20514,9 @@ packages:
+@@ -19899,6 +20599,9 @@ packages:
    micromark-util-decode-string@2.0.1:
      resolution: {integrity: sha512-nDV/77Fj6eH1ynwscYTOsbK7rR//Uj0bZXBwJZRfaLEJ1iGBR6kIfNmlNqaqJf649EP0F3NWNdeJi03elllNUQ==}
 
@@ -15637,7 +15857,7 @@ index 36dc0506d3..2869c9718c 100644
    micromark-util-encode@2.0.1:
      resolution: {integrity: sha512-c3cVx2y4KqUnwopcO9b/SCdo2O67LwJJ/UyqGfbigahfegL9myoEFoDYZgkT7f36T0bLrM9hZTAaAyH+PCAXjw==}
 
-@@ -19920,8 +20538,8 @@ packages:
+@@ -19920,8 +20623,8 @@ packages:
    micromark-util-symbol@2.0.1:
      resolution: {integrity: sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q==}
 
@@ -15648,7 +15868,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark@4.0.2:
      resolution: {integrity: sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==}
-@@ -20016,8 +20634,8 @@ packages:
+@@ -20016,8 +20719,8 @@ packages:
    multistream@4.1.0:
      resolution: {integrity: sha512-J1XDiAmmNpRCBfIWJv+n0ymC4ABcf/Pl+5YvC5B/D2f/2+8PtHvCNxMPKiQcZyi922Hq69J2YOpb1pTywfifyw==}
 
@@ -15659,7 +15879,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
      hasBin: true
 
-@@ -20324,6 +20942,10 @@ packages:
+@@ -20324,6 +21027,10 @@ packages:
    pathe@2.0.3:
      resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
@@ -15670,7 +15890,7 @@ index 36dc0506d3..2869c9718c 100644
    pdfjs-dist@6.3.289:
      resolution: {integrity: sha512-ZHjSVpDa3D6izMq8/04lvkhkATUmL9px6ChPaXc1k6nU2Mrhlg1/7F0bdUqCwUjw3NsPTfPZsMDUU6ZIcRaeQw==}
      engines: {node: '>=22.13.0 || >=24'}
-@@ -20341,6 +20963,40 @@ packages:
+@@ -20341,6 +21048,40 @@ packages:
    performance-now@2.1.0:
      resolution: {integrity: sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==}
 
@@ -15711,7 +15931,7 @@ index 36dc0506d3..2869c9718c 100644
    picocolors@1.1.1:
      resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
-@@ -20395,10 +21051,26 @@ packages:
+@@ -20395,10 +21136,26 @@ packages:
      resolution: {integrity: sha512-rEwq/ZHlJIKw++XtLAO8PPuOQA/zaPJOZJ37BVuN97nLpMJeuDVLVGRwbFoBgLudgdTMP2hdRJP++H+8QOA3vg==}
      engines: {node: '>= 10.12'}
 
@@ -15740,7 +15960,7 @@ index 36dc0506d3..2869c9718c 100644
    postject@1.0.0-alpha.6:
      resolution: {integrity: sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A==}
      engines: {node: '>=14.0.0'}
-@@ -20463,8 +21135,8 @@ packages:
+@@ -20463,8 +21220,8 @@ packages:
    property-information@7.2.0:
      resolution: {integrity: sha512-IAtzIB6sUiWaJYrX9smp3V46pBGbBeLFRGdh25kg1334VcBlD8HzhPeNIWQH9zhGmo2itIe25EHt9dQP7G5hmg==}
 
@@ -15751,7 +15971,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=12.0.0'}
 
    proxy-addr@2.0.8:
-@@ -20496,8 +21168,8 @@ packages:
+@@ -20496,8 +21253,8 @@ packages:
      resolution: {integrity: sha512-BbubeCEyTuQjVMakvJQ/Sxbc93F2pwmbsxONT/ZRrwU7Ua38d8unYTwXpTVLAKJ4BDuH9IGztCjQcd/N/39Dvg==}
      engines: {node: '>=16.0.0'}
 
@@ -15762,7 +15982,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=0.6'}
 
    quansync@1.0.0:
-@@ -20776,8 +21448,8 @@ packages:
+@@ -20776,8 +21533,8 @@ packages:
    setprototypeof@1.2.0:
      resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
 
@@ -15773,7 +15993,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=20.9.0'}
      peerDependencies:
        '@types/node': '*'
-@@ -20881,6 +21553,10 @@ packages:
+@@ -20881,6 +21638,10 @@ packages:
      resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
      engines: {node: '>=0.10.0'}
 
@@ -15784,7 +16004,7 @@ index 36dc0506d3..2869c9718c 100644
    source-map-support@0.5.21:
      resolution: {integrity: sha512-uBHU3L3czsIyYXKX88fdrGovxdSCoTGDRZ6SYXtSRxLZUzHg5P/66Ht6uoUlHu9EZod+inXhKo3qQgwXUT/y1w==}
 
-@@ -20904,6 +21580,10 @@ packages:
+@@ -20904,6 +21665,10 @@ packages:
      resolution: {integrity: sha512-1POYv7uv2gXoyGFpBCmpDVSNV74IfsWlDW216UPjbWufNf+bSU6GdbDsxdcxtfwb4xlI3yxzOTKClUosxARYrQ==}
      engines: {node: '>=0.10.0'}
 
@@ -15795,7 +16015,17 @@ index 36dc0506d3..2869c9718c 100644
    sprintf-js@1.1.3:
      resolution: {integrity: sha512-Oo+0REFV59/rz3gfJNKQiBlwfHaSESl1pcGyABQsnnIfWOFt6JNj5gCog2U6MLZ//IGYD+nA8nI+mTShREReaA==}
 
-@@ -21240,12 +21920,12 @@ packages:
+@@ -21044,6 +21809,9 @@ packages:
+   text-decoder@1.2.7:
+     resolution: {integrity: sha512-vlLytXkeP4xvEq2otHeJfSQIRyWxo/oZGEbXrtEEF9Hnmrdly59sUbzZ/QgyWuLYHctCHxFF4tRQZNQ9k60ExQ==}
+
++  three@0.180.0:
++    resolution: {integrity: sha512-o+qycAMZrh+TsE01GqWUxUIKR1AL0S8pq7zDkYOQw8GqfX8b8VoCKYUoHbhiX5j+7hr8XsuHDVU6+gkQJQKg9w==}
++
+   tiny-async-pool@1.3.0:
+     resolution: {integrity: sha512-01EAw5EDrcVrdgyCLgoSPvqznC0sVxDSVeiOz09FUpjh71G79VCqneOr+xvt7T1r76CF6ZZfPjHorN2+d+3mqA==}
+
+@@ -21240,12 +22008,12 @@ packages:
      resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
      engines: {node: '>=18.17'}
 
@@ -15812,7 +16042,7 @@ index 36dc0506d3..2869c9718c 100644
      engines: {node: '>=22.19.0'}
 
    unicode-properties@1.4.1:
-@@ -21481,27 +22161,27 @@ packages:
+@@ -21481,27 +22249,27 @@ packages:
      hasBin: true
      peerDependencies:
        markdown-it-mathjax3: ^4
@@ -15849,7 +16079,7 @@ index 36dc0506d3..2869c9718c 100644
        happy-dom: '*'
        jsdom: '*'
        vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-@@ -21678,6 +22358,10 @@ packages:
+@@ -21678,6 +22446,10 @@ packages:
    xmlchars@2.2.0:
      resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
@@ -15860,7 +16090,16 @@ index 36dc0506d3..2869c9718c 100644
    y18n@5.0.8:
      resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
      engines: {node: '>=10'}
-@@ -22489,7 +23173,7 @@ snapshots:
+@@ -22402,6 +23174,8 @@ snapshots:
+       '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.1
+       '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.1
+
++  '@dimforge/rapier3d-compat@0.12.0': {}
++
+   '@docsearch/css@3.8.2': {}
+
+   '@docsearch/js@3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)':
+@@ -22489,7 +23263,7 @@ snapshots:
        semver: 7.8.5
        sumchecker: 3.0.1
      optionalDependencies:
@@ -15869,7 +16108,7 @@ index 36dc0506d3..2869c9718c 100644
      transitivePeerDependencies:
        - supports-color
 
-@@ -22894,7 +23578,7 @@ snapshots:
+@@ -22894,7 +23668,7 @@ snapshots:
      dependencies:
        google-auth-library: 10.7.0
        p-retry: 4.6.2
@@ -15878,7 +16117,7 @@ index 36dc0506d3..2869c9718c 100644
        ws: 8.21.0
      optionalDependencies:
        '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-@@ -22903,9 +23587,9 @@ snapshots:
+@@ -22903,9 +23677,9 @@ snapshots:
        - supports-color
        - utf-8-validate
 
@@ -15890,7 +16129,7 @@ index 36dc0506d3..2869c9718c 100644
 
    '@humanfs/core@0.19.2':
      dependencies:
-@@ -22937,108 +23621,108 @@ snapshots:
+@@ -22937,108 +23711,108 @@ snapshots:
 
    '@img/colour@1.1.0': {}
 
@@ -16037,7 +16276,7 @@ index 36dc0506d3..2869c9718c 100644
      optional: true
 
    '@isaacs/cliui@8.0.2':
-@@ -23070,6 +23754,8 @@ snapshots:
+@@ -23070,6 +23844,8 @@ snapshots:
 
    '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -16046,7 +16285,7 @@ index 36dc0506d3..2869c9718c 100644
    '@jridgewell/trace-mapping@0.3.31':
      dependencies:
        '@jridgewell/resolve-uri': 3.1.2
-@@ -23273,16 +23959,16 @@ snapshots:
+@@ -23273,16 +24049,16 @@ snapshots:
      dependencies:
        zod: 4.4.3
 
@@ -16067,7 +16306,7 @@ index 36dc0506d3..2869c9718c 100644
        ajv: 8.20.0
        ajv-formats: 3.0.1(ajv@8.20.0)
        content-type: 1.0.5
-@@ -23292,7 +23978,7 @@ snapshots:
+@@ -23292,7 +24068,7 @@ snapshots:
        eventsource-parser: 3.1.0
        express: 5.2.1
        express-rate-limit: 8.5.2(express@5.2.1)
@@ -16076,7 +16315,16 @@ index 36dc0506d3..2869c9718c 100644
        jose: 6.2.3
        json-schema-typed: 8.0.2
        pkce-challenge: 5.0.1
-@@ -24408,6 +25094,12 @@ snapshots:
+@@ -24127,6 +24903,8 @@ snapshots:
+       '@trycua/cua-driver-win32-arm64-msvc': 0.28.0
+       '@trycua/cua-driver-win32-x64-msvc': 0.28.0
+
++  '@tweenjs/tween.js@23.1.3': {}
++
+   '@tybys/wasm-util@0.10.2':
+     dependencies:
+       tslib: 2.8.1
+@@ -24408,6 +25186,12 @@ snapshots:
      dependencies:
        '@types/node': 22.20.0
 
@@ -16089,7 +16337,34 @@ index 36dc0506d3..2869c9718c 100644
    '@types/picomatch@3.0.2': {}
 
    '@types/picomatch@4.0.3': {}
-@@ -24470,6 +25162,10 @@ snapshots:
+@@ -24452,6 +25236,18 @@ snapshots:
+
+   '@types/spdx-expression-parse@4.0.0': {}
+
++  '@types/stats.js@0.17.4': {}
++
++  '@types/three@0.180.0':
++    dependencies:
++      '@dimforge/rapier3d-compat': 0.12.0
++      '@tweenjs/tween.js': 23.1.3
++      '@types/stats.js': 0.17.4
++      '@types/webxr': 0.5.24
++      '@webgpu/types': 0.1.74
++      fflate: 0.8.3
++      meshoptimizer: 0.22.0
++
+   '@types/tough-cookie@4.0.5': {}
+
+   '@types/trusted-types@2.0.7': {}
+@@ -24464,16 +25260,21 @@ snapshots:
+
+   '@types/web-bluetooth@0.0.21': {}
+
++  '@types/webxr@0.5.24': {}
++
+   '@types/whatwg-mimetype@3.0.2': {}
+
+   '@types/ws@8.18.1':
      dependencies:
        '@types/node': 22.20.0
 
@@ -16100,7 +16375,11 @@ index 36dc0506d3..2869c9718c 100644
    '@types/yauzl@2.10.3':
      dependencies:
        '@types/node': 22.20.0
-@@ -24538,10 +25234,10 @@ snapshots:
+-    optional: true
+
+   '@typescript-eslint/types@8.61.0': {}
+
+@@ -24538,10 +25339,10 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
 
@@ -16113,7 +16392,7 @@ index 36dc0506d3..2869c9718c 100644
        ast-v8-to-istanbul: 1.0.4
        istanbul-lib-coverage: 3.2.2
        istanbul-lib-report: 3.0.1
-@@ -24550,62 +25246,64 @@ snapshots:
+@@ -24550,62 +25351,64 @@ snapshots:
        obug: 2.1.3
        std-env: 4.1.0
        tinyrainbow: 3.1.0
@@ -16196,7 +16475,7 @@ index 36dc0506d3..2869c9718c 100644
        convert-source-map: 2.0.0
        tinyrainbow: 3.1.0
 
-@@ -24682,7 +25380,7 @@ snapshots:
+@@ -24682,7 +25485,7 @@ snapshots:
        '@vue/shared': 3.5.39
        estree-walker: 2.0.2
        magic-string: 0.30.21
@@ -16205,7 +16484,16 @@ index 36dc0506d3..2869c9718c 100644
        source-map-js: 1.2.1
 
    '@vue/compiler-ssr@3.5.39':
-@@ -24775,7 +25473,7 @@ snapshots:
+@@ -24759,6 +25562,8 @@ snapshots:
+     transitivePeerDependencies:
+       - typescript
+
++  '@webgpu/types@0.1.74': {}
++
+   '@xmldom/xmldom@0.8.15': {}
+
+   '@xterm/addon-fit@0.11.0': {}
+@@ -24775,7 +25580,7 @@ snapshots:
        progress: 2.0.3
        semver: 7.8.5
        tar-fs: 3.1.3
@@ -16214,7 +16502,7 @@ index 36dc0506d3..2869c9718c 100644
        yargs: 16.2.2
      transitivePeerDependencies:
        - bare-abort-controller
-@@ -24813,7 +25511,7 @@ snapshots:
+@@ -24813,7 +25618,7 @@ snapshots:
 
    '@yarnpkg/parsers@3.1.0':
      dependencies:
@@ -16223,7 +16511,7 @@ index 36dc0506d3..2869c9718c 100644
        tslib: 2.8.1
 
    abbrev@4.0.0: {}
-@@ -24853,7 +25551,7 @@ snapshots:
+@@ -24853,7 +25658,7 @@ snapshots:
    ajv@8.20.0:
      dependencies:
        fast-deep-equal: 3.1.3
@@ -16232,7 +16520,7 @@ index 36dc0506d3..2869c9718c 100644
        json-schema-traverse: 1.0.0
        require-from-string: 2.0.2
 
-@@ -24925,7 +25623,7 @@ snapshots:
+@@ -24925,7 +25730,7 @@ snapshots:
        hosted-git-info: 4.1.0
        isbinaryfile: 5.0.7
        jiti: 2.7.0
@@ -16241,7 +16529,7 @@ index 36dc0506d3..2869c9718c 100644
        json5: 2.2.3
        lazy-val: 1.0.5
        minimatch: 10.2.5
-@@ -25108,7 +25806,7 @@ snapshots:
+@@ -25108,7 +25913,7 @@ snapshots:
        http-errors: 2.0.1
        iconv-lite: 0.7.3
        on-finished: 2.4.1
@@ -16250,7 +16538,7 @@ index 36dc0506d3..2869c9718c 100644
        raw-body: 3.0.2
        type-is: 2.1.0
      transitivePeerDependencies:
-@@ -25128,7 +25826,7 @@ snapshots:
+@@ -25128,7 +25933,7 @@ snapshots:
      dependencies:
        balanced-match: 1.0.2
 
@@ -16259,7 +16547,7 @@ index 36dc0506d3..2869c9718c 100644
      dependencies:
        balanced-match: 4.0.4
 
-@@ -25185,7 +25883,7 @@ snapshots:
+@@ -25185,7 +25990,7 @@ snapshots:
        fs-extra: 10.1.0
        http-proxy-agent: 7.0.2
        https-proxy-agent: 7.0.6
@@ -16268,7 +16556,7 @@ index 36dc0506d3..2869c9718c 100644
        sanitize-filename: 1.6.4
        source-map-support: 0.5.21
        stat-mode: 1.0.0
-@@ -25400,7 +26098,7 @@ snapshots:
+@@ -25400,7 +26205,7 @@ snapshots:
        mime-types: 2.1.35
        oauth-sign: 0.9.0
        performance-now: 2.1.0
@@ -16277,7 +16565,7 @@ index 36dc0506d3..2869c9718c 100644
        safe-buffer: 5.2.1
        tough-cookie: 4.1.4
        tunnel-agent: 0.6.0
-@@ -25725,7 +26423,7 @@ snapshots:
+@@ -25725,7 +26530,7 @@ snapshots:
        app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
        builder-util: 26.15.3
        fs-extra: 10.1.0
@@ -16286,7 +16574,7 @@ index 36dc0506d3..2869c9718c 100644
      transitivePeerDependencies:
        - electron-builder-squirrel-windows
        - supports-color
-@@ -25818,7 +26516,7 @@ snapshots:
+@@ -25818,7 +26623,7 @@ snapshots:
      dependencies:
        builder-util-runtime: 9.7.0
        fs-extra: 10.1.0
@@ -16295,7 +16583,7 @@ index 36dc0506d3..2869c9718c 100644
        lazy-val: 1.0.5
        lodash.escaperegexp: 4.1.2
        lodash.isequal: 4.5.0
-@@ -26134,14 +26832,14 @@ snapshots:
+@@ -26134,14 +26939,14 @@ snapshots:
 
    expand-template@2.0.3: {}
 
@@ -16312,7 +16600,7 @@ index 36dc0506d3..2869c9718c 100644
 
    express@5.2.1:
      dependencies:
-@@ -26165,7 +26863,7 @@ snapshots:
+@@ -26165,7 +26970,7 @@ snapshots:
        once: 1.4.0
        parseurl: 1.3.3
        proxy-addr: 2.0.8
@@ -16321,7 +16609,7 @@ index 36dc0506d3..2869c9718c 100644
        range-parser: 1.3.0
        router: 2.2.0
        send: 1.2.1
-@@ -26209,7 +26907,7 @@ snapshots:
+@@ -26209,7 +27014,7 @@ snapshots:
 
    fast-sha256@1.3.0: {}
 
@@ -16330,7 +16618,7 @@ index 36dc0506d3..2869c9718c 100644
 
    fast-xml-builder@1.2.0:
      dependencies:
-@@ -26579,7 +27277,7 @@ snapshots:
+@@ -26579,7 +27384,7 @@ snapshots:
 
    he@1.2.0: {}
 
@@ -16339,7 +16627,7 @@ index 36dc0506d3..2869c9718c 100644
 
    hookable@5.5.3: {}
 
-@@ -26710,7 +27408,7 @@ snapshots:
+@@ -26710,7 +27515,7 @@ snapshots:
 
    into-stream@9.1.0: {}
 
@@ -16348,7 +16636,7 @@ index 36dc0506d3..2869c9718c 100644
 
    ipaddr.js@1.9.1: {}
 
-@@ -26803,11 +27501,7 @@ snapshots:
+@@ -26803,11 +27608,7 @@ snapshots:
 
    js-tokens@4.0.0: {}
 
@@ -16361,7 +16649,7 @@ index 36dc0506d3..2869c9718c 100644
      dependencies:
        argparse: 2.0.1
 
-@@ -26859,7 +27553,7 @@ snapshots:
+@@ -26859,7 +27660,7 @@ snapshots:
        saxes: 6.0.0
        symbol-tree: 3.2.4
        tough-cookie: 6.0.1
@@ -16370,7 +16658,7 @@ index 36dc0506d3..2869c9718c 100644
        w3c-xmlserializer: 5.0.0
        webidl-conversions: 8.0.1
        whatwg-mimetype: 5.0.0
-@@ -27143,7 +27837,7 @@ snapshots:
+@@ -27143,7 +27944,7 @@ snapshots:
 
    magic-string@0.30.21:
      dependencies:
@@ -16379,7 +16667,7 @@ index 36dc0506d3..2869c9718c 100644
 
    magicast@0.5.3:
      dependencies:
-@@ -27187,7 +27881,7 @@ snapshots:
+@@ -27187,7 +27988,7 @@ snapshots:
        micromark-util-decode-string: 2.0.1
        micromark-util-normalize-identifier: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -16388,11 +16676,13 @@ index 36dc0506d3..2869c9718c 100644
        unist-util-stringify-position: 4.0.0
      transitivePeerDependencies:
        - supports-color
-@@ -27324,42 +28018,43 @@ snapshots:
+@@ -27324,42 +28125,45 @@ snapshots:
        ts-dedent: 2.3.0
        uuid: 14.0.1
 
 -  micromark-core-commonmark@2.0.3:
++  meshoptimizer@0.22.0: {}
++
 +  micromark-core-commonmark@2.0.4:
      dependencies:
        decode-named-character-reference: 1.3.0
@@ -16439,7 +16729,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark-extension-gfm-strikethrough@2.1.0:
      dependencies:
-@@ -27368,27 +28063,27 @@ snapshots:
+@@ -27368,27 +28172,27 @@ snapshots:
        micromark-util-classify-character: 2.0.1
        micromark-util-resolve-all: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -16473,7 +16763,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark-extension-gfm@3.0.0:
      dependencies:
-@@ -27399,54 +28094,54 @@ snapshots:
+@@ -27399,54 +28203,54 @@ snapshots:
        micromark-extension-gfm-tagfilter: 2.0.0
        micromark-extension-gfm-task-list-item: 2.1.0
        micromark-util-combine-extensions: 2.0.1
@@ -16540,7 +16830,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark-util-chunked@2.0.1:
      dependencies:
-@@ -27456,12 +28151,12 @@ snapshots:
+@@ -27456,12 +28260,12 @@ snapshots:
      dependencies:
        micromark-util-character: 2.1.1
        micromark-util-symbol: 2.0.1
@@ -16555,7 +16845,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark-util-decode-numeric-character-reference@2.0.2:
      dependencies:
-@@ -27474,6 +28169,10 @@ snapshots:
+@@ -27474,6 +28278,10 @@ snapshots:
        micromark-util-decode-numeric-character-reference: 2.0.2
        micromark-util-symbol: 2.0.1
 
@@ -16566,7 +16856,7 @@ index 36dc0506d3..2869c9718c 100644
    micromark-util-encode@2.0.1: {}
 
    micromark-util-html-tag-name@2.0.1: {}
-@@ -27484,7 +28183,7 @@ snapshots:
+@@ -27484,7 +28292,7 @@ snapshots:
 
    micromark-util-resolve-all@2.0.1:
      dependencies:
@@ -16575,7 +16865,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark-util-sanitize-uri@2.0.1:
      dependencies:
-@@ -27497,11 +28196,11 @@ snapshots:
+@@ -27497,11 +28305,11 @@ snapshots:
        devlop: 1.1.0
        micromark-util-chunked: 2.0.1
        micromark-util-symbol: 2.0.1
@@ -16589,7 +16879,7 @@ index 36dc0506d3..2869c9718c 100644
 
    micromark@4.0.2(supports-color@9.4.0):
      dependencies:
-@@ -27509,8 +28208,8 @@ snapshots:
+@@ -27509,8 +28317,8 @@ snapshots:
        debug: 4.4.3(supports-color@9.4.0)
        decode-named-character-reference: 1.3.0
        devlop: 1.1.0
@@ -16600,7 +16890,7 @@ index 36dc0506d3..2869c9718c 100644
        micromark-util-character: 2.1.1
        micromark-util-chunked: 2.0.1
        micromark-util-combine-extensions: 2.0.1
-@@ -27521,7 +28220,7 @@ snapshots:
+@@ -27521,7 +28329,7 @@ snapshots:
        micromark-util-sanitize-uri: 2.0.1
        micromark-util-subtokenize: 2.1.0
        micromark-util-symbol: 2.0.1
@@ -16609,7 +16899,7 @@ index 36dc0506d3..2869c9718c 100644
      transitivePeerDependencies:
        - supports-color
 
-@@ -27547,7 +28246,7 @@ snapshots:
+@@ -27547,7 +28355,7 @@ snapshots:
 
    minimatch@10.2.5:
      dependencies:
@@ -16618,7 +16908,7 @@ index 36dc0506d3..2869c9718c 100644
 
    minimatch@3.1.5:
      dependencies:
-@@ -27592,7 +28291,7 @@ snapshots:
+@@ -27592,7 +28400,7 @@ snapshots:
        once: 1.4.0
        readable-stream: 3.6.2
 
@@ -16627,7 +16917,7 @@ index 36dc0506d3..2869c9718c 100644
 
    napi-build-utils@2.0.0: {}
 
-@@ -27893,6 +28592,10 @@ snapshots:
+@@ -27893,6 +28701,10 @@ snapshots:
 
    pathe@2.0.3: {}
 
@@ -16638,7 +16928,7 @@ index 36dc0506d3..2869c9718c 100644
    pdfjs-dist@6.3.289:
      optionalDependencies:
        '@napi-rs/canvas': 1.0.8
-@@ -27905,6 +28608,41 @@ snapshots:
+@@ -27905,6 +28717,41 @@ snapshots:
 
    performance-now@2.1.0: {}
 
@@ -16680,7 +16970,7 @@ index 36dc0506d3..2869c9718c 100644
    picocolors@1.1.1: {}
 
    picomatch@4.0.4: {}
-@@ -27956,11 +28694,21 @@ snapshots:
+@@ -27956,11 +28803,21 @@ snapshots:
      transitivePeerDependencies:
        - supports-color
 
@@ -16705,7 +16995,7 @@ index 36dc0506d3..2869c9718c 100644
 
    postject@1.0.0-alpha.6:
      dependencies:
-@@ -28020,7 +28768,7 @@ snapshots:
+@@ -28020,7 +28877,7 @@ snapshots:
 
    property-information@7.2.0: {}
 
@@ -16714,7 +17004,7 @@ index 36dc0506d3..2869c9718c 100644
      dependencies:
        '@protobufjs/aspromise': 1.1.2
        '@protobufjs/base64': 1.1.2
-@@ -28065,7 +28813,7 @@ snapshots:
+@@ -28065,7 +28922,7 @@ snapshots:
 
    pvutils@1.2.0: {}
 
@@ -16723,7 +17013,7 @@ index 36dc0506d3..2869c9718c 100644
      dependencies:
        es-define-property: 1.0.1
        side-channel: 1.1.1
-@@ -28411,37 +29159,37 @@ snapshots:
+@@ -28411,37 +29268,37 @@ snapshots:
 
    setprototypeof@1.2.0: {}
 
@@ -16787,7 +17077,7 @@ index 36dc0506d3..2869c9718c 100644
        '@types/node': 22.20.0
 
    shebang-command@2.0.0:
-@@ -28551,6 +29299,8 @@ snapshots:
+@@ -28551,6 +29408,8 @@ snapshots:
 
    source-map-js@1.2.1: {}
 
@@ -16796,7 +17086,7 @@ index 36dc0506d3..2869c9718c 100644
    source-map-support@0.5.21:
      dependencies:
        buffer-from: 1.1.2
-@@ -28571,6 +29321,8 @@ snapshots:
+@@ -28571,6 +29430,8 @@ snapshots:
 
    speakingurl@14.0.1: {}
 
@@ -16805,7 +17095,16 @@ index 36dc0506d3..2869c9718c 100644
    sprintf-js@1.1.3:
      optional: true
 
-@@ -28921,9 +29673,9 @@ snapshots:
+@@ -28763,6 +29624,8 @@ snapshots:
+     transitivePeerDependencies:
+       - react-native-b4a
+
++  three@0.180.0: {}
++
+   tiny-async-pool@1.3.0:
+     dependencies:
+       semver: 5.7.2
+@@ -28921,9 +29784,9 @@ snapshots:
 
    undici@6.28.0: {}
 
@@ -16817,7 +17116,7 @@ index 36dc0506d3..2869c9718c 100644
 
    unicode-properties@1.4.1:
      dependencies:
-@@ -28939,7 +29691,7 @@ snapshots:
+@@ -28939,7 +29802,7 @@ snapshots:
 
    union@0.5.0:
      dependencies:
@@ -16826,7 +17125,7 @@ index 36dc0506d3..2869c9718c 100644
 
    unist-util-is@6.0.1:
      dependencies:
-@@ -29058,7 +29810,7 @@ snapshots:
+@@ -29058,7 +29921,7 @@ snapshots:
    vite@5.4.21(@types/node@25.9.3)(lightningcss@1.32.0):
      dependencies:
        esbuild: 0.21.5
@@ -16835,7 +17134,7 @@ index 36dc0506d3..2869c9718c 100644
        rollup: 4.62.2
      optionalDependencies:
        '@types/node': 25.9.3
-@@ -29070,7 +29822,7 @@ snapshots:
+@@ -29070,7 +29933,7 @@ snapshots:
        esbuild: 0.25.12
        fdir: 6.5.0(picomatch@4.0.4)
        picomatch: 4.0.4
@@ -16844,7 +17143,7 @@ index 36dc0506d3..2869c9718c 100644
        rollup: 4.62.2
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29085,7 +29837,7 @@ snapshots:
+@@ -29085,7 +29948,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -16853,7 +17152,7 @@ index 36dc0506d3..2869c9718c 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29100,7 +29852,7 @@ snapshots:
+@@ -29100,7 +29963,7 @@ snapshots:
      dependencies:
        lightningcss: 1.32.0
        picomatch: 4.0.4
@@ -16862,7 +17161,7 @@ index 36dc0506d3..2869c9718c 100644
        rolldown: 1.0.3
        tinyglobby: 0.2.17
      optionalDependencies:
-@@ -29111,14 +29863,14 @@ snapshots:
+@@ -29111,14 +29974,14 @@ snapshots:
        tsx: 4.22.4
        yaml: 2.9.0
 
@@ -16880,7 +17179,7 @@ index 36dc0506d3..2869c9718c 100644
      dependencies:
        '@docsearch/css': 3.8.2
        '@docsearch/js': 3.8.2(@algolia/client-search@5.55.2)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
-@@ -29139,7 +29891,7 @@ snapshots:
+@@ -29139,7 +30002,7 @@ snapshots:
        vite: 5.4.21(@types/node@25.9.3)(lightningcss@1.32.0)
        vue: 3.5.39(typescript@6.0.3)
      optionalDependencies:
@@ -16889,7 +17188,7 @@ index 36dc0506d3..2869c9718c 100644
      transitivePeerDependencies:
        - '@algolia/client-search'
        - '@types/node'
-@@ -29168,17 +29920,17 @@ snapshots:
+@@ -29168,17 +30031,17 @@ snapshots:
        - typescript
        - universal-cookie
 
@@ -16916,7 +17215,7 @@ index 36dc0506d3..2869c9718c 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29193,23 +29945,23 @@ snapshots:
+@@ -29193,23 +30056,23 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -16950,7 +17249,7 @@ index 36dc0506d3..2869c9718c 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29224,23 +29976,23 @@ snapshots:
+@@ -29224,23 +30087,23 @@ snapshots:
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
        '@types/node': 22.20.0
@@ -16984,7 +17283,7 @@ index 36dc0506d3..2869c9718c 100644
        magic-string: 0.30.21
        obug: 2.1.3
        pathe: 2.0.3
-@@ -29254,8 +30006,8 @@ snapshots:
+@@ -29254,8 +30117,8 @@ snapshots:
        why-is-node-running: 2.3.0
      optionalDependencies:
        '@opentelemetry/api': 1.9.1
@@ -16995,7 +17294,7 @@ index 36dc0506d3..2869c9718c 100644
        happy-dom: 20.11.6
        jsdom: 29.1.1(@noble/hashes@2.3.0)
      transitivePeerDependencies:
-@@ -29383,6 +30135,8 @@ snapshots:
+@@ -29383,6 +30246,8 @@ snapshots:
 
    xmlchars@2.2.0: {}
 
@@ -17112,7 +17411,7 @@ index 0471bfa13b..41f3454047 100644
      { "path": "./packages/client/ui-approval" },
      { "path": "./packages/client/ui-chat/tsconfig.client.json" },
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index bbdbf3cac5..ba4b10c640 100644
+index bbdbf3cac5..08b18e108d 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
 @@ -198,6 +198,7 @@
@@ -17123,7 +17422,7 @@ index bbdbf3cac5..ba4b10c640 100644
      { "path": "./packages/experimental/speech-to-text" },
      { "path": "./packages/experimental/speech-to-text-sensevoice" },
      { "path": "./packages/experimental/api-speech-to-text" },
-@@ -303,6 +304,19 @@
+@@ -303,6 +304,20 @@
      { "path": "./packages/storage/storage-json" },
      { "path": "./packages/storage/storage-sqlite" },
      { "path": "./packages/storage/storage-domain" },
@@ -17132,6 +17431,7 @@ index bbdbf3cac5..ba4b10c640 100644
 +    { "path": "./packages/physicsos/paper-host" },
 +    { "path": "./packages/physicsos/auth-host" },
 +    { "path": "./packages/physicsos/notice-host" },
++    { "path": "./packages/physicsos/experiment-host" },
 +    { "path": "./packages/physicsos/update-host" },
 +    { "path": "./packages/physicsos/health-host" },
 +    { "path": "./packages/physicsos/learning-host" },
@@ -17143,64 +17443,3 @@ index bbdbf3cac5..ba4b10c640 100644
      { "path": "./packages/feedback/message-feedback" },
      { "path": "./packages/workspace/workspace" },
      { "path": "./packages/session/session-title" },
-diff --git a/packages/client/ui-settings-models/src/client/store.ts b/packages/client/ui-settings-models/src/client/store.ts
-index 34a20107e3..67c502a9c8 100644
---- a/packages/client/ui-settings-models/src/client/store.ts
-+++ b/packages/client/ui-settings-models/src/client/store.ts
-@@ -192,14 +192,17 @@ export class ModelsSettingsStore {
-     if (!registered.ok) { this.failLoad(generation, registered.error.message); return }
-     if (!declared.ok) { this.failLoad(generation, declared.error.message); return }
-     const mirrored = this.describeFace.getSnapshot()
--    if (mirrored.view === undefined) {
--      this.failLoad(generation, mirrored.error ?? 'settings are unavailable in this browser')
--      return
--    }
-+    /* The settings mirror only answers on loopback, because the write API it
-+       backs can change the host's own configuration. A page served over the
-+       public origin therefore gets no namespace views — but the providers the
-+       host actually registered are still worth showing. Fall back to that
-+       read-only directory instead of failing the whole section: on a deployed
-+       site the model list is information, not something the visitor edits. */
-+    const view = mirrored.view
-     const providers = joinProviderDirectory(registered.value, declared.value)
--    const writable = mirrored.view.writable
--    const views: readonly SettingsNamespaceView[] = mirrored.view.namespaces
--    const namespaces = new Map(views.map(view => [view.ns, view]))
-+    const writable = view === undefined ? false : view.writable
-+    const views: readonly SettingsNamespaceView[] = view === undefined ? [] : view.namespaces
-+    const namespaces = new Map(views.map(row => [row.ns, row]))
-     const rows: ProviderRow[] = providers.map((entry) => {
-       const namespace = namespaces.get(entry.settingsNs)
-       const configured = namespace !== undefined
-diff --git a/packages/client/ui-settings-models/tests/store.client.spec.ts b/packages/client/ui-settings-models/tests/store.client.spec.ts
-index 007ff68099..0acf38053b 100644
---- a/packages/client/ui-settings-models/tests/store.client.spec.ts
-+++ b/packages/client/ui-settings-models/tests/store.client.spec.ts
-@@ -294,7 +294,7 @@ describe('edge joins', () => {
-     expect(store.store.getSnapshot()).toMatchObject({ status: 'error', error: 'settings down' })
-   })
- 
--  it('reports a terminally unavailable settings mirror precisely', async () => {
-+  it('falls back to a read-only directory when the settings mirror is unavailable', async () => {
-     const { ctx } = api()
-     const store = new ModelsSettingsStore(
-       ctx,
-@@ -302,10 +302,14 @@ describe('edge joins', () => {
-       new SettingsDescribeMirror(ctx, 'memory'),
-     )
-     await store.load()
--    expect(store.store.getSnapshot()).toMatchObject({
--      status: 'error',
--      error: 'settings are unavailable in this browser',
--    })
-+    /* A public deployment has no settings mirror (the write API it backs is
-+       loopback-only), but the providers the host registered are still real:
-+       the section lists them read-only instead of reporting a failure. */
-+    const snapshot = store.store.getSnapshot()
-+    expect(snapshot.status).toBe('ready')
-+    expect(snapshot.error).toBeNull()
-+    expect(snapshot.writable).toBe(false)
-+    expect(snapshot.rows.length).toBeGreaterThan(0)
-   })
- 
-   it('reuses a held settings view after its refresh fails', async () => {

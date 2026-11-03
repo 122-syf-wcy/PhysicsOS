@@ -6,4 +6,4 @@ const { manifest, files } = await validatePackage(process.cwd())
 await mkdir('release', { recursive: true })
 const path = `release/${manifest.experimentId}-${manifest.version}.zip`
 await writeFile(path, zipBytes(files))
-console.log(`Created ${path}. Upload at the matching experiment when platform submissions are enabled.`)
+console.log(`Created ${path}. Submit this release ZIP from the convex-lens contribution panel.`)

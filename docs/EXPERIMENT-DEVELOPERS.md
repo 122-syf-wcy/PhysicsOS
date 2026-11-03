@@ -19,7 +19,7 @@
 
 `standards.js` 是 AGENTS.md 与基础代码风格的唯一来源。
 `content.js` 是页面文档与 Markdown 下载的唯一来源。
-`scripts/developers/resources.mjs` 定义独立工具包与候选 JSON Schema。
+`scripts/developers/resources.mjs` 定义独立工具包与实验包 JSON Schema。
 
 按项目环境约定执行：
 
@@ -33,6 +33,9 @@ node --test scripts/developers/standards.test.mjs
 
 ## 实际状态
 
-文档、下载、独立实验模板与一致性工具包已实现。模板包含本地预览宿主、参考协议 v1、构建与 ZIP 打包，可直接在独立目录开发。生产站点的上传入口、资源隔离域、正式引擎适配、审核与自动发布尚在建设；不能把本地预览或打包成功当成已上线。正式接入前，实验文件投稿不通过 GitHub PR，也不伪造上传成功。
+本分支已实现凸透镜的独立文件投稿闭环：登录后在实验页点击“贡献实验”，上传构建后的 ZIP 与作者资料，平台管理员预览、审核并发布；新开的实验使用最新通过的版本，已有记录固定原展示，历史版本可回滚。官方样板、社区版本、作者头像与 GitHub 展示均接入页面。其他实验尚待协议适配。
+
+服务代码位于 `overlays/harness/files/packages/physicsos/experiment-host/`；数据包括 storage-domain 元数据与 `DSH_HOME/experiment-packages` 文件，备份必须同时覆盖。实验代码由可信外层加不透明内层 iframe 隔离，服务器不执行上传者脚本。生产是否已切换以本次发布报告为准；本地模板预览成功仍不表示审核通过。
+
 
 工具包只负责代码一致性；不能代替物理行为测试、浏览器性能测量或维护者评审。实验模板采用独立配置，不覆盖主站 package.json 或要求贡献者运行主站构建。

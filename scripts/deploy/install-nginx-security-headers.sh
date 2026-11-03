@@ -109,10 +109,10 @@ end_marker = "# END PhysicsOS paper-preview location"
 lines = text.splitlines()
 kept, skipping = [], False
 for line in lines:
-    if line.strip() == start_marker:
+    if line.strip() in {start_marker, "# BEGIN PhysicsOS experiment locations"}:
         skipping = True
         continue
-    if line.strip() == end_marker:
+    if line.strip() in {end_marker, "# END PhysicsOS experiment locations"}:
         skipping = False
         continue
     if not skipping:
@@ -137,6 +137,31 @@ block = [
     "    proxy_read_timeout 300s;",
     "}",
     end_marker,
+    "# BEGIN PhysicsOS experiment locations",
+    "location ^~ /physicsos/experiments/ {",
+    "    client_max_body_size 32m;",
+    "    proxy_pass http://127.0.0.1:3080;",
+    "    proxy_http_version 1.1;",
+    "    proxy_set_header Host $host;",
+    "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
+    "    proxy_set_header X-Forwarded-Proto $scheme;",
+    "    proxy_read_timeout 120s;",
+    "}",
+    "location ^~ /physicsos/experiment-assets/ {",
+    "    proxy_pass http://127.0.0.1:3080;",
+    "    proxy_http_version 1.1;",
+    "    proxy_set_header Host $host;",
+    "    proxy_set_header X-Forwarded-Proto $scheme;",
+    '    proxy_set_header Cookie "";',
+    "    proxy_hide_header Set-Cookie;",
+    "    # The host supplies package-scoped CSP + sandbox on every document.",
+    "    # Own add_header rules suppress inherited X-Frame-Options DENY.",
+    f'    add_header Strict-Transport-Security "max-age={max_age}; includeSubDomains" always;',
+    '    add_header X-Content-Type-Options "nosniff" always;',
+    '    add_header Referrer-Policy "no-referrer" always;',
+    '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+    "}",
+    "# END PhysicsOS experiment locations",
 ]
 
 # Insert as the last directive of the TLS server block. Walk forward, tracking

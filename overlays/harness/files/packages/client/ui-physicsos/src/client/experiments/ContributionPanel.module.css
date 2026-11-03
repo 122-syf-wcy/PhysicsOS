@@ -1,3 +1,4 @@
+.backdrop, .backdrop * { box-sizing: border-box; }
 .backdrop {
   position: fixed;
   inset: 0;

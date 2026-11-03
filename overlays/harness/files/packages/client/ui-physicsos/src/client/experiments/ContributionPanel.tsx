@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { createConvexLensScene } from '@physicsos/physics-scene'
 import { createOpticsWorkspaceRuntime } from '../physics/optics-workspace-runtime.ts'
@@ -156,7 +157,7 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
     if (preview === undefined) return
     void run(async () => {
       if (action === 'reject' && !reason.trim()) throw new Error('请填写退回原因')
-      await contributionApi.review(
+      const { item } = await contributionApi.review(
         preview.item,
         action,
         action === 'reject' ? reason.trim() : undefined,
@@ -167,11 +168,16 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
           ? '已发布。新打开的实验会自动使用此版本；正在进行的实验保持原版本。'
           : '已退回，贡献者可以查看原因并上传新修订。',
       )
-      setPreview(undefined)
+      setCatalog(current => current === undefined ? current : {
+        ...current,
+        active: action === 'approve' ? item : current.active,
+        items: current.items.map(row => row.id === item.id ? item : row),
+      })
+      setPreview(current => current?.item.id === item.id ? { ...current, item } : current)
       await refresh()
     })
   }
-  return (
+  return createPortal(
     <div className={css.backdrop}>
       <div
         ref={dialog}
@@ -477,6 +483,7 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
           ) : null}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

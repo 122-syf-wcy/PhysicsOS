@@ -535,3 +535,15 @@ describe('AdminWorkspace', () => {
     expect(schoolAdmin.queryByRole('tab', { name: '公告' })).toBeNull()
   })
 })
+
+it('keeps hook order while a restored session changes loading to authenticated', () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    const view = render(<AuthGate {...gateProps({ status: 'loading' })} />)
+    expect(() =>{  view.rerender(<AuthGate {...gateProps({ status: 'authed', user: USER })} />); }).not.toThrow()
+    expect(view.container.querySelector('[data-physicsos-auth-gate]')).toBeNull()
+    expect(() =>{  view.rerender(<AuthGate {...gateProps({ status: 'guest' })} />); }).not.toThrow()
+    expect(view.container.querySelector('[data-physicsos-auth-gate]')).toBeTruthy()
+    expect(errors).not.toHaveBeenCalled()
+  } finally { errors.mockRestore() }
+})

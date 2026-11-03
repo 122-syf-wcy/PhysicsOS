@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PhysicsOS experiment package — V1 draft, not an active upload API",
+  "title": "PhysicsOS experiment package — V1 convex-lens contract",
   "type": "object",
   "additionalProperties": false,
   "required": [

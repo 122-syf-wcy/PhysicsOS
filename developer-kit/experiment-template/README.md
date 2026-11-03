@@ -28,13 +28,13 @@ npm run pack
 
 产物为 `release/convex-lens-1.0.0.zip`。入口 `dist/index.html`，全部运行资源在包内；ZIP 同时带源码、清单和审核资料。pack 不收集 node_modules、preview 或环境变量文件。
 
-不要修改 dist 后跳过 build；源码与产物必须对应。第一次 npm install 后保留 package-lock.json，后续使用 npm ci。生产服务应重新校验并重建比对上传内容。
+不要修改 dist 后跳过 build；源码与产物必须对应。第一次 npm install 后保留 package-lock.json，后续使用 npm ci。服务器重新校验并冻结同一份上传产物；首版不执行上传者的构建脚本，管理员核对源码与展示后发布。
 
 ## 与平台的关系
 
 `src/protocol.ts` 和 HOST_PROTOCOL.md 是参考文件协议 v1。实验只接收宿主快照，发出参数预览/提交/取消意图，不访问主站内部模块或 parent.document。
 
-预览器使用明示 preview-fixture 的开发快照，不是正式平台引擎。平台上传、审核与自动发布服务尚未接通；不要把本地预览成功标为已上线。最终规则是最新审核通过版本成为该实验默认效果，正在运行的实例固定原版本，历史可回滚。
+预览器使用明示 preview-fixture 的开发快照，不是正式平台引擎。凸透镜已由本版本接通上传、审核与自动发布；本地预览成功仍不表示审核通过。最终规则是最新审核通过版本成为该实验默认效果，正在运行的实例固定原版本，历史可回滚。
 
 ## 作者
 

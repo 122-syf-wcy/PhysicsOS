@@ -23,6 +23,7 @@ try {
     'three',
     'visual',
     'package',
+    'protocol',
     'review',
     'authors',
     'agents',

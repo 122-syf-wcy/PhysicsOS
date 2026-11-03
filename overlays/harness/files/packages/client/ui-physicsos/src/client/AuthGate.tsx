@@ -160,8 +160,6 @@ export function AuthGate({
     Extract<RegisterOutcome, { kind: 'pending' }> | undefined
   >()
 
-  if (status === 'authed' && token === '') return null
-
   const switchView = (next: View): void => {
     setView(next)
     setError('')
@@ -207,7 +205,7 @@ export function AuthGate({
   /* Debounced lookup: one request per typing pause, not per keystroke. The
      cancellation flag keeps an older reply from overwriting a newer query. */
   useEffect(() => {
-    if (view !== 'register') return
+    if (view !== 'register' || status === 'authed') return
     const needle = schoolName.trim()
     if (needle.length < 1) {
       setOptions(undefined)
@@ -231,7 +229,9 @@ export function AuthGate({
         })
     }, 250)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [schoolName, view, searchSchools])
+  }, [schoolName, view, searchSchools, status])
+
+  if (status === 'authed' && token === '') return null
 
   const chooseSchool = (school: SchoolRow): void => {
     setSchoolName(school.name)

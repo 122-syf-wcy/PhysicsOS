@@ -30,7 +30,7 @@ const relativePath = {
 }
 export const manifestSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  title: 'PhysicsOS experiment package — V1 draft, not an active upload API',
+  title: 'PhysicsOS experiment package — V1 convex-lens contract',
   type: 'object',
   additionalProperties: false,
   required: Object.keys(manifestExample),
@@ -100,7 +100,7 @@ check 执行 Prettier、源码文件命名、ESLint 与 TypeScript，不代替�
 ## 贡献方式
 
 贡献者独立制作实验文件，在对应实验页上传 ZIP，后台审核通过后自动同步。无需克隆 PhysicsOS 或修改主站源码。
-本工具包只做风格检查；上传审核与生产宿主接入尚未开放。独立实验模板已支持本地预览、构建与打包，不需要主仓库。
+本工具包只做风格检查。凸透镜已接通独立实验模板、文件上传、管理员审核与自动展示；其他实验逐步适配，不需要克隆主仓库。
 
 ## 文件
 

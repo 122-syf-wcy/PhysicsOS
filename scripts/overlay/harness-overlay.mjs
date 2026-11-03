@@ -48,6 +48,7 @@ const OVERLAY_PATHS = [
   /* PhysicsOS 反馈与公告 host plugin — student bug/idea intake plus the
      admin announcement surface, over the shared identity service. */
   'packages/physicsos/notice-host',
+  'packages/physicsos/experiment-host',
   /* PhysicsOS 更新通道 host plugin — hosts the Tauri updater's latest.json
      (publish / rollback / yank). Its signing half is minisign/Ed25519, NOT the
      Apple/Windows code-signing certs, which is why this half is not blocked. */
