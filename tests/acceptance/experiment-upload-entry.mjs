@@ -3,23 +3,28 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { readArchive } from './downloaded-experiment-release.mjs'
+import { zipBytes } from '../../developer-kit/experiment-template/tools/archive.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const base = process.env.PHYSICSOS_CONTRIBUTION_BASE ?? 'http://127.0.0.1:3095'
 const home = process.env.PHYSICSOS_CONTRIBUTION_PREVIEW_HOME ?? '/tmp/physicsos-upload-entry-preview'
-const shots = join(root, 'docs/reports/screenshots/experiment-upload-entry')
+const shots = join(root, 'docs/reports/screenshots/experiment-package-contract')
 await mkdir(shots, { recursive: true })
 const password = await readFile(join(home, 'admin-password'), 'utf8')
-const zip = join(root, 'developer-kit/experiment-template/release/convex-lens-1.0.0.zip')
+const prior = JSON.parse(await readFile(join(home, 'acceptance-result.json'), 'utf8'))
+const zip = prior.entryZip
+const version = '1.2.0'
 const bytes = await readFile(zip)
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 const errors = []
+let expectedRejection = false
 try {
   const createContext = async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' })
     context.on('page', page => {
       page.on('pageerror', error => errors.push(error.message))
-      page.on('console', entry => { if (entry.type() === 'error') errors.push(entry.text()) })
+      page.on('console', entry => { if (entry.type() === 'error' && !expectedRejection) errors.push(entry.text()) })
     })
     return context
   }
@@ -57,7 +62,7 @@ try {
   let chooser = page.waitForEvent('filechooser')
   await workspace.getByRole('button', { name: '选择 ZIP 文件', exact: true }).press('Enter')
   await (await chooser).setFiles(zip)
-  await expect(workspace.getByText('convex-lens-1.0.0.zip', { exact: true })).toBeVisible()
+  await expect(workspace.getByText(`convex-lens-${version}.zip`, { exact: true })).toBeVisible()
   await workspace.getByRole('button', { name: '移除实验文件', exact: true }).click()
   await expect(workspace.locator('input[type="file"]').first()).toHaveValue('')
   chooser = page.waitForEvent('filechooser')
@@ -68,6 +73,26 @@ try {
   await (await chooser).setFiles(join(root, 'overlays/harness/files/apps/web/public/physicsos/developers/assets/physicsos-mark-128.png'))
   await workspace.getByLabel('作者显示名', { exact: true }).fill('入口验收贡献者')
   await workspace.getByLabel('本次修改说明', { exact: true }).fill('由统一实验上传页提交')
+  const invalidFiles = await readArchive(bytes)
+  const invalidParameters = JSON.parse(invalidFiles.get('parameters.json').toString())
+  invalidParameters.parameters[0].unit = 'm'
+  invalidFiles.set('parameters.json', Buffer.from(JSON.stringify(invalidParameters)))
+  const invalidZip = join(home, 'invalid-unit.zip')
+  await writeFile(invalidZip, zipBytes(invalidFiles), { mode: 0o600 })
+  await workspace.locator('input[type="file"]').first().setInputFiles(invalidZip)
+  expectedRejection = true
+  const rejected = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/convex-lens/packages'))
+  await workspace.getByRole('button', { name: '上传并提交审核', exact: true }).click()
+  expect((await rejected).status()).toBe(400)
+  await expect(workspace.getByRole('alert')).toContainText('parameters.json')
+  await expect(workspace.getByRole('alert')).toContainText('parameters[0].unit')
+  await page.screenshot({ path: join(shots, 'entry-invalid-unit-guidance.png'), animations: 'disabled' })
+  expectedRejection = false
+  const [replacement] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    workspace.getByRole('button', { name: '更换实验文件', exact: true }).click(),
+  ])
+  await replacement.setFiles(zip)
   const uploaded = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/convex-lens/packages'))
   await workspace.getByRole('button', { name: '上传并提交审核', exact: true }).click()
   const response = await uploaded
@@ -76,8 +101,8 @@ try {
   expect(item.sha256).toBe(createHash('sha256').update(bytes).digest('hex'))
   await expect(workspace.locator(`[data-package-id="${item.id}"]`)).toContainText('等待审核', { timeout: 30000 })
   await workspace.evaluate(node => { node.scrollTop = 0 })
-  await page.screenshot({ path: join(shots, 'upload-desktop.png'), animations: 'disabled' })
-  await workspace.locator('form').screenshot({ path: join(shots, 'upload-controls.png'), animations: 'disabled' })
+  await page.screenshot({ path: join(shots, 'entry-upload-desktop.png'), animations: 'disabled' })
+  await workspace.locator('form').screenshot({ path: join(shots, 'entry-upload-controls.png'), animations: 'disabled' })
   await page.reload()
   await expect(page).toHaveURL(`${base}/#/contribute`)
   await expect(page.locator(`[data-package-id="${item.id}"]`)).toContainText('等待审核', { timeout: 60000 })
@@ -87,14 +112,15 @@ try {
   await reviewer.goto(`${base}/#/contribute`)
   await expect(reviewer.getByRole('heading', { name: '实验上传与贡献' })).toBeVisible({ timeout: 60000 })
   await dismissNotice(reviewer)
-  await reviewer.locator(`[data-package-id="${item.id}"]`).getByRole('button', { name: '预览 v1.0.0', exact: true }).click()
+  await reviewer.locator(`[data-package-id="${item.id}"]`).getByRole('button', { name: `预览 v${version}`, exact: true }).click()
   await expect(reviewer.locator('[data-community-status="ready"]')).toBeVisible({ timeout: 30000 })
   const archive = await admin.request.get(`${base}/physicsos/experiments/packages/${item.id}/archive`)
   expect(archive.ok()).toBe(true)
   expect(createHash('sha256').update(await archive.body()).digest('hex')).toBe(item.sha256)
+  await reviewer.getByRole('region', { name: '审核预览', exact: true }).screenshot({ path: join(shots, 'entry-review-desktop.png'), animations: 'disabled' })
   await reviewer.getByRole('button', { name: '审核通过并发布', exact: true }).click()
   await expect(reviewer.locator(`[data-package-id="${item.id}"]`)).toContainText('当前默认', { timeout: 30000 })
-  await reviewer.screenshot({ path: join(shots, 'review-desktop.png'), animations: 'disabled' })
+  await reviewer.screenshot({ path: join(shots, 'entry-published-desktop.png'), animations: 'disabled' })
 
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   await expect(page.locator(`[data-package-id="${item.id}"]`)).toContainText('当前默认')
@@ -144,7 +170,7 @@ try {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await expect.poll(() => workspace.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
   await workspace.evaluate(node => { node.scrollTop = 0 })
-  await page.screenshot({ path: join(shots, 'upload-mobile.png'), animations: 'disabled' })
+  await page.screenshot({ path: join(shots, 'entry-upload-mobile.png'), animations: 'disabled' })
   expect(errors).toEqual([])
   await writeFile(join(home, 'upload-entry-result.json'), JSON.stringify({ activeId: item.id, sha256: item.sha256, version: item.version }), { mode: 0o600 })
   console.log('PASS: home sidebar, glass native file chooser, real student ZIP, administrator preview/approval/archive, reload/history, delayed-sync navigation, retained experiment dialog, mobile and clean console')

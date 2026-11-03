@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ContributionPanel } from '../src/client/experiments/ContributionPanel.tsx'
 import type { ExperimentPackageView } from '../src/client/experiments/contribution-api.ts'
 
+const nativeScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+const scrollIntoView = vi.fn()
+beforeEach(() => {
+  scrollIntoView.mockClear()
+  HTMLElement.prototype.scrollIntoView = scrollIntoView
+})
 afterEach(() => {
   cleanup()
+  if (nativeScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', nativeScroll)
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   vi.unstubAllGlobals()
 })
 
@@ -140,6 +148,9 @@ it('requires the current V2 candidate first render, resets on failure and candid
   const approve = () => screen.getByRole<HTMLButtonElement>('button', { name: '审核通过并发布' })
   fireEvent.click(await screen.findByRole('button', { name: '预览 v2.0.0', exact: true }))
   await screen.findByTitle('候选三维实验')
+  expect(scrollIntoView.mock.instances[0]).toBe(
+    screen.getByRole('region', { name: '候选实验预览' }),
+  )
   expect(approve().disabled).toBe(true)
   const first = await bind()
   expect(approve().disabled).toBe(true)
@@ -165,6 +176,7 @@ it('requires the current V2 candidate first render, resets on failure and candid
   expect(approve().disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: '预览 v2.0.1', exact: true }))
   await waitFor(() => { expect(view.getByRole('heading', { name: '预览 v2.0.1 · b' })).toBeTruthy() })
+  expect(scrollIntoView).toHaveBeenCalledTimes(2)
   acknowledge()
   expect(approve().disabled).toBe(true)
 })
