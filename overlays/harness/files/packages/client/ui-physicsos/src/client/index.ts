@@ -30,6 +30,8 @@ import { startSyncRetry } from './sync-retry.ts'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { OptionalPhysicsSurface as PhysicsSurface } from './optional-surfaces.tsx'
 import type { PhysicsSurfaceInjected } from './LabWorkspace.tsx'
+import { createQuestionCodeOwnerStore } from './experiments/question-code-context.ts'
+import type { QuestionCodeRegenerate } from './experiments/question-code-api.ts'
 import { createAgentSceneSync } from './physics/agent-scene-sync.ts'
 import { intermediatesToPrune, watchTurnEdges } from './lab-return.ts'
 import { PhysicsProfileLabel } from './PhysicsProfileLabel.tsx'
@@ -289,7 +291,11 @@ export function apply(ctx: ClientContext): void {
   /* The card's own face — the Lab handover, the self-check record, and the end
      of a turn's Lab visit — shared by the conversation-flow card and the
      turn-tail seat. */
+  const questionCodeOwner = createQuestionCodeOwnerStore()
+  let regenerateQuestionCode: QuestionCodeRegenerate = async () => ({ ok: false, error: '学习会话尚未就绪，请稍后重试。' })
   const sceneCardFace = () => ({
+    questionCodeOwner,
+    regenerateQuestionCode: (sceneId: string) => regenerateQuestionCode(sceneId),
     openSceneInLab: (ref: PhysicsSceneRef) => { surface.open('lab', ref) },
     endTurnHygiene,
     recordAttempt: (attempt: Parameters<typeof learningRecord.record>[0]) => {
@@ -526,15 +532,18 @@ export function apply(ctx: ClientContext): void {
        projection, which rides the session list rows. The first value seen for
        a session only becomes the active scene; a later revision opens the Lab. */
     const agentScenes = createAgentSceneSync({
-      adoptScene: (ref) => { surface.openTransient(surface.store.getSnapshot().surface, ref) },
-      showScene: (ref) => {
-        labAutoOpened = true
+      adoptScene: (ref) => {
         turnScenes.push(ref)
-        surface.openTransient('lab', ref)
+        surface.openTransient(surface.store.getSnapshot().surface, ref)
+      },
+      showScene: (ref) => {
+        turnScenes.push(ref)
+        surface.openTransient(surface.store.getSnapshot().surface, ref)
       },
     })
     const mirrorAgentScene = (): void => {
       const active = currentSessionId()
+      questionCodeOwner.set(auth.store.getSnapshot().status === 'authed' ? active : undefined)
       const summary = active === undefined
         ? undefined
         : scope.sessions.list.getSnapshot().byId[active]
@@ -543,7 +552,8 @@ export function apply(ctx: ClientContext): void {
     scope.effect(() => {
       mirrorAgentScene()
       const stop = scope.sessions.list.subscribe(mirrorAgentScene)
-      return () => { stop() }
+      const stopAuth = auth.store.subscribe(mirrorAgentScene)
+      return () => { stop(); stopAuth(); questionCodeOwner.set(undefined) }
     }, 'ui-physicsos: mirror agent scenes')
 
     /* The turn's own end closes the Lab the agent opened. The turn-tail seat
@@ -625,6 +635,17 @@ export function apply(ctx: ClientContext): void {
       return result.ok ? { ok: true } : { ok: false, error: result.error.message }
     }
 
+    regenerateQuestionCode = async (sceneId) => {
+      const ownerSessionId = currentSessionId()
+      if (ownerSessionId === undefined || auth.store.getSnapshot().status !== 'authed') {
+        return { ok: false, error: '请先登录并打开本题的学习会话。' }
+      }
+      const summary = scope.sessions.list.getSnapshot().byId[ownerSessionId]
+      const projection = summary?.projectionValues?.['physicsScenes'] as { scenes?: Record<string, unknown> } | undefined
+      if (projection?.scenes?.[sceneId] === undefined) return { ok: false, error: '当前学习会话中没有这个题目场景。' }
+      return submitToTutor(`请为当前学习会话中已保存的物理场景 ${JSON.stringify(sceneId)} 生成或重新生成本题代码实验。调用 physics_generate_experiment，sceneId 必须为 ${JSON.stringify(sceneId)}；从已保存场景读取本题条件，保留题目理解、解题步骤和物理验证，使用最新代码实验视图。`)
+    }
+
     /* 重新练习 / 题库练习 → the golden stem goes to the tutor; on success the
        surface returns to the conversation so the student watches the solve
        card stream in where the answer lives. */
@@ -660,6 +681,7 @@ export function apply(ctx: ClientContext): void {
         },
         /* 出卷专区 talks to the host's `/physicsos/paper` REST surface; the
            client is one injected callback bag, built once in apply. */
+        questionCodeOwner,
         paperApi,
         adminApi,
         noticeApi,

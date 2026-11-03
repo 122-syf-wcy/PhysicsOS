@@ -25,7 +25,7 @@ export type SceneTurnCardProps =
 
 /** Render this Turn's newest scene beside its answer, or nothing when it had none. */
 export function SceneTurnCard({
-  turn, t, openSceneInLab, recordAttempt, endTurnHygiene,
+  turn, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner, endTurnHygiene,
 }: SceneTurnCardProps): React.ReactNode {
   const data = turn.data.get(PHYSICS_SCENE_TURN_KEY)
   /* The turn closed — this seat only exists once `turn/end` is in the log. That
@@ -39,6 +39,8 @@ export function SceneTurnCard({
       data={data}
       t={t}
       openSceneInLab={openSceneInLab}
+      {...questionCodeOwner === undefined ? {} : { questionCodeOwner }}
+      {...regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode }}
       {...recordAttempt === undefined ? {} : { recordAttempt }}
     />
   )

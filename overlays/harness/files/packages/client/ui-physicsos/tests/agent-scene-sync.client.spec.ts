@@ -57,18 +57,31 @@ describe('readAgentScenesProjection', () => {
 })
 
 describe('createAgentSceneSync', () => {
-  it('adopts the first value of a session silently and shows later revisions in the Lab', () => {
+  it('adopts every revision silently while the code experiment stays in chat', () => {
     const { sync, adopted, shown } = harness()
     expect(sync.apply('session-a', projection('s1', snapshotOf('s1', 0)))).toBe('adopted')
     expect(adopted.map(ref => ref.sceneId)).toEqual(['s1'])
     expect(shown).toHaveLength(0)
 
-    expect(sync.apply('session-a', projection('s1', snapshotOf('s1', 1)))).toBe('shown')
-    expect(shown.map(ref => `${ref.sceneId}@${ref.scene.revision}`)).toEqual(['s1@1'])
+    expect(sync.apply('session-a', projection('s1', snapshotOf('s1', 1)))).toBe('adopted')
+    expect(adopted.map(ref => `${ref.sceneId}@${ref.scene.revision}`)).toEqual(['s1@0', 's1@1'])
+    expect(shown).toHaveLength(0)
 
     /* A second scene the agent opened becomes the one the Lab shows. */
-    expect(sync.apply('session-a', projection('s2', snapshotOf('s1', 1), snapshotOf('s2', 0)))).toBe('shown')
-    expect(shown.at(-1)?.sceneId).toBe('s2')
+    expect(sync.apply('session-a', projection('s2', snapshotOf('s1', 1), snapshotOf('s2', 0)))).toBe('adopted')
+    expect(adopted.at(-1)?.sceneId).toBe('s2')
+    expect(shown).toHaveLength(0)
+  })
+
+  it('keeps code experiment changes in chat without opening the old Lab', () => {
+    const { sync, adopted, shown } = harness()
+    const value = snapshotOf('s1', 0) as Record<string, unknown>
+    value.visualization = { status: 'generating', jobId: 'job-1', ownerSessionId: 'session-a', sceneId: 's1', sceneRevision: 0 }
+    sync.apply('session-a', projection('s1', value))
+    value.visualization = { status: 'failed', jobId: 'job-1', ownerSessionId: 'session-a', sceneId: 's1', sceneRevision: 0, code: 'RENDER_FAILED', message: '重新生成' }
+    expect(sync.apply('session-a', projection('s1', value))).toBe('adopted')
+    expect(adopted).toHaveLength(2)
+    expect(shown).toHaveLength(0)
   })
 
   it('treats re-deliveries and unrelated rebuilds as no-ops', () => {
@@ -111,7 +124,7 @@ describe('createAgentSceneSync', () => {
     expect(shown).toHaveLength(0)
 
     const mechanics = createMechanicsScene({ sceneId: 's1', revision: 1, model: 'projectile_motion', position: { x: 0, y: 20, z: 0 }, velocity: { x: 10, y: 0, z: 0 } })
-    expect(sync.apply('session-a', projection('s1', snapshotOf('s1', 1, mechanics)))).toBe('shown')
-    expect(shown[0]?.scene.bodies).toHaveLength(1)
+    expect(sync.apply('session-a', projection('s1', snapshotOf('s1', 1, mechanics)))).toBe('adopted')
+    expect(adopted[0]?.scene.bodies).toHaveLength(1)
   })
 })

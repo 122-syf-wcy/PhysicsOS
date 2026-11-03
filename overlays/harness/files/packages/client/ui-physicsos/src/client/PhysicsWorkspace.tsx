@@ -76,6 +76,10 @@ import {
 } from './physics/circuit-builder.ts'
 import { GlassSelect } from './GlassSelect.tsx'
 import css from './LabWorkspace.module.css'
+import type { CodeVisualizationState } from '@deepseek-ai/dsh-tool-physicsos/types'
+import type { PhysicsScene } from '@physicsos/physics-scene'
+import type { QuestionCodeOwnerStore } from './experiments/question-code-context.ts'
+import { QuestionCodeCanvas } from './experiments/QuestionCodeCanvas.tsx'
 import { useExperimentSession } from './experiments/use-experiment-session.ts'
 import { CommunityWorkspaceCanvas } from './experiments/CommunityWorkspaceCanvas.tsx'
 
@@ -110,6 +114,9 @@ const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
 export interface PhysicsWorkspaceProps {
   /** Exact template identity; approved packages replace only this experiment's canvas. */
   readonly experimentId?: string
+  readonly questionCodeVisualization?: CodeVisualizationState
+  readonly questionCodeScene?: PhysicsScene
+  readonly questionCodeOwner?: QuestionCodeOwnerStore
   readonly onSceneChange?: (scene: import('@physicsos/physics-scene').PhysicsScene) => void
   readonly runtime: WorkspaceRuntime
   readonly t: Translate
@@ -157,6 +164,9 @@ export interface PhysicsWorkspaceProps {
  */
 export function PhysicsWorkspace({
   experimentId,
+  questionCodeVisualization,
+  questionCodeScene,
+  questionCodeOwner,
   runtime,
   onSceneChange,
   t,
@@ -845,7 +855,9 @@ export function PhysicsWorkspace({
             >
               {/* The canvas is the renderer: it subscribes to the frame source
                   directly, so animation frames re-render only this subtree (#123). */}
-              {experimentId === undefined ? <CanvasFrame
+              {questionCodeVisualization !== undefined && questionCodeScene !== undefined
+                ? <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
+                : experimentId === undefined ? <CanvasFrame
                 source={frameSource}
                 ariaLabel={snapshot.ariaLabel}
                 onSeekTime={seek}

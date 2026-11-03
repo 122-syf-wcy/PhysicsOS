@@ -11,7 +11,7 @@ import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversati
    same Definitions the Chat view registers. */
 import { commandDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/command.ts'
 import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
-import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { SceneCardBody, SceneChatCard } from '../src/client/SceneChatCard.tsx'
 import {
   isPhysicsSceneEvent, physicsSceneCardDefinition, physicsSceneTurnDefinition,
   PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData,
@@ -290,7 +290,20 @@ describe('physics scene chat card', () => {
     } as never, {} as never)).toThrow('physics-scene-card start requires physics/scene')
   })
 
-  it('renders badge, title, canvas and transport, and opens the Lab on request', () => {
+  it('uses the code experiment status shell for historical cards without generating on read', () => {
+    const regenerateQuestionCode = vi.fn(async () => ({ ok: true as const }))
+    const data = solvedCardData('mech-01-uniform-acceleration')
+    const view = render(<SceneCardBody {...({ data, t, openSceneInLab: vi.fn(), regenerateQuestionCode } as Parameters<typeof SceneCardBody>[0])} />)
+    expect(view.container.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+    expect(view.queryByRole('img')).toBeNull()
+    expect(view.container.querySelector('[data-code-experiment-shell]')).not.toBeNull()
+    expect(regenerateQuestionCode).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('button', { name: '生成本题实验' }))
+    expect(regenerateQuestionCode).toHaveBeenCalledWith(data.sceneId)
+    expect(view.getByText('解题步骤')).toBeTruthy()
+  })
+
+  it('renders the code shell, exact scene controls and transport for a historical scene', () => {
     const openSceneInLab = vi.fn()
     const data: PhysicsSceneCardData = {
       sceneId: ref.sceneId,
@@ -304,17 +317,18 @@ describe('physics scene chat card', () => {
     }
     const view = render(<SceneChatCard {...cardProps(data, openSceneInLab)} />)
 
-    expect(view.getByText('物理场景')).toBeTruthy()
+    expect(view.getByText('本题代码实验')).toBeTruthy()
     expect(view.getByText('斜抛运动')).toBeTruthy()
-    expect(view.container.querySelector('svg')).not.toBeNull()
+    expect(view.container.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+    expect(view.container.querySelector('iframe')).toBeNull()
 
     const play = view.getByRole('button', { name: '播放 / 暂停' })
     expect(play.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(play)
     expect(view.getByRole('button', { name: '播放 / 暂停' }).getAttribute('aria-pressed')).toBe('true')
 
-    fireEvent.click(view.getByRole('button', { name: '在物理世界中打开' }))
-    expect(openSceneInLab).toHaveBeenCalledWith({ sceneId: ref.sceneId, scene: ref.scene })
+    expect((view.getByRole('button', { name: '在实验室中探索' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(openSceneInLab).not.toHaveBeenCalled()
   })
 
   it('yields to a newer scene card inside the same answer block', () => {
@@ -396,7 +410,7 @@ describe('physics scene chat card', () => {
     const view = render(<SceneChatCard {...cardProps(data)} />)
 
     expect(view.getByRole('status').textContent)
-      .toBe('这个场景暂不支持内嵌预览，请在物理世界中查看。')
+      .toContain('这段历史记录还没有本题代码实验')
     expect(view.queryByRole('button', { name: '播放 / 暂停' })).toBeNull()
   })
 
@@ -417,7 +431,7 @@ describe('physics scene chat card', () => {
     expect(view.container.textContent).toContain('20.00 m/s')
   })
 
-  it('lights the mapped primitive on the canvas when a known chip is toggled', () => {
+  it('keeps known highlights in the shared local session while awaiting a code renderer', () => {
     const view = render(<SceneChatCard {...cardProps(solvedCardData('mech-01-uniform-acceleration'))} />)
     /* The spec's `t` does not interpolate, so every chip shares the raw
        template name — the MathText title picks the v0 one. */
@@ -427,11 +441,32 @@ describe('physics scene chat card', () => {
     expect(view.container.querySelector('g[class*="highlightGroup"]')).toBeNull()
 
     fireEvent.click(chip)
-    expect(view.container.querySelector('g[class*="highlightGroup"]')).not.toBeNull()
+    expect(view.container.querySelector('iframe')).toBeNull()
     expect(chip.getAttribute('aria-pressed')).toBe('true')
 
     fireEvent.click(view.getByRole('button', { name: '取消高亮 {symbol}' }))
     expect(view.container.querySelector('g[class*="highlightGroup"]')).toBeNull()
+  })
+
+  it('publishes generating and ready updates at the same scene revision while preserving the solve', () => {
+    const solved = solvedCardData('01-proton-basic')
+    const initial = entry(2, 'physics/scene', { ...solved, turn: 1 })
+    const generating = entry(3, 'physics/scene', { ...solved, solve: undefined, turn: 1,
+      visualization: { status: 'generating', jobId: 'job-1', ownerSessionId: 'session-a', sceneId: solved.sceneId, sceneRevision: solved.revision } })
+    const ready = entry(4, 'physics/scene', { ...solved, solve: undefined, turn: 1,
+      visualization: { status: 'ready', artifactId: 'artifact-1', ownerSessionId: 'session-a', sceneId: solved.sceneId, sceneRevision: solved.revision } })
+    const value = snapshot([entry(1, 'turn/start', { turn: 1 }), initial, generating, ready])
+    const card = node(value, 'physics-scene-card')?.data as PhysicsSceneCardData
+    expect(card.visualization?.status).toBe('ready')
+    expect(card.solve?.goldenQuestionId).toBe('01-proton-basic')
+    const start = entry(1, 'turn/start', { turn: 1 })
+    let state = physicsSceneTurnDefinition.start({} as never, { ...start, role: 'start', location: { kind: 'session' } } as never, {} as never)
+    state = physicsSceneTurnDefinition.update({ state } as never, { ...initial, role: 'update', location: { kind: 'session' } } as never)
+    const previous = physicsSceneTurnDefinition.buildLocationData!({ state } as never, 'turn', null)
+    state = physicsSceneTurnDefinition.update({ state } as never, { ...generating, role: 'update', location: { kind: 'session' } } as never)
+    const next = physicsSceneTurnDefinition.buildLocationData!({ state } as never, 'turn', previous)
+    expect(next).not.toBe(previous)
+    expect(next).toMatchObject({ value: { visualization: { status: 'generating' }, solve: solved.solve } })
   })
 
   it('keeps the solve payload when a command revision folds into the card', () => {

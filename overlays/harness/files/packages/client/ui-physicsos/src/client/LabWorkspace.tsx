@@ -27,6 +27,8 @@ import { LibraryWorkspace } from './LibraryWorkspace.tsx'
 import { ContributeWorkspace } from './ContributeWorkspace.tsx'
 import { PaperWorkspace } from './PaperWorkspace.tsx'
 import type { PaperApi } from './paper-api.ts'
+import type { QuestionCodeOwnerStore } from './experiments/question-code-context.ts'
+import { questionCodeVisualizationOf } from './experiments/question-code-api.ts'
 import { PhysicsWorkspace } from './PhysicsWorkspace.tsx'
 import type { LearningRecordState, SelfCheckAttemptInput } from './learning-record-store.ts'
 import { domainOfScene, type SupportedSceneDomain } from './physics/domain-of-scene.ts'
@@ -47,6 +49,7 @@ import css from './LabWorkspace.module.css'
 
 /** Registration-side face for {@link PhysicsSurface}. */
 export interface PhysicsSurfaceInjected {
+  questionCodeOwner?: QuestionCodeOwnerStore
   hooks: {
     physicsSurface: SnapshotStore<PhysicsSurfaceState>
     learningRecord: SnapshotStore<LearningRecordState>
@@ -106,6 +109,7 @@ export function PhysicsSurface({
   noticeApi,
   modelPoolApi,
   useAuth,
+  questionCodeOwner,
 }: PhysicsSurfaceProps) {
   const surfaceState = usePhysicsSurface(snapshot => snapshot)
   const surface = surfaceState.surface
@@ -272,13 +276,17 @@ export function PhysicsSurface({
 
   const bench = scene === undefined ? undefined : opticalBenchOf(scene)
   const element = bench?.elements[0]
-  const Workspace = domain === 'optics' && bench?.elements.length === 1 && element?.type === 'thin_lens' && element.focalLength.value > 0
+  const questionCodeVisualization = questionCodeVisualizationOf(scene)
+  const questionCodeScene = surfaceState.sceneRef?.originScene ?? scene
+  const Workspace = questionCodeVisualization === undefined && domain === 'optics' && bench?.elements.length === 1 && element?.type === 'thin_lens' && element.focalLength.value > 0
     ? ConvexLensPage : PhysicsWorkspace
   return (<>
     {surfaceState.routeNotice ? <div role="status" className={pageCss.routeNotice}>{surfaceState.routeNotice}</div> : null}
     <Workspace
       key={runtimeKey}
       runtime={runtime}
+      {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
+      {...(questionCodeVisualization === undefined || questionCodeScene === undefined ? {} : { questionCodeVisualization, questionCodeScene })}
       {...(templateId === undefined ? {} : { experimentId: templateId })}
       {...(updateScene === undefined ? {} : { onSceneChange: updateScene })}
       t={t}

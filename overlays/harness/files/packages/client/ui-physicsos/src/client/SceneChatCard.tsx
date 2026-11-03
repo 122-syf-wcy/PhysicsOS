@@ -8,7 +8,7 @@
  * authoritative scene still lives in the host's EventStore.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import {
   IconChevronLeftOutlineMedium,
@@ -22,14 +22,17 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
    merge (the card's kind), and the Session-scoped `useChat` standard hook. */
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
-import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
+import type { CodeVisualizationState, PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 
-import { STEP_FRACTION, useAnimationClock } from './animation-clock.ts'
+import { STEP_FRACTION } from './animation-clock.ts'
 import { buildWorkspaceRuntime } from './physics/build-workspace-runtime.ts'
 import { domainOfScene } from './physics/domain-of-scene.ts'
-import { useEventEffects } from './physics/event-effects.ts'
-import { createFrameSource, useFrameSource, type FrameSource } from './physics/frame-source.ts'
-import { PhysicsCanvas } from './physics/PhysicsCanvas.tsx'
+import { useFrameSource, type FrameSource } from './physics/frame-source.ts'
+import { QuestionCodeCanvas } from './experiments/QuestionCodeCanvas.tsx'
+import { useExperimentSession } from './experiments/use-experiment-session.ts'
+import { QuestionCodeControls } from './experiments/QuestionCodeControls.tsx'
+import type { QuestionCodeOwnerStore } from './experiments/question-code-context.ts'
+import { withQuestionCodeVisualization, questionCodeSceneIdentity, type QuestionCodeRegenerate } from './experiments/question-code-api.ts'
 import { MathText } from './physics/MathText.tsx'
 import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './physics/workspace-runtime.ts'
@@ -52,6 +55,9 @@ type Translate = (key: PhysicsosKey, params?: Record<string, unknown>) => string
 export interface SceneChatCardInjected {
   /** Hand the card's scene to the Lab — the same verb 最近空间 rows use. */
   openSceneInLab: (ref: PhysicsSceneRef) => void
+  questionCodeOwner?: QuestionCodeOwnerStore
+  /** Explicit user action queues generation in the selected owning chat. */
+  regenerateQuestionCode?: QuestionCodeRegenerate
   /**
    * Close an agent-opened Lab and drop the turn's scaffolding scenes. Called
    * once per turn by the turn-tail seat, which only mounts after the turn ends.
@@ -76,8 +82,6 @@ export type SceneCardBodyProps =
   & InjectFace<SceneChatCardInjected>
   & PropsLocale<'physicsos'>
 
-const SUMMARY_INTERVAL_MS = 250
-
 /* One answer flow may publish several scenes — an abandoned first attempt
    and the corrected one the agent settles on. Cards are keyed per scene, so
    the supersede check lives here: a card yields to a newer scene card that
@@ -85,15 +89,17 @@ const SUMMARY_INTERVAL_MS = 250
 const ANSWER_BOUNDARY = new Set(['user', 'steering'])
 
 export const SceneCardBody = memo(function SceneCardBody({
-  data, t, openSceneInLab, recordAttempt,
+  data, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner,
 }: SceneCardBodyProps) {
   /* The snapshot invariant guarantees `scene` is the whole PhysicsScene at
      this revision (`scene.id === sceneId`, `scene.revision === revision`). */
   const scene = data.scene as unknown as PhysicsScene
   const domain = domainOfScene(scene)
-  const runtimeKey = `${domain}:${data.sceneId}:${data.revision}`
+  const runtimeKey = `${domain}:${data.sceneId}:${data.revision}:${questionCodeSceneIdentity(scene)}`
   const runtime = useMemo<WorkspaceRuntime | null>(
-    () => buildWorkspaceRuntime(domain, scene),
+    () => {
+      try { return buildWorkspaceRuntime(domain, scene) } catch { return null }
+    },
     /* runtimeKey encodes domain + scene identity; `scene` is a fresh JSON
        view per node build, so keying on it would rebuild the runtime every
        materialization. */
@@ -101,11 +107,11 @@ export const SceneCardBody = memo(function SceneCardBody({
   )
 
   return (
-    <div className={css.card} data-scene-card={data.sceneId}>
+    <div className={css.card} data-scene-card={data.sceneId} data-code-experiment-shell>
       <header className={css.head}>
         <span className={css.badge}>
           <IconPhysicsLab size={14} />
-          {t('sceneCard.badge')}
+          本题代码实验
         </span>
         <span className={css.title} title={data.title}>{data.title}</span>
         {/* The card folds every later revision of this scene — the badge
@@ -114,19 +120,29 @@ export const SceneCardBody = memo(function SceneCardBody({
         <button
           type="button"
           className={css.open}
+          disabled={data.visualization?.status !== 'ready'}
           onClick={() => {
-            openSceneInLab({ sceneId: data.sceneId, scene })
+            openSceneInLab({ sceneId: data.sceneId, scene: data.visualization === undefined ? scene : withQuestionCodeVisualization(scene, data.visualization),
+              ...(data.visualization === undefined ? {} : { originScene: scene }) })
           }}
         >
-          {t('sceneCard.openInLab')}
+          在实验室中探索
         </button>
       </header>
       {runtime === null ? (
-        <p className={css.unsupported} role="status">{t('sceneCard.unsupported')}</p>
+        <><QuestionCodeCanvas scene={scene} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
+          {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
+          {data.solve === undefined ? null : <SolveSection solve={data.solve} verification={[]} domain={domain}
+            bodyId={scene.bodies[0]?.id} drawn={EMPTY_DRAWN} activeToken={null} onToggle={() => {}}
+            sceneTitle={data.title} revision={data.revision} recordAttempt={recordAttempt} t={t} />}</>
       ) : (
         <CardStage
           key={runtimeKey}
           runtime={runtime}
+          scene={scene}
+          {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
+          {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
+          {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })}
           t={t}
           {...(data.solve === undefined ? {} : {
             solve: data.solve,
@@ -150,6 +166,10 @@ export const SceneCardBody = memo(function SceneCardBody({
     `setHighlight`, never through a scene command. */
 function CardStage({
   runtime,
+  scene,
+  visualization,
+  questionCodeOwner,
+  regenerateQuestionCode,
   t,
   solve,
   domain,
@@ -159,6 +179,10 @@ function CardStage({
   recordAttempt,
 }: {
   runtime: WorkspaceRuntime
+  scene: PhysicsScene
+  visualization?: CodeVisualizationState
+  questionCodeOwner?: QuestionCodeOwnerStore
+  regenerateQuestionCode?: QuestionCodeRegenerate
   t: Translate
   solve?: PhysicsSceneSolveSummary | undefined
   domain?: string | undefined
@@ -167,54 +191,12 @@ function CardStage({
   revision?: number | undefined
   recordAttempt?: ((attempt: SelfCheckAttemptInput) => void) | undefined
 }) {
-  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot>(() => runtime.getSnapshot())
-  const [frameSource] = useState(() => createFrameSource<WorkspaceSnapshot>(runtime.getSnapshot()))
-  const summaryRef = useRef(snapshot)
-  const lastSummaryAt = useRef(0)
+  const { session, snapshot, commit, frameSource } = useExperimentSession(runtime)
   const [highlightToken, setHighlightToken] = useState<string | null>(null)
-
   const clock = snapshot.clock
   const running = clock.running
   const failed = snapshot.status === 'failed'
   const clockScale = timeScaleOf(clock.total)
-
-  const commit = useCallback(
-    (next: WorkspaceSnapshot) => {
-      frameSource.set(next)
-      summaryRef.current = next
-      setSnapshot(next)
-    },
-    [frameSource],
-  )
-
-  useAnimationClock(
-    running,
-    useCallback(
-      (elapsed: number) => {
-        const next = runtime.advance(elapsed)
-        frameSource.set(next)
-        const previous = summaryRef.current
-        const now = typeof performance === 'undefined' ? 0 : performance.now()
-        const significant =
-          next.status !== previous.status ||
-          next.clock.running !== previous.clock.running
-        if (significant || now - lastSummaryAt.current >= SUMMARY_INTERVAL_MS) {
-          lastSummaryAt.current = now
-          summaryRef.current = next
-          setSnapshot(next)
-        }
-      },
-      [runtime, frameSource],
-    ),
-  )
-
-  /* A rebuilt runtime (new revision card data) must not keep the last frame. */
-  useEffect(() => {
-    const next = runtime.getSnapshot()
-    frameSource.set(next)
-    summaryRef.current = next
-    setSnapshot(next)
-  }, [runtime, frameSource])
 
   const seek = useCallback(
     (time: number) => {
@@ -240,23 +222,11 @@ function CardStage({
 
   return (
     <>
-      {solve === undefined ? null : (
-        <SolveSection
-          solve={solve}
-          verification={snapshot.verification}
-          domain={domain}
-          bodyId={bodyId}
-          drawn={drawn}
-          activeToken={highlightToken}
-          onToggle={toggleKnown}
-          sceneTitle={sceneTitle ?? ''}
-          revision={revision}
-          recordAttempt={recordAttempt}
-          t={t}
-        />
-      )}
-      <div className={css.stage}>
-        <CardCanvas source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek} />
+      <div className={css.codeBench}>
+        <QuestionCodeCanvas scene={scene} session={session} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
+          {...(visualization === undefined ? {} : { visualization })}
+          {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
+        <QuestionCodeControls session={session} snapshot={snapshot} />
       </div>
       <div className={css.transport} aria-label={t('lab.timeline')}>
         <button
@@ -316,7 +286,26 @@ function CardStage({
           />
         </div>
         <span className={css.clockEnd}>{formatTimeIn(clock.total, clockScale)}</span>
+        <select className={css.rate} aria-label={t('lab.rate')} value={clock.rate} disabled={failed || clock.total <= 0}
+          onChange={event => { commit(runtime.setRate(Number(event.target.value))) }}>
+          {[0.25, 0.5, 1, 2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
+        </select>
       </div>
+      {solve === undefined ? null : (
+        <SolveSection
+          solve={solve}
+          verification={snapshot.verification}
+          domain={domain}
+          bodyId={bodyId}
+          drawn={drawn}
+          activeToken={highlightToken}
+          onToggle={toggleKnown}
+          sceneTitle={sceneTitle ?? ''}
+          revision={revision}
+          recordAttempt={recordAttempt}
+          t={t}
+        />
+      )}
     </>
   )
 }
@@ -538,38 +527,13 @@ function SolveSection({
   )
 }
 
-/** The renderer half: only this subtree re-renders per animation frame. */
-function CardCanvas({
-  source,
-  ariaLabel,
-  onSeekTime,
-}: {
-  source: FrameSource<WorkspaceSnapshot>
-  ariaLabel: string
-  onSeekTime: (time: number) => void
-}) {
-  const frame = useFrameSource(source)
-  const effects = useEventEffects(frame.clock, frame.events, frame.view)
-  return (
-    <PhysicsCanvas
-      view={frame.view}
-      ariaLabel={ariaLabel}
-      trajectoryTimes={frame.trajectoryTimes}
-      {...(frame.sampleReadout === undefined ? {} : { sampleReadout: frame.sampleReadout })}
-      onSeekTime={onSeekTime}
-      effects={effects}
-      clockTime={frame.clock.time}
-    />
-  )
-}
-
 /**
  * The conversation-flow entry point: one card per scene node, yielding to the
  * Turn's own card once that Turn has closed, and to a newer scene card in the
  * same answer block while it is still running.
  */
 export const SceneChatCard = memo(function SceneChatCard({
-  node, t, openSceneInLab, recordAttempt, useChat,
+  node, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner, useChat,
 }: SceneChatCardProps) {
   const superseded = useChat((snapshot) => {
     /* The Turn card covers this answer once the Turn closes. This card is what
@@ -606,5 +570,5 @@ export const SceneChatCard = memo(function SceneChatCard({
     return false
   })
   if (superseded) return null
-  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab} {...recordAttempt === undefined ? {} : { recordAttempt }} />
+  return <SceneCardBody data={node.data} t={t} openSceneInLab={openSceneInLab} {...questionCodeOwner === undefined ? {} : { questionCodeOwner }} {...regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode }} {...recordAttempt === undefined ? {} : { recordAttempt }} />
 })

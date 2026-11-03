@@ -2,6 +2,7 @@ import type { DerivedQuantity, FormulaRef, SimulationResult } from '@physicsos/p
 import type { Quantity } from '@physicsos/physics-units'
 import type { QuantityVector } from '@physicsos/physics-core'
 import type { PhysicsScene } from '@physicsos/physics-scene'
+import { resolveMechanicsModel } from '@physicsos/engine-mechanics'
 import { resolveOpticalImaging } from '@physicsos/engine-optics'
 import {
   observeModernPhysicsScene,
@@ -1306,6 +1307,21 @@ function buildSolution(
         { id: 'f-s', expression: 's = v0*t + 0.5*a*t²' },
       )
     } else if (model === 'projectile_motion') {
+      /* Reuse the engine's resolved launch conditions. The landing answer stays
+         the verified SimulationResult; only the displayed algebra depends on
+         whether the launch is horizontal, from ground level, or elevated. */
+      const resolved = resolveMechanicsModel(scene)
+      const projectile = resolved.modelId === 'projectile_motion' ? resolved : undefined
+      const h0 =
+        projectile === undefined ? undefined : projectile.initialPosition.y - projectile.groundY
+      const vy0 = projectile?.initialVelocity.y
+      const g = projectile === undefined ? undefined : Math.abs(projectile.acceleration.y)
+      const flightFormula =
+        vy0 !== undefined && Math.abs(vy0) < 1e-12
+          ? 't = √(2h/g)'
+          : h0 === 0 && vy0 !== undefined && vy0 > 0
+            ? 't = 2*vy0/g'
+            : 't = (vy0 + √(vy0² + 2*g*h0))/g'
       steps.push({
         index: steps.length + 1,
         title: '抛体运动',
@@ -1322,11 +1338,12 @@ function buildSolution(
         }
         steps.push({
           index: steps.length + 1,
-          title: 't = √(2h/g)',
+          title: flightFormula,
           resultSymbol: 't',
           resultValue: val.toFixed(2),
           resultUnit: 's',
-          description: '',
+          description:
+            '以地面为零高度，h0 为初始高度，vy0 为初始竖直速度；落地时竖直位置为零，取非负时间。',
         })
       }
       const range = dq.find((d) => d.key === 'range')
@@ -1348,9 +1365,31 @@ function buildSolution(
         results['max_height'] = { symbol: 'H', label: '最大高度', value: val.toFixed(2), unit: 'm' }
       }
       derivationFormulas.push(
-        { id: 'f-flight', expression: 't = √(2h/g)' },
+        { id: 'f-flight', expression: flightFormula },
         { id: 'f-range', expression: 'R = vx * t' },
       )
+      if (projectile !== undefined && h0 !== undefined && vy0 !== undefined && g !== undefined) {
+        /* Derived components and the default gravity are absent from ir.knowns.
+           Supply only the engine's values for a complete substitution, rounding
+           display precision to suppress sin(30°)'s floating-point tail. */
+        const engineKnown = (symbol: string, value: number, unit: string, dimension: string) => ({
+          key: symbol,
+          label: symbol,
+          symbol,
+          value,
+          unit,
+          dimension,
+          displayValue: `${Number(value.toPrecision(12))} ${unit}`,
+        })
+        attachSubstitutions(steps, [
+          engineKnown('h', h0, 'm', 'length'),
+          engineKnown('h0', h0, 'm', 'length'),
+          engineKnown('vy0', vy0, 'm/s', 'velocity'),
+          engineKnown('g', g, 'm/s^2', 'acceleration'),
+          engineKnown('vx', projectile.initialVelocity.x, 'm/s', 'velocity'),
+          engineKnown('t', projectile.flightTime, 's', 'time'),
+        ])
+      }
     } else if (model === 'newton_second_law') {
       steps.push({ index: steps.length + 1, title: '牛顿第二定律', description: 'ΣF = ma' })
       const acc = dq.find((d) => d.key === 'acceleration')

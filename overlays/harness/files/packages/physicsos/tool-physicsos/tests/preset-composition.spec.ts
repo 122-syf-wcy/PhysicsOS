@@ -79,7 +79,7 @@ describe('the physics-student agent preset', () => {
     expect(meta.order).toBe(0)
   })
 
-  it('composes under one agent scope: the persona shadows the deployment default and the seven tools are visible to that scope only', async () => {
+  it('composes under one agent scope: the persona shadows the deployment default and the physics tools are visible to that scope only', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, { personaPrefix: 'You are a coding agent.' })
     await ctx.plugin(ToolRuntime)
@@ -101,7 +101,7 @@ describe('the physics-student agent preset', () => {
     expect(persona).not.toContain('coding agent')
 
     const scoped = ctx.tools.schemas(key).map(schema => schema.name).filter(name => name.startsWith('physics_'))
-    expect(scoped.sort()).toEqual([...PHYSICS_TOOL_NAMES].sort())
+    expect(scoped.sort()).toEqual([...toolPhysicsos.TOOL_NAMES].sort())
     const global = ctx.tools.schemas().map(schema => schema.name).filter(name => name.startsWith('physics_'))
     expect(global).toEqual([])
   })

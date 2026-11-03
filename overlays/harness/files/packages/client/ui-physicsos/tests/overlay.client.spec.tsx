@@ -103,7 +103,10 @@ const openLabOnTemplate = (
 ): void => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown experiment template: ${templateId}`)
-  surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+  const ref = createExperimentSceneRef(template, t(template.label))
+  surface.open('lab', { ...ref, scene: { ...ref.scene, metadata: { ...ref.scene.metadata,
+    experimentRelease: { kind: 'official', id: `physicsos-${templateId}-v1`, experimentId: templateId, version: '1.0.0' },
+  } } })
 }
 
 afterEach(() => {
@@ -677,10 +680,11 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getAllByText('质子垂直进入匀强磁场').length).toBeGreaterThan(0)
     expect(screen.getByText('已验证')).toBeTruthy()
     expect(screen.getAllByText(/轨道半径/).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByRole('img')).toBeTruthy()
+    expect(screen.getByText('这段历史记录还没有本题代码实验')).toBeTruthy()
+    expect(screen.queryByRole('img')).toBeNull()
   })
 
-  it('renders every mechanics question family through the shared verified canvas', () => {
+  it('renders every mechanics question family in the code shell with its verified solution', () => {
     for (const [questionId, title] of [
       ['mech-01-uniform-acceleration', '匀加速直线运动'],
       ['mech-02-projectile-horizontal', '平抛运动'],
@@ -690,11 +694,9 @@ describe('PhysicsOS overlay presentation', () => {
     ] as const) {
       const view = renderSolved(questionId)
       expect(screen.getByText('已验证')).toBeTruthy()
-      const canvas = screen.getByRole('img')
-      expect(canvas.getAttribute('aria-label')).toContain('可验证物理画布')
-      const viewBox = canvas.getAttribute('viewBox')?.split(' ').map(Number)
-      expect(viewBox).toBeDefined()
-      expect((viewBox?.[2] ?? 1) / (viewBox?.[3] ?? 1), title).toBeLessThan(2.2)
+      expect(view.container.querySelector('[data-code-experiment-shell]'), title).not.toBeNull()
+      expect(view.container.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+      expect(screen.queryByRole('img')).toBeNull()
       expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
       view.unmount()
     }
@@ -745,46 +747,16 @@ describe('PhysicsOS overlay presentation', () => {
     expect(answerText).toContain('75.00m')
   })
 
-  it('opens the exact verified mechanics Scene in the full Physics Lab', () => {
-    const surface = createPhysicsSurfaceController()
-    let opened: PhysicsSceneRef | undefined
-    const questionView = renderSolved('mech-01-uniform-acceleration', (ref) => { opened = ref })
-
-    const openButton = screen.getByRole('button', { name: '在物理世界中打开' })
-    fireEvent.click(openButton)
-    expect(opened).toBeDefined()
-    expect(opened!.sceneId).toBe(opened!.scene.id)
-    questionView.unmount()
-    surface.open('lab', opened)
-
-    const { container } = render(
-      <PhysicsSurface
-        useLearningRecord={neverHook}
-        useRecentExperiments={neverHook}
-        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
-        t={t}
-        useSessions={neverHook}
-        useWorkspaces={neverHook}
-        useAuth={neverHook}
-      />,
-    )
-    expect(container.querySelector('[data-physicsos-domain="mechanics"]')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '匀加速直线运动' })).toBeTruthy()
-    expect(screen.getByText('引擎已验证')).toBeTruthy()
-    expect(screen.getByRole('img', { name: '匀加速直线运动的可验证物理画布' })).toBeTruthy()
+  it('keeps a historical verified question in chat until its own code renderer exists', () => {
+    const open = vi.fn()
+    const view = renderSolved('mech-01-uniform-acceleration', open)
+    const button = screen.getByRole('button', { name: '在实验室中探索' }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(open).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[data-question-code-status="historical"]')).not.toBeNull()
+    expect(screen.getByText('物理已验证')).toBeTruthy()
     expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
-
-    /* A question scene is editable in the Lab: continuing the same revisioned
-       Scene is what keeps solve and experiment in one physical world, and an edit
-       is a new revision rather than a second source of truth. */
-    fireEvent.click(screen.getByRole('button', { name: '检查器' }))
-    const massInput = screen.getByRole('textbox', { name: '质量' })
-    if (!(massInput instanceof HTMLInputElement)) throw new Error('mass editor is not an input.')
-    fireEvent.change(massInput, { target: { value: '3' } })
-    fireEvent.blur(massInput)
-    expect(
-      container.querySelector('[data-physicsos-surface="lab"]')?.getAttribute('data-scene-revision'),
-    ).toBe('1')
   })
 
   it('rejects a question text that names no physics, honestly', () => {

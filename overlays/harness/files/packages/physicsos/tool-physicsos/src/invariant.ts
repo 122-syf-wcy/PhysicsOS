@@ -25,7 +25,7 @@ export const inject = ['invariants']
  */
 function validateSnapshot(value: unknown, fail: InvariantFailure): void {
   if (typeof value !== 'object' || value === null) fail('physics/scene data must be an object')
-  const { sceneId, revision, domain, engineId, title, cause, scene } = value as Record<string, unknown>
+  const { sceneId, revision, domain, engineId, title, cause, scene, visualization } = value as Record<string, unknown>
   if (typeof sceneId !== 'string' || sceneId.length === 0) fail('physics/scene sceneId must be a non-empty string')
   if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) {
     fail('physics/scene revision must be a non-negative integer')
@@ -39,6 +39,26 @@ function validateSnapshot(value: unknown, fail: InvariantFailure): void {
   if (embedded.schemaVersion !== SCENE_SCHEMA) fail(`physics/scene scene.schemaVersion must be ${SCENE_SCHEMA}`)
   if (embedded.id !== sceneId) fail('physics/scene scene.id must equal sceneId')
   if (embedded.revision !== revision) fail('physics/scene scene.revision must equal revision')
+  if (visualization !== undefined) {
+    if (typeof visualization !== 'object' || visualization === null || Array.isArray(visualization)) fail('physics/scene visualization must be an object')
+    const code = visualization as Record<string, unknown>
+    if (!['generating', 'ready', 'failed'].includes(String(code.status))) fail('physics/scene visualization carries an unknown status')
+    if (code.sceneId !== sceneId || code.sceneRevision !== revision) fail('physics/scene visualization must identify this exact scene revision')
+    if (typeof code.ownerSessionId !== 'string' || !code.ownerSessionId) fail('physics/scene visualization requires an owner session')
+    const common = ['status', 'ownerSessionId', 'sceneId', 'sceneRevision']
+    const fields = code.status === 'ready' ? [...common, 'artifactId', 'sceneSha256', 'experimentId', 'sha256', 'title', 'childSessionId', 'createdAt'] : code.status === 'generating' ? [...common, 'jobId', 'deadlineAt'] : [...common, 'jobId', 'code', 'message']
+    if (Object.keys(code).some(key => !fields.includes(key))) fail('physics/scene visualization cannot contain source code or capability URLs')
+    if (code.status === 'ready') {
+      for (const key of ['sceneSha256', 'sha256']) if (typeof code[key] !== 'string' || !/^[a-f0-9]{64}$/.test(String(code[key]))) fail(`physics/scene visualization.${key} must be a SHA256 digest`)
+      for (const key of ['artifactId', 'experimentId', 'title', 'childSessionId', 'createdAt']) if (typeof code[key] !== 'string' || !code[key]) fail(`physics/scene visualization.${key} must be a nonempty string`)
+    } else if (code.status === 'generating') {
+      if (typeof code.jobId !== 'string' || !code.jobId) fail('physics/scene generating visualization requires a job id')
+      if (code.deadlineAt !== undefined && (typeof code.deadlineAt !== 'number' || !Number.isSafeInteger(code.deadlineAt) || code.deadlineAt < 0)) fail('physics/scene generating deadlineAt must be a non-negative safe integer')
+    } else {
+      if (typeof code.code !== 'string' || typeof code.message !== 'string') fail('physics/scene failed visualization requires a coded message')
+    }
+  }
+
 }
 
 /* jscpd:ignore-start -- package companions share replay and dispatch plumbing */

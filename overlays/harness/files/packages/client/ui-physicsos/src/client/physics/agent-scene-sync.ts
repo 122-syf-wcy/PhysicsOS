@@ -4,11 +4,9 @@
  * The model edits scenes inside the host process through the physics tools;
  * `@deepseek-ai/dsh-tool-physicsos` publishes every touched scene as a
  * `physics/scene` session event, and the host folds them into the session's
- * `physicsScenes` projection. This module turns that projection into Lab
- * navigation: the FIRST value seen for a session is its baseline (the scene
- * becomes the active one silently, so a reload or a session switch does not
- * yank the student off the surface they are on); every later change is a live
- * revision and opens the Lab on it.
+ * `physicsScenes` projection. This module adopts complete snapshots without changing the current
+ * surface. The generated code experiment remains in chat; only an explicit
+ * student handover opens the Lab.
  *
  * Pure and framework-free: the caller feeds `(sessionId, projection value)`
  * and supplies the two surface actions. The projection is read defensively —
@@ -16,6 +14,8 @@
  */
 
 import { validateScene, type PhysicsScene } from '@physicsos/physics-scene'
+import type { CodeVisualizationState } from '@deepseek-ai/dsh-tool-physicsos/types'
+import { withQuestionCodeVisualization } from '../experiments/question-code-api.ts'
 
 /** One scene snapshot as the host published it (the subset the Lab needs). */
 export interface AgentSceneSnapshot {
@@ -23,6 +23,7 @@ export interface AgentSceneSnapshot {
   revision: number
   title?: string
   cause?: string
+  visualization?: CodeVisualizationState
   scene: PhysicsScene
 }
 
@@ -50,7 +51,7 @@ export const readAgentScenesProjection = (value: unknown): AgentScenesProjection
   const checked: Record<string, AgentSceneSnapshot> = {}
   for (const [key, entry] of Object.entries(scenes)) {
     if (!isRecord(entry)) return undefined
-    const { sceneId, revision, title, cause, scene } = entry
+    const { sceneId, revision, title, cause, scene, visualization } = entry
     if (typeof sceneId !== 'string' || sceneId !== key) return undefined
     if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) return undefined
     if (!isRecord(scene)) return undefined
@@ -62,6 +63,9 @@ export const readAgentScenesProjection = (value: unknown): AgentScenesProjection
       revision,
       ...(typeof title === 'string' ? { title } : {}),
       ...(typeof cause === 'string' ? { cause } : {}),
+      ...(isRecord(visualization) && ['ready', 'generating', 'failed'].includes(String(visualization['status']))
+        && visualization['sceneId'] === sceneId && visualization['sceneRevision'] === revision
+        ? { visualization: visualization as unknown as CodeVisualizationState } : {}),
       scene: scene as unknown as PhysicsScene,
     }
   }
@@ -72,6 +76,7 @@ export const readAgentScenesProjection = (value: unknown): AgentScenesProjection
 export interface AgentSceneRef {
   sceneId: string
   scene: PhysicsScene
+  originScene?: PhysicsScene
 }
 
 /**
@@ -80,7 +85,7 @@ export interface AgentSceneRef {
 export interface AgentSceneSyncDeps {
   /** Make the scene the active one without changing surface (baseline / session switch). */
   adoptScene: (ref: AgentSceneRef) => void
-  /** Open the Lab on the scene (a live revision the agent just produced). */
+  /** Legacy callback retained for callers; scene mirroring never navigates. */
   showScene: (ref: AgentSceneRef) => void
 }
 
@@ -116,7 +121,7 @@ export function createAgentSceneSync(deps: AgentSceneSyncDeps): AgentSceneSync {
       if (projection.latest === null) return 'absent'
       const snapshot = projection.scenes[projection.latest]
       if (snapshot === undefined) return 'invalid'
-      const stamp = `${snapshot.sceneId}@${snapshot.revision}`
+      const stamp = `${snapshot.sceneId}@${snapshot.revision}:${JSON.stringify(snapshot.visualization ?? null)}`
       const previous = applied.get(sessionId)
       if (previous === stamp) return 'unchanged'
       applied.set(sessionId, stamp)
@@ -124,13 +129,11 @@ export function createAgentSceneSync(deps: AgentSceneSyncDeps): AgentSceneSync {
          scene validator rejects is remembered (so it is not re-tried on every
          list rebuild) but never mounted. */
       if (validateScene(snapshot.scene).status === 'failed') return 'invalid'
-      const ref: AgentSceneRef = { sceneId: snapshot.sceneId, scene: snapshot.scene }
-      if (previous === undefined) {
-        deps.adoptScene(ref)
-        return 'adopted'
-      }
-      deps.showScene(ref)
-      return 'shown'
+      const ref: AgentSceneRef = { sceneId: snapshot.sceneId, scene: snapshot.visualization === undefined
+        ? snapshot.scene : withQuestionCodeVisualization(snapshot.scene, snapshot.visualization),
+        ...(snapshot.visualization === undefined ? {} : { originScene: snapshot.scene }) }
+      deps.adoptScene(ref)
+      return 'adopted'
     },
   }
 }

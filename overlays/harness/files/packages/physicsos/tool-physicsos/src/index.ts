@@ -13,6 +13,11 @@
  * @module @deepseek-ai/dsh-tool-physicsos
  */
 
+import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from './code-provider.ts'
+import { generateQuestionCode, type CodeStyleContext } from './code-generation.ts'
+import { codeStyleFor } from './code-style-selection.ts'
+import type {} from '@deepseek-ai/dsh-subagent'
+import type { CodeExperimentRef, CodeVisualizationSource, CodeVisualizationState } from '@physicsos/agent-tools'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
@@ -70,7 +75,7 @@ export const Config: z<Config> = z.object({
 })
 
 /** Model-facing tool names this plugin registers (the runtime's own list). */
-export const TOOL_NAMES: readonly string[] = PHYSICS_TOOL_NAMES
+export const TOOL_NAMES: readonly string[] = [...PHYSICS_TOOL_NAMES, 'physics_generate_experiment']
 
 /** Key under which scenes of agent-less callers (tests, Code Mode without an agent) are held. */
 const ANONYMOUS_SCOPE = '__anonymous__'
@@ -89,7 +94,8 @@ export class PhysicsToolCallError extends HarnessError {
 
 /** The runtime's text projection of one canonical value, as the single model-visible block. */
 const renderFor = (tool: PhysicsToolName) => (_args: unknown, value: unknown): ContentBlock[] => [
-  { type: 'text', text: PHYSICS_TOOL_RENDERERS[tool](value) },
+  { type: 'text', text: PHYSICS_TOOL_RENDERERS[tool](value) + (tool === 'physics_solve_question' && typeof value === 'object' && value !== null && 'visualization' in value
+    ? ((value.visualization as { status: string }).status === 'ready' ? '\n\n本题代码实验已生成并显示在当前对话；物理结果由引擎验证。' : '\n\n本题代码实验生成未完成，不能声称已显示动画；可调用 physics_generate_experiment 重试。') : '') },
 ]
 
 /** Any lossless-JSON object: the runtime returns plain data and its tests pin the round trip. */
@@ -116,11 +122,19 @@ const physicsScenesProjectionSchema: ZodType<PhysicsScenesProjection> = zod.obje
     domain: zod.string(),
     engineId: zod.string(),
     title: zod.string(),
+    experimentId: zod.string().optional(),
+    model: zod.string().optional(),
     cause: zod.union([zod.literal('created'), zod.literal('solved'), zod.literal('command')]),
     commandType: zod.string().optional(),
     eventType: zod.string().optional(),
     sourceQuestionId: zod.string().optional(),
     turn: zod.number().optional(),
+    solve: zod.custom<PhysicsSceneSolveSummary>(() => true).optional(),
+    visualization: zod.union([
+      zod.object({ status: zod.literal('ready'), artifactId: zod.string(), ownerSessionId: zod.string(), sceneId: zod.string(), sceneRevision: zod.number().int().nonnegative(), sceneSha256: zod.string(), experimentId: zod.string(), sha256: zod.string(), title: zod.string(), childSessionId: zod.string(), createdAt: zod.string() }),
+      zod.object({ status: zod.literal('generating'), jobId: zod.string(), deadlineAt: zod.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(), ownerSessionId: zod.string(), sceneId: zod.string(), sceneRevision: zod.number().int().nonnegative() }),
+      zod.object({ status: zod.literal('failed'), jobId: zod.string().optional(), ownerSessionId: zod.string(), sceneId: zod.string(), sceneRevision: zod.number().int().nonnegative(), code: zod.string(), message: zod.string() }),
+    ]).optional(),
     scene: zod.custom<JsonValue>(() => true),
   })),
 })
@@ -221,6 +235,12 @@ export const foldPhysicsSolveTrace = (
  */
 export function apply(ctx: Context, config: Config): void {
   const runtimes = new Map<string, PhysicsToolRuntime>()
+  ctx.inject(['subagents', 'agentPresets'], async (child) => {
+    if (child.subagents.getProvider(CODE_PROVIDER_NAME) !== undefined) return
+    const provider = new PhysicsCodeProvider(child)
+    child.subagents.registerProvider(provider)
+    await provider.initialize()
+  })
   const runtimeFor = (exec: ToolRunContext): PhysicsToolRuntime => {
     const key = config.sceneScope === 'process'
       ? '__process__'
@@ -248,7 +268,7 @@ export function apply(ctx: Context, config: Config): void {
       init: () => EMPTY_PROJECTION,
       apply: (state, event) => (event.type === 'physics/scene' ? foldPhysicsScene(state, event.data) : state),
       wire: { viewSchema: physicsScenesProjectionSchema, view: state => state },
-      stateVersion: 1,
+      stateVersion: 2,
     })
     projectionCtx.sessionProjections.register<'physicsSolveTraces', PhysicsSolveTracesProjection>({
       key: 'physicsSolveTraces',
@@ -271,7 +291,7 @@ export function apply(ctx: Context, config: Config): void {
     runtime: PhysicsToolRuntime,
     description: SceneDescription,
     cause: PhysicsSceneSnapshotCause,
-    extra: { commandType?: string; eventType?: string; solve?: PhysicsSceneSolveSummary } = {},
+    extra: { commandType?: string; eventType?: string; solve?: PhysicsSceneSolveSummary; experimentId?: string; model?: string } = {},
   ): void => {
     if (exec.agent === undefined) return
     /* The snapshot rides the owning turn so the chat card can dock at the
@@ -290,10 +310,67 @@ export function apply(ctx: Context, config: Config): void {
       ...(extra.eventType === undefined ? {} : { eventType: extra.eventType }),
       ...(description.sourceQuestionId === undefined ? {} : { sourceQuestionId: description.sourceQuestionId }),
       ...(extra.solve === undefined ? {} : { solve: extra.solve }),
+      ...(extra.experimentId === undefined ? {} : { experimentId: extra.experimentId }),
+      ...(extra.model === undefined ? {} : { model: extra.model }),
       scene: runtime.sceneSnapshot(description.sceneId) as unknown as JsonValue,
     }
     exec.agent.session.append('physics/scene', snapshot)
   }
+
+  /** Recover only this session's persisted scene projection when the process runtime is empty. */
+  const persistedScene = (exec: ToolRunContext, sceneId: string): PhysicsSceneSnapshot | undefined => {
+    if (exec.agent === undefined) return undefined
+    const projected = ctx.get('sessionProjections')?.stateOf(exec.agent.session, 'physicsScenes')
+    if (projected !== undefined) return projected.scenes[sceneId]
+    // Compatibility for headless assemblies without projections. Existing physics
+    // logs remain the source of truth; no catalog factory is used to recover facts.
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing physics event-reader fallback.
+    const events = exec.agent.session.snapshotEvents()
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]
+      if (event?.type === 'physics/scene' && event.data.sceneId === sceneId && exec.agent.session.isOwnSeq(event.seq)) return event.data
+    }
+    return undefined
+  }
+  const generate = async (exec: ToolRunContext, sceneId: string, experimentId?: string, instructions?: string): Promise<CodeVisualizationState> => {
+    const parent = exec.agent
+    if (parent === undefined) throw new HarnessError('题目代码实验需要当前对话。', 'SESSION_REQUIRED')
+    if (parent.session.header.parentSession !== undefined) throw new HarnessError('题目代码生成只能由主对话发起。', 'GENERATION_DEPTH_LIMIT')
+    const ownerSessionId = String(parent.id)
+    const identity = ctx.get('physicsosIdentity' as never) as { sessionOwnerKey(sessionId: string): string | undefined } | undefined
+    if (identity?.sessionOwnerKey(ownerSessionId) === undefined) throw new HarnessError('当前对话的账号身份不可用。', 'SESSION_OWNER_REQUIRED')
+    const snapshot = persistedScene(exec, sceneId)
+    if (snapshot === undefined) throw new HarnessError('当前对话没有这个题目场景。', 'SCENE_NOT_FOUND')
+    const turn = currentTurnOf(exec)
+    type Artifacts = { context(id: string): Promise<CodeStyleContext>; create(input: { ownerSessionId: string; scene: unknown; experimentId: string; childSessionId: string; source: CodeVisualizationSource }): Promise<CodeExperimentRef> }
+    const artifacts = ctx.get('questionCodeArtifacts' as never) as Artifacts | undefined
+    const selected = codeStyleFor(snapshot, experimentId)
+    return generateQuestionCode({
+      ownerSessionId, snapshot, signal: exec.signal, experimentId: selected, instructions,
+      current: () => persistedScene(exec, sceneId),
+      isCurrent: () => currentTurnOf(exec) === turn && (ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')?.latest ?? sceneId) === sceneId,
+      publish: value => parent.session.append('physics/scene', value),
+      context: id => artifacts === undefined ? Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' })) : artifacts.context(id),
+      start: request => {
+        const subagents = ctx.get('subagents')
+        if (subagents === undefined) return Promise.reject(Object.assign(new Error('Code child unavailable'), { code: 'CHILD_UNAVAILABLE' }))
+        return subagents.start(CODE_PROVIDER_NAME, { ...request, parent })
+      },
+      create: input => artifacts!.create(input),
+    })
+  }
+  ctx.tools.register(defineTool({
+    name: 'physics_generate_experiment',
+    description: '调用专用受限代码子代理，为当前对话已有的真实题目场景生成最新 V3 私有实验。解题成功后已自动生成；重新生成或手动打开实验后使用此工具。只生成展示代码，不改变物理条件或答案。',
+    parameters: {
+      sceneId: { type: 'string', required: true, description: '当前对话的 physics_solve_question / physics_create_experiment 返回的 sceneId。' },
+      experimentId: { type: 'string', description: '可选：已注册的同物理域实验风格 id；默认按当前题目模型选择。' },
+      instructions: { type: 'string', description: '可选：展示和标注要求；不用于修改物理条件。' },
+    },
+    output: { schema: ANY_OBJECT, render: (_args, value) => [{ type: 'text', text: (value as unknown as CodeVisualizationState).status === 'ready' ? '本题代码实验已生成，已显示在当前对话。物理条件与已验证答案保持一致。' : '本题代码实验未完成，可调用 physics_generate_experiment 重新生成。' }] },
+    execute: async (args, exec) => await generate(exec, args.sceneId, args.experimentId, args.instructions) as unknown as AnyObject,
+    presentCall: () => ({ card: 'generic', title: '生成本题代码实验', kind: 'other' }),
+  }))
 
   ctx.tools.register(defineTool({
     name: 'physics_list_experiments',
@@ -321,7 +398,7 @@ export function apply(ctx: Context, config: Config): void {
     execute: (args, exec) => {
       const runtime = runtimeFor(exec)
       const description = guarded(() => runtime.createExperiment(args.templateId, args.title))
-      publish(exec, runtime, description, 'created')
+      publish(exec, runtime, description, 'created', { experimentId: args.templateId })
       return Promise.resolve(description as unknown as AnyObject)
     },
     presentCall: args => ({ card: 'generic', title: `打开实验 ${args.templateId}`, kind: 'other', rawInput: args }),
@@ -338,13 +415,14 @@ export function apply(ctx: Context, config: Config): void {
       },
     },
     output: { schema: ANY_OBJECT, render: renderFor('physics_solve_question') },
-    execute: (args, exec) => {
+    execute: async (args, exec) => {
       const runtime = runtimeFor(exec)
       const startedAt = Date.now()
       const solved = guarded(() => runtime.solveQuestion(args.text, args.questionId))
       const durationMs = Date.now() - startedAt
       if (solved.scene !== undefined) {
         publish(exec, runtime, solved.scene, 'solved', {
+          ...(solved.model === undefined ? {} : { model: solved.model }),
           solve: {
             knowns: solved.knowns,
             targets: solved.targets,
@@ -404,7 +482,11 @@ export function apply(ctx: Context, config: Config): void {
         }
         exec.agent.session.append('physics/solve-trace', trace)
       }
-      return Promise.resolve(solved as unknown as AnyObject)
+      if (solved.status === 'solved' && solved.scene !== undefined && solved.verification?.status === 'passed' && exec.agent?.ctx !== undefined) {
+        const visualization = await generate(exec, solved.scene.sceneId)
+        return { ...solved, visualization: { status: visualization.status, ...(visualization.status === 'failed' ? { code: visualization.code } : {}) } } as unknown as AnyObject
+      }
+      return solved as unknown as AnyObject
     },
     presentCall: args => ({ card: 'generic', title: '题目运行时求解', kind: 'other', rawInput: args.text }),
   }))

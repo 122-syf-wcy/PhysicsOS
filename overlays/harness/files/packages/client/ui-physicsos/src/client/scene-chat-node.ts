@@ -17,7 +17,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 /* Type-only: merges the `physics/scene` event type into SessionEventMap and
    brings the solve-summary wire shape the card renders. */
-import type { PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
+import type { CodeVisualizationState, PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 import type {
   ChatConversationViewNode, ConversationLocation, ConversationNodeDefinition,
 } from './runtime-compat.ts'
@@ -32,6 +32,7 @@ export interface PhysicsSceneCardData {
   readonly commandType: string | undefined
   /** Structured solve result — present when `cause === 'solved'`. */
   readonly solve: PhysicsSceneSolveSummary | undefined
+  readonly visualization?: CodeVisualizationState
   readonly scene: JsonValue
 }
 
@@ -81,6 +82,7 @@ const stateOf = (event: SessionEvent<'physics/scene'>): PhysicsSceneCardState =>
   solve: event.data.solve,
   turn: event.data.turn,
   scene: event.data.scene,
+  ...(event.data.visualization === undefined ? {} : { visualization: event.data.visualization }),
 })
 
 const viewNode = (
@@ -159,6 +161,7 @@ const publishedOf = (card: PhysicsSceneCardState): PhysicsSceneCardData => ({
   commandType: card.commandType,
   solve: card.solve,
   scene: card.scene,
+  ...(card.visualization === undefined ? {} : { visualization: card.visualization }),
 })
 
 /**
@@ -190,7 +193,7 @@ export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsScene
     if (event.type === 'physics/scene') {
       const next = stateOf(event)
       /* Same solve-preserving fold as the per-scene card. */
-      const card = next.solve === undefined && context.state.card?.solve !== undefined
+      const card = next.sceneId === context.state.card?.sceneId && next.solve === undefined && context.state.card.solve !== undefined
         ? { ...next, solve: context.state.card.solve }
         : next
       return { ...context.state, card, published: publishedOf(card) }
@@ -211,7 +214,11 @@ export const physicsSceneTurnDefinition: ConversationNodeDefinition<PhysicsScene
       && previous.key === PHYSICS_SCENE_TURN_KEY
       && previous.value.sceneId === published.sceneId
       && previous.value.revision === published.revision
-      && previous.value.solve === published.solve) return previous
+      && previous.value.solve === published.solve
+      && previous.value.visualization === published.visualization
+      && previous.value.scene === published.scene
+      && previous.value.title === published.title
+      && previous.value.cause === published.cause) return previous
     return {
       kind: 'turn',
       turn: context.state.turn,

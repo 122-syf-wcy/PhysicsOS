@@ -75,10 +75,10 @@ async function openExperiment(ctx: Context, templateId: string, agent?: Agent): 
 }
 
 describe('dsh-tool-physicsos', () => {
-  it('registers exactly the seven physics_* tools with the runtime\'s own descriptions', async () => {
+  it('registers the physics runtime tools and dedicated code generation tool with the runtime\'s own descriptions', async () => {
     const ctx = await setup()
     const names = ctx.tools.schemas().map(schema => schema.name).filter(name => name.startsWith('physics_'))
-    expect(names.sort()).toEqual([...PHYSICS_TOOL_NAMES].sort())
+    expect(names.sort()).toEqual([...plugin.TOOL_NAMES].sort())
     const command = ctx.tools.schemas().find(schema => schema.name === 'physics_scene_command')!
     expect(command.description).toContain('SetWaveHarmonic')
     const params = command.parameters as { properties: Record<string, { enum?: string[] }>; required?: string[] }

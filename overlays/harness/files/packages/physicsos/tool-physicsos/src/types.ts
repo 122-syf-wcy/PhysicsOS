@@ -14,6 +14,8 @@
  * @module @deepseek-ai/dsh-tool-physicsos/types
  */
 
+import type { CodeVisualizationState } from '@physicsos/agent-tools'
+export type { CodeExperimentRef, CodeVisualizationState, CodeVisualizationSource } from '@physicsos/agent-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 /* Type-only: the canonical provenance contract (`QuantityProvenance`) the
    solved answers carry. Erased at build, so the snapshot stays plain data. */
@@ -89,6 +91,10 @@ export interface PhysicsSceneSnapshot {
   domain: string
   engineId: string
   title: string
+  /** Exact catalog/style id for explicitly opened experiments. */
+  experimentId?: string
+  /** Question Runtime semantic model; used only to select a V3 style foundation. */
+  model?: string
   cause: PhysicsSceneSnapshotCause
   /** The SceneCommand type that produced this revision (`cause: 'command'`). */
   commandType?: string
@@ -100,6 +106,8 @@ export interface PhysicsSceneSnapshot {
   turn?: number
   /** Structured solve result; present only on `cause: 'solved'` snapshots. */
   solve?: PhysicsSceneSolveSummary
+  /** Private latest V3 code experiment lifecycle. Source and capability URLs remain server-owned. */
+  visualization?: CodeVisualizationState
   scene: JsonValue
 }
 

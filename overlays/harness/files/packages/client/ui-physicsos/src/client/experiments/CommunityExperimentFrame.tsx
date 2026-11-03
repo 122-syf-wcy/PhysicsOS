@@ -21,6 +21,8 @@ interface Props {
   readonly experimentId?: string
   readonly protocolVersion?: 1 | 2 | 3
   readonly onStatusChange?: (status: CommunityFrameStatus) => void
+  /** Private capabilities refresh before retrying a renderer. */
+  readonly onRetry?: () => void
 }
 
 /** Only a trusted wrapper relays a revocable port to its opaque uploaded child. */
@@ -31,6 +33,7 @@ export function CommunityExperimentFrame({
   experimentId,
   protocolVersion = 1,
   onStatusChange,
+  onRetry,
 }: Props) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [attempt, setAttempt] = useState(0)
@@ -213,7 +216,8 @@ export function CommunityExperimentFrame({
               type="button"
               onClick={() => {
                 statusCallback.current?.('loading')
-                setAttempt(value => value + 1)
+                if (onRetry !== undefined) onRetry()
+                else setAttempt(value => value + 1)
               }}
             >
               重新加载实验文件

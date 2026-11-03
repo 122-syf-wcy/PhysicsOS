@@ -167,6 +167,17 @@ describe('identity service', () => {
     void fakeDomain.table('schools').put(school.id, school)
   })
 
+  it('reads exact persisted session ownership without claiming or administrator bypass', async () => {
+    expect(identity.sessionOwnerKey('never-claimed')).toBeUndefined()
+    const actor = { userKey: userKey(school.id, teacher.username), schoolId: school.id, username: teacher.username, role: teacher.role }
+    await service.claimApiResource(actor, 'session', 'private-parent')
+    expect(service.sessionOwnerKey('private-parent')).toBe(actor.userKey)
+    expect(identity.sessionOwnerKey('private-parent')).toBe(actor.userKey)
+    expect(new AuthService(fakeDomain).sessionOwnerKey('private-parent')).toBe(actor.userKey)
+    await service.claimApiResource(actor, 'workspace', 'workspace-only')
+    expect(identity.sessionOwnerKey('workspace-only')).toBeUndefined()
+  })
+
   it('files an audit row under the actor’s own school', async () => {
     const token = await logIn()
     const actor = identity.actorOf(requestWith(`physicsos_session=${token}`))

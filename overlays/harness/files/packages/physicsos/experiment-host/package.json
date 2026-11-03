@@ -42,7 +42,10 @@
     "yauzl": "3.4.0",
     "es-module-lexer": "2.1.0",
     "parse5": "8.0.1",
-    "@physicsos/engine-optics": "link:../../../../../packages/engine-optics"
+    "@physicsos/engine-optics": "link:../../../../../packages/engine-optics",
+    "@physicsos/agent-tools": "link:../../../../../packages/agent-tools",
+    "@physicsos/physics-scene": "link:../../../../../packages/physics-scene",
+    "@physicsos/physics-runtime": "link:../../../../../packages/physics-runtime"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

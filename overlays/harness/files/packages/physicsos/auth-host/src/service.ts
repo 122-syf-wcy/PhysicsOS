@@ -469,6 +469,12 @@ export class AuthService {
     return this.apiResources.get(`${kind}:${id}`)?.ownerKey === actor.userKey
   }
 
+  /** Exact persisted owner for a Harness session; never claims a resource or applies a role bypass. */
+  sessionOwnerKey(sessionId: string): string | undefined {
+    const row = this.apiResources.get(`session:${sessionId}`)
+    return row?.kind === 'session' && row.resourceId === sessionId ? row.ownerKey : undefined
+  }
+
   /**
    * The resources owned by one account, used to filter list responses.
    * @param actor - the server-resolved account.

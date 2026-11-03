@@ -112,7 +112,7 @@ describe('Electric product slice', () => {
     expect(fieldInput.value).toBe('1.2')
   })
 
-  it('passes an Electric golden question scene to Lab from a solved card', () => {
+  it('keeps an Electric historical question in the code status shell until a renderer is generated', () => {
     const data = solvedCardData('electric-01-perpendicular-deflection')
     let openedScene: PhysicsScene | undefined
     const openSceneInLab = (sceneRef: PhysicsSceneRef) => {
@@ -127,7 +127,9 @@ describe('Electric product slice', () => {
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '在物理世界中打开' }))
-    expect(openedScene?.fields[0]?.type).toBe('uniform_electric')
+    expect((screen.getByRole('button', { name: '在实验室中探索' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(openedScene).toBeUndefined()
+    expect(screen.getByText('这段历史记录还没有本题代码实验')).toBeTruthy()
+    expect(screen.getByText('物理验证')).toBeTruthy()
   })
 })

@@ -4,6 +4,7 @@ import { ASSET_PREFIX, type ExperimentService } from './service.ts'
 import { inlineImportMapHashes } from './archive.ts'
 import { experimentWrapper } from './embed.ts'
 import { experimentCatalog, experimentProfile } from './contract-v3.ts'
+import type { QuestionCodeArtifactService } from './question-code-service.ts'
 
 const JSON_LIMIT = Math.ceil((20 * 1024 * 1024) / 3) * 4 + 400_000
 export interface RouteDeps {
@@ -12,6 +13,7 @@ export interface RouteDeps {
 }
 export interface AssetDeps {
   service: ExperimentService
+  questionCodes?: QuestionCodeArtifactService
 }
 const send = (res: ServerResponse, status: number, body: unknown): void => {
   res.writeHead(status, {
@@ -207,6 +209,7 @@ function requestOrigin(req: IncomingMessage, configured?: string): string {
 /** Separate export for a dedicated uncredentialed resource origin deployment. */
 export function experimentAssets({
   service,
+  questionCodes,
 }: AssetDeps): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     // These headers also cover error responses and direct navigation.
@@ -242,7 +245,9 @@ export function experimentAssets({
             requestOrigin(req, service.assetOrigin),
           )
         : url
-      const asset = await service.asset(raw)
+      const asset = raw.pathname.startsWith(`${ASSET_PREFIX}/question/`)
+        ? await questionCodes?.asset(raw)
+        : await service.asset(raw)
       if (!asset) {
         send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
         return

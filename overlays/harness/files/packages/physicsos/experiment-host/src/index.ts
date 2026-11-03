@@ -12,6 +12,24 @@ import { openDeveloperPromptDomain } from './prompt-domain.ts'
 import { DeveloperPromptService } from './prompt-service.ts'
 import { developerPromptRoutes, PROMPT_MARKDOWN_ALIAS } from './prompt-routes.ts'
 import { PROMPT_SEED } from './prompt-seed.ts'
+import { openQuestionCodeDomain } from './question-code-domain.ts'
+import {
+  QuestionCodeArtifactService,
+  QUESTION_CODE_SERVICE,
+  type QuestionCodeIdentity,
+} from './question-code-service.ts'
+import { questionCodeRoutes, QUESTION_CODE_PREFIX } from './question-code-routes.ts'
+export {
+  QuestionCodeArtifactService,
+  QUESTION_CODE_SERVICE,
+  questionSceneSha256,
+} from './question-code-service.ts'
+export type {
+  QuestionCodeArtifacts,
+  CreateQuestionCodeInput,
+  QuestionCodeIdentity,
+} from './question-code-service.ts'
+export type { QuestionCodeContext } from './question-code-context.ts'
 export { ExperimentService } from './service.ts'
 export type { PackageView, ExperimentOptions } from './service.ts'
 export { experimentRoutes, experimentAssets } from './routes.ts'
@@ -20,10 +38,15 @@ export { experimentDomain, openExperimentDomain } from './domain.ts'
 export const name = 'experiment-host'
 export const inject = ['webServer', 'storageDomain']
 export interface Config {
+  questionArtifactsRoot?: string
   packagesRoot?: string
   assetOrigin?: string
 }
-export const Config: z<Config> = z.object({ packagesRoot: z.string(), assetOrigin: z.string() })
+export const Config: z<Config> = z.object({
+  questionArtifactsRoot: z.string(),
+  packagesRoot: z.string(),
+  assetOrigin: z.string(),
+})
 export async function apply(ctx: Context, config: Config = {}): Promise<() => Promise<void>> {
   return ctx.effect(async function* () {
     const domain = await openExperimentDomain(ctx)
@@ -39,6 +62,31 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield () => promptDomain.close()
     yield () => prompts.close()
     await prompts.initialize()
+    const questionDomain = await openQuestionCodeDomain(ctx)
+    const questionIdentity = (): QuestionCodeIdentity | undefined => {
+      const identity = identityOf(ctx) as QuestionCodeIdentity | undefined
+      return identity && typeof identity.sessionOwnerKey === 'function' ? identity : undefined
+    }
+    const questionCodes = new QuestionCodeArtifactService(questionDomain, {
+      root:
+        config.questionArtifactsRoot ??
+        (config.packagesRoot
+          ? `${config.packagesRoot}-question-code`
+          : dshHomePath('question-code-artifacts')),
+      identity: questionIdentity,
+      prompts,
+      ...(config.assetOrigin === undefined ? {} : { assetOrigin: config.assetOrigin }),
+    })
+    yield () => questionDomain.close()
+    yield () => questionCodes.close()
+    await questionCodes.initialize()
+    ctx.provide(QUESTION_CODE_SERVICE, questionCodes)
+    yield ctx.webServer.register({
+      kind: 'prefix',
+      path: QUESTION_CODE_PREFIX,
+      handler: questionCodeRoutes({ service: questionCodes, identity: questionIdentity }),
+    })
+
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/developer-prompts',
@@ -57,7 +105,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/experiment-assets',
-      handler: experimentAssets({ service }),
+      handler: experimentAssets({ service, questionCodes }),
     })
   }, 'experiment-host')
 }

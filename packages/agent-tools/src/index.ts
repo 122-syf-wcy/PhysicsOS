@@ -57,3 +57,4 @@ export {
   type ToolScalar,
   type ToolVerification,
 } from './physics-tool-runtime.ts'
+export type { CodeExperimentRef, CodeVisualizationState, CodeVisualizationSource } from './code-visualization.ts'
