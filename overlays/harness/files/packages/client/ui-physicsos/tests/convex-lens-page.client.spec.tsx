@@ -12,7 +12,8 @@ const mount = () => render(<ConvexLensPage runtime={createOpticsWorkspaceRuntime
 it('offers an apparatus-first page with all five engine-backed imaging conditions', () => {
   const {container} = mount()
   expect(screen.getByRole('heading',{name:'凸透镜成像规律'})).toBeTruthy()
-  expect(screen.getByRole('button',{name:'三维装置'})).toBeTruthy()
+  expect(screen.queryByRole('button',{name:'二维光路'})).toBeNull()
+  expect(screen.getByRole('button',{name:'贡献实验'})).toBeTruthy()
   expect(screen.queryByRole('button',{name:'运行'})).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:/投影仪.*1.5f/}))
   expect(screen.getAllByText(/倒立、放大的实像/).length).toBeGreaterThan(0)

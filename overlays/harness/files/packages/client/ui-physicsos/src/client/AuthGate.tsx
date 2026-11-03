@@ -412,17 +412,6 @@ export function AuthGate({
               />
             </Field>
           )}
-          <Field label={t('auth.email.label')} invalid={error === t('auth.error.needEmail') || error === t('auth.error.emailFormat')}>
-            <input
-              className={css.input}
-              type="email"
-              autoComplete="email"
-              placeholder={t('auth.email.placeholder')}
-              value={email}
-              data-testid="register-email"
-              onChange={(event) => { setEmail(event.target.value) }}
-            />
-          </Field>
           <Field label={t('auth.password.label')}>
             {passwordField}
           </Field>
@@ -518,6 +507,17 @@ export function AuthGate({
               autoComplete="name"
               value={displayName}
               onChange={(event) => { setDisplayName(event.target.value) }}
+            />
+          </Field>
+          <Field label={t('auth.email.label')} invalid={error === t('auth.error.needEmail') || error === t('auth.error.emailFormat')}>
+            <input
+              className={css.input}
+              type="email"
+              autoComplete="email"
+              placeholder={t('auth.email.placeholder')}
+              value={email}
+              data-testid="register-email"
+              onChange={(event) => { setEmail(event.target.value) }}
             />
           </Field>
           <Field label={t('auth.password.label')}>

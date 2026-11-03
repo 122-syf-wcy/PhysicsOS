@@ -435,21 +435,18 @@ describe('optics self-checks in the drawer', () => {
 })
 
 describe('optics Lab surface', () => {
-  it('mounts a verified lens bench with the element, marks and labels drawn', () => {
+  it('mounts the dedicated three-dimensional lens page with verified readings', () => {
     const { container } = mountLab('convex-lens')
 
     expect(container.querySelector('[data-physicsos-domain="optics"]')).toBeTruthy()
-    expect(container.querySelector('svg[role="img"]')).toBeTruthy()
+    expect(container.querySelector('[data-experiment-page="convex-lens"]')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '二维光路' })).toBeNull()
     const lab = container.querySelector('[data-physicsos-surface="lab"]')
     expect(lab?.getAttribute('data-verification-status')).toBe('verified')
     expect(lab?.getAttribute('data-scene-revision')).toBe('0')
 
-    /* The bench is VISIBLE: element and screen labels plus the F/2F ticks. */
-    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
-    expect(svgText).toContain('凸透镜')
-    expect(svgText).toContain('光屏')
-    expect(svgText).toContain('F')
-    expect(svgText).toContain('2F')
+    expect(screen.getByRole('heading', { name: '凸透镜成像规律' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '贡献实验' })).toBeTruthy()
   })
 
   it('commits a 物距 edit from the inspector as an auditable revision', () => {

@@ -77,7 +77,8 @@
     "clsx": "^2.0.0",
     "katex": "^0.16.47",
     "pdfjs-dist": "6.2.108",
-    "three": "0.180.0"
+    "three": "0.180.0",
+    "@deepseek-ai/dsh-util-crypto": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-locale": "workspace:^",

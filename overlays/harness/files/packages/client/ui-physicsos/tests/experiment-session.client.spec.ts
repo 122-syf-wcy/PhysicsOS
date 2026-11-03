@@ -54,3 +54,15 @@ it('persists only committed conditions while both views consume the preview fram
   expect(saved).toHaveLength(1)
   expect(session.getSnapshot().sceneRevision).toBe(1)
 })
+
+it('pins the displayed package in saved scenes and each captured observation', () => {
+  const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+  const session = createExperimentSession(runtime)
+  const release = { id: 'pkg_1', experimentId: 'convex-lens', version: '1.0.0', sha256: 'a'.repeat(64) }
+  session.setRelease(release)
+  session.recordObservation()
+  expect(session.getScene()?.metadata.experimentRelease).toEqual(release)
+  expect(session.getNotebook()[0]?.experimentRelease).toEqual(release)
+  session.setRelease({ ...release, id: 'pkg_2', version: '2.0.0' })
+  expect(session.getNotebook()[0]?.experimentRelease?.id).toBe('pkg_1')
+})

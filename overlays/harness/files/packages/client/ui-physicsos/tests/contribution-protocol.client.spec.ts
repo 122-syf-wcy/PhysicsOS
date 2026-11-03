@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest'
+import { createConvexLensScene } from '@physicsos/physics-scene'
+import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
+import { createExperimentSession } from '../src/client/experiments/experiment-session.ts'
+import {
+  contributionSnapshot,
+  applyContributionIntent,
+} from '../src/client/experiments/contribution-protocol.ts'
+
+describe('contributed lens files use the platform engine', () => {
+  it('sends real, infinite and virtual imaging without exposing account or scene contents', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+    const frame = contributionSnapshot(runtime.getSnapshot())
+    expect(frame.source).toBe('platform-engine')
+    expect(frame.result.imageDistanceCm).toBeCloseTo(15)
+    expect(frame.result.imageHeightCm).toBeLessThan(0)
+    expect(Object.keys(frame).sort()).toEqual(['parameters', 'result', 'revision', 'source'])
+    runtime.editParameter('object-distance', 10)
+    expect(contributionSnapshot(runtime.getSnapshot()).result).toMatchObject({
+      imageDistanceCm: null,
+      imageHeightCm: null,
+      imageKind: 'none',
+      screenSharp: false,
+    })
+    runtime.editParameter('object-distance', 5)
+    expect(contributionSnapshot(runtime.getSnapshot()).result).toMatchObject({
+      imageKind: 'virtual',
+      screenSharp: false,
+    })
+    expect(contributionSnapshot(runtime.getSnapshot()).result.imageDistanceCm).toBeCloseTo(-10)
+  })
+
+  it('previews without persistence, cancels, then commits one scene revision', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+    const saves: unknown[] = []
+    const session = createExperimentSession(runtime, scene => saves.push(scene))
+    expect(
+      applyContributionIntent(session, {
+        type: 'parameter/preview',
+        id: 'objectDistanceCm',
+        value: 15,
+      }),
+    ).toBe(true)
+    expect(contributionSnapshot(session.getSnapshot()).result.imageDistanceCm).toBeCloseTo(30)
+    expect(saves).toHaveLength(0)
+    applyContributionIntent(session, { type: 'parameter/cancel' })
+    expect(contributionSnapshot(session.getSnapshot()).result.imageDistanceCm).toBeCloseTo(15)
+    applyContributionIntent(session, {
+      type: 'parameter/commit',
+      id: 'objectDistanceCm',
+      value: 15,
+    })
+    expect(saves).toHaveLength(1)
+    expect(runtime.getScene().revision).toBe(1)
+  })
+
+  it('ignores unknown, out-of-bounds and nonfinite commands without changing the experiment', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+    const session = createExperimentSession(runtime)
+    const original = runtime.getScene()
+    for (const data of [
+      null,
+      [],
+      { type: 'navigate', url: '/admin' },
+      { type: 'parameter/commit', id: '__proto__', value: 2 },
+      { type: 'parameter/commit', id: 'objectDistanceCm', value: -1 },
+      { type: 'parameter/preview', id: 'focalLengthCm', value: Infinity },
+      { type: 'parameter/commit', id: 'objectDistanceCm', value: 1e9 },
+      { type: 'parameter/commit', id: 'screenDistanceCm', value: '15' },
+    ])
+      expect(applyContributionIntent(session, data)).toBe(false)
+    expect(runtime.getScene()).toEqual(original)
+  })
+})
