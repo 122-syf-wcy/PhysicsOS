@@ -18,6 +18,7 @@
  * open — the alternative is a deployment where the gate silently is not there.
  */
 import type { IncomingMessage } from 'node:http'
+import type { ContractIssue } from './contract-v2.ts'
 
 /** Service key `auth-host` publishes the session identity seam under. */
 export const IDENTITY_SERVICE = 'physicsosIdentity'
@@ -53,6 +54,7 @@ export class ExperimentError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly issues?: ContractIssue[],
   ) {
     super(message)
     this.name = 'ExperimentError'

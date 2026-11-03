@@ -195,8 +195,6 @@ describe('experiment REST and credential-free asset boundary', () => {
       Object.entries({
         ...files(),
         'README.md': 'distinct source review notes',
-        'cases.json': '{"review":"cases"}',
-        'ASSET-LICENSES.json': '{"review":"licenses"}',
       }).map(([name, data]) => ({ name, data })),
     )
     const { item } = await jsonOf<ItemEnvelope>(
@@ -430,3 +428,30 @@ function trustedScript(html: string): string {
   }
   throw new Error('Trusted wrapper script missing')
 }
+
+describe('V2 intake diagnostics over REST', () => {
+  it('returns safe actionable metadata issues and omits contributor input', async () => {
+    const { call } = await setup()
+    const entries = Object.entries(files()).map(([name, data]) => ({
+      name,
+      data: name === 'teaching.json' ? '{private-sensitive-value' : data,
+    }))
+    const response = await call('/convex-lens/packages', uploadBody(zip(entries)))
+    expect(response.status).toBe(400)
+    const value: unknown = await response.json()
+    expect(value).toMatchObject({
+      error: {
+        code: 'INVALID_METADATA',
+        issues: [
+          {
+            file: 'teaching.json',
+            path: '$',
+            message: expect.any(String) as unknown,
+            suggestion: expect.any(String) as unknown,
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(value)).not.toContain('private-sensitive-value')
+  })
+})

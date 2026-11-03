@@ -8,6 +8,8 @@ import type { Readable } from 'node:stream'
 import { z } from 'zod'
 import { ExperimentError } from './identity.ts'
 import { scanHtml, cssReferences } from './html.ts'
+import { manifestV2Schema, schemaContractIssues, validatePackageMetadata } from './contract-v2.ts'
+import { evaluateCase } from './contract-optics.ts'
 
 export const ZIP_LIMIT = 20 * 1024 * 1024
 export const EXPANDED_LIMIT = 40 * 1024 * 1024
@@ -35,7 +37,7 @@ export const manifestSchema = z
     license: z.string().min(1).max(80),
   })
   .strict()
-export type Manifest = z.infer<typeof manifestSchema>
+export type Manifest = z.infer<typeof manifestSchema> | z.infer<typeof manifestV2Schema>
 export interface ValidatedArchive {
   manifest: Manifest
   assets: Map<string, Buffer>
@@ -88,7 +90,14 @@ export function safeArchivePath(name: string): boolean {
 function allowedFile(name: string): boolean {
   return (
     roots.has(name) ||
-    ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json'].includes(name) ||
+    [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'tsconfig.build.json',
+      'eslint.config.mjs',
+      'prettier.config.mjs',
+    ].includes(name) ||
     (/^(?:src|public|tools|tests)\//.test(name) &&
       /\.(?:ts|tsx|js|mjs|html|css|json|png|webp|jpe?g|svg|glb|gltf|bin|ktx2|woff2?|md|txt)$/i.test(
         name,
@@ -193,7 +202,7 @@ async function validateReferences(assets: Map<string, Buffer>): Promise<void> {
   }
 }
 function open(bytes: Buffer): Promise<ZipFile> {
-  return new Promise((resolve, reject) =>{
+  return new Promise((resolve, reject) => {
     fromBuffer(
       bytes,
       { lazyEntries: true, decodeStrings: false, validateEntrySizes: true },
@@ -201,8 +210,8 @@ function open(bytes: Buffer): Promise<ZipFile> {
         if (error || !zip) reject(invalid())
         else resolve(zip)
       },
-    ) },
-  )
+    )
+  })
 }
 /** This size-limited contract needs ordinary single-disk ZIP, never ZIP64. */
 function centralBoundary(bytes: Buffer): { start: number; end: number } {
@@ -230,7 +239,10 @@ function centralBoundary(bytes: Buffer): { start: number; end: number } {
   throw invalid()
 }
 /** Fully verify sizes, CRC, names and metadata before accepting any asset. */
-export async function validateArchive(bytes: Buffer): Promise<ValidatedArchive> {
+export async function validateArchive(
+  bytes: Buffer,
+  options: { allowLegacy?: boolean } = {},
+): Promise<ValidatedArchive> {
   if (bytes.length > ZIP_LIMIT)
     throw new ExperimentError(413, 'ZIP_TOO_LARGE', 'ZIP 不能超过 20 MiB')
   if (bytes.length < 22) throw invalid()
@@ -334,13 +346,16 @@ export async function validateArchive(bytes: Buffer): Promise<ValidatedArchive> 
           total += entry.uncompressedSize
           if (total > EXPANDED_LIMIT) throw invalid()
           const stream = await new Promise<Readable>((resolveStream, rejectStream) => {
-            zip.openReadStream(entry, (error: Error | null, stream: Readable | null | undefined) => {
-              if (error || !stream) {
-                rejectStream(invalid())
-                return
-              }
-              resolveStream(stream)
-            })
+            zip.openReadStream(
+              entry,
+              (error: Error | null, stream: Readable | null | undefined) => {
+                if (error || !stream) {
+                  rejectStream(invalid())
+                  return
+                }
+                resolveStream(stream)
+              },
+            )
           })
           const chunks: Buffer[] = []
           let size = 0
@@ -362,17 +377,60 @@ export async function validateArchive(bytes: Buffer): Promise<ValidatedArchive> 
       zip.readEntry()
     })
     if (centralCursor !== central.end) throw invalid()
-    for (const name of roots) if (!files.has(name)) throw invalid()
     let value: unknown
     try {
       const metadata = files.get('experiment.json')
-      if (metadata === undefined) throw invalid()
-      value = JSON.parse(metadata.toString('utf8'))
+      if (metadata === undefined || metadata.length > 256 * 1024) throw new Error('manifest size')
+      value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(metadata))
     } catch {
-      throw invalid()
+      throw new ExperimentError(
+        400,
+        'INVALID_MANIFEST',
+        'experiment.json 缺失、过大或不是有效 UTF-8 JSON',
+        [
+          {
+            code: 'INVALID_MANIFEST',
+            file: 'experiment.json',
+            path: '$',
+            message: '文件缺失、过大或 JSON 无效。',
+            suggestion: '恢复 V2 模板的 experiment.json。',
+          },
+        ],
+      )
     }
-    const parsed = manifestSchema.safeParse(value)
-    if (!parsed.success) throw invalid()
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      throw new ExperimentError(400, 'INVALID_MANIFEST', '实验清单不符合 V2 契约')
+    const header = value as Record<string, unknown>
+    if (header.experimentId !== 'convex-lens')
+      throw new ExperimentError(400, 'UNSUPPORTED_EXPERIMENT', '只支持已注册的 convex-lens 实验')
+    if (
+      (header.schemaVersion === 1 || header.schemaVersion === 2) &&
+      header.protocolVersion !== header.schemaVersion
+    )
+      throw new ExperimentError(400, 'INCOMPATIBLE_PROTOCOL', '清单版本与运行协议版本必须一致')
+    if (header.schemaVersion === 1 && !options.allowLegacy)
+      throw new ExperimentError(
+        400,
+        'PACKAGE_UPGRADE_REQUIRED',
+        '新投稿须升级为 V2，请使用最新模板重新发布',
+      )
+    const parsed =
+      header.schemaVersion === 1 && options.allowLegacy
+        ? manifestSchema.safeParse(value)
+        : manifestV2Schema.safeParse(value)
+    if (!parsed.success)
+      throw new ExperimentError(
+        400,
+        'INVALID_MANIFEST',
+        '实验清单不符合受支持的契约',
+        schemaContractIssues('experiment.json', parsed.error, 'INVALID_MANIFEST'),
+      )
+    if (parsed.data.schemaVersion === 2) {
+      const issues = validatePackageMetadata(files, evaluateCase)
+      if (issues.length)
+        throw new ExperimentError(400, 'INVALID_METADATA', '实验元数据不符合 V2 契约', issues)
+    }
+    for (const name of roots) if (!files.has(name)) throw invalid()
     const assets = new Map([...files].filter(([name]) => name.startsWith('dist/')))
     if (
       !assets.has(parsed.data.entry) ||
@@ -382,7 +440,8 @@ export async function validateArchive(bytes: Buffer): Promise<ValidatedArchive> 
       throw invalid()
     await validateReferences(assets)
     return { manifest: parsed.data, assets, fileCount }
-  } catch {
+  } catch (error) {
+    if (error instanceof ExperimentError) throw error
     throw invalid()
   } finally {
     zip.close()

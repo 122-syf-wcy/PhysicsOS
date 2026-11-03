@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { validateArchive } from '../src/archive.ts'
-import { files, manifest, zip } from './fixtures.ts'
+import { files, manifest, legacyFiles, zip } from './fixtures.ts'
 const base = () => Object.entries(files()).map(([name, data]) => ({ name, data }))
 
 describe('static experiment archive boundary', () => {
@@ -20,6 +20,8 @@ describe('static experiment archive boundary', () => {
         { name: 'public/index.html', data: '<h1>Build source</h1>' },
         { name: 'tools/build.mjs', data: 'throw new Error("Must not run")' },
         { name: 'tests/package.test.mjs', data: 'throw new Error("Must not run")' },
+        { name: 'eslint.config.mjs', data: 'export default []' },
+        { name: 'prettier.config.mjs', data: 'export default {}' },
         { name: 'package.json', data: '{"scripts":{"install":"exit 1"}}' },
         { name: 'tsconfig.json', data: '{}' },
         { name: 'tsconfig.build.json', data: '{}' },
@@ -144,14 +146,14 @@ describe('static experiment archive boundary', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ARCHIVE' })
   })
   it.each([
-    { engine: { id: 'mechanics', contractVersion: 1 } },
-    { protocolVersion: 2 },
-    { renderer: 'two' },
-    { experimentId: 'other' },
-    { entry: '../index.html' },
-    { entry: 'src/main.ts' },
-    { theme: 'other' },
-  ])('rejects incompatible manifest %j', async (change) => {
+    { change: { engine: { id: 'mechanics', contractVersion: 1 } }, code: 'INVALID_MANIFEST' },
+    { change: { protocolVersion: 1 }, code: 'INCOMPATIBLE_PROTOCOL' },
+    { change: { renderer: 'two' }, code: 'INVALID_MANIFEST' },
+    { change: { experimentId: 'other' }, code: 'UNSUPPORTED_EXPERIMENT' },
+    { change: { entry: '../index.html' }, code: 'INVALID_MANIFEST' },
+    { change: { entry: 'src/main.ts' }, code: 'INVALID_MANIFEST' },
+    { change: { theme: 'other' }, code: 'INVALID_MANIFEST' },
+  ])('rejects incompatible manifest %j', async ({ change, code }) => {
     const entries = base().filter(item => item.name !== 'experiment.json')
     await expect(
       validateArchive(
@@ -160,7 +162,7 @@ describe('static experiment archive boundary', () => {
           { name: 'experiment.json', data: JSON.stringify({ ...manifest, ...change }) },
         ]),
       ),
-    ).rejects.toMatchObject({ code: 'INVALID_ARCHIVE' })
+    ).rejects.toMatchObject({ code })
   })
   it.each([
     ['dist/index.html', '<script src="https://evil.example/x.js"></script>'],
@@ -178,5 +180,23 @@ describe('static experiment archive boundary', () => {
     await expect(
       validateArchive(zip([...base().filter(item => item.name !== name), { name, data }])),
     ).rejects.toMatchObject({ code: 'INVALID_ARCHIVE' })
+  })
+})
+
+describe('version-aware archive intake', () => {
+  it('rejects new V1 intake but verifies frozen legacy packages explicitly', async () => {
+    const bytes = zip(Object.entries(legacyFiles()).map(([name, data]) => ({ name, data })))
+    await expect(validateArchive(bytes)).rejects.toMatchObject({ code: 'PACKAGE_UPGRADE_REQUIRED' })
+    expect((await validateArchive(bytes, { allowLegacy: true })).manifest.schemaVersion).toBe(1)
+  })
+  it('returns bounded safe metadata issues rather than collapsing them into ZIP errors', async () => {
+    const entries = Object.entries(files()).map(([name, data]) => ({
+      name,
+      data: name === 'teaching.json' ? '{secret-sensitive-value' : data,
+    }))
+    await expect(validateArchive(zip(entries))).rejects.toMatchObject({
+      code: 'INVALID_METADATA',
+      issues: [{ file: 'teaching.json', path: '$', suggestion: expect.any(String) as unknown }],
+    })
   })
 })

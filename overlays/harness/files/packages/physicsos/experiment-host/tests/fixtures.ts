@@ -2,8 +2,8 @@ import type { PackageView } from '../src/service.ts'
 import { crc32, deflateRawSync } from 'node:zlib'
 
 export const manifest = {
-  schemaVersion: 1,
-  protocolVersion: 1,
+  schemaVersion: 2,
+  protocolVersion: 2,
   packageType: 'browser-static',
   experimentId: 'convex-lens',
   version: '1.0.0',
@@ -18,6 +18,101 @@ export const manifest = {
   cover: 'dist/assets/icon.svg',
   license: 'Apache-2.0',
 }
+export const legacyManifest = { ...manifest, schemaVersion: 1, protocolVersion: 1 }
+export const parameterDocument = {
+  schemaVersion: 2,
+  experimentId: 'convex-lens',
+  parameters: [
+    {
+      id: 'objectDistanceCm',
+      label: '物距',
+      unit: 'cm',
+      access: 'read-write',
+      default: 30,
+      safety: { min: 1, max: 200 },
+      display: { min: 1, max: 80, step: 0.5 },
+    },
+    {
+      id: 'focalLengthCm',
+      label: '焦距',
+      unit: 'cm',
+      access: 'read-write',
+      default: 10,
+      safety: { min: 1, max: 200 },
+      display: { min: 2, max: 30, step: 0.5 },
+    },
+    {
+      id: 'screenDistanceCm',
+      label: '光屏距离',
+      unit: 'cm',
+      access: 'read-write',
+      default: 15,
+      safety: { min: 1, max: 200 },
+      display: { min: 1, max: 100, step: 0.5 },
+    },
+  ],
+  readOnlySnapshot: [
+    'parameters.objectHeightCm',
+    'visible.image',
+    'visible.rays',
+    'result',
+    'rays',
+  ],
+}
+export const teachingDocument = {
+  schemaVersion: 2,
+  experimentId: 'convex-lens',
+  title: '凸透镜',
+  steps: ['观察成像'],
+  limitations: ['近轴模型'],
+}
+export const caseDocument = {
+  schemaVersion: 2,
+  experimentId: 'convex-lens',
+  unit: 'cm',
+  cases: [
+    {
+      id: 'beyond-2f',
+      input: { objectDistanceCm: 30, focalLengthCm: 10, objectHeightCm: 4 },
+      expected: { imageDistanceCm: 15, imageHeightCm: -2, imageKind: 'real' },
+    },
+    {
+      id: 'at-2f',
+      input: { objectDistanceCm: 20, focalLengthCm: 10, objectHeightCm: 4 },
+      expected: { imageDistanceCm: 20, imageHeightCm: -4, imageKind: 'real' },
+    },
+    {
+      id: 'between-f-2f',
+      input: { objectDistanceCm: 15, focalLengthCm: 10, objectHeightCm: 4 },
+      expected: { imageDistanceCm: 30, imageHeightCm: -8, imageKind: 'real' },
+    },
+    {
+      id: 'at-f',
+      input: { objectDistanceCm: 10, focalLengthCm: 10, objectHeightCm: 4 },
+      expected: { imageDistanceCm: null, imageHeightCm: null, imageKind: 'none' },
+    },
+    {
+      id: 'within-f',
+      input: { objectDistanceCm: 5, focalLengthCm: 10, objectHeightCm: 4 },
+      expected: { imageDistanceCm: -10, imageHeightCm: 8, imageKind: 'virtual' },
+    },
+  ],
+}
+export const licenseDocument = [
+  {
+    path: 'dist/assets/*',
+    name: 'Original assets',
+    license: 'Apache-2.0',
+    source: 'original',
+    notice: 'LICENSE',
+  },
+  {
+    path: 'dist/vendor/*',
+    name: 'Three.js',
+    license: 'MIT',
+    source: 'https://github.com/mrdoob/three.js',
+  },
+]
 export const files = () => ({
   'experiment.json': JSON.stringify(manifest),
   'dist/index.html':
@@ -27,13 +122,23 @@ export const files = () => ({
   'dist/assets/main.css': 'body{color:#333}',
   'dist/assets/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
   'src/main.ts': 'export const neverExecute = true;',
+  'parameters.json': JSON.stringify(parameterDocument),
+  'teaching.json': JSON.stringify(teachingDocument),
+  'cases.json': JSON.stringify(caseDocument),
+  'ASSET-LICENSES.json': JSON.stringify(licenseDocument),
+  'dist/vendor/notice.txt': 'MIT',
+  'README.md': 'Review this package.',
+  'MODEL.md': 'Thin lens.',
+  LICENSE: 'Apache-2.0',
+})
+/** Frozen V1 fixture deliberately keeps historical permissive metadata. */
+export const legacyFiles = () => ({
+  ...files(),
+  'experiment.json': JSON.stringify(legacyManifest),
   'parameters.json': '[]',
   'teaching.json': '{}',
   'cases.json': '[]',
   'ASSET-LICENSES.json': '[]',
-  'README.md': 'Review this package.',
-  'MODEL.md': 'Thin lens.',
-  LICENSE: 'Apache-2.0',
 })
 export function checksum(bytes: Buffer): number {
   return crc32(bytes)
@@ -125,10 +230,20 @@ export const admin = {
   role: 'SUPER_ADMIN' as const,
 }
 
-export interface ItemEnvelope { item: PackageView }
-export interface PreviewEnvelope { entryUrl: string }
-export interface ListEnvelope { active: PackageView | null; items: PackageView[]; canReview: boolean }
-export interface ErrorEnvelope { error: { code: string; message: string } }
+export interface ItemEnvelope {
+  item: PackageView
+}
+export interface PreviewEnvelope {
+  entryUrl: string
+}
+export interface ListEnvelope {
+  active: PackageView | null
+  items: PackageView[]
+  canReview: boolean
+}
+export interface ErrorEnvelope {
+  error: { code: string; message: string }
+}
 /** Wire assertions below check the selected REST envelope; keep JSON at an unknown boundary. */
 export async function jsonOf<T>(response: Response): Promise<T> {
   const body: unknown = await response.json()

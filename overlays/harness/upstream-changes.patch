@@ -14775,7 +14775,7 @@ index 36dc0506d3..2254db3023 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9860,6 +10079,412 @@ importers:
+@@ -9860,6 +10079,415 @@ importers:
          specifier: workspace:*
          version: link:../../core/tools
 
@@ -14867,6 +14867,9 @@ index 36dc0506d3..2254db3023 100644
 +      '@deepseek-ai/schemastery':
 +        specifier: link:../../../vendor/schemastery
 +        version: link:../../../vendor/schemastery
++      '@physicsos/engine-optics':
++        specifier: link:../../../../../packages/engine-optics
++        version: link:../../../../../packages/engine-optics
 +      es-module-lexer:
 +        specifier: 2.1.0
 +        version: 2.1.0

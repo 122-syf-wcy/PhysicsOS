@@ -23,7 +23,13 @@ const send = (res: ServerResponse, status: number, body: unknown): void => {
 }
 const errorResponse = (res: ServerResponse, error: unknown): void => {
   if (error instanceof ExperimentError)
-    send(res, error.status, { error: { code: error.code, message: error.message } })
+    send(res, error.status, {
+      error: {
+        code: error.code,
+        message: error.message,
+        ...(error.issues ? { issues: error.issues } : {}),
+      },
+    })
   else send(res, 500, { error: { code: 'INTERNAL', message: 'internal error' } })
 }
 function checkCsrf(req: IncomingMessage): void {

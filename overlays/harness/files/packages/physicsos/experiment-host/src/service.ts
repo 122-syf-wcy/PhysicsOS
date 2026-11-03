@@ -6,7 +6,12 @@ import { z } from 'zod'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { ExperimentError, type IdentityActor } from './identity.ts'
 import { assetContentType, validateArchive, ZIP_LIMIT, type ValidatedArchive } from './archive.ts'
-import type { experimentDomain, ExperimentPackageRecord, ExperimentState } from './domain.ts'
+import {
+  experimentStateSchema,
+  type experimentDomain,
+  type ExperimentPackageRecord,
+  type ExperimentState,
+} from './domain.ts'
 import { prepareRecovery, readRecovery, clearRecovery } from './recovery.ts'
 
 export const ASSET_PREFIX = '/physicsos/experiment-assets'
@@ -51,6 +56,8 @@ export interface PackageView {
   id: string
   experimentId: 'convex-lens'
   version: string
+  schemaVersion: 1 | 2
+  protocolVersion: 1 | 2
   sha256: string
   status: 'pending' | 'approved' | 'rejected'
   author: { name: string; bio?: string; github?: string; avatarUrl?: string }
@@ -188,12 +195,14 @@ export class ExperimentService {
       await this.domain.table('state').put('convex-lens', previous)
       await clearRecovery(this.root)
     }
-    this.currentState = this.domain.table('state').get('convex-lens') ?? {
-      packages: [],
-      activeId: null,
-      sequence: 0,
-      releases: [],
-    }
+    this.currentState = experimentStateSchema.parse(
+      this.domain.table('state').get('convex-lens') ?? {
+        packages: [],
+        activeId: null,
+        sequence: 0,
+        releases: [],
+      },
+    )
     this.initialized = true
     this.fenced = false
   }
@@ -257,6 +266,8 @@ export class ExperimentService {
       id: item.id,
       experimentId: item.experimentId,
       version: item.version,
+      schemaVersion: item.schemaVersion ?? 1,
+      protocolVersion: item.protocolVersion ?? 1,
       sha256: item.sha256,
       status: item.status,
       author,
@@ -344,6 +355,8 @@ export class ExperimentService {
           id,
           experimentId: 'convex-lens',
           version: validated.manifest.version,
+          schemaVersion: validated.manifest.schemaVersion,
+          protocolVersion: validated.manifest.protocolVersion,
           sha256: digest,
           authorKey: actor.userKey,
           author: {
@@ -378,8 +391,13 @@ export class ExperimentService {
       const archive = await verifiedFile(join(this.root, item.id, 'archive.zip'), {
         sha256: item.sha256,
       })
-      const validated: ValidatedArchive = await validateArchive(archive)
-      if (validated.manifest.version !== item.version) throw new Error('manifest')
+      const validated: ValidatedArchive = await validateArchive(archive, { allowLegacy: true })
+      if (
+        validated.manifest.version !== item.version ||
+        validated.manifest.schemaVersion !== (item.schemaVersion ?? 1) ||
+        validated.manifest.protocolVersion !== (item.protocolVersion ?? 1)
+      )
+        throw new Error('manifest')
       for (const asset of item.assets)
         await verifiedFile(join(this.root, item.id, asset.name), asset)
     } catch {

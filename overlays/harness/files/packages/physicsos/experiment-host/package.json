@@ -41,7 +41,8 @@
     "zod": "^4.4.3",
     "yauzl": "3.4.0",
     "es-module-lexer": "2.1.0",
-    "parse5": "8.0.1"
+    "parse5": "8.0.1",
+    "@physicsos/engine-optics": "link:../../../../../packages/engine-optics"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

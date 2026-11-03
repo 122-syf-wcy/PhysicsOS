@@ -12,8 +12,10 @@ import {
   zip,
   files,
   manifest,
+  legacyFiles,
 } from './fixtures.ts'
 import { host } from './support.ts'
+import { experimentStateSchema } from '../src/domain.ts'
 let root: string
 let loaded: Awaited<ReturnType<typeof host>> | undefined
 async function setup(options = {}) {
@@ -193,5 +195,79 @@ describe('immutable upload, review and release service', () => {
       { status: 400 },
     )
     expect(service.list(admin).items).toHaveLength(0)
+  })
+})
+
+async function seedLegacy() {
+  const { service, domain } = await setup()
+  const item = await service.upload(contributor, uploadBody())
+  const bytes = zip(Object.entries(legacyFiles()).map(([name, data]) => ({ name, data })))
+  const digest = crypto.createHash('sha256').update(bytes).digest('hex')
+  await writeFile(join(root, 'files', item.id, 'archive.zip'), bytes)
+  const state = structuredClone(domain.table('state').get('convex-lens')!)
+  const record = state.packages[0]!
+  record.sha256 = digest
+  delete record.schemaVersion
+  delete record.protocolVersion
+  await domain.table('state').put('convex-lens', state)
+  await loaded!.close()
+  loaded = await host(root)
+  return { service: loaded.service, item: { ...item, sha256: digest }, bytes }
+}
+describe('V1 migration and trusted persisted versions', () => {
+  it('approves an existing pending V1 and retains V1 history across V2 approval and rollback', async () => {
+    const { service, item } = await seedLegacy()
+    expect(service.list(admin).items[0]).toMatchObject({
+      schemaVersion: 1,
+      protocolVersion: 1,
+      status: 'pending',
+    })
+    await service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 })
+    const next = await service.upload(contributor, uploadBody())
+    expect(next).toMatchObject({ schemaVersion: 2, protocolVersion: 2 })
+    await service.review(admin, next.id, { action: 'approve', expectedSha256: next.sha256 })
+    await service.rollback(admin, { packageId: item.id, expectedActiveId: next.id })
+    expect(service.list(admin).active).toMatchObject({
+      id: item.id,
+      schemaVersion: 1,
+      protocolVersion: 1,
+    })
+    expect(service.list(admin).items).toHaveLength(2)
+  })
+  it('rejects reupload of a rejected V1 while retaining its original review record', async () => {
+    const { service, item, bytes } = await seedLegacy()
+    await service.review(admin, item.id, { action: 'reject', expectedSha256: item.sha256 })
+    await expect(service.upload(contributor, uploadBody(bytes))).rejects.toMatchObject({
+      code: 'PACKAGE_UPGRADE_REQUIRED',
+    })
+    expect(service.list(admin).items).toHaveLength(1)
+  })
+  it('persists the V2 pair and rejects half-present or mismatched stored versions', async () => {
+    const { service, domain } = await setup()
+    await service.upload(contributor, uploadBody())
+    const state = domain.table('state').get('convex-lens')!
+    expect(state.packages[0]).toMatchObject({ schemaVersion: 2, protocolVersion: 2 })
+    for (const pair of [
+      { schemaVersion: 2, protocolVersion: undefined },
+      { schemaVersion: undefined, protocolVersion: 2 },
+      { schemaVersion: 1, protocolVersion: 2 },
+    ]) {
+      const malformed = structuredClone(state)
+      Object.assign(malformed.packages[0]!, pair)
+      expect(experimentStateSchema.safeParse(malformed).success).toBe(false)
+    }
+  })
+  it('refuses frozen V2 archive verification when stored protocol selects V1', async () => {
+    const { service, domain } = await setup()
+    const item = await service.upload(contributor, uploadBody())
+    const state = structuredClone(domain.table('state').get('convex-lens')!)
+    state.packages[0]!.schemaVersion = 1
+    state.packages[0]!.protocolVersion = 1
+    await domain.table('state').put('convex-lens', state)
+    await loaded!.close()
+    loaded = await host(root)
+    await expect(loaded.service.preview(admin, item.id)).rejects.toMatchObject({
+      code: 'INTEGRITY_MISMATCH',
+    })
   })
 })
