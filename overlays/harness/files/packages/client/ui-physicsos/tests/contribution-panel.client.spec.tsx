@@ -48,9 +48,13 @@ it('shows committed approval immediately and keeps the preview while the catalog
   render(<ContributionPanel onClose={() => {}} />)
   fireEvent.click(await screen.findByRole('button', { name: '预览 v1.0.0', exact: true }))
   const frame = await screen.findByTitle('候选三维实验')
+  expect(
+    screen.getByRole('link', { name: '下载冻结审核 ZIP', exact: true }).getAttribute('href'),
+  ).toBe('/physicsos/experiments/packages/package-1/archive')
+  expect(screen.getByLabelText('审核文件 SHA-256').textContent).toBe(pending.sha256)
   fireEvent.click(screen.getByRole('button', { name: '审核通过并发布', exact: true }))
   await waitFor(() => {
-    expect(screen.getAllByRole('status').some(node => node.textContent?.includes('已发布'))).toBe(
+    expect(screen.getAllByRole('status').some((node) => node.textContent?.includes('已发布'))).toBe(
       true,
     )
   })

@@ -84,7 +84,7 @@ const downloadItems = [
   ['physicsos-code-style-v1.zip', '代码风格工具包', '完整规范 + AGENTS.md + 可执行检查配置', 'ZIP'],
   ['AGENTS.md', '通用 AGENTS.md', '直接放入实验目录，或作为任务上下文', 'MD'],
   ['CODE_STYLE.md', '代码风格规范', '命名、类型、模块边界与格式规则', 'MD'],
-  ['experiment.schema.json', '实验包 Schema', '候选 JSON Schema · 上传协议尚未启用', 'JSON'],
+  ['experiment.schema.json', '实验包 Schema', '凸透镜 v1 文件投稿 · 清单校验 Schema', 'JSON'],
   ['experiment.example.json', '清单示例', '候选结构 · 非完整可运行实验包', 'JSON'],
 ]
 

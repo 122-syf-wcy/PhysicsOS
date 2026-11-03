@@ -48,7 +48,7 @@ export function mountLens(
     return group
   }
   const object = stand()
-  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 5, 20), material(0xf3e8cc))
+  const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1, 20), material(0xf3e8cc))
   candle.position.y = 2.5
   object.add(candle)
   const flame = new THREE.Mesh(
@@ -79,6 +79,18 @@ export function mountLens(
   const image = new THREE.Group()
   root.add(image)
   const imageArrow = addBox(image, [0.28, 1, 0.28], 0x689588)
+  const rays = new THREE.Group()
+  root.add(rays)
+  const clearRays = (): void => {
+    for (const child of [...rays.children]) {
+      if (!(child instanceof THREE.Line)) continue
+      const line = child as THREE.Line<THREE.BufferGeometry, THREE.Material | THREE.Material[]>
+      line.geometry.dispose()
+      for (const material of Array.isArray(line.material) ? line.material : [line.material])
+        material.dispose()
+      rays.remove(child)
+    }
+  }
   let last: ExperimentSnapshot | undefined
   let disposed = false
   let scheduled: number | undefined
@@ -138,14 +150,50 @@ export function mountLens(
     update: (snapshot): void => {
       last = snapshot
       object.position.x = -snapshot.parameters.objectDistanceCm
+      candle.scale.y = snapshot.parameters.objectHeightCm
+      candle.position.y = snapshot.parameters.objectHeightCm / 2
+      flame.position.y = snapshot.parameters.objectHeightCm
       screen.position.x = snapshot.parameters.screenDistanceCm
       const { imageDistanceCm: x, imageHeightCm: height } = snapshot.result
-      image.visible = x !== null && height !== null && Math.abs(x) <= 100 && Math.abs(height) <= 50
+      image.visible =
+        snapshot.visible.image &&
+        x !== null &&
+        height !== null &&
+        Math.abs(x) <= 100 &&
+        Math.abs(height) <= 50
       if (x !== null && height !== null) {
         image.position.x = x
         imageArrow.scale.y = Math.abs(height)
         imageArrow.position.y = height / 2
       }
+      clearRays()
+      rays.visible = snapshot.visible.rays
+      if (rays.visible)
+        for (const ray of snapshot.rays) {
+          for (const [path, virtual] of [
+            [ray.points, false],
+            [ray.extension, true],
+          ] as const) {
+            if (!path) continue
+            const segments: THREE.Vector3[] = []
+            for (let index = 1; index < path.length; index++) {
+              const from = path[index - 1]
+              const to = path[index]
+              if (!from || !to) continue
+              const clipped = clipSegment(from, to)
+              if (clipped) segments.push(...clipped)
+            }
+            if (!segments.length) continue
+            const line = new THREE.LineSegments(
+              new THREE.BufferGeometry().setFromPoints(segments),
+              virtual
+                ? new THREE.LineDashedMaterial({ color: 0x9366bc, dashSize: 0.8, gapSize: 0.5 })
+                : new THREE.LineBasicMaterial({ color: 0xd39a40 }),
+            )
+            line.computeLineDistances()
+            rays.add(line)
+          }
+        }
       host.dataset.source = last.source
       draw()
     },
@@ -160,6 +208,7 @@ export function mountLens(
       renderer.domElement.removeEventListener('pointerup', up)
       renderer.domElement.removeEventListener('pointercancel', up)
       renderer.domElement.removeEventListener('webglcontextlost', lost)
+      clearRays()
       root.traverse((entry) => {
         if (!(entry instanceof THREE.Mesh)) return
         const mesh = entry as THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>
@@ -172,4 +221,34 @@ export function mountLens(
       renderer.domElement.remove()
     },
   }
+}
+
+/** Clip display segments only; all ray directions and intersections remain engine-owned. */
+function clipSegment(
+  a: { readonly x: number; readonly y: number },
+  b: { readonly x: number; readonly y: number },
+): [THREE.Vector3, THREE.Vector3] | undefined {
+  let from = 0
+  let to = 1
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  for (const [p, q] of [
+    [-dx, a.x + 100],
+    [dx, 100 - a.x],
+    [-dy, a.y + 50],
+    [dy, 50 - a.y],
+  ] as const) {
+    if (p === 0) {
+      if (q < 0) return undefined
+      continue
+    }
+    const fraction = q / p
+    if (p < 0) from = Math.max(from, fraction)
+    else to = Math.min(to, fraction)
+    if (from > to) return undefined
+  }
+  return [
+    new THREE.Vector3(a.x + from * dx, a.y + from * dy, 0),
+    new THREE.Vector3(a.x + to * dx, a.y + to * dy, 0),
+  ]
 }

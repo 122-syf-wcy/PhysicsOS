@@ -15,7 +15,8 @@ const embedPath = (raw: string): string =>
 const sha256 = (bytes: Buffer): string => crypto.createHash('sha256').update(bytes).digest('hex')
 const contentTypeOf = (name: string): string => {
   const contentType = assetContentType(name)
-  if (contentType === undefined) throw new ExperimentError(400, 'INVALID_ARCHIVE', '文件类型不符合要求')
+  if (contentType === undefined)
+    throw new ExperimentError(400, 'INVALID_ARCHIVE', '文件类型不符合要求')
   return contentType
 }
 const badRequest = (): ExperimentError =>
@@ -381,6 +382,17 @@ export class ExperimentService {
       if (validated.manifest.version !== item.version) throw new Error('manifest')
       for (const asset of item.assets)
         await verifiedFile(join(this.root, item.id, asset.name), asset)
+    } catch {
+      throw new ExperimentError(409, 'INTEGRITY_MISMATCH', '冻结的实验文件校验失败')
+    }
+  }
+  /** Authenticated review material: the original frozen bytes, never the public dist boundary. */
+  async archive(actor: IdentityActor, packageId: string): Promise<Buffer> {
+    const item = this.record(packageId)
+    if (actor.role !== 'SUPER_ADMIN' && item.authorKey !== actor.userKey)
+      throw new ExperimentError(403, 'FORBIDDEN', '无权下载此实验包')
+    try {
+      return await verifiedFile(join(this.root, item.id, 'archive.zip'), { sha256: item.sha256 })
     } catch {
       throw new ExperimentError(409, 'INTEGRITY_MISMATCH', '冻结的实验文件校验失败')
     }

@@ -22,10 +22,11 @@ Cordis 插件注入 `webServer`、`storageDomain`；身份服务按请求延迟�
 | `GET /convex-lens` | `{active,items,canReview}` |
 | `POST /convex-lens/packages` | `{zipBase64,author:{name,bio?,github?,avatarDataUrl?},note?}` → `201 {item}` |
 | `GET /packages/:id/preview` | `{entryUrl}` |
+| `GET /packages/:id/archive` | 作者或 SUPER_ADMIN 下载原始冻结 ZIP；逐次校验同一 SHA-256，附件 / no-store / nosniff，最多 20 MiB。 |
 | `POST /packages/:id/review` | `{action:'approve'|'reject',expectedSha256,reason?}` → `{item}` |
 | `POST /convex-lens/rollback` | `{packageId,expectedActiveId}` → `{item}` |
 
-登录账号可投稿，查看自己的待审/退回包与所有已批准版本；预览仅作者或 `SUPER_ADMIN` 可取得。只有 `SUPER_ADMIN` 可全站批准、退回或回滚，并查看所有投稿；学校管理员没有全站发布权限。回滚目标必须曾获批准。公开元数据不包含账号键、学校标识或存储路径。
+登录账号可投稿，查看自己的待审/退回包与所有已批准版本；预览与冻结 ZIP 下载仅作者或 `SUPER_ADMIN` 可取得，已批准包的 ZIP 仍需要此权限。审核面板为所选版本显示下载链接和完整摘要，源码、参考用例、许可与批准绑定同一份 ZIP。只有 `SUPER_ADMIN` 可全站批准、退回或回滚，并查看所有投稿；学校管理员没有全站发布权限。回滚目标必须曾获批准。公开元数据不包含账号键、学校标识或存储路径。
 
 作者名 1–80 字符、简介最多 300、说明最多 500；GitHub 仅接收规范个人主页 URL。可选头像为 PNG/JPEG/WebP，解码后最多 256 KiB；链接与头像不表示身份认证。
 

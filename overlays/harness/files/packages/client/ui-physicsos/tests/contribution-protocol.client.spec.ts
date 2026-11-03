@@ -14,7 +14,14 @@ describe('contributed lens files use the platform engine', () => {
     expect(frame.source).toBe('platform-engine')
     expect(frame.result.imageDistanceCm).toBeCloseTo(15)
     expect(frame.result.imageHeightCm).toBeLessThan(0)
-    expect(Object.keys(frame).sort()).toEqual(['parameters', 'result', 'revision', 'source'])
+    expect(Object.keys(frame).sort()).toEqual([
+      'parameters',
+      'rays',
+      'result',
+      'revision',
+      'source',
+      'visible',
+    ])
     runtime.editParameter('object-distance', 10)
     expect(contributionSnapshot(runtime.getSnapshot()).result).toMatchObject({
       imageDistanceCm: null,
@@ -30,10 +37,38 @@ describe('contributed lens files use the platform engine', () => {
     expect(contributionSnapshot(runtime.getSnapshot()).result.imageDistanceCm).toBeCloseTo(-10)
   })
 
+  it('carries platform height, layer flags and the actual engine ray paths in lens-relative centimetres', () => {
+    const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
+    runtime.editParameter('object-height', 9)
+    const engine = runtime.getSnapshot()
+    const frame = contributionSnapshot(engine)
+    expect(frame.parameters.objectHeightCm).toBe(9)
+    expect(frame.result.imageHeightCm).toBeCloseTo(-4.5)
+    expect(frame.rays).toHaveLength(3)
+    expect(frame.rays[0]?.points[0]).toEqual({ x: -30, y: 9 })
+    expect(frame.rays.map((ray) => ray.points)).toEqual(
+      engine.view.opticalRays?.map((ray) => ray.points),
+    )
+    runtime.setObservable('image', false)
+    runtime.setObservable('rays', false)
+    const hidden = contributionSnapshot(runtime.getSnapshot())
+    expect(hidden.visible).toEqual({ image: false, rays: false })
+    expect(hidden.result).toEqual(frame.result)
+    expect(hidden.rays).toEqual(frame.rays)
+    const session = createExperimentSession(runtime)
+    expect(
+      applyContributionIntent(session, {
+        type: 'parameter/commit',
+        id: 'objectHeightCm',
+        value: 2,
+      }),
+    ).toBe(false)
+  })
+
   it('previews without persistence, cancels, then commits one scene revision', () => {
     const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
     const saves: unknown[] = []
-    const session = createExperimentSession(runtime, scene => saves.push(scene))
+    const session = createExperimentSession(runtime, (scene) => saves.push(scene))
     expect(
       applyContributionIntent(session, {
         type: 'parameter/preview',

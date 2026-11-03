@@ -1,12 +1,19 @@
-/** Reference protocol v1, implemented by the local preview host. Production adapter pending. */
+/** Convex-lens protocol v1: platform engine snapshots and an explicitly marked local fixture. */
 export interface ExperimentSnapshot {
   readonly revision: number
   readonly source: 'preview-fixture' | 'platform-engine'
   readonly parameters: {
     readonly objectDistanceCm: number
+    readonly objectHeightCm: number
     readonly focalLengthCm: number
     readonly screenDistanceCm: number
   }
+  readonly visible: { readonly image: boolean; readonly rays: boolean }
+  /** Lens-relative x/y coordinates in centimetres; production paths come from the engine. */
+  readonly rays: readonly {
+    readonly points: readonly { readonly x: number; readonly y: number }[]
+    readonly extension?: readonly { readonly x: number; readonly y: number }[]
+  }[]
   readonly result: {
     readonly imageDistanceCm: number | null
     readonly imageHeightCm: number | null
@@ -32,8 +39,23 @@ function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isRayPath(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    value.length <= 16 &&
+    value.every((point) => isRecord(point) && finite(point.x) && finite(point.y))
+  )
+}
+
 export function isSnapshot(value: unknown): value is ExperimentSnapshot {
-  if (!isRecord(value) || !isRecord(value.parameters) || !isRecord(value.result)) return false
+  if (
+    !isRecord(value) ||
+    !isRecord(value.parameters) ||
+    !isRecord(value.result) ||
+    !isRecord(value.visible)
+  )
+    return false
   const parameters = value.parameters
   const result = value.result
   return (
@@ -43,6 +65,18 @@ export function isSnapshot(value: unknown): value is ExperimentSnapshot {
     (value.source === 'preview-fixture' || value.source === 'platform-engine') &&
     finite(parameters.objectDistanceCm) &&
     parameters.objectDistanceCm > 0 &&
+    finite(parameters.objectHeightCm) &&
+    parameters.objectHeightCm > 0 &&
+    typeof value.visible.image === 'boolean' &&
+    typeof value.visible.rays === 'boolean' &&
+    Array.isArray(value.rays) &&
+    value.rays.length <= 12 &&
+    value.rays.every(
+      (ray) =>
+        isRecord(ray) &&
+        isRayPath(ray.points) &&
+        (ray.extension === undefined || isRayPath(ray.extension)),
+    ) &&
     finite(parameters.focalLengthCm) &&
     parameters.focalLengthCm > 0 &&
     finite(parameters.screenDistanceCm) &&

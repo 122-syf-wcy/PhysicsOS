@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { LensBenchProps } from './lens-bench.ts'
 import { lensParameter } from './lens-bench.ts'
 import css from './ExperimentPage.module.css'
@@ -25,13 +25,21 @@ function Parameter({
   const inputId = useId()
   const value = lensParameter(snapshot, id)
   const [text, setText] = useState(String(value))
+  const [renderedValue, setRenderedValue] = useState(value)
   const [error, setError] = useState(false)
+  const cancelBlur = useRef(false)
   const dragging = useRef(false)
   const pending = useRef(value)
-  useEffect(() => {
+  // Reset drafts when the engine value changes, before rendering the controlled input.
+  if (renderedValue !== value) {
+    setRenderedValue(value)
     setText(String(value))
-  }, [value])
+  }
   const settle = (): void => {
+    if (cancelBlur.current) {
+      cancelBlur.current = false
+      return
+    }
     const next = Number(text)
     if (text.trim() === '' || !Number.isFinite(next) || next < min || next > max) {
       setError(true)
@@ -67,6 +75,7 @@ function Parameter({
             onKeyDown={(event) => {
               if (event.key === 'Enter') event.currentTarget.blur()
               if (event.key === 'Escape') {
+                cancelBlur.current = true
                 setText(String(value))
                 setError(false)
                 event.currentTarget.blur()

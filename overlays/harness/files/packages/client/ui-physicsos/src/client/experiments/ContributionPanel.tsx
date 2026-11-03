@@ -168,12 +168,16 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
           ? '已发布。新打开的实验会自动使用此版本；正在进行的实验保持原版本。'
           : '已退回，贡献者可以查看原因并上传新修订。',
       )
-      setCatalog(current => current === undefined ? current : {
-        ...current,
-        active: action === 'approve' ? item : current.active,
-        items: current.items.map(row => row.id === item.id ? item : row),
-      })
-      setPreview(current => current?.item.id === item.id ? { ...current, item } : current)
+      setCatalog((current) =>
+        current === undefined
+          ? current
+          : {
+              ...current,
+              active: action === 'approve' ? item : current.active,
+              items: current.items.map((row) => (row.id === item.id ? item : row)),
+            },
+      )
+      setPreview((current) => (current?.item.id === item.id ? { ...current, item } : current))
       await refresh()
     })
   }
@@ -346,7 +350,7 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
             {catalog?.items.length === 0 ? (
               <p className={css.muted}>还没有投稿。下载模板，开始你的第一个三维实验。</p>
             ) : null}
-            {catalog?.items.map(item => (
+            {catalog?.items.map((item) => (
               <article key={item.id} className={css.version} data-package-id={item.id}>
                 <div className={css.sectionHeading}>
                   <ContributionAuthorBadge author={item.author} version={item.version} />
@@ -377,16 +381,16 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
                   item.status === 'approved' &&
                   catalog.active &&
                   catalog.active.id !== item.id ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => {
-                          setRollback(item)
-                        }}
-                      >
-                        回滚到此版本
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setRollback(item)
+                      }}
+                    >
+                      回滚到此版本
+                    </button>
+                  ) : null}
                 </div>
               </article>
             ))}
@@ -406,6 +410,20 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
                   关闭预览
                 </button>
               </div>
+              {catalog?.canReview ? (
+                <div className={css.reviewActions}>
+                  <a
+                    href={`/physicsos/experiments/packages/${encodeURIComponent(preview.item.id)}/archive`}
+                    download
+                  >
+                    下载冻结审核 ZIP
+                  </a>
+                  <p>下载并核对源码、dist、参考用例和素材许可；该 ZIP 的摘要与审批一致。</p>
+                  <small aria-label="审核文件 SHA-256" style={{ overflowWrap: 'anywhere' }}>
+                    {preview.item.sha256}
+                  </small>
+                </div>
+              ) : null}
               <CandidatePreview key={preview.item.id} entryUrl={preview.entryUrl} />
               {catalog?.canReview && preview.item.status === 'pending' ? (
                 <div className={css.reviewActions}>

@@ -22,7 +22,7 @@
 | 消息 | 方向 | 用途 |
 | --- | --- | --- |
 | experiment/ready → experiment/connect → experiment/connected | 实验 ↔ 宿主 | 握手及端口确认 |
-| experiment/snapshot | 宿主 → 实验 | 只读 revision、source、parameters、result |
+| experiment/snapshot | 宿主 → 实验 | 只读 revision、source、parameters、visible、rays、result |
 | parameter/preview | 实验 → 宿主 | id/value，临时显示，不落库 |
 | parameter/commit | 实验 → 宿主 | id/value，校验后提交一次 |
 | parameter/cancel | 实验 → 宿主 | 取消当前预览 |
@@ -39,9 +39,32 @@
   "source": "preview-fixture",
   "parameters": {
     "objectDistanceCm": 30,
+    "objectHeightCm": 6,
     "focalLengthCm": 10,
     "screenDistanceCm": 15
   },
+  "visible": {
+    "image": true,
+    "rays": true
+  },
+  "rays": [
+    {
+      "points": [
+        {
+          "x": -30,
+          "y": 6
+        },
+        {
+          "x": 0,
+          "y": 6
+        },
+        {
+          "x": 15,
+          "y": -3
+        }
+      ]
+    }
+  ],
   "result": {
     "imageDistanceCm": 15,
     "imageHeightCm": -3,
@@ -51,7 +74,7 @@
 }
 ```
 
-示例坐标单位是 cm，已在字段名中说明；平台内部单位由正式适配器转换。source=preview-fixture 明确表示开发数据。只有平台引擎实际生成的结果才能标记 platform-engine；展示该字段不构成独立的物理验证证明。
+参数与 ray.points/extension 坐标单位都是 cm；x 以透镜为原点、向光屏为正，y 以光轴为原点、向上为正。物高与 image/rays 显示开关仅由宿主控制；包内仍只能发送 objectDistanceCm、focalLengthCm、screenDistanceCm 三种有界参数意图。正式 rays 是引擎实际生成的光路与虚像延长线，renderer 只做显示裁剪，不重算物理。source=preview-fixture 明确表示开发数据。只有平台引擎实际生成的结果才能标记 platform-engine；展示该字段不构成独立的物理验证证明。
 
 ## 平台已接入的能力
 

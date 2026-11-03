@@ -2,12 +2,25 @@ import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { runInNewContext } from 'node:vm'
 import { parseFragment, type DefaultTreeAdapterTypes } from 'parse5'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { experimentRoutes, experimentAssets } from '../src/routes.ts'
-import { admin, contributor, other, schoolAdmin, uploadBody, zip, files, jsonOf, type ItemEnvelope, type PreviewEnvelope, type ListEnvelope, type ErrorEnvelope } from './fixtures.ts'
+import {
+  admin,
+  contributor,
+  other,
+  schoolAdmin,
+  uploadBody,
+  zip,
+  files,
+  jsonOf,
+  type ItemEnvelope,
+  type PreviewEnvelope,
+  type ListEnvelope,
+  type ErrorEnvelope,
+} from './fixtures.ts'
 import { host } from './support.ts'
 let loaded: Awaited<ReturnType<typeof host>> | undefined
 let root: string
@@ -50,7 +63,9 @@ afterEach(async () => {
   if (server)
     await new Promise<void>((resolve) => {
       server!.closeAllConnections()
-      server!.close(() =>{  resolve() })
+      server!.close(() => {
+        resolve()
+      })
     })
   server = undefined
   await loaded?.close()
@@ -84,11 +99,15 @@ describe('experiment REST and credential-free asset boundary', () => {
         )
       ).status,
     ).toBe(200)
-    expect((await jsonOf<ListEnvelope>(await call('/convex-lens', undefined, 'other'))).active?.id).toBe(item.id)
+    expect(
+      (await jsonOf<ListEnvelope>(await call('/convex-lens', undefined, 'other'))).active?.id,
+    ).toBe(item.id)
     identityUnavailable()
     const refused = await call('/convex-lens')
     expect(refused.status).toBe(503)
-    expect(await jsonOf<ErrorEnvelope>(refused)).toMatchObject({ error: { code: 'IDENTITY_UNAVAILABLE' } })
+    expect(await jsonOf<ErrorEnvelope>(refused)).toMatchObject({
+      error: { code: 'IDENTITY_UNAVAILABLE' },
+    })
   })
   it('rejects cross-site and non-json requests before any upload and caps streamed JSON', async () => {
     const { base, call } = await setup()
@@ -157,17 +176,79 @@ describe('experiment REST and credential-free asset boundary', () => {
     expect(module.headers.get('access-control-allow-origin')).toBe('*')
     expect(module.headers.get('cache-control')).toBe('no-store')
     expect((await fetch(new URL('../src/main.ts', new URL(entryUrl, base)))).status).toBe(404)
-    const published = await jsonOf<ItemEnvelope>(await call(
-      `/packages/${item.id}/review`,
-      { action: 'approve', expectedSha256: item.sha256 },
-      'admin',
-    ))
+    const published = await jsonOf<ItemEnvelope>(
+      await call(
+        `/packages/${item.id}/review`,
+        { action: 'approve', expectedSha256: item.sha256 },
+        'admin',
+      ),
+    )
     const approvedEntry = published.item.entryUrl
     if (approvedEntry === undefined) throw new Error('Approved entry URL missing')
     const publicHtml = await fetch(new URL(approvedEntry, base))
     expect(publicHtml.headers.get('content-security-policy')).toContain('sandbox allow-scripts')
     expect(publicHtml.headers.get('cache-control')).toContain('immutable')
   })
+  it('downloads the exact frozen review ZIP only for its owner or SUPER_ADMIN, even after approval', async () => {
+    const { base, call } = await setup()
+    const bytes = zip(
+      Object.entries({
+        ...files(),
+        'README.md': 'distinct source review notes',
+        'cases.json': '{"review":"cases"}',
+        'ASSET-LICENSES.json': '{"review":"licenses"}',
+      }).map(([name, data]) => ({ name, data })),
+    )
+    const { item } = await jsonOf<ItemEnvelope>(
+      await call('/convex-lens/packages', uploadBody(bytes)),
+    )
+    for (const status of ['pending', 'approved']) {
+      if (status === 'approved')
+        await call(
+          `/packages/${item.id}/review`,
+          { action: 'approve', expectedSha256: item.sha256 },
+          'admin',
+        )
+      expect((await call(`/packages/${item.id}/archive`, undefined, 'anonymous')).status).toBe(401)
+      expect((await call(`/packages/${item.id}/archive`, undefined, 'other')).status).toBe(403)
+      expect((await call(`/packages/${item.id}/archive`, undefined, 'schoolAdmin')).status).toBe(
+        403,
+      )
+      for (const actor of ['contributor', 'admin']) {
+        const response = await call(`/packages/${item.id}/archive`, undefined, actor)
+        expect(response.status).toBe(200)
+        expect(response.headers.get('content-type')).toBe('application/zip')
+        expect(response.headers.get('content-disposition')).toBe(
+          `attachment; filename="convex-lens-${item.id}.zip"`,
+        )
+        expect(response.headers.get('cache-control')).toBe('no-store')
+        expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+        expect(response.headers.get('access-control-allow-origin')).toBeNull()
+        const downloaded = Buffer.from(await response.arrayBuffer())
+        expect(downloaded.equals(bytes)).toBe(true)
+        expect(createHash('sha256').update(downloaded).digest('hex')).toBe(item.sha256)
+      }
+    }
+    expect(
+      (
+        await fetch(
+          `${base}/physicsos/experiment-assets/releases/${item.id}/${item.sha256}/archive.zip`,
+        )
+      ).status,
+    ).toBe(404)
+    expect(
+      (
+        await fetch(
+          `${base}/physicsos/experiment-assets/releases/${item.id}/${item.sha256}/README.md`,
+        )
+      ).status,
+    ).toBe(404)
+    await writeFile(join(root, 'files', item.id, 'archive.zip'), Buffer.from('tampered'))
+    const corrupt = await call(`/packages/${item.id}/archive`, undefined, 'admin')
+    expect(corrupt.status).toBe(409)
+    expect((await jsonOf<ErrorEnvelope>(corrupt)).error.code).toBe('INTEGRITY_MISMATCH')
+  })
+
   it('permits only the exact frozen importmap as an inline script', async () => {
     const { base, call } = await setup()
     const map = '{"imports":{"three":"./runtime/protocol.js"}}'
@@ -177,7 +258,9 @@ describe('experiment REST and credential-free asset boundary', () => {
         data: name === 'dist/index.html' ? `<script type="importmap">${map}</script>${data}` : data,
       })),
     )
-    const { item } = await jsonOf<ItemEnvelope>(await call('/convex-lens/packages', uploadBody(archive)))
+    const { item } = await jsonOf<ItemEnvelope>(
+      await call('/convex-lens/packages', uploadBody(archive)),
+    )
     const { entryUrl } = await jsonOf<PreviewEnvelope>(await call(`/packages/${item.id}/preview`))
     const response = await fetch(new URL(entryUrl.replace('/embed/', '/'), base), {
       headers: { 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'same-origin' },
@@ -213,11 +296,13 @@ describe('experiment REST and credential-free asset boundary', () => {
     expect(csp.includes(`'sha256-${createHash('sha256').update(script).digest('base64')}'`)).toBe(
       true,
     )
-    const approved = await jsonOf<ItemEnvelope>(await call(
-      `/packages/${item.id}/review`,
-      { action: 'approve', expectedSha256: item.sha256 },
-      'admin',
-    ))
+    const approved = await jsonOf<ItemEnvelope>(
+      await call(
+        `/packages/${item.id}/review`,
+        { action: 'approve', expectedSha256: item.sha256 },
+        'admin',
+      ),
+    )
     expect(approved.item.entryUrl?.startsWith('/physicsos/experiment-assets/embed/releases/')).toBe(
       true,
     )

@@ -61,7 +61,9 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
       clean()
       reject(new ExperimentError(400, 'BAD_REQUEST', '请求体读取失败'))
     }
-    const aborted = () =>{  failed() }
+    const aborted = () => {
+      failed()
+    }
     const data = (chunk: Buffer) => {
       total += chunk.length
       if (total > JSON_LIMIT) {
@@ -115,6 +117,20 @@ export function experimentRoutes({
       }
       if (method === 'POST' && path === '/physicsos/experiments/convex-lens/packages') {
         send(res, 201, { item: await service.upload(actor, await readJson(req)) })
+        return
+      }
+      const archive = /^\/physicsos\/experiments\/packages\/([^/]+)\/archive$/.exec(path)
+      if (method === 'GET' && archive?.[1]) {
+        const bytes = await service.archive(actor, archive[1])
+        res.writeHead(200, {
+          'content-type': 'application/zip',
+          'content-length': bytes.length,
+          'content-disposition': `attachment; filename="convex-lens-${archive[1]}.zip"`,
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'referrer-policy': 'no-referrer',
+        })
+        res.end(bytes)
         return
       }
       const preview = /^\/physicsos\/experiments\/packages\/([^/]+)\/preview$/.exec(path)
