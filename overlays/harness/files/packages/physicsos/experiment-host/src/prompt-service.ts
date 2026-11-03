@@ -17,6 +17,7 @@ import {
   PROMPT_IMPORT_LIMIT,
   type PromptDocument,
   type PromptSeed,
+  type PromptBinding,
 } from './prompt-format.ts'
 
 const revisionWire = z
@@ -41,8 +42,19 @@ const activateWire = revisionWire
   .strict()
 const hash = (value: unknown): string =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex')
+/** JSONB and other stores may reorder keys; hash schema fields in a fixed order. */
+const canonicalBinding = (binding: PromptBinding): PromptBinding => ({
+  release: {
+    schemaVersion: binding.release.schemaVersion,
+    experimentId: binding.release.experimentId,
+    url: binding.release.url,
+    sha256: binding.release.sha256,
+    bytes: binding.release.bytes,
+  },
+  contractMarkdown: binding.contractMarkdown,
+})
 const contentHash = (value: Pick<PromptDocument, 'version' | 'body' | 'binding'>): string =>
-  hash({ version: value.version, body: value.body, binding: value.binding })
+  hash({ version: value.version, body: value.body, binding: canonicalBinding(value.binding) })
 const requireAdmin = (actor: IdentityActor): void => {
   if (actor.role !== 'SUPER_ADMIN')
     throw new ExperimentError(403, 'FORBIDDEN', '仅平台管理员可管理开发提示词。')
@@ -83,7 +95,7 @@ export class DeveloperPromptService {
     seed: PromptSeed,
   ) {
     if (!validPromptBinding(seed.binding)) throw invalid('系统提示词绑定无效。')
-    this.seed = structuredClone({ body: validateBody(seed.body), binding: seed.binding })
+    this.seed = structuredClone({ body: validateBody(seed.body), binding: canonicalBinding(seed.binding) })
   }
   async initialize(): Promise<void> {
     await this.tail

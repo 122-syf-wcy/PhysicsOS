@@ -102,6 +102,15 @@ export function developerPromptRoutes({
     try {
       const path = new URL(req.url ?? '/', 'http://local').pathname
       const method = req.method ?? 'GET'
+      if (method === 'GET' && path === `${PREFIX}/template`) {
+        res.writeHead(302, {
+          location: service.current().binding.release.url,
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+        })
+        res.end()
+        return
+      }
       if (method === 'GET' && (path === `${PREFIX}/current.md` || path === PROMPT_MARKDOWN_ALIAS)) {
         markdown(req, res, service.current())
         return

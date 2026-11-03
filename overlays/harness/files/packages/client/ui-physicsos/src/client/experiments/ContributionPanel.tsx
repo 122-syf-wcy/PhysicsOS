@@ -282,7 +282,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
             开发文档 ↗
           </a>
-          <a href="/physicsos/developers/downloads/physicsos-experiment-template-v2.zip" download>
+          <a href="/physicsos/developer-prompts/template" download="physicsos-experiment-template-v2.zip">
             下载独立模板 ↓
           </a>
           <a href={`${DOCS}#/agents`} target="_blank" rel="noopener noreferrer">
@@ -421,7 +421,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                         setRollback(item)
                       }}
                     >
-                    回滚到此版本
+                      回滚到此版本
                     </button>
                   ) : null}
               </div>

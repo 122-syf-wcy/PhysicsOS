@@ -69,6 +69,22 @@
 .actions {
   margin: 14px 0;
 }
+.downloadLink {
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  text-decoration: none;
+}
+.downloadLink,
+.actions button,
+.upload input::file-selector-button {
+  background-image: var(--physics-glass-sheen);
+  box-shadow: var(--physics-glass-rim);
+  backdrop-filter: var(--physics-glass-blur-soft);
+}
 .error,
 .notice {
   padding: 12px 14px;

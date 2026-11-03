@@ -59,6 +59,15 @@ const saveBody = (
 ) => ({ expectedRevision, version, body, note: '改善材质' })
 
 describe('shared developer prompt Markdown', () => {
+  it.each(['\uD800', '\uDC00'])(
+    'rejects unpaired Unicode surrogates instead of silently replacing exported bytes',
+    (value) => {
+      expect(() => validateBody(value)).toThrow()
+    },
+  )
+  it('preserves valid non-BMP Unicode in author text', () => {
+    expect(validateBody('🧪 实验说明')).toBe('🧪 实验说明')
+  })
   it('exports real immutable binding and roundtrips only the editable section', () => {
     const markdown = renderPrompt(
       { version: '1.1.0', body: '# 自定义\n\n保留光线。', binding: seed.binding },
@@ -107,6 +116,33 @@ describe('shared developer prompt Markdown', () => {
 })
 
 describe('developer prompt publication', () => {
+  it('keeps digests and draft bindings stable when JSON storage reorders object keys', async () => {
+    const { domain, service } = await setup()
+    await service.save(admin, saveBody(0))
+    const first = (await service.publish(admin, { expectedRevision: 1 })).current
+    const reordered = {
+      contractMarkdown: seed.binding.contractMarkdown,
+      release: {
+        bytes: seed.binding.release.bytes,
+        sha256: seed.binding.release.sha256,
+        url: seed.binding.release.url,
+        experimentId: seed.binding.release.experimentId,
+        schemaVersion: seed.binding.release.schemaVersion,
+      },
+    }
+    const state = structuredClone(domain.table('state').get('convex-lens'))!
+    state.versions[0]!.binding = reordered
+    await domain.table('state').put('convex-lens', state)
+    const reopened = new DeveloperPromptService(domain, { ...seed, binding: reordered })
+    await reopened.initialize()
+    expect(reopened.current()).toEqual(first)
+    await reopened.save(admin, saveBody(2, '1.2.0'))
+    const reconfigured = new DeveloperPromptService(domain, seed)
+    await reconfigured.initialize()
+    expect((await reconfigured.publish(admin, { expectedRevision: 3 })).current.version).toBe(
+      '1.2.0',
+    )
+  })
   it('keeps saved/imported drafts private until explicit publish and freezes the published version', async () => {
     const { service } = await setup()
     expect(service.current()).toMatchObject({

@@ -61,3 +61,13 @@ ZIP 最多 20 MiB，展开总量最多 40 MiB，单文件最多 20 MiB，最多 
 没有模型调用、计费 Token 消耗或模型 KV cache 变化。正常的 storage-domain KV 读写与磁盘 I/O 会发生；“无 KV 模型影响”不代表不写业务存储。
 
 参考案例校验只验证有界元数据与平台引擎的一致性。静态校验不证明源码与 dist 对应，也不证明实际渲染、教学、性能或运行时生成资源正确。当前 importmap 只支持确切 `imports` 映射，最多 16 个；scopes/前缀映射不支持。当前不支持多进程发布、自动源码重建比对或自动物理/性能验收；更完整的事务恢复可后续改进。人工物理/性能审核、反代配置与真实浏览器隔离验收由集成和发布流程负责。测试与构建按项目约定在服务器隔离 Docker 中进行。
+
+## 开发提示词管理
+
+独立 `physicsos_developer_prompts` domain 保存一个共享草稿、不可变发布历史和当前指针。SUPER_ADMIN 在后台编辑/导入 Markdown、设置独立 X.Y.Z 提示词版本，保存后手动发布。提示词发布更新开发者说明；实验 ZIP 仍走原有上传/审核流程。
+
+`/physicsos/developer-prompts` 下的公开 GET 接口：`/current`、`/versions/:id` 返回已发布投影，`/current.md`、`/versions/:id.md` 返回完整 Markdown，`/template` 重定向到当前发布记录冻结的模板。旧 `/physicsos/developers/downloads/AGENTS.md` 地址也返回当前发布内容。公开响应不包含草稿、操作者或修改说明，当前指针不缓存。
+
+管理 GET `/admin` 与全部 POST 均明确要求 SUPER_ADMIN。POST `/admin/draft` 接受 `{expectedRevision,version,body,note}`；`/admin/import` 使用 `{expectedRevision,version,note,filename,base64}`；`/admin/publish` 使用 `{expectedRevision}`；`/admin/activate` 使用 `{expectedRevision,id,expectedSha256}`。过期 revision 返回 409，发布版本号不可重复使用。正文上限 64 KiB UTF-8，导入 128 KiB，200 个发布版本、1000 条发布/切换记录；达到上限拒绝新操作，不自动删除历史。
+
+固定契约和实际模板描述符由 `scripts/developers/generate-prompts.mjs` 生成；后台只修改可编辑说明。摘要按固定字段顺序计算，不依赖 JSON/JSONB 对象键序。写入拒绝时尝试恢复先前记录；恢复不确定时封锁提示词读写，存储与服务重启后重新核对有效状态。这是单进程协调，不能当作多进程 CAS 或跨后端事务保证。

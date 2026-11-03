@@ -181,7 +181,9 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
     anchor.href = url
     anchor.download = `physicsos-convex-lens-prompt-${form.version}.md`
     anchor.click()
-    setTimeout(() =>{  URL.revokeObjectURL(url); }, 1000)
+    setTimeout(() => {
+      URL.revokeObjectURL(url)
+    }, 1000)
   }
   const useVersion = (item: PromptVersion): void => {
     edit({ body: item.body, note: '', version: nextVersion(item.version) })
@@ -213,7 +215,14 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
             · 固定实验格式 V2
           </p>
         )}
-        {view && <a href="/physicsos/developer-prompts/current.md">下载当前已发布提示词</a>}
+        {view && (
+          <a
+            className={`${css.ghost} ${styles.downloadLink}`}
+            href="/physicsos/developer-prompts/current.md"
+          >
+            下载当前已发布提示词
+          </a>
+        )}
         {error && (
           <p className={styles.error} role="alert">
             {error}
@@ -241,7 +250,9 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                     className={css.input}
                     value={form.version}
                     maxLength={32}
-                    onChange={event =>{  edit({ version: event.target.value }); }}
+                    onChange={(event) => {
+                      edit({ version: event.target.value })
+                    }}
                   />
                 </label>
                 <label className={css.field}>
@@ -250,7 +261,9 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                     className={css.input}
                     value={form.note}
                     maxLength={500}
-                    onChange={event =>{  edit({ note: event.target.value }); }}
+                    onChange={(event) => {
+                      edit({ note: event.target.value })
+                    }}
                   />
                 </label>
                 <label className={css.field}>
@@ -258,7 +271,9 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                   <textarea
                     className={`${css.input} ${styles.editor}`}
                     value={form.body}
-                    onChange={event =>{  edit({ body: event.target.value }); }}
+                    onChange={(event) => {
+                      edit({ body: event.target.value })
+                    }}
                     spellCheck={false}
                   />
                 </label>
@@ -354,12 +369,19 @@ export function AdminPromptTab({ api }: { api: DeveloperPromptApi }): ReactNode 
                       <p className={styles.digest}>SHA-256 {item.sha256}</p>
                     </div>
                     <div className={`${css.actions} ${styles.actions}`}>
-                      <a href={`/physicsos/developer-prompts/versions/${item.id}.md`}>下载此版本</a>
+                      <a
+                        className={`${css.ghost} ${styles.downloadLink}`}
+                        href={`/physicsos/developer-prompts/versions/${item.id}.md`}
+                      >
+                        下载此版本
+                      </a>
                       <button
                         type="button"
                         className={css.ghost}
                         disabled={busy}
-                        onClick={() =>{  useVersion(item); }}
+                        onClick={() => {
+                          useVersion(item)
+                        }}
                         aria-label={`从 ${item.version} 继续编辑`}
                       >
                         继续编辑新版本

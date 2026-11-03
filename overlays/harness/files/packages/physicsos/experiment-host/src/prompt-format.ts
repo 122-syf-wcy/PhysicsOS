@@ -29,6 +29,7 @@ const fixedStart = '<!-- physicsos:contract:start -->'
 const fixedEnd = '<!-- physicsos:contract:end -->'
 const reserved = /<!--\s*physicsos:/i
 const utf8 = new TextEncoder()
+const utf8Text = new TextDecoder('utf-8', { fatal: true })
 
 /** Normalize author text without executing Markdown or interpreting expressions. */
 export function validateBody(text: string): string {
@@ -36,9 +37,11 @@ export function validateBody(text: string): string {
     .replace(/^\uFEFF/, '')
     .replace(/\r\n?/g, '\n')
     .trim()
+  const bytes = utf8.encode(body)
   if (
     !body ||
-    utf8.encode(body).length > PROMPT_BODY_LIMIT ||
+    bytes.length > PROMPT_BODY_LIMIT ||
+    utf8Text.decode(bytes) !== body ||
     /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body) ||
     reserved.test(body)
   )
