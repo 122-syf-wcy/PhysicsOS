@@ -6,6 +6,7 @@ import { LensControls } from './LensControls.tsx'
 import { CommunityExperimentFrame } from './CommunityExperimentFrame.tsx'
 import {
   contributionApi,
+  contributionPreviewUrl,
   contributionFileData,
   type ContributionAuthor,
   type ContributionCatalog,
@@ -144,9 +145,9 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
   }
   const openPreview = (item: ExperimentPackageView): void => {
     void run(async () => {
-      const result = await contributionApi.preview(item.id)
+      const entryUrl = await contributionPreviewUrl(item)
       if (alive.current) {
-        setPreview({ item, entryUrl: result.entryUrl })
+        setPreview({ item, entryUrl })
         setReason('')
       }
     })

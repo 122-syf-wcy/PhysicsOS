@@ -49,9 +49,14 @@ export interface SceneLineage {
   forkedAt: IsoDateTime
 }
 
+/** The renderer used by a saved experiment, including the bundled official sample. */
+export type ExperimentReleaseIdentity =
+  | { readonly kind: 'official'; readonly id: string; readonly experimentId: string; readonly version: string }
+  | { readonly kind?: 'community'; readonly id: string; readonly experimentId: string; readonly version: string; readonly sha256: string }
+
 /** A captured engine reading; presentation data, not a new physical condition. */
 export interface ExperimentObservation {
-  readonly experimentRelease?: { readonly id: string; readonly experimentId: string; readonly version: string; readonly sha256: string }
+  readonly experimentRelease?: ExperimentReleaseIdentity
   readonly id: string
   readonly recordedAt: string
   readonly sceneId: string
@@ -63,7 +68,7 @@ export interface ExperimentObservation {
 
 /** docs/03 §25 */
 export interface SceneMetadata {
-  experimentRelease?: { readonly id: string; readonly experimentId: string; readonly version: string; readonly sha256: string }
+  experimentRelease?: ExperimentReleaseIdentity
   experimentNotebook?: { readonly version: 1; readonly entries: readonly ExperimentObservation[] }
   createdAt: IsoDateTime
   updatedAt: IsoDateTime

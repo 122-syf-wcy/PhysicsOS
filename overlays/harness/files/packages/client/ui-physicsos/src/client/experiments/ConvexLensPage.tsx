@@ -6,7 +6,12 @@ import { ExperimentReportPanel } from '../ExperimentReportPanel.tsx'
 import { experimentMetaOf } from '../physics/experiment-summaries.ts'
 import { ContributionPanel, ContributionAuthorBadge } from './ContributionPanel.tsx'
 import { CommunityExperimentFrame } from './CommunityExperimentFrame.tsx'
-import { contributionApi, type ExperimentPackageView } from './contribution-api.ts'
+import {
+  contributionApi,
+  contributionReleaseIdentity,
+  selectContributionRelease,
+  type ExperimentPackageView,
+} from './contribution-api.ts'
 import { LensControls } from './LensControls.tsx'
 import { ExperimentNotebook } from './ExperimentNotebook.tsx'
 import { OptionalLensBench } from './OptionalLensBench.tsx'
@@ -51,25 +56,13 @@ export function ConvexLensPage({
       .catalog()
       .then((catalog) => {
         if (!alive) return
-        const selected =
-          pinned === undefined
-            ? catalog.active
-            : catalog.items.find(item => item.id === pinned.id && item.sha256 === pinned.sha256)
+        const selected = selectContributionRelease(catalog, pinned)
         if (selected === undefined || (selected !== null && !selected.entryUrl)) {
           setReleaseError('该记录使用的实验版本暂时无法载入。参数和记录已保留。')
           return
         }
         setRelease(selected)
-        session.setRelease(
-          selected === null
-            ? undefined
-            : {
-              id: selected.id,
-              experimentId: selected.experimentId,
-              version: selected.version,
-              sha256: selected.sha256,
-            },
-        )
+        session.setRelease(contributionReleaseIdentity(selected))
       })
       .catch(() => {
         if (alive) setReleaseError('暂时无法读取实验版本，请检查网络后重试。')

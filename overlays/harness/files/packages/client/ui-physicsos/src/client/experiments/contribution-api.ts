@@ -1,3 +1,7 @@
+import type { PhysicsScene } from '@physicsos/physics-scene'
+
+type ReleaseIdentity = NonNullable<PhysicsScene['metadata']['experimentRelease']>
+
 export interface ContributionAuthor {
   readonly name: string
   readonly bio?: string
@@ -29,6 +33,39 @@ export interface ContributionInput {
   readonly zipBase64: string
   readonly author: { name: string; bio?: string; github?: string; avatarDataUrl?: string }
   readonly note?: string
+}
+
+/** Bundled renderers have a distinct identity; never invent a content hash for them. */
+export function contributionReleaseIdentity(item: ExperimentPackageView | null): ReleaseIdentity {
+  return item === null
+    ? {
+      kind: 'official',
+      id: 'physicsos-convex-lens-v1',
+      experimentId: 'convex-lens',
+      version: '1.0.0',
+    }
+    : {
+      kind: 'community',
+      id: item.id,
+      experimentId: item.experimentId,
+      version: item.version,
+      sha256: item.sha256,
+    }
+}
+
+export function selectContributionRelease(
+  catalog: ContributionCatalog,
+  pinned?: ReleaseIdentity,
+): ExperimentPackageView | null | undefined {
+  if (pinned?.kind === 'official') return null
+  if (pinned === undefined) return catalog.active
+  return catalog.items.find(item => item.id === pinned.id && item.sha256 === pinned.sha256)
+}
+
+/** Approved assets are public; only drafts require the owner/admin preview capability. */
+export async function contributionPreviewUrl(item: ExperimentPackageView): Promise<string> {
+  if (item.status === 'approved' && item.entryUrl) return item.entryUrl
+  return (await contributionApi.preview(item.id)).entryUrl
 }
 
 async function request<T>(path: string, body?: unknown): Promise<T> {
