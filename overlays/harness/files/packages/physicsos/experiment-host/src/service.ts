@@ -122,7 +122,8 @@ export class ExperimentService {
         await clearRecovery(this.root)
         this.currentState = previous; this.fenced = false
       } catch {
-        // The durable marker remains for initialize(); no subsequent write or read is allowed.
+        // Keep this process fenced and retain finalized bytes. Multiple I/O failures may leave no marker;
+        // restart can adopt a valid persisted next state, so callers must refresh canonical versions.
       }
       throw error
     }
