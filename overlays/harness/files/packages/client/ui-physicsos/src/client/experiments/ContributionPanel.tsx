@@ -334,7 +334,7 @@ export function ContributionPanel({
                 />
                 <span>
                   <strong>下载独立模板 ↓</strong>
-                  <small aria-hidden="true">从可运行的凸透镜样板开始</small>
+                  <small aria-hidden="true">从可运行的{selectedLabel}样板开始</small>
                 </span>
               </a>
               <a

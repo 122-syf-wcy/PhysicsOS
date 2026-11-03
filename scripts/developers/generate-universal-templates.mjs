@@ -184,7 +184,7 @@ try {
       'teaching.json': {schemaVersion:3,experimentId:profile.id,title:profile.label,steps:['调节平台参数，观察装置、读数与轨迹的变化。','暂停或回放，比较平台计算的物理量。'],limitations:['物理量、轨迹与验证结果均由 PhysicsOS 平台引擎产生。','作者仅绘制收到的快照；模型适用条件见平台实验说明。']},
       'cases.json': {schemaVersion:3,experimentId:profile.id,source:'platform-engine',cases:[{id:'default',input:{parameters:Object.fromEntries(profile.parameters.map(item=>[item.id,item.value])),choices:Object.fromEntries(profile.choices.map(item=>[item.id,item.value]))}}]},
       'public/fixture.json': snapshots[profile.id],
-      'src/target.js': `// Generated target identity; change using npm run configure -- <id>.\nexport const experimentId = ${JSON.stringify(profile.id)};\n`,
+      'src/target.js': `// Target comes from the selected download. Set version using npm run configure -- --version 1.1.0.\nexport const experimentId = ${JSON.stringify(profile.id)};\n`,
       'tools/profile.json': profile,
     }
     data.targets[profile.id] = Object.fromEntries(Object.entries(profileFiles).map(([name,value])=>[name,encode(value)]))
