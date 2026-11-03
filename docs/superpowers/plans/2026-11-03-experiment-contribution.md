@@ -42,10 +42,10 @@
 - PackageView has id, experimentId, version, sha256, status ('pending'|'approved'|'rejected'), author {name,bio?,github?,avatarUrl?}, note?, createdAt, publishedAt?, rejectionReason?, entryUrl? (approved only). No account/storage details.
 - Asset prefix /physicsos/experiment-assets. Expose an assets handler separately as well as same-server registration, so a deployment can use a separate origin. Config assetOrigin optional. Every HTML response has mandatory sandbox and path-scoped CSP even opened directly. Pending asset URLs use expiring random capability path, released URLs use immutable package id/hash.
 
-- [ ] Write tests proving valid template ZIP intake, review and rollback, immutable digest, owner/admin visibility, authorization, CSRF/size/content-type, malformed archive classes, failed writes, restart restoration and active-state sequence.
-- [ ] Run failing tests in server container before implementation.
-- [ ] Implement validation, file storage, domain/service, route and Cordis plugin using notice-host patterns. A path named differently from its central ZIP entry must be rejected. Never run package scripts.
-- [ ] Run own complete suite and plugin typecheck; log exact commands and output. Commit only owned files.
+- [x] Write tests proving valid template ZIP intake, review and rollback, immutable digest, owner/admin visibility, authorization, CSRF/size/content-type, malformed archive classes, failed writes, restart restoration and active-state sequence.
+- [x] Run failing tests in server container before implementation.
+- [x] Implement validation, file storage, domain/service, route and Cordis plugin using notice-host patterns. A path named differently from its central ZIP entry must be rejected. Never run package scripts.
+- [x] Run own complete suite and plugin typecheck; log exact commands and output. Commit only owned files.
 
 ## Task 2: Real physics bridge and contribution UI
 
@@ -53,19 +53,19 @@
 
 **Interfaces:** Task 1 REST contract. Snapshot sent to template is developer-kit/experiment-template/src/protocol.ts ExperimentSnapshot with source platform-engine; engine inspector values remain in cm. Allowed intents map objectDistanceCm/object-distance, focalLengthCm/focal-length, screenDistanceCm/screen-distance to session preview/commit/cancel. Reject unknown/out-of-range/nonfinite values.
 
-- [ ] Test mapping against real optics: f=10/u=30 yields v=15; u=f yields null; virtual images stay virtual; preview does not persist, cancel restores, commit once. Test invalid messages/source/channel and disposal.
-- [ ] Observe failing tests, then implement authenticated fetch client, sandbox frame, one-use handshake, timeout/reload and pinned release.
-- [ ] Add real ZIP/file metadata form and admin review panel, loading/errors, candidate preview using separate engine runtime, and confirmed stale-safe rollback. Author/GitHub/avatar and status are visible.
-- [ ] Make official lens sample default three-only; integrate published file without altering parameters/report/notebook or other experiments. Record package release in observation metadata.
-- [ ] Run relevant component/runtime tests and commit scoped files.
+- [x] Test mapping against real optics: f=10/u=30 yields v=15; u=f yields null; virtual images stay virtual; preview does not persist, cancel restores, commit once. Test invalid messages/source/channel and disposal.
+- [x] Observe failing tests, then implement authenticated fetch client, sandbox frame, one-use handshake, timeout/reload and pinned release.
+- [x] Add real ZIP/file metadata form and admin review panel, loading/errors, candidate preview using separate engine runtime, and confirmed stale-safe rollback. Author/GitHub/avatar and status are visible.
+- [x] Make official lens sample default three-only; integrate published file without altering parameters/report/notebook or other experiments. Record package release in observation metadata.
+- [x] Run relevant component/runtime tests and commit scoped files.
 
 ## Task 3: Composition, candidate and acceptance
 
 **Files:** scripts/overlay/harness-overlay.mjs, overlays/harness/upstream-changes.patch, docs/developer content and generated downloads, tests/acceptance/experiment-contribution.mjs, deployment support and report.
 
-- [ ] Integrate old docs and page branches in isolated worktree; retain root uncommitted changes. Update AGENTS confirmed server address.
-- [ ] Register new host in real web bundle, workspace, TS project references and lock patch; add composition coverage for identity service resolved after host boot.
-- [ ] Build server candidate using current isolated dependency tree; boot with separate home/storage and ports, no production secrets or data.
-- [ ] Real browser lifecycle: upload served template ZIP, preview via sandbox, approve, fresh page automatic load, second version and pinned old session, rollback, denial of cross-account access, desktop/mobile screenshots and restart persistence.
-- [ ] Update documents to exact supported capability and generate matching downloads. Run required suites, lint/typecheck/build; report pre-existing failures precisely.
-- [ ] Fresh independent code review, fix important findings, verify final commit and present reviewable candidate. Deployment only after concrete candidate is ready and authorization resolved.
+- [x] Integrate old docs and page branches in isolated worktree; retain root uncommitted changes. Update AGENTS confirmed server address.
+- [x] Register new host in real web bundle, workspace, TS project references and lock patch; add composition coverage for identity service resolved after host boot.
+- [x] Build server candidate using current isolated dependency tree; boot with separate home/storage and ports, no production secrets or data.
+- [x] Real browser lifecycle: upload served template ZIP, preview via sandbox, approve, fresh page automatic load, second version and pinned old session, rollback, denial of cross-account access, desktop/mobile screenshots and restart persistence.
+- [x] Update documents to exact supported capability and generate matching downloads. Run required suites, lint/typecheck/build; report pre-existing failures precisely.
+- [x] Fresh independent code review, fix important findings, verify final commit and present reviewable candidate. Deployment only after concrete candidate is ready and authorization resolved.
