@@ -5,6 +5,7 @@ import { createOpticsWorkspaceRuntime } from '../physics/optics-workspace-runtim
 import { useExperimentSession } from './use-experiment-session.ts'
 import { LensControls } from './LensControls.tsx'
 import { CommunityExperimentFrame } from './CommunityExperimentFrame.tsx'
+import { ContributionFilePicker } from './ContributionFilePicker.tsx'
 import {
   contributionApi,
   contributionPreviewUrl,
@@ -201,7 +202,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
         }
         if (event.key !== 'Tab') return
         const nodes = dialog.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), iframe, [tabindex="0"]',
+          'button:not(:disabled), a[href], input:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled), iframe, [tabindex="0"]',
         )
         const first = nodes?.[0]
         const last = nodes?.[nodes.length - 1]
@@ -253,20 +254,9 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
         </nav>
         <form onSubmit={submit} className={css.form}>
           <h3>提交一个新版本</h3>
-          <label className={css.wide}>
-            实验文件 ZIP{' '}
-            <input
-              type="file"
-              accept=".zip,application/zip"
-              required
-              onChange={(event) => {
-                setFile(event.target.files?.[0])
-              }}
-            />
-            <small>
-              从模板运行 npm run build 和 npm run pack。最大 20 MiB，目标实验为 convex-lens。
-            </small>
-          </label>
+          <div className={css.wide}>
+            <ContributionFilePicker kind="zip" file={file} disabled={busy} onChange={setFile} />
+          </div>
           <label>
             作者显示名
             <input
@@ -302,17 +292,12 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
               rows={2}
             />
           </label>
-          <label>
-            作者头像（可选）
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => {
-                setAvatar(event.target.files?.[0])
-              }}
-            />
-            <small>PNG、JPEG 或 WebP，最大 256 KiB；填写 GitHub 时优先显示 GitHub 头像。</small>
-          </label>
+          <ContributionFilePicker
+            kind="avatar"
+            file={avatar}
+            disabled={busy}
+            onChange={setAvatar}
+          />
           <label className={css.wide}>
             本次修改说明
             <textarea

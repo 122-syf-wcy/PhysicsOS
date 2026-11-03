@@ -80,3 +80,35 @@ it('shows a sign-in error without enabling upload when the session has expired',
     (screen.getByRole('button', { name: '上传并提交审核' }) as HTMLButtonElement).disabled,
   ).toBe(true)
 })
+
+it('uses the Chinese file action, shows selection details and removes the pending ZIP', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => catalog()),
+  )
+  render(<ContributionPanel embedded />)
+  await screen.findByText('PhysicsOS 官方三维样板', { exact: false })
+  const input = screen.getByLabelText('实验文件 ZIP', { exact: false }) as HTMLInputElement
+  const openPicker = vi.spyOn(input, 'click').mockImplementation(() => {})
+  fireEvent.click(screen.getByRole('button', { name: '选择 ZIP 文件', exact: true }))
+  expect(openPicker).toHaveBeenCalledOnce()
+  fireEvent.change(input, {
+    target: {
+      files: [new File([new Uint8Array(2048)], 'my-lens.zip', { type: 'application/zip' })],
+    },
+  })
+  expect(screen.getByText('my-lens.zip')).toBeTruthy()
+  expect(screen.getByText('2 KiB')).toBeTruthy()
+  expect(screen.getByRole('button', { name: '更换实验文件', exact: true })).toBeTruthy()
+  const remove = screen.getByRole('button', { name: '移除实验文件', exact: true })
+  remove.focus()
+  fireEvent.click(remove)
+  expect(screen.queryByText('my-lens.zip')).toBeNull()
+  expect(document.activeElement).toBe(
+    screen.getByRole('button', { name: '选择 ZIP 文件', exact: true }),
+  )
+  expect(
+    (screen.getByRole('button', { name: '上传并提交审核' }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+  openPicker.mockRestore()
+})

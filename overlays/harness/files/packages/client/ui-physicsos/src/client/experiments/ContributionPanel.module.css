@@ -1,4 +1,7 @@
-.backdrop, .backdrop * { box-sizing: border-box; }
+.backdrop,
+.backdrop * {
+  box-sizing: border-box;
+}
 .backdrop {
   position: fixed;
   inset: 0;
@@ -10,14 +13,18 @@
   backdrop-filter: blur(5px);
 }
 .dialog {
+  --upload-ink: var(--physics-ink, #283c32);
+  --upload-muted: var(--physics-ink-muted, #617064);
+  --upload-accent: #527f6c;
   width: min(1080px, 100%);
   max-height: calc(100dvh - 48px);
   overflow: auto;
-  color: #283c32;
-  background: #faf9f5;
-  border: 1px solid #e1e5dc;
-  border-radius: 20px;
-  box-shadow: 0 22px 80px rgb(19 35 27 / 22%);
+  color: var(--upload-ink);
+  background-color: var(--physics-glass-plate, #f4f7f5);
+  background-image: var(--physics-glass-sheen);
+  border: 1px solid var(--physics-glass-border, rgb(255 255 255 / 84%));
+  border-radius: 24px;
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift-raised);
 }
 .header {
   position: sticky;
@@ -27,13 +34,15 @@
   justify-content: space-between;
   align-items: flex-start;
   padding: 24px 30px;
-  background: #faf9f5;
-  border-bottom: 1px solid #e2e5dc;
+  background: var(--physics-glass-fill-strong, rgb(255 255 255 / 80%));
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  border-bottom: 1px solid var(--physics-glass-border-soft);
 }
 .header span {
   font-size: 11px;
   font-weight: 700;
-  color: #557160;
+  color: var(--upload-muted);
   letter-spacing: 0.1em;
 }
 .header h2 {
@@ -43,7 +52,7 @@
 .header p {
   margin: 0;
   font-size: 13px;
-  color: #637265;
+  color: var(--upload-muted);
 }
 .content {
   padding: 24px 30px 36px;
@@ -58,19 +67,45 @@
   overflow-wrap: anywhere;
 }
 .dialog button,
-.links a {
-  border: 1px solid #d8e0d5;
-  background: #fff;
-  color: #3f594a;
-  border-radius: 9px;
-  padding: 9px 14px;
+.links a,
+.reviewActions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  border: 1px solid var(--physics-glass-border-soft, rgb(132 164 151 / 30%));
+  background-color: var(--physics-glass-fill-strong, rgb(255 255 255 / 72%));
+  background-image: var(--physics-glass-sheen);
+  box-shadow:
+    var(--physics-glass-rim),
+    0 3px 8px rgb(46 75 62 / 7%);
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
+  color: var(--upload-ink);
+  border-radius: 15px;
+  padding: 10px 16px;
   cursor: pointer;
   font: inherit;
   font-size: 13px;
+  font-weight: 550;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
 }
-.dialog button:hover,
-.links a:hover {
-  background: #edf3e9;
+.dialog button:hover:not(:disabled),
+.links a:hover,
+.reviewActions a:hover {
+  border-color: color-mix(in srgb, var(--upload-accent) 48%, transparent);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-lift);
+  transform: translateY(-1px);
+}
+.dialog button:active:not(:disabled),
+.links a:active,
+.reviewActions a:active {
+  transform: translateY(0.5px) scale(0.98);
 }
 .dialog button:disabled {
   opacity: 0.5;
@@ -84,9 +119,22 @@
   outline-offset: 3px;
 }
 .dialog .primary {
-  background: #497357;
-  color: white;
-  border-color: #497357;
+  min-height: 46px;
+  padding: 11px 22px;
+  color: #174a34;
+  border-color: rgb(246 255 250 / 90%);
+  background: linear-gradient(
+    165deg,
+    rgb(239 255 245 / 97%) 0%,
+    rgb(195 231 211 / 94%) 44%,
+    rgb(152 201 174 / 95%) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -1px 1px rgb(68 119 88 / 18%),
+    inset 0 0 0 1px rgb(255 255 255 / 34%),
+    0 8px 20px -8px rgb(57 110 82 / 35%);
+  font-weight: 650;
 }
 .links {
   display: flex;
@@ -99,9 +147,13 @@
 }
 .form {
   padding: 24px;
-  border: 1px solid #e0e5da;
-  border-radius: 14px;
-  background: white;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 22px;
+  background-color: var(--physics-glass-fill, rgb(255 255 255 / 55%));
+  background-image: var(--physics-glass-sheen);
+  box-shadow:
+    var(--physics-glass-rim),
+    0 10px 30px -20px rgb(49 86 65 / 20%);
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
@@ -123,18 +175,29 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 10px;
-  border: 1px solid #dce2d7;
-  border-radius: 7px;
-  background: #fdfefa;
+  padding: 12px 14px;
+  border: 1px solid var(--physics-glass-border-soft, rgb(133 166 151 / 25%));
+  border-radius: 13px;
+  background-color: var(--physics-glass-fill-strong, rgb(255 255 255 / 70%));
+  background-image: var(--physics-glass-sheen);
+  box-shadow:
+    var(--physics-glass-rim),
+    inset 0 2px 4px rgb(41 73 57 / 3%);
   font: inherit;
   font-size: 13px;
-  color: #263c2e;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--upload-ink);
+}
+.dialog input::placeholder,
+.dialog textarea::placeholder {
+  color: var(--upload-muted);
+  opacity: 0.8;
 }
 .dialog small {
   font-size: 11px;
   font-weight: 400;
-  color: #617064;
+  color: var(--upload-muted);
   overflow-wrap: anywhere;
   line-height: 1.7;
 }
@@ -152,7 +215,7 @@
   color: #9b4031;
 }
 .muted {
-  color: #617064;
+  color: var(--upload-muted);
 }
 .versions {
   margin-top: 30px;
@@ -169,10 +232,10 @@
 }
 .version {
   margin-top: 12px;
-  border: 1px solid #e0e5da;
+  border: 1px solid var(--physics-glass-border-soft);
   padding: 18px;
   border-radius: 12px;
-  background: white;
+  background: var(--physics-glass-fill-strong);
 }
 .author {
   display: flex;
@@ -185,11 +248,11 @@
   gap: 3px;
 }
 .author div span {
-  color: #617064;
+  color: var(--upload-muted);
   font-size: 11px;
 }
 .author a {
-  color: #426b4d;
+  color: var(--physics-ink-link, #426b4d);
   font-size: 12px;
 }
 .avatar {
@@ -213,7 +276,8 @@
 }
 .status {
   font-size: 11px;
-  background: #eef3e9;
+  color: var(--upload-ink);
+  background: var(--physics-tint-verified, #eef3e9);
   border-radius: 5px;
   padding: 5px 8px;
 }
@@ -225,9 +289,9 @@
 }
 .review {
   margin-top: 22px;
-  border: 1px solid #c8d7c4;
+  border: 1px solid var(--physics-glass-border-soft);
   border-radius: 14px;
-  background: white;
+  background: var(--physics-glass-fill-strong);
   padding: 20px;
 }
 .preview {
@@ -241,7 +305,7 @@
   min-width: 0;
 }
 .reviewActions {
-  border-top: 1px solid #e0e5da;
+  border-top: 1px solid var(--physics-glass-border-soft);
   padding-top: 15px;
   margin-top: 15px;
 }
@@ -317,12 +381,142 @@
 
 /* A full product page uses normal document focus and its parent's scroll area. */
 .dialog.embedded,
-.dialog.embedded * { box-sizing: border-box; }
+.dialog.embedded * {
+  box-sizing: border-box;
+}
 .dialog.embedded {
   width: 100%;
   height: auto;
   max-height: none;
   overflow: visible;
-  border-radius: 14px;
-  box-shadow: none;
+  border-radius: 24px;
+  background-color: var(--physics-glass-fill, rgb(255 255 255 / 55%));
+  backdrop-filter: var(--physics-glass-blur);
+  -webkit-backdrop-filter: var(--physics-glass-blur);
+  box-shadow: var(--physics-glass-rim), var(--physics-glass-shadow);
+}
+
+.fileField {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.filePicker {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 18px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow:
+    var(--physics-glass-rim),
+    0 5px 14px -10px rgb(34 73 53 / 20%);
+}
+.filePicker[data-selected='true'] {
+  border-color: color-mix(in srgb, var(--upload-accent) 42%, transparent);
+}
+.fileGlyph {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 46px;
+  border: 1px solid var(--physics-glass-border);
+  border-radius: 13px;
+  background: var(--physics-tint-verified, #eaf4ed);
+  box-shadow: var(--physics-glass-rim);
+  color: var(--upload-ink);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.fileGlyph svg {
+  width: 23px;
+  height: 23px;
+}
+.fileDetails {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.fileDetails strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
+}
+.fileDetails span {
+  color: var(--upload-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.fileActions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dialog .fileButton {
+  white-space: nowrap;
+}
+.fileButton svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+.dialog .removeFile {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--upload-muted);
+  font-size: 19px;
+  font-weight: 400;
+}
+.dialog .fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (max-width: 700px) {
+  .filePicker {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 11px;
+    padding: 12px;
+  }
+  .fileGlyph {
+    width: 38px;
+    height: 42px;
+  }
+  .fileActions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .dialog.embedded {
+    border-radius: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog button,
+  .links a,
+  .reviewActions a {
+    transition: none;
+  }
+  .dialog button:hover:not(:disabled),
+  .dialog button:active:not(:disabled),
+  .links a:hover,
+  .links a:active,
+  .reviewActions a:hover,
+  .reviewActions a:active {
+    transform: none;
+  }
 }

@@ -54,7 +54,18 @@ try {
   await expect(workspace.getByRole('heading', { name: '实验上传与贡献' })).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(workspace.getByText('当前支持：凸透镜成像规律 · 三维实验')).toBeVisible()
-  await workspace.locator('input[type="file"]').first().setInputFiles(zip)
+  let chooser = page.waitForEvent('filechooser')
+  await workspace.getByRole('button', { name: '选择 ZIP 文件', exact: true }).press('Enter')
+  await (await chooser).setFiles(zip)
+  await expect(workspace.getByText('convex-lens-1.0.0.zip', { exact: true })).toBeVisible()
+  await workspace.getByRole('button', { name: '移除实验文件', exact: true }).click()
+  await expect(workspace.locator('input[type="file"]').first()).toHaveValue('')
+  chooser = page.waitForEvent('filechooser')
+  await workspace.getByRole('button', { name: '选择 ZIP 文件', exact: true }).click()
+  await (await chooser).setFiles(zip)
+  chooser = page.waitForEvent('filechooser')
+  await workspace.getByRole('button', { name: '选择头像', exact: true }).click()
+  await (await chooser).setFiles(join(root, 'overlays/harness/files/apps/web/public/physicsos/developers/assets/physicsos-mark-128.png'))
   await workspace.getByLabel('作者显示名', { exact: true }).fill('入口验收贡献者')
   await workspace.getByLabel('本次修改说明', { exact: true }).fill('由统一实验上传页提交')
   const uploaded = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/convex-lens/packages'))
@@ -66,6 +77,7 @@ try {
   await expect(workspace.locator(`[data-package-id="${item.id}"]`)).toContainText('等待审核', { timeout: 30000 })
   await workspace.evaluate(node => { node.scrollTop = 0 })
   await page.screenshot({ path: join(shots, 'upload-desktop.png'), animations: 'disabled' })
+  await workspace.locator('form').screenshot({ path: join(shots, 'upload-controls.png'), animations: 'disabled' })
   await page.reload()
   await expect(page).toHaveURL(`${base}/#/contribute`)
   await expect(page.locator(`[data-package-id="${item.id}"]`)).toContainText('等待审核', { timeout: 60000 })
@@ -100,6 +112,31 @@ try {
   await page.goForward()
   await expect(page).toHaveURL(sceneUrl)
   await expect(page.locator('[data-community-status="ready"]')).toBeVisible({ timeout: 30000 })
+  let releaseSync
+  const syncGate = new Promise(resolve => { releaseSync = resolve })
+  let syncHeld = false
+  const scenesPattern = '**/physicsos/learning/scenes**'
+  await student.route(scenesPattern, async route => {
+    if (route.request().method() === 'GET' && !syncHeld) {
+      syncHeld = true
+      await syncGate
+    }
+    await route.continue()
+  })
+  const delayedStartup = await student.newPage()
+  try {
+    await delayedStartup.goto(`${base}/#/experiments/convex-lens`)
+    await expect.poll(() => syncHeld, { timeout: 30000 }).toBe(true)
+    await delayedStartup.getByRole('button', { name: '实验上传', exact: true }).click()
+    await expect(delayedStartup.getByRole('heading', { name: '实验上传与贡献' })).toBeVisible()
+    releaseSync()
+    await expect(delayedStartup).toHaveURL(`${base}/#/contribute`)
+    await expect(delayedStartup.getByRole('heading', { name: '实验上传与贡献' })).toBeVisible()
+  } finally {
+    releaseSync()
+    await student.unroute(scenesPattern)
+    await delayedStartup.close()
+  }
   await page.getByRole('button', { name: '实验上传', exact: true }).click()
   await page.setViewportSize({ width: 390, height: 844 })
   workspace = page.locator('[data-physicsos-surface="contribute"]')
@@ -110,5 +147,5 @@ try {
   await page.screenshot({ path: join(shots, 'upload-mobile.png'), animations: 'disabled' })
   expect(errors).toEqual([])
   await writeFile(join(home, 'upload-entry-result.json'), JSON.stringify({ activeId: item.id, sha256: item.sha256, version: item.version }), { mode: 0o600 })
-  console.log('PASS: home sidebar, direct upload page, real student ZIP, administrator preview/approval/archive, reload/history, retained experiment dialog, mobile and clean console')
+  console.log('PASS: home sidebar, glass native file chooser, real student ZIP, administrator preview/approval/archive, reload/history, delayed-sync navigation, retained experiment dialog, mobile and clean console')
 } finally { await browser.close() }

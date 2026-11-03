@@ -7,6 +7,7 @@
   box-sizing: border-box;
   padding: 24px;
   background: var(--dsw-alias-bg-base);
+  background-image: var(--physics-glass-ambient);
 }
 .header {
   display: flex;
@@ -47,8 +48,15 @@
 .action {
   flex: none;
   padding: 9px 13px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 9px;
+  border: 1px solid var(--physics-glass-border-soft);
+  border-radius: 15px;
+  background-color: var(--physics-glass-fill-strong);
+  background-image: var(--physics-glass-sheen);
+  box-shadow:
+    var(--physics-glass-rim),
+    0 3px 8px rgb(46 75 62 / 7%);
+  backdrop-filter: var(--physics-glass-blur-soft);
+  -webkit-backdrop-filter: var(--physics-glass-blur-soft);
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   text-decoration: none;
@@ -76,8 +84,9 @@
     padding: 18px 12px;
   }
   .header {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
     align-items: flex-start;
-    flex-wrap: wrap;
     gap: 10px;
   }
   .icon {
@@ -88,6 +97,8 @@
     font-size: 21px;
   }
   .action {
-    margin-left: 48px;
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
   }
 }
