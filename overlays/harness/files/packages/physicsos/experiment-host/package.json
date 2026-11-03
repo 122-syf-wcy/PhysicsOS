@@ -38,7 +38,7 @@
     "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/dsh-storage": "workspace:^",
     "@deepseek-ai/dsh-storage-domain": "workspace:^",
-    "zod": "^4.4.3",
+    "zod": "4.6.7",
     "yauzl": "3.4.0",
     "es-module-lexer": "2.1.0",
     "parse5": "8.0.1",

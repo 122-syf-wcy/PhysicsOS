@@ -6,7 +6,7 @@
 
 贡献者在本地编译，交付带源码的浏览器静态包。平台校验后在隔离域提供 dist/index.html，通过消息协议接入参数和快照。贡献者无需修改主仓库，主站也不需要为每次投稿重新构建。
 
-> **首版接收范围**：仅接收 convex-lens、optics contractVersion 1、protocolVersion 1。服务器校验并冻结已编译产物，不执行上传包中的安装或构建脚本。物理、视觉与许可由管理员交互审核；自动校验不表示审核通过。
+> **首版接收范围**：仅接收 convex-lens、optics contractVersion 1、protocolVersion 2。服务器校验并冻结已编译产物，不执行上传包中的安装或构建脚本。物理、视觉与许可由管理员交互审核；自动校验不表示审核通过。
 
 ## ZIP 根目录固定
 
@@ -39,12 +39,12 @@ ZIP 不要再套一层随机目录。src 用于审核，dist 用于实际运行�
 
 ## 实验包清单
 
-### experiment.json · 参考文件协议 v1
+### experiment.json · 参考文件协议 V2
 
 ```json
 {
-  "schemaVersion": 1,
-  "protocolVersion": 1,
+  "schemaVersion": 2,
+  "protocolVersion": 2,
   "packageType": "browser-static",
   "experimentId": "convex-lens",
   "version": "1.0.0",
@@ -56,7 +56,7 @@ ZIP 不要再套一层随机目录。src 用于审核，dist 用于实际运行�
     "contractVersion": 1
   },
   "parameters": "parameters.json",
-  "cover": "dist/assets/cover.jpg",
+  "cover": "dist/assets/cover.svg",
   "teaching": "teaching.json",
   "referenceCases": "cases.json",
   "assetLicenses": "ASSET-LICENSES.json",
@@ -64,7 +64,7 @@ ZIP 不要再套一层随机目录。src 用于审核，dist 用于实际运行�
 }
 ```
 
-experimentId 必须匹配上传页；作者身份由登录账户绑定。入口和所有资源采用包内相对路径，不引用贡献者磁盘或外部脚本。版本和审核产物冻结；改一个文件就提交新版本。
+schemaVersion 与 protocolVersion 固定为 2，experimentId 固定 convex-lens，engine 为 optics / contractVersion 1。parameters.json 中三个参数使用 cm，安全范围 [1,200]；生成默认值、显示范围、只读字段不可修改。teaching.json 为有界教学文本。cases.json 保留五个必需薄透镜用例，所有额外用例也由平台光学引擎验证。ASSET-LICENSES.json 覆盖 dist/assets 与 dist/vendor，声明真实 HTTPS 来源或 original；Schema 之外的语义约束由同一 canonical validator 执行。experimentId 必须匹配上传页；作者身份由登录账户绑定。入口和所有资源采用包内相对路径，不引用贡献者磁盘或外部脚本。版本和审核产物冻结；改一个文件就提交新版本。
 
 ## 本地检查与服务器审核各自负责
 

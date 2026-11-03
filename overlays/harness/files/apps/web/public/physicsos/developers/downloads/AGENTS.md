@@ -1,13 +1,21 @@
 # PhysicsOS 实验开发约定
 
-规范版本：1.2 · 更新：2026-11-03
-适用范围：实验 <experiment-id>。将本文件保存到实验目录的 AGENTS.md。
+规范版本：2.0 · 更新：2026-11-03
+适用范围：实验 convex-lens。将本文件保存到实验目录的 AGENTS.md。
 
 ## 任务与事实
 
 你正在独立制作一个可上传到 PhysicsOS 的三维实验文件包。工作目录是下载的实验模板，不是 PhysicsOS 主仓库。先阅读包内 AGENTS.md、README.md、PACKAGE_SPEC.md、HOST_PROTOCOL.md 和模板源码。用户明确要求优先；发现契约冲突时说明，不暗自改变协议。
 
-交付目标是 <experiment-id> 的实验 ZIP。贡献者不需要克隆 PhysicsOS、不修改主站源码、不提交 PR、不接触生产部署。仅修改独立包内源码与素材；保留已有工作。dist 是 npm run build 的输出，不手工改它绕过源码。
+交付目标是 convex-lens 的实验 ZIP。贡献者不需要克隆 PhysicsOS、不修改主站源码、不提交 PR、不接触生产部署。仅修改独立包内源码与素材；保留已有工作。dist 是 npm run build 的输出，不手工改它绕过源码。
+
+## 固定 V2 契约（必须）
+
+- experimentId 固定为 convex-lens；schemaVersion 与 protocolVersion 都是 2，engine 固定 optics / contractVersion 1。
+- 只编辑稳定 X.Y.Z 内容版本、src 三维呈现与交互、public 自有素材、teaching.json 教学内容和许可声明；不修改生成的 src/contract-wire.ts、tools/contract-wire.ts、tools/contract-v2.ts、tools/package-resources.ts、tools/html.ts 或平台光学模块，不改协议校验或发布检查绕过失败。
+- parameters.json 必须保留模板的三个 cm 参数、固定安全与显示范围和只读字段；cases.json 保留五个必需用例，额外用例也由可信平台光学引擎验证。物距、焦距、光屏距离意图安全范围 [1,200] cm；物高、result、rays、visible 为只读事实。
+- beyond-2f: u=30, f=10, h=4 cm；at-2f: u=20, f=10, h=4 cm；between-f-2f: u=15, f=10, h=4 cm；at-f: u=10, f=10, h=4 cm；within-f: u=5, f=10, h=4 cm。
+- V2 接收带 frameId/revision 的快照，必须等待真实绘制成功后回复 experiment/rendered。experiment/connected 不代表首帧完成；渲染失败发送协议安全错误。新投稿不接受 V1，旧冻结 V1 由平台保留。
 
 ## 统一代码风格（必须）
 
@@ -15,7 +23,7 @@
 - 两空格缩进，LF 换行，UTF-8，无 BOM，文件末尾换行；无分号、单引号、多行末尾逗号。格式化以项目工具为准，目标行宽 100。
 - 源码使用 kebab-case.ts，样式 kebab-case.css，测试 kebab-case.test.ts。组件扩展可以使用 kebab-case.tsx，但基础模板不依赖 React。
 - 类型导出用 PascalCase；函数、变量用 camelCase；全局常量用 UPPER_SNAKE_CASE。使用有物理含义的名称，避免 data1、temp、helper2。
-- 类型依赖使用 import type；相对模块引用使用 .js 后缀，TypeScript 编译后直接在浏览器运行。优先具名导出。Props 和只读快照使用 readonly。
+- 类型依赖使用 import type；源码相对模块引用使用 .ts 后缀；rewriteRelativeImportExtensions 编译为浏览器 .js。优先具名导出。Props 和只读快照使用 readonly。
 - 一个模块一个职责：页面组织、运行时接入、三维渲染、交互、资源与测试分别组织。不要把计算、状态、DOM 与 Three.js 场景堆进一个组件。
 - 用类型收窄和提前返回处理分支。异步任务必须 await 或显式处理 rejection；错误要提供可恢复入口，不能空 catch 冒充成功。
 - 注释解释单位、坐标变换、约束和取舍；导出契约说明输入、输出与清理责任，避免逐行复述代码。
@@ -50,14 +58,22 @@
 
 ## 提交与验证（必须）
 
-- 在独立模板目录运行 npm install、npm run dev、npm run check、npm run build、npm run pack。首次安装后保留锁文件；实验包作者无需任何生产服务器权限。
+- 在独立模板目录运行 npm ci、npm run dev、npm run release。保留随包提供的锁文件；实验包作者无需任何生产服务器权限。
 - 先做与改动相关的验证，再运行 required checks。记录真实命令、结果和未运行原因，不声称未执行的检查通过。
 - 有意义的行为测试覆盖：典型值与临界值、非法输入、拖动提交/取消、旧记录恢复、实例隔离、资源释放；不要只测试 mock 被调用或复制实现公式作为期望值。
 - 手机 390×844 与桌面 1440×1000 检查布局；覆盖触摸、键盘、加载失败、WebGL 错误和反复挂载。性能数据写明设备、浏览器、网络与资源大小。
-- pack 前必须 build，再验证 manifest、相对资源和文件限制。生成 release/<experimentId>-<version>.zip；平台解压后可直接服务 dist/index.html，不需要改主仓库。
+- npm run release 顺序执行 check → clean build → validate:package → pack；npm run pack 是同一完整发布流程。生成 release/<experimentId>-<version>.zip 及真实 SHA-256 检查报告；平台解压后可直接服务 dist/index.html，不需要改主仓库。
 - 提供源码、说明、已知限制、参考用例、截图、素材来源与许可证。作者/GitHub 资料不得冒用；GitHub 链接不等于身份已验证。
-- 最新审核通过的版本成为默认版本。版本与产物冻结，保留历史回滚，运行中的实验不热替换；这是计划中的投稿流程，不由前端自行发布。
+- 最新审核通过的版本成为默认版本。版本与产物冻结，保留历史回滚，运行中的实验不热替换；管理员审批后更新默认发布指针，上传成功不等于审核通过。
 
 ## 完成时汇报
 
 依次说明：实验 ID 与包版本、ZIP 路径、协议版本、交互与物理范围、检查结果、截图、素材许可、已知限制。不要把 demo 标成上线，不绕过校验，不因赶工降低类型或物理标准。
+
+## 可信模板发布身份
+
+下载：https://physics.dongsiwei.com/physicsos/developers/downloads/physicsos-experiment-template-v2-f9165baa152c62ad73c1d51f9e62e68abe53e480d642bd5a655393f25061b936.zip
+SHA-256：f9165baa152c62ad73c1d51f9e62e68abe53e480d642bd5a655393f25061b936
+字节数：232146
+
+先核对下载字节的 SHA-256，再解压并使用 npm ci。此模板身份摘要不替代最终投稿 ZIP 的服务器校验或管理员审核。

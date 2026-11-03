@@ -5,7 +5,7 @@
 ## 投稿流程只围绕实验文件
 
 - 在独立模板里完成开发与预览。
-- 运行 npm run check、npm run build、npm run pack。
+- 运行 npm run release（完整检查、清理构建、验证与打包）。
 - 在凸透镜实验页选择“贡献实验”，提交生成的 ZIP、作者资料和版本说明。
 - 自动检查通过后进入后台审核，可退回修改。
 - 管理员通过后自动发布，新进入该实验的用户看到最新效果与作者。
@@ -13,9 +13,7 @@
 ### 贡献者实际运行的命令
 
 ```shell
-npm run check
-npm run build
-npm run pack
+npm run release
 # 产物：release/convex-lens-1.0.0.zip
 ```
 

@@ -6,13 +6,13 @@
 
 你只需要自己的实验目录：下载模板、制作三维装置、打包 ZIP。平台负责加载与展示，后台审核通过后把最新版本设为该实验的默认效果。无需克隆 PhysicsOS、修改主站或提交 PR。
 
-- 下载独立实验模板，填写 experimentId 与版本。
+- 下载独立实验模板，确认固定 convex-lens 契约并填写稳定 X.Y.Z 版本。
 - 复制 AGENTS.md 到该目录，让开发助手只修改这个实验包。
 - 在独立预览器中制作三维装置，使用宿主快照与参数意图接口。
 - 运行检查、构建与打包，取得 release 目录中的 ZIP。
 - 在对应实验页上传文件与作者资料；审核通过后平台自动同步。
 
-> **首个开放样板：凸透镜**：登录后点击侧栏“实验上传”，直接提交 ZIP、查看投稿及审核记录；也可打开凸透镜实验，点击“贡献实验”。统一入口地址为 /#/contribute。本版本支持凸透镜上传、平台管理员审核、默认版本切换与回滚，其他实验逐步适配。请上传 npm run pack 生成的 release ZIP，不要直接上传刚下载的源码模板 ZIP。
+> **首个开放样板：凸透镜**：登录后点击侧栏“实验上传”，直接提交 ZIP、查看投稿及审核记录；也可打开凸透镜实验，点击“贡献实验”。统一入口地址为 /#/contribute。本版本支持凸透镜上传、平台管理员审核、默认版本切换与回滚，其他实验逐步适配。请上传 npm run release 生成的 release ZIP，不要直接上传刚下载的源码模板 ZIP。
 
 ## 两边通过文件与协议连接
 
@@ -27,20 +27,18 @@
 ### 下载模板并解压后 · 首次安装需联网
 
 ```shell
-npm install
+npm ci
 npm run dev
 # 浏览器打开 http://127.0.0.1:4175
 # 修改 src 后，重新运行 npm run build 并刷新预览
 
 npm run format:write
-npm run check
-npm run build
-npm run pack
+npm run release
 ```
 
 模板需要 Node.js ≥ 24.7，不需要 PhysicsOS 仓库或生产服务器权限。dev 会先构建再启动独立预览；它没有自动热更新。模板内 Three.js 从本地依赖打包，发布时不依赖 CDN。
 
-> **产物在哪里**：npm run pack 生成 release/convex-lens-1.0.0.zip。ZIP 根目录有 experiment.json，入口为 dist/index.html；平台解压后按清单直接加载。模板里的 preview 只供开发，不进入投稿 ZIP。
+> **产物在哪里**：npm run release 生成 release/convex-lens-1.0.0.zip。ZIP 根目录有 experiment.json，入口为 dist/index.html；平台解压后按清单直接加载。模板里的 preview 只供开发，不进入投稿 ZIP。
 
 ## 先验证“文件可以独立工作”
 

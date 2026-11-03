@@ -1,5 +1,16 @@
 import { documents, documentMarkdown } from './content.js'
-import { STANDARD_VERSION, UPDATED_AT, agentInstructions, normalizeExperimentId } from './standards.js'
+import {
+  STANDARD_VERSION,
+  UPDATED_AT,
+  agentInstructions,
+  normalizeExperimentId,
+} from './standards.js'
+const templateRelease = await fetch(
+  new URL('./downloads/template-release.json', import.meta.url),
+).then((response) => {
+  if (!response.ok) throw new Error('模板发布描述加载失败')
+  return response.json()
+})
 
 const main = document.querySelector('#main')
 const nav = document.querySelector('#doc-nav')
@@ -29,7 +40,9 @@ function showToast(message) {
   clearTimeout(toastTimeout)
   toast.textContent = message
   toast.hidden = false
-  toastTimeout = setTimeout(() => { toast.hidden = true }, 2600)
+  toastTimeout = setTimeout(() => {
+    toast.hidden = true
+  }, 2600)
 }
 
 async function copyText(text) {
@@ -67,7 +80,16 @@ function button(text, action, className = 'button secondary') {
 function codeBlock(title, language, value) {
   const box = element('div', 'code-block')
   const head = element('div', 'code-head')
-  head.append(element('span', '', title), button('复制', () => { void copyText(value) }, 'copy-button'))
+  head.append(
+    element('span', '', title),
+    button(
+      '复制',
+      () => {
+        void copyText(value)
+      },
+      'copy-button',
+    ),
+  )
   const pre = element('pre')
   pre.tabIndex = 0
   pre.setAttribute('aria-label', title)
@@ -80,11 +102,16 @@ function codeBlock(title, language, value) {
 }
 
 const downloadItems = [
-  ['physicsos-experiment-template-v1.zip', '独立实验模板', '自己的目录开发 · 独立预览 · 生成投稿 ZIP', 'ZIP'],
+  [
+    'physicsos-experiment-template-v2.zip',
+    '独立实验模板',
+    '自己的目录开发 · 独立预览 · 生成投稿 ZIP',
+    'ZIP',
+  ],
   ['physicsos-code-style-v1.zip', '代码风格工具包', '完整规范 + AGENTS.md + 可执行检查配置', 'ZIP'],
-  ['AGENTS.md', '通用 AGENTS.md', '直接放入实验目录，或作为任务上下文', 'MD'],
+  ['AGENTS.md', '凸透镜 V2 AGENTS.md', '绑定可信模板 URL 与 SHA-256；放入实验目录作为任务上下文', 'MD'],
   ['CODE_STYLE.md', '代码风格规范', '命名、类型、模块边界与格式规则', 'MD'],
-  ['experiment.schema.json', '实验包 Schema', '凸透镜 v1 文件投稿 · 清单校验 Schema', 'JSON'],
+  ['experiment.schema.json', '实验包 Schema', '凸透镜 V2 文件投稿 · 清单校验 Schema', 'JSON'],
   ['experiment.example.json', '清单示例', '候选结构 · 非完整可运行实验包', 'JSON'],
 ]
 
@@ -95,7 +122,11 @@ function downloadsBlock() {
     anchor.download = file
     const text = element('div')
     text.append(element('strong', '', title), element('small', '', description))
-    anchor.append(element('span', 'file-badge', format), text, element('span', 'download-arrow', '↓'))
+    anchor.append(
+      element('span', 'file-badge', format),
+      text,
+      element('span', 'download-arrow', '↓'),
+    )
     container.append(anchor)
   }
   return container
@@ -104,16 +135,22 @@ function downloadsBlock() {
 function agentBlock() {
   const block = element('div', 'agent-builder')
   const form = element('form', 'agent-form')
-  form.addEventListener('submit', event => { event.preventDefault() })
-  const label = element('label', '', '实验 ID（可选）')
+  form.addEventListener('submit', (event) => {
+    event.preventDefault()
+  })
+  const label = element('label', '', '已注册实验契约')
   label.htmlFor = 'experiment-id'
-  const input = element('input')
+  const input = element('select')
+  const option = element('option', '', '凸透镜 · convex-lens · V2')
+  option.value = 'convex-lens'
+  input.append(option)
   input.id = 'experiment-id'
-  input.placeholder = '例如 convex-lens'
-  input.autocomplete = 'off'
-  input.maxLength = 128
   input.setAttribute('aria-describedby', 'id-help id-error')
-  const help = element('small', 'input-help', '填写后会限定修改范围；留空生成通用模板。')
+  const help = element(
+    'small',
+    'input-help',
+    '当前仅开放凸透镜 V2 契约；任务说明不会改变协议或元数据。',
+  )
   help.id = 'id-help'
   const error = element('p', 'input-error')
   error.id = 'id-error'
@@ -122,15 +159,34 @@ function agentBlock() {
   prompt.tabIndex = 0
   prompt.setAttribute('aria-label', 'AGENTS.md 完整内容')
   const actions = element('div', 'agent-actions')
-  let current = agentInstructions()
+  let current = agentInstructions('convex-lens', { release: templateRelease })
   prompt.textContent = current
-  const copy = button('复制 AGENTS.md', () => { void copyText(current) }, 'button primary')
-  const download = button('下载 AGENTS.md', () => { downloadText('AGENTS.md', current) })
-  actions.append(copy, download, element('span', 'agent-meta', `规范 v${STANDARD_VERSION} · 完整规则`))
-  input.addEventListener('input', () => {
+  const copy = button(
+    '复制 AGENTS.md',
+    () => {
+      void copyText(current)
+    },
+    'button primary',
+  )
+  const download = button('下载 AGENTS.md', () => {
+    downloadText('AGENTS.md', current)
+  })
+  actions.append(
+    copy,
+    download,
+    element('span', 'agent-meta', `规范 v${STANDARD_VERSION} · 完整规则`),
+  )
+  const taskLabel = element('label', '', '本次任务说明（可选）')
+  taskLabel.htmlFor = 'task-description'
+  const task = element('textarea')
+  task.id = 'task-description'
+  task.maxLength = 2000
+  task.placeholder = '例如：改进器材材质和手机拖动体验'
+  function updatePrompt() {
     try {
-      const id = input.value.trim() === '' ? '' : normalizeExperimentId(input.value)
-      current = agentInstructions(id)
+      const id = normalizeExperimentId(input.value)
+      current = agentInstructions(id, { release: templateRelease })
+      if (task.value.trim()) current += '\n## 本次用户任务\n\n' + task.value.trim() + '\n'
       prompt.textContent = current
       error.textContent = ''
       input.setAttribute('aria-invalid', 'false')
@@ -142,8 +198,10 @@ function agentBlock() {
       copy.disabled = true
       download.disabled = true
     }
-  })
-  form.append(label, input, help, error)
+  }
+  input.addEventListener('change', updatePrompt)
+  task.addEventListener('input', updatePrompt)
+  form.append(label, input, help, taskLabel, task, error)
   block.append(form, actions, prompt)
   return block
 }
@@ -192,30 +250,77 @@ function renderBlock(block) {
 function hero() {
   const container = element('div', 'hero')
   const top = element('div', 'hero-eyebrow')
-  top.append(element('span', 'small-dot'), element('span', '', 'PHYSICSOS · OPEN EXPERIMENTS'), element('span', 'version-pill', `规范 v${STANDARD_VERSION}`))
+  top.append(
+    element('span', 'small-dot'),
+    element('span', '', 'PHYSICSOS · OPEN EXPERIMENTS'),
+    element('span', 'version-pill', `规范 v${STANDARD_VERSION}`),
+  )
   const heading = element('h1')
-  heading.append(document.createTextNode('一起，把物理'), element('br'), element('em', '', '做成看得见的实验。'))
-  const subtitle = element('p', 'hero-description', '下载模板，独立制作实验文件，上传并审核。\n无需修改主站源码，让你的作品成为实验的一部分。')
+  heading.append(
+    document.createTextNode('一起，把物理'),
+    element('br'),
+    element('em', '', '做成看得见的实验。'),
+  )
+  const subtitle = element(
+    'p',
+    'hero-description',
+    '下载模板，独立制作实验文件，上传并审核。\n无需修改主站源码，让你的作品成为实验的一部分。',
+  )
   const actions = element('div', 'hero-actions')
-  actions.append(button('复制 AGENTS.md  ↗', () => { void copyText(agentInstructions()) }, 'button primary'), link('阅读代码规范  →', '#/code-style', 'button secondary'))
+  actions.append(
+    button(
+      '复制 AGENTS.md  ↗',
+      () => {
+        void copyText(agentInstructions('convex-lens', { release: templateRelease }))
+      },
+      'button primary',
+    ),
+    link('阅读代码规范  →', '#/code-style', 'button secondary'),
+  )
   const quick = element('div', 'quick-cards')
-  for (const [id, number, title, desc] of [['downloads', '01', '下载独立模板', '不克隆主站，自己的目录开发'], ['agents', '02', '按标准制作文件', '复制 AGENTS.md，统一代码与效果'], ['review', '03', '上传后审核同步', '最新通过版本成为默认效果']]) {
+  for (const [id, number, title, desc] of [
+    ['downloads', '01', '下载独立模板', '不克隆主站，自己的目录开发'],
+    ['agents', '02', '按标准制作文件', '复制 AGENTS.md，统一代码与效果'],
+    ['review', '03', '上传后审核同步', '最新通过版本成为默认效果'],
+  ]) {
     const card = link('', `#/${id}`, 'quick-card')
-    card.append(element('span', 'card-number', number), element('strong', '', title), element('small', '', desc), element('span', 'card-arrow', '↗'))
+    card.append(
+      element('span', 'card-number', number),
+      element('strong', '', title),
+      element('small', '', desc),
+      element('span', 'card-arrow', '↗'),
+    )
     quick.append(card)
   }
   const preview = element('div', 'hero-code')
   const tab = element('div', 'hero-code-head')
-  tab.append(element('span', 'file-tab', 'AGENTS.md'), element('span', '', '独立制作文件，审核后同步展示'))
+  tab.append(
+    element('span', 'file-tab', 'AGENTS.md'),
+    element('span', '', '独立制作文件，审核后同步展示'),
+  )
   const lines = element('div', 'hero-code-lines')
-  const content = ['# PhysicsOS 实验开发约定', '', '01  只开发独立实验文件包', '02  引擎决定物理，三维负责呈现', '03  同一套交互与 Warm Lab 视觉', '04  打包上传，审核后同步展示']
+  const content = [
+    '# PhysicsOS 实验开发约定',
+    '',
+    '01  只开发独立实验文件包',
+    '02  引擎决定物理，三维负责呈现',
+    '03  同一套交互与 Warm Lab 视觉',
+    '04  打包上传，审核后同步展示',
+  ]
   content.forEach((text, index) => {
     const line = element('div')
-    line.append(element('span', 'line-number', String(index + 1).padStart(2, '0')), element('span', index === 0 ? 'code-title' : '', text))
+    line.append(
+      element('span', 'line-number', String(index + 1).padStart(2, '0')),
+      element('span', index === 0 ? 'code-title' : '', text),
+    )
     lines.append(line)
   })
   const footer = element('div', 'hero-code-foot')
-  footer.append(element('span', 'check-dot', '✓'), element('span', '', 'TypeScript · Three.js · 实验文件 ZIP'), link('查看完整提示词 →', '#/agents'))
+  footer.append(
+    element('span', 'check-dot', '✓'),
+    element('span', '', 'TypeScript · Three.js · 实验文件 ZIP'),
+    link('查看完整提示词 →', '#/agents'),
+  )
   preview.append(tab, lines, footer)
   const intro = element('div', 'hero-intro')
   const copy = element('div', 'hero-copy')
@@ -271,20 +376,27 @@ function closeMenu() {
 
 function renderPage() {
   const route = parseRoute()
-  const doc = documents.find(item => item.id === route.id)
+  const doc = documents.find((item) => item.id === route.id)
   closeMenu()
   results.hidden = true
   if (!doc) {
     delete main.dataset.doc
-    document.querySelectorAll('[data-doc]').forEach(anchor => anchor.removeAttribute('aria-current'))
-    main.replaceChildren(element('div', 'breadcrumb', '文档 / 未找到页面'), element('h1', 'not-found-title', '这份文档还没有写在这里。'), element('p', '', '链接可能已经变更，可以返回目录或搜索关键词。'), link('返回文档首页 →', '#/start', 'button primary'))
+    document
+      .querySelectorAll('[data-doc]')
+      .forEach((anchor) => anchor.removeAttribute('aria-current'))
+    main.replaceChildren(
+      element('div', 'breadcrumb', '文档 / 未找到页面'),
+      element('h1', 'not-found-title', '这份文档还没有写在这里。'),
+      element('p', '', '链接可能已经变更，可以返回目录或搜索关键词。'),
+      link('返回文档首页 →', '#/start', 'button primary'),
+    )
     toc.replaceChildren()
     document.title = '文档未找到 · PhysicsOS'
     return
   }
   const samePage = activeId === doc.id && main.dataset.doc === doc.id
   activeId = doc.id
-  document.querySelectorAll('[data-doc]').forEach(anchor => {
+  document.querySelectorAll('[data-doc]').forEach((anchor) => {
     if (anchor.dataset.doc === doc.id) anchor.setAttribute('aria-current', 'page')
     else anchor.removeAttribute('aria-current')
   })
@@ -298,14 +410,33 @@ function renderPage() {
   document.title = `${doc.title} · PhysicsOS 开发者文档`
   main.replaceChildren()
   const crumbs = element('div', 'breadcrumb')
-  crumbs.append(link('开发者文档', '#/start'), element('span', '', '/'), element('span', '', doc.title))
+  crumbs.append(
+    link('开发者文档', '#/start'),
+    element('span', '', '/'),
+    element('span', '', doc.title),
+  )
   main.append(crumbs)
   if (doc.id === 'start') main.append(hero())
   else {
     const header = element('header', 'doc-header')
-    header.append(element('span', 'doc-tag', doc.tag), element('h1', '', doc.title), element('p', '', doc.subtitle))
+    header.append(
+      element('span', 'doc-tag', doc.tag),
+      element('h1', '', doc.title),
+      element('p', '', doc.subtitle),
+    )
     const actions = element('div', 'doc-actions')
-    actions.append(button('复制本文链接', () => { const url = new URL(location.href); url.hash = `/${doc.id}`; void copyText(url.toString()) }, 'text-button'), link('下载 Markdown ↓', `downloads/${doc.file}`, 'text-link'))
+    actions.append(
+      button(
+        '复制本文链接',
+        () => {
+          const url = new URL(location.href)
+          url.hash = `/${doc.id}`
+          void copyText(url.toString())
+        },
+        'text-button',
+      ),
+      link('下载 Markdown ↓', `downloads/${doc.file}`, 'text-link'),
+    )
     actions.lastChild.download = doc.file
     header.append(actions)
     main.append(header)
@@ -327,15 +458,35 @@ function renderPage() {
   const index = documents.indexOf(doc)
   const pager = element('nav', 'pager')
   pager.setAttribute('aria-label', '相邻文档')
-  for (const [label, next] of [['← 上一篇', documents[index - 1]], ['下一篇 →', documents[index + 1]]]) {
-    if (!next) { pager.append(element('span')); continue }
+  for (const [label, next] of [
+    ['← 上一篇', documents[index - 1]],
+    ['下一篇 →', documents[index + 1]],
+  ]) {
+    if (!next) {
+      pager.append(element('span'))
+      continue
+    }
     const anchor = link('', `#/${next.id}`)
     anchor.append(element('small', '', label), element('strong', '', next.title))
     pager.append(anchor)
   }
-  main.append(pager, element('footer', 'doc-footer', `PhysicsOS · 开源实验，共同维护　 /　规范 ${STANDARD_VERSION} · ${UPDATED_AT}`))
-  if (route.section) requestAnimationFrame(() => { document.getElementById(route.section)?.scrollIntoView(); updateToc() })
-  else { window.scrollTo(0, 0); requestAnimationFrame(updateToc) }
+  main.append(
+    pager,
+    element(
+      'footer',
+      'doc-footer',
+      `PhysicsOS · 开源实验，共同维护　 /　规范 ${STANDARD_VERSION} · ${UPDATED_AT}`,
+    ),
+  )
+  if (route.section)
+    requestAnimationFrame(() => {
+      document.getElementById(route.section)?.scrollIntoView()
+      updateToc()
+    })
+  else {
+    window.scrollTo(0, 0)
+    requestAnimationFrame(updateToc)
+  }
 }
 
 function updateToc() {
@@ -357,33 +508,67 @@ function updateToc() {
   })
 }
 
-window.addEventListener('scroll', () => {
-  if (tocFrame !== undefined) return
-  tocFrame = requestAnimationFrame(() => { tocFrame = undefined; updateToc() })
-}, { passive: true })
+window.addEventListener(
+  'scroll',
+  () => {
+    if (tocFrame !== undefined) return
+    tocFrame = requestAnimationFrame(() => {
+      tocFrame = undefined
+      updateToc()
+    })
+  },
+  { passive: true },
+)
 
 function searchDocuments() {
   const query = search.value.trim().toLowerCase()
   results.replaceChildren()
-  if (!query) { results.hidden = true; return }
+  if (!query) {
+    results.hidden = true
+    return
+  }
   const matches = []
   for (const doc of documents) {
     if (`${doc.title} ${doc.subtitle}`.toLowerCase().includes(query)) {
       matches.push({ title: doc.title, path: `#/${doc.id}`, description: doc.subtitle })
     }
     for (const section of doc.sections) {
-      const body = section.blocks.map(block => block.text ?? block.value ?? block.items?.join(' ') ?? block.rows?.flat().join(' ') ?? '').join(' ')
-      if (`${section.title} ${body}`.toLowerCase().includes(query)) matches.push({ title: `${doc.title} / ${section.title}`, path: `#/${doc.id}/${section.id}`, description: body.slice(0, 90) })
+      const body = section.blocks
+        .map(
+          (block) =>
+            block.text ??
+            block.value ??
+            block.items?.join(' ') ??
+            block.rows?.flat().join(' ') ??
+            '',
+        )
+        .join(' ')
+      if (`${section.title} ${body}`.toLowerCase().includes(query))
+        matches.push({
+          title: `${doc.title} / ${section.title}`,
+          path: `#/${doc.id}/${section.id}`,
+          description: body.slice(0, 90),
+        })
     }
   }
   results.hidden = false
-  const summary = element('div', 'search-summary', matches.length ? `找到 ${matches.length} 处内容` : '没有找到相关内容，试试“命名”“拖动”或“作者”。')
+  const summary = element(
+    'div',
+    'search-summary',
+    matches.length
+      ? `找到 ${matches.length} 处内容`
+      : '没有找到相关内容，试试“命名”“拖动”或“作者”。',
+  )
   summary.setAttribute('role', 'status')
   results.append(summary)
   for (const match of matches.slice(0, 8)) {
     const anchor = link('', match.path, 'search-result')
     anchor.append(element('strong', '', match.title), element('small', '', match.description))
-    anchor.addEventListener('click', () => { results.hidden = true; search.value = ''; main.focus({ preventScroll: true }) })
+    anchor.addEventListener('click', () => {
+      results.hidden = true
+      search.value = ''
+      main.focus({ preventScroll: true })
+    })
     results.append(anchor)
   }
 }
@@ -392,15 +577,32 @@ renderNav()
 renderPage()
 window.addEventListener('hashchange', renderPage)
 search.addEventListener('input', searchDocuments)
-search.addEventListener('focus', () => { if (search.value) searchDocuments() })
-search.addEventListener('keydown', event => {
-  if (event.key === 'ArrowDown' || event.key === 'Enter') { const first = results.querySelector('a'); if (first) { event.preventDefault(); first.focus() } }
+search.addEventListener('focus', () => {
+  if (search.value) searchDocuments()
+})
+search.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown' || event.key === 'Enter') {
+    const first = results.querySelector('a')
+    if (first) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
   if (event.key === 'Escape') results.hidden = true
 })
-document.addEventListener('click', event => { if (!event.target.closest('.search-wrap')) results.hidden = true })
-document.addEventListener('keydown', event => {
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); search.focus(); search.select() }
-  if (event.key === 'Escape') { results.hidden = true; closeMenu() }
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.search-wrap')) results.hidden = true
+})
+document.addEventListener('keydown', (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    search.focus()
+    search.select()
+  }
+  if (event.key === 'Escape') {
+    results.hidden = true
+    closeMenu()
+  }
 })
 document.querySelector('#menu-toggle').addEventListener('click', () => {
   const open = !document.body.classList.contains('menu-open')
@@ -410,7 +612,9 @@ document.querySelector('#menu-toggle').addEventListener('click', () => {
   document.querySelector('#sidebar').inert = mobileViewport.matches && !open
 })
 document.querySelector('#menu-backdrop').addEventListener('click', closeMenu)
-document.querySelector('#close-copy').addEventListener('click', () => { document.querySelector('#copy-dialog').close() })
+document.querySelector('#close-copy').addEventListener('click', () => {
+  document.querySelector('#copy-dialog').close()
+})
 
 mobileViewport.addEventListener('change', closeMenu)
 closeMenu()

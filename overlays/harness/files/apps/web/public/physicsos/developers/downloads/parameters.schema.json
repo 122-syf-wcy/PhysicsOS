@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 2
+    },
+    "experimentId": {
+      "type": "string",
+      "const": "convex-lens"
+    },
+    "parameters": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "const": "objectDistanceCm"
+            },
+            "label": {
+              "type": "string",
+              "const": "物距"
+            },
+            "unit": {
+              "type": "string",
+              "const": "cm"
+            },
+            "access": {
+              "type": "string",
+              "const": "read-write"
+            },
+            "default": {
+              "type": "number",
+              "const": 30
+            },
+            "safety": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "const": 1
+                },
+                "max": {
+                  "type": "number",
+                  "const": 200
+                }
+              },
+              "required": [
+                "min",
+                "max"
+              ],
+              "additionalProperties": false
+            },
+            "display": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "const": 1
+                },
+                "max": {
+                  "type": "number",
+                  "const": 80
+                },
+                "step": {
+                  "type": "number",
+                  "const": 0.5
+                }
+              },
+              "required": [
+                "min",
+                "max",
+                "step"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "unit",
+            "access",
+            "default",
+            "safety",
+            "display"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "const": "focalLengthCm"
+            },
+            "label": {
+              "type": "string",
+              "const": "焦距"
+            },
+            "unit": {
+              "type": "string",
+              "const": "cm"
+            },
+            "access": {
+              "type": "string",
+              "const": "read-write"
+            },
+            "default": {
+              "type": "number",
+              "const": 10
+            },
+            "safety": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "const": 1
+                },
+                "max": {
+                  "type": "number",
+                  "const": 200
+                }
+              },
+              "required": [
+                "min",
+                "max"
+              ],
+              "additionalProperties": false
+            },
+            "display": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "const": 2
+                },
+                "max": {
+                  "type": "number",
+                  "const": 30
+                },
+                "step": {
+                  "type": "number",
+                  "const": 0.5
+                }
+              },
+              "required": [
+                "min",
+                "max",
+                "step"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "unit",
+            "access",
+            "default",
+            "safety",
+            "display"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "const": "screenDistanceCm"
+            },
+            "label": {
+              "type": "string",
+              "const": "光屏距离"
+            },
+            "unit": {
+              "type": "string",
+              "const": "cm"
+            },
+            "access": {
+              "type": "string",
+              "const": "read-write"
+            },
+            "default": {
+              "type": "number",
+              "const": 15
+            },
+            "safety": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "const": 1
+                },
+                "max": {
+                  "type": "number",
+                  "const": 200
+                }
+              },
+              "required": [
+                "min",
+                "max"
+              ],
+              "additionalProperties": false
+            },
+            "display": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "const": 1
+                },
+                "max": {
+                  "type": "number",
+                  "const": 100
+                },
+                "step": {
+                  "type": "number",
+                  "const": 0.5
+                }
+              },
+              "required": [
+                "min",
+                "max",
+                "step"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "label",
+            "unit",
+            "access",
+            "default",
+            "safety",
+            "display"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "readOnlySnapshot": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "string",
+          "const": "parameters.objectHeightCm"
+        },
+        {
+          "type": "string",
+          "const": "visible.image"
+        },
+        {
+          "type": "string",
+          "const": "visible.rays"
+        },
+        {
+          "type": "string",
+          "const": "result"
+        },
+        {
+          "type": "string",
+          "const": "rays"
+        }
+      ],
+      "items": false,
+      "minItems": 5,
+      "maxItems": 5
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "experimentId",
+    "parameters",
+    "readOnlySnapshot"
+  ],
+  "additionalProperties": false
+}

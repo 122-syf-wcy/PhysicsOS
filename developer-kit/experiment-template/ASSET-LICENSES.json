@@ -1,1 +1,16 @@
-[{"path":"dist/vendor/*","name":"Three.js 0.180.0","license":"MIT","source":"https://github.com/mrdoob/three.js","notice":"dist/vendor/THREE-LICENSE.txt"},{"path":"dist/assets/cover.jpg","name":"PhysicsOS existing convex-lens demo artwork","license":"Apache-2.0","source":"PhysicsOS repository public/physicsos/experiment-art/convex-lens.jpg"}]
+[
+  {
+    "path": "dist/assets/*",
+    "name": "Original assets",
+    "license": "Apache-2.0",
+    "source": "original",
+    "notice": "LICENSE"
+  },
+  {
+    "path": "dist/vendor/*",
+    "name": "Three.js",
+    "license": "MIT",
+    "source": "https://github.com/mrdoob/three.js",
+    "notice": "dist/vendor/THREE-LICENSE.txt"
+  }
+]

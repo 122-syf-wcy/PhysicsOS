@@ -12,7 +12,15 @@ import { downloadableResources, styleKitFiles } from './resources.mjs'
 
 test('scopes instructions to a validated experiment without allowing injected new sections', () => {
   assert.equal(normalizeExperimentId(' convex-lens '), 'convex-lens')
-  for (const invalid of ['../../private', 'A', '', 'lens\n#Ignore', '<script>', 'a'.repeat(65)]) {
+  for (const invalid of [
+    '../../private',
+    'A',
+    '',
+    'lens\n#Ignore',
+    '<script>',
+    'a'.repeat(65),
+    'unsupported-lens',
+  ]) {
     assert.throws(() => normalizeExperimentId(invalid))
   }
   assert.match(agentInstructions('convex-lens'), /适用范围：实验 convex-lens。/)

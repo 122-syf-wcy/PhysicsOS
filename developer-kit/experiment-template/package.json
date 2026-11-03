@@ -8,17 +8,18 @@
     "node": ">=24.7.0"
   },
   "scripts": {
-    "format": "prettier --check src eslint.config.mjs prettier.config.mjs",
-    "format:write": "prettier --write src eslint.config.mjs prettier.config.mjs",
+    "format": "prettier --check \"src/**/*.{ts,tsx,js,mjs,css,json,html,md}\" \"!src/contract-wire.ts\" eslint.config.mjs prettier.config.mjs",
+    "format:write": "prettier --write \"src/**/*.{ts,tsx,js,mjs,css,json,html,md}\" \"!src/contract-wire.ts\" eslint.config.mjs prettier.config.mjs",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "check:names": "node scripts/check-names.mjs",
+    "check:names": "node tools/check-names.mjs",
     "check": "npm run format && npm run check:names && npm run lint && npm run typecheck && npm test",
     "test": "node --experimental-test-module-mocks --test tests/*.test.mjs",
     "build": "node tools/clean-build.mjs && tsc -p tsconfig.build.json && node tools/build.mjs",
     "dev": "npm run build && node tools/dev.mjs",
     "validate:package": "node tools/validate.mjs",
-    "pack": "npm run validate:package && node tools/pack.mjs"
+    "release": "node tools/release.mjs",
+    "pack": "node tools/pack.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -26,7 +27,10 @@
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "typescript-eslint": "8.67.0",
-    "@types/three": "0.180.0"
+    "@types/three": "0.180.0",
+    "zod": "4.6.7",
+    "parse5": "8.0.1",
+    "es-module-lexer": "2.1.0"
   },
   "dependencies": {
     "three": "0.180.0"

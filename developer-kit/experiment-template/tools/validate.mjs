@@ -1,50 +1,65 @@
 import { lstat, readFile, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { manifestV2Schema, schemaContractIssues, validatePackageMetadata, evaluateCaseWithOptics } from './contract-v2.ts'
+import { thinLensOutcome } from './platform-optics.mjs'
+import { safeArchivePath, allowedFile, FILE_LIMIT, EXPANDED_LIMIT, FILE_COUNT_LIMIT, validatePackageResources } from './package-resources.ts'
 
-export async function validatePackage(root) {
-  const manifest = JSON.parse(await readFile(resolve(root, 'experiment.json'), 'utf8'))
-  if (manifest.schemaVersion !== 1 || manifest.protocolVersion !== 1 || manifest.packageType !== 'browser-static') throw new Error('Unsupported package contract')
-  if (typeof manifest.experimentId !== 'string' || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(manifest.experimentId) || manifest.experimentId.length > 64) throw new Error('Invalid experimentId')
-  if (typeof manifest.version !== 'string' || !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(manifest.version)) throw new Error('Invalid version')
-  if (manifest.entry !== 'dist/index.html' || manifest.renderer !== 'three' || manifest.theme !== 'physicsos-warm-lab-v1') throw new Error('Invalid entry, renderer or theme')
+export const PACKAGE_ROOTS = ['dist', 'src', 'public', 'tools', 'tests']
+export const PACKAGE_FILES = ['experiment.json', 'parameters.json', 'teaching.json', 'cases.json', 'ASSET-LICENSES.json', 'README.md', 'MODEL.md', 'LICENSE', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json', 'eslint.config.mjs', 'prettier.config.mjs']
+const invalid = () => new Error('Invalid package resources')
+/** Explicit package allowlist: local files outside it are never submitted. */
+export async function collectPackageFiles(root) {
   const files = new Map()
   let bytes = 0
-  const allowedRoots = ['dist', 'src', 'public', 'tools', 'tests']
-  const allowedFiles = ['experiment.json', 'parameters.json', 'teaching.json', 'cases.json', 'ASSET-LICENSES.json', 'README.md', 'MODEL.md', 'LICENSE', 'package.json', 'tsconfig.json', 'tsconfig.build.json']
-  const extensions = /\.(html|js|mjs|ts|tsx|css|json|png|webp|jpe?g|svg|glb|gltf|bin|ktx2|woff2|md|txt)$/i
-  async function collect(path) {
-    if (path.split('/').some(part => part === '..' || part.startsWith('.')) || path.includes('\\')) throw new Error(`Forbidden path: ${path}`)
+  async function collect(path, optional = false) {
     const full = resolve(root, path)
-    const info = await lstat(full)
-    if (info.isSymbolicLink()) throw new Error(`Symlink forbidden: ${path}`)
+    let info
+    try { info = await lstat(full) }
+    catch (error) { if (optional && error.code === 'ENOENT') return; throw invalid() }
+    if (!safeArchivePath(path) || info.isSymbolicLink()) throw invalid()
     if (info.isDirectory()) {
-      if (path.split('/').includes('node_modules')) throw new Error('node_modules must not be packaged')
-      for (const name of await readdir(full)) await collect(`${path}/${name}`)
+      for (const name of (await readdir(full)).sort()) await collect(`${path}/${name}`)
       return
     }
-    if (!info.isFile() || (!extensions.test(path) && !path.endsWith('/LICENSE') && path !== 'LICENSE')) throw new Error(`Unsupported file: ${path}`)
-    if (info.size > 20 * 1024 * 1024) throw new Error(`File exceeds 20 MiB: ${path}`)
+    if (!info.isFile() || !allowedFile(path) || info.size > FILE_LIMIT) throw invalid()
     bytes += info.size
-    if (bytes > 40 * 1024 * 1024 || files.size >= 1000) throw new Error('Package exceeds 40 MiB or 1000 files')
+    if (bytes > EXPANDED_LIMIT || files.size >= FILE_COUNT_LIMIT) throw invalid()
     files.set(path, await readFile(full))
   }
-  for (const path of [...allowedRoots, ...allowedFiles]) await collect(path)
-  try { await lstat(resolve(root, 'package-lock.json')); await collect('package-lock.json') } catch (error) { if (error.code !== 'ENOENT') throw error }
-  if (!files.has(manifest.entry)) throw new Error('Built entry missing; run npm run build first')
-  for (const key of ['parameters', 'teaching', 'referenceCases', 'assetLicenses', 'cover']) {
-    if (typeof manifest[key] !== 'string' || !files.has(manifest[key])) throw new Error(`Missing referenced file: ${key}`)
-  }
-  const html = files.get(manifest.entry).toString()
-  if (/\b(?:src|href)\s*=\s*["'](?:https?:|\/\/|file:|\/)/i.test(html)) throw new Error('Runtime entry must use package-relative assets')
-  for (const match of html.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
-    const resource = match[1].split(/[?#]/)[0].replace(/^\.\//, '')
-    if (resource.includes('..') || !files.has(`dist/${resource}`)) throw new Error(`Entry asset missing: ${resource}`)
-  }
-  return { manifest, files, bytes }
+  for (const path of [...PACKAGE_ROOTS, ...PACKAGE_FILES]) await collect(path, path === 'package-lock.json' || path.endsWith('.config.mjs'))
+  return { files, bytes }
 }
-
+function metadataError(message, issues) {
+  const error = new Error(message)
+  error.issues = issues
+  return error
+}
+export async function validatePackage(root) {
+  const { files, bytes } = await collectPackageFiles(root)
+  let value
+  const raw = files.get('experiment.json')
+  try {
+    if (!raw || raw.byteLength > 256 * 1024) throw new Error()
+    value = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(raw))
+  } catch { throw metadataError('Invalid manifest JSON', [{code:'INVALID_MANIFEST',file:'experiment.json',path:'$',message:'文件缺失、过大或 JSON 无效。',suggestion:'恢复 V2 模板的 experiment.json。'}]) }
+  const parsed = manifestV2Schema.safeParse(value)
+  if (!parsed.success) throw metadataError('Invalid V2 manifest', schemaContractIssues('experiment.json', parsed.error, 'INVALID_MANIFEST'))
+  const issues = validatePackageMetadata(files, input => evaluateCaseWithOptics(input, thinLensOutcome))
+  if (issues.length) throw metadataError('Invalid V2 metadata', issues)
+  const sdk = files.get('src/contract-wire.ts')
+  const tool = files.get('tools/contract-wire.ts')
+  if (!sdk || !tool || !sdk.equals(tool)) throw new Error('Generated contract wire copies differ; restore the trusted template copies')
+  await validatePackageResources(files, parsed.data)
+  return { manifest: parsed.data, files, bytes }
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const result = await validatePackage(process.cwd())
-  console.log(`Package validation passed: ${result.files.size} files, ${result.bytes} bytes`)
+  try {
+    const result = await validatePackage(process.cwd())
+    console.log(`Package validation passed: ${result.files.size} files, ${result.bytes} bytes`)
+  } catch (error) {
+    console.error(error.message)
+    for (const issue of error.issues ?? []) console.error(`${issue.file} ${issue.path}: ${issue.message} ${issue.suggestion}`)
+    process.exitCode = 1
+  }
 }

@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "protocolVersion": 2,
+  "packageType": "browser-static",
   "experimentId": "convex-lens",
   "version": "1.0.0",
-  "protocolVersion": 1,
-  "packageType": "browser-static",
   "entry": "dist/index.html",
   "renderer": "three",
   "theme": "physicsos-warm-lab-v1",
@@ -12,9 +12,9 @@
     "contractVersion": 1
   },
   "parameters": "parameters.json",
-  "cover": "dist/assets/cover.jpg",
   "teaching": "teaching.json",
   "referenceCases": "cases.json",
   "assetLicenses": "ASSET-LICENSES.json",
+  "cover": "dist/assets/cover.svg",
   "license": "Apache-2.0"
 }

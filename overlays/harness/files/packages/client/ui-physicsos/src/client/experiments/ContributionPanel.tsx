@@ -203,16 +203,16 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           ? '已发布。新打开的实验会自动使用此版本；正在进行的实验保持原版本。'
           : '已退回，贡献者可以查看原因并上传新修订。',
       )
-      setCatalog(current =>
+      setCatalog((current) =>
         current === undefined
           ? current
           : {
-            ...current,
-            active: action === 'approve' ? item : current.active,
-            items: current.items.map(row => (row.id === item.id ? item : row)),
-          },
+              ...current,
+              active: action === 'approve' ? item : current.active,
+              items: current.items.map((row) => (row.id === item.id ? item : row)),
+            },
       )
-      setPreview(current => (current?.item.id === item.id ? { ...current, item } : current))
+      setPreview((current) => (current?.item.id === item.id ? { ...current, item } : current))
       await refresh()
     })
   }
@@ -276,7 +276,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
             开发文档 ↗
           </a>
-          <a href="/physicsos/developers/downloads/physicsos-experiment-template-v1.zip" download>
+          <a href="/physicsos/developers/downloads/physicsos-experiment-template-v2.zip" download>
             下载独立模板 ↓
           </a>
           <a href={`${DOCS}#/agents`} target="_blank" rel="noopener noreferrer">
@@ -376,7 +376,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           {catalog?.items.length === 0 ? (
             <p className={css.muted}>还没有投稿。下载模板，开始你的第一个三维实验。</p>
           ) : null}
-          {catalog?.items.map(item => (
+          {catalog?.items.map((item) => (
             <article key={item.id} className={css.version} data-package-id={item.id}>
               <div className={css.sectionHeading}>
                 <ContributionAuthorBadge author={item.author} version={item.version} />
@@ -408,16 +408,16 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                 item.status === 'approved' &&
                 catalog.active &&
                 catalog.active.id !== item.id ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setRollback(item)
-                      }}
-                    >
-                      回滚到此版本
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setRollback(item)
+                    }}
+                  >
+                    回滚到此版本
+                  </button>
+                ) : null}
               </div>
             </article>
           ))}

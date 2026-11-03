@@ -4,82 +4,50 @@ import {
   documentMarkdown,
 } from '../../overlays/harness/files/apps/web/public/physicsos/developers/content.js'
 
-export const manifestExample = {
-  schemaVersion: 1,
-  experimentId: 'convex-lens',
-  version: '1.0.0',
-  protocolVersion: 1,
-  packageType: 'browser-static',
-  entry: 'dist/index.html',
-  renderer: 'three',
-  theme: 'physicsos-warm-lab-v1',
-  engine: { id: 'optics', contractVersion: 1 },
-  parameters: 'parameters.json',
-  cover: 'dist/assets/cover.jpg',
-  teaching: 'teaching.json',
-  referenceCases: 'cases.json',
-  assetLicenses: 'ASSET-LICENSES.json',
-  license: 'Apache-2.0',
-}
-
-const relativePath = {
-  type: 'string',
-  minLength: 1,
-  maxLength: 240,
-  pattern: '^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-zA-Z0-9_./-]+$',
-}
-export const manifestSchema = {
-  $schema: 'https://json-schema.org/draft/2020-12/schema',
-  title: 'PhysicsOS experiment package — V1 convex-lens contract',
-  type: 'object',
-  additionalProperties: false,
-  required: Object.keys(manifestExample),
-  properties: {
-    schemaVersion: { const: 1 },
-    experimentId: { type: 'string', maxLength: 64, pattern: '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$' },
-    version: { type: 'string', pattern: '^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$' },
-    protocolVersion: { const: 1 },
-    packageType: { const: 'browser-static' },
-    entry: { const: 'dist/index.html' },
-    parameters: relativePath,
-    renderer: { const: 'three' },
-    theme: { const: 'physicsos-warm-lab-v1' },
-    engine: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['id', 'contractVersion'],
-      properties: {
-        id: { type: 'string', minLength: 1 },
-        contractVersion: { type: 'integer', minimum: 1 },
-      },
-    },
-    cover: relativePath,
-    teaching: relativePath,
-    referenceCases: relativePath,
-    assetLicenses: relativePath,
-    license: { type: 'string', minLength: 1 },
-  },
-}
-
+import { z } from 'zod'
+import {
+  manifestV2Example,
+  manifestV2Schema,
+  parametersV2Document,
+  parametersV2Schema,
+  teachingV2Example,
+  teachingV2Schema,
+  casesV2Document,
+  casesV2Schema,
+  assetLicensesV2Example,
+  assetLicensesV2Schema,
+} from '../../overlays/harness/files/packages/physicsos/experiment-host/src/contract-v2.ts'
+export const manifestExample = manifestV2Example
+// Custom semantic refinements also run in the canonical validator, beyond JSON Schema.
+export const manifestSchema = z.toJSONSchema(manifestV2Schema, { unrepresentable: 'any' })
 const stringify = (value) => JSON.stringify(value, null, 2) + '\n'
 
-export function downloadableResources() {
+export function downloadableResources(options = {}) {
   return new Map([
     ...documents.map((doc) => [doc.file, documentMarkdown(doc)]),
-    ['AGENTS.md', agentInstructions()],
+    ['AGENTS.md', agentInstructions('convex-lens', options)],
     ['experiment.schema.json', stringify(manifestSchema)],
     ['experiment.example.json', stringify(manifestExample)],
+    ...[
+      ['parameters', parametersV2Schema],
+      ['teaching', teachingV2Schema],
+      ['cases', casesV2Schema],
+      ['asset-licenses', assetLicensesV2Schema],
+    ].map(([name, schema]) => [
+      `${name}.schema.json`,
+      stringify(z.toJSONSchema(schema, { unrepresentable: 'any' })),
+    ]),
   ])
 }
 
-export function styleKitFiles() {
+export function styleKitFiles(options = {}) {
   return new Map([
-    ...downloadableResources(),
+    ...downloadableResources(options),
     [
       'README.md',
       `# PhysicsOS 代码风格工具包 v1.0
 
-这是辅助代码风格工具包。需要预览、构建与 ZIP 打包，请下载独立实验模板 physicsos-experiment-template-v1.zip。
+这是辅助代码风格工具包。需要预览、构建与 ZIP 打包，请下载独立实验模板 physicsos-experiment-template-v2.zip。
 
 ## 开始
 
@@ -215,7 +183,7 @@ export default tseslint.config(
     ],
     [
       'src/experiments/convex-lens/lens-types.ts',
-      `/** Style example only; the public experiment SDK has not been released. */
+      `/** Style example only; the SDK contract is src/contract-wire.ts. */
 export interface LensFrame {
   readonly objectDistanceMeters: number
   readonly imageDistanceMeters: number | null
@@ -257,4 +225,16 @@ if (errors.length > 0) {
 `,
     ],
   ])
+}
+
+export function templateMetadata() {
+  return new Map(
+    Object.entries({
+      'experiment.json': manifestV2Example,
+      'parameters.json': parametersV2Document,
+      'teaching.json': teachingV2Example,
+      'cases.json': casesV2Document,
+      'ASSET-LICENSES.json': assetLicensesV2Example,
+    }).map(([name, value]) => [name, stringify(value)]),
+  )
 }

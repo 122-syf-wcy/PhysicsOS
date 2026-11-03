@@ -11,7 +11,7 @@
 ## 一次握手，一条专属通道
 
 - 宿主为每次挂载生成随机 channel，并将精确 hostOrigin 与 channel 放入入口查询参数。channel 不是账号令牌。
-- 实验向精确 hostOrigin 发送 experiment/ready，包含 protocolVersion: 1 和 channel。
+- 实验向精确 hostOrigin 发送 experiment/ready，包含 protocolVersion: 2 和 channel。
 - 宿主检查 event.source 为该 iframe、sandbox 不透明 origin、channel 与协议版本，创建 MessageChannel。
 - 宿主只向这个 iframe 发送 experiment/connect 并转移一个端口；实验检查 event.source === parent、精确宿主 origin、channel 后接受。
 - 由于 sandbox 使用不透明 origin，宿主这一次端口转移需 targetOrigin="*"；它只面向已绑定 iframe，不携带用户数据。后续状态通过 MessagePort，不能广播到 window。
@@ -28,6 +28,10 @@
 | parameter/cancel | 实验 → 宿主 | 取消当前预览 |
 
 宿主必须限制参数 ID、数值范围、消息大小与频率；未知消息拒绝或忽略。实验必须验证快照类型与有限数值。作者、发布权限与学习记录不能由实验消息指定。
+
+## 首帧必须真实绘制
+
+V2 快照消息携带 protocolVersion:2、frameId 和 snapshot。SDK 串行等待 onFrame 完成后才发送 experiment/rendered，回传同一 frameId 与 revision。experiment/connected 只表示通道连接；首帧未完成不能作为审核预览就绪。失败使用 SNAPSHOT_INVALID 或 RENDER_FAILED。首次帧保留，后续积压只保留最新完整快照。
 
 ## 凸透镜开发快照示例
 

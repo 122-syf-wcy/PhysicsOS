@@ -14880,8 +14880,8 @@ index 36dc0506d3..2254db3023 100644
 +        specifier: 3.4.0
 +        version: 3.4.0
 +      zod:
-+        specifier: ^4.4.3
-+        version: 4.4.3
++        specifier: 4.6.7
++        version: 4.6.7
 +    devDependencies:
 +      '@deepseek-ai/cordis':
 +        specifier: workspace:^
@@ -16093,6 +16093,16 @@ index 36dc0506d3..2254db3023 100644
    y18n@5.0.8:
      resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
      engines: {node: '>=10'}
+@@ -21745,6 +22520,9 @@ packages:
+   zod@4.4.3:
+     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
++  zod@4.6.7:
++    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
++
+   zustand@4.4.7:
+     resolution: {integrity: sha512-QFJWJMdlETcI69paJwhSMJz7PPWjVP8Sjhclxmxmxv/RYI7ZOvR5BHX+ktH0we9gTWQMxcne8q1OY8xxz604gw==}
+     engines: {node: '>=12.7.0'}
 @@ -22402,6 +23174,8 @@ snapshots:
        '@deepseek-ai/libreoffice-kit-win32-arm64': 0.1.1
        '@deepseek-ai/libreoffice-kit-win32-x64': 0.1.1
@@ -17306,6 +17316,16 @@ index 36dc0506d3..2254db3023 100644
    y18n@5.0.8: {}
 
    yallist@3.1.1: {}
+@@ -29448,6 +30319,8 @@ snapshots:
+
+   zod@4.4.3: {}
+
++  zod@4.6.7: {}
++
+   zustand@4.4.7(@types/react@18.3.31)(immer@10.2.0)(react@18.3.1):
+     dependencies:
+       use-sync-external-store: 1.2.0(react@18.3.1)
+
 diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
 index 4782ad5bdb..8a5d4be415 100644
 --- a/pnpm-workspace.yaml
@@ -17446,3 +17466,195 @@ index bbdbf3cac5..08b18e108d 100644
      { "path": "./packages/feedback/message-feedback" },
      { "path": "./packages/workspace/workspace" },
      { "path": "./packages/session/session-title" },
+diff --git a/docs/subsystems/storage.md b/docs/subsystems/storage.md
+index 03b0fa1c67..dbe9744d9b 100644
+--- a/docs/subsystems/storage.md
++++ b/docs/subsystems/storage.md
+@@ -50,6 +50,8 @@ A backend owns one medium (a file-tree root, a database file) and exposes option
+ 
+ A domain is declared once by its owning package as a spec object — the single source of the domain's identity, layout, and record schemas (zod, so `z.infer` keeps consumer types un-duplicated):
+ 
++The persistence boundary uses `DomainValueSchema<V>` (`parse` and `safeParse` only), retaining the original schema objects while avoiding internal validator-version types. Validation and the global null sentinel stay unchanged.
++
+ ```ts type-equiv
+ /** Static declaration of one domain: identity, version, and record layout. */
+ interface DomainSpec {
+diff --git a/docs/subsystems/storage.zh.md b/docs/subsystems/storage.zh.md
+index ded8783fbf..a08645c171 100644
+--- a/docs/subsystems/storage.zh.md
++++ b/docs/subsystems/storage.zh.md
+@@ -50,6 +50,8 @@ interface StorageBackend {
+ 
+ 领域由其拥有包声明一次，形式是一个 spec 对象——它是该领域的身份、布局和记录 schema 的单一来源（schema 用 zod 编写，因此 `z.infer` 让消费方类型无需重复声明）：
+ 
++持久化边界使用 `DomainValueSchema<V>`，只声明 `parse` 和 `safeParse`，保留原始 schema 对象，避免绑定校验器内部的版本类型。校验行为和全局 null 哨兵约束保持一致。
++
+ ```ts type-equiv
+ /** Static declaration of one domain: identity, version, and record layout. */
+ interface DomainSpec {
+diff --git a/packages/extensions/tool-cordis/src/api-catalog.ts b/packages/extensions/tool-cordis/src/api-catalog.ts
+index 501831b9cc..8f44768393 100644
+--- a/packages/extensions/tool-cordis/src/api-catalog.ts
++++ b/packages/extensions/tool-cordis/src/api-catalog.ts
+@@ -5023,7 +5023,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+   },
+   {
+     name: 'DomainGlobalSpec',
+-    declaration: 'export interface DomainGlobalSpec<G> {\n    readonly schema: ZodType<G>;\n    readonly initial: G;\n}',
++    declaration: 'export interface DomainGlobalSpec<G> {\n    readonly schema: DomainValueSchema<G>;\n    readonly initial: G;\n}',
+   },
+   {
+     name: 'DomainImpl',
+@@ -5035,7 +5035,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+   },
+   {
+     name: 'DomainTableSpec',
+-    declaration: 'export interface DomainTableSpec<K extends string = string, V = unknown> {\n    readonly valueSchema: ZodType<V>;\n    readonly __key?: K;\n}',
++    declaration: 'export interface DomainTableSpec<K extends string = string, V = unknown> {\n    readonly valueSchema: DomainValueSchema<V>;\n    readonly __key?: K;\n}',
++  },
++  {
++    name: 'DomainValueSchema',
++    declaration: 'export interface DomainValueSchema<V> {\n    parse(value: unknown): V;\n    safeParse(value: unknown): {\n        success: boolean;\n    };\n}',
+   },
+   {
+     name: 'DshEnvironment',
+diff --git a/packages/storage/storage-domain/README.md b/packages/storage/storage-domain/README.md
+index bfe5cc6c53..5ca48d64ce 100644
+--- a/packages/storage/storage-domain/README.md
++++ b/packages/storage/storage-domain/README.md
+@@ -33,7 +33,7 @@ Choose it for any host-side data that must survive restarts and stay valid again
+ 
+ ### Declaring a domain
+ 
+-The owning package declares the domain once with `defineDomain` — name, version, and zod record schemas — and exports it. `defineDomain` fails loudly at module load on a bad name, a version that is not a non-negative integer, or a global schema that accepts `null`.
++The owning package declares the domain once with `defineDomain` — name, version, and zod record schemas — and exports it. `defineDomain` fails loudly at module load on a bad name, a version that is not a non-negative integer, or a global schema that accepts `null`. The public `DomainValueSchema<V>` boundary requires only `parse(value: unknown): V` and `safeParse(value: unknown): { success: boolean }`, so different compatible validator versions retain their original schema objects without sharing Zod internal types.
+ 
+ ```text
+ // Owning package, once:
+diff --git a/packages/storage/storage-domain/src/index.ts b/packages/storage/storage-domain/src/index.ts
+index 7e0be5e151..7c08fdfafa 100644
+--- a/packages/storage/storage-domain/src/index.ts
++++ b/packages/storage/storage-domain/src/index.ts
+@@ -20,7 +20,7 @@ export { DomainError } from './error.ts'
+ export type { DomainErrorCode, DomainErrorOptions, InvalidRecordDetail } from './error.ts'
+ export { defineDomain, domainTable, descriptorOf } from './spec.ts'
+ export type {
+-  DomainSpec, DomainGlobalSpec, DomainTableSpec,
++  DomainSpec, DomainGlobalSpec, DomainTableSpec, DomainValueSchema,
+   TableKeyOf, TableValueOf, GlobalValueOf,
+ } from './spec.ts'
+ export type { DomainChanged } from './events.ts'
+diff --git a/packages/storage/storage-domain/src/spec.ts b/packages/storage/storage-domain/src/spec.ts
+index f0eea2d4b2..211ce78507 100644
+--- a/packages/storage/storage-domain/src/spec.ts
++++ b/packages/storage/storage-domain/src/spec.ts
+@@ -4,17 +4,23 @@
+  * it once with {@link defineDomain} and both the type surface and the runtime
+  * (validation, descriptor projection) derive from it. Record schemas are zod
+  * (`z.infer` keeps types un-duplicated and the same schemas later project to
+- * RPC wire schemas); plugin `Config` stays schemastery.
++ * RPC wire schemas). The durable boundary types only parse/safeParse, preserving
++ * the original schema objects across validator versions; plugin `Config` stays schemastery.
+  * @module @deepseek-ai/dsh-storage-domain/src/spec
+  */
+ 
+-import type { ZodType } from 'zod'
+ import { UNIT_NAME_RE, type KvUnitDescriptor } from '@deepseek-ai/dsh-storage'
+ 
++/** Only the validator methods consumed by persistence; no dependency on Zod internal version brands. */
++export interface DomainValueSchema<V> {
++  parse(value: unknown): V
++  safeParse(value: unknown): { success: boolean }
++}
++
+ /** Global singleton declaration: schema plus the value used before the first write. */
+ export interface DomainGlobalSpec<G> {
+   /** Validates the stored global at the durable boundary. */
+-  readonly schema: ZodType<G>
++  readonly schema: DomainValueSchema<G>
+   /** Value served when the medium holds no global yet; not written until the first `set`. */
+   readonly initial: G
+ }
+@@ -26,7 +32,7 @@ export interface DomainGlobalSpec<G> {
+  */
+ export interface DomainTableSpec<K extends string = string, V = unknown> {
+   /** Validates every stored record at the durable boundary. */
+-  readonly valueSchema: ZodType<V>
++  readonly valueSchema: DomainValueSchema<V>
+   /** Phantom carrier for the key type; never present at runtime. */
+   readonly __key?: K
+ }
+@@ -88,7 +94,7 @@ export type GlobalValueOf<S extends DomainSpec> =
+  * @param schema - zod schema validating every stored record of this table.
+  * @returns the table declaration, key-typed by `K`.
+  */
+-export function domainTable<K extends string, V>(schema: ZodType<V>): DomainTableSpec<K, V> {
++export function domainTable<K extends string, V>(schema: DomainValueSchema<V>): DomainTableSpec<K, V> {
+   return { valueSchema: schema }
+ }
+ 
+diff --git a/packages/storage/storage-domain/tests/schema-contract.spec.ts b/packages/storage/storage-domain/tests/schema-contract.spec.ts
+new file mode 100644
+index 0000000000..27f5ebbd14
+--- /dev/null
++++ b/packages/storage/storage-domain/tests/schema-contract.spec.ts
+@@ -0,0 +1,59 @@
++import { expect, expectTypeOf, test } from 'vitest'
++import { z } from 'zod'
++import { defineDomain, domainTable } from '../src/spec.ts'
++import type { DomainValueSchema, TableValueOf } from '../src/spec.ts'
++
++const parser: DomainValueSchema<{ label: string }> = {
++  parse(value: unknown): { label: string } {
++    if (!value || typeof value !== 'object' || !('label' in value) || typeof value.label !== 'string')
++      throw new Error('Invalid record')
++    return { label: value.label }
++  },
++  safeParse(value: unknown): { success: boolean } {
++    try { this.parse(value); return { success: true } }
++    catch { return { success: false } }
++  },
++}
++const spec = defineDomain({
++  name: 'structural_schema', version: 0,
++  tables: { items: domainTable<string, { label: string }>(parser) },
++  global: { schema: z.object({ title: z.string() }), initial: { title: 'Original' } },
++})
++
++test('retains the original parser and inferred value type without depending on validator internals', () => {
++  expectTypeOf<TableValueOf<typeof spec, 'items'>>().toEqualTypeOf<{ label: string }>()
++  expect(spec.tables.items.valueSchema).toBe(parser)
++  expect(spec.tables.items.valueSchema.parse({ label: 'Saved' })).toEqual({ label: 'Saved' })
++  expect(() => spec.tables.items.valueSchema.parse({ label: 4 })).toThrow('Invalid record')
++  expect(() => defineDomain({ name: 'null_schema', version: 0, tables: {}, global: { schema: { parse: value => value, safeParse: () => ({ success: true }) }, initial: null } })).toThrow('must not accept null')
++})
++
++test('source interfaces and the generated storage catalog declarations remain identical', async () => {
++  const { readFile } = await import('node:fs/promises')
++  const ts = await import('typescript')
++  const names = new Set(['DomainGlobalSpec', 'DomainTableSpec', 'DomainValueSchema'])
++  const source = ts.createSourceFile('spec.ts', await readFile(new URL('../src/spec.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true)
++  const catalog = ts.createSourceFile('api-catalog.ts', await readFile(new URL('../../../extensions/tool-cordis/src/api-catalog.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true)
++  const printer = ts.createPrinter({ removeComments: true })
++  const expected = new Map<string, string>()
++  for (const statement of source.statements) {
++    if (ts.isInterfaceDeclaration(statement) && names.has(statement.name.text))
++      expected.set(statement.name.text, printer.printNode(ts.EmitHint.Unspecified, statement, source).replace(/\r/g, ''))
++  }
++  const actual = new Map<string, string>()
++  const visit = (node: import('typescript').Node): void => {
++    if (ts.isObjectLiteralExpression(node)) {
++      const fields = new Map<string, string>()
++      for (const property of node.properties) {
++        if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && ts.isStringLiteral(property.initializer))
++          fields.set(property.name.text, property.initializer.text)
++      }
++      const name = fields.get('name'), declaration = fields.get('declaration')
++      if (name && declaration && names.has(name)) actual.set(name, declaration)
++    }
++    ts.forEachChild(node, visit)
++  }
++  visit(catalog)
++  expect([...expected.keys()].sort()).toEqual([...names].sort())
++  expect(actual).toEqual(expected)
++})

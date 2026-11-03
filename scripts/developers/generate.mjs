@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 import { zipBytes } from '../../developer-kit/experiment-template/tools/archive.mjs'
 import { downloadableResources, styleKitFiles } from './resources.mjs'
 
@@ -18,7 +19,6 @@ async function emit(name, body) {
   if (!expected.equals(actual)) throw new Error(`Generated resource is stale: ${name}`)
 }
 const resources = downloadableResources()
-for (const [name, body] of resources) await emit(name, body)
 
 // Store-only ZIP: deterministic paths and timestamps, UTF-8, no archive dependency.
 function crc32(bytes) {
@@ -76,15 +76,65 @@ console.log(
 
 const template = new URL('../../developer-kit/experiment-template/', import.meta.url)
 const templateFiles = new Map()
-async function collectTemplate(directory = '') {
-  for (const item of await readdir(new URL(directory, template), { withFileTypes: true })) {
-    if (['node_modules', 'dist', 'release'].includes(item.name)) continue
-    const path = directory + item.name
-    if (item.isSymbolicLink()) throw new Error(`Unexpected template symlink: ${path}`)
-    if (item.isDirectory()) await collectTemplate(path + '/')
-    else templateFiles.set('physicsos-experiment-template-v1/' + path, await readFile(new URL(path, template)))
-  }
+const roots = ['src', 'public', 'tools', 'tests', 'preview']
+const rootFiles = [
+  '.editorconfig',
+  '.gitignore',
+  'package.json',
+  'package-lock.json',
+  'tsconfig.json',
+  'tsconfig.build.json',
+  'eslint.config.mjs',
+  'prettier.config.mjs',
+  'experiment.json',
+  'parameters.json',
+  'teaching.json',
+  'cases.json',
+  'ASSET-LICENSES.json',
+  'LICENSE',
+  ...[...resources.keys()].filter(
+    (name) =>
+      name.endsWith('.md') || name.endsWith('.schema.json') || name === 'experiment.example.json',
+  ),
+  'README.md',
+  'MODEL.md',
+]
+async function collectTemplate(path) {
+  const { lstat } = await import('node:fs/promises')
+  const item = await lstat(new URL(path, template))
+  if (item.isSymbolicLink()) throw new Error('Unexpected template symlink')
+  if (item.isDirectory()) {
+    for (const name of (await readdir(new URL(path + '/', template))).sort()) {
+      if (name.startsWith('.') || name === 'node_modules')
+        throw new Error('Unexpected template resource')
+      await collectTemplate(path + '/' + name)
+    }
+  } else if (item.isFile())
+    templateFiles.set(
+      'physicsos-experiment-template-v2/' + path,
+      await readFile(new URL(path, template)),
+    )
+  else throw new Error('Unexpected template resource')
 }
-await collectTemplate()
-await emit('physicsos-experiment-template-v1.zip', zipBytes(templateFiles))
-console.log(`${check ? 'Verified' : 'Generated'} independent experiment template: ${templateFiles.size} files`)
+for (const path of [...new Set([...roots, ...rootFiles])].sort()) await collectTemplate(path)
+const bytes = zipBytes(templateFiles)
+const sha256 = createHash('sha256').update(bytes).digest('hex')
+const release = {
+  schemaVersion: 2,
+  experimentId: 'convex-lens',
+  url: `/physicsos/developers/downloads/physicsos-experiment-template-v2-${sha256}.zip`,
+  sha256,
+  bytes: bytes.length,
+}
+await emit('physicsos-experiment-template-v2.zip', bytes)
+await emit(`physicsos-experiment-template-v2-${sha256}.zip`, bytes)
+await emit('template-release.json', JSON.stringify(release, null, 2) + '\n')
+for (const [name, body] of downloadableResources({
+  release,
+  origin: 'https://physics.dongsiwei.com',
+}))
+  await emit(name, body)
+console.log(
+  `${check ? 'Verified' : 'Generated'} V2 template (${templateFiles.size} files, ${bytes.length} bytes; SHA-256 ${sha256})`,
+)
+// Historical V1 archive remains frozen and is deliberately never regenerated.

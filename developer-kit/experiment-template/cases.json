@@ -1,1 +1,72 @@
-[{"u":30,"f":10,"v":15,"kind":"real"},{"u":20,"f":10,"v":20,"kind":"real"},{"u":15,"f":10,"v":30,"kind":"real"},{"u":10,"f":10,"v":null,"kind":"none"},{"u":5,"f":10,"v":-10,"kind":"virtual"}]
+{
+  "schemaVersion": 2,
+  "experimentId": "convex-lens",
+  "unit": "cm",
+  "cases": [
+    {
+      "id": "beyond-2f",
+      "input": {
+        "objectDistanceCm": 30,
+        "focalLengthCm": 10,
+        "objectHeightCm": 4
+      },
+      "expected": {
+        "imageDistanceCm": 15,
+        "imageHeightCm": -2,
+        "imageKind": "real"
+      }
+    },
+    {
+      "id": "at-2f",
+      "input": {
+        "objectDistanceCm": 20,
+        "focalLengthCm": 10,
+        "objectHeightCm": 4
+      },
+      "expected": {
+        "imageDistanceCm": 20,
+        "imageHeightCm": -4,
+        "imageKind": "real"
+      }
+    },
+    {
+      "id": "between-f-2f",
+      "input": {
+        "objectDistanceCm": 15,
+        "focalLengthCm": 10,
+        "objectHeightCm": 4
+      },
+      "expected": {
+        "imageDistanceCm": 30,
+        "imageHeightCm": -8,
+        "imageKind": "real"
+      }
+    },
+    {
+      "id": "at-f",
+      "input": {
+        "objectDistanceCm": 10,
+        "focalLengthCm": 10,
+        "objectHeightCm": 4
+      },
+      "expected": {
+        "imageDistanceCm": null,
+        "imageHeightCm": null,
+        "imageKind": "none"
+      }
+    },
+    {
+      "id": "within-f",
+      "input": {
+        "objectDistanceCm": 5,
+        "focalLengthCm": 10,
+        "objectHeightCm": 4
+      },
+      "expected": {
+        "imageDistanceCm": -10,
+        "imageHeightCm": 8,
+        "imageKind": "virtual"
+      }
+    }
+  ]
+}

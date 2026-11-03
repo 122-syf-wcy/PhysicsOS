@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 2
+    },
+    "experimentId": {
+      "type": "string",
+      "const": "convex-lens"
+    },
+    "unit": {
+      "type": "string",
+      "const": "cm"
+    },
+    "cases": {
+      "minItems": 5,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "input": {
+            "type": "object",
+            "properties": {
+              "objectDistanceCm": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 200
+              },
+              "focalLengthCm": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 200
+              },
+              "objectHeightCm": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 200
+              }
+            },
+            "required": [
+              "objectDistanceCm",
+              "focalLengthCm",
+              "objectHeightCm"
+            ],
+            "additionalProperties": false
+          },
+          "expected": {
+            "type": "object",
+            "properties": {
+              "imageDistanceCm": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "imageHeightCm": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "imageKind": {
+                "type": "string",
+                "enum": [
+                  "real",
+                  "virtual",
+                  "none"
+                ]
+              }
+            },
+            "required": [
+              "imageDistanceCm",
+              "imageHeightCm",
+              "imageKind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "input",
+          "expected"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "experimentId",
+    "unit",
+    "cases"
+  ],
+  "additionalProperties": false
+}

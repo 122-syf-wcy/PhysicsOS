@@ -1,104 +1,101 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PhysicsOS experiment package — V1 convex-lens contract",
   "type": "object",
-  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 2
+    },
+    "protocolVersion": {
+      "type": "number",
+      "const": 2
+    },
+    "packageType": {
+      "type": "string",
+      "const": "browser-static"
+    },
+    "experimentId": {
+      "type": "string",
+      "const": "convex-lens"
+    },
+    "version": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)$"
+    },
+    "entry": {
+      "type": "string",
+      "const": "dist/index.html"
+    },
+    "renderer": {
+      "type": "string",
+      "const": "three"
+    },
+    "theme": {
+      "type": "string",
+      "const": "physicsos-warm-lab-v1"
+    },
+    "engine": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "const": "optics"
+        },
+        "contractVersion": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "id",
+        "contractVersion"
+      ],
+      "additionalProperties": false
+    },
+    "parameters": {
+      "type": "string",
+      "const": "parameters.json"
+    },
+    "teaching": {
+      "type": "string",
+      "const": "teaching.json"
+    },
+    "referenceCases": {
+      "type": "string",
+      "const": "cases.json"
+    },
+    "assetLicenses": {
+      "type": "string",
+      "const": "ASSET-LICENSES.json"
+    },
+    "cover": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*$"
+    }
+  },
   "required": [
     "schemaVersion",
-    "experimentId",
-    "version",
     "protocolVersion",
     "packageType",
+    "experimentId",
+    "version",
     "entry",
     "renderer",
     "theme",
     "engine",
     "parameters",
-    "cover",
     "teaching",
     "referenceCases",
     "assetLicenses",
+    "cover",
     "license"
   ],
-  "properties": {
-    "schemaVersion": {
-      "const": 1
-    },
-    "experimentId": {
-      "type": "string",
-      "maxLength": 64,
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
-    },
-    "version": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
-    },
-    "protocolVersion": {
-      "const": 1
-    },
-    "packageType": {
-      "const": "browser-static"
-    },
-    "entry": {
-      "const": "dist/index.html"
-    },
-    "parameters": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 240,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-zA-Z0-9_./-]+$"
-    },
-    "renderer": {
-      "const": "three"
-    },
-    "theme": {
-      "const": "physicsos-warm-lab-v1"
-    },
-    "engine": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "contractVersion"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contractVersion": {
-          "type": "integer",
-          "minimum": 1
-        }
-      }
-    },
-    "cover": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 240,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-zA-Z0-9_./-]+$"
-    },
-    "teaching": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 240,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-zA-Z0-9_./-]+$"
-    },
-    "referenceCases": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 240,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-zA-Z0-9_./-]+$"
-    },
-    "assetLicenses": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 240,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[a-zA-Z0-9_./-]+$"
-    },
-    "license": {
-      "type": "string",
-      "minLength": 1
-    }
-  }
+  "additionalProperties": false
 }

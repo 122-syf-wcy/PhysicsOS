@@ -1,19 +1,20 @@
-export const STANDARD_VERSION = '1.2'
+import { CONTRACT_PROFILE } from './contract-profile.js'
+export const STANDARD_VERSION = '2.0'
 export const UPDATED_AT = '2026-11-03'
 export const REPOSITORY = 'https://github.com/122-syf-wcy/PhysicsOS'
 export const EXPERIMENT_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
 export function normalizeExperimentId(value) {
   const id = value.trim()
-  if (!EXPERIMENT_ID_PATTERN.test(id) || id.length > 64) {
-    throw new Error('使用 1–64 位小写英文、数字和连字符，例如 convex-lens。')
+  if (!EXPERIMENT_ID_PATTERN.test(id) || id.length > 64 || id !== CONTRACT_PROFILE.experimentId) {
+    throw new Error('当前仅支持已注册的 convex-lens 契约。')
   }
   return id
 }
 
-export function agentInstructions(experimentId = '') {
-  const id = experimentId.trim() === '' ? '<experiment-id>' : normalizeExperimentId(experimentId)
-  return `# PhysicsOS 实验开发约定
+export function agentInstructions(experimentId = 'convex-lens', options = {}) {
+  const id = normalizeExperimentId(experimentId)
+  const base = `# PhysicsOS 实验开发约定
 
 规范版本：${STANDARD_VERSION} · 更新：${UPDATED_AT}
 适用范围：实验 ${id}。将本文件保存到实验目录的 AGENTS.md。
@@ -24,13 +25,21 @@ export function agentInstructions(experimentId = '') {
 
 交付目标是 ${id} 的实验 ZIP。贡献者不需要克隆 PhysicsOS、不修改主站源码、不提交 PR、不接触生产部署。仅修改独立包内源码与素材；保留已有工作。dist 是 npm run build 的输出，不手工改它绕过源码。
 
+## 固定 V2 契约（必须）
+
+- experimentId 固定为 ${CONTRACT_PROFILE.experimentId}；schemaVersion 与 protocolVersion 都是 2，engine 固定 optics / contractVersion 1。
+- 只编辑稳定 X.Y.Z 内容版本、src 三维呈现与交互、public 自有素材、teaching.json 教学内容和许可声明；不修改生成的 src/contract-wire.ts、tools/contract-wire.ts、tools/contract-v2.ts、tools/package-resources.ts、tools/html.ts 或平台光学模块，不改协议校验或发布检查绕过失败。
+- parameters.json 必须保留模板的三个 cm 参数、固定安全与显示范围和只读字段；cases.json 保留五个必需用例，额外用例也由可信平台光学引擎验证。物距、焦距、光屏距离意图安全范围 [1,200] cm；物高、result、rays、visible 为只读事实。
+- ${CONTRACT_PROFILE.cases.cases.map((item) => `${item.id}: u=${item.input.objectDistanceCm}, f=${item.input.focalLengthCm}, h=${item.input.objectHeightCm} cm`).join('；')}。
+- V2 接收带 frameId/revision 的快照，必须等待真实绘制成功后回复 experiment/rendered。experiment/connected 不代表首帧完成；渲染失败发送协议安全错误。新投稿不接受 V1，旧冻结 V1 由平台保留。
+
 ## 统一代码风格（必须）
 
 - TypeScript / ESM。strict 为 true；数据边界使用 unknown 后校验；禁止 any 扩散、非空断言和用 @ts-ignore / @ts-nocheck 跳过错误。
 - 两空格缩进，LF 换行，UTF-8，无 BOM，文件末尾换行；无分号、单引号、多行末尾逗号。格式化以项目工具为准，目标行宽 100。
 - 源码使用 kebab-case.ts，样式 kebab-case.css，测试 kebab-case.test.ts。组件扩展可以使用 kebab-case.tsx，但基础模板不依赖 React。
 - 类型导出用 PascalCase；函数、变量用 camelCase；全局常量用 UPPER_SNAKE_CASE。使用有物理含义的名称，避免 data1、temp、helper2。
-- 类型依赖使用 import type；相对模块引用使用 .js 后缀，TypeScript 编译后直接在浏览器运行。优先具名导出。Props 和只读快照使用 readonly。
+- 类型依赖使用 import type；源码相对模块引用使用 .ts 后缀；rewriteRelativeImportExtensions 编译为浏览器 .js。优先具名导出。Props 和只读快照使用 readonly。
 - 一个模块一个职责：页面组织、运行时接入、三维渲染、交互、资源与测试分别组织。不要把计算、状态、DOM 与 Three.js 场景堆进一个组件。
 - 用类型收窄和提前返回处理分支。异步任务必须 await 或显式处理 rejection；错误要提供可恢复入口，不能空 catch 冒充成功。
 - 注释解释单位、坐标变换、约束和取舍；导出契约说明输入、输出与清理责任，避免逐行复述代码。
@@ -65,18 +74,46 @@ export function agentInstructions(experimentId = '') {
 
 ## 提交与验证（必须）
 
-- 在独立模板目录运行 npm install、npm run dev、npm run check、npm run build、npm run pack。首次安装后保留锁文件；实验包作者无需任何生产服务器权限。
+- 在独立模板目录运行 npm ci、npm run dev、npm run release。保留随包提供的锁文件；实验包作者无需任何生产服务器权限。
 - 先做与改动相关的验证，再运行 required checks。记录真实命令、结果和未运行原因，不声称未执行的检查通过。
 - 有意义的行为测试覆盖：典型值与临界值、非法输入、拖动提交/取消、旧记录恢复、实例隔离、资源释放；不要只测试 mock 被调用或复制实现公式作为期望值。
 - 手机 390×844 与桌面 1440×1000 检查布局；覆盖触摸、键盘、加载失败、WebGL 错误和反复挂载。性能数据写明设备、浏览器、网络与资源大小。
-- pack 前必须 build，再验证 manifest、相对资源和文件限制。生成 release/<experimentId>-<version>.zip；平台解压后可直接服务 dist/index.html，不需要改主仓库。
+- npm run release 顺序执行 check → clean build → validate:package → pack；npm run pack 是同一完整发布流程。生成 release/<experimentId>-<version>.zip 及真实 SHA-256 检查报告；平台解压后可直接服务 dist/index.html，不需要改主仓库。
 - 提供源码、说明、已知限制、参考用例、截图、素材来源与许可证。作者/GitHub 资料不得冒用；GitHub 链接不等于身份已验证。
-- 最新审核通过的版本成为默认版本。版本与产物冻结，保留历史回滚，运行中的实验不热替换；这是计划中的投稿流程，不由前端自行发布。
+- 最新审核通过的版本成为默认版本。版本与产物冻结，保留历史回滚，运行中的实验不热替换；管理员审批后更新默认发布指针，上传成功不等于审核通过。
 
 ## 完成时汇报
 
 依次说明：实验 ID 与包版本、ZIP 路径、协议版本、交互与物理范围、检查结果、截图、素材许可、已知限制。不要把 demo 标成上线，不绕过校验，不因赶工降低类型或物理标准。
 `
+  if (options.baseOnly) return base
+  const descriptor = '/physicsos/developers/downloads/template-release.json'
+  if (!options.release)
+    return (
+      base +
+      `\n## 可信模板发布身份\n\n本包不嵌入自己的 ZIP 哈希。请从正式站点 ${descriptor} 获取不可变模板 URL、SHA-256 与字节数，并核对下载字节。\n`
+    )
+  const release = options.release
+  if (
+    release.schemaVersion !== 2 ||
+    release.experimentId !== id ||
+    !/^\/physicsos\/developers\/downloads\/physicsos-experiment-template-v2-[a-f0-9]{64}\.zip$/.test(
+      release.url,
+    ) ||
+    !/^[a-f0-9]{64}$/.test(release.sha256) ||
+    !release.url.includes(release.sha256) ||
+    !Number.isSafeInteger(release.bytes) ||
+    release.bytes < 1
+  )
+    throw new Error('模板发布描述无效。')
+  const origin =
+    options.origin ??
+    (typeof location === 'undefined' ? 'https://physics.dongsiwei.com' : location.origin)
+  const url = new URL(release.url, origin).href
+  return (
+    base +
+    `\n## 可信模板发布身份\n\n下载：${url}\nSHA-256：${release.sha256}\n字节数：${release.bytes}\n\n先核对下载字节的 SHA-256，再解压并使用 npm ci。此模板身份摘要不替代最终投稿 ZIP 的服务器校验或管理员审核。\n`
+  )
 }
 
 export const styleRows = [
