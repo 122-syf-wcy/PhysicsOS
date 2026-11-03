@@ -8,6 +8,10 @@ import { openExperimentDomain } from './domain.ts'
 import { ExperimentService } from './service.ts'
 import { experimentAssets, experimentRoutes } from './routes.ts'
 import { identityOf } from './identity.ts'
+import { openDeveloperPromptDomain } from './prompt-domain.ts'
+import { DeveloperPromptService } from './prompt-service.ts'
+import { developerPromptRoutes } from './prompt-routes.ts'
+import { PROMPT_SEED } from './prompt-seed.ts'
 export { ExperimentService } from './service.ts'
 export type { PackageView, ExperimentOptions } from './service.ts'
 export { experimentRoutes, experimentAssets } from './routes.ts'
@@ -30,6 +34,16 @@ export async function apply(ctx: Context, config: Config = {}): Promise<() => Pr
     yield () => domain.close()
     yield () => service.close()
     await service.initialize()
+    const promptDomain = await openDeveloperPromptDomain(ctx)
+    const prompts = new DeveloperPromptService(promptDomain, PROMPT_SEED)
+    yield () => promptDomain.close()
+    yield () => prompts.close()
+    await prompts.initialize()
+    yield ctx.webServer.register({
+      kind: 'prefix',
+      path: '/physicsos/developer-prompts',
+      handler: developerPromptRoutes({ service: prompts, identity: () => identityOf(ctx) }),
+    })
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/experiments',
