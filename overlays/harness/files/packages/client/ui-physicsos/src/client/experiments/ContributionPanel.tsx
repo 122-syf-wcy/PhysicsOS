@@ -73,8 +73,11 @@ function CandidatePreview({ entryUrl }: { entryUrl: string }) {
   )
 }
 
-/** The same dialog gives contributors their own submissions and admins the review queue. */
-export function ContributionPanel({ onClose }: { onClose: () => void }) {
+type ContributionPanelProps =
+  { embedded: true; onClose?: never } | { embedded?: false; onClose: () => void }
+
+/** Shared workflow: the contribution page and experiment dialog use the same state and API. */
+export function ContributionPanel({ onClose, embedded = false }: ContributionPanelProps) {
   const dialog = useRef<HTMLDivElement>(null)
   const [catalog, setCatalog] = useState<ContributionCatalog>()
   const [error, setError] = useState('')
@@ -98,15 +101,15 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     alive.current = true
     const previous = document.activeElement
-    dialog.current?.focus()
+    if (!embedded) dialog.current?.focus()
     void refresh().catch((failure: unknown) => {
       if (alive.current) setError(failure instanceof Error ? failure.message : '无法读取投稿')
     })
     return () => {
       alive.current = false
-      if (previous instanceof HTMLElement) previous.focus()
+      if (!embedded && previous instanceof HTMLElement) previous.focus()
     }
-  }, [])
+  }, [embedded])
 
   const run = async (action: () => Promise<void>): Promise<void> => {
     if (busy) return
@@ -181,38 +184,40 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
       await refresh()
     })
   }
-  return createPortal(
-    <div className={css.backdrop}>
-      <div
-        ref={dialog}
-        className={css.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="contribution-title"
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.stopPropagation()
-            onClose()
-          }
-          if (event.key !== 'Tab') return
-          const nodes = dialog.current?.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), iframe, [tabindex="0"]',
-          )
-          const first = nodes?.[0]
-          const last = nodes?.[nodes.length - 1]
-          if (
-            event.shiftKey &&
-            (document.activeElement === first || document.activeElement === dialog.current)
-          ) {
-            event.preventDefault()
-            last?.focus()
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault()
-            first?.focus()
-          }
-        }}
-      >
+  const panel = (
+    <div
+      ref={dialog}
+      className={`${css.dialog}${embedded ? ` ${css.embedded}` : ''}`}
+      role={embedded ? 'region' : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-labelledby={embedded ? undefined : 'contribution-title'}
+      aria-label={embedded ? '凸透镜实验上传与审核' : undefined}
+      tabIndex={embedded ? undefined : -1}
+      onKeyDown={(event) => {
+        if (embedded) return
+        if (event.key === 'Escape') {
+          event.stopPropagation()
+          onClose?.()
+        }
+        if (event.key !== 'Tab') return
+        const nodes = dialog.current?.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), iframe, [tabindex="0"]',
+        )
+        const first = nodes?.[0]
+        const last = nodes?.[nodes.length - 1]
+        if (
+          event.shiftKey &&
+          (document.activeElement === first || document.activeElement === dialog.current)
+        ) {
+          event.preventDefault()
+          last?.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first?.focus()
+        }
+      }}
+    >
+      {!embedded ? (
         <header className={css.header}>
           <div>
             <span>PHYSICSOS · 开发者社区</span>
@@ -223,285 +228,289 @@ export function ContributionPanel({ onClose }: { onClose: () => void }) {
             ×
           </button>
         </header>
-        <div className={css.content}>
-          {error ? (
-            <p role="alert" className={css.error}>
-              {error}
+      ) : null}
+      <div className={css.content}>
+        {error ? (
+          <p role="alert" className={css.error}>
+            {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p role="status" className={css.notice}>
+            {notice}
+          </p>
+        ) : null}
+        <nav className={css.links} aria-label="贡献资源">
+          <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
+            开发文档 ↗
+          </a>
+          <a href="/physicsos/developers/downloads/physicsos-experiment-template-v1.zip" download>
+            下载独立模板 ↓
+          </a>
+          <a href={`${DOCS}#/agents`} target="_blank" rel="noopener noreferrer">
+            复制 AGENTS.md ↗
+          </a>
+        </nav>
+        <form onSubmit={submit} className={css.form}>
+          <h3>提交一个新版本</h3>
+          <label className={css.wide}>
+            实验文件 ZIP{' '}
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              required
+              onChange={(event) => {
+                setFile(event.target.files?.[0])
+              }}
+            />
+            <small>
+              从模板运行 npm run build 和 npm run pack。最大 20 MiB，目标实验为 convex-lens。
+            </small>
+          </label>
+          <label>
+            作者显示名
+            <input
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value)
+              }}
+              required
+              maxLength={80}
+              autoComplete="name"
+            />
+          </label>
+          <label>
+            GitHub 个人主页
+            <input
+              value={github}
+              onChange={(event) => {
+                setGithub(event.target.value)
+              }}
+              type="url"
+              placeholder="https://github.com/your-name"
+              maxLength={200}
+            />
+          </label>
+          <label>
+            作者简介
+            <textarea
+              value={bio}
+              onChange={(event) => {
+                setBio(event.target.value)
+              }}
+              maxLength={300}
+              rows={2}
+            />
+          </label>
+          <label>
+            作者头像（可选）
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => {
+                setAvatar(event.target.files?.[0])
+              }}
+            />
+            <small>PNG、JPEG 或 WebP，最大 256 KiB；填写 GitHub 时优先显示 GitHub 头像。</small>
+          </label>
+          <label className={css.wide}>
+            本次修改说明
+            <textarea
+              value={note}
+              onChange={(event) => {
+                setNote(event.target.value)
+              }}
+              maxLength={500}
+              rows={2}
+            />
+          </label>
+          <div className={css.wide}>
+            <button
+              type="submit"
+              className={css.primary}
+              disabled={busy || file === undefined || catalog === undefined}
+            >
+              {busy ? '正在处理…' : '上传并提交审核'}
+            </button>
+          </div>
+        </form>
+        <section className={css.versions} aria-label="实验版本">
+          <div className={css.sectionHeading}>
+            <h3>{catalog?.canReview ? '投稿审核与发布记录' : '我的投稿与发布记录'}</h3>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                void run(refresh)
+              }}
+            >
+              刷新
+            </button>
+          </div>
+          {catalog === undefined ? (
+            <p role="status">{error ? '未能读取投稿，请点击刷新重试。' : '正在读取版本…'}</p>
+          ) : (
+            <p>
+              当前默认：
+              {catalog.active
+                ? `v${catalog.active.version} · ${catalog.active.author.name}`
+                : 'PhysicsOS 官方三维样板'}
             </p>
+          )}
+          {catalog?.items.length === 0 ? (
+            <p className={css.muted}>还没有投稿。下载模板，开始你的第一个三维实验。</p>
           ) : null}
-          {notice ? (
-            <p role="status" className={css.notice}>
-              {notice}
-            </p>
-          ) : null}
-          <nav className={css.links} aria-label="贡献资源">
-            <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
-              开发文档 ↗
-            </a>
-            <a href="/physicsos/developers/downloads/physicsos-experiment-template-v1.zip" download>
-              下载独立模板 ↓
-            </a>
-            <a href={`${DOCS}#/agents`} target="_blank" rel="noopener noreferrer">
-              复制 AGENTS.md ↗
-            </a>
-          </nav>
-          <form onSubmit={submit} className={css.form}>
-            <h3>提交一个新版本</h3>
-            <label className={css.wide}>
-              实验文件 ZIP{' '}
-              <input
-                type="file"
-                accept=".zip,application/zip"
-                required
-                onChange={(event) => {
-                  setFile(event.target.files?.[0])
-                }}
-              />
+          {catalog?.items.map((item) => (
+            <article key={item.id} className={css.version} data-package-id={item.id}>
+              <div className={css.sectionHeading}>
+                <ContributionAuthorBadge author={item.author} version={item.version} />
+                <span className={css.status}>
+                  {catalog.active?.id === item.id ? '当前默认' : STATUS[item.status]}
+                </span>
+              </div>
+              {item.author.bio ? <p>{item.author.bio}</p> : null}
+              {item.note ? <p>{item.note}</p> : null}
               <small>
-                从模板运行 npm run build 和 npm run pack。最大 20 MiB，目标实验为 convex-lens。
+                {new Date(item.createdAt).toLocaleString('zh-CN')} · SHA-256{' '}
+                {item.sha256.slice(0, 12)}…
               </small>
-            </label>
-            <label>
-              作者显示名
-              <input
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value)
-                }}
-                required
-                maxLength={80}
-                autoComplete="name"
-              />
-            </label>
-            <label>
-              GitHub 个人主页
-              <input
-                value={github}
-                onChange={(event) => {
-                  setGithub(event.target.value)
-                }}
-                type="url"
-                placeholder="https://github.com/your-name"
-                maxLength={200}
-              />
-            </label>
-            <label>
-              作者简介
-              <textarea
-                value={bio}
-                onChange={(event) => {
-                  setBio(event.target.value)
-                }}
-                maxLength={300}
-                rows={2}
-              />
-            </label>
-            <label>
-              作者头像（可选）
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => {
-                  setAvatar(event.target.files?.[0])
-                }}
-              />
-              <small>PNG、JPEG 或 WebP，最大 256 KiB；填写 GitHub 时优先显示 GitHub 头像。</small>
-            </label>
-            <label className={css.wide}>
-              本次修改说明
-              <textarea
-                value={note}
-                onChange={(event) => {
-                  setNote(event.target.value)
-                }}
-                maxLength={500}
-                rows={2}
-              />
-            </label>
-            <div className={css.wide}>
-              <button type="submit" className={css.primary} disabled={busy || file === undefined}>
-                {busy ? '正在处理…' : '上传并提交审核'}
-              </button>
-            </div>
-          </form>
-          <section className={css.versions} aria-label="实验版本">
-            <div className={css.sectionHeading}>
-              <h3>{catalog?.canReview ? '投稿审核与发布记录' : '我的投稿与发布记录'}</h3>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void run(refresh)
-                }}
-              >
-                刷新
-              </button>
-            </div>
-            {catalog === undefined ? (
-              <p role="status">正在读取版本…</p>
-            ) : (
-              <p>
-                当前默认：
-                {catalog.active
-                  ? `v${catalog.active.version} · ${catalog.active.author.name}`
-                  : 'PhysicsOS 官方三维样板'}
-              </p>
-            )}
-            {catalog?.items.length === 0 ? (
-              <p className={css.muted}>还没有投稿。下载模板，开始你的第一个三维实验。</p>
-            ) : null}
-            {catalog?.items.map((item) => (
-              <article key={item.id} className={css.version} data-package-id={item.id}>
-                <div className={css.sectionHeading}>
-                  <ContributionAuthorBadge author={item.author} version={item.version} />
-                  <span className={css.status}>
-                    {catalog.active?.id === item.id ? '当前默认' : STATUS[item.status]}
-                  </span>
-                </div>
-                {item.author.bio ? <p>{item.author.bio}</p> : null}
-                {item.note ? <p>{item.note}</p> : null}
-                <small>
-                  {new Date(item.createdAt).toLocaleString('zh-CN')} · SHA-256{' '}
-                  {item.sha256.slice(0, 12)}…
-                </small>
-                {item.rejectionReason ? (
-                  <p className={css.error}>退回原因：{item.rejectionReason}</p>
-                ) : null}
-                <div className={css.actions}>
+              {item.rejectionReason ? (
+                <p className={css.error}>退回原因：{item.rejectionReason}</p>
+              ) : null}
+              <div className={css.actions}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    openPreview(item)
+                  }}
+                >
+                  预览 v{item.version}
+                </button>
+                {catalog.canReview &&
+                item.status === 'approved' &&
+                catalog.active &&
+                catalog.active.id !== item.id ? (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      openPreview(item)
+                      setRollback(item)
                     }}
                   >
-                    预览 v{item.version}
+                    回滚到此版本
                   </button>
-                  {catalog.canReview &&
-                  item.status === 'approved' &&
-                  catalog.active &&
-                  catalog.active.id !== item.id ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setRollback(item)
-                      }}
-                    >
-                      回滚到此版本
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-          </section>
-          {preview ? (
-            <section className={css.review} aria-label="审核预览">
-              <div className={css.sectionHeading}>
-                <h3>
-                  预览 v{preview.item.version} · {preview.item.author.name}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreview(undefined)
-                  }}
-                >
-                  关闭预览
-                </button>
+                ) : null}
               </div>
-              {catalog?.canReview ? (
-                <div className={css.reviewActions}>
-                  <a
-                    href={`/physicsos/experiments/packages/${encodeURIComponent(preview.item.id)}/archive`}
-                    download
-                  >
-                    下载冻结审核 ZIP
-                  </a>
-                  <p>下载并核对源码、dist、参考用例和素材许可；该 ZIP 的摘要与审批一致。</p>
-                  <small aria-label="审核文件 SHA-256" style={{ overflowWrap: 'anywhere' }}>
-                    {preview.item.sha256}
-                  </small>
-                </div>
-              ) : null}
-              <CandidatePreview key={preview.item.id} entryUrl={preview.entryUrl} />
-              {catalog?.canReview && preview.item.status === 'pending' ? (
-                <div className={css.reviewActions}>
-                  <p>核对装置、物理结果、手机操作和素材授权后发布。通过后自动替换当前默认版本。</p>
-                  <label>
-                    退回原因
-                    <textarea
-                      value={reason}
-                      onChange={(event) => {
-                        setReason(event.target.value)
-                      }}
-                      maxLength={500}
-                      rows={2}
-                    />
-                  </label>
-                  <div className={css.actions}>
-                    <button
-                      type="button"
-                      className={css.primary}
-                      disabled={busy}
-                      onClick={() => {
-                        review('approve')
-                      }}
-                    >
-                      审核通过并发布
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || !reason.trim()}
-                      onClick={() => {
-                        review('reject')
-                      }}
-                    >
-                      退回修改
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-          {rollback && catalog?.active ? (
-            <section className={css.review} aria-label="确认回滚">
+            </article>
+          ))}
+        </section>
+        {preview ? (
+          <section className={css.review} aria-label="审核预览">
+            <div className={css.sectionHeading}>
               <h3>
-                将默认版本恢复为 v{rollback.version} · {rollback.author.name}？
+                预览 v{preview.item.version} · {preview.item.author.name}
               </h3>
-              <p>当前版本保留在历史中，正在运行的实验不会中断。</p>
-              <div className={css.actions}>
-                <button
-                  type="button"
-                  className={css.primary}
-                  disabled={busy}
-                  onClick={() => {
-                    void run(async () => {
-                      if (!catalog.active) return
-                      await contributionApi.rollback(rollback.id, catalog.active.id)
-                      if (!alive.current) return
-                      setRollback(undefined)
-                      setNotice('已恢复默认版本。重新打开实验后生效。')
-                      await refresh()
-                    })
-                  }}
+              <button
+                type="button"
+                onClick={() => {
+                  setPreview(undefined)
+                }}
+              >
+                关闭预览
+              </button>
+            </div>
+            {catalog?.canReview ? (
+              <div className={css.reviewActions}>
+                <a
+                  href={`/physicsos/experiments/packages/${encodeURIComponent(preview.item.id)}/archive`}
+                  download
                 >
-                  确认回滚
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRollback(undefined)
-                  }}
-                >
-                  取消
-                </button>
+                  下载冻结审核 ZIP
+                </a>
+                <p>下载并核对源码、dist、参考用例和素材许可；该 ZIP 的摘要与审批一致。</p>
+                <small aria-label="审核文件 SHA-256" style={{ overflowWrap: 'anywhere' }}>
+                  {preview.item.sha256}
+                </small>
               </div>
-            </section>
-          ) : null}
-        </div>
+            ) : null}
+            <CandidatePreview key={preview.item.id} entryUrl={preview.entryUrl} />
+            {catalog?.canReview && preview.item.status === 'pending' ? (
+              <div className={css.reviewActions}>
+                <p>核对装置、物理结果、手机操作和素材授权后发布。通过后自动替换当前默认版本。</p>
+                <label>
+                  退回原因
+                  <textarea
+                    value={reason}
+                    onChange={(event) => {
+                      setReason(event.target.value)
+                    }}
+                    maxLength={500}
+                    rows={2}
+                  />
+                </label>
+                <div className={css.actions}>
+                  <button
+                    type="button"
+                    className={css.primary}
+                    disabled={busy}
+                    onClick={() => {
+                      review('approve')
+                    }}
+                  >
+                    审核通过并发布
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !reason.trim()}
+                    onClick={() => {
+                      review('reject')
+                    }}
+                  >
+                    退回修改
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+        {rollback && catalog?.active ? (
+          <section className={css.review} aria-label="确认回滚">
+            <h3>
+              将默认版本恢复为 v{rollback.version} · {rollback.author.name}？
+            </h3>
+            <p>当前版本保留在历史中，正在运行的实验不会中断。</p>
+            <div className={css.actions}>
+              <button
+                type="button"
+                className={css.primary}
+                disabled={busy}
+                onClick={() => {
+                  void run(async () => {
+                    if (!catalog.active) return
+                    await contributionApi.rollback(rollback.id, catalog.active.id)
+                    if (!alive.current) return
+                    setRollback(undefined)
+                    setNotice('已恢复默认版本。重新打开实验后生效。')
+                    await refresh()
+                  })
+                }}
+              >
+                确认回滚
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRollback(undefined)
+                }}
+              >
+                取消
+              </button>
+            </div>
+          </section>
+        ) : null}
       </div>
-    </div>,
-    document.body,
+    </div>
   )
+  return embedded ? panel : createPortal(<div className={css.backdrop}>{panel}</div>, document.body)
 }

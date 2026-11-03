@@ -314,3 +314,15 @@
     font-size: 12px;
   }
 }
+
+/* A full product page uses normal document focus and its parent's scroll area. */
+.dialog.embedded,
+.dialog.embedded * { box-sizing: border-box; }
+.dialog.embedded {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  border-radius: 14px;
+  box-shadow: none;
+}

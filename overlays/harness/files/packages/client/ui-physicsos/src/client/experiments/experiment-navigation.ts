@@ -9,6 +9,8 @@ interface Catalog {
   idOf: (ref: PhysicsSceneRef) => string | undefined
 }
 const ROOT = '#/experiments'
+const CONTRIBUTION = '#/contribute'
+const isManaged = (hash: string): boolean => hash.startsWith(ROOT) || hash === CONTRIBUTION
 export const experimentHref = (id: string, sceneId?: string): string =>
   `${ROOT}/${encodeURIComponent(id)}${sceneId === undefined ? '' : `?scene=${encodeURIComponent(sceneId)}`}`
 
@@ -25,16 +27,23 @@ export function startExperimentNavigation({
   let alive = true
   let generation = 0
   let applying = false
-  let wasManaged = browser.location.hash.startsWith(ROOT)
+  let wasManaged = isManaged(browser.location.hash)
   const write = (hash: string, replace = false): void => {
     if (browser.location.hash === hash) return
     const url = `${browser.location.pathname}${browser.location.search}${hash}`
     browser.history[replace ? 'replaceState' : 'pushState'](browser.history.state, '', url)
-    wasManaged = hash.startsWith(ROOT)
+    wasManaged = isManaged(hash)
   }
   const read = async (): Promise<void> => {
     const ticket = ++generation
     const hash = browser.location.hash
+    if (hash === CONTRIBUTION) {
+      wasManaged = true
+      applying = true
+      surface.open('contribute')
+      applying = false
+      return
+    }
     if (!hash.startsWith(ROOT)) {
       if (wasManaged) {
         applying = true
@@ -53,14 +62,18 @@ export function startExperimentNavigation({
       }
       const url = new URL(hash.slice(1), 'https://physicsos.invalid')
       const match = /^\/experiments\/([a-z0-9-]+)$/.exec(url.pathname)
+      // Only suppress our own synchronous store writes. User navigation during
+      // a catalog load must invalidate this ticket instead of being ignored.
+      applying = false
       const catalog = await loadCatalog()
       if (!alive || generation !== ticket) return
+      applying = true
       const id = match?.[1]
       const requested = url.searchParams.get('scene')
       const saved =
         requested === null
           ? undefined
-          : surface.recent.getSnapshot().items.find(item => item.sceneId === requested)
+          : surface.recent.getSnapshot().items.find((item) => item.sceneId === requested)
       const ref =
         saved !== undefined && catalog.idOf(saved) === id
           ? sceneRefOf(saved)
@@ -79,6 +92,7 @@ export function startExperimentNavigation({
       }
     } catch {
       if (alive && generation === ticket) {
+        applying = true
         surface.openExperimentPicker()
         surface.setRouteNotice('实验暂时无法打开，请重新选择或刷新页面。')
       }
@@ -90,6 +104,10 @@ export function startExperimentNavigation({
     if (!alive || applying) return
     const state = surface.store.getSnapshot()
     const ticket = ++generation
+    if (state.surface === 'contribute') {
+      write(CONTRIBUTION)
+      return
+    }
     if (state.surface !== 'lab') {
       if (wasManaged) write('')
       return
@@ -100,8 +118,7 @@ export function startExperimentNavigation({
     }
     try {
       const catalog = await loadCatalog()
-      if (ticket !== generation || surface.store.getSnapshot() !== state)
-        return
+      if (ticket !== generation || surface.store.getSnapshot() !== state) return
       const id = catalog.idOf(state.sceneRef)
       if (id !== undefined) write(experimentHref(id, state.sceneRef.sceneId))
       else if (wasManaged) write(ROOT)
@@ -118,6 +135,7 @@ export function startExperimentNavigation({
     void sync()
   })
   if (wasManaged) void read()
+  else void sync()
   return () => {
     alive = false
     generation += 1

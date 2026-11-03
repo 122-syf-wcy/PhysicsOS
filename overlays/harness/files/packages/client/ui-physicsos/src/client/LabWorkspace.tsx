@@ -24,6 +24,7 @@ import type { AuthState } from './auth-store.ts'
 import { LabEmptyState } from './LabEmptyState.tsx'
 import { LearningRecordWorkspace } from './LearningRecordWorkspace.tsx'
 import { LibraryWorkspace } from './LibraryWorkspace.tsx'
+import { ContributeWorkspace } from './ContributeWorkspace.tsx'
 import { PaperWorkspace } from './PaperWorkspace.tsx'
 import type { PaperApi } from './paper-api.ts'
 import { PhysicsWorkspace } from './PhysicsWorkspace.tsx'
@@ -156,6 +157,7 @@ export function PhysicsSurface({
   }
   /* 资源库 is a catalog surface like 学习记录: no physics runtime, it reads
      the curriculum catalog and hands actions off to the Lab / the tutor. */
+  if (surface === 'contribute') return <ContributeWorkspace t={t} />
   if (surface === 'library') {
     return (
       <LibraryWorkspace

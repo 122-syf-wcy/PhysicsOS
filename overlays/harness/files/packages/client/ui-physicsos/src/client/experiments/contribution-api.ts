@@ -39,18 +39,18 @@ export interface ContributionInput {
 export function contributionReleaseIdentity(item: ExperimentPackageView | null): ReleaseIdentity {
   return item === null
     ? {
-      kind: 'official',
-      id: 'physicsos-convex-lens-v1',
-      experimentId: 'convex-lens',
-      version: '1.0.0',
-    }
+        kind: 'official',
+        id: 'physicsos-convex-lens-v1',
+        experimentId: 'convex-lens',
+        version: '1.0.0',
+      }
     : {
-      kind: 'community',
-      id: item.id,
-      experimentId: item.experimentId,
-      version: item.version,
-      sha256: item.sha256,
-    }
+        kind: 'community',
+        id: item.id,
+        experimentId: item.experimentId,
+        version: item.version,
+        sha256: item.sha256,
+      }
 }
 
 export function selectContributionRelease(
@@ -59,7 +59,7 @@ export function selectContributionRelease(
 ): ExperimentPackageView | null | undefined {
   if (pinned?.kind === 'official') return null
   if (pinned === undefined) return catalog.active
-  return catalog.items.find(item => item.id === pinned.id && item.sha256 === pinned.sha256)
+  return catalog.items.find((item) => item.id === pinned.id && item.sha256 === pinned.sha256)
 }
 
 /** Approved assets are public; only drafts require the owner/admin preview capability. */
@@ -76,12 +76,27 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
     ...(body === undefined
       ? {}
       : {
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      }),
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
   })
-  const data = (await response.json()) as { error?: { message?: string } }
-  if (!response.ok) throw new Error(data.error?.message ?? `请求失败（${response.status}）`)
+  const data: unknown = await response.json().catch(() => undefined)
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('请先登录，再上传或查看实验投稿。')
+    if (response.status === 404) throw new Error('实验上传服务暂不可用，请稍后刷新重试。')
+    const error =
+      data !== null && typeof data === 'object' && 'error' in data ? data.error : undefined
+    const message =
+      error !== null &&
+      typeof error === 'object' &&
+      'message' in error &&
+      typeof error.message === 'string'
+        ? error.message
+        : `请求失败（${response.status}），请重试。`
+    throw new Error(message)
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data))
+    throw new Error('实验上传服务返回了无效响应，请刷新重试。')
   return data as T
 }
 

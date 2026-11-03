@@ -1039,3 +1039,16 @@
   outline: 2px solid var(--dsw-alias-button-info-fill);
   outline-offset: 3px;
 }
+
+.uploadEntry {
+  margin: 10px 10px 0 0;
+  padding: 7px 13px;
+  border: 1px solid #c8d8c6;
+  border-radius: 8px;
+  background: #edf3e8;
+  color: #395f45;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.uploadEntry:focus-visible { outline: 2px solid #497357; outline-offset: 3px; }
