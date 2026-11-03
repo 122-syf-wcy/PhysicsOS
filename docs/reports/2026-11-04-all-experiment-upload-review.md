@@ -1,6 +1,6 @@
 # 全部实验上传、渲染审核与自动展示
 
-状态：全部76个实验的开发与私有候选验收完成，正式发布准备中；本轮尚未改动正式应用。用户明确要求全部实验，并沿用已授权的 GitHub 与部署流程。
+状态：2026-11-04 全部76个实验上传、后台渲染审核和自动展示已上线，GitHub main 已更新。用户明确要求全部实验，并沿用已授权的 GitHub 与部署流程。
 
 ## 已实现
 
@@ -57,3 +57,27 @@
 生产数据库备份`/opt/physicsos/backups/postgres/20261104-all-preflight/postgres.dump`已验证并恢复到独立数据库`physicsos_all_20261104`。同时复制生产文件用于读取旧归档；候选使用独立state、测试引导管理员和memory共享状态，验收写入不会触及正式数据库或Redis。
 
 新镜像+PostgreSQL/文件副本实测通过：76目录、V3模板上传/冻结归档/私有预览、两个目标独立发布、跨目标回滚拒绝、原凸透镜目录保持一致；如旧目录含包，实际归档摘要也已读取校验。真实候选重启后，新版本/历史和旧凸透镜状态与存证一致。日志`/tmp/physicsos-all-postgres-check.log`、`physicsos-all-postgres-persistence.log`。正式发布和最终HTTPS记录随后补充。
+
+
+## 正式发布结果
+
+- 入口：<https://physics.dongsiwei.com>，上传页 `/#/contribute`；超级管理员“账户菜单 → 管理后台 → 内容与通知 → 实验审核”。
+- GitHub main/codex分支原子快进：`6d277ef → bf0cb00`；运行代码为`d43225e`，后续提交仅补充验收和交接文档。服务器检出已同步。
+- 正式镜像`physicsos-app:all-d43225e`，ID `ddc1f1e0f2e3b4a53f110eed03f34fd5b9584310e0b8320728515acaa1028919`，与验证的PostgreSQL候选完全一致。app/PostgreSQL/Redis全部healthy，`physicsos-app:local`指向新镜像。
+- HTTPS真实浏览器通过：76目录与上传选择、pinhole所选模板/提示词摘要、后台审核筛选入口且无上传表单、原提示词管理、匿名/管理员边界、Secure会话、旧lens MD/模板、出卷和实验iframe响应头、移动端文档。未在正式数据库上传、批准或发布测试实验。
+- 最终日志：`/tmp/physicsos-all-production-smoke.log`。不声称执行真实模型生成、全量其他业务或GitHub Actions CI（本机gh未认证）；本次发布依据服务器构建/候选/实站验收。
+
+## 恢复点
+
+切换时仅停止app，再生成并验证一致的数据库与文件恢复点；其他服务持续运行。
+
+| 项目 | 服务器保留位置 |
+| --- | --- |
+| 切换前镜像 | `physicsos-app:rollback-all-experiments-20261104`，ID `d6f608e5a37ccbb45b0034e8064a67670045818d34ca96111001122f2885e061` |
+| 切换前数据库 | `/opt/physicsos/backups/postgres/20261104-all-switch/postgres.dump`，已验证TOC |
+| 切换前文件与配置 | `/opt/physicsos/backups/releases/20261104-all-experiments/`，`app-data.tar.gz`已验证目录和摘要 |
+| 候选镜像上下文、清单与私有副本 | `/opt/physicsos-previews/all-experiments-release-20261104/` |
+
+镜像回滚命令可使用 `PHYSICSOS_APP_IMAGE=physicsos-app:rollback-all-experiments-20261104 docker compose up -d --no-deps --no-build --wait app`；将`physicsos-app:local`标签指回旧镜像以保持后续运维一致。数据库和文件恢复点分别保留，本次未执行数据恢复。
+
+密钥继续使用原有文件挂载，抽查权限`0400 / 999:999`；Compose非Swarm模式忽略secret uid/gid/mode是既有提示，文件权限不放宽。开发分支和隔离工作区保留，未改vendor子模块指针。验收候选容器在收尾后停止，数据/恢复资料保留。
