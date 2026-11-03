@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AdminWorkspace } from '../src/client/AdminWorkspace.tsx'
 import {
@@ -19,6 +19,7 @@ import type { ModelPoolApi } from '../src/client/model-pool-api.ts'
 import type { NoticeApi } from '../src/client/notice-api.ts'
 import type { PaperApi } from '../src/client/paper-api.ts'
 import css from '../src/client/AdminWorkspace.module.css'
+import { contributionApi } from '../src/client/experiments/contribution-api.ts'
 
 const t = (key: PhysicsosKey): string => zh[key] ?? key
 
@@ -134,7 +135,10 @@ const expectSingleShell = (content: Element): void => {
 }
 
 describe('administrator shell', () => {
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
 
   it('exports the shared admin primitives', () => {
     expect([
@@ -155,6 +159,44 @@ describe('administrator shell', () => {
     first.unmount()
     render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
     expect(screen.getByRole('tab', { name: '开发提示词' })).not.toBeNull()
+  })
+
+  it('offers experiment review only to platform administrators', () => {
+    const first = render(
+      <AdminWorkspace api={api} useAuth={authedAs('SCHOOL_ADMIN')} t={t} />,
+    )
+    expect(screen.queryByRole('tab', { name: '实验审核' })).toBeNull()
+    first.unmount()
+    render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
+    expect(screen.getByRole('tab', { name: '实验审核' })).not.toBeNull()
+  })
+
+  it('opens the experiment review queue without the contribution uploader', async () => {
+    vi.spyOn(contributionApi, 'reviewQueue').mockResolvedValue({
+      active: null,
+      canReview: true,
+      items: [{
+        id: 'pending-lens-2',
+        experimentId: 'convex-lens',
+        version: '2.0.0',
+        schemaVersion: 2,
+        protocolVersion: 2,
+        sha256: 'a'.repeat(64),
+        status: 'pending',
+        author: { name: '实验创作者' },
+        createdAt: '2026-11-04T00:00:00Z',
+        note: '等待审核的独立凸透镜实验',
+      }],
+    })
+    render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '实验审核' }))
+
+    expect(screen.getByRole('heading', { name: '实验审核' })).not.toBeNull()
+    expect(await screen.findByRole('button', { name: '预览 v2.0.0' })).not.toBeNull()
+    expect(screen.getByText('等待审核的独立凸透镜实验')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: '上传并提交审核' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: '贡献资源' })).toBeNull()
   })
 
   it('keeps one page header, tablist, and content region across every visible tab', () => {
@@ -179,6 +221,7 @@ describe('administrator shell', () => {
       '用户',
       '密码重置',
       '内容',
+      '实验审核',
       '反馈',
       '公告',
       '模型通道',

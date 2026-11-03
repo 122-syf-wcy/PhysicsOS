@@ -13,6 +13,7 @@ import {
   type ExperimentState,
 } from './domain.ts'
 import { prepareRecovery, readRecovery, clearRecovery } from './recovery.ts'
+import { experimentProfile } from './contract-v3.ts'
 
 export const ASSET_PREFIX = '/physicsos/experiment-assets'
 const embedPath = (raw: string): string =>
@@ -54,10 +55,10 @@ const rollbackWire = z
   .strict()
 export interface PackageView {
   id: string
-  experimentId: 'convex-lens'
+  experimentId: string
   version: string
-  schemaVersion: 1 | 2
-  protocolVersion: 1 | 2
+  schemaVersion: 1 | 2 | 3
+  protocolVersion: 1 | 2 | 3
   sha256: string
   status: 'pending' | 'approved' | 'rejected'
   author: { name: string; bio?: string; github?: string; avatarUrl?: string }
@@ -73,7 +74,7 @@ export interface ExperimentOptions {
   previewTtlMs?: number
 }
 export interface Asset {
-  protocolVersion: 1 | 2
+  protocolVersion: 1 | 2 | 3
   bytes: Buffer
   contentType: string
   scopePath: string
@@ -282,7 +283,7 @@ export class ExperimentService {
     }
   }
   private record(packageId: string): ExperimentPackageRecord {
-    const item = this.state().packages.find(row => row.id === packageId)
+    const item = this.state().packages.find((row) => row.id === packageId)
     if (!item) throw new ExperimentError(404, 'NOT_FOUND', '实验包不存在')
     return item
   }
@@ -290,32 +291,97 @@ export class ExperimentService {
     if (actor.role !== 'SUPER_ADMIN')
       throw new ExperimentError(403, 'FORBIDDEN', '只有平台管理员可以审核或回滚')
   }
-  list(actor: IdentityActor): {
+  private requireExperiment(experimentId: string): void {
+    if (!experimentProfile(experimentId))
+      throw new ExperimentError(400, 'UNSUPPORTED_EXPERIMENT', '实验未注册')
+  }
+  private activeId(state: ExperimentState, experimentId: string): string | null {
+    return experimentId === 'convex-lens'
+      ? state.activeId
+      : (state.activeByExperiment?.[experimentId] ?? null)
+  }
+  private activePointers(
+    state: ExperimentState,
+    experimentId: string,
+    packageId: string,
+  ): Pick<ExperimentState, 'activeId' | 'activeByExperiment'> {
+    return {
+      activeId: experimentId === 'convex-lens' ? packageId : state.activeId,
+      activeByExperiment: {
+        ...state.activeByExperiment,
+        'convex-lens': state.activeId,
+        [experimentId]: packageId,
+      },
+    }
+  }
+  reviewQueue(actor: IdentityActor): {
+    items: PackageView[]
+    activeByExperiment: Record<string, PackageView | null>
+    canReview: true
+  } {
+    this.requireAdmin(actor)
+    const state = this.state()
+    const activeByExperiment: Record<string, PackageView | null> = {}
+    for (const experimentId of new Set([
+      'convex-lens',
+      ...Object.keys(state.activeByExperiment ?? {}),
+    ])) {
+      const item = state.packages.find(
+        (row) =>
+          row.experimentId === experimentId &&
+          row.id === this.activeId(state, experimentId) &&
+          row.status === 'approved',
+      )
+      activeByExperiment[experimentId] = item ? this.view(item) : null
+    }
+    return {
+      items: state.packages
+        .slice()
+        .reverse()
+        .map((item) => this.view(item)),
+      activeByExperiment,
+      canReview: true,
+    }
+  }
+  list(
+    actor: IdentityActor,
+    experimentId = 'convex-lens',
+  ): {
     active: PackageView | null
     items: PackageView[]
     canReview: boolean
   } {
+    this.requireExperiment(experimentId)
     const state = this.state(),
       active = state.packages.find(
-        item => item.id === state.activeId && item.status === 'approved',
+        (item) =>
+          item.experimentId === experimentId &&
+          item.id === this.activeId(state, experimentId) &&
+          item.status === 'approved',
       )
     return {
       active: active ? this.view(active) : null,
       items: state.packages
         .filter(
-          item =>
-            actor.role === 'SUPER_ADMIN' ||
-            item.status === 'approved' ||
-            item.authorKey === actor.userKey,
+          (item) =>
+            item.experimentId === experimentId &&
+            (actor.role === 'SUPER_ADMIN' ||
+              item.status === 'approved' ||
+              item.authorKey === actor.userKey),
         )
         .slice()
         .reverse()
-        .map(item => this.view(item)),
+        .map((item) => this.view(item)),
       canReview: actor.role === 'SUPER_ADMIN',
     }
   }
-  async upload(actor: IdentityActor, body: unknown): Promise<PackageView> {
+  async upload(
+    actor: IdentityActor,
+    body: unknown,
+    experimentId = 'convex-lens',
+  ): Promise<PackageView> {
     this.state()
+    this.requireExperiment(experimentId)
     const parsed = uploadWire.safeParse(body)
     if (!parsed.success) throw badRequest()
     const input = parsed.data
@@ -323,6 +389,8 @@ export class ExperimentService {
       avatar = avatarOf(input.author.avatarDataUrl)
     return this.serialize(async () => {
       const validated = await validateArchive(archive)
+      if (validated.manifest.experimentId !== experimentId)
+        throw new ExperimentError(400, 'EXPERIMENT_MISMATCH', 'ZIP 清单与所选实验不一致')
       if (avatar) {
         if (validated.assets.has(avatar.path)) throw badRequest()
         validated.assets.set(avatar.path, avatar.bytes)
@@ -354,7 +422,7 @@ export class ExperimentService {
         await syncDirectory(this.root)
         const item: ExperimentPackageRecord = {
           id,
-          experimentId: 'convex-lens',
+          experimentId: validated.manifest.experimentId,
           version: validated.manifest.version,
           schemaVersion: validated.manifest.schemaVersion,
           protocolVersion: validated.manifest.protocolVersion,
@@ -394,6 +462,7 @@ export class ExperimentService {
       })
       const validated: ValidatedArchive = await validateArchive(archive, { allowLegacy: true })
       if (
+        validated.manifest.experimentId !== item.experimentId ||
         validated.manifest.version !== item.version ||
         validated.manifest.schemaVersion !== (item.schemaVersion ?? 1) ||
         validated.manifest.protocolVersion !== (item.protocolVersion ?? 1)
@@ -405,11 +474,19 @@ export class ExperimentService {
       throw new ExperimentError(409, 'INTEGRITY_MISMATCH', '冻结的实验文件校验失败')
     }
   }
-  /** Authenticated review material: the original frozen bytes, never the public dist boundary. */
-  async archive(actor: IdentityActor, packageId: string): Promise<Buffer> {
+  private archiveRecord(actor: IdentityActor, packageId: string): ExperimentPackageRecord {
     const item = this.record(packageId)
     if (actor.role !== 'SUPER_ADMIN' && item.authorKey !== actor.userKey)
       throw new ExperimentError(403, 'FORBIDDEN', '无权下载此实验包')
+    return item
+  }
+  archiveFilename(actor: IdentityActor, packageId: string): string {
+    const item = this.archiveRecord(actor, packageId)
+    return `${item.experimentId}-${item.id}.zip`
+  }
+  /** Authenticated review material: the original frozen bytes, never the public dist boundary. */
+  async archive(actor: IdentityActor, packageId: string): Promise<Buffer> {
+    const item = this.archiveRecord(actor, packageId)
     try {
       return await verifiedFile(join(this.root, item.id, 'archive.zip'), { sha256: item.sha256 })
     } catch {
@@ -447,7 +524,7 @@ export class ExperimentService {
         }
         await this.persistState({
           ...current,
-          packages: current.packages.map(row => (row.id === item.id ? updated : row)),
+          packages: current.packages.map((row) => (row.id === item.id ? updated : row)),
         })
         return this.view(updated)
       }
@@ -455,14 +532,16 @@ export class ExperimentService {
       const updated: ExperimentPackageRecord = { ...item, status: 'approved', publishedAt: now }
       const sequence = current.sequence + 1
       await this.persistState({
-        packages: current.packages.map(row => (row.id === item.id ? updated : row)),
-        activeId: item.id,
+        ...current,
+        packages: current.packages.map((row) => (row.id === item.id ? updated : row)),
+        ...this.activePointers(current, item.experimentId, item.id),
         sequence,
         releases: [
           ...current.releases,
           {
             sequence,
             packageId: item.id,
+            experimentId: item.experimentId,
             action: 'approve',
             actorKey: actor.userKey,
             createdAt: now,
@@ -472,30 +551,41 @@ export class ExperimentService {
       return this.view(updated)
     })
   }
-  async rollback(actor: IdentityActor, body: unknown): Promise<PackageView> {
+  async rollback(
+    actor: IdentityActor,
+    body: unknown,
+    experimentId = 'convex-lens',
+  ): Promise<PackageView> {
     this.requireAdmin(actor)
+    this.requireExperiment(experimentId)
     const input = rollbackWire.safeParse(body)
     if (!input.success) throw badRequest()
     return this.serialize(async () => {
       const current = this.state(),
         item = this.record(input.data.packageId)
       if (
-        current.activeId !== input.data.expectedActiveId ||
+        item.experimentId !== experimentId ||
+        this.activeId(current, experimentId) !== input.data.expectedActiveId ||
         item.status !== 'approved' ||
-        !current.releases.some(release => release.packageId === item.id)
+        !current.releases.some(
+          (release) =>
+            release.packageId === item.id &&
+            (release.experimentId ?? 'convex-lens') === experimentId,
+        )
       )
         throw new ExperimentError(409, 'VERSION_CONFLICT', '默认版本已改变或目标未发布')
       await this.verify(item)
       const sequence = current.sequence + 1
       await this.persistState({
         ...current,
-        activeId: item.id,
+        ...this.activePointers(current, experimentId, item.id),
         sequence,
         releases: [
           ...current.releases,
           {
             sequence,
             packageId: item.id,
+            experimentId,
             action: 'rollback',
             actorKey: actor.userKey,
             createdAt: new Date().toISOString(),
@@ -519,15 +609,15 @@ export class ExperimentService {
         this.previews.delete(match[3])
         return null
       }
-      item = this.state().packages.find(row => row.id === capability.packageId)
+      item = this.state().packages.find((row) => row.id === capability.packageId)
       scopePath = `${ASSET_PREFIX}/preview/${match[3]}/`
     } else {
       item = this.state().packages.find(
-        row => row.id === match[1] && row.sha256 === match[2] && row.status === 'approved',
+        (row) => row.id === match[1] && row.sha256 === match[2] && row.status === 'approved',
       )
       scopePath = `${ASSET_PREFIX}/releases/${match[1]}/${match[2]}/`
     }
-    const asset = item?.assets.find(asset => asset.name === name)
+    const asset = item?.assets.find((asset) => asset.name === name)
     if (!item || !asset) return null
     try {
       return {

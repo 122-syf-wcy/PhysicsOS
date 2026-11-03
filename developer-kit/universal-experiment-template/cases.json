@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 3,
+  "experimentId": "uniform-linear",
+  "source": "platform-engine",
+  "cases": [
+    {
+      "id": "default",
+      "input": {
+        "parameters": {
+          "mass": 1,
+          "speed": 4
+        },
+        "choices": {}
+      }
+    }
+  ]
+}

@@ -72,3 +72,13 @@ it('shows bounded actionable metadata issue paths and suggestions on failed uplo
     contributionApi.upload({ zipBase64: 'AA==', author: { name: '作者' } }),
   ).rejects.toThrow('parameters.json · parameters[0].unit：恢复生成的 cm 单位')
 })
+
+it('binds official and community releases to the requested experiment', () => {
+  const official = contributionReleaseIdentity(null, 'pinhole')
+  expect(official.experimentId).toBe('pinhole')
+  expect(official.id).toBe('physicsos-pinhole-v1')
+  const pending = { ...published, experimentId: 'pinhole', status: 'pending' as const }
+  expect(selectContributionRelease({ active: published, items: [published], canReview: false }, undefined, 'pinhole')).toBeUndefined()
+  expect(selectContributionRelease({ active: pending, items: [pending], canReview: false }, contributionReleaseIdentity(pending), 'pinhole')).toBeUndefined()
+  expect(selectContributionRelease(catalog, official, 'convex-lens')).toBeUndefined()
+})

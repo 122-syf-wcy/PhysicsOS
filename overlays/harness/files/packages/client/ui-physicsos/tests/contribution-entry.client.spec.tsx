@@ -41,7 +41,7 @@ it('renders the actual upload form as a normal page without dialog focus trappin
       <ContributionPanel embedded />
     </>,
   )
-  await screen.findByText('PhysicsOS 官方三维样板', { exact: false })
+  await screen.findByText('PhysicsOS 官方实验样板', { exact: false })
   expect(screen.queryByRole('dialog')).toBeNull()
   expect(screen.getByLabelText('实验文件 ZIP', { exact: false }).getAttribute('type')).toBe('file')
   expect(screen.getByRole('button', { name: '上传并提交审核' })).toBeTruthy()
@@ -87,7 +87,7 @@ it('uses the Chinese file action, shows selection details and removes the pendin
     vi.fn(async () => catalog()),
   )
   render(<ContributionPanel embedded />)
-  await screen.findByText('PhysicsOS 官方三维样板', { exact: false })
+  await screen.findByText('PhysicsOS 官方实验样板', { exact: false })
   const input = screen.getByLabelText('实验文件 ZIP', { exact: false }) as HTMLInputElement
   const openPicker = vi.spyOn(input, 'click').mockImplementation(() => {})
   fireEvent.click(screen.getByRole('button', { name: '选择 ZIP 文件', exact: true }))

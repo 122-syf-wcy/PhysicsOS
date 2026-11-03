@@ -3,6 +3,7 @@ import { ExperimentError, guard, auditWrites, type PhysicsosIdentity } from './i
 import { ASSET_PREFIX, type ExperimentService } from './service.ts'
 import { inlineImportMapHashes } from './archive.ts'
 import { experimentWrapper } from './embed.ts'
+import { experimentCatalog, experimentProfile } from './contract-v3.ts'
 
 const JSON_LIMIT = Math.ceil((20 * 1024 * 1024) / 3) * 4 + 400_000
 export interface RouteDeps {
@@ -103,12 +104,46 @@ export function experimentRoutes({
     try {
       const url = new URL(req.url ?? '/', 'http://local'),
         path = url.pathname
-      const method = req.method ?? 'GET',
-        identity = identityOf()
-      const floor =
-        method === 'POST' && path === '/physicsos/experiments/convex-lens/packages'
-          ? 'STUDENT'
-          : 'SUPER_ADMIN'
+      const method = req.method ?? 'GET'
+      if (method === 'GET' && path === '/physicsos/experiments/catalog') {
+        send(res, 200, { items: experimentCatalog })
+        return
+      }
+      const download = /^\/physicsos\/experiments\/([a-z0-9-]+)\/(template|developer-prompt)$/.exec(
+        path,
+      )
+      if (method === 'GET' && download?.[1]) {
+        if (!experimentProfile(download[1]))
+          throw new ExperimentError(404, 'NOT_FOUND', '实验模板未注册')
+        const { buildExperimentTemplate, experimentDeveloperPrompt } =
+          await import('./template-download.ts')
+        if (download[2] === 'template') {
+          const artifact = await buildExperimentTemplate(download[1])
+          res.writeHead(200, {
+            'content-type': 'application/zip',
+            'content-length': artifact.bytes.length,
+            'content-disposition': `attachment; filename="${artifact.filename}"`,
+            'cache-control': 'no-store',
+            'x-content-type-options': 'nosniff',
+            'referrer-policy': 'no-referrer',
+            etag: `"${artifact.sha256}"`,
+          })
+          res.end(artifact.bytes)
+        } else {
+          res.writeHead(200, {
+            'content-type': 'text/markdown; charset=utf-8',
+            'content-disposition': 'attachment; filename="AGENTS.md"',
+            'cache-control': 'no-store',
+            'x-content-type-options': 'nosniff',
+            'referrer-policy': 'no-referrer',
+          })
+          res.end(experimentDeveloperPrompt(download[1]))
+        }
+        return
+      }
+      const identity = identityOf()
+      const target = /^\/physicsos\/experiments\/([a-z0-9-]+)(?:\/(packages|rollback))?$/.exec(path)
+      const floor = method === 'POST' && target?.[2] === 'packages' ? 'STUDENT' : 'SUPER_ADMIN'
       const { actor, writes } = guard(identity, req, floor)
       if (writes) checkCsrf(req)
       if (writes && identity)
@@ -117,12 +152,16 @@ export function experimentRoutes({
             console.error('[experiment-host] audit write failed')
           })
         })
-      if (method === 'GET' && path === '/physicsos/experiments/convex-lens') {
-        send(res, 200, service.list(actor))
+      if (method === 'GET' && path === '/physicsos/experiments/review-queue') {
+        send(res, 200, service.reviewQueue(actor))
         return
       }
-      if (method === 'POST' && path === '/physicsos/experiments/convex-lens/packages') {
-        send(res, 201, { item: await service.upload(actor, await readJson(req)) })
+      if (method === 'GET' && target?.[1] && !target[2]) {
+        send(res, 200, service.list(actor, target[1]))
+        return
+      }
+      if (method === 'POST' && target?.[1] && target[2] === 'packages') {
+        send(res, 201, { item: await service.upload(actor, await readJson(req), target[1]) })
         return
       }
       const archive = /^\/physicsos\/experiments\/packages\/([^/]+)\/archive$/.exec(path)
@@ -131,7 +170,7 @@ export function experimentRoutes({
         res.writeHead(200, {
           'content-type': 'application/zip',
           'content-length': bytes.length,
-          'content-disposition': `attachment; filename="convex-lens-${archive[1]}.zip"`,
+          'content-disposition': `attachment; filename="${service.archiveFilename(actor, archive[1])}"`,
           'cache-control': 'no-store',
           'x-content-type-options': 'nosniff',
           'referrer-policy': 'no-referrer',
@@ -149,8 +188,8 @@ export function experimentRoutes({
         send(res, 200, { item: await service.review(actor, review[1], await readJson(req)) })
         return
       }
-      if (method === 'POST' && path === '/physicsos/experiments/convex-lens/rollback') {
-        send(res, 200, { item: await service.rollback(actor, await readJson(req)) })
+      if (method === 'POST' && target?.[1] && target[2] === 'rollback') {
+        send(res, 200, { item: await service.rollback(actor, await readJson(req), target[1]) })
         return
       }
       send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
@@ -199,9 +238,9 @@ export function experimentAssets({
       const embedded = url.pathname.startsWith(`${ASSET_PREFIX}/embed/`)
       const raw = embedded
         ? new URL(
-          url.pathname.replace(`${ASSET_PREFIX}/embed/`, `${ASSET_PREFIX}/`),
-          requestOrigin(req, service.assetOrigin),
-        )
+            url.pathname.replace(`${ASSET_PREFIX}/embed/`, `${ASSET_PREFIX}/`),
+            requestOrigin(req, service.assetOrigin),
+          )
         : url
       const asset = await service.asset(raw)
       if (!asset) {

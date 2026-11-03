@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { experimentRoutes, experimentAssets } from '../src/routes.ts'
+import { validateArchive } from '../src/archive.ts'
 import {
   admin,
   contributor,
@@ -22,6 +23,7 @@ import {
   type ErrorEnvelope,
 } from './fixtures.ts'
 import { host } from './support.ts'
+import { universalFiles } from './universal-fixtures.ts'
 let loaded: Awaited<ReturnType<typeof host>> | undefined
 let root: string
 let server: ReturnType<typeof createServer> | undefined
@@ -43,7 +45,7 @@ async function setup() {
   server = createServer((req, res) => {
     void (req.url?.startsWith('/physicsos/experiment-assets') ? assets(req, res) : api(req, res))
   })
-  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
+  await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve))
   const port = (server.address() as { port: number }).port,
     base = `http://127.0.0.1:${port}`
   return {
@@ -266,7 +268,7 @@ describe('experiment REST and credential-free asset boundary', () => {
     expect(response.status).toBe(200)
     const csp = response.headers.get('content-security-policy')!
     expect(csp.includes(`'sha256-${createHash('sha256').update(map).digest('base64')}'`)).toBe(true)
-    expect(csp.split(';').find(part => part.trim().startsWith('script-src '))).not.toContain(
+    expect(csp.split(';').find((part) => part.trim().startsWith('script-src '))).not.toContain(
       'unsafe-inline',
     )
   })
@@ -282,7 +284,7 @@ describe('experiment REST and credential-free asset boundary', () => {
     expect(
       csp
         .split(';')
-        .find(part => part.trim().startsWith('frame-src '))
+        .find((part) => part.trim().startsWith('frame-src '))
         ?.trim() === `frame-src ${raw.origin}${raw.pathname}`,
     ).toBe(true)
     expect(csp.includes('sandbox allow-scripts allow-same-origin')).toBe(true)
@@ -422,8 +424,8 @@ function trustedScript(html: string): string {
     const node = nodes.pop()!
     if ('tagName' in node && node.tagName === 'script')
       return node.childNodes
-        .filter(child => child.nodeName === '#text')
-        .map(child => ('value' in child ? child.value : ''))
+        .filter((child) => child.nodeName === '#text')
+        .map((child) => ('value' in child ? child.value : ''))
         .join('')
     if ('childNodes' in node) nodes.push(...node.childNodes)
   }
@@ -454,5 +456,67 @@ describe('V2 intake diagnostics over REST', () => {
       },
     })
     expect(JSON.stringify(value)).not.toContain('private-sensitive-value')
+  })
+})
+
+describe('registered experiment routes', () => {
+  it('serves the complete catalog and restricts the cross-experiment review queue to SUPER_ADMIN', async () => {
+    const { call } = await setup()
+    const catalog = await call('/catalog')
+    expect(catalog.status).toBe(200)
+    const profileList = await jsonOf<{ items: { id: string }[] }>(catalog)
+    expect(profileList.items).toHaveLength(76)
+    expect(profileList.items.some((item) => item.id === 'pinhole')).toBe(true)
+    for (const actor of ['contributor', 'schoolAdmin'])
+      expect((await call('/review-queue', undefined, actor)).status).toBe(403)
+    expect((await call('/review-queue', undefined, 'admin')).status).toBe(200)
+  })
+  it('uploads, previews and publishes V3 for its exact selected experiment without changing lens', async () => {
+    const { base, call } = await setup()
+    const archive = zip(Object.entries(universalFiles()).map(([name, data]) => ({ name, data })))
+    const wrongTarget = await call('/convex-lens/packages', uploadBody(archive))
+    expect(wrongTarget.status).toBe(400)
+    expect((await jsonOf<ErrorEnvelope>(wrongTarget)).error.code).toBe('EXPERIMENT_MISMATCH')
+    const response = await call('/pinhole/packages', uploadBody(archive))
+    expect(response.status).toBe(201)
+    const { item } = await jsonOf<ItemEnvelope>(response)
+    expect(item.experimentId).toBe('pinhole')
+    const frozenZip = await call(`/packages/${item.id}/archive`)
+    expect(frozenZip.headers.get('content-disposition')).toBe(
+      `attachment; filename="pinhole-${item.id}.zip"`,
+    )
+    const { entryUrl } = await jsonOf<PreviewEnvelope>(await call(`/packages/${item.id}/preview`))
+    const wrapper = await (await fetch(new URL(entryUrl, base))).text()
+    expect(wrapper).toContain('const protocolVersion = 3;')
+    expect(wrapper).toContain('sandbox="allow-scripts"')
+    const reviewed = await call(
+      `/packages/${item.id}/review`,
+      { action: 'approve', expectedSha256: item.sha256 },
+      'admin',
+    )
+    expect(reviewed.status).toBe(200)
+    expect((await jsonOf<ListEnvelope>(await call('/pinhole'))).active?.id).toBe(item.id)
+    expect((await jsonOf<ListEnvelope>(await call('/convex-lens'))).active).toBeNull()
+    expect((await call('/invented-experiment/packages', uploadBody())).status).toBe(400)
+  })
+})
+
+describe('registered public template downloads', () => {
+  it('downloads a trusted V3 template and prompt anonymously while refusing unknown IDs', async () => {
+    const { call } = await setup()
+    const response = await call('/pinhole/template', undefined, 'anonymous')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('application/zip')
+    const bytes = Buffer.from(await response.arrayBuffer())
+    expect(response.headers.get('etag')).toBe(
+      `"${createHash('sha256').update(bytes).digest('hex')}"`,
+    )
+    const validated = await validateArchive(bytes)
+    expect(validated.manifest).toMatchObject({ experimentId: 'pinhole', protocolVersion: 3 })
+    const prompt = await call('/pinhole/developer-prompt', undefined, 'anonymous')
+    expect(prompt.status).toBe(200)
+    expect(prompt.headers.get('content-type')).toBe('text/markdown; charset=utf-8')
+    expect(await prompt.text()).toContain('pinhole')
+    expect((await call('/invented-experiment/template', undefined, 'anonymous')).status).toBe(404)
   })
 })

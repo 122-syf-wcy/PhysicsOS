@@ -1,0 +1,18 @@
+{
+  "name": "physicsos-universal-experiment",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "engines": { "node": ">=24.7.0" },
+  "scripts": {
+    "configure": "node tools/configure.mjs",
+    "check": "node tools/check.mjs && node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "node tools/build.mjs",
+    "dev": "node tools/dev.mjs",
+    "validate:package": "node tools/validate.mjs",
+    "release": "node tools/release.mjs",
+    "pack": "node tools/release.mjs"
+  },
+  "dependencies": { "zod": "4.6.7", "parse5": "8.0.1", "es-module-lexer": "2.1.0" }
+}

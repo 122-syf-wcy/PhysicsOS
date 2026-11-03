@@ -77,6 +77,7 @@ import {
 import { GlassSelect } from './GlassSelect.tsx'
 import css from './LabWorkspace.module.css'
 import { useExperimentSession } from './experiments/use-experiment-session.ts'
+import { CommunityWorkspaceCanvas } from './experiments/CommunityWorkspaceCanvas.tsx'
 
 type Translate = (key: PhysicsosKey) => string
 
@@ -107,6 +108,8 @@ const failureMessage = (
 const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
 
 export interface PhysicsWorkspaceProps {
+  /** Exact template identity; approved packages replace only this experiment's canvas. */
+  readonly experimentId?: string
   readonly onSceneChange?: (scene: import('@physicsos/physics-scene').PhysicsScene) => void
   readonly runtime: WorkspaceRuntime
   readonly t: Translate
@@ -153,6 +156,7 @@ export interface PhysicsWorkspaceProps {
  * re-renders the whole tree.
  */
 export function PhysicsWorkspace({
+  experimentId,
   runtime,
   onSceneChange,
   t,
@@ -163,7 +167,7 @@ export function PhysicsWorkspace({
   buildMode,
   experimentMeta,
 }: PhysicsWorkspaceProps) {
-  const { snapshot, commit, frameSource } = useExperimentSession(runtime, onSceneChange)
+  const { session, snapshot, commit, frameSource } = useExperimentSession(runtime, onSceneChange)
   const [selected, setSelected] = useState('scene')
   /* The canvas owns the bench: the data strip stays a handle until asked.
      The tab still defaults to charts when they exist, so expanding lands
@@ -841,14 +845,18 @@ export function PhysicsWorkspace({
             >
               {/* The canvas is the renderer: it subscribes to the frame source
                   directly, so animation frames re-render only this subtree (#123). */}
-              <CanvasFrame
+              {experimentId === undefined ? <CanvasFrame
                 source={frameSource}
                 ariaLabel={snapshot.ariaLabel}
                 onSeekTime={seek}
                 {...(componentDrag === undefined ? {} : { componentDrag })}
                 {...(componentControl === undefined ? {} : { componentControl })}
                 {...(componentWiring === undefined ? {} : { componentWiring })}
-              />
+              /> : <CommunityWorkspaceCanvas experimentId={experimentId} session={session}
+                fallback={<CanvasFrame source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
+                  {...(componentDrag === undefined ? {} : { componentDrag })}
+                  {...(componentControl === undefined ? {} : { componentControl })}
+                  {...(componentWiring === undefined ? {} : { componentWiring })} />} />}
             </section>
 
             {/* The timeline row is only real where a run window exists. Hiding

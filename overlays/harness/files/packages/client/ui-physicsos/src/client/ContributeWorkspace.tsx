@@ -35,7 +35,7 @@ export function ContributeWorkspace({ t }: Pick<ProductSurfaceBaseProps, 't'>): 
         />
       </header>
       <div className={css.supported}>
-        <strong>{t('contribute.supported')}</strong>
+        <strong>全部 76 个已有实验均支持上传与审核</strong>
         <a href={experimentHref('convex-lens')}>{t('contribute.openExperiment')} →</a>
       </div>
       <ContributionPanel embedded />

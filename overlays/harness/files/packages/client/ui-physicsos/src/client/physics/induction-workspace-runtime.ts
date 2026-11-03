@@ -412,8 +412,8 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         value: model === undefined
           ? Number.NaN
           : Number.parseFloat(model.resistance.toFixed(2)),
-        min: 0.5,
-        step: 0.5,
+        min: isDoubleBar ? 0.01 : 0.5,
+        step: isDoubleBar ? 0.01 : 0.5,
         highlights: bench.id,
       },
     ]

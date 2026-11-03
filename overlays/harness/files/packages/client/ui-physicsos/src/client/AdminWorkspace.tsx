@@ -15,6 +15,7 @@ import type { NoticeApi } from './notice-api.ts'
 import { AdminContentTab } from './AdminContentTab.tsx'
 import { AdminDashboardTab } from './AdminDashboardTab.tsx'
 import { AdminDeviceTab } from './AdminDeviceTab.tsx'
+import { AdminExperimentTab } from './AdminExperimentTab.tsx'
 import { AdminModelPoolTab } from './AdminModelPoolTab.tsx'
 import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
@@ -50,6 +51,7 @@ type Tab =
   | 'users'
   | 'resets'
   | 'content'
+  | 'experimentReview'
   | 'notice'
   | 'platformNotice'
   | 'developerPrompts'
@@ -130,6 +132,9 @@ export function AdminWorkspace({
     { id: 'resets' as const, label: t('admin.tab.resets'), group: 'people' as const },
     { id: 'devices' as const, label: t('admin.tab.devices'), group: 'people' as const },
     ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content'), group: 'content' as const }]),
+    ...(isSuper
+      ? [{ id: 'experimentReview' as const, label: t('admin.tab.experimentReview'), group: 'content' as const }]
+      : []),
     ...(noticeApi === undefined ? [] : [{ id: 'notice' as const, label: t('admin.tab.notice'), group: 'content' as const }]),
     ...(noticeApi === undefined || !isSuper
       ? []
@@ -178,6 +183,7 @@ export function AdminWorkspace({
         {active === 'content' && paperApi !== undefined && (
           <AdminContentTab api={paperApi} reviewer={username} t={t} />
         )}
+        {active === 'experimentReview' && isSuper && <AdminExperimentTab t={t} />}
         {active === 'notice' && noticeApi !== undefined && (
           <AdminNoticeTab api={noticeApi} t={t} />
         )}

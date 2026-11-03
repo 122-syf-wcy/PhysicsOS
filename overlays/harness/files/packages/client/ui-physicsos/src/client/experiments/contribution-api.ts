@@ -13,8 +13,8 @@ export interface ExperimentPackageView {
   readonly id: string
   readonly experimentId: string
   readonly version: string
-  readonly schemaVersion?: 1 | 2
-  readonly protocolVersion?: 1 | 2
+  readonly schemaVersion?: 1 | 2 | 3
+  readonly protocolVersion?: 1 | 2 | 3
   readonly sha256: string
   readonly status: 'pending' | 'approved' | 'rejected'
   readonly author: ContributionAuthor
@@ -29,6 +29,7 @@ export interface ContributionCatalog {
   readonly active: ExperimentPackageView | null
   readonly items: readonly ExperimentPackageView[]
   readonly canReview: boolean
+  readonly activeByExperiment?: Readonly<Record<string, ExperimentPackageView | null>>
 }
 
 export interface ContributionInput {
@@ -38,12 +39,12 @@ export interface ContributionInput {
 }
 
 /** Bundled renderers have a distinct identity; never invent a content hash for them. */
-export function contributionReleaseIdentity(item: ExperimentPackageView | null): ReleaseIdentity {
+export function contributionReleaseIdentity(item: ExperimentPackageView | null, experimentId = 'convex-lens'): ReleaseIdentity {
   return item === null
     ? {
       kind: 'official',
-      id: 'physicsos-convex-lens-v1',
-      experimentId: 'convex-lens',
+      id: `physicsos-${experimentId}-v1`,
+      experimentId,
       version: '1.0.0',
     }
     : {
@@ -58,10 +59,12 @@ export function contributionReleaseIdentity(item: ExperimentPackageView | null):
 export function selectContributionRelease(
   catalog: ContributionCatalog,
   pinned?: ReleaseIdentity,
+  experimentId = 'convex-lens',
 ): ExperimentPackageView | null | undefined {
+  if (pinned !== undefined && pinned.experimentId !== experimentId) return undefined
   if (pinned?.kind === 'official') return null
-  if (pinned === undefined) return catalog.active
-  return catalog.items.find(item => item.id === pinned.id && item.sha256 === pinned.sha256)
+  if (pinned === undefined) return catalog.active === null ? null : catalog.active.experimentId === experimentId && catalog.active.status === 'approved' ? catalog.active : undefined
+  return catalog.items.find(item => item.id === pinned.id && item.sha256 === pinned.sha256 && item.experimentId === experimentId && item.status === 'approved')
 }
 
 /** Approved assets are public; only drafts require the owner/admin preview capability. */
@@ -120,9 +123,12 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const contributionApi = {
-  catalog: (): Promise<ContributionCatalog> => request('/convex-lens'),
-  upload: (input: ContributionInput): Promise<{ item: ExperimentPackageView }> =>
-    request('/convex-lens/packages', input),
+  registry: (): Promise<{ items: readonly { id: string; label: string; domain: string }[] }> => request('/catalog'),
+  reviewQueue: (): Promise<ContributionCatalog> => request<Omit<ContributionCatalog, 'active'>>('/review-queue').then(data => ({ ...data, active: null })),
+  catalog: (experimentId = 'convex-lens'): Promise<ContributionCatalog> =>
+    request(`/${encodeURIComponent(experimentId)}`),
+  upload: (input: ContributionInput, experimentId = 'convex-lens'): Promise<{ item: ExperimentPackageView }> =>
+    request(`/${encodeURIComponent(experimentId)}/packages`, input),
   preview: (id: string): Promise<{ entryUrl: string }> =>
     request(`/packages/${encodeURIComponent(id)}/preview`),
   review: (
@@ -138,8 +144,9 @@ export const contributionApi = {
   rollback: (
     packageId: string,
     expectedActiveId: string,
+    experimentId = 'convex-lens',
   ): Promise<{ item: ExperimentPackageView }> =>
-    request('/convex-lens/rollback', { packageId, expectedActiveId }),
+    request(`/${encodeURIComponent(experimentId)}/rollback`, { packageId, expectedActiveId }),
 }
 
 /** Browser file bytes, bounded before a potentially large allocation. */

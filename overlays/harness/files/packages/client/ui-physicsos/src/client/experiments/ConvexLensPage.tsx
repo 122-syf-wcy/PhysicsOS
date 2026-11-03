@@ -302,6 +302,7 @@ export function ConvexLensPage({
             ) : release?.entryUrl ? (
               <CommunityExperimentFrame
                 key={release.id}
+                experimentId="convex-lens"
                 entryUrl={release.entryUrl}
                 protocolVersion={release.protocolVersion ?? 1}
                 session={session}

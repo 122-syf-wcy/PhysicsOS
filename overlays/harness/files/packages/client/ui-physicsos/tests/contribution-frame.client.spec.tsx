@@ -6,6 +6,8 @@ import { createConvexLensScene } from '@physicsos/physics-scene'
 import { createOpticsWorkspaceRuntime } from '../src/client/physics/optics-workspace-runtime.ts'
 import { createExperimentSession } from '../src/client/experiments/experiment-session.ts'
 import { CommunityExperimentFrame } from '../src/client/experiments/CommunityExperimentFrame.tsx'
+import { findExperimentTemplate } from '../src/client/physics/experiment-templates.ts'
+import { buildWorkspaceRuntime } from '../src/client/physics/build-workspace-runtime.ts'
 
 afterEach(() => {
   cleanup()
@@ -82,7 +84,7 @@ it('does not grant the trusted wrapper sandbox to raw package HTML', () => {
 })
 
 // A controllable port keeps timeout and stale-instance assertions deterministic.
-function bindV2(view: ReturnType<typeof render>) {
+function bindV2(view: ReturnType<typeof render>, protocolVersion: 2 | 3 = 2) {
   const frame = view.getByTitle('社区三维实验') as HTMLIFrameElement
   const outbound: Record<string, unknown>[] = []
   let closed = false
@@ -114,13 +116,13 @@ function bindV2(view: ReturnType<typeof render>) {
         origin: location.origin,
         data: {
           type: 'experiment/ready',
-          protocolVersion: 2,
+          protocolVersion,
           channel: new URL(frame.src).searchParams.get('channel'),
         },
       }),
     )
   })
-  message({ type: 'experiment/connected', protocolVersion: 2 })
+  message({ type: 'experiment/connected', protocolVersion })
   return { outbound, message, closed: () => closed }
 }
 function v2Frame() {
@@ -230,4 +232,76 @@ it('V2 rejects harmless extra intent fields while accepting the exact bounded in
   expect(fixture.runtime.getScene().revision).toBe(0)
   fixture.message({ type: 'parameter/commit', id: 'objectDistanceCm', value: 15 })
   expect(fixture.runtime.getScene().revision).toBe(1)
+})
+
+function v3Frame() {
+  const template = findExperimentTemplate('incline')!
+  const runtime = buildWorkspaceRuntime(template.domain, template.createScene('斜面实验').scene)!
+  const session = createExperimentSession(runtime)
+  const status = vi.fn()
+  const view = render(
+    <CommunityExperimentFrame
+      entryUrl="/physicsos/experiment-assets/embed/releases/p/hash/dist/index.html"
+      session={session}
+      experimentId="incline"
+      protocolVersion={3}
+      onStatusChange={status}
+    />,
+  )
+  return { runtime, session, view, status, ...bindV2(view, 3) }
+}
+it('V3 publishes the selected non-lens engine and requires its exact first rendered frame', () => {
+  const fixture = v3Frame()
+  const first = fixture.outbound[0]!
+  expect(first).toMatchObject({ type: 'experiment/snapshot', protocolVersion: 3,
+    snapshot: { experimentId: 'incline', domain: 'mechanics', source: 'platform-engine', revision: 0 } })
+  expect(fixture.status).toHaveBeenLastCalledWith('loading')
+  const ack = { type: 'experiment/rendered', protocolVersion: 3, frameId: first.frameId, revision: 0 }
+  fixture.message({ ...ack, protocolVersion: 2 })
+  fixture.message({ ...ack, frameId: 'stale-instance' })
+  fixture.message({ ...ack, revision: 1 })
+  expect(fixture.status).toHaveBeenLastCalledWith('loading')
+  fixture.message(ack)
+  expect(fixture.status).toHaveBeenLastCalledWith('ready')
+  fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 30 })
+  expect(fixture.runtime.getScene?.()?.revision).toBe(1)
+  expect(fixture.outbound[1]).toMatchObject({ protocolVersion: 3, snapshot: { revision: 1 } })
+  fixture.message({ type: 'experiment/error', protocolVersion: 3, code: 'RENDER_FAILED' })
+  expect(fixture.status).toHaveBeenLastCalledWith('failed')
+  expect(fixture.closed()).toBe(true)
+  fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 40 })
+  expect(fixture.runtime.getScene?.()?.revision).toBe(1)
+})
+it('V3 times out on connection without rendering, and revokes commands on unmount', () => {
+  vi.useFakeTimers()
+  try {
+    const fixture = v3Frame()
+    act(() => { vi.advanceTimersByTime(15000) })
+    expect(fixture.status).toHaveBeenLastCalledWith('failed')
+    fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 30 })
+    expect(fixture.runtime.getScene?.()?.revision).toBe(0)
+    fixture.view.unmount()
+    fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 40 })
+    expect(fixture.runtime.getScene?.()?.revision).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+it('V3 rejects extra intent fields and limits the live port to 120 actions per second', () => {
+  vi.spyOn(performance, 'now').mockReturnValue(100)
+  const fixture = v3Frame()
+  fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 30, ignored: true })
+  expect(fixture.runtime.getScene?.()?.revision).toBe(0)
+  for (let i = 0; i < 130; i++) fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 30 })
+  expect(fixture.runtime.getScene?.()?.revision).toBe(119)
+  vi.spyOn(performance, 'now').mockReturnValue(1101)
+  fixture.message({ type: 'parameter/commit', protocolVersion: 3, id: 'angle', value: 40 })
+  expect(fixture.runtime.getScene?.()?.revision).toBe(120)
+})
+it('V3 publishes animation frames without waiting for the throttled workspace summary', () => {
+  const fixture = v3Frame()
+  const summary = fixture.session.getSnapshot()
+  act(() => {
+    fixture.session.frames.set({ ...summary, clock: { ...summary.clock, time: 0.1 } })
+  })
+  expect(fixture.session.getSnapshot().clock.time).toBe(0)
+  expect(fixture.outbound.at(-1)?.snapshot).toMatchObject({ clock: { time: 0.1 } })
 })

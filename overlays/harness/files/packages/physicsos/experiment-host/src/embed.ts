@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 /** Platform-owned bootstrap only. Contributor text is never interpolated into this script. */
-const bootstrapFor = (protocolVersion: 1 | 2): string => `(() => {
+const bootstrapFor = (protocolVersion: 1 | 2 | 3): string => `(() => {
   'use strict';
   const protocolVersion = ${protocolVersion};
   const inner = document.getElementById('experiment');
@@ -46,7 +46,7 @@ const attribute = (text: string): string =>
     .replaceAll('>', '&gt;')
 export function experimentWrapper(
   raw: URL,
-  protocolVersion: 1 | 2 = 1,
+  protocolVersion: 1 | 2 | 3 = 1,
 ): { bytes: Buffer; csp: string } {
   const bootstrap = bootstrapFor(protocolVersion)
   const csp = [

@@ -3,13 +3,14 @@ import css from './ContributionPanel.module.css'
 
 interface FilePickerProps {
   kind: 'zip' | 'avatar'
+  experimentName?: string
   file: File | undefined
   disabled: boolean
   onChange: (file: File | undefined) => void
 }
 
 /** Keep the native chooser; give its trigger and selected file a readable, shared material. */
-export function ContributionFilePicker({ kind, file, disabled, onChange }: FilePickerProps) {
+export function ContributionFilePicker({ kind, file, disabled, onChange, experimentName = '凸透镜成像规律' }: FilePickerProps) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -102,7 +103,7 @@ export function ContributionFilePicker({ kind, file, disabled, onChange }: FileP
       </div>
       <small id={`${id}-hint`}>
         {zip
-          ? '上传模板构建后 release 目录中的 ZIP，适用于凸透镜成像规律。'
+          ? `上传模板构建后 release 目录中的 ZIP，适用于${experimentName}。`
           : '填写 GitHub 主页时优先显示 GitHub 头像。'}
       </small>
     </div>

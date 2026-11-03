@@ -1,0 +1,5 @@
+[
+  {"path":"dist/assets/*","name":"PhysicsOS reference assets","license":"Apache-2.0","source":"original","notice":"LICENSE"},
+  {"path":"dist/vendor/*","name":"Frozen PhysicsOS reference renderer","license":"Apache-2.0","source":"original","notice":"LICENSE"},
+  {"path":"dist/vendor/*","name":"Bundled React, React DOM and clsx","license":"MIT","source":"https://github.com/facebook/react","notice":"dist/vendor/RENDERER-LICENSES.txt"}
+]

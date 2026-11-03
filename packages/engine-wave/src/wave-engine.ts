@@ -662,6 +662,7 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
     objects.push({
       id: waveMarkerId(model.benchId),
       position: quantityVector({ x: markerX + markerDisplacement, y: 0, z: 0 }, 'm', 'length'),
+      values: { displacement: metres(markerDisplacement) },
       velocity: quantityVector(
         { x: longitudinalParticleVelocityAt(model, markerX, timeSeconds), y: 0, z: 0 },
         'm/s',

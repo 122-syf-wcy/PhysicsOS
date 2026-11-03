@@ -1,11 +1,14 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { createConvexLensScene } from '@physicsos/physics-scene'
-import { createOpticsWorkspaceRuntime } from '../physics/optics-workspace-runtime.ts'
-import { useExperimentSession } from './use-experiment-session.ts'
-import { LensControls } from './LensControls.tsx'
-import { CommunityExperimentFrame, type CommunityFrameStatus } from './CommunityExperimentFrame.tsx'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { CommunityFrameStatus } from './CommunityExperimentFrame.tsx'
+import { ExperimentCandidatePreview } from './ExperimentCandidatePreview.tsx'
 import { ContributionFilePicker } from './ContributionFilePicker.tsx'
+import { GlassSelect } from '../GlassSelect.tsx'
+import {
+  canUploadExperiment,
+  contributionTargets,
+  DEFAULT_CONTRIBUTION_EXPERIMENT,
+} from './contribution-targets.ts'
 import {
   contributionApi,
   contributionPreviewUrl,
@@ -54,51 +57,20 @@ export function ContributionAuthorBadge({
   )
 }
 
-function CandidatePreview({
-  entryUrl,
-  protocolVersion,
-  onStatusChange,
-}: {
-  entryUrl: string
-  protocolVersion?: 1 | 2
-  onStatusChange: (status: CommunityFrameStatus) => void
-}) {
-  const runtime = useMemo(() => createOpticsWorkspaceRuntime(createConvexLensScene()), [])
-  const { session, snapshot } = useExperimentSession(runtime)
-  const previewView = useRef<HTMLElement>(null)
-  useEffect(() => {
-    // Offscreen opaque frames can have animation frames suspended by the browser.
-    // Bring the selected renderer into view so its first draw can complete.
-    previewView.current?.scrollIntoView({ block: 'start' })
-  }, [])
-  return (
-    <section ref={previewView} className={css.preview} aria-label="候选实验预览">
-      <CommunityExperimentFrame
-        entryUrl={entryUrl}
-        protocolVersion={protocolVersion ?? 1}
-        onStatusChange={onStatusChange}
-        session={session}
-        title="候选三维实验"
-      />
-      <aside>
-        <h3>验证实验条件</h3>
-        <LensControls
-          snapshot={snapshot}
-          preview={session.previewParameter}
-          commit={session.commitParameter}
-          cancel={session.cancelPreview}
-        />
-        <p>此预览使用独立实验条件，不会改变你正在操作的实验。</p>
-      </aside>
-    </section>
-  )
-}
-
-type ContributionPanelProps =
+type ContributionPanelProps = (
   { embedded: true; onClose?: never } | { embedded?: false; onClose: () => void }
+) & { mode?: 'upload' | 'review' }
 
 /** Shared workflow: the contribution page and experiment dialog use the same state and API. */
-export function ContributionPanel({ onClose, embedded = false }: ContributionPanelProps) {
+export function ContributionPanel({
+  onClose,
+  embedded = false,
+  mode = 'upload',
+}: ContributionPanelProps) {
+  const reviewOnly = mode === 'review'
+  const [experimentId, setExperimentId] = useState(DEFAULT_CONTRIBUTION_EXPERIMENT)
+  const [reviewFilter, setReviewFilter] = useState('pending')
+  const [reviewExperiment, setReviewExperiment] = useState('all')
   const dialog = useRef<HTMLDivElement>(null)
   const [catalog, setCatalog] = useState<ContributionCatalog>()
   const [error, setError] = useState('')
@@ -123,10 +95,14 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
   const [reason, setReason] = useState('')
   const [rollback, setRollback] = useState<ExperimentPackageView>()
   const alive = useRef(true)
+  const catalogSequence = useRef(0)
 
   const refresh = async (): Promise<void> => {
-    const data = await contributionApi.catalog()
-    if (alive.current) setCatalog(data)
+    const token = ++catalogSequence.current
+    const data = await (reviewOnly
+      ? contributionApi.reviewQueue()
+      : contributionApi.catalog(experimentId))
+    if (alive.current && token === catalogSequence.current) setCatalog(data)
   }
   useEffect(() => {
     alive.current = true
@@ -137,9 +113,10 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
     })
     return () => {
       alive.current = false
+      catalogSequence.current++
       if (!embedded && previous instanceof HTMLElement) previous.focus()
     }
-  }, [embedded])
+  }, [embedded, experimentId, reviewOnly])
 
   const run = async (action: () => Promise<void>): Promise<void> => {
     if (busy) return
@@ -158,22 +135,29 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
   const submit = (event: FormEvent): void => {
     event.preventDefault()
     void run(async () => {
+      if (!canUploadExperiment(experimentId))
+        throw new Error('该实验尚未开放上传，请选择已开放的实验。')
       if (file === undefined) throw new Error('请选择实验 ZIP 文件')
       const data = await contributionFileData(file, 20 * 1024 * 1024)
       const avatarDataUrl =
         avatar === undefined ? undefined : await contributionFileData(avatar, 256 * 1024)
-      await contributionApi.upload({
-        zipBase64: data.slice(data.indexOf(',') + 1),
-        author: {
-          name: name.trim(),
-          ...(bio.trim() ? { bio: bio.trim() } : {}),
-          ...(github.trim() ? { github: github.trim() } : {}),
-          ...(avatarDataUrl ? { avatarDataUrl } : {}),
+      await contributionApi.upload(
+        {
+          zipBase64: data.slice(data.indexOf(',') + 1),
+          author: {
+            name: name.trim(),
+            ...(bio.trim() ? { bio: bio.trim() } : {}),
+            ...(github.trim() ? { github: github.trim() } : {}),
+            ...(avatarDataUrl ? { avatarDataUrl } : {}),
+          },
+          ...(note.trim() ? { note: note.trim() } : {}),
         },
-        ...(note.trim() ? { note: note.trim() } : {}),
-      })
+        experimentId,
+      )
       if (!alive.current) return
-      setNotice('实验文件已提交，审核通过后会自动成为凸透镜实验的默认版本。')
+      setNotice(
+        `实验文件已提交，审核通过后会自动成为${contributionTargets.find(item => item.value === experimentId)?.label ?? '对应实验'}的默认版本。`,
+      )
       await refresh()
     })
   }
@@ -192,7 +176,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
     if (
       preview === undefined ||
       (action === 'approve' &&
-        preview.item.protocolVersion === 2 &&
+        (preview.item.protocolVersion ?? 1) !== 1 &&
         (previewStatus?.instance !== preview.instance || previewStatus.status !== 'ready'))
     )
       return
@@ -214,7 +198,16 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
           ? current
           : {
             ...current,
-            active: action === 'approve' ? item : current.active,
+            active:
+                action === 'approve' && item.experimentId === experimentId ? item : current.active,
+            ...(action === 'approve'
+              ? {
+                activeByExperiment: {
+                  ...current.activeByExperiment,
+                  [item.experimentId]: item,
+                },
+              }
+              : {}),
             items: current.items.map(row => (row.id === item.id ? item : row)),
           },
       )
@@ -222,14 +215,42 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
       await refresh()
     })
   }
+  if (reviewOnly && catalog && !catalog.canReview) {
+    return (
+      <div className={css.error} role="alert">
+        只有平台管理员可以查看实验审核队列，请检查当前登录账号。
+      </div>
+    )
+  }
+  const activeFor = (id: string): ExperimentPackageView | null =>
+    catalog?.activeByExperiment?.[id] ??
+    (catalog?.active?.experimentId === id ? catalog.active : null)
+  const visibleItems = catalog?.items.filter(
+    item =>
+      !reviewOnly ||
+      ((reviewFilter === 'all' || item.status === reviewFilter) &&
+        (reviewExperiment === 'all' || item.experimentId === reviewExperiment)),
+  )
+  const selectedLabel =
+    contributionTargets.find(item => item.value === experimentId)?.label ?? experimentId
+  const rollbackActive = rollback === undefined ? null : activeFor(rollback.experimentId)
+  const canRollback = (item: ExperimentPackageView): boolean => {
+    const active = activeFor(item.experimentId)
+    return (
+      catalog?.canReview === true &&
+      item.status === 'approved' &&
+      active !== null &&
+      active.id !== item.id
+    )
+  }
   const panel = (
     <div
       ref={dialog}
-      className={`${css.dialog}${embedded ? ` ${css.embedded}` : ''}`}
+      className={`${css.dialog}${embedded ? ` ${css.embedded}` : ''}${reviewOnly ? ` ${css.reviewOnly}` : ''}`}
       role={embedded ? 'region' : 'dialog'}
       aria-modal={embedded ? undefined : true}
       aria-labelledby={embedded ? undefined : 'contribution-title'}
-      aria-label={embedded ? '凸透镜实验上传与审核' : undefined}
+      aria-label={embedded ? (reviewOnly ? '实验审核队列' : '实验上传与审核') : undefined}
       tabIndex={embedded ? undefined : -1}
       onKeyDown={(event) => {
         if (embedded) return
@@ -259,7 +280,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
         <header className={css.header}>
           <div>
             <span>PHYSICSOS · 开发者社区</span>
-            <h2 id="contribution-title">贡献凸透镜实验</h2>
+            <h2 id="contribution-title">贡献实验</h2>
             <p>上传独立实验文件，让你的三维装置进入课堂。</p>
           </div>
           <button type="button" onClick={onClose} aria-label="关闭贡献实验">
@@ -278,123 +299,204 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
             {notice}
           </p>
         ) : null}
-        <nav className={css.links} aria-label="贡献资源">
-          <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
-            <img
-              src="/physicsos/developers/assets/studio/icon-review.webp"
-              width="54"
-              height="54"
-              alt=""
-            />
-            <span>
-              <strong>开发文档 ↗</strong>
-              <small aria-hidden="true">了解规范与提交流程</small>
-            </span>
-          </a>
-          <a
-            href="/physicsos/developer-prompts/template"
-            download="physicsos-experiment-template-v2.zip"
-          >
-            <img
-              src="/physicsos/developers/assets/studio/icon-upload.webp"
-              width="54"
-              height="54"
-              alt=""
-            />
-            <span>
-              <strong>下载独立模板 ↓</strong>
-              <small aria-hidden="true">从可运行的凸透镜样板开始</small>
-            </span>
-          </a>
-          <a href={`${DOCS}#/agents`} target="_blank" rel="noopener noreferrer">
-            <img
-              src="/physicsos/developers/assets/studio/icon-prompt.webp"
-              width="54"
-              height="54"
-              alt=""
-            />
-            <span>
-              <strong>复制 AGENTS.md ↗</strong>
-              <small aria-hidden="true">获取当前版本的开发提示词</small>
-            </span>
-          </a>
-        </nav>
-        <form onSubmit={submit} className={css.form}>
-          <div className={`${css.wide} ${css.formHeading}`}>
-            <span aria-hidden="true">01</span>
-            <div>
-              <h3>提交一个新版本</h3>
-              <p>上传实验包，补充作者信息，审核通过后自动展示。</p>
-            </div>
-          </div>
-          <div className={css.wide}>
-            <ContributionFilePicker kind="zip" file={file} disabled={busy} onChange={setFile} />
-          </div>
-          <label>
-            作者显示名
-            <input
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value)
-              }}
-              required
-              maxLength={80}
-              autoComplete="name"
-            />
-          </label>
-          <label>
-            GitHub 个人主页
-            <input
-              value={github}
-              onChange={(event) => {
-                setGithub(event.target.value)
-              }}
-              type="url"
-              placeholder="https://github.com/your-name"
-              maxLength={200}
-            />
-          </label>
-          <label>
-            作者简介
-            <textarea
-              value={bio}
-              onChange={(event) => {
-                setBio(event.target.value)
-              }}
-              maxLength={300}
-              rows={2}
-            />
-          </label>
-          <ContributionFilePicker
-            kind="avatar"
-            file={avatar}
-            disabled={busy}
-            onChange={setAvatar}
-          />
-          <label className={css.wide}>
-            本次修改说明
-            <textarea
-              value={note}
-              onChange={(event) => {
-                setNote(event.target.value)
-              }}
-              maxLength={500}
-              rows={2}
-            />
-          </label>
-          <div className={css.wide}>
-            <button
-              type="submit"
-              className={css.primary}
-              disabled={busy || file === undefined || catalog === undefined}
-            >
-              {busy ? '正在处理…' : '上传并提交审核'}
-            </button>
-          </div>
-        </form>
+        {!reviewOnly && (
+          <>
+            <nav className={css.links} aria-label="贡献资源">
+              <a href={`${DOCS}#/start`} target="_blank" rel="noopener noreferrer">
+                <img
+                  src="/physicsos/developers/assets/studio/icon-review.webp"
+                  width="54"
+                  height="54"
+                  alt=""
+                />
+                <span>
+                  <strong>开发文档 ↗</strong>
+                  <small aria-hidden="true">了解规范与提交流程</small>
+                </span>
+              </a>
+              <a
+                href={
+                  experimentId === 'convex-lens'
+                    ? '/physicsos/developer-prompts/template'
+                    : `/physicsos/experiments/${encodeURIComponent(experimentId)}/template`
+                }
+                download={
+                  experimentId === 'convex-lens'
+                    ? 'physicsos-experiment-template-v2.zip'
+                    : `${experimentId}-template-v3.zip`
+                }
+              >
+                <img
+                  src="/physicsos/developers/assets/studio/icon-upload.webp"
+                  width="54"
+                  height="54"
+                  alt=""
+                />
+                <span>
+                  <strong>下载独立模板 ↓</strong>
+                  <small aria-hidden="true">从可运行的凸透镜样板开始</small>
+                </span>
+              </a>
+              <a
+                href={`${DOCS}?experiment=${encodeURIComponent(experimentId)}#/agents`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src="/physicsos/developers/assets/studio/icon-prompt.webp"
+                  width="54"
+                  height="54"
+                  alt=""
+                />
+                <span>
+                  <strong>复制 AGENTS.md ↗</strong>
+                  <small aria-hidden="true">获取当前版本的开发提示词</small>
+                </span>
+              </a>
+            </nav>
+            <form onSubmit={submit} className={css.form}>
+              <div className={`${css.wide} ${css.formHeading}`}>
+                <span aria-hidden="true">01</span>
+                <div>
+                  <h3>提交一个新版本</h3>
+                  <p>上传实验包，补充作者信息，审核通过后自动展示。</p>
+                </div>
+              </div>
+              <label className={css.wide}>
+                <span>对应实验</span>
+                <GlassSelect
+                  value={experimentId}
+                  options={contributionTargets}
+                  ariaLabel="对应实验"
+                  disabled={busy}
+                  className={css.experimentSelect}
+                  onChange={(value) => {
+                    if (value === experimentId || !canUploadExperiment(value)) return
+                    setExperimentId(value)
+                    setCatalog(undefined)
+                    setFile(undefined)
+                    setPreview(undefined)
+                    setRollback(undefined)
+                    setError('')
+                    setNotice('')
+                  }}
+                />
+                <small>全部已有实验均可上传；ZIP 清单中的 experimentId 必须与所选实验一致。</small>
+              </label>
+              <div className={css.wide}>
+                <ContributionFilePicker
+                  key={experimentId}
+                  kind="zip"
+                  experimentName={selectedLabel}
+                  file={file}
+                  disabled={busy}
+                  onChange={setFile}
+                />
+              </div>
+              <label>
+                作者显示名
+                <input
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value)
+                  }}
+                  required
+                  maxLength={80}
+                  autoComplete="name"
+                />
+              </label>
+              <label>
+                GitHub 个人主页
+                <input
+                  value={github}
+                  onChange={(event) => {
+                    setGithub(event.target.value)
+                  }}
+                  type="url"
+                  placeholder="https://github.com/your-name"
+                  maxLength={200}
+                />
+              </label>
+              <label>
+                作者简介
+                <textarea
+                  value={bio}
+                  onChange={(event) => {
+                    setBio(event.target.value)
+                  }}
+                  maxLength={300}
+                  rows={2}
+                />
+              </label>
+              <ContributionFilePicker
+                kind="avatar"
+                file={avatar}
+                disabled={busy}
+                onChange={setAvatar}
+              />
+              <label className={css.wide}>
+                本次修改说明
+                <textarea
+                  value={note}
+                  onChange={(event) => {
+                    setNote(event.target.value)
+                  }}
+                  maxLength={500}
+                  rows={2}
+                />
+              </label>
+              <div className={css.wide}>
+                <button
+                  type="submit"
+                  className={css.primary}
+                  disabled={busy || file === undefined || catalog === undefined}
+                >
+                  {busy ? '正在处理…' : '上传并提交审核'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
         <section className={css.versions} aria-label="实验版本">
           <div className={css.sectionHeading}>
-            <h3>{catalog?.canReview ? '投稿审核与发布记录' : '我的投稿与发布记录'}</h3>
+            <h3>
+              {reviewOnly
+                ? '实验投稿审核'
+                : catalog?.canReview
+                  ? '投稿审核与发布记录'
+                  : '我的投稿与发布记录'}
+            </h3>
+            {reviewOnly && (
+              <GlassSelect
+                value={reviewFilter}
+                options={[
+                  { value: 'pending', label: '待审核' },
+                  { value: 'approved', label: '已通过' },
+                  { value: 'rejected', label: '已退回' },
+                  { value: 'all', label: '全部记录' },
+                ]}
+                ariaLabel="审核状态"
+                disabled={busy}
+                onChange={(value) => {
+                  setReviewFilter(value)
+                  setPreview(undefined)
+                  setRollback(undefined)
+                }}
+              />
+            )}
+            {reviewOnly && (
+              <GlassSelect
+                value={reviewExperiment}
+                options={[{ value: 'all', label: '全部实验' }, ...contributionTargets]}
+                ariaLabel="筛选实验"
+                disabled={busy}
+                onChange={(value) => {
+                  setReviewExperiment(value)
+                  setPreview(undefined)
+                  setRollback(undefined)
+                }}
+              />
+            )}
             <button
               type="button"
               disabled={busy}
@@ -405,55 +507,96 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
               刷新
             </button>
           </div>
+          {reviewOnly && catalog && (
+            <div className={css.reviewStats}>
+              <span>
+                <strong>{catalog.items.filter(item => item.status === 'pending').length}</strong>
+                待审核
+              </span>
+              <span>
+                <strong>{catalog.items.filter(item => item.status === 'approved').length}</strong>
+                已通过
+              </span>
+              <span>
+                <strong>{catalog.items.filter(item => item.status === 'rejected').length}</strong>
+                已退回
+              </span>
+            </div>
+          )}
+          {reviewOnly && (
+            <p className={css.muted}>
+              全部实验投稿集中审核；预览加载的是上传 ZIP 中的实际作品，物理结果来自对应的平台引擎。
+            </p>
+          )}
           {catalog === undefined ? (
             <p role="status">{error ? '未能读取投稿，请点击刷新重试。' : '正在读取版本…'}</p>
           ) : (
             <p>
               当前默认：
-              {catalog.active
-                ? `v${catalog.active.version} · ${catalog.active.author.name}`
-                : 'PhysicsOS 官方三维样板'}
+              {reviewOnly && reviewExperiment === 'all'
+                ? `${Object.values(catalog.activeByExperiment ?? {}).filter(Boolean).length} 个实验已使用社区版本`
+                : (reviewOnly ? activeFor(reviewExperiment) : catalog.active)
+                  ? `v${(reviewOnly ? activeFor(reviewExperiment) : catalog.active)?.version} · ${(reviewOnly ? activeFor(reviewExperiment) : catalog.active)?.author.name}`
+                  : 'PhysicsOS 官方实验样板'}
             </p>
           )}
-          {catalog?.items.length === 0 ? (
-            <p className={css.muted}>还没有投稿。下载模板，开始你的第一个三维实验。</p>
+          {visibleItems?.length === 0 ? (
+            <p className={css.muted}>
+              {reviewOnly
+                ? '当前筛选下没有实验投稿，可切换审核状态查看历史记录。'
+                : '还没有投稿。下载模板，开始你的第一个三维实验。'}
+            </p>
           ) : null}
-          {catalog?.items.map(item => (
-            <article key={item.id} className={css.version} data-package-id={item.id}>
-              <div className={css.sectionHeading}>
-                <ContributionAuthorBadge author={item.author} version={item.version} />
-                <span className={css.status} data-state={item.status}>
-                  {catalog.active?.id === item.id ? '当前默认' : STATUS[item.status]}
-                  {(item.protocolVersion ?? 1) === 1 ? <span> · 旧格式</span> : null}
-                </span>
-              </div>
-              {item.author.bio ? <p>{item.author.bio}</p> : null}
-              {item.note ? <p>{item.note}</p> : null}
-              <small>
-                {new Date(item.createdAt).toLocaleString('zh-CN')} · SHA-256{' '}
-                {item.sha256.slice(0, 12)}…
-              </small>
-              {item.rejectionReason ? (
-                <p className={css.error}>退回原因：{item.rejectionReason}</p>
-              ) : null}
-              <div className={css.actions}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    openPreview(item)
-                  }}
-                >
-                  预览 v{item.version}
-                </button>
-                {catalog.canReview && item.status === 'approved' && catalog.active && catalog.active.id !== item.id && (
-                  <button type="button" disabled={busy} onClick={() => { setRollback(item) }}>
-                    回滚到此版本
+          {catalog &&
+            visibleItems?.map(item => (
+              <article key={item.id} className={css.version} data-package-id={item.id}>
+                <div className={css.sectionHeading}>
+                  <ContributionAuthorBadge author={item.author} version={item.version} />
+                  <span className={css.status} data-state={item.status}>
+                    {activeFor(item.experimentId)?.id === item.id
+                      ? '当前默认'
+                      : STATUS[item.status]}
+                    {(item.protocolVersion ?? 1) === 1 ? <span> · 旧格式</span> : null}
+                  </span>
+                </div>
+                <p className={css.muted}>
+                  对应实验：
+                  {contributionTargets.find(target => target.value === item.experimentId)
+                    ?.label ?? item.experimentId}
+                </p>
+                {item.author.bio ? <p>{item.author.bio}</p> : null}
+                {item.note ? <p>{item.note}</p> : null}
+                <small>
+                  {new Date(item.createdAt).toLocaleString('zh-CN')} · SHA-256{' '}
+                  {item.sha256.slice(0, 12)}…
+                </small>
+                {item.rejectionReason ? (
+                  <p className={css.error}>退回原因：{item.rejectionReason}</p>
+                ) : null}
+                <div className={css.actions}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      openPreview(item)
+                    }}
+                  >
+                    预览 v{item.version}
                   </button>
-                )}
-              </div>
-            </article>
-          ))}
+                  {canRollback(item) && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setRollback(item)
+                      }}
+                    >
+                      回滚到此版本
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
         </section>
         {preview ? (
           <section className={css.review} aria-label="审核预览">
@@ -485,8 +628,9 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                 </small>
               </div>
             ) : null}
-            <CandidatePreview
+            <ExperimentCandidatePreview
               key={preview.instance}
+              experimentId={preview.item.experimentId}
               entryUrl={preview.entryUrl}
               protocolVersion={preview.item.protocolVersion ?? 1}
               onStatusChange={(status) => {
@@ -496,7 +640,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
             {catalog?.canReview && preview.item.status === 'pending' ? (
               <div className={css.reviewActions}>
                 <p>核对装置、物理结果、手机操作和素材授权后发布。通过后自动替换当前默认版本。</p>
-                {preview.item.protocolVersion === 2 ? (
+                {(preview.item.protocolVersion ?? 1) !== 1 ? (
                   <p>首帧兼容确认仅用于辅助审核；仍需核对源码、物理结果和授权。</p>
                 ) : null}
                 <label>
@@ -516,7 +660,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                     className={css.primary}
                     disabled={
                       busy ||
-                      (preview.item.protocolVersion === 2 &&
+                      ((preview.item.protocolVersion ?? 1) !== 1 &&
                         (previewStatus?.instance !== preview.instance ||
                           previewStatus.status !== 'ready'))
                     }
@@ -540,7 +684,7 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
             ) : null}
           </section>
         ) : null}
-        {rollback && catalog?.active ? (
+        {rollback && rollbackActive ? (
           <section className={css.review} aria-label="确认回滚">
             <h3>
               将默认版本恢复为 v{rollback.version} · {rollback.author.name}？
@@ -553,8 +697,11 @@ export function ContributionPanel({ onClose, embedded = false }: ContributionPan
                 disabled={busy}
                 onClick={() => {
                   void run(async () => {
-                    if (!catalog.active) return
-                    await contributionApi.rollback(rollback.id, catalog.active.id)
+                    await contributionApi.rollback(
+                      rollback.id,
+                      rollbackActive.id,
+                      rollback.experimentId,
+                    )
                     if (!alive.current) return
                     setRollback(undefined)
                     setNotice('已恢复默认版本。重新打开实验后生效。')

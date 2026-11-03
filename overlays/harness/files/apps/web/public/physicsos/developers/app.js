@@ -1,6 +1,7 @@
 import { documents, documentMarkdown } from './content.js'
 import { STANDARD_VERSION, UPDATED_AT, normalizeExperimentId } from './standards.js'
 import { renderPrompt, validPromptDocument } from './prompt-format.js'
+import { universalExperiments } from './universal-experiments.js'
 
 const main = document.querySelector('#main')
 const nav = document.querySelector('#doc-nav')
@@ -245,7 +246,98 @@ function downloadsBlock() {
   return container
 }
 
+function universalDownloadButton() {
+  const action = button('下载 AGENTS.md ↓', () => {
+    const preview = document.querySelector('[data-universal-prompt][data-ready="true"] .agent-preview')
+    if (preview) downloadText('AGENTS.md', preview.textContent)
+  }, 'text-button')
+  action.dataset.universalDownload = ''
+  action.disabled = true
+  return action
+}
+function selectedDeveloperExperiment() { return new URL(location.href).searchParams.get('experiment') ?? 'convex-lens' }
+function changeDeveloperExperiment(id) {
+  const url = new URL(location.href)
+  url.searchParams.set('experiment', id)
+  url.hash = '/agents'
+  history.replaceState(null, '', url)
+  main.dataset.doc = ''
+  renderPage()
+}
+function universalAgentBlock(id) {
+  const block = element('div', 'agent-builder')
+  block.dataset.universalPrompt = id
+  const form = element('form', 'agent-form')
+  form.addEventListener('submit', event => event.preventDefault())
+  const label = element('label', '', '已注册实验契约')
+  label.htmlFor = 'experiment-id'
+  const select = element('select')
+  select.id = 'experiment-id'
+  for (const profile of universalExperiments) {
+    const option = element('option', '', `${profile.label} · ${profile.id} · ${profile.id === 'convex-lens' ? 'V2兼容' : 'V3'}`)
+    option.value = profile.id
+    select.append(option)
+  }
+  select.value = id
+  select.addEventListener('change', () => changeDeveloperExperiment(select.value))
+  const help = element('small', 'input-help', '全部已有实验均可上传。下载与所选实验一致的模板，完整提示词固定该实验和V3协议。')
+  const taskLabel = element('label', '', '本次任务说明（可选）')
+  taskLabel.htmlFor = 'task-description'
+  const task = element('textarea')
+  task.id = 'task-description'
+  task.maxLength = 2000
+  task.value = authorTask
+  const error = element('p', 'input-error')
+  error.setAttribute('role', 'alert')
+  const preview = element('pre', 'agent-preview')
+  preview.tabIndex = 0
+  preview.setAttribute('aria-label', 'AGENTS.md 完整内容')
+  const actions = element('div', 'agent-actions')
+  let complete = '', basePrompt = ''
+  const copy = button('复制 AGENTS.md', () => { if (complete) void copyText(complete) }, 'button primary')
+  const download = button('下载 AGENTS.md', () => {
+    if (!complete) return
+    const url = URL.createObjectURL(new Blob([complete], {type:'text/markdown;charset=utf-8'}))
+    const anchor = link('', url)
+    anchor.download = `${id}-AGENTS.md`
+    anchor.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  })
+  copy.disabled = download.disabled = true
+  const meta = element('span', 'agent-meta', '正在加载对应实验提示词…')
+  const template = link('下载对应实验模板 ↓', `/physicsos/experiments/${encodeURIComponent(id)}/template`, 'button secondary')
+  template.download = `${id}-template-v3.zip`
+  actions.append(copy, download, template, meta)
+  const update = () => {
+    complete = basePrompt ? basePrompt + (authorTask.trim() ? `\n\n## 本次开发任务\n${authorTask}\n` : '') : ''
+    preview.textContent = complete || '提示词尚未载入，普通开发文档仍可阅读。'
+  }
+  task.addEventListener('input', () => { authorTask = task.value; update() })
+  const load = async () => {
+    delete block.dataset.ready
+    copy.disabled = download.disabled = true
+    if (block.isConnected && selectedDeveloperExperiment() === id) {
+      const top = document.querySelector('[data-universal-download]')
+      if (top) top.disabled = true
+    }
+    error.textContent = ''
+    try {
+      if (!universalExperiments.some(profile => profile.id === id)) throw new Error('实验未注册，请从下拉框选择。')
+      const response = await fetch(`/physicsos/experiments/${encodeURIComponent(id)}/developer-prompt`, {cache:'no-store'})
+      if (!response.ok) throw new Error('对应实验提示词加载失败，请重试。')
+      basePrompt = await response.text()
+      if (!basePrompt.includes(id) || basePrompt.length > 131072) throw new Error('提示词响应无效，请重试。')
+      update(); block.dataset.ready = 'true'; copy.disabled = download.disabled = false; meta.textContent = '固定契约 V3 · 平台计算物理结果'; if (block.isConnected && selectedDeveloperExperiment() === id) { const top = document.querySelector('[data-universal-download]'); if (top) top.disabled = false }
+    } catch (issue) { error.textContent = issue.message; meta.textContent = '提示词尚未就绪' }
+  }
+  const retry = button('重新加载提示词', () => { void load() })
+  form.append(label, select, help, taskLabel, task, error, retry)
+  block.append(form, actions, preview)
+  update(); void load()
+  return block
+}
 function agentBlock() {
+  if (selectedDeveloperExperiment() !== 'convex-lens') return universalAgentBlock(selectedDeveloperExperiment())
   const block = element('div', 'agent-builder')
   const form = element('form', 'agent-form')
   form.addEventListener('submit', (event) => {
@@ -254,15 +346,18 @@ function agentBlock() {
   const label = element('label', '', '已注册实验契约')
   label.htmlFor = 'experiment-id'
   const input = element('select')
-  const option = element('option', '', '凸透镜 · convex-lens · V2')
-  option.value = 'convex-lens'
-  input.append(option)
+  for (const profile of universalExperiments) {
+    const option = element('option', '', `${profile.label} · ${profile.id} · ${profile.id === 'convex-lens' ? 'V2兼容' : 'V3'}`)
+    option.value = profile.id
+    input.append(option)
+  }
+  input.value = 'convex-lens'
   input.id = 'experiment-id'
   input.setAttribute('aria-describedby', 'id-help id-error')
   const help = element(
     'small',
     'input-help',
-    '当前仅开放凸透镜 V2 契约；任务说明不会改变协议或元数据。',
+    '全部已有实验均可上传。凸透镜保留已发布 V2 提示词；其他实验使用通用 V3 契约。',
   )
   help.id = 'id-help'
   const error = element('p', 'input-error')
@@ -306,7 +401,7 @@ function agentBlock() {
       download.disabled = true
     }
   }
-  input.addEventListener('change', updatePrompt)
+  input.addEventListener('change', () => { if (input.value !== 'convex-lens') changeDeveloperExperiment(input.value); else updatePrompt() })
   task.addEventListener('input', () => {
     authorTask = task.value
     updatePrompt()
@@ -512,6 +607,17 @@ function renderPage() {
     return
   }
   main.dataset.doc = doc.id
+  const selectedExperiment = selectedDeveloperExperiment()
+  const kit = document.querySelector('.sidebar-kit')
+  if (kit) {
+    if (selectedExperiment === 'convex-lens') kit.dataset.templateDownload = ''
+    else {
+      delete kit.dataset.templateDownload
+      kit.href = `/physicsos/experiments/${encodeURIComponent(selectedExperiment)}/template`
+      kit.removeAttribute('aria-disabled')
+      kit.tabIndex = 0
+    }
+  }
   document.title = `${doc.title} · PhysicsOS 开发者文档`
   templateReleaseViews.clear()
   main.replaceChildren()
@@ -542,7 +648,9 @@ function renderPage() {
         'text-button',
       ),
       doc.id === 'agents'
-        ? boundPromptButton('下载 AGENTS.md ↓', 'download', 'text-button')
+        ? selectedDeveloperExperiment() === 'convex-lens'
+          ? boundPromptButton('下载 AGENTS.md ↓', 'download', 'text-button')
+          : universalDownloadButton()
         : link('下载 Markdown ↓', `downloads/${doc.file}`, 'text-link'),
     )
     if (doc.id !== 'agents') actions.lastChild.download = doc.file
@@ -559,6 +667,7 @@ function renderPage() {
     main.append(header)
   }
   const article = element('article', 'article')
+  if (['agents','package','protocol','submit'].includes(doc.id)) { const notice = element('aside', 'note'); notice.append(element('strong', '', '全部实验现已支持上传'), element('p', '', '凸透镜保留 V2 兼容模板；其他实验使用通用 V3。请选择对应实验，并以下载模板和完整提示词中的固定规范为准。')); article.append(notice) }
   toc.replaceChildren()
   for (const section of doc.sections) {
     const item = element('section', 'doc-section')

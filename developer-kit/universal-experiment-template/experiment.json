@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 3,
+  "protocolVersion": 3,
+  "packageType": "browser-static",
+  "experimentId": "uniform-linear",
+  "version": "1.0.0",
+  "entry": "dist/index.html",
+  "renderer": "platform",
+  "theme": "physicsos-warm-lab-v1",
+  "engine": {
+    "id": "mechanics",
+    "contractVersion": 1
+  },
+  "parameters": "parameters.json",
+  "teaching": "teaching.json",
+  "referenceCases": "cases.json",
+  "assetLicenses": "ASSET-LICENSES.json",
+  "cover": "dist/assets/cover.svg",
+  "license": "Apache-2.0"
+}

@@ -3,10 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { ExperimentSession } from './experiment-session.ts'
 import {
   applyContributionIntent,
+  applyUniversalContributionIntent,
   contributionSnapshot,
   isContributionMessage,
+  universalContributionSnapshot,
 } from './contribution-protocol.ts'
 import { isSnapshot, isExperimentIntent } from './contract-wire.ts'
+import { isUniversalSnapshot } from './universal-contract.ts'
 import css from './ContributionPanel.module.css'
 
 export type CommunityFrameStatus = 'loading' | 'ready' | 'failed'
@@ -15,7 +18,8 @@ interface Props {
   readonly entryUrl: string
   readonly session: ExperimentSession
   readonly title?: string
-  readonly protocolVersion?: 1 | 2
+  readonly experimentId?: string
+  readonly protocolVersion?: 1 | 2 | 3
   readonly onStatusChange?: (status: CommunityFrameStatus) => void
 }
 
@@ -24,6 +28,7 @@ export function CommunityExperimentFrame({
   entryUrl,
   session,
   title = '社区三维实验',
+  experimentId,
   protocolVersion = 1,
   onStatusChange,
 }: Props) {
@@ -59,8 +64,16 @@ export function CommunityExperimentFrame({
     }
     const publish = (): void => {
       if (!connected || disposed) return
-      const snapshot = contributionSnapshot(session.getSnapshot())
-      if (!isSnapshot(snapshot)) {
+      let snapshot
+      try {
+        snapshot = protocolVersion === 3
+          ? universalContributionSnapshot(session.frames.get(), experimentId ?? '')
+          : contributionSnapshot(session.getSnapshot())
+      } catch {
+        fail()
+        return
+      }
+      if (protocolVersion === 3 ? !isUniversalSnapshot(snapshot, experimentId) : !isSnapshot(snapshot)) {
         fail()
         return
       }
@@ -70,7 +83,7 @@ export function CommunityExperimentFrame({
       }
       const frameId = `${token}:${++sequence}`
       firstFrame ??= { frameId, revision: snapshot.revision }
-      port?.postMessage({ type: 'experiment/snapshot', protocolVersion: 2, frameId, snapshot })
+      port?.postMessage({ type: 'experiment/snapshot', protocolVersion, frameId, snapshot })
     }
     const receive = (event: MessageEvent<unknown>): void => {
       if (
@@ -108,7 +121,7 @@ export function CommunityExperimentFrame({
           count = 0
         }
         if (++count > 120) return
-        if (protocolVersion === 2 && message.data.protocolVersion === 2) {
+        if (protocolVersion !== 1 && message.data.protocolVersion === protocolVersion) {
           if (
             message.data.type === 'experiment/error' &&
             (message.data.code === 'SNAPSHOT_INVALID' || message.data.code === 'RENDER_FAILED')
@@ -126,7 +139,13 @@ export function CommunityExperimentFrame({
             updateStatus('ready')
           }
         }
-        if (protocolVersion === 1 || isExperimentIntent(message.data))
+        if (protocolVersion === 3) {
+          try {
+            applyUniversalContributionIntent(session, message.data)
+          } catch {
+            fail()
+          }
+        } else if (protocolVersion === 1 || isExperimentIntent(message.data))
           applyContributionIntent(session, message.data)
       }
       port.start()
@@ -137,7 +156,9 @@ export function CommunityExperimentFrame({
         [channel.port2],
       )
     }
-    const unsubscribe = session.subscribe(publish)
+    const unsubscribe = protocolVersion === 3
+      ? session.frames.subscribe(publish)
+      : session.subscribe(publish)
     const timeout = setTimeout(fail, 15000)
     updateStatus('loading')
     window.addEventListener('message', receive)
@@ -165,7 +186,7 @@ export function CommunityExperimentFrame({
       port?.close()
       session.cancelPreview()
     }
-  }, [entryUrl, session, attempt, protocolVersion])
+  }, [entryUrl, session, attempt, protocolVersion, experimentId])
   return (
     <div className={css.frameHost} data-community-status={status}>
       <iframe
@@ -180,8 +201,10 @@ export function CommunityExperimentFrame({
           <strong>{status === 'failed' ? '实验文件暂时无法显示' : '正在载入三维实验文件'}</strong>
           <span>
             {status === 'failed'
-              ? '当前参数与记录已保留。检查网络和 WebGL 支持后重试。'
-              : protocolVersion === 2
+              ? protocolVersion === 3
+                ? '当前参数与记录已保留。检查实验代码、资源和浏览器支持后重试。'
+                : '当前参数与记录已保留。检查网络和 WebGL 支持后重试。'
+              : protocolVersion !== 1
                 ? '等待实验渲染平台首帧…'
                 : '连接平台物理引擎…'}
           </span>

@@ -49,8 +49,8 @@
     "verify:dependencies": "node scripts/dev/check-workspace-dependencies.mjs",
     "test:acceptance:visual": "node tests/acceptance/glass-surfaces.mjs",
     "lint:tooling": "eslint scripts/overlay/*.mjs scripts/deploy/*.mjs scripts/dev/*.mjs",
-    "docs:developers:build": "node scripts/developers/generate-contract.mjs && node scripts/developers/prepare-template.mjs && node scripts/developers/generate.mjs && node scripts/developers/generate-prompts.mjs",
-    "docs:developers:check": "node --test scripts/developers/*.test.mjs && node scripts/developers/generate-contract.mjs --check && node scripts/developers/generate.mjs --check"
+    "docs:developers:build": "node scripts/developers/generate-contract.mjs && node scripts/developers/prepare-template.mjs && node scripts/developers/generate.mjs && node scripts/developers/generate-prompts.mjs && node scripts/developers/generate-universal-templates.mjs",
+    "docs:developers:check": "node --test scripts/developers/*.test.mjs && node scripts/developers/generate-contract.mjs --check && node scripts/developers/generate.mjs --check && node scripts/developers/generate-universal-templates.mjs --check"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

@@ -10,10 +10,10 @@ const author = z.object({
 const record = z
   .object({
     id: z.string().regex(/^exp_[a-f0-9]{32}$/),
-    experimentId: z.literal('convex-lens'),
+    experimentId: z.string().min(1).max(100),
     version: z.string(),
-    schemaVersion: z.union([z.literal(1), z.literal(2)]).optional(),
-    protocolVersion: z.union([z.literal(1), z.literal(2)]).optional(),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+    protocolVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
     sha256: digest,
     authorKey: z.string().min(1),
     author,
@@ -34,7 +34,7 @@ const record = z
     ),
   })
   .refine(
-    row =>
+    (row) =>
       (row.schemaVersion === undefined && row.protocolVersion === undefined) ||
       (row.schemaVersion !== undefined && row.schemaVersion === row.protocolVersion),
     { message: 'Stored package versions must be absent together or match.' },
@@ -42,11 +42,13 @@ const record = z
 export const experimentStateSchema = z.object({
   packages: z.array(record),
   activeId: z.string().nullable(),
+  activeByExperiment: z.record(z.string(), z.string().nullable()).optional(),
   sequence: z.number().int().min(0),
   releases: z.array(
     z.object({
       sequence: z.number().int().min(1),
       packageId: z.string(),
+      experimentId: z.string().min(1).max(100).optional(),
       action: z.enum(['approve', 'rollback']),
       actorKey: z.string(),
       createdAt: z.string(),

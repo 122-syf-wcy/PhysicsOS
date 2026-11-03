@@ -1,0 +1,3600 @@
+[
+  {
+    "id": "uniform-linear",
+    "label": "匀速直线运动",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 4
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "average-speed",
+    "label": "测量平均速度",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 0.5
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 0
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "uniform-acceleration",
+    "label": "匀变速直线运动",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "projectile-horizontal",
+    "label": "平抛运动",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "height",
+        "label": "初始高度",
+        "unit": "m",
+        "min": 0,
+        "step": 1,
+        "value": 20
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "angle",
+        "label": "抛射角",
+        "unit": "°",
+        "min": 0,
+        "max": 90,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "projectile-oblique",
+    "label": "斜抛运动",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "height",
+        "label": "初始高度",
+        "unit": "m",
+        "min": 0,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 20
+      },
+      {
+        "id": "angle",
+        "label": "抛射角",
+        "unit": "°",
+        "min": 0,
+        "max": 90,
+        "step": 1,
+        "value": 40
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "newton-second-law",
+    "label": "牛顿第二定律",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "force",
+        "label": "合外力",
+        "unit": "N",
+        "step": 1,
+        "value": 10
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "incline",
+    "label": "斜面运动",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "angle",
+        "label": "倾角",
+        "unit": "°",
+        "min": 1,
+        "max": 89,
+        "step": 1,
+        "value": 30
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      },
+      {
+        "id": "friction",
+        "label": "摩擦系数",
+        "unit": "",
+        "min": 0,
+        "step": 0.05,
+        "value": 0.2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "mechanical-energy",
+    "label": "动能与势能的转化",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "cart-mass",
+        "label": "小车质量",
+        "unit": "kg",
+        "min": 0.1,
+        "max": 20,
+        "step": 0.1,
+        "value": 2
+      },
+      {
+        "id": "release-height",
+        "label": "释放高度",
+        "unit": "cm",
+        "min": 5,
+        "max": 300,
+        "step": 5,
+        "value": 90
+      },
+      {
+        "id": "ramp-angle",
+        "label": "斜面倾角",
+        "unit": "°",
+        "min": 5,
+        "max": 85,
+        "step": 5,
+        "value": 45
+      },
+      {
+        "id": "ramp-friction",
+        "label": "摩擦系数",
+        "unit": "",
+        "min": 0,
+        "max": 0.8,
+        "step": 0.05,
+        "value": 0
+      }
+    ],
+    "choices": [
+      {
+        "id": "ramp-surface",
+        "label": "斜面表面",
+        "value": "smooth",
+        "options": [
+          {
+            "value": "smooth",
+            "label": "光滑（μ = 0，机械能守恒）"
+          },
+          {
+            "value": "rough",
+            "label": "粗糙（μ = 0.2）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ramp-friction",
+    "label": "机械能的损失去哪儿了",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "cart-mass",
+        "label": "小车质量",
+        "unit": "kg",
+        "min": 0.1,
+        "max": 20,
+        "step": 0.1,
+        "value": 2
+      },
+      {
+        "id": "release-height",
+        "label": "释放高度",
+        "unit": "cm",
+        "min": 5,
+        "max": 300,
+        "step": 5,
+        "value": 90
+      },
+      {
+        "id": "ramp-angle",
+        "label": "斜面倾角",
+        "unit": "°",
+        "min": 5,
+        "max": 85,
+        "step": 5,
+        "value": 45
+      },
+      {
+        "id": "ramp-friction",
+        "label": "摩擦系数",
+        "unit": "",
+        "min": 0,
+        "max": 0.8,
+        "step": 0.05,
+        "value": 0.2
+      }
+    ],
+    "choices": [
+      {
+        "id": "ramp-surface",
+        "label": "斜面表面",
+        "value": "rough",
+        "options": [
+          {
+            "value": "smooth",
+            "label": "光滑（μ = 0，机械能守恒）"
+          },
+          {
+            "value": "rough",
+            "label": "粗糙（μ = 0.2）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "lever-balance",
+    "label": "探究杠杆的平衡条件",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "left-mass",
+        "label": "左钩码质量",
+        "unit": "g",
+        "min": 1,
+        "step": 20,
+        "value": 200
+      },
+      {
+        "id": "left-arm",
+        "label": "左力臂",
+        "unit": "cm",
+        "min": 1,
+        "max": 20,
+        "step": 0.5,
+        "value": 15
+      },
+      {
+        "id": "right-mass",
+        "label": "右钩码质量",
+        "unit": "g",
+        "min": 1,
+        "step": 20,
+        "value": 300
+      },
+      {
+        "id": "right-arm",
+        "label": "右力臂",
+        "unit": "cm",
+        "min": 1,
+        "max": 20,
+        "step": 0.5,
+        "value": 10
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "collision-elastic",
+    "label": "弹性碰撞",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass-ball-a",
+        "label": "质量 ball-a",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "mass-ball-b",
+        "label": "质量 ball-b",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "speed-ball-a",
+        "label": "速率 ball-a",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 2
+      },
+      {
+        "id": "speed-ball-b",
+        "label": "速率 ball-b",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 1.5
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "collision-inelastic",
+    "label": "非弹性碰撞",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass-ball-a",
+        "label": "质量 ball-a",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 2
+      },
+      {
+        "id": "mass-ball-b",
+        "label": "质量 ball-b",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "speed-ball-a",
+        "label": "速率 ball-a",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 1.6
+      },
+      {
+        "id": "speed-ball-b",
+        "label": "速率 ball-b",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 0
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "collision-perfectly-inelastic",
+    "label": "完全非弹性碰撞",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass-ball-a",
+        "label": "质量 ball-a",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "mass-ball-b",
+        "label": "质量 ball-b",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "speed-ball-a",
+        "label": "速率 ball-a",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 3
+      },
+      {
+        "id": "speed-ball-b",
+        "label": "速率 ball-b",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 0
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "vt-area",
+    "label": "v–t 图像与位移",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "force-composition",
+    "label": "力的合成",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "force",
+        "label": "合外力",
+        "unit": "N",
+        "step": 1,
+        "value": 3
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "concurrent-equilibrium",
+    "label": "共点力平衡",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "force",
+        "label": "合外力",
+        "unit": "N",
+        "step": 1,
+        "value": 8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "apparent-weight",
+    "label": "超重与失重",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 60
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 1
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "chase-meeting",
+    "label": "追及与相遇",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass-chaser",
+        "label": "质量 chaser",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "mass-leader",
+        "label": "质量 leader",
+        "unit": "kg",
+        "min": 0.01,
+        "max": 100,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "speed-chaser",
+        "label": "速率 chaser",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 3
+      },
+      {
+        "id": "speed-leader",
+        "label": "速率 leader",
+        "unit": "m/s",
+        "min": 0,
+        "max": 50,
+        "step": 0.1,
+        "value": 1
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "hooke-law",
+    "label": "探究弹簧弹力与形变量",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "悬挂质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "springConstant",
+        "label": "劲度系数",
+        "unit": "N/m",
+        "min": 0.1,
+        "step": 1,
+        "value": 49
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "spring-oscillator",
+    "label": "弹簧振子",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "振子质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "springConstant",
+        "label": "劲度系数",
+        "unit": "N/m",
+        "min": 0.1,
+        "step": 1,
+        "value": 50
+      },
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "m",
+        "min": 0,
+        "step": 0.05,
+        "value": 0.5
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "circular-orbit",
+    "label": "万有引力与向心力",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 420000
+      },
+      {
+        "id": "speed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1,
+        "value": 7656.2204794148765
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "simple-pendulum",
+    "label": "单摆",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "摆球质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 0.5
+      },
+      {
+        "id": "pendulumLength",
+        "label": "摆长",
+        "unit": "m",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 2
+      },
+      {
+        "id": "amplitude",
+        "label": "摆角",
+        "unit": "°",
+        "min": 0,
+        "max": 60,
+        "step": 1,
+        "value": 14.999999999999998
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "friction-static",
+    "label": "静摩擦与滑动摩擦",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "物块质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "force",
+        "label": "拉力",
+        "unit": "N",
+        "step": 0.5,
+        "value": 0
+      },
+      {
+        "id": "staticFriction",
+        "label": "静摩擦系数",
+        "unit": "",
+        "min": 0,
+        "step": 0.05,
+        "value": 0.5
+      },
+      {
+        "id": "friction",
+        "label": "动摩擦系数",
+        "unit": "",
+        "min": 0,
+        "step": 0.05,
+        "value": 0.3
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "friction-mu",
+    "label": "测动摩擦因数",
+    "domain": "mechanics",
+    "parameters": [
+      {
+        "id": "mass",
+        "label": "物块质量",
+        "unit": "kg",
+        "min": 0.1,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "force",
+        "label": "拉力",
+        "unit": "N",
+        "step": 0.5,
+        "value": 15
+      },
+      {
+        "id": "staticFriction",
+        "label": "静摩擦系数",
+        "unit": "",
+        "min": 0,
+        "step": 0.05,
+        "value": 0.4
+      },
+      {
+        "id": "friction",
+        "label": "动摩擦系数",
+        "unit": "",
+        "min": 0,
+        "step": 0.05,
+        "value": 0.3
+      },
+      {
+        "id": "gravity",
+        "label": "重力加速度",
+        "unit": "m/s²",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 9.8
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "pinhole",
+    "label": "小孔成像",
+    "domain": "optics",
+    "parameters": [
+      {
+        "id": "object-height",
+        "label": "物高",
+        "unit": "cm",
+        "min": 1,
+        "max": 40,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "object-distance",
+        "label": "物距",
+        "unit": "cm",
+        "min": 5,
+        "max": 150,
+        "step": 5,
+        "value": 30
+      },
+      {
+        "id": "screen-distance",
+        "label": "像距",
+        "unit": "cm",
+        "min": 5,
+        "max": 150,
+        "step": 5,
+        "value": 15
+      }
+    ],
+    "choices": [
+      {
+        "id": "pinhole-layout",
+        "label": "屏的位置",
+        "value": "smaller",
+        "options": [
+          {
+            "value": "smaller",
+            "label": "v < u：缩小的像"
+          },
+          {
+            "value": "same",
+            "label": "v = u：等大的像"
+          },
+          {
+            "value": "larger",
+            "label": "v > u：放大的像"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "total-reflection",
+    "label": "全反射",
+    "domain": "optics",
+    "parameters": [
+      {
+        "id": "incident-index",
+        "label": "入射介质折射率",
+        "unit": "",
+        "min": 1,
+        "max": 2.5,
+        "step": 0.05,
+        "value": 1.5
+      },
+      {
+        "id": "refracted-index",
+        "label": "折射介质折射率",
+        "unit": "",
+        "min": 0.5,
+        "max": 2.5,
+        "step": 0.05,
+        "value": 1
+      },
+      {
+        "id": "incident-angle",
+        "label": "入射角",
+        "unit": "°",
+        "min": 0,
+        "max": 85,
+        "step": 1,
+        "value": 45
+      }
+    ],
+    "choices": [
+      {
+        "id": "refraction-angle",
+        "label": "入射角",
+        "value": "past",
+        "options": [
+          {
+            "value": "under",
+            "label": "小于临界角：有折射光线"
+          },
+          {
+            "value": "critical",
+            "label": "正好临界角：折射角 90°"
+          },
+          {
+            "value": "past",
+            "label": "超过临界角：全反射"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "plane-mirror",
+    "label": "平面镜成像",
+    "domain": "optics",
+    "parameters": [
+      {
+        "id": "object-distance",
+        "label": "物距",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "object-height",
+        "label": "物高",
+        "unit": "cm",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "screen-distance",
+        "label": "光屏位置（镜后）",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 10
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "convex-lens",
+    "label": "凸透镜成像规律",
+    "domain": "optics",
+    "parameters": [
+      {
+        "id": "object-distance",
+        "label": "物距",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 30
+      },
+      {
+        "id": "object-height",
+        "label": "物高",
+        "unit": "cm",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "focal-length",
+        "label": "焦距",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "screen-distance",
+        "label": "光屏到镜距离",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 15
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "concave-mirror",
+    "label": "凹面镜成像",
+    "domain": "optics",
+    "parameters": [
+      {
+        "id": "object-distance",
+        "label": "物距",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 30
+      },
+      {
+        "id": "object-height",
+        "label": "物高",
+        "unit": "cm",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "mirror-focal-length",
+        "label": "焦距（>0 凹面镜，<0 凸面镜）",
+        "unit": "cm",
+        "min": -100,
+        "max": 100,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "screen-distance",
+        "label": "光屏到镜距离（镜前）",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 15
+      }
+    ],
+    "choices": [
+      {
+        "id": "mirror-type",
+        "label": "镜面类型",
+        "value": "concave",
+        "options": [
+          {
+            "value": "concave",
+            "label": "凹面镜（会聚）"
+          },
+          {
+            "value": "convex",
+            "label": "凸面镜（发散）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "convex-mirror",
+    "label": "凸面镜后视镜",
+    "domain": "optics",
+    "parameters": [
+      {
+        "id": "object-distance",
+        "label": "物距",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 30
+      },
+      {
+        "id": "object-height",
+        "label": "物高",
+        "unit": "cm",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "mirror-focal-length",
+        "label": "焦距（>0 凹面镜，<0 凸面镜）",
+        "unit": "cm",
+        "min": -100,
+        "max": 100,
+        "step": 1,
+        "value": -10
+      },
+      {
+        "id": "screen-distance",
+        "label": "光屏到镜距离（镜前）",
+        "unit": "cm",
+        "min": 1,
+        "step": 1,
+        "value": 20
+      }
+    ],
+    "choices": [
+      {
+        "id": "mirror-type",
+        "label": "镜面类型",
+        "value": "convex",
+        "options": [
+          {
+            "value": "concave",
+            "label": "凹面镜（会聚）"
+          },
+          {
+            "value": "convex",
+            "label": "凸面镜（发散）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "echo-ranging",
+    "label": "回声测距",
+    "domain": "acoustics",
+    "parameters": [
+      {
+        "id": "wall-distance",
+        "label": "峭壁距离",
+        "unit": "m",
+        "min": 1,
+        "step": 10,
+        "value": 340
+      },
+      {
+        "id": "sound-speed",
+        "label": "声速",
+        "unit": "m/s",
+        "min": 1,
+        "step": 10,
+        "value": 340
+      }
+    ],
+    "choices": [
+      {
+        "id": "medium",
+        "label": "传播介质",
+        "value": "air",
+        "options": [
+          {
+            "value": "air",
+            "label": "空气 15 ℃（340 m/s）"
+          },
+          {
+            "value": "water",
+            "label": "水（1500 m/s）"
+          },
+          {
+            "value": "steel",
+            "label": "钢铁（5200 m/s）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义声速"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wave-travelling",
+    "label": "绳上的简谐横波",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 5
+      },
+      {
+        "id": "frequency",
+        "label": "波源频率",
+        "unit": "Hz",
+        "min": 0.5,
+        "max": 50,
+        "step": 0.5,
+        "value": 5
+      },
+      {
+        "id": "wave-speed",
+        "label": "波速（由介质决定）",
+        "unit": "m/s",
+        "min": 0.5,
+        "max": 200,
+        "step": 0.5,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "wave-interference",
+    "label": "双源干涉与波的叠加",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 3
+      },
+      {
+        "id": "frequency",
+        "label": "波源频率",
+        "unit": "Hz",
+        "min": 0.5,
+        "max": 50,
+        "step": 0.5,
+        "value": 10
+      },
+      {
+        "id": "wave-speed",
+        "label": "波速（由介质决定）",
+        "unit": "m/s",
+        "min": 0.5,
+        "max": 200,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "path-difference",
+        "label": "路程差（移动观察点）",
+        "unit": "m",
+        "min": 0,
+        "max": 0.8,
+        "step": 0.05,
+        "value": 0.4
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "wave-standing",
+    "label": "两端固定的弦驻波",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 4
+      },
+      {
+        "id": "wave-speed",
+        "label": "弦上波速（由介质决定）",
+        "unit": "m/s",
+        "min": 0.5,
+        "max": 200,
+        "step": 0.5,
+        "value": 40
+      },
+      {
+        "id": "string-length",
+        "label": "弦长",
+        "unit": "m",
+        "min": 0.2,
+        "max": 5,
+        "step": 0.1,
+        "value": 1
+      },
+      {
+        "id": "harmonic",
+        "label": "谐波次数",
+        "unit": "",
+        "min": 1,
+        "max": 8,
+        "step": 1,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "wave-longitudinal",
+    "label": "纵波(疏密波)",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "frequency",
+        "label": "波源频率",
+        "unit": "Hz",
+        "min": 0.5,
+        "max": 50,
+        "step": 0.5,
+        "value": 4
+      },
+      {
+        "id": "wave-speed",
+        "label": "波速（由介质决定）",
+        "unit": "m/s",
+        "min": 0.5,
+        "max": 200,
+        "step": 0.5,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "wave-reflection-refraction",
+    "label": "波的反射与折射",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "frequency",
+        "label": "波源频率",
+        "unit": "Hz",
+        "min": 0.5,
+        "max": 50,
+        "step": 0.5,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "wave-diffraction",
+    "label": "单缝衍射",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "frequency",
+        "label": "波源频率",
+        "unit": "Hz",
+        "min": 0.5,
+        "max": 50,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "wave-speed",
+        "label": "波速（由介质决定）",
+        "unit": "m/s",
+        "min": 0.5,
+        "max": 200,
+        "step": 0.5,
+        "value": 1
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "wave-doppler",
+    "label": "多普勒效应",
+    "domain": "wave",
+    "parameters": [
+      {
+        "id": "amplitude",
+        "label": "振幅",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 20,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "frequency",
+        "label": "波源频率",
+        "unit": "Hz",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 500
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "buoyancy",
+    "label": "探究浮力的大小",
+    "domain": "fluid",
+    "parameters": [
+      {
+        "id": "block-mass",
+        "label": "物块质量",
+        "unit": "g",
+        "min": 1,
+        "step": 10,
+        "value": 270
+      },
+      {
+        "id": "liquid-density",
+        "label": "液体密度",
+        "unit": "kg/m³",
+        "min": 1,
+        "step": 50,
+        "value": 1000
+      }
+    ],
+    "choices": [
+      {
+        "id": "liquid",
+        "label": "液体",
+        "value": "water",
+        "options": [
+          {
+            "value": "water",
+            "label": "水（1000 kg/m³）"
+          },
+          {
+            "value": "brine",
+            "label": "盐水（1100 kg/m³）"
+          },
+          {
+            "value": "alcohol",
+            "label": "酒精（800 kg/m³）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义密度"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "solid-pressure",
+    "label": "探究压力的作用效果",
+    "domain": "fluid",
+    "parameters": [
+      {
+        "id": "pressure-force",
+        "label": "压力",
+        "unit": "N",
+        "min": 0,
+        "step": 1,
+        "value": 20
+      },
+      {
+        "id": "contact-area",
+        "label": "受力面积",
+        "unit": "cm²",
+        "min": 1,
+        "step": 10,
+        "value": 200
+      },
+      {
+        "id": "comparison-area",
+        "label": "对比面面积",
+        "unit": "cm²",
+        "min": 1,
+        "step": 10,
+        "value": 50
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "liquid-pressure",
+    "label": "探究液体内部的压强",
+    "domain": "fluid",
+    "parameters": [
+      {
+        "id": "liquid-density",
+        "label": "液体密度",
+        "unit": "kg/m³",
+        "min": 1,
+        "step": 50,
+        "value": 1000
+      },
+      {
+        "id": "probe-depth",
+        "label": "探头深度",
+        "unit": "cm",
+        "min": 0,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "comparison-depth",
+        "label": "对比深度",
+        "unit": "cm",
+        "min": 0,
+        "step": 5,
+        "value": 40
+      },
+      {
+        "id": "comparison-liquid-density",
+        "label": "对比液体密度",
+        "unit": "kg/m³",
+        "min": 1,
+        "step": 50,
+        "value": 1100
+      }
+    ],
+    "choices": [
+      {
+        "id": "liquid-density",
+        "label": "液体",
+        "value": "water",
+        "options": [
+          {
+            "value": "water",
+            "label": "水（1000 kg/m³）"
+          },
+          {
+            "value": "brine",
+            "label": "盐水（1100 kg/m³）"
+          },
+          {
+            "value": "alcohol",
+            "label": "酒精（800 kg/m³）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义密度"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "atmospheric-pressure",
+    "label": "大气压的测量",
+    "domain": "fluid",
+    "parameters": [
+      {
+        "id": "atmospheric-pressure",
+        "label": "大气压",
+        "unit": "Pa",
+        "min": 1,
+        "step": 1000,
+        "value": 101300
+      },
+      {
+        "id": "barometer-fluid-density",
+        "label": "气压计液体密度",
+        "unit": "kg/m³",
+        "min": 1,
+        "step": 100,
+        "value": 13600
+      },
+      {
+        "id": "hemisphere-radius",
+        "label": "半球半径",
+        "unit": "cm",
+        "min": 0.5,
+        "step": 1,
+        "value": 5
+      }
+    ],
+    "choices": [
+      {
+        "id": "atmospheric-pressure",
+        "label": "气压",
+        "value": "standard",
+        "options": [
+          {
+            "value": "standard",
+            "label": "标准大气压（101300 Pa）"
+          },
+          {
+            "value": "plateau",
+            "label": "高原（70000 Pa）"
+          },
+          {
+            "value": "highland",
+            "label": "高山（60000 Pa）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义气压"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "thermometer",
+    "label": "温度计的刻度",
+    "domain": "thermal",
+    "parameters": [
+      {
+        "id": "thermometer-temperature",
+        "label": "所测温度",
+        "unit": "°C",
+        "min": -30,
+        "max": 120,
+        "step": 5,
+        "value": 25
+      },
+      {
+        "id": "filling-coefficient",
+        "label": "膨胀系数",
+        "unit": "1/K",
+        "min": 0.00001,
+        "max": 0.002,
+        "step": 0.00001,
+        "value": 0.0002
+      },
+      {
+        "id": "bulb-volume",
+        "label": "玻璃泡体积",
+        "unit": "cm³",
+        "min": 0.02,
+        "max": 1,
+        "step": 0.02,
+        "value": 0.1
+      },
+      {
+        "id": "bore-diameter",
+        "label": "细管直径",
+        "unit": "mm",
+        "min": 0.05,
+        "max": 1,
+        "step": 0.01,
+        "value": 0.16
+      }
+    ],
+    "choices": [
+      {
+        "id": "filling-liquid",
+        "label": "测温液体",
+        "value": "mercury-like",
+        "options": [
+          {
+            "value": "mercury-like",
+            "label": "类水银（β = 2×10⁻⁴）"
+          },
+          {
+            "value": "water",
+            "label": "水（β = 2.1×10⁻⁴）"
+          },
+          {
+            "value": "alcohol",
+            "label": "酒精（β = 1.1×10⁻³，灵敏度高得多）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
+          }
+        ]
+      },
+      {
+        "id": "dip-into",
+        "label": "把温度计插进",
+        "value": "room",
+        "options": [
+          {
+            "value": "ice",
+            "label": "冰水混合物（0 °C，下固定点）"
+          },
+          {
+            "value": "steam",
+            "label": "沸水（100 °C，上固定点）"
+          },
+          {
+            "value": "room",
+            "label": "室温（25 °C）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "noise",
+    "label": "噪声的减弱",
+    "domain": "acoustics",
+    "parameters": [
+      {
+        "id": "noise-source-level",
+        "label": "声源功率级",
+        "unit": "dB",
+        "min": 40,
+        "max": 140,
+        "step": 5,
+        "value": 100
+      },
+      {
+        "id": "listener-distance",
+        "label": "听者距离",
+        "unit": "m",
+        "min": 0.5,
+        "max": 32,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "barrier-attenuation",
+        "label": "屏障隔声量",
+        "unit": "dB",
+        "min": 0,
+        "max": 60,
+        "step": 5,
+        "value": 15
+      }
+    ],
+    "choices": [
+      {
+        "id": "barrier",
+        "label": "屏障",
+        "value": "glass",
+        "options": [
+          {
+            "value": "none",
+            "label": "没有屏障（对照组）"
+          },
+          {
+            "value": "glass",
+            "label": "单层玻璃（15 dB）"
+          },
+          {
+            "value": "wall",
+            "label": "砖墙（30 dB）"
+          },
+          {
+            "value": "double",
+            "label": "双层隔声（45 dB）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
+          }
+        ]
+      },
+      {
+        "id": "listener-step",
+        "label": "听者位置",
+        "value": "near",
+        "options": [
+          {
+            "value": "near",
+            "label": "1 m 处"
+          },
+          {
+            "value": "double",
+            "label": "退到 2 m（距离加倍）"
+          },
+          {
+            "value": "far",
+            "label": "退到 8 m（8 倍）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "crystal-melting",
+    "label": "探究晶体的熔化过程",
+    "domain": "thermal",
+    "parameters": [
+      {
+        "id": "sample-mass",
+        "label": "样品质量",
+        "unit": "g",
+        "min": 1,
+        "step": 20,
+        "value": 100
+      },
+      {
+        "id": "heater-power",
+        "label": "加热功率",
+        "unit": "W",
+        "min": 1,
+        "step": 10,
+        "value": 50
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "boiling-water",
+    "label": "水的沸腾",
+    "domain": "thermal",
+    "parameters": [
+      {
+        "id": "sample-mass",
+        "label": "样品质量",
+        "unit": "g",
+        "min": 1,
+        "step": 20,
+        "value": 500
+      },
+      {
+        "id": "heater-power",
+        "label": "加热功率",
+        "unit": "W",
+        "min": 1,
+        "step": 10,
+        "value": 500
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "heat-capacity-comparison",
+    "label": "比较不同物质的吸热能力",
+    "domain": "thermal",
+    "parameters": [
+      {
+        "id": "sample-mass",
+        "label": "每种样品质量",
+        "unit": "g",
+        "min": 1,
+        "step": 20,
+        "value": 100
+      },
+      {
+        "id": "heater-power",
+        "label": "加热功率",
+        "unit": "W",
+        "min": 1,
+        "step": 10,
+        "value": 50
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "point-charge",
+    "label": "单点电荷电场",
+    "domain": "electric",
+    "parameters": [
+      {
+        "id": "source-1",
+        "label": "正电荷",
+        "unit": "C",
+        "step": 0.000001,
+        "value": 0.000005
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "multi-point-charge",
+    "label": "多点电荷电场",
+    "domain": "electric",
+    "parameters": [
+      {
+        "id": "source-1",
+        "label": "正电荷",
+        "unit": "C",
+        "step": 0.000001,
+        "value": 0.000004
+      },
+      {
+        "id": "source-2",
+        "label": "负电荷",
+        "unit": "C",
+        "step": 0.000001,
+        "value": -0.000004
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "uniform-electric",
+    "label": "匀强电场中的带电粒子",
+    "domain": "electric",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 0.000001
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 0.01
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 100000,
+        "value": 2
+      },
+      {
+        "id": "E",
+        "label": "场强",
+        "unit": "V/m",
+        "min": 0,
+        "step": 100,
+        "value": 10000
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "down",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "parallel-plate",
+    "label": "平行板电场偏转",
+    "domain": "electric",
+    "parameters": [
+      {
+        "id": "plateSeparation",
+        "label": "板间距",
+        "unit": "m",
+        "min": 0.0001,
+        "step": 0.004,
+        "value": 0.04
+      },
+      {
+        "id": "plateLength",
+        "label": "板长",
+        "unit": "m",
+        "min": 0.0001,
+        "step": 0.012,
+        "value": 0.12
+      },
+      {
+        "id": "electricFieldStrength",
+        "label": "场强",
+        "unit": "V/m",
+        "min": 0,
+        "step": 100,
+        "value": 2000
+      },
+      {
+        "id": "particleCharge",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": -1.6e-19
+      },
+      {
+        "id": "particleMass",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-31,
+        "value": 9.11e-31
+      },
+      {
+        "id": "initialSpeed",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 1000000,
+        "value": 30000000
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "down",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "straight-wire-field",
+    "label": "通电直导线周围的磁场",
+    "domain": "magnetic",
+    "parameters": [
+      {
+        "id": "current",
+        "label": "电流",
+        "unit": "A",
+        "min": -50,
+        "max": 50,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "probe-distance",
+        "label": "探测距离",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 50,
+        "step": 0.5,
+        "value": 5
+      },
+      {
+        "id": "comparison-probe-distance",
+        "label": "对比探测距离",
+        "unit": "cm",
+        "min": 0.5,
+        "max": 100,
+        "step": 0.5,
+        "value": 10
+      }
+    ],
+    "choices": [
+      {
+        "id": "current-direction",
+        "label": "电流方向",
+        "value": "out",
+        "options": [
+          {
+            "value": "out",
+            "label": "电流出纸面（⊙）"
+          },
+          {
+            "value": "in",
+            "label": "电流进纸面（⊗）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "solenoid-field",
+    "label": "通电螺线管内部的磁场",
+    "domain": "magnetic",
+    "parameters": [
+      {
+        "id": "current",
+        "label": "电流",
+        "unit": "A",
+        "min": -50,
+        "max": 50,
+        "step": 0.5,
+        "value": 5
+      },
+      {
+        "id": "solenoid-turns",
+        "label": "匝数",
+        "unit": "匝",
+        "min": 1,
+        "max": 4000,
+        "step": 10,
+        "value": 400
+      },
+      {
+        "id": "solenoid-length",
+        "label": "线圈长度",
+        "unit": "cm",
+        "min": 2,
+        "max": 100,
+        "step": 1,
+        "value": 20
+      },
+      {
+        "id": "solenoid-comparison-turns",
+        "label": "对比绕组匝数",
+        "unit": "匝",
+        "min": 1,
+        "max": 8000,
+        "step": 10,
+        "value": 800
+      }
+    ],
+    "choices": [
+      {
+        "id": "current-direction",
+        "label": "电流方向",
+        "value": "out",
+        "options": [
+          {
+            "value": "out",
+            "label": "电流出纸面（⊙）"
+          },
+          {
+            "value": "in",
+            "label": "电流进纸面（⊗）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "electromagnet",
+    "label": "电磁铁：铁芯与吸力",
+    "domain": "magnetic",
+    "parameters": [
+      {
+        "id": "current",
+        "label": "电流",
+        "unit": "A",
+        "min": -50,
+        "max": 50,
+        "step": 0.5,
+        "value": 1
+      },
+      {
+        "id": "solenoid-turns",
+        "label": "匝数",
+        "unit": "匝",
+        "min": 1,
+        "max": 4000,
+        "step": 10,
+        "value": 200
+      },
+      {
+        "id": "solenoid-length",
+        "label": "线圈长度",
+        "unit": "cm",
+        "min": 2,
+        "max": 100,
+        "step": 1,
+        "value": 20
+      },
+      {
+        "id": "core-permeability",
+        "label": "铁芯相对磁导率",
+        "unit": "",
+        "min": 1,
+        "max": 5000,
+        "step": 10,
+        "value": 200
+      },
+      {
+        "id": "comparison-core-permeability",
+        "label": "对比铁芯相对磁导率",
+        "unit": "",
+        "min": 1,
+        "max": 5000,
+        "step": 10,
+        "value": 800
+      },
+      {
+        "id": "core-area",
+        "label": "极面面积",
+        "unit": "cm²",
+        "min": 0.5,
+        "max": 100,
+        "step": 0.5,
+        "value": 4
+      }
+    ],
+    "choices": [
+      {
+        "id": "current-direction",
+        "label": "电流方向",
+        "value": "out",
+        "options": [
+          {
+            "value": "out",
+            "label": "电流出纸面（⊙）"
+          },
+          {
+            "value": "in",
+            "label": "电流进纸面（⊗）"
+          }
+        ]
+      },
+      {
+        "id": "core-material",
+        "label": "铁芯",
+        "value": "soft-iron",
+        "options": [
+          {
+            "value": "air",
+            "label": "空气芯（μ_r = 1）"
+          },
+          {
+            "value": "soft-iron",
+            "label": "软铁（μ_r = 200）"
+          },
+          {
+            "value": "silicon-steel",
+            "label": "硅钢（μ_r = 800）"
+          },
+          {
+            "value": "custom",
+            "label": "自定义"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "motor",
+    "label": "电动机：安培力与力矩",
+    "domain": "magnetic",
+    "parameters": [
+      {
+        "id": "current",
+        "label": "电流",
+        "unit": "A",
+        "min": -50,
+        "max": 50,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "rotor-field",
+        "label": "定子磁场",
+        "unit": "T",
+        "min": 0.05,
+        "max": 2,
+        "step": 0.05,
+        "value": 0.5
+      },
+      {
+        "id": "rotor-turns",
+        "label": "匝数",
+        "unit": "匝",
+        "min": 1,
+        "max": 2000,
+        "step": 10,
+        "value": 100
+      },
+      {
+        "id": "rotor-side",
+        "label": "受力边长",
+        "unit": "cm",
+        "min": 1,
+        "max": 40,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "rotor-width",
+        "label": "线圈宽度",
+        "unit": "cm",
+        "min": 1,
+        "max": 40,
+        "step": 0.5,
+        "value": 4
+      },
+      {
+        "id": "rotor-angle",
+        "label": "线圈角度",
+        "unit": "°",
+        "min": -90,
+        "max": 180,
+        "step": 5,
+        "value": 0
+      }
+    ],
+    "choices": [
+      {
+        "id": "current-direction",
+        "label": "电流方向",
+        "value": "out",
+        "options": [
+          {
+            "value": "out",
+            "label": "电流出纸面（⊙）"
+          },
+          {
+            "value": "in",
+            "label": "电流进纸面（⊗）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "magnetic-circular",
+    "label": "磁场中的带电粒子运动",
+    "domain": "magnetic",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "粒子电荷",
+        "unit": "C",
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "粒子质量",
+        "unit": "kg",
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "value": 2000000
+      },
+      {
+        "id": "B",
+        "label": "磁感应强度",
+        "unit": "T",
+        "value": 0.5
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "方向",
+        "value": "into-page",
+        "options": [
+          {
+            "value": "into-page",
+            "label": "垂直纸面向里"
+          },
+          {
+            "value": "out-of-page",
+            "label": "垂直纸面向外"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "series-circuit",
+    "label": "串联电路",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0
+      },
+      {
+        "id": "resistance:r1",
+        "label": "R₁",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "resistance:r2",
+        "label": "R₂",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 20
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "parallel-circuit",
+    "label": "并联电路",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0
+      },
+      {
+        "id": "resistance:r1",
+        "label": "R₁",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "resistance:r2",
+        "label": "R₂",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 15
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mixed-circuit",
+    "label": "混联电路",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0
+      },
+      {
+        "id": "resistance:r1",
+        "label": "R₁",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 2
+      },
+      {
+        "id": "resistance:r2",
+        "label": "R₂",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 6
+      },
+      {
+        "id": "resistance:r3",
+        "label": "R₃",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 3
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "short-circuit",
+    "label": "短路",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0.5
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rheostat-circuit",
+    "label": "滑动变阻器调节电流",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 6
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0
+      },
+      {
+        "id": "resistance:rv",
+        "label": "R 全阻值",
+        "unit": "Ω",
+        "min": 1,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "slider:rv",
+        "label": "R 滑片位置",
+        "unit": "%",
+        "min": 0,
+        "max": 100,
+        "step": 5,
+        "value": 0
+      },
+      {
+        "id": "resistance:r0",
+        "label": "R₀",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 10
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "va-resistance",
+    "label": "伏安法测电阻",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 3
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0
+      },
+      {
+        "id": "resistance:rv",
+        "label": "R 全阻值",
+        "unit": "Ω",
+        "min": 1,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "slider:rv",
+        "label": "R 滑片位置",
+        "unit": "%",
+        "min": 0,
+        "max": 100,
+        "step": 5,
+        "value": 25
+      },
+      {
+        "id": "resistance:r0",
+        "label": "R₀",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 5
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bulb-power",
+    "label": "测量小灯泡的电功率",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 4.5
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0
+      },
+      {
+        "id": "resistance:rv",
+        "label": "R 全阻值",
+        "unit": "Ω",
+        "min": 1,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "slider:rv",
+        "label": "R 滑片位置",
+        "unit": "%",
+        "min": 0,
+        "max": 100,
+        "step": 5,
+        "value": 30
+      },
+      {
+        "id": "resistance:r0",
+        "label": "R₀",
+        "unit": "Ω",
+        "min": 0.1,
+        "step": 1,
+        "value": 8.3
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "emf-measurement",
+    "label": "测电源电动势与内阻",
+    "domain": "circuit",
+    "parameters": [
+      {
+        "id": "emf",
+        "label": "电动势",
+        "unit": "V",
+        "min": 0,
+        "step": 0.5,
+        "value": 4.5
+      },
+      {
+        "id": "internal-resistance",
+        "label": "内阻",
+        "unit": "Ω",
+        "min": 0,
+        "step": 0.1,
+        "value": 0.5
+      },
+      {
+        "id": "resistance:rv",
+        "label": "R 全阻值",
+        "unit": "Ω",
+        "min": 1,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "slider:rv",
+        "label": "R 滑片位置",
+        "unit": "%",
+        "min": 0,
+        "max": 100,
+        "step": 5,
+        "value": 10
+      }
+    ],
+    "choices": [
+      {
+        "id": "switch:sw",
+        "label": "S",
+        "value": "closed",
+        "options": [
+          {
+            "value": "closed",
+            "label": "闭合"
+          },
+          {
+            "value": "open",
+            "label": "断开"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "velocity-selector",
+    "label": "速度选择器",
+    "domain": "composite",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 10000,
+        "value": 100000
+      },
+      {
+        "id": "E",
+        "label": "电场强度",
+        "unit": "V/m",
+        "min": 0,
+        "step": 1000,
+        "value": 20000
+      },
+      {
+        "id": "B",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0,
+        "step": 0.01,
+        "value": 0.2
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "up",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mass-spectrometer",
+    "label": "质谱仪基础模型",
+    "domain": "composite",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 10000,
+        "value": 100000
+      },
+      {
+        "id": "E",
+        "label": "电场强度",
+        "unit": "V/m",
+        "min": 0,
+        "step": 1000,
+        "value": 200
+      },
+      {
+        "id": "B",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0,
+        "step": 0.01,
+        "value": 0.002
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "up",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "composite-eb",
+    "label": "电场 + 磁场复合运动",
+    "domain": "composite",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 10000,
+        "value": 100000
+      },
+      {
+        "id": "E",
+        "label": "电场强度",
+        "unit": "V/m",
+        "min": 0,
+        "step": 1000,
+        "value": 20000
+      },
+      {
+        "id": "B",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0,
+        "step": 0.01,
+        "value": 0.2
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "up",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "composite-ebg",
+    "label": "电场 + 磁场 + 重力",
+    "domain": "composite",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 10000,
+        "value": 100000
+      },
+      {
+        "id": "E",
+        "label": "电场强度",
+        "unit": "V/m",
+        "min": 0,
+        "step": 1000,
+        "value": 20000
+      },
+      {
+        "id": "B",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0,
+        "step": 0.01,
+        "value": 0.2
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "up",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "multi-region-field",
+    "label": "多场区带电粒子运动",
+    "domain": "composite",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 10000,
+        "value": 100000
+      },
+      {
+        "id": "E",
+        "label": "电场强度",
+        "unit": "V/m",
+        "min": 0,
+        "step": 1000,
+        "value": 20000
+      },
+      {
+        "id": "B",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0,
+        "step": 0.01,
+        "value": 0.2
+      }
+    ],
+    "choices": [
+      {
+        "id": "direction",
+        "label": "电场方向",
+        "value": "up",
+        "options": [
+          {
+            "value": "right",
+            "label": "水平向右"
+          },
+          {
+            "value": "left",
+            "label": "水平向左"
+          },
+          {
+            "value": "up",
+            "label": "竖直向上"
+          },
+          {
+            "value": "down",
+            "label": "竖直向下"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cyclotron",
+    "label": "回旋加速器",
+    "domain": "composite",
+    "parameters": [
+      {
+        "id": "q",
+        "label": "电荷量",
+        "unit": "C",
+        "step": 1e-19,
+        "value": 1.6e-19
+      },
+      {
+        "id": "m",
+        "label": "质量",
+        "unit": "kg",
+        "min": 1e-32,
+        "step": 1e-27,
+        "value": 1.67e-27
+      },
+      {
+        "id": "v0",
+        "label": "初速度",
+        "unit": "m/s",
+        "min": 0,
+        "step": 10000,
+        "value": 100000
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "induction-bar-motion",
+    "label": "导体棒切割磁感线",
+    "domain": "induction",
+    "parameters": [
+      {
+        "id": "field-strength",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 0.5
+      },
+      {
+        "id": "loop-resistance",
+        "label": "回路电阻",
+        "unit": "Ω",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 5
+      },
+      {
+        "id": "bar-length",
+        "label": "棒长",
+        "unit": "cm",
+        "min": 5,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "bar-velocity",
+        "label": "棒速（正负 = 方向）",
+        "unit": "m/s",
+        "min": -10,
+        "max": 10,
+        "step": 0.5,
+        "value": 2
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "transformer",
+    "label": "变压器",
+    "domain": "induction",
+    "parameters": [
+      {
+        "id": "transformer-voltage",
+        "label": "一次电压",
+        "unit": "V",
+        "min": 1,
+        "max": 1000,
+        "step": 10,
+        "value": 220
+      },
+      {
+        "id": "transformer-current",
+        "label": "一次电流",
+        "unit": "A",
+        "min": 0,
+        "max": 10,
+        "step": 0.05,
+        "value": 0.1
+      },
+      {
+        "id": "primary-turns",
+        "label": "一次匝数",
+        "unit": "匝",
+        "min": 50,
+        "max": 5000,
+        "step": 50,
+        "value": 1000
+      },
+      {
+        "id": "secondary-turns",
+        "label": "二次匝数",
+        "unit": "匝",
+        "min": 50,
+        "max": 5000,
+        "step": 50,
+        "value": 200
+      }
+    ],
+    "choices": [
+      {
+        "id": "transformer-kind",
+        "label": "变压器类型",
+        "value": "step-down",
+        "options": [
+          {
+            "value": "step-down",
+            "label": "降压（N₂ < N₁）"
+          },
+          {
+            "value": "step-up",
+            "label": "升压（N₂ > N₁）"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "induction-double-bar-momentum",
+    "label": "导轨双棒 · 冲量型",
+    "domain": "induction",
+    "parameters": [
+      {
+        "id": "field-strength",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 0.5
+      },
+      {
+        "id": "loop-resistance",
+        "label": "回路电阻",
+        "unit": "Ω",
+        "min": 0.01,
+        "step": 0.01,
+        "value": 0.1
+      },
+      {
+        "id": "bar-length",
+        "label": "导轨间距（棒长）",
+        "unit": "cm",
+        "min": 5,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "bar-mass-1",
+        "label": "棒 1 质量",
+        "unit": "g",
+        "min": 10,
+        "step": 10,
+        "value": 50
+      },
+      {
+        "id": "bar-mass-2",
+        "label": "棒 2 质量",
+        "unit": "g",
+        "min": 10,
+        "step": 10,
+        "value": 50
+      },
+      {
+        "id": "bar-velocity-1",
+        "label": "棒 1 初速度（正负 = 方向）",
+        "unit": "m/s",
+        "min": -10,
+        "max": 10,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "bar-velocity-2",
+        "label": "棒 2 初速度（正负 = 方向）",
+        "unit": "m/s",
+        "min": -10,
+        "max": 10,
+        "step": 0.5,
+        "value": 0
+      },
+      {
+        "id": "external-force",
+        "label": "棒 1 恒定外力（0 = 自由双棒）",
+        "unit": "N",
+        "min": 0,
+        "step": 0.01,
+        "value": 0
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "induction-double-bar-force",
+    "label": "导轨双棒 · 恒力型",
+    "domain": "induction",
+    "parameters": [
+      {
+        "id": "field-strength",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 0.5
+      },
+      {
+        "id": "loop-resistance",
+        "label": "回路电阻",
+        "unit": "Ω",
+        "min": 0.01,
+        "step": 0.01,
+        "value": 0.1
+      },
+      {
+        "id": "bar-length",
+        "label": "导轨间距（棒长）",
+        "unit": "cm",
+        "min": 5,
+        "step": 5,
+        "value": 20
+      },
+      {
+        "id": "bar-mass-1",
+        "label": "棒 1 质量",
+        "unit": "g",
+        "min": 10,
+        "step": 10,
+        "value": 50
+      },
+      {
+        "id": "bar-mass-2",
+        "label": "棒 2 质量",
+        "unit": "g",
+        "min": 10,
+        "step": 10,
+        "value": 50
+      },
+      {
+        "id": "bar-velocity-1",
+        "label": "棒 1 初速度（正负 = 方向）",
+        "unit": "m/s",
+        "min": -10,
+        "max": 10,
+        "step": 0.5,
+        "value": 0
+      },
+      {
+        "id": "bar-velocity-2",
+        "label": "棒 2 初速度（正负 = 方向）",
+        "unit": "m/s",
+        "min": -10,
+        "max": 10,
+        "step": 0.5,
+        "value": 0
+      },
+      {
+        "id": "external-force",
+        "label": "棒 1 恒定外力（0 = 自由双棒）",
+        "unit": "N",
+        "min": 0,
+        "step": 0.01,
+        "value": 0.1
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "induction-flux-change",
+    "label": "磁通量变化产生感应电动势",
+    "domain": "induction",
+    "parameters": [
+      {
+        "id": "field-strength",
+        "label": "磁感应强度",
+        "unit": "T",
+        "min": 0.1,
+        "step": 0.1,
+        "value": 0.4
+      },
+      {
+        "id": "loop-resistance",
+        "label": "回路电阻",
+        "unit": "Ω",
+        "min": 0.5,
+        "step": 0.5,
+        "value": 2
+      },
+      {
+        "id": "flux-rate",
+        "label": "磁通量变化率（正负 = 方向）",
+        "unit": "Wb/s",
+        "min": -0.5,
+        "max": 0.5,
+        "step": 0.01,
+        "value": 0.05
+      }
+    ],
+    "choices": []
+  },
+  {
+    "id": "photoelectric-effect",
+    "label": "光电效应",
+    "domain": "modern",
+    "parameters": [],
+    "choices": []
+  }
+]

@@ -659,3 +659,12 @@
 :global(body[data-ds-dark-theme]) .status[data-state='pending'] { color: #e3bd7e; }
 :global(body[data-ds-dark-theme]) .status[data-state='approved'] { color: #9cd3b8; }
 :global(body[data-ds-dark-theme]) .status[data-state='rejected'] { color: #f0b1a5; }
+.experimentSelect { width: 100%; min-height: 44px; }
+.dialog.embedded.reviewOnly { padding: 24px; }
+.reviewOnly .content { padding: 0; }
+.reviewOnly .versions { margin-top: 0; padding-top: 0; border-top: 0; }
+.reviewStats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+.reviewStats > span { display: flex; align-items: baseline; gap: 9px; padding: 15px 18px; border: 1px solid var(--physics-glass-border-soft); border-radius: 16px; background-color: var(--physics-glass-fill); background-image: var(--physics-glass-sheen); box-shadow: var(--physics-glass-rim); font-size: 12px; color: var(--upload-muted); }
+.reviewStats strong { font-size: 23px; font-weight: 650; color: var(--upload-ink); }
+.reviewOnly .sectionHeading > [data-glass-select] { margin-left: auto; min-width: 130px; }
+@media (max-width: 700px) { .dialog.embedded.reviewOnly { padding: 18px; } .reviewStats { gap: 8px; } .reviewStats > span { flex-direction: column; gap: 4px; padding: 12px; } .reviewOnly .sectionHeading > [data-glass-select] { margin-left: 0; flex: 1; } }

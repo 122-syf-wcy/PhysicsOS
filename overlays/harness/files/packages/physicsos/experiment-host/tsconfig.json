@@ -2,11 +2,10 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
+    "resolveJsonModule": true,
     "outDir": "lib/types"
   },
-  "include": [
-    "src"
-  ],
+  "include": ["src", "src/**/*.json"],
   "references": [
     {
       "path": "../../../tsconfig.physicsos.json"

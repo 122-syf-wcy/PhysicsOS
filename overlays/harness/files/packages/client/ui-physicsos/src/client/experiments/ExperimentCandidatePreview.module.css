@@ -1,0 +1,29 @@
+.preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  margin-top: 18px;
+  min-height: 380px;
+  align-items: stretch;
+}
+.controls { min-width: 0; max-height: 640px; overflow: auto; padding: 0 4px; color: var(--physics-ink, #283c32); }
+.controls h4 { margin: 0 0 12px; font-size: 15px; }
+.controls fieldset { border: 0; padding: 12px 0; margin: 0; border-top: 1px solid var(--physics-glass-border-soft, #d9e1d9); }
+.controls legend { font-weight: 650; font-size: 12px; padding: 4px 0; }
+.controls label { display: grid; gap: 7px; font-size: 12px; margin-bottom: 12px; }
+.controls input[type='number'], .controls select { width: 100%; box-sizing: border-box; min-height: 36px; border: 1px solid var(--physics-glass-border-soft, #d9e1d9); border-radius: 9px; background: var(--physics-glass-fill-strong, #fff); color: inherit; padding: 7px 9px; font: inherit; }
+.controls input[type='range'] { width: 100%; accent-color: var(--physics-ink-link, #527f6c); }
+.controls .visibility { display: flex; align-items: center; gap: 8px; }
+.visibility input { width: auto; margin: 0; accent-color: var(--physics-ink-link, #527f6c); }
+.parameter { margin-bottom: 14px; }
+.parameter > span { font-size: 11px; color: #9b4031; }
+.reading { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin: 8px 0; }
+.reading output { text-align: right; font-variant-numeric: tabular-nums; }
+.playback { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+.playback select { width: auto; }
+.playback button { border: 1px solid var(--physics-glass-border-soft, #d9e1d9); border-radius: 9px; padding: 7px 10px; color: inherit; background: var(--physics-glass-fill-strong, #fff); font: inherit; cursor: pointer; }
+@media (max-width: 700px) {
+  .preview { grid-template-columns: minmax(0, 1fr); }
+  .preview > :first-child { height: 350px; }
+  .controls { max-height: none; overflow: visible; }
+}

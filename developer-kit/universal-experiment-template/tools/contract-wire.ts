@@ -1,0 +1,147 @@
+/** Pure V2 wire validation; local previews explicitly opt into fixture snapshots. */
+export const PROTOCOL_VERSION = 2 as const
+export const PARAMETER_CONTRACT = [
+  {
+    id: 'objectDistanceCm',
+    label: '物距',
+    unit: 'cm',
+    access: 'read-write',
+    default: 30,
+    safety: { min: 1, max: 200 },
+    display: { min: 1, max: 80, step: 0.5 },
+  },
+  {
+    id: 'focalLengthCm',
+    label: '焦距',
+    unit: 'cm',
+    access: 'read-write',
+    default: 10,
+    safety: { min: 1, max: 200 },
+    display: { min: 2, max: 30, step: 0.5 },
+  },
+  {
+    id: 'screenDistanceCm',
+    label: '光屏距离',
+    unit: 'cm',
+    access: 'read-write',
+    default: 15,
+    safety: { min: 1, max: 200 },
+    display: { min: 1, max: 100, step: 0.5 },
+  },
+] as const
+export interface ExperimentSnapshot {
+  readonly revision: number
+  readonly source: 'preview-fixture' | 'platform-engine'
+  readonly parameters: {
+    readonly objectDistanceCm: number
+    readonly objectHeightCm: number
+    readonly focalLengthCm: number
+    readonly screenDistanceCm: number
+  }
+  readonly visible: { readonly image: boolean; readonly rays: boolean }
+  /** Lens-relative x/y coordinates in centimetres; production paths come from the engine. */
+  readonly rays: readonly {
+    readonly points: readonly { readonly x: number; readonly y: number }[]
+    readonly extension?: readonly { readonly x: number; readonly y: number }[]
+  }[]
+  readonly result: {
+    readonly imageDistanceCm: number | null
+    readonly imageHeightCm: number | null
+    readonly imageKind: 'real' | 'virtual' | 'none'
+    readonly screenSharp: boolean
+  }
+}
+
+export type ParameterId = 'objectDistanceCm' | 'focalLengthCm' | 'screenDistanceCm'
+export type ExperimentIntent =
+  | {
+    readonly type: 'parameter/preview' | 'parameter/commit'
+    readonly id: ParameterId
+    readonly value: number
+  }
+  | { readonly type: 'parameter/cancel' }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function finite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isRayPath(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    value.length <= 16 &&
+    value.every(point => isRecord(point) && finite(point.x) && finite(point.y))
+  )
+}
+
+/** Validate finite positive engine facts; writable-intent ranges do not limit snapshots.
+ * @param value Untrusted received snapshot.
+ * @param options Explicit local preview source allowance.
+ * @returns Whether the value contains a usable snapshot.
+ */
+export function isSnapshot(
+  value: unknown,
+  options: { allowFixture?: boolean } = {},
+): value is ExperimentSnapshot {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.parameters) ||
+    !isRecord(value.result) ||
+    !isRecord(value.visible)
+  )
+    return false
+  const parameters = value.parameters
+  const result = value.result
+  return (
+    finite(value.revision) &&
+    Number.isInteger(value.revision) &&
+    value.revision >= 0 &&
+    (value.source === 'platform-engine' ||
+      (options.allowFixture === true && value.source === 'preview-fixture')) &&
+    finite(parameters.objectDistanceCm) &&
+    parameters.objectDistanceCm > 0 &&
+    finite(parameters.objectHeightCm) &&
+    parameters.objectHeightCm > 0 &&
+    typeof value.visible.image === 'boolean' &&
+    typeof value.visible.rays === 'boolean' &&
+    Array.isArray(value.rays) &&
+    value.rays.length <= 12 &&
+    value.rays.every(
+      ray =>
+        isRecord(ray) &&
+        isRayPath(ray.points) &&
+        (ray.extension === undefined || isRayPath(ray.extension)),
+    ) &&
+    finite(parameters.focalLengthCm) &&
+    parameters.focalLengthCm > 0 &&
+    finite(parameters.screenDistanceCm) &&
+    parameters.screenDistanceCm > 0 &&
+    (result.imageDistanceCm === null || finite(result.imageDistanceCm)) &&
+    (result.imageHeightCm === null || finite(result.imageHeightCm)) &&
+    (result.imageKind === 'real' ||
+      result.imageKind === 'virtual' ||
+      result.imageKind === 'none') &&
+    typeof result.screenSharp === 'boolean'
+  )
+}
+
+/** Allow only bounded writable parameter intents with exact keys.
+ * @param value Untrusted message from the package.
+ * @returns Whether the message requests an allowed parameter operation.
+ */
+export function isExperimentIntent(value: unknown): value is ExperimentIntent {
+  if (!isRecord(value)) return false
+  if (value.type === 'parameter/cancel') return Object.keys(value).length === 1
+  return (
+    (value.type === 'parameter/preview' || value.type === 'parameter/commit') &&
+    Object.keys(value).length === 3 &&
+    PARAMETER_CONTRACT.some(parameter => parameter.id === value.id) &&
+    finite(value.value) &&
+    value.value >= 1 &&
+    value.value <= 200
+  )
+}

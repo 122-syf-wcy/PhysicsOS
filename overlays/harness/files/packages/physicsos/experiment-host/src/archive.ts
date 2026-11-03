@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { ExperimentError } from './identity.ts'
 import { manifestV2Schema, schemaContractIssues, validatePackageMetadata } from './contract-v2.ts'
 import { evaluateCase } from './contract-optics.ts'
+import { manifestV3Schema, experimentProfile, validatePackageMetadataV3 } from './contract-v3.ts'
 import {
   ZIP_LIMIT,
   safeArchivePath,
@@ -47,7 +48,10 @@ export const manifestSchema = z
     license: z.string().min(1).max(80),
   })
   .strict()
-export type Manifest = z.infer<typeof manifestSchema> | z.infer<typeof manifestV2Schema>
+export type Manifest =
+  | z.infer<typeof manifestSchema>
+  | z.infer<typeof manifestV2Schema>
+  | z.infer<typeof manifestV3Schema>
 export interface ValidatedArchive {
   manifest: Manifest
   assets: Map<string, Buffer>
@@ -255,10 +259,14 @@ export async function validateArchive(
     if (!value || typeof value !== 'object' || Array.isArray(value))
       throw new ExperimentError(400, 'INVALID_MANIFEST', '实验清单不符合 V2 契约')
     const header = value as Record<string, unknown>
-    if (header.experimentId !== 'convex-lens')
-      throw new ExperimentError(400, 'UNSUPPORTED_EXPERIMENT', '只支持已注册的 convex-lens 实验')
     if (
-      (header.schemaVersion === 1 || header.schemaVersion === 2) &&
+      header.schemaVersion === 3
+        ? !experimentProfile(header.experimentId)
+        : header.experimentId !== 'convex-lens'
+    )
+      throw new ExperimentError(400, 'UNSUPPORTED_EXPERIMENT', '只支持已注册的实验与对应版本契约')
+    if (
+      (header.schemaVersion === 1 || header.schemaVersion === 2 || header.schemaVersion === 3) &&
       header.protocolVersion !== header.schemaVersion
     )
       throw new ExperimentError(400, 'INCOMPATIBLE_PROTOCOL', '清单版本与运行协议版本必须一致')
@@ -271,7 +279,9 @@ export async function validateArchive(
     const parsed =
       header.schemaVersion === 1 && options.allowLegacy
         ? manifestSchema.safeParse(value)
-        : manifestV2Schema.safeParse(value)
+        : header.schemaVersion === 3
+          ? manifestV3Schema.safeParse(value)
+          : manifestV2Schema.safeParse(value)
     if (!parsed.success)
       throw new ExperimentError(
         400,
@@ -283,6 +293,11 @@ export async function validateArchive(
       const issues = validatePackageMetadata(files, evaluateCase)
       if (issues.length)
         throw new ExperimentError(400, 'INVALID_METADATA', '实验元数据不符合 V2 契约', issues)
+    }
+    if (parsed.data.schemaVersion === 3) {
+      const issues = validatePackageMetadataV3(files, parsed.data)
+      if (issues.length)
+        throw new ExperimentError(400, 'INVALID_METADATA', '实验元数据不符合 V3 契约', issues)
     }
     const assets = await validatePackageResources(files, parsed.data)
     return { manifest: parsed.data, assets, fileCount }

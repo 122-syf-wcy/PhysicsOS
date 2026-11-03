@@ -496,7 +496,8 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         unit: 'Hz',
         value: rounded(model?.frequency, 2),
         min: 0.5,
-        max: 50,
+        // Doppler's sound source uses frequencies above the rope-wave teaching range.
+        ...(bench.type === 'doppler' ? {} : { max: 50 }),
         step: 0.5,
         highlights: bench.id,
       })

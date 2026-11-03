@@ -279,6 +279,7 @@ export function PhysicsSurface({
     <Workspace
       key={runtimeKey}
       runtime={runtime}
+      {...(templateId === undefined ? {} : { experimentId: templateId })}
       {...(updateScene === undefined ? {} : { onSceneChange: updateScene })}
       t={t}
       {...(surfaceState.buildMode === true ? { buildMode: true } : {})}
