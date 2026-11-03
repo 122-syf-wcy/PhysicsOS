@@ -181,10 +181,11 @@ export function apply(ctx: ClientContext): void {
     const start = (): void => {
       if (auth.store.getSnapshot().status !== 'authed' || starting) return
       starting = true
+      const initialState = surface.store.getSnapshot()
       void surface.sync().catch(() => {}).then(() => {
         if (disposed) return
         stopNavigation = startExperimentNavigation({
-          surface, window,
+          surface, window, initialState,
           loadCatalog: async () => (await loadWorkspaceModule()).experimentCatalog,
         })
       })

@@ -107,3 +107,31 @@ it('synchronizes an upload selection made before the navigation bridge starts', 
   stop = startExperimentNavigation({ surface, window, loadCatalog: async () => experimentCatalog })
   expect(window.location.hash).toBe('#/contribute')
 })
+
+it.each([
+  ['#/experiments/convex-lens', 'contribute'],
+  ['#/contribute', 'lab'],
+] as const)(
+  'keeps a newer selection while account sync is pending at %s',
+  async (hash, destination) => {
+    window.history.replaceState(null, '', `/${hash}`)
+    const surface = createPhysicsSurfaceController()
+    const initialState = surface.store.getSnapshot()
+    const selected = destination === 'lab' ? experimentCatalog.create('convex-lens') : undefined
+    surface.open(destination, selected)
+    stop = startExperimentNavigation({
+      surface,
+      window,
+      initialState,
+      loadCatalog: async () => experimentCatalog,
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(surface.store.getSnapshot().surface).toBe(destination)
+    if (destination === 'contribute') expect(window.location.hash).toBe('#/contribute')
+    else {
+      expect(surface.store.getSnapshot().sceneRef?.sceneId).toBe(selected?.sceneId)
+      expect(window.location.hash).toContain('#/experiments/convex-lens?scene=')
+    }
+  },
+)

@@ -2,6 +2,7 @@ import {
   sceneRefOf,
   type PhysicsSceneRef,
   type PhysicsSurfaceController,
+  type PhysicsSurfaceState,
 } from '../surface-store.ts'
 
 interface Catalog {
@@ -19,10 +20,13 @@ export function startExperimentNavigation({
   surface,
   window: browser,
   loadCatalog,
+  initialState = surface.store.getSnapshot(),
 }: {
   surface: PhysicsSurfaceController
   window: Window
   loadCatalog: () => Promise<Catalog>
+  /** Snapshot taken before account sync; a later selection takes precedence over the old URL. */
+  initialState?: PhysicsSurfaceState
 }): () => void {
   let alive = true
   let generation = 0
@@ -134,7 +138,7 @@ export function startExperimentNavigation({
   const unsubscribe = surface.store.subscribe(() => {
     void sync()
   })
-  if (wasManaged) void read()
+  if (wasManaged && surface.store.getSnapshot() === initialState) void read()
   else void sync()
   return () => {
     alive = false
