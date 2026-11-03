@@ -285,3 +285,7 @@ td { color: #6e805f; }
   .hero-intro h1 { font-size: 31px; }
   .hero-mascot { width: 210px; margin: 13px auto -14px; }
 }
+
+.template-release-notice p { margin: 0; }
+.template-release-notice .button { margin-top: 10px; }
+.download-item[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }

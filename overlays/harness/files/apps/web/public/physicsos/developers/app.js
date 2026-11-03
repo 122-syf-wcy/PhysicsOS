@@ -5,12 +5,6 @@ import {
   agentInstructions,
   normalizeExperimentId,
 } from './standards.js'
-const templateRelease = await fetch(
-  new URL('./downloads/template-release.json', import.meta.url),
-).then((response) => {
-  if (!response.ok) throw new Error('模板发布描述加载失败')
-  return response.json()
-})
 
 const main = document.querySelector('#main')
 const nav = document.querySelector('#doc-nav')
@@ -22,6 +16,94 @@ let toastTimeout
 let activeId = 'start'
 let tocFrame
 const mobileViewport = matchMedia('(max-width: 640px)')
+
+// Descriptor availability only controls bound-prompt actions; ordinary docs initialize immediately.
+let templateReleaseState = { status: 'loading', release: null }
+let templateReleaseRequest
+let authorTask = ''
+const templateReleaseViews = new Map()
+
+function observeTemplateRelease(node, update) {
+  templateReleaseViews.set(node, update)
+  update()
+}
+function notifyTemplateRelease() {
+  for (const [node, update] of templateReleaseViews) {
+    if (node.isConnected) update()
+    else templateReleaseViews.delete(node)
+  }
+}
+function loadTemplateRelease() {
+  if (templateReleaseRequest) return templateReleaseRequest
+  templateReleaseState = { status: 'loading', release: null }
+  notifyTemplateRelease()
+  templateReleaseRequest = Promise.resolve()
+    .then(async () => {
+      try {
+        const response = await fetch(new URL('./downloads/template-release.json', import.meta.url))
+        if (!response.ok) throw new Error('Template descriptor unavailable')
+        const release = await response.json()
+        if (release === null || typeof release !== 'object' || Array.isArray(release))
+          throw new Error('Template descriptor must be an object')
+        // Reuse the bound prompt's canonical descriptor checks; never invent an archive identity.
+        agentInstructions('convex-lens', { release })
+        templateReleaseState = { status: 'ready', release }
+      } catch {
+        templateReleaseState = { status: 'error', release: null }
+      }
+    })
+    .finally(() => {
+      templateReleaseRequest = undefined
+      notifyTemplateRelease()
+    })
+  return templateReleaseRequest
+}
+function boundPromptText() {
+  if (templateReleaseState.status !== 'ready') return null
+  let text = agentInstructions('convex-lens', { release: templateReleaseState.release })
+  if (authorTask.trim()) text += '\n## 本次用户任务\n\n' + authorTask.trim() + '\n'
+  return text
+}
+function boundPromptButton(text, kind, className = 'button secondary') {
+  const action = button(
+    text,
+    () => {
+      const value = boundPromptText()
+      if (value === null) return
+      if (kind === 'copy') void copyText(value)
+      else downloadText('AGENTS.md', value)
+    },
+    className,
+  )
+  action.dataset.boundPromptAction = kind
+  observeTemplateRelease(action, () => {
+    action.disabled = templateReleaseState.status !== 'ready'
+  })
+  return action
+}
+function templateReleaseNotice() {
+  const notice = element('aside', 'note template-release-notice')
+  const status = element('p')
+  status.dataset.templateReleaseStatus = ''
+  status.setAttribute('role', 'status')
+  const retry = button('重试加载模板发布信息', () => {
+    void loadTemplateRelease()
+  })
+  retry.dataset.templateReleaseRetry = ''
+  observeTemplateRelease(notice, () => {
+    const state = templateReleaseState.status
+    status.textContent =
+      state === 'ready'
+        ? '可信模板发布信息已就绪。'
+        : state === 'loading'
+          ? '正在加载可信模板发布信息；文档可正常阅读。'
+          : '可信模板发布信息加载失败；开发文档仍可阅读。请重试，加载成功后才能复制或下载绑定提示词。'
+    retry.hidden = state === 'ready'
+    retry.disabled = state !== 'error'
+  })
+  notice.append(status, retry)
+  return notice
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag)
@@ -109,7 +191,12 @@ const downloadItems = [
     'ZIP',
   ],
   ['physicsos-code-style-v1.zip', '代码风格工具包', '完整规范 + AGENTS.md + 可执行检查配置', 'ZIP'],
-  ['AGENTS.md', '凸透镜 V2 AGENTS.md', '绑定可信模板 URL 与 SHA-256；放入实验目录作为任务上下文', 'MD'],
+  [
+    'AGENTS.md',
+    '凸透镜 V2 AGENTS.md',
+    '绑定可信模板 URL 与 SHA-256；放入实验目录作为任务上下文',
+    'MD',
+  ],
   ['CODE_STYLE.md', '代码风格规范', '命名、类型、模块边界与格式规则', 'MD'],
   ['experiment.schema.json', '实验包 Schema', '凸透镜 V2 文件投稿 · 清单校验 Schema', 'JSON'],
   ['experiment.example.json', '清单示例', '候选结构 · 非完整可运行实验包', 'JSON'],
@@ -120,6 +207,21 @@ function downloadsBlock() {
   for (const [file, title, description, format] of downloadItems) {
     const anchor = link('', `downloads/${file}`, 'download-item')
     anchor.download = file
+    if (file === 'AGENTS.md') {
+      anchor.dataset.boundPromptAction = 'download'
+      anchor.addEventListener('click', (event) => {
+        event.preventDefault()
+        const value = boundPromptText()
+        if (value !== null) downloadText(file, value)
+      })
+      observeTemplateRelease(anchor, () => {
+        const ready = templateReleaseState.status === 'ready'
+        anchor.setAttribute('aria-disabled', String(!ready))
+        if (ready) anchor.href = `downloads/${file}`
+        else anchor.removeAttribute('href')
+        anchor.tabIndex = ready ? 0 : -1
+      })
+    }
     const text = element('div')
     text.append(element('strong', '', title), element('small', '', description))
     anchor.append(
@@ -129,6 +231,7 @@ function downloadsBlock() {
     )
     container.append(anchor)
   }
+  container.append(templateReleaseNotice())
   return container
 }
 
@@ -159,18 +262,9 @@ function agentBlock() {
   prompt.tabIndex = 0
   prompt.setAttribute('aria-label', 'AGENTS.md 完整内容')
   const actions = element('div', 'agent-actions')
-  let current = agentInstructions('convex-lens', { release: templateRelease })
-  prompt.textContent = current
-  const copy = button(
-    '复制 AGENTS.md',
-    () => {
-      void copyText(current)
-    },
-    'button primary',
-  )
-  const download = button('下载 AGENTS.md', () => {
-    downloadText('AGENTS.md', current)
-  })
+  let current = ''
+  const copy = boundPromptButton('复制 AGENTS.md', 'copy', 'button primary')
+  const download = boundPromptButton('下载 AGENTS.md', 'download')
   actions.append(
     copy,
     download,
@@ -181,17 +275,21 @@ function agentBlock() {
   const task = element('textarea')
   task.id = 'task-description'
   task.maxLength = 2000
+  task.value = authorTask
   task.placeholder = '例如：改进器材材质和手机拖动体验'
   function updatePrompt() {
     try {
       const id = normalizeExperimentId(input.value)
-      current = agentInstructions(id, { release: templateRelease })
+      current =
+        templateReleaseState.status === 'ready'
+          ? agentInstructions(id, { release: templateReleaseState.release })
+          : agentInstructions(id, { baseOnly: true })
       if (task.value.trim()) current += '\n## 本次用户任务\n\n' + task.value.trim() + '\n'
       prompt.textContent = current
       error.textContent = ''
       input.setAttribute('aria-invalid', 'false')
-      copy.disabled = false
-      download.disabled = false
+      copy.disabled = templateReleaseState.status !== 'ready'
+      download.disabled = templateReleaseState.status !== 'ready'
     } catch (issue) {
       error.textContent = issue.message
       input.setAttribute('aria-invalid', 'true')
@@ -200,9 +298,13 @@ function agentBlock() {
     }
   }
   input.addEventListener('change', updatePrompt)
-  task.addEventListener('input', updatePrompt)
+  task.addEventListener('input', () => {
+    authorTask = task.value
+    updatePrompt()
+  })
+  observeTemplateRelease(block, updatePrompt)
   form.append(label, input, help, taskLabel, task, error)
-  block.append(form, actions, prompt)
+  block.append(form, templateReleaseNotice(), actions, prompt)
   return block
 }
 
@@ -268,13 +370,7 @@ function hero() {
   )
   const actions = element('div', 'hero-actions')
   actions.append(
-    button(
-      '复制 AGENTS.md  ↗',
-      () => {
-        void copyText(agentInstructions('convex-lens', { release: templateRelease }))
-      },
-      'button primary',
-    ),
+    boundPromptButton('复制 AGENTS.md  ↗', 'copy', 'button primary'),
     link('阅读代码规范  →', '#/code-style', 'button secondary'),
   )
   const quick = element('div', 'quick-cards')
@@ -324,7 +420,7 @@ function hero() {
   preview.append(tab, lines, footer)
   const intro = element('div', 'hero-intro')
   const copy = element('div', 'hero-copy')
-  copy.append(heading, subtitle, actions)
+  copy.append(heading, subtitle, actions, templateReleaseNotice())
   const art = element('figure', 'hero-mascot')
   const picture = element('picture')
   const image = element('img')
@@ -408,6 +504,7 @@ function renderPage() {
   }
   main.dataset.doc = doc.id
   document.title = `${doc.title} · PhysicsOS 开发者文档`
+  templateReleaseViews.clear()
   main.replaceChildren()
   const crumbs = element('div', 'breadcrumb')
   crumbs.append(
@@ -435,9 +532,11 @@ function renderPage() {
         },
         'text-button',
       ),
-      link('下载 Markdown ↓', `downloads/${doc.file}`, 'text-link'),
+      doc.id === 'agents'
+        ? boundPromptButton('下载 AGENTS.md ↓', 'download', 'text-button')
+        : link('下载 Markdown ↓', `downloads/${doc.file}`, 'text-link'),
     )
-    actions.lastChild.download = doc.file
+    if (doc.id !== 'agents') actions.lastChild.download = doc.file
     header.append(actions)
     main.append(header)
   }
@@ -575,6 +674,7 @@ function searchDocuments() {
 
 renderNav()
 renderPage()
+void loadTemplateRelease()
 window.addEventListener('hashchange', renderPage)
 search.addEventListener('input', searchDocuments)
 search.addEventListener('focus', () => {
