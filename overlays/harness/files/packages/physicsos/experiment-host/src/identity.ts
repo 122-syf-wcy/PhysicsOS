@@ -60,7 +60,10 @@ export class ExperimentError extends Error {
 }
 
 const RANK: Record<IdentityRole, number> = {
-  STUDENT: 0, TEACHER: 1, SCHOOL_ADMIN: 2, SUPER_ADMIN: 3,
+  STUDENT: 0,
+  TEACHER: 1,
+  SCHOOL_ADMIN: 2,
+  SUPER_ADMIN: 3,
 }
 
 /**
@@ -122,7 +125,9 @@ export const auditWrites = async (
 ): Promise<void> => {
   if (req.method === undefined || req.method === 'GET') return
   if (statusCode >= 400) return
-  await ledger.record(actor, `experiments.${req.method.toLowerCase()}`, path, { status: statusCode })
+  await ledger.record(actor, `experiments.${req.method.toLowerCase()}`, path, {
+    status: statusCode,
+  })
 }
 
 /**
@@ -130,9 +135,9 @@ export const auditWrites = async (
  * @param ctx - the registrant context's service store.
  * @returns the seam when auth-host has published it, else `undefined`.
  */
-export const identityOf = (
-  ctx: { get: (name: string) => unknown },
-): PhysicsosIdentity | undefined => {
+export const identityOf = (ctx: {
+  get: (name: string) => unknown
+}): PhysicsosIdentity | undefined => {
   const service = ctx.get(IDENTITY_SERVICE)
-  return service === undefined ? undefined : service as PhysicsosIdentity
+  return service === undefined ? undefined : (service as PhysicsosIdentity)
 }

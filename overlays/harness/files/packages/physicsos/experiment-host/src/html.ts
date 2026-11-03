@@ -13,30 +13,55 @@ export function scanHtml(text: string): HtmlScan {
   let raw: { name: string; start: number; attributes: Record<string, string> } | undefined
   const finishRaw = (end: number) => {
     if (raw?.name === 'script' && raw.attributes['type']?.toLowerCase() === 'importmap') {
-      result.scripts.push({ attributes: raw.attributes, contents: text.slice(raw.start, end).replace(/\r\n?/g, '\n') })
+      result.scripts.push({
+        attributes: raw.attributes,
+        contents: text.slice(raw.start, end).replace(/\r\n?/g, '\n'),
+      })
     } else if (raw?.name === 'style') result.styles.push(text.slice(raw.start, end))
     raw = undefined
   }
   const ignore = () => {}
   const handler: TokenHandler = {
-    onComment: ignore, onDoctype: ignore, onCharacter: ignore, onNullCharacter: ignore, onWhitespaceCharacter: ignore,
+    onComment: ignore,
+    onDoctype: ignore,
+    onCharacter: ignore,
+    onNullCharacter: ignore,
+    onWhitespaceCharacter: ignore,
     onStartTag(token) {
-      const attributes: Record<string, string> = Object.fromEntries(token.attrs.map(attr => [attr.name, attr.value]))
-      if (['base', 'iframe', 'frame', 'object', 'embed'].includes(token.tagName)) result.forbiddenContainer = true
+      const attributes: Record<string, string> = Object.fromEntries(
+        token.attrs.map(attr => [attr.name, attr.value]),
+      )
+      if (['base', 'iframe', 'frame', 'object', 'embed'].includes(token.tagName))
+        result.forbiddenContainer = true
       for (const [name, value] of Object.entries(attributes)) {
         if (resources.has(name)) result.references.push(value)
         if (name === 'style') result.styles.push(value)
-        if (name === 'srcset') for (const source of value.split(',')) result.references.push(source.trim().split(/\s+/, 1)[0] ?? '')
+        if (name === 'srcset')
+          for (const source of value.split(','))
+            result.references.push(source.trim().split(/\s+/, 1)[0] ?? '')
       }
-      if (token.tagName === 'script' || rawText.has(token.tagName) || token.tagName === 'title' || token.tagName === 'textarea') {
+      if (
+        token.tagName === 'script' ||
+        rawText.has(token.tagName) ||
+        token.tagName === 'title' ||
+        token.tagName === 'textarea'
+      ) {
         raw = { name: token.tagName, start: token.location?.endOffset ?? text.length, attributes }
         tokenizer.lastStartTagName = token.tagName
-        tokenizer.state = token.tagName === 'script' ? TokenizerMode.SCRIPT_DATA
-          : ['title', 'textarea'].includes(token.tagName) ? TokenizerMode.RCDATA : TokenizerMode.RAWTEXT
+        tokenizer.state =
+          token.tagName === 'script'
+            ? TokenizerMode.SCRIPT_DATA
+            : ['title', 'textarea'].includes(token.tagName)
+              ? TokenizerMode.RCDATA
+              : TokenizerMode.RAWTEXT
       } else if (token.tagName === 'plaintext') tokenizer.state = TokenizerMode.PLAINTEXT
     },
-    onEndTag(token) { if (raw?.name === token.tagName) finishRaw(token.location?.startOffset ?? text.length) },
-    onEof() { finishRaw(text.length) },
+    onEndTag(token) {
+      if (raw?.name === token.tagName) finishRaw(token.location?.startOffset ?? text.length)
+    },
+    onEof() {
+      finishRaw(text.length)
+    },
   }
   const tokenizer = new Tokenizer({ sourceCodeLocationInfo: true }, handler)
   tokenizer.write(text, true)
@@ -46,23 +71,43 @@ export function scanHtml(text: string): HtmlScan {
 export function cssReferences(text: string): string[] {
   const refs: string[] = []
   let i = 0
-  const whitespace = () => { while (i < text.length && /\s/.test(text[i] ?? '')) i++ }
+  const whitespace = () => {
+    while (i < text.length && /\s/.test(text[i] ?? '')) i++
+  }
   const quoted = (): string => {
     const quote = text[i++]
     const start = i
     while (i < text.length) {
-      if (text[i] === '\\') { i += 2; continue }
-      if (text[i] === quote) { const value = text.slice(start, i); i++; return value }
+      if (text[i] === '\\') {
+        i += 2
+        continue
+      }
+      if (text[i] === quote) {
+        const value = text.slice(start, i)
+        i++
+        return value
+      }
       i++
     }
     throw new Error('Unclosed CSS string')
   }
   while (i < text.length) {
-    if (text[i] === '/' && text[i + 1] === '*') { const end = text.indexOf('*/', i + 2); i = end < 0 ? text.length : end + 2; continue }
-    if (text[i] === '"' || text[i] === "'") { quoted(); continue }
+    if (text[i] === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2)
+      i = end < 0 ? text.length : end + 2
+      continue
+    }
+    if (text[i] === '"' || text[i] === "'") {
+      quoted()
+      continue
+    }
     if (text[i] === '@' && text.slice(i + 1, i + 7).toLowerCase() === 'import') {
-      i += 7; whitespace()
-      if (text[i] === '"' || text[i] === "'") { refs.push(quoted()); continue }
+      i += 7
+      whitespace()
+      if (text[i] === '"' || text[i] === "'") {
+        refs.push(quoted())
+        continue
+      }
     }
     if (/[a-zA-Z_-]/.test(text[i] ?? '')) {
       const start = i++
@@ -70,11 +115,19 @@ export function cssReferences(text: string): string[] {
       if (text.slice(start, i).toLowerCase() !== 'url') continue
       whitespace()
       if (text[i] !== '(') continue
-      i++; whitespace()
-      if (text[i] === '"' || text[i] === "'") { refs.push(quoted()); whitespace() }
-      else { const start = i; while (i < text.length && text[i] !== ')') i++; refs.push(text.slice(start, i).trim()) }
+      i++
+      whitespace()
+      if (text[i] === '"' || text[i] === "'") {
+        refs.push(quoted())
+        whitespace()
+      } else {
+        const start = i
+        while (i < text.length && text[i] !== ')') i++
+        refs.push(text.slice(start, i).trim())
+      }
       if (text[i] !== ')') throw new Error('Unclosed CSS URL')
-      i++; continue
+      i++
+      continue
     }
     i++
   }

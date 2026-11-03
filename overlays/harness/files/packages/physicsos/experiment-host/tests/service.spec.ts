@@ -3,28 +3,58 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import crypto from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { admin, contributor, other, schoolAdmin, uploadBody, zip, files, manifest } from './fixtures.ts'
+import {
+  admin,
+  contributor,
+  other,
+  schoolAdmin,
+  uploadBody,
+  zip,
+  files,
+  manifest,
+} from './fixtures.ts'
 import { host } from './support.ts'
 let root: string
 let loaded: Awaited<ReturnType<typeof host>> | undefined
-async function setup(options = {}) { root = await mkdtemp(join(tmpdir(), 'experiment-service-')); loaded = await host(root, options); return loaded }
-afterEach(async () => { await loaded?.close(); loaded = undefined; if (root) await rm(root, { force: true, recursive: true }) })
+async function setup(options = {}) {
+  root = await mkdtemp(join(tmpdir(), 'experiment-service-'))
+  loaded = await host(root, options)
+  return loaded
+}
+afterEach(async () => {
+  await loaded?.close()
+  loaded = undefined
+  if (root) await rm(root, { force: true, recursive: true })
+})
 
 describe('immutable upload, review and release service', () => {
   it('freezes the archive digest, hides drafts and internal metadata, exposes only approved entries', async () => {
     const { service } = await setup()
-    const bytes = zip(), expected = crypto.createHash('sha256').update(bytes).digest('hex')
+    const bytes = zip(),
+      expected = crypto.createHash('sha256').update(bytes).digest('hex')
     const item = await service.upload(contributor, uploadBody(bytes))
-    expect(item).toMatchObject({ status: 'pending', sha256: expected, version: '1.0.0', author: { name: 'Contributor' } })
+    expect(item).toMatchObject({
+      status: 'pending',
+      sha256: expected,
+      version: '1.0.0',
+      author: { name: 'Contributor' },
+    })
     expect(item.entryUrl).toBeUndefined()
     expect(JSON.stringify(item)).not.toMatch(/authorKey|schoolId|storagePath|avatarDataUrl/)
     expect(service.list(other).items).toHaveLength(0)
     expect(service.list(schoolAdmin).canReview).toBe(false)
     expect(service.list(admin).items).toHaveLength(1)
     await expect(service.preview(other, item.id)).rejects.toMatchObject({ status: 403 })
-    await expect(service.review(schoolAdmin, item.id, { action: 'approve', expectedSha256: expected })).rejects.toMatchObject({ status: 403 })
-    await expect(service.review(admin, item.id, { action: 'approve', expectedSha256: '0'.repeat(64) })).rejects.toMatchObject({ status: 409 })
-    const approved = await service.review(admin, item.id, { action: 'approve', expectedSha256: expected })
+    await expect(
+      service.review(schoolAdmin, item.id, { action: 'approve', expectedSha256: expected }),
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(
+      service.review(admin, item.id, { action: 'approve', expectedSha256: '0'.repeat(64) }),
+    ).rejects.toMatchObject({ status: 409 })
+    const approved = await service.review(admin, item.id, {
+      action: 'approve',
+      expectedSha256: expected,
+    })
     expect(approved).toMatchObject({ status: 'approved', sha256: expected })
     expect(approved.entryUrl).toContain(`${item.id}/${expected}/dist/index.html`)
     expect(service.list(other).active?.id).toBe(item.id)
@@ -35,31 +65,60 @@ describe('immutable upload, review and release service', () => {
   it('serializes approval and stale-safe rollback and restores exactly the active version after restart', async () => {
     const { service } = await setup()
     const first = await service.upload(contributor, uploadBody())
-    const entries = Object.entries(files()).map(([name, data]) => ({ name, data: name === 'experiment.json' ? JSON.stringify({ ...manifest, version: '1.1.0' }) : data }))
+    const entries = Object.entries(files()).map(([name, data]) => ({
+      name,
+      data: name === 'experiment.json' ? JSON.stringify({ ...manifest, version: '1.1.0' }) : data,
+    }))
     const second = await service.upload(contributor, uploadBody(zip(entries)))
-    const [a, b] = await Promise.all([first, second].map(item => service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 })))
+    const [a, b] = await Promise.all(
+      [first, second].map(item =>
+        service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 }),
+      ),
+    )
     expect(service.list(contributor).active?.id).toBe(b.id)
-    await expect(service.rollback(admin, { packageId: a.id, expectedActiveId: a.id })).rejects.toMatchObject({ status: 409 })
-    await expect(service.rollback(schoolAdmin, { packageId: a.id, expectedActiveId: b.id })).rejects.toMatchObject({ status: 403 })
+    await expect(
+      service.rollback(admin, { packageId: a.id, expectedActiveId: a.id }),
+    ).rejects.toMatchObject({ status: 409 })
+    await expect(
+      service.rollback(schoolAdmin, { packageId: a.id, expectedActiveId: b.id }),
+    ).rejects.toMatchObject({ status: 403 })
     await service.rollback(admin, { packageId: a.id, expectedActiveId: b.id })
     expect(service.list(contributor).active?.id).toBe(a.id)
-    expect((await service.asset(new URL(b.entryUrl!.replace('/embed/', '/'), 'https://assets.example')))?.bytes.toString()).toContain('doctype')
-    await loaded!.close(); loaded = await host(root)
+    expect(
+      (
+        await service.asset(new URL(b.entryUrl!.replace('/embed/', '/'), 'https://assets.example'))
+      )?.bytes.toString(),
+    ).toContain('doctype')
+    await loaded!.close()
+    loaded = await host(root)
     expect(loaded.service.list(contributor).active?.id).toBe(a.id)
     expect(loaded.service.list(contributor).items).toHaveLength(2)
   })
   it('rejection remains visible to its owner and cannot be published or rolled back', async () => {
-    const { service } = await setup(), item = await service.upload(contributor, uploadBody())
-    const rejected = await service.review(admin, item.id, { action: 'reject', expectedSha256: item.sha256, reason: 'Optics do not match.' })
+    const { service } = await setup(),
+      item = await service.upload(contributor, uploadBody())
+    const rejected = await service.review(admin, item.id, {
+      action: 'reject',
+      expectedSha256: item.sha256,
+      reason: 'Optics do not match.',
+    })
     expect(rejected).toMatchObject({ status: 'rejected', rejectionReason: 'Optics do not match.' })
     expect(service.list(contributor).items).toHaveLength(1)
     expect(service.list(other).items).toHaveLength(0)
-    await expect(service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 })).rejects.toMatchObject({ status: 409 })
-    await expect(service.rollback(admin, { packageId: item.id, expectedActiveId: item.id })).rejects.toMatchObject({ status: 409 })
+    await expect(
+      service.review(admin, item.id, { action: 'approve', expectedSha256: item.sha256 }),
+    ).rejects.toMatchObject({ status: 409 })
+    await expect(
+      service.rollback(admin, { packageId: item.id, expectedActiveId: item.id }),
+    ).rejects.toMatchObject({ status: 409 })
   })
   it('accepts digest-bound rejection when the optional reason is omitted', async () => {
-    const { service } = await setup(), item = await service.upload(contributor, uploadBody())
-    const rejected = await service.review(admin, item.id, { action: 'reject', expectedSha256: item.sha256 })
+    const { service } = await setup(),
+      item = await service.upload(contributor, uploadBody())
+    const rejected = await service.review(admin, item.id, {
+      action: 'reject',
+      expectedSha256: item.sha256,
+    })
     expect(rejected.status).toBe('rejected')
     expect(rejected.rejectionReason).toBeUndefined()
     expect(service.list(contributor).items[0]?.status).toBe('rejected')
@@ -68,14 +127,26 @@ describe('immutable upload, review and release service', () => {
     const { service } = await setup({ assetOrigin: 'https://assets.example', previewTtlMs: 5 })
     const item = await service.upload(contributor, uploadBody())
     const preview = await service.preview(contributor, item.id)
-    expect(preview.entryUrl.startsWith('https://assets.example/physicsos/experiment-assets/embed/preview/')).toBe(true)
+    expect(
+      preview.entryUrl.startsWith(
+        'https://assets.example/physicsos/experiment-assets/embed/preview/',
+      ),
+    ).toBe(true)
     const entry = new URL(preview.entryUrl.replace('/embed/', '/'))
     expect((await service.asset(entry))?.bytes.toString()).toContain('doctype')
-    expect(await service.asset(new URL(`/physicsos/experiment-assets/releases/${item.id}/${item.sha256}/dist/index.html`, entry))).toBeNull()
+    expect(
+      await service.asset(
+        new URL(
+          `/physicsos/experiment-assets/releases/${item.id}/${item.sha256}/dist/index.html`,
+          entry,
+        ),
+      ),
+    ).toBeNull()
     expect(await service.asset(new URL('../src/main.ts', entry))).toBeNull()
     await new Promise(resolve => setTimeout(resolve, 15))
     expect(await service.asset(entry)).toBeNull()
-    await loaded!.close(); loaded = await host(root)
+    await loaded!.close()
+    loaded = await host(root)
     expect(await loaded.service.asset(entry)).toBeNull()
   })
   it('failed metadata publication and damaged immutable files leave the prior active release', async () => {
@@ -85,14 +156,19 @@ describe('immutable upload, review and release service', () => {
     const b = await service.upload(contributor, uploadBody())
     const state = domain.table('state')
     const failing = vi.spyOn(state, 'put').mockRejectedValueOnce(new Error('disk full'))
-    await expect(service.review(admin, b.id, { action: 'approve', expectedSha256: b.sha256 })).rejects.toThrow()
+    await expect(
+      service.review(admin, b.id, { action: 'approve', expectedSha256: b.sha256 }),
+    ).rejects.toThrow()
     failing.mockRestore()
     expect(service.list(admin).active?.id).toBe(a.id)
     expect(service.list(admin).items.find(item => item.id === b.id)?.status).toBe('pending')
     await writeFile(join(root, 'files', b.id, 'archive.zip'), 'tampered')
-    await expect(service.review(admin, b.id, { action: 'approve', expectedSha256: b.sha256 })).rejects.toMatchObject({ code: 'INTEGRITY_MISMATCH' })
+    await expect(
+      service.review(admin, b.id, { action: 'approve', expectedSha256: b.sha256 }),
+    ).rejects.toMatchObject({ code: 'INTEGRITY_MISMATCH' })
     expect(service.list(admin).active?.id).toBe(a.id)
-    await loaded!.close(); loaded = await host(root)
+    await loaded!.close()
+    loaded = await host(root)
     expect(loaded.service.list(admin).active?.id).toBe(a.id)
   })
   it('a failed file freeze never creates a visible package', async () => {
@@ -102,14 +178,20 @@ describe('immutable upload, review and release service', () => {
     expect(service.list(admin).items).toHaveLength(0)
   })
   it.each([
-    { author: { name: '' } }, { author: { name: 'x'.repeat(81) } }, { author: { name: 'x', bio: 'x'.repeat(301) } },
-    { author: { name: 'x', github: 'https://evil.example/user' } }, { author: { name: 'x', github: 'https://github.com/user/repo' } },
-    { note: 'x'.repeat(501) }, { zipBase64: '!!invalid' },
+    { author: { name: '' } },
+    { author: { name: 'x'.repeat(81) } },
+    { author: { name: 'x', bio: 'x'.repeat(301) } },
+    { author: { name: 'x', github: 'https://evil.example/user' } },
+    { author: { name: 'x', github: 'https://github.com/user/repo' } },
+    { note: 'x'.repeat(501) },
+    { zipBase64: '!!invalid' },
     { author: { name: 'x', avatarDataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' } },
     { author: { name: 'x', avatarDataUrl: 'data:image/png;base64,eA==' } },
-  ])('rejects invalid contribution metadata %j', async change => {
+  ])('rejects invalid contribution metadata %j', async (change) => {
     const { service } = await setup()
-    await expect(service.upload(contributor, { ...uploadBody(), ...change })).rejects.toMatchObject({ status: 400 })
+    await expect(service.upload(contributor, { ...uploadBody(), ...change })).rejects.toMatchObject(
+      { status: 400 },
+    )
     expect(service.list(admin).items).toHaveLength(0)
   })
 })

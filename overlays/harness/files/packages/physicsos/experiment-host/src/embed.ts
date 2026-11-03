@@ -33,13 +33,27 @@ const bootstrap = `(() => {
   addEventListener('message', receive);
   inner.src = raw.href;
 })();`
-const style = 'html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#faf6ee}iframe{display:block;width:100%;height:100%;border:0}'
-const hash = (text: string): string => `'sha256-${createHash('sha256').update(text).digest('base64')}'`
-const attribute = (text: string): string => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+const style =
+  'html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#faf6ee}iframe{display:block;width:100%;height:100%;border:0}'
+const hash = (text: string): string =>
+  `'sha256-${createHash('sha256').update(text).digest('base64')}'`
+const attribute = (text: string): string =>
+  text
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
 export function experimentWrapper(raw: URL): { bytes: Buffer; csp: string } {
   const csp = [
-    'sandbox allow-scripts allow-same-origin', "default-src 'none'", `script-src ${hash(bootstrap)}`, `style-src ${hash(style)}`,
-    `frame-src ${raw.origin}${raw.pathname}`, "connect-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
+    'sandbox allow-scripts allow-same-origin',
+    "default-src 'none'",
+    `script-src ${hash(bootstrap)}`,
+    `style-src ${hash(style)}`,
+    `frame-src ${raw.origin}${raw.pathname}`,
+    "connect-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
   ].join('; ')
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>PhysicsOS experiment</title><style>${style}</style></head><body><iframe id="experiment" title="实验三维视图区" sandbox="allow-scripts" referrerpolicy="no-referrer" data-raw-entry="${attribute(raw.href)}"></iframe><script>${bootstrap}</script></body></html>`
   return { bytes: Buffer.from(html), csp }
