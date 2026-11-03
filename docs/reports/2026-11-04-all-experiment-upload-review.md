@@ -49,3 +49,11 @@
 审查范围`6d277ef..1730261`，记录见 [代码审查](2026-11-04-all-experiment-code-review.md)。结论可合并，无Critical/Important；两处非阻塞说明已修正：模板卡片改用所选实验名称，生成目标文件注释改为真实的`configure -- --version`命令。重新生成与`--check`通过，程序契约和物理模型不改变；没有把原始审查改写为重复审查。
 
 生成SDK的Node类型擦除结果保留位置空白，部分原始许可证保留末尾空行；这是生成/许可证文件的字节保留行为，源码定向规范检查通过。审查未展开10MB模板base64及既有第三方渲染器，而依据生成器、校验器同源检查和实际浏览器证据判断；不作任意作者代码科学正确性的自动认证。发布与PostgreSQL副本检查仍由执行者完成。
+
+## 发布镜像和 PostgreSQL 副本
+
+审查修正后的运行代码提交`d43225e`。候选`physicsos-app:all-d43225e`，镜像`sha256:ddc1f1e0f2e3b4a53f110eed03f34fd5b9584310e0b8320728515acaa1028919`，基于实际D6正式镜像。增量113项、50,780,489字节；镜像内所有改变文件SHA一致，原生flock实际锁检查通过。
+
+生产数据库备份`/opt/physicsos/backups/postgres/20261104-all-preflight/postgres.dump`已验证并恢复到独立数据库`physicsos_all_20261104`。同时复制生产文件用于读取旧归档；候选使用独立state、测试引导管理员和memory共享状态，验收写入不会触及正式数据库或Redis。
+
+新镜像+PostgreSQL/文件副本实测通过：76目录、V3模板上传/冻结归档/私有预览、两个目标独立发布、跨目标回滚拒绝、原凸透镜目录保持一致；如旧目录含包，实际归档摘要也已读取校验。真实候选重启后，新版本/历史和旧凸透镜状态与存证一致。日志`/tmp/physicsos-all-postgres-check.log`、`physicsos-all-postgres-persistence.log`。正式发布和最终HTTPS记录随后补充。
