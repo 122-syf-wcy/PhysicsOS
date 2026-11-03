@@ -90,6 +90,9 @@ function templateReleaseNotice() {
   const status = element('p')
   status.dataset.templateReleaseStatus = ''
   status.setAttribute('role', 'status')
+  const digest = element('p', 'prompt-content-sha')
+  digest.dataset.promptContentSha = ''
+  digest.title = '根据提示词版本、正文和模板绑定计算，用于识别发布内容，不是 Markdown 文件的哈希。'
   const retry = button('重试加载提示词', () => {
     void loadTemplateRelease()
   })
@@ -104,8 +107,11 @@ function templateReleaseNotice() {
           : '提示词加载失败；开发文档仍可阅读。请重试，加载成功后才能复制或下载绑定提示词。'
     retry.hidden = state === 'ready'
     retry.disabled = state !== 'error'
+    digest.hidden = state !== 'ready'
+    digest.textContent =
+      state === 'ready' ? `提示词内容摘要（SHA-256）：${templateReleaseState.prompt.sha256}` : ''
   })
-  notice.append(status, retry)
+  notice.append(status, digest, retry)
   return notice
 }
 

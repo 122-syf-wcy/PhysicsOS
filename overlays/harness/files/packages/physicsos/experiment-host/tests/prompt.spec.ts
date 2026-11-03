@@ -79,7 +79,7 @@ describe('shared developer prompt Markdown', () => {
     expect(markdown).toContain('schemaVersion: 2')
     expect(markdown).toContain('提高触摸体验')
     expect(importPromptMarkdown(markdown)).toBe('# 自定义\n\n保留光线。')
-    expect(importPromptMarkdown('\uFEFF# 中文\r\n\r\n说明。\r\n')).toBe('# 中文\n\n说明。')
+    expect(importPromptMarkdown('\uFEFF# 中文\r\n\r\n说明。\r\n')).toBe('# 中文\n\n说明。\n')
   })
   it.each(['', '   ', 'a\u0000b', 'a\u001bb', 'x'.repeat(65537), '中'.repeat(21846)])(
     'rejects invalid or oversized body without treating characters as bytes',
@@ -116,6 +116,50 @@ describe('shared developer prompt Markdown', () => {
 })
 
 describe('developer prompt publication', () => {
+  it('preserves significant Markdown indentation and trailing line breaks through save, export and import', async () => {
+    const { service } = await setup()
+    const body = '    const x = 1\n    const y = 2\n\n保留硬换行  \n'
+    const saved = await service.save(admin, saveBody(0, '1.1.0', body))
+    expect(saved.draft?.body).toBe(body)
+    const published = (await service.publish(admin, { expectedRevision: 1 })).current
+    expect(published.body).toBe(body)
+    const exported = renderPrompt(published, 'https://candidate.example')
+    expect(importPromptMarkdown(exported)).toBe(body)
+    const imported = await service.import(admin, {
+      expectedRevision: 2,
+      version: '1.2.0',
+      note: '',
+      filename: 'code.md',
+      base64: Buffer.from(exported).toString('base64'),
+    })
+    expect(imported.draft?.body).toBe(body)
+    expect(importPromptMarkdown('\uFEFF' + body.replaceAll('\n', '\r\n'))).toBe(body)
+  })
+  it.each(['header', 'fixed', 'suffix', 'plain'])(
+    'rejects disallowed controls anywhere in an imported %s document without changing the draft',
+    async (position) => {
+      const { service } = await setup()
+      const exported = renderPrompt({ version: '1.1.0', ...seed }, 'https://candidate.example')
+      const text =
+        position === 'header'
+          ? '\u0000' + exported
+          : position === 'fixed'
+            ? exported.replace('## 固定规范', '## 固定规范\u001b')
+            : position === 'suffix'
+              ? exported + '\u000c'
+              : '\u000b正文\u000c'
+      await expect(
+        service.import(admin, {
+          expectedRevision: 0,
+          version: '1.1.0',
+          note: '',
+          filename: 'prompt.md',
+          base64: Buffer.from(text).toString('base64'),
+        }),
+      ).rejects.toMatchObject({ status: 400 })
+      expect(service.admin(admin)).toMatchObject({ revision: 0, draft: null })
+    },
+  )
   it('keeps digests and draft bindings stable when JSON storage reorders object keys', async () => {
     const { domain, service } = await setup()
     await service.save(admin, saveBody(0))

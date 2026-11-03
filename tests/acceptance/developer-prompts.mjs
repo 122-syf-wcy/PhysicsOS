@@ -108,7 +108,7 @@ try {
   const firstVersion = `1.${stamp}.0`,
     secondVersion = `1.${stamp}.1`,
     draftVersion = `1.${stamp}.2`
-  const body1 = `## 发布样板 ${stamp}\n\n改善蓝紫色器材材质与手机拖动；保留平台物理快照。`
+  const body1 = `    // 保留 Markdown 首行缩进\n    const marker = '${stamp}'\n\n## 发布样板 ${stamp}\n\n改善蓝紫色器材材质与手机拖动；保留平台物理快照。  \n`
   const input = join(home, 'prompt-upload.md')
   await writeFile(input, '\uFEFF# 导入草稿\r\n\r\n保留原有光线。', { mode: 0o600 })
   await panel.getByLabel('提示词版本', { exact: true }).fill(firstVersion)
@@ -149,6 +149,7 @@ try {
   const docs = await publicContext.newPage()
   await docs.goto(base + '/physicsos/developers/index.html#/agents')
   await expect(docs.locator('.agent-meta')).toContainText(firstVersion)
+  await expect(docs.locator('[data-prompt-content-sha]')).toContainText(first.sha256)
   await expect(docs.locator('.agent-preview')).toHaveText(complete)
   await docs.locator('.agent-actions [data-bound-prompt-action="copy"]').click()
   expect(await docs.evaluate(() => navigator.clipboard.readText())).toBe(complete)

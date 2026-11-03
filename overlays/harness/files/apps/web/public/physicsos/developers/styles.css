@@ -288,4 +288,5 @@ td { color: #6e805f; }
 
 .template-release-notice p { margin: 0; }
 .template-release-notice .button { margin-top: 10px; }
+.template-release-notice .prompt-content-sha { margin-top: 8px; font-size: 11px; overflow-wrap: anywhere; opacity: .8; }
 .download-item[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }

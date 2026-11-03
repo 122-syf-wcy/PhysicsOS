@@ -32,27 +32,28 @@ const reserved = /<!--\s*physicsos:/i
 const utf8 = new TextEncoder()
 const utf8Text = new TextDecoder('utf-8', { fatal: true })
 
-/** Normalize author text without executing Markdown or interpreting expressions. */
-export function validateBody(text        )         {
-  const body = text
-    .replace(/^\uFEFF/, '')
-    .replace(/\r\n?/g, '\n')
-    .trim()
-  const bytes = utf8.encode(body)
+/** Validate the entire input before extracting fields; whitespace may be Markdown syntax. */
+function normalizeText(text        )         {
+  const value = text.replace(/^\uFEFF+/, '').replace(/\r\n?/g, '\n')
   if (
-    !body ||
-    bytes.length > PROMPT_BODY_LIMIT ||
-    utf8Text.decode(bytes) !== body ||
-    /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body) ||
-    reserved.test(body)
+    utf8Text.decode(utf8.encode(value)) !== value ||
+    /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)
   )
+    throw new Error('Markdown 不能包含无效 Unicode 或禁止的控制字符。')
+  return value
+}
+
+/** Preserve author indentation/line breaks; normalize only BOM and line-ending encoding. */
+export function validateBody(text        )         {
+  const body = normalizeText(text)
+  if (!body.trim() || utf8.encode(body).length > PROMPT_BODY_LIMIT || reserved.test(body))
     throw new Error('正文须为 1–64 KiB 的有效 Markdown 文本，不能包含控制字符或平台保留标记。')
   return body
 }
 
 /** Accept either a plain body or a complete, unambiguous platform export. */
 export function importPromptMarkdown(text        )         {
-  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
+  const normalized = normalizeText(text)
   if (!reserved.test(normalized)) return validateBody(normalized)
   const markers = [start, end, fixedStart, fixedEnd]
   const positions = markers.map(marker => normalized.indexOf(marker))
@@ -69,7 +70,9 @@ export function importPromptMarkdown(text        )         {
     )
   const withoutMarkers = markers.reduce((value, marker) => value.replace(marker, ''), normalized)
   if (reserved.test(withoutMarkers)) throw new Error('Markdown 含未知平台标记。')
-  return validateBody(normalized.slice((positions[0] ?? 0) + start.length, positions[1]))
+  const framed = normalized.slice((positions[0] ?? 0) + start.length, positions[1])
+  // renderPrompt contributes one newline on either side. Preserve author-owned whitespace.
+  return validateBody(framed.replace(/^\n/, '').replace(/\n$/, ''))
 }
 
 function object(value         )                                   {

@@ -97,6 +97,8 @@ try {
     await expect(page.locator('.download-item[data-template-download]')).toBeVisible()
     await page.goto(base + '/#/package')
     await expect(page.locator('.doc-tag')).toContainText('V2')
+    await page.goto(base + '/#/agents')
+    await expect(page.locator('[data-prompt-content-sha]')).toContainText(publishedPrompt.sha256)
     await page.close()
     passed++
     console.log('PASS static and dynamic V2 author entries')
@@ -141,6 +143,7 @@ try {
       await expect(page.locator('.agent-preview')).toContainText(descriptor.sha256)
       await expect(page.locator('.agent-preview')).toContainText(publishedPrompt.body)
       await expect(page.locator('.agent-meta')).toContainText(publishedPrompt.version)
+      await expect(page.locator('[data-prompt-content-sha]')).toContainText(publishedPrompt.sha256)
       await expect(page.locator('.agent-preview')).toContainText('重试时追加键盘体验')
       for (const action of await page.locator('[data-bound-prompt-action]').all())
         await expect(action).toBeEnabled()
