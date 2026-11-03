@@ -2,9 +2,24 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { ExperimentError, guard, type PhysicsosIdentity } from './identity.ts'
 import type { DeveloperPromptService } from './prompt-service.ts'
+import { renderPrompt, type PromptDocument } from './prompt-format.ts'
 
 const LIMIT = 192 * 1024
 const PREFIX = '/physicsos/developer-prompts'
+export const PROMPT_MARKDOWN_ALIAS = '/physicsos/developers/downloads/AGENTS.md'
+function markdown(req: IncomingMessage, res: ServerResponse, document: PromptDocument): void {
+  const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'https:' : 'http:'
+  const origin = new URL(`${protocol}//${req.headers.host ?? 'localhost'}`).origin
+  const body = renderPrompt(document, origin)
+  res.writeHead(200, {
+    'content-type': 'text/markdown; charset=utf-8',
+    'content-disposition': 'attachment; filename="AGENTS.md"',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+  })
+  res.end(body)
+}
 const send = (res: ServerResponse, status: number, body: unknown): void => {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -87,13 +102,19 @@ export function developerPromptRoutes({
     try {
       const path = new URL(req.url ?? '/', 'http://local').pathname
       const method = req.method ?? 'GET'
+      if (method === 'GET' && (path === `${PREFIX}/current.md` || path === PROMPT_MARKDOWN_ALIAS)) {
+        markdown(req, res, service.current())
+        return
+      }
       if (method === 'GET' && path === `${PREFIX}/current`) {
         send(res, 200, service.current())
         return
       }
       const published = new RegExp(`^${PREFIX}/versions/([^/]+)$`).exec(path)
       if (method === 'GET' && published?.[1]) {
-        send(res, 200, service.published(published[1]))
+        if (published[1].endsWith('.md'))
+          markdown(req, res, service.published(published[1].slice(0, -3)))
+        else send(res, 200, service.published(published[1]))
         return
       }
       const ledger = identity()

@@ -1,10 +1,6 @@
 import { documents, documentMarkdown } from './content.js'
-import {
-  STANDARD_VERSION,
-  UPDATED_AT,
-  agentInstructions,
-  normalizeExperimentId,
-} from './standards.js'
+import { STANDARD_VERSION, UPDATED_AT, normalizeExperimentId } from './standards.js'
+import { renderPrompt, validPromptDocument } from './prompt-format.js'
 
 const main = document.querySelector('#main')
 const nav = document.querySelector('#doc-nav')
@@ -17,8 +13,8 @@ let activeId = 'start'
 let tocFrame
 const mobileViewport = matchMedia('(max-width: 640px)')
 
-// Descriptor availability only controls bound-prompt actions; ordinary docs initialize immediately.
-let templateReleaseState = { status: 'loading', release: null }
+// Published prompt availability controls bound actions; ordinary docs initialize immediately.
+let templateReleaseState = { status: 'loading', release: null, prompt: null }
 let templateReleaseRequest
 let authorTask = ''
 const templateReleaseViews = new Map()
@@ -28,6 +24,7 @@ function observeTemplateRelease(node, update) {
   update()
 }
 function notifyTemplateRelease() {
+  updateTemplateLinks()
   for (const [node, update] of templateReleaseViews) {
     if (node.isConnected) update()
     else templateReleaseViews.delete(node)
@@ -35,21 +32,18 @@ function notifyTemplateRelease() {
 }
 function loadTemplateRelease() {
   if (templateReleaseRequest) return templateReleaseRequest
-  templateReleaseState = { status: 'loading', release: null }
+  templateReleaseState = { status: 'loading', release: null, prompt: null }
   notifyTemplateRelease()
   templateReleaseRequest = Promise.resolve()
     .then(async () => {
       try {
-        const response = await fetch(new URL('./downloads/template-release.json', import.meta.url))
-        if (!response.ok) throw new Error('Template descriptor unavailable')
-        const release = await response.json()
-        if (release === null || typeof release !== 'object' || Array.isArray(release))
-          throw new Error('Template descriptor must be an object')
-        // Reuse the bound prompt's canonical descriptor checks; never invent an archive identity.
-        agentInstructions('convex-lens', { release })
-        templateReleaseState = { status: 'ready', release }
+        const response = await fetch('/physicsos/developer-prompts/current', { cache: 'no-store' })
+        if (!response.ok) throw new Error('Published prompt unavailable')
+        const prompt = await response.json()
+        if (!validPromptDocument(prompt)) throw new Error('Published prompt is invalid')
+        templateReleaseState = { status: 'ready', release: prompt.binding.release, prompt }
       } catch {
-        templateReleaseState = { status: 'error', release: null }
+        templateReleaseState = { status: 'error', release: null, prompt: null }
       }
     })
     .finally(() => {
@@ -60,9 +54,19 @@ function loadTemplateRelease() {
 }
 function boundPromptText() {
   if (templateReleaseState.status !== 'ready') return null
-  let text = agentInstructions('convex-lens', { release: templateReleaseState.release })
-  if (authorTask.trim()) text += '\n## 本次用户任务\n\n' + authorTask.trim() + '\n'
-  return text
+  return renderPrompt(templateReleaseState.prompt, location.origin, authorTask)
+}
+function updateTemplateLinks() {
+  for (const anchor of document.querySelectorAll(
+    'a[data-template-download], a[href*="physicsos-experiment-template-v2"]',
+  )) {
+    anchor.dataset.templateDownload = ''
+    const ready = templateReleaseState.status === 'ready'
+    anchor.setAttribute('aria-disabled', String(!ready))
+    anchor.tabIndex = ready ? 0 : -1
+    if (ready) anchor.setAttribute('href', templateReleaseState.release.url)
+    else anchor.removeAttribute('href')
+  }
 }
 function boundPromptButton(text, kind, className = 'button secondary') {
   const action = button(
@@ -86,7 +90,7 @@ function templateReleaseNotice() {
   const status = element('p')
   status.dataset.templateReleaseStatus = ''
   status.setAttribute('role', 'status')
-  const retry = button('重试加载模板发布信息', () => {
+  const retry = button('重试加载提示词', () => {
     void loadTemplateRelease()
   })
   retry.dataset.templateReleaseRetry = ''
@@ -94,10 +98,10 @@ function templateReleaseNotice() {
     const state = templateReleaseState.status
     status.textContent =
       state === 'ready'
-        ? '可信模板发布信息已就绪。'
+        ? `当前提示词 v${templateReleaseState.prompt.version}${templateReleaseState.prompt.publishedAt === null ? '（系统默认）' : ''}，已绑定对应模板。`
         : state === 'loading'
-          ? '正在加载可信模板发布信息；文档可正常阅读。'
-          : '可信模板发布信息加载失败；开发文档仍可阅读。请重试，加载成功后才能复制或下载绑定提示词。'
+          ? '正在加载已发布提示词与模板；文档可正常阅读。'
+          : '提示词加载失败；开发文档仍可阅读。请重试，加载成功后才能复制或下载绑定提示词。'
     retry.hidden = state === 'ready'
     retry.disabled = state !== 'error'
   })
@@ -265,11 +269,14 @@ function agentBlock() {
   let current = ''
   const copy = boundPromptButton('复制 AGENTS.md', 'copy', 'button primary')
   const download = boundPromptButton('下载 AGENTS.md', 'download')
-  actions.append(
-    copy,
-    download,
-    element('span', 'agent-meta', `规范 v${STANDARD_VERSION} · 完整规则`),
-  )
+  const meta = element('span', 'agent-meta')
+  observeTemplateRelease(meta, () => {
+    meta.textContent =
+      templateReleaseState.status === 'ready'
+        ? `提示词 v${templateReleaseState.prompt.version} · 规范 v${STANDARD_VERSION}`
+        : '提示词尚未就绪'
+  })
+  actions.append(copy, download, meta)
   const taskLabel = element('label', '', '本次任务说明（可选）')
   taskLabel.htmlFor = 'task-description'
   const task = element('textarea')
@@ -279,12 +286,8 @@ function agentBlock() {
   task.placeholder = '例如：改进器材材质和手机拖动体验'
   function updatePrompt() {
     try {
-      const id = normalizeExperimentId(input.value)
-      current =
-        templateReleaseState.status === 'ready'
-          ? agentInstructions(id, { release: templateReleaseState.release })
-          : agentInstructions(id, { baseOnly: true })
-      if (task.value.trim()) current += '\n## 本次用户任务\n\n' + task.value.trim() + '\n'
+      normalizeExperimentId(input.value)
+      current = boundPromptText() ?? '已发布提示词尚未就绪，请等待加载或重试。'
       prompt.textContent = current
       error.textContent = ''
       input.setAttribute('aria-invalid', 'false')
@@ -554,6 +557,7 @@ function renderPage() {
     toc.append(link(section.title, `#/${doc.id}/${section.id}`, 'toc-link'))
   }
   main.append(article)
+  updateTemplateLinks()
   const index = documents.indexOf(doc)
   const pager = element('nav', 'pager')
   pager.setAttribute('aria-label', '相邻文档')

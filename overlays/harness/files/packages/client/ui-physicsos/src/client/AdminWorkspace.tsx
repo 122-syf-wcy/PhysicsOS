@@ -20,6 +20,8 @@ import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
 import { AdminPlatformNoticeTab } from './AdminPlatformNoticeTab.tsx'
 import { AdminPluginTab } from './AdminPluginTab.tsx'
+import { AdminPromptTab } from './AdminPromptTab.tsx'
+import { createDeveloperPromptApi, type DeveloperPromptApi } from './developer-prompt-api.ts'
 import { PasswordResetQueue } from './AuthGate.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
 import type { PhysicsosKey } from './locales.ts'
@@ -50,6 +52,7 @@ type Tab =
   | 'content'
   | 'notice'
   | 'platformNotice'
+  | 'developerPrompts'
   | 'modelPool'
   | 'plugins'
   | 'ops'
@@ -81,6 +84,8 @@ export interface AdminWorkspaceProps {
   modelPoolApi?: ModelPoolApi
   /** SUPER_ADMIN plugin catalog client; defaults to the same-origin route. */
   pluginApi?: PluginCenterApi
+  /** Platform-wide developer instructions; the server requires SUPER_ADMIN. */
+  promptApi?: DeveloperPromptApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
   t: (key: PhysicsosKey) => string
@@ -92,9 +97,11 @@ const fmtTime = (iso: string): string => {
 }
 
 const defaultPluginApi = createPluginCenterApi()
+const defaultPromptApi = createDeveloperPromptApi()
 
 export function AdminWorkspace({
-  api, paperApi, noticeApi, modelPoolApi, pluginApi = defaultPluginApi, useAuth, t,
+  api, paperApi, noticeApi, modelPoolApi,
+  pluginApi = defaultPluginApi, promptApi = defaultPromptApi, useAuth, t,
 }: AdminWorkspaceProps) {
   const role = useAuth(state => state.user?.role)
   /* The judging account, attributed on every review — the same identity the
@@ -130,6 +137,9 @@ export function AdminWorkspace({
     ...(modelPoolApi === undefined || !isSuper
       ? []
       : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool'), group: 'system' as const }]),
+    ...(isSuper
+      ? [{ id: 'developerPrompts' as const, label: t('admin.tab.developerPrompts'), group: 'content' as const }]
+      : []),
     ...(!isSuper ? [] : [{ id: 'plugins' as const, label: t('admin.tab.plugins'), group: 'system' as const }]),
     { id: 'ops' as const, label: t('admin.tab.ops'), group: 'system' as const },
     { id: 'audit' as const, label: t('admin.tab.audit'), group: 'system' as const },
@@ -178,6 +188,7 @@ export function AdminWorkspace({
           <AdminModelPoolTab api={modelPoolApi} t={t} />
         )}
         {active === 'plugins' && isSuper && <AdminPluginTab api={pluginApi} t={t} />}
+        {active === 'developerPrompts' && isSuper && <AdminPromptTab api={promptApi} />}
         {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
         {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
         {active === 'audit' && <AuditTab api={api} t={t} />}
@@ -281,7 +292,7 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
                 type="button" className={css.primary}
                 disabled={busy === request.id}
                 data-testid="approve-school-request"
-                onClick={() => { approve(request, false) }}
+                onClick={() => { void approve(request, false) }}
               >
                 {t('admin.requests.approve')}
               </button>
@@ -333,7 +344,7 @@ function RequestsTab({ api, t }: { api: AdminApi; t: (key: PhysicsosKey) => stri
               <button
                 type="button" className={css.primary}
                 disabled={busy === request.id}
-                onClick={() => { approve(request, true) }}
+                onClick={() => { void approve(request, true) }}
               >
                 {t('admin.confirm.submit')}
               </button>

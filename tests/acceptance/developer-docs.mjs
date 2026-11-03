@@ -4,6 +4,7 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { PROMPT_SEED } from '../../overlays/harness/files/packages/physicsos/experiment-host/src/prompt-seed.ts'
 
 const docs = fileURLToPath(
   new URL('../../overlays/harness/files/apps/web/public/physicsos/developers/', import.meta.url),
@@ -11,6 +12,14 @@ const docs = fileURLToPath(
 const descriptor = JSON.parse(
   await readFile(resolve(docs, 'downloads/template-release.json'), 'utf8'),
 )
+const publishedPrompt = {
+  id: `prompt_${'1'.repeat(32)}`,
+  version: '3.2.1',
+  body: '## 已发布开发说明\n\n改进触摸和材质。',
+  sha256: 'c'.repeat(64),
+  publishedAt: '2026-11-03T00:00:00Z',
+  binding: PROMPT_SEED.binding,
+}
 const types = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -25,7 +34,7 @@ let mode = 'ok',
   releaseResponse
 const server = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname
-  if (path === '/downloads/template-release.json') {
+  if (path === '/physicsos/developer-prompts/current') {
     requests++
     if (mode === 'delay')
       await new Promise((resolve) => {
@@ -44,8 +53,14 @@ const server = createServer(async (req, res) => {
             mode === 'null-descriptor'
               ? null
               : mode === 'descriptor'
-                ? { ...descriptor, schemaVersion: 1 }
-                : descriptor,
+                ? {
+                    ...publishedPrompt,
+                    binding: {
+                      ...publishedPrompt.binding,
+                      release: { ...descriptor, schemaVersion: 1 },
+                    },
+                  }
+                : publishedPrompt,
           ),
     )
     return
@@ -76,15 +91,10 @@ try {
   if (selected === 'all' || selected === 'entry') {
     const page = await browser.newPage()
     await page.goto(base)
-    await expect(page.locator('a.sidebar-kit')).toHaveAttribute(
-      'href',
-      'downloads/physicsos-experiment-template-v2.zip',
-    )
+    await expect(page.locator('a.sidebar-kit')).toHaveAttribute('href', descriptor.url)
     await expect(page.locator('.sidebar-version')).toContainText('规范 v2.0')
     await page.goto(base + '/#/downloads')
-    await expect(
-      page.locator('.download-item[href="downloads/physicsos-experiment-template-v2.zip"]'),
-    ).toBeVisible()
+    await expect(page.locator('.download-item[data-template-download]')).toBeVisible()
     await page.goto(base + '/#/package')
     await expect(page.locator('.doc-tag')).toContainText('V2')
     await page.close()
@@ -104,7 +114,7 @@ try {
         errors = []
       page.on('pageerror', (error) => errors.push(error.message))
       if (failure === 'network')
-        await page.route('**/downloads/template-release.json', (route) => route.abort())
+        await page.route('**/physicsos/developer-prompts/current', (route) => route.abort())
       await page.goto(base + '/#/agents')
       await expect(page.locator('#main h1')).toHaveText('AGENTS.md 提示词', { timeout: 5000 })
       await expect(page.locator('#doc-nav a').first()).toBeVisible()
@@ -117,7 +127,7 @@ try {
       await page.locator('#doc-nav [data-doc="agents"]').click()
       await expect(page.locator('#task-description')).toHaveValue('保留我的材质任务')
       mode = 'delay'
-      if (failure === 'network') await page.unroute('**/downloads/template-release.json')
+      if (failure === 'network') await page.unroute('**/physicsos/developer-prompts/current')
       const before = requests
       await page.locator('[data-template-release-retry]').click()
       await expect(page.locator('[data-template-release-status]')).toContainText('正在加载')
@@ -129,6 +139,8 @@ try {
       await expect(page.locator('#task-description')).toHaveValue('重试时追加键盘体验')
       releaseResponse()
       await expect(page.locator('.agent-preview')).toContainText(descriptor.sha256)
+      await expect(page.locator('.agent-preview')).toContainText(publishedPrompt.body)
+      await expect(page.locator('.agent-meta')).toContainText(publishedPrompt.version)
       await expect(page.locator('.agent-preview')).toContainText('重试时追加键盘体验')
       for (const action of await page.locator('[data-bound-prompt-action]').all())
         await expect(action).toBeEnabled()
@@ -139,6 +151,7 @@ try {
       expect(text).toContain(descriptor.sha256)
       expect(text).toContain(base + descriptor.url)
       expect(text).toContain('重试时追加键盘体验')
+      expect(text).toBe(await page.locator('.agent-preview').textContent())
       expect(errors).toEqual([])
       await context.close()
       passed++

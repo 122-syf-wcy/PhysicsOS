@@ -147,6 +147,16 @@ describe('administrator shell', () => {
     ].every(primitive => typeof primitive === 'function')).toBe(true)
   })
 
+  it('offers developer prompt management only to platform administrators', () => {
+    const first = render(
+      <AdminWorkspace api={api} useAuth={authedAs('SCHOOL_ADMIN')} t={t} />,
+    )
+    expect(screen.queryByRole('tab', { name: '开发提示词' })).toBeNull()
+    first.unmount()
+    render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
+    expect(screen.getByRole('tab', { name: '开发提示词' })).not.toBeNull()
+  })
+
   it('keeps one page header, tablist, and content region across every visible tab', () => {
     render(
       <AdminWorkspace
