@@ -1,6 +1,6 @@
 # Task 1 report — canonical contract and version-aware host intake
 
-Status: DONE. Base: 8b37e1f. Source: isolated worktree `/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS`. All execution, tests, formatting and builds ran inside the existing `physicsos-experiments-build` container on `root@107.151.246.59`; local changes are source/Git only. No production container, account, data, deployment, main branch or submodule pointer changes.
+Status: DONE. Base: 8b37e1f. Final implementation commit: `8f77f97d3a32490fc1e53c2ec8aa5d9ab191e0ef` (supersedes unpublished `f4842e0`; this report hash record is a follow-up documentation commit). Source: isolated worktree `/Users/dongsiwei/.codex/worktrees/experiment-contribution/PhysicsOS`. All execution, tests, formatting and builds ran inside the existing `physicsos-experiments-build` container on `root@107.151.246.59`; local changes are source/Git only. No production container, account, data, deployment, main branch or submodule pointer changes.
 
 ## Implementation
 
