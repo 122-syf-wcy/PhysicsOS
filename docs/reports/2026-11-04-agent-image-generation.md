@@ -1,4 +1,4 @@
-> 当前状态：560bd20最终候选通过真实生图、分段代码、桌面/手机视觉、交互和重启恢复；正式发布在文末记录。
+> 当前状态：2026-11-05 00:23（北京时间）已切换正式站点。560bd20运行镜像通过真实生图、分段代码、桌面/手机视觉、交互和重启恢复，正式HTTPS回归结果见文末。
 
 # 题目实验子代理运行时生图
 
@@ -73,3 +73,15 @@ acf0970镜像已通过105711文件完整校验、原始真实源码校验复放�
 候选真实重启后所有原renderer/CSS/bootstrap和生成图片hash、artifact身份/owner完全相同，匿名与错误hash拒绝、签名重新授权通过；已写exact candidate accepted marker。旧生产DDC镜像和数据库/文件配对恢复点将在正式切换时保留。
 
 证据：[桌面](screenshots/chat-code-experiment/agent-image-real-560bd20/01-real-model-owned-code.png)、[手机](screenshots/chat-code-experiment/agent-image-real-560bd20/independent-real-mobile-play-controls.png)、[验收JSON](screenshots/chat-code-experiment/agent-image-real-560bd20/acceptance-result.json)。
+
+## 正式发布
+
+2026-11-05 00:23（北京时间），GitHub main/服务器HEAD快进至96e2c0b37a1f2a7aabd51b7d41fa1054333a1b99，运行镜像与候选精确ID一致（560bd20）。正式入口https://physics.dongsiwei.com/readyz返回ready，PostgreSQL/Redis均ok。
+
+停应用后完成配对恢复点：/opt/physicsos/backups/postgres/20261104-chat-code-switch/postgres.dump（480KiB）及/opt/physicsos/backups/releases/20261104-chat-code/app-data.tar.gz（16MiB），哈希验证保留；旧DDC镜像标记physicsos-app:rollback-chat-code-20261104。仅在备份后应用已审查两模型字段off→none、maxTokensField→max_tokens，parent high/32768保持；配置原字节独立备份，失败/手动回滚先还原配置。
+
+正式容器生图配置使用https://image.haqiuhaqiu.xyz、gpt-image-2.5-sunburst和原/run/secrets/image_api_key挂载。没有把用户提供密钥写入版本库/日志。
+
+正式HTTPS回归最终通过10项：readyz、匿名私有API拒绝、管理员登录、全部76实验与逐个上传选择、审核专页/过滤、提示词版本/Markdown导入/草稿/手动发布/预览、新私有API404、浏览器零异常。生产没有既有审核包，因此未验证实际包预览画面，未创建测试投稿。首次只读围栏误拦页面自动session/create，失败结果保留；最终允许正常空会话初始化，仍禁止模型请求/投稿/发布，最终PASS。
+
+最终源码与报告已整合到main；运行镜像保持经过实测的560bd20，没有为文档变化重新打包。

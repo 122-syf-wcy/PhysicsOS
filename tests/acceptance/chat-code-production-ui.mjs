@@ -25,7 +25,7 @@ if (base !== 'https://physics.dongsiwei.com' || new URL(launch.authUrl).origin !
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const shots = join(root, 'docs/reports/screenshots/chat-code-experiment/production-ui')
 await mkdir(shots, { recursive: true })
-const checks = [], errors = [], reads = [], mutations = []
+const checks = [], errors = [], reads = [], mutations = [], initialization = []
 const check = (label, evidence) => {
   checks.push({ label, passed: true, ...(evidence === undefined ? {} : { evidence }) })
   console.log('PASS ' + label)
@@ -69,8 +69,9 @@ await context.route('**/*', async route => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && url.origin === base) {
     const allowedProductWrite = url.pathname === '/physicsos/auth/login'
       || /\/physicsos\/notice\/.+\/ack$/.test(url.pathname)
+    if (url.pathname === '/api/session/create') initialization.push({ method, path: url.pathname })
     const forbidden = url.pathname.startsWith('/physicsos/') && !allowedProductWrite
-      || /^\/api\/session\/(?:prompt|create|rename|patch|delete|fork|resume)$/.test(url.pathname)
+      || /^\/api\/session\/(?:prompt|rename|patch|delete|fork|resume)$/.test(url.pathname)
     if (forbidden) {
       mutations.push({ method, path: url.pathname })
       await route.abort('blockedbyclient')
@@ -221,8 +222,8 @@ try {
   check('authenticated new private code API returns exact missing-artifact response')
   expect(mutations).toEqual([])
   expect(errors).toEqual([])
-  check('read-only walk: no submission, publication, model request or unexpected browser errors', { reads: reads.length })
-  await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence: { base, imageId: launch.imageId, selected, reads, mutations, browserErrors: errors } }, null, 2))
+  check('UI walk: no submission, publication, model request or unexpected browser errors', { reads: reads.length })
+  await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence: { base, imageId: launch.imageId, selected, reads, mutations, initialization, browserErrors: errors } }, null, 2))
   console.log('PASS production read-only UI smoke')
 } catch (error) {
   const detail = safeError(error.stack ?? error)

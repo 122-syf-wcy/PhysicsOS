@@ -43,7 +43,7 @@ Files: host drawImage dataflow check/tests, client style/loading text if necessa
 - [x] Preserve background-only rejection; allow genuine engine-driven drawImage geometry, enforce local resource existence.
 - [x] Build candidate; real one question uses configured image tool and actual artwork; inspect desktop/mobile screenshots before accepting.
 - [x] Verify raw sources/assets/owner/PG/restart and exact image. Keep failed evidence distinct.
-- [ ] Atomic FF GitHub main; stopped-app paired backup, approved image switch and formal76/admin/prompt HTTPS regression.
+- [x] Atomic FF GitHub main; stopped-app paired backup, approved image switch and formal76/admin/prompt HTTPS regression.
 
 ### Task4: Bounded source parts after upstream long-output diagnosis
 - [x] Real child test first: image tool→two code writes→metadata output yields exact concatenated source, source tool absent from parent; invalid/oversize/write quota rejected.

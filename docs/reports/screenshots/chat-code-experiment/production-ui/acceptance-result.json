@@ -1,0 +1,88 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "label": "formal HTTPS readyz returns 200",
+      "passed": true,
+      "evidence": {
+        "imageId": "sha256:a0fcd9a8546ca536dc38abd321ea29d2120595feb3a0314461469df89882b8bf"
+      }
+    },
+    {
+      "label": "new private question-code route rejects anonymous requests",
+      "passed": true
+    },
+    {
+      "label": "existing administrator logs in through actual production Web shell",
+      "passed": true
+    },
+    {
+      "label": "all 76 registered experiments remain available",
+      "passed": true
+    },
+    {
+      "label": "actual glass selector enables and selects all 76 matching upload targets",
+      "passed": true,
+      "evidence": {
+        "selected": 76,
+        "uploadStyle": {
+          "radius": 15,
+          "shadow": "rgb(255, 255, 255) 0px 1px 0px 0px inset, rgba(68, 119, 88, 0.18) 0px -1px 1px 0px inset, rgba(255, 255, 255, 0.34) 0px 0px 0px 1px inset, rgba(57, 110, 82, 0.35) 0px 8px 20px -8px",
+          "fill": "linear-gradient(165deg, rgba(239, 255, 245, 0.97) 0%, rgba(195, 231, 211, 0.94) 44%, rgba(152, 201, 174, 0.95) 100%)"
+        }
+      }
+    },
+    {
+      "label": "dedicated administrator experiment review page and filters remain present",
+      "passed": true,
+      "evidence": {
+        "packages": 0
+      }
+    },
+    {
+      "label": "review page has no existing package to preview; no test submission created",
+      "passed": true
+    },
+    {
+      "label": "prompt version, Markdown import, draft save, manual publish and full preview remain present",
+      "passed": true,
+      "evidence": {
+        "promptStyle": {
+          "radius": 14,
+          "shadow": "rgba(255, 255, 255, 0.95) 0px 1px 0px 0px inset, rgba(255, 255, 255, 0.4) 0px -1px 0px 0px inset, rgba(255, 255, 255, 0.26) 0px 0px 0px 1px inset, rgba(36, 68, 102, 0.157) 0px 4px 10px -5px",
+          "fill": "linear-gradient(rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.22) 38%, rgba(255, 255, 255, 0) 70%)"
+        }
+      }
+    },
+    {
+      "label": "authenticated new private code API returns exact missing-artifact response",
+      "passed": true
+    },
+    {
+      "label": "UI walk: no submission, publication, model request or unexpected browser errors",
+      "passed": true,
+      "evidence": {
+        "reads": 4
+      }
+    }
+  ],
+  "evidence": {
+    "base": "https://physics.dongsiwei.com",
+    "imageId": "sha256:a0fcd9a8546ca536dc38abd321ea29d2120595feb3a0314461469df89882b8bf",
+    "selected": 76,
+    "reads": [
+      "/physicsos/notice/platform-notice",
+      "/physicsos/experiments/catalog",
+      "/physicsos/experiments/review-queue",
+      "/physicsos/developer-prompts/admin"
+    ],
+    "mutations": [],
+    "initialization": [
+      {
+        "method": "POST",
+        "path": "/api/session/create"
+      }
+    ],
+    "browserErrors": []
+  }
+}
