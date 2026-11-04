@@ -12,7 +12,9 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
+import type { GenerateOptions, LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, toolCallResponse, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as physicsTools from '../src/index.ts'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from '../src/code-provider.ts'
@@ -181,6 +183,36 @@ afterEach(async () => {
   for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
   for (const root of persistenceRoots.splice(0)) await rm(root, { recursive: true, force: true })
 })
+
+async function presentationHost(adapter: MockAdapter, options: AgentOptions = { provider: 'mock', model: 'presentation-test' }): Promise<{
+  ctx: Context
+  parent: Agent
+}> {
+  const ctx = new Context(); contexts.push(ctx)
+  await ctx.plugin(Loader); ctx.loader.builtins.include = Include
+  await mountAgentLoopTestDependencies(ctx)
+  await ctx.plugin(AgentLoop, { agents: [] })
+  await ctx.plugin(AgentPresets, { default: 'student' })
+  await ctx.agentPresets.register({ id: 'student', plugins: [] })
+  await ctx.plugin(SubagentRuntime)
+  ctx.provide('physicsosIdentity', { sessionOwnerKey: (id: string) => id === 'parent' ? 'school:student' : undefined } as never)
+  ctx.provide('questionCodeArtifacts', {
+    context: async (id: string) => ({ ...await dependencies().deps.context(id), experimentId: id }),
+    create: async (input: Parameters<CodeGenerationDependencies['create']>[0]) => ({
+      status: 'ready', artifactId: input.childSessionId, ownerSessionId: input.ownerSessionId,
+      sceneId: String((input.scene as PhysicsScene).id), sceneRevision: (input.scene as PhysicsScene).revision,
+      sceneSha256: 'a'.repeat(64), sha256: 'b'.repeat(64), experimentId: input.experimentId,
+      childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z',
+    }),
+  } as never)
+  await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+  ctx.llm.registerAdapter(['mock'], adapter)
+  const handle = await ctx.agents.create({
+    sessionId: SessionId('parent'), agentOptions: options,
+    setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'student') },
+  })
+  return { ctx, parent: handle.agent }
+}
 describe('the real code child provider', () => {
   it('reaches the model and dispatches with structured_output as its sole tool, even when the parent preset owns physics and question tools', async () => {
     const ctx = new Context(); contexts.push(ctx)
@@ -362,6 +394,157 @@ describe('the real code child provider', () => {
     }
     expect(inputs.map(input => input.scene)).toEqual([original.scene, original.scene])
     await resumed.dispose()
+  })
+
+  it.each([
+    { advertised: ['high', 'off', 'low'], expected: 'off', parentCap: 32768, childCap: 8192 },
+    { advertised: ['high', 'medium'], expected: 'high', parentCap: 32768, childCap: 8192 },
+    { advertised: ['high', 'low'], expected: 'low', parentCap: 4096, childCap: 4096 },
+  ])('uses advertised $expected effort and cap $childCap without changing the main route', async ({ advertised, expected, parentCap, childCap }) => {
+    const reasoning: LlmModelReasoningInfo = {
+      efforts: advertised.map(id => ({ id: ReasoningEffortId(id), name: id })), defaultEffort: ReasoningEffortId('high'),
+    }
+    const adapter = new MockAdapter([textResponse('parent idle'), toolCallResponse('child-output', 'structured_output', source)], reasoning)
+    const { ctx, parent } = await presentationHost(adapter, {
+      provider: 'mock', model: 'presentation-test', reasoningEffort: ReasoningEffortId('high'), maxTokens: parentCap,
+    })
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '建立真实主请求头。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const optionsBefore = { ...parent.options }
+    const headerBefore = parent.session.requestHeader()?.config
+    const provider = new PhysicsCodeProvider(ctx)
+    const run = await provider.start({
+      parent, signal: new AbortController().signal, label: 'presentation child', prompt: [{ type: 'text', text: '绘制已验证场景标签。' }],
+      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source), additionalProperties: false },
+      maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'presentation child' }),
+    })
+    try {
+      expect((await run.result).structured).toEqual(source)
+      expect(adapter.requests[1]?.reasoningEffort).toBe(expected)
+      expect(adapter.requests[1]?.maxTokens).toBe(childCap)
+      expect(adapter.requests[1]?.provider).toBe(headerBefore?.provider)
+      expect(adapter.requests[1]?.model).toBe(headerBefore?.model)
+      expect(parent.options).toEqual(optionsBefore)
+      expect(parent.session.requestHeader()?.config).toEqual(headerBefore)
+    } finally { await run.dispose() }
+  })
+  it('reuses failed status in the same real turn and allows one manual retry in the next turn', async () => {
+    let childCalls = 0
+    let mainCalls = 0
+    let sceneId = ''
+    const respond = (options: GenerateOptions) => {
+      if (options.tools?.some(tool => tool.name === 'structured_output')) {
+        childCalls++
+        return childCalls === 1 ? textResponse('No structured code.') : toolCallResponse('manual-code', 'structured_output', source)
+      }
+      mainCalls++
+      if (mainCalls === 1) return toolCallResponse('solve', 'physics_solve_question', { text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。' })
+      sceneId = ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? ''
+      if (mainCalls === 2 || mainCalls === 4) return toolCallResponse(`generate-${mainCalls}`, 'physics_generate_experiment', { sceneId })
+      return textResponse('使用手动重新生成入口。')
+    }
+    const adapter = new MockAdapter(Array.from({ length: 9 }, () => respond))
+    const { ctx, parent } = await presentationHost(adapter)
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '解题并生成实验。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    expect(childCalls).toBe(1)
+    expect(ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.scenes[sceneId]?.visualization?.status).toBe('failed')
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '手动重新生成。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    expect(childCalls).toBe(2)
+    const events = parent.session.snapshotEvents().flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(events.filter(snapshot => snapshot.visualization !== undefined).map(snapshot => snapshot.turn)).toEqual([1, 1, 2, 2])
+    expect(events.at(-1)?.visualization?.status).toBe('ready')
+  })
+  it('returns a ready reference on same-turn repetition without starting another child', async () => {
+    let childCalls = 0
+    let mainCalls = 0
+    const respond = (options: GenerateOptions) => {
+      if (options.tools?.some(tool => tool.name === 'structured_output')) {
+        childCalls++
+        return toolCallResponse('ready-code', 'structured_output', source)
+      }
+      mainCalls++
+      if (mainCalls === 1) return toolCallResponse('solve', 'physics_solve_question', { text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。' })
+      if (mainCalls === 2) {
+        return toolCallResponse('same-turn-ready', 'physics_generate_experiment', { sceneId: ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? '' })
+      }
+      return textResponse('代码已就绪。')
+    }
+    const { ctx, parent } = await presentationHost(new MockAdapter(Array.from({ length: 7 }, () => respond)))
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '生成本题实验。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    expect(childCalls).toBe(1)
+    expect(parent.session.snapshotEvents().filter(event => event.type === 'physics/scene')).toHaveLength(3)
+  })
+
+  it('falls back to inherited effort when advisory model metadata lookup fails', async () => {
+    const reasoning: LlmModelReasoningInfo = {
+      efforts: ['high', 'off'].map(id => ({ id: ReasoningEffortId(id), name: id })), defaultEffort: ReasoningEffortId('high'),
+    }
+    const adapter = new MockAdapter([toolCallResponse('fallback-code', 'structured_output', source)], reasoning)
+    const { ctx, parent } = await presentationHost(adapter, {
+      provider: 'mock', model: 'presentation-test', reasoningEffort: ReasoningEffortId('high'), maxTokens: 32768,
+    })
+    const lookup = vi.spyOn(ctx.llm, 'resolveModelInfo').mockRejectedValueOnce(new Error('Advisory metadata unavailable'))
+    const provider = new PhysicsCodeProvider(ctx)
+    const run = await provider.start({
+      parent, signal: new AbortController().signal, prompt: [{ type: 'text', text: '简短呈现。' }],
+      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source), additionalProperties: false },
+      maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
+    })
+    try {
+      expect((await run.result).structured).toEqual(source)
+      expect(adapter.requests[0]?.reasoningEffort).toBe('high')
+      expect(adapter.requests[0]?.maxTokens).toBe(8192)
+    } finally { await run.dispose(); lookup.mockRestore() }
+  })
+  it('cancels a hung metadata lookup before child creation and releases its abort listener', async () => {
+    const adapter = new MockAdapter([])
+    const { ctx, parent } = await presentationHost(adapter)
+    const lookup = vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementation(() => new Promise(() => {}))
+    const controller = new AbortController()
+    const removed = vi.spyOn(controller.signal, 'removeEventListener')
+    const starting = new PhysicsCodeProvider(ctx).start({
+      parent, signal: controller.signal, prompt: [{ type: 'text', text: '简短呈现。' }],
+      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source), additionalProperties: false },
+      maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
+    })
+    await vi.waitFor(() => { expect(lookup).toHaveBeenCalledTimes(1) })
+    controller.abort()
+    const rejected = await Promise.race([
+      starting.then(() => false, () => true), new Promise<boolean>((resolve) => { setTimeout(() => { resolve(false) }, 200) }),
+    ])
+    expect(rejected).toBe(true)
+    expect(ctx.agents.list().filter(agent => agent.session.header.parentSession === parent.id)).toHaveLength(0)
+    expect(adapter.requests).toHaveLength(0)
+    expect(removed.mock.calls.some(call => call[0] === 'abort')).toBe(true)
+    lookup.mockRestore(); removed.mockRestore()
+  })
+  it('honors an explicitly different style even when a same-turn ready reference exists', async () => {
+    let mainCalls = 0
+    let childCalls = 0
+    const respond = (options: GenerateOptions) => {
+      if (options.tools?.some(tool => tool.name === 'structured_output')) {
+        childCalls++
+        return toolCallResponse('styled-code', 'structured_output', source)
+      }
+      mainCalls++
+      if (mainCalls === 1) return toolCallResponse('solve', 'physics_solve_question', { text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。' })
+      if (mainCalls === 2) {
+        return toolCallResponse('explicit-style', 'physics_generate_experiment', {
+          sceneId: ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? '', experimentId: 'solenoid-field',
+        })
+      }
+      return textResponse('不同风格已生成。')
+    }
+    const { ctx, parent } = await presentationHost(new MockAdapter(Array.from({ length: 7 }, () => respond)))
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '本题代码实验。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    expect(childCalls).toBe(2)
+    const latest = ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? ''
+    const state = ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.scenes[latest]?.visualization
+    expect(state?.status === 'ready' && state.experimentId).toBe('solenoid-field')
   })
 
 })

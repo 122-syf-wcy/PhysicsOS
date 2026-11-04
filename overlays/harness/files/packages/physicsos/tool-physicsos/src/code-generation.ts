@@ -69,6 +69,7 @@ function checkedSource(result: SubagentResult): CodeVisualizationSource {
 function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, repair?: string): string {
   return [
     '为下面的真实题目场景生成最新 V3 风格的专属实验。只返回 title、summary、rendererJs、stylesheet 四个字符串。',
+    '这是轻量呈现任务：已有物理求解与校验已经完成，不再推导或重新解题。迅速提交简短 SDK wrapper，加上本题对象、已知量与关键点标签；renderer 尽量少于 200 行，CSS 只补少量题目样式，不复制整套模板或重新实现引擎。',
     '使用题目的原始场景与平台 frame/snapshot；绝不改写题目条件、引入默认场景、重新计算物理答案或编造模拟结果。',
     'rendererJs 必须导出 renderFrame(snapshot)。优先复用 ../vendor/platform-renderer.js 的公开 SDK 和基础 renderer；在其基础上为本题的真实对象、方向、轨迹/关键点和已知量加入清晰标注。不能原样返回基础 renderer。',
     '只可静态导入现有相对路径资源；禁止 fetch、外网、存储、parent/top、eval、Function、动态import及脚本注入。禁止返回 HTML、manifest 或其他文件。',
@@ -125,7 +126,7 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
       if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
       // Await start directly: its provider owns cancellation until publication;
       // racing start would lose the holder and leak a late published child.
-      const run = await deps.start({ label: `题目实验代码 · ${original.title.slice(0, 100)}`, prompt: [{ type: 'text', text: promptFor(style, deps, repair) }], signal: controller.signal, outputSchema: CODE_SOURCE_SCHEMA, toolFilter: { allow: [] }, maxDepth: 1, agentOptions: { maxTokens: 24000 } })
+      const run = await deps.start({ label: `题目实验代码 · ${original.title.slice(0, 100)}`, prompt: [{ type: 'text', text: promptFor(style, deps, repair) }], signal: controller.signal, outputSchema: CODE_SOURCE_SCHEMA, toolFilter: { allow: [] }, maxDepth: 1, agentOptions: { maxTokens: 8192 } })
       try {
         const source = checkedSource(await wait(run.result))
         if (source.rendererJs.trim() === style.baseRenderer.trim() || ONLY_REEXPORT.test(source.rendererJs)) throw Object.assign(new Error('Unchanged template renderer'), { code: 'INVALID_SOURCE' })

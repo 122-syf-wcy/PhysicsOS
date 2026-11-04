@@ -2,6 +2,8 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SubagentProvider, ResolvedSubagentStartRequest, SubagentRun } from '@deepseek-ai/dsh-subagent'
+import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 
@@ -25,11 +27,49 @@ export class PhysicsCodeProvider implements SubagentProvider {
   }
   /** Register the durable internal composition during host startup, before cold child reads. */
   initialize(): Promise<void> { return this.ensurePreset() }
+  private async lightEffort(request: ResolvedSubagentStartRequest): Promise<ReasoningEffortId | undefined> {
+    const signal = request.signal
+    const isAborted = (): boolean => signal.aborted
+    const abortError = (): Error => {
+      const reason = signal.reason as unknown
+      const timedOut = typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'GENERATION_TIMEOUT'
+      return Object.assign(new Error('Code metadata lookup aborted'), {
+        code: timedOut ? 'GENERATION_TIMEOUT' : 'GENERATION_ABORTED',
+      })
+    }
+    if (isAborted()) throw abortError()
+    const route = parentAgentOptionsForDelegation(request.parent)
+    const llm = this.ctx.get('llm')
+    if (llm === undefined || route.provider === undefined || route.model === undefined) return undefined
+    let onAbort: (() => void) | undefined
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => { reject(abortError()) }
+      signal.addEventListener('abort', onAbort, { once: true })
+      if (isAborted()) onAbort()
+    })
+    try {
+      // Only advisory metadata is raced. Actual child startup keeps its holder-owned lifecycle.
+      const info = await Promise.race([llm.resolveModelInfo(route.provider, route.model, signal), aborted])
+      for (const level of ['off', 'none', 'minimal', 'low']) {
+        const effort = info.reasoning?.efforts.find(item => item.id.toLowerCase() === level)
+        if (effort !== undefined) return effort.id
+      }
+      return undefined
+    } catch (error) {
+      if (isAborted()) throw abortError()
+      if (error instanceof Error && error.name === 'AbortError') throw error
+      // Catalog/metadata availability does not gate the exact route's ordinary call path.
+      return undefined
+    } finally {
+      if (onAbort !== undefined) signal.removeEventListener('abort', onAbort)
+    }
+  }
   async start(request: ResolvedSubagentStartRequest): Promise<SubagentRun> {
     await this.ensurePreset()
     if (!request.outputSchema || request.maxDepth !== 1 || request.parent.session.header.parentSession !== undefined) {
       throw new Error('Code generation requires a structured first-level child')
     }
+    const reasoningEffort = await this.lightEffort(request)
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}\n${marker}`
     const flags = { isolated: false }
@@ -61,9 +101,12 @@ export class PhysicsCodeProvider implements SubagentProvider {
       return undefined
     }, { global: true })
     try {
-      const parentLimit = request.parent.session.requestHeader()?.config.maxTokens ?? request.parent.options.maxTokens ?? 24000
-      const maxTokens = Math.min(parentLimit, request.agentOptions?.maxTokens ?? 24000)
-      const run = await startInProcessRun({ ...request, persona, toolFilter: { allow: [] }, agentOptions: { maxTokens } }, {})
+      const parentLimit = request.parent.session.requestHeader()?.config.maxTokens ?? request.parent.options.maxTokens ?? 8192
+      const maxTokens = Math.min(8192, parentLimit, request.agentOptions?.maxTokens ?? 8192)
+      const run = await startInProcessRun({
+        ...request, persona, toolFilter: { allow: [] },
+        agentOptions: { maxTokens, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) },
+      }, {})
       if (!flags.isolated) { await run.dispose(); throw new Error('Code child creation did not establish its restricted preset') }
       return run
     } finally { remove() }
