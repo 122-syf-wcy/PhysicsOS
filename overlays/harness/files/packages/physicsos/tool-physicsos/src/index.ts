@@ -361,7 +361,9 @@ export function apply(ctx: Context, config: Config): void {
       ownerSessionId, snapshot, signal: exec.signal, experimentId: selected, instructions,
       current: () => persistedScene(exec, sceneId),
       isCurrent: () => currentTurnOf(exec) === turn && (ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')?.latest ?? sceneId) === sceneId,
-      publish: value => parent.session.append('physics/scene', value),
+      publish: (value) => {
+        parent.session.append('physics/scene', { ...value, ...(turn === undefined ? {} : { turn }) })
+      },
       context: id => artifacts === undefined ? Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' })) : artifacts.context(id),
       start: (request) => {
         const subagents = ctx.get('subagents')

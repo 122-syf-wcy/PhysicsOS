@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import JsonlSessionPersistence from '../../../session/session-persistence-jsonl/src/index.ts'
+import type { PhysicsScene } from '@physicsos/physics-scene'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -171,7 +176,11 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
 })
 
 const contexts: Context[] = []
-afterEach(async () => { for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose() })
+const persistenceRoots: string[] = []
+afterEach(async () => {
+  for (const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose()
+  for (const root of persistenceRoots.splice(0)) await rm(root, { recursive: true, force: true })
+})
 describe('the real code child provider', () => {
   it('reaches the model and dispatches with structured_output as its sole tool, even when the parent preset owns physics and question tools', async () => {
     const ctx = new Context(); contexts.push(ctx)
@@ -274,6 +283,85 @@ describe('the real code child provider', () => {
     expect(wire?.scenes[scenes[0]!.sceneId]?.visualization?.status).toBe('ready')
     expect(JSON.stringify(scenes)).not.toContain('rendererJs')
     expect(adapter.requests[1]?.tools?.map(t => t.name)).toEqual(['structured_output'])
+  })
+
+  it('publishes cold regeneration statuses on the real second parent turn without rewriting first-turn facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'physics-code-cold-turn-'))
+    persistenceRoots.push(root)
+    const inputs: Parameters<CodeGenerationDependencies['create']>[0][] = []
+    async function boot(adapter: MockAdapter): Promise<Context> {
+      const ctx = new Context(); contexts.push(ctx)
+      await ctx.plugin(Loader); ctx.loader.builtins.include = Include
+      await mountAgentLoopTestDependencies(ctx)
+      await ctx.plugin(JsonlSessionPersistence, { root })
+      await ctx.plugin(AgentLoop, { agents: [] })
+      await ctx.plugin(AgentPresets, { default: 'student' })
+      await ctx.agentPresets.register({ id: 'student', plugins: [] })
+      await ctx.plugin(SubagentRuntime)
+      ctx.provide('physicsosIdentity', { sessionOwnerKey: (id: string) => id === 'parent' ? 'school:student' : undefined } as never)
+      ctx.provide('questionCodeArtifacts', {
+        context: (experimentId: string) => dependencies().deps.context(experimentId),
+        create: async (input: Parameters<CodeGenerationDependencies['create']>[0]) => {
+          inputs.push(input)
+          const scene = input.scene as PhysicsScene
+          return {
+            status: 'ready', artifactId: `private-${inputs.length}`, ownerSessionId: input.ownerSessionId,
+            sceneId: String(scene.id), sceneRevision: scene.revision, sceneSha256: 'a'.repeat(64),
+            sha256: String(inputs.length).repeat(64), experimentId: input.experimentId,
+            childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z',
+          }
+        },
+      } as never)
+      await ctx.plugin(physicsTools, { sceneScope: 'session', maxScenes: 64 })
+      ctx.llm.registerAdapter(['mock'], adapter)
+      return ctx
+    }
+    const question = '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。'
+    const firstAdapter = new MockAdapter([
+      toolCallResponse('solve-first', 'physics_solve_question', { text: question }),
+      toolCallResponse('code-first', 'structured_output', source), textResponse('第一题已验证。'),
+    ])
+    const first = await boot(firstAdapter)
+    const firstHandle = await first.agents.create({
+      sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' },
+      setup: async (agentCtx) => { await first.agentPresets.mount(agentCtx, 'student') },
+    })
+    firstHandle.agent.followup(createUserMessage({ content: [{ type: 'text', text: question }], source: { kind: 'user' } }))
+    await firstHandle.agent.whenIdle()
+    const originalEvents = firstHandle.agent.session.snapshotEvents()
+    const originalScenes = originalEvents.flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    const original = originalScenes.at(-1)
+    if (original === undefined || original.visualization?.status !== 'ready') throw new Error('First code experiment was not ready')
+    expect(originalScenes.map(snapshot => snapshot.turn)).toEqual([1, 1, 1])
+    await firstHandle.dispose()
+    await first.fiber.dispose()
+
+    const nextAdapter = new MockAdapter([
+      toolCallResponse('regenerate-second', 'physics_generate_experiment', { sceneId: original.sceneId }),
+      toolCallResponse('code-second', 'structured_output', { ...source, title: '冷重生成' }), textResponse('代码已重新生成。'),
+    ])
+    const next = await boot(nextAdapter)
+    const resumed = await next.agents.resume({
+      resumeSessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' },
+      setup: async (agentCtx) => { await next.agentPresets.mount(agentCtx, 'student') },
+    })
+    const regeneratedPrompt = createUserMessage({ content: [{ type: 'text', text: '重新生成本题代码实验。' }], source: { kind: 'user' } })
+    resumed.agent.followup(regeneratedPrompt)
+    await resumed.agent.whenIdle()
+    const restoredEvents = resumed.agent.session.snapshotEvents()
+    const newScenes = restoredEvents.slice(originalEvents.length).flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(restoredEvents.some(event => event.type === 'turn/start' && event.data.turn === 2)).toBe(true)
+    expect(newScenes.map(snapshot => snapshot.visualization?.status)).toEqual(['generating', 'ready'])
+    expect(newScenes.map(snapshot => snapshot.turn)).toEqual([2, 2])
+    expect(restoredEvents.slice(0, originalEvents.length)).toEqual(originalEvents)
+    for (const snapshot of newScenes) {
+      expect(snapshot.scene).toEqual(original.scene)
+      expect(snapshot.solve).toEqual(original.solve)
+      expect(snapshot.revision).toBe(original.revision)
+      if (snapshot.visualization?.status === 'ready') expect(snapshot.visualization.sceneSha256).toBe(original.visualization.sceneSha256)
+    }
+    expect(inputs.map(input => input.scene)).toEqual([original.scene, original.scene])
+    await resumed.dispose()
   })
 
 })
