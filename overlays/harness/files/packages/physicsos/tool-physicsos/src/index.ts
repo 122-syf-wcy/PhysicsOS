@@ -13,6 +13,7 @@
  * @module @deepseek-ai/dsh-tool-physicsos
  */
 
+import { isDeepStrictEqual } from 'node:util'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from './code-provider.ts'
 import { generateQuestionCode, type CodeStyleContext } from './code-generation.ts'
 import { codeStyleFor } from './code-style-selection.ts'
@@ -446,34 +447,49 @@ export function apply(ctx: Context, config: Config): void {
       const solved = guarded(() => runtime.solveQuestion(args.text, args.questionId))
       const durationMs = Date.now() - startedAt
       if (solved.scene !== undefined) {
-        publish(exec, runtime, solved.scene, 'solved', {
-          ...(solved.model === undefined ? {} : { model: solved.model }),
-          solve: {
-            knowns: solved.knowns,
-            targets: solved.targets,
-            /* Each answer carries the simulation's provenance — engine
-               id/version, scene revision, verifier and checks — so the client
-               names the engine behind the number instead of the scene domain.
-               An answer with no engine behind it forwards the honest null. */
-            answers: solved.answers.map(answer => ({
-              key: answer.key,
-              label: answer.label,
-              symbol: answer.symbol,
-              value: answer.value,
-              unit: answer.unit,
-              provenance: answer.provenance,
-            })),
-            steps: solved.steps,
-            ...(solved.verification === undefined ? {} : {
-              verification: {
-                status: solved.verification.status,
-                checks: solved.verification.checks,
-              },
-            }),
-            issues: solved.issues,
-            ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
-          },
-        })
+        const previous = solved.reusedScene === true ? persistedScene(exec, solved.scene.sceneId) : undefined
+        const sameTurnVisualization = exec.agent !== undefined && previous !== undefined
+          && previous.turn === currentTurnOf(exec) && previous.sceneId === solved.scene.sceneId
+          && previous.revision === solved.scene.revision
+          && previous.visualization?.ownerSessionId === String(exec.agent.id)
+          && previous.visualization.sceneId === solved.scene.sceneId
+          && previous.visualization.sceneRevision === solved.scene.revision
+          && isDeepStrictEqual(
+            JSON.parse(JSON.stringify(previous.scene)) as unknown,
+            JSON.parse(JSON.stringify(runtime.sceneSnapshot(solved.scene.sceneId))) as unknown,
+          )
+        // A cached engine result must not clear this turn's completed/failed code job.
+        // Compare every serialized scene fact; new turns and revisions still publish normally.
+        if (!sameTurnVisualization) {
+          publish(exec, runtime, solved.scene, 'solved', {
+            ...(solved.model === undefined ? {} : { model: solved.model }),
+            solve: {
+              knowns: solved.knowns,
+              targets: solved.targets,
+              /* Each answer carries the simulation's provenance — engine
+                 id/version, scene revision, verifier and checks — so the client
+                 names the engine behind the number instead of the scene domain.
+                 An answer with no engine behind it forwards the honest null. */
+              answers: solved.answers.map(answer => ({
+                key: answer.key,
+                label: answer.label,
+                symbol: answer.symbol,
+                value: answer.value,
+                unit: answer.unit,
+                provenance: answer.provenance,
+              })),
+              steps: solved.steps,
+              ...(solved.verification === undefined ? {} : {
+                verification: {
+                  status: solved.verification.status,
+                  checks: solved.verification.checks,
+                },
+              }),
+              issues: solved.issues,
+              ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
+            },
+          })
+        }
       }
       /* Every attempt — solved or rejected — leaves a trace: the scene mirror
          only carries READY solves, so without this a rejected attempt (parse

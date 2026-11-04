@@ -547,4 +547,72 @@ describe('the real code child provider', () => {
     expect(state?.status === 'ready' && state.experimentId).toBe('solenoid-field')
   })
 
+  it.each(['failed', 'bare-sdk', 'ready'] as const)('keeps same-turn cached solve visualization after %s and permits a new user turn', async (initial) => {
+    const question = '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。'
+    const firstChildren = initial === 'bare-sdk' ? 2 : 1
+    let childCalls = 0
+    let mainCalls = 0
+    const respond = (options: GenerateOptions) => {
+      if (options.tools?.some(tool => tool.name === 'structured_output')) {
+        childCalls++
+        if (childCalls <= firstChildren && initial === 'failed') return textResponse('No structured code.')
+        if (childCalls <= firstChildren && initial === 'bare-sdk') {
+          return toolCallResponse('bare-sdk', 'structured_output', { ...source, rendererJs: 'export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";' })
+        }
+        return toolCallResponse('question-code', 'structured_output', source)
+      }
+      mainCalls++
+      if (mainCalls === 1 || mainCalls === 2 || mainCalls === 4) return toolCallResponse(`solve-${mainCalls}`, 'physics_solve_question', { text: question })
+      return textResponse('只使用已有引擎结果。')
+    }
+    const { ctx, parent } = await presentationHost(new MockAdapter(Array.from({ length: 12 }, () => respond)))
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: question }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const first = parent.session.snapshotEvents().flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(childCalls).toBe(firstChildren)
+    expect(first.filter(snapshot => snapshot.visualization?.status === 'generating')).toHaveLength(1)
+    expect(first.at(-1)?.visualization?.status).toBe(initial === 'ready' ? 'ready' : 'failed')
+    const traces = ctx.sessionProjections.stateOf(parent.session, 'physicsSolveTraces')?.traces
+    expect(traces?.at(-1)?.reusedScene).toBe(true)
+    for (const snapshot of first) expect(snapshot.scene).toEqual(first[0]?.scene)
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '新轮次重新生成本题。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const all = parent.session.snapshotEvents().flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(childCalls).toBe(firstChildren + 1)
+    expect(all.filter(snapshot => snapshot.visualization?.status === 'generating').map(snapshot => snapshot.turn)).toEqual([1, 2])
+    expect(all.at(-1)?.visualization?.status).toBe('ready')
+    expect(all.at(-1)?.scene).toEqual(first[0]?.scene)
+  })
+  it('allows a new code job after a real scene command advances the revision in the same turn', async () => {
+    let childCalls = 0
+    let mainCalls = 0
+    const respond = (options: GenerateOptions) => {
+      if (options.tools?.some(tool => tool.name === 'structured_output')) {
+        childCalls++
+        return childCalls === 1 ? textResponse('No structured code.') : toolCallResponse('revised-code', 'structured_output', source)
+      }
+      mainCalls++
+      if (mainCalls === 1) return toolCallResponse('solve', 'physics_solve_question', { text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。' })
+      const state = ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')
+      const sceneId = state?.latest ?? ''
+      const scene = state?.scenes[sceneId]?.scene as PhysicsScene | undefined
+      if (mainCalls === 2) {
+        return toolCallResponse('change-field', 'physics_scene_command', {
+          sceneId, type: 'SetMagneticFieldStrength',
+          payload: { fieldId: scene?.fields.find(field => field.type === 'uniform_magnetic')?.id ?? '', strength: { value: 1, unit: 'T' } },
+        })
+      }
+      if (mainCalls === 3) return toolCallResponse('revised-job', 'physics_generate_experiment', { sceneId })
+      return textResponse('修改条件由引擎校验。')
+    }
+    const { ctx, parent } = await presentationHost(new MockAdapter(Array.from({ length: 9 }, () => respond)))
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '生成后改条件。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const scenes = parent.session.snapshotEvents().flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(childCalls).toBe(2)
+    expect(scenes.filter(snapshot => snapshot.visualization?.status === 'generating').map(snapshot => snapshot.revision)).toEqual([0, 1])
+    expect(scenes.at(-1)?.visualization?.status).toBe('ready')
+    expect(scenes.at(-1)?.revision).toBe(1)
+  })
+
 })
