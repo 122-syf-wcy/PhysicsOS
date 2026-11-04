@@ -1,4 +1,16 @@
 /** Select exact type declarations needed by this domain; never rewrite physics values. */
+import type { PhysicsSceneSolveSummary } from './types.ts'
+/** Repeated per-answer provenance stays in the session; authors only need verified quantities. */
+export function authorSolveFacts(solve: PhysicsSceneSolveSummary | undefined): unknown {
+  if (solve === undefined) return null
+  return {
+    knowns: solve.knowns, targets: solve.targets,
+    answers: solve.answers.map(({ key, label, symbol, value, unit }) => ({ key, label, symbol, value, unit })),
+    steps: solve.steps, issues: solve.issues,
+    verification: solve.verification === undefined ? undefined : { status: solve.verification.status,
+      checks: solve.verification.checks.map(({ id, passed }) => ({ id, passed })) },
+  }
+}
 export function focusedRenderContract(contract: string, domain: string): string {
   const marker = 'Exact field shapes (TypeScript notation describes data; do not import these types):'
   const split = contract.indexOf(marker)

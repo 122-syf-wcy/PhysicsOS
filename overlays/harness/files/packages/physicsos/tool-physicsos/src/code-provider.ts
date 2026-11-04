@@ -9,10 +9,11 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
 import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
+import { QuestionCodeParts } from './question-code-parts.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者和实验美术设计师。按已发布实验提示词制作 Warm Lab 拟真实验场景。先调用 physics_generate_experiment_asset 生成本题环境或材质，再用独立原生 Canvas2D/SVG 与生成素材完成装置、空间与动态画面；物理事实由平台引擎持有。不能导入旧渲染器，不能询问学生、修改题目条件、调用物理/文件/终端/网页工具或进一步委派。最后用 structured_output 提交四个源码字符串。'
+export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者和实验美术设计师。按已发布实验提示词制作 Warm Lab 拟真实验场景。先调用 physics_generate_experiment_asset 生成本题环境或材质，再用独立原生 Canvas2D/SVG 与生成素材完成装置、空间与动态画面；物理事实由平台引擎持有。不能导入旧渲染器，不能询问学生、修改题目条件、调用物理/文件/终端/网页工具或进一步委派。通过physics_write_experiment_code每次最多2400字符分段交付JS/CSS，最后structured_output仅提交title/summary。'
 
 export class PhysicsCodeProvider implements SubagentProvider {
   readonly name = CODE_PROVIDER_NAME
@@ -87,7 +88,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
       ? artifacts?.assetManifest?.({ ownerSessionId: assetOwner, generationId, scene: assetScene.scene }) ?? [] : []
     const canGenerateAsset = assetScene !== undefined && generationId !== undefined
       && typeof artifacts?.generateAsset === 'function' && existingAssets.length === 0
-    const allowedTools = canGenerateAsset ? ['physics_generate_experiment_asset'] : []
+    const chunked = assetScene !== undefined && generationId !== undefined && typeof artifacts?.generateAsset === 'function'
+    const parts = new QuestionCodeParts()
+    const stagedParts = new WeakMap<object, () => void>()
+    const allowedTools = [...(canGenerateAsset ? ['physics_generate_experiment_asset'] : []), ...(chunked ? ['physics_write_experiment_code'] : [])]
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}\n${marker}`
     const flags = { isolated: false }
@@ -100,6 +104,33 @@ export class PhysicsCodeProvider implements SubagentProvider {
       const presets = this.ctx.get('agentPresets')
       if (presets === undefined) throw new Error('Code child requires the agent preset registry')
       await presets.mount(agent.ctx, CODE_PRESET_ID)
+      agent.ctx.on('tools/result', (exec, result) => {
+        const commit = stagedParts.get(exec)
+        stagedParts.delete(exec)
+        if (!result.isError) commit?.()
+      })
+      if (chunked) agent.ctx.tools.register(defineTool({
+        name: 'physics_write_experiment_code',
+        description: '分段提交实验JS或CSS，每次不超过2400字符，最多10次。建议每段15–30行、一个完整函数，分3–5次写完。先replace写renderer入口，再append辅助函数和图片缓存。全部写完后用structured_output只提交title/summary。平台只拼接原文，不替你写代码。',
+        parameters: {
+          file: { type: 'string', required: true, enum: ['rendererJs', 'stylesheet'] },
+          mode: { type: 'string', required: true, enum: ['replace', 'append'] },
+          content: { type: 'string', required: true, description: '本段源码原文，无Markdown；最多2400字符，不要一次交付完整长程序。' },
+        },
+        output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+        execute: (args, exec) => {
+          if (request.signal.aborted || exec.signal.aborted) throw new HarnessError('代码生成已取消。', 'GENERATION_ABORTED')
+          const current = request.parent.ctx.get('sessionProjections')?.stateOf(request.parent.session, 'physicsScenes')?.scenes[assetScene.sceneId]
+          if (current?.visualization?.status !== 'generating' || current.visualization.jobId !== generationId) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
+          try {
+            const staged = parts.stage(args.file, args.mode, args.content)
+            stagedParts.set(exec, staged.commit)
+            return Promise.resolve(staged.result)
+          }
+          catch (error) { throw new HarnessError(error instanceof Error ? error.message : 'CODE_WRITE_FAILED', 'CODE_WRITE_FAILED') }
+        },
+        presentCall: () => ({ card: 'generic', title: '编写本题实验画面', kind: 'other' }),
+      }))
       if (canGenerateAsset) agent.ctx.tools.register(defineTool({
         name: 'physics_generate_experiment_asset',
         timeoutMs: 185_000,
@@ -126,9 +157,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
       agent.ctx.tools.presentAs('native')
       agent.ctx.tools.restrict({ allow: [] })
       agent.ctx.tools.guard((exec) => {
+        if (chunked && exec.name === 'physics_write_experiment_code') return undefined
         if (canGenerateAsset && exec.name === 'physics_generate_experiment_asset') return undefined
         if (exec.name !== 'structured_output') return 'Code child accepts only structured_output'
-        const source = exec.arguments as Record<string, unknown>
+        const source = { ...(exec.arguments as Record<string, unknown>), ...(chunked ? parts.source() : {}) }
         const limits = { title: 120, summary: 1000, rendererJs: 96000, stylesheet: 24000 }
         for (const [key, maximum] of Object.entries(limits)) {
           if (typeof source[key] !== 'string' || source[key].length > maximum) return `Code source ${key} must be a string of at most ${maximum} characters`
@@ -136,7 +168,9 @@ export class PhysicsCodeProvider implements SubagentProvider {
         if (!(source.title as string).trim() || !(source.rendererJs as string).trim()) return 'Code source title and rendererJs must not be empty'
         if (/\bfunction\s+renderFrame\s*\(/.test(source.rendererJs as string)
           && !/\bexport\s+(?:async\s+)?function\s+renderFrame\s*\(/.test(source.rendererJs as string)) {
-          return 'rendererJs is missing export: begin the entry with export async function renderFrame(snapshot). Resubmit complete four fields now.'
+          return chunked
+            ? 'rendererJs缺少export：用physics_write_experiment_code replace修正入口，再append其余函数；最后只提交title/summary。'
+            : 'rendererJs is missing export: begin the entry with export async function renderFrame(snapshot). Resubmit complete four fields now.'
         }
         return undefined
       })
@@ -151,10 +185,16 @@ export class PhysicsCodeProvider implements SubagentProvider {
       const maxTokens = Math.min(8192, parentLimit, request.agentOptions?.maxTokens ?? 8192)
       const run = await startInProcessRun({
         ...request, persona, toolFilter: { allow: [] },
+        ...(chunked ? { outputSchema: { type: 'object' as const, additionalProperties: false,
+          properties: { title: { type: 'string' }, summary: { type: 'string' } }, required: ['title', 'summary'] } } : {}),
         agentOptions: { maxTokens, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) },
       }, {})
       if (!flags.isolated) { await run.dispose(); throw new Error('Code child creation did not establish its restricted preset') }
-      return run
+      if (!chunked) return run
+      return { ...run, result: run.result.then((result) => {
+        if (result.stopReason !== 'completed' || result.structured === null || typeof result.structured !== 'object') return result
+        return { ...result, structured: { ...result.structured, ...parts.source() } }
+      }) }
     } finally { remove() }
   }
 }

@@ -120,6 +120,12 @@ describe('model pool proxy', () => {
     expect(received[0]?.tools).toEqual([code, image])
     await chat(base, { tools: [code], tool_choice: 'none' })
     expect(received.at(-1)?.tool_choice).toBe('none')
+    const meta = { ...code, function: { ...code.function, parameters: { type: 'object', properties: { title: { type: 'string' }, summary: { type: 'string' } }, required: ['title', 'summary'] } } }
+    const writer = { type: 'function', function: { name: 'physics_write_experiment_code', parameters: { type: 'object' } } }
+    await chat(base, { tools: [meta, writer, image] })
+    expect(received.at(-1)?.tool_choice).toBe('required')
+    await chat(base, { tools: [meta] })
+    expect(received.at(-1)?.tool_choice).toBeUndefined()
   })
   it('uses the conventional /v1 prefix for an origin-only channel during actual chat', async () => {
     let path = ''

@@ -321,7 +321,12 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
 }
 describe('the real code child provider', () => {
   it('lets the isolated child generate an owned image before submitting code while preserving the main model options', async () => {
-    const adapter = new MockAdapter([toolCallResponse('image', 'physics_generate_experiment_asset', { prompt: 'Warm Lab wood and plaster environment, no labels', kind: 'environment' }), toolCallResponse('code', 'structured_output', source)])
+    const adapter = new MockAdapter([
+      toolCallResponse('image', 'physics_generate_experiment_asset', { prompt: 'Warm Lab wood and plaster environment, no labels', kind: 'environment' }),
+      toolCallResponse('js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
+      toolCallResponse('css', 'physics_write_experiment_code', { file: 'stylesheet', mode: 'replace', content: source.stylesheet }),
+      toolCallResponse('code', 'structured_output', { title: source.title, summary: source.summary }),
+    ])
     const { ctx, parent } = await presentationHost(adapter)
     const image = { path: './assets/generated/abcdef.png', cssPath: './generated/abcdef.png', sha256: 'c'.repeat(64), width: 1536, height: 1024, kind: 'environment', model: 'gpt-image-2.5-sunburst' }
     const generateAsset = vi.fn(async () => image)
@@ -335,14 +340,28 @@ describe('the real code child provider', () => {
     try {
       expect((await run.result).structured).toEqual(source)
       expect(generateAsset).toHaveBeenCalledWith(expect.objectContaining({ ownerSessionId: 'parent', generationId: 'owned-job', scene: original.scene, kind: 'environment' }))
-      expect(adapter.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['physics_generate_experiment_asset', 'structured_output'])
+      expect(adapter.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['physics_generate_experiment_asset', 'physics_write_experiment_code', 'structured_output'])
       expect(parent.options).toEqual(before)
       expect(ctx.tools.schemas(parent).map(tool => tool.name)).not.toContain('physics_generate_experiment_asset')
+      expect(ctx.tools.schemas(parent).map(tool => tool.name)).not.toContain('physics_write_experiment_code')
     } finally { await run.dispose() }
   })
   it('offers only code submission when the same generation already owns an image', async () => {
-    const adapter = new MockAdapter([toolCallResponse('code', 'structured_output', source)])
+    const adapter = new MockAdapter([
+      toolCallResponse('too-long', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: 'x'.repeat(2401) }),
+      toolCallResponse('js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
+      toolCallResponse('append', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// authored ending' }),
+      toolCallResponse('rejected', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// rejected-part' }),
+      toolCallResponse('css', 'physics_write_experiment_code', { file: 'stylesheet', mode: 'replace', content: source.stylesheet }),
+      toolCallResponse('code', 'structured_output', { title: source.title, summary: source.summary }),
+    ])
     const { ctx, parent } = await presentationHost(adapter)
+    ctx.on('tools/post-execute', async (exec, _result, next) => {
+      if (exec.name === 'physics_write_experiment_code' && (exec.arguments as { content?: string }).content?.includes('rejected-part')) {
+        return { kind: 'block', feedback: [{ type: 'text', text: 'Rejected test fragment' }] }
+      }
+      return next()
+    }, { global: true })
     const original = snapshot()
     parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'existing-image-job', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
     const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: () => Promise<unknown>; assetManifest: () => unknown[] }
@@ -351,8 +370,8 @@ describe('the real code child provider', () => {
     const provider = new PhysicsCodeProvider(ctx)
     const run = await provider.start({ parent, signal: new AbortController().signal, label: 'code after image', prompt: [{ type: 'text', text: 'Submit code using existing asset.' }], outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'code after image' }) })
     try {
-      expect((await run.result).structured).toEqual(source)
-      expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['structured_output'])
+      expect((await run.result).structured).toEqual({ ...source, rendererJs: source.rendererJs + '\n// authored ending' })
+      expect(adapter.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['physics_write_experiment_code', 'structured_output'])
       expect(artifacts.generateAsset).not.toHaveBeenCalled()
     } finally { await run.dispose() }
   })
