@@ -245,6 +245,10 @@ describe('private question code artifacts', () => {
     ['detached inline SVG', () => 'export function renderFrame(snapshot) { const detached = document.createElement("div"); detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
     ['inline SVG mounted only by an uncalled helper', () => 'const detached = document.createElement("div"); function unusedMount() { document.getElementById("canvas").append(detached) } export function renderFrame(snapshot) { detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
     ['guarded constant view decoy', () => ownCanvas.replace('snapshot.view', 'snapshot && { opticalObjects: [{ at: { x: 10, y: 20 } }] }')],
+    ['nested inspector-only coordinates', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const root = document.getElementById("canvas"); const canvas = document.createElement("canvas"); root.replaceChildren(canvas); const ctx = canvas.getContext("2d"); const inspector = snapshot.inspector || []; inspector.forEach((sec) => (sec.derived || []).forEach((d) => { ctx.beginPath(); ctx.arc(d.value, 20, 3, 0, 6.28); ctx.fill(); })); }'],
+    ['nested constant callbacks with unused view', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const root = document.getElementById("canvas"); const canvas = document.createElement("canvas"); root.replaceChildren(canvas); const ctx = canvas.getContext("2d"); const sections = [{ derived: [{ value: 10 }] }]; sections.forEach((sec) => (sec.derived || []).forEach((d) => { ctx.beginPath(); ctx.arc(d.value, 20, 3, 0, 6.28); ctx.fill(); })); }'],
+    ['unused nested primitive callbacks beside constant drawing', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const root = document.getElementById("canvas"); const canvas = document.createElement("canvas"); root.replaceChildren(canvas); const ctx = canvas.getContext("2d"); (view.opticalObjects || []).forEach((object) => (object.parts || []).forEach((part) => {})); ctx.beginPath(); ctx.arc(10, 20, 3, 0, 6.28); ctx.fill(); }'],
+    ['spaced constant helper callback receiver despite a data argument', () => ownCanvas.replace('for (const item of view.opticalObjects ?? []) {', 'constant (view.opticalObjects).forEach((item) => {').replace('    ctx.beginPath(); ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2); ctx.fill();\n  }', '    ctx.beginPath(); ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2); ctx.fill();\n  });') + '\nfunction constant(objects) { return [{ at: { x: 10, y: 20 } }] }'],
   ] as const)('rejects %s before it can acquire independent metadata or freeze files', async (_name: string, renderer: () => string) => {
     const service = await setup(), before = await readdir(join(root, 'private', 'blobs'))
     await expect(service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '独立实验', summary: '', rendererJs: renderer(), stylesheet: '' } })).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
@@ -259,6 +263,17 @@ describe('private question code artifacts', () => {
   it('accepts the real child guarded view alias without counting its guard as geometry', async () => {
     const service = await setup()
     const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '条件读取透镜快照', summary: '', rendererJs: ownCanvas.replace('snapshot.view', 'snapshot && snapshot.view'), stylesheet: '' } })
+    expect(ref.rendererKind).toBe('independent')
+  })
+  it('accepts actual nested derived and parameter collectors without borrowing the outer callback receiver', async () => {
+    const service = await setup()
+    const collectors = `  const inspector = snapshot.inspector || [];
+  const derived = [], params = [];
+  inspector.forEach((sec) => (sec.derived || []).forEach((d) => derived.push(d)));
+  inspector.forEach((sec) => (sec.parameters || []).forEach((p) => params.push(p)));
+`
+    const rendererJs = ownCanvas.replace('  const canvas =', collectors + '  const canvas =')
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '嵌套收集快照读数', summary: '', rendererJs, stylesheet: '' } })
     expect(ref.rendererKind).toBe('independent')
   })
   it.each([

@@ -181,6 +181,38 @@ function drawingCalls(code: string): DrawingCall[] {
   }
   return calls
 }
+/** Read a member-call receiver backwards, keeping nested groups whole and stopping at expression boundaries. */
+function drawingCallbackReceiver(code: string, call: DrawingCall): string | undefined {
+  let index = call.start - 1
+  while (index >= 0 && /\s/.test(code[index] ?? '')) index--
+  if (code[index] !== '.') return undefined
+  index--
+  if (code[index] === '?') index--
+  while (index >= 0 && /\s/.test(code[index] ?? '')) index--
+  const end = index + 1, groups: string[] = []
+  for (; index >= 0; index--) {
+    const char = code[index]
+    if (char === ')' || char === ']' || char === '}') {
+      groups.push(char === ')' ? '(' : char === ']' ? '[' : '{')
+      if (groups.length > 64) throw new Error('Drawing receiver is too deep')
+    } else if (char === '(' || char === '[' || char === '{') {
+      if (!groups.length) break
+      if (groups.pop() !== char) throw new Error('Unbalanced drawing receiver')
+    } else if (!groups.length && !/[A-Za-z0-9_$?.]/.test(char ?? '')) {
+      if (!/\s/.test(char ?? '')) break
+      let before = index - 1, after = index + 1
+      while (before >= 0 && /\s/.test(code[before] ?? '')) before--
+      while (after < end && /\s/.test(code[after] ?? '')) after++
+      const word = code.slice(0, before + 1).match(/([A-Za-z_$][\w$]*)$/)?.[1]
+      const invocation = (code[after] === '(' || code[after] === '[') &&
+        /[A-Za-z0-9_$)\]]/.test(code[before] ?? '') &&
+        !['return', 'throw', 'if', 'for', 'while', 'switch', 'catch', 'yield', 'await', 'new', 'typeof', 'void'].includes(word ?? '')
+      if (!invocation && code[before] !== '.' && code[after] !== '.' && code[before] !== '?' && code[after] !== '?') break
+    }
+  }
+  if (groups.length) throw new Error('Unclosed drawing receiver')
+  return code.slice(index + 1, end).trim() || undefined
+}
 function drawingBindings(code: string): Map<string, string> {
   const bindings = new Map<string, string>()
   for (const match of code.matchAll(/\b([A-Za-z_$][\w$]*)\s*=\s*(?!=|>)/g)) {
@@ -193,8 +225,12 @@ function drawingBindings(code: string): Map<string, string> {
     for (const name of drawingNames(match[1] ?? '')) bindings.set(name, name === 'view' ? `(${value}).view` : value)
   }
   for (const match of code.matchAll(/\bfor\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([^)]*)\)/g)) bindings.set(match[1] ?? '', match[2] ?? '')
-  for (const match of code.matchAll(/([^;{}\n]+)\.(?:forEach|map|flatMap|reduce)\s*\(\s*(?:\(([^)]*)\)|([A-Za-z_$][\w$]*))\s*=>/g)) {
-    for (const name of drawingNames(match[2] ?? match[3] ?? '')) bindings.set(name, match[1] ?? '')
+  for (const call of drawingCalls(code)) {
+    if (!['forEach', 'map', 'flatMap', 'reduce'].includes(call.name)) continue
+    const receiver = drawingCallbackReceiver(code, call)
+    const parameters = call.arguments[0]?.match(/^\s*(?:\(([^)]*)\)|([A-Za-z_$][\w$]*))\s*=>/)
+    if (receiver === undefined || parameters === undefined || parameters === null) continue
+    for (const name of drawingNames(parameters[1] ?? parameters[2] ?? '')) bindings.set(name, receiver)
   }
   return bindings
 }

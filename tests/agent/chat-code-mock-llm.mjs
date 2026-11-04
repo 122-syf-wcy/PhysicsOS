@@ -198,7 +198,7 @@ export async function startChatCodeMock({ port = 0, evidenceFile, sourceOverride
         record.independentContract = prompt.includes('zero imports') && prompt.includes('There is no renderer factory or platform draw function')
         record.publishedStyle = /发布风格版本：([^\n]+)/.exec(prompt)?.[1]
         record.hasVerifiedAnswer = prompt.includes('已验证解答：') && !prompt.includes('已验证解答：null')
-        record.repair = prompt.includes('本次为唯一修复机会')
+        record.repair = /本次为(?:同一任务的)?唯一修复机会/.test(prompt)
         const source = mode === 'invalid-always' || (mode === 'repair-once' && epochChildren === 1)
           ? { ...CHAT_CODE_SOURCE, rendererJs: "import 'https://invalid.example/remote.js'\nexport const renderFrame = () => {}" }
           : sourceOverride ?? CHAT_CODE_SOURCE

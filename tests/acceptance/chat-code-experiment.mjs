@@ -556,7 +556,7 @@ try {
     }
     if (codeChildren.length === 2) {
       expect(JSON.stringify(child.events)).toMatch(/上次封闭代码校验未通过（(?:INVALID_SOURCE|INVALID_CODE_SOURCE|INVALID_PACKAGE|INVALID_METADATA|UNSAFE_RESOURCES)(?:[^）]*)）/)
-      expect(JSON.stringify(child.events)).toContain('本次为唯一修复机会')
+      expect(JSON.stringify(child.events)).toMatch(/本次为(?:同一任务的)?唯一修复机会/)
     }
     const generationEvents = sceneEvents(parent)
     expect(generationEvents.filter(event => event.data.visualization?.status === 'generating')).toHaveLength(1)
