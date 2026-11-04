@@ -191,6 +191,18 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
     expect(h.start).toHaveBeenCalledTimes(2)
     expect(h.dispose).toHaveBeenCalledTimes(2)
   })
+  it('uses the sole repair to finish code after a text-only child already generated an owned asset', async () => {
+    const h = dependencies()
+    const asset = { path: './assets/generated/abcdef.png', kind: 'environment' }
+    h.deps.assetManifest = () => [asset]
+    h.start.mockImplementationOnce(async () => ({ id: 'image-child', result: Promise.resolve({ stopReason: 'error', output: [{ type: 'text', text: 'I have the asset and will write code.' }] }), dispose: h.dispose }))
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    const block = h.start.mock.calls[1]?.[0].prompt[0]
+    expect(block?.type === 'text' ? block.text : '').toContain('MISSING_STRUCTURED_OUTPUT')
+    expect(block?.type === 'text' ? block.text : '').toContain(asset.path)
+    expect(h.states.filter(state => state.visualization?.status === 'generating')).toHaveLength(1)
+  })
   it.each([
     ['missing export', 'missing_export', true],
     ['missing engine geometry', 'missing_engine_geometry', true],

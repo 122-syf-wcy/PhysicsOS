@@ -111,6 +111,7 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     `题目场景（唯一物理条件来源）：${JSON.stringify(deps.snapshot.scene)}`,
     `已验证解答：${JSON.stringify(deps.snapshot.solve ?? null)}`,
     assets ? `本任务已生成素材（可直接复用，不要重复调用）：${JSON.stringify(assets)}` : '',
+    '禁止以“准备编写代码”“稍后交付”等普通文字结束。完成图片工具后必须继续调用structured_output交付完整代码；已有素材时直接复用，不能重复生图。',
     deps.instructions ? `本次展示要求：${deps.instructions.slice(0, 4000)}` : '',
     repair ? `上次封闭代码校验未通过（${repair.code}）；本次为同一任务的唯一修复机会，请针对下面待修复源码返回完整的四个字符串。` : '',
     repair?.reason ? `可信校验原因：${repair.reason}。${SOURCE_VALIDATION_HINTS[repair.reason]}` : '',
@@ -160,7 +161,14 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
       const run = await deps.start({ label: `题目实验代码 · ${original.title.slice(0, 100)}`, prompt: [{ type: 'text', text: promptFor(style, deps, repair, deps.assetManifest?.(jobId)) }], signal: controller.signal, outputSchema: CODE_SOURCE_SCHEMA, toolFilter: { allow: [] }, maxDepth: 1, agentOptions: { maxTokens: 8192 } })
       let rejectedSource: CodeVisualizationSource | undefined
       try {
-        const source = checkedSource(await wait(run.result))
+        const result = await wait(run.result)
+        const generatedAssets = deps.assetManifest?.(jobId)
+        if (result.stopReason === 'error' && result.structured === undefined
+          && result.output.some(block => block.type === 'text' && block.text.trim().length > 0)
+          && Array.isArray(generatedAssets) && generatedAssets.length > 0) {
+          throw Object.assign(new Error('Child finished after image generation without submitting code'), { code: 'MISSING_STRUCTURED_OUTPUT' })
+        }
+        const source = checkedSource(result)
         rejectedSource = source
         if (ONLY_REEXPORT.test(source.rendererJs)) throw Object.assign(new Error('A renderer must draw the question independently'), { code: 'INVALID_SOURCE', sourceValidationReason: 'legacy_renderer' })
         if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
@@ -175,7 +183,7 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
         return ref
       } catch (error) {
         const code = codeOf(error)
-        if (attempt === 0 && ['INVALID_SOURCE', 'INVALID_CODE_SOURCE', 'INVALID_PACKAGE', 'INVALID_METADATA', 'UNSAFE_RESOURCES', 'IMAGE_REQUIRED', 'IMAGE_UNUSED'].includes(code) && !controller.signal.aborted && isCurrent()) {
+        if (attempt === 0 && ['INVALID_SOURCE', 'INVALID_CODE_SOURCE', 'INVALID_PACKAGE', 'INVALID_METADATA', 'UNSAFE_RESOURCES', 'IMAGE_REQUIRED', 'IMAGE_UNUSED', 'MISSING_STRUCTURED_OUTPUT'].includes(code) && !controller.signal.aborted && isCurrent()) {
           const reason = trustedSourceValidationReason(error)
           repair = {
             code, ...(reason === undefined ? {} : { reason }),
