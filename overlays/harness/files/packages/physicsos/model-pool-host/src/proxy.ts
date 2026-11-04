@@ -79,6 +79,22 @@ const readJsonBody = async (req: IncomingMessage): Promise<Record<string, unknow
 const normalizeUpstreamPayload = (
   payload: Record<string, unknown>,
 ): Record<string, unknown> => {
+  const object = (value: unknown): Record<string, unknown> | undefined =>
+    value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+  if (payload.tool_choice === undefined && Array.isArray(payload.tools) && payload.tools.length >= 1 && payload.tools.length <= 2) {
+    const functions = payload.tools.map((tool: unknown) => object(object(tool)?.function))
+    const code = functions.find(fn => fn?.name === 'structured_output')
+    const schema = object(code?.parameters), properties = object(schema?.properties)
+    const required: unknown = schema?.required
+    const fields = ['rendererJs', 'stylesheet', 'summary', 'title']
+    if (properties && Object.keys(properties).sort().join(',') === fields.join(',')
+      && fields.every(name => object(properties[name])?.type === 'string')
+      && Array.isArray(required) && fields.every(name => required.includes(name))
+      && functions.every(fn => fn?.name === 'structured_output' || fn?.name === 'physics_generate_experiment_asset')) {
+      // This isolated workflow has no useful plain-text completion: image then code.
+      payload = { ...payload, tool_choice: 'required' }
+    }
+  }
   const normalized = payload.reasoning_effort === 'off'
     ? { ...payload, reasoning_effort: 'none' }
     : payload

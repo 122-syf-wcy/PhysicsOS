@@ -134,6 +134,10 @@ export class PhysicsCodeProvider implements SubagentProvider {
           if (typeof source[key] !== 'string' || source[key].length > maximum) return `Code source ${key} must be a string of at most ${maximum} characters`
         }
         if (!(source.title as string).trim() || !(source.rendererJs as string).trim()) return 'Code source title and rendererJs must not be empty'
+        if (/\bfunction\s+renderFrame\s*\(/.test(source.rendererJs as string)
+          && !/\bexport\s+(?:async\s+)?function\s+renderFrame\s*\(/.test(source.rendererJs as string)) {
+          return 'rendererJs is missing export: begin the entry with export async function renderFrame(snapshot). Resubmit complete four fields now.'
+        }
         return undefined
       })
       const names = agent.ctx.tools.schemas(agent).map(tool => tool.name)

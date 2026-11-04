@@ -365,14 +365,14 @@ describe('the real code child provider', () => {
     await ctx.agentPresets.register({ id: 'student', plugins: [{ name: new URL('./fixtures/student-tools.js', import.meta.url).href }] })
     const handle = await ctx.agents.create({ sessionId: SessionId('parent'), agentOptions: { provider: 'mock', model: 'mock' }, setup: async (childCtx) => { await ctx.agentPresets.mount(childCtx, 'student') } })
     const parent = handle.agent
-    const adapter = new MockAdapter([toolCallResponse('oversized', 'structured_output', { ...source, title: 'x'.repeat(121) }), toolCallResponse('result', 'structured_output', source)])
+    const adapter = new MockAdapter([toolCallResponse('oversized', 'structured_output', { ...source, title: 'x'.repeat(121) }), toolCallResponse('unexported', 'structured_output', { ...source, rendererJs: source.rendererJs.replace('export function', 'function') }), toolCallResponse('result', 'structured_output', source)])
     ctx.llm.registerAdapter(['mock'], adapter)
     const provider = new PhysicsCodeProvider(ctx)
     const request = { label: 'question code', parent, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source), additionalProperties: false }, toolFilter: { allow: [] }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'question code' }) }
     const run = await provider.start(request)
     try {
       expect((await run.result).structured).toEqual(source)
-      expect(adapter.requests).toHaveLength(2)
+      expect(adapter.requests).toHaveLength(3)
       expect(adapter.requests.at(-1)?.tools?.map(t => t.name)).toEqual(['structured_output'])
       expect(ctx.tools.schemas(run.localAgent).map(t => t.name)).toEqual(['structured_output'])
       expect(run.localAgent?.session.snapshotEvents().some(e => e.type === 'agent-preset/selected' && e.data.agentPreset === 'physics-code-only')).toBe(true)

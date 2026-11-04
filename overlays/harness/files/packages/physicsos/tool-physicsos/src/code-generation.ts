@@ -9,7 +9,7 @@ import { QUESTION_CODE_VISUAL_BRIEF } from './question-code-visual-brief.ts'
 export const CODE_TIMEOUT_MS = 600_000
 export const CODE_SOURCE_SCHEMA: ObjectJsonSchema = { type: 'object', additionalProperties: false, properties: {
   title: { type: 'string', description: 'Required nonempty title, at most 120 characters.' }, summary: { type: 'string', description: 'At most 1000 characters.' },
-  rendererJs: { type: 'string', description: 'Must include export function renderFrame(snapshot) and use native Canvas2D or SVG. No imports, old renderer or empty wrapper; at most 96000 characters.' }, stylesheet: { type: 'string', description: 'CSS for the independent experimental scene, at most 24000 characters.' },
+  rendererJs: { type: 'string', description: 'Start with export async function renderFrame(snapshot) { ... }, then any small helpers. Use native Canvas2D or SVG. Keep under 80 lines. No imports, old renderer or empty wrapper; at most 96000 characters.' }, stylesheet: { type: 'string', description: 'CSS for the independent experimental scene, at most 24000 characters.' },
 }, required: ['title', 'summary', 'rendererJs', 'stylesheet'] }
 export interface CodeStyleContext {
   experimentId: string
@@ -93,7 +93,7 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     '为下面真实题目制作达到现有实验区质量的独立拟真实验。先调用 physics_generate_experiment_asset 制作本题环境或材质，随后用 structured_output 返回 title、summary、rendererJs、stylesheet 四个字符串。',
     '已有物理解答和校验已完成。本任务只设计与绘制，不再推导或重新解题。输出紧凑可工作的代码，尽快用 structured_output 提交。',
     '使用题目的原始场景与平台 frame/snapshot；绝不改写题目条件、引入默认场景、重新计算物理答案或编造模拟结果。',
-    'rendererJs 必须包含字面声明 export function renderFrame(snapshot) { ... }；提交前确认 export 关键字确实在源码中，不能只定义未导出的 const renderFrame。在现有 #canvas DIV 内创建自己的 Canvas2D（推荐）或原生SVG并绘制。禁止任何 import/reexport、renderPlatformFrame、旧平台绘图函数或仅装饰旧图的包装器。平台只提供数据与握手，不提供本题画面。',
+    'rendererJs 开头先写 export async function renderFrame(snapshot) { ... }，然后再声明辅助函数/图片缓存；提交前确认 export 关键字确实在源码中，不能只定义未导出的 const renderFrame。在现有 #canvas DIV 内创建自己的 Canvas2D（推荐）或原生SVG并绘制。禁止任何 import/reexport、renderPlatformFrame、旧平台绘图函数或仅装饰旧图的包装器。平台只提供数据与握手，不提供本题画面。',
     '代码结构保持直接：在导出的 renderFrame 内读取 view 的对象/轨迹并实际绘图，或调用普通命名函数/const箭头函数完成坐标投影和绘制。不要使用对象/类方法或动态函数分派，也不要只返回view、把绘图留在未调用的函数里。复用Canvas/DOM，每次完成当前引擎帧的绘制后再返回；不要创建自己的物理计时循环。',
     '画面要有真实装置感和独立构图：精致材质、柔和空间光照、清晰物体与运动轨迹、玻璃信息卡和关键点标注。不要照画旧坐标纸/大XY网格图；辅助刻度可简洁呈现。让人一眼能看到本题的实验现象，标题取自然的题目实验名称。',
     `title 必须描述真实题目的装置/现象，不能照抄实验风格家族名称。真实题目标签：${deps.snapshot.title}。`,

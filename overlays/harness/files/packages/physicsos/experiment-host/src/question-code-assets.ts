@@ -2,6 +2,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { crc32, inflateSync } from 'node:zlib'
+import { cssReferences } from './html.ts'
 export interface AssetBinding { ownerSessionId: string; ownerKey: string; generationId: string; sceneSha256: string }
 export interface QuestionAssetDescriptor { path: string; cssPath: string; sha256: string; width: number; height: number; kind: 'environment' | 'material'; model: string }
 export interface GenerateQuestionAssetInput extends AssetBinding { prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
@@ -15,7 +16,10 @@ const sameBinding = (a: AssetBinding, b: AssetBinding): boolean =>
   a.ownerKey === b.ownerKey && a.ownerSessionId === b.ownerSessionId
   && a.generationId === b.generationId && a.sceneSha256 === b.sceneSha256
 async function bounded(response: Response, maximum: number, signal: AbortSignal): Promise<Buffer> {
-  if (Number(response.headers.get('content-length')) > maximum || !response.body) throw failure('IMAGE_RESPONSE_INVALID')
+  if (Number(response.headers.get('content-length')) > maximum || !response.body) {
+    await response.body?.cancel().catch(() => undefined)
+    throw failure('IMAGE_RESPONSE_INVALID')
+  }
   const reader = response.body.getReader(), chunks: Uint8Array[] = []
   let size = 0
   try {
@@ -33,7 +37,7 @@ async function bounded(response: Response, maximum: number, signal: AbortSignal)
 }
 function pngSize(bytes: Buffer): { width: number; height: number } {
   if (bytes.length < 45 || bytes.length > MAX_IMAGE || !bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw failure('IMAGE_RESPONSE_INVALID')
-  let width = 0, height = 0, depth = 0, color = 0, ended = false
+  let width = 0, height = 0, depth = 0, color = 0, ended = false, afterData = false, palette = false
   const compressed: Buffer[] = []
   for (let offset = 8; offset + 12 <= bytes.length;) {
     const length = bytes.readUInt32BE(offset), end = offset + 12 + length
@@ -44,14 +48,28 @@ function pngSize(bytes: Buffer): { width: number; height: number } {
       if (offset !== 8 || length !== 13) throw failure('IMAGE_RESPONSE_INVALID')
       width = data.readUInt32BE(0); height = data.readUInt32BE(4); depth = data[8] ?? 0; color = data[9] ?? 0
       if (width < 64 || height < 64 || width > 4096 || height > 4096 || width * height > 8_388_608 || depth !== 8 || ![0,2,4,6].includes(color) || data[10] !== 0 || data[11] !== 0 || data[12] !== 0) throw failure('IMAGE_RESPONSE_INVALID')
-    } else if (type === 'IDAT') compressed.push(data)
+    } else if (type === 'IDAT') {
+      if (!width || afterData) throw failure('IMAGE_RESPONSE_INVALID')
+      compressed.push(data)
+    }
     else if (type === 'IEND') { ended = length === 0 && end === bytes.length; break }
+    else if (type === 'PLTE') {
+      if (!width || palette || compressed.length || [0, 4].includes(color) || length === 0 || length > 768 || length % 3) throw failure('IMAGE_RESPONSE_INVALID')
+      palette = true
+    } else {
+      if (!/^[A-Za-z]{4}$/.test(type) || type[0] === type[0]?.toUpperCase()) throw failure('IMAGE_RESPONSE_INVALID')
+      if (compressed.length) afterData = true
+    }
     offset = end
   }
   if (!ended || !compressed.length || !width) throw failure('IMAGE_RESPONSE_INVALID')
   const channels = color === 6 ? 4 : color === 2 ? 3 : color === 4 ? 2 : 1
   const expected = height * (width * channels + 1)
-  try { if (inflateSync(Buffer.concat(compressed), { maxOutputLength: expected }).length !== expected) throw failure('IMAGE_RESPONSE_INVALID') }
+  try {
+    const pixels = inflateSync(Buffer.concat(compressed), { maxOutputLength: expected })
+    if (pixels.length !== expected) throw failure('IMAGE_RESPONSE_INVALID')
+    for (let row = 0; row < height; row++) if ((pixels[row * (width * channels + 1)] ?? 255) > 4) throw failure('IMAGE_RESPONSE_INVALID')
+  }
   catch { throw failure('IMAGE_RESPONSE_INVALID') }
   return { width, height }
 }
@@ -75,10 +93,18 @@ export class QuestionCodeAssets {
   manifest(binding: AssetBinding): QuestionAssetDescriptor[] {
     return (this.job(binding)?.assets ?? []).map(asset => ({ ...asset.descriptor }))
   }
-  files(binding: AssetBinding, source: string): Map<string, Buffer> {
+  files(binding: AssetBinding, source: string, stylesheet = ''): Map<string, Buffer> {
     const available = this.job(binding)?.assets ?? []
-    const selected = available.filter(asset => source.includes(asset.descriptor.path) || source.includes(asset.descriptor.cssPath))
-    for (const match of source.matchAll(/(?:\.\/)?(?:assets\/)?generated\/[a-f0-9]+\.png/g)) {
+    const masked = source.replace(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, value => ' '.repeat(value.length))
+    const references = new Set(cssReferences(stylesheet.replace(/\/\*[\s\S]*?\*\//g, '')))
+    for (const match of source.matchAll(/\.src\s*=\s*(["'])([^"']+)\1/g)) {
+      if (masked.slice(match.index, match.index + 4) === '.src') references.add(match[2] ?? '')
+    }
+    for (const match of source.matchAll(/\.setAttribute\s*\(\s*(["'])src\1\s*,\s*(["'])([^"']+)\2\s*\)/g)) {
+      if (masked.slice(match.index, match.index + 13) === '.setAttribute') references.add(match[3] ?? '')
+    }
+    const selected = available.filter(asset => references.has(asset.descriptor.path) || references.has(asset.descriptor.cssPath))
+    for (const match of (source + '\n' + stylesheet).matchAll(/(?:\.\/)?(?:assets\/)?generated\/[a-f0-9]+\.png/g)) {
       if (!available.some(asset => asset.descriptor.path.endsWith(match[0].replace(/^\.\//, '')))) throw failure('IMAGE_BINDING_INVALID')
     }
     if (available.length && !selected.length) throw failure('IMAGE_UNUSED')
@@ -128,7 +154,7 @@ export class QuestionCodeAssets {
         const url = new URL(item.url)
         if (url.origin !== base.origin || url.protocol !== 'https:' || url.username || url.password || url.hash) throw failure('IMAGE_RESPONSE_INVALID')
         const download = await this.fetcher(url, { signal: controller.signal, redirect: 'error' })
-        if (!download.ok) throw failure('IMAGE_GENERATION_FAILED')
+        if (!download.ok) { await download.body?.cancel(); throw failure('IMAGE_GENERATION_FAILED') }
         bytes = await bounded(download, MAX_IMAGE, controller.signal)
       } else throw failure('IMAGE_RESPONSE_INVALID')
       controller.signal.throwIfAborted()
@@ -142,6 +168,6 @@ export class QuestionCodeAssets {
       if (controller.signal.aborted || isAborted()) throw failure(isAborted() ? 'IMAGE_ABORTED' : 'IMAGE_TIMEOUT')
       if (error instanceof Error && /^IMAGE_[A-Z_]+$/.test(error.message)) throw error
       throw failure('IMAGE_GENERATION_FAILED')
-    } finally { clearTimeout(timer); input.signal.removeEventListener('abort', onAbort) }
+    } finally { clearTimeout(timer); input.signal.removeEventListener('abort', onAbort); controller.abort() }
   }
 }

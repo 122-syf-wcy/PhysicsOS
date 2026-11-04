@@ -102,6 +102,25 @@ const chat = async (
 }
 
 describe('model pool proxy', () => {
+  it('requires tool delivery only for the isolated four-field experiment code contract', async () => {
+    const received: Record<string, unknown>[] = []
+    const upstream = await startUpstream((body, res) => { received.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'code', baseURL: upstream.url, priority: 10 })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-code-key' })
+    const base = await startPool(store)
+    const properties = Object.fromEntries(['rendererJs', 'stylesheet', 'summary', 'title'].map(name => [name, { type: 'string' }]))
+    const code = { type: 'function', function: { name: 'structured_output', parameters: { type: 'object', properties, required: Object.keys(properties) } } }
+    const image = { type: 'function', function: { name: 'physics_generate_experiment_asset', parameters: { type: 'object' } } }
+    for (const tools of [[code, image], [code], [code, { ...image, function: { ...image.function, name: 'other' } }], [{ ...code, function: { ...code.function, parameters: { type: 'object', properties: { answer: { type: 'string' } } } } }]]) {
+      await chat(base, { tools })
+    }
+    expect(received.map(body => body.tool_choice)).toEqual(['required', 'required', undefined, undefined])
+    expect(received[0]?.tools).toEqual([code, image])
+    await chat(base, { tools: [code], tool_choice: 'none' })
+    expect(received.at(-1)?.tool_choice).toBe('none')
+  })
   it('uses the conventional /v1 prefix for an origin-only channel during actual chat', async () => {
     let path = ''
     const upstream = await startUpstream((_body, res, _headers, url) => {

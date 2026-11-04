@@ -679,7 +679,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
       if (input.generationId !== undefined) {
         const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
         if (!this.imageAssets.manifest(binding).length) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
-        const generated = this.imageAssets.files(binding, source.rendererJs + '\n' + source.stylesheet)
+        const generated = this.imageAssets.files(binding, source.rendererJs, source.stylesheet)
         for (const [name, bytes] of generated) files.set(name, bytes)
         const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
         if (!Array.isArray(licenses)) throw invalidSource()
