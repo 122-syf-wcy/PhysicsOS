@@ -99,6 +99,38 @@ describe('parent question code generation', () => {
     expect(h.start).toHaveBeenCalledTimes(1)
   })
   it.each([
+    ['optics', 'convex-lens', 'opticalRays', '光轴'],
+    ['circuit', 'series-circuit', 'circuitWires', '接线'],
+    ['magnetic', 'magnetic-circular', 'vectors', '方向'],
+    ['mechanics', 'incline', 'incline', '斜面'],
+  ])('gives %s apparatus guidance without projectile-only framing', async (domain, experimentId, primitive, teaching) => {
+    const h = dependencies()
+    h.original.domain = domain
+    h.deps.context = async () => ({ experimentId, developerPrompt: '', publishedBody: 'Warm Lab', styleVersion: 'V3', renderContract: 'Exact engine facts', allowedAssetPaths: [] })
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    const block = h.start.mock.calls[0]?.[0].prompt[0]
+    const prompt = block?.type === 'text' ? block.text : ''
+    expect(prompt).toContain(primitive)
+    expect(prompt).toContain(teaching)
+    expect(prompt).not.toContain('将真实ground.y映射到舞台高度82%')
+    expect(prompt).not.toContain('不要绘制向量箭头')
+    expect(prompt).not.toContain('球半径桌面18–22px')
+    expect(prompt).toContain(JSON.stringify(h.original.scene))
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }))
+  })
+  it.each(['projectile-horizontal', 'projectile-oblique'])('retains full-trajectory framing only for %s', async (experimentId) => {
+    const h = dependencies()
+    h.original.domain = 'mechanics'
+    h.deps.context = async () => ({ experimentId, developerPrompt: '', publishedBody: 'Warm Lab', styleVersion: 'V3', renderContract: 'Exact engine facts', allowedAssetPaths: [] })
+    await generateQuestionCode(h.deps)
+    const block = h.start.mock.calls[0]?.[0].prompt[0]
+    const prompt = block?.type === 'text' ? block.text : ''
+    expect(prompt).toContain('完整轨迹')
+    expect(prompt).toContain('竖直上抛')
+    expect(prompt).toContain('将真实ground.y映射到舞台高度82%')
+    expect(prompt).toContain('snapshot.view.visible')
+  })
+  it.each([
     'export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";',
     `// 本题专用
 export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";
