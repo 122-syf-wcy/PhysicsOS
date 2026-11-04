@@ -232,8 +232,11 @@ function drawingBindings(code: string): Map<string, string> {
     const start = match.index + match[0].length, value = code.slice(start, drawingExpressionEnd(code, start))
     for (const name of drawingNames(match[1] ?? '')) bindings.set(name, name === 'view' ? `(${value}).view` : value)
   }
-  for (const match of code.matchAll(/\bfor\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([^)]*)\)/g)) bindings.set(match[1] ?? '', match[2] ?? '')
   for (const call of drawingCalls(code)) {
+    if (call.name === 'for') {
+      const iteration = code.slice(call.start, call.end).match(/^for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s+of\s+([\s\S]*)\)$/)
+      if (iteration !== null) bindings.set(iteration[1] ?? '', iteration[2] ?? '')
+    }
     if (!['forEach', 'map', 'flatMap', 'reduce'].includes(call.name)) continue
     const receiver = drawingCallbackReceiver(code, call)
     const parameters = call.arguments[0]?.match(/^\s*(?:\(([^)]*)\)|([A-Za-z_$][\w$]*))\s*=>/)
