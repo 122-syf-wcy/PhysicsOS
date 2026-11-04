@@ -139,7 +139,7 @@ describe('model pool proxy', () => {
     expect(store.key(key.id)?.requestCount).toBe(1)
   })
 
-  it('translates the off reasoning sentinel to the gateway-supported none value', async () => {
+  it.each(['off', 'none'])('disables DeepSeek thinking on the actual wire for reasoning effort %s', async (effort) => {
     let seen: Record<string, unknown> = {}
     const upstream = await startUpstream((body, res) => {
       seen = body
@@ -152,9 +152,108 @@ describe('model pool proxy', () => {
     await store.addKey(ADMIN, channel.id, { key: 'sk-fast-0000' })
     const base = await startPool(store)
 
-    const result = await chat(base, { reasoning_effort: 'off' })
+    const result = await chat(base, { reasoning_effort: effort, max_tokens: 8192 })
     expect(result.status).toBe(200)
     expect(seen.reasoning_effort).toBe('none')
+    expect(seen.thinking).toEqual({ type: 'disabled' })
+    expect(seen.max_tokens).toBe(8192)
+    expect(seen.messages).toEqual([{ role: 'user', content: 'hi' }])
+  })
+
+  it('preserves the main DeepSeek high-effort request on the actual wire', async () => {
+    let seen: Record<string, unknown> = {}
+    const upstream = await startUpstream((body, res) => {
+      seen = body
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: 'ok' }))
+    })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'a', baseURL: upstream.url, priority: 10 })
+    await store.addKey(ADMIN, channel.id, { key: 'sk-main-local-fixture' })
+    const base = await startPool(store)
+
+    const result = await chat(base, { reasoning_effort: 'high', max_tokens: 32768 })
+    expect(result.status).toBe(200)
+    expect(seen).toEqual({
+      model: 'deepseek-v4.1-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoning_effort: 'high',
+      max_tokens: 32768,
+    })
+  })
+
+  it.each(['off', 'none', 'high'])('preserves OpenAI reasoning effort %s after the channel maps the model', async (effort) => {
+    let seen: Record<string, unknown> = {}
+    const upstream = await startUpstream((body, res) => {
+      seen = body
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: 'ok' }))
+    })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, {
+      name: 'openai', baseURL: upstream.url, models: ['gpt-4.1'], priority: 10,
+    })
+    await store.addKey(ADMIN, channel.id, { key: 'sk-openai-local-fixture' })
+    const base = await startPool(store)
+
+    /* The platform label is DeepSeek, but only the selected channel's wire
+       model may choose a provider-specific thinking extension. */
+    const result = await chat(base, { reasoning_effort: effort, max_tokens: 8192 })
+    expect(result.status).toBe(200)
+    expect(seen).toEqual({
+      model: 'gpt-4.1',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoning_effort: effort === 'off' ? 'none' : effort,
+      max_tokens: 8192,
+    })
+  })
+
+  it('disables thinking for a channel mapped to DeepSeek from a different platform label', async () => {
+    let seen: Record<string, unknown> = {}
+    const upstream = await startUpstream((body, res) => {
+      seen = body
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: 'ok' }))
+    })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, {
+      name: 'deepseek', baseURL: upstream.url, models: ['deepseek-v4.1-flash'], priority: 10,
+    })
+    await store.addKey(ADMIN, channel.id, { key: 'sk-deepseek-local-fixture' })
+    const base = await startPool(store)
+
+    const result = await chat(base, { model: 'platform-fast', reasoning_effort: 'off' })
+    expect(result.status).toBe(200)
+    expect(seen.model).toBe('deepseek-v4.1-flash')
+    expect(seen.thinking).toEqual({ type: 'disabled' })
+  })
+
+  it('preserves a DeepSeek distilled model request without native thinking fields', async () => {
+    let seen: Record<string, unknown> = {}
+    const upstream = await startUpstream((body, res) => {
+      seen = body
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: 'ok' }))
+    })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, {
+      name: 'distilled', baseURL: upstream.url, models: ['deepseek-r1-distill-qwen-32b'], priority: 10,
+    })
+    await store.addKey(ADMIN, channel.id, { key: 'sk-distilled-local-fixture' })
+    const base = await startPool(store)
+
+    const result = await chat(base, { reasoning_effort: 'off', max_tokens: 8192 })
+    expect(result.status).toBe(200)
+    expect(seen).toEqual({
+      model: 'deepseek-r1-distill-qwen-32b',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoning_effort: 'none',
+      max_tokens: 8192,
+    })
   })
 
   it('fails over to the next key when the first answer is 401', async () => {

@@ -70,15 +70,25 @@ const readJsonBody = async (req: IncomingMessage): Promise<Record<string, unknow
 }
 
 /**
- * Translate Harness sentinels into the OpenAI-compatible vocabulary expected
- * by current gateways. `off` means "do not spend reasoning tokens"; upstream
- * enumerates that as `none`, not as the literal `off`.
+ * Translate Harness sentinels after the channel has selected its wire model.
+ * OpenAI gateways spell `off` as `none`; DeepSeek also needs its native
+ * `thinking` switch, which the generic pool provider cannot infer upstream.
+ * Restrict that extension to native chat models, excluding distilled models.
+ * Leave every other effort and model's wire fields unchanged.
  */
 const normalizeUpstreamPayload = (
   payload: Record<string, unknown>,
-): Record<string, unknown> => payload.reasoning_effort === 'off'
-  ? { ...payload, reasoning_effort: 'none' }
-  : payload
+): Record<string, unknown> => {
+  const normalized = payload.reasoning_effort === 'off'
+    ? { ...payload, reasoning_effort: 'none' }
+    : payload
+  if (normalized.reasoning_effort === 'none'
+    && typeof normalized.model === 'string'
+    && /^deepseek-(?:v[34](?:[.-]|$)|chat$|reasoner$)/i.test(normalized.model)) {
+    return { ...normalized, thinking: { type: 'disabled' } }
+  }
+  return normalized
+}
 
 const writeStream = async (
   res: ServerResponse,
