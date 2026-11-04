@@ -78,9 +78,15 @@ export class PhysicsCodeProvider implements SubagentProvider {
     const pending = assetScene?.visualization
     const assetOwner = String(request.parent.id)
     const generationId = pending?.status === 'generating' && pending.ownerSessionId === assetOwner ? pending.jobId : undefined
-    type AssetService = { generateAsset(input: { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }): Promise<{ path: string; cssPath: string; sha256: string; width: number; height: number; kind: string; model: string }> }
+    type AssetService = {
+      generateAsset(input: { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }): Promise<{ path: string; cssPath: string; sha256: string; width: number; height: number; kind: string; model: string }>
+      assetManifest?(input: { ownerSessionId: string; generationId: string; scene: unknown }): unknown[]
+    }
     const artifacts = (this.ctx.get as (name: string) => unknown)('questionCodeArtifacts') as AssetService | undefined
-    const canGenerateAsset = assetScene !== undefined && generationId !== undefined && typeof artifacts?.generateAsset === 'function'
+    const existingAssets = assetScene !== undefined && generationId !== undefined
+      ? artifacts?.assetManifest?.({ ownerSessionId: assetOwner, generationId, scene: assetScene.scene }) ?? [] : []
+    const canGenerateAsset = assetScene !== undefined && generationId !== undefined
+      && typeof artifacts?.generateAsset === 'function' && existingAssets.length === 0
     const allowedTools = canGenerateAsset ? ['physics_generate_experiment_asset'] : []
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}\n${marker}`

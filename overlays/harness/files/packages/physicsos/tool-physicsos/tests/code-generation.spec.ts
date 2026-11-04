@@ -340,6 +340,22 @@ describe('the real code child provider', () => {
       expect(ctx.tools.schemas(parent).map(tool => tool.name)).not.toContain('physics_generate_experiment_asset')
     } finally { await run.dispose() }
   })
+  it('offers only code submission when the same generation already owns an image', async () => {
+    const adapter = new MockAdapter([toolCallResponse('code', 'structured_output', source)])
+    const { ctx, parent } = await presentationHost(adapter)
+    const original = snapshot()
+    parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'existing-image-job', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
+    const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: () => Promise<unknown>; assetManifest: () => unknown[] }
+    artifacts.generateAsset = vi.fn(async () => ({}))
+    artifacts.assetManifest = () => [{ path: './assets/generated/abcdef.png' }]
+    const provider = new PhysicsCodeProvider(ctx)
+    const run = await provider.start({ parent, signal: new AbortController().signal, label: 'code after image', prompt: [{ type: 'text', text: 'Submit code using existing asset.' }], outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'code after image' }) })
+    try {
+      expect((await run.result).structured).toEqual(source)
+      expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['structured_output'])
+      expect(artifacts.generateAsset).not.toHaveBeenCalled()
+    } finally { await run.dispose() }
+  })
   it('reaches the model and dispatches with structured_output as its sole tool, even when the parent preset owns physics and question tools', async () => {
     const ctx = new Context(); contexts.push(ctx)
     await ctx.plugin(Loader); ctx.loader.builtins.include = Include
