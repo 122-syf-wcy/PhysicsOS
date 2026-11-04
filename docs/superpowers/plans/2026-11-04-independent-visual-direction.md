@@ -32,9 +32,9 @@ Files: new overlay tool-physicsos/src/question-code-visual-brief.ts; temporary s
 
 Interface: exports QUESTION_CODE_VISUAL_BRIEF:string containing navy/purple glass-stage direction, legible layout/label rules and brief native Canvas material helpers without full renderFrame, imports or physics.
 
-- [ ] Author brief and narrow native material/scene preview from existing engine snapshots.
-- [ ] Inspect desktop and219px preview; do not claim it is a real model result.
-- [ ] Report source/API/no-solver boundary and preview evidence.
+- [x] Author brief and narrow native material/scene preview from existing engine snapshots.
+- [x] Inspect desktop and219px preview; do not claim it is a real model result.
+- [x] Report source/API/no-solver boundary and preview evidence.
 
 ### Task2: Prompt precedence and compact output
 
@@ -42,9 +42,9 @@ Files: tool-physicsos/src/code-generation.ts and its existing tests.
 
 Consumes QUESTION_CODE_VISUAL_BRIEF. Gives the new authored visual brief priority over legacy body style, requires original-question title, compact source and readable mobile scene, retaining all lifecycle/privacy constraints.
 
-- [ ] Add meaningful captured-child-request regression for new-vs-legacy visual precedence and unchanged original source facts/budget/repair.
-- [ ] Wire brief and updated instructions; keep public prompt data as physics/teaching/package guidance.
-- [ ] Server focused/full tool tests, bundle and typed lint; no source/parent metadata leak.
+- [x] Add meaningful captured-child-request regression for new-vs-legacy visual precedence and unchanged original source facts/budget/repair.
+- [x] Wire brief and updated instructions; keep public prompt data as physics/teaching/package guidance.
+- [x] Server focused/full tool tests, bundle and typed lint; no source/parent metadata leak.
 
 ### Task3: Final appearance and release
 

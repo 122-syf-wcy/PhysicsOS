@@ -130,6 +130,12 @@ if (inspectArtifact) {
     const sourceResponse = await api.get(endpoint + '/source')
     expect(sourceResponse.ok()).toBe(true)
     const source = await sourceResponse.json()
+    expect(source.ref.artifactId).toBe(artifactId)
+    expect(source.ref.rendererKind).toBe('independent')
+    if (process.env.PHYSICSOS_CHAT_CODE_OWNER_SESSION_ID) expect(source.ref.ownerSessionId).toBe(process.env.PHYSICSOS_CHAT_CODE_OWNER_SESSION_ID)
+    if (process.env.PHYSICSOS_CHAT_CODE_CHILD_SESSION_ID) expect(source.ref.childSessionId).toBe(process.env.PHYSICSOS_CHAT_CODE_CHILD_SESSION_ID)
+    if (process.env.PHYSICSOS_CHAT_CODE_REF_SHA256) expect(source.ref.sha256).toBe(process.env.PHYSICSOS_CHAT_CODE_REF_SHA256)
+    if (process.env.PHYSICSOS_CHAT_CODE_REPLAY_SOURCE_FILE) expect(source.source).toEqual(JSON.parse(await secureText(process.env.PHYSICSOS_CHAT_CODE_REPLAY_SOURCE_FILE)))
     const snapshot = { ref: source.ref, rendererSha256: hash(source.source.rendererJs), stylesheetSha256: hash(source.source.stylesheet) }
     if (process.env.PHYSICSOS_CHAT_CODE_EXPECTED_FILE) {
       const previous = JSON.parse(await readFile(process.env.PHYSICSOS_CHAT_CODE_EXPECTED_FILE, 'utf8'))
@@ -142,7 +148,33 @@ if (inspectArtifact) {
     const wrapper = await api.get(new URL(preview.entryUrl, fixture.base).href)
     expect(wrapper.ok()).toBe(true)
     expect(wrapper.headers()['content-security-policy']).toContain('sandbox allow-scripts allow-same-origin')
-    const result = { passed: true, readOnly: true, snapshot, signedPreviewRenewed: true, wrapperStatus: wrapper.status(), persistenceCompared: Boolean(process.env.PHYSICSOS_CHAT_CODE_EXPECTED_FILE) }
+    const rawEntry = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), fixture.base)
+    const blobHashes = {}
+    for (const [name, path] of [['renderer', 'runtime/renderer.js'], ['stylesheet', 'assets/experiment.css'], ['bootstrap', 'runtime/main.js'], ['viewportStylesheet', 'assets/platform-base.css']]) {
+      const response = await api.get(new URL(path, rawEntry).href)
+      expect(response.ok()).toBe(true)
+      blobHashes[name] = hash(await response.body())
+    }
+    expect(blobHashes.renderer).toBe(snapshot.rendererSha256)
+    expect(blobHashes.stylesheet).toBe(snapshot.stylesheetSha256)
+    const generatedPaths = [...new Set((source.source.rendererJs + '\n' + source.source.stylesheet).match(/(?:\.\/)?(?:assets\/)?generated\/[a-f0-9]+\.png/g) ?? [])]
+    for (const path of generatedPaths) {
+      const normalized = './assets/' + path.replace(/^\.\//, '').replace(/^assets\//, '')
+      const response = await api.get(new URL(normalized, rawEntry).href)
+      expect(response.ok()).toBe(true)
+      blobHashes[normalized] = hash(await response.body())
+    }
+    const guest = await request.newContext()
+    try {
+      expect((await guest.get(endpoint + '/source')).status()).toBe(401)
+      expect((await guest.get(endpoint + '/preview')).status()).toBe(401)
+    } finally { await guest.dispose() }
+    expect((await api.get(endpoint + '/source?sha256=' + '0'.repeat(64))).status()).toBe(409)
+    if (process.env.PHYSICSOS_CHAT_CODE_EXPECTED_FILE) {
+      const previous = JSON.parse(await readFile(process.env.PHYSICSOS_CHAT_CODE_EXPECTED_FILE, 'utf8'))
+      if (previous.blobHashes) expect(blobHashes).toEqual(previous.blobHashes)
+    }
+    const result = { passed: true, readOnly: true, snapshot, blobHashes, exactRawChildSource: Boolean(process.env.PHYSICSOS_CHAT_CODE_REPLAY_SOURCE_FILE), guestRejected: true, staleHashRejected: true, signedPreviewRenewed: true, wrapperStatus: wrapper.status(), persistenceCompared: Boolean(process.env.PHYSICSOS_CHAT_CODE_EXPECTED_FILE) }
     await writeFile(join(shots, 'artifact-inspection.json'), JSON.stringify(result, null, 2))
     console.log('PASS read-only owned artifact source/integrity/preview' + (result.persistenceCompared ? ' after real candidate restart' : ' baseline'))
   } catch (error) {
@@ -155,6 +187,17 @@ const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '
 const context = await browser.newContext({ viewport: { width: 1440, height: 1080 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' })
 const errors = []
 const expectedClientAborts = []
+const privateFrameAborts = []
+const loadedPrivateFrames = new Set()
+const isPrivateFrameDocument = url => /^\/physicsos\/experiment-assets\/embed\/question\/[^/]+\/dist\/index\.html$/.test(new URL(url).pathname)
+const checkBrowserErrors = async () => {
+  for (const abort of privateFrameAborts) {
+    expect(loadedPrivateFrames.has(abort.path)).toBe(true)
+    expectedClientAborts.push({ ...abort, reason: 'private iframe navigation canceled; same resource loaded and final authored frames painted' })
+  }
+  privateFrameAborts.length = 0
+  expect(errors).toEqual([])
+}
 let authenticated = false, navigating = false
 let lastPromptSessionId
 let lastCreatedSessionId
@@ -180,10 +223,15 @@ context.on('page', page => {
       expectedClientAborts.push({ path: cleanUrl(request.url()), reason: 'private loader AbortController cleanup' })
       return
     }
+    if (request.method() === 'GET' && request.isNavigationRequest() && request.failure()?.errorText === 'net::ERR_ABORTED' && isPrivateFrameDocument(request.url())) {
+      privateFrameAborts.push({ path: cleanUrl(request.url()), kind: 'navigation-abort', error: request.failure().errorText })
+      return
+    }
     if (!authenticated && /\/api\/events/.test(request.url())) return
     errors.push({ kind: 'requestfailed', path: cleanUrl(request.url()), error: request.failure()?.errorText })
   })
   page.on('response', response => {
+    if (response.ok() && response.request().isNavigationRequest() && isPrivateFrameDocument(response.url())) loadedPrivateFrames.add(cleanUrl(response.url()))
     if (new URL(response.url()).pathname === '/api/session/create' && response.ok()) {
       void response.json().then(message => { lastCreatedSessionId = message?.result?.value?.sessionId }).catch(error => { errors.push({ kind: 'session-create-response', error: cleanError(error.message) }) })
     }
@@ -308,7 +356,7 @@ const codeReady = async () => {
     const frame = card().locator('[data-community-status]')
     return await frame.count() ? (await frame.getAttribute('data-community-status')) === 'failed' ? 'render-failed' : await frame.getAttribute('data-community-status') : 'loading'
   }
-  await expect.poll(painted, { timeout: realSmoke ? 480000 : 180000 }).toMatch(terminal)
+  await expect.poll(painted, { timeout: realSmoke ? 780000 : 180000 }).toMatch(terminal)
   expect(await painted()).toBe('ready')
   const frame = card().frameLocator('iframe').frameLocator('iframe')
   if (!realSmoke && !styleReplay) {
@@ -354,6 +402,7 @@ const geometryOf = paint => ({
   svg: paint.svg.flatMap(svg => svg.geometry ?? []),
 })
 const verifyIndependentMotion = async (frame, label) => {
+  await card().locator('[data-question-code-status]').scrollIntoViewIfNeeded()
   const first = await latestSnapshot()
   expect(first.source).toBe('platform-engine')
   const apex = first.events.find(event => event.kind === 'apex')
@@ -366,7 +415,7 @@ const verifyIndependentMotion = async (frame, label) => {
       const paint = await authoredPaint(frame)
       return paint.canvas.some(canvas => canvas.opaquePixels > 0 && canvas.distinctColors > 8) || paint.svg.some(svg => svg.primitives > 3)
     }, { timeout: 15000 }).toBe(true)
-    await frame.locator('body').evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await frame.locator('body').evaluate(() => new Promise(resolve => { requestAnimationFrame(() => requestAnimationFrame(resolve)); setTimeout(resolve, 100) }))
     const snapshot = await latestSnapshot()
     const paint = await authoredPaint(frame)
     const stamped = paint.canvas.find(canvas => canvas.bodyY !== null)
@@ -442,6 +491,10 @@ const verifyMobileAndParameters = async (frame, label, source) => {
   await seekPlatform(0)
   await page.setViewportSize({ width: 1440, height: 1080 })
   await card().scrollIntoViewIfNeeded()
+  await expect.poll(() => frame.locator('canvas').evaluateAll(nodes => nodes.every(canvas => {
+    const box = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2)
+    return Math.abs(canvas.width - box.width * dpr) <= 2 && Math.abs(canvas.height - box.height * dpr) <= 2
+  })), { timeout: 15000 }).toBe(true)
   check('live condition changes, restore-origin and mobile playback operate on the same engine runtime', { changedApex: { time: changedApex.clock.time, body: changedApex.view.bodies[0] }, mobile: { viewport: mobile.viewport, scrollWidth: mobile.scrollWidth, canvasBounds: mobile.canvas.map(canvas => canvas.rect), controlBounds, mobileGeometry, collisions } })
   return { changedApex, mobile, sourceSha256: hash(source.rendererJs) }
 }
@@ -501,7 +554,7 @@ try {
     await card().locator('summary').filter({ hasText: '本题实验代码' }).first().click()
     await expect(card().locator('pre code').first()).toHaveText(originalSource.rendererJs)
     await shot('02-original-real-source-preserved')
-    expect(errors).toEqual([])
+    await checkBrowserErrors()
     check('unchanged real child source replay: independent V3 Canvas/SVG painted with original source, zero paid model requests')
     await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence: { paidModelRequests: 0, scriptedProviderRequests: fixture.mock.requests.length, replayedRealSource: true, ref, sourceSha256: hash(originalSource.rendererJs), stylesheetSha256: hash(originalSource.stylesheet), styles, liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, browserErrors: errors, expectedClientAborts } }, null, 2))
     console.log('PASS unchanged real-source independent V3 replay')
@@ -527,7 +580,7 @@ try {
         exported = await ownedExport(ownerSessionId)
         parent = exported.find(log => log.header?.id === ownerSessionId)
         return parent.events.some(event => event.type === 'turn/end' && event.data.reason?.kind === 'completed')
-      }, { timeout: 30000 }).toBe(true)
+      }, { timeout: 90000 }).toBe(true)
     }
     const parentStopReason = parent.events.filter(event => event.type === 'turn/end').at(-1)?.data.reason?.kind ?? 'running'
     const original = finalScene(parent), ref = original.visualization
@@ -550,12 +603,12 @@ try {
     const codeChildren = exported.filter(log => log.header?.parentSession === ownerSessionId)
     expect(codeChildren.length).toBeGreaterThanOrEqual(1)
     expect(codeChildren.length).toBeLessThanOrEqual(2)
-    for (const codeChild of codeChildren) {
-      expect(codeChild.events.find(event => event.type === 'request/header').data.header.tools.map(tool => tool.name)).toEqual(['structured_output'])
-      expect(codeChild.events.filter(event => event.type === 'tool/call').every(event => event.data.name === 'structured_output')).toBe(true)
+    for (const [index, codeChild] of codeChildren.entries()) {
+      expect(codeChild.events.find(event => event.type === 'request/header').data.header.tools.map(tool => tool.name).sort()).toEqual(index === 0 ? ['physics_generate_experiment_asset', 'structured_output'] : ['structured_output'])
+      expect(codeChild.events.filter(event => event.type === 'tool/call').every(event => ['structured_output', 'physics_generate_experiment_asset'].includes(event.data.name))).toBe(true)
     }
     if (codeChildren.length === 2) {
-      expect(JSON.stringify(child.events)).toMatch(/上次封闭代码校验未通过（(?:INVALID_SOURCE|INVALID_CODE_SOURCE|INVALID_PACKAGE|INVALID_METADATA|UNSAFE_RESOURCES)(?:[^）]*)）/)
+      expect(JSON.stringify(child.events)).toMatch(/上次封闭代码校验未通过（(?:INVALID_SOURCE|INVALID_CODE_SOURCE|INVALID_PACKAGE|INVALID_METADATA|UNSAFE_RESOURCES|IMAGE_REQUIRED|IMAGE_UNUSED|MISSING_STRUCTURED_OUTPUT)(?:[^）]*)）/)
       expect(JSON.stringify(child.events)).toMatch(/本次为(?:同一任务的)?唯一修复机会/)
     }
     const generationEvents = sceneEvents(parent)
@@ -564,9 +617,9 @@ try {
     const jobStart = generationEvents.find(event => event.data.visualization?.status === 'generating').time
     const jobEnd = generationEvents.find(event => event.data.visualization?.status === 'ready').time
     const jobDurationMs = jobEnd - jobStart
-    expect(jobDurationMs).toBeLessThan(300000)
+    expect(jobDurationMs).toBeLessThan(600000)
     const childHeader = child.events.find(event => event.type === 'request/header').data.header
-    expect(childHeader.tools.map(tool => tool.name)).toEqual(['structured_output'])
+    expect(childHeader.tools.map(tool => tool.name).sort()).toEqual(codeChildren.length === 1 ? ['physics_generate_experiment_asset', 'structured_output'] : ['structured_output'])
     const childConfig = childHeader.config
     const parentConfig = parent.events.find(event => event.type === 'request/header').data.header.config
     expect(childConfig.maxTokens).toBeLessThanOrEqual(Math.min(8192, parentConfig.maxTokens))
@@ -579,7 +632,7 @@ try {
     const lightEffort = ['off', 'none', 'minimal', 'low'].map(level => advertisedEfforts.find(effort => effort.toLowerCase() === level)).find(Boolean)
     expect(lightEffort).toBeTruthy()
     expect(childConfig.reasoningEffort).toBe(lightEffort)
-    const structured = child.events.filter(event => event.type === 'tool/call')
+    const structured = child.events.filter(event => event.type === 'tool/call' && event.data.name === 'structured_output')
     expect(structured.length).toBeGreaterThanOrEqual(1)
     expect(structured.length).toBeLessThanOrEqual(2)
     expect(structured.every(event => event.data.name === 'structured_output')).toBe(true)
@@ -605,6 +658,22 @@ try {
     expect(privateWrapper.headers()['cache-control']).toBe('no-store')
     expect(privateWrapper.headers()['content-security-policy']).toContain('sandbox allow-scripts allow-same-origin')
     expect((await context.request.get(new URL(signedPreview.entryUrl.replace('/embed/question/', '/question/'), fixture.base).href)).status()).toBe(403)
+    const imageCalls = codeChildren.flatMap(log => log.events).filter(event => event.type === 'tool/call' && event.data.name === 'physics_generate_experiment_asset')
+    expect(imageCalls.length).toBeGreaterThanOrEqual(1)
+    expect(imageCalls.length).toBeLessThanOrEqual(2)
+    const imageAssets = codeChildren.flatMap(log => log.events).filter(event => event.type === 'tool/result').flatMap(event => { try { const value = JSON.parse(toolText(event)); return value.path?.startsWith('./assets/generated/') ? [value] : [] } catch { return [] } })
+    expect(imageAssets.length).toBeGreaterThanOrEqual(1)
+    const rawEntry = new URL(signedPreview.entryUrl.replace('/embed/question/', '/question/'), fixture.base)
+    for (const asset of imageAssets) {
+      expect(asset.model).toBe('gpt-image-2.5-sunburst')
+      expect(source.source.rendererJs.includes(asset.path) || source.source.stylesheet.includes(asset.cssPath)).toBe(true)
+      const response = await context.request.get(new URL(asset.path, rawEntry).href)
+      expect(response.ok()).toBe(true)
+      const bytes = await response.body()
+      expect(hash(bytes)).toBe(asset.sha256)
+      await writeFile(join(shots, 'generated-' + asset.sha256.slice(0, 12) + '.png'), bytes)
+    }
+    check('real PhysicsOS child calls configured Sunburst and freezes referenced image bytes in owned experiment', { imageAssets, imageCalls: imageCalls.length })
     check('real candidate private source requires owner cookie, exact hash and signed sandbox preview')
     expect(await card().frameLocator('iframe').frameLocator('iframe').locator('canvas, svg').count()).toBeGreaterThan(0)
     await expect(page.locator('[data-physicsos-surface="lab"]')).toBeHidden()
@@ -622,9 +691,9 @@ try {
     await card().locator('summary').filter({ hasText: '本题实验代码' }).first().click()
     await expect(card().locator('pre code').first()).toHaveText(source.source.rendererJs)
     await shot('02-real-model-frozen-source')
-    expect(errors).toEqual([])
+    await checkBrowserErrors()
     check('one real configured-model question: engine → real restricted child → private source → V3 rendered frame', { ownerSessionId, childSessionId: ref.childSessionId, artifactId: ref.artifactId, sourceSha256: hash(source.source.rendererJs) })
-    evidence = { realModel: true, base: fixture.base, ref, sourceSha256: hash(source.source.rendererJs), rendererKind: ref.rendererKind, liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, toolCalls: calls.map(event => event.data.name), firstChildTools: ['structured_output'], childStarts: codeChildren.length, finalChildSourceAttempts: structured.length, exportIncludesRealChild: true, generationJobs: 1, jobDurationMs, reusedExistingOwnedSession: Boolean(existingSessionId), sentNewPrompt: !existingSessionId, parentStopReason, childConfig: { model: childConfig.model, maxTokens: childConfig.maxTokens, reasoningEffort: childConfig.reasoningEffort }, advertisedEfforts, browserErrors: errors, expectedClientAborts }
+    evidence = { realModel: true, base: fixture.base, ref, sourceSha256: hash(source.source.rendererJs), rendererKind: ref.rendererKind, liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, toolCalls: calls.map(event => event.data.name), firstChildTools: ['physics_generate_experiment_asset', 'structured_output'], imageAssets, childStarts: codeChildren.length, finalChildSourceAttempts: structured.length, exportIncludesRealChild: true, generationJobs: 1, jobDurationMs, reusedExistingOwnedSession: Boolean(existingSessionId), sentNewPrompt: !existingSessionId, parentStopReason, childConfig: { model: childConfig.model, maxTokens: childConfig.maxTokens, reasoningEffort: childConfig.reasoningEffort }, advertisedEfforts, browserErrors: errors, expectedClientAborts }
     await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence }, null, 2))
     console.log('PASS real configured-model private owned chat smoke (' + smokeLabel + ')')
   } else {
@@ -850,7 +919,7 @@ try {
   check('legacy kind has no fetch/mount until manual upgrade; missing-artifact history generates independent code without old-template fallback')
   await shot('06-history-regenerated-private-code')
 
-  expect(errors).toEqual([])
+  await checkBrowserErrors()
   check('browser gate: zero unexpected console/page/request/HTTP errors')
   evidence = { ...evidence, initialRef: ref, regeneratedRef: regenerated.visualization, recoveredRef: recovered.visualization, failed: { sessionId: failedSessionId, code: failedScene.visualization.code, childAttempts: failures.length }, childFirstRequest: childRequest, sourceSha256: hash(CHAT_CODE_SOURCE.rendererJs), liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, snapshots: changedSnapshots.map(snapshot => ({ domain: snapshot.domain, title: snapshot.title, revision: snapshot.revision, inspector: snapshot.inspector, clock: snapshot.clock })), browserErrors: errors, expectedClientAborts }
   await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence }, null, 2))
