@@ -5,6 +5,7 @@ import type { SubagentResult, SubagentRun, SubagentStartRequest } from '@deepsee
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
 import { QUESTION_CODE_VISUAL_BRIEF } from './question-code-visual-brief.ts'
+import { focusedRenderContract, publishedVisualGuidance, registeredParameterGuidance } from './question-code-prompt-context.ts'
 
 export const CODE_TIMEOUT_MS = 600_000
 export const CODE_SOURCE_SCHEMA: ObjectJsonSchema = { type: 'object', additionalProperties: false, properties: {
@@ -104,9 +105,9 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     '所有数值取自平台 frame/场景已有的事实；显示的解答只引用下面已通过引擎校验的结果。代码中不得硬编码另一题的参数或使用模拟公式代替引擎。',
     '每次 renderFrame 使用当前 snapshot.view 的位置/轨迹/装置几何，snapshot.clock 的播放时间，inspector/overlay 中的真实量测；不能自己用 v*t 或加速度公式推进物体。改变屏幕坐标、材质、绘制大小和布局属于展示。向量端点已经按平台显示比例缩放，不得据箭头长度推算速度或力。',
     `实验风格目标：${style.experimentId}；发布风格版本：${style.styleVersion}`,
-    `真实 V3 数据/绘制契约（字段准确，以此读取引擎事实）：\n${style.renderContract}`,
-    `最新实验开发规范（只参考物理、教学与包契约；视觉以上面的已发布实验视觉正文为准，不采用旧renderer或外部构建建议）：\n${style.developerPrompt}`,
-    `最新已发布的可编辑说明（只参考物理、教学与包契约；视觉与材质要求是本题的首要基准；仅忽略旧模板绑定和旧绘图调用建议）：\n${style.publishedBody}`,
+    `真实 V3 数据/绘制契约（字段准确，以此读取引擎事实）：\n${focusedRenderContract(style.renderContract, deps.snapshot.domain)}`,
+    `最新实验开发规范（只参考物理、教学与包契约；视觉以上面的已发布实验视觉正文为准，不采用旧renderer或外部构建建议）：\n${registeredParameterGuidance(style.developerPrompt)}`,
+    `最新已发布的可编辑说明（只参考物理、教学与包契约；视觉与材质要求是本题的首要基准；仅忽略旧模板绑定和旧绘图调用建议）：\n${publishedVisualGuidance(style.publishedBody)}`,
     `允许资源路径：${JSON.stringify(style.allowedAssetPaths)}`,
     `题目场景（唯一物理条件来源）：${JSON.stringify(deps.snapshot.scene)}`,
     `已验证解答：${JSON.stringify(deps.snapshot.solve ?? null)}`,
