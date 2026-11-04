@@ -521,30 +521,46 @@ describe('the real code child provider', () => {
     expect(removed.mock.calls.some(call => call[0] === 'abort')).toBe(true)
     lookup.mockRestore(); removed.mockRestore()
   })
-  it('honors an explicitly different style even when a same-turn ready reference exists', async () => {
+  it.each([
+    { label: 'additional presentation instructions', args: { instructions: '增强展示，添加轨迹标签和颜色对比。' }, nextStyle: 'magnetic-circular' },
+    { label: 'an explicitly different experiment style', args: { experimentId: 'solenoid-field' }, nextStyle: 'solenoid-field' },
+  ])('preserves same-turn ready code despite $label and permits a new user turn', async ({ args, nextStyle }) => {
     let mainCalls = 0
     let childCalls = 0
     const respond = (options: GenerateOptions) => {
       if (options.tools?.some(tool => tool.name === 'structured_output')) {
         childCalls++
+        if (mainCalls === 2) return textResponse('Unexpected regeneration did not produce code.')
         return toolCallResponse('styled-code', 'structured_output', source)
       }
       mainCalls++
       if (mainCalls === 1) return toolCallResponse('solve', 'physics_solve_question', { text: '一个质子以 2.0×10^6 m/s 的速度，垂直进入磁感应强度为 0.50 T，方向垂直纸面向里的匀强磁场。已知：m = 1.67×10^-27 kg，q = +1.60×10^-19 C。求轨道半径。' })
-      if (mainCalls === 2) {
-        return toolCallResponse('explicit-style', 'physics_generate_experiment', {
-          sceneId: ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? '', experimentId: 'solenoid-field',
+      if (mainCalls === 2 || mainCalls === 4) {
+        return toolCallResponse(`presentation-${mainCalls}`, 'physics_generate_experiment', {
+          sceneId: ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? '', ...args,
         })
       }
-      return textResponse('不同风格已生成。')
+      return textResponse('代码已就绪，需要改展示请使用手动重新生成入口。')
     }
-    const { ctx, parent } = await presentationHost(new MockAdapter(Array.from({ length: 7 }, () => respond)))
+    const { ctx, parent } = await presentationHost(new MockAdapter(Array.from({ length: 10 }, () => respond)))
     parent.followup(createUserMessage({ content: [{ type: 'text', text: '本题代码实验。' }], source: { kind: 'user' } }))
     await parent.whenIdle()
-    expect(childCalls).toBe(2)
+    expect(childCalls).toBe(1)
+    const first = parent.session.snapshotEvents().flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(first).toHaveLength(3)
+    expect(first.map(snapshot => snapshot.visualization?.status)).toEqual([undefined, 'generating', 'ready'])
+    const original = first.at(-1)
     const latest = ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.latest ?? ''
-    const state = ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.scenes[latest]?.visualization
-    expect(state?.status === 'ready' && state.experimentId).toBe('solenoid-field')
+    expect(ctx.sessionProjections.stateOf(parent.session, 'physicsScenes')?.scenes[latest]?.visualization).toEqual(original?.visualization)
+    for (const snapshot of first) expect(snapshot.scene).toEqual(first[0]?.scene)
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: '手动重新生成，并调整展示。' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const all = parent.session.snapshotEvents().flatMap(event => event.type === 'physics/scene' ? [event.data] : [])
+    expect(childCalls).toBe(2)
+    expect(all.filter(snapshot => snapshot.visualization?.status === 'generating').map(snapshot => snapshot.turn)).toEqual([1, 2])
+    const state = all.at(-1)?.visualization
+    expect(state?.status === 'ready' && state.experimentId).toBe(nextStyle)
+    expect(all.at(-1)?.scene).toEqual(original?.scene)
   })
 
   it.each(['failed', 'bare-sdk', 'ready'] as const)('keeps same-turn cached solve visualization after %s and permits a new user turn', async (initial) => {

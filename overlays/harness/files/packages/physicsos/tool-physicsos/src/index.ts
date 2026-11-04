@@ -96,7 +96,7 @@ export class PhysicsToolCallError extends HarnessError {
 /** The runtime's text projection of one canonical value, as the single model-visible block. */
 const renderFor = (tool: PhysicsToolName) => (_args: unknown, value: unknown): ContentBlock[] => [
   { type: 'text', text: PHYSICS_TOOL_RENDERERS[tool](value) + (tool === 'physics_solve_question' && typeof value === 'object' && value !== null && 'visualization' in value
-    ? ((value.visualization as { status: string }).status === 'ready' ? '\n\n本题代码实验已生成并显示在当前对话；物理结果由引擎验证。' : '\n\n本题代码实验本轮未完成，不能声称已显示动画。请提示学生点击「手动重新生成」开启新轮次；本轮不要重复调用 physics_generate_experiment。') : '') },
+    ? ((value.visualization as { status: string }).status === 'ready' ? '\n\n本题代码实验已生成并显示在当前对话；物理结果由引擎验证。本轮已就绪，不要再次生成；需调整展示请提示学生点击「手动重新生成」开启新轮次。' : '\n\n本题代码实验本轮未完成，不能声称已显示动画。请提示学生点击「手动重新生成」开启新轮次；本轮不要重复调用 physics_generate_experiment。') : '') },
 ]
 
 /** Any lossless-JSON object: the runtime returns plain data and its tests pin the round trip. */
@@ -349,8 +349,7 @@ export function apply(ctx: Context, config: Config): void {
     const existing = snapshot.visualization
     if (snapshot.turn === turn && existing?.ownerSessionId === ownerSessionId
       && existing.sceneId === sceneId && existing.sceneRevision === snapshot.revision) {
-      if (existing.status !== 'ready') return existing
-      if (!instructions?.trim() && (!experimentId || experimentId === existing.experimentId)) return existing
+      return existing
     }
     type Artifacts = {
       context(id: string): Promise<CodeStyleContext>
@@ -387,13 +386,13 @@ export function apply(ctx: Context, config: Config): void {
   }
   ctx.tools.register(defineTool({
     name: 'physics_generate_experiment',
-    description: '调用专用受限代码子代理，为当前对话已有的真实题目场景生成最新 V3 私有实验。解题成功后已自动尝试；同一场景本轮失败或正在生成时只复用状态，不再次启动子任务。失败请提示学生点击「手动重新生成」后在新轮次调用。只生成展示代码，不改变物理条件或答案。',
+    description: '调用专用受限代码子代理，为当前对话已有的真实题目场景生成最新 V3 私有实验。解题成功后已自动尝试；同一场景版本本轮无论已就绪、失败或正在生成，都只复用状态，不再次启动子任务。失败或需调整展示请提示学生点击「手动重新生成」后在新轮次调用。只生成展示代码，不改变物理条件或答案。',
     parameters: {
       sceneId: { type: 'string', required: true, description: '当前对话的 physics_solve_question / physics_create_experiment 返回的 sceneId。' },
       experimentId: { type: 'string', description: '可选：已注册的同物理域实验风格 id；默认按当前题目模型选择。' },
       instructions: { type: 'string', description: '可选：展示和标注要求；不用于修改物理条件。' },
     },
-    output: { schema: ANY_OBJECT, render: (_args, value) => [{ type: 'text', text: (value as unknown as CodeVisualizationState).status === 'ready' ? '本题代码实验已生成，已显示在当前对话。物理条件与已验证答案保持一致。' : '本题代码实验本轮已尝试；失败或中断请点击「手动重新生成」开启新轮次，本轮不要重复调用 physics_generate_experiment。' }] },
+    output: { schema: ANY_OBJECT, render: (_args, value) => [{ type: 'text', text: (value as unknown as CodeVisualizationState).status === 'ready' ? '本题代码实验已生成，已显示在当前对话。物理条件与已验证答案保持一致。本轮已就绪，不要再次生成；需调整展示请点击「手动重新生成」开启新轮次。' : '本题代码实验本轮已尝试；失败或中断请点击「手动重新生成」开启新轮次，本轮不要重复调用 physics_generate_experiment。' }] },
     execute: async (args, exec) => await generate(exec, args.sceneId, args.experimentId, args.instructions) as unknown as AnyObject,
     presentCall: () => ({ card: 'generic', title: '生成本题代码实验', kind: 'other' }),
   }))
