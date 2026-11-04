@@ -195,13 +195,19 @@ context.on('page', page => {
 await context.addInitScript(() => {
   window.__chatCodeSnapshots = []
   window.__chatCodeReplies = []
-  window.__chatCodeDrawStats = { calls: {}, lastArcs: [] }
-  for (const method of ['clearRect', 'fillRect', 'stroke', 'fill', 'arc', 'ellipse', 'fillText', 'lineTo']) {
+  window.__chatCodeDrawStats = { calls: {}, lastArcs: [], geometry: [] }
+  for (const method of ['clearRect', 'fillRect', 'stroke', 'fill', 'arc', 'ellipse', 'fillText', 'lineTo', 'moveTo', 'rect', 'bezierCurveTo', 'quadraticCurveTo', 'strokeRect', 'drawImage']) {
     const native = CanvasRenderingContext2D.prototype[method]
     CanvasRenderingContext2D.prototype[method] = function (...args) {
       const stats = window.__chatCodeDrawStats
       stats.calls[method] = (stats.calls[method] ?? 0) + 1
-      if (method === 'clearRect' || method === 'fillRect' && args[0] === 0 && args[1] === 0) stats.lastArcs = []
+      const matrix = this.getTransform()
+      const background = method === 'fillRect' && args[0] === 0 && args[1] === 0 && Math.abs(args[2] * matrix.a) >= this.canvas.width - 2 && Math.abs(args[3] * matrix.d) >= this.canvas.height - 2
+      if (method === 'clearRect' || background) { stats.lastArcs = []; stats.geometry = [] }
+      if (!background && ['arc', 'ellipse', 'lineTo', 'moveTo', 'rect', 'bezierCurveTo', 'quadraticCurveTo', 'fillRect', 'strokeRect', 'drawImage'].includes(method)) {
+        stats.geometry.push({ method, coordinates: args.map(value => typeof value === 'number' ? Number(value.toFixed(8)) : typeof value === 'object' ? { type: value?.constructor?.name, width: value?.width, height: value?.height } : value), matrix: ['a', 'b', 'c', 'd', 'e', 'f'].map(key => Number(matrix[key].toFixed(8))), canvasId: this.canvas.id })
+        if (stats.geometry.length > 20000) stats.geometry.splice(0, stats.geometry.length - 20000)
+      }
       if (method === 'arc') stats.lastArcs.push({ x: args[0], y: args[1], radius: args[2], canvasId: this.canvas.id })
       return native.apply(this, args)
     }
@@ -339,8 +345,13 @@ const authoredPaint = async frame => frame.locator('body').evaluate(body => {
     return { id: element.id, width: element.width, height: element.height, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, pixelHash: pixelHash.toString(16), opaquePixels, distinctColors: colors.size,
       bodyY: element.getAttribute('data-body-y'), clockTime: element.getAttribute('data-clock-time') }
   })
-  const svg = Array.from(body.querySelectorAll('svg')).map(element => ({ markup: element.outerHTML, primitives: element.querySelectorAll('path,circle,ellipse,line,polyline,polygon,rect').length }))
+  const svg = Array.from(body.querySelectorAll('svg')).map(element => ({ markup: element.outerHTML, primitives: element.querySelectorAll('path,circle,ellipse,line,polyline,polygon,rect').length,
+    geometry: Array.from(element.querySelectorAll('g,path,circle,ellipse,line,polyline,polygon,rect')).map(node => ({ tag: node.tagName, cssTransform: getComputedStyle(node).transform, attributes: Object.fromEntries(['x','y','x1','x2','y1','y2','cx','cy','r','rx','ry','d','points','width','height','transform'].filter(name => node.hasAttribute(name)).map(name => [name, node.getAttribute(name)])) })) }))
   return { viewport: { width: innerWidth, height: innerHeight }, scrollWidth: body.scrollWidth, canvas, svg, drawStats: window.__chatCodeDrawStats }
+})
+const geometryOf = paint => ({
+  canvas: Array.from(new Set((paint.drawStats?.geometry ?? []).map(command => canonical(command)))).sort(),
+  svg: paint.svg.flatMap(svg => svg.geometry ?? []),
 })
 const verifyIndependentMotion = async (frame, label) => {
   const first = await latestSnapshot()
@@ -373,8 +384,11 @@ const verifyIndependentMotion = async (frame, label) => {
   expect(frames[2].snapshot.view.bodies[0].at.y).toBeCloseTo(0, 8)
   expect(frames[1].snapshot.clock.time).toBeLessThan(frames[2].snapshot.clock.time)
   expect(canonical({ canvas: frames[1].paint.canvas.map(canvas => canvas.pixelHash), svg: frames[1].paint.svg })).not.toBe(canonical({ canvas: frames[0].paint.canvas.map(canvas => canvas.pixelHash), svg: frames[0].paint.svg }))
+  expect(geometryOf(frames[0].paint).canvas.length + geometryOf(frames[0].paint).svg.length).toBeGreaterThan(0)
+  expect(canonical(geometryOf(frames[1].paint))).not.toBe(canonical(geometryOf(frames[0].paint)))
+  await writeFile(join(shots, label + '-native-geometry.json'), JSON.stringify(frames.map(item => ({ name: item.name, clock: item.snapshot.clock, engineBody: item.snapshot.view.bodies[0], geometrySha256: hash(canonical(geometryOf(item.paint))), geometry: geometryOf(item.paint) })), null, 2))
   await seekPlatform(0)
-  check('independent authored pixels follow true V3 t0, apex and impact frames', { label, samples: frames.map(item => ({ name: item.name, time: item.snapshot.clock.time, body: item.snapshot.view.bodies[0], pixelHashes: item.paint.canvas.map(canvas => canvas.pixelHash) })) })
+  check('independent authored pixels and native geometry follow true V3 t0, apex and impact frames', { label, samples: frames.map(item => ({ name: item.name, time: item.snapshot.clock.time, body: item.snapshot.view.bodies[0], pixelHashes: item.paint.canvas.map(canvas => canvas.pixelHash), geometrySha256: hash(canonical(geometryOf(item.paint))) })) })
   return frames
 }
 const verifyMobileAndParameters = async (frame, label, source) => {
@@ -472,26 +486,25 @@ try {
     const child = await sessionLog(fixture.home, ref.childSessionId)
     expect(JSON.parse(child.events.find(event => event.type === 'tool/call').data.arguments)).toEqual(originalSource)
     const styles = await frame.locator('body').evaluate(body => ({ bodyFont: getComputedStyle(body).fontFamily, bodyMargin: getComputedStyle(body).margin,
-      h1Font: getComputedStyle(document.querySelector('h1')).fontSize, mainDisplay: getComputedStyle(document.querySelector('main')).display,
       trustedBaseLinks: Array.from(document.querySelectorAll('link[rel="stylesheet"]')).filter(link => link.getAttribute('href')?.endsWith('/platform-base.css')).length }))
     expect(styles.bodyFont).toMatch(/system-ui|sans-serif/)
     expect(styles.bodyMargin).toBe('0px')
-    expect(styles.h1Font).toBe('20px')
-    expect(styles.mainDisplay).toBe('grid')
     expect(styles.trustedBaseLinks).toBe(1)
+    const liveFrames = await verifyIndependentMotion(frame, 'real-source-replay')
+    const exploration = await verifyMobileAndParameters(frame, 'real-source-replay', originalSource)
     const snapshots = await page.evaluate(() => window.__chatCodeSnapshots)
     const params = snapshots.at(-1).inspector.flatMap(section => section.parameters ?? [])
     expect(params.find(param => param.id === 'speed').value).toBeCloseTo(20, 10)
     expect(params.find(param => param.id === 'angle').value).toBeCloseTo(90, 10)
     expect(params.find(param => param.id === 'gravity').value).toBeCloseTo(9.8, 10)
-    await shot('01-real-source-platform-base-restored')
+    await shot('01-real-source-independent-canvas')
     await card().locator('summary').filter({ hasText: '本题实验代码' }).first().click()
     await expect(card().locator('pre code').first()).toHaveText(originalSource.rendererJs)
     await shot('02-original-real-source-preserved')
     expect(errors).toEqual([])
-    check('unchanged real child source replay: trusted V3 base layout and actual frame restored, zero model requests')
-    await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence: { paidModelRequests: 0, scriptedProviderRequests: fixture.mock.requests.length, replayedRealSource: true, ref, sourceSha256: hash(originalSource.rendererJs), stylesheetSha256: hash(originalSource.stylesheet), styles, browserErrors: errors, expectedClientAborts } }, null, 2))
-    console.log('PASS real-source V3 base style replay')
+    check('unchanged real child source replay: independent V3 Canvas/SVG painted with original source, zero paid model requests')
+    await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence: { paidModelRequests: 0, scriptedProviderRequests: fixture.mock.requests.length, replayedRealSource: true, ref, sourceSha256: hash(originalSource.rendererJs), stylesheetSha256: hash(originalSource.stylesheet), styles, liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, browserErrors: errors, expectedClientAborts } }, null, 2))
+    console.log('PASS unchanged real-source independent V3 replay')
   } else if (realSmoke) {
     const existingSessionId = process.env.PHYSICSOS_CHAT_CODE_EXISTING_SESSION_ID
     let ownerSessionId
@@ -542,7 +555,7 @@ try {
       expect(codeChild.events.filter(event => event.type === 'tool/call').every(event => event.data.name === 'structured_output')).toBe(true)
     }
     if (codeChildren.length === 2) {
-      expect(JSON.stringify(child.events)).toMatch(/上次封闭代码校验未通过（(?:INVALID_SOURCE|INVALID_CODE_SOURCE|INVALID_PACKAGE|INVALID_METADATA|UNSAFE_RESOURCES)）/)
+      expect(JSON.stringify(child.events)).toMatch(/上次封闭代码校验未通过（(?:INVALID_SOURCE|INVALID_CODE_SOURCE|INVALID_PACKAGE|INVALID_METADATA|UNSAFE_RESOURCES)(?:[^）]*)）/)
       expect(JSON.stringify(child.events)).toContain('本次为唯一修复机会')
     }
     const generationEvents = sceneEvents(parent)

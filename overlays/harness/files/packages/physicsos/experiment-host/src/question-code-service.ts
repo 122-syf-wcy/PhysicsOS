@@ -93,8 +93,23 @@ const inputSchema = z
   .strict()
 const missing = (): ExperimentError =>
   new ExperimentError(404, 'NOT_FOUND', '未找到当前账号的题目实验。')
-const invalidSource = (): ExperimentError =>
-  new ExperimentError(400, 'INVALID_SOURCE', '生成代码未通过封闭资源、元数据或语法检查。')
+type SourceValidationReason =
+  | 'missing_export'
+  | 'module_dependency'
+  | 'missing_native_entry'
+  | 'legacy_renderer'
+  | 'missing_engine_geometry'
+  | 'missing_native_drawing'
+class DrawingValidationError extends Error {
+  constructor(readonly reason: SourceValidationReason) {
+    super('Independent drawing validation failed')
+  }
+}
+const invalidSource = (reason?: SourceValidationReason): ExperimentError => {
+  const error = new ExperimentError(400, 'INVALID_SOURCE', '生成代码未通过封闭资源、元数据或语法检查。')
+  if (reason !== undefined) Object.defineProperty(error, 'sourceValidationReason', { value: reason })
+  return error
+}
 /** Private code has its own viewport baseline, independent of community template chrome. */
 const independentStylesheet = `:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#dce8f4;background:#0b1320;color-scheme:dark}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative}#canvas{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}#canvas>canvas,#canvas>svg{display:block;width:100%;height:100%}[hidden]{display:none!important}`
@@ -248,9 +263,11 @@ function drawingDomReceiver(prefix: string): string | undefined {
 /** Static evidence is bound to the exported entry and its called local helpers. */
 function validateIndependentDrawing(source: string): void {
   const [imports, exports] = parse(source), frame = exports.find(entry => entry.n === 'renderFrame')
-  if (imports.length || frame?.ln === undefined) throw new Error('Independent renderer must export renderFrame without module dependencies')
+  if (imports.length) throw new DrawingValidationError('module_dependency')
+  if (frame?.ln === undefined) throw new DrawingValidationError('missing_export')
   const code = drawingCode(source), functions = drawingFunctions(code), entry = functions.get(frame.ln)
-  if (!entry || /\brenderPlatformFrame\b/.test(code)) throw new Error('Missing standalone drawing entry')
+  if (!entry) throw new DrawingValidationError('missing_native_entry')
+  if (/\brenderPlatformFrame\b/.test(code)) throw new DrawingValidationError('legacy_renderer')
   const inlineSvg = new Map<DrawingFunction, DrawingSvgExpression[]>()
   for (const fn of functions.values()) {
     const expressions = drawingInlineSvg(source, fn)
@@ -334,6 +351,9 @@ function validateIndependentDrawing(source: string): void {
   }
   const classify = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set()): number => {
     if (seen.size > 64) return 0
+    // In a same-object guard, only the RHS is the value; the frame operand controls access to its view.
+    const guardedView = expression.match(/^\s*([A-Za-z_$][\w$]*)\s*&&\s*\1\s*\.\s*view\s*$/)
+    if (guardedView?.[1] !== undefined) return classify(`${guardedView[1]}.view`, fn, seen)
     let value = 0
     const text = expression.split('')
     // A local helper's result must itself depend on data; merely passing data to a constant helper is insufficient.
@@ -403,7 +423,7 @@ function validateIndependentDrawing(source: string): void {
     }
     return false
   })
-  if (!geometry) throw new Error('Reachable drawing coordinates must come from view primitives')
+  if (!geometry) throw new DrawingValidationError('missing_engine_geometry')
   // Context creation and mounting may occur once at module scope; painting and data cannot be borrowed from unused functions.
   const rectangles = [...active.matchAll(/\.(?:fillRect|strokeRect)\s*\(/g)].length >= 2
   const canvas = /\.getContext\s*\(\s*["']2d["']/.test(code) &&
@@ -412,7 +432,7 @@ function validateIndependentDrawing(source: string): void {
   const svg = svgGeometry || /\.createElementNS\s*\(/.test(code) &&
     /["'](?:circle|ellipse|path|line|polyline|polygon)["']/.test(code) &&
     /\.setAttribute\s*\(/.test(active) && /\.(?:append|appendChild|replaceChildren)\s*\(/.test(code)
-  if (!canvas && !svg) throw new Error('Independent entry must perform native scene drawing')
+  if (!canvas && !svg) throw new DrawingValidationError('missing_native_drawing')
 }
 const recordHash = (record: Omit<QuestionCodeRecord, 'sha256'> | QuestionCodeRecord): string => {
   const { sha256: _ignored, ...body } = record as QuestionCodeRecord
@@ -634,8 +654,8 @@ document.addEventListener('physicsos-experiment-intent', event => {
         } finally {
           await rm(checkDir, { recursive: true, force: true })
         }
-      } catch {
-        throw invalidSource()
+      } catch (error) {
+        throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined)
       }
       files.set('question-scene.json', Buffer.from(canonicalQuestionJson(scene)))
       const frozen: QuestionCodeRecord['files'] = []

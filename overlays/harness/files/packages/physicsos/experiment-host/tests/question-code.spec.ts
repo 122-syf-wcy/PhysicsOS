@@ -244,6 +244,7 @@ describe('private question code artifacts', () => {
     ['inline SVG constant helper despite a data argument', () => 'function constant(point) { return 10 } export function renderFrame(snapshot) { document.getElementById("canvas").innerHTML = `<svg><circle cx="${constant(snapshot.view.opticalObjects[0].at)}" cy="0" r="3" /></svg>`; }'],
     ['detached inline SVG', () => 'export function renderFrame(snapshot) { const detached = document.createElement("div"); detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
     ['inline SVG mounted only by an uncalled helper', () => 'const detached = document.createElement("div"); function unusedMount() { document.getElementById("canvas").append(detached) } export function renderFrame(snapshot) { detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
+    ['guarded constant view decoy', () => ownCanvas.replace('snapshot.view', 'snapshot && { opticalObjects: [{ at: { x: 10, y: 20 } }] }')],
   ] as const)('rejects %s before it can acquire independent metadata or freeze files', async (_name: string, renderer: () => string) => {
     const service = await setup(), before = await readdir(join(root, 'private', 'blobs'))
     await expect(service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '独立实验', summary: '', rendererJs: renderer(), stylesheet: '' } })).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
@@ -254,6 +255,29 @@ describe('private question code artifacts', () => {
     const service = await setup()
     const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '透镜 SVG', summary: '', rendererJs: ownSvg, stylesheet: '' } })
     expect(ref.rendererKind).toBe('independent')
+  })
+  it('accepts the real child guarded view alias without counting its guard as geometry', async () => {
+    const service = await setup()
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '条件读取透镜快照', summary: '', rendererJs: ownCanvas.replace('snapshot.view', 'snapshot && snapshot.view'), stylesheet: '' } })
+    expect(ref.rendererKind).toBe('independent')
+  })
+  it.each([
+    ['missing_export', ownCanvas.replace('export function renderFrame', 'function renderFrame')],
+    ['missing_engine_geometry', ownCanvas.replace('item.at.x, item.at.y', '10, 20')],
+  ])('provides a bounded internal %s reason while preserving the public source failure', async (reason, rendererJs) => {
+    const service = await setup()
+    const error: unknown = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '待修复透镜', summary: '', rendererJs, stylesheet: '' } }).catch((failure: unknown) => failure)
+    expect(error).toMatchObject({ code: 'INVALID_SOURCE', sourceValidationReason: reason, message: '生成代码未通过封闭资源、元数据或语法检查。' })
+    expect(JSON.stringify(error)).not.toContain('sourceValidationReason')
+    expect([...domain!.table('artifacts').entries()]).toHaveLength(0)
+    expect(await readdir(join(root, 'private', 'blobs'))).toEqual([])
+  })
+  it('keeps closed-resource details masked rather than treating them as trusted drawing reasons', async () => {
+    const service = await setup()
+    const error: unknown = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '封闭资源', summary: '', rendererJs: ownCanvas, stylesheet: 'canvas { background: url(https://forbidden.invalid/private-resource); }' } }).catch((failure: unknown) => failure)
+    expect(error).toMatchObject({ code: 'INVALID_SOURCE', message: '生成代码未通过封闭资源、元数据或语法检查。' })
+    expect(error).not.toHaveProperty('sourceValidationReason')
+    expect(JSON.stringify(error)).not.toContain('forbidden.invalid')
   })
   it.each([
     ownCanvas.replace('export function renderFrame(snapshot)', 'function draw(snapshot)') + '\nexport const renderFrame = snapshot => draw(snapshot);',
