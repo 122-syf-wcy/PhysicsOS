@@ -4,6 +4,7 @@ import type { CodeExperimentRef, CodeVisualizationSource, CodeVisualizationState
 import type { SubagentResult, SubagentRun, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
+import { QUESTION_CODE_VISUAL_BRIEF } from './question-code-visual-brief.ts'
 
 export const CODE_TIMEOUT_MS = 300_000
 export const CODE_SOURCE_SCHEMA: ObjectJsonSchema = { type: 'object', additionalProperties: false, properties: {
@@ -88,12 +89,13 @@ function checkedSource(result: SubagentResult): CodeVisualizationSource {
 function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, repair?: CodeRepair): string {
   return [
     '为下面的真实题目生成独立 Canvas 实验画面和完整的现代实验场景。只返回 title、summary、rendererJs、stylesheet 四个字符串。',
-    '已有物理解答和校验已完成。本任务只设计与绘制，不再推导或重新解题。输出紧凑可工作的代码，renderer 建议不超过160行，CSS不超过100行，尽快用 structured_output 提交。',
+    '已有物理解答和校验已完成。本任务只设计与绘制，不再推导或重新解题。输出紧凑可工作的代码，尽快用 structured_output 提交。',
     '使用题目的原始场景与平台 frame/snapshot；绝不改写题目条件、引入默认场景、重新计算物理答案或编造模拟结果。',
     'rendererJs 必须包含字面声明 export function renderFrame(snapshot) { ... }；提交前确认 export 关键字确实在源码中，不能只定义未导出的 const renderFrame。在现有 #canvas DIV 内创建自己的 Canvas2D（推荐）或原生SVG并绘制。禁止任何 import/reexport、renderPlatformFrame、旧平台绘图函数或仅装饰旧图的包装器。平台只提供数据与握手，不提供本题画面。',
     '代码结构保持直接：在导出的 renderFrame 内读取 view 的对象/轨迹并实际绘图，或调用普通命名函数/const箭头函数完成坐标投影和绘制。不要使用对象/类方法或动态函数分派，也不要只返回view、把绘图留在未调用的函数里。复用Canvas/DOM，每次完成当前引擎帧的绘制后再返回；不要创建自己的物理计时循环。',
     '画面要有真实装置感和独立构图：精致材质、柔和空间光照、清晰物体与运动轨迹、玻璃信息卡和关键点标注。不要照画旧坐标纸/大XY网格图；辅助刻度可简洁呈现。让人一眼能看到本题的实验现象，标题取自然的题目实验名称。',
     `title 必须描述真实题目的装置/现象，不能照抄实验风格家族名称。真实题目标签：${deps.snapshot.title}。`,
+    QUESTION_CODE_VISUAL_BRIEF,
     'Canvas fillStyle、strokeStyle、addColorStop 必须使用有效原生颜色字面值，例如 #3f8f9c、#fff、rgba(63,143,156,0.4)。十六进制颜色只允许3、4、6或8位合法hex；不要拼接/替换出5位等非法颜色，不要把 CSS 变量当成 Canvas 颜色。',
     '必须适配实测219×360 CSS像素的 #canvas，也支持宽屏。每帧读取舞台正值clientWidth/clientHeight并同步更新Canvas像素尺寸；DPR仅用于画布分辨率，布局使用CSS像素。投影可用宽高必须为正，主物体与轨迹必须完整可见。窄屏的信息卡应紧凑置于顶部/底部、折叠或隐藏，不能始终保留300px侧栏或固定大gutter；尺寸变化要同步重算布局并重绘。',
     '只用浏览器原生绘图/DOM/CSS。禁止 fetch、外网、存储、parent/top、eval、Function、动态import及脚本注入。禁止返回 HTML、manifest 或其他文件。',
@@ -101,8 +103,8 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     '每次 renderFrame 使用当前 snapshot.view 的位置/轨迹/装置几何，snapshot.clock 的播放时间，inspector/overlay 中的真实量测；不能自己用 v*t 或加速度公式推进物体。改变屏幕坐标、材质、绘制大小和布局属于展示。向量端点已经按平台显示比例缩放，不得据箭头长度推算速度或力。',
     `实验风格目标：${style.experimentId}；发布风格版本：${style.styleVersion}`,
     `真实 V3 数据/绘制契约（字段准确，以此读取引擎事实）：\n${style.renderContract}`,
-    `最新实验开发规范（只参考物理、参数与封闭资源契约，不采用其中旧renderer或外部构建建议）：\n${style.developerPrompt}`,
-    `最新已发布的可编辑说明（参考视觉/教学正文；旧模板绑定和旧绘图调用建议不适用于独立画面）：\n${style.publishedBody}`,
+    `最新实验开发规范（只参考物理、教学与包契约；视觉以上面的独立画面视觉规范为准，不采用旧renderer或外部构建建议）：\n${style.developerPrompt}`,
+    `最新已发布的可编辑说明（只参考物理、教学与包契约；视觉以上面的独立画面视觉规范为准，忽略旧模板绑定和旧绘图调用建议）：\n${style.publishedBody}`,
     `允许资源路径：${JSON.stringify(style.allowedAssetPaths)}`,
     `题目场景（唯一物理条件来源）：${JSON.stringify(deps.snapshot.scene)}`,
     `已验证解答：${JSON.stringify(deps.snapshot.solve ?? null)}`,

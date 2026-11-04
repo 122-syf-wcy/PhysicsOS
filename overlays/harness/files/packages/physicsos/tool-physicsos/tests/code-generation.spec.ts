@@ -74,6 +74,29 @@ describe('parent question code generation', () => {
     expect(generating?.status === 'generating' && generating.deadlineAt).toBeGreaterThanOrEqual(started + 300_000)
     expect(generating?.status === 'generating' && generating.deadlineAt).toBeLessThan(started + 301_000)
   })
+  it('prioritizes authored scene direction over legacy styles without replacing the real question or generation limits', async () => {
+    const h = dependencies()
+    h.original.title = '竖直上抛的运动观察'
+    h.deps.context = async () => ({ experimentId: 'projectile-motion', developerPrompt: '教学：观察最高点；视觉：米白色坐标网格', publishedBody: '标题使用斜抛运动；复用旧坐标纸', styleVersion: 'V3', renderContract: 'snapshot.view.bodies[].at', allowedAssetPaths: [] })
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    const request = h.start.mock.calls[0]?.[0]
+    const block = request?.prompt[0]
+    const prompt = block?.type === 'text' ? block.text : ''
+    expect(prompt).toContain('独立画面视觉规范（优先于下面公开正文中的视觉建议）')
+    expect(prompt).toContain('深海军蓝')
+    expect(prompt).toContain('同点起点/落点合并')
+    expect(prompt).toContain('219×360')
+    expect(prompt).toContain('真实题目标签：竖直上抛的运动观察')
+    expect(prompt).toContain('只参考物理、教学与包契约')
+    expect(prompt.indexOf('独立画面视觉规范')).toBeLessThan(prompt.indexOf('教学：观察最高点'))
+    expect(prompt).toContain(JSON.stringify(h.original.scene))
+    expect(prompt).toContain(JSON.stringify(h.original.solve))
+    expect(request?.agentOptions?.maxTokens).toBe(8192)
+    expect(request?.toolFilter).toEqual({ allow: [] })
+    expect(request?.maxDepth).toBe(1)
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }))
+    expect(h.start).toHaveBeenCalledTimes(1)
+  })
   it.each([
     'export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";',
     `// 本题专用
