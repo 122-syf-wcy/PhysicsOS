@@ -469,6 +469,9 @@ const verifyMobileAndParameters = async (frame, label, source) => {
   }
   const controlBounds = await card().getByRole('button', { name: '播放 / 暂停', exact: true }).boundingBox()
   expect(controlBounds.width).toBeGreaterThanOrEqual(32)
+  await writeFile(join(shots, label + '-mobile-document-geometry.json'), JSON.stringify(await page.evaluate(() => ({scrollX,innerWidth,rootWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,wide:[...document.querySelectorAll('body *')].filter(n=>n.getBoundingClientRect().width>innerWidth+5).slice(0,12).map(n=>({tag:n.tagName,cls:n.className,width:n.getBoundingClientRect().width,scroll:n.scrollWidth,overflow:getComputedStyle(n).overflowX})),ancestors:(()=>{const rows=[];let n=document.querySelector('[data-code-experiment-shell]');while(n){const r=n.getBoundingClientRect();rows.push({tag:n.tagName,cls:n.className,x:r.x,width:r.width,scroll:n.scrollWidth,left:n.scrollLeft,overflow:getComputedStyle(n).overflowX});n=n.parentElement}return rows})()})), null, 2))
+  await card().locator('[data-question-code-status]').scrollIntoViewIfNeeded()
+  await expect.poll(() => card().evaluate(node => node.getBoundingClientRect().x)).toBeGreaterThanOrEqual(0)
   await shot(label + '-mobile-play-controls')
   const mobileGeometry = await card().evaluate(element => {
     const rect = node => { const box = node.getBoundingClientRect(); return { label: node.getAttribute('aria-label') ?? node.textContent?.trim(), x: box.x, y: box.y, width: box.width, height: box.height } }
@@ -604,8 +607,8 @@ try {
     expect(codeChildren.length).toBeGreaterThanOrEqual(1)
     expect(codeChildren.length).toBeLessThanOrEqual(2)
     for (const [index, codeChild] of codeChildren.entries()) {
-      expect(codeChild.events.find(event => event.type === 'request/header').data.header.tools.map(tool => tool.name).sort()).toEqual(index === 0 ? ['physics_generate_experiment_asset', 'structured_output'] : ['structured_output'])
-      expect(codeChild.events.filter(event => event.type === 'tool/call').every(event => ['structured_output', 'physics_generate_experiment_asset'].includes(event.data.name))).toBe(true)
+      expect(codeChild.events.find(event => event.type === 'request/header').data.header.tools.map(tool => tool.name).sort()).toEqual(index === 0 ? ['physics_generate_experiment_asset', 'physics_write_experiment_code', 'structured_output'] : ['physics_write_experiment_code', 'structured_output'])
+      expect(codeChild.events.filter(event => event.type === 'tool/call').every(event => ['structured_output', 'physics_generate_experiment_asset', 'physics_write_experiment_code'].includes(event.data.name))).toBe(true)
     }
     if (codeChildren.length === 2) {
       expect(JSON.stringify(child.events)).toMatch(/上次封闭代码校验未通过（(?:INVALID_SOURCE|INVALID_CODE_SOURCE|INVALID_PACKAGE|INVALID_METADATA|UNSAFE_RESOURCES|IMAGE_REQUIRED|IMAGE_UNUSED|MISSING_STRUCTURED_OUTPUT)(?:[^）]*)）/)
@@ -619,7 +622,7 @@ try {
     const jobDurationMs = jobEnd - jobStart
     expect(jobDurationMs).toBeLessThan(600000)
     const childHeader = child.events.find(event => event.type === 'request/header').data.header
-    expect(childHeader.tools.map(tool => tool.name).sort()).toEqual(codeChildren.length === 1 ? ['physics_generate_experiment_asset', 'structured_output'] : ['structured_output'])
+    expect(childHeader.tools.map(tool => tool.name).sort()).toEqual(codeChildren.length === 1 ? ['physics_generate_experiment_asset', 'physics_write_experiment_code', 'structured_output'] : ['physics_write_experiment_code', 'structured_output'])
     const childConfig = childHeader.config
     const parentConfig = parent.events.find(event => event.type === 'request/header').data.header.config
     expect(childConfig.maxTokens).toBeLessThanOrEqual(Math.min(8192, parentConfig.maxTokens))
@@ -636,7 +639,19 @@ try {
     expect(structured.length).toBeGreaterThanOrEqual(1)
     expect(structured.length).toBeLessThanOrEqual(2)
     expect(structured.every(event => event.data.name === 'structured_output')).toBe(true)
-    const childSource = JSON.parse(structured.at(-1).data.arguments)
+    const submitted = JSON.parse(structured.at(-1).data.arguments)
+    const written = { rendererJs: '', stylesheet: '' }
+    const sourceWrites = child.events.filter(event => event.type === 'tool/call' && event.data.name === 'physics_write_experiment_code')
+    for (const write of sourceWrites) {
+      const outcome = child.events.find(event => event.type === 'tool/result' && event.data.message?.toolCallId === write.data.callId)
+      if (outcome?.data.message.isError !== false) continue
+      const part = JSON.parse(write.data.arguments)
+      expect(part.content.length).toBeLessThanOrEqual(2400)
+      written[part.file] = part.mode === 'append' ? written[part.file] + part.content : part.content
+    }
+    expect(sourceWrites.length).toBeGreaterThan(0)
+    expect(sourceWrites.length).toBeLessThanOrEqual(10)
+    const childSource = { ...submitted, ...written }
     const response = await context.request.get(fixture.base + `/physicsos/question-code/artifacts/${ref.artifactId}/source?sha256=${ref.sha256}`)
     expect(response.ok()).toBe(true)
     const source = await response.json()
@@ -675,7 +690,7 @@ try {
     }
     check('real PhysicsOS child calls configured Sunburst and freezes referenced image bytes in owned experiment', { imageAssets, imageCalls: imageCalls.length })
     check('real candidate private source requires owner cookie, exact hash and signed sandbox preview')
-    expect(await card().frameLocator('iframe').frameLocator('iframe').locator('canvas, svg').count()).toBeGreaterThan(0)
+    await expect(card().frameLocator('iframe').frameLocator('iframe').locator('canvas, svg').first()).toBeVisible({ timeout: 30000 })
     await expect(page.locator('[data-physicsos-surface="lab"]')).toBeHidden()
     const snapshots = await page.evaluate(() => window.__chatCodeSnapshots)
     const parameters = snapshots.at(-1).inspector.flatMap(section => section.parameters ?? [])
@@ -693,7 +708,7 @@ try {
     await shot('02-real-model-frozen-source')
     await checkBrowserErrors()
     check('one real configured-model question: engine → real restricted child → private source → V3 rendered frame', { ownerSessionId, childSessionId: ref.childSessionId, artifactId: ref.artifactId, sourceSha256: hash(source.source.rendererJs) })
-    evidence = { realModel: true, base: fixture.base, ref, sourceSha256: hash(source.source.rendererJs), rendererKind: ref.rendererKind, liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, toolCalls: calls.map(event => event.data.name), firstChildTools: ['physics_generate_experiment_asset', 'structured_output'], imageAssets, childStarts: codeChildren.length, finalChildSourceAttempts: structured.length, exportIncludesRealChild: true, generationJobs: 1, jobDurationMs, reusedExistingOwnedSession: Boolean(existingSessionId), sentNewPrompt: !existingSessionId, parentStopReason, childConfig: { model: childConfig.model, maxTokens: childConfig.maxTokens, reasoningEffort: childConfig.reasoningEffort }, advertisedEfforts, browserErrors: errors, expectedClientAborts }
+    evidence = { realModel: true, base: fixture.base, ref, sourceSha256: hash(source.source.rendererJs), rendererKind: ref.rendererKind, liveFrames: liveFrames.map(item => ({ name: item.name, clock: item.snapshot.clock, body: item.snapshot.view.bodies[0], paint: item.paint })), exploration, toolCalls: calls.map(event => event.data.name), firstChildTools: ['physics_generate_experiment_asset', 'physics_write_experiment_code', 'structured_output'], imageAssets, childStarts: codeChildren.length, finalChildSourceAttempts: structured.length, exportIncludesRealChild: true, generationJobs: 1, jobDurationMs, reusedExistingOwnedSession: Boolean(existingSessionId), sentNewPrompt: !existingSessionId, parentStopReason, childConfig: { model: childConfig.model, maxTokens: childConfig.maxTokens, reasoningEffort: childConfig.reasoningEffort }, advertisedEfforts, browserErrors: errors, expectedClientAborts }
     await writeFile(join(shots, 'acceptance-result.json'), JSON.stringify({ passed: true, checks, evidence }, null, 2))
     console.log('PASS real configured-model private owned chat smoke (' + smokeLabel + ')')
   } else {

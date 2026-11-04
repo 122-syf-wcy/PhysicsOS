@@ -40,14 +40,14 @@ Interface: provider reads current generating scene/job from actual parent projec
 
 ### Task3: Visual and release integration
 Files: host drawImage dataflow check/tests, client style/loading text if necessary, acceptance script and reports.
-- [ ] Preserve background-only rejection; allow genuine engine-driven drawImage geometry, enforce local resource existence.
-- [ ] Build candidate; real one question uses configured image tool and actual artwork; inspect desktop/mobile screenshots before accepting.
-- [ ] Verify raw sources/assets/owner/PG/restart and exact image. Keep failed evidence distinct.
+- [x] Preserve background-only rejection; allow genuine engine-driven drawImage geometry, enforce local resource existence.
+- [x] Build candidate; real one question uses configured image tool and actual artwork; inspect desktop/mobile screenshots before accepting.
+- [x] Verify raw sources/assets/owner/PG/restart and exact image. Keep failed evidence distinct.
 - [ ] Atomic FF GitHub main; stopped-app paired backup, approved image switch and formal76/admin/prompt HTTPS regression.
 
 ### Task4: Bounded source parts after upstream long-output diagnosis
-- [ ] Real child test first: image tool→two code writes→metadata output yields exact concatenated source, source tool absent from parent; invalid/oversize/write quota rejected.
-- [ ] Scoped source buffer, percall2400chars/max10writes, metadata final schema; unchanged fourfield artifact contract and existing image guards.
-- [ ] Narrow wire contract supports metadata+write tool only; tests prove ordinary requests unchanged.
-- [ ] Reduce solved answer prompt to authoritative quantities/status, omit repeated provenance diagnostics (full facts remain in scene/session).
-- [ ] Server tests/build, actual child/image/code/visual/restart; then authorized release gates.
+- [x] Real child test first: image tool→two code writes→metadata output yields exact concatenated source, source tool absent from parent; invalid/oversize/write quota rejected.
+- [x] Scoped source buffer, percall2400chars/max10writes, metadata final schema; unchanged fourfield artifact contract and existing image guards.
+- [x] Narrow wire contract supports metadata+write tool only; tests prove ordinary requests unchanged.
+- [x] Reduce solved answer prompt to authoritative quantities/status, omit repeated provenance diagnostics (full facts remain in scene/session).
+- [x] Server tests/build, actual child/image/code/visual/restart; then authorized release gates.

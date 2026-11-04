@@ -1,4 +1,4 @@
-> 当前状态：实现已提交并在服务器构建；真实生图成功，但端到端代码交付/视觉门禁未通过，未上线。最终运行源码2f5d26f，生产仍68bd8d0。
+> 当前状态：560bd20最终候选通过真实生图、分段代码、桌面/手机视觉、交互和重启恢复；正式发布在文末记录。
 
 # 题目实验子代理运行时生图
 
@@ -49,3 +49,27 @@ acf0970镜像已通过105711文件完整校验、原始真实源码校验复放�
 未写candidate-accepted-image.txt，未快进远端main/服务器main，未切换生产。要完成发布，需当前代码模型稳定交付完整工具结果，或者用户提供/配置其他可用代码模型通道；生图网关和gpt-image-2.5-sunburst已经真实验证。下一执行者应先读本报告与服务器release目录，不能重新从旧深蓝方案开始，也不能把模板/手写源码冒充真实child结果。
 
 服务器release：/opt/physicsos-previews/chat-code-release-20261104；真实测试脚本tests/acceptance/chat-code-experiment.mjs。现候选/DB/files副本可用，production/main68bd8d0镜像DDC健康。已准备配对备份、两字段model-wire配置迁移、回滚脚本，全部尚未正式执行。图片+代码重启验证入口tooling/physicsos-agent-image-persistence.py要求passed真实验收，当前不得绕过。
+
+## 续接：按成功工具事件分段交付源码
+
+上游定点诊断：原素材后请求非流式返回空content，usage6144；缩为1648token输入强制structured_output、1228token无工具JSON仍空。15行函数请求84输入tokens成功返回437字符，说明可交付小片段。保留完整原响应在候选/tmp私有文件，不冒充实际实验产物。
+
+改为child专属physics_write_experiment_code：每段2400字符、每child至多10次执行（包括超长拒绝），replace/append保存原文，最终structured_output只提交title/summary。provider拼接成功片段与metadata为原四字段artifact接口，平台不补写renderer。图片与代码额度、父模型/high、600秒生成期限保持。用于提示词的答案只投影数值/单位/验证结论，重复provenance诊断留在原会话中不改动。
+
+独立审查发现execute后被post-execute拒绝的片段会泄漏到最终source；回归RED重现，改为按ToolExecution暂存，仅权威tools/result成功commit。修正缺export反馈为writer修复→metadata收尾。最终验收逐个回放成功写入事件，与source API全量字符串一致。
+
+分段版本e561fd3真实成功：session-46d93313-0ba3-4af6-a9d2-5522ded85326，child7b371bdb-ea65-4bd7-88d3-46b1ca4fb691。一次生图、八次成功源码片段写入（JS10103字符、CSS222字符）、一次metadata交付，206.945秒，原图1536×1024哈希ab59cb…1883。首次浏览器在短暂iframe重新挂载时count断言误报，改为等待可见，同一session无新prompt补验全部通过：source逐字等于成功写入拼接、图片哈希、owner、原题20/90/9.8、t0/apex/impact、速度探索/恢复和手机播放。
+
+截图实际复核发现路径偏小、悬空地面和重复读数卡，故e561fd3只算功能通过，未发布。560bd20只追加明确构图要求：完整轨迹上下界映射舞台18%–82%、原始ground对齐背景地板、取消图内重复读数与箭头、放大主体，仍不改物理。测试76通过、类型/build/lint通过。手机几何诊断root/body375、scrollX0，card x88 width247；旧截图偏移来自scrollIntoView时序，新增截图前card.x>=0。
+
+## 最终候选验收（2026-11-05，北京时间）
+
+运行源码560bd2038e3c93d58552be076c941f323d527bb4，镜像physicsos-app:chat-code-560bd20，ID sha256:a0fcd9a8546ca536dc38abd321ea29d2120595feb3a0314461469df89882b8bf。完整校验105721文件/9534链接/83依赖通过。
+
+真实session-33d22c8d-ed2b-464b-8221-a558c882858e，child5a497264-50fb-40dc-92ba-a98cdefc999e，一次生成job/child/生图，八次writer调用（其中一个超长片段被拒绝后拆分，最终源码只含成功写入），211.442秒完成。图像1536×1024，SHA256 3bb6e26341ae2bab75e75cdcb4916e88d581b0100df06b7dbcb1cff13aed59ae。
+
+端到端PASS：精确source回放、图片请求/字节hash/真实引用、owner与签名、t0/最高点/落地几何变化、25m/s探索保留原题方向、恢复原题、手机播放、暂停尺寸变化重绘、浏览器错误0。桌面和手机截图已人工检查：Warm Lab生成场景真实显示，运动轨迹占舞台大部分高度，主体和地板对应，去掉读数堆叠与悬空地面。最高点文字仍贴近球体，是可继续打磨的小细节，不能承诺所有新题目的模型画面完全相同。
+
+候选真实重启后所有原renderer/CSS/bootstrap和生成图片hash、artifact身份/owner完全相同，匿名与错误hash拒绝、签名重新授权通过；已写exact candidate accepted marker。旧生产DDC镜像和数据库/文件配对恢复点将在正式切换时保留。
+
+证据：[桌面](screenshots/chat-code-experiment/agent-image-real-560bd20/01-real-model-owned-code.png)、[手机](screenshots/chat-code-experiment/agent-image-real-560bd20/independent-real-mobile-play-controls.png)、[验收JSON](screenshots/chat-code-experiment/agent-image-real-560bd20/acceptance-result.json)。

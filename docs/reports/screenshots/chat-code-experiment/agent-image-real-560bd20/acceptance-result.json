@@ -1,0 +1,7366 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "label": "authenticated student Web shell and product session cookie",
+      "passed": true
+    },
+    {
+      "label": "real PhysicsOS child calls configured Sunburst and freezes referenced image bytes in owned experiment",
+      "passed": true,
+      "evidence": {
+        "imageAssets": [
+          {
+            "path": "./assets/generated/868a643deaa3e847a7b5bebd046c86a0.png",
+            "cssPath": "./generated/868a643deaa3e847a7b5bebd046c86a0.png",
+            "sha256": "3bb6e26341ae2bab75e75cdcb4916e88d581b0100df06b7dbcb1cff13aed59ae",
+            "width": 1536,
+            "height": 1024,
+            "kind": "environment",
+            "model": "gpt-image-2.5-sunburst"
+          }
+        ],
+        "imageCalls": 1
+      }
+    },
+    {
+      "label": "real candidate private source requires owner cookie, exact hash and signed sandbox preview",
+      "passed": true
+    },
+    {
+      "label": "independent authored pixels and native geometry follow true V3 t0, apex and impact frames",
+      "passed": true,
+      "evidence": {
+        "label": "independent-real",
+        "samples": [
+          {
+            "name": "t0",
+            "time": 0,
+            "body": {
+              "id": "body-1",
+              "kind": "ball",
+              "at": {
+                "x": 0,
+                "y": 0
+              },
+              "size": 1.4106122448979599,
+              "live": true,
+              "label": "m"
+            },
+            "pixelHashes": [
+              "fc595ad5"
+            ],
+            "geometrySha256": "09f32655858ca6f19c30cc66f36d367a6865fd8f84783564c3562176b1b35653"
+          },
+          {
+            "name": "apex",
+            "time": 2.04081632653061,
+            "body": {
+              "id": "body-1",
+              "kind": "ball",
+              "at": {
+                "x": 2.4992791819333715e-15,
+                "y": 20.40816326530612
+              },
+              "size": 1.4106122448979599,
+              "live": true,
+              "label": "m"
+            },
+            "pixelHashes": [
+              "c8812a51"
+            ],
+            "geometrySha256": "bb2f3b6e81ad6eb22dc05b21496f6bd649f3fa3dc584a862cc95f6f39773a5eb"
+          },
+          {
+            "name": "impact",
+            "time": 4.081632653061225,
+            "body": {
+              "id": "body-1",
+              "kind": "ball",
+              "at": {
+                "x": 4.9985583638667485e-15,
+                "y": -1.4210854715202004e-14
+              },
+              "size": 1.4106122448979599,
+              "live": true,
+              "label": "m"
+            },
+            "pixelHashes": [
+              "18d412aa"
+            ],
+            "geometrySha256": "6e269a3dd4e0c3e41b83364e9cb2d555b884cc557857a15b5517211fa0b3444f"
+          }
+        ]
+      }
+    },
+    {
+      "label": "live condition changes, restore-origin and mobile playback operate on the same engine runtime",
+      "passed": true,
+      "evidence": {
+        "changedApex": {
+          "time": 2.55102040816327,
+          "body": {
+            "id": "body-1",
+            "kind": "ball",
+            "at": {
+              "x": 3.905123721770904e-15,
+              "y": 31.887755102040817
+            },
+            "size": 2.2040816326530615,
+            "live": true,
+            "label": "m"
+          }
+        },
+        "mobile": {
+          "viewport": {
+            "width": 219,
+            "height": 360
+          },
+          "scrollWidth": 219,
+          "canvasBounds": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 219,
+              "height": 360
+            }
+          ],
+          "controlBounds": {
+            "x": 116.625,
+            "y": 425.390625,
+            "width": 36,
+            "height": 36
+          },
+          "mobileGeometry": {
+            "viewportWidth": 375,
+            "transport": [
+              {
+                "label": "播放 / 暂停",
+                "x": 116.625,
+                "y": 563.390625,
+                "width": 36,
+                "height": 36
+              },
+              {
+                "label": "后退一步",
+                "x": 167.875,
+                "y": 563.390625,
+                "width": 36,
+                "height": 36
+              },
+              {
+                "label": "单步",
+                "x": 219.125,
+                "y": 563.390625,
+                "width": 36,
+                "height": 36
+              },
+              {
+                "label": "重置",
+                "x": 270.375,
+                "y": 563.390625,
+                "width": 36,
+                "height": 36
+              },
+              {
+                "label": "播放倍速",
+                "x": 247,
+                "y": 605.390625,
+                "width": 64,
+                "height": 36
+              }
+            ],
+            "actions": [
+              {
+                "label": "</>本题实验代码",
+                "x": 114,
+                "y": 447.390625,
+                "width": 195,
+                "height": 38
+              },
+              {
+                "label": "重新生成本题实验",
+                "x": 114,
+                "y": 493.390625,
+                "width": 195,
+                "height": 38
+              }
+            ]
+          },
+          "collisions": []
+        }
+      }
+    },
+    {
+      "label": "one real configured-model question: engine → real restricted child → private source → V3 rendered frame",
+      "passed": true,
+      "evidence": {
+        "ownerSessionId": "session-33d22c8d-ed2b-464b-8221-a558c882858e",
+        "childSessionId": "5a497264-50fb-40dc-92ba-a98cdefc999e",
+        "artifactId": "qcode_294c119acf360d9f934aced34abfc4f1",
+        "sourceSha256": "2b83558365767f505109e031840b357a65467c958d95c6ab8a2a61f7c6ace9dd"
+      }
+    }
+  ],
+  "evidence": {
+    "realModel": true,
+    "base": "http://127.0.0.1:3098",
+    "ref": {
+      "status": "ready",
+      "artifactId": "qcode_294c119acf360d9f934aced34abfc4f1",
+      "ownerSessionId": "session-33d22c8d-ed2b-464b-8221-a558c882858e",
+      "childSessionId": "5a497264-50fb-40dc-92ba-a98cdefc999e",
+      "sceneId": "question-agent-question-mw2be4hh-1",
+      "sceneRevision": 0,
+      "sceneSha256": "4b32d1e4f52972f2e062ed71446f824293881c2e7113b1a4838be07b7f12a7d4",
+      "experimentId": "projectile-oblique",
+      "sha256": "20c71770af3222c7f1ecc36a280222dfe645d23f63eae0eed88196ce84cba846",
+      "title": "抛体运动：实验教学中庭中的竖直上抛轨迹观测",
+      "rendererKind": "independent",
+      "createdAt": "2026-11-04T16:15:23.481Z"
+    },
+    "sourceSha256": "2b83558365767f505109e031840b357a65467c958d95c6ab8a2a61f7c6ace9dd",
+    "rendererKind": "independent",
+    "liveFrames": [
+      {
+        "name": "t0",
+        "clock": {
+          "time": 0,
+          "total": 4.081632653061225,
+          "running": false,
+          "rate": 1
+        },
+        "body": {
+          "id": "body-1",
+          "kind": "ball",
+          "at": {
+            "x": 0,
+            "y": 0
+          },
+          "size": 1.4106122448979599,
+          "live": true,
+          "label": "m"
+        },
+        "paint": {
+          "viewport": {
+            "width": 698,
+            "height": 518
+          },
+          "scrollWidth": 698,
+          "canvas": [
+            {
+              "id": "",
+              "width": 698,
+              "height": 518,
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 698,
+                "height": 518
+              },
+              "pixelHash": "fc595ad5",
+              "opaquePixels": 6500,
+              "distinctColors": 2621,
+              "bodyY": null,
+              "clockTime": null
+            }
+          ],
+          "svg": [],
+          "drawStats": {
+            "calls": {
+              "clearRect": 1,
+              "drawImage": 1,
+              "fillRect": 1,
+              "moveTo": 1,
+              "lineTo": 63,
+              "stroke": 5,
+              "ellipse": 1,
+              "fill": 6,
+              "arc": 2,
+              "fillText": 3
+            },
+            "lastArcs": [
+              {
+                "x": 348.99999999999994,
+                "y": 424.76,
+                "radius": 20,
+                "canvasId": ""
+              },
+              {
+                "x": 342.19999999999993,
+                "y": 416.76,
+                "radius": 5.6000000000000005,
+                "canvasId": ""
+              }
+            ],
+            "geometry": [
+              {
+                "method": "moveTo",
+                "coordinates": [
+                  349,
+                  404.36375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  384.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  365.51375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  347.06
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  329.25375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  312.095
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  295.58375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  279.72
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  264.50375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  249.935
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  236.01375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  222.74
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  210.11375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  198.135
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  186.80375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  176.12
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  166.08375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  156.695
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  147.95375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  139.86
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  132.41375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  125.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  119.46375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  113.96
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  109.10375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  104.895
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  101.33375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  98.42
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  96.15375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  94.535
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.56375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.24
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.56375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  94.535
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  96.15375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  98.42
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  101.33375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  104.895
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  109.10375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  113.96
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  119.46375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  125.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  132.41375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  139.86
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  147.95375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  156.695
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  166.08375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  176.12
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  186.80375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  198.135
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  210.11375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  222.74
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  236.01375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  249.935
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  264.50375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  279.72
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  295.58375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  312.095
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  329.25375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  347.06
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  365.51375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  384.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  404.36375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  424.76
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "ellipse",
+                "coordinates": [
+                  349,
+                  426.76,
+                  30,
+                  6.8,
+                  0,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  424.76,
+                  20,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  342.2,
+                  416.76,
+                  5.6,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "apex",
+        "clock": {
+          "time": 2.04081632653061,
+          "total": 4.081632653061225,
+          "running": false,
+          "rate": 1
+        },
+        "body": {
+          "id": "body-1",
+          "kind": "ball",
+          "at": {
+            "x": 2.4992791819333715e-15,
+            "y": 20.40816326530612
+          },
+          "size": 1.4106122448979599,
+          "live": true,
+          "label": "m"
+        },
+        "paint": {
+          "viewport": {
+            "width": 698,
+            "height": 518
+          },
+          "scrollWidth": 698,
+          "canvas": [
+            {
+              "id": "",
+              "width": 698,
+              "height": 518,
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 698,
+                "height": 518
+              },
+              "pixelHash": "c8812a51",
+              "opaquePixels": 6500,
+              "distinctColors": 2655,
+              "bodyY": null,
+              "clockTime": null
+            }
+          ],
+          "svg": [],
+          "drawStats": {
+            "calls": {
+              "clearRect": 2,
+              "drawImage": 2,
+              "fillRect": 2,
+              "moveTo": 3,
+              "lineTo": 126,
+              "stroke": 11,
+              "ellipse": 2,
+              "fill": 18,
+              "arc": 10,
+              "fillText": 6
+            },
+            "lastArcs": [
+              {
+                "x": 348.99999999999994,
+                "y": 424.76,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 348.99999999999994,
+                "y": 312.095,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 222.7400000000001,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 156.6950000000001,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 113.96000000000015,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 94.5350000000002,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 93.24000000000024,
+                "radius": 20,
+                "canvasId": ""
+              },
+              {
+                "x": 342.2,
+                "y": 85.24000000000024,
+                "radius": 5.6000000000000005,
+                "canvasId": ""
+              }
+            ],
+            "geometry": [
+              {
+                "method": "moveTo",
+                "coordinates": [
+                  349,
+                  424.76
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  404.36375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  384.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  365.51375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  347.06
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  329.25375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  312.095
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  295.58375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  279.72
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  264.50375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  249.935
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  236.01375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  222.74
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  210.11375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  198.135
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  186.80375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  176.12
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  166.08375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  156.695
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  147.95375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  139.86
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  132.41375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  125.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  119.46375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  113.96
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  109.10375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  104.895
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  101.33375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  98.42
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  96.15375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  94.535
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.56375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  424.76,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  312.095,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  222.74,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  156.695,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  113.96,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  94.535,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "moveTo",
+                "coordinates": [
+                  349,
+                  93.24
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.56375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  94.535
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  96.15375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  98.42
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  101.33375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  104.895
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  109.10375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  113.96
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  119.46375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  125.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  132.41375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  139.86
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  147.95375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  156.695
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  166.08375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  176.12
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  186.80375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  198.135
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  210.11375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  222.74
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  236.01375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  249.935
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  264.50375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  279.72
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  295.58375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  312.095
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  329.25375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  347.06
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  365.51375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  384.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  404.36375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  424.76
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "ellipse",
+                "coordinates": [
+                  349,
+                  426.76,
+                  40.03484321,
+                  6.8,
+                  0,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  93.24,
+                  20,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  342.2,
+                  85.24,
+                  5.6,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "impact",
+        "clock": {
+          "time": 4.081632653061225,
+          "total": 4.081632653061225,
+          "running": false,
+          "rate": 1
+        },
+        "body": {
+          "id": "body-1",
+          "kind": "ball",
+          "at": {
+            "x": 4.9985583638667485e-15,
+            "y": -1.4210854715202004e-14
+          },
+          "size": 1.4106122448979599,
+          "live": true,
+          "label": "m"
+        },
+        "paint": {
+          "viewport": {
+            "width": 698,
+            "height": 518
+          },
+          "scrollWidth": 698,
+          "canvas": [
+            {
+              "id": "",
+              "width": 698,
+              "height": 518,
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 698,
+                "height": 518
+              },
+              "pixelHash": "18d412aa",
+              "opaquePixels": 6500,
+              "distinctColors": 2644,
+              "bodyY": null,
+              "clockTime": null
+            }
+          ],
+          "svg": [],
+          "drawStats": {
+            "calls": {
+              "clearRect": 3,
+              "drawImage": 3,
+              "fillRect": 3,
+              "moveTo": 4,
+              "lineTo": 190,
+              "stroke": 16,
+              "ellipse": 3,
+              "fill": 35,
+              "arc": 23,
+              "fillText": 9
+            },
+            "lastArcs": [
+              {
+                "x": 348.99999999999994,
+                "y": 424.76,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 348.99999999999994,
+                "y": 312.095,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 222.7400000000001,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 156.6950000000001,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 113.96000000000015,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 94.5350000000002,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 98.42000000000019,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 125.61500000000018,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 176.1200000000002,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349,
+                "y": 249.93500000000012,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349.00000000000006,
+                "y": 347.0600000000002,
+                "radius": 1.7,
+                "canvasId": ""
+              },
+              {
+                "x": 349.00000000000006,
+                "y": 424.7600000000002,
+                "radius": 20,
+                "canvasId": ""
+              },
+              {
+                "x": 342.20000000000005,
+                "y": 416.7600000000002,
+                "radius": 5.6000000000000005,
+                "canvasId": ""
+              }
+            ],
+            "geometry": [
+              {
+                "method": "moveTo",
+                "coordinates": [
+                  349,
+                  424.76
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  404.36375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  384.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  365.51375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  347.06
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  329.25375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  312.095
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  295.58375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  279.72
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  264.50375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  249.935
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  236.01375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  222.74
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  210.11375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  198.135
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  186.80375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  176.12
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  166.08375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  156.695
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  147.95375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  139.86
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  132.41375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  125.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  119.46375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  113.96
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  109.10375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  104.895
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  101.33375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  98.42
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  96.15375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  94.535
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.56375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.24
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  93.56375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  94.535
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  96.15375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  98.42
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  101.33375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  104.895
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  109.10375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  113.96
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  119.46375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  125.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  132.41375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  139.86
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  147.95375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  156.695
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  166.08375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  176.12
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  186.80375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  198.135
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  210.11375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  222.74
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  236.01375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  249.935
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  264.50375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  279.72
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  295.58375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  312.095
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  329.25375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  347.06
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  365.51375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  384.615
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  404.36375
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "lineTo",
+                "coordinates": [
+                  349,
+                  424.76
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  424.76,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  312.095,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  222.74,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  156.695,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  113.96,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  94.535,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  98.42,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  125.615,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  176.12,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  249.935,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  347.06,
+                  1.7,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "ellipse",
+                "coordinates": [
+                  349,
+                  426.76,
+                  30,
+                  6.8,
+                  0,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  349,
+                  424.76,
+                  20,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              },
+              {
+                "method": "arc",
+                "coordinates": [
+                  342.2,
+                  416.76,
+                  5.6,
+                  0,
+                  6.28318531
+                ],
+                "matrix": [
+                  1,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0
+                ],
+                "canvasId": ""
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "exploration": {
+      "changedApex": {
+        "experimentId": "projectile-oblique",
+        "revision": 1,
+        "source": "platform-engine",
+        "domain": "mechanics",
+        "title": "抛体运动",
+        "view": {
+          "domain": "mechanics",
+          "extent": {
+            "width": 87.07482993197279,
+            "height": 48.9795918367347
+          },
+          "origin": {
+            "x": -43.03741496598639,
+            "y": -8.545918367346943
+          },
+          "grid": {
+            "minor": 4,
+            "major": 20
+          },
+          "axes": {
+            "x": "x / m",
+            "y": "y / m"
+          },
+          "tickStep": 20,
+          "tickLabelAvoid": {
+            "y": [
+              -4,
+              12
+            ]
+          },
+          "bodies": [
+            {
+              "id": "body-1",
+              "kind": "ball",
+              "at": {
+                "x": 3.905123721770904e-15,
+                "y": 31.887755102040817
+              },
+              "size": 2.2040816326530615,
+              "live": true,
+              "label": "m"
+            }
+          ],
+          "particles": [],
+          "vectors": [
+            {
+              "id": "velocity",
+              "role": "velocity",
+              "observable": "velocity",
+              "from": {
+                "x": 3.905123721770904e-15,
+                "y": 31.887755102040817
+              },
+              "to": {
+                "x": 0.2862831504920561,
+                "y": 22.586037142806283
+              },
+              "symbol": "v"
+            },
+            {
+              "id": "acceleration",
+              "role": "acceleration",
+              "observable": "acceleration",
+              "from": {
+                "x": 3.905123721770904e-15,
+                "y": 31.887755102040817
+              },
+              "to": {
+                "x": 3.905123721770904e-15,
+                "y": 23.512244897959185
+              },
+              "symbol": "a"
+            },
+            {
+              "id": "force-gravity",
+              "role": "gravity",
+              "observable": "forces",
+              "from": {
+                "x": 3.905123721770904e-15,
+                "y": 31.887755102040817
+              },
+              "to": {
+                "x": 3.905123721770904e-15,
+                "y": 22.581632653061224
+              },
+              "symbol": "mg"
+            }
+          ],
+          "trajectories": [
+            {
+              "id": "trajectory",
+              "kind": "history",
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "x": 1.2203511630534051e-16,
+                  "y": 1.9618443080357144
+                },
+                {
+                  "x": 2.4407023261068103e-16,
+                  "y": 3.861407844387755
+                },
+                {
+                  "x": 3.6610534891602154e-16,
+                  "y": 5.698690609056122
+                },
+                {
+                  "x": 4.881404652213621e-16,
+                  "y": 7.473692602040816
+                },
+                {
+                  "x": 6.101755815267025e-16,
+                  "y": 9.186413823341836
+                },
+                {
+                  "x": 7.322106978320431e-16,
+                  "y": 10.836854272959183
+                },
+                {
+                  "x": 8.542458141373836e-16,
+                  "y": 12.425013950892858
+                },
+                {
+                  "x": 9.762809304427241e-16,
+                  "y": 13.950892857142858
+                },
+                {
+                  "x": 1.0983160467480647e-15,
+                  "y": 15.414490991709183
+                },
+                {
+                  "x": 1.220351163053405e-15,
+                  "y": 16.815808354591834
+                },
+                {
+                  "x": 1.3423862793587458e-15,
+                  "y": 18.154844945790817
+                },
+                {
+                  "x": 1.4644213956640862e-15,
+                  "y": 19.431600765306122
+                },
+                {
+                  "x": 1.5864565119694267e-15,
+                  "y": 20.646075813137756
+                },
+                {
+                  "x": 1.7084916282747673e-15,
+                  "y": 21.798270089285715
+                },
+                {
+                  "x": 1.830526744580108e-15,
+                  "y": 22.888183593749996
+                },
+                {
+                  "x": 1.9525618608854482e-15,
+                  "y": 23.915816326530614
+                },
+                {
+                  "x": 2.074596977190789e-15,
+                  "y": 24.88116828762755
+                },
+                {
+                  "x": 2.1966320934961294e-15,
+                  "y": 25.784239477040817
+                },
+                {
+                  "x": 2.31866720980147e-15,
+                  "y": 26.625029894770407
+                },
+                {
+                  "x": 2.44070232610681e-15,
+                  "y": 27.403539540816325
+                },
+                {
+                  "x": 2.562737442412151e-15,
+                  "y": 28.11976841517857
+                },
+                {
+                  "x": 2.6847725587174916e-15,
+                  "y": 28.77371651785714
+                },
+                {
+                  "x": 2.806807675022832e-15,
+                  "y": 29.365383848852034
+                },
+                {
+                  "x": 2.9288427913281723e-15,
+                  "y": 29.89477040816326
+                },
+                {
+                  "x": 3.050877907633513e-15,
+                  "y": 30.361876195790817
+                },
+                {
+                  "x": 3.1729130239388535e-15,
+                  "y": 30.76670121173469
+                },
+                {
+                  "x": 3.2949481402441942e-15,
+                  "y": 31.109245455994895
+                },
+                {
+                  "x": 3.4169832565495346e-15,
+                  "y": 31.389508928571427
+                },
+                {
+                  "x": 3.5390183728548754e-15,
+                  "y": 31.607491629464285
+                },
+                {
+                  "x": 3.661053489160216e-15,
+                  "y": 31.763193558673464
+                },
+                {
+                  "x": 3.783088605465556e-15,
+                  "y": 31.85661471619898
+                },
+                {
+                  "x": 3.9051237217708965e-15,
+                  "y": 31.887755102040817
+                }
+              ]
+            },
+            {
+              "id": "trajectory",
+              "kind": "predicted",
+              "points": [
+                {
+                  "x": 4.027158838076237e-15,
+                  "y": 31.856614716198976
+                },
+                {
+                  "x": 4.149193954381578e-15,
+                  "y": 31.763193558673464
+                },
+                {
+                  "x": 4.271229070686918e-15,
+                  "y": 31.607491629464285
+                },
+                {
+                  "x": 4.393264186992259e-15,
+                  "y": 31.38950892857143
+                },
+                {
+                  "x": 4.5152993032975995e-15,
+                  "y": 31.109245455994895
+                },
+                {
+                  "x": 4.63733441960294e-15,
+                  "y": 30.76670121173469
+                },
+                {
+                  "x": 4.75936953590828e-15,
+                  "y": 30.361876195790806
+                },
+                {
+                  "x": 4.88140465221362e-15,
+                  "y": 29.89477040816326
+                },
+                {
+                  "x": 5.003439768518961e-15,
+                  "y": 29.365383848852048
+                },
+                {
+                  "x": 5.125474884824302e-15,
+                  "y": 28.77371651785714
+                },
+                {
+                  "x": 5.2475100011296425e-15,
+                  "y": 28.11976841517857
+                },
+                {
+                  "x": 5.369545117434983e-15,
+                  "y": 27.40353954081632
+                },
+                {
+                  "x": 5.491580233740324e-15,
+                  "y": 26.625029894770407
+                },
+                {
+                  "x": 5.613615350045664e-15,
+                  "y": 25.7842394770408
+                },
+                {
+                  "x": 5.735650466351005e-15,
+                  "y": 24.881168287627546
+                },
+                {
+                  "x": 5.857685582656345e-15,
+                  "y": 23.915816326530603
+                },
+                {
+                  "x": 5.9797206989616854e-15,
+                  "y": 22.88818359375
+                },
+                {
+                  "x": 6.101755815267026e-15,
+                  "y": 21.798270089285708
+                },
+                {
+                  "x": 6.223790931572367e-15,
+                  "y": 20.64607581313774
+                },
+                {
+                  "x": 6.345826047877707e-15,
+                  "y": 19.431600765306115
+                },
+                {
+                  "x": 6.4678611641830485e-15,
+                  "y": 18.1548449457908
+                },
+                {
+                  "x": 6.5898962804883885e-15,
+                  "y": 16.815808354591823
+                },
+                {
+                  "x": 6.7119313967937284e-15,
+                  "y": 15.414490991709187
+                },
+                {
+                  "x": 6.833966513099069e-15,
+                  "y": 13.950892857142847
+                },
+                {
+                  "x": 6.956001629404409e-15,
+                  "y": 12.425013950892861
+                },
+                {
+                  "x": 7.078036745709751e-15,
+                  "y": 10.836854272959172
+                },
+                {
+                  "x": 7.200071862015091e-15,
+                  "y": 9.186413823341837
+                },
+                {
+                  "x": 7.322106978320431e-15,
+                  "y": 7.473692602040813
+                },
+                {
+                  "x": 7.444142094625771e-15,
+                  "y": 5.698690609056115
+                },
+                {
+                  "x": 7.566177210931111e-15,
+                  "y": 3.861407844387756
+                },
+                {
+                  "x": 7.688212327236453e-15,
+                  "y": 1.9618443080357082
+                },
+                {
+                  "x": 7.810247443541793e-15,
+                  "y": 0
+                }
+              ]
+            }
+          ],
+          "keyPoints": [
+            {
+              "id": "launch",
+              "kind": "launch",
+              "at": {
+                "x": 0,
+                "y": 0
+              },
+              "label": "起点",
+              "readout": [
+                {
+                  "label": "t",
+                  "value": "0 s"
+                },
+                {
+                  "label": "x",
+                  "value": "0 m"
+                },
+                {
+                  "label": "y",
+                  "value": "0 m"
+                }
+              ]
+            },
+            {
+              "id": "apex",
+              "kind": "apex",
+              "at": {
+                "x": 3.9051237217708965e-15,
+                "y": 31.887755102040817
+              },
+              "label": "最高点",
+              "readout": [
+                {
+                  "label": "x",
+                  "value": "3.905e-15 m"
+                },
+                {
+                  "label": "y",
+                  "value": "31.89 m"
+                },
+                {
+                  "label": "H",
+                  "value": "31.89 m"
+                }
+              ]
+            },
+            {
+              "id": "impact",
+              "kind": "impact",
+              "at": {
+                "x": 7.810247443541793e-15,
+                "y": 0
+              },
+              "label": "落地点",
+              "readout": [
+                {
+                  "label": "t",
+                  "value": "5.102 s"
+                },
+                {
+                  "label": "x",
+                  "value": "7.810e-15 m"
+                },
+                {
+                  "label": "y",
+                  "value": "0 m"
+                },
+                {
+                  "label": "R",
+                  "value": "7.810e-15 m"
+                }
+              ]
+            }
+          ],
+          "angles": [
+            {
+              "id": "launch-angle",
+              "at": {
+                "x": 0,
+                "y": 0
+              },
+              "radius": 5.1183673469387765,
+              "startAngle": 0,
+              "endAngle": 90,
+              "symbol": "\\theta",
+              "value": "90°"
+            }
+          ],
+          "dimensions": [
+            {
+              "id": "range",
+              "from": {
+                "x": 0,
+                "y": -2.938775510204082
+              },
+              "to": {
+                "x": 7.810247443541793e-15,
+                "y": -2.938775510204082
+              },
+              "label": "R = 7.810e-15 m",
+              "side": "left"
+            }
+          ],
+          "labels": [],
+          "guides": [],
+          "motionMarks": [
+            {
+              "id": "mark-0",
+              "at": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "mark-1",
+              "at": {
+                "x": 9.762809304427241e-16,
+                "y": 13.950892857142858
+              }
+            },
+            {
+              "id": "mark-2",
+              "at": {
+                "x": 1.9525618608854482e-15,
+                "y": 23.915816326530614
+              },
+              "label": "t=1.276"
+            },
+            {
+              "id": "mark-3",
+              "at": {
+                "x": 2.9288427913281723e-15,
+                "y": 29.89477040816326
+              }
+            },
+            {
+              "id": "mark-4",
+              "at": {
+                "x": 3.9051237217708965e-15,
+                "y": 31.887755102040817
+              },
+              "label": "t=2.551"
+            },
+            {
+              "id": "mark-5",
+              "at": {
+                "x": 4.88140465221362e-15,
+                "y": 29.89477040816326
+              }
+            },
+            {
+              "id": "mark-6",
+              "at": {
+                "x": 5.857685582656345e-15,
+                "y": 23.915816326530603
+              },
+              "label": "t=3.827"
+            },
+            {
+              "id": "mark-7",
+              "at": {
+                "x": 6.833966513099069e-15,
+                "y": 13.950892857142847
+              }
+            },
+            {
+              "id": "mark-8",
+              "at": {
+                "x": 7.810247443541793e-15,
+                "y": 0
+              }
+            }
+          ],
+          "ground": {
+            "y": 0,
+            "from": -43.03741496598639,
+            "to": 44.03741496598639,
+            "label": "地面"
+          },
+          "overlay": {
+            "readout": [
+              "抛体运动",
+              "t = 2.551 s",
+              "v = 4.976e-14 m/s",
+              "a = 9.8 m/s²"
+            ],
+            "scale": {
+              "label": "20 m",
+              "length": 20
+            }
+          },
+          "visible": {
+            "velocity": true,
+            "acceleration": true,
+            "trajectory": true,
+            "keyPoints": true,
+            "forces": true,
+            "netForce": true,
+            "components": false,
+            "decomposition": false
+          }
+        },
+        "inspector": [
+          {
+            "id": "initial",
+            "title": "初始条件",
+            "parameters": [
+              {
+                "id": "height",
+                "label": "初始高度",
+                "symbol": "h",
+                "unit": "m",
+                "value": 0,
+                "min": 0,
+                "step": 1,
+                "highlights": "launch-height"
+              },
+              {
+                "id": "speed",
+                "label": "初速度",
+                "symbol": "v_0",
+                "unit": "m/s",
+                "value": 25,
+                "min": 0,
+                "step": 1,
+                "highlights": "velocity"
+              },
+              {
+                "id": "angle",
+                "label": "抛射角",
+                "symbol": "\\theta",
+                "unit": "°",
+                "value": 90,
+                "min": 0,
+                "max": 90,
+                "step": 1,
+                "highlights": "launch-angle"
+              },
+              {
+                "id": "gravity",
+                "label": "重力加速度",
+                "symbol": "g",
+                "unit": "m/s²",
+                "value": 9.8,
+                "min": 0.1,
+                "step": 0.1,
+                "highlights": "force-gravity"
+              }
+            ]
+          },
+          {
+            "id": "derived",
+            "title": "派生量",
+            "derived": [
+              {
+                "id": "flight",
+                "label": "飞行时间",
+                "symbol": "t",
+                "value": "5.102",
+                "unit": "s"
+              },
+              {
+                "id": "range",
+                "label": "水平射程",
+                "symbol": "R",
+                "value": "7.810e-15",
+                "unit": "m"
+              },
+              {
+                "id": "maxh",
+                "label": "最大高度",
+                "symbol": "H",
+                "value": "31.89",
+                "unit": "m"
+              },
+              {
+                "id": "impact",
+                "label": "落地速度",
+                "symbol": "v",
+                "value": "25",
+                "unit": "m/s"
+              }
+            ]
+          }
+        ],
+        "clock": {
+          "time": 2.55102040816327,
+          "total": 5.1020408163265305,
+          "running": false,
+          "rate": 1
+        },
+        "table": {
+          "columns": [
+            "Step",
+            "t / s",
+            "x / m",
+            "y / m",
+            "vₓ",
+            "v_y"
+          ],
+          "rows": [
+            {
+              "step": 0,
+              "values": [
+                "0",
+                "0",
+                "0",
+                "0",
+                "1.531e-15",
+                "25"
+              ]
+            },
+            {
+              "step": 1,
+              "values": [
+                "8",
+                "0.6378",
+                "9.763e-16",
+                "13.95",
+                "1.531e-15",
+                "18.75"
+              ]
+            },
+            {
+              "step": 2,
+              "values": [
+                "16",
+                "1.276",
+                "1.953e-15",
+                "23.92",
+                "1.531e-15",
+                "12.5"
+              ]
+            },
+            {
+              "step": 3,
+              "values": [
+                "24",
+                "1.913",
+                "2.929e-15",
+                "29.89",
+                "1.531e-15",
+                "6.25"
+              ]
+            },
+            {
+              "step": 4,
+              "values": [
+                "32",
+                "2.551",
+                "3.905e-15",
+                "31.89",
+                "1.531e-15",
+                "0"
+              ]
+            },
+            {
+              "step": 5,
+              "values": [
+                "40",
+                "3.189",
+                "4.881e-15",
+                "29.89",
+                "1.531e-15",
+                "-6.25"
+              ]
+            },
+            {
+              "step": 6,
+              "values": [
+                "48",
+                "3.827",
+                "5.858e-15",
+                "23.92",
+                "1.531e-15",
+                "-12.5"
+              ]
+            },
+            {
+              "step": 7,
+              "values": [
+                "56",
+                "4.464",
+                "6.834e-15",
+                "13.95",
+                "1.531e-15",
+                "-18.75"
+              ]
+            },
+            {
+              "step": 8,
+              "values": [
+                "64",
+                "5.102",
+                "7.810e-15",
+                "0",
+                "1.531e-15",
+                "-25"
+              ]
+            }
+          ]
+        },
+        "charts": [
+          {
+            "id": "x-t",
+            "title": "x - t",
+            "xLabel": "t / s",
+            "yLabel": "x / m",
+            "role": "trajectory",
+            "points": [
+              {
+                "t": 0,
+                "value": 0
+              },
+              {
+                "t": 0.07971938775510204,
+                "value": 1.2203511630534051e-16
+              },
+              {
+                "t": 0.15943877551020408,
+                "value": 2.4407023261068103e-16
+              },
+              {
+                "t": 0.23915816326530612,
+                "value": 3.6610534891602154e-16
+              },
+              {
+                "t": 0.31887755102040816,
+                "value": 4.881404652213621e-16
+              },
+              {
+                "t": 0.39859693877551017,
+                "value": 6.101755815267025e-16
+              },
+              {
+                "t": 0.47831632653061223,
+                "value": 7.322106978320431e-16
+              },
+              {
+                "t": 0.5580357142857143,
+                "value": 8.542458141373836e-16
+              },
+              {
+                "t": 0.6377551020408163,
+                "value": 9.762809304427241e-16
+              },
+              {
+                "t": 0.7174744897959183,
+                "value": 1.0983160467480647e-15
+              },
+              {
+                "t": 0.7971938775510203,
+                "value": 1.220351163053405e-15
+              },
+              {
+                "t": 0.8769132653061225,
+                "value": 1.3423862793587458e-15
+              },
+              {
+                "t": 0.9566326530612245,
+                "value": 1.4644213956640862e-15
+              },
+              {
+                "t": 1.0363520408163265,
+                "value": 1.5864565119694267e-15
+              },
+              {
+                "t": 1.1160714285714286,
+                "value": 1.7084916282747673e-15
+              },
+              {
+                "t": 1.1957908163265305,
+                "value": 1.830526744580108e-15
+              },
+              {
+                "t": 1.2755102040816326,
+                "value": 1.9525618608854482e-15
+              },
+              {
+                "t": 1.3552295918367347,
+                "value": 2.074596977190789e-15
+              },
+              {
+                "t": 1.4349489795918366,
+                "value": 2.1966320934961294e-15
+              },
+              {
+                "t": 1.5146683673469388,
+                "value": 2.31866720980147e-15
+              },
+              {
+                "t": 1.5943877551020407,
+                "value": 2.44070232610681e-15
+              },
+              {
+                "t": 1.6741071428571428,
+                "value": 2.562737442412151e-15
+              },
+              {
+                "t": 1.753826530612245,
+                "value": 2.6847725587174916e-15
+              },
+              {
+                "t": 1.8335459183673468,
+                "value": 2.806807675022832e-15
+              },
+              {
+                "t": 1.913265306122449,
+                "value": 2.9288427913281723e-15
+              },
+              {
+                "t": 1.992984693877551,
+                "value": 3.050877907633513e-15
+              },
+              {
+                "t": 2.072704081632653,
+                "value": 3.1729130239388535e-15
+              },
+              {
+                "t": 2.152423469387755,
+                "value": 3.2949481402441942e-15
+              },
+              {
+                "t": 2.232142857142857,
+                "value": 3.4169832565495346e-15
+              },
+              {
+                "t": 2.3118622448979593,
+                "value": 3.5390183728548754e-15
+              },
+              {
+                "t": 2.391581632653061,
+                "value": 3.661053489160216e-15
+              },
+              {
+                "t": 2.471301020408163,
+                "value": 3.783088605465556e-15
+              },
+              {
+                "t": 2.5510204081632653,
+                "value": 3.9051237217708965e-15
+              },
+              {
+                "t": 2.6307397959183674,
+                "value": 4.027158838076237e-15
+              },
+              {
+                "t": 2.7104591836734695,
+                "value": 4.149193954381578e-15
+              },
+              {
+                "t": 2.790178571428571,
+                "value": 4.271229070686918e-15
+              },
+              {
+                "t": 2.8698979591836733,
+                "value": 4.393264186992259e-15
+              },
+              {
+                "t": 2.9496173469387754,
+                "value": 4.5152993032975995e-15
+              },
+              {
+                "t": 3.0293367346938775,
+                "value": 4.63733441960294e-15
+              },
+              {
+                "t": 3.1090561224489797,
+                "value": 4.75936953590828e-15
+              },
+              {
+                "t": 3.1887755102040813,
+                "value": 4.88140465221362e-15
+              },
+              {
+                "t": 3.2684948979591835,
+                "value": 5.003439768518961e-15
+              },
+              {
+                "t": 3.3482142857142856,
+                "value": 5.125474884824302e-15
+              },
+              {
+                "t": 3.4279336734693877,
+                "value": 5.2475100011296425e-15
+              },
+              {
+                "t": 3.50765306122449,
+                "value": 5.369545117434983e-15
+              },
+              {
+                "t": 3.587372448979592,
+                "value": 5.491580233740324e-15
+              },
+              {
+                "t": 3.6670918367346936,
+                "value": 5.613615350045664e-15
+              },
+              {
+                "t": 3.7468112244897958,
+                "value": 5.735650466351005e-15
+              },
+              {
+                "t": 3.826530612244898,
+                "value": 5.857685582656345e-15
+              },
+              {
+                "t": 3.90625,
+                "value": 5.9797206989616854e-15
+              },
+              {
+                "t": 3.985969387755102,
+                "value": 6.101755815267026e-15
+              },
+              {
+                "t": 4.065688775510204,
+                "value": 6.223790931572367e-15
+              },
+              {
+                "t": 4.145408163265306,
+                "value": 6.345826047877707e-15
+              },
+              {
+                "t": 4.2251275510204085,
+                "value": 6.4678611641830485e-15
+              },
+              {
+                "t": 4.30484693877551,
+                "value": 6.5898962804883885e-15
+              },
+              {
+                "t": 4.384566326530612,
+                "value": 6.7119313967937284e-15
+              },
+              {
+                "t": 4.464285714285714,
+                "value": 6.833966513099069e-15
+              },
+              {
+                "t": 4.544005102040816,
+                "value": 6.956001629404409e-15
+              },
+              {
+                "t": 4.623724489795919,
+                "value": 7.078036745709751e-15
+              },
+              {
+                "t": 4.70344387755102,
+                "value": 7.200071862015091e-15
+              },
+              {
+                "t": 4.783163265306122,
+                "value": 7.322106978320431e-15
+              },
+              {
+                "t": 4.862882653061225,
+                "value": 7.444142094625771e-15
+              },
+              {
+                "t": 4.942602040816326,
+                "value": 7.566177210931111e-15
+              },
+              {
+                "t": 5.022321428571429,
+                "value": 7.688212327236453e-15
+              },
+              {
+                "t": 5.1020408163265305,
+                "value": 7.810247443541793e-15
+              }
+            ]
+          },
+          {
+            "id": "y-t",
+            "title": "y - t",
+            "xLabel": "t / s",
+            "yLabel": "y / m",
+            "role": "trajectory",
+            "points": [
+              {
+                "t": 0,
+                "value": 0
+              },
+              {
+                "t": 0.07971938775510204,
+                "value": 1.9618443080357144
+              },
+              {
+                "t": 0.15943877551020408,
+                "value": 3.861407844387755
+              },
+              {
+                "t": 0.23915816326530612,
+                "value": 5.698690609056122
+              },
+              {
+                "t": 0.31887755102040816,
+                "value": 7.473692602040816
+              },
+              {
+                "t": 0.39859693877551017,
+                "value": 9.186413823341836
+              },
+              {
+                "t": 0.47831632653061223,
+                "value": 10.836854272959183
+              },
+              {
+                "t": 0.5580357142857143,
+                "value": 12.425013950892858
+              },
+              {
+                "t": 0.6377551020408163,
+                "value": 13.950892857142858
+              },
+              {
+                "t": 0.7174744897959183,
+                "value": 15.414490991709183
+              },
+              {
+                "t": 0.7971938775510203,
+                "value": 16.815808354591834
+              },
+              {
+                "t": 0.8769132653061225,
+                "value": 18.154844945790817
+              },
+              {
+                "t": 0.9566326530612245,
+                "value": 19.431600765306122
+              },
+              {
+                "t": 1.0363520408163265,
+                "value": 20.646075813137756
+              },
+              {
+                "t": 1.1160714285714286,
+                "value": 21.798270089285715
+              },
+              {
+                "t": 1.1957908163265305,
+                "value": 22.888183593749996
+              },
+              {
+                "t": 1.2755102040816326,
+                "value": 23.915816326530614
+              },
+              {
+                "t": 1.3552295918367347,
+                "value": 24.88116828762755
+              },
+              {
+                "t": 1.4349489795918366,
+                "value": 25.784239477040817
+              },
+              {
+                "t": 1.5146683673469388,
+                "value": 26.625029894770407
+              },
+              {
+                "t": 1.5943877551020407,
+                "value": 27.403539540816325
+              },
+              {
+                "t": 1.6741071428571428,
+                "value": 28.11976841517857
+              },
+              {
+                "t": 1.753826530612245,
+                "value": 28.77371651785714
+              },
+              {
+                "t": 1.8335459183673468,
+                "value": 29.365383848852034
+              },
+              {
+                "t": 1.913265306122449,
+                "value": 29.89477040816326
+              },
+              {
+                "t": 1.992984693877551,
+                "value": 30.361876195790817
+              },
+              {
+                "t": 2.072704081632653,
+                "value": 30.76670121173469
+              },
+              {
+                "t": 2.152423469387755,
+                "value": 31.109245455994895
+              },
+              {
+                "t": 2.232142857142857,
+                "value": 31.389508928571427
+              },
+              {
+                "t": 2.3118622448979593,
+                "value": 31.607491629464285
+              },
+              {
+                "t": 2.391581632653061,
+                "value": 31.763193558673464
+              },
+              {
+                "t": 2.471301020408163,
+                "value": 31.85661471619898
+              },
+              {
+                "t": 2.5510204081632653,
+                "value": 31.887755102040817
+              },
+              {
+                "t": 2.6307397959183674,
+                "value": 31.856614716198976
+              },
+              {
+                "t": 2.7104591836734695,
+                "value": 31.763193558673464
+              },
+              {
+                "t": 2.790178571428571,
+                "value": 31.607491629464285
+              },
+              {
+                "t": 2.8698979591836733,
+                "value": 31.38950892857143
+              },
+              {
+                "t": 2.9496173469387754,
+                "value": 31.109245455994895
+              },
+              {
+                "t": 3.0293367346938775,
+                "value": 30.76670121173469
+              },
+              {
+                "t": 3.1090561224489797,
+                "value": 30.361876195790806
+              },
+              {
+                "t": 3.1887755102040813,
+                "value": 29.89477040816326
+              },
+              {
+                "t": 3.2684948979591835,
+                "value": 29.365383848852048
+              },
+              {
+                "t": 3.3482142857142856,
+                "value": 28.77371651785714
+              },
+              {
+                "t": 3.4279336734693877,
+                "value": 28.11976841517857
+              },
+              {
+                "t": 3.50765306122449,
+                "value": 27.40353954081632
+              },
+              {
+                "t": 3.587372448979592,
+                "value": 26.625029894770407
+              },
+              {
+                "t": 3.6670918367346936,
+                "value": 25.7842394770408
+              },
+              {
+                "t": 3.7468112244897958,
+                "value": 24.881168287627546
+              },
+              {
+                "t": 3.826530612244898,
+                "value": 23.915816326530603
+              },
+              {
+                "t": 3.90625,
+                "value": 22.88818359375
+              },
+              {
+                "t": 3.985969387755102,
+                "value": 21.798270089285708
+              },
+              {
+                "t": 4.065688775510204,
+                "value": 20.64607581313774
+              },
+              {
+                "t": 4.145408163265306,
+                "value": 19.431600765306115
+              },
+              {
+                "t": 4.2251275510204085,
+                "value": 18.1548449457908
+              },
+              {
+                "t": 4.30484693877551,
+                "value": 16.815808354591823
+              },
+              {
+                "t": 4.384566326530612,
+                "value": 15.414490991709187
+              },
+              {
+                "t": 4.464285714285714,
+                "value": 13.950892857142847
+              },
+              {
+                "t": 4.544005102040816,
+                "value": 12.425013950892861
+              },
+              {
+                "t": 4.623724489795919,
+                "value": 10.836854272959172
+              },
+              {
+                "t": 4.70344387755102,
+                "value": 9.186413823341837
+              },
+              {
+                "t": 4.783163265306122,
+                "value": 7.473692602040813
+              },
+              {
+                "t": 4.862882653061225,
+                "value": 5.698690609056115
+              },
+              {
+                "t": 4.942602040816326,
+                "value": 3.861407844387756
+              },
+              {
+                "t": 5.022321428571429,
+                "value": 1.9618443080357082
+              },
+              {
+                "t": 5.1020408163265305,
+                "value": 0
+              }
+            ]
+          },
+          {
+            "id": "vx-t",
+            "title": "v_x - t",
+            "xLabel": "t / s",
+            "yLabel": "v_x / (m/s)",
+            "role": "velocity",
+            "points": [
+              {
+                "t": 0,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.07971938775510204,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.15943877551020408,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.23915816326530612,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.31887755102040816,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.39859693877551017,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.47831632653061223,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.5580357142857143,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.6377551020408163,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.7174744897959183,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.7971938775510203,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.8769132653061225,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 0.9566326530612245,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.0363520408163265,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.1160714285714286,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.1957908163265305,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.2755102040816326,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.3552295918367347,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.4349489795918366,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.5146683673469388,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.5943877551020407,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.6741071428571428,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.753826530612245,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.8335459183673468,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.913265306122449,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 1.992984693877551,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.072704081632653,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.152423469387755,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.232142857142857,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.3118622448979593,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.391581632653061,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.471301020408163,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.5510204081632653,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.6307397959183674,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.7104591836734695,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.790178571428571,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.8698979591836733,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 2.9496173469387754,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.0293367346938775,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.1090561224489797,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.1887755102040813,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.2684948979591835,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.3482142857142856,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.4279336734693877,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.50765306122449,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.587372448979592,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.6670918367346936,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.7468112244897958,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.826530612244898,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.90625,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 3.985969387755102,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.065688775510204,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.145408163265306,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.2251275510204085,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.30484693877551,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.384566326530612,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.464285714285714,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.544005102040816,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.623724489795919,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.70344387755102,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.783163265306122,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.862882653061225,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 4.942602040816326,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 5.022321428571429,
+                "value": 1.5308084989341915e-15
+              },
+              {
+                "t": 5.1020408163265305,
+                "value": 1.5308084989341915e-15
+              }
+            ]
+          },
+          {
+            "id": "vy-t",
+            "title": "v_y - t",
+            "xLabel": "t / s",
+            "yLabel": "v_y / (m/s)",
+            "role": "velocity",
+            "points": [
+              {
+                "t": 0,
+                "value": 25
+              },
+              {
+                "t": 0.07971938775510204,
+                "value": 24.21875
+              },
+              {
+                "t": 0.15943877551020408,
+                "value": 23.4375
+              },
+              {
+                "t": 0.23915816326530612,
+                "value": 22.65625
+              },
+              {
+                "t": 0.31887755102040816,
+                "value": 21.875
+              },
+              {
+                "t": 0.39859693877551017,
+                "value": 21.09375
+              },
+              {
+                "t": 0.47831632653061223,
+                "value": 20.3125
+              },
+              {
+                "t": 0.5580357142857143,
+                "value": 19.53125
+              },
+              {
+                "t": 0.6377551020408163,
+                "value": 18.75
+              },
+              {
+                "t": 0.7174744897959183,
+                "value": 17.96875
+              },
+              {
+                "t": 0.7971938775510203,
+                "value": 17.1875
+              },
+              {
+                "t": 0.8769132653061225,
+                "value": 16.40625
+              },
+              {
+                "t": 0.9566326530612245,
+                "value": 15.625
+              },
+              {
+                "t": 1.0363520408163265,
+                "value": 14.84375
+              },
+              {
+                "t": 1.1160714285714286,
+                "value": 14.062499999999998
+              },
+              {
+                "t": 1.1957908163265305,
+                "value": 13.28125
+              },
+              {
+                "t": 1.2755102040816326,
+                "value": 12.5
+              },
+              {
+                "t": 1.3552295918367347,
+                "value": 11.718749999999998
+              },
+              {
+                "t": 1.4349489795918366,
+                "value": 10.9375
+              },
+              {
+                "t": 1.5146683673469388,
+                "value": 10.156249999999998
+              },
+              {
+                "t": 1.5943877551020407,
+                "value": 9.375
+              },
+              {
+                "t": 1.6741071428571428,
+                "value": 8.59375
+              },
+              {
+                "t": 1.753826530612245,
+                "value": 7.8125
+              },
+              {
+                "t": 1.8335459183673468,
+                "value": 7.03125
+              },
+              {
+                "t": 1.913265306122449,
+                "value": 6.25
+              },
+              {
+                "t": 1.992984693877551,
+                "value": 5.4687499999999964
+              },
+              {
+                "t": 2.072704081632653,
+                "value": 4.6875
+              },
+              {
+                "t": 2.152423469387755,
+                "value": 3.90625
+              },
+              {
+                "t": 2.232142857142857,
+                "value": 3.1249999999999964
+              },
+              {
+                "t": 2.3118622448979593,
+                "value": 2.3437499999999964
+              },
+              {
+                "t": 2.391581632653061,
+                "value": 1.5625
+              },
+              {
+                "t": 2.471301020408163,
+                "value": 0.78125
+              },
+              {
+                "t": 2.5510204081632653,
+                "value": 0
+              },
+              {
+                "t": 2.6307397959183674,
+                "value": -0.7812500000000036
+              },
+              {
+                "t": 2.7104591836734695,
+                "value": -1.5625000000000036
+              },
+              {
+                "t": 2.790178571428571,
+                "value": -2.34375
+              },
+              {
+                "t": 2.8698979591836733,
+                "value": -3.125
+              },
+              {
+                "t": 2.9496173469387754,
+                "value": -3.90625
+              },
+              {
+                "t": 3.0293367346938775,
+                "value": -4.6875000000000036
+              },
+              {
+                "t": 3.1090561224489797,
+                "value": -5.4687500000000036
+              },
+              {
+                "t": 3.1887755102040813,
+                "value": -6.25
+              },
+              {
+                "t": 3.2684948979591835,
+                "value": -7.03125
+              },
+              {
+                "t": 3.3482142857142856,
+                "value": -7.8125
+              },
+              {
+                "t": 3.4279336734693877,
+                "value": -8.59375
+              },
+              {
+                "t": 3.50765306122449,
+                "value": -9.375
+              },
+              {
+                "t": 3.587372448979592,
+                "value": -10.156250000000007
+              },
+              {
+                "t": 3.6670918367346936,
+                "value": -10.9375
+              },
+              {
+                "t": 3.7468112244897958,
+                "value": -11.71875
+              },
+              {
+                "t": 3.826530612244898,
+                "value": -12.5
+              },
+              {
+                "t": 3.90625,
+                "value": -13.28125
+              },
+              {
+                "t": 3.985969387755102,
+                "value": -14.062500000000007
+              },
+              {
+                "t": 4.065688775510204,
+                "value": -14.843750000000007
+              },
+              {
+                "t": 4.145408163265306,
+                "value": -15.625
+              },
+              {
+                "t": 4.2251275510204085,
+                "value": -16.406250000000007
+              },
+              {
+                "t": 4.30484693877551,
+                "value": -17.1875
+              },
+              {
+                "t": 4.384566326530612,
+                "value": -17.96875
+              },
+              {
+                "t": 4.464285714285714,
+                "value": -18.750000000000007
+              },
+              {
+                "t": 4.544005102040816,
+                "value": -19.53125
+              },
+              {
+                "t": 4.623724489795919,
+                "value": -20.312500000000007
+              },
+              {
+                "t": 4.70344387755102,
+                "value": -21.09375
+              },
+              {
+                "t": 4.783163265306122,
+                "value": -21.875
+              },
+              {
+                "t": 4.862882653061225,
+                "value": -22.656250000000007
+              },
+              {
+                "t": 4.942602040816326,
+                "value": -23.4375
+              },
+              {
+                "t": 5.022321428571429,
+                "value": -24.218750000000007
+              },
+              {
+                "t": 5.1020408163265305,
+                "value": -25
+              }
+            ]
+          }
+        ],
+        "verification": [
+          {
+            "id": "horizontal_velocity_constant",
+            "label": "水平速度守恒",
+            "status": "passed",
+            "detail": "Horizontal velocity is constant (no air resistance)."
+          },
+          {
+            "id": "vertical_acceleration",
+            "label": "竖直加速度 = g",
+            "status": "passed",
+            "detail": "Vertical acceleration equals -g."
+          },
+          {
+            "id": "impact_y",
+            "label": "落地点约束",
+            "status": "passed",
+            "detail": "Impact y ≈ groundY (0 vs 0)."
+          },
+          {
+            "id": "mechanics_numeric_states",
+            "label": "mechanics_numeric_states",
+            "status": "passed",
+            "detail": "All states must be finite and ordered in scene time."
+          },
+          {
+            "id": "mechanics_summary_consistency",
+            "label": "mechanics_summary_consistency",
+            "status": "passed",
+            "detail": "Summary velocity, displacement, acceleration and force must agree with the sampled window."
+          },
+          {
+            "id": "mechanics_kinematic_consistency",
+            "label": "mechanics_kinematic_consistency",
+            "status": "passed",
+            "detail": "Every sampled position and velocity must satisfy the scene initial conditions and acceleration."
+          },
+          {
+            "id": "mechanics_prescribed_acceleration",
+            "label": "mechanics_prescribed_acceleration",
+            "status": "passed",
+            "detail": "Every sampled acceleration must match the independently resolved scene forces."
+          },
+          {
+            "id": "scene-structure",
+            "label": "场景结构有效",
+            "status": "passed",
+            "detail": "28/28"
+          }
+        ],
+        "events": [
+          {
+            "id": "launch",
+            "time": 0,
+            "label": "发射",
+            "kind": "launch"
+          },
+          {
+            "id": "apex",
+            "time": 2.5510204081632653,
+            "label": "最高点",
+            "kind": "apex"
+          },
+          {
+            "id": "impact",
+            "time": 5.1020408163265305,
+            "label": "落地",
+            "kind": "impact"
+          }
+        ],
+        "trajectoryTimes": [
+          0,
+          0.07971938775510204,
+          0.15943877551020408,
+          0.23915816326530612,
+          0.31887755102040816,
+          0.39859693877551017,
+          0.47831632653061223,
+          0.5580357142857143,
+          0.6377551020408163,
+          0.7174744897959183,
+          0.7971938775510203,
+          0.8769132653061225,
+          0.9566326530612245,
+          1.0363520408163265,
+          1.1160714285714286,
+          1.1957908163265305,
+          1.2755102040816326,
+          1.3552295918367347,
+          1.4349489795918366,
+          1.5146683673469388,
+          1.5943877551020407,
+          1.6741071428571428,
+          1.753826530612245,
+          1.8335459183673468,
+          1.913265306122449,
+          1.992984693877551,
+          2.072704081632653,
+          2.152423469387755,
+          2.232142857142857,
+          2.3118622448979593,
+          2.391581632653061,
+          2.471301020408163,
+          2.5510204081632653,
+          2.6307397959183674,
+          2.7104591836734695,
+          2.790178571428571,
+          2.8698979591836733,
+          2.9496173469387754,
+          3.0293367346938775,
+          3.1090561224489797,
+          3.1887755102040813,
+          3.2684948979591835,
+          3.3482142857142856,
+          3.4279336734693877,
+          3.50765306122449,
+          3.587372448979592,
+          3.6670918367346936,
+          3.7468112244897958,
+          3.826530612244898,
+          3.90625,
+          3.985969387755102,
+          4.065688775510204,
+          4.145408163265306,
+          4.2251275510204085,
+          4.30484693877551,
+          4.384566326530612,
+          4.464285714285714,
+          4.544005102040816,
+          4.623724489795919,
+          4.70344387755102,
+          4.783163265306122,
+          4.862882653061225,
+          4.942602040816326,
+          5.022321428571429,
+          5.1020408163265305
+        ],
+        "ariaLabel": "抛体运动的可验证物理画布"
+      },
+      "mobile": {
+        "viewport": {
+          "width": 219,
+          "height": 360
+        },
+        "scrollWidth": 219,
+        "canvas": [
+          {
+            "id": "",
+            "width": 219,
+            "height": 360,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 219,
+              "height": 360
+            },
+            "pixelHash": "dcc07b04",
+            "opaquePixels": 7920,
+            "distinctColors": 1461,
+            "bodyY": null,
+            "clockTime": null
+          }
+        ],
+        "svg": [],
+        "drawStats": {
+          "calls": {
+            "clearRect": 21,
+            "drawImage": 21,
+            "fillRect": 21,
+            "moveTo": 32,
+            "lineTo": 1324,
+            "stroke": 116,
+            "ellipse": 21,
+            "fill": 158,
+            "arc": 74,
+            "fillText": 63
+          },
+          "lastArcs": [
+            {
+              "x": 109.49999999999997,
+              "y": 288,
+              "radius": 1.7,
+              "canvasId": ""
+            },
+            {
+              "x": 109.49999999999997,
+              "y": 238.31968200461432,
+              "radius": 15,
+              "canvasId": ""
+            },
+            {
+              "x": 104.39999999999998,
+              "y": 232.31968200461432,
+              "radius": 4.2,
+              "canvasId": ""
+            }
+          ],
+          "geometry": [
+            {
+              "method": "moveTo",
+              "coordinates": [
+                109.5,
+                288
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                273.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                260.1
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                246.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "arc",
+              "coordinates": [
+                109.5,
+                288,
+                1.7,
+                0,
+                6.28318531
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "moveTo",
+              "coordinates": [
+                109.5,
+                234
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                221.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                209.7
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                198.225
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                187.2
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                176.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                166.5
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                156.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                147.6
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                138.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                130.5
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                122.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                115.2
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                108.225
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                101.7
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                95.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                90
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                84.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                80.1
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                75.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                72
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                68.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                65.7
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                63.225
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                61.2
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                59.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                58.5
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                57.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                57.6
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                57.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                58.5
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                59.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                61.2
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                63.225
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                65.7
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                68.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                72
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                75.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                80.1
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                84.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                90
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                95.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                101.7
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                108.225
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                115.2
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                122.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                130.5
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                138.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                147.6
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                156.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                166.5
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                176.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                187.2
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                198.225
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                209.7
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                221.625
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                234
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                246.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                260.1
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                273.825
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "lineTo",
+              "coordinates": [
+                109.5,
+                288
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "ellipse",
+              "coordinates": [
+                109.5,
+                290,
+                24.1634035,
+                5.1,
+                0,
+                0,
+                6.28318531
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "arc",
+              "coordinates": [
+                109.5,
+                238.319682,
+                15,
+                0,
+                6.28318531
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            },
+            {
+              "method": "arc",
+              "coordinates": [
+                104.4,
+                232.319682,
+                4.2,
+                0,
+                6.28318531
+              ],
+              "matrix": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              "canvasId": ""
+            }
+          ]
+        }
+      },
+      "sourceSha256": "2b83558365767f505109e031840b357a65467c958d95c6ab8a2a61f7c6ace9dd"
+    },
+    "toolCalls": [
+      "physics_solve_question",
+      "physics_observe"
+    ],
+    "firstChildTools": [
+      "physics_generate_experiment_asset",
+      "physics_write_experiment_code",
+      "structured_output"
+    ],
+    "imageAssets": [
+      {
+        "path": "./assets/generated/868a643deaa3e847a7b5bebd046c86a0.png",
+        "cssPath": "./generated/868a643deaa3e847a7b5bebd046c86a0.png",
+        "sha256": "3bb6e26341ae2bab75e75cdcb4916e88d581b0100df06b7dbcb1cff13aed59ae",
+        "width": 1536,
+        "height": 1024,
+        "kind": "environment",
+        "model": "gpt-image-2.5-sunburst"
+      }
+    ],
+    "childStarts": 1,
+    "finalChildSourceAttempts": 1,
+    "exportIncludesRealChild": true,
+    "generationJobs": 1,
+    "jobDurationMs": 211442,
+    "reusedExistingOwnedSession": false,
+    "sentNewPrompt": true,
+    "parentStopReason": "completed",
+    "childConfig": {
+      "model": "deepseek-v4.1-flash",
+      "maxTokens": 8192,
+      "reasoningEffort": "off"
+    },
+    "advertisedEfforts": [
+      "off",
+      "high"
+    ],
+    "browserErrors": [],
+    "expectedClientAborts": []
+  }
+}

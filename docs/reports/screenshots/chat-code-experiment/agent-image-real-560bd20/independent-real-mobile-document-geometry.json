@@ -1,0 +1,238 @@
+{
+  "scrollX": 0,
+  "innerWidth": 375,
+  "rootWidth": 375,
+  "bodyWidth": 375,
+  "wide": [
+    {
+      "tag": "SPAN",
+      "cls": "_root_1bw19_1",
+      "width": 1088.484375,
+      "scroll": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "CODE",
+      "cls": "",
+      "width": 741.734375,
+      "scroll": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "CODE",
+      "cls": "",
+      "width": 503.328125,
+      "scroll": 0,
+      "overflow": "visible"
+    }
+  ],
+  "ancestors": [
+    {
+      "tag": "DIV",
+      "cls": "ts8wqW_card",
+      "x": 88,
+      "width": 247,
+      "scroll": 245,
+      "left": 0,
+      "overflow": "hidden"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "R7_Uua_root",
+      "x": 88,
+      "width": 247,
+      "scroll": 247,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "vXnJmG_flowItem",
+      "x": 88,
+      "width": 247,
+      "scroll": 247,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "vXnJmG_column",
+      "x": 88,
+      "width": 247,
+      "scroll": 247,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "vXnJmG_scroll",
+      "x": 56,
+      "width": 311,
+      "scroll": 311,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "vXnJmG_root",
+      "x": 56,
+      "width": 311,
+      "scroll": 311,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "vXnJmG_frame",
+      "x": 56,
+      "width": 311,
+      "scroll": 311,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "JVPRha_viewArea",
+      "x": 56,
+      "width": 311,
+      "scroll": 311,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "JVPRha_scrollBody",
+      "x": 56,
+      "width": 317,
+      "scroll": 311,
+      "left": 0,
+      "overflow": "auto"
+    },
+    {
+      "tag": "DIV",
+      "cls": "JVPRha_body",
+      "x": 56,
+      "width": 319,
+      "scroll": 530,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "JVPRha_root",
+      "x": 56,
+      "width": 319,
+      "scroll": 530,
+      "left": 0,
+      "overflow": "hidden"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "PNW8VW_centerCol",
+      "x": 56,
+      "width": 319,
+      "scroll": 319,
+      "left": 0,
+      "overflow": "hidden"
+    },
+    {
+      "tag": "DIV",
+      "cls": "PNW8VW_frame",
+      "x": 0,
+      "width": 375,
+      "scroll": 750,
+      "left": 0,
+      "overflow": "hidden"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 0,
+      "scroll": 0,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "x": 0,
+      "width": 375,
+      "scroll": 375,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "BODY",
+      "cls": "",
+      "x": 0,
+      "width": 375,
+      "scroll": 375,
+      "left": 0,
+      "overflow": "visible"
+    },
+    {
+      "tag": "HTML",
+      "cls": "",
+      "x": 0,
+      "width": 375,
+      "scroll": 375,
+      "left": 0,
+      "overflow": "visible"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "readOnly": true,
+  "snapshot": {
+    "ref": {
+      "status": "ready",
+      "artifactId": "qcode_294c119acf360d9f934aced34abfc4f1",
+      "ownerSessionId": "session-33d22c8d-ed2b-464b-8221-a558c882858e",
+      "childSessionId": "5a497264-50fb-40dc-92ba-a98cdefc999e",
+      "sceneId": "question-agent-question-mw2be4hh-1",
+      "sceneRevision": 0,
+      "sceneSha256": "4b32d1e4f52972f2e062ed71446f824293881c2e7113b1a4838be07b7f12a7d4",
+      "experimentId": "projectile-oblique",
+      "sha256": "20c71770af3222c7f1ecc36a280222dfe645d23f63eae0eed88196ce84cba846",
+      "title": "\u629b\u4f53\u8fd0\u52a8\uff1a\u5b9e\u9a8c\u6559\u5b66\u4e2d\u5ead\u4e2d\u7684\u7ad6\u76f4\u4e0a\u629b\u8f68\u8ff9\u89c2\u6d4b",
+      "rendererKind": "independent",
+      "createdAt": "2026-11-04T16:15:23.481Z"
+    },
+    "rendererSha256": "2b83558365767f505109e031840b357a65467c958d95c6ab8a2a61f7c6ace9dd",
+    "stylesheetSha256": "84a07df0e84e8b08c47ff843fa39e5aade61d4e598f9140ddd2e59666399ab04"
+  },
+  "blobHashes": {
+    "renderer": "2b83558365767f505109e031840b357a65467c958d95c6ab8a2a61f7c6ace9dd",
+    "stylesheet": "84a07df0e84e8b08c47ff843fa39e5aade61d4e598f9140ddd2e59666399ab04",
+    "bootstrap": "500cddeb10c5ca0e6253716a0e5f04309565b91d80bc03f2f09e2e5e1e0a29e8",
+    "viewportStylesheet": "3a27e28ac8cda5ce8810b3ebc6a3a294b7b5b7572c5945b71badcfabea3a72e8",
+    "./assets/generated/868a643deaa3e847a7b5bebd046c86a0.png": "3bb6e26341ae2bab75e75cdcb4916e88d581b0100df06b7dbcb1cff13aed59ae"
+  },
+  "exactRawChildSource": false,
+  "guestRejected": true,
+  "staleHashRejected": true,
+  "signedPreviewRenewed": true,
+  "wrapperStatus": 200,
+  "persistenceCompared": false
+}
