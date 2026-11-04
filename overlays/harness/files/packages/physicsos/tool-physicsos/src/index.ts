@@ -365,7 +365,9 @@ export function apply(ctx: Context, config: Config): void {
         experimentId: string
         childSessionId: string
         source: CodeVisualizationSource
+        generationId: string
       }): Promise<CodeExperimentRef>
+      assetManifest?(input: { ownerSessionId: string; generationId: string; scene: unknown }): unknown
     }
     const artifacts = lookup('questionCodeArtifacts') as Artifacts | undefined
     const selected = codeStyleFor(snapshot, experimentId)
@@ -377,6 +379,7 @@ export function apply(ctx: Context, config: Config): void {
         parent.session.append('physics/scene', { ...value, ...(turn === undefined ? {} : { turn }) })
       },
       context: id => artifacts === undefined ? Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' })) : artifacts.context(id),
+      assetManifest: generationId => artifacts?.assetManifest?.({ ownerSessionId, generationId, scene: snapshot.scene }),
       start: (request) => {
         const subagents = ctx.get('subagents')
         if (subagents === undefined) return Promise.reject(Object.assign(new Error('Code child unavailable'), { code: 'CHILD_UNAVAILABLE' }))

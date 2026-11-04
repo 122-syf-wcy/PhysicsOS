@@ -4,12 +4,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SubagentProvider, ResolvedSubagentStartRequest, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import { parentAgentOptionsForDelegation } from '@deepseek-ai/dsh-subagent'
 import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { PhysicsSceneSnapshot } from './types.ts'
 import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者。用独立原生 Canvas2D/SVG 创建本题的现代实验画面、布局与操作界面；只输出 renderer/CSS，物理事实由平台引擎持有。不能导入模块或调用旧平台渲染器，不能询问学生、修改题目条件、调用物理工具、文件/终端/网页工具或进一步委派。使用 structured_output 提交最终四个字符串。'
+export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者和实验美术设计师。按已发布实验提示词制作 Warm Lab 拟真实验场景。先调用 physics_generate_experiment_asset 生成本题环境或材质，再用独立原生 Canvas2D/SVG 与生成素材完成装置、空间与动态画面；物理事实由平台引擎持有。不能导入旧渲染器，不能询问学生、修改题目条件、调用物理/文件/终端/网页工具或进一步委派。最后用 structured_output 提交四个源码字符串。'
 
 export class PhysicsCodeProvider implements SubagentProvider {
   readonly name = CODE_PROVIDER_NAME
@@ -70,6 +73,15 @@ export class PhysicsCodeProvider implements SubagentProvider {
       throw new Error('Code generation requires a structured first-level child')
     }
     const reasoningEffort = await this.lightEffort(request)
+    const parentState = request.parent.ctx.get('sessionProjections')?.stateOf(request.parent.session, 'physicsScenes')
+    const assetScene: PhysicsSceneSnapshot | undefined = parentState?.latest ? parentState.scenes[parentState.latest] : undefined
+    const pending = assetScene?.visualization
+    const assetOwner = String(request.parent.id)
+    const generationId = pending?.status === 'generating' && pending.ownerSessionId === assetOwner ? pending.jobId : undefined
+    type AssetService = { generateAsset(input: { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }): Promise<{ path: string; cssPath: string; sha256: string; width: number; height: number; kind: string; model: string }> }
+    const artifacts = (this.ctx.get as (name: string) => unknown)('questionCodeArtifacts') as AssetService | undefined
+    const canGenerateAsset = assetScene !== undefined && generationId !== undefined && typeof artifacts?.generateAsset === 'function'
+    const allowedTools = canGenerateAsset ? ['physics_generate_experiment_asset'] : []
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}\n${marker}`
     const flags = { isolated: false }
@@ -82,9 +94,33 @@ export class PhysicsCodeProvider implements SubagentProvider {
       const presets = this.ctx.get('agentPresets')
       if (presets === undefined) throw new Error('Code child requires the agent preset registry')
       await presets.mount(agent.ctx, CODE_PRESET_ID)
+      if (canGenerateAsset) agent.ctx.tools.register(defineTool({
+        name: 'physics_generate_experiment_asset',
+        timeoutMs: 185_000,
+        description: '调用平台已配置的gpt-image-2.5-sunburst为本题制作Warm Lab环境/材质图片。每题最多2次，通常1张环境已足够。不要生成文字、公式、轨迹或测量结果。返回本包图片path和CSS路径；随后必须实际使用图片绘制实验。',
+        parameters: {
+          prompt: { type: 'string', required: true, description: '具体美术构图、材质、灯光、留白位置；不超过5000字。图片不可含物理读数或运动结果。' },
+          kind: { type: 'string', required: true, enum: ['environment', 'material'], description: 'environment为实验环境/场景背景，material为器材表面材质。' },
+        },
+        output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+        execute: async (args, exec) => {
+          if (request.signal.aborted || exec.signal.aborted) throw new HarnessError('素材生成已取消。', 'IMAGE_ABORTED')
+          const current = request.parent.ctx.get('sessionProjections')?.stateOf(request.parent.session, 'physicsScenes')?.scenes[assetScene.sceneId]
+          if (current?.visualization?.status !== 'generating' || current.visualization.jobId !== generationId) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
+          try {
+            return await artifacts.generateAsset({ ownerSessionId: assetOwner, generationId, scene: assetScene.scene,
+              prompt: args.prompt, kind: args.kind, signal: AbortSignal.any([request.signal, exec.signal]) })
+          } catch (error) {
+            const code = error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^IMAGE_[A-Z_]+$/.test(error.code) ? error.code : 'IMAGE_GENERATION_FAILED'
+            throw new HarnessError('素材生成未完成（' + code + '）。请在剩余额度内处理；不能伪造图片路径。', code)
+          }
+        },
+        presentCall: () => ({ card: 'generic', title: '制作本题实验素材', kind: 'other' }),
+      }))
       agent.ctx.tools.presentAs('native')
       agent.ctx.tools.restrict({ allow: [] })
       agent.ctx.tools.guard((exec) => {
+        if (canGenerateAsset && exec.name === 'physics_generate_experiment_asset') return undefined
         if (exec.name !== 'structured_output') return 'Code child accepts only structured_output'
         const source = exec.arguments as Record<string, unknown>
         const limits = { title: 120, summary: 1000, rendererJs: 96000, stylesheet: 24000 }
@@ -95,7 +131,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
         return undefined
       })
       const names = agent.ctx.tools.schemas(agent).map(tool => tool.name)
-      if (names.length !== 1 || names[0] !== 'structured_output') throw new Error('Code child tool isolation failed')
+      if (names.length !== allowedTools.length + 1 || names.some(name => name !== 'structured_output' && !allowedTools.includes(name))) throw new Error('Code child tool isolation failed')
       agent.session.append('agent-preset/selected', { agentPreset: CODE_PRESET_ID })
       flags.isolated = true
       return undefined

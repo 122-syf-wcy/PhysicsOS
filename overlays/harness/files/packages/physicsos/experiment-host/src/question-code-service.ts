@@ -22,6 +22,9 @@ import {
 } from './question-code-domain.ts'
 import { questionCodeContext, type QuestionCodeContext } from './question-code-context.ts'
 import type { DeveloperPromptService } from './prompt-service.ts'
+import { QuestionCodeAssets, type QuestionAssetDescriptor } from './question-code-assets.ts'
+export interface QuestionAssetRequest { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
+export type QuestionAssetScope = Pick<QuestionAssetRequest, 'ownerSessionId' | 'generationId' | 'scene'>
 export const QUESTION_CODE_SERVICE = 'questionCodeArtifacts'
 export interface QuestionCodeIdentity extends PhysicsosIdentity {
   sessionOwnerKey(sessionId: string): string | undefined
@@ -32,11 +35,14 @@ export interface CreateQuestionCodeInput {
   experimentId: string
   childSessionId: string
   source: CodeVisualizationSource
+  generationId?: string
 }
 export interface QuestionCodeArtifacts {
   create(input: CreateQuestionCodeInput): Promise<CodeExperimentRef>
   context(experimentId: string): Promise<QuestionCodeContext>
   describe(ownerSessionId: string, artifactId: string, expectedSha256: string): CodeExperimentRef
+  generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor>
+  assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[]
 }
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -49,6 +55,7 @@ export interface QuestionCodeOptions {
   prompts?: Pick<DeveloperPromptService, 'current'>
   assetOrigin?: string
   previewTtlMs?: number
+  imageAssets?: QuestionCodeAssets
 }
 const executeFile = promisify(execFile)
 const hash = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex')
@@ -89,6 +96,7 @@ const inputSchema = z
     experimentId: z.string().min(1).max(100),
     scene: z.unknown(),
     source: sourceSchema,
+    generationId: z.string().min(1).max(200).optional(),
   })
   .strict()
 const missing = (): ExperimentError =>
@@ -111,7 +119,7 @@ const invalidSource = (reason?: SourceValidationReason): ExperimentError => {
   return error
 }
 /** Private code has its own viewport baseline, independent of community template chrome. */
-const independentStylesheet = `:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#dce8f4;background:#0b1320;color-scheme:dark}
+const independentStylesheet = `:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#2e3d38;background:#fafaf7;color-scheme:light}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative}#canvas{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}#canvas>canvas,#canvas>svg{display:block;width:100%;height:100%}[hidden]{display:none!important}`
 const independentHtml = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PhysicsOS experiment</title><link rel="stylesheet" href="./assets/platform-base.css"><link rel="stylesheet" href="./assets/experiment.css"></head>
@@ -455,6 +463,10 @@ function validateIndependentDrawing(source: string): void {
         transforms.set(receiver, (transforms.get(receiver) ?? 0) | argumentsKind)
       } else if (['arc', 'ellipse', 'rect', 'moveTo', 'lineTo', 'fillRect', 'strokeRect'].includes(call.name)) {
         if (((argumentsKind | (transforms.get(receiver) ?? 0)) & DRAW_GEOMETRY) !== 0) return true
+      } else if (call.name === 'drawImage' && [3, 5, 9].includes(call.arguments.length)) {
+        const destination = call.arguments.slice(call.arguments.length === 9 ? 5 : 1)
+        const destinationKind = destination.reduce((kind, argument) => kind | classify(argument, fn), 0)
+        if (((destinationKind | (transforms.get(receiver) ?? 0)) & DRAW_GEOMETRY) !== 0) return true
       } else if (call.name === 'setAttribute' && call.arguments.slice(1).some(argument => (classify(argument, fn) & DRAW_GEOMETRY) !== 0)) return true
     }
     return false
@@ -464,7 +476,7 @@ function validateIndependentDrawing(source: string): void {
   const rectangles = [...active.matchAll(/\.(?:fillRect|strokeRect)\s*\(/g)].length >= 2
   const canvas = /\.getContext\s*\(\s*["']2d["']/.test(code) &&
     ((/\.(?:arc|ellipse|rect)\s*\(|\.moveTo\s*\([\s\S]*?\.lineTo\s*\(/.test(active) && /\.(?:fill|stroke)\s*\(/.test(active)) ||
-      rectangles) && /\.(?:append|appendChild|replaceChildren)\s*\(/.test(code)
+      rectangles || /\.drawImage\s*\(/.test(active)) && /\.(?:append|appendChild|replaceChildren)\s*\(/.test(code)
   const svg = svgGeometry || /\.createElementNS\s*\(/.test(code) &&
     /["'](?:circle|ellipse|path|line|polyline|polygon)["']/.test(code) &&
     /\.setAttribute\s*\(/.test(active) && /\.(?:append|appendChild|replaceChildren)\s*\(/.test(code)
@@ -529,11 +541,13 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   private readonly root: string
   readonly assetOrigin: string | undefined
   private readonly ttl: number
+  private readonly imageAssets: QuestionCodeAssets
   constructor(
     private readonly domain: Domain<typeof questionCodeDomain>,
     private readonly options: QuestionCodeOptions,
   ) {
     this.root = resolve(options.root)
+    this.imageAssets = options.imageAssets ?? new QuestionCodeAssets()
     this.ttl = Math.min(15 * 60_000, Math.max(1, options.previewTtlMs ?? 10 * 60_000))
     if (options.assetOrigin !== undefined) {
       const origin = new URL(options.assetOrigin)
@@ -623,6 +637,18 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
   context(experimentId: string): Promise<QuestionCodeContext> {
     return Promise.resolve().then(() => questionCodeContext(experimentId, this.options.prompts))
   }
+  private assetBinding(input: QuestionAssetScope) {
+    this.requireReady()
+    const ownerKey = this.owner(input.ownerSessionId)
+    if (!ownerKey) throw new ExperimentError(403, 'SESSION_OWNER_UNAVAILABLE', '对话账号身份不可用。')
+    if (validateScene(input.scene as PhysicsScene).status === 'failed') throw new ExperimentError(400, 'INVALID_SCENE', '题目场景无效。')
+    return { ownerSessionId: input.ownerSessionId, ownerKey, generationId: input.generationId,
+      sceneSha256: questionSceneSha256(input.scene as PhysicsScene) }
+  }
+  generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor> {
+    return this.imageAssets.generate({ ...this.assetBinding(input), prompt: input.prompt, kind: input.kind, signal: input.signal })
+  }
+  assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[] { return this.imageAssets.manifest(this.assetBinding(input)) }
   async create(input: CreateQuestionCodeInput): Promise<CodeExperimentRef> {
     const operation = this.tail.then(async () => {
       this.requireReady()
@@ -650,6 +676,15 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
         throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
       const context = await this.context(input.experimentId),
         files = experimentTemplateFiles(input.experimentId)
+      if (input.generationId !== undefined) {
+        const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
+        if (!this.imageAssets.manifest(binding).length) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
+        const generated = this.imageAssets.files(binding, source.rendererJs + '\n' + source.stylesheet)
+        for (const [name, bytes] of generated) files.set(name, bytes)
+        const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
+        if (!Array.isArray(licenses)) throw invalidSource()
+        files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://image.haqiuhaqiu.xyz', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
+      } else if (/assets\/generated\//.test(source.rendererJs + source.stylesheet)) throw invalidSource()
       files.set('public/assets/platform-base.css', Buffer.from(independentStylesheet))
       files.set('dist/assets/platform-base.css', Buffer.from(independentStylesheet))
       // Keep the trusted SDK, but replace community chrome with the generic authored viewport.

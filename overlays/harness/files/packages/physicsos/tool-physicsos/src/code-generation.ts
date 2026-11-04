@@ -6,7 +6,7 @@ import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
 import { QUESTION_CODE_VISUAL_BRIEF } from './question-code-visual-brief.ts'
 
-export const CODE_TIMEOUT_MS = 300_000
+export const CODE_TIMEOUT_MS = 600_000
 export const CODE_SOURCE_SCHEMA: ObjectJsonSchema = { type: 'object', additionalProperties: false, properties: {
   title: { type: 'string', description: 'Required nonempty title, at most 120 characters.' }, summary: { type: 'string', description: 'At most 1000 characters.' },
   rendererJs: { type: 'string', description: 'Must include export function renderFrame(snapshot) and use native Canvas2D or SVG. No imports, old renderer or empty wrapper; at most 96000 characters.' }, stylesheet: { type: 'string', description: 'CSS for the independent experimental scene, at most 24000 characters.' },
@@ -36,7 +36,9 @@ export interface CodeGenerationDependencies {
     experimentId: string
     childSessionId: string
     source: CodeVisualizationSource
+    generationId: string
   }): Promise<CodeExperimentRef>
+  assetManifest?(generationId: string): unknown
   current(): PhysicsSceneSnapshot | undefined
   isCurrent?(): boolean
   publish(snapshot: PhysicsSceneSnapshot): void
@@ -86,9 +88,9 @@ function checkedSource(result: SubagentResult): CodeVisualizationSource {
     || source.rendererJs.length > 96000 || source.stylesheet.length > 24000) throw Object.assign(new Error('Invalid structured result'), { code: 'INVALID_SOURCE' })
   return source
 }
-function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, repair?: CodeRepair): string {
+function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, repair?: CodeRepair, assets?: unknown): string {
   return [
-    '为下面的真实题目生成独立 Canvas 实验画面和完整的现代实验场景。只返回 title、summary、rendererJs、stylesheet 四个字符串。',
+    '为下面真实题目制作达到现有实验区质量的独立拟真实验。先调用 physics_generate_experiment_asset 制作本题环境或材质，随后用 structured_output 返回 title、summary、rendererJs、stylesheet 四个字符串。',
     '已有物理解答和校验已完成。本任务只设计与绘制，不再推导或重新解题。输出紧凑可工作的代码，尽快用 structured_output 提交。',
     '使用题目的原始场景与平台 frame/snapshot；绝不改写题目条件、引入默认场景、重新计算物理答案或编造模拟结果。',
     'rendererJs 必须包含字面声明 export function renderFrame(snapshot) { ... }；提交前确认 export 关键字确实在源码中，不能只定义未导出的 const renderFrame。在现有 #canvas DIV 内创建自己的 Canvas2D（推荐）或原生SVG并绘制。禁止任何 import/reexport、renderPlatformFrame、旧平台绘图函数或仅装饰旧图的包装器。平台只提供数据与握手，不提供本题画面。',
@@ -103,11 +105,12 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     '每次 renderFrame 使用当前 snapshot.view 的位置/轨迹/装置几何，snapshot.clock 的播放时间，inspector/overlay 中的真实量测；不能自己用 v*t 或加速度公式推进物体。改变屏幕坐标、材质、绘制大小和布局属于展示。向量端点已经按平台显示比例缩放，不得据箭头长度推算速度或力。',
     `实验风格目标：${style.experimentId}；发布风格版本：${style.styleVersion}`,
     `真实 V3 数据/绘制契约（字段准确，以此读取引擎事实）：\n${style.renderContract}`,
-    `最新实验开发规范（只参考物理、教学与包契约；视觉以上面的独立画面视觉规范为准，不采用旧renderer或外部构建建议）：\n${style.developerPrompt}`,
-    `最新已发布的可编辑说明（只参考物理、教学与包契约；视觉以上面的独立画面视觉规范为准，忽略旧模板绑定和旧绘图调用建议）：\n${style.publishedBody}`,
+    `最新实验开发规范（只参考物理、教学与包契约；视觉以上面的已发布实验视觉正文为准，不采用旧renderer或外部构建建议）：\n${style.developerPrompt}`,
+    `最新已发布的可编辑说明（只参考物理、教学与包契约；视觉与材质要求是本题的首要基准；仅忽略旧模板绑定和旧绘图调用建议）：\n${style.publishedBody}`,
     `允许资源路径：${JSON.stringify(style.allowedAssetPaths)}`,
     `题目场景（唯一物理条件来源）：${JSON.stringify(deps.snapshot.scene)}`,
     `已验证解答：${JSON.stringify(deps.snapshot.solve ?? null)}`,
+    assets ? `本任务已生成素材（可直接复用，不要重复调用）：${JSON.stringify(assets)}` : '',
     deps.instructions ? `本次展示要求：${deps.instructions.slice(0, 4000)}` : '',
     repair ? `上次封闭代码校验未通过（${repair.code}）；本次为同一任务的唯一修复机会，请针对下面待修复源码返回完整的四个字符串。` : '',
     repair?.reason ? `可信校验原因：${repair.reason}。${SOURCE_VALIDATION_HINTS[repair.reason]}` : '',
@@ -154,7 +157,7 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
       if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
       // Await start directly: its provider owns cancellation until publication;
       // racing start would lose the holder and leak a late published child.
-      const run = await deps.start({ label: `题目实验代码 · ${original.title.slice(0, 100)}`, prompt: [{ type: 'text', text: promptFor(style, deps, repair) }], signal: controller.signal, outputSchema: CODE_SOURCE_SCHEMA, toolFilter: { allow: [] }, maxDepth: 1, agentOptions: { maxTokens: 8192 } })
+      const run = await deps.start({ label: `题目实验代码 · ${original.title.slice(0, 100)}`, prompt: [{ type: 'text', text: promptFor(style, deps, repair, deps.assetManifest?.(jobId)) }], signal: controller.signal, outputSchema: CODE_SOURCE_SCHEMA, toolFilter: { allow: [] }, maxDepth: 1, agentOptions: { maxTokens: 8192 } })
       let rejectedSource: CodeVisualizationSource | undefined
       try {
         const source = checkedSource(await wait(run.result))
@@ -164,7 +167,7 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
         if (controller.signal.aborted) throw Object.assign(new Error('Generation aborted'), { code: 'GENERATION_ABORTED' })
         const ref = await wait(deps.create({
           ownerSessionId: deps.ownerSessionId, scene: original.scene, experimentId: style.experimentId,
-          childSessionId: String(run.id), source,
+          childSessionId: String(run.id), source, generationId: jobId,
         }))
         if (ref.rendererKind !== 'independent') throw Object.assign(new Error('Host did not validate an independent renderer'), { code: 'INVALID_METADATA' })
         if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
@@ -172,7 +175,7 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
         return ref
       } catch (error) {
         const code = codeOf(error)
-        if (attempt === 0 && ['INVALID_SOURCE', 'INVALID_CODE_SOURCE', 'INVALID_PACKAGE', 'INVALID_METADATA', 'UNSAFE_RESOURCES'].includes(code) && !controller.signal.aborted && isCurrent()) {
+        if (attempt === 0 && ['INVALID_SOURCE', 'INVALID_CODE_SOURCE', 'INVALID_PACKAGE', 'INVALID_METADATA', 'UNSAFE_RESOURCES', 'IMAGE_REQUIRED', 'IMAGE_UNUSED'].includes(code) && !controller.signal.aborted && isCurrent()) {
           const reason = trustedSourceValidationReason(error)
           repair = {
             code, ...(reason === undefined ? {} : { reason }),

@@ -60,19 +60,19 @@ describe('parent question code generation', () => {
     const delegated = h.start.mock.calls[0]?.[0]?.prompt[0]
     expect(delegated?.type === 'text' ? delegated.text : undefined).toContain('"value":3')
     const prompt = delegated?.type === 'text' ? delegated.text : ''
-    expect(prompt).toContain('独立 Canvas')
+    expect(prompt).toContain('Canvas2D')
     expect(prompt).toContain('snapshot.view.bodies[].at')
     expect(prompt).not.toContain('SDK wrapper')
     expect(prompt).not.toContain('基础 renderer：')
     expect(h.dispose).toHaveBeenCalledTimes(1)
   })
-  it('gives the complete independent renderer a single shared five-minute deadline', async () => {
-    expect(CODE_TIMEOUT_MS).toBe(300_000)
+  it('gives the complete independent renderer a single shared ten-minute deadline', async () => {
+    expect(CODE_TIMEOUT_MS).toBe(600_000)
     const h = dependencies(), started = Date.now()
     expect((await generateQuestionCode(h.deps)).status).toBe('ready')
     const generating = h.states[0]?.visualization
-    expect(generating?.status === 'generating' && generating.deadlineAt).toBeGreaterThanOrEqual(started + 300_000)
-    expect(generating?.status === 'generating' && generating.deadlineAt).toBeLessThan(started + 301_000)
+    expect(generating?.status === 'generating' && generating.deadlineAt).toBeGreaterThanOrEqual(started + 600_000)
+    expect(generating?.status === 'generating' && generating.deadlineAt).toBeLessThan(started + 601_000)
   })
   it('prioritizes authored scene direction over legacy styles without replacing the real question or generation limits', async () => {
     const h = dependencies()
@@ -82,13 +82,14 @@ describe('parent question code generation', () => {
     const request = h.start.mock.calls[0]?.[0]
     const block = request?.prompt[0]
     const prompt = block?.type === 'text' ? block.text : ''
-    expect(prompt).toContain('独立画面视觉规范（优先于下面公开正文中的视觉建议）')
-    expect(prompt).toContain('深海军蓝')
-    expect(prompt).toContain('同点起点/落点合并')
+    expect(prompt).toContain('独立实验视觉与素材制作')
+    expect(prompt).toContain('Warm Lab')
+    expect(prompt).toContain('physics_generate_experiment_asset')
+    expect(prompt).toContain('起点/落点同点只标一次')
     expect(prompt).toContain('219×360')
     expect(prompt).toContain('真实题目标签：竖直上抛的运动观察')
     expect(prompt).toContain('只参考物理、教学与包契约')
-    expect(prompt.indexOf('独立画面视觉规范')).toBeLessThan(prompt.indexOf('教学：观察最高点'))
+    expect(prompt.indexOf('独立实验视觉与素材制作')).toBeLessThan(prompt.indexOf('教学：观察最高点'))
     expect(prompt).toContain(JSON.stringify(h.original.scene))
     expect(prompt).toContain(JSON.stringify(h.original.solve))
     expect(request?.agentOptions?.maxTokens).toBe(8192)
@@ -307,6 +308,26 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
   return { ctx, parent: handle.agent }
 }
 describe('the real code child provider', () => {
+  it('lets the isolated child generate an owned image before submitting code while preserving the main model options', async () => {
+    const adapter = new MockAdapter([toolCallResponse('image', 'physics_generate_experiment_asset', { prompt: 'Warm Lab wood and plaster environment, no labels', kind: 'environment' }), toolCallResponse('code', 'structured_output', source)])
+    const { ctx, parent } = await presentationHost(adapter)
+    const image = { path: './assets/generated/abcdef.png', cssPath: './generated/abcdef.png', sha256: 'c'.repeat(64), width: 1536, height: 1024, kind: 'environment', model: 'gpt-image-2.5-sunburst' }
+    const generateAsset = vi.fn(async () => image)
+    const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: typeof generateAsset }
+    artifacts.generateAsset = generateAsset
+    const original = snapshot()
+    parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'owned-job', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision, deadlineAt: Date.now() + 600000 } })
+    const before = { ...parent.options }
+    const provider = new PhysicsCodeProvider(ctx)
+    const run = await provider.start({ parent, signal: new AbortController().signal, label: 'image child', prompt: [{ type: 'text', text: 'Generate a scene material then code.' }], outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'image child' }) })
+    try {
+      expect((await run.result).structured).toEqual(source)
+      expect(generateAsset).toHaveBeenCalledWith(expect.objectContaining({ ownerSessionId: 'parent', generationId: 'owned-job', scene: original.scene, kind: 'environment' }))
+      expect(adapter.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['physics_generate_experiment_asset', 'structured_output'])
+      expect(parent.options).toEqual(before)
+      expect(ctx.tools.schemas(parent).map(tool => tool.name)).not.toContain('physics_generate_experiment_asset')
+    } finally { await run.dispose() }
+  })
   it('reaches the model and dispatches with structured_output as its sole tool, even when the parent preset owns physics and question tools', async () => {
     const ctx = new Context(); contexts.push(ctx)
     await ctx.plugin(Loader); ctx.loader.builtins.include = Include

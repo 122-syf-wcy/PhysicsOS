@@ -1,23 +1,11 @@
-/** Presentation guidance only: these examples contain no scene, solver, or renderer entry. */
+/** Runtime art direction follows the published experiment standard, not a fixed renderer. */
 export const QUESTION_CODE_VISUAL_BRIEF = String.raw`
-独立画面视觉规范（优先于下面公开正文中的视觉建议）：
-生成一座深海军蓝 #10182f 的玻璃实验台：紫色 #7966eb 环境光、青色 #64dbef 轨迹、暖金色 #ffc877 主体、浅色 #eef2ff 文字。用渐变、透明材质、边缘高光、接触阴影表现装置；不要米白纸张、棕色地面、大XY网格或整页坐标图。背景渐变不是实验，必须独立绘制真实引擎几何对应的物体、轨迹或装置。
-主画面呈现物理现象；外层已有标题、条件、播放和结果。若初速度水平分量为0、竖直分量向上，title必须使用“竖直上抛”，不要附加“斜抛”。图内至多保留2–3个关键标签，不要重复整套参数面板。只画题目确实存在的装置，不添加改变物理含义的发射器、斜面或测量仪器。title取真实题目名称，风格家族名称只用于匹配数据契约。
-219×360手机舞台也必须可读：主物体视觉半径至少10px，文字至少12px，标签距边缘至少12px。同点起点/落点合并；移动主体的标签避开最高点/轨迹文字。窄屏不画长箭头说明、重复刻度或侧边信息卡，宁可留白。先测文字宽度再夹紧标签位置，数据接近零时只在显示格式中写0，不改物理数据。
-关键标签必须先按投影后屏幕位置聚类：两点距离小于8px时合并为一个标签（例如“起点 / 落点”），只绘制一次文字。可省略起点/落点标签和角度扇形，不能在相同位置逐项fillText。外层已有完整读数，图内不再绘制overlay.readout/inspector卡片，最多保留clock.time与一个最高点标签，避免重复和浮点近零噪声。
-投影优先采用引擎提供的完整轨迹/装置边界，保留四周留白与底部平台空间；使用同一正比例缩放x/y。不要把当前运动物体或随时间变化的向量端点加入投影边界；有完整轨迹时从完整轨迹求固定边界，无完整轨迹时用view.origin/extent。箭头可以隐藏，不得因箭头拉伸投影导致最高点漂移。不要让竖直上抛沿用很宽的旧坐标范围，也不要每帧追随物体重新缩放造成主体静止。画布CSS铺满#canvas，每帧同步尺寸并用DPR提高清晰度。字体使用系统中文无衬线，避免密集说明。
-下列仅为可选材质函数参考，不是完整实验；你仍须编写 export function renderFrame(snapshot)，读取真实snapshot.view几何、完成本题布局和绘制。不得原样只交付这些函数，不得增加依赖或物理计算：
-function glass(ctx,x,y,w,h){
-  ctx.save();ctx.beginPath();ctx.roundRect(x,y,w,h,14);
-  const g=ctx.createLinearGradient(x,y,x+w,y+h);
-  g.addColorStop(0,'rgba(173,188,255,0.13)');g.addColorStop(1,'rgba(65,84,135,0.07)');
-  ctx.fillStyle=g;ctx.fill();ctx.strokeStyle='rgba(188,205,255,0.22)';ctx.lineWidth=1;ctx.stroke();ctx.restore();
-}
-function metalSphere(ctx,x,y,r){
-  ctx.save();ctx.shadowColor='rgba(255,190,100,0.4)';ctx.shadowBlur=18;
-  const g=ctx.createRadialGradient(x-r*.35,y-r*.4,r*.08,x,y,r);
-  g.addColorStop(0,'#fff6dc');g.addColorStop(.35,'#ffd48a');g.addColorStop(.78,'#ba782e');g.addColorStop(1,'#60371e');
-  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();ctx.restore();
-}
-代码保持紧凑：renderer约100–140行、2500–3500输出tokens；stylesheet仅补少量舞台样式。无需把规范写进输出源码，不要长注释。以一次structured_output交付完整四字段。
+独立实验视觉与素材制作：以下补充执行方法，风格以最新已发布实验正文为准。
+Warm Lab：暖白、柔和日光、自然木材/浅灰石材、真实金属与玻璃器材、灰绿色操作控件。根据题目选真实空间：自由上抛是宽敞实验教学中庭/运动实验场，透镜是木质光学台，电学是整洁电学装置。不要一律深蓝渐变背景加小球，不要旧坐标纸。装置与物理现象占主视野。
+先调用physics_generate_experiment_asset，优先生成一张1536×1024高质量本题环境。用具体英文描述摄影机、空间纵深、柔和光影、材质和运动留白；让图片中心约60%保持低纹理清晰空间，地面位于下方20%左右，左右边缘有克制的实验室细节。无文字、刻度、公式、箭头、轨迹、运动球体，动态内容由代码画。不要随意添加会改变题意的发射器、传感器或器械。必要时第二张material用于物体表面，每题总计最多2次，不需要凑满。
+把返回的path作为文档相对路径给new Image().src，把cssPath用于CSS背景。它们是私有包内资源，无需fetch/import。图片必须真的加载并用于场景：禁止只返回路径不画图或用CSS盖住素材。可以把静态环境设为底层图片，Canvas透明覆盖真实位置/轨迹；不得重新用纯色画布遮住整张背景。
+图片加载放在模块缓存Promise中，设置src之前必须设image.crossOrigin="anonymous"（沙箱图片资源已提供CORS），export async function renderFrame(snapshot)等待image.decode()再画并返回，不注册另一套物理时钟。例：const environment=new Image(); environment.crossOrigin='anonymous'; environment.src='工具返回的path'; const loaded=environment.decode(); renderFrame内await loaded; ctx.drawImage(environment,0,0,w,h)。实际代码须用真实返回路径。主体用高质量原生材质/可用器材图片，半径桌面至少16px、手机至少12px，有高光、接触阴影和空间关系。
+构图需为动态过程设计：完整轨迹固定边界、x/y等比映射、稳定地面与坐标比例。环境只负责质感，真实物体位置/轨迹来自snapshot.view。不要使用随时间变化的向量端点做缩放边界。手机219×360和桌面都要让主体运动占画面至少约一半高度/宽度，背景裁切保留中心运动空间。
+图内只保留必要标注，不重复外层标题/参数/完整读数卡。先合并距离8px以内关键点，起点/落点同点只标一次；最高点写“最高点”，不要显示几乎为0的横坐标。标签12px以上，边界12px留白，避免压住主体。数值仅用已有引擎读数，接近零可显示0不改变事实。竖直上抛标题不写斜抛。
+输出约160行以内精炼源码，不要长解释；保留真实装置质感、景深和清楚的教学焦点。最终画面应像可操作的真实实验，而非装饰海报或一根线加圆点。
 `

@@ -100,7 +100,7 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
     </div> : <div className={css.codeStatus} role={error || status === 'failed' ? 'alert' : 'status'}>
       <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
       <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
-        : status === 'generating' ? '正在为本题绘制专属实验，完成后即可探索条件变化。'
+        : status === 'generating' ? '正在制作本题场景素材与实验画面，完成后即可探索条件变化。'
           : status === 'upgrade-required' ? '点击升级，为这道题生成完整的独立实验。原题条件和已验证答案会继续保留。'
             : '本题的条件、解题步骤和物理验证已保留。'}</p>
       {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
