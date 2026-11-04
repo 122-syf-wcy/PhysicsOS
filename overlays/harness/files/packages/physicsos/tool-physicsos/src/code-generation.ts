@@ -110,6 +110,7 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     `最新已发布的可编辑说明（只参考物理、教学与包契约；视觉与材质要求是本题的首要基准；仅忽略旧模板绑定和旧绘图调用建议）：\n${publishedVisualGuidance(style.publishedBody)}`,
     `允许资源路径：${JSON.stringify(style.allowedAssetPaths)}`,
     `题目场景（唯一物理条件来源）：${JSON.stringify(deps.snapshot.scene)}`,
+    '最终构图验收（优先于通用坐标视窗）：物体和完整运动路径必须占据画面主体。竖直上抛时不要使用view.extent的宽横轴范围，否则手机轨迹会缩成短线；使用predicted完整轨迹和apex关键点的纵向范围。将真实ground.y映射到舞台高度82%，最高点映射到18%，水平方向居中。只作统一比例投影，不重新解算物理。背景图片的地板就是视觉地面，禁止额外画悬空地面线/色块/小平台。球半径桌面18–22px、手机14–18px。轨迹细而清楚，球有真实材质；起落点仅保留一个简短标签，最高点标签避让主体。不要绘制向量箭头、图内参数读数卡或近零科学计数法标签：所有读数由外层平台控件呈现。画面可以有一处简洁t=时间，其他面积留给真实场景与运动。',
     `已验证解答：${JSON.stringify(authorSolveFacts(deps.snapshot.solve))}`,
     assets ? `本任务已生成素材（可直接复用，不要重复调用）：${JSON.stringify(assets)}` : '',
     '禁止以“准备编写代码”“稍后交付”等普通文字结束。完成图片工具后必须继续调用physics_write_experiment_code分段写代码，再用structured_output提交title/summary；已有素材时直接复用，不能重复生图。',
