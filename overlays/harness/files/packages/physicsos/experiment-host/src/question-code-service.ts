@@ -274,6 +274,18 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
         throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
       const context = await this.context(input.experimentId),
         files = experimentTemplateFiles(input.experimentId)
+      const platformStylesheet = files.get('public/assets/experiment.css')
+      if (platformStylesheet === undefined) throw invalidSource()
+      files.set('public/assets/platform-base.css', Buffer.from(platformStylesheet))
+      files.set('dist/assets/platform-base.css', Buffer.from(platformStylesheet))
+      // Freeze the trusted shell's base styles separately, before the child's supplementary CSS.
+      const authoredLink = '<link rel="stylesheet" href="./assets/experiment.css">'
+      const layeredLinks = '<link rel="stylesheet" href="./assets/platform-base.css">' + authoredLink
+      for (const name of ['public/index.html', 'dist/index.html']) {
+        const html = files.get(name)?.toString('utf8')
+        if (html === undefined || !html.includes(authoredLink)) throw invalidSource()
+        files.set(name, Buffer.from(html.replace(authoredLink, layeredLinks)))
+      }
       files.set('src/renderer.js', Buffer.from(source.rendererJs))
       files.set('dist/runtime/renderer.js', Buffer.from(source.rendererJs))
       files.set('public/assets/experiment.css', Buffer.from(source.stylesheet))

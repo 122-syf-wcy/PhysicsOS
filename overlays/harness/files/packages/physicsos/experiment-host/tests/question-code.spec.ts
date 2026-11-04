@@ -1,11 +1,14 @@
 import { createServer } from 'node:http'
-import { mkdtemp, rm, readdir, unlink, symlink } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, rm, readdir, readFile, writeFile, unlink, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createConvexLensScene } from '@physicsos/physics-scene'
-import { openQuestionCodeDomain } from '../src/question-code-domain.ts'
-import { QuestionCodeArtifactService, questionSceneSha256 } from '../src/question-code-service.ts'
+import { openQuestionCodeDomain, type QuestionCodeRecord } from '../src/question-code-domain.ts'
+import { QuestionCodeArtifactService, canonicalQuestionJson, questionSceneSha256 } from '../src/question-code-service.ts'
+import { experimentTemplateFiles } from '../src/template-download.ts'
+import { assetContentType } from '../src/package-resources.ts'
 import { questionCodeRoutes } from '../src/question-code-routes.ts'
 import { experimentAssets } from '../src/routes.ts'
 import { host } from './support.ts'
@@ -68,6 +71,30 @@ async function create(service: QuestionCodeArtifactService) {
     },
   })
 }
+/** Seed the pre-layering format directly; production must read its original frozen bytes. */
+async function legacyArtifact(service: QuestionCodeArtifactService) {
+  const files = experimentTemplateFiles('convex-lens')
+  files.set('question-scene.json', Buffer.from(canonicalQuestionJson(scene())))
+  const digest = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex')
+  const blobs = new Map<string, Buffer>()
+  const frozen: QuestionCodeRecord['files'] = []
+  for (const [name, bytes] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
+    const sha256 = digest(bytes)
+    blobs.set(sha256, bytes)
+    frozen.push({ name, sha256, size: bytes.length, contentType: assetContentType(name) ?? 'application/octet-stream' })
+  }
+  for (const [sha256, bytes] of blobs) await writeFile(join(root, 'private', 'blobs', sha256), bytes, { flag: 'wx', mode: 0o400 })
+  const body: Omit<QuestionCodeRecord, 'sha256'> = {
+    id: 'qcode_' + '1'.repeat(32), ownerSessionId: 'parent-session', ownerKey: contributor.userKey,
+    childSessionId: 'legacy-child', sceneId: scene().id, sceneRevision: scene().revision,
+    sceneSha256: questionSceneSha256(scene()), experimentId: 'convex-lens',
+    title: '旧格式题目透镜', summary: '原样读取旧格式', createdAt: '2026-11-04T00:00:00Z',
+    styleVersion: '3.7.2', files: frozen,
+  }
+  const row = { ...body, sha256: digest(canonicalQuestionJson(body)) }
+  await domain!.table('artifacts').put(row.id, row)
+  return service.describe('parent-session', row.id, row.sha256)
+}
 afterEach(async () => {
   if (server)
     await new Promise<void>((resolve) => {
@@ -117,6 +144,37 @@ describe('private question code artifacts', () => {
     expect(context.developerPrompt).not.toContain('physicsos-convex-lens-template-v2')
     expect(context.styleVersion).toBeTruthy()
   })
+  it('layers frozen V3 platform CSS before exact supplementary child CSS without changing community templates', async () => {
+    const service = await setup(), context = await service.context('convex-lens')
+    const trusted = experimentTemplateFiles('convex-lens')
+    const source = {
+      title: '本题标注', summary: '精确保留子代理源码',
+      rendererJs: context.baseRenderer + '\n// Question-specific labels.\n',
+      stylesheet: '/* supplementary only */\nh1 { color: #175; }\n',
+    }
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source })
+    expect((await service.source(contributor, ref.artifactId, ref.sha256)).source).toEqual(source)
+    const row = domain!.table('artifacts').get(ref.artifactId)!
+    expect(row.files.map(file => file.name)).toEqual(expect.arrayContaining(['public/assets/platform-base.css', 'dist/assets/platform-base.css']))
+    const preview = service.preview(contributor, ref.artifactId, ref.sha256)
+    const raw = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), 'http://local')
+    const entry = await service.asset(raw)
+    const html = entry!.bytes.toString('utf8')
+    const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? ''
+    expect(head).toContain('href="./assets/platform-base.css"')
+    expect(head).toContain('href="./assets/experiment.css"')
+    expect(head.indexOf('href="./assets/platform-base.css"')).toBeLessThan(head.indexOf('href="./assets/experiment.css"'))
+    const publicHtml = row.files.find(file => file.name === 'public/index.html')!
+    expect((await readFile(join(root, 'private', 'blobs', publicHtml.sha256))).toString('utf8')).toBe(html)
+    const platform = await service.asset(new URL('./assets/platform-base.css', raw))
+    expect(platform?.bytes.toString('utf8')).toBe(context.baseStylesheet)
+    expect(platform?.contentType).toBe('text/css; charset=utf-8')
+    const authored = await service.asset(new URL('./assets/experiment.css', raw))
+    expect(authored?.bytes.toString('utf8')).toBe(source.stylesheet)
+    expect(row.files.find(file => file.name === 'public/assets/platform-base.css')?.sha256).toBe(platform?.sha256)
+    const templateDigests = (files: Map<string, Buffer>) => [...files].map(([name, bytes]) => [name, createHash('sha256').update(bytes).digest('hex')])
+    expect(templateDigests(experimentTemplateFiles('convex-lens'))).toEqual(templateDigests(trusted))
+  })
   it('fails closed for missing session owner, wrong domain, oversized or external source', async () => {
     const service = await setup(),
       context = await service.context('convex-lens')
@@ -149,6 +207,9 @@ describe('private question code artifacts', () => {
     ).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
     await expect(
       service.create({ ...input, source: { ...input.source, rendererJs: 'export const =' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
+    await expect(
+      service.create({ ...input, source: { ...input.source, stylesheet: '@import url("https://bad.example/style.css");' } }),
     ).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
   })
   it('reauthorizes owner cookie, refuses other accounts including admins, and signed assets expire', async () => {
@@ -226,10 +287,14 @@ describe('private question code artifacts', () => {
       ).status,
     ).toBe(404)
   })
-  it('keeps signed capabilities and immutable descriptors valid across restart', async () => {
+  it.each(['layered', 'legacy'] as const)('reads %s frozen bytes and keeps signed capabilities and immutable descriptors valid across restart', async (format) => {
     const service = await setup(),
-      ref = await create(service),
+      ref = await (format === 'legacy' ? legacyArtifact(service) : create(service)),
       preview = service.preview(contributor, ref.artifactId)
+    const before = structuredClone(domain!.table('artifacts').get(ref.artifactId))
+    const original = await service.source(contributor, ref.artifactId, ref.sha256)
+    const raw = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), 'http://local')
+    const originalBase = await service.asset(new URL('./assets/platform-base.css', raw))
     await service.close()
     await domain!.close()
     await loaded!.close()
@@ -242,8 +307,20 @@ describe('private question code artifacts', () => {
     })
     await codes.initialize()
     expect(codes.describe('parent-session', ref.artifactId, ref.sha256)).toEqual(ref)
-    const raw = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), 'http://local')
-    expect((await codes.asset(raw))?.protocolVersion).toBe(3)
+    const entry = await codes.asset(raw)
+    expect(entry?.protocolVersion).toBe(3)
+    const base = await codes.asset(new URL('./assets/platform-base.css', raw))
+    if (format === 'legacy') {
+      expect(entry?.bytes.toString('utf8')).not.toContain('platform-base.css')
+      expect(base).toBeUndefined()
+    } else {
+      expect(entry?.bytes.toString('utf8')).toContain('platform-base.css')
+      expect(base).toBeDefined()
+      expect(base?.bytes.toString('utf8')).toBe(originalBase?.bytes.toString('utf8'))
+      expect(base?.sha256).toBe(originalBase?.sha256)
+    }
+    expect(await codes.source(contributor, ref.artifactId, ref.sha256)).toEqual(original)
+    expect(domain.table('artifacts').get(ref.artifactId)).toEqual(before)
   })
   it('refuses modified blob content and symlink substitutions', async () => {
     const service = await setup(),
