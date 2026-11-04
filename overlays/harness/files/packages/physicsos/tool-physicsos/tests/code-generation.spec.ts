@@ -18,10 +18,17 @@ import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, toolCallResponse, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as physicsTools from '../src/index.ts'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from '../src/code-provider.ts'
-import { generateQuestionCode, type CodeGenerationDependencies } from '../src/code-generation.ts'
+import { CODE_TIMEOUT_MS, generateQuestionCode, type CodeGenerationDependencies } from '../src/code-generation.ts'
 import type { PhysicsSceneSnapshot } from '../src/types.ts'
 
-const source = { title: '本题轨迹', summary: '按本题场景标注', rendererJs: 'export function renderFrame(snapshot) { return []; }', stylesheet: '.question { color: blue; }' }
+const source = { title: '本题轨迹', summary: '独立绘制本题引擎快照', rendererJs: `export function renderFrame(snapshot) {
+  const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 480;
+  document.getElementById('canvas').replaceChildren(canvas);
+  const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Canvas unavailable');
+  const point = snapshot.view.bodies?.[0]?.at || snapshot.view.particles?.[0]?.at;
+  ctx.clearRect(0, 0, 800, 480);
+  if (point) { ctx.beginPath(); ctx.arc(point.x, point.y, 8, 0, Math.PI * 2); ctx.fill(); }
+}`, stylesheet: '.question { color: blue; }' }
 const snapshot = (): PhysicsSceneSnapshot => ({ sceneId: 'question-scene', revision: 2, domain: 'magnetic', engineId: 'engine-magnetic', title: '本题', cause: 'solved', turn: 4,
   scene: { schemaVersion: 'physics-scene/1.0', id: 'question-scene', revision: 2, particles: [{ charge: { value: 3, unit: 'C' } }], metadata: {} },
   solve: { knowns: [], targets: ['轨道半径'], answers: [], steps: [], issues: [], verification: { status: 'passed', checks: [] } },
@@ -31,10 +38,10 @@ function dependencies() {
   let latest = original
   const states: PhysicsSceneSnapshot[] = []
   const dispose = vi.fn(async () => {})
-  const create = vi.fn(async () => ({ status: 'ready' as const, artifactId: 'private-1', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: 2, sceneSha256: 'a'.repeat(64), experimentId: 'magnetic-circular', sha256: 'b'.repeat(64), title: '本题轨迹', childSessionId: 'child', createdAt: '2026-11-04T00:00:00Z' }))
+  const create = vi.fn(async () => ({ status: 'ready' as const, rendererKind: 'independent' as const, artifactId: 'private-1', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: 2, sceneSha256: 'a'.repeat(64), experimentId: 'magnetic-circular', sha256: 'b'.repeat(64), title: '本题轨迹', childSessionId: 'child', createdAt: '2026-11-04T00:00:00Z' }))
   const start = vi.fn(async (_request: Parameters<CodeGenerationDependencies['start']>[0]) => ({ id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose }))
   const deps = { ownerSessionId: 'parent', snapshot: original, signal: new AbortController().signal, experimentId: 'magnetic-circular',
-    context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3 prompt', publishedBody: 'current published body', styleVersion: 'V3', baseRenderer: 'base renderer', baseStylesheet: 'base CSS', allowedAssetPaths: [] }),
+    context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3 prompt', publishedBody: 'current published body', styleVersion: 'V3', renderContract: 'snapshot.view.bodies[].at 是引擎位置；snapshot.clock.time 是平台时间。', allowedAssetPaths: [] }),
     start, create, current: () => latest, publish: (value: PhysicsSceneSnapshot) => { latest = value; states.push(value) },
   } as unknown as CodeGenerationDependencies
   return { deps, original, states, dispose, create, start, setLatest: (value: PhysicsSceneSnapshot) => { latest = value } }
@@ -52,7 +59,20 @@ describe('parent question code generation', () => {
     expect(JSON.stringify(h.start.mock.calls)).toContain('latest V3 prompt')
     const delegated = h.start.mock.calls[0]?.[0]?.prompt[0]
     expect(delegated?.type === 'text' ? delegated.text : undefined).toContain('"value":3')
+    const prompt = delegated?.type === 'text' ? delegated.text : ''
+    expect(prompt).toContain('独立 Canvas')
+    expect(prompt).toContain('snapshot.view.bodies[].at')
+    expect(prompt).not.toContain('SDK wrapper')
+    expect(prompt).not.toContain('基础 renderer：')
     expect(h.dispose).toHaveBeenCalledTimes(1)
+  })
+  it('gives the complete independent renderer a single shared five-minute deadline', async () => {
+    expect(CODE_TIMEOUT_MS).toBe(300_000)
+    const h = dependencies(), started = Date.now()
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    const generating = h.states[0]?.visualization
+    expect(generating?.status === 'generating' && generating.deadlineAt).toBeGreaterThanOrEqual(started + 300_000)
+    expect(generating?.status === 'generating' && generating.deadlineAt).toBeLessThan(started + 301_000)
   })
   it.each([
     'export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";',
@@ -68,13 +88,15 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
     expect(h.start).toHaveBeenCalledTimes(2)
     expect(h.dispose).toHaveBeenCalledTimes(2)
   })
-  it('rejects an unchanged base renderer before artifact creation', async () => {
+  it('refuses to publish a legacy host descriptor as independently generated code', async () => {
     const h = dependencies()
-    h.deps.context = async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'V3', publishedBody: '', styleVersion: 'V3', baseRenderer: source.rendererJs, baseStylesheet: '', allowedAssetPaths: [] })
+    const legacy = await h.create()
+    Reflect.deleteProperty(legacy, 'rendererKind')
+    h.deps.create = async () => legacy
     const result = await generateQuestionCode(h.deps)
-    expect(result.status === 'failed' && result.code).toBe('INVALID_SOURCE')
-    expect(h.create).not.toHaveBeenCalled()
+    expect(result.status === 'failed' && result.code).toBe('INVALID_METADATA')
     expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.states.at(-1)?.visualization?.status).toBe('failed')
   })
   it('persists a generation deadline and never rewrites a later question after timeout', async () => {
     const ctx = new Context(); contexts.push(ctx)
@@ -199,7 +221,7 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
   ctx.provide('questionCodeArtifacts', {
     context: async (id: string) => ({ ...await dependencies().deps.context(id), experimentId: id }),
     create: async (input: Parameters<CodeGenerationDependencies['create']>[0]) => ({
-      status: 'ready', artifactId: input.childSessionId, ownerSessionId: input.ownerSessionId,
+      status: 'ready', rendererKind: 'independent', artifactId: input.childSessionId, ownerSessionId: input.ownerSessionId,
       sceneId: String((input.scene as PhysicsScene).id), sceneRevision: (input.scene as PhysicsScene).revision,
       sceneSha256: 'a'.repeat(64), sha256: 'b'.repeat(64), experimentId: input.experimentId,
       childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z',
@@ -277,7 +299,7 @@ describe('the real code child provider', () => {
     ctx.provide('physicsosIdentity', { sessionOwnerKey: (id: string) => id === 'parent' ? 'school:student' : undefined } as never)
     const inputs: { scene: unknown }[] = []
     ctx.provide('questionCodeArtifacts', {
-      context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3', publishedBody: 'editable prompt', styleVersion: 'latest', baseRenderer: 'base renderer', baseStylesheet: '', allowedAssetPaths: [] }),
+      context: async () => ({ experimentId: 'magnetic-circular', developerPrompt: 'latest V3', publishedBody: 'editable prompt', styleVersion: 'latest', renderContract: 'snapshot.view 与 snapshot.clock 是平台快照。', allowedAssetPaths: [] }),
       create: async (input: {
         scene: { id: string; revision: number }
         ownerSessionId: string
@@ -286,7 +308,7 @@ describe('the real code child provider', () => {
         source: typeof source
       }) => {
         inputs.push(input)
-        return { status: 'ready', artifactId: 'private', ownerSessionId: input.ownerSessionId, sceneId: input.scene.id, sceneRevision: input.scene.revision, sceneSha256: 'a'.repeat(64), sha256: 'b'.repeat(64), experimentId: input.experimentId, childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z' }
+        return { status: 'ready', rendererKind: 'independent', artifactId: 'private', ownerSessionId: input.ownerSessionId, sceneId: input.scene.id, sceneRevision: input.scene.revision, sceneSha256: 'a'.repeat(64), sha256: 'b'.repeat(64), experimentId: input.experimentId, childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z' }
       },
     } as never)
     const startErrors: string[] = []
@@ -313,6 +335,14 @@ describe('the real code child provider', () => {
     const wire = ctx.sessionProjections.snapshot(handle.agent.session).values.physicsScenes
     expect(wire?.scenes[scenes[0]!.sceneId]?.solve).toEqual(scenes[0]?.solve)
     expect(wire?.scenes[scenes[0]!.sceneId]?.visualization?.status).toBe('ready')
+    const projectedCode = wire?.scenes[scenes[0]!.sceneId]?.visualization
+    expect(projectedCode?.status === 'ready' && projectedCode.rendererKind).toBe('independent')
+    const parentResult = adapter.requests.at(-1)?.messages.find(message => message.role === 'tool' && message.toolCallId === 'solve')
+    const parentText = parentResult?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+    expect(parentText).toContain('本题独立代码实验已生成')
+    expect(parentText).not.toContain('此历史版本使用旧渲染方式')
+    expect(parentText).not.toContain('升级为独立代码实验')
+    expect(parentText).not.toContain('rendererJs')
     expect(JSON.stringify(scenes)).not.toContain('rendererJs')
     expect(adapter.requests[1]?.tools?.map(t => t.name)).toEqual(['structured_output'])
   })
@@ -337,7 +367,7 @@ describe('the real code child provider', () => {
           inputs.push(input)
           const scene = input.scene as PhysicsScene
           return {
-            status: 'ready', artifactId: `private-${inputs.length}`, ownerSessionId: input.ownerSessionId,
+            status: 'ready', rendererKind: 'independent', artifactId: `private-${inputs.length}`, ownerSessionId: input.ownerSessionId,
             sceneId: String(scene.id), sceneRevision: scene.revision, sceneSha256: 'a'.repeat(64),
             sha256: String(inputs.length).repeat(64), experimentId: input.experimentId,
             childSessionId: input.childSessionId, title: input.source.title, createdAt: '2026-11-04T00:00:00Z',

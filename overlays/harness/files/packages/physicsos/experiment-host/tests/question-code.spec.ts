@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, rm, readdir, readFile, writeFile, unlink, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createConvexLensScene } from '@physicsos/physics-scene'
 import { openQuestionCodeDomain, type QuestionCodeRecord } from '../src/question-code-domain.ts'
@@ -56,8 +57,31 @@ const scene = () =>
     objectDistance: 62,
     now: '2026-11-04T00:00:00.000Z',
   })
+const ownCanvas = `export function renderFrame(snapshot) {
+  const view = snapshot.view, root = document.getElementById('canvas');
+  const canvas = document.createElement('canvas'); root.replaceChildren(canvas);
+  canvas.width = root.clientWidth; canvas.height = root.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.beginPath(); ctx.moveTo(view.origin.x, view.origin.y);
+  ctx.lineTo(view.origin.x + view.extent.width, view.origin.y); ctx.stroke();
+  for (const item of view.opticalObjects ?? []) {
+    ctx.beginPath(); ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2); ctx.fill();
+  }
+}`
+const ownSvg = `export function renderFrame(snapshot) {
+  const view = snapshot.view, ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  const circle = document.createElementNS(ns, 'circle');
+  circle.setAttribute('cx', String(view.opticalObjects[0].at.x)); circle.setAttribute('r', '3');
+  svg.append(circle); document.getElementById('canvas').replaceChildren(svg);
+}`
+const ownRectangles = `export function renderFrame(snapshot) {
+  const view = snapshot.view, root = document.getElementById('canvas');
+  const canvas = document.createElement('canvas'); root.replaceChildren(canvas);
+  const ctx = canvas.getContext('2d'); ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (const item of view.opticalObjects ?? []) ctx.fillRect(item.at.x, item.at.y, 2, item.height);
+}`
 async function create(service: QuestionCodeArtifactService) {
-  const context = await service.context('convex-lens')
   return service.create({
     ownerSessionId: 'parent-session',
     childSessionId: 'child-session',
@@ -66,8 +90,8 @@ async function create(service: QuestionCodeArtifactService) {
     source: {
       title: '题目透镜',
       summary: '精确绘制题目快照',
-      rendererJs: context.baseRenderer,
-      stylesheet: context.baseStylesheet,
+      rendererJs: ownCanvas,
+      stylesheet: 'canvas { display: block; width: 100%; height: 100%; }',
     },
   })
 }
@@ -125,6 +149,7 @@ describe('private question code artifacts', () => {
       sceneRevision: scene().revision,
       sceneSha256: questionSceneSha256(scene()),
       experimentId: 'convex-lens',
+      rendererKind: 'independent',
     })
     expect(ref).not.toHaveProperty('entryUrl')
     expect(loaded!.service.list(contributor, 'convex-lens')).toEqual(before)
@@ -138,18 +163,28 @@ describe('private question code artifacts', () => {
     expect(context.developerPrompt).toContain('schemaVersion')
     expect(context.developerPrompt).toContain('协议 3')
     expect(context.allowedAssetPaths).toContain('dist/runtime/protocol.js')
-    expect(context.baseRenderer).toContain('renderFrame')
+    expect(context.renderContract).toContain('renderFrame(snapshot)')
+    expect(context.renderContract).toContain('SceneVisualModel')
+    expect(context.renderContract).toContain('trajectoryTimes')
+    expect(context.renderContract).toContain('clock.time')
+    expect(context.renderContract).toContain('y-up')
+    expect(context.renderContract).toContain('pre-scaled')
+    expect(context.renderContract).toContain('opticalObjects')
+    expect(context.renderContract).toContain('thermalSample')
+    expect(context.renderContract).toContain('waveEnvelope')
+    expect(context).not.toHaveProperty('baseRenderer')
+    expect(context).not.toHaveProperty('baseStylesheet')
     expect(context.publishedBody).toBe('已发布最新风格要求')
     expect(context.styleVersion).toBe('3.7.2')
     expect(context.developerPrompt).not.toContain('physicsos-convex-lens-template-v2')
     expect(context.styleVersion).toBeTruthy()
   })
-  it('layers frozen V3 platform CSS before exact supplementary child CSS without changing community templates', async () => {
-    const service = await setup(), context = await service.context('convex-lens')
+  it('freezes a fullscreen authored shell before exact child CSS without changing community templates or source strings', async () => {
+    const service = await setup()
     const trusted = experimentTemplateFiles('convex-lens')
     const source = {
-      title: '本题标注', summary: '精确保留子代理源码',
-      rendererJs: context.baseRenderer + '\n// Question-specific labels.\n',
+      title: '  本题独立画面  ', summary: '精确保留子代理源码',
+      rendererJs: ownCanvas + '\n// Question-specific labels.\n',
       stylesheet: '/* supplementary only */\nh1 { color: #175; }\n',
     }
     const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source })
@@ -160,6 +195,13 @@ describe('private question code artifacts', () => {
     const raw = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), 'http://local')
     const entry = await service.asset(raw)
     const html = entry!.bytes.toString('utf8')
+    expect(html).toContain('id="canvas"')
+    expect(html).toContain('id="parameters" hidden')
+    expect(html).toContain('id="title"')
+    expect(html).toContain('id="status"')
+    expect(html).toContain('src="./runtime/main.js"')
+    expect(html).not.toContain('<aside')
+    expect(html).not.toContain('<header')
     const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? ''
     expect(head).toContain('href="./assets/platform-base.css"')
     expect(head).toContain('href="./assets/experiment.css"')
@@ -167,7 +209,8 @@ describe('private question code artifacts', () => {
     const publicHtml = row.files.find(file => file.name === 'public/index.html')!
     expect((await readFile(join(root, 'private', 'blobs', publicHtml.sha256))).toString('utf8')).toBe(html)
     const platform = await service.asset(new URL('./assets/platform-base.css', raw))
-    expect(platform?.bytes.toString('utf8')).toBe(context.baseStylesheet)
+    expect(platform?.bytes.toString('utf8')).toContain('height:100%')
+    expect(platform?.bytes.toString('utf8')).not.toBe(trusted.get('public/assets/experiment.css')?.toString('utf8'))
     expect(platform?.contentType).toBe('text/css; charset=utf-8')
     const authored = await service.asset(new URL('./assets/experiment.css', raw))
     expect(authored?.bytes.toString('utf8')).toBe(source.stylesheet)
@@ -175,9 +218,114 @@ describe('private question code artifacts', () => {
     const templateDigests = (files: Map<string, Buffer>) => [...files].map(([name, bytes]) => [name, createHash('sha256').update(bytes).digest('hex')])
     expect(templateDigests(experimentTemplateFiles('convex-lens'))).toEqual(templateDigests(trusted))
   })
+  it.each([
+    ['old template', () => experimentTemplateFiles('convex-lens').get('src/renderer.js')!.toString('utf8')],
+    ['old alias import', () => "import { renderFrame as old } from './platform-renderer.js'; export function renderFrame(snapshot) { old(snapshot) }"],
+    ['old reexport', () => "export { renderFrame } from './platform-renderer.js'"],
+    ['any module dependency', () => "import helper from './protocol.js';\n" + ownCanvas],
+    ['dynamic import', () => ownCanvas + "\nimport('./protocol.js')"],
+    ['old render call', () => ownCanvas + '\nrenderPlatformFrame({})'],
+    ['empty renderer', () => 'export function renderFrame(snapshot) {}'],
+    ['comments only', () => 'export function renderFrame(snapshot) {} // snapshot.view canvas.getContext("2d"); ctx.arc(1,2,3); ctx.fill()'],
+    ['string decoy', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const fake = "canvas.getContext(\'2d\'); ctx.arc(1,2,3); ctx.fill()"; }'],
+    ['background only', () => "export function renderFrame(snapshot) { const view = snapshot.view; const c = document.createElement('canvas'), ctx = c.getContext('2d'); ctx.fillRect(0, 0, 10, 10); document.getElementById('canvas').append(c); }"],
+    ['empty exported alias', () => ownCanvas.replace('export function renderFrame(snapshot)', 'function draw(snapshot)') + '\nconst empty = () => {}; export { empty as renderFrame }'],
+    ['unused painter beside a property-return entry', () => ownCanvas.replace('export function renderFrame(snapshot)', 'function unusedDraw(snapshot)') + '\nexport const renderFrame = snapshot => snapshot.view;'],
+    ['unused painter beside a void-return entry', () => ownCanvas.replace('export function renderFrame(snapshot)', 'function unusedDraw(snapshot)') + '\nexport function renderFrame(snapshot) { return; }'],
+    ['two constant backgrounds with an unused view', () => "export function renderFrame(snapshot) { const view = snapshot.view; const c = document.createElement('canvas'), ctx = c.getContext('2d'); ctx.fillRect(0,0,10,10); ctx.fillRect(0,0,10,10); document.getElementById('canvas').append(c); }"],
+    ['constant coordinate aliases with an unused view', () => "export function renderFrame(snapshot) { const view = snapshot.view; const x = 10, y = 20; const c = document.createElement('canvas'), ctx = c.getContext('2d'); ctx.beginPath(); ctx.arc(x,y,3,0,6.28); ctx.fill(); document.getElementById('canvas').append(c); }"],
+    ['constant helper result despite a data argument', () => "function constant(point) { return 10 } export function renderFrame(snapshot) { const view = snapshot.view; const x = constant(view.opticalObjects[0].at); const c = document.createElement('canvas'), ctx = c.getContext('2d'); ctx.beginPath(); ctx.arc(x,20,3,0,6.28); ctx.fill(); document.getElementById('canvas').append(c); }"],
+    ['uncalled nested painter', () => 'export function renderFrame(snapshot) { ' + ownCanvas.replace('export function renderFrame(snapshot)', 'function unusedDraw(snapshot)') + '\nreturn snapshot.view }'],
+    ['reset data transform before constant geometry', () => ownCanvas.replace('ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2)', 'ctx.translate(item.at.x, item.at.y); ctx.resetTransform(); ctx.arc(0, 0, 3, 0, Math.PI * 2)')],
+    ['restore data transform before constant geometry', () => ownCanvas.replace('ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2)', 'ctx.save(); ctx.translate(item.at.x, item.at.y); ctx.restore(); ctx.arc(0, 0, 3, 0, Math.PI * 2)')],
+    ['data transform on another context', () => ownCanvas.replace('ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2)', 'other.translate(item.at.x, item.at.y); ctx.arc(0, 0, 3, 0, Math.PI * 2)')],
+    ['unused inline SVG painter', () => 'function unusedDraw(snapshot) { document.getElementById("canvas").innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; } export function renderFrame(snapshot) { return snapshot.view }'],
+    ['inline SVG readout beside constant geometry', () => 'export function renderFrame(snapshot) { document.getElementById("canvas").innerHTML = `<svg><circle cx="0" cy="0" r="3" /><text>${snapshot.view.opticalObjects[0].at.x}</text></svg>`; }'],
+    ['inline SVG constant helper despite a data argument', () => 'function constant(point) { return 10 } export function renderFrame(snapshot) { document.getElementById("canvas").innerHTML = `<svg><circle cx="${constant(snapshot.view.opticalObjects[0].at)}" cy="0" r="3" /></svg>`; }'],
+    ['detached inline SVG', () => 'export function renderFrame(snapshot) { const detached = document.createElement("div"); detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
+    ['inline SVG mounted only by an uncalled helper', () => 'const detached = document.createElement("div"); function unusedMount() { document.getElementById("canvas").append(detached) } export function renderFrame(snapshot) { detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
+  ] as const)('rejects %s before it can acquire independent metadata or freeze files', async (_name: string, renderer: () => string) => {
+    const service = await setup(), before = await readdir(join(root, 'private', 'blobs'))
+    await expect(service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '独立实验', summary: '', rendererJs: renderer(), stylesheet: '' } })).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
+    expect(await readdir(join(root, 'private', 'blobs'))).toEqual(before)
+    expect([...domain!.table('artifacts').entries()]).toHaveLength(0)
+  })
+  it('accepts native SVG drawing from the read-only frame', async () => {
+    const service = await setup()
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '透镜 SVG', summary: '', rendererJs: ownSvg, stylesheet: '' } })
+    expect(ref.rendererKind).toBe('independent')
+  })
+  it.each([
+    ownCanvas.replace('export function renderFrame(snapshot)', 'function draw(snapshot)') + '\nexport const renderFrame = snapshot => draw(snapshot);',
+    ownCanvas.replace('export function renderFrame(snapshot)', 'function draw(snapshot)') + '\nexport function renderFrame(snapshot) { return draw(snapshot) }',
+    ownCanvas.replace("  const canvas = document.createElement('canvas'); root.replaceChildren(canvas);", '  root.replaceChildren(canvas);').replace("  const ctx = canvas.getContext('2d');", '') + "\nconst canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');",
+    ownCanvas.replace('ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2)', 'ctx.arc(project(item.at).x, project(item.at).y, 3, 0, Math.PI * 2)') + '\nfunction project(point) { return { x: point.x * 2, y: point.y * 2 } }',
+    ownCanvas.replace('for (const item of view.opticalObjects ?? []) {', '(view.opticalObjects ?? []).forEach(item => {').replace('    ctx.beginPath(); ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2); ctx.fill();\n  }', '    ctx.beginPath(); ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2); ctx.fill();\n  });'),
+    ownCanvas.replace('export function renderFrame(snapshot)', 'function draw(\n snapshot\n)') + '\nexport const renderFrame = snapshot => draw(snapshot);',
+    ownCanvas.replace('ctx.arc(item.at.x, item.at.y, 3, 0, Math.PI * 2)', 'ctx.translate(item.at.x, item.at.y); ctx.arc(0, 0, 3, 0, Math.PI * 2)'),
+    'export function renderFrame(snapshot) { const view = snapshot.view; document.getElementById("canvas").innerHTML = `<svg><circle cx="${view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }',
+    'export function renderFrame(snapshot) { const root = document.getElementById("canvas"); root.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }',
+    'function mount(root, node) { root.append(node) } export function renderFrame(snapshot) { const stage = document.getElementById("canvas"); const child = document.createElement("div"); const alias = child; alias.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; mount(stage, child); }',
+  ])('accepts an entry that reaches its own local painter or uses module-level Canvas setup', async (rendererJs: string) => {
+    const service = await setup()
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '本地绘图函数', summary: '', rendererJs, stylesheet: '' } })
+    expect(ref.rendererKind).toBe('independent')
+  })
+  it('accepts Canvas rectangles that draw frame apparatus in addition to the background', async () => {
+    const service = await setup()
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '透镜矩形画面', summary: '', rendererJs: ownRectangles, stylesheet: '' } })
+    expect(ref.rendererKind).toBe('independent')
+  })
+  it('routes authored controls through the frozen private bootstrap and authenticated V3 SDK only', async () => {
+    const service = await setup(), trusted = experimentTemplateFiles('convex-lens'), ref = await create(service)
+    const preview = service.preview(contributor, ref.artifactId)
+    const raw = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), 'http://local')
+    const moduleText = async (name: string) => {
+      const asset = await service.asset(new URL('./runtime/' + name, raw))
+      if (!asset) throw new Error('Missing frozen private runtime')
+      return asset.bytes.toString('utf8')
+    }
+    const main = await moduleText('main.js')
+    const modules = await Promise.all(['universal-contract.js', 'protocol.js'].map(moduleText))
+    const windowEvents = new Map<string, (event: unknown) => void>()
+    const documentEvents = new Map<string, (event: { detail: unknown }) => void>()
+    const sent: unknown[] = [], ready: unknown[] = []
+    const origin = 'https://preview.example', channel = '12345678-1234-1234-1234-123456789abc'
+    const parent = { postMessage: (message: unknown) => { ready.push(message) } }
+    const port = { postMessage: (message: unknown) => { sent.push(message) }, start: () => {}, close: () => {} }
+    const scope = {
+      URL, URLSearchParams, location: { search: '?hostOrigin=' + encodeURIComponent(origin) + '&channel=' + channel }, parent,
+      document: {
+        getElementById: () => ({}),
+        addEventListener: (type: string, listener: (event: { detail: unknown }) => void) => { documentEvents.set(type, listener) },
+      },
+      addEventListener: (type: string, listener: (event: unknown) => void) => { windowEvents.set(type, listener) },
+      removeEventListener: (type: string) => { windowEvents.delete(type) },
+      renderFrame: () => {},
+    }
+    // Execute only the frozen trusted bootstrap/SDK, with imports linked in this test realm.
+    const script = [...modules, main].map(text => text.replace(/^import .+$/gm, '').replace(/\bexport\s+(?=(?:const|function))/g, '')).join('\n')
+    runInNewContext(script, scope)
+    expect(ready).toHaveLength(1)
+    const intent = { type: 'playback/seek', protocolVersion: 3, time: 1.25 }
+    const dispatch = (detail: unknown) => documentEvents.get('physicsos-experiment-intent')?.({ detail })
+    dispatch(intent)
+    expect(sent).toHaveLength(0)
+    const connect = (hostOrigin: string) => windowEvents.get('message')?.({ source: parent, origin: hostOrigin, data: { type: 'experiment/connect', protocolVersion: 3, channel }, ports: [port] })
+    connect('https://wrong.example'); dispatch(intent)
+    expect(sent).toHaveLength(0)
+    connect(origin)
+    dispatch(intent)
+    expect(sent).toEqual([{ type: 'experiment/connected', protocolVersion: 3 }, intent])
+    for (const invalid of [{ ...intent, protocolVersion: 2 }, { ...intent, time: NaN }, { ...intent, extra: true }, { type: 'unknown', protocolVersion: 3 }]) dispatch(invalid)
+    expect(sent).toHaveLength(2)
+    windowEvents.get('pagehide')?.({})
+    dispatch(intent)
+    expect(sent).toHaveLength(2)
+    expect(experimentTemplateFiles('convex-lens').get('src/main.js')).toEqual(trusted.get('src/main.js'))
+  })
   it('fails closed for missing session owner, wrong domain, oversized or external source', async () => {
-    const service = await setup(),
-      context = await service.context('convex-lens')
+    const service = await setup()
     const input = {
       ownerSessionId: 'parent-session',
       childSessionId: 'child-session',
@@ -186,8 +334,8 @@ describe('private question code artifacts', () => {
       source: {
         title: 'test',
         summary: '',
-        rendererJs: context.baseRenderer,
-        stylesheet: context.baseStylesheet,
+        rendererJs: ownCanvas,
+        stylesheet: '',
       },
     }
     owner = undefined
@@ -287,11 +435,13 @@ describe('private question code artifacts', () => {
       ).status,
     ).toBe(404)
   })
-  it.each(['layered', 'legacy'] as const)('reads %s frozen bytes and keeps signed capabilities and immutable descriptors valid across restart', async (format) => {
+  it.each(['independent', 'legacy'] as const)('reads %s frozen bytes and keeps signed capabilities and immutable descriptors valid across restart', async (format) => {
     const service = await setup(),
       ref = await (format === 'legacy' ? legacyArtifact(service) : create(service)),
       preview = service.preview(contributor, ref.artifactId)
     const before = structuredClone(domain!.table('artifacts').get(ref.artifactId))
+    if (format === 'legacy') expect(ref).not.toHaveProperty('rendererKind')
+    else expect(ref.rendererKind).toBe('independent')
     const original = await service.source(contributor, ref.artifactId, ref.sha256)
     const raw = new URL(preview.entryUrl.replace('/embed/question/', '/question/'), 'http://local')
     const originalBase = await service.asset(new URL('./assets/platform-base.css', raw))

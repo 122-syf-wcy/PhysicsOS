@@ -32,14 +32,15 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
     return () => { clearTimeout(timer) }
   }, [visualization?.status, deadlineAt])
   const ref = visualization?.status === 'ready' ? visualization : undefined
+  const independent = ref?.rendererKind === 'independent'
   const bound = visualization === undefined || questionCodeRefMatches(visualization, scene, owner)
   const sceneIdentity = questionCodeSceneIdentity(scene)
-  const key = ref === undefined ? '' : `${owner}:${ref.artifactId}:${ref.sha256}:${ref.sceneSha256}:${ref.sceneId}:${ref.sceneRevision}:${attempt}:${sceneIdentity}`
+  const key = ref === undefined ? '' : `${owner}:${ref.artifactId}:${ref.sha256}:${ref.sceneSha256}:${ref.sceneId}:${ref.sceneRevision}:${ref.rendererKind ?? 'legacy'}:${attempt}:${sceneIdentity}`
   useEffect(() => {
     setLoaded(undefined)
     setError('')
     setFrameStatus('loading')
-    if (ref === undefined || !bound || session === undefined) return
+    if (ref === undefined || !independent || !bound || session === undefined) return
     const abort = new AbortController()
     let refresh: ReturnType<typeof setTimeout> | undefined
     void questionCodeSceneSha256(scene).then((digest) => {
@@ -62,42 +63,57 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
       if (!abort.signal.aborted) setError(failure instanceof Error ? failure.message : '本题实验暂时无法载入，请重试。')
     })
     return () => { abort.abort(); if (refresh !== undefined) clearTimeout(refresh) }
-  }, [key, bound, session])
+  }, [key, independent, bound, session])
   const status = visualization !== undefined && visualization.ownerSessionId !== owner ? 'owner-mismatch'
     : !bound ? 'stale' : error ? 'failed'
       : visualization?.status === 'generating' && (deadlineAt === undefined || deadlineAt <= now) ? 'interrupted'
-        : visualization?.status ?? 'historical'
-  const ready = bound && ref !== undefined && loaded?.key === key && session !== undefined
+        : ref !== undefined && !independent ? 'upgrade-required' : visualization?.status ?? 'historical'
+  const ready = bound && independent && loaded?.key === key && session !== undefined
   const title = error || (status === 'historical' ? '这段历史记录还没有本题代码实验'
     : status === 'generating' ? '正在生成本题实验'
       : status === 'interrupted' ? '本题实验生成已中断，可重新生成'
         : status === 'failed' ? '本题实验生成失败'
           : status === 'owner-mismatch' ? '请在生成本题实验的学习会话中查看'
             : status === 'stale' ? '题目条件已更新，请重新生成本题实验'
-              : (session === undefined ? '这个场景暂时无法连接物理引擎' : '正在载入本题实验'))
-  return <div className={css.codeCanvas} data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status}>
-    {ready ? <CommunityExperimentFrame key={key} entryUrl={loaded.entryUrl} session={session}
-      experimentId={ref.experimentId} protocolVersion={3} title={`${scene.metadata.title ?? ref.title} · 本题实验`}
-      onStatusChange={setFrameStatus}
-      onRetry={() => { setAttempt(value => value + 1) }} />
-      : <div className={css.codeStatus} role={error || status === 'failed' ? 'alert' : 'status'}>
-        <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
-        <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
-          : status === 'generating' ? '实验代码将使用本题的条件、对象与物理引擎。'
+              : status === 'upgrade-required' ? '这份历史实验可以升级为独立画面'
+                : (session === undefined ? '这个场景暂时无法连接物理引擎' : '正在载入本题实验'))
+  const regenerate = (): void => {
+    if (regenerateQuestionCode === undefined || regenerating) return
+    setRegenerating(true)
+    void Promise.resolve(regenerateQuestionCode(scene.id)).then((result) => {
+      if (!result.ok) setError(result.error)
+    }).catch(() => { setError('未能提交生成请求，请稍后重试。') }).finally(() => { setRegenerating(false) })
+  }
+  return <div className={css.codeCanvas} data-question-code-layout={independent ? 'independent' : 'pending'}
+    data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status}>
+    {ready ? <div className={css.codeStage}>
+      <CommunityExperimentFrame key={key} entryUrl={loaded.entryUrl} session={session}
+        experimentId={ref.experimentId} protocolVersion={3} title={loaded.source.title || ref.title} showStatus={false}
+        onStatusChange={setFrameStatus}
+        onRetry={() => { setAttempt(value => value + 1) }} />
+      {frameStatus !== 'ready' ? <div className={css.frameOverlay} role={frameStatus === 'failed' ? 'alert' : 'status'}>
+        <span className={css.codeMark} aria-hidden="true"><span /></span>
+        <strong>{frameStatus === 'failed' ? '实验画面暂时无法显示' : '正在打开实验画面'}</strong>
+        <p>{frameStatus === 'failed' ? '当前条件已保留，可以重新载入画面。' : '即将呈现本题的独立可视化。'}</p>
+        {frameStatus === 'failed' ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新加载实验文件</button> : null}
+      </div> : null}
+    </div> : <div className={css.codeStatus} role={error || status === 'failed' ? 'alert' : 'status'}>
+      <span className={css.codeMark} aria-hidden="true">{'</>'}</span><strong>{title}</strong>
+      <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
+        : status === 'generating' ? '正在为本题绘制专属实验，完成后即可探索条件变化。'
+          : status === 'upgrade-required' ? '点击升级，为这道题生成完整的独立实验。原题条件和已验证答案会继续保留。'
             : '本题的条件、解题步骤和物理验证已保留。'}</p>
-        {error && bound && ref !== undefined ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
-      </div>}
-    {regenerateQuestionCode !== undefined && status !== 'generating' && (status !== 'owner-mismatch') ? (
-      <div className={css.codeActions}><button type="button" disabled={regenerating} onClick={() => {
-        setRegenerating(true)
-        void Promise.resolve(regenerateQuestionCode(scene.id)).then((result) => {
-          if (!result.ok) setError(result.error)
-        }).catch(() => { setError('未能提交生成请求，请稍后重试。') }).finally(() => { setRegenerating(false) })
-      }}>{regenerating ? '正在提交…' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}</button></div>
-    ) : null}
-    {ready ? <details className={css.source}><summary>本题实验代码</summary>
-      <p>{loaded.source.summary}</p><pre><code>{loaded.source.rendererJs}</code></pre>
-      {loaded.source.stylesheet ? <details><summary>样式</summary><pre><code>{loaded.source.stylesheet}</code></pre></details> : null}
-    </details> : null}
+      {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
+    </div>}
+    {ready || (regenerateQuestionCode !== undefined && status !== 'generating' && status !== 'owner-mismatch') ? <div className={css.codeActions}>
+      {ready ? <details className={css.source}><summary><span aria-hidden="true">{'</>'}</span>本题实验代码</summary>
+        <div className={css.sourceBody}><p>{loaded.source.summary}</p><pre><code>{loaded.source.rendererJs}</code></pre>
+          {loaded.source.stylesheet ? <details><summary>样式</summary><pre><code>{loaded.source.stylesheet}</code></pre></details> : null}
+        </div>
+      </details> : null}
+      {regenerateQuestionCode !== undefined && status !== 'generating' && status !== 'owner-mismatch' ? <button type="button" disabled={regenerating} onClick={regenerate}>
+        {regenerating ? '正在提交…' : status === 'upgrade-required' ? '升级为独立实验' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}
+      </button> : null}
+    </div> : null}
   </div>
 }

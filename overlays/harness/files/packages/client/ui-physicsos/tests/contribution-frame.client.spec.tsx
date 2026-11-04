@@ -25,6 +25,7 @@ it('only binds the trusted wrapper frame and revokes its commands on unmount', a
       session={session}
     />,
   )
+  expect(view.getByRole('status').textContent).toContain('正在载入三维实验文件')
   const frame = view.getByTitle('社区三维实验') as HTMLIFrameElement
   const target = frame.contentWindow!
   const token = new URL(frame.src).searchParams.get('channel')

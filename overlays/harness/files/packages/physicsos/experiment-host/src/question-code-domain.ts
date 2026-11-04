@@ -14,6 +14,7 @@ export const questionCodeRecordSchema = z
     experimentId: z.string().min(1).max(100),
     sha256: digest,
     title: z.string().min(1).max(120),
+    rendererKind: z.literal('independent').optional(),
     summary: z.string().max(1000),
     createdAt: z.string(),
     styleVersion: z.string().min(1).max(100),

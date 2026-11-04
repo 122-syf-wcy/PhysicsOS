@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者。只输出 renderer/CSS，物理事实由平台引擎持有。不能询问学生、修改题目条件、调用物理工具、文件/终端/网页工具或进一步委派。使用 structured_output 提交最终四个字符串。'
+export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者。用独立原生 Canvas2D/SVG 创建本题的现代实验画面、布局与操作界面；只输出 renderer/CSS，物理事实由平台引擎持有。不能导入模块或调用旧平台渲染器，不能询问学生、修改题目条件、调用物理工具、文件/终端/网页工具或进一步委派。使用 structured_output 提交最终四个字符串。'
 
 export class PhysicsCodeProvider implements SubagentProvider {
   readonly name = CODE_PROVIDER_NAME

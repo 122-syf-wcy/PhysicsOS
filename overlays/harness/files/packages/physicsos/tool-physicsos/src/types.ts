@@ -106,7 +106,7 @@ export interface PhysicsSceneSnapshot {
   turn?: number
   /** Structured solve result; present only on `cause: 'solved'` snapshots. */
   solve?: PhysicsSceneSolveSummary
-  /** Private latest V3 code experiment lifecycle. Source and capability URLs remain server-owned. */
+  /** Private latest V3 code lifecycle, including the optional validated independent renderer marker. */
   visualization?: CodeVisualizationState
   scene: JsonValue
 }

@@ -46,6 +46,7 @@ import { PHYSICS_SCENE_TURN_KEY, type PhysicsSceneCardData } from './scene-chat-
 import type { PhysicsSceneRef } from './surface-store.ts'
 import { IconPhysicsLab } from './icons/physics-icons.tsx'
 import { TimelineScrubber } from './TimelineScrubber.tsx'
+import { GlassSelect } from './GlassSelect.tsx'
 import type { PhysicsosKey } from './locales.ts'
 import css from './SceneChatCard.module.css'
 
@@ -94,6 +95,8 @@ export const SceneCardBody = memo(function SceneCardBody({
   /* The snapshot invariant guarantees `scene` is the whole PhysicsScene at
      this revision (`scene.id === sceneId`, `scene.revision === revision`). */
   const scene = data.scene as unknown as PhysicsScene
+  const independent = data.visualization?.status === 'ready' && data.visualization.rendererKind === 'independent'
+  const experimentTitle = independent ? data.visualization.title : data.title
   const domain = domainOfScene(scene)
   const runtimeKey = `${domain}:${data.sceneId}:${data.revision}:${questionCodeSceneIdentity(scene)}`
   const runtime = useMemo<WorkspaceRuntime | null>(
@@ -109,18 +112,14 @@ export const SceneCardBody = memo(function SceneCardBody({
   return (
     <div className={css.card} data-scene-card={data.sceneId} data-code-experiment-shell>
       <header className={css.head}>
-        <span className={css.badge}>
-          <IconPhysicsLab size={14} />
-          本题代码实验
-        </span>
-        <span className={css.title} title={data.title}>{data.title}</span>
-        {/* The card folds every later revision of this scene — the badge
-            says which one is on stage. */}
-        <span className={css.rev}>rev. {data.revision}</span>
+        <div className={css.heading}>
+          <span className={css.badge}><IconPhysicsLab size={14} />本题代码实验</span>
+          <h3 className={css.title} title={experimentTitle}>{experimentTitle}</h3>
+        </div>
         <button
           type="button"
           className={css.open}
-          disabled={data.visualization?.status !== 'ready'}
+          disabled={!independent}
           onClick={() => {
             openSceneInLab({
               sceneId: data.sceneId,
@@ -231,9 +230,8 @@ function CardStage({
         <QuestionCodeCanvas scene={scene} session={session} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
           {...(visualization === undefined ? {} : { visualization })}
           {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
-        <QuestionCodeControls session={session} snapshot={snapshot} />
       </div>
-      <div className={css.transport} aria-label={t('lab.timeline')}>
+      <div className={css.transport} aria-label={t('lab.timeline')} data-running={running}>
         <button
           type="button"
           className={clsx(css.control, css.controlPrimary)}
@@ -291,11 +289,11 @@ function CardStage({
           />
         </div>
         <span className={css.clockEnd}>{formatTimeIn(clock.total, clockScale)}</span>
-        <select className={css.rate} aria-label={t('lab.rate')} value={clock.rate} disabled={failed || clock.total <= 0}
-          onChange={(event) => { commit(runtime.setRate(Number(event.target.value))) }}>
-          {[0.25, 0.5, 1, 2].map(rate => <option key={rate} value={rate}>{rate}×</option>)}
-        </select>
+        <GlassSelect className={css.rate} ariaLabel={t('lab.rate')} value={String(clock.rate)} disabled={failed || clock.total <= 0}
+          options={[0.25, 0.5, 1, 2].map(rate => ({ value: String(rate), label: `${rate}×` }))}
+          onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
       </div>
+      <QuestionCodeControls session={session} snapshot={snapshot} />
       {solve === undefined ? null : (
         <SolveSection
           solve={solve}

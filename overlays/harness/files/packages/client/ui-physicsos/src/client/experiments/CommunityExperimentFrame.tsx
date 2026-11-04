@@ -23,6 +23,8 @@ interface Props {
   readonly onStatusChange?: (status: CommunityFrameStatus) => void
   /** Private capabilities refresh before retrying a renderer. */
   readonly onRetry?: () => void
+  /** A private experiment can supply its own chrome without duplicating status. */
+  readonly showStatus?: boolean
 }
 
 /** Only a trusted wrapper relays a revocable port to its opaque uploaded child. */
@@ -34,6 +36,7 @@ export function CommunityExperimentFrame({
   protocolVersion = 1,
   onStatusChange,
   onRetry,
+  showStatus = true,
 }: Props) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [attempt, setAttempt] = useState(0)
@@ -199,7 +202,7 @@ export function CommunityExperimentFrame({
         referrerPolicy="no-referrer"
         className={css.frame}
       />
-      {status !== 'ready' ? (
+      {showStatus && status !== 'ready' ? (
         <div className={css.frameStatus} role={status === 'failed' ? 'alert' : 'status'}>
           <strong>{status === 'failed' ? '实验文件暂时无法显示' : '正在载入三维实验文件'}</strong>
           <span>

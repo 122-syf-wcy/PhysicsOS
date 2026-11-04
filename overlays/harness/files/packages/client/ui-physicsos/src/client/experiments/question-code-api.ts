@@ -6,6 +6,7 @@ export function sameQuestionCodeRef(a: CodeExperimentRef, b: CodeExperimentRef):
   return a.artifactId === b.artifactId && a.ownerSessionId === b.ownerSessionId && a.sceneId === b.sceneId
     && a.sceneRevision === b.sceneRevision && a.sceneSha256 === b.sceneSha256 && a.sha256 === b.sha256
     && a.experimentId === b.experimentId && a.childSessionId === b.childSessionId
+    && a.rendererKind === b.rendererKind
 }
 export function questionCodeRefMatches(ref: CodeVisualizationState, scene: PhysicsScene, owner: string | undefined): boolean {
   return owner !== undefined && ref.ownerSessionId === owner && ref.sceneId === scene.id && ref.sceneRevision === scene.revision

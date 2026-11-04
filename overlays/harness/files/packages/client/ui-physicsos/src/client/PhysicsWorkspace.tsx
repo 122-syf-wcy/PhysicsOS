@@ -80,6 +80,8 @@ import type { CodeVisualizationState } from '@deepseek-ai/dsh-tool-physicsos/typ
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { QuestionCodeOwnerStore } from './experiments/question-code-context.ts'
 import { QuestionCodeCanvas } from './experiments/QuestionCodeCanvas.tsx'
+import { QuestionCodeControls } from './experiments/QuestionCodeControls.tsx'
+import codeCss from './SceneChatCard.module.css'
 import { useExperimentSession } from './experiments/use-experiment-session.ts'
 import { CommunityWorkspaceCanvas } from './experiments/CommunityWorkspaceCanvas.tsx'
 
@@ -514,6 +516,52 @@ export function PhysicsWorkspace({
     }
   }, [])
 
+  if (questionCodeVisualization !== undefined && questionCodeScene !== undefined) {
+    const independent = questionCodeVisualization.status === 'ready' && questionCodeVisualization.rendererKind === 'independent'
+    const title = independent ? questionCodeVisualization.title : questionCodeScene.metadata.title ?? snapshot.title
+    return <div ref={coverRef} className={clsx(css.cover, codeCss.labCover)} data-private-question-code-workspace
+      data-physicsos-surface="lab" data-physicsos-domain={snapshot.domain} data-physicsos-running={running ? 'true' : 'false'}
+      data-scene-revision={snapshot.sceneRevision} data-verification-status={displayedStatus}>
+      <div className={codeCss.labContent}>
+        <header className={codeCss.labHeader}>
+          {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
+            <IconChevronLeftOutlineMedium size={14} />{t('lab.backToChat')}
+          </button>}
+          <div className={codeCss.heading}>
+            <span className={codeCss.badge}><IconScene size={14} />本题代码实验</span>
+            <h1 className={codeCss.title}>{title}</h1>
+          </div>
+        </header>
+        <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
+          {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
+        <div className={codeCss.transport} aria-label={t('lab.timeline')} data-running={running}>
+          <button type="button" className={clsx(codeCss.control, codeCss.controlPrimary)} disabled={failed || clock.total <= 0}
+            aria-label={ended ? t('lab.replay') : t('lab.playPause')} aria-pressed={running}
+            onClick={() => { commit(runtime.setRunning(!running)) }}>
+            {running ? <IconPauseOutlineMedium size={14} /> : <IconPlayOutlineMedium size={14} />}
+          </button>
+          <button type="button" className={codeCss.control} disabled={failed} aria-label={t('lab.stepBack')}
+            onClick={() => { commit(runtime.step(-clock.total * STEP_FRACTION)) }}><IconChevronLeftOutlineMedium size={14} /></button>
+          <button type="button" className={codeCss.control} disabled={failed} aria-label={t('lab.step')}
+            onClick={() => { commit(runtime.step(clock.total * STEP_FRACTION)) }}><IconChevronRightOutlineMedium size={14} /></button>
+          <button type="button" className={codeCss.control} disabled={failed} aria-label={t('lab.reset')}
+            onClick={() => { commit(runtime.seek(0)) }}><IconRefreshOutlineMedium size={14} /></button>
+          <LiveClock source={frameSource} scale={clockScale} {...(codeCss.clock === undefined ? {} : { className: codeCss.clock })} />
+          <div className={codeCss.trackWrap}><TimelineScrubber label={t('lab.timeline')} min={0} max={clock.total} value={clock.time}
+            valueText={`${formatTimeIn(clock.time, clockScale)} / ${formatTimeIn(clock.total, clockScale)}`} onChange={seek} /></div>
+          <span className={codeCss.clockEnd}>{formatTimeIn(clock.total, clockScale)}</span>
+          <GlassSelect className={codeCss.rate} ariaLabel={t('lab.rate')} value={String(clock.rate)} disabled={failed || clock.total <= 0}
+            options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}×` }))}
+            onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
+        </div>
+        <QuestionCodeControls session={session} snapshot={snapshot} />
+        {questionCodeVisualization.status === 'ready' && !independent ? <p className={codeCss.labHint}>
+          返回原学习对话，点击“升级为独立实验”，即可为这道题生成完整的新画面。
+        </p> : null}
+      </div>
+    </div>
+  }
+
   return (
     <div
       ref={coverRef}
@@ -855,21 +903,18 @@ export function PhysicsWorkspace({
             >
               {/* The canvas is the renderer: it subscribes to the frame source
                   directly, so animation frames re-render only this subtree (#123). */}
-              {questionCodeVisualization !== undefined && questionCodeScene !== undefined
-                ? <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
-                  {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
-                : experimentId === undefined ? <CanvasFrame
-                  source={frameSource}
-                  ariaLabel={snapshot.ariaLabel}
-                  onSeekTime={seek}
+              {experimentId === undefined ? <CanvasFrame
+                source={frameSource}
+                ariaLabel={snapshot.ariaLabel}
+                onSeekTime={seek}
+                {...(componentDrag === undefined ? {} : { componentDrag })}
+                {...(componentControl === undefined ? {} : { componentControl })}
+                {...(componentWiring === undefined ? {} : { componentWiring })}
+              /> : <CommunityWorkspaceCanvas experimentId={experimentId} session={session}
+                fallback={<CanvasFrame source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
                   {...(componentDrag === undefined ? {} : { componentDrag })}
                   {...(componentControl === undefined ? {} : { componentControl })}
-                  {...(componentWiring === undefined ? {} : { componentWiring })}
-                /> : <CommunityWorkspaceCanvas experimentId={experimentId} session={session}
-                  fallback={<CanvasFrame source={frameSource} ariaLabel={snapshot.ariaLabel} onSeekTime={seek}
-                    {...(componentDrag === undefined ? {} : { componentDrag })}
-                    {...(componentControl === undefined ? {} : { componentControl })}
-                    {...(componentWiring === undefined ? {} : { componentWiring })} />} />}
+                  {...(componentWiring === undefined ? {} : { componentWiring })} />} />}
             </section>
 
             {/* The timeline row is only real where a run window exists. Hiding
@@ -1084,12 +1129,14 @@ const collectObservables = (
 function LiveClock({
   source,
   scale,
+  className = css.clock,
 }: {
   source: FrameSource<WorkspaceSnapshot>
   scale: ReturnType<typeof timeScaleOf>
+  className?: string
 }) {
   const frame = useFrameSource(source)
-  return <span className={css.clock}>{formatTimeIn(frame.clock.time, scale)}</span>
+  return <span className={className}>{formatTimeIn(frame.clock.time, scale)}</span>
 }
 
 function CanvasFrame({

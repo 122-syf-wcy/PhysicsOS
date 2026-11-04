@@ -9,6 +9,8 @@ export interface CodeExperimentRef {
   readonly experimentId: string
   readonly sha256: string
   readonly title: string
+  /** Absent on immutable legacy artifacts; set only after standalone drawing validation. */
+  readonly rendererKind?: 'independent'
   readonly childSessionId: string
   readonly createdAt: string
 }

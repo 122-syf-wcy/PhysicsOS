@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { zh } from '../locales.ts'
+import { GlassSelect } from '../GlassSelect.tsx'
 import type { QuantityParameter, SceneTreeNode } from '../physics/scene-visual-model.ts'
 import type { WorkspaceSnapshot } from '../physics/workspace-runtime.ts'
 import { applyUniversalContributionIntent } from './contribution-protocol.ts'
@@ -16,25 +17,37 @@ export function QuestionCodeControls({ session, snapshot }: { session: Experimen
     }
   }
   visit(snapshot.tree)
-  return <aside className={css.parameters} aria-label="本题实验参数">
-    <h4>实验参数</h4>
-    {snapshot.inspector.map(section => <fieldset key={section.id}>
-      <legend>{section.title}</legend>
-      {(section.parameters ?? []).map(parameter => <ParameterEditor key={parameter.id} parameter={parameter} session={session} />)}
-      {(section.choices ?? []).map(choice => <label key={choice.id}>{choice.label}<select value={choice.value} onChange={(event) => {
-        applyUniversalContributionIntent(session, { type: 'choice/set', protocolVersion: 3, id: choice.id, value: event.target.value })
-      }}>{choice.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>)}
-      {(section.derived ?? []).map(item => (
-        <p className={css.reading} key={item.id}>
-          <span>{item.label}</span><output>{item.value} {item.unit}</output>
-        </p>
-      ))}
-    </fieldset>)}
-    <details><summary>显示内容</summary>{Object.entries(snapshot.view.visible).map(([key, enabled]) => typeof enabled === 'boolean' ?
+  return <section className={css.parameters} aria-label="本题实验参数" data-question-code-controls>
+    <div className={css.controlsHead}>
+      <h4>实验条件</h4>
+      <button type="button" className={css.restore} disabled={snapshot.branch?.canRestore !== true || session.runtime.restoreOrigin === undefined}
+        onClick={() => {
+          const restored = session.runtime.restoreOrigin?.()
+          if (restored !== undefined) session.commit(restored)
+        }}>恢复原题</button>
+    </div>
+    <details className={css.conditions} open><summary>调整条件<span>探索变化，保留原题</span></summary>
+      <div className={css.conditionGroups}>{snapshot.inspector.map(section =>
+        (section.parameters?.length ?? 0) + (section.choices?.length ?? 0) > 0 ?
+          <fieldset key={section.id}><legend>{section.title}</legend><div className={css.parameterGrid}>
+            {(section.parameters ?? []).map(parameter => <ParameterEditor key={parameter.id} parameter={parameter} session={session} />)}
+            {(section.choices ?? []).map(choice => <div className={css.choice} key={choice.id}><span>{choice.label}</span>
+              <GlassSelect value={choice.value} options={choice.options} ariaLabel={choice.label} onChange={(value) => {
+                applyUniversalContributionIntent(session, { type: 'choice/set', protocolVersion: 3, id: choice.id, value })
+              }} />
+            </div>)}
+          </div></fieldset> : null)}</div>
+    </details>
+    {snapshot.inspector.some(section => (section.derived?.length ?? 0) > 0) ? <div className={css.readings} aria-label="实验读数">
+      {snapshot.inspector.flatMap(section => (section.derived ?? []).map(item => <div className={css.reading} key={`${section.id}:${item.id}`}>
+        <span>{item.label}</span><output>{item.value}<small>{item.unit}</small></output>
+      </div>))}
+    </div> : null}
+    <details className={css.displayOptions}><summary>显示内容</summary><div className={css.visibilityOptions}>{Object.entries(snapshot.view.visible).map(([key, enabled]) => typeof enabled === 'boolean' ?
       <label className={css.visibility} key={key}><input type="checkbox" checked={enabled} onChange={(event) => {
         applyUniversalContributionIntent(session, { type: 'observable/set', protocolVersion: 3, key, enabled: event.target.checked })
-      }} />{labels.get(key) ?? (zh as Partial<Record<string, string>>)[`lab.observable.${key}`] ?? key}</label> : null)}</details>
-  </aside>
+      }} /><span>{labels.get(key) ?? (zh as Partial<Record<string, string>>)[`lab.observable.${key}`] ?? key}</span></label> : null)}</div></details>
+  </section>
 }
 
 function ParameterEditor({ parameter, session }: { readonly parameter: QuantityParameter; readonly session: ExperimentSession }) {
