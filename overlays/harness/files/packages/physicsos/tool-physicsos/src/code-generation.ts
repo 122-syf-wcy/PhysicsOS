@@ -167,7 +167,6 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
         const result = await wait(run.result)
         const generatedAssets = deps.assetManifest?.(jobId)
         if (result.stopReason === 'error' && result.structured === undefined
-          && result.output.some(block => block.type === 'text' && block.text.trim().length > 0)
           && Array.isArray(generatedAssets) && generatedAssets.length > 0) {
           throw Object.assign(new Error('Child finished after image generation without submitting code'), { code: 'MISSING_STRUCTURED_OUTPUT' })
         }

@@ -235,6 +235,20 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
     expect(block?.type === 'text' ? block.text : '').toContain(asset.path)
     expect(h.states.filter(state => state.visualization?.status === 'generating')).toHaveLength(1)
   })
+  it('uses only one repair after an empty upstream failure with an existing image, without increasing the job deadline', async () => {
+    const h = dependencies()
+    h.deps.assetManifest = () => [{ path: './assets/generated/abcdef.png' }]
+    h.start.mockImplementationOnce(async () => ({ id: 'failed-child', result: Promise.resolve({ stopReason: 'error', output: [] }), dispose: h.dispose }))
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.states.filter(state => state.visualization?.status === 'generating')).toHaveLength(1)
+    expect(h.dispose).toHaveBeenCalledTimes(2)
+    const twice = dependencies()
+    twice.deps.assetManifest = () => [{ path: './assets/generated/abcdef.png' }]
+    twice.start.mockImplementation(async () => ({ id: 'failed-child', result: Promise.resolve({ stopReason: 'error', output: [] }), dispose: twice.dispose }))
+    expect((await generateQuestionCode(twice.deps)).status).toBe('failed')
+    expect(twice.start).toHaveBeenCalledTimes(2)
+  })
   it.each([
     ['missing export', 'missing_export', true],
     ['missing engine geometry', 'missing_engine_geometry', true],
