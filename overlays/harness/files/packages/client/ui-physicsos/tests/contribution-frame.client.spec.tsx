@@ -140,6 +140,27 @@ function v2Frame() {
   )
   return { runtime, session, view, status, ...bindV2(view) }
 }
+it('republishes the same paused engine snapshot on frame resize and disconnects on unmount', () => {
+  let resized: (() => void) | undefined
+  const observe = vi.fn(), disconnect = vi.fn()
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: () => void) { resized = callback }
+    observe = observe
+    disconnect = disconnect
+  })
+  const h = v2Frame()
+  expect(h.outbound).toHaveLength(1)
+  const first = h.outbound[0]!
+  act(() => { resized?.() })
+  expect(h.outbound).toHaveLength(2)
+  expect(h.outbound[1]?.snapshot).toEqual(first.snapshot)
+  expect(h.outbound[1]?.frameId).not.toBe(first.frameId)
+  expect(observe).toHaveBeenCalledWith(h.view.getByTitle('社区三维实验'))
+  h.view.unmount()
+  expect(disconnect).toHaveBeenCalledOnce()
+  act(() => { resized?.() })
+  expect(h.outbound).toHaveLength(2)
+})
 it('V2 connected alone times out instead of becoming ready', () => {
   vi.useFakeTimers()
   try {

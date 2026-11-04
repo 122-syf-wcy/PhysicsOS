@@ -165,6 +165,9 @@ export function CommunityExperimentFrame({
     const unsubscribe = protocolVersion === 3
       ? session.frames.subscribe(publish)
       : session.subscribe(publish)
+    // Paused scenes still need a new authored frame when their viewport changes.
+    const resize = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(publish)
+    resize?.observe(element)
     const timeout = setTimeout(fail, 15000)
     updateStatus('loading')
     window.addEventListener('message', receive)
@@ -189,6 +192,7 @@ export function CommunityExperimentFrame({
       clearTimeout(timeout)
       window.removeEventListener('message', receive)
       unsubscribe()
+      resize?.disconnect()
       port?.close()
       session.cancelPreview()
     }
