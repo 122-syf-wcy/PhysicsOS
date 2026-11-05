@@ -1,0 +1,128 @@
+{
+  "capturedDate": "2026-11-05",
+  "sourceRevision": "ea646e6c9c45d6c9656f4292268807bb5a6529fa",
+  "scope": "Isolated candidate diagnostics; no production switch. Contains counts and route metadata only.",
+  "route": {
+    "selectedProvider": "physicsos-pool",
+    "selectedModel": "deepseek-v4.1-flash",
+    "enabledChannelCount": 1,
+    "channelName": "风少公益站",
+    "upstreamHost": "api.fengshao1227.com",
+    "configuredUpstreamModels": [
+      "deepseek-v4.1-flash"
+    ],
+    "priority": 10,
+    "metadataReadOnly": true
+  },
+  "historicalSuccessfulChild": {
+    "sessionId": "5a497264-50fb-40dc-92ba-a98cdefc999e",
+    "selectedReasoningEffort": "off",
+    "maxTokens": 8192,
+    "responseModelReported": null,
+    "responseModelNote": "The persisted replay metadata contains no responseModel field; absence does not identify the upstream backend.",
+    "firstResponseInputTokens": 9723,
+    "firstResponseOutputTokens": 403,
+    "firstResponseTool": "physics_generate_experiment_asset",
+    "responseCount": 10,
+    "reasoningCharactersAcrossResponses": 0,
+    "toolCalls": {
+      "asset": 1,
+      "writer": 8,
+      "metadata": 1
+    },
+    "largestSingleResponseOutputTokens": 2447,
+    "terminalReason": "completed",
+    "promptCharacters": {
+      "system": 3360,
+      "task": 25070,
+      "internalContext": 880
+    }
+  },
+  "candidate16384Probe": {
+    "parentSessionId": "session-2537c57e-3ae0-4963-bfe3-ad3dc9306253",
+    "childSessionId": "60a005a0-23ae-424e-81a5-6efb0224db7b",
+    "selectedReasoningEffort": "off",
+    "maxTokens": 16384,
+    "responseModelReported": "hy4-free",
+    "inputTokens": 5768,
+    "outputTokens": 16384,
+    "responseCount": 1,
+    "reasoningCharacters": 35258,
+    "textCharacters": 0,
+    "toolCalls": 0,
+    "terminalReason": "max-tokens",
+    "publishedFailureCode": "MAX_TOKENS",
+    "continuationStarted": false,
+    "continuationNote": "No owned image or committed source existed; the bounded continuation rule correctly refused a new child.",
+    "promptCharacters": {
+      "system": 3360,
+      "task": 12223,
+      "internalContext": 880
+    },
+    "tools": [
+      "physics_generate_experiment_asset",
+      "physics_write_experiment_code",
+      "structured_output"
+    ]
+  },
+  "assetOnlyProbe": {
+    "purpose": "Determine whether the current mapped route can emit an asset tool call with a short task and forced named tool. Returned tool is never executed.",
+    "maxTokens": 8192,
+    "reasoningEffortSent": "none",
+    "thinkingTypeSent": "disabled",
+    "toolChoice": "named physics_generate_experiment_asset",
+    "toolSchemaCount": 1,
+    "httpStatus": 200,
+    "responseModelReported": "hy4-free",
+    "inputTokens": 310,
+    "outputTokens": 340,
+    "reasoningTokensReported": 283,
+    "reasoningCharacters": 1260,
+    "textCharacters": 0,
+    "toolCalls": 1,
+    "toolArgumentCharacters": 193,
+    "finishReason": "tool_calls",
+    "durationMs": 4732,
+    "modelRequests": 1,
+    "toolExecutions": 0,
+    "imageRequests": 0,
+    "limitation": "Both task length and tool choice changed, so this probe does not isolate their effects. It proves tool-call capability, not completed image/code generation."
+  },
+  "fullPromptForcedAssetProbe": {
+    "purpose": "Replay only the recorded input messages and three tool schemas from the 16384 failure, with the baseline 8192 cap and a named first-asset tool choice. No assistant reasoning or output is replayed. Returned tool is never executed.",
+    "status": "finished",
+    "selectedModel": "deepseek-v4.1-flash",
+    "responseModelReported": "hy4-free",
+    "maxTokens": 8192,
+    "reasoningEffortSent": "none",
+    "thinkingTypeSent": "disabled",
+    "toolChoice": "named physics_generate_experiment_asset",
+    "toolSchemaCount": 3,
+    "promptCharacters": {
+      "system": 3360,
+      "task": 12223,
+      "internalContext": 880
+    },
+    "httpStatus": 200,
+    "inputTokens": 5768,
+    "cachedInputTokensReported": 5696,
+    "outputTokens": 4009,
+    "reasoningTokensReported": 3848,
+    "reasoningCharacters": 13887,
+    "textCharacters": 0,
+    "toolCalls": 1,
+    "toolArgumentCharacters": 244,
+    "finishReason": "tool_calls",
+    "durationMs": 53644,
+    "modelRequests": 1,
+    "toolExecutions": 0,
+    "imageRequests": 0,
+    "limitation": "This single probe supports named first-tool choice on the unchanged task. It does not prove subsequent code generation or image execution succeeds."
+  },
+  "interpretation": [
+    "The 16384 cap was active; the failure is not explained by an unchanged 8192 parent cap.",
+    "The latest task is about half the character length of the historical successful task, with the identical system-message character length.",
+    "The configured upstream model remains deepseek-v4.1-flash; hy4-free is an upstream-reported response model, not a configured local alias.",
+    "The latest failure occurred before any asset or code tool call, so source validation and image usage checks did not cause that failure."
+  ]
+}

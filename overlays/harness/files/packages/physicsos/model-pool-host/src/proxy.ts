@@ -96,7 +96,24 @@ const normalizeUpstreamPayload = (
         || fn?.name === 'physics_write_experiment_code')) {
       isolatedCode = true
       // This isolated workflow has no useful plain-text completion: image then code.
-      if (payload.tool_choice === undefined) payload = { ...payload, tool_choice: 'required' }
+      if (payload.tool_choice === undefined) {
+        const image = functions.find(fn => fn?.name === 'physics_generate_experiment_asset')
+        const imageSchema = object(image?.parameters), imageProperties = object(imageSchema?.properties)
+        const imageRequired: unknown = imageSchema?.required
+        const kinds: unknown = object(imageProperties?.kind)?.enum
+        // The child already owns the bounded image tool. Direct only its initial
+        // call, before any assistant/tool history; later code steps and failed
+        // image recovery keep the ordinary tool choice and existing quotas.
+        const initialImage = chunked && object(imageProperties?.prompt)?.type === 'string'
+          && object(imageProperties?.kind)?.type === 'string'
+          && Array.isArray(kinds) && kinds.length === 2 && kinds.includes('environment') && kinds.includes('material')
+          && Array.isArray(imageRequired) && imageRequired.includes('prompt') && imageRequired.includes('kind')
+          && Array.isArray(payload.messages) && payload.messages.length > 0
+          && payload.messages.every(message => ['system', 'developer', 'user'].includes(String(object(message)?.role)))
+        payload = { ...payload, tool_choice: initialImage
+          ? { type: 'function', function: { name: 'physics_generate_experiment_asset' } }
+          : 'required' }
+      }
     }
   }
   const nativeDeepSeek = typeof payload.model === 'string'

@@ -13,7 +13,7 @@ import { QuestionCodeParts } from './question-code-parts.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者和实验美术设计师。按已发布实验提示词制作 Warm Lab 拟真实验场景。先调用 physics_generate_experiment_asset 生成本题环境或材质，再用独立原生 Canvas2D/SVG 与生成素材完成装置、空间与动态画面；物理事实由平台引擎持有。不能导入旧渲染器，不能询问学生、修改题目条件、调用物理/文件/终端/网页工具或进一步委派。通过physics_write_experiment_code每次最多2400字符分段交付JS/CSS，最后structured_output仅提交title/summary。'
+export const CODE_PERSONA = '你是 PhysicsOS 的专用题目实验代码作者和实验美术设计师。按已发布实验提示词制作 Warm Lab 拟真实验场景。已有本任务素材时直接复用，不再生图；没有素材且提供素材工具时先调用 physics_generate_experiment_asset 生成本题环境或材质。用独立原生 Canvas2D/SVG 与生成素材完成装置、空间与动态画面；物理事实由平台引擎持有。不能导入旧渲染器，不能询问学生、修改题目条件、调用物理/文件/终端/网页工具或进一步委派。通过physics_write_experiment_code每次最多2400字符分段交付JS/CSS，最后structured_output仅提交title/summary。'
 
 export class PhysicsCodeProvider implements SubagentProvider {
   readonly name = CODE_PROVIDER_NAME

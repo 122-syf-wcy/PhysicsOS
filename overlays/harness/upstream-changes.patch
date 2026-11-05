@@ -13163,6 +13163,78 @@ index ff7daaca09..cdcc084f07 100644
    it.each(['v1', 'v2'] as const)(
      'resolves %s package metadata from the owning entry tree',
      (version) => {
+diff --git a/packages/client/ui-commands/src/client/service.ts b/packages/client/ui-commands/src/client/service.ts
+--- a/packages/client/ui-commands/src/client/service.ts
++++ b/packages/client/ui-commands/src/client/service.ts
+@@ -97,7 +97,12 @@
+     this.directory = new CommandDirectory(async (sessionId) => {
+       const sessions = this.sessions()
+       if (sessions.subagentAddress(sessionId) !== undefined) return []
+-      if (sessions.binding(sessionId) === undefined) {
++      const binding = sessions.binding(sessionId)
++      // A cold trigger controller can warm the catalog from a Slot inject during
++      // React render. Retaining publishes the session list, so yield first and
++      // keep the request bound to the same live Session generation afterwards.
++      await Promise.resolve()
++      if (binding === undefined || sessions.binding(sessionId) !== binding) {
+         throw new Error(`command catalog requires a retained session "${sessionId}"`)
+       }
+       return sessions.using(sessionId, { source: 'commandCatalog' }, async (reference) => {
+diff --git a/packages/client/ui-commands/tests/service.client.spec.ts b/packages/client/ui-commands/tests/service.client.spec.ts
+--- a/packages/client/ui-commands/tests/service.client.spec.ts
++++ b/packages/client/ui-commands/tests/service.client.spec.ts
+@@ -228,13 +228,50 @@
+ })
+ 
+ describe('candidates', () => {
++  it('defers command catalog retention until render-time source warm returns', async () => {
++    const response = Promise.withResolvers<{ commands: CommandDescriptor[] }>()
++    const b = await bench({ commands: () => response.promise })
++    const retained: number[] = []
++    const stop = b.sessions.list.subscribe(() => {
++      retained.push(b.sessions.retainInfo(sid('s1')).getSnapshot().retainedBy.commandCatalog ?? 0)
++    })
++    try {
++      b.source.warm!(proj('s1'))
++      // InputBar resolves its trigger controller from a Slot inject during render.
++      // Warming must not synchronously notify the sidebar's session-list subscriber.
++      expect(retained).toEqual([])
++      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
++      await vi.waitFor(() => { expect(retained).toEqual([1]) })
++      expect(b.listCalls).toEqual([{ sessionId: sid('s1') }])
++      response.resolve({ commands: S1_CMDS })
++      await b.warm(proj('s1'))
++      expect(retained).toEqual([1, 0])
++      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().referenceCount).toBe(1)
++    } finally {
++      response.resolve({ commands: S1_CMDS })
++      stop()
++    }
++  })
++
++  it('does not reacquire a Session released while deferred catalog acquisition is pending', async () => {
++    const b = await bench()
++    const reference = b.sessions.retain(sid('other'), { source: 'testOperation' })
++    b.source.warm!(proj('other'))
++    reference.release()
++    await expect(b.source.candidates(proj('other'), req(''))).rejects.toThrow('requires a retained session')
++    expect(b.sessions.binding(sid('other'))).toBeUndefined()
++    expect(b.listCalls).toEqual([])
++  })
++
+   it('waits for initial history and retains the Session until the catalog RPC settles', async () => {
+     const opened = Promise.withResolvers<undefined>()
+     const response = Promise.withResolvers<{ commands: CommandDescriptor[] }>()
+     const b = await bench({ initialOpen: () => opened.promise, commands: () => response.promise })
+     try {
+       const pending = b.source.candidates(proj('s1'), req(''))
+-      expect(b.sessions.retainInfo(sid('s1')).getSnapshot().retainedBy.commandCatalog).toBe(1)
++      await vi.waitFor(() => {
++        expect(b.sessions.retainInfo(sid('s1')).getSnapshot().retainedBy.commandCatalog).toBe(1)
++      })
+       expect(b.listCalls).toEqual([])
+       opened.resolve(undefined)
+       await vi.waitFor(() => { expect(b.listCalls).toHaveLength(1) })
 diff --git a/packages/client/ui-conversation/src/client/apply.ts b/packages/client/ui-conversation/src/client/apply.ts
 index 942444d3b7..2f44c10a4f 100644
 --- a/packages/client/ui-conversation/src/client/apply.ts

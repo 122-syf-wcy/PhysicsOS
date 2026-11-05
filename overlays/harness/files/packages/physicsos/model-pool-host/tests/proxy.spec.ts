@@ -102,6 +102,47 @@ const chat = async (
 }
 
 describe('model pool proxy', () => {
+  it('forces only the first image call in the strict chunked code workflow and releases later steps', async () => {
+    const received: Record<string, unknown>[] = []
+    const upstream = await startUpstream((body, res) => { received.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'code-first-image', baseURL: upstream.url, priority: 10 })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-first-image' })
+    const base = await startPool(store)
+    const metadata = { type: 'function', function: { name: 'structured_output', parameters: { type: 'object', additionalProperties: false, properties: { title: { type: 'string' }, summary: { type: 'string' } }, required: ['title', 'summary'] } } }
+    const writer = { type: 'function', function: { name: 'physics_write_experiment_code', parameters: { type: 'object' } } }
+    const image = { type: 'function', function: { name: 'physics_generate_experiment_asset', parameters: { type: 'object', properties: { prompt: { type: 'string' }, kind: { type: 'string', enum: ['environment', 'material'] } }, required: ['prompt', 'kind'] } } }
+    const tools = [metadata, writer, image]
+    const initial = [{ role: 'system', content: 'Private code author.' }, { role: 'user', content: 'Draw the actual scene.' }]
+    const forcedImage = { type: 'function', function: { name: 'physics_generate_experiment_asset' } }
+    await chat(base, { tools, messages: initial, max_tokens: 8192 })
+    expect(received.at(-1)).toMatchObject({ tools, messages: initial, max_tokens: 8192, tool_choice: forcedImage })
+    const called = { role: 'assistant', content: null, tool_calls: [{ id: 'asset-1', type: 'function', function: { name: 'physics_generate_experiment_asset', arguments: '{}' } }] }
+    for (const history of [
+      [called],
+      [called, { role: 'tool', tool_call_id: 'asset-1', content: '{"path":"./assets/generated/owned.png"}' }],
+      [called, { role: 'tool', tool_call_id: 'asset-1', content: '{"isError":true}' }],
+      [{ role: 'assistant', content: 'Code is partly written.' }],
+      [{ role: 'function', name: 'physics_generate_experiment_asset', content: '{}' }],
+    ]) {
+      await chat(base, { tools, messages: [...initial, ...history] })
+      expect(received.at(-1)?.tool_choice).toBe('required')
+    }
+    for (const choice of ['auto', 'none', 'required', { type: 'function', function: { name: 'structured_output' } }]) {
+      await chat(base, { tools, messages: initial, tool_choice: choice })
+      expect(received.at(-1)?.tool_choice).toEqual(choice)
+    }
+    for (const other of [
+      [metadata, writer],
+      [metadata, writer, { ...image, function: { ...image.function, parameters: { type: 'object' } } }],
+    ]) {
+      await chat(base, { tools: other, messages: initial })
+      expect(received.at(-1)?.tool_choice).toBe('required')
+    }
+    await chat(base, { tools: [image], messages: initial })
+    expect(received.at(-1)?.tool_choice).toBeUndefined()
+  })
   it('restores omitted off effort only for native DeepSeek isolated code requests on the actual wire', async () => {
     const received: Record<string, unknown>[] = []
     const upstream = await startUpstream((body, res) => { received.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') })
