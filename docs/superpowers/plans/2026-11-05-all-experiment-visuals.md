@@ -32,40 +32,40 @@ Files: `experiment-packages/lab-collection/src/{renderer,scene-kit,main}.js`, `e
 
 Interface: domain functions receive `(snapshot, kit)` and append geometry to `kit.group`. Kit operates in raw scene coordinates and provides THREE, unit (max extent / 12), palette, box, sphere, cylinder, tube, line, arrow, circle, polygon, label. Object arguments use `{x,y,z?}`. Root owns camera, uniform mapping, geometry/material disposal, common vectors/trajectories/labels/readouts and observer cleanup.
 
-- [ ] Establish meaningful release coverage and projection/visibility checks in server Docker.
-- [ ] Implement kit/shell and decode canonical templates, overlay authored files, bundle local Three, run normal release per target.
-- [ ] Verify 76 matching manifests, unique target bindings, hashes, complete resource validation.
+- [x] Establish meaningful release coverage and projection/visibility checks in server Docker.
+- [x] Implement kit/shell and decode canonical templates, overlay authored files, bundle local Three, run normal release per target.
+- [x] Verify 76 matching manifests, unique target bindings, hashes, complete resource validation.
 
 ### Task 2: Mechanics renderer (24 experiments)
 
 File: `experiment-packages/lab-collection/src/mechanics.js`; export `drawMechanics(snapshot, kit)`.
 
-- [ ] Map all mechanics view families and retain precise body/rig anchors, springs, pivots, balance beam, tracks, energy apparatus.
-- [ ] Implement distinctive physical apparatus and target-specific details from snapshot only.
-- [ ] Verify baseline and evolved snapshots; record review notes.
+- [x] Map all mechanics view families and retain precise body/rig anchors, springs, pivots, balance beam, tracks, energy apparatus.
+- [x] Implement distinctive physical apparatus and target-specific details from snapshot only.
+- [x] Verify baseline and evolved snapshots; record review notes.
 
 ### Task 3: Optics / wave / acoustics / fluid / thermal / modern renderer (24 experiments)
 
 Files: `experiment-packages/lab-collection/src/{optics,waves,matter}.js`; export `drawOptics`, `drawWaves` (wave/acoustics), `drawMatter` (fluid/thermal/modern).
 
-- [ ] Preserve lens/mirror geometry, real/virtual rays, refraction/pinhole, exact wave samples, tank/probe/thermometer facts.
-- [ ] Implement apparatus without recalculating image formation, waves or temperature.
-- [ ] Verify characteristic cases and visibility, including all subfamilies.
+- [x] Preserve lens/mirror geometry, real/virtual rays, refraction/pinhole, exact wave samples, tank/probe/thermometer facts.
+- [x] Implement apparatus without recalculating image formation, waves or temperature.
+- [x] Verify characteristic cases and visibility, including all subfamilies.
 
 ### Task 4: Electricity / magnetic / induction / composite renderer (28 experiments)
 
 Files: `experiment-packages/lab-collection/src/{circuits,fields}.js`; export `drawCircuits` and `drawFields`.
 
-- [ ] Preserve wire endpoints and topology, switch state, component ratings and meter readings.
-- [ ] Draw plates/charges, bounded fields, magnetic signs, coils, motor and induction rails from visual facts.
-- [ ] Verify current/field direction, zero values and all subfamilies.
+- [x] Preserve wire endpoints and topology, switch state, component ratings and meter readings.
+- [x] Draw plates/charges, bounded fields, magnetic signs, coils, motor and induction rails from visual facts.
+- [x] Verify current/field direction, zero values and all subfamilies.
 
 ### Task 5: Server browser acceptance, review and publication
 
 Files: `tests/acceptance/lab-collection.mjs`, `scripts/developers/publish-lab-collection.mjs`, report/screenshots.
 
-- [ ] Render all 76 real engine fixtures in WebGL; inspect desktop/mobile contact sheets and targeted frames.
-- [ ] Use isolated candidate upload/preview/approval for representative domains and real parameter/time changes; fix observed faults.
-- [ ] Independent code/physics review; complete required checks with recorded evidence.
+- [x] Render all 76 real engine fixtures in WebGL; inspect desktop/mobile contact sheets and targeted frames.
+- [x] Use isolated candidate upload/preview/approval for representative domains and real parameter/time changes; fix observed faults.
+- [x] Independent code/physics review; complete required checks with recorded evidence.
 - [ ] Recheck remote/main/runtime, create server recovery point, publish exact verified archives via API, verify all active IDs/SHA and production browser loads.
 - [ ] Commit source and report, synchronize Git without overwriting existing work, deliver concise result and links.

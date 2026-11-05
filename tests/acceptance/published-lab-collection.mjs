@@ -98,7 +98,10 @@ async function main() {
     ] })
     context = await browser.newContext({
       viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1,
-      locale: 'zh-CN', timezoneId: 'Asia/Shanghai', serviceWorkers: 'block',
+      // A fresh context has no installed workers. Playwright's worker-blocking
+      // init script accesses navigator.serviceWorker inside opaque sandboxed
+      // frames, which throws before the experiment's own code runs.
+      locale: 'zh-CN', timezoneId: 'Asia/Shanghai',
     })
     context.setDefaultTimeout(30000)
     context.setDefaultNavigationTimeout(60000)
@@ -264,9 +267,12 @@ async function main() {
         const surface = page.locator('[data-physicsos-surface="lab"]')
         await expect(surface).toBeVisible({ timeout: 60000 })
         await dismissNotice(page)
-        const release = surface.locator(`[data-experiment-release="${item.packageId}"]`)
+        // The dedicated lens page and shared workspaces use different outer
+        // cards. Identify their common frame by its exact approved entry URL.
+        const entryPrefix = `${base}/physicsos/experiment-assets/embed/releases/${item.packageId}/${item.sha256}/`
+        const release = surface.locator(`[data-community-status]:has(> iframe[src^="${entryPrefix}"])`)
         await expect(release).toBeVisible({ timeout: 45000 })
-        const ready = release.locator('[data-community-status]')
+        const ready = release
         await expect(ready).toHaveAttribute('data-community-status', 'ready', { timeout: 45000 })
         const wrapper = release.frameLocator('iframe')
         const raw = wrapper.frameLocator('iframe')

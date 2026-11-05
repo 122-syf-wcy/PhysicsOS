@@ -30,7 +30,7 @@
 - 客户端对应检查：力学/器材 44、波界面 3、复合场 5、感应固定导轨 4、感应完整套件 23 项通过。
 - 保留正式生成器源码重新构建后的工具包 76 项通过；通用模板 5 项通过，76 模板同源检查通过。
 - 三维几何/资源释放/旋转取景 3 项检查通过。UI、工具包、实验宿主类型与运行包构建及 Web 构建通过。
-- 76 包已经历一次完整 WebGL/实际 SDK/参数与时间/显示开关/桌面和手机布局检查，无 JavaScript 异常、外部资源请求或资源失败。最终显示开关与程序缓存修复又通过四个代表包检查，最终全量摘要随发布记录附上。
+- 最终 76 包全部通过 WebGL/实际 SDK/参数与时间/显示开关/桌面和手机布局检查，无 JavaScript 异常、外部资源请求或资源失败。逐项核验实际 ZIP 的 SHA-256 与验收记录一致：76 项显示开关通过、75 项参数往返通过、浮力排开体积独立开关检查通过。
 - `photoelectric-effect` 的平台契约本来不提供参数或播放操作（`inspector=[]`、目录参数为空）。它完成三维只读展示；验收明确记录该范围，不伪造参数成功。
 - 手机检查采用 Chromium 的 390 px 视口；未声称测得真实手机硬件帧率。
 
@@ -39,3 +39,20 @@
 开始时远端 main 与服务器 HEAD 为 `2818cf1`，实际镜像为 `sha256:a0fcd9a8546ca536dc38abd321ea29d2120595feb3a0314461469df89882b8bf`（560bd20）。运行包在该真实镜像之上只增加必要的物理/界面/模板变更；上一轮未完成验收的 ab231a0 生成器修改保留在原分支与旧候选镜像，不混入本轮正式发布。
 
 上传走现有登录、ZIP 校验、SHA 绑定审核和默认版本指针 API。候选使用独立 PostgreSQL 数据和文件；正式切换前保留数据库备份、应用数据和上一镜像。新打开的实验采用新默认包，已保存场景维持原有版本绑定。
+
+## 整库测试边界
+
+本轮另外尝试了根目录 `pnpm test`。构建容器默认 pnpm 依赖自检会尝试重装，设置 `pnpm_config_verify_deps_before_run=false` 后沿用已有依赖运行。补齐 Git 和可用源码路径索引后，整库测试仍在 image-generation 的三项源码扫描测试停止：
+
+- `secret hygiene > no tracked file contains credential material`：构建容器保留的模型池旧测试中三处假凭据字面量触发扫描（`proxy.spec.ts:198/225/246`）；这些测试不属于本次改动，且构建容器旧测试文件摘要与生产源码基线不同。
+- `secret hygiene > the scanner is not silently scoped to this package` 与 `negative control > passes on .env.example, whose values are empty`：运行镜像的构建目录未包含 `.env.example`。
+
+这次未削弱扫描规则或将整库测试报告为通过。上述专项物理、模板、渲染与全部实验浏览器验收独立通过。真实页面测试还修正了测试工具设置：Playwright 的 `serviceWorkers: block` 注入脚本会在缺少 allow-same-origin 的沙箱 iframe 读取 navigator.serviceWorker 而抛错；使用没有已安装 worker 的新浏览器上下文后，该错误消失，沙箱权限保持原配置。
+
+## 候选环境结果
+
+运行源码提交 `75c2e6828340584f41ba6d8346ba12b07896bd71`；独立分支基于正式 `2818cf1`，仅引入本次 40 个文件，保留原工作树的生成器候选与其它改动。镜像 `physicsos-app:lab-visuals-75c2e68`，ID `sha256:ad6d0eb0c8825eebffabef09a8818018c194036fc814092219d1d9ba8cc1185c`。核对 105723 个文件摘要、9534 个链接、83 个依赖解析与原生文件锁通过；7 个运行模块导入通过。
+
+独立候选环境通过标准 API 上传审批全部 76 包，默认版本指针及 SHA 全部一致。真实产品 UI 已覆盖 13 个代表实验、12 个领域，包括桌面与 390px 手机视口、首帧确认、真实 WebGL、资源与异常检查。凸透镜使用独立页面，测试已改为按精确批准地址定位 iframe；保留首轮定位失败与更正后通过的记录。
+
+服务器证据目录：`/opt/physicsos-previews/lab-visuals-release-20261105`，含 `candidate-acceptance.json`、`acceptance.json`、`index.json`、`verify.log` 和最终截图归档。正式切换与发布结果将在完成后补充。
