@@ -166,22 +166,33 @@ export const inductionSceneVisual = (input: InductionVisualInput): SceneVisualMo
     return doubleBarSceneVisual({ scene, model, frameState, time, scalarAt })
   }
 
-  /* Follow camera for the sweeping rod. The rod travels metres along a field
-     20 cm tall, so a frame that holds the whole sweep flattens the rig into a
-     hairline; instead the window rides with the rod at a fixed comfortable
-     scale and the field marks scroll past it — which is exactly the flux
-     cutting the student is meant to see. The rod's position is the engine's
-     published state at this frame. */
+  /* The observation window follows the solved rod, while the laboratory
+     apparatus stays fixed. Derive the track/field extent from the published
+     full timeline, not from the current camera window: translating the closure
+     with the rod would keep the loop area constant and erase the flux cutting.
+     A local viewport keeps this metres-long sweep legible beside a 20 cm rod. */
   const fieldHeightCm = isBar ? cmOf(model.barLength) + 6 : 26
   let fieldOrigin: ScenePoint
   let fieldWidthCm: number
+  let windowLeft: number
+  let windowWidth: number
+  const rodId = `${model.benchId}.bar`
+  const initialRodXCm = cmOf(objectX(simulation.states[0], rodId))
   if (isBar) {
-    const rodXCm = cmOf(objectX(frameState, `${model.benchId}.bar`))
-    fieldWidthCm = Math.max(cmOf(model.barLength) * 5, 100)
-    fieldOrigin = { x: rodXCm - fieldWidthCm / 2, y: -fieldHeightCm / 2 }
+    const rodXCm = cmOf(objectX(frameState, rodId))
+    windowWidth = Math.max(cmOf(model.barLength) * 5, 100)
+    windowLeft = rodXCm - windowWidth / 2
+    const sweep = simulation.states.reduce((bounds, sample) => {
+      const x = cmOf(objectX(sample, rodId))
+      return { min: Math.min(bounds.min, x), max: Math.max(bounds.max, x) }
+    }, { min: initialRodXCm, max: initialRodXCm })
+    fieldOrigin = { x: sweep.min - windowWidth / 2, y: -fieldHeightCm / 2 }
+    fieldWidthCm = sweep.max - sweep.min + windowWidth
   } else {
     fieldWidthCm = 40
     fieldOrigin = { x: -fieldWidthCm / 2, y: -fieldHeightCm / 2 }
+    windowLeft = fieldOrigin.x
+    windowWidth = fieldWidthCm
   }
 
   /* Readouts from the engine's derived set at this frame. */
@@ -214,12 +225,13 @@ export const inductionSceneVisual = (input: InductionVisualInput): SceneVisualMo
       label: `L = ${fmtInductionValue(cmOf(model.barLength))} cm · v = ${fmtInductionValue(model.barVelocity, 3)} m/s`,
       direction: model.barVelocity < 0 ? -1 : 1,
     }
-    /* The rail-and-resistor rig: two horizontal rails the rod bridges, closed
-       at the left end by the resistor wire — the loop the induced current
-       actually runs around. The resistor sits inside the field's left margin,
-       upstream of the rod's start. */
+    /* Put the closure behind the initial rod, on the side opposite the stated
+       motion, so either cutting direction extends a real loop without the rod
+       passing through its fixed resistor. This is apparatus layout; the rod
+       displacement and current still come only from the engine. */
     const railHalf = cmOf(model.barLength) / 2
-    const closureX = fieldOrigin.x + 5
+    const motionSide = model.barVelocity < 0 ? -1 : 1
+    const closureX = initialRodXCm - motionSide * (windowWidth / 2 - 5)
     const rails: SceneVisualModel['inductionRails'] = [
       { id: 'induction-rail-top', from: { x: fieldOrigin.x, y: railHalf }, to: { x: fieldOrigin.x + fieldWidthCm, y: railHalf } },
       { id: 'induction-rail-bottom', from: { x: fieldOrigin.x, y: -railHalf }, to: { x: fieldOrigin.x + fieldWidthCm, y: -railHalf } },
@@ -230,17 +242,21 @@ export const inductionSceneVisual = (input: InductionVisualInput): SceneVisualMo
       span: railHalf * 2,
       label: `R = ${fmtInductionValue(model.resistance)} Ω`,
     }
-    /* The current arrow rides the bottom rail between the closure and the rod:
-       the segment of the loop where the induced current visibly returns. */
+    /* The direction annotation stays on the visible portion of the bottom
+       conductor when the fixed closure has moved outside the following view.
+       Clipping this annotation does not shorten the physical charge-flow path. */
+    const visibleClosureX = motionSide > 0
+      ? Math.max(closureX, windowLeft + 5)
+      : Math.min(closureX, windowLeft + windowWidth - 5)
     const currentArrow: SceneVisualModel['inductionCurrent'] = {
       id: 'induction-current-arrow',
-      from: { x: closureX + 2, y: -railHalf },
-      to: { x: displacementCm - 2, y: -railHalf },
+      from: { x: visibleClosureX + motionSide * 2, y: -railHalf },
+      to: { x: displacementCm - motionSide * 2, y: -railHalf },
       sign: lenz,
     }
     /* The live loop the induced current runs around: resistor wire → bottom
-       rail → rod → top rail, ordered so a POSITIVE current travels the bottom
-       rail left→right — the direction the arrow draws for lenz > 0. The
+       rail → rod → top rail. A positive current runs upward through the rod;
+       reversing the cutting direction reverses it without relocating a wire. The
        engine's signed induced_current already carries that sign (R > 0 gives
        sign(I) = sign(E) = lenz); a zero current emits no flow. */
     const chargeFlows: SceneVisualModel['chargeFlows'] =
@@ -258,8 +274,8 @@ export const inductionSceneVisual = (input: InductionVisualInput): SceneVisualMo
         }]
         : undefined
     return emptyVisualModel('induction', {
-      extent: { width: fieldWidthCm + 8, height: fieldHeightCm + 24 },
-      origin: { x: fieldOrigin.x - 4, y: fieldOrigin.y - 16 },
+      extent: { width: windowWidth + 8, height: fieldHeightCm + 24 },
+      origin: { x: windowLeft - 4, y: fieldOrigin.y - 16 },
       grid: { minor: 2, major: 10 },
       axes: { x: 'x / cm', y: '' },
       tickStep: 10,

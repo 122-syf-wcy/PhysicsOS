@@ -63,6 +63,31 @@ const runNewton = (
 }
 
 describe('observeMechanicsScene', () => {
+  it.each([
+    { fraction: 0, expected: [-24, 0] },
+    { fraction: 0.25, expected: [0, -24] },
+    { fraction: 0.5, expected: [24, 0] },
+    { fraction: 0.75, expected: [0, 24] },
+  ])('observes orbital gravity as the current net force at $fraction turns', ({ fraction, expected }) => {
+    const scene = createMechanicsScene({ model: 'circular_orbit', gravitationalParameter: 32, orbitRadius: 2, mass: 3 })
+    const engine = new MechanicsEngine()
+    const simulation = engine.simulate(scene, createMechanicsSimulationRequest(scene, 'sim-orbit-force', 'trace-orbit-force'))
+    const state = engine.stateAt(scene, { value: Math.PI * fraction, unit: 's', dimension: 'time' })
+    const observations = observeMechanicsScene({ scene, simulation, state }).observations
+    const gravity = observations.find(entry => entry.type === 'mechanics_force' && entry.label === 'gravity')
+    const net = observations.find(entry => entry.type === 'net_force')
+    if (gravity?.type !== 'mechanics_force' || net?.type !== 'net_force') throw new Error('Orbital forces are absent.')
+    const g = toCanonicalVector(gravity.vector).vectorSI
+    const f = toCanonicalVector(net.vector).vectorSI
+    // Independent quarter-turn oracle, not a comparison to another derived field.
+    expect(g.x).toBeCloseTo(expected[0]!, 10)
+    expect(g.y).toBeCloseTo(expected[1]!, 10)
+    expect(gravity.magnitude.value).toBeCloseTo(24, 10)
+    expect(f.x).toBeCloseTo(g.x, 10)
+    expect(f.y).toBeCloseTo(g.y, 10)
+    expect(observations.some(entry => entry.type === 'mechanics_force' && entry.label === 'normal')).toBe(false)
+  })
+
   it('balances weight with a normal force for supported horizontal motion', () => {
     const { scene, simulation } = runUniform(vec3(4, 0, 0), 2)
     const observed = observeMechanicsScene({ scene, simulation })

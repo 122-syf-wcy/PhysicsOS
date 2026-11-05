@@ -714,7 +714,9 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
       objects.push({
         id: waveRefractedRayId(model.benchId),
         position: quantityVector(
-          { x: Math.sin(reading.refractedAngleRad), y: -Math.cos(reading.refractedAngleRad), z: 0 },
+          // These are propagation directions: transmission keeps the incoming
+          // tangential sense and crosses the boundary along the same normal.
+          { x: -Math.sin(reading.refractedAngleRad), y: Math.cos(reading.refractedAngleRad), z: 0 },
           'm',
           'length',
         ),

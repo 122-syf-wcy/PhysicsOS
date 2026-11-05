@@ -410,6 +410,15 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
   }
 
   const bounds = boundsOf(geometryPoints)
+  /* Expand the point-mass state into a visible body without moving its COM. */
+  const bodySize = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.045, 0.28)
+  const inclineRadians = (inclineAngle * Math.PI) / 180
+  /* The provisional slope passes through the point-mass path. Its contact
+     surface sits one body half-edge inward along the surface normal. */
+  const inclineContactOrigin = {
+    x: inclineOrigin.x - bodySize * Math.sin(inclineRadians),
+    y: inclineOrigin.y - bodySize * Math.cos(inclineRadians),
+  }
   const majorGrid = niceStep(Math.max(bounds.extent.width, bounds.extent.height))
   const arrowLength = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.19, 0.6)
   const netForce = derivedVectorOf(state, 'net_force')
@@ -609,7 +618,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
   if (model === 'inclined_plane') {
     angles.push({
       id: 'incline-angle',
-      at: { x: inclineOrigin.x + inclineBase, y: inclineOrigin.y },
+      at: { x: inclineContactOrigin.x + inclineBase, y: inclineContactOrigin.y },
       radius: Math.max(arrowLength * 0.55, 0.35),
       startAngle: 180 - inclineAngle,
       endAngle: 180,
@@ -620,11 +629,6 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
 
   const velocity = canonicalVector(bodyState.velocity)
   const acceleration = canonicalVector(bodyState.acceleration)
-  /* The body keeps a visible presence: at a 0.025 factor a block on a 1-D run
-     of 40 m rendered ~14 px in a 960 px canvas — the scene read as an empty
-     grid with a dot. The floor covers short-window scenes (incline wedges). */
-  const bodySize = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.045, 0.28)
-
   /* A horizontal 1-D run happens on a surface even when the scene never
      declared one: the cart's wheels have to sit on something, and the
      observation layer already balances mg with N there. The track top sits one
@@ -640,8 +644,9 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
       model === 'spring_oscillator') &&
     Math.abs(initialVelocity?.y ?? 0) < 1e-9 &&
     Math.abs(initialAcceleration?.y ?? 0) < 1e-9
-  /* A friction-surface scene declares its level surface explicitly; other
-     horizontal 1-D runs get the implied track under the body's wheels. */
+  /* The friction factory stores the point-mass motion level as surfaceY.
+     Like the other horizontal rigs, its visible contact lies one half-edge
+     below that COM level; the body and force origins keep their world points. */
   const frictionSurface = scene.observableDefinitions.find(
     definition => definition.parameters?.['kind'] === 'friction_surface',
   )
@@ -652,7 +657,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
   const trackGround =
     isHorizontalLinear && groundObservation === undefined
       ? {
-        y: frictionSurfaceY ?? initialPosition.y - bodySize * 1.0,
+        y: (frictionSurfaceY ?? initialPosition.y) - bodySize,
         from: bounds.origin.x,
         to: bounds.origin.x + bounds.extent.width,
         label: model === 'horizontal_friction' ? '水平面' : '水平轨道',
@@ -741,6 +746,9 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
       flip: true,
     })
   }
+  /* Match the oscillator resolver's fixed mounting side, including right-wall
+     springs. This is an anchor transform, not a new equilibrium calculation. */
+  const springSide = initialPosition.x >= (springAnchorParam?.x ?? 0) ? 1 : -1
 
   return {
     domain: 'mechanics',
@@ -777,7 +785,8 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
         size: bodySize,
         live: true,
         label: 'm',
-        ...(model === 'inclined_plane' ? { rotation: inclineAngle } : {}),
+        /* The surface descends toward +x: scene-space rotation is clockwise. */
+        ...(model === 'inclined_plane' ? { rotation: -inclineAngle } : {}),
       },
     ],
     particles: [],
@@ -807,7 +816,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
         },
       }),
     ...(model === 'inclined_plane'
-      ? { incline: { origin: inclineOrigin, base: inclineBase, angle: inclineAngle } }
+      ? { incline: { origin: inclineContactOrigin, base: inclineBase, angle: inclineAngle } }
       : {}),
     ...(springConstraint === undefined || springAnchorParam === undefined
       ? {}
@@ -823,12 +832,13 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
               : { x: position.x - Math.sign(position.x - (springAnchorParam.x ?? 0)) * bodySize, y: position.y },
           naturalLength: Number.isFinite(springNatural) ? springNatural : 0,
           axis: springAxis,
-          /* The relaxed-end position: where the coil tip rests with zero
-             stretch, so a stretched/compressed coil has a reference. */
+          /* naturalLength belongs to the point-mass constraint. Map its
+             relaxed COM to the SAME near-face anchor used by the live end,
+             so tip-to-reference separation equals the actual deformation. */
           equilibrium:
             springAxis === 'vertical'
-              ? (springAnchorParam.y ?? 0) - (Number.isFinite(springNatural) ? springNatural : 0)
-              : (springAnchorParam.x ?? 0) + (Number.isFinite(springNatural) ? springNatural : 0),
+              ? (springAnchorParam.y ?? 0) - (Number.isFinite(springNatural) ? springNatural : 0) + bodySize
+              : (springAnchorParam.x ?? 0) + springSide * ((Number.isFinite(springNatural) ? springNatural : 0) - bodySize),
         },
       }),
     ...(ropeConstraint === undefined || pendulumPivotParam === undefined

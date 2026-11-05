@@ -131,6 +131,7 @@ const magneticFieldVisualOf = (scene: PhysicsScene, region: Region): FieldVisual
   )
   if (field?.type !== 'uniform_magnetic') return undefined
   const bz = toCanonicalVector(field.magneticFluxDensity).vectorSI.z
+  if (bz === 0) return undefined
   return {
     direction: bz < 0 ? 'into-page' : 'out-of-page',
     spacing: latticeSpacingOf(

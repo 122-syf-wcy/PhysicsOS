@@ -1,0 +1,6 @@
+Use case: product-mockup
+Asset type: seamless PBR base-color texture for the tabletop of a premium interactive physics laboratory, to be mapped onto real 3D geometry.
+Primary request: a straight-on, orthographic, perfectly flat scan of an immaculate warm ivory laboratory worktop. Very fine mineral ceramic microtexture, restrained barely visible warm grey flecks and subtle powder-coated tactile grain, realistic microscopic material detail, uniform neutral diffuse illumination, elegant high-end scientific instrument workbench material.
+Color: pale warm ivory near #e9e7df, low contrast, no strong pattern.
+Composition: fills every pixel edge to edge, seamlessly tileable square texture, no perspective, no object silhouette, no borders.
+Constraints: only surface material. No apparatus, no text, no numbers, no markings, no shadows, no lighting gradient, no vignette, no cracks, no stains, no decorative marble veins. This is not an image of a room or a tabletop seen at an angle.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { derivedScalar } from '@physicsos/physics-core'
+import { quantity } from '@physicsos/physics-units'
 import {
   createDiffractionScene,
   createDopplerScene,
@@ -61,6 +62,40 @@ describe('longitudinal wave model', () => {
 })
 
 describe('wave reflection and refraction model', () => {
+  it.each([
+    { angle: 0, transmittedX: 0, transmittedY: 1 },
+    { angle: 30, transmittedX: -0.25, transmittedY: 0.9682458365518543 },
+  ])('keeps transmitted propagation across the boundary at $angle degrees', ({ angle, transmittedX, transmittedY }) => {
+    const scene = createReflectionRefractionScene({
+      amplitude: 1, frequency: 2, incidentSpeed: 4, transmittedSpeed: 2, incidentAngle: angle,
+    })
+    const state = new WaveEngine().stateAt(scene, quantity(0, 's', 'time'))
+    const ray = (suffix: string) => {
+      const position = state.objects.find(object => object.id.endsWith(`.${suffix}`))?.position
+      if (position === undefined) throw new Error(`missing ${suffix} ray`)
+      return position.vector
+    }
+    const incident = ray('incident'), reflected = ray('reflected'), transmitted = ray('refracted')
+    // Reflection reverses the normal component; transmission retains it and
+    // also retains the tangential propagation sense. No ray can travel back
+    // into the incident medium and still represent the transmitted branch.
+    expect(incident.y).toBeGreaterThan(0)
+    expect(reflected.y).toBeLessThan(0)
+    expect(transmitted.y).toBeGreaterThan(0)
+    expect(reflected.x).toBeCloseTo(incident.x, 12)
+    expect(transmitted.x).toBeCloseTo(transmittedX, 12)
+    expect(transmitted.y).toBeCloseTo(transmittedY, 12)
+  })
+
+  it('omits the transmitted state object under total internal reflection', () => {
+    const scene = createReflectionRefractionScene({
+      amplitude: 1, frequency: 2, incidentSpeed: 2, transmittedSpeed: 4, incidentAngle: 45,
+    })
+    const state = new WaveEngine().stateAt(scene, quantity(0, 's', 'time'))
+    expect(state.objects.some(object => object.id.endsWith('.refracted'))).toBe(false)
+    expect(state.objects.find(object => object.id.endsWith('.reflected'))?.position?.vector.y).toBeLessThan(0)
+  })
+
   it('applies reflection equality and Snell’s wave-speed law', () => {
     const scene = createReflectionRefractionScene({
       amplitude: 1,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createMechanicsScene } from '@physicsos/physics-scene'
-import { isScalarQuantity } from '@physicsos/physics-core'
+import { derivedVector, isScalarQuantity, toCanonicalVector } from '@physicsos/physics-core'
 
 import { MechanicsEngine, createMechanicsSimulationRequest } from '../src/index.ts'
 import { detectMechanicsModel } from '../src/mechanics-model-selector.ts'
@@ -25,6 +25,23 @@ const scalarOf = (scene: ReturnType<typeof orbitScene>, key: string): number => 
 }
 
 describe('circular orbit through the engine', () => {
+  it.each([
+    { fraction: 0, acceleration: [-8, 0], force: [-24, 0] },
+    { fraction: 0.25, acceleration: [0, -8], force: [0, -24] },
+    { fraction: 0.5, acceleration: [8, 0], force: [24, 0] },
+    { fraction: 0.75, acceleration: [0, 8], force: [0, 24] },
+  ])('keeps generic derived vectors radial at $fraction of an orbit', ({ fraction, acceleration, force }) => {
+    // GM=32, r=2 gives a=8, v=4, T=π; m=3 gives F=24 N.
+    const scene = orbitScene({ gravitationalParameter: 32, orbitRadius: 2, mass: 3 })
+    const state = engine.stateAt(scene, { value: Math.PI * fraction, unit: 's', dimension: 'time' })
+    const a = toCanonicalVector(derivedVector(state.derived, 'acceleration')).vectorSI
+    const f = toCanonicalVector(derivedVector(state.derived, 'net_force')).vectorSI
+    expect(a.x).toBeCloseTo(acceleration[0]!, 10)
+    expect(a.y).toBeCloseTo(acceleration[1]!, 10)
+    expect(f.x).toBeCloseTo(force[0]!, 10)
+    expect(f.y).toBeCloseTo(force[1]!, 10)
+  })
+
   it('is detected from its own orbit observable', () => {
     expect(detectMechanicsModel(orbitScene())).toBe('circular_orbit')
   })

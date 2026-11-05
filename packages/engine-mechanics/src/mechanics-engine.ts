@@ -218,7 +218,9 @@ function computeDerivedAtTime(model: MechanicsModel, t: number, startTime = 0): 
         ? pendulumStateAt(model, t)
         : model.modelId === 'horizontal_friction'
           ? frictionStateAt(model, t)
-          : undefined
+          : model.modelId === 'circular_orbit'
+            ? orbitStateAt(model, t)
+            : undefined
   const accelerationNow = instant?.acceleration ?? model.acceleration
   const velocityNow = instant?.velocity ?? add(model.velocity, scale(model.acceleration, t))
 

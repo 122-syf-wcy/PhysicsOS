@@ -135,6 +135,43 @@ describe('projectile initial-speed edits', () => {
 })
 
 describe('P3-a mechanics expansion scenes', () => {
+  it.each([15, 30, 60])('aligns the block rotation with a descending %i° incline', angle => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({ model: 'inclined_plane', inclineAngle: angle }))
+    for (const snapshot of [runtime.getSnapshot(), runtime.seek(0.25)]) {
+      const body = snapshot.view.bodies[0]
+      const incline = snapshot.view.incline
+      expect(body?.rotation).toBeCloseTo(-angle, 10)
+      if (body?.rotation === undefined || incline === undefined) throw new Error('Incline body is absent.')
+      const rotation = body.rotation * Math.PI / 180
+      const radians = incline.angle * Math.PI / 180
+      const slope = { x: incline.base, y: -incline.base * Math.tan(radians) }
+      expect(Math.cos(rotation) * slope.y - Math.sin(rotation) * slope.x).toBeCloseTo(0, 10)
+      const peak = { x: incline.origin.x, y: incline.origin.y - slope.y }
+      const normalDistance = (body.at.x - peak.x) * Math.sin(radians) + (body.at.y - peak.y) * Math.cos(radians)
+      expect(normalDistance).toBeCloseTo(body.size, 10)
+      const angleArc = snapshot.view.angles.find(item => item.id === 'incline-angle')
+      expect(angleArc?.at).toEqual({ x: incline.origin.x + incline.base, y: incline.origin.y })
+    }
+  })
+
+  it.each([
+    { fraction: 0, direction: [-1, 0] },
+    { fraction: 0.25, direction: [0, -1] },
+    { fraction: 0.5, direction: [1, 0] },
+    { fraction: 0.75, direction: [0, 1] },
+  ])('draws orbital gravity inward at $fraction turns without a second resultant', ({ fraction, direction }) => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({ model: 'circular_orbit', gravitationalParameter: 32, orbitRadius: 2, mass: 3 }))
+    const snapshot = runtime.seek(runtime.getSnapshot().clock.total * fraction)
+    const gravity = snapshot.view.vectors.find(vector => vector.id === 'force-gravity')
+    expect(gravity).toBeDefined()
+    if (gravity === undefined) throw new Error('Orbital gravity is absent.')
+    const dx = gravity.to.x - gravity.from.x
+    const dy = gravity.to.y - gravity.from.y
+    expect(dx * direction[0]! + dy * direction[1]!).toBeGreaterThan(0)
+    expect(dx * direction[1]! - dy * direction[0]!).toBeCloseTo(0, 8)
+    expect(snapshot.view.vectors.find(vector => vector.id === 'net-force')).toBeUndefined()
+  })
+
   it('force-composition draws indexed F₁ F₂ arrows plus the resultant', () => {
     const snapshot = createMechanicsWorkspaceRuntime(
       createMechanicsScene({
@@ -357,6 +394,34 @@ describe('playback contract', () => {
     expect(after.view.bodies[0]?.at.x ?? 0).toBeGreaterThan(0)
   })
 
+  it.each([
+    { label: 'ramped pull', force: 0, ramp: 2, level: 0.6 },
+    { label: 'constant pull', force: 15, ramp: 0, level: -1.2 },
+  ])('keeps the friction contact plane below the COM for $label', ({ force, ramp, level }) => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+      model: 'horizontal_friction', mass: 2,
+      position: { x: 0, y: level, z: 0 },
+      appliedForce: { x: force, y: 0, z: 0 }, appliedForceRamp: ramp, maxAppliedForce: ramp === 0 ? force : 30,
+      frictionCoefficient: 0.3, staticFrictionCoefficient: 0.5,
+    }))
+    const initial = runtime.getSnapshot()
+    const moved = runtime.seek(initial.clock.total * 0.9)
+    const edited = runtime.editParameter('mass', 3)
+    for (const snapshot of [initial, moved, edited]) {
+      const body = snapshot.view.bodies[0]
+      const ground = snapshot.view.ground
+      const rail = snapshot.view.apparatus?.find(item => item.part === 'track-rail')
+      const puller = snapshot.view.apparatus?.find(item => item.part === 'spring-scale')
+      if (body === undefined || ground === undefined) throw new Error('Friction apparatus is absent.')
+      expect(body.at.y).toBeCloseTo(level, 10)
+      expect(ground.y).toBeCloseTo(body.at.y - body.size, 10)
+      expect(rail?.at.y).toBeCloseTo(ground.y, 10)
+      expect(puller?.at.x).toBeCloseTo(body.at.x + body.size, 10)
+      expect(puller?.at.y).toBeCloseTo(body.at.y, 10)
+    }
+    expect(moved.view.bodies[0]?.at.x).toBeGreaterThan(initial.view.bodies[0]?.at.x ?? 0)
+  })
+
   it('spring statics hangs at equilibrium with Δx = mg/k published', () => {
     const runtime = createMechanicsWorkspaceRuntime(
       createMechanicsScene({
@@ -380,6 +445,47 @@ describe('playback contract', () => {
     /* Nothing moves: body stays at equilibrium through the window. */
     const end = runtime.seek(snapshot.clock.total)
     expect(end.view.bodies[0]?.at.y ?? 0).toBeCloseTo(0.8, 6)
+  })
+
+  it('measures Hooke extension between matching coil-tip anchors after parameter edits', () => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+      model: 'spring_statics', mass: 1, position: { x: 0, y: 0.8, z: 0 },
+      springConstant: 49, springNaturalLength: 2, springAnchor: { x: 0, y: 3, z: 0 },
+    }))
+    const cases = [
+      { snapshot: runtime.getSnapshot(), extension: 0.2 },
+      { snapshot: runtime.editParameter('mass', 2), extension: 0.4 },
+      { snapshot: runtime.editParameter('springConstant', 98), extension: 0.2 },
+      { snapshot: runtime.editParameter('gravity', 4.9), extension: 0.1 },
+    ]
+    for (const { snapshot, extension } of cases) {
+      const body = snapshot.view.bodies[0]
+      const spring = snapshot.view.spring
+      if (body === undefined || spring?.equilibrium === undefined) throw new Error('Spring reference is absent.')
+      expect(snapshot.status).toBe('verified')
+      expect(body.at.y).toBeCloseTo(1 - extension, 10)
+      expect(spring.end.y).toBeCloseTo(body.at.y + body.size, 10)
+      expect(spring.equilibrium - spring.end.y).toBeCloseTo(extension, 10)
+      // Translate the displayed tip back to the point-mass constraint anchor.
+      expect(spring.equilibrium - body.size).toBeCloseTo(1, 10)
+      expect(spring.naturalLength).toBe(2)
+    }
+  })
+
+  it.each([-1, 1])('keeps horizontal spring tip references on mounting side %i', side => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+      model: 'spring_oscillator', mass: 1, position: { x: side * 2.4, y: 0, z: 0 },
+      springConstant: 4, springNaturalLength: 2, springAnchor: { x: 0, y: 0, z: 0 },
+    }))
+    const initial = runtime.getSnapshot()
+    const opposite = runtime.seek(Math.PI / 2)
+    for (const [snapshot, displacement] of [[initial, 0.4], [opposite, -0.4]] as const) {
+      const body = snapshot.view.bodies[0]
+      const spring = snapshot.view.spring
+      if (body === undefined || spring?.equilibrium === undefined) throw new Error('Spring reference is absent.')
+      expect(spring.end.x).toBeCloseTo(body.at.x - side * body.size, 10)
+      expect(side * (spring.end.x - spring.equilibrium)).toBeCloseTo(displacement, 10)
+    }
   })
 
   it('collision replay: run pressed after the end restarts from t = 0', () => {

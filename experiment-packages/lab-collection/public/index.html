@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PhysicsOS 三维实验</title><link rel="stylesheet" href="./assets/experiment.css"></head>
+<body>
+<header><div><p class="eyebrow">PHYSICSOS · 交互实验</p><h1 id="title">准备实验装置</h1></div><p id="status" role="status">正在连接实验</p></header>
+<main><section class="stage" aria-label="实验视图"><div class="view-tools"><button id="reset-view" type="button">装置视角</button><button id="front-view" type="button">正视</button><button id="full-view" type="button">查看全程</button><span>拖动旋转 · 自由观察</span></div><div id="canvas"><div id="labels" aria-hidden="true"></div></div><div id="readouts" aria-label="实验读数"></div><div id="playback" hidden><button type="button" id="play">播放</button><input id="seek" type="range" min="0" max="1" step="any" value="0" aria-label="实验时间"><output id="time"></output></div></section><details class="settings" open><summary>实验条件</summary><div id="parameters"></div></details></main>
+<script type="module" src="./runtime/main.js"></script>
+</body></html>

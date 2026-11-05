@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createBarMotionScene,
@@ -8,6 +8,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
+import { contributionApi } from '../src/client/experiments/contribution-api.ts'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
@@ -287,7 +288,15 @@ describe('induction tutor and self-checks', () => {
 })
 
 describe('induction Lab surface', () => {
-  it('mounts a verified induction workspace with the rod rig drawn', () => {
+  it('mounts a verified induction workspace with the rod rig drawn', async () => {
+    // A fresh Lab resolves its renderer release asynchronously. This fixture
+    // selects the official renderer through the real catalog-selection path;
+    // only the network result is mocked, not the canvas or the physical state.
+    const catalog = vi.spyOn(contributionApi, 'catalog').mockResolvedValue({
+      active: null,
+      items: [],
+      canReview: false,
+    })
     const surface = createPhysicsSurfaceController()
     surface.open('lab', sceneOf('induction-bar-motion'))
     const { container } = render(
@@ -304,7 +313,8 @@ describe('induction Lab surface', () => {
     expect(container.querySelector('[data-physicsos-domain="induction"]')).toBeTruthy()
     const lab = container.querySelector('[data-physicsos-surface="lab"]')
     expect(lab?.getAttribute('data-verification-status')).toBe('verified')
-    expect(container.querySelector('svg[role="img"]')).toBeTruthy()
+    await waitFor(() => expect(container.querySelector('svg[role="img"]')).toBeTruthy())
+    expect(catalog).toHaveBeenCalledWith('induction-bar-motion')
     /* The readout overlay carries the engine's verified numbers. */
     const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
     expect(svgText.join(' ')).toContain('E = BLv')

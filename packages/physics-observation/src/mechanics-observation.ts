@@ -278,9 +278,10 @@ export const observeMechanicsScene = (
     }
   }
 
+  let netForce: QuantityVector<'force'> | undefined
   try {
-    const netForce = derivedVector(
-      simulation.derivedQuantities,
+    netForce = derivedVector(
+      state.derived,
       'net_force',
     ) as QuantityVector<'force'>
     for (const def of visible(scene, 'force')) {
@@ -302,14 +303,18 @@ export const observeMechanicsScene = (
     /* net_force not available */
   }
 
-  /* Weight, for any mechanics scene that shows forces.
-   *
-   * Gravity is the one force whose direction needs no surface frame, so it is
-   * reported for every model rather than only on an incline: a projectile's free
-   * body diagram is `mg` alone, and labelling that arrow `mg` instead of `ΣF` is
-   * what makes the picture a free-body diagram rather than a net-force sketch. */
-  const gravityMagnitude = gravityForceMagnitude(scene, body.id)
-  if (gravityMagnitude !== undefined && gravityMagnitude > 0) {
+  /* A circular orbit's only force is its instantaneous central attraction.
+   * The factory's generic uniform-gravity field is not that force; the engine's
+   * current net-force vector already carries the verified GMm/r² direction and
+   * magnitude. Other mechanics models retain their uniform-field weight. */
+  const isOrbit = scene.observableDefinitions.some(def => def.parameters?.['kind'] === 'orbit')
+  const gravityMagnitude = isOrbit ? undefined : gravityForceMagnitude(scene, body.id)
+  const gravityVector = isOrbit
+    ? netForce?.vector
+    : gravityMagnitude === undefined
+      ? undefined
+      : { x: 0, y: -gravityMagnitude, z: 0 }
+  if (gravityVector !== undefined && magnitude(gravityVector) > 0) {
     for (const def of visible(scene, 'force')) {
       observations.push(
         forceObservation(
@@ -317,7 +322,7 @@ export const observeMechanicsScene = (
           body.id,
           state.time,
           bodyState.position,
-          { x: 0, y: -gravityMagnitude, z: 0 },
+          gravityVector,
           'gravity',
         ),
       )

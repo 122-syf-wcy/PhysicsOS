@@ -1,0 +1,3 @@
+lab-surface.webp is a compressed 768px derivative of a 1024px material texture generated on 2026-11-05 using the imagegen skill CLI and the user-selected gpt-image-2.5-sunburst service. It is decorative tabletop material only. It contains no measurement, apparatus, light ray, physical result or text.
+
+Original and prompt are retained in the task workspace output/imagegen/lab-premium/. The actual live experiment geometry, readouts and parameters remain driven by the platform physics engine.
