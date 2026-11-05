@@ -67,5 +67,5 @@ Files: `tests/acceptance/lab-collection.mjs`, `scripts/developers/publish-lab-co
 - [x] Render all 76 real engine fixtures in WebGL; inspect desktop/mobile contact sheets and targeted frames.
 - [x] Use isolated candidate upload/preview/approval for representative domains and real parameter/time changes; fix observed faults.
 - [x] Independent code/physics review; complete required checks with recorded evidence.
-- [ ] Recheck remote/main/runtime, create server recovery point, publish exact verified archives via API, verify all active IDs/SHA and production browser loads.
-- [ ] Commit source and report, synchronize Git without overwriting existing work, deliver concise result and links.
+- [x] Recheck remote/main/runtime, create server recovery point, publish exact verified archives via API, verify all active IDs/SHA and production browser loads.
+- [x] Commit source and report, synchronize Git without overwriting existing work, deliver concise result and links.

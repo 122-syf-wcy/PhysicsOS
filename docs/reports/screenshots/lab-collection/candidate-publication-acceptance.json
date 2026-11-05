@@ -1,0 +1,665 @@
+{
+  "passed": true,
+  "count": 13,
+  "domains": 12,
+  "publicationCount": 76,
+  "archiveCount": 76,
+  "image": "sha256:ad6d0eb0c8825eebffabef09a8818018c194036fc814092219d1d9ba8cc1185c",
+  "sourceRevision": "75c2e6828340584f41ba6d8346ba12b07896bd71",
+  "results": [
+    {
+      "id": "incline",
+      "domain": "mechanics",
+      "experimentId": "incline",
+      "packageId": "exp_240eb3fe921c706ca4515a733ec15728",
+      "sha256": "c3f6c17dd5f6438012ab95839b89fec9b03fcf4a039e87d702a9c33d080bc57f",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_240eb3fe921c706ca4515a733ec15728",
+        "sha256": "c3f6c17dd5f6438012ab95839b89fec9b03fcf4a039e87d702a9c33d080bc57f",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_240eb3fe921c706ca4515a733ec15728/c3f6c17dd5f6438012ab95839b89fec9b03fcf4a039e87d702a9c33d080bc57f/dist/index.html",
+      "desktop": {
+        "experimentId": "incline",
+        "revision": 0,
+        "calls": 28,
+        "triangles": 10050,
+        "webgl": true,
+        "variations": 4860,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "mechanics-incline-desktop.png",
+        "mechanics-incline-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "incline",
+        "revision": 0,
+        "calls": 26,
+        "triangles": 7608,
+        "webgl": true,
+        "variations": 4481,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_240eb3fe921c706ca4515a733ec15728",
+        "sha256": "c3f6c17dd5f6438012ab95839b89fec9b03fcf4a039e87d702a9c33d080bc57f",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "wave-standing",
+      "domain": "wave",
+      "experimentId": "wave-standing",
+      "packageId": "exp_f242a1a5ce7ed8e1e61691b4e7dd5086",
+      "sha256": "c04256503d38835293b00fabef196d3b26c58f5e3a850afbe747700c8f8ac813",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_f242a1a5ce7ed8e1e61691b4e7dd5086",
+        "sha256": "c04256503d38835293b00fabef196d3b26c58f5e3a850afbe747700c8f8ac813",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_f242a1a5ce7ed8e1e61691b4e7dd5086/c04256503d38835293b00fabef196d3b26c58f5e3a850afbe747700c8f8ac813/dist/index.html",
+      "desktop": {
+        "experimentId": "wave-standing",
+        "revision": 0,
+        "calls": 82,
+        "triangles": 25522,
+        "webgl": true,
+        "variations": 242,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "wave-wave-standing-desktop.png",
+        "wave-wave-standing-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "wave-standing",
+        "revision": 0,
+        "calls": 82,
+        "triangles": 25522,
+        "webgl": true,
+        "variations": 148,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_f242a1a5ce7ed8e1e61691b4e7dd5086",
+        "sha256": "c04256503d38835293b00fabef196d3b26c58f5e3a850afbe747700c8f8ac813",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "buoyancy",
+      "domain": "fluid",
+      "experimentId": "buoyancy",
+      "packageId": "exp_19e2e52189338ef867146a7e062ca74f",
+      "sha256": "56500c339c26fd7dcb80e502e1a960b71d59b8e92f24c54a7b456fe6405ae7f9",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_19e2e52189338ef867146a7e062ca74f",
+        "sha256": "56500c339c26fd7dcb80e502e1a960b71d59b8e92f24c54a7b456fe6405ae7f9",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_19e2e52189338ef867146a7e062ca74f/56500c339c26fd7dcb80e502e1a960b71d59b8e92f24c54a7b456fe6405ae7f9/dist/index.html",
+      "desktop": {
+        "experimentId": "buoyancy",
+        "revision": 0,
+        "calls": 40,
+        "triangles": 2186,
+        "webgl": true,
+        "variations": 411,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "fluid-buoyancy-desktop.png",
+        "fluid-buoyancy-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "buoyancy",
+        "revision": 0,
+        "calls": 40,
+        "triangles": 2186,
+        "webgl": true,
+        "variations": 421,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_19e2e52189338ef867146a7e062ca74f",
+        "sha256": "56500c339c26fd7dcb80e502e1a960b71d59b8e92f24c54a7b456fe6405ae7f9",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "noise",
+      "domain": "acoustics",
+      "experimentId": "noise",
+      "packageId": "exp_848a706561300f2be1765b666b593b89",
+      "sha256": "ba8a0a8fc39a5483cd3f7572587118e2de5095ad0ce468ebd357d3d0a9414a8d",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_848a706561300f2be1765b666b593b89",
+        "sha256": "ba8a0a8fc39a5483cd3f7572587118e2de5095ad0ce468ebd357d3d0a9414a8d",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_848a706561300f2be1765b666b593b89/ba8a0a8fc39a5483cd3f7572587118e2de5095ad0ce468ebd357d3d0a9414a8d/dist/index.html",
+      "desktop": {
+        "experimentId": "noise",
+        "revision": 0,
+        "calls": 19,
+        "triangles": 3250,
+        "webgl": true,
+        "variations": 43,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "acoustics-noise-desktop.png",
+        "acoustics-noise-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "noise",
+        "revision": 0,
+        "calls": 19,
+        "triangles": 3250,
+        "webgl": true,
+        "variations": 71,
+        "width": 294,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_848a706561300f2be1765b666b593b89",
+        "sha256": "ba8a0a8fc39a5483cd3f7572587118e2de5095ad0ce468ebd357d3d0a9414a8d",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "boiling-water",
+      "domain": "thermal",
+      "experimentId": "boiling-water",
+      "packageId": "exp_9d4dd6125701707bdbdfc7f9046079e9",
+      "sha256": "0af0d274fd2da04525a865c8b160dd3215d1e909f826a48027ee10b3a0017433",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_9d4dd6125701707bdbdfc7f9046079e9",
+        "sha256": "0af0d274fd2da04525a865c8b160dd3215d1e909f826a48027ee10b3a0017433",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_9d4dd6125701707bdbdfc7f9046079e9/0af0d274fd2da04525a865c8b160dd3215d1e909f826a48027ee10b3a0017433/dist/index.html",
+      "desktop": {
+        "experimentId": "boiling-water",
+        "revision": 0,
+        "calls": 34,
+        "triangles": 2226,
+        "webgl": true,
+        "variations": 592,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "thermal-boiling-water-desktop.png",
+        "thermal-boiling-water-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "boiling-water",
+        "revision": 0,
+        "calls": 34,
+        "triangles": 2226,
+        "webgl": true,
+        "variations": 762,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_9d4dd6125701707bdbdfc7f9046079e9",
+        "sha256": "0af0d274fd2da04525a865c8b160dd3215d1e909f826a48027ee10b3a0017433",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "parallel-plate",
+      "domain": "electric",
+      "experimentId": "parallel-plate",
+      "packageId": "exp_6953a9fc39543468a75b04343ca67b2d",
+      "sha256": "679bb7b7f00cdb703814a552971c7213d222e3da45c045f4bcf735be77f09c15",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_6953a9fc39543468a75b04343ca67b2d",
+        "sha256": "679bb7b7f00cdb703814a552971c7213d222e3da45c045f4bcf735be77f09c15",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_6953a9fc39543468a75b04343ca67b2d/679bb7b7f00cdb703814a552971c7213d222e3da45c045f4bcf735be77f09c15/dist/index.html",
+      "desktop": {
+        "experimentId": "parallel-plate",
+        "revision": 0,
+        "calls": 189,
+        "triangles": 2916,
+        "webgl": true,
+        "variations": 415,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "electric-parallel-plate-desktop.png",
+        "electric-parallel-plate-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "parallel-plate",
+        "revision": 0,
+        "calls": 189,
+        "triangles": 2916,
+        "webgl": true,
+        "variations": 268,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_6953a9fc39543468a75b04343ca67b2d",
+        "sha256": "679bb7b7f00cdb703814a552971c7213d222e3da45c045f4bcf735be77f09c15",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "magnetic-circular",
+      "domain": "magnetic",
+      "experimentId": "magnetic-circular",
+      "packageId": "exp_60cd39c43cd9346c59ba1ad602a939f8",
+      "sha256": "9425f4d2ea0e0dc4f08ca61f628ebcef187a1467d39f058d80099ac0af7677a7",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_60cd39c43cd9346c59ba1ad602a939f8",
+        "sha256": "9425f4d2ea0e0dc4f08ca61f628ebcef187a1467d39f058d80099ac0af7677a7",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_60cd39c43cd9346c59ba1ad602a939f8/9425f4d2ea0e0dc4f08ca61f628ebcef187a1467d39f058d80099ac0af7677a7/dist/index.html",
+      "desktop": {
+        "experimentId": "magnetic-circular",
+        "revision": 0,
+        "calls": 107,
+        "triangles": 1238,
+        "webgl": true,
+        "variations": 71,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "magnetic-magnetic-circular-desktop.png",
+        "magnetic-magnetic-circular-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "magnetic-circular",
+        "revision": 0,
+        "calls": 107,
+        "triangles": 1238,
+        "webgl": true,
+        "variations": 101,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_60cd39c43cd9346c59ba1ad602a939f8",
+        "sha256": "9425f4d2ea0e0dc4f08ca61f628ebcef187a1467d39f058d80099ac0af7677a7",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "series-circuit",
+      "domain": "circuit",
+      "experimentId": "series-circuit",
+      "packageId": "exp_b0b63b4a49713e0d114a95fd09634a55",
+      "sha256": "f16e992b7f14b96f2f05a6f4f879b89ad611d88b72be5c3b2dca4bdff0103895",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_b0b63b4a49713e0d114a95fd09634a55",
+        "sha256": "f16e992b7f14b96f2f05a6f4f879b89ad611d88b72be5c3b2dca4bdff0103895",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_b0b63b4a49713e0d114a95fd09634a55/f16e992b7f14b96f2f05a6f4f879b89ad611d88b72be5c3b2dca4bdff0103895/dist/index.html",
+      "desktop": {
+        "experimentId": "series-circuit",
+        "revision": 0,
+        "calls": 259,
+        "triangles": 49772,
+        "webgl": true,
+        "variations": 588,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "circuit-series-circuit-desktop.png",
+        "circuit-series-circuit-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "series-circuit",
+        "revision": 0,
+        "calls": 259,
+        "triangles": 49772,
+        "webgl": true,
+        "variations": 467,
+        "width": 294,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_b0b63b4a49713e0d114a95fd09634a55",
+        "sha256": "f16e992b7f14b96f2f05a6f4f879b89ad611d88b72be5c3b2dca4bdff0103895",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "velocity-selector",
+      "domain": "composite",
+      "experimentId": "velocity-selector",
+      "packageId": "exp_6fbb38dfeee5fe5e99805a96234c19ae",
+      "sha256": "1d3c0c14913f044f0bc727d44bf88e51c8de0491883e2f8066c1106d6834cce0",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_6fbb38dfeee5fe5e99805a96234c19ae",
+        "sha256": "1d3c0c14913f044f0bc727d44bf88e51c8de0491883e2f8066c1106d6834cce0",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_6fbb38dfeee5fe5e99805a96234c19ae/1d3c0c14913f044f0bc727d44bf88e51c8de0491883e2f8066c1106d6834cce0/dist/index.html",
+      "desktop": {
+        "experimentId": "velocity-selector",
+        "revision": 0,
+        "calls": 136,
+        "triangles": 24004,
+        "webgl": true,
+        "variations": 346,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "composite-velocity-selector-desktop.png",
+        "composite-velocity-selector-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "velocity-selector",
+        "revision": 0,
+        "calls": 136,
+        "triangles": 24004,
+        "webgl": true,
+        "variations": 229,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_6fbb38dfeee5fe5e99805a96234c19ae",
+        "sha256": "1d3c0c14913f044f0bc727d44bf88e51c8de0491883e2f8066c1106d6834cce0",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "transformer",
+      "domain": "induction",
+      "experimentId": "transformer",
+      "packageId": "exp_ac1cee9b611e2874f65255c0f41e0f31",
+      "sha256": "336a1a3b1f0d971fb5f1a438fb659408ad0ab4dbd16e3b11fceb7821c0f23505",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_ac1cee9b611e2874f65255c0f41e0f31",
+        "sha256": "336a1a3b1f0d971fb5f1a438fb659408ad0ab4dbd16e3b11fceb7821c0f23505",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_ac1cee9b611e2874f65255c0f41e0f31/336a1a3b1f0d971fb5f1a438fb659408ad0ab4dbd16e3b11fceb7821c0f23505/dist/index.html",
+      "desktop": {
+        "experimentId": "transformer",
+        "revision": 0,
+        "calls": 11,
+        "triangles": 7814,
+        "webgl": true,
+        "variations": 597,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "induction-transformer-desktop.png",
+        "induction-transformer-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "transformer",
+        "revision": 0,
+        "calls": 11,
+        "triangles": 7814,
+        "webgl": true,
+        "variations": 503,
+        "width": 294,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_ac1cee9b611e2874f65255c0f41e0f31",
+        "sha256": "336a1a3b1f0d971fb5f1a438fb659408ad0ab4dbd16e3b11fceb7821c0f23505",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "photoelectric-effect",
+      "domain": "modern",
+      "experimentId": "photoelectric-effect",
+      "packageId": "exp_c0a17edc9919a45a286e5258edcf9c3c",
+      "sha256": "d4a63ed394652fa10d55fe3b62d317641ac0f76317f15568670e8f9f540ddb34",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_c0a17edc9919a45a286e5258edcf9c3c",
+        "sha256": "d4a63ed394652fa10d55fe3b62d317641ac0f76317f15568670e8f9f540ddb34",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_c0a17edc9919a45a286e5258edcf9c3c/d4a63ed394652fa10d55fe3b62d317641ac0f76317f15568670e8f9f540ddb34/dist/index.html",
+      "desktop": {
+        "experimentId": "photoelectric-effect",
+        "revision": 0,
+        "calls": 31,
+        "triangles": 5514,
+        "webgl": true,
+        "variations": 547,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "modern-photoelectric-effect-desktop.png",
+        "modern-photoelectric-effect-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "photoelectric-effect",
+        "revision": 0,
+        "calls": 31,
+        "triangles": 5514,
+        "webgl": true,
+        "variations": 332,
+        "width": 294,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_c0a17edc9919a45a286e5258edcf9c3c",
+        "sha256": "d4a63ed394652fa10d55fe3b62d317641ac0f76317f15568670e8f9f540ddb34",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "uniform-linear",
+      "domain": "mechanics",
+      "experimentId": "uniform-linear",
+      "packageId": "exp_4a85c6dc27cee4d963d83172aa14694f",
+      "sha256": "787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_4a85c6dc27cee4d963d83172aa14694f",
+        "sha256": "787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_4a85c6dc27cee4d963d83172aa14694f/787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594/dist/index.html",
+      "desktop": {
+        "experimentId": "uniform-linear",
+        "revision": 0,
+        "calls": 206,
+        "triangles": 37612,
+        "webgl": true,
+        "variations": 1308,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "mechanics-uniform-linear-desktop.png",
+        "mechanics-uniform-linear-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "uniform-linear",
+        "revision": 0,
+        "calls": 197,
+        "triangles": 35180,
+        "webgl": true,
+        "variations": 1374,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_4a85c6dc27cee4d963d83172aa14694f",
+        "sha256": "787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "convex-lens",
+      "domain": "optics",
+      "experimentId": "convex-lens",
+      "packageId": "exp_d98eefbe8b8704b98db10f509bf18553",
+      "sha256": "a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_d98eefbe8b8704b98db10f509bf18553",
+        "sha256": "a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_d98eefbe8b8704b98db10f509bf18553/a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7/dist/index.html",
+      "desktop": {
+        "experimentId": "convex-lens",
+        "revision": 0,
+        "calls": 646,
+        "triangles": 70880,
+        "webgl": true,
+        "variations": 813,
+        "width": 530,
+        "height": 350,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "screenshots": [
+        "optics-convex-lens-desktop.png",
+        "optics-convex-lens-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "convex-lens",
+        "revision": 0,
+        "calls": 646,
+        "triangles": 70880,
+        "webgl": true,
+        "variations": 983,
+        "width": 278,
+        "height": 227.5,
+        "overflow": false,
+        "canvasOutsideViewport": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_d98eefbe8b8704b98db10f509bf18553",
+        "sha256": "a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    }
+  ],
+  "testHarnessCorrections": [
+    "Omit worker-blocking init script in opaque frames",
+    "Match approved iframe entry URL for dedicated lens page"
+  ]
+}

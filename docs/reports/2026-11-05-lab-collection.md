@@ -2,7 +2,7 @@
 
 ## 范围
 
-本次为现有目录的全部 76 个实验、12 个物理领域制作独立 V3 上传包。每包包含实际源码、构建入口、标准元数据、平台默认快照、Three.js 0.180.0、材质与许可证。正式发布记录和最终验收摘要在切换完成后补充；本段不表示已经上线。
+本次为现有目录的全部 76 个实验、12 个物理领域制作独立 V3 上传包。每包包含实际源码、构建入口、标准元数据、平台默认快照、Three.js 0.180.0、材质与许可证。全部76包已于2026年11月5日发布到正式站；最终逐页验收结果见下方发布记录。
 
 三维器材包括精加工光具座、厚透镜与环形镜架、蜡烛、光屏、夹具、滚花旋钮、轨道与小车、橡胶轮胎和金属轮毂、电表、电阻绕组、接线柱、磁场线圈、液体容器与温度计等。统一采用物理材质、工作室反射、柔和阴影、完整标注、装置近景/全程/正视取景以及手机布局。
 
@@ -55,4 +55,27 @@
 
 独立候选环境通过标准 API 上传审批全部 76 包，默认版本指针及 SHA 全部一致。真实产品 UI 已覆盖 13 个代表实验、12 个领域，包括桌面与 390px 手机视口、首帧确认、真实 WebGL、资源与异常检查。凸透镜使用独立页面，测试已改为按精确批准地址定位 iframe；保留首轮定位失败与更正后通过的记录。
 
-服务器证据目录：`/opt/physicsos-previews/lab-visuals-release-20261105`，含 `candidate-acceptance.json`、`acceptance.json`、`index.json`、`verify.log` 和最终截图归档。正式切换与发布结果将在完成后补充。
+服务器证据目录：`/opt/physicsos-previews/lab-visuals-release-20261105`，含 `candidate-acceptance.json`、`acceptance.json`、`index.json`、`verify.log` 和最终截图归档。正式切换与发布结果如下。
+
+## 正式发布记录
+
+北京时间 2026年11月5日13:08，正式镜像切换为候选验收过的 `physicsos-app:lab-visuals-75c2e68`；`/readyz` 与容器健康检查通过。远端 main 与服务器检出版本同步到 `612417b`，其中运行源码为 `75c2e68`，后续提交仅补充验收脚本及文档。随后标准 API 完成 76 个 2.0.0 独立包的上传、审核与默认版本切换，全部 active ID/SHA 与通过验收的 ZIP 一致。新打开的实验使用新版，旧场景保持原有版本绑定。正式 HTTPS 站点全部 76 个页面、12 个领域的真实浏览器检查通过：发布 ID/SHA、首帧确认、WebGL、桌面和 390px 手机视口，零脚本异常、零外部资源请求、零资源失败。证据：`screenshots/lab-collection/production/result.json`。
+
+恢复点全部保留在服务器：
+
+- `/opt/physicsos/backups/releases/20261105-lab-visuals/`：切换前镜像ID、Git版本、Compose配置、应用数据压缩包与SHA。
+- `/opt/physicsos/backups/postgres/20261105-lab-visuals/`：PostgreSQL完整备份、恢复目录验证与SHA。
+- `physicsos-app:rollback-lab-20261105`：切换前实际运行镜像 `sha256:a0fcd9a8546ca536dc38abd321ea29d2120595feb3a0314461469df89882b8bf`。
+- 发布前默认指针清单：发布证据目录 `physicsos-lab-production-publication.json.before.json`。
+
+未删除任何恢复镜像、数据库或实验文件。为保留运行空间，清理了构建容器可重新下载的 npm 缓存。
+
+## 最终页面修正与复验
+
+实际截图复核发现凸透镜专用页仍使用较矮的旧 iframe，高度不足会裁掉新装置。先新增 `canvasClippedVertically` 检查，在正式页复现失败；然后仅为该专用页的上传实验容器设置 740px 高度。UI/Web 在服务器重建，镜像相对上一版只有 5 个文件变化，其中唯一源码变化为 `ExperimentPage.module.css`，全部76个实验包不变。
+
+最终源码 `8da73a5026c0ee48f61b5eee4538285794b67c8e`，镜像 `physicsos-app:lab-visuals-8da73a5`，ID `sha256:16bbe985c321c153d8cb185d18368e8e4bf1b1321e939549a63bff6a882c20bf`。完整文件/链接/依赖/原生锁核验通过；候选及正式站的凸透镜与匀速运动均通过桌面、手机、防垂直裁切回归（2/2）。正式容器健康，`/readyz` 的 PostgreSQL 与 Redis 均正常。证据：`screenshots/lab-collection/production/lens-layout-fix/result.json`。
+
+第二次切换也保留了数据库与应用文件配套恢复点：`/opt/physicsos/backups/{releases,postgres}/20261105-lab-lens-layout`，上一版镜像标签 `physicsos-app:rollback-lab-lens-20261105`。候选容器已停止，镜像和独立数据保留。
+
+额外逐包解压核对 988 个渲染源码及素材文件，全部匹配 `75c2e68` 的发布源码；ZIP 与验收、上传、正式默认指针使用同一 SHA。最终服务器汇总为 `final-release.json`；Git 后续提交只记录报告、计划与验收证据。

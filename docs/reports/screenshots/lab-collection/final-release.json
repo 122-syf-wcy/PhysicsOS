@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "packages": 76,
+  "domains": 12,
+  "version": "2.0.0",
+  "packageSourceRevision": "75c2e6828340584f41ba6d8346ba12b07896bd71",
+  "finalImageSourceRevision": "8da73a5026c0ee48f61b5eee4538285794b67c8e",
+  "finalImage": "sha256:16bbe985c321c153d8cb185d18368e8e4bf1b1321e939549a63bff6a882c20bf",
+  "productionBrowserCoverage": 76,
+  "finalLayoutRegressionTargets": 2,
+  "sourceArchiveFileMatches": 988,
+  "health": {
+    "status": "ready",
+    "checks": {
+      "postgres": {
+        "status": "ok"
+      },
+      "redis": {
+        "status": "ok"
+      }
+    }
+  },
+  "recoveryDirectories": [
+    "/opt/physicsos/backups/releases/20261105-lab-visuals",
+    "/opt/physicsos/backups/postgres/20261105-lab-visuals",
+    "/opt/physicsos/backups/releases/20261105-lab-lens-layout",
+    "/opt/physicsos/backups/postgres/20261105-lab-lens-layout"
+  ],
+  "fullRepositorySuite": "not passed; see report for image-generation source-scan fixtures/build-context limitations"
+}

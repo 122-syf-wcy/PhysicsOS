@@ -1,0 +1,123 @@
+{
+  "base": "https://physics.dongsiwei.com",
+  "startedAt": "2026-11-05T05:57:04.749Z",
+  "passed": true,
+  "smoke": true,
+  "publicationCount": 76,
+  "requestedCount": 2,
+  "attemptedCount": 2,
+  "count": 2,
+  "registryCount": 76,
+  "domains": 2,
+  "transportBootstrapUsed": false,
+  "results": [
+    {
+      "id": "uniform-linear",
+      "domain": "mechanics",
+      "experimentId": "uniform-linear",
+      "packageId": "exp_c204a170bfb1d0420681e001092570e0",
+      "sha256": "787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_c204a170bfb1d0420681e001092570e0",
+        "sha256": "787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_c204a170bfb1d0420681e001092570e0/787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594/dist/index.html",
+      "desktop": {
+        "experimentId": "uniform-linear",
+        "revision": 0,
+        "calls": 206,
+        "triangles": 37612,
+        "webgl": true,
+        "variations": 1308,
+        "width": 660,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false,
+        "canvasClippedVertically": false
+      },
+      "screenshots": [
+        "mechanics-uniform-linear-desktop.png",
+        "mechanics-uniform-linear-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "uniform-linear",
+        "revision": 0,
+        "calls": 197,
+        "triangles": 35180,
+        "webgl": true,
+        "variations": 1374,
+        "width": 294,
+        "height": 367.25,
+        "overflow": false,
+        "canvasOutsideViewport": false,
+        "canvasClippedVertically": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_c204a170bfb1d0420681e001092570e0",
+        "sha256": "787ab8102946ce096402f9126e689de52439849856b3216f11370676601eb594",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    },
+    {
+      "id": "convex-lens",
+      "domain": "optics",
+      "experimentId": "convex-lens",
+      "packageId": "exp_2c260aaaf92337719dc2522598be50a7",
+      "sha256": "a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7",
+      "version": "2.0.0",
+      "passed": true,
+      "catalogBefore": {
+        "packageId": "exp_2c260aaaf92337719dc2522598be50a7",
+        "sha256": "a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7",
+        "version": "2.0.0",
+        "status": "approved"
+      },
+      "assetPath": "/physicsos/experiment-assets/releases/exp_2c260aaaf92337719dc2522598be50a7/a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7/dist/index.html",
+      "desktop": {
+        "experimentId": "convex-lens",
+        "revision": 0,
+        "calls": 646,
+        "triangles": 70880,
+        "webgl": true,
+        "variations": 560,
+        "width": 530,
+        "height": 473.59375,
+        "overflow": false,
+        "canvasOutsideViewport": false,
+        "canvasClippedVertically": false
+      },
+      "screenshots": [
+        "optics-convex-lens-desktop.png",
+        "optics-convex-lens-mobile.png"
+      ],
+      "mobile": {
+        "experimentId": "convex-lens",
+        "revision": 0,
+        "calls": 646,
+        "triangles": 70880,
+        "webgl": true,
+        "variations": 490,
+        "width": 278,
+        "height": 420,
+        "overflow": false,
+        "canvasOutsideViewport": false,
+        "canvasClippedVertically": false
+      },
+      "catalogAfter": {
+        "packageId": "exp_2c260aaaf92337719dc2522598be50a7",
+        "sha256": "a4dc292c09a10735954e80021813487632fd8b3e8a471829544e373c1cec33d7",
+        "version": "2.0.0",
+        "status": "approved"
+      }
+    }
+  ],
+  "errors": [],
+  "external": [],
+  "failures": [],
+  "finishedAt": "2026-11-05T05:58:30.570Z"
+}
