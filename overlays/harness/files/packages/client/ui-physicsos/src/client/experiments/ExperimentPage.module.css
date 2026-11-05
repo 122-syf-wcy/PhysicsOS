@@ -227,6 +227,11 @@
   position: relative;
   background: color-mix(in srgb, #b7c9e5 7%, var(--ep-paper));
 }
+.stage > [data-community-status] {
+  /* Uploaded experiments include their own title, canvas and readouts. */
+  height: 740px;
+  min-height: 740px;
+}
 .stageCaption {
   display: flex;
   justify-content: space-between;

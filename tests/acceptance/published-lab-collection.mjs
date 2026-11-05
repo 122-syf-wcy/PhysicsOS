@@ -204,6 +204,7 @@ async function main() {
           width: bounds.width, height: bounds.height,
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
           canvasOutsideViewport: bounds.left < -1 || bounds.right > innerWidth + 1,
+          canvasClippedVertically: bounds.top < -1 || bounds.bottom > innerHeight + 1,
         }
         if (gl && !gl.isContextLost() && node.width && node.height) {
           const pixels = new Uint8Array(node.width * node.height * 4)
@@ -222,6 +223,7 @@ async function main() {
       assert.ok(evidence.width > 20 && evidence.height > 20, `${id}: collapsed canvas`)
       assert.equal(evidence.overflow, false, `${id}: package horizontal overflow`)
       assert.equal(evidence.canvasOutsideViewport, false, `${id}: canvas outside package viewport`)
+      assert.equal(evidence.canvasClippedVertically, false, `${id}: canvas cut off by the iframe height`)
       return evidence
     }
 
