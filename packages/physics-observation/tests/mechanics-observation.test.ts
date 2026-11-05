@@ -63,6 +63,18 @@ const runNewton = (
 }
 
 describe('observeMechanicsScene', () => {
+  it('uses current sliding friction direction and removes it after horizontal stopping', () => {
+    const scene = createMechanicsScene({ model: 'inclined_plane', mass: 0.1,
+      inclineAngle: 0, frictionCoefficient: 0.4, gravity: vec3(0, -10, 0), velocity: vec3(-3, 0, 0) })
+    const engine = new MechanicsEngine()
+    const simulation = engine.simulate(scene, createMechanicsSimulationRequest(scene, 'slip', 'slip'))
+    const at = (time: number) => observeMechanicsScene({ scene, simulation,
+      state: engine.stateAt(scene, { value: time, unit: 's', dimension: 'time' }) }).observations
+    const friction = at(0).find(entry => entry.type === 'mechanics_force' && entry.label === 'friction')
+    if (friction?.type !== 'mechanics_force') throw new Error('Sliding friction is absent')
+    expect(toCanonicalVector(friction.vector).vectorSI.x).toBeCloseTo(0.4)
+    expect(at(2).some(entry => entry.type === 'mechanics_force' && entry.label === 'friction')).toBe(false)
+  })
   it.each([
     { fraction: 0, expected: [-24, 0] },
     { fraction: 0.25, expected: [0, -24] },

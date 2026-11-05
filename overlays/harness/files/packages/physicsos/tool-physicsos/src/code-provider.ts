@@ -20,6 +20,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
   readonly inheritsParentContext = false
   readonly capabilities = { agentOptions: true, outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
   private presetReady?: Promise<void>
+  private readonly checkpoints = new WeakMap<object, { jobId: string; sceneId: string; revision: number; parts: QuestionCodeParts; release(): void }>()
   constructor(private readonly ctx: Context) {}
   private ensurePreset(): Promise<void> {
     return this.presetReady ??= (async () => {
@@ -89,8 +90,19 @@ export class PhysicsCodeProvider implements SubagentProvider {
     const canGenerateAsset = assetScene !== undefined && generationId !== undefined
       && typeof artifacts?.generateAsset === 'function' && existingAssets.length === 0
     const chunked = assetScene !== undefined && generationId !== undefined && typeof artifacts?.generateAsset === 'function'
-    const parts = new QuestionCodeParts()
-    const stagedParts = new WeakMap<object, () => void>()
+    const prior = this.checkpoints.get(request.parent)
+    const resumable = chunked && prior?.jobId === generationId && prior.sceneId === assetScene.sceneId && prior.revision === assetScene.revision
+    const parts = resumable ? prior.parts : new QuestionCodeParts()
+    prior?.release()
+    const checkpoint = chunked ? { jobId: generationId, sceneId: assetScene.sceneId, revision: assetScene.revision, parts, release: (): void => { clearCheckpoint() } } : undefined
+    if (checkpoint) this.checkpoints.set(request.parent, checkpoint)
+    const clearCheckpoint = (): void => {
+      if (this.checkpoints.get(request.parent) === checkpoint) this.checkpoints.delete(request.parent)
+      request.signal.removeEventListener('abort', clearCheckpoint)
+    }
+    if (checkpoint) request.signal.addEventListener('abort', clearCheckpoint, { once: true })
+    if (request.signal.aborted) clearCheckpoint()
+    const stagedParts = new WeakMap<object, { commit(): void; discard(): void }>()
     const allowedTools = [...(canGenerateAsset ? ['physics_generate_experiment_asset'] : []), ...(chunked ? ['physics_write_experiment_code'] : [])]
     const marker = `PhysicsOS internal code run ${randomUUID()}`
     const persona = `${CODE_PERSONA}\n${marker}`
@@ -105,13 +117,14 @@ export class PhysicsCodeProvider implements SubagentProvider {
       if (presets === undefined) throw new Error('Code child requires the agent preset registry')
       await presets.mount(agent.ctx, CODE_PRESET_ID)
       agent.ctx.on('tools/result', (exec, result) => {
-        const commit = stagedParts.get(exec)
+        const staged = stagedParts.get(exec)
         stagedParts.delete(exec)
-        if (!result.isError) commit?.()
+        if (result.isError || request.signal.aborted || exec.signal.aborted) staged?.discard()
+        else staged?.commit()
       })
       if (chunked) agent.ctx.tools.register(defineTool({
         name: 'physics_write_experiment_code',
-        description: '分段提交实验JS或CSS，每次不超过2400字符，最多10次。建议每段15–30行、一个完整函数，分3–5次写完。先replace写renderer入口，再append辅助函数和图片缓存。全部写完后用structured_output只提交title/summary。平台只拼接原文，不替你写代码。',
+        description: '分段提交实验JS或CSS，每次不超过2400字符，同一任务最多10次（中断续写共用额度）。先replace写入口，再append；已有片段时继续append或显式replace。全部写完后structured_output只提交title/summary。',
         parameters: {
           file: { type: 'string', required: true, enum: ['rendererJs', 'stylesheet'] },
           mode: { type: 'string', required: true, enum: ['replace', 'append'] },
@@ -124,7 +137,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
           if (current?.visualization?.status !== 'generating' || current.visualization.jobId !== generationId) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
           try {
             const staged = parts.stage(args.file, args.mode, args.content)
-            stagedParts.set(exec, staged.commit)
+            stagedParts.set(exec, staged)
             return Promise.resolve(staged.result)
           }
           catch (error) { throw new HarnessError(error instanceof Error ? error.message : 'CODE_WRITE_FAILED', 'CODE_WRITE_FAILED') }
@@ -192,9 +205,26 @@ export class PhysicsCodeProvider implements SubagentProvider {
       if (!flags.isolated) { await run.dispose(); throw new Error('Code child creation did not establish its restricted preset') }
       if (!chunked) return run
       return { ...run, result: run.result.then((result) => {
-        if (result.stopReason !== 'completed' || result.structured === null || typeof result.structured !== 'object') return result
+        const partialSource = parts.source()
+        const hasPartial = partialSource.rendererJs.length > 0 || partialSource.stylesheet.length > 0
+        if (result.stopReason !== 'completed') {
+          const child = this.ctx.agents.get(run.id)
+          // oxlint-disable-next-line typescript/no-deprecated -- Safe classification of this owned child's terminal failure only.
+          const end = child?.session.snapshotEvents().findLast(event => event.type === 'turn/end')
+          const reason = end?.type === 'turn/end' ? end.data.reason : undefined
+          const code = reason?.kind === 'error' ? reason.error.code : undefined
+          const diagnostic = ['PI_AI_ERROR', 'EMPTY_RESPONSE', 'RATE_LIMIT', 'TIMEOUT', 'TRANSPORT', 'SERVER'].includes(String(code)) ? String(code) : undefined
+          if (result.stopReason === 'aborted' || request.signal.aborted) clearCheckpoint()
+          return { ...result, ...(hasPartial ? { partialSource } : {}), ...(diagnostic ? { diagnostic } : {}) }
+        }
+        // A completed child can still require host validation repair. Retain the
+        // same parts and write budget until the parent settles its shared signal.
+        if (result.structured === null || typeof result.structured !== 'object') return result
         return { ...result, structured: { ...result.structured, ...parts.source() } }
-      }) }
+      }, error => { clearCheckpoint(); throw error }) }
+    } catch (error) {
+      clearCheckpoint()
+      throw error
     } finally { remove() }
   }
 }

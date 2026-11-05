@@ -132,7 +132,7 @@ export const SceneCardBody = memo(function SceneCardBody({
         </button>
       </header>
       {runtime === null ? (
-        <><QuestionCodeCanvas scene={scene}
+        <><QuestionCodeCanvas scene={scene} hasVerifiedSolution={data.solve?.verification?.status === 'passed'}
           {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
           {...(data.visualization === undefined ? {} : { visualization: data.visualization })}
           {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
@@ -227,7 +227,7 @@ function CardStage({
   return (
     <>
       <div className={css.codeBench}>
-        <QuestionCodeCanvas scene={scene} session={session} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
+        <QuestionCodeCanvas scene={scene} session={session} hasVerifiedSolution={solve?.verification?.status === 'passed'} {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
           {...(visualization === undefined ? {} : { visualization })}
           {...(regenerateQuestionCode === undefined ? {} : { regenerateQuestionCode })} />
       </div>

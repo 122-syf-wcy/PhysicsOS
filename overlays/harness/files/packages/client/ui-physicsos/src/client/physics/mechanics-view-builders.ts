@@ -532,6 +532,8 @@ function chartsOf(
       y: obj?.position?.vector.y ?? 0,
       vx: obj?.velocity?.vector.x ?? 0,
       vy: obj?.velocity?.vector.y ?? 0,
+      ax: obj?.acceleration?.vector.x ?? 0,
+      ay: obj?.acceleration?.vector.y ?? 0,
     }
   })
   const series = (id: string, title: string, yLabel: string, pick: (s: (typeof samples)[number]) => number, role: ChartSeries['role']): ChartSeries => ({
@@ -552,10 +554,11 @@ function chartsOf(
     ]
   }
   if (modelId === 'inclined_plane') {
-    const a = Math.hypot(model.acceleration.x, model.acceleration.y)
+    const incline = model as Extract<MechanicsModel, { modelId: 'inclined_plane' }>
+    const radians = incline.inclineAngle * Math.PI / 180
     return [
       series('v-t', '|v| - t', 'v / (m/s)', s => Math.hypot(s.vx, s.vy), 'velocity'),
-      { id: 'a-t', title: 'a - t', xLabel: 't / s', yLabel: 'a / (m/s²)', role: 'acceleration', points: samples.map(s => ({ t: s.t, value: a })) },
+      series('a-t', 'a - t（沿斜面向下为正）', 'a / (m/s²)', s => s.ax * Math.cos(radians) - s.ay * Math.sin(radians), 'acceleration'),
     ]
   }
   return [
@@ -623,10 +626,19 @@ function derivationOf(
   }
   if (modelId === 'inclined_plane') {
     const m = model as Extract<MechanicsModel, { modelId: 'inclined_plane' }>
+    const radians = m.inclineAngle * Math.PI / 180
+    const initialSpeed = m.velocity.x * Math.cos(radians) - m.velocity.y * Math.sin(radians)
+    const initialAcceleration = m.acceleration.x * Math.cos(radians) - m.acceleration.y * Math.sin(radians)
+    const sticking = Math.abs(initialSpeed) <= 1e-10 && Math.abs(initialAcceleration) <= 1e-10
+    const expression = sticking ? 'a = 0'
+      : initialSpeed < -1e-10 ? 'a = g(\\sin\\theta + \\mu\\cos\\theta)'
+        : 'a = g(\\sin\\theta - \\mu\\cos\\theta)'
     return [
       { id: 'step-1', title: '重力分解', expression: 'mg\\sin\\theta,\\; mg\\cos\\theta', detail: '将重力沿斜面和垂直斜面分解。', result: { symbol: 'g\\sin\\theta', value: fmt(m.gravityParallel), unit: 'm/s²' } },
       { id: 'step-2', title: '支持力', expression: 'N = mg\\cos\\theta', result: { symbol: 'N', value: fmt(m.normalForce), unit: 'N' } },
-      { id: 'step-3', title: '沿斜面加速度', expression: 'a = g(\\sin\\theta - \\mu\\cos\\theta)', result: { symbol: 'a', value: fmt(Math.hypot(m.acceleration.x, m.acceleration.y)), unit: 'm/s²' } },
+      { id: 'step-3', title: '初始沿斜面加速度', expression,
+        detail: '沿斜面向下为正，滑动摩擦力与速度反向。本模型静、动摩擦系数均为 μ；停下后，若静摩擦足以平衡重力分量则保持静止，否则向下滑动。',
+        result: { symbol: 'a', value: fmt(initialAcceleration), unit: 'm/s²' } },
     ]
   }
   if (modelId === 'newton_second_law') {

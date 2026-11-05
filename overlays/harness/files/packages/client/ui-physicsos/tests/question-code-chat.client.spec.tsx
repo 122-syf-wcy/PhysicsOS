@@ -16,6 +16,20 @@ import { solvedCardData } from './solved-card-fixture.client.ts'
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 const t = (key: string): string => (zh as Record<string, string>)[key] ?? key
+it('labels a scene without a verified solution as a demonstration rather than a solved question', () => {
+  const data = solvedCardData('mech-01-uniform-acceleration')
+  const { solve: _solve, ...sceneOnly } = data
+  const view = render(<SceneCardBody data={sceneOnly} openSceneInLab={vi.fn()} t={t} />)
+  expect(view.getByText('当前场景演示')).toBeTruthy()
+  expect(view.getByText('展示已保存的条件与运动过程，尚未包含整道题的求解验证。')).toBeTruthy()
+  expect(view.queryByText('本题的条件、解题步骤和物理验证已保留。')).toBeNull()
+})
+it('keeps verified question explanations without a scene-only scope label', () => {
+  const data = solvedCardData('mech-01-uniform-acceleration')
+  const view = render(<SceneCardBody data={data} openSceneInLab={vi.fn()} t={t} />)
+  expect(view.queryByText('当前场景演示')).toBeNull()
+  expect(view.getByText('解题步骤')).toBeTruthy()
+})
 it.each([undefined, 1])('allows explicit recovery of a restored unfinished generation with deadline %s', async (deadlineAt) => {
   const solved = solvedCardData('mech-01-uniform-acceleration')
   const questionCodeOwner = createQuestionCodeOwnerStore(); questionCodeOwner.set('owner-chat')

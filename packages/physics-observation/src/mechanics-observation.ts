@@ -553,16 +553,21 @@ export const observeMechanicsScene = (
           ),
         )
       }
-      const frictionForce = scalarOrUndefined(simulation, 'friction_force')
-      if (frictionForce !== undefined && frictionForce > 0) {
-        /* Kinetic friction opposes the slide, i.e. up the slope. */
+      let friction: Vector3 | undefined
+      try { friction = derivedVector(state.derived, 'friction_vector').vector }
+      catch {
+        // Old persisted simulations have only the downhill scalar convention.
+        const force = scalarOrUndefined(simulation, 'friction_force')
+        if (force !== undefined) friction = scaleVector(along, -force)
+      }
+      if (friction !== undefined && magnitude(friction) > 1e-12) {
         observations.push(
           forceObservation(
             def.id,
             body.id,
             state.time,
             bodyState.position,
-            scaleVector(along, -frictionForce),
+            friction,
             'friction',
           ),
         )

@@ -362,7 +362,9 @@ export function resolveInclinedPlaneModel(scene: PhysicsScene): MechanicsModel {
   const inclineAngle = resolveInclineAngle(scene)
   const frictionCoefficient = resolveFrictionCoefficient(scene)
 
-  const result = inclineAcceleration(mass, gravity, inclineAngle, frictionCoefficient)
+  const radians = inclineAngle * Math.PI / 180
+  const speedAlongIncline = velocity.x * Math.cos(radians) - velocity.y * Math.sin(radians)
+  const result = inclineAcceleration(mass, gravity, inclineAngle, frictionCoefficient, speedAlongIncline)
 
   return {
     modelId: 'inclined_plane',

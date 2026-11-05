@@ -29,6 +29,7 @@ import {
 import type { MechanicsModel } from './models/types.ts'
 import { resolveMechanicsModel, detectMechanicsModel } from './mechanics-model-selector.ts'
 import { kinematicsAt } from './solvers/analytical-kinematics.ts'
+import { inclineStateAt } from './solvers/incline-motion.ts'
 import { centripetalAcceleration, circularOrbitPeriod, gravitationalAcceleration } from './orbit.ts'
 
 export const MECHANICS_ENGINE_ID = 'engine-mechanics'
@@ -180,7 +181,9 @@ const orbitStateAt = (
 
 function stateAtForModel(model: MechanicsModel, t: number): SimulationState {
   const ks =
-    model.modelId === 'spring_oscillator'
+    model.modelId === 'inclined_plane'
+      ? inclineStateAt(model, t)
+      : model.modelId === 'spring_oscillator'
       ? oscillatorStateAt(model, t)
       : model.modelId === 'simple_pendulum'
         ? pendulumStateAt(model, t)
@@ -212,7 +215,9 @@ function computeDerivedAtTime(model: MechanicsModel, t: number, startTime = 0): 
   /* Instantaneous kinematics at t — for the harmonic rigs acceleration is not
      the constant `model.acceleration` field, it is the closed-form value. */
   const instant =
-    model.modelId === 'spring_oscillator'
+    model.modelId === 'inclined_plane'
+      ? inclineStateAt(model, t)
+      : model.modelId === 'spring_oscillator'
       ? oscillatorStateAt(model, t)
       : model.modelId === 'simple_pendulum'
         ? pendulumStateAt(model, t)
@@ -367,6 +372,7 @@ function computeDerivedAtTime(model: MechanicsModel, t: number, startTime = 0): 
   }
 
   if (model.modelId === 'inclined_plane') {
+    const current = inclineStateAt(model, t)
     derived.push({
       key: 'gravity_parallel',
       targetId: model.bodyId,
@@ -391,17 +397,21 @@ function computeDerivedAtTime(model: MechanicsModel, t: number, startTime = 0): 
     derived.push({
       key: 'friction_force',
       targetId: model.bodyId,
-      value: quantity(model.frictionForce, 'N', 'force'),
-      formula: { expression: 'f = μN' },
+      value: quantity(magnitude(current.friction), 'N', 'force'),
+      formula: { expression: 'sliding: f = μN; sticking: f balances tangential gravity' },
       assumptions,
     })
     derived.push({
       key: 'incline_acceleration',
       targetId: model.bodyId,
-      value: quantity(magnitude(model.acceleration), 'm/s^2', 'acceleration'),
-      formula: { expression: 'a = g*sin(θ) - μg*cos(θ)' },
+      value: quantity(current.acceleration.x * Math.cos(model.inclineAngle * Math.PI / 180)
+        - current.acceleration.y * Math.sin(model.inclineAngle * Math.PI / 180), 'm/s^2', 'acceleration'),
+      formula: { expression: 'a_t = g*sin(θ) + f_t/m; positive down the plane' },
       assumptions,
     })
+    derived.push({ key: 'friction_vector', targetId: model.bodyId,
+      value: quantityVector(current.friction, 'N', 'force'),
+      formula: { expression: 'f opposes slip; static f balances tangential gravity' }, assumptions })
   }
 
   if (model.modelId === 'spring_oscillator') {

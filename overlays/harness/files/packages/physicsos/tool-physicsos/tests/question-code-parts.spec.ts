@@ -1,5 +1,14 @@
 import { expect, it } from 'vitest'
 import { QuestionCodeParts } from '../src/question-code-parts.ts'
+it('rejects overlapping uncommitted writes instead of silently overwriting accepted segments', () => {
+  const parts = new QuestionCodeParts()
+  const first = parts.stage('rendererJs', 'append', 'first')
+  expect(() => parts.stage('rendererJs', 'append', 'lost')).toThrow('CODE_WRITE_PENDING')
+  first.commit()
+  parts.write('rendererJs', 'append', 'second')
+  first.commit()
+  expect(parts.source().rendererJs).toBe('firstsecond')
+})
 it('preserves original segments, replaces explicitly, and bounds writes without partially modifying content', () => {
   const parts = new QuestionCodeParts()
   parts.write('rendererJs', 'replace', 'first\n')

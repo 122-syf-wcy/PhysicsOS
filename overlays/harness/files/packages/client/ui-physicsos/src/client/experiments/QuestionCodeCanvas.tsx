@@ -14,9 +14,10 @@ interface Props {
   readonly scene: PhysicsScene
   readonly session?: ExperimentSession
   readonly regenerateQuestionCode?: QuestionCodeRegenerate
+  readonly hasVerifiedSolution?: boolean
 }
 /** Private code only paints snapshots from this question's platform-owned session. */
-export function QuestionCodeCanvas({ visualization, scene, session, regenerateQuestionCode, questionCodeOwner }: Props) {
+export function QuestionCodeCanvas({ visualization, scene, session, regenerateQuestionCode, questionCodeOwner, hasVerifiedSolution }: Props) {
   const owner = useQuestionCodeOwner(questionCodeOwner)
   const [attempt, setAttempt] = useState(0)
   const [loaded, setLoaded] = useState<{ entryUrl: string; source: CodeVisualizationSource; key: string }>()
@@ -86,6 +87,10 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
   }
   return <div className={css.codeCanvas} data-question-code-layout={independent ? 'independent' : 'pending'}
     data-question-code-status={ready ? frameStatus === 'failed' ? 'render-failed' : frameStatus : status}>
+    {hasVerifiedSolution === false ? <div className={css.scopeNote} data-question-scope="scene">
+      <strong>当前场景演示</strong>
+      <span>展示已保存的条件与运动过程，尚未包含整道题的求解验证。</span>
+    </div> : null}
     {ready ? <div className={css.codeStage}>
       <CommunityExperimentFrame key={key} entryUrl={loaded.entryUrl} session={session}
         experimentId={ref.experimentId} protocolVersion={3} title={loaded.source.title || ref.title} showStatus={false}
@@ -102,7 +107,7 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
       <p>{status === 'failed' && visualization?.status === 'failed' ? visualization.message
         : status === 'generating' ? '正在制作本题场景素材与实验画面，完成后即可探索条件变化。'
           : status === 'upgrade-required' ? '点击升级，为这道题生成完整的独立实验。原题条件和已验证答案会继续保留。'
-            : '本题的条件、解题步骤和物理验证已保留。'}</p>
+            : hasVerifiedSolution === false ? '已保存的场景条件已保留。' : '本题的条件、解题步骤和物理验证已保留。'}</p>
       {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
     </div>}
     {ready || (regenerateQuestionCode !== undefined && status !== 'generating' && status !== 'owner-mismatch') ? <div className={css.codeActions}>

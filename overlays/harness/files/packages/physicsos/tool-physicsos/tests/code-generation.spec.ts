@@ -47,6 +47,63 @@ function dependencies() {
   return { deps, original, states, dispose, create, start, setLatest: (value: PhysicsSceneSnapshot) => { latest = value } }
 }
 describe('parent question code generation', () => {
+  it('does not resume an aborted child even when code and generated assets exist', async () => {
+    const h = dependencies()
+    h.deps.assetManifest = () => [{ path: './assets/generated/existing.png' }]
+    h.start.mockImplementationOnce(async () => ({ id: 'aborted', result: Promise.resolve({ stopReason: 'aborted', output: [], partialSource: { rendererJs: source.rendererJs, stylesheet: '' } }), dispose: h.dispose }))
+    const result = await generateQuestionCode(h.deps)
+    expect(result.status === 'failed' && result.code).toBe('GENERATION_ABORTED')
+    expect(h.start).toHaveBeenCalledTimes(1)
+    expect(h.create).not.toHaveBeenCalled()
+  })
+  it('rejects unchecked partial source and releases the shared job signal after the final result', async () => {
+    const h = dependencies()
+    h.start.mockImplementationOnce(async () => ({ id: 'interrupted', result: Promise.resolve({ stopReason: 'error', diagnostic: 'PI_AI_ERROR', output: [], partialSource: { rendererJs: 'PRIVATE_OVERLIMIT'.repeat(2000), stylesheet: '', injected: 'SECRET_FIELD' } }), dispose: h.dispose }))
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    const block = h.start.mock.calls[1]?.[0].prompt[0]
+    expect(block?.type === 'text' ? block.text : '').not.toContain('PRIVATE_OVERLIMIT')
+    expect(block?.type === 'text' ? block.text : '').not.toContain('SECRET_FIELD')
+    expect(h.start.mock.calls.every(([request]) => request.signal.aborted)).toBe(true)
+  })
+  it('bounds empty responses to one retry and keeps raw failure text out of durable state', async () => {
+    const h = dependencies()
+    h.start.mockImplementation(async () => ({ id: 'empty', result: Promise.resolve({ stopReason: 'error', diagnostic: 'EMPTY_RESPONSE', output: [{ type: 'text', text: 'private upstream detail' }] }), dispose: h.dispose }))
+    const result = await generateQuestionCode(h.deps)
+    expect(result.status === 'failed' && result.code).toBe('EMPTY_RESPONSE')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.dispose).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(h.states)).not.toContain('private upstream detail')
+  })
+  it('does not reinterpret an unknown terminal diagnostic as a transient error because code exists', async () => {
+    const h = dependencies()
+    h.deps.assetManifest = () => [{ path: './assets/generated/existing.png' }]
+    h.start.mockImplementationOnce(async () => ({ id: 'rejected', result: Promise.resolve({ stopReason: 'error', diagnostic: 'POLICY_REJECTED', output: [], partialSource: { rendererJs: source.rendererJs, stylesheet: '' } }), dispose: h.dispose }))
+    const result = await generateQuestionCode(h.deps)
+    expect(result.status === 'failed' && result.code).toBe('CHILD_INCOMPLETE')
+    expect(h.start).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(h.states)).not.toContain('POLICY_REJECTED')
+  })
+  it('retains a second attempt after an upstream stream error without requiring prior text output', async () => {
+    const h = dependencies()
+    h.start.mockImplementationOnce(async () => ({ id: 'interrupted',
+      result: Promise.resolve({ stopReason: 'error', diagnostic: 'UPSTREAM_STREAM_ERROR', output: [] }), dispose: h.dispose }))
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.states.filter(x => x.visualization?.status === 'generating')).toHaveLength(1)
+  })
+  it('never applies projectile-specific art instructions to a friction apparatus', async () => {
+    const h = dependencies()
+    h.original.domain = 'mechanics'
+    h.original.title = '水平板上的摩擦减速'
+    h.deps.context = async () => ({ experimentId: 'incline', developerPrompt: '', publishedBody: '',
+      renderContract: 'snapshot.view.bodies[].at', styleVersion: 'V3', allowedAssetPaths: [] })
+    await generateQuestionCode(h.deps)
+    const text = h.start.mock.calls[0]![0].prompt[0]
+    if (text?.type !== 'text') throw new Error('missing prompt')
+    expect(text.text).toContain('受力')
+    expect(text.text).not.toContain('不要绘制向量箭头')
+    expect(text.text).not.toContain('最高点映射到18%')
+  })
   it('delegates the exact solved scene and publishes only metadata while retaining cause and evidence', async () => {
     const h = dependencies()
     const result = await generateQuestionCode(h.deps)
@@ -320,6 +377,62 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
   return { ctx, parent: handle.agent }
 }
 describe('the real code child provider', () => {
+  it('shares the write budget after completed output and clears saved code when the job is aborted', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('first-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
+      toolCallResponse('first-done', 'structured_output', { title: source.title, summary: source.summary }),
+      toolCallResponse('repair-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// repaired' }),
+      toolCallResponse('repair-done', 'structured_output', { title: source.title, summary: source.summary }),
+      [{ type: 'finish', reason: { kind: 'error', failure: { code: 'PI_AI_ERROR', message: 'SSE interrupted' } } }],
+    ])
+    const { ctx, parent } = await presentationHost(adapter)
+    const written: unknown[] = []
+    ctx.on('tools/result', (exec, result) => { if (exec.name === 'physics_write_experiment_code') written.push(result) }, { global: true })
+    const original = snapshot()
+    parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'budget-job', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
+    const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: () => Promise<unknown>; assetManifest: () => unknown[] }
+    artifacts.generateAsset = async () => ({})
+    artifacts.assetManifest = () => [{ path: './assets/generated/existing.png' }]
+    const provider = new PhysicsCodeProvider(ctx), controller = new AbortController()
+    const request = { parent, signal: controller.signal, prompt: [{ type: 'text' as const, text: 'Complete the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
+    const first = await provider.start(request)
+    await first.result; await first.dispose()
+    const second = await provider.start(request)
+    expect((await second.result).structured).toEqual({ ...source, rendererJs: source.rendererJs + '\n// repaired', stylesheet: '' })
+    await second.dispose()
+    expect(JSON.stringify(written[1])).toContain('remainingWrites')
+    expect(JSON.stringify(written[1])).toContain('8')
+    controller.abort()
+    const third = await provider.start({ ...request, signal: new AbortController().signal })
+    expect(await third.result).not.toHaveProperty('partialSource')
+    await third.dispose()
+  })
+  it('continues accepted code segments after an interrupted child without another image call', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('first-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
+      [{ type: 'finish', reason: { kind: 'error', failure: { code: 'PI_AI_ERROR', message: 'SSE interrupted' } } }],
+      toolCallResponse('more-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// continued' }),
+      toolCallResponse('css', 'physics_write_experiment_code', { file: 'stylesheet', mode: 'replace', content: source.stylesheet }),
+      toolCallResponse('done', 'structured_output', { title: source.title, summary: source.summary }),
+    ])
+    const { ctx, parent } = await presentationHost(adapter)
+    const original = snapshot()
+    parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'resume-job', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
+    const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: () => Promise<unknown>; assetManifest: () => unknown[] }
+    artifacts.generateAsset = vi.fn(async () => ({}))
+    artifacts.assetManifest = () => [{ path: './assets/generated/abcdef.png' }]
+    const provider = new PhysicsCodeProvider(ctx)
+    const request = { parent, signal: new AbortController().signal, label: 'resume', prompt: [{ type: 'text' as const, text: 'Complete the exact question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME, label: 'resume' }) }
+    const first = await provider.start(request)
+    expect((await first.result).stopReason).toBe('error')
+    await first.dispose()
+    const resumed = await provider.start(request)
+    try {
+      expect((await resumed.result).structured).toEqual({ ...source, rendererJs: source.rendererJs + '\n// continued' })
+      expect(artifacts.generateAsset).not.toHaveBeenCalled()
+      expect(adapter.requests.flatMap(r => r.tools ?? []).some(t => t.name === 'physics_generate_experiment_asset')).toBe(false)
+    } finally { await resumed.dispose() }
+  })
   it('lets the isolated child generate an owned image before submitting code while preserving the main model options', async () => {
     const adapter = new MockAdapter([
       toolCallResponse('image', 'physics_generate_experiment_asset', { prompt: 'Warm Lab wood and plaster environment, no labels', kind: 'environment' }),

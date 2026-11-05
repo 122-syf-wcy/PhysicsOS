@@ -28,6 +28,7 @@ export function inclineAcceleration(
   gravity: Vector3,
   inclineAngle: number,
   frictionCoefficient: number,
+  speedAlongIncline = 0,
 ): {
   gravityParallel: number
   gravityNormal: number
@@ -43,9 +44,11 @@ export function inclineAcceleration(
   const normalForce = mass * gravityNormal
 
   const maxStaticFriction = frictionCoefficient * normalForce
-  const frictionForce = Math.min(maxStaticFriction, mass * gravityParallel)
+  const sliding = Math.abs(speedAlongIncline) > 1e-10
+  const frictionForce = sliding ? maxStaticFriction : Math.min(maxStaticFriction, mass * Math.abs(gravityParallel))
 
-  const netForceAlongIncline = mass * gravityParallel - frictionForce
+  const frictionDirection = sliding ? -Math.sign(speedAlongIncline) : -Math.sign(gravityParallel)
+  const netForceAlongIncline = mass * gravityParallel + frictionDirection * frictionForce
 
   const unitAlongIncline = { x: Math.cos(angleRad), y: -Math.sin(angleRad), z: 0 } as Vector3
 
