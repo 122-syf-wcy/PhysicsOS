@@ -220,7 +220,7 @@ describe('model pool proxy', () => {
     const channel = await store.createChannel(ADMIN, {
       name: 'openai', baseURL: upstream.url, models: ['gpt-4.1'], priority: 10,
     })
-    await store.addKey(ADMIN, channel.id, { key: 'sk-openai-local-fixture' })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-openai-local-fixture' })
     const base = await startPool(store)
 
     /* The platform label is DeepSeek, but only the selected channel's wire
@@ -247,7 +247,7 @@ describe('model pool proxy', () => {
     const channel = await store.createChannel(ADMIN, {
       name: 'deepseek', baseURL: upstream.url, models: ['deepseek-v4.1-flash'], priority: 10,
     })
-    await store.addKey(ADMIN, channel.id, { key: 'sk-deepseek-local-fixture' })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-deepseek-local-fixture' })
     const base = await startPool(store)
 
     const result = await chat(base, { model: 'platform-fast', reasoning_effort: 'off' })
@@ -268,7 +268,7 @@ describe('model pool proxy', () => {
     const channel = await store.createChannel(ADMIN, {
       name: 'distilled', baseURL: upstream.url, models: ['deepseek-r1-distill-qwen-32b'], priority: 10,
     })
-    await store.addKey(ADMIN, channel.id, { key: 'sk-distilled-local-fixture' })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-distilled-local-fixture' })
     const base = await startPool(store)
 
     const result = await chat(base, { reasoning_effort: 'off', max_tokens: 8192 })

@@ -1,0 +1,170 @@
+{
+  "baseRevision": "5292b5595b572c1703bff1d49365f36c526b1a45",
+  "environment": "107.151.246.59 / Docker physicsos-experiments-build",
+  "sourceSnapshot": "/tmp/physicsos-validation-source",
+  "change": "Replace three synthetic provider-shaped test credentials with fixture values",
+  "sourceScan": {
+    "before": {
+      "passed": 17,
+      "failed": 1
+    },
+    "after": {
+      "passed": 18,
+      "failed": 0
+    },
+    "completeTrackedSource": true
+  },
+  "core": {
+    "packages": 32,
+    "tests": 1751,
+    "failed": 0
+  },
+  "modelPool": {
+    "files": 7,
+    "tests": 89,
+    "failed": 0
+  },
+  "totalDistinctTests": 1840,
+  "packages": [
+    {
+      "package": "packages/shared",
+      "passed": 1
+    },
+    {
+      "package": "packages/question-paper",
+      "passed": 42
+    },
+    {
+      "package": "packages/image-generation",
+      "passed": 18
+    },
+    {
+      "package": "packages/exam-standard",
+      "passed": 56
+    },
+    {
+      "package": "packages/ui",
+      "passed": 2
+    },
+    {
+      "package": "packages/physics-math",
+      "passed": 38
+    },
+    {
+      "package": "packages/physics-units",
+      "passed": 27
+    },
+    {
+      "package": "packages/platform-bridge",
+      "passed": 11
+    },
+    {
+      "package": "packages/physics-core",
+      "passed": 50
+    },
+    {
+      "package": "packages/physics-electric-core",
+      "passed": 13
+    },
+    {
+      "package": "packages/physics-scene",
+      "passed": 104
+    },
+    {
+      "package": "packages/engine-fluid",
+      "passed": 46
+    },
+    {
+      "package": "packages/engine-circuit",
+      "passed": 24
+    },
+    {
+      "package": "packages/engine-acoustics",
+      "passed": 22
+    },
+    {
+      "package": "packages/engine-induction",
+      "passed": 70
+    },
+    {
+      "package": "packages/engine-modern",
+      "passed": 9
+    },
+    {
+      "package": "packages/engine-lever",
+      "passed": 20
+    },
+    {
+      "package": "packages/engine-magnetic",
+      "passed": 77
+    },
+    {
+      "package": "packages/engine-optics",
+      "passed": 31
+    },
+    {
+      "package": "packages/physics-composite-core",
+      "passed": 48
+    },
+    {
+      "package": "packages/engine-wave",
+      "passed": 41
+    },
+    {
+      "package": "packages/engine-thermal",
+      "passed": 34
+    },
+    {
+      "package": "packages/physics-verifier",
+      "passed": 40
+    },
+    {
+      "package": "packages/engine-electric",
+      "passed": 19
+    },
+    {
+      "package": "packages/engine-collision",
+      "passed": 15
+    },
+    {
+      "package": "packages/engine-electric-region",
+      "passed": 20
+    },
+    {
+      "package": "packages/engine-composite",
+      "passed": 34
+    },
+    {
+      "package": "packages/engine-mechanics",
+      "passed": 140
+    },
+    {
+      "package": "packages/physics-observation",
+      "passed": 50
+    },
+    {
+      "package": "packages/physics-runtime",
+      "passed": 130
+    },
+    {
+      "package": "packages/question-core",
+      "passed": 449
+    },
+    {
+      "package": "packages/agent-tools",
+      "passed": 70
+    }
+  ],
+  "productionRuntimeChanged": false,
+  "commands": {
+    "core": "NODE_ENV=test pnpm_config_verify_deps_before_run=false pnpm run test:core",
+    "modelPool": "NODE_ENV=test /app/node_modules/.bin/vitest run --config vitest.model-pool.config.mts"
+  },
+  "logHashes": {
+    "red": "62fd3e775c1df0bf3eebaa5b633a9cc9582fcac30c6a7ed38b00a5ba65e12118",
+    "scan": "798e9deffa34384278513107cf5c1495a9202243ba34a5cd7d36782516e50939",
+    "core": "91335f5176fccdebffff53076225b469bfc15e992ecc2039f426d054c7c65e59",
+    "pool": "d60366930ef2fcba6d92f136726d7b6b7bdb476cd18707604566402c5d0589c5"
+  },
+  "scope": "Core and model-pool suites; does not assert every root test group ran"
+}

@@ -40,7 +40,7 @@
 
 上传走现有登录、ZIP 校验、SHA 绑定审核和默认版本指针 API。候选使用独立 PostgreSQL 数据和文件；正式切换前保留数据库备份、应用数据和上一镜像。新打开的实验采用新默认包，已保存场景维持原有版本绑定。
 
-## 整库测试边界
+## 首轮整库测试边界（后续已关闭原三项失败）
 
 本轮另外尝试了根目录 `pnpm test`。构建容器默认 pnpm 依赖自检会尝试重装，设置 `pnpm_config_verify_deps_before_run=false` 后沿用已有依赖运行。补齐 Git 和可用源码路径索引后，整库测试仍在 image-generation 的三项源码扫描测试停止：
 
@@ -79,3 +79,11 @@
 第二次切换也保留了数据库与应用文件配套恢复点：`/opt/physicsos/backups/{releases,postgres}/20261105-lab-lens-layout`，上一版镜像标签 `physicsos-app:rollback-lab-lens-20261105`。候选容器已停止，镜像和独立数据保留。
 
 额外逐包解压核对 988 个渲染源码及素材文件，全部匹配 `75c2e68` 的发布源码；ZIP 与验收、上传、正式默认指针使用同一 SHA。最终服务器汇总为 `final-release.json`；Git 后续提交只记录报告、计划与验收证据。
+
+## 源码扫描收尾（2026年11月5日）
+
+上一轮记录的三项失败已解决。使用正式 `5292b55` 的完整 Git 源码归档创建服务器 Docker 测试副本，并建立准确的源码索引后，`.env.example` 与扫描范围两项自动通过；剩余失败精确指向模型池代理测试的三处假密钥。将这三处数据改为明确的 `fixture-` 前缀，扫描规则、生产实现与断言保持原语义，源码扫描从17通过/1失败变为18/18通过。
+
+随后沿用服务器已有依赖，以 `NODE_ENV=test` 运行核心测试（容器默认 production 会让 React 测试环境缺少 act）。32个核心包、1751项测试全部通过；模型池7个测试文件、89项测试全部通过，合计1840项且无失败。模型池使用完整上游测试脚手架及实际代理/本地HTTP测试，覆盖路由、请求字段、取消与轮换行为。本轮仅修改3处测试数据，不改变运行镜像。
+
+验证记录：`screenshots/lab-collection/source-scan-followup.json`；服务器 `/opt/physicsos-previews/lab-validation-20261105/result.json`，源码副本在构建容器 `/tmp/physicsos-validation-source`。本次通过范围是完整核心套件和模型池套件，不宣称根测试命令的所有其它组都执行过。
