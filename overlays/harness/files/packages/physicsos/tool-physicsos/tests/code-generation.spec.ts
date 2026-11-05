@@ -47,6 +47,82 @@ function dependencies() {
   return { deps, original, states, dispose, create, start, setLatest: (value: PhysicsSceneSnapshot) => { latest = value } }
 }
 describe('parent question code generation', () => {
+  it('continues reasoning-only token exhaustion after an owned image without restarting the job', async () => {
+    const h = dependencies()
+    const asset = { path: './assets/generated/owned.png', kind: 'environment' }
+    let assets: unknown[] = []
+    h.deps.assetManifest = () => assets
+    h.start.mockImplementationOnce(async () => {
+      assets = [asset]
+      return { id: 'image-child', result: Promise.resolve({ stopReason: 'max-tokens', output: [{ type: 'reasoning', text: 'Unfinished private planning.' }] }), dispose: h.dispose }
+    })
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.dispose).toHaveBeenCalledTimes(2)
+    const [first, resumed] = h.start.mock.calls.map(([request]) => request)
+    expect(resumed?.signal).toBe(first?.signal)
+    const block = resumed?.prompt[0]
+    const prompt = block?.type === 'text' ? block.text : ''
+    expect(prompt).toContain('MAX_TOKENS')
+    expect(prompt).toContain(asset.path)
+    expect(prompt).not.toContain('上游中断')
+    expect(h.states.map(state => state.visualization?.status)).toEqual(['generating', 'ready'])
+    expect(JSON.stringify(h.states)).not.toContain('Unfinished private planning.')
+  })
+  it.each([
+    ['renderer', { rendererJs: source.rendererJs, stylesheet: '' }],
+    ['stylesheet', { rendererJs: '', stylesheet: source.stylesheet }],
+  ])('continues token exhaustion with valid committed partial %s and no owned asset', async (_label, partialSource) => {
+    const h = dependencies()
+    h.start.mockImplementationOnce(async () => ({ id: 'limited', result: Promise.resolve({ stopReason: 'max-tokens', output: [], partialSource }), dispose: h.dispose }))
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    const resumed = h.start.mock.calls[1]?.[0].prompt[0]
+    expect(resumed?.type === 'text' ? resumed.text : '').toContain(JSON.stringify(partialSource))
+  })
+  it.each([
+    ['missing', undefined],
+    ['empty', { rendererJs: '  ', stylesheet: '\n' }],
+    ['extra fields', { rendererJs: source.rendererJs, stylesheet: '', injected: 'untrusted' }],
+    ['oversized', { rendererJs: 'x'.repeat(24001), stylesheet: '' }],
+  ])('does not continue token exhaustion with %s partial code and no owned asset', async (_label, partialSource) => {
+    const h = dependencies()
+    h.start.mockImplementationOnce(async () => ({ id: 'limited', result: Promise.resolve({ stopReason: 'max-tokens', output: [], partialSource }), dispose: h.dispose }))
+    const result = await generateQuestionCode(h.deps)
+    expect(result.status === 'failed' && result.code).toBe('MAX_TOKENS')
+    expect(h.start).toHaveBeenCalledTimes(1)
+    expect(h.create).not.toHaveBeenCalled()
+  })
+  it('reports token exhaustion after the sole continuation rather than starting a third child', async () => {
+    const h = dependencies()
+    h.deps.assetManifest = () => [{ path: './assets/generated/owned.png' }]
+    h.start.mockImplementation(async () => ({ id: 'limited', result: Promise.resolve({ stopReason: 'max-tokens', output: [{ type: 'reasoning', text: 'private exhausted output' }] }), dispose: h.dispose }))
+    const result = await generateQuestionCode(h.deps)
+    expect(result.status === 'failed' && result.code).toBe('MAX_TOKENS')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.dispose).toHaveBeenCalledTimes(2)
+    expect(h.create).not.toHaveBeenCalled()
+    expect(JSON.stringify(h.states)).not.toContain('private exhausted output')
+  })
+  it('keeps the original deadline when continuing after token exhaustion', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = dependencies()
+      h.deps.timeoutMs = 40
+      h.deps.assetManifest = () => [{ path: './assets/generated/owned.png' }]
+      h.start.mockImplementationOnce(async () => ({ id: 'limited', result: new Promise(resolve => {
+        setTimeout(() => resolve({ stopReason: 'max-tokens', output: [] }), 25)
+      }), dispose: h.dispose }))
+      h.start.mockImplementationOnce(async () => ({ id: 'continuing', result: new Promise(() => {}), dispose: h.dispose }))
+      const work = generateQuestionCode(h.deps)
+      await vi.advanceTimersByTimeAsync(25)
+      expect(h.start).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(15)
+      const result = await work
+      expect(result.status === 'failed' && result.code).toBe('GENERATION_TIMEOUT')
+      expect(h.dispose).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
+  })
   it('does not resume an aborted child even when code and generated assets exist', async () => {
     const h = dependencies()
     h.deps.assetManifest = () => [{ path: './assets/generated/existing.png' }]
@@ -377,6 +453,36 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
   return { ctx, parent: handle.agent }
 }
 describe('the real code child provider', () => {
+  it('continues committed code through the injected provider using the remaining shared write budget', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('first-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
+      ...Array.from({ length: 8 }, (_, i) => toolCallResponse(`part-${i}`, 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// accepted' })),
+      [{ type: 'finish', reason: { kind: 'max-tokens' } }],
+      toolCallResponse('last-write', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// continued' }),
+      toolCallResponse('over-budget', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// must not commit' }),
+      toolCallResponse('done', 'structured_output', { title: source.title, summary: source.summary }),
+    ])
+    const { ctx, parent } = await presentationHost(adapter)
+    const h = dependencies()
+    const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: () => Promise<unknown>; assetManifest: () => unknown[] }
+    artifacts.generateAsset = vi.fn(async () => ({}))
+    artifacts.assetManifest = () => []
+    const results: unknown[] = []
+    ctx.on('tools/result', (exec, result) => { if (exec.name === 'physics_write_experiment_code') results.push(result) }, { global: true })
+    const publish = h.deps.publish
+    h.deps.publish = value => { publish(value); parent.session.append('physics/scene', value) }
+    const starts = vi.fn((request: Parameters<CodeGenerationDependencies['start']>[0]) => ctx.subagents.start(CODE_PROVIDER_NAME, { ...request, parent }))
+    h.deps.start = starts
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(starts).toHaveBeenCalledTimes(2)
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ source: {
+      ...source, rendererJs: source.rendererJs + '\n// accepted'.repeat(8) + '\n// continued', stylesheet: '',
+    } }))
+    expect(JSON.stringify(results.at(-1))).toContain('CODE_WRITE_LIMIT')
+    expect(artifacts.generateAsset).not.toHaveBeenCalled()
+    const resumed = starts.mock.calls[1]?.[0].prompt[0]
+    expect(resumed?.type === 'text' ? resumed.text : '').toContain(JSON.stringify({ rendererJs: source.rendererJs + '\n// accepted'.repeat(8), stylesheet: '' }))
+  })
   it('shares the write budget after completed output and clears saved code when the job is aborted', async () => {
     const adapter = new MockAdapter([
       toolCallResponse('first-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),

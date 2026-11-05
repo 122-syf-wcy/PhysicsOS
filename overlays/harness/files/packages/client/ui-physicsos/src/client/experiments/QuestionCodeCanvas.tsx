@@ -17,7 +17,7 @@ interface Props {
   readonly hasVerifiedSolution?: boolean
 }
 /** Private code only paints snapshots from this question's platform-owned session. */
-export function QuestionCodeCanvas({ visualization, scene, session, regenerateQuestionCode, questionCodeOwner, hasVerifiedSolution }: Props) {
+export function QuestionCodeCanvas({ visualization, scene, session, regenerateQuestionCode, questionCodeOwner, hasVerifiedSolution = false }: Props) {
   const owner = useQuestionCodeOwner(questionCodeOwner)
   const [attempt, setAttempt] = useState(0)
   const [loaded, setLoaded] = useState<{ entryUrl: string; source: CodeVisualizationSource; key: string }>()

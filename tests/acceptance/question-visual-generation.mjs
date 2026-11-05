@@ -28,8 +28,8 @@ async function privateText(path) {
 const password = await privateText(process.env.PHYSICSOS_VISUAL_PASSWORD_FILE)
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-http2'] })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' })
-const report = { name, base, passed: false, errors: [], startedAt: new Date().toISOString() }
-let sessionId
+const report = { name, base, passed: false, errors: [], sessionCreates: [], phase: 'login', startedAt: new Date().toISOString() }
+let sessionId, page
 try {
   const login = await context.request.post(base + '/physicsos/auth/login', { data: { username: process.env.PHYSICSOS_VISUAL_USERNAME ?? 'chat-review-20261104', schoolId: 'PHYSICSOS-OPEN', password }, headers: { origin: base } })
   assert.equal(login.status(), 200)
@@ -49,11 +49,15 @@ try {
       } }
     }
   })
-  const page = await context.newPage()
+  page = await context.newPage()
   page.on('pageerror', error => report.errors.push(safe(error)))
   page.on('response', async response => {
-    if (new URL(response.url()).pathname === '/api/session/create' && response.ok()) {
-      try { sessionId = (await response.json()).result?.value?.sessionId } catch {}
+    if (new URL(response.url()).pathname === '/api/session/create') {
+      try {
+        const result = (await response.json()).result
+        report.sessionCreates.push({ status: response.status(), ok: result?.ok, errorCode: result?.error?.code })
+        if (result?.value?.sessionId) sessionId = result.value.sessionId
+      } catch {}
     }
   })
   await page.goto(base, { waitUntil: 'domcontentloaded' })
@@ -62,24 +66,31 @@ try {
   if (notice.notice?.enabled && notice.acknowledgedVersion !== notice.notice.version) {
     await page.locator('[data-physicsos-platform-notice]').getByRole('button', { name: '继续', exact: true }).click()
   }
+  report.phase = 'new-session'
   await page.getByRole('button', { name: '新建会话', exact: true }).last().click()
   const input = page.locator('[data-composer-input]').first()
   await expect(input).toBeVisible({ timeout: 30000 })
+  // Blank-session reuse can replace a stale session after a candidate restart.
+  // A visible composer remains disabled while that asynchronous navigation settles.
+  await expect(input).toHaveAttribute('contenteditable', 'true', { timeout: 30000 }).catch(() => {})
   if (await input.getAttribute('contenteditable') !== 'true') {
-    await input.click()
+    report.phase = 'workspace'
+    await page.getByRole('button', { name: '选择工作区', exact: true }).click()
     const panel = page.locator('[data-physicsos-workspace-panel]')
-    await expect(panel).toBeVisible()
+    await expect(panel).toBeVisible({ timeout: 30000 })
     if (await panel.getByRole('button', { name: '打开', exact: true }).count()) await panel.getByRole('button', { name: '打开', exact: true }).first().click()
     else {
       if (!await panel.getByLabel('工作区名称', { exact: true }).count()) await panel.getByRole('button', { name: '新建工作区', exact: true }).click()
       await panel.getByLabel('工作区名称', { exact: true }).fill('可视化修复验收')
       await panel.getByRole('button', { name: '创建并进入', exact: true }).click()
     }
-    await expect(panel).toBeHidden()
+    await expect(panel).toBeHidden({ timeout: 30000 })
   }
-  await expect(input).toHaveAttribute('contenteditable', 'true')
+  report.phase = 'composer'
+  await expect(input).toHaveAttribute('contenteditable', 'true', { timeout: 30000 })
   await input.fill(prompts[name])
   await page.getByRole('button', { name: '发送消息', exact: true }).click()
+  report.phase = 'generation'
   console.log(`Started real ${name} generation`)
   const card = page.locator('[data-code-experiment-shell]').last()
   const status = card.locator('[data-question-code-status]')
@@ -88,6 +99,7 @@ try {
   if (report.status !== 'ready') {
     report.failureText = safe(await status.innerText()); throw new Error(`Generation ended ${report.status}`)
   }
+  report.phase = 'paint'
   const frame = card.frameLocator('iframe').frameLocator('iframe')
   const latest = () => page.evaluate(() => window.__visualSnapshots.at(-1))
   const first = await latest(); assert.equal(first.source, 'platform-engine'); report.domain = first.domain; report.experimentId = first.experimentId
@@ -104,6 +116,7 @@ try {
   }
   report.desktop = await paint(); await card.screenshot({ path: output + '/desktop.png' })
   if (first.clock.total > 0) {
+    report.phase = 'timeline'
     const seek = card.getByRole('slider', { name: '时间轴', exact: true })
     const time = first.clock.total * 0.4
     await seek.evaluate((el, value) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, String(value)); el.dispatchEvent(new Event('input', { bubbles: true })) }, time)
@@ -111,12 +124,23 @@ try {
     await expect.poll(async () => (await paint()).sha256).not.toBe(report.desktop.sha256)
     report.evolved = await paint()
   }
+  report.phase = 'mobile'
   await page.setViewportSize({ width: 390, height: 844 }); await expect(status).toHaveAttribute('data-question-code-status', 'ready')
   report.mobile = await paint(); await card.screenshot({ path: output + '/mobile.png' })
   report.sessionId = sessionId; report.passed = report.errors.length === 0
   assert.equal(report.passed, true)
   console.log(`PASS real ${name}: engine frame, authored paint, desktop/mobile, applicable timeline`)
 } catch (error) {
+  if (page && !page.isClosed()) {
+    try {
+      report.uiState = await page.evaluate(() => ({
+        composers: Array.from(document.querySelectorAll('[data-composer-input]')).map(el => ({ editable: el.getAttribute('contenteditable'), visible: el.getBoundingClientRect().width > 0 })),
+        workspacePanel: !!document.querySelector('[data-physicsos-workspace-panel]'),
+        statuses: Array.from(document.querySelectorAll('[data-question-code-status]')).map(el => el.getAttribute('data-question-code-status')),
+      }))
+      await page.screenshot({ path: output + '/failure.png', fullPage: true, timeout: 10000 })
+    } catch (diagnosticError) { report.diagnosticError = safe(diagnosticError) }
+  }
   report.error = safe(error); report.sessionId = sessionId; console.log(`FAIL ${name}: ${report.error}`); process.exitCode = 1
 } finally {
   report.finishedAt = new Date().toISOString()

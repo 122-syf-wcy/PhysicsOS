@@ -62,6 +62,8 @@ export interface PhysicsSceneRef {
   sceneId: string
   scene: PhysicsScene
   originScene?: PhysicsScene
+  /** Verification belongs to the original question, outside the scene/hash contract. */
+  hasVerifiedSolution?: boolean
   buildMode?: true
 }
 
@@ -70,6 +72,7 @@ export const sceneRefOf = (entry: PhysicsSceneRef): PhysicsSceneRef => ({
   sceneId: entry.sceneId,
   scene: entry.scene,
   ...(entry.originScene === undefined ? {} : { originScene: entry.originScene }),
+  ...(entry.hasVerifiedSolution === undefined ? {} : { hasVerifiedSolution: entry.hasVerifiedSolution }),
   ...(entry.buildMode === true ? { buildMode: true } : {}),
 })
 
@@ -111,6 +114,7 @@ export interface RecentExperimentEntry {
   readonly updatedAt: string
   readonly scene: PhysicsScene
   readonly originScene?: PhysicsScene
+  readonly hasVerifiedSolution?: boolean
   readonly buildMode?: true
 }
 
@@ -333,6 +337,7 @@ export function createPhysicsSurfaceController(
       )).toISOString(),
       scene,
       ...(sceneRef.originScene === undefined ? {} : { originScene: sceneRef.originScene }),
+      ...(sceneRef.hasVerifiedSolution === undefined ? {} : { hasVerifiedSolution: sceneRef.hasVerifiedSolution }),
       ...(sceneRef.buildMode === true ? { buildMode: true } : {}),
     }
     deleted.delete(entry.sceneId)
@@ -388,6 +393,7 @@ export function createPhysicsSurfaceController(
       const sceneRef: PhysicsSceneRef = {
         sceneId: String(scene.id), scene,
         ...(originScene === undefined ? {} : { originScene }),
+        ...(previous.hasVerifiedSolution === undefined ? {} : { hasVerifiedSolution: scene.id === previous.scene.id && previous.hasVerifiedSolution }),
         ...(current.buildMode === true ? { buildMode: true } : {}),
       }
       store.set({ ...current, sceneRef })

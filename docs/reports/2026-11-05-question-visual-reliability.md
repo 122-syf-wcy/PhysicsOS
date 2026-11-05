@@ -24,3 +24,29 @@
 ## 适用范围
 
 固定平面摩擦模型采用相同静/动摩擦系数，适用于0°–90°、竖直向下重力与沿平面初速度。法向初速度或任意重力方向不属于本轮扩展。未把这次修复宣称为任意多阶段复合场题的完整求解器。
+
+## 集成进度
+
+提交 `beca7e8` 已冻结首个候选。新增整体核心测试32包1777项通过；相关生产源码类型检查、UI/tool/host打包与Web构建通过。服务器发布目录 `/opt/physicsos-previews/question-visual-reliability-20261105`，镜像 `physicsos-app:question-visual-beca7e8`。该镜像在真实正式镜像16bbe985之上仅覆盖73个运行文件（27MB），源码摘要逐个与本次提交对应。
+
+真实候选生成为 `/tmp/physicsos-qv-real-incline`（构建容器，测试仅候选账号），日志 `real-incline.log`；76原版ZIP用新引擎的完整回归日志为 `lab-regression.log`，输出`/tmp/physicsos-qv-lab-regression`。当前两项在跑，尚未切换正式站。
+
+真实候选首轮输入5679 tokens，相比用户历史8855下降约36%。进一步复现了第二个底层问题：子代理配置reasoningEffort=off，PiAI通道序列化却可能省略off字段；平台代理仅在显式none/off时添加DeepSeek原生thinking.disabled。实际上游仍输出两轮8192token推理（约3万字符）并最终max-tokens，没有交付代码。此候选未发布；正在修复仅针对严格匹配的受限代码工具组合的wire默认值，普通聊天/显式高推理保持不变。
+
+## 接续复核（2026-11-05）
+
+实时确认远端 main 与服务器检出均为 `60f31efe`，正式镜像仍为 `16bbe985`；`b2038fe` 候选尚未上线。已有76个默认包的指针、版本及原ZIP哈希均保持一致，完整目录回归76/76通过；候选精确核验105747文件、9534链接、83依赖和flock通过。
+
+进一步采集隔离候选的真实出站字段，确认代码子代理确实发送 `reasoning_effort=none`、`thinking.type=disabled`、`tool_choice=required`，而现有中转通道仍返回推理并可能在写代码前耗尽8192输出token。因此“序列化省略off”不是全部原因。关闭参数符合[DeepSeek Chat API文档](https://api-docs.deepseek.com/api/create-chat-completion/)；未更换用户模型或通道，未通过增加输出上限掩盖问题。诊断只输出模型、工具结构及计数，不输出请求正文、密钥或Cookie。
+
+父流程另有确定缺口：带已有素材、最终仅推理内容的 max-tokens 结束会被归为不可恢复的 CHILD_INCOMPLETE。补充显式 MAX_TOKENS 分类；仅在已有本任务素材或有效非空源码时续写一次，并保留原截止时间、写入额度与取消/版本保护。验证覆盖纯推理达限、JS/CSS检查点、无进展不重试、二次达限、截止时间及真实子代理跨恢复的10次写入上限。
+
+SSH直连握手间歇超时，使用本机既有SOCKS代理恢复；未修改系统网络或服务器SSH配置。清理经核查无引用的 `/tmp/s8` 与 `/tmp/pnpmtest` 两处旧pnpm缓存后，服务器空间从628MB增至2.7GB，所有镜像、备份和实验包保留。
+
+真实短请求随后发现并定位生产插件上下文的异常：失败回调通过 `this.ctx.agents` 访问了未注入的服务，导致普通Error覆盖原停止原因，父层只显示 GENERATION_FAILED。修复改用已持有的 `run.localAgent`，回归测试改为真实插件注册后的 `ctx.subagents.start` 路径；此测试已先复现失败再通过，完整生成器108/108通过。此前直接用根上下文实例化provider的测试未覆盖该生产约束。
+
+新增包级 `tool-physicsos/vitest.config.ts`，显式将源码和构建依赖的导入统一到同一源码模块，消除 scope 单例被加载两份造成的假失败。可复现命令（服务器Harness目录）：`NODE_ENV=test ./node_modules/.bin/vitest run --config packages/physicsos/tool-physicsos/vitest.config.ts packages/physicsos/tool-physicsos --maxWorkers=2`。完整包108项再次通过；另以 `noCheck:false` 对整个工具包源码做独立严格类型检查，依赖使用现有声明产物。
+
+审查补充了实验室入口与“最近空间”的求解范围状态传递，验证状态单独保留，不写入原始scene或改变其哈希。未提供整题验证证据时保守展示场景说明。
+
+广泛UI检查结果为1239通过、32失败，另有12个AppleDouble副产物被误当测试文件（已从构建测试目录清除）。真实失败集中于既有SVG/Three器材断言；用本轮修改前UI源码复测代表性的光学、贡献渲染和工作区6个失败，结果相同。没有将这些无关的旧渲染测试修改混入本次；完整76包真实浏览器回归已另行通过。

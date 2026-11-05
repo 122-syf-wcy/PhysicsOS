@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createPhysicsSurfaceController, PHYSICS_PANEL_IDS } from '../src/client/surface-store.ts'
+import { createPhysicsSurfaceController, PHYSICS_PANEL_IDS, sceneRefOf as restoreSceneRef } from '../src/client/surface-store.ts'
 import {
   createExperimentSceneRef, findExperimentTemplate,
 } from '../src/client/physics/experiment-templates.ts'
@@ -12,6 +12,19 @@ const sceneRefOf = (id: string, title: string) => {
 }
 
 describe('what 最近空间 remembers', () => {
+  it.each([false, true])('retains verified solution scope %s through an edit and recent-space restore', (hasVerifiedSolution) => {
+    const surface = createPhysicsSurfaceController()
+    const original = sceneRefOf('projectile-oblique', '斜抛运动')
+    const ref = { ...original, originScene: original.scene, hasVerifiedSolution }
+    surface.open('lab', ref)
+    surface.updateScene({ ...ref.scene, revision: ref.scene.revision + 1 })
+    const saved = surface.recent.getSnapshot().items[0]!
+    const restored = restoreSceneRef(saved)
+    expect(restored.hasVerifiedSolution).toBe(hasVerifiedSolution)
+    expect(restored.originScene).toBe(original.scene)
+    surface.open('lab', restored)
+    expect(surface.store.getSnapshot().sceneRef?.hasVerifiedSolution).toBe(hasVerifiedSolution)
+  })
   it('keeps the agent’s own visits out of the list', () => {
     const surface = createPhysicsSurfaceController()
     const ref = sceneRefOf('projectile-oblique', '斜抛运动')

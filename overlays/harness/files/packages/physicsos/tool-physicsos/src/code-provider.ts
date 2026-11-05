@@ -173,7 +173,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
         if (chunked && exec.name === 'physics_write_experiment_code') return undefined
         if (canGenerateAsset && exec.name === 'physics_generate_experiment_asset') return undefined
         if (exec.name !== 'structured_output') return 'Code child accepts only structured_output'
-        const source = { ...(exec.arguments as Record<string, unknown>), ...(chunked ? parts.source() : {}) }
+        const source: Record<string, unknown> = { ...(exec.arguments as Record<string, unknown>), ...(chunked ? parts.source() : {}) }
         const limits = { title: 120, summary: 1000, rendererJs: 96000, stylesheet: 24000 }
         for (const [key, maximum] of Object.entries(limits)) {
           if (typeof source[key] !== 'string' || source[key].length > maximum) return `Code source ${key} must be a string of at most ${maximum} characters`
@@ -208,7 +208,9 @@ export class PhysicsCodeProvider implements SubagentProvider {
         const partialSource = parts.source()
         const hasPartial = partialSource.rendererJs.length > 0 || partialSource.stylesheet.length > 0
         if (result.stopReason !== 'completed') {
-          const child = this.ctx.agents.get(run.id)
+          // The injected provider owns this child handle; its context does not
+          // request the global agents service and cannot read that registry.
+          const child = run.localAgent
           // oxlint-disable-next-line typescript/no-deprecated -- Safe classification of this owned child's terminal failure only.
           const end = child?.session.snapshotEvents().findLast(event => event.type === 'turn/end')
           const reason = end?.type === 'turn/end' ? end.data.reason : undefined

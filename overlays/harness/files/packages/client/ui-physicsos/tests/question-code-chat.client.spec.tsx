@@ -5,6 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createMechanicsScene } from '@physicsos/physics-scene'
 import type { CodeExperimentRef } from '@deepseek-ai/dsh-tool-physicsos/types'
 import { PhysicsWorkspace } from '../src/client/PhysicsWorkspace.tsx'
+import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
+import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { buildWorkspaceRuntime } from '../src/client/physics/build-workspace-runtime.ts'
 import { SceneCardBody } from '../src/client/SceneChatCard.tsx'
 import { questionCodeSceneSha256, withQuestionCodeVisualization } from '../src/client/experiments/question-code-api.ts'
@@ -78,6 +80,27 @@ async function fixture(ttl = 60_000) {
     commandType: undefined, solve: undefined, scene: scene as never, visualization: ref }
   return { ref, data, questionCodeOwner, fetch, openSceneInLab: vi.fn() }
 }
+it.each([false, true])('retains verified solution scope %s when the chat experiment opens in the full Lab', async (verified) => {
+  const f = await fixture()
+  const data = { ...f.data, solve: verified ? solvedCardData('mech-01-uniform-acceleration').solve : undefined }
+  const frozen = JSON.stringify(scene)
+  const surface = createPhysicsSurfaceController()
+  const card = render(<SceneCardBody data={data} questionCodeOwner={f.questionCodeOwner}
+    openSceneInLab={ref => surface.open('lab', ref)} t={t} />)
+  await waitFor(() => { expect(card.container.querySelector('iframe')).not.toBeNull() })
+  fireEvent.click(card.getByRole('button', { name: '在实验室中探索' }))
+  card.unmount()
+  const unavailable = (() => { throw new Error('unrelated page hook was read') }) as never
+  const props = { usePhysicsSurface: (selector: (value: ReturnType<typeof surface.store.getSnapshot>) => unknown) => selector(surface.store.getSnapshot()),
+    useLearningRecord: unavailable, useRecentExperiments: unavailable, useSessions: unavailable, useWorkspaces: unavailable, useAuth: unavailable,
+    questionCodeOwner: f.questionCodeOwner, t } as unknown as PhysicsSurfaceProps
+  const lab = render(<PhysicsSurface {...props} />)
+  expect(lab.container.querySelector('[data-private-question-code-workspace]')).not.toBeNull()
+  expect(lab.queryByText('当前场景演示') !== null).toBe(!verified)
+  expect(surface.store.getSnapshot().sceneRef?.originScene).toBe(scene)
+  expect(JSON.stringify(scene)).toBe(frozen)
+  expect(await questionCodeSceneSha256(surface.store.getSnapshot().sceneRef!.originScene!)).toBe(f.ref.sceneSha256)
+})
 function connect(view: ReturnType<typeof render>) {
   const frame = view.container.querySelector('iframe')!
   const outbound: Record<string, unknown>[] = []
@@ -132,7 +155,7 @@ it('renders exact question physics rather than template defaults, with independe
   expect(view.container.textContent).toContain('exact question')
   fireEvent.click(view.getByRole('button', { name: '在实验室中探索' }))
   expect(f.openSceneInLab).toHaveBeenCalledWith({
-    sceneId: scene.id, scene: withQuestionCodeVisualization(scene, f.ref), originScene: scene,
+    sceneId: scene.id, scene: withQuestionCodeVisualization(scene, f.ref), originScene: scene, hasVerifiedSolution: false,
   })
   expect(f.fetch.mock.calls.every(([url]) => url.includes(`sha256=${f.ref.sha256}`))).toBe(true)
 })
@@ -143,6 +166,7 @@ it('requires an explicit upgrade for a legacy ready artifact without opening its
   const view = render(<SceneCardBody data={{ ...f.data, visualization: legacy }} questionCodeOwner={f.questionCodeOwner}
     openSceneInLab={f.openSceneInLab} t={t} regenerateQuestionCode={regenerateQuestionCode} />)
   expect(view.container.querySelector('[data-question-code-status="upgrade-required"]')).not.toBeNull()
+  expect(view.getByText('当前场景演示')).toBeTruthy()
   expect(view.container.querySelector('iframe')).toBeNull()
   expect(f.fetch).not.toHaveBeenCalled()
   expect(regenerateQuestionCode).not.toHaveBeenCalled()

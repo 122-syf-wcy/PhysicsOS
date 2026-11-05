@@ -124,6 +124,7 @@ export const SceneCardBody = memo(function SceneCardBody({
             openSceneInLab({
               sceneId: data.sceneId,
               scene: data.visualization === undefined ? scene : withQuestionCodeVisualization(scene, data.visualization),
+              hasVerifiedSolution: data.solve?.verification?.status === 'passed',
               ...(data.visualization === undefined ? {} : { originScene: scene }),
             })
           }}

@@ -118,6 +118,7 @@ export interface PhysicsWorkspaceProps {
   readonly experimentId?: string
   readonly questionCodeVisualization?: CodeVisualizationState
   readonly questionCodeScene?: PhysicsScene
+  readonly questionCodeHasVerifiedSolution?: boolean
   readonly questionCodeOwner?: QuestionCodeOwnerStore
   readonly onSceneChange?: (scene: import('@physicsos/physics-scene').PhysicsScene) => void
   readonly runtime: WorkspaceRuntime
@@ -168,6 +169,7 @@ export function PhysicsWorkspace({
   experimentId,
   questionCodeVisualization,
   questionCodeScene,
+  questionCodeHasVerifiedSolution,
   questionCodeOwner,
   runtime,
   onSceneChange,
@@ -533,6 +535,7 @@ export function PhysicsWorkspace({
           </div>
         </header>
         <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
+          hasVerifiedSolution={questionCodeHasVerifiedSolution === true}
           {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })} />
         <div className={codeCss.transport} aria-label={t('lab.timeline')} data-running={running}>
           <button type="button" className={clsx(codeCss.control, codeCss.controlPrimary)} disabled={failed || clock.total <= 0}

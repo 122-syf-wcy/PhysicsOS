@@ -57,6 +57,18 @@ describe('readAgentScenesProjection', () => {
 })
 
 describe('createAgentSceneSync', () => {
+  it('updates verification scope without altering the original scene or opening the Lab', () => {
+    const { sync, adopted, shown } = harness()
+    const original = createMagneticScene({ sceneId: 's1', revision: 0 })
+    const value = snapshotOf('s1', 0, original) as Record<string, unknown>
+    sync.apply('session-a', projection('s1', value))
+    expect(adopted.at(-1)?.hasVerifiedSolution).toBe(false)
+    value.solve = { verification: { status: 'passed' } }
+    expect(sync.apply('session-a', projection('s1', value))).toBe('adopted')
+    expect(adopted.at(-1)?.hasVerifiedSolution).toBe(true)
+    expect(adopted.at(-1)?.scene).toEqual(original)
+    expect(shown).toHaveLength(0)
+  })
   it('adopts every revision silently while the code experiment stays in chat', () => {
     const { sync, adopted, shown } = harness()
     expect(sync.apply('session-a', projection('s1', snapshotOf('s1', 0)))).toBe('adopted')

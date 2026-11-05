@@ -24,6 +24,7 @@ export interface AgentSceneSnapshot {
   title?: string
   cause?: string
   visualization?: CodeVisualizationState
+  hasVerifiedSolution: boolean
   scene: PhysicsScene
 }
 
@@ -51,7 +52,7 @@ export const readAgentScenesProjection = (value: unknown): AgentScenesProjection
   const checked: Record<string, AgentSceneSnapshot> = {}
   for (const [key, entry] of Object.entries(scenes)) {
     if (!isRecord(entry)) return undefined
-    const { sceneId, revision, title, cause, scene, visualization } = entry
+    const { sceneId, revision, title, cause, scene, visualization, solve } = entry
     if (typeof sceneId !== 'string' || sceneId !== key) return undefined
     if (typeof revision !== 'number' || !Number.isInteger(revision) || revision < 0) return undefined
     if (!isRecord(scene)) return undefined
@@ -61,6 +62,7 @@ export const readAgentScenesProjection = (value: unknown): AgentScenesProjection
     checked[key] = {
       sceneId,
       revision,
+      hasVerifiedSolution: isRecord(solve) && isRecord(solve['verification']) && solve['verification']['status'] === 'passed',
       ...(typeof title === 'string' ? { title } : {}),
       ...(typeof cause === 'string' ? { cause } : {}),
       ...(isRecord(visualization) && ['ready', 'generating', 'failed'].includes(String(visualization['status']))
@@ -77,6 +79,7 @@ export interface AgentSceneRef {
   sceneId: string
   scene: PhysicsScene
   originScene?: PhysicsScene
+  hasVerifiedSolution?: boolean
 }
 
 /**
@@ -121,7 +124,7 @@ export function createAgentSceneSync(deps: AgentSceneSyncDeps): AgentSceneSync {
       if (projection.latest === null) return 'absent'
       const snapshot = projection.scenes[projection.latest]
       if (snapshot === undefined) return 'invalid'
-      const stamp = `${snapshot.sceneId}@${snapshot.revision}:${JSON.stringify(snapshot.visualization ?? null)}`
+      const stamp = `${snapshot.sceneId}@${snapshot.revision}:${snapshot.hasVerifiedSolution}:${JSON.stringify(snapshot.visualization ?? null)}`
       const previous = applied.get(sessionId)
       if (previous === stamp) return 'unchanged'
       applied.set(sessionId, stamp)
@@ -131,6 +134,7 @@ export function createAgentSceneSync(deps: AgentSceneSyncDeps): AgentSceneSync {
       if (validateScene(snapshot.scene).status === 'failed') return 'invalid'
       const ref: AgentSceneRef = { sceneId: snapshot.sceneId, scene: snapshot.visualization === undefined
         ? snapshot.scene : withQuestionCodeVisualization(snapshot.scene, snapshot.visualization),
+      hasVerifiedSolution: snapshot.hasVerifiedSolution,
       ...(snapshot.visualization === undefined ? {} : { originScene: snapshot.scene }) }
       deps.adoptScene(ref)
       return 'adopted'

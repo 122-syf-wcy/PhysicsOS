@@ -287,7 +287,7 @@ export function PhysicsSurface({
       runtime={runtime}
       {...(questionCodeOwner === undefined ? {} : { questionCodeOwner })}
       {...(questionCodeVisualization === undefined || questionCodeScene === undefined
-        ? {} : { questionCodeVisualization, questionCodeScene })}
+        ? {} : { questionCodeVisualization, questionCodeScene, questionCodeHasVerifiedSolution: surfaceState.sceneRef?.hasVerifiedSolution === true })}
       {...(templateId === undefined ? {} : { experimentId: templateId })}
       {...(updateScene === undefined ? {} : { onSceneChange: updateScene })}
       t={t}
