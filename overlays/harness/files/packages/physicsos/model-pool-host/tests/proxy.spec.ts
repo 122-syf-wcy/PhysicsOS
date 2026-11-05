@@ -102,6 +102,35 @@ const chat = async (
 }
 
 describe('model pool proxy', () => {
+  it('restores omitted off effort only for native DeepSeek isolated code requests on the actual wire', async () => {
+    const received: Record<string, unknown>[] = []
+    const upstream = await startUpstream((body, res) => { received.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'code', baseURL: upstream.url, priority: 10 })
+    await store.addKey(ADMIN, channel.id, { key: 'fixture-code-no-effort' })
+    const base = await startPool(store)
+    const metadata = { type: 'function', function: { name: 'structured_output', parameters: { type: 'object', properties: { title: { type: 'string' }, summary: { type: 'string' } }, required: ['title', 'summary'] } } }
+    const writer = { type: 'function', function: { name: 'physics_write_experiment_code', parameters: { type: 'object' } } }
+    const image = { type: 'function', function: { name: 'physics_generate_experiment_asset', parameters: { type: 'object' } } }
+    const full = { ...metadata, function: { ...metadata.function, parameters: { type: 'object', properties: Object.fromEntries(['rendererJs', 'stylesheet', 'summary', 'title'].map(name => [name, { type: 'string' }])), required: ['rendererJs', 'stylesheet', 'summary', 'title'] } } }
+    for (const tools of [[metadata, writer, image], [metadata, writer], [full]]) {
+      expect((await chat(base, { tools, max_tokens: 8192, tool_choice: 'auto' })).status).toBe(200)
+      expect(received.at(-1)).toMatchObject({ model: 'deepseek-v4.1-flash', reasoning_effort: 'none', thinking: { type: 'disabled' }, max_tokens: 8192, tool_choice: 'auto', tools })
+    }
+    for (const extra of [{}, { tools: [metadata] }, { tools: [metadata, writer], reasoning_effort: 'high' }, { tools: [metadata, writer], thinking: { type: 'enabled' } }]) {
+      await chat(base, extra)
+      expect(received.at(-1)).toEqual({ model: 'deepseek-v4.1-flash', messages: [{ role: 'user', content: 'hi' }], ...extra, ...('tools' in extra && extra.tools.length === 2 ? { tool_choice: 'required' } : {}) })
+    }
+    const openaiStore = await makeStore()
+    const openaiChannel = await openaiStore.createChannel(ADMIN, { name: 'mapped', baseURL: upstream.url, models: ['gpt-4.1'], priority: 10 })
+    await openaiStore.addKey(ADMIN, openaiChannel.id, { key: 'fixture-openai-no-effort' })
+    const openaiBase = await startPool(openaiStore)
+    await chat(openaiBase, { tools: [metadata, writer] })
+    expect(received.at(-1)?.model).toBe('gpt-4.1')
+    expect(received.at(-1)?.thinking).toBeUndefined()
+    expect(received.at(-1)?.reasoning_effort).toBeUndefined()
+  })
   it('requires tool delivery only for the isolated four-field experiment code contract', async () => {
     const received: Record<string, unknown>[] = []
     const upstream = await startUpstream((body, res) => { received.push(body); res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}') })

@@ -81,7 +81,8 @@ const normalizeUpstreamPayload = (
 ): Record<string, unknown> => {
   const object = (value: unknown): Record<string, unknown> | undefined =>
     value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
-  if (payload.tool_choice === undefined && Array.isArray(payload.tools) && payload.tools.length >= 1 && payload.tools.length <= 3) {
+  let isolatedCode = false
+  if (Array.isArray(payload.tools) && payload.tools.length >= 1 && payload.tools.length <= 3) {
     const functions = payload.tools.map((tool: unknown) => object(object(tool)?.function))
     const code = functions.find(fn => fn?.name === 'structured_output')
     const schema = object(code?.parameters), properties = object(schema?.properties)
@@ -93,16 +94,22 @@ const normalizeUpstreamPayload = (
       && Array.isArray(required) && fields.every(name => required.includes(name))
       && functions.every(fn => fn?.name === 'structured_output' || fn?.name === 'physics_generate_experiment_asset'
         || fn?.name === 'physics_write_experiment_code')) {
+      isolatedCode = true
       // This isolated workflow has no useful plain-text completion: image then code.
-      payload = { ...payload, tool_choice: 'required' }
+      if (payload.tool_choice === undefined) payload = { ...payload, tool_choice: 'required' }
     }
   }
-  const normalized = payload.reasoning_effort === 'off'
+  const nativeDeepSeek = typeof payload.model === 'string'
+    && /^deepseek-(?:v[34](?:[.-]|$)|chat$|reasoner$)/i.test(payload.model)
+  // PiAI serializes effort=off as an absent field. Restore that intent only
+  // for this restricted code contract on native DeepSeek. Never override an
+  // explicit effort/thinking choice or infer the policy from normal chat text.
+  const omittedCodeEffort = isolatedCode && nativeDeepSeek
+    && payload.reasoning_effort === undefined && payload.thinking === undefined
+  const normalized = payload.reasoning_effort === 'off' || omittedCodeEffort
     ? { ...payload, reasoning_effort: 'none' }
     : payload
-  if (normalized.reasoning_effort === 'none'
-    && typeof normalized.model === 'string'
-    && /^deepseek-(?:v[34](?:[.-]|$)|chat$|reasoner$)/i.test(normalized.model)) {
+  if (normalized.reasoning_effort === 'none' && nativeDeepSeek) {
     return { ...normalized, thinking: { type: 'disabled' } }
   }
   return normalized
