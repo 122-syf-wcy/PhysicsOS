@@ -12,19 +12,22 @@ export interface QuestionCodeContext {
   renderContract: string
   allowedAssetPaths: string[]
 }
+/** The style version an artifact is frozen under: the published prompt's, else the platform default. */
+export const styleVersionOf = (prompts?: Pick<DeveloperPromptService, 'current'>): string =>
+  prompts?.current().version ?? 'v3-platform-default'
+
 export function questionCodeContext(
   experimentId: string,
   prompts?: Pick<DeveloperPromptService, 'current'>,
 ): QuestionCodeContext {
   if (!experimentProfile(experimentId))
     throw new ExperimentError(400, 'UNKNOWN_EXPERIMENT', '请选择已注册的实验风格。')
-  const files = experimentTemplateFiles(experimentId),
-    published = prompts?.current()
+  const files = experimentTemplateFiles(experimentId)
   return {
     experimentId,
     developerPrompt: experimentDeveloperPrompt(experimentId),
-    publishedBody: published?.body ?? '',
-    styleVersion: published?.version ?? 'v3-platform-default',
+    publishedBody: prompts?.current().body ?? '',
+    styleVersion: styleVersionOf(prompts),
     renderContract: QUESTION_CODE_RENDER_CONTRACT,
     allowedAssetPaths: [...files.keys()].filter(name => name.startsWith('dist/')).sort(),
   }
