@@ -29,6 +29,10 @@ export interface ProxyDeps {
   readonly rotation: WeightedRotation
   /** Total deadline for one upstream attempt, including the response stream. */
   readonly attemptTimeoutMs: number
+  /** Wait for one attempt's response headers; failover is only legal before them. */
+  readonly headersTimeoutMs?: number
+  /** Window in which a further attempt may still start with a full header wait. */
+  readonly requestBudgetMs?: number
   readonly nowMs?: () => number
   readonly log?: (line: string) => void
 }
@@ -172,6 +176,11 @@ const writeStream = async (
  */
 export const modelProxyHandler = (deps: ProxyDeps) => {
   const nowMs = deps.nowMs ?? ((): number => Date.now())
+  const headersTimeoutMs = deps.headersTimeoutMs === undefined
+    ? undefined
+    : Math.min(deps.headersTimeoutMs, deps.attemptTimeoutMs)
+  const headerWaitMs = headersTimeoutMs ?? deps.attemptTimeoutMs
+  const requestBudgetMs = Math.max(deps.requestBudgetMs ?? Number.POSITIVE_INFINITY, headerWaitMs)
   let modelsCache: { readonly at: number; readonly ids: readonly string[] } | null = null
 
   const listModels = async (signal: AbortSignal): Promise<readonly string[]> => {
@@ -271,11 +280,16 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
     }
 
     const budget = Math.min(candidates.length, settings.retryCount + 1)
+    /* The first attempt always runs; a later one starts only while a full header
+       wait still fits, so the pool answers before its caller's stream deadline.
+       Wall time comes from performance.now(): nowMs may be a frozen test clock. */
+    const attemptsUntil = performance.now() + requestBudgetMs
     let lastFailure: KeyFailure | undefined
     let attempt = 0
     for (const candidate of candidates) {
       if (cancelled()) return
       if (attempt >= budget) break
+      if (attempt > 0 && attemptsUntil - performance.now() < headerWaitMs) break
       attempt += 1
       let secret: string
       try {
@@ -294,6 +308,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
              name is a product-facing label, not something an upstream knows. */
           payload: normalizeUpstreamPayload({ ...payload, model: upstreamModelOf(candidate.channel, model) }),
           timeoutMs: deps.attemptTimeoutMs,
+          ...(headersTimeoutMs === undefined ? {} : { headersTimeoutMs }),
           signal: abort.signal,
         })
         if (cancelled()) {

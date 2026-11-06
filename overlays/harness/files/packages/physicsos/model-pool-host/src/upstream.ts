@@ -83,6 +83,8 @@ export interface ForwardInput {
   readonly secret: string
   readonly payload: unknown
   readonly timeoutMs: number
+  /** Abort unless response headers arrive in time; `timeoutMs` still bounds the whole attempt. */
+  readonly headersTimeoutMs?: number
   readonly signal: AbortSignal
 }
 
@@ -127,9 +129,13 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
   const timer = setTimeout(() => {
     controller.abort(new PoolError(504, 'MODEL_POOL_ATTEMPT_TIMEOUT', '上游响应超时'))
   }, input.timeoutMs)
+  const headersTimer = input.headersTimeoutMs === undefined ? undefined : setTimeout(() => {
+    controller.abort(new PoolError(504, 'MODEL_POOL_HEADERS_TIMEOUT', '上游响应头超时'))
+  }, input.headersTimeoutMs)
 
   const detach = (): void => {
     clearTimeout(timer)
+    clearTimeout(headersTimer)
     input.signal.removeEventListener('abort', link)
   }
 
@@ -156,6 +162,7 @@ export const forwardChat = async (input: ForwardInput): Promise<ForwardResult> =
       messagesOf(error),
     )
   }
+  clearTimeout(headersTimer)
 
   const streaming = (input.payload as { stream?: unknown } | null)?.stream === true
   if (response.ok && streaming && response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'text/event-stream') {

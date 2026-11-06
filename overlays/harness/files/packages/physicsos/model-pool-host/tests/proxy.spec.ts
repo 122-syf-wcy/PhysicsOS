@@ -69,11 +69,16 @@ const makeStore = async (): Promise<PoolStore> => new PoolStore({
   proxy: { host: '127.0.0.1', port: 0 },
 })
 
-const startPool = async (store: PoolStore, attemptTimeoutMs = 5_000): Promise<string> => {
+const startPool = async (
+  store: PoolStore,
+  attemptTimeoutMs = 5_000,
+  timing: { readonly headersTimeoutMs?: number; readonly requestBudgetMs?: number } = {},
+): Promise<string> => {
   const proxy = await startModelProxy({
     store,
     rotation: new WeightedRotation({ random: () => 0 }),
     attemptTimeoutMs,
+    ...timing,
     nowMs: () => new Date('2026-09-26T00:00:00.000Z').getTime(),
   }, '127.0.0.1', 0)
   cleanup.push(proxy.close)
@@ -708,4 +713,95 @@ describe('committed stream failures', () => {
       if (mode === 'stalled') expect(store.keys()[0]?.lastError).toContain('超时')
     })
   }
+})
+
+describe('request deadlines', () => {
+  /** One channel per upstream, in priority order, each with one key. */
+  const seedTiers = async (store: PoolStore, upstreams: readonly Upstream[]): Promise<string[]> => {
+    const keys: string[] = []
+    for (const [index, upstream] of upstreams.entries()) {
+      const channel = await store.createChannel(ADMIN, { name: `tier-${String(index)}`, baseURL: upstream.url, priority: index })
+      keys.push((await store.addKey(ADMIN, channel.id, { key: `sk-tier-030${String(index)}` })).id)
+    }
+    return keys
+  }
+
+  it('fails over after the per-attempt header timeout, not the whole attempt timeout', async () => {
+    const hung = await startUpstream(() => { /* never sends headers */ })
+    const healthy = await startUpstream((_body, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: 'fallback-answer' }))
+    })
+    cleanup.push(hung.close, healthy.close)
+    const store = await makeStore()
+    const [hungKey] = await seedTiers(store, [hung, healthy])
+    const base = await startPool(store, 5_000, { headersTimeoutMs: 100, requestBudgetMs: 2_000 })
+
+    const started = performance.now()
+    const result = await chat(base)
+    expect(performance.now() - started).toBeLessThan(1_500)
+    expect(result.status).toBe(200)
+    expect(result.text).toContain('fallback-answer')
+    expect(result.attempts).toBe('2')
+    expect(store.key(hungKey!)?.failCount).toBe(1)
+    expect(store.key(hungKey!)?.lastError).toContain('超时')
+  })
+
+  it('stops starting attempts once a full header wait no longer fits the request budget', async () => {
+    const relays = await Promise.all([0, 1, 2].map(() => startUpstream((_body, res) => {
+      setTimeout(() => {
+        res.writeHead(524, { 'content-type': 'text/plain' })
+        res.end('error code: 524')
+      }, 300)
+    })))
+    for (const relay of relays) cleanup.push(relay.close)
+    const store = await makeStore()
+    await seedTiers(store, relays)
+    const base = await startPool(store, 5_000, { headersTimeoutMs: 400, requestBudgetMs: 900 })
+
+    const result = await chat(base, { stream: true })
+    expect(result.status).toBe(503)
+    expect(result.text).toContain('MODEL_POOL_EXHAUSTED')
+    expect(result.text).toContain('524')
+    expect(relays.map(relay => relay.hits())).toEqual([1, 1, 0])
+  })
+
+  it('answers 503 inside the request budget when every upstream withholds headers', async () => {
+    const silent = await Promise.all([0, 1, 2].map(() => startUpstream(() => { /* never sends headers */ })))
+    for (const upstream of silent) cleanup.push(upstream.close)
+    const store = await makeStore()
+    const keys = await seedTiers(store, silent)
+    const base = await startPool(store, 5_000, { headersTimeoutMs: 300, requestBudgetMs: 800 })
+
+    const started = performance.now()
+    const result = await chat(base)
+    expect(performance.now() - started).toBeLessThan(1_500)
+    expect(result.status).toBe(503)
+    expect(silent.map(upstream => upstream.hits())).toEqual([1, 1, 0])
+    expect(keys.map(id => store.key(id)?.failCount)).toEqual([1, 1, 0])
+  })
+
+  it('never applies the header timeout or request budget to a committed stream', async () => {
+    const slowStream = await startUpstream((_body, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.write('data: {"choices":[{"index":0,"delta":{"content":"slow"},"finish_reason":null}]}\n\n')
+      setTimeout(() => {
+        res.write('data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n')
+        res.end('data: [DONE]\n\n')
+      }, 400)
+    })
+    const fallback = await startUpstream((_body, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.end('data: [DONE]\n\n')
+    })
+    cleanup.push(slowStream.close, fallback.close)
+    const store = await makeStore()
+    await seedTiers(store, [slowStream, fallback])
+    const base = await startPool(store, 5_000, { headersTimeoutMs: 100, requestBudgetMs: 200 })
+
+    const result = await chat(base, { stream: true })
+    expect(result.status).toBe(200)
+    expect(result.text).toContain('"finish_reason":"stop"')
+    expect(fallback.hits()).toBe(0)
+  })
 })

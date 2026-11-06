@@ -21,6 +21,10 @@ export interface Config {
   readonly autoRecover?: boolean
   /** Total deadline for an attempt, including its response stream. */
   readonly attemptTimeoutMs?: number
+  /** Wait for one attempt's response headers; failover is only legal before them. */
+  readonly headersTimeoutMs?: number
+  /** Window in which a further attempt may still start with a full header wait. */
+  readonly requestBudgetMs?: number
   readonly testTimeoutMs?: number
   /** Seeded platform channel, used only while the pool has no channels at all. */
   readonly fallbackBaseURL?: string
@@ -39,6 +43,8 @@ export interface NormalizedConfig {
   readonly cooldownMaxMs: number
   readonly autoRecover: boolean
   readonly attemptTimeoutMs: number
+  readonly headersTimeoutMs: number
+  readonly requestBudgetMs: number
   readonly testTimeoutMs: number
   readonly fallback: { readonly baseURL: string; readonly apiKey: string; readonly label: string } | undefined
 }
@@ -118,6 +124,11 @@ export const normalizeConfig = (
     cooldownMaxMs,
     autoRecover: config.autoRecover ?? true,
     attemptTimeoutMs: boundedInt(config.attemptTimeoutMs, 300_000, 1_000, 900_000),
+    /* undici's default headersTimeout is 300 s, so a longer wait is unreachable;
+       120 s still outlasts a relay's ~100 s Cloudflare 524. */
+    headersTimeoutMs: boundedInt(config.headersTimeoutMs, 120_000, 1_000, 300_000),
+    /* Below the Harness 300 s stream-idle default, so the pool answers before its caller aborts. */
+    requestBudgetMs: boundedInt(config.requestBudgetMs, 240_000, 1_000, 900_000),
     testTimeoutMs: boundedInt(config.testTimeoutMs, 20_000, 1_000, 120_000),
     fallback: fallbackApiKey === undefined || fallbackApiKey === ''
       ? undefined

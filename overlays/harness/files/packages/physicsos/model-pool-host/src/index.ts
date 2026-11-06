@@ -114,6 +114,8 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
       store,
       rotation,
       attemptTimeoutMs: normalized.attemptTimeoutMs,
+      headersTimeoutMs: normalized.headersTimeoutMs,
+      requestBudgetMs: normalized.requestBudgetMs,
       log: (message) => { ctx.logger.warn(message) },
     }, normalized.host, normalized.port)
     ctx.logger.info(
