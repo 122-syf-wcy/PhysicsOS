@@ -23,6 +23,7 @@ import {
 import { questionCodeContext, type QuestionCodeContext } from './question-code-context.ts'
 import type { DeveloperPromptService } from './prompt-service.ts'
 import { QuestionCodeAssets, type QuestionAssetDescriptor } from './question-code-assets.ts'
+import { CANVAS_TEXT_SHIM } from './question-code-canvas-text.ts'
 export interface QuestionAssetRequest { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
 export type QuestionAssetScope = Pick<QuestionAssetRequest, 'ownerSessionId' | 'generationId' | 'scene'>
 export const QUESTION_CODE_SERVICE = 'questionCodeArtifacts'
@@ -726,7 +727,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
 document.addEventListener('physicsos-experiment-intent', event => {
   connection.send(event.detail)
 })
-`)
+` + CANVAS_TEXT_SHIM)
       files.set('src/main.js', privateBootstrap)
       files.set('dist/runtime/main.js', privateBootstrap)
       files.set('src/renderer.js', Buffer.from(source.rendererJs))
