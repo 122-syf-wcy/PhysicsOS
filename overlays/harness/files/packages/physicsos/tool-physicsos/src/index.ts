@@ -366,7 +366,7 @@ export function apply(ctx: Context, config: Config): void {
         childSessionId: string
         source: CodeVisualizationSource
         generationId: string
-      }): Promise<CodeExperimentRef>
+      }, signal?: AbortSignal): Promise<CodeExperimentRef>
       assetManifest?(input: { ownerSessionId: string; generationId: string; scene: unknown }): unknown
     }
     const artifacts = lookup('questionCodeArtifacts') as Artifacts | undefined
@@ -385,11 +385,11 @@ export function apply(ctx: Context, config: Config): void {
         if (subagents === undefined) return Promise.reject(Object.assign(new Error('Code child unavailable'), { code: 'CHILD_UNAVAILABLE' }))
         return subagents.start(CODE_PROVIDER_NAME, { ...request, parent })
       },
-      create: (input) => {
+      create: (input, signal) => {
         if (artifacts === undefined) {
           return Promise.reject(Object.assign(new Error('Code artifacts unavailable'), { code: 'ARTIFACTS_UNAVAILABLE' }))
         }
-        return artifacts.create(input)
+        return artifacts.create(input, signal)
       },
     })
   }

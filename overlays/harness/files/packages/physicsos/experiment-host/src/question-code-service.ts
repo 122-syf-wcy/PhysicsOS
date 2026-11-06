@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { constants } from 'node:fs'
-import { mkdir, open, rm, mkdtemp } from 'node:fs/promises'
+import { link, mkdir, open, rename, rm, mkdtemp } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { join, resolve } from 'node:path'
@@ -39,7 +39,8 @@ export interface CreateQuestionCodeInput {
   generationId?: string
 }
 export interface QuestionCodeArtifacts {
-  create(input: CreateQuestionCodeInput): Promise<CodeExperimentRef>
+  /** `signal` lets a caller that gave up stop the create before it commits. */
+  create(input: CreateQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef>
   context(experimentId: string): Promise<QuestionCodeContext>
   describe(ownerSessionId: string, artifactId: string, expectedSha256: string): CodeExperimentRef
   generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor>
@@ -558,6 +559,47 @@ async function durableFile(path: string, bytes: Buffer): Promise<void> {
     await handle.close()
   }
 }
+/* Content-addressed blobs are shared by every account. A blob only appears at
+   its final name through link() after a complete, fsynced write, so neither a
+   concurrent create nor a crash can expose a partial file; a corrupt blob already
+   at the final name (an interrupted in-place write) is replaced with verified bytes. */
+async function publishBlob(directory: string, digest: string, bytes: Buffer): Promise<void> {
+  const path = join(directory, digest)
+  const temporary = join(directory, `.${digest}.${randomBytes(8).toString('hex')}.tmp`)
+  await durableFile(temporary, bytes)
+  try {
+    try {
+      await link(temporary, path)
+      return
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+    try {
+      await verifiedFile(path, { sha256: digest, size: bytes.length })
+    } catch {
+      await rename(temporary, path)
+    }
+  } finally {
+    await rm(temporary, { force: true })
+  }
+}
+/** Runs at most `limit` tasks at once; a finished task hands its slot to the next waiter. */
+class Gate {
+  private active = 0
+  private readonly waiting: (() => void)[] = []
+  constructor(private readonly limit: number) {}
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.active < this.limit) this.active += 1
+    else await new Promise<void>((resolve) => { this.waiting.push(resolve) })
+    try {
+      return await task()
+    } finally {
+      const next = this.waiting.shift()
+      if (next === undefined) this.active -= 1
+      else next()
+    }
+  }
+}
 interface Capability {
   id: string
   sha256: string
@@ -565,7 +607,10 @@ interface Capability {
   nonce: string
 }
 export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
-  private tail: Promise<void> = Promise.resolve()
+  /* Each syntax check forks a Node process: concurrent accounts overlap, but
+     the forks stay bounded. */
+  private readonly syntaxChecks = new Gate(2)
+  private readonly inflight = new Set<Promise<unknown>>()
   private initialized = false
   private secret: Buffer | undefined
   private readonly root: string
@@ -623,7 +668,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     this.initialized = true
   }
   async close(): Promise<void> {
-    await this.tail
+    await Promise.allSettled([...this.inflight])
   }
   private requireReady(): void {
     if (!this.initialized || !this.secret)
@@ -679,138 +724,140 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     return this.imageAssets.generate({ ...this.assetBinding(input), prompt: input.prompt, kind: input.kind, signal: input.signal })
   }
   assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[] { return this.imageAssets.manifest(this.assetBinding(input)) }
-  async create(input: CreateQuestionCodeInput): Promise<CodeExperimentRef> {
-    const operation = this.tail.then(async () => {
-      this.requireReady()
-      const parsed = inputSchema.safeParse(input)
-      if (!parsed.success) throw invalidSource()
-      const ownerKey = this.owner(input.ownerSessionId)
-      if (!ownerKey)
-        throw new ExperimentError(
-          403,
-          'SESSION_OWNER_UNAVAILABLE',
-          '对话必须已有可验证的账号归属。',
-        )
-      const scene = structuredClone(input.scene)
-      try {
-        if (validateScene(scene).status === 'failed') throw new Error('invalid scene')
-      } catch {
-        throw new ExperimentError(400, 'INVALID_SCENE', '题目物理场景未通过校验。')
-      }
-      const profile = experimentProfile(input.experimentId)
-      const selected = pickEngine(scene)
-      if (!profile || !selected.entry || profile.domain !== domainOfEngine(selected.entry.engine))
-        throw new ExperimentError(400, 'SCENE_PROFILE_MISMATCH', '实验风格与题目物理领域不一致。')
-      const source = parsed.data.source
-      if (Buffer.byteLength(canonicalQuestionJson(source), 'utf8') > 128 * 1024)
-        throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
-      const context = await this.context(input.experimentId),
-        files = experimentTemplateFiles(input.experimentId)
-      if (input.generationId !== undefined) {
-        const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
-        if (!this.imageAssets.manifest(binding).length) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
-        const generated = this.imageAssets.files(binding, source.rendererJs, source.stylesheet)
-        for (const [name, bytes] of generated) files.set(name, bytes)
-        const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
-        if (!Array.isArray(licenses)) throw invalidSource()
-        files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://image.haqiuhaqiu.xyz', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
-      } else if (/assets\/generated\//.test(source.rendererJs + source.stylesheet)) throw invalidSource()
-      files.set('public/assets/platform-base.css', Buffer.from(independentStylesheet))
-      files.set('dist/assets/platform-base.css', Buffer.from(independentStylesheet))
-      // Keep the trusted SDK, but replace community chrome with the generic authored viewport.
-      for (const name of ['public/index.html', 'dist/index.html']) {
-        files.set(name, Buffer.from(independentHtml))
-      }
-      const bootstrap = files.get('src/main.js')
-      if (bootstrap === undefined) throw invalidSource()
-      const privateBootstrap = Buffer.from(bootstrap.toString('utf8') + `
+  async create(input: CreateQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef> {
+    const operation = this.build(input, signal)
+    this.inflight.add(operation)
+    void operation.finally(() => { this.inflight.delete(operation) }).catch(() => {})
+    return operation
+  }
+  /* Creates overlap freely: blob publication is the only shared file state and is
+     atomic per digest, and rows land on the domain's write chain. A caller that
+     gave up is honoured before each durable step, so it never leaves an orphan row. */
+  private async build(input: CreateQuestionCodeInput, signal: AbortSignal | undefined): Promise<CodeExperimentRef> {
+    const stillWanted = (): void => {
+      if (signal?.aborted === true) throw new ExperimentError(499, 'GENERATION_ABORTED', '题目实验生成已取消。')
+    }
+    stillWanted()
+    this.requireReady()
+    const parsed = inputSchema.safeParse(input)
+    if (!parsed.success) throw invalidSource()
+    const ownerKey = this.owner(input.ownerSessionId)
+    if (!ownerKey)
+      throw new ExperimentError(
+        403,
+        'SESSION_OWNER_UNAVAILABLE',
+        '对话必须已有可验证的账号归属。',
+      )
+    const scene = structuredClone(input.scene)
+    try {
+      if (validateScene(scene).status === 'failed') throw new Error('invalid scene')
+    } catch {
+      throw new ExperimentError(400, 'INVALID_SCENE', '题目物理场景未通过校验。')
+    }
+    const profile = experimentProfile(input.experimentId)
+    const selected = pickEngine(scene)
+    if (!profile || !selected.entry || profile.domain !== domainOfEngine(selected.entry.engine))
+      throw new ExperimentError(400, 'SCENE_PROFILE_MISMATCH', '实验风格与题目物理领域不一致。')
+    const source = parsed.data.source
+    if (Buffer.byteLength(canonicalQuestionJson(source), 'utf8') > 128 * 1024)
+      throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
+    const context = await this.context(input.experimentId),
+      files = experimentTemplateFiles(input.experimentId)
+    if (input.generationId !== undefined) {
+      const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
+      if (!this.imageAssets.manifest(binding).length) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
+      const generated = this.imageAssets.files(binding, source.rendererJs, source.stylesheet)
+      for (const [name, bytes] of generated) files.set(name, bytes)
+      const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
+      if (!Array.isArray(licenses)) throw invalidSource()
+      files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://image.haqiuhaqiu.xyz', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
+    } else if (/assets\/generated\//.test(source.rendererJs + source.stylesheet)) throw invalidSource()
+    files.set('public/assets/platform-base.css', Buffer.from(independentStylesheet))
+    files.set('dist/assets/platform-base.css', Buffer.from(independentStylesheet))
+    // Keep the trusted SDK, but replace community chrome with the generic authored viewport.
+    for (const name of ['public/index.html', 'dist/index.html']) {
+      files.set(name, Buffer.from(independentHtml))
+    }
+    const bootstrap = files.get('src/main.js')
+    if (bootstrap === undefined) throw invalidSource()
+    const privateBootstrap = Buffer.from(bootstrap.toString('utf8') + `
 document.addEventListener('physicsos-experiment-intent', event => {
   connection.send(event.detail)
 })
 ` + CANVAS_TEXT_SHIM)
-      files.set('src/main.js', privateBootstrap)
-      files.set('dist/runtime/main.js', privateBootstrap)
-      files.set('src/renderer.js', Buffer.from(source.rendererJs))
-      files.set('dist/runtime/renderer.js', Buffer.from(source.rendererJs))
-      files.set('public/assets/experiment.css', Buffer.from(source.stylesheet))
-      files.set('dist/assets/experiment.css', Buffer.from(source.stylesheet))
+    files.set('src/main.js', privateBootstrap)
+    files.set('dist/runtime/main.js', privateBootstrap)
+    files.set('src/renderer.js', Buffer.from(source.rendererJs))
+    files.set('dist/runtime/renderer.js', Buffer.from(source.rendererJs))
+    files.set('public/assets/experiment.css', Buffer.from(source.stylesheet))
+    files.set('dist/assets/experiment.css', Buffer.from(source.stylesheet))
+    try {
+      const manifestBytes = files.get('experiment.json')
+      if (manifestBytes === undefined) throw invalidSource()
+      const manifest = manifestV3Schema.parse(JSON.parse(manifestBytes.toString('utf8')))
+      if (validatePackageMetadataV3(files, manifest).length) throw new Error('metadata')
+      await validatePackageResources(files, manifest)
+      await init
+      validateIndependentDrawing(source.rendererJs)
+      const checkDir = await mkdtemp(join(this.root, 'checks', 'renderer-'))
       try {
-        const manifestBytes = files.get('experiment.json')
-        if (manifestBytes === undefined) throw invalidSource()
-        const manifest = manifestV3Schema.parse(JSON.parse(manifestBytes.toString('utf8')))
-        if (validatePackageMetadataV3(files, manifest).length) throw new Error('metadata')
-        await validatePackageResources(files, manifest)
-        await init
-        validateIndependentDrawing(source.rendererJs)
-        const checkDir = await mkdtemp(join(this.root, 'checks', 'renderer-'))
-        try {
-          const rendererPath = join(checkDir, 'renderer.mjs')
-          await durableFile(rendererPath, Buffer.from(source.rendererJs))
-          // Fixed executable and options, service-owned path, syntax only. Uploaded code is never run.
-          await executeFile(process.execPath, ['--check', rendererPath], {
-            timeout: 5000,
-            maxBuffer: 4096,
-            env: { PATH: process.env.PATH ?? '' },
-          })
-        } finally {
-          await rm(checkDir, { recursive: true, force: true })
-        }
-      } catch (error) {
-        throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined)
-      }
-      files.set('question-scene.json', Buffer.from(canonicalQuestionJson(scene)))
-      const frozen: QuestionCodeRecord['files'] = []
-      for (const [name, bytes] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
-        const digest = hash(bytes),
-          path = join(this.root, 'blobs', digest)
-        try {
-          await durableFile(path, bytes)
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-          await verifiedFile(path, { sha256: digest, size: bytes.length })
-        }
-        frozen.push({
-          name,
-          sha256: digest,
-          size: bytes.length,
-          contentType: assetContentType(name) ?? 'application/octet-stream',
-        })
-      }
-      const row: QuestionCodeRecord = {
-        id: 'qcode_' + randomBytes(16).toString('hex'),
-        ownerSessionId: input.ownerSessionId,
-        ownerKey,
-        childSessionId: input.childSessionId,
-        sceneId: scene.id,
-        sceneRevision: scene.revision,
-        sceneSha256: questionSceneSha256(scene),
-        experimentId: input.experimentId,
-        sha256: '',
-        title: source.title,
-        rendererKind: 'independent',
-        summary: source.summary,
-        createdAt: new Date().toISOString(),
-        styleVersion: context.styleVersion,
-        files: frozen,
-      }
-      row.sha256 = recordHash(row)
-      this.checked(row)
-      const blobsDirectory = await open(join(this.root, 'blobs'), 'r')
-      try {
-        await blobsDirectory.sync()
+        const rendererPath = join(checkDir, 'renderer.mjs')
+        await durableFile(rendererPath, Buffer.from(source.rendererJs))
+        // Fixed executable and options, service-owned path, syntax only. Uploaded code is never run.
+        await this.syntaxChecks.run(() => executeFile(process.execPath, ['--check', rendererPath], {
+          timeout: 5000,
+          maxBuffer: 4096,
+          env: { PATH: process.env.PATH ?? '' },
+        }))
       } finally {
-        await blobsDirectory.close()
+        await rm(checkDir, { recursive: true, force: true })
       }
-      // A deleted/reclaimed session during generation cannot acquire a completed artifact.
-      if (this.owner(input.ownerSessionId) !== ownerKey) throw missing()
-      await this.domain.table('artifacts').put(row.id, row)
-      return project(row)
-    })
-    this.tail = operation.then(
-      () => {},
-      () => {},
-    )
-    return operation
+    } catch (error) {
+      throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined)
+    }
+    files.set('question-scene.json', Buffer.from(canonicalQuestionJson(scene)))
+    stillWanted()
+    const frozen: QuestionCodeRecord['files'] = []
+    for (const [name, bytes] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
+      const digest = hash(bytes)
+      await publishBlob(join(this.root, 'blobs'), digest, bytes)
+      frozen.push({
+        name,
+        sha256: digest,
+        size: bytes.length,
+        contentType: assetContentType(name) ?? 'application/octet-stream',
+      })
+    }
+    const row: QuestionCodeRecord = {
+      id: 'qcode_' + randomBytes(16).toString('hex'),
+      ownerSessionId: input.ownerSessionId,
+      ownerKey,
+      childSessionId: input.childSessionId,
+      sceneId: scene.id,
+      sceneRevision: scene.revision,
+      sceneSha256: questionSceneSha256(scene),
+      experimentId: input.experimentId,
+      sha256: '',
+      title: source.title,
+      rendererKind: 'independent',
+      summary: source.summary,
+      createdAt: new Date().toISOString(),
+      styleVersion: context.styleVersion,
+      files: frozen,
+    }
+    row.sha256 = recordHash(row)
+    this.checked(row)
+    const blobsDirectory = await open(join(this.root, 'blobs'), 'r')
+    try {
+      await blobsDirectory.sync()
+    } finally {
+      await blobsDirectory.close()
+    }
+    // A deleted/reclaimed session during generation cannot acquire a completed artifact.
+    if (this.owner(input.ownerSessionId) !== ownerKey) throw missing()
+    stillWanted()
+    await this.domain.table('artifacts').put(row.id, row)
+    return project(row)
   }
   private authorized(
     actor: IdentityActor,

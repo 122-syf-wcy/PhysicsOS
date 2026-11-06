@@ -199,7 +199,7 @@ describe('parent question code generation', () => {
     expect(prompt).toContain('snapshot.view.bodies[].at')
     expect(prompt).not.toContain('SDK wrapper')
     expect(prompt).not.toContain('基础 renderer：')
-    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }))
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }), expect.any(AbortSignal))
     expect(h.dispose).toHaveBeenCalledTimes(1)
   })
   it('gives the complete independent renderer a single shared ten-minute deadline', async () => {
@@ -229,7 +229,7 @@ describe('parent question code generation', () => {
     expect(request?.agentOptions?.maxTokens).toBe(8192)
     expect(request?.toolFilter).toEqual({ allow: [] })
     expect(request?.maxDepth).toBe(1)
-    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }))
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }), expect.any(AbortSignal))
     expect(h.start).toHaveBeenCalledTimes(1)
   })
   it('keeps the registered incline author task compact while retaining the exact server-owned scene and solve', async () => {
@@ -252,7 +252,7 @@ describe('parent question code generation', () => {
     expect(prompt).toContain('drawScene(ctx,view,')
     expect(prompt).toContain("image.src='./assets/generated/owned.png'")
     for (const irrelevant of ['original-scene-only', 'original-solve-only', 'interface InspectorSection', 'interface DerivedQuantityView', '已发布视觉标准', '## 当前平台配置']) expect(prompt).not.toContain(irrelevant)
-    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: original.scene }))
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: original.scene }), expect.any(AbortSignal))
     expect(h.states.at(-1)?.scene).toEqual(original.scene)
     expect(h.states.at(-1)?.solve).toEqual(original.solve)
   })
@@ -440,6 +440,19 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
     expect(h.dispose).toHaveBeenCalledTimes(1)
     expect(h.states.at(-1)?.visualization?.status).toBe('failed')
   })
+  it('hands the job signal to create so an abandoned create can stop before it commits', async () => {
+    const h = dependencies()
+    const controller = new AbortController()
+    h.deps.signal = controller.signal
+    let received: AbortSignal | undefined
+    h.deps.create = (_input, signal) => {
+      received = signal
+      controller.abort()
+      return new Promise(() => {})
+    }
+    expect(await generateQuestionCode(h.deps)).toMatchObject({ status: 'failed', code: 'GENERATION_ABORTED' })
+    expect(received?.aborted).toBe(true)
+  })
 })
 
 const contexts: Context[] = []
@@ -503,7 +516,7 @@ describe('the real code child provider', () => {
     expect(starts).toHaveBeenCalledTimes(2)
     expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ source: {
       ...source, rendererJs: source.rendererJs + '\n// accepted'.repeat(8) + '\n// continued', stylesheet: '',
-    } }))
+    } }), expect.any(AbortSignal))
     expect(JSON.stringify(results.at(-1))).toContain('CODE_WRITE_LIMIT')
     expect(artifacts.generateAsset).not.toHaveBeenCalled()
     const resumed = starts.mock.calls[1]?.[0].prompt[0]

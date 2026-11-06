@@ -39,7 +39,7 @@ export interface CodeGenerationDependencies {
     childSessionId: string
     source: CodeVisualizationSource
     generationId: string
-  }): Promise<CodeExperimentRef>
+  }, signal?: AbortSignal): Promise<CodeExperimentRef>
   assetManifest?(generationId: string): unknown
   current(): PhysicsSceneSnapshot | undefined
   isCurrent?(): boolean
@@ -193,10 +193,13 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
         if (ONLY_REEXPORT.test(source.rendererJs)) throw Object.assign(new Error('A renderer must draw the question independently'), { code: 'INVALID_SOURCE', sourceValidationReason: 'legacy_renderer' })
         if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
         if (controller.signal.aborted) throw Object.assign(new Error('Generation aborted'), { code: 'GENERATION_ABORTED' })
-        const ref = await wait(deps.create({
+        const creating = deps.create({
           ownerSessionId: deps.ownerSessionId, scene: original.scene, experimentId: style.experimentId,
           childSessionId: String(run.id), source, generationId: jobId,
-        }))
+        }, controller.signal)
+        // Once the race below settles on an abort, the create's own rejection has no reader.
+        creating.catch(() => {})
+        const ref = await wait(creating)
         if (ref.rendererKind !== 'independent') throw Object.assign(new Error('Host did not validate an independent renderer'), { code: 'INVALID_METADATA' })
         if (!isCurrent()) throw Object.assign(new Error('Scene changed'), { code: 'STALE_GENERATION' })
         append(ref)
