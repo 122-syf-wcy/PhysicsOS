@@ -1,10 +1,24 @@
 import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { focusedRenderContract, publishedVisualGuidance, registeredParameterGuidance } from '../src/question-code-prompt-context.ts'
+import { runInNewContext } from 'node:vm'
+import { focusedRenderContract, publishedVisualGuidance, registeredParameterGuidance, QUESTION_CODE_LABEL_EXAMPLE } from '../src/question-code-prompt-context.ts'
 import { QUESTION_CODE_RENDER_CONTRACT } from '../../experiment-host/src/question-code-render-contract.ts'
 import { PROMPT_SEED } from '../../experiment-host/src/prompt-seed.ts'
 import { questionComposition } from '../src/question-code-composition.ts'
 import registry from '../../experiment-host/src/experiment-registry.json' with { type: 'json' }
+
+it('gives authors a screen-only label helper that draws coincident force names at finite distinct positions', () => {
+  const place = runInNewContext(`${QUESTION_CODE_LABEL_EXAMPLE};putLabel`) as (ctx: unknown, text: string, p: { x: number; y: number }, used: unknown[], w: number, h: number) => void
+  const drawn: { text: string; x: number; y: number }[] = []
+  const ctx = { font: '', textAlign: '', textBaseline: '', measureText: (text: string) => ({ width: text.length * 7 }),
+    fillText: (text: string, x: number, y: number) => { drawn.push({ text, x, y }) } }
+  const used: unknown[] = []
+  for (const text of ['mg', 'N', 'f', 'a', 'F合', 'v']) place(ctx, text, { x: 110, y: 180 }, used, 219, 360)
+  expect(drawn).toHaveLength(6)
+  expect(new Set(drawn.map(p => `${p.x},${p.y}`)).size).toBe(6)
+  expect(drawn.every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 8 && p.y >= 8 && p.x < 211 && p.y < 352)).toBe(true)
+  expect(() => place(ctx, 'invalid', { x: 1, y: NaN }, used, 219, 360)).toThrow()
+})
 
 it.each([
   ['mechanics', 'ground', 'GroundVisual'],

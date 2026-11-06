@@ -8,7 +8,7 @@
 
 import type { CodeVisualizationSource } from '@physicsos/agent-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
-import { focusedRenderContract, QUESTION_CODE_ENTRY_EXAMPLE } from './question-code-prompt-context.ts'
+import { focusedRenderContract, QUESTION_CODE_ENTRY_EXAMPLE, QUESTION_CODE_LABEL_EXAMPLE } from './question-code-prompt-context.ts'
 import { questionComposition } from './question-code-composition.ts'
 import { MAX_CODE_PART_CHARACTERS } from './question-code-parts.ts'
 import {
@@ -72,16 +72,17 @@ export function questionCodePrompt(
   const images = imagesOf(assets)
   return [
     `真实题目标签：${snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '只展示当前引擎快照已有结论。' : '仅当前场景/局部阶段演示，不能声称整题已解。'}`,
-    `立即提交代码，不先规划整个程序。physics_write_experiment_code：优先完整JS一次replace、CSS一次replace，再structured_output提交title/summary。JS每次及合计<=${MAX_CODE_PART_CHARACTERS}字符，CSS合计<=6000字符；需要时可append分段，同一任务共10次。`,
-    '用下面Canvas2D入口示例并填入素材工具返回的真实path（占位符不能提交），连同普通命名drawScene与辅助函数组成完整JS提交，必须实际绘制本题snapshot.view几何。入口示例只含浏览器连接代码，不是已完成画面。219×360手机完整可见，当前帧画完再返回。无import/reexport、旧renderer、对象/类方法分派、fetch/外网/存储/parent/top/eval/脚本注入。',
+    `physics_write_experiment_code：完整JS一次replace、CSS一次replace，再structured_output提交title/summary。JS合计<=${MAX_CODE_PART_CHARACTERS}字符，CSS<=6000字符；可append，共10次。`,
+    'Canvas2D入口示例：填真实path并用drawScene绘制snapshot.view。适配219×360。仅普通函数；无import/reexport、旧renderer、动态分派、fetch/外网/存储/parent/top/eval。',
     QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
-    '只投影snapshot.view引擎几何，等比且y只翻转一次；直接使用引擎origin/extent，不重新拟合当前位置改变比例。斜面为无限平面的局部跟随视窗，origin可随位置平移。不解题/积分/自建时钟。向量from/to已是显示端点，直接投影，不能按箭头长度标物理量；表格/读数/控件由外层提供。空数组/缺省字段/零值合法，不补造物体或最高点。',
-    'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。向量开关只来自view.visible[vector.observable]；不能读取vector.visible或猜observable名称，具体显示条件按下方领域契约。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
-    '标注用屏幕像素布局：字体至少11px，measureText测量包围盒并留4px间距，依次尝试箭头端点的上/下/左/右及四个斜向位置，约束在画布8px内；冲突时移到空处并加细引导线，不能重叠或丢掉合力/加速度标签。改变标签位置不改变箭头端点。手机缩减装饰和重复说明，不缩小字号。外层已有标题、参数、播放和读数，画布不再重复这些控件。',
-    '没有素材先physics_generate_experiment_asset生成一张环境/材质，无文字/公式/箭头/轨迹/动态物体；已有素材复用。示例中的.src必须是真实path的单/双引号字面值，CSS用url(真实cssPath)；不能用不透明底色遮住图片。',
-    questionComposition(snapshot.domain, style.experimentId),
+    'snapshot.view只读；用origin/extent等比投影、y仅翻转一次，不拟合当前位置。斜面为局部跟随视窗。禁止解题/积分/自建时钟；from/to是显示端点，不是物理数值。空值合法，不补造物体。',
+    'Warm Lab暖白、木与金属，装置占主体。保留受力/场/光路方向和中文标签。开关按view.visible[vector.observable]。body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle/电路rotation为度，leverBeam.tilt/currentRotor.angle为弧度。body.size是半径/半边长，单位不变。',
+    '逐帧用putLabel显示vector.symbol而非label。只投影一次：putLabel(ctx,vector.symbol,point(vector.to,t),used,w,h)，used每帧置[]；p是屏幕坐标，勿再point。颜色按vector.role非observable；字>=11px。禁drawPanel/自建读数；不得写死质量/角度/N/f/a或由箭头长度求值。数值由外层引擎显示。',
+    QUESTION_CODE_LABEL_EXAMPLE,
+    '缺素材用physics_generate_experiment_asset生成环境/材质，禁文字/动态事实；已有素材复用。.src须是真实path字符串，CSS用真实cssPath；勿遮住图片。',
+    questionComposition(snapshot.domain, style.experimentId).split('\n').slice(1).join('\n'),
     VECTOR_DOMAINS.has(snapshot.domain)
-      ? '绘图选择示例：for(const vector of view.vectors){if(view.visible[vector.observable]===true){/* 用point(vector.from,t)和point(vector.to,t)绘制箭头及vector.label */}}。没有visible.vectors、visible.trajectories、visible.motionMarks、visible.angles；轨迹用visible.trajectory，角度按提供几何绘制。'
+      ? 'for(const vector of view.vectors) if(view.visible[vector.observable]===true) 绘制箭头和symbol。轨迹用visible.trajectory；没有visible.vectors/trajectories/angles。'
       : '',
     focusedRenderContract(style.renderContract, snapshot.domain, style.experimentId),
     images.length ? `本任务素材（直接复用，不再生图）：${JSON.stringify(images)}` : '',

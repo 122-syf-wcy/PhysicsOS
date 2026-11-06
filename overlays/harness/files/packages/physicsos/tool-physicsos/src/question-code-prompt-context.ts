@@ -18,6 +18,17 @@ drawScene(ctx,view,{s,ox,oy,h,origin:view.origin});
 let board,image,decoded;
 function point(p,t){return{x:t.ox+(p.x-t.origin.x)*t.s,y:t.h-t.oy-(p.y-t.origin.y)*t.s}}
 `
+/** Screen-pixel label placement only; no physical geometry or solver is supplied. */
+export const QUESTION_CODE_LABEL_EXAMPLE = `function putLabel(ctx,text,p,used,w,h){
+if(!Number.isFinite(p.x)||!Number.isFinite(p.y))throw Error('Invalid label coordinates');
+ctx.font='12px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+const a=ctx.measureText(text).width+8,b=20;
+for(let r=0;r<8;r++)for(const[d,e]of[[1,-1],[-1,-1],[1,1],[-1,1],[0,-1],[0,1]]){
+const x=Math.max(8,Math.min(w-a-8,p.x+d*(a/2+10+r*12)-a/2)),y=Math.max(8,Math.min(h-b-8,p.y+e*(14+r*22)-b/2));
+if(used.some(q=>x<q.x+q.a+4&&x+a+4>q.x&&y<q.y+q.b+4&&y+b+4>q.y))continue;
+used.push({x,y,a,b});ctx.fillText(text,x+4,y+4);return}
+}
+`
 /** Repeated per-answer provenance stays in the session; authors only need verified quantities. */
 export function authorSolveFacts(solve: PhysicsSceneSolveSummary | undefined): unknown {
   if (solve === undefined) return null
@@ -66,7 +77,9 @@ export function focusedRenderContract(contract: string, domain: string, experime
   const fields = new Set(['domain', 'extent', 'origin', 'visible', 'highlighted', 'labels',
     ...(domainFields ?? [...(shared[domain] ?? []), ...guide.split(':').slice(1).join(':').match(/[A-Za-z_$][\w$]*/g) ?? []])])
   const keepFields = (name: string, allowed: Set<string>): void => {
-    declarations.set(name, declarations.get(name)!.split('\n').filter(line => {
+    const declaration = declarations.get(name)
+    if (declaration === undefined) return
+    declarations.set(name, declaration.split('\n').filter((line) => {
       const field = /^([A-Za-z_$][\w$]*)\??:/.exec(line)?.[1]
       return field === undefined || allowed.has(field)
     }).join('\n'))
@@ -108,7 +121,7 @@ export function focusedRenderContract(contract: string, domain: string, experime
     fields.has('incline') ? '存在incline.points时直接按incline.points顺序画多边形，不根据angle/base自行算顶点；点来自引擎，保留物体与坡面接触关系，缺失时不补造斜面。' : '',
     fields.has('boundedField') ? 'boundedField.at是中心；场符号裁剪到边界。' : ''].filter(Boolean).join('')
   return notes + '\nV3 drawing subset (read-only; string taxonomies omit enum lists):\n'
-    + [...selected].map(name => compact(declarations.get(name)!)).join('\n')
+    + [...selected].map(name => compact(declarations.get(name) ?? '')).join('\n')
 }
 export function publishedVisualGuidance(body: string): string {
   const sections = body.split(/(?=^## )/m)
