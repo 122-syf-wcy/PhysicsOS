@@ -546,6 +546,10 @@ describe('paper routes — identity gate', () => {
     expect(unchanged.status).toBe(304)
     expect(unchanged.headers.get('etag')).toBe(etag)
     expect(await unchanged.text()).toBe('')
+    /* A gzip-ing proxy weakens the validator on the way out; it must still match. */
+    expect((await fetch(`${base}/jobs/${job.id}`, {
+      headers: { ...as('TEACHER', 'SCHOOL-A'), 'if-none-match': `W/${etag!}, "other"` },
+    })).status).toBe(304)
     expect((await fetch(`${base}/jobs/${job.id}`, {
       headers: { ...as('TEACHER', 'SCHOOL-B'), 'if-none-match': etag! },
     })).status).toBe(404)

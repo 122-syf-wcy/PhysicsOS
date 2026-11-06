@@ -118,7 +118,10 @@ const sendConditional = (req: IncomingMessage, res: ServerResponse, body: unknow
   const payload = JSON.stringify(body)
   const etag = `"${createHash('sha256').update(payload).digest('base64url').slice(0, 27)}"`
   const headers = { etag, 'cache-control': 'private, no-cache' }
-  if (req.headers['if-none-match'] === etag) {
+  /* A gzip-ing reverse proxy downgrades the tag to a weak validator (`W/"…"`);
+     the body it names is still ours, so compare without the prefix. */
+  const offered = (req.headers['if-none-match'] ?? '').split(',').map(tag => tag.trim().replace(/^W\//, ''))
+  if (offered.includes(etag)) {
     res.writeHead(304, headers)
     res.end()
     return
