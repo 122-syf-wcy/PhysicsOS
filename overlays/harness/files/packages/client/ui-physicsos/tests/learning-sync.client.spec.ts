@@ -395,3 +395,91 @@ it('does not resurrect a scene deleted and acknowledged during another scene upl
   expect(remote.scenes.has('B')).toBe(false)
   expect(controller.recent.getSnapshot().items.some(item => item.sceneId === 'B')).toBe(false)
 })
+
+const pendingRows = (count: number): StudentAttempt[] =>
+  Array.from({ length: count }, (_, index) => localAttempt(`row-${String(index)}`, `2026-09-26T08:00:${String(index).padStart(2, '0')}.000Z`))
+
+it('keeps up to four attempt uploads in flight during one reconciliation', async () => {
+  const { storage } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(pendingRows(10)) })
+  const remote = api()
+  const put = remote.putAttempt
+  const gate = deferred()
+  let inFlight = 0
+  let peak = 0
+  remote.putAttempt = async (item) => {
+    peak = Math.max(peak, ++inFlight)
+    await gate.promise
+    inFlight -= 1
+    return put(item)
+  }
+  const syncing = createLearningRecordController(storage, remote).sync()
+  await vi.waitFor(() => { expect(inFlight).toBe(4) })
+  gate.resolve()
+  await syncing
+  expect(peak).toBe(4)
+  expect(remote.attempts.size).toBe(10)
+})
+
+it('a stalled upload does not hold back later rows, and a rejected row stays queued for the next pass', async () => {
+  const rows = ['slow', 'bad', 'a', 'b', 'c', 'd'].map((id, index) => localAttempt(id, `2026-09-26T09:00:0${String(index)}.000Z`))
+  const { storage, values } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
+  const remote = api()
+  const put = remote.putAttempt
+  const releaseSlow = deferred()
+  let rejectBad = true
+  remote.putAttempt = async (item) => {
+    if (item.id === 'slow') await releaseSlow.promise
+    if (item.id === 'bad' && rejectBad) throw new LearningApiError(409, 'ID_CONFLICT', 'conflict')
+    return put(item)
+  }
+  const controller = createLearningRecordController(storage, remote)
+  const first = controller.sync()
+  await vi.waitFor(() => { expect([...remote.attempts.keys()].sort()).toEqual(['a', 'b', 'c', 'd']) })
+  releaseSlow.resolve()
+  await expect(first).rejects.toMatchObject({ code: 'ID_CONFLICT' })
+  expect(JSON.parse(values.get('physicsos.learning-record.outbox')!)).toMatchObject([{ id: 'bad' }])
+  rejectBad = false
+  await controller.sync()
+  expect(remote.attempts.has('bad')).toBe(true)
+  expect(values.get('physicsos.learning-record.outbox')).toBe('[]')
+})
+
+it('a request deadline ends the upload phase after one wave instead of one deadline per row', async () => {
+  vi.useFakeTimers()
+  try {
+    const { storage, values } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(pendingRows(10)) })
+    let puts = 0
+    const remote = createLearningApi({ fetch: async (_input, init) => {
+      if (init?.method !== 'PUT') return { ok: true, status: 200, json: async () => ({ items: [] }) } as Response
+      puts += 1
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => { reject(init.signal?.reason) }, { once: true })
+      })
+    } })
+    let settled = false
+    const outcome = createLearningRecordController(storage, remote).sync().catch((error: unknown) => { settled = true; return error })
+    await vi.advanceTimersByTimeAsync(15_001)
+    expect(settled).toBe(true)
+    expect(await outcome).toMatchObject({ code: 'LEARNING_TIMEOUT' })
+    expect(puts).toBe(4)
+    expect(JSON.parse(values.get('physicsos.learning-record.outbox')!)).toHaveLength(10)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+
+it('stops paging attempts once the 200-row record is full', async () => {
+  const remote = api()
+  const ordered = Array.from({ length: 450 }, (_, index) =>
+    localAttempt(`remote-${String(index).padStart(3, '0')}`, new Date(Date.UTC(2026, 8, 26, 0, 0, 450 - index)).toISOString()))
+  const queries: { cursor?: string; limit?: number }[] = []
+  remote.listAttempts = async (query = {}) => {
+    queries.push(query)
+    const start = Number(query.cursor ?? 0)
+    const end = start + (query.limit ?? 50)
+    return end < ordered.length ? { items: ordered.slice(start, end), nextCursor: String(end) } : { items: ordered.slice(start) }
+  }
+  const controller = createLearningRecordController(memoryStorage().storage, remote)
+  await controller.sync()
+  expect(queries).toEqual([{ limit: 100 }, { cursor: '100', limit: 100 }])
+  expect(controller.store.getSnapshot().attempts.map(item => item.id)).toEqual(ordered.slice(0, 200).map(item => item.id))
+})

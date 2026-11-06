@@ -12,7 +12,7 @@
 
 import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import type { MistakeType } from '@physicsos/question-core'
-import type { LearningApi } from './learning-api.ts'
+import { LearningApiError, type LearningApi } from './learning-api.ts'
 
 /** One recorded self-check answer — local-only history, never leaves the browser. */
 export interface StudentAttempt {
@@ -48,9 +48,18 @@ export type SelfCheckAttemptInput = Omit<StudentAttempt, 'id' | 'at'>
 const STORAGE_KEY = 'physicsos.learning-record'
 const ATTEMPT_LIMIT = 200
 const OUTBOX_KEY = 'physicsos.learning-record.outbox'
+// Leaves HTTP/1.1 connections for chat streams when HTTP/2 is unavailable.
+const UPLOAD_CONCURRENCY = 4
+// learning-host refuses larger pages.
+const ATTEMPT_PAGE_SIZE = 100
 
 type RecordStorage = Pick<Storage, 'getItem' | 'setItem'>
 type LearningRecordSync = Pick<LearningApi, 'listAttempts' | 'putAttempt'>
+
+/** Offline, deadline, session and host failures would repeat for every later row. */
+const haltsUploads = (error: unknown): boolean =>
+  error instanceof TypeError ||
+  (error instanceof LearningApiError && (error.status >= 500 || [401, 403, 408].includes(error.status)))
 
 const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
   try {
@@ -154,16 +163,30 @@ export function createLearningRecordController(
       const failures: unknown[] = []
       // Bound each reconciliation; a permanently rejected row cannot starve
       // later rows, and edits created during this pass have their own upload.
-      for (const attempt of [...pending.values()].slice(0, ATTEMPT_LIMIT)) {
-        try { await upload(attempt) } catch (error) { failures.push(error) }
+      // A failure every row would repeat stops new uploads, so a stalled host
+      // costs one request deadline per pass rather than one per row.
+      const queue = [...pending.values()].slice(0, ATTEMPT_LIMIT)
+      let halted = false
+      const drain = async (): Promise<void> => {
+        while (!halted) {
+          const attempt = queue.shift()
+          if (attempt === undefined) return
+          try { await upload(attempt) } catch (error) {
+            failures.push(error)
+            halted ||= haltsUploads(error)
+          }
+        }
       }
+      await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => drain()))
       const remoteAttempts: StudentAttempt[] = []
       const seenCursors = new Set<string>()
       let cursor: string | undefined
       for (let page = 0; page < 100; page += 1) {
-        const result = await remote.listAttempts(cursor === undefined ? {} : { cursor })
+        const result = await remote.listAttempts(
+          cursor === undefined ? { limit: ATTEMPT_PAGE_SIZE } : { cursor, limit: ATTEMPT_PAGE_SIZE })
         remoteAttempts.push(...result.items)
-        if (result.nextCursor === undefined) break
+        // Pages arrive in merge order; rows past the cap cannot enter the record.
+        if (result.nextCursor === undefined || remoteAttempts.length >= ATTEMPT_LIMIT) break
         if (seenCursors.has(result.nextCursor)) throw new Error('learning sync repeated a cursor')
         seenCursors.add(result.nextCursor)
         cursor = result.nextCursor
