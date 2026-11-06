@@ -101,7 +101,7 @@ function diagnosticChild(session) {
     detail.argumentsParsed = args !== null && typeof args === 'object' && !Array.isArray(args)
     if (tool === 'physics_write_experiment_code') {
       detail.codePartChars = typeof args?.content === 'string' ? args.content.length : null
-      detail.validCodePart = detail.argumentsParsed && ['rendererJs', 'stylesheet'].includes(args.file) && ['replace', 'append'].includes(args.mode) && typeof args.content === 'string' && args.content.length <= 2400
+      detail.validCodePart = detail.argumentsParsed && ['rendererJs', 'stylesheet'].includes(args.file) && ['replace', 'append'].includes(args.mode) && typeof args.content === 'string' && args.content.length <= 6000
     }
     return detail
   })

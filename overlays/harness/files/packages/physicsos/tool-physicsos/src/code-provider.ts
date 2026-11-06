@@ -9,11 +9,11 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PhysicsSceneSnapshot } from './types.ts'
 import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
-import { QuestionCodeParts } from './question-code-parts.ts'
+import { MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = '你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。立即用physics_write_experiment_code分段交付JS/CSS，每段<=2400字符；最后structured_output只提交title/summary。只用原生Canvas2D/SVG与本地普通函数。'
+export const CODE_PERSONA = `你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。立即用physics_write_experiment_code分段交付JS/CSS，每段<=${MAX_CODE_PART_CHARACTERS}字符，优先2–3次写完；最后structured_output只提交title/summary。只用原生Canvas2D/SVG与本地普通函数。`
 
 export class PhysicsCodeProvider implements SubagentProvider {
   readonly name = CODE_PROVIDER_NAME
@@ -124,11 +124,11 @@ export class PhysicsCodeProvider implements SubagentProvider {
       })
       if (chunked) agent.ctx.tools.register(defineTool({
         name: 'physics_write_experiment_code',
-        description: '分段提交实验JS或CSS，每次不超过2400字符，同一任务最多10次（中断续写共用额度）。先replace写入口，再append；已有片段时继续append或显式replace。全部写完后structured_output只提交title/summary。',
+        description: `分段提交实验JS或CSS，每次不超过${MAX_CODE_PART_CHARACTERS}字符，优先2–3次写完；同一任务最多10次（中断续写共用额度）。JS合计最多24000、CSS合计最多6000字符。先replace再append，全部写完后structured_output只提交title/summary。`,
         parameters: {
           file: { type: 'string', required: true, enum: ['rendererJs', 'stylesheet'] },
           mode: { type: 'string', required: true, enum: ['replace', 'append'] },
-          content: { type: 'string', required: true, description: '本段源码原文，无Markdown；最多2400字符，不要一次交付完整长程序。' },
+          content: { type: 'string', required: true, description: `本段源码原文，无Markdown；最多${MAX_CODE_PART_CHARACTERS}字符。完整JS通常分2段，CSS用1段。` },
         },
         output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
         execute: (args, exec) => {

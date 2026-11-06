@@ -1,4 +1,5 @@
 /** Bounded byte-preserving source assembly. Never executes or supplies renderer code. */
+export const MAX_CODE_PART_CHARACTERS = 6000
 export class QuestionCodeParts {
   private writes = 0
   private readonly parts = { rendererJs: '', stylesheet: '' }
@@ -12,7 +13,7 @@ export class QuestionCodeParts {
     if (this.writes >= 10) throw new Error('CODE_WRITE_LIMIT')
     this.writes++
     if (this.pending.has(file)) throw new Error('CODE_WRITE_PENDING: await the previous write before continuing this file')
-    if (content.length > 2400) throw new Error('CODE_PART_TOO_LARGE')
+    if (content.length > MAX_CODE_PART_CHARACTERS) throw new Error('CODE_PART_TOO_LARGE')
     const next = mode === 'append' ? this.parts[file] + content : content
     if (next.length > (file === 'rendererJs' ? 24000 : 6000)) throw new Error('CODE_SOURCE_TOO_LARGE')
     this.pending.add(file)

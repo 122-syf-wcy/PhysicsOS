@@ -90,7 +90,7 @@ it('keeps the distinct wave and modern visibility defaults after omitting the gl
   expect(focusedRenderContract(QUESTION_CODE_RENDER_CONTRACT, 'wave')).toContain('!==false')
   expect(focusedRenderContract(QUESTION_CODE_RENDER_CONTRACT, 'modern')).toContain('不检查visible.trajectory')
   const mechanics = focusedRenderContract(QUESTION_CODE_RENDER_CONTRACT, 'mechanics', 'incline')
-  expect(mechanics).toContain('visible[observable]===true')
+  expect(mechanics).toContain('view.visible[vector.observable]===true')
   expect(mechanics).toContain('angles/dimensions按已给几何绘制')
 })
 it('keeps published visual requirements verbatim while excluding unrelated upload procedures', () => {
