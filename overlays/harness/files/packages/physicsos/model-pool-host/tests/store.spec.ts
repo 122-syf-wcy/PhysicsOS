@@ -146,7 +146,7 @@ describe('pool store', () => {
   it.each(['success', 'failure'] as const)('ignores an old credential %s after a queued replacement', async (outcome) => {
     const store = makeStore()
     const channel = await seedChannel(store)
-    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-old-inflight-credential' })
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-old-inflight' })
     const original = store.key(added.id)
     if (original === undefined) throw new Error('key missing before replacement')
     await store.updateKey(ADMIN, added.id, { key: 'sk-new-credential' })
