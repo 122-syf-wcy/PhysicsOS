@@ -45,39 +45,45 @@ const neverHook = (() => {
    keys pass straight through. */
 const t = (key: string): string => (key === 'paper.backToHome' ? '返回首页' : key)
 
-const stubApi = (jobs: PaperJobWire[] = []): PaperApi => ({
-  listSources: vi.fn().mockResolvedValue([]),
-  addSource: vi.fn(),
-  verifySource: vi.fn(),
-  listAnnotations: vi.fn().mockResolvedValue([]),
-  addAnnotation: vi.fn(),
-  reviewAnnotation: vi.fn(),
-  annotationStats: vi.fn().mockResolvedValue({}),
-  importCsv: vi.fn(),
-  listBlueprints: vi.fn().mockResolvedValue([]),
-  verifyBlueprint: vi.fn(),
-  listJobs: vi.fn().mockResolvedValue(jobs),
-  createJob: vi.fn(),
-  getJob: vi.fn().mockImplementation((id: string) => Promise.resolve(jobs.find(j => j.id === id))),
-  confirmSpec: vi.fn(),
-  runDraft: vi.fn(),
-  runChecks: vi.fn(),
-  reviewQuestion: vi.fn(),
-  repairQuestion: vi.fn(),
-  replaceQuestion: vi.fn(),
-  bankPlan: vi.fn(),
-  approve: vi.fn(),
-  runExport: vi.fn(),
-  listExports: vi.fn().mockResolvedValue([]),
-  fileUrl: vi.fn().mockReturnValue(''),
-  listBankItems: vi.fn().mockResolvedValue([]),
-  ingestBank: vi.fn(),
-  updateBankItem: vi.fn(),
-  reviewBankItem: vi.fn(),
-  reviewBankItems: vi.fn(),
-  triageBankItems: vi.fn(),
-  ingestBankImages: vi.fn(),
-})
+const stubApi = (jobs: PaperJobWire[] = []): PaperApi => {
+  const api: PaperApi = {
+    listSources: vi.fn().mockResolvedValue([]),
+    addSource: vi.fn(),
+    verifySource: vi.fn(),
+    listAnnotations: vi.fn().mockResolvedValue([]),
+    addAnnotation: vi.fn(),
+    reviewAnnotation: vi.fn(),
+    annotationStats: vi.fn().mockResolvedValue({}),
+    importCsv: vi.fn(),
+    listBlueprints: vi.fn().mockResolvedValue([]),
+    verifyBlueprint: vi.fn(),
+    listJobs: vi.fn().mockResolvedValue(jobs),
+    createJob: vi.fn(),
+    getJob: vi.fn().mockImplementation((id: string) => Promise.resolve(jobs.find(j => j.id === id))),
+    /* Pollers revalidate through pollJob; by default it rides whatever getJob
+       answers so a test's status schedule drives both. */
+    pollJob: vi.fn().mockImplementation((id: string) => api.getJob(id).then(found => ({ job: found }))),
+    confirmSpec: vi.fn(),
+    runDraft: vi.fn(),
+    runChecks: vi.fn(),
+    reviewQuestion: vi.fn(),
+    repairQuestion: vi.fn(),
+    replaceQuestion: vi.fn(),
+    bankPlan: vi.fn(),
+    approve: vi.fn(),
+    runExport: vi.fn(),
+    listExports: vi.fn().mockResolvedValue([]),
+    fileUrl: vi.fn().mockReturnValue(''),
+    listBankItems: vi.fn().mockResolvedValue([]),
+    ingestBank: vi.fn(),
+    updateBankItem: vi.fn(),
+    reviewBankItem: vi.fn(),
+    reviewBankItems: vi.fn(),
+    triageBankItems: vi.fn(),
+    ingestBankImages: vi.fn(),
+  }
+  return api
+}
 
 describe('PaperWorkspace', () => {
   /* Fake-timer tests must never leak the mocked clock into their neighbours:
@@ -228,6 +234,99 @@ describe('PaperWorkspace', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps one poller per job, revalidates by ETag and leaves the view alone while nothing changed', async () => {
+    vi.useFakeTimers()
+    try {
+      const specJob = job({
+        status: 'spec',
+        specTable: [{
+          questionNo: 1, sectionTitle: '选择题', kind: 'choice-single', score: 3,
+          knowledge: ['内能'], ability: '识记', difficulty: 'basic',
+        }] as never,
+      })
+      const api = stubApi([specJob])
+      api.bankPlan = vi.fn().mockResolvedValue([])
+      api.confirmSpec = vi.fn().mockResolvedValue({ ...specJob, status: 'spec' })
+      api.runDraft = vi.fn().mockResolvedValue({ status: 'drafting' })
+      api.runChecks = vi.fn().mockResolvedValue({ status: 'checking' })
+      /* The first conditional read carries the body and a tag; every later
+         one with that tag is a 304 → `unchanged`. */
+      const seenTags: (string | undefined)[] = []
+      api.pollJob = vi.fn().mockImplementation((_id: string, etag?: string) => {
+        seenTags.push(etag)
+        if (etag === '"v1"') return Promise.resolve({ unchanged: true })
+        return Promise.resolve({ job: { ...specJob, status: 'drafting', updatedAt: '2026-09-17T00:00:01Z' }, etag: '"v1"' })
+      })
+      render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+      await vi.advanceTimersByTimeAsync(0)
+      fireEvent.click(screen.getByText(/bp-gz/))
+      await vi.advanceTimersByTimeAsync(0)
+      const getJobCallsBefore = (api.getJob as ReturnType<typeof vi.fn>).mock.calls.length
+      fireEvent.click(screen.getByRole('button', { name: /AI 起草 \+ 自动检查/ }))
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(0)
+      /* 30 s of drafting: the runner alone polls (2.5 s cadence → 12 ticks);
+         the 3 s backup poller stays quiet, so getJob is not touched again. */
+      await vi.advanceTimersByTimeAsync(30_000)
+      const polls = (api.pollJob as ReturnType<typeof vi.fn>).mock.calls.length
+      expect(polls).toBeGreaterThanOrEqual(11)
+      expect(polls).toBeLessThanOrEqual(13)
+      /* The runner's own first read is a plain getJob; nothing else used it. */
+      expect((api.getJob as ReturnType<typeof vi.fn>).mock.calls.length).toBe(getJobCallsBefore + 1)
+      expect(seenTags[0]).toBeUndefined()
+      expect(seenTags.slice(1).every(tag => tag === '"v1"')).toBe(true)
+      expect(screen.getByRole('status').getAttribute('aria-label')).toContain('AI 起草')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a job response that lands after the teacher switched to another job', async () => {
+    const first = job({ id: 'paper-1', blueprintId: 'bp-first', status: 'review' })
+    const second = job({ id: 'paper-2', blueprintId: 'bp-second', status: 'review' })
+    const api = stubApi([first, second])
+    api.bankPlan = vi.fn().mockResolvedValue([])
+    let releaseFirst: ((value: PaperJobWire) => void) | undefined
+    api.getJob = vi.fn().mockImplementation((id: string) => id === 'paper-1'
+      ? new Promise<PaperJobWire>((resolve) => { releaseFirst = resolve })
+      : Promise.resolve(second))
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    fireEvent.click(await screen.findByText(/bp-first/))
+    fireEvent.click(screen.getByText(/bp-second/))
+    await vi.waitFor(() => { expect(document.querySelector('[class*="jobRowActive"]')?.textContent).toContain('bp-second') })
+    /* The slow response for the first job arrives now — and must not win. */
+    releaseFirst!({ ...first, updatedAt: '2026-09-18T00:00:00Z' })
+    await vi.waitFor(() => { expect(api.getJob).toHaveBeenCalledTimes(2) })
+    await Promise.resolve()
+    expect(document.querySelector('[class*="jobRowActive"]')?.textContent).toContain('bp-second')
+    expect(document.querySelector('[class*="jobRowActive"]')?.textContent).not.toContain('bp-first')
+  })
+
+  it('does not let an older job state overwrite a newer one', async () => {
+    /* The list row shows v1; only the detail header reflects what getJob answered. */
+    const listed = job({ status: 'review', updatedAt: '2026-09-17T00:00:00Z', versions: [{ version: 1, hash: 'h1', at: '2026-09-17', summary: 'v1' }] })
+    const newer = job({ status: 'review', updatedAt: '2026-09-17T00:00:10Z', versions: [{ version: 3, hash: 'h3', at: '2026-09-17', summary: 'v3' }] })
+    const older = job({ status: 'review', updatedAt: '2026-09-17T00:00:05Z', versions: [{ version: 2, hash: 'h2', at: '2026-09-17', summary: 'v2' }] })
+    const api = stubApi([listed])
+    api.bankPlan = vi.fn().mockResolvedValue([])
+    const answers = [newer, older]
+    api.getJob = vi.fn().mockImplementation(() => Promise.resolve(answers.shift() ?? older))
+    render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    fireEvent.click(await screen.findByText(/bp-gz/))
+    await screen.findByText(/v3/)
+    /* A second click re-reads the job; the stub now answers with the older
+       snapshot, which must be dropped rather than shown. */
+    fireEvent.click(screen.getAllByText(/bp-gz/)[0]!)
+    await vi.waitFor(() => { expect(api.getJob).toHaveBeenCalledTimes(2) })
+    await Promise.resolve()
+    expect(screen.queryByText(/v2/)).toBeNull()
+    expect(screen.getByText(/v3/)).toBeTruthy()
   })
 
   it('shows the working mascot with live progress telemetry while drafting', async () => {

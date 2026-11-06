@@ -5,6 +5,7 @@
  * surfaces as a structured `{error:{code,message}}` with its HTTP status.
  */
 
+import { createHash } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
@@ -103,6 +104,26 @@ const MIME: Record<string, string> = {
 const send = (res: ServerResponse, status: number, body: unknown): void => {
   const payload = JSON.stringify(body)
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(payload)
+}
+
+/**
+ * Conditional variant for polled resources: the body's digest is the ETag,
+ * and a matching `If-None-Match` answers 304 with no body. Job pollers ask
+ * every 2.5–3 s for 45 minutes while a draft runs; the document only changes
+ * a handful of times in that window, so this turns almost every poll into a
+ * header-only round trip and spares the client a full re-render.
+ */
+const sendConditional = (req: IncomingMessage, res: ServerResponse, body: unknown): void => {
+  const payload = JSON.stringify(body)
+  const etag = `"${createHash('sha256').update(payload).digest('base64url').slice(0, 27)}"`
+  const headers = { etag, 'cache-control': 'private, no-cache' }
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, headers)
+    res.end()
+    return
+  }
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', ...headers })
   res.end(payload)
 }
 
@@ -574,7 +595,7 @@ export function paperRoutes(deps: RouteDeps): (req: IncomingMessage, res: Server
         return
       }
       if (method === 'GET' && seg[0] === 'jobs' && seg.length === 2) {
-        send(res, 200, jobForActor(segment(seg, 1)))
+        sendConditional(req, res, jobForActor(segment(seg, 1)))
         return
       }
       if (method === 'PUT' && seg[0] === 'jobs' && seg[2] === 'spec') {

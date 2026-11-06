@@ -534,6 +534,32 @@ describe('paper routes — identity gate', () => {
     expect(schoolBJobs.map(row => row.id)).not.toContain(job.id)
     expect((await get(`/jobs/${job.id}`, 'TEACHER', 'SCHOOL-B')).status).toBe(404)
 
+    /* Pollers revalidate with the ETag: an unchanged job is a header-only 304,
+       a changed one carries a new tag and the full body again. */
+    const first = await get(`/jobs/${job.id}`, 'TEACHER', 'SCHOOL-A')
+    const etag = first.headers.get('etag')
+    expect(etag).toMatch(/^"[A-Za-z0-9_-]{27}"$/)
+    expect(first.headers.get('cache-control')).toBe('private, no-cache')
+    const unchanged = await fetch(`${base}/jobs/${job.id}`, {
+      headers: { ...as('TEACHER', 'SCHOOL-A'), 'if-none-match': etag! },
+    })
+    expect(unchanged.status).toBe(304)
+    expect(unchanged.headers.get('etag')).toBe(etag)
+    expect(await unchanged.text()).toBe('')
+    expect((await fetch(`${base}/jobs/${job.id}`, {
+      headers: { ...as('TEACHER', 'SCHOOL-B'), 'if-none-match': etag! },
+    })).status).toBe(404)
+    expect((await fetch(`${base}/jobs/${job.id}/spec`, {
+      method: 'PUT', headers: { 'content-type': 'application/json', ...as('TEACHER', 'SCHOOL-A') },
+      body: JSON.stringify({ specTable: [] }),
+    })).status).toBe(200)
+    const changed = await fetch(`${base}/jobs/${job.id}`, {
+      headers: { ...as('TEACHER', 'SCHOOL-A'), 'if-none-match': etag! },
+    })
+    expect(changed.status).toBe(200)
+    expect(changed.headers.get('etag')).not.toBe(etag)
+    expect((await changed.json() as { id: string }).id).toBe(job.id)
+
     const sourceAList = await (await get('/sources', 'TEACHER', 'SCHOOL-A')).json() as { id: string }[]
     const sourceBList = await (await get('/sources', 'TEACHER', 'SCHOOL-B')).json() as { id: string }[]
     expect(sourceAList.map(row => row.id)).toContain('tenant-source-a')

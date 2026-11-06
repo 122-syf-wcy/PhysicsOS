@@ -240,17 +240,55 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
 
   useEffect(() => { void refresh() }, [refresh])
 
+  /* The job the teacher currently has open. Every job update — a click, a
+     poll, a runner tick, a late response — flows through `applyJob`, which
+     drops anything that is not about the selected job and anything older
+     than what is already shown, so a slow poll can never overwrite a newer
+     selection or a newer state. */
+  const selectedJobRef = useRef<string | undefined>(undefined)
+  const applyJob = useCallback((latest: PaperJobWire) => {
+    setActiveJob((previous) => {
+      if (latest.id !== selectedJobRef.current) return previous
+      if (previous !== undefined && previous.id === latest.id && latest.updatedAt < previous.updatedAt) return previous
+      return latest
+    })
+  }, [])
+  const selectJob = useCallback((latest: PaperJobWire) => {
+    selectedJobRef.current = latest.id
+    applyJob(latest)
+  }, [applyJob])
   const openJob = useCallback(async (id: string) => {
-    try { setActiveJob(await api.getJob(id)) } catch (e) { setNotice(err(e)) }
-  }, [api])
+    selectedJobRef.current = id
+    try { applyJob(await api.getJob(id)) } catch (e) { setNotice(err(e)) }
+  }, [api, applyJob])
 
-  /* Poll while a job is in an async stage. */
+  /* Backup poll while a job is in an async stage and no runner in the detail
+     view is already driving it (a reload mid-draft lands here). One request
+     in flight at a time, revalidated by ETag, and keyed on id + status so a
+     state update does not restart the interval. */
+  const [runnerJob, setRunnerJob] = useState<string>()
+  const onRunnerActive = useCallback((jobId: string, active: boolean) => {
+    setRunnerJob(previous => (active ? jobId : previous === jobId ? undefined : previous))
+  }, [])
+  const activeJobId = activeJob?.id
+  const activeJobStatus = activeJob?.status
   useEffect(() => {
-    if (activeJob === undefined) return
-    if (activeJob.status !== 'drafting' && activeJob.status !== 'checking') return
-    const timer = setInterval(() => { void openJob(activeJob.id) }, 3000)
-    return () => { clearInterval(timer) }
-  }, [activeJob, openJob])
+    if (activeJobId === undefined || runnerJob === activeJobId) return
+    if (activeJobStatus !== 'drafting' && activeJobStatus !== 'checking') return
+    let etag: string | undefined
+    let inFlight = false
+    let live = true
+    const timer = setInterval(() => {
+      if (inFlight) return
+      inFlight = true
+      void api.pollJob(activeJobId, etag).then((polled) => {
+        if (!live || 'unchanged' in polled) return
+        etag = polled.etag
+        applyJob(polled.job)
+      }).catch((e: unknown) => { if (live) setNotice(err(e)) }).finally(() => { inFlight = false })
+    }, 3000)
+    return () => { live = false; clearInterval(timer) }
+  }, [activeJobId, activeJobStatus, runnerJob, api, applyJob])
 
   const run = useCallback(async (action: () => Promise<unknown>) => {
     try { await action(); await refresh() } catch (e) { setNotice(err(e)) }
@@ -374,7 +412,7 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
         <NewPaperPanel
           blueprints={verifiedBlueprints}
           api={api}
-          onCreated={(job) => { setActiveJob(job); setTab('jobs'); void refresh() }}
+          onCreated={(job) => { selectJob(job); setTab('jobs'); void refresh() }}
           onError={setNotice}
           onReview={() => { setTab('jobs') }}
         />
@@ -383,7 +421,8 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
         <JobsPanel
           jobs={draftJobs} activeJob={activeJob} reviewer={reviewer}
           api={api} openJob={openJob} run={run}
-          onJobUpdate={setActiveJob}
+          onJobUpdate={applyJob}
+          onRunnerActive={onRunnerActive}
           notify={setNotice}
         />
       )}
@@ -619,7 +658,7 @@ function MixBar({ mix }: { readonly mix: DifficultyMix }) {
 
 /* --------------------------------------------------------- 草稿与审核 -- */
 
-function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, notify }: {
+function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, onRunnerActive, notify }: {
   jobs: PaperJobWire[]
   activeJob: PaperJobWire | undefined
   reviewer: string
@@ -627,6 +666,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
   openJob: (id: string) => Promise<void>
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  onRunnerActive: (jobId: string, active: boolean) => void
   notify: (message: string | undefined) => void
 }) {
   /* The list folds away so long stems get the full width — the split is the
@@ -674,8 +714,10 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
           </button>
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
-            : <JobDetail job={activeJob} reviewer={reviewer} api={api}
-              run={run} onJobUpdate={onJobUpdate} notify={notify} />}
+            /* Keyed by job: switching jobs remounts the detail, so its runner
+               and repair/replace pollers stop with the job they belonged to. */
+            : <JobDetail key={activeJob.id} job={activeJob} reviewer={reviewer} api={api}
+              run={run} onJobUpdate={onJobUpdate} onRunnerActive={onRunnerActive} notify={notify} />}
         </div>
       </div>
     </section>
@@ -795,12 +837,58 @@ function AiWorker({ job, runnerActive, since }: {
   )
 }
 
-function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
+/**
+ * Poll one job until `settled` says stop or the component drops it. One
+ * request in flight at a time, revalidated by ETag so an unchanged job costs
+ * headers only, and a response that lands after cleanup is never applied.
+ * Shared by the 退回修改 / 换题 waits below.
+ */
+function useJobPoll(
+  api: PaperApi,
+  jobId: string,
+  active: boolean,
+  onJobUpdate: (job: PaperJobWire) => void,
+  settled: (latest: PaperJobWire) => boolean,
+  onSettled: () => void,
+  onTimeout: () => void,
+  timeoutMs: number,
+): void {
+  const settledRef = useRef(settled)
+  settledRef.current = settled
+  const onSettledRef = useRef(onSettled)
+  onSettledRef.current = onSettled
+  const onTimeoutRef = useRef(onTimeout)
+  onTimeoutRef.current = onTimeout
+  useEffect(() => {
+    if (!active) return
+    const since = Date.now()
+    let etag: string | undefined
+    let inFlight = false
+    let live = true
+    const timer = setInterval(() => {
+      if (inFlight) return
+      inFlight = true
+      void api.pollJob(jobId, etag).then((polled) => {
+        if (!live) return
+        if (!('unchanged' in polled)) {
+          etag = polled.etag
+          onJobUpdate(polled.job)
+          if (settledRef.current(polled.job)) { onSettledRef.current(); return }
+        }
+        if (Date.now() - since > timeoutMs) onTimeoutRef.current()
+      }).catch(() => {}).finally(() => { inFlight = false })
+    }, 3000)
+    return () => { live = false; clearInterval(timer) }
+  }, [api, jobId, active, onJobUpdate, timeoutMs])
+}
+
+function JobDetail({ job, reviewer, api, run, onJobUpdate, onRunnerActive, notify }: {
   job: PaperJobWire
   reviewer: string
   api: PaperApi
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  onRunnerActive: (jobId: string, active: boolean) => void
   notify: (message: string | undefined) => void
 }) {
   const reload = () => run(async () => { onJobUpdate(await api.getJob(job.id)) })
@@ -809,8 +897,8 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
      （drafting → drafting 结束时置 checking；check 从 checking 走到 review）。
      背靠背连发两者会竞态——check 可能在起草完成前以 NO_DOCUMENT 把任务打成
      failed。正确顺序是：draft → 轮询到 checking → 才发 check → 轮询到终态。
-     runner 由本组件持有：activeJob 的刷新、轮询与可视化都由它驱动，页面中途
-     刷新时退回旧的 3s 状态轮询兜底。 */
+     runner 由本组件持有：activeJob 的刷新、轮询与可视化都由它驱动；runner
+     在跑时上层的 3s 兜底轮询暂停，页面中途刷新时才由它接手。 */
   const [runnerActive, setRunnerActive] = useState(false)
   const [runnerSince, setRunnerSince] = useState(0)
   const runnerRef = useRef<{ jobId: string; cancelled: boolean } | null>(null)
@@ -819,101 +907,98 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
   }, [])
   const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
 
-  const driveAi = () => {
+  /** What a runner body sees: its job, whether it was dropped, and a conditional poll. */
+  interface Runner {
+    readonly jobId: string
+    /** True once this detail view unmounted (the teacher moved on). Read it, never cache it. */
+    readonly cancelled: () => boolean
+    /** One conditional read: `undefined` means the job has not moved since the last body seen. */
+    readonly poll: () => Promise<PaperJobWire | undefined>
+  }
+  /** Start a runner for this job; `work` drives it and returns when done. */
+  const drive = (work: (runner: Runner) => Promise<void>) => {
     if (runnerRef.current !== null) return
     const handle = { jobId: job.id, cancelled: false }
     runnerRef.current = handle
     setRunnerActive(true)
     setRunnerSince(Date.now())
+    onRunnerActive(handle.jobId, true)
+    const cancelled = (): boolean => handle.cancelled
+    let etag: string | undefined
+    const poll = async (): Promise<PaperJobWire | undefined> => {
+      const polled = await api.pollJob(handle.jobId, etag)
+      if (cancelled() || 'unchanged' in polled) return undefined
+      etag = polled.etag
+      onJobUpdate(polled.job)
+      return polled.job
+    }
     void (async () => {
       try {
-        let latest = await api.getJob(handle.jobId)
-        /* 细目表自动确认：确认步不再需要教师操作（spec/failed 都从这里重试）。 */
-        if (latest.status === 'spec' || latest.status === 'failed') {
-          latest = await api.confirmSpec(latest.id, latest.specTable)
-        }
-        onJobUpdate(latest)
-        await api.runDraft(latest.id)
-        let checkFired = false
-        const deadline = Date.now() + 45 * 60_000
-        while (!handle.cancelled && Date.now() < deadline) {
-          await sleep(2500)
-          latest = await api.getJob(handle.jobId)
-          onJobUpdate(latest)
-          if (latest.status === 'checking' && !checkFired) {
-            /* 起草驱动完成（进入 checking）——现在才是发检查的正确时机。 */
-            checkFired = true
-            await api.runChecks(latest.id)
-            continue
-          }
-          if (latest.status === 'review' || latest.status === 'approved'
-            || latest.status === 'exported' || latest.status === 'failed') break
-        }
+        await work({ jobId: handle.jobId, cancelled, poll })
       } catch (e) {
-        notify(err(e))
+        if (!cancelled()) notify(err(e))
       } finally {
         runnerRef.current = null
         setRunnerActive(false)
-        void reload()
+        onRunnerActive(handle.jobId, false)
+        if (!cancelled()) void reload()
       }
     })()
   }
 
+  const driveAi = () => {
+    drive(async ({ jobId, cancelled, poll }) => {
+      let latest = await api.getJob(jobId)
+      /* 细目表自动确认：确认步不再需要教师操作（spec/failed 都从这里重试）。 */
+      if (latest.status === 'spec' || latest.status === 'failed') {
+        latest = await api.confirmSpec(latest.id, latest.specTable)
+      }
+      if (cancelled()) return
+      onJobUpdate(latest)
+      await api.runDraft(latest.id)
+      let checkFired = false
+      const deadline = Date.now() + 45 * 60_000
+      while (!cancelled() && Date.now() < deadline) {
+        await sleep(2500)
+        latest = (await poll()) ?? latest
+        if (cancelled()) break
+        if (latest.status === 'checking' && !checkFired) {
+          /* 起草驱动完成（进入 checking）——现在才是发检查的正确时机。 */
+          checkFired = true
+          await api.runChecks(latest.id)
+          continue
+        }
+        if (latest.status === 'review' || latest.status === 'approved'
+          || latest.status === 'exported' || latest.status === 'failed') break
+      }
+    })
+  }
+
   /* 导出同样长跑（每张题图 ~70 s）——同 runner 模式驱动可视化与轮询。 */
   const driveExport = () => {
-    if (runnerRef.current !== null) return
-    const handle = { jobId: job.id, cancelled: false }
-    runnerRef.current = handle
-    setRunnerActive(true)
-    setRunnerSince(Date.now())
-    void (async () => {
-      try {
-        await api.runExport(handle.jobId)
-        const deadline = Date.now() + 45 * 60_000
-        while (!handle.cancelled && Date.now() < deadline) {
-          await sleep(2500)
-          const latest = await api.getJob(handle.jobId)
-          onJobUpdate(latest)
-          if (latest.status === 'exported') break
-        }
-      } catch (e) {
-        notify(err(e))
-      } finally {
-        runnerRef.current = null
-        setRunnerActive(false)
-        void reload()
+    drive(async ({ jobId, cancelled, poll }) => {
+      await api.runExport(jobId)
+      const deadline = Date.now() + 45 * 60_000
+      while (!cancelled() && Date.now() < deadline) {
+        await sleep(2500)
+        const latest = await poll()
+        if (latest?.status === 'exported') break
       }
-    })()
+    })
   }
   /* 退回修改 modal: the suggestion goes to the model, which revises the
      question in place; the new version lands as status 'draft' again. */
   const [repairTarget, setRepairTarget] = useState<number | null>(null)
   const [repairText, setRepairText] = useState('')
   const [repairPending, setRepairPending] = useState<{ no: number; version: number; since: number } | null>(null)
-  useEffect(() => {
-    if (repairPending === null) return
-    const timer = setInterval(() => {
-      void api.getJob(job.id).then((latest) => {
-        onJobUpdate(latest)
-        const landed = (latest.versions.at(-1)?.version ?? 0) > repairPending.version
-        if (landed || Date.now() - repairPending.since > 180_000) setRepairPending(null)
-      }).catch(() => {})
-    }, 3000)
-    return () => { clearInterval(timer) }
-  }, [repairPending, api, job.id, onJobUpdate])
+  useJobPoll(api, job.id, repairPending !== null, onJobUpdate,
+    latest => (latest.versions.at(-1)?.version ?? 0) > (repairPending?.version ?? Number.POSITIVE_INFINITY),
+    () => { setRepairPending(null) }, () => { setRepairPending(null) }, 180_000)
   /* 题库换题：同退回修订的轮询——等新版本落库。 */
   const [replacePending, setReplacePending] = useState<{ no: number; version: number; since: number } | null>(null)
-  useEffect(() => {
-    if (replacePending === null) return
-    const timer = setInterval(() => {
-      void api.getJob(job.id).then((latest) => {
-        onJobUpdate(latest)
-        const landed = (latest.versions.at(-1)?.version ?? 0) > replacePending.version
-        if (landed || Date.now() - replacePending.since > 180_000) setReplacePending(null)
-      }).catch(() => {})
-    }, 3000)
-    return () => { clearInterval(timer) }
-  }, [replacePending, api, job.id, onJobUpdate])
+  useJobPoll(api, job.id, replacePending !== null, onJobUpdate,
+    latest => (latest.versions.at(-1)?.version ?? 0) > (replacePending?.version ?? Number.POSITIVE_INFINITY),
+    () => { setReplacePending(null) }, () => { setReplacePending(null) }, 180_000)
   /* Live assembly preview: how the bank would serve this spec table now —
      shown on the confirm table and reused for the swap button. */
   const [bankPlan, setBankPlan] = useState<readonly BankPlanRow[] | null>(null)

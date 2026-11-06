@@ -23,6 +23,30 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return body as T
 }
 
+/** Result of one conditional job read. */
+export type JobPoll =
+  | { readonly job: PaperJobWire; readonly etag?: string }
+  | { readonly unchanged: true }
+
+/**
+ * Conditional GET: revalidates with `If-None-Match`, so a poller whose job
+ * has not moved pays for headers only and skips its state update entirely.
+ */
+const pollJob = async (id: string, etag?: string): Promise<JobPoll> => {
+  const response = await fetch(`/physicsos/paper/jobs/${id}`, {
+    headers: { 'content-type': 'application/json', ...(etag === undefined ? {} : { 'if-none-match': etag }) },
+  })
+  if (response.status === 304) return { unchanged: true }
+  const body = await response.json().catch(() => ({})) as PaperJobWire & { error?: { code?: string; message?: string } }
+  if (!response.ok) {
+    const error = new Error(body.error?.message ?? `${response.status}`) as PaperApiError
+    Object.defineProperty(error, 'code', { value: body.error?.code ?? `HTTP_${response.status}` })
+    throw error
+  }
+  const tag = response.headers.get('etag')
+  return tag === null ? { job: body } : { job: body, etag: tag }
+}
+
 const post = <T>(path: string, body: unknown): Promise<T> =>
   request<T>(path, { method: 'POST', body: JSON.stringify(body) })
 
@@ -249,6 +273,11 @@ export interface PaperApi {
   listJobs: () => Promise<PaperJobWire[]>
   createJob: (blueprintId: string, requestBody: PaperJobWire['request']) => Promise<PaperJobWire>
   getJob: (id: string) => Promise<PaperJobWire>
+  /**
+   * Conditional read for pollers: pass the `etag` of the last body seen and
+   * an unchanged job comes back as `{ unchanged: true }` with no payload.
+   */
+  pollJob: (id: string, etag?: string) => Promise<JobPoll>
   confirmSpec: (id: string, specTable: readonly SpecRowWire[]) => Promise<PaperJobWire>
   runDraft: (id: string) => Promise<{ status: string }>
   runChecks: (id: string) => Promise<{ status: string }>
@@ -326,6 +355,7 @@ export function createPaperApi(): PaperApi {
     listJobs: () => request('/jobs'),
     createJob: (blueprintId, requestBody) => post('/jobs', { blueprintId, request: requestBody }),
     getJob: id => request(`/jobs/${id}`),
+    pollJob,
     confirmSpec: (id, specTable) => put(`/jobs/${id}/spec`, { specTable }),
     runDraft: id => post(`/jobs/${id}/draft`, {}),
     runChecks: id => post(`/jobs/${id}/check`, {}),
