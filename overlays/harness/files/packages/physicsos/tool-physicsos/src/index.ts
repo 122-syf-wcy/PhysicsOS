@@ -17,6 +17,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from './code-provider.ts'
 import { generateQuestionCode, type CodeStyleContext } from './code-generation.ts'
 import { codeStyleFor } from './code-style-selection.ts'
+import { registerRegenerateRoute } from './regenerate-route.ts'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type { CodeExperimentRef, CodeVisualizationSource, CodeVisualizationState } from '@physicsos/agent-tools'
 import type { Context } from '@deepseek-ai/cordis'
@@ -185,11 +186,18 @@ const EMPTY_PROJECTION: PhysicsScenesProjection = { latest: null, scenes: {} }
 const EMPTY_SOLVE_TRACES: PhysicsSolveTracesProjection = { traces: [] }
 
 /**
+ * What a generation needs from its caller: the owning agent and a cancel
+ * signal. A tool call hands in its `ToolRunContext`; the direct regeneration
+ * route hands in the resolved agent and the request's signal.
+ */
+export type GenerationHost = Pick<ToolRunContext, 'agent' | 'signal'>
+
+/**
  * The turn a physics event should ride: read back off the session's open
  * `turn/start`, newest first. Shared by the scene mirror and the solve trace
  * so both dock at the answer that produced them.
  */
-const currentTurnOf = (exec: ToolRunContext): number | undefined => {
+const currentTurnOf = (exec: GenerationHost): number | undefined => {
   // oxlint-disable-next-line typescript/no-deprecated -- Existing open-turn lookup; projection migration deferred.
   const events = exec.agent?.session.snapshotEvents()
   if (events === undefined) return undefined
@@ -326,7 +334,7 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   /** Recover only this session's persisted scene projection when the process runtime is empty. */
-  const persistedScene = (exec: ToolRunContext, sceneId: string): PhysicsSceneSnapshot | undefined => {
+  const persistedScene = (exec: GenerationHost, sceneId: string): PhysicsSceneSnapshot | undefined => {
     if (exec.agent === undefined) return undefined
     const projected = ctx.get('sessionProjections')?.stateOf(exec.agent.session, 'physicsScenes')
     if (projected !== undefined) return projected.scenes[sceneId]
@@ -340,8 +348,14 @@ export function apply(ctx: Context, config: Config): void {
     }
     return undefined
   }
+  /**
+   * Generate (or regenerate) the independent code experiment for one scene of
+   * the calling agent's session. The model's tool reuses whatever state this
+   * turn already produced; a user-initiated regeneration (`force`) starts a
+   * new job unless one is still running for the same scene revision.
+   */
   const generate = async (
-    exec: ToolRunContext, sceneId: string, experimentId?: string, instructions?: string,
+    exec: GenerationHost, sceneId: string, experimentId?: string, instructions?: string, force = false,
   ): Promise<CodeVisualizationState> => {
     const parent = exec.agent
     if (parent === undefined) throw new HarnessError('题目代码实验需要当前对话。', 'SESSION_REQUIRED')
@@ -353,10 +367,13 @@ export function apply(ctx: Context, config: Config): void {
     if (snapshot === undefined) throw new HarnessError('当前对话没有这个题目场景。', 'SCENE_NOT_FOUND')
     const turn = currentTurnOf(exec)
     const existing = snapshot.visualization
-    if (snapshot.turn === turn && existing?.ownerSessionId === ownerSessionId
-      && existing.sceneId === sceneId && existing.sceneRevision === snapshot.revision) {
-      return existing
-    }
+    const reusable = existing !== undefined && existing.ownerSessionId === ownerSessionId
+      && existing.sceneId === sceneId && existing.sceneRevision === snapshot.revision
+    /* A job past its deadline is an interrupted one (the process restarted
+       mid-run), not a live one: a forced regeneration may replace it. */
+    const live = reusable && existing.status === 'generating'
+      && (existing.deadlineAt === undefined || existing.deadlineAt > Date.now())
+    if (reusable && (force ? live : snapshot.turn === turn)) return existing
     type Artifacts = {
       context(id: string): Promise<CodeStyleContext>
       create(input: {
@@ -393,6 +410,9 @@ export function apply(ctx: Context, config: Config): void {
       },
     })
   }
+  /* The browser's 「重新生成」 reaches the same generation without a model turn. */
+  registerRegenerateRoute(ctx, (host, sceneId, experimentId, instructions, force) =>
+    generate(host, sceneId, experimentId, instructions, force))
   ctx.tools.register(defineTool({
     name: 'physics_generate_experiment',
     description: '调用专用受限代码子代理，独立绘制当前题目的Canvas/SVG实验场景和现代界面，禁止调用旧平台绘图模板。解题成功后已自动尝试；同一场景版本本轮无论已就绪、失败或正在生成，都只复用状态，不再次启动子任务。失败、旧版本升级或需调整展示请提示学生点击生成入口后在新轮次调用。只生成展示代码，不改变物理条件或答案。',

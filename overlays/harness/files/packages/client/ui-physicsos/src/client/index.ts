@@ -27,6 +27,7 @@ import { HomeBrandMark } from './HomeBrand.tsx'
 import { startExperimentNavigation } from './experiments/experiment-navigation.ts'
 import { loadWorkspaceModule } from './optional-modules.ts'
 import { startSyncRetry } from './sync-retry.ts'
+import { requestDirectRegeneration } from './question-code-regenerate.ts'
 import { createLearningRecordController } from './learning-record-store.ts'
 import { OptionalPhysicsSurface as PhysicsSurface } from './optional-surfaces.tsx'
 import type { PhysicsSurfaceInjected } from './LabWorkspace.tsx'
@@ -647,6 +648,12 @@ export function apply(ctx: ClientContext): void {
       const summary = scope.sessions.list.getSnapshot().byId[ownerSessionId]
       const projection = summary?.projectionValues?.['physicsScenes'] as { scenes?: Record<string, unknown> } | undefined
       if (projection?.scenes?.[sceneId] === undefined) return { ok: false, error: '当前学习会话中没有这个题目场景。' }
+      /* Direct path: the host starts the trusted code generation for the saved
+         scene itself — no tutor turn, no reasoning, nothing an upstream model
+         error can stop before the child starts. Older hosts answer 404/503 and
+         the chat prompt below remains the fallback. */
+      const direct = await requestDirectRegeneration(String(ownerSessionId), sceneId)
+      if (direct !== undefined) return direct
       return submitToTutor(`请为当前学习会话中已保存的物理场景 ${JSON.stringify(sceneId)} 生成或重新生成本题代码实验。调用 physics_generate_experiment，sceneId 必须为 ${JSON.stringify(sceneId)}；从已保存场景读取本题条件，保留题目理解、解题步骤和物理验证，使用最新代码实验视图。`)
     }
 
