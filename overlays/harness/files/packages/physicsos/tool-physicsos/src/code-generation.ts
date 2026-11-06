@@ -68,6 +68,7 @@ const SOURCE_VALIDATION_HINTS = {
   legacy_renderer: '删除旧平台绘图调用，直接在 #canvas 中绘制 snapshot.view 提供的几何。',
   missing_engine_geometry: '实际绘图坐标必须来自当前 snapshot.view 的物体、轨迹或装置几何；常量背景与未调用绘图函数不算画面。',
   missing_native_drawing: '在 #canvas 中挂载自己的 Canvas 2D 或原生 SVG，完成当前帧绘图后再返回。',
+  syntax_error: '代码未通过JavaScript模块语法检查。常见原因：同名函数、变量或常量在模块顶层重复声明（append分段补写时最容易重复定义辅助函数），括号、引号或模板字符串没有闭合。整文件replace，确保每个名字只声明一次。',
 } as const
 type TrustedSourceValidationReason = keyof typeof SOURCE_VALIDATION_HINTS
 interface CodeRepair {

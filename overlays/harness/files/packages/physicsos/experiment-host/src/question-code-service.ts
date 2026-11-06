@@ -111,6 +111,7 @@ type SourceValidationReason =
   | 'missing_engine_geometry'
   | 'missing_native_drawing'
   | 'invalid_visibility_key'
+  | 'syntax_error'
 class DrawingValidationError extends Error {
   constructor(readonly reason: SourceValidationReason) {
     super('Independent drawing validation failed')
@@ -792,6 +793,8 @@ document.addEventListener('physicsos-experiment-intent', event => {
     files.set('public/assets/experiment.css', Buffer.from(source.stylesheet))
     files.set('dist/assets/experiment.css', Buffer.from(source.stylesheet))
     try {
+      // The resource and drawing checks below lex the renderer, so Node's own syntax verdict comes first.
+      await this.checkSyntax(source.rendererJs)
       const manifestBytes = files.get('experiment.json')
       if (manifestBytes === undefined) throw invalidSource()
       const manifest = manifestV3Schema.parse(JSON.parse(manifestBytes.toString('utf8')))
@@ -799,19 +802,6 @@ document.addEventListener('physicsos-experiment-intent', event => {
       await validatePackageResources(files, manifest)
       await init
       validateIndependentDrawing(source.rendererJs)
-      const checkDir = await mkdtemp(join(this.root, 'checks', 'renderer-'))
-      try {
-        const rendererPath = join(checkDir, 'renderer.mjs')
-        await durableFile(rendererPath, Buffer.from(source.rendererJs))
-        // Fixed executable and options, service-owned path, syntax only. Uploaded code is never run.
-        await this.syntaxChecks.run(() => executeFile(process.execPath, ['--check', rendererPath], {
-          timeout: 5000,
-          maxBuffer: 4096,
-          env: { PATH: process.env.PATH ?? '' },
-        }))
-      } finally {
-        await rm(checkDir, { recursive: true, force: true })
-      }
     } catch (error) {
       throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined)
     }
@@ -858,6 +848,27 @@ document.addEventListener('physicsos-experiment-intent', event => {
     stillWanted()
     await this.domain.table('artifacts').put(row.id, row)
     return project(row)
+  }
+  private async checkSyntax(rendererJs: string): Promise<void> {
+    const checkDir = await mkdtemp(join(this.root, 'checks', 'renderer-'))
+    try {
+      const rendererPath = join(checkDir, 'renderer.mjs')
+      await durableFile(rendererPath, Buffer.from(rendererJs))
+      // Fixed executable and options, service-owned path, syntax only. Uploaded code is never run.
+      await this.syntaxChecks.run(() => executeFile(process.execPath, ['--check', rendererPath], {
+        timeout: 5000,
+        maxBuffer: 4096,
+        env: { PATH: process.env.PATH ?? '' },
+      }))
+    } catch (error) {
+      // Only Node's completed verdict is the author's error; a timed-out or killed check is not.
+      const failure = error as { code?: unknown; killed?: unknown; stderr?: unknown }
+      if (failure.code === 1 && failure.killed !== true && String(failure.stderr).includes('SyntaxError'))
+        throw new DrawingValidationError('syntax_error')
+      throw error
+    } finally {
+      await rm(checkDir, { recursive: true, force: true })
+    }
   }
   private authorized(
     actor: IdentityActor,

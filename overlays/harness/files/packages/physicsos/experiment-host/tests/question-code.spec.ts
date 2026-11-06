@@ -287,6 +287,15 @@ describe('private question code artifacts', () => {
     expect([...domain!.table('artifacts').entries()]).toHaveLength(0)
     expect(await readdir(join(root, 'private', 'blobs'))).toEqual([])
   })
+  it.each([
+    ['a helper declared twice by an appended segment', ownCanvas + '\nfunction visibleList(list) { return list }\nfunction visibleList(list) { return list }\n'],
+    ['an unterminated template literal', ownCanvas + '\nconst label = `unterminated\n'],
+  ])('names %s as a syntax error the author can repair', async (_label, rendererJs) => {
+    const service = await setup()
+    const error: unknown = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '语法待修复', summary: '', rendererJs, stylesheet: '' } }).catch((failure: unknown) => failure)
+    expect(error).toMatchObject({ code: 'INVALID_SOURCE', sourceValidationReason: 'syntax_error', message: '生成代码未通过封闭资源、元数据或语法检查。' })
+    expect([...domain!.table('artifacts').entries()]).toHaveLength(0)
+  })
   it('keeps closed-resource details masked rather than treating them as trusted drawing reasons', async () => {
     const service = await setup()
     const error: unknown = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '封闭资源', summary: '', rendererJs: ownCanvas, stylesheet: 'canvas { background: url(https://forbidden.invalid/private-resource); }' } }).catch((failure: unknown) => failure)
