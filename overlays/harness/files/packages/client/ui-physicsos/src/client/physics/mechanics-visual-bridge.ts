@@ -257,9 +257,15 @@ const sceneVisibility = (
   trajectory: scene.observableDefinitions.some(
     definition => definition.type === 'trajectory' && definition.visible,
   ),
-  keyPoints: hasKeyPoints,
-  forces: hasForces,
-  netForce: hasForces,
+  keyPoints: hasKeyPoints && scene.observableDefinitions.some(
+    definition => definition.visible && definition.parameters?.['kind'] === 'keypoints',
+  ),
+  forces: hasForces && scene.observableDefinitions.some(
+    definition => definition.type === 'force' && definition.visible,
+  ),
+  netForce: hasForces && scene.observableDefinitions.some(
+    definition => definition.type === 'force' && definition.visible,
+  ),
   components: scene.observableDefinitions.some(
     definition => definition.visible && definition.parameters?.['kind'] === 'velocity_components',
   ),
@@ -814,7 +820,14 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
         },
       }),
     ...(model === 'inclined_plane'
-      ? { incline: { origin: inclineContactOrigin, base: inclineBase, angle: inclineAngle } }
+      ? { incline: {
+        origin: inclineContactOrigin, base: inclineBase, angle: inclineAngle,
+        points: [
+          { ...inclineContactOrigin },
+          { x: inclineContactOrigin.x + inclineBase, y: inclineContactOrigin.y },
+          { x: inclineContactOrigin.x, y: inclineContactOrigin.y + inclineRise },
+        ],
+      } }
       : {}),
     ...(springConstraint === undefined || springAnchorParam === undefined
       ? {}

@@ -190,6 +190,8 @@ export interface InclineVisual {
   base: number
   /** Incline angle in degrees. */
   angle: number
+  /** Engine-provided wedge polygon in drawing order; project these points directly. */
+  points?: readonly ScenePoint[]
 }
 
 /** Raised launch platform for a horizontal projectile. */

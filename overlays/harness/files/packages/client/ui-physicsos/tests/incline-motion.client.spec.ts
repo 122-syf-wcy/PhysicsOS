@@ -17,6 +17,48 @@ const runtimeFor = (angle: number, speed: number, friction: number) => {
 }
 
 describe('incline motion in the mechanics workspace', () => {
+  it('keeps force visibility controlled by the scene observable after a user toggle', () => {
+    const runtime = runtimeFor(30, 0, 0.2)
+    const original = runtime.getSnapshot()
+    expect(original.view.visible.forces).toBe(true)
+    expect(original.view.visible.netForce).toBe(true)
+    const hidden = runtime.setObservable('forces', false)
+    expect(hidden.view.visible.forces).toBe(false)
+    expect(hidden.view.visible.netForce).toBe(true)
+    expect(runtime.getScene().observableDefinitions.find(item => item.type === 'force')?.visible).toBe(false)
+    expect(hidden.view.bodies[0]?.at).toEqual(original.view.bodies[0]?.at)
+    const restored = runtime.setObservable('forces', true)
+    expect(restored.view.visible.forces).toBe(true)
+    expect(restored.view.visible.netForce).toBe(true)
+  })
+
+  it('toggles the resultant independently and keeps that display choice across timeline changes', () => {
+    const runtime = runtimeFor(30, 0, 0.2)
+    const original = runtime.getScene()
+    const hidden = runtime.setObservable('netForce', false)
+    expect(hidden.view.visible.forces).toBe(true)
+    expect(hidden.view.visible.netForce).toBe(false)
+    expect(runtime.seek(4).view.visible.netForce).toBe(false)
+    const restored = runtime.setObservable('netForce', true)
+    expect(restored.view.visible.forces).toBe(true)
+    expect(restored.view.visible.netForce).toBe(true)
+    expect(runtime.getScene()).toEqual(original)
+  })
+
+  it('keeps supplied key-point geometry hidden after its observable is disabled', () => {
+    const runtime = createMechanicsWorkspaceRuntime(createMechanicsScene({
+      model: 'projectile_motion', position: { x: 0, y: 0, z: 0 },
+      velocity: { x: 0, y: 20, z: 0 }, groundY: 0,
+    }))
+    const original = runtime.getSnapshot()
+    expect(original.view.keyPoints.length).toBeGreaterThan(0)
+    expect(original.view.visible.keyPoints).toBe(true)
+    const hidden = runtime.setObservable('keyPoints', false)
+    expect(hidden.view.visible.keyPoints).toBe(false)
+    const restored = runtime.setObservable('keyPoints', true)
+    expect(restored.view.visible.keyPoints).toBe(true)
+  })
+
   it.each([0, 15, 30, 60])('keeps a readable moving surface window on the unbounded %i° plane', (angle) => {
     const runtime = runtimeFor(angle, 3, 0.2)
     const original = JSON.stringify(runtime.getScene())
@@ -40,6 +82,11 @@ describe('incline motion in the mechanics workspace', () => {
       // The patch moves along the same physical plane, keeping its normal
       // offset from the engine COM exactly one displayed block half-edge.
       const apex = { x: plane.origin.x, y: plane.origin.y + plane.base * Math.tan(radians) }
+      expect(plane.points).toEqual([
+        plane.origin,
+        { x: plane.origin.x + 6, y: plane.origin.y },
+        apex,
+      ])
       const distance = (body.at.x - apex.x) * Math.sin(radians) + (body.at.y - apex.y) * Math.cos(radians)
       expect(distance).toBeCloseTo(body.size, 9)
       const along = (body.at.x - apex.x) * Math.cos(radians)

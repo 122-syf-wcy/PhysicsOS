@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { focusedRenderContract, publishedVisualGuidance, registeredParameterGuidance } from '../src/question-code-prompt-context.ts'
 import { QUESTION_CODE_RENDER_CONTRACT } from '../../experiment-host/src/question-code-render-contract.ts'
 import { PROMPT_SEED } from '../../experiment-host/src/prompt-seed.ts'
@@ -51,12 +52,25 @@ it('gives incline authors the exact surface and vectors without unrelated mechan
   expect(result).toContain('interface VectorVisual')
   expect(result).not.toContain('interface InspectorSection')
   expect(result).toContain('interface CoordinateVisual')
-  expect(result).toContain('底边左端')
-  expect(result).toContain('base*tan(angle°)')
+  expect(result).toContain('points?:ScenePoint[]')
+  expect(result).toContain('直接按incline.points顺序画多边形')
+  expect(result).not.toContain('base*tan(angle°)')
   expect(result).toContain('history实线/predicted虚线')
   expect(result).not.toContain('interface PendulumVisual')
   expect(result).not.toContain('interface ChartSeries')
   expect(result.length).toBeLessThan(2200)
+})
+it('keeps the optional engine incline polygon synchronized in host and client contracts', () => {
+  const client = readFileSync(new URL('../../../client/ui-physicsos/src/client/physics/scene-visual-model.ts', import.meta.url), 'utf8')
+  const shape = (contract: string): string => {
+    const declaration = /(?:export )?interface InclineVisual\s*\{([\s\S]*?)\n\}/.exec(contract)?.[1]
+    expect(declaration).toBeDefined()
+    return declaration!.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, '')
+  }
+  expect(shape(client)).toContain('points?:readonlyScenePoint[]')
+  expect(shape(QUESTION_CODE_RENDER_CONTRACT)).toBe(shape(client))
+  const composition = questionComposition('mechanics', 'incline')
+  expect(composition).toContain('直接按incline.points顺序画多边形')
 })
 it('keeps native drawing fields and direction semantics while omitting unrelated readout contracts', () => {
   for (const domain of ['magnetic', 'electric', 'composite', 'optics', 'induction', 'wave']) {

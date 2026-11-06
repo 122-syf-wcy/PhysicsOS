@@ -1,6 +1,6 @@
 /** Domain-specific presentation guidance; never supplies or computes physical results. */
 const DOMAIN_GUIDANCE: Record<string, string> = {
-  mechanics: '力学装置：以当前bodies与真实装置为主体；存在incline时保留斜面、支点和物体接触关系；弹簧/摆/杠杆按对应几何绘制。保留教学所需vectors方向，不添加题目中不存在的球、落点或地面。',
+  mechanics: '力学装置：以当前bodies与真实装置为主体；存在incline.points时直接按incline.points顺序画多边形，不根据angle/base自行算顶点，保留斜面、支点和物体接触关系；缺失时不补造斜面。弹簧/摆/杠杆按对应几何绘制。保留教学所需vectors方向，不添加题目中不存在的球、落点或地面。',
   optics: '光学实验台：以opticalObjects、opticalElements、opticalImages、opticalScreens和opticalRays组成完整装置；光轴保持清楚，物体、透镜/镜面、像和光屏按引擎位置排列。光线来自opticalRays并保留传播方向与实虚线语义，不能用背景图片代替光路。',
   circuit: '电路实验台：按circuitComponents、circuitWires和circuitJunctions的真实几何布置器材和接线；端子连接必须清楚，不能为美观改变拓扑。电流方向与电表读数来自快照，必要箭头和元件标签保留。',
   magnetic: '磁场实验：用particles、trajectories、field和vectors展示真实粒子、轨迹、磁场与方向；必要的速度/受力箭头和磁场入纸面/出纸面符号要清楚，不把磁场误画成有地板的抛体空间。',

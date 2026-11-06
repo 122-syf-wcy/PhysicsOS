@@ -175,6 +175,8 @@ export class MechanicsRuntimeBridge {
   private commandSequence = 0
   private traceSequence = 0
   private highlighted: readonly string[] = []
+  /** Resultant visibility is presentation state; it has no separate scene observable. */
+  private netForceVisible = true
   private snapshot!: MechanicsRuntimeSnapshot
   /** Keep the selected launch direction while the velocity magnitude is zero. */
   private launchDirection = { x: 1, y: 0, z: 0 }
@@ -578,6 +580,10 @@ export class MechanicsRuntimeBridge {
    * @returns the mechanics runtime snapshot.
    */
   setObservableEnabled(key: ObservableKey, enabled: boolean): MechanicsRuntimeSnapshot {
+    if (key === 'netForce') {
+      this.netForceVisible = enabled
+      return this.recompute()
+    }
     /* Every layer, including velocity components and force decomposition, is a
        scene observable, so the toggle goes through the command gate and produces
        an ObservableEnabled/Disabled event. */
@@ -783,10 +789,14 @@ export class MechanicsRuntimeBridge {
                 : row),
             })
           : built.inspector,
-        view:
-          this.highlighted.length === 0
-            ? built.view
-            : { ...built.view, highlighted: this.highlighted },
+        view: {
+          ...built.view,
+          visible: {
+            ...built.view.visible,
+            netForce: this.netForceVisible && built.view.vectors.some(vector => vector.observable === 'netForce'),
+          },
+          ...(this.highlighted.length === 0 ? {} : { highlighted: this.highlighted }),
+        },
       }
       return this.snapshot
     } catch (error: unknown) {

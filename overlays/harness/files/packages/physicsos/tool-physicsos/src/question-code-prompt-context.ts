@@ -105,7 +105,7 @@ export function focusedRenderContract(contract: string, domain: string, experime
     modern: '轨迹是示意层，不检查visible.trajectory。',
   }
   const notes = [visibility[domain], fields.has('trajectories') ? 'trajectories.history实线/predicted虚线，保留点序。' : '',
-    fields.has('incline') ? 'incline.origin是底边左端，底边沿+x；顶点为(origin.x,origin.y+base*tan(angle°))，坡面左高右低。' : '',
+    fields.has('incline') ? '存在incline.points时直接按incline.points顺序画多边形，不根据angle/base自行算顶点；点来自引擎，保留物体与坡面接触关系，缺失时不补造斜面。' : '',
     fields.has('boundedField') ? 'boundedField.at是中心；场符号裁剪到边界。' : ''].filter(Boolean).join('')
   return notes + '\nV3 drawing subset (read-only; string taxonomies omit enum lists):\n'
     + [...selected].map(name => compact(declarations.get(name)!)).join('\n')

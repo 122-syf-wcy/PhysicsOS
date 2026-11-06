@@ -169,6 +169,7 @@ interface InclineVisual {
 origin: ScenePoint
 base: number
 angle: number
+points?: readonly ScenePoint[]
 }
 
 interface PlatformVisual {
