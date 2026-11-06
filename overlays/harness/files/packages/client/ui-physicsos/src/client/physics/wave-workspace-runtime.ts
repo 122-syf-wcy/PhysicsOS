@@ -45,6 +45,7 @@ import {
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
+import { memoizeOnIdentityWith } from './frame-memo.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -53,6 +54,7 @@ import type {
   ObservableKey,
   QuantityParameter,
   SceneTreeNode,
+  TimelineEvent,
   VerificationCheckView,
 } from './scene-visual-model.ts'
 import {
@@ -262,7 +264,8 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '机械波实验'
     const badge = branchBadgeOf(scene)
     const bench = waveBenchOf(scene)
@@ -314,10 +317,34 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       sceneRevision: scene.revision,
       view: this.highlighted.length === 0 ? view : { ...view, highlighted: this.highlighted },
       ariaLabel: `${title}的可验证物理画布`,
-      tree: this.treeOf(scene, bench),
-      inspector: this.inspectorOf(bench, model),
-      charts: chartsOf(simulation, model),
-      table: tableOf(model, simulation),
+      /* Tree, inspector and the panels below are functions of the scene and
+         its simulation alone: built once per revision, shared across frames. */
+      ...this.staticPanels(simulation, { scene, bench, model }),
+      clock: {
+        time: this.currentTime,
+        total: this.runSeconds,
+        running: this.running,
+        rate: this.rate,
+      },
+      ...(badge === undefined
+        ? {}
+        : {
+          branch: {
+            originQuestionTitle: this.origin?.metadata.title,
+            parentRevision: badge.parentRevision,
+            canRestore: this.origin !== undefined,
+          },
+        }),
+    }
+  }
+
+  /** Frame-invariant panels per simulation; see `frame-memo.ts`. */
+  private readonly staticPanels = memoizeOnIdentityWith(
+    (simulation: SimulationResult, context: { scene: PhysicsScene; bench: WaveBench; model: ResolvedWaveModel }) => ({
+      tree: this.treeOf(context.scene, context.bench),
+      inspector: this.inspectorOf(context.bench, context.model),
+      charts: chartsOf(simulation, context.model),
+      table: tableOf(context.model, simulation),
       derivation: simulation.derivedQuantities
         .filter(derived => derived.formula !== undefined && isScalarQuantity(derived.value))
         .map(derived => ({
@@ -341,25 +368,10 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         status: (check.passed ? 'passed' : 'failed') as VerificationCheckView['status'],
         ...(check.message === undefined ? {} : { detail: check.message }),
       })),
-      events: [],
-      clock: {
-        time: this.currentTime,
-        total: this.runSeconds,
-        running: this.running,
-        rate: this.rate,
-      },
+      events: [] as readonly TimelineEvent[],
       trajectoryTimes: simulation.states.map(entry => canonicalValue(entry.time)),
-      ...(badge === undefined
-        ? {}
-        : {
-          branch: {
-            originQuestionTitle: this.origin?.metadata.title,
-            parentRevision: badge.parentRevision,
-            canRestore: this.origin !== undefined,
-          },
-        }),
-    }
-  }
+    }),
+  )
 
   private treeOf(scene: PhysicsScene, bench: WaveBench): readonly SceneTreeNode[] {
     const model = this.computed?.model

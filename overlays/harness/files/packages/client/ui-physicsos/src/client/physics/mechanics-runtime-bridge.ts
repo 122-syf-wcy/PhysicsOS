@@ -689,7 +689,8 @@ export class MechanicsRuntimeBridge {
    * @returns the mechanics runtime snapshot.
    */
   recompute(): MechanicsRuntimeSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const modelId = detectMechanicsModel(scene) ?? 'uniform_linear_motion'
     const velocity = scene.bodies[0]?.velocity.vector
     const initialSpeed = velocity === undefined ? 0 : Math.hypot(velocity.x, velocity.y, velocity.z)
@@ -701,23 +702,26 @@ export class MechanicsRuntimeBridge {
       }
     }
     try {
-      const support = this.engine.canHandle(scene)
-      if (!support.supported) {
-        this.snapshot = this.failedSnapshot(scene, modelId, {
-          code: 'UNSUPPORTED_MODEL',
-          message: unsupportedMessage(modelId),
-          retryable: false,
-        })
-        return this.snapshot
-      }
-
       /* One simulation per scene revision: the analytical engine is exact at any
          t, so replaying it every animation frame recomputed 65 states, derived
          quantities and the verification for identical values. That per-frame work
          — not the renderer — is what made playback stutter. A command bumps the
-         revision and misses the cache. */
+         revision and misses the cache; a hit also proves the engine accepted this
+         revision, so the full scene validation in `canHandle` runs once per
+         revision rather than once per frame. */
       const cached = this.simulationCache
       const fresh = cached === undefined || cached.sceneRevision !== scene.revision
+      if (fresh) {
+        const support = this.engine.canHandle(scene)
+        if (!support.supported) {
+          this.snapshot = this.failedSnapshot(scene, modelId, {
+            code: 'UNSUPPORTED_MODEL',
+            message: unsupportedMessage(modelId),
+            retryable: false,
+          })
+          return this.snapshot
+        }
+      }
       const simulation = fresh
         ? this.engine.simulate(
           scene,

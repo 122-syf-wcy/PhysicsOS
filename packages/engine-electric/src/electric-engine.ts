@@ -19,6 +19,7 @@ import {
   type VerificationResult,
 } from '@physicsos/physics-core'
 import {
+  memoizeOnFrozenScene,
   validateScene,
   trajectorySampleTimes,
   trajectoryStorageSampleCount,
@@ -120,7 +121,7 @@ export function createElectricSimulationRequest(
   }
 }
 
-export const resolveUniformElectricModel = (scene: PhysicsScene): UniformElectricParticleModel => {
+const computeUniformElectricModel = (scene: PhysicsScene): UniformElectricParticleModel => {
   const engine = new ElectricEngine()
   const support = engine.canHandle(scene)
   if (!support.supported) throw new EngineUnsupportedError(engine.engineId, support)
@@ -152,6 +153,16 @@ export const resolveUniformElectricModel = (scene: PhysicsScene): UniformElectri
     acceleration,
   }
 }
+
+/**
+ * Resolve the uniform-field particle model. Runs on every animation frame
+ * (the Lab re-projects the playhead through it) and its `canHandle` is a full
+ * scene validation, so a frozen scene snapshot — what the Lab's store hands
+ * out between commands — is resolved once per revision. Unfrozen scenes are
+ * recomputed on every call, as before.
+ */
+export const resolveUniformElectricModel: (scene: PhysicsScene) => UniformElectricParticleModel =
+  memoizeOnFrozenScene(computeUniformElectricModel)
 
 const derivedAt = (model: UniformElectricParticleModel, time: number): DerivedQuantity[] => {
   const displacement = add(

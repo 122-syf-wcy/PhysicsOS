@@ -42,6 +42,7 @@ import {
 
 import { microWindowPhysicalDelta } from '../animation-clock.ts'
 import { compositeSceneVisualAt, compositeSampleReadout } from './composite-visual-bridge.ts'
+import { memoizeOnIdentityWith } from './frame-memo.ts'
 import {
   branchBadgeOf,
   forkExperimentalScene,
@@ -215,6 +216,8 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  /** The full run for the current revision; a composite simulate is the costliest call in the Lab. */
+  private simulationCache: { key: string; simulation: SimulationResult } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -224,16 +227,27 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     this.recompute()
   }
 
+  /**
+   * Re-project the current playhead. Runs on every animation frame: it reads
+   * the store's shared frozen snapshot (no clone) and validates + simulates
+   * only when the scene revision changed — a cached simulation already proves
+   * the engine accepted this revision. Per frame only `stateAtSeconds` runs,
+   * and the engine memoizes its phase decomposition on the frozen scene.
+   */
   private recompute(): void {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     try {
-      const support = this.engine.canHandle(scene)
-      if (!support.supported) {
-        this.failure = support.failedConditions.map(entry => entry.message).join(' ')
-        this.computed = undefined
-        return
+      const key = `${String(scene.id)}:${scene.revision}`
+      const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+      if (cached === undefined) {
+        const support = this.engine.canHandle(scene)
+        if (!support.supported) {
+          this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+          this.computed = undefined
+          return
+        }
       }
-      const simulation = this.engine.simulate(
+      const simulation = cached ?? this.engine.simulate(
         scene,
         createCompositeSimulationRequest(
           scene,
@@ -241,6 +255,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
           `composite-lab-trace-${String(scene.id)}-${scene.revision}`,
         ),
       )
+      this.simulationCache = { key, simulation }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
@@ -314,7 +329,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '复合场中的带电粒子'
     const badge = branchBadgeOf(scene)
 
@@ -399,26 +414,11 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
       sceneRevision: scene.revision,
       view: this.highlighted.length === 0 ? view : { ...view, highlighted: this.highlighted },
       ariaLabel: `${title}的可验证物理画布`,
-      tree: this.treeOf(scene),
+      /* The inspector reads the current state; everything else below is a
+         function of the simulation alone and is built once per revision. */
       inspector: this.inspectorOf(scene, simulation, state),
-      charts: chartsOf(simulation, particle.id),
-      table: tableOf(simulation, particle.id),
-      derivation: simulation.derivedQuantities
-        .filter(derived => derived.formula !== undefined)
-        .map(derived => ({
-          id: derived.key,
-          title: DERIVED_LABELS[derived.key] ?? derived.key,
-          expression: derived.formula?.expression ?? '',
-          result: {
-            symbol: DERIVED_LABELS[derived.key] ?? derived.key,
-            value: derivedText(derived),
-            unit: derivedUnit(derived),
-          },
-        })),
-      verification: verificationOf(scene, simulation),
-      events: compositeEventsOf(simulation, scene),
+      ...this.staticPanels(simulation, { scene, particleId: particle.id }),
       clock: { time: this.currentTime, total: endTime, running: this.running, rate: this.rate },
-      trajectoryTimes: simulation.states.map(sample => sample.time.value),
       sampleReadout: index => compositeSampleReadout(simulation, particle.id, index),
       ...(badge === undefined
         ? {}
@@ -431,6 +431,33 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
         }),
     }
   }
+
+  /**
+   * Frame-invariant panels per simulation (see `frame-memo.ts`). The apparatus
+   * verification alone re-ran the composite verifier on every frame before.
+   */
+  private readonly staticPanels = memoizeOnIdentityWith(
+    (simulation: SimulationResult, context: { scene: PhysicsScene; particleId: string }) => ({
+      tree: this.treeOf(context.scene),
+      charts: chartsOf(simulation, context.particleId),
+      table: tableOf(simulation, context.particleId),
+      derivation: simulation.derivedQuantities
+        .filter(derived => derived.formula !== undefined)
+        .map(derived => ({
+          id: derived.key,
+          title: DERIVED_LABELS[derived.key] ?? derived.key,
+          expression: derived.formula?.expression ?? '',
+          result: {
+            symbol: DERIVED_LABELS[derived.key] ?? derived.key,
+            value: derivedText(derived),
+            unit: derivedUnit(derived),
+          },
+        })),
+      verification: verificationOf(context.scene, simulation),
+      events: compositeEventsOf(simulation, context.scene),
+      trajectoryTimes: simulation.states.map(sample => sample.time.value),
+    }),
+  )
 
   private treeOf(scene: PhysicsScene): readonly SceneTreeNode[] {
     const particle = scene.particles[0]

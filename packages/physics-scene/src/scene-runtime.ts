@@ -951,6 +951,43 @@ type ApplyCommandResult = { ok: true; event: PhysicsEvent } | { ok: false; error
 
 const clone = <T>(value: T): T => structuredClone(value)
 
+/**
+ * Recursively freeze a JSON-like value in place and return the same
+ * reference. Already-frozen objects are skipped, so a snapshot that was
+ * frozen once costs nothing on later calls.
+ * @param value - the object graph to freeze.
+ * @returns `value`, now deeply frozen.
+ */
+export const deepFreeze = <T>(value: T): T => {
+  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value
+  Object.freeze(value)
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child)
+  return value
+}
+
+/**
+ * Memoize a pure function of a scene on the scene's identity — but only for
+ * frozen scenes, i.e. the shared snapshots {@link SceneStore.peekScene} hands
+ * out, which cannot change under the cache. An unfrozen scene may still be
+ * edited in place by whoever owns it, so it is recomputed on every call,
+ * exactly as before. Engines use this to resolve a model once per revision
+ * instead of once per animation frame.
+ * @param compute - the pure derivation to cache.
+ * @returns a function with the same signature that reuses frozen results.
+ */
+export const memoizeOnFrozenScene = <S extends object, T>(
+  compute: (scene: S) => T,
+): ((scene: S) => T) => {
+  const cache = new WeakMap<S, T>()
+  return (scene: S): T => {
+    if (!Object.isFrozen(scene)) return compute(scene)
+    if (cache.has(scene)) return cache.get(scene) as T
+    const value = compute(scene)
+    cache.set(scene, value)
+    return value
+  }
+}
+
 const defaultEventIdFactory = (
   sceneId: SceneId,
   revision: number,
@@ -4699,10 +4736,13 @@ const errorFromUnknown = (error: unknown): DomainError => {
 
 /**
  * Minimal in-memory store for the current scene and its successful mutation
- * events. Public reads are cloned so callers cannot bypass the command gate.
+ * events. Public reads cannot bypass the command gate: `getScene()` hands out
+ * a private deep copy, `peekScene()` a shared deeply frozen snapshot.
  */
 export class SceneStore {
   private currentScene: PhysicsScene
+  /** Whether `currentScene` has been frozen for sharing since the last commit. */
+  private frozen = false
   private readonly events: PhysicsEvent[] = []
   private readonly tolerance: PhysicsTolerance
   private readonly now: () => IsoDateTime
@@ -4715,8 +4755,29 @@ export class SceneStore {
     this.eventIdFactory = options.eventIdFactory ?? defaultEventIdFactory
   }
 
+  /**
+   * A private, mutable deep copy of the current scene. Use it when the caller
+   * needs its own object to edit; for read-only hot paths prefer
+   * {@link peekScene}, which costs nothing per call.
+   * @returns a fresh clone of the current scene.
+   */
   getScene(): PhysicsScene {
     return clone(this.currentScene)
+  }
+
+  /**
+   * The current scene as a shared, deeply frozen snapshot. The same reference
+   * is returned until the next accepted command, so per-frame consumers can
+   * read it 60 times a second without a copy and memoize derived work on its
+   * identity; any attempt to mutate it throws instead of reaching the store.
+   * @returns the frozen current scene.
+   */
+  peekScene(): PhysicsScene {
+    if (!this.frozen) {
+      deepFreeze(this.currentScene)
+      this.frozen = true
+    }
+    return this.currentScene
   }
 
   getEvents(): readonly PhysicsEvent[] {
@@ -4819,6 +4880,7 @@ export class SceneStore {
       }
 
       this.currentScene = nextScene
+      this.frozen = false
       this.events.push(applied.event)
 
       return {

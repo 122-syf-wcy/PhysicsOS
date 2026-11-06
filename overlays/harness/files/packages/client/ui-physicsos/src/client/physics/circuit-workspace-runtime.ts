@@ -61,6 +61,7 @@ import {
 } from './experimental-branch.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
+import { memoizeOnIdentityWith } from './frame-memo.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -70,6 +71,7 @@ import type {
   QuantityParameter,
   ScenePoint,
   SceneTreeNode,
+  TimelineEvent,
   VerificationCheckView,
 } from './scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
@@ -220,19 +222,29 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
     this.recompute()
   }
 
+  /**
+   * Re-project the current playhead. Runs on every animation frame: reads the
+   * store's shared frozen snapshot and validates + simulates only when the
+   * scene revision changed (a cached simulation proves the engine accepted
+   * this revision); per frame only the operating point at `currentTime` is
+   * re-solved, which is genuinely time-dependent for a rheostat sweep.
+   */
   private recompute(): void {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     this.failureCondition = undefined
     try {
-      const support = this.engine.canHandle(scene)
-      if (!support.supported) {
-        this.failureCondition = support.failedConditions[0]?.condition
-        this.failure = support.failedConditions.map(entry => entry.message).join(' ')
-        this.computed = undefined
-        return
-      }
       const key = `${String(scene.id)}:${scene.revision}`
-      const simulation = this.simulationCache?.key === key ? this.simulationCache.simulation : this.engine.simulate(
+      const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+      if (cached === undefined) {
+        const support = this.engine.canHandle(scene)
+        if (!support.supported) {
+          this.failureCondition = support.failedConditions[0]?.condition
+          this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+          this.computed = undefined
+          return
+        }
+      }
+      const simulation = cached ?? this.engine.simulate(
         scene,
         createCircuitSimulationRequest(
           scene,
@@ -317,7 +329,7 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '直流动态电路'
     const badge = branchBadgeOf(scene)
     const circuit = circuitOf(scene)
@@ -392,10 +404,30 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
       sceneRevision: scene.revision,
       view: this.highlighted.length === 0 ? view : { ...view, highlighted: this.highlighted },
       ariaLabel: `${title}的可验证物理画布`,
-      tree: this.treeOf(scene, circuit),
+      /* The inspector reads the current operating point; everything else
+         below is a function of the simulation alone and is built once per revision. */
       inspector: this.inspectorOf(circuit, state),
-      charts: chartsOf(simulation, circuit.id),
-      table: tableOf(simulation, circuit.id),
+      ...this.staticPanels(simulation, { scene, circuit }),
+      clock: { time: this.currentTime, total: endTime, running: this.running, rate: this.rate },
+      sampleReadout: index => sampleReadoutOf(simulation, circuit.id, index),
+      ...(badge === undefined
+        ? {}
+        : {
+          branch: {
+            originQuestionTitle: this.origin?.metadata.title,
+            parentRevision: badge.parentRevision,
+            canRestore: this.origin !== undefined,
+          },
+        }),
+    }
+  }
+
+  /** Frame-invariant panels per simulation; see `frame-memo.ts`. */
+  private readonly staticPanels = memoizeOnIdentityWith(
+    (simulation: SimulationResult, context: { scene: PhysicsScene; circuit: Circuit }) => ({
+      tree: this.treeOf(context.scene, context.circuit),
+      charts: chartsOf(simulation, context.circuit.id),
+      table: tableOf(simulation, context.circuit.id),
       derivation: simulation.derivedQuantities
         .filter(derived => derived.formula !== undefined && isScalarQuantity(derived.value))
         .map(derived => ({
@@ -414,21 +446,10 @@ export class CircuitWorkspaceRuntime implements WorkspaceRuntime {
         status: (check.passed ? 'passed' : 'failed') as VerificationCheckView['status'],
         ...(check.message === undefined ? {} : { detail: check.message }),
       })),
-      events: [],
-      clock: { time: this.currentTime, total: endTime, running: this.running, rate: this.rate },
+      events: [] as readonly TimelineEvent[],
       trajectoryTimes: simulation.states.map(sample => sample.time.value),
-      sampleReadout: index => sampleReadoutOf(simulation, circuit.id, index),
-      ...(badge === undefined
-        ? {}
-        : {
-          branch: {
-            originQuestionTitle: this.origin?.metadata.title,
-            parentRevision: badge.parentRevision,
-            canRestore: this.origin !== undefined,
-          },
-        }),
-    }
-  }
+    }),
+  )
 
   private treeOf(scene: PhysicsScene, circuit: Circuit): readonly SceneTreeNode[] {
     const componentChildren: SceneTreeNode[] = circuit.components.map(component => ({

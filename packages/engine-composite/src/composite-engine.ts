@@ -53,6 +53,7 @@ import {
   hasUnsampleableRegion,
   cyclotronBenchOf,
   isCompositeFieldScene,
+  memoizeOnFrozenScene,
   sameFieldEnvironment,
   sampleFieldsAt,
   trajectorySampleTimes,
@@ -1048,6 +1049,31 @@ const simulateCyclotron = (
 
 /* ------------------------------------------------------------- the engine -- */
 
+/**
+ * Frame-path caches. `stateAt` runs on every animation frame and both the
+ * model resolution and the phase decomposition are pure functions of the
+ * scene (plus the horizon), so for a frozen snapshot — what the Lab's store
+ * hands out between commands — they are computed once per revision instead
+ * of per frame. Unfrozen scenes bypass the caches exactly as before.
+ */
+const cachedCompositeModel = memoizeOnFrozenScene(resolveCompositeModel)
+type PhaseDecomposition = ReturnType<typeof decomposePhases>
+const phaseCache = new WeakMap<PhysicsScene, Map<number, PhaseDecomposition>>()
+const cachedPhases = (scene: PhysicsScene, model: CompositeModel, endTime: number): PhaseDecomposition => {
+  if (!Object.isFrozen(scene)) return decomposePhases(scene, model, endTime)
+  let byHorizon = phaseCache.get(scene)
+  if (byHorizon === undefined) {
+    byHorizon = new Map()
+    phaseCache.set(scene, byHorizon)
+  }
+  let decomposition = byHorizon.get(endTime)
+  if (decomposition === undefined) {
+    decomposition = decomposePhases(scene, model, endTime)
+    byHorizon.set(endTime, decomposition)
+  }
+  return decomposition
+}
+
 export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike> {
   readonly engineId = COMPOSITE_ENGINE_ID
   readonly engineVersion = COMPOSITE_ENGINE_VERSION
@@ -1236,12 +1262,12 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
     if (cyclotronBenchOf(scene) !== undefined) {
       return cyclotronStateAt(resolveCyclotronModel(scene), seconds)
     }
-    const model = resolveCompositeModel(scene)
+    const model = cachedCompositeModel(scene)
     const endTime =
       scene.timeline.endTime === undefined
         ? DEFAULT_DURATION_SECONDS
         : canonicalValue(scene.timeline.endTime)
-    const { phases } = decomposePhases(scene, model, Math.max(seconds, endTime))
+    const { phases } = cachedPhases(scene, model, Math.max(seconds, endTime))
     return stateAtForModel(scene, model, phases, seconds)
   }
 
@@ -1291,9 +1317,9 @@ export class CompositeEngine implements PhysicsEngine<PhysicsScene, PhysicsEvent
       return simulateCyclotron(scene, request, startTime, endTime)
     }
 
-    const model = resolveCompositeModel(scene)
+    const model = cachedCompositeModel(scene)
 
-    const { phases, truncated } = decomposePhases(scene, model, endTime)
+    const { phases, truncated } = cachedPhases(scene, model, endTime)
 
     /* Uniform sampling plus every phase boundary. Without the boundaries a
        gyration arc that starts and ends between two samples would be drawn as a

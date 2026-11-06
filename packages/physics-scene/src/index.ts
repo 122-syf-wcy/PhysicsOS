@@ -90,6 +90,8 @@ export {
   SCENE_REVISION_CONFLICT,
   SceneRuntime,
   SceneStore,
+  deepFreeze,
+  memoizeOnFrozenScene,
   type PhysicsEvent,
   type PhysicsEventEnvelope,
   type PhysicsEventPayload,

@@ -418,4 +418,41 @@ describe('Scene Runtime rejection is atomic', () => {
     velocityCommand.payload.velocity.vector.y = 99
     expect(runtime.getScene().particles[0]?.velocity.vector).toEqual(vec3(0, 4, 0))
   })
+
+  it('peekScene shares one frozen snapshot per revision while getScene stays a private copy', () => {
+    const runtime = runtimeFor(magneticScene())
+    const first = runtime.peekScene()
+    /* Same reference across reads: frame loops can memoize on identity. */
+    expect(runtime.peekScene()).toBe(first)
+    expect(first).toEqual(runtime.getScene())
+    expect(runtime.getScene()).not.toBe(first)
+    /* Deeply frozen: a write cannot reach the store, it throws. */
+    expect(Object.isFrozen(first)).toBe(true)
+    expect(Object.isFrozen(first.particles)).toBe(true)
+    expect(Object.isFrozen(first.particles[0]?.mass)).toBe(true)
+    expect(() => { (first as { revision: number }).revision = 42 }).toThrow(TypeError)
+    expect(() => { first.particles.pop() }).toThrow(TypeError)
+    expect(runtime.peekScene().revision).toBe(5)
+    expect(runtime.peekScene().particles).toHaveLength(1)
+    /* A private copy taken from a frozen store is still editable. */
+    const copy = runtime.getScene()
+    copy.revision = 77
+    expect(copy.revision).toBe(77)
+    expect(runtime.peekScene().revision).toBe(5)
+
+    /* An accepted command publishes a new snapshot; the old one is untouched. */
+    const command = {
+      ...commandMetadata(runtime.getScene(), 'command-peek-charge'),
+      type: 'SetParticleCharge',
+      payload: { particleId: 'particle-1', charge: quantity(3, 'C', 'electric_charge') },
+    } satisfies SceneCommand<'SetParticleCharge'>
+    executeSingleEvent(runtime, command)
+    const second = runtime.peekScene()
+    expect(second).not.toBe(first)
+    expect(second.revision).toBe(6)
+    expect(second.particles[0]?.charge?.value).toBe(3)
+    expect(first.revision).toBe(5)
+    expect(first.particles[0]?.charge?.value).not.toBe(3)
+    expect(runtime.peekScene()).toBe(second)
+  })
 })
