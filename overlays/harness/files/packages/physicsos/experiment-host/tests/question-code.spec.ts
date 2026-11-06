@@ -530,3 +530,30 @@ describe('private question code artifacts', () => {
     expect(() => service.preview(contributor, row.id)).toThrow()
   })
 })
+
+it.each(['vectors', 'trajectories', 'motionMarks', 'angles', 'dimensions'])('rejects an array field passed as a view visibility helper key: %s', async (field) => {
+  const service = await setup()
+  const rendererJs = ownCanvas + `
+function vis(v,k){return v.visible?.[k]===true}
+function extra(view){return vis(view,'${field}')}`
+  const reachable = rendererJs.replace('  const canvas =', '  extra(view);\n  const canvas =')
+  const error: unknown = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '错误图层开关', summary: '', rendererJs: reachable, stylesheet: '' } }).catch((failure: unknown) => failure)
+  expect(error).toMatchObject({ code: 'INVALID_SOURCE', sourceValidationReason: 'invalid_visibility_key' })
+})
+it.each([
+  "view.visible.vectors", "view.visible?.['trajectories']", "view.visible[\"motionMarks\"]",
+])('rejects a direct known array-name visibility lookup: %s', async (lookup) => {
+  const service = await setup()
+  const rendererJs = ownCanvas.replace('  const canvas =', `  if(${lookup}) view.title;\n  const canvas =`)
+  await expect(service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '错误图层开关', summary: '', rendererJs, stylesheet: '' } })).rejects.toMatchObject({ code: 'INVALID_SOURCE', sourceValidationReason: 'invalid_visibility_key' })
+})
+it.each([
+  "view.visible[vector.observable]===true", "view.visible[vector.observable]!==false",
+  "vis(view,'trajectory')", "vis(view,'forces')", "vis({visible:{vectors:true}},'vectors')",
+])('accepts contract visibility keys and unrelated objects: %s', async (lookup) => {
+  const service = await setup()
+  const rendererJs = ownCanvas.replace('  const canvas =', `  const vector={observable:'forces'}; if(${lookup}) view.title;\n  const canvas =`)
+    + '\nfunction vis(v,k){return v.visible?.[k]===true}'
+  const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '正确图层开关', summary: '', rendererJs, stylesheet: '' } })
+  expect(ref.rendererKind).toBe('independent')
+})

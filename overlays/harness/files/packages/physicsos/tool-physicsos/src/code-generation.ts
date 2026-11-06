@@ -60,6 +60,7 @@ const ONLY_REEXPORT = new RegExp(`^${MODULE_TRIVIA}(?:${MODULE_REEXPORT}${MODULE
 
 function codeOf(error: unknown): string { return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' ? error.code : 'GENERATION_FAILED' }
 const SOURCE_VALIDATION_HINTS = {
+  invalid_visibility_key: 'view.visible的键是observable（如forces、trajectory），不是vectors/trajectories/motionMarks/angles/dimensions等数组字段名。向量用view.visible[vector.observable]；波动只在键为false时隐藏。角度/尺寸按已给几何绘制。',
   missing_export: '必须使用字面声明 export function renderFrame(snapshot) { ... }，不能只定义未导出的 const renderFrame。',
   module_dependency: '删除所有 import、动态 import 和 reexport；仅使用本模块普通命名函数和原生浏览器 API。',
   missing_native_entry: '导出的 renderFrame 必须绑定本模块实际绘图的普通函数，不能使用对象/类方法或动态分派。',
@@ -113,10 +114,11 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     '立即分段写代码，不先规划整个程序。physics_write_experiment_code：每段<=2400字符，同一任务共10次；先replace入口，后append；完成后structured_output只含title/summary。',
     '首段使用下面Canvas2D入口示例并填入素材工具返回的真实path（占位符不能提交）；随后append普通命名drawScene与辅助函数，必须实际绘制本题snapshot.view几何。入口示例只含浏览器连接代码，不是已完成画面。219×360手机完整可见，当前帧画完再返回。无import/reexport、旧renderer、对象/类方法分派、fetch/外网/存储/parent/top/eval/脚本注入。',
     QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
-    '只投影snapshot.view引擎几何，等比且y只翻转一次，固定视窗不跟随当前物体缩放。不解题/积分/自建时钟。向量from/to已是显示端点，直接投影，不能按箭头长度标物理量；表格/读数/控件由外层提供。空数组/缺省字段/零值合法，不补造物体或最高点。',
-    'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。向量与guides必须用view.visible[vector.observable]===true筛选；不能读取vector.visible或猜observable名称，其余层按契约的visible键。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
+    '只投影snapshot.view引擎几何，等比且y只翻转一次；直接使用引擎origin/extent，不重新拟合当前位置改变比例。斜面为无限平面的局部跟随视窗，origin可随位置平移。不解题/积分/自建时钟。向量from/to已是显示端点，直接投影，不能按箭头长度标物理量；表格/读数/控件由外层提供。空数组/缺省字段/零值合法，不补造物体或最高点。',
+    'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。向量开关只来自view.visible[vector.observable]；不能读取vector.visible或猜observable名称，具体显示条件按下方领域契约。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
     '没有素材先physics_generate_experiment_asset生成一张环境/材质，无文字/公式/箭头/轨迹/动态物体；已有素材复用。示例中的.src必须是真实path的单/双引号字面值，CSS用url(真实cssPath)；不能用不透明底色遮住图片。',
     questionComposition(deps.snapshot.domain, style.experimentId),
+    ['mechanics', 'magnetic', 'electric', 'composite', 'fluid'].includes(deps.snapshot.domain) ? '绘图选择示例：for(const vector of view.vectors){if(view.visible[vector.observable]===true){/* 用point(vector.from,t)和point(vector.to,t)绘制箭头及vector.label */}}。没有visible.vectors、visible.trajectories、visible.motionMarks、visible.angles；轨迹用visible.trajectory，角度按提供几何绘制。' : '',
     focusedRenderContract(style.renderContract, deps.snapshot.domain, style.experimentId),
     images.length ? `本任务素材（直接复用，不再生图）：${JSON.stringify(images)}` : '',
     deps.instructions ? `展示要求（不得改物理条件）：${deps.instructions.slice(0, 4000)}` : '',

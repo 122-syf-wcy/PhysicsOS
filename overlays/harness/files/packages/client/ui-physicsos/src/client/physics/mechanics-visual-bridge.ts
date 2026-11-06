@@ -326,11 +326,9 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     simulation.states[0]?.objects.find(object => object.id === body.id)?.position,
   ) ?? position
 
-  /* An inclined body slides for as long as the simulation window allows, so
-     framing on its whole path would draw a hundred-metre wedge with a speck on it.
-     The physically interesting object here is the SURFACE and the free-body
-     diagram at the current instant, so the incline frames on those and lets the
-     motion run through the frame instead. */
+  /* The incline model is an unbounded plane. Show a constant-size local patch
+     around the current engine position: including the initial position would
+     keep zooming out and make both the surface and its force arrows unreadable. */
   const framesOnTrajectory = model !== 'inclined_plane'
   /* The camera frames the FULL simulation window for every non-incline model,
      taken from the engine states directly — not from the trajectory observable.
@@ -344,7 +342,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     : []
   const geometryPoints: ScenePoint[] = framesOnTrajectory
     ? [position, initialPosition, ...pathPoints]
-    : [position, initialPosition]
+    : [position]
   if (framesOnTrajectory) {
     for (const point of [launchPoint, apexPoint, impactPoint]) {
       if (point !== undefined) geometryPoints.push(point)
@@ -357,13 +355,13 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
   const inclineBase = model === 'inclined_plane' ? 6 : Math.max(preliminary.extent.width, 6)
   const inclineAngle = inclineObservation?.angle ?? 30
   const inclineRise = inclineBase * Math.tan((inclineAngle * Math.PI) / 180)
-  /* Place the WEDGE so the body lands part-way down the slope rather than exactly
-     on the apex corner. The body keeps its scene position — only the drawn surface
-     moves — so the free-body arrows still start at the real object. */
+  /* Move the displayed patch along the same infinite physical plane. The COM
+     and force origins remain the engine's true world coordinates. */
   const bodySlopeFraction = 0.42
+  const inclineFocus = model === 'inclined_plane' ? position : initialPosition
   const inclineOrigin = {
-    x: initialPosition.x - inclineBase * bodySlopeFraction,
-    y: initialPosition.y - inclineRise * (1 - bodySlopeFraction),
+    x: inclineFocus.x - inclineBase * bodySlopeFraction,
+    y: inclineFocus.y - inclineRise * (1 - bodySlopeFraction),
   }
   if (model === 'inclined_plane') {
     /* The apex must be in bounds too, or the top of the wedge is cropped. */
@@ -371,7 +369,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
       inclineOrigin,
       { x: inclineOrigin.x + inclineBase, y: inclineOrigin.y },
       { x: inclineOrigin.x, y: inclineOrigin.y + inclineRise },
-      initialPosition,
+      position,
     )
   }
   if (groundObservation !== undefined) {
@@ -886,6 +884,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     overlay: {
       readout: [
         MODEL_LABELS[model],
+        ...(model === 'inclined_plane' ? ['无限斜面 · 局部跟随视窗'] : []),
         `t = ${formatNumber(state.time.value)} s`,
         `v = ${velocity === undefined ? '—' : formatNumber(vectorMagnitude(velocity))} m/s`,
         `a = ${acceleration === undefined ? '—' : formatNumber(vectorMagnitude(acceleration))} m/s²`,

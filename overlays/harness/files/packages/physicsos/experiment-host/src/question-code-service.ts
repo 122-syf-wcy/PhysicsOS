@@ -108,6 +108,7 @@ type SourceValidationReason =
   | 'legacy_renderer'
   | 'missing_engine_geometry'
   | 'missing_native_drawing'
+  | 'invalid_visibility_key'
 class DrawingValidationError extends Error {
   constructor(readonly reason: SourceValidationReason) {
     super('Independent drawing validation failed')
@@ -165,19 +166,19 @@ function drawingExpressionEnd(code: string, start: number): number {
   }
   return code.length
 }
-function drawingArguments(code: string): string[] {
+function drawingArguments(code: string, original = code): string[] {
   const parts: string[] = []
   let start = 0, depth = 0
   for (let index = 0; index < code.length; index++) {
     const char = code[index]
     if (char === ',' && depth === 0) {
-      parts.push(code.slice(start, index).trim())
+      parts.push(original.slice(start, index).trim())
       start = index + 1
     }
     if (char === '(' || char === '[' || char === '{') depth++
     if (char === ')' || char === ']' || char === '}') depth--
   }
-  if (code.slice(start).trim()) parts.push(code.slice(start).trim())
+  if (original.slice(start).trim()) parts.push(original.slice(start).trim())
   return parts
 }
 function drawingCalls(code: string): DrawingCall[] {
@@ -327,7 +328,7 @@ function validateIndependentDrawing(source: string): void {
     }
     fn.calls.sort((left, right) => left.start - right.start)
   }
-  const reachable = new Set<DrawingFunction>(), incoming = new Map<string, { caller: DrawingFunction; arguments: string[] }[]>()
+  const reachable = new Set<DrawingFunction>(), incoming = new Map<string, { caller: DrawingFunction; arguments: string[]; rawArguments: string[] }[]>()
   const visit = (fn: DrawingFunction): void => {
     if (reachable.has(fn)) return
     reachable.add(fn)
@@ -336,7 +337,9 @@ function validateIndependentDrawing(source: string): void {
       // Member calls are native API calls, not bare local function delegation.
       if (!callee || fn.code[call.start - 1] === '.') continue
       const calls = incoming.get(callee.name) ?? []
-      calls.push({ caller: fn, arguments: call.arguments }); incoming.set(callee.name, calls)
+      const open = fn.code.indexOf('(', call.start)
+      const rawArguments = drawingArguments(fn.code.slice(open + 1, call.end - 1), source.slice(fn.bodyStart + open + 1, fn.bodyStart + call.end - 1))
+      calls.push({ caller: fn, arguments: call.arguments, rawArguments }); incoming.set(callee.name, calls)
       visit(callee)
     }
   }
@@ -444,6 +447,29 @@ function validateIndependentDrawing(source: string): void {
     return value
   }
   const active = [...reachable].map(fn => fn.code).join('\n')
+  // Array field names are not observable keys. Bind the visibility receiver to
+  // the engine view before checking a literal, including the common vis(view,k)
+  // helper. Masked source offsets preserve only argument data, never execute it.
+  const invalidKeys = new Set(['vectors', 'trajectories', 'motionMarks', 'angles', 'dimensions'])
+  const invalidLiteral = (value: string): boolean => {
+    const literal = /^\s*(['"])([A-Za-z_$][\w$]*)\1\s*$/.exec(value)
+    return literal !== null && invalidKeys.has(literal[2] ?? '')
+  }
+  for (const fn of reachable) {
+    for (const match of fn.code.matchAll(/\b([A-Za-z_$][\w$]*(?:\s*\??\.\s*[A-Za-z_$][\w$]*)*)\s*\??\.\s*visible\s*(?:\?\.)?\s*(?:\[([^\]]+)\]|\.\s*([A-Za-z_$][\w$]*))/g)) {
+      const receiver = match[1] ?? '', raw = source.slice(fn.bodyStart + match.index, fn.bodyStart + match.index + match[0].length)
+      const bracket = raw.indexOf('[')
+      const key = bracket >= 0 ? raw.slice(bracket + 1, raw.lastIndexOf(']')).trim() : `'${match[3] ?? ''}'`
+      if (invalidLiteral(key) && (classify(receiver, fn) & DRAW_VIEW) !== 0) throw new DrawingValidationError('invalid_visibility_key')
+      const receiverIndex = fn.parameters.findIndex(names => names.includes(receiver.trim()))
+      const keyIndex = fn.parameters.findIndex(names => names.includes(key))
+      if (receiverIndex < 0 || keyIndex < 0) continue
+      for (const call of incoming.get(fn.name) ?? []) {
+        if ((classify(call.arguments[receiverIndex] ?? '', call.caller) & DRAW_VIEW) !== 0
+          && invalidLiteral(call.rawArguments[keyIndex] ?? '')) throw new DrawingValidationError('invalid_visibility_key')
+      }
+    }
+  }
   const svgGeometry = [...reachable].some(fn =>
     (inlineSvg.get(fn) ?? []).some(part =>
       nodeIdentities(part.receiver, fn).some(node => mounted.has(node)) &&

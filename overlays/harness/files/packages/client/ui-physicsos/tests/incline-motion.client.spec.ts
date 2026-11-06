@@ -17,6 +17,52 @@ const runtimeFor = (angle: number, speed: number, friction: number) => {
 }
 
 describe('incline motion in the mechanics workspace', () => {
+  it.each([0, 15, 30, 60])('keeps a readable moving surface window on the unbounded %i° plane', (angle) => {
+    const runtime = runtimeFor(angle, 3, 0.2)
+    const original = JSON.stringify(runtime.getScene())
+    const first = runtime.getSnapshot().view
+    const firstBody = first.bodies[0]!
+    const firstPlane = first.incline!
+    const radians = angle * Math.PI / 180
+    for (const time of [0, 4, 10]) {
+      const frame = runtime.seek(time)
+      const view = frame.view, body = view.bodies[0]!, plane = view.incline!
+      expect(frame.clock.time).toBe(time)
+      expect(view.extent.width).toBeCloseTo(first.extent.width, 9)
+      expect(view.extent.height).toBeCloseTo(first.extent.height, 9)
+      expect(body.size).toBeCloseTo(firstBody.size, 9)
+      expect(plane.base).toBe(6)
+      expect(plane.angle).toBe(angle)
+      expect(body.at.x - view.origin.x).toBeCloseTo(firstBody.at.x - first.origin.x, 9)
+      expect(body.at.y - view.origin.y).toBeCloseTo(firstBody.at.y - first.origin.y, 9)
+      expect(plane.origin.x - view.origin.x).toBeCloseTo(firstPlane.origin.x - first.origin.x, 9)
+      expect(plane.origin.y - view.origin.y).toBeCloseTo(firstPlane.origin.y - first.origin.y, 9)
+      // The patch moves along the same physical plane, keeping its normal
+      // offset from the engine COM exactly one displayed block half-edge.
+      const apex = { x: plane.origin.x, y: plane.origin.y + plane.base * Math.tan(radians) }
+      const distance = (body.at.x - apex.x) * Math.sin(radians) + (body.at.y - apex.y) * Math.cos(radians)
+      expect(distance).toBeCloseTo(body.size, 9)
+      const along = (body.at.x - apex.x) * Math.cos(radians)
+        - (body.at.y - apex.y) * Math.sin(radians)
+      expect(along).toBeGreaterThan(0)
+      expect(along).toBeLessThan(plane.base / Math.cos(radians))
+      expect(body.at.x).toBeGreaterThanOrEqual(plane.origin.x)
+      expect(body.at.x).toBeLessThanOrEqual(plane.origin.x + plane.base)
+    }
+    expect(JSON.stringify(runtime.getScene())).toBe(original)
+  })
+
+  it('keeps the engine position beyond the initial drawn patch instead of clamping the block', () => {
+    const runtime = runtimeFor(30, 0, 0.2)
+    const atFour = runtime.seek(4).view.bodies[0]!.at
+    // g=10, μ=0.2: a=5−√3; x(4)=20√3−12, y(4)=−20+4√3.
+    expect(atFour.x).toBeCloseTo(22.641016151377542, 9)
+    expect(atFour.y).toBeCloseTo(-13.071796769724491, 9)
+    const atTen = runtime.seek(10).view.bodies[0]!.at
+    expect(atTen.x).toBeCloseTo(141.50635094610965, 9)
+    expect(atTen.y).toBeCloseTo(-81.69872981077806, 9)
+  })
+
   it('plots signed frame acceleration instead of repeating its initial magnitude', () => {
     const scene = createMechanicsScene({ model: 'inclined_plane', inclineAngle: 0,
       gravity: { x: 0, y: -10, z: 0 }, velocity: { x: 3, y: 0, z: 0 }, frictionCoefficient: 0.4 })
