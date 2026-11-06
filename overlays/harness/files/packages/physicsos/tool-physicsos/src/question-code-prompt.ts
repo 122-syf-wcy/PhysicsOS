@@ -77,6 +77,7 @@ export function questionCodePrompt(
     QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
     '只投影snapshot.view引擎几何，等比且y只翻转一次；直接使用引擎origin/extent，不重新拟合当前位置改变比例。斜面为无限平面的局部跟随视窗，origin可随位置平移。不解题/积分/自建时钟。向量from/to已是显示端点，直接投影，不能按箭头长度标物理量；表格/读数/控件由外层提供。空数组/缺省字段/零值合法，不补造物体或最高点。',
     'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。向量开关只来自view.visible[vector.observable]；不能读取vector.visible或猜observable名称，具体显示条件按下方领域契约。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
+    '标注用屏幕像素布局：字体至少11px，measureText测量包围盒并留4px间距，依次尝试箭头端点的上/下/左/右及四个斜向位置，约束在画布8px内；冲突时移到空处并加细引导线，不能重叠或丢掉合力/加速度标签。改变标签位置不改变箭头端点。手机缩减装饰和重复说明，不缩小字号。外层已有标题、参数、播放和读数，画布不再重复这些控件。',
     '没有素材先physics_generate_experiment_asset生成一张环境/材质，无文字/公式/箭头/轨迹/动态物体；已有素材复用。示例中的.src必须是真实path的单/双引号字面值，CSS用url(真实cssPath)；不能用不透明底色遮住图片。',
     questionComposition(snapshot.domain, style.experimentId),
     VECTOR_DOMAINS.has(snapshot.domain)

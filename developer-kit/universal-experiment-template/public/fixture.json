@@ -464,7 +464,7 @@
       "trajectory": true,
       "keyPoints": false,
       "forces": true,
-      "netForce": true,
+      "netForce": false,
       "components": false,
       "decomposition": false
     }
@@ -1270,6 +1270,12 @@
       "label": "mechanics_numeric_states",
       "status": "passed",
       "detail": "All states must be finite and ordered in scene time."
+    },
+    {
+      "id": "mechanics_derived_consistency",
+      "label": "mechanics_derived_consistency",
+      "status": "passed",
+      "detail": "Every frame derived quantity must agree with independently resolved scene motion and forces."
     },
     {
       "id": "mechanics_summary_consistency",

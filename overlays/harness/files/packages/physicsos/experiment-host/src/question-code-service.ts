@@ -20,7 +20,7 @@ import {
   questionCodeRecordSchema,
   type QuestionCodeRecord,
 } from './question-code-domain.ts'
-import { questionCodeContext, type QuestionCodeContext } from './question-code-context.ts'
+import { questionCodeContext, styleVersionOf, type QuestionCodeContext } from './question-code-context.ts'
 import type { DeveloperPromptService } from './prompt-service.ts'
 import { QuestionCodeAssets, type QuestionAssetDescriptor } from './question-code-assets.ts'
 import { CANVAS_TEXT_SHIM } from './question-code-canvas-text.ts'
@@ -748,7 +748,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     const source = parsed.data.source
     if (Buffer.byteLength(canonicalQuestionJson(source), 'utf8') > 128 * 1024)
       throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
-    const context = await this.context(input.experimentId),
+    const styleVersion = styleVersionOf(this.options.prompts?.current()),
       files = experimentTemplateFiles(input.experimentId)
     if (input.generationId !== undefined) {
       const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
@@ -818,7 +818,7 @@ document.addEventListener('physicsos-experiment-intent', event => {
       rendererKind: 'independent',
       summary: source.summary,
       createdAt: new Date().toISOString(),
-      styleVersion: context.styleVersion,
+      styleVersion,
       files: frozen,
     }
     row.sha256 = recordHash(row)

@@ -189,6 +189,7 @@ describe('real Loader composition — the 更新通道 gate', () => {
       username: 'stu-2024009',
       password: 'student-pass',
       displayName: '组合测试学生',
+      email: 'stu-2024009@example.com',
     })
     expect(registered.status).toBe(201)
     const studentCookie = registered.headers.get('set-cookie')!.split(';')[0]!

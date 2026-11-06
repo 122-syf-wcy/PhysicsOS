@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,7 +26,7 @@ const mountLab = (templateId: string) => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown template: ${templateId}`)
   const surface = createPhysicsSurfaceController()
-  surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+  surface.open('lab', withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id))
   const element = () => (
     <PhysicsSurface
       useLearningRecord={neverHook}
@@ -45,7 +46,7 @@ describe('return to chat', () => {
   it('offers a back button that dismisses the cover to the transcript', () => {
     const template = findExperimentTemplate('rheostat-circuit')!
     const surface = createPhysicsSurfaceController()
-    surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+    surface.open('lab', withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id))
     const openSurface = vi.fn()
     render(
       <PhysicsSurface
@@ -66,7 +67,7 @@ describe('return to chat', () => {
   it('leads the toolbar with the way back to the experiment centre', () => {
     const template = findExperimentTemplate('rheostat-circuit')!
     const surface = createPhysicsSurfaceController()
-    surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+    surface.open('lab', withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id))
     const openExperimentPicker = vi.fn()
     const openSurface = vi.fn()
     render(

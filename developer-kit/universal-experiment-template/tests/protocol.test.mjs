@@ -6,7 +6,7 @@ import { isUniversalSnapshot } from '../src/universal-contract.js'
 
 const fixture = JSON.parse(await readFile(new URL('../public/fixture.json', import.meta.url)))
 const tick = () => new Promise(resolve => setImmediate(resolve))
-function harness(draw) {
+function harness(draw, options) {
   const origin = 'https://preview.example'
   const channel = '12345678-1234-1234-1234-123456789abc'
   const listeners = new Map()
@@ -14,11 +14,49 @@ function harness(draw) {
   const ready = []
   const parent = { postMessage(value, target) { ready.push({ value, target }) } }
   Object.assign(globalThis, { location: { search: `?hostOrigin=${encodeURIComponent(origin)}&channel=${channel}` }, parent, addEventListener(type, handler) { listeners.set(type, handler) }, removeEventListener(type) { listeners.delete(type) } })
-  const connection = connectExperiment(draw)
+  const connection = connectExperiment(draw, options)
   const port = { postMessage(value) { sent.push(value) }, start() {}, close() { this.closed = true } }
   const connect = overrides => listeners.get('message')?.({ source: parent, origin, data: { type: 'experiment/connect', protocolVersion: 3, channel }, ports: [port], ...overrides })
   return { connection, port, sent, ready, connect, listeners }
 }
+
+test('embedded presentation is applied only after authentication and before the first frame', async () => {
+  const order = []
+  const h = harness(() => order.push('draw'), { onPresentation: value => order.push(value.mode) })
+  const data = { ...h.ready[0].value, type: 'experiment/connect', presentation: { mode: 'embedded' } }
+  for (const invalid of [
+    { data, origin: 'https://wrong.example' }, { data, source: {} }, { data, ports: [] },
+    { data: { ...data, channel: 'wrong-channel' } }, { data: { ...data, protocolVersion: 2 } },
+  ]) h.connect(invalid)
+  assert.deepEqual(order, [])
+  h.connect({ data })
+  assert.deepEqual(order, ['embedded'])
+  assert.equal(h.sent[0].type, 'experiment/connected')
+  assert.deepEqual(h.sent[0].presentation, { mode: 'embedded' })
+  h.port.onmessage({ data: { type: 'experiment/snapshot', protocolVersion: 3, frameId: 'first', snapshot: fixture } })
+  await tick()
+  assert.deepEqual(order, ['embedded', 'draw'])
+  h.connect({ data: { ...data, presentation: undefined } })
+  assert.deepEqual(order, ['embedded', 'draw'])
+  h.connection.dispose()
+})
+test('SDK without an embedded layout handler never advertises compact presentation', () => {
+  const h = harness(() => {})
+  h.connect({ data: { ...h.ready[0].value, type: 'experiment/connect', presentation: { mode: 'embedded' } } })
+  assert.equal(h.sent[0].type, 'experiment/connected')
+  assert.equal(h.sent[0].presentation, undefined)
+  h.connection.dispose()
+})
+test('missing and malformed presentation keep standalone controls while accepting legacy hosts', () => {
+  for (const presentation of [undefined, null, 'embedded', { mode: 'standalone' }, { mode: 'other' }, { mode: 'embedded', hidden: true }]) {
+    const applied = []
+    const h = harness(() => {}, { onPresentation: value => applied.push(value.mode) })
+    h.connect({ data: { ...h.ready[0].value, type: 'experiment/connect', presentation } })
+    assert.deepEqual(applied, ['standalone'])
+    assert.equal(h.sent[0].type, 'experiment/connected')
+    h.connection.dispose()
+  }
+})
 
 test('SDK authenticates its host and one channel before receiving frames', async () => {
   const draws = []

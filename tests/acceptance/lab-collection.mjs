@@ -233,7 +233,48 @@ try {
     await frame.locator('#front-view').click()
     assert.equal(await frame.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${id}: mobile overflow`)
     await page.screenshot({ path: join(output, `${id}-mobile.png`) })
-    results.push({ id, domain: item.domain, sha256: item.sha256, ...evidence, parameterChecked, parameterApplicable: parameters.length > 0, parameterCount: parameters.length, parameterNotApplicableReason: parameters.length ? null : 'The platform runtime exposes no editable parameters', parameterVisualChanged, playbackChecked, visibilityChanged, visibilityChecked, visibilityApplicable, visibilityDrawableLayers, visibilityKeys: keys, visibilityAssessmentVersion: 1, visibilityNotApplicableReason: visibilityApplicable ? null : 'No enabled nonempty drawable layer in the tested runtime snapshot', buoyancyDisplacementChecked, ...(programProbe ? { programCreations } : {}) })
+    // Reconnect the exact archive in its authenticated embedded mode. A fresh
+    // port is required: presentation is fixed by the initial trusted handshake.
+    await page.goto(origin + '/preview')
+    await page.evaluate(({ id, snapshot }) => {
+      window.messages = []
+      const iframe = document.createElement('iframe'); iframe.setAttribute('sandbox', 'allow-scripts'); document.body.append(iframe)
+      const channel = crypto.randomUUID()
+      addEventListener('message', event => {
+        if (event.source !== iframe.contentWindow || event.data?.type !== 'experiment/ready' || event.data.channel !== channel) return
+        const pair = new MessageChannel(); window.port = pair.port1
+        pair.port1.onmessage = event => {
+          window.messages.push(event.data)
+          if (event.data.type === 'experiment/connected') pair.port1.postMessage({ type: 'experiment/snapshot', protocolVersion: 3, frameId: 'embedded', snapshot })
+        }
+        pair.port1.start()
+        iframe.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion: 3, channel, presentation: { mode: 'embedded' } }, '*', [pair.port2])
+      })
+      iframe.src = `/package/${id}/dist/index.html?hostOrigin=${encodeURIComponent(location.origin)}&channel=${channel}`
+    }, { id, snapshot: snapshotOf(runtime, id) })
+    await ack('embedded')
+    const embedded = page.frames().find(f => f.url().includes(`/package/${id}/`))
+    const embeddedLayouts = []
+    for (const viewport of [{ width: 1180, height: 620 }, { width: 390, height: 420 }, { width: 280, height: 340 }]) {
+      await page.setViewportSize(viewport)
+      await embedded.locator('#front-view').click()
+      const layout = await embedded.evaluate(() => {
+        const visible = selector => { const e = document.querySelector(selector); return !!e && e.getBoundingClientRect().height > 0 && getComputedStyle(e).display !== 'none' }
+        const canvas = document.querySelector('#canvas').getBoundingClientRect()
+        const boxes = [...document.querySelectorAll('#labels span')].map(e => e.getBoundingClientRect())
+        return { mode: document.documentElement.dataset.presentation, duplicates: ['header', '.settings', '#playback'].filter(visible),
+          canvas: { width: canvas.width, height: canvas.height }, overflow: document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight,
+          overlaps: boxes.some((a, i) => boxes.slice(i + 1).some(b => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1)) }
+      })
+      assert.equal(layout.mode, 'embedded', `${id}: embedded handshake not applied`)
+      assert.deepEqual(layout.duplicates, [], `${id}: repeated host controls`)
+      assert.ok(layout.canvas.width >= viewport.width - 4 && layout.canvas.height >= 180, `${id}: embedded canvas too small ${JSON.stringify(layout)}`)
+      assert.equal(layout.overflow, false, `${id}: embedded viewport overflow`)
+      assert.equal(layout.overlaps, false, `${id}: embedded labels overlap`)
+      embeddedLayouts.push({ ...viewport, ...layout })
+      await page.screenshot({ path: join(output, `${id}-embedded-${viewport.width}.png`) })
+    }
+    results.push({ id, domain: item.domain, sha256: item.sha256, ...evidence, embeddedLayouts, parameterChecked, parameterApplicable: parameters.length > 0, parameterCount: parameters.length, parameterNotApplicableReason: parameters.length ? null : 'The platform runtime exposes no editable parameters', parameterVisualChanged, playbackChecked, visibilityChanged, visibilityChecked, visibilityApplicable, visibilityDrawableLayers, visibilityKeys: keys, visibilityAssessmentVersion: 1, visibilityNotApplicableReason: visibilityApplicable ? null : 'No enabled nonempty drawable layer in the tested runtime snapshot', buoyancyDisplacementChecked, ...(programProbe ? { programCreations } : {}) })
     await page.close(); console.log(`PASS ${results.length}/${index.count} ${id}: WebGL + SDK + parameter/time + mobile`)
   }
   assert.deepEqual(errors, []); assert.deepEqual(external, []); assert.deepEqual(failures, [])

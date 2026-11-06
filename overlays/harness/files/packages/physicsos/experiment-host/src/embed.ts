@@ -29,7 +29,11 @@ const bootstrapFor = (protocolVersion: 1 | 2 | 3): string => `(() => {
     if (event.source !== parent || event.origin !== hostOrigin || data.type !== 'experiment/connect' || !ready || connected || event.ports?.length !== 1) return;
     connected = true;
     removeEventListener('message', receive);
-    inner.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion, channel }, '*', [event.ports[0]]);
+    const mode = data.presentation;
+    const embedded = protocolVersion === 3 && mode && typeof mode === 'object' && !Array.isArray(mode)
+      && Object.keys(mode).length === 1 && mode.mode === 'embedded';
+    inner.contentWindow.postMessage({ type: 'experiment/connect', protocolVersion, channel,
+      ...(embedded ? { presentation: { mode: 'embedded' } } : {}) }, '*', [event.ports[0]]);
   };
   addEventListener('message', receive);
   inner.src = raw.href;

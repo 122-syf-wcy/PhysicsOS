@@ -127,6 +127,7 @@ describe('real Loader composition — the class workflow gate', () => {
         username: 'class-student',
         password: 'student-pass',
         displayName: '组合测试学生',
+        email: 'class-student@example.com',
       })
       expect(registered.status).toBe(201)
       const studentCookie = registered.headers.get('set-cookie')!.split(';')[0]!

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createArchimedesScene } from '@physicsos/physics-scene'
@@ -33,7 +34,7 @@ afterEach(() => {
 const sceneOf = (templateId: string) => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown template: ${templateId}`)
-  return createExperimentSceneRef(template, t(template.label))
+  return withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id)
 }
 
 const mountLab = (templateId: string) => {

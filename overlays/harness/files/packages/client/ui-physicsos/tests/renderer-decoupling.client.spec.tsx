@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
@@ -18,7 +19,7 @@ const openLabOnTemplate = (
 ): void => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown experiment template: ${templateId}`)
-  surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+  surface.open('lab', withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id))
 }
 
 afterEach(() => {

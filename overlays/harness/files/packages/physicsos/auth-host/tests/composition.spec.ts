@@ -223,6 +223,7 @@ describe('real Loader composition', () => {
       username: 'scope-student',
       password: 'hunter2-pass',
       displayName: '范围学生',
+      email: 'scope-student@example.com',
     })
     expect(registered.status).toBe(201)
     const cookie = registered.headers.get('set-cookie')!.split(';')[0]!
@@ -282,6 +283,7 @@ describe('real Loader composition', () => {
       username: 'scope-other',
       password: 'hunter2-pass',
       displayName: '另一个学生',
+      email: 'scope-other@example.com',
     })
     const otherCookie = other.headers.get('set-cookie')!.split(';')[0]!
     const otherList = await post('/api/session.list', rpc('other-list', 'session.list', {}), otherCookie)

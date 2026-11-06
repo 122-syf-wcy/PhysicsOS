@@ -4,7 +4,7 @@ import { experimentId } from './target.js'
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** One authenticated, revocable MessagePort. A frame is acknowledged only after rendering succeeds. */
-export function connectExperiment(onFrame) {
+export function connectExperiment(onFrame, options = {}) {
   const query = new URLSearchParams(location.search)
   const host = query.get('hostOrigin')
   const channel = query.get('channel')
@@ -38,6 +38,9 @@ export function connectExperiment(onFrame) {
     if (port || event.ports.length !== 1) return
     port = event.ports[0]
     removeEventListener('message', receive)
+    const presentation = event.data.presentation
+    const embedded = record(presentation) && Object.keys(presentation).length === 1 && presentation.mode === 'embedded'
+    options.onPresentation?.({ mode: embedded ? 'embedded' : 'standalone' })
     port.onmessage = event => {
       const data = event.data
       if (disposed || !record(data) || data.type !== 'experiment/snapshot' || data.protocolVersion !== 3) return
@@ -46,7 +49,8 @@ export function connectExperiment(onFrame) {
       if (!drawing) { drawing = true; void draw(port) }
     }
     port.start()
-    port.postMessage({ type: 'experiment/connected', protocolVersion: 3 })
+    port.postMessage({ type: 'experiment/connected', protocolVersion: 3,
+      ...(embedded && typeof options.onPresentation === 'function' ? { presentation: { mode: 'embedded' } } : {}) })
     if (pendingError) reportError(pendingError)
   }
   addEventListener('message', receive)

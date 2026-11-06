@@ -139,6 +139,7 @@ describe('real Loader composition — the 反馈与公告 gate', () => {
       username: 'stu-2024001',
       password: 'student-pass',
       displayName: '组合测试学生',
+      email: 'stu-2024001@example.com',
     })
     expect(registered.status).toBe(201)
     const studentCookie = registered.headers.get('set-cookie')!.split(';')[0]!

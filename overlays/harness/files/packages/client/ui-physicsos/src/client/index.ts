@@ -609,8 +609,9 @@ export function apply(ctx: ClientContext): void {
        owns interpretation; the solved scene card streams back into the chat. */
     const submitToTutor = async (
       text: string,
+      targetSessionId?: SessionId,
     ): Promise<{ ok: true } | { ok: false; error: string }> => {
-      let sessionId = currentSessionId()
+      let sessionId = targetSessionId ?? currentSessionId()
       if (sessionId === undefined) {
         /* startSession is asynchronous: the workspace connect resolves, then
            the Workspace UI takes the main-view reference. Wait briefly for it. */
@@ -642,7 +643,9 @@ export function apply(ctx: ClientContext): void {
 
     regenerateQuestionCode = async (sceneId) => {
       const ownerSessionId = currentSessionId()
-      if (ownerSessionId === undefined || auth.store.getSnapshot().status !== 'authed') {
+      const ownerAuth = auth.store.getSnapshot()
+      const owner = ownerAuth.user
+      if (ownerSessionId === undefined || ownerAuth.status !== 'authed' || owner === undefined) {
         return { ok: false, error: '请先登录并打开本题的学习会话。' }
       }
       const summary = scope.sessions.list.getSnapshot().byId[ownerSessionId]
@@ -654,7 +657,16 @@ export function apply(ctx: ClientContext): void {
          the chat prompt below remains the fallback. */
       const direct = await requestDirectRegeneration(String(ownerSessionId), sceneId)
       if (direct !== undefined) return direct
-      return submitToTutor(`请为当前学习会话中已保存的物理场景 ${JSON.stringify(sceneId)} 生成或重新生成本题代码实验。调用 physics_generate_experiment，sceneId 必须为 ${JSON.stringify(sceneId)}；从已保存场景读取本题条件，保留题目理解、解题步骤和物理验证，使用最新代码实验视图。`)
+      /* The HTTP request may outlive a session/account switch. Its fallback
+         belongs to the original owner and scene, never the newly active chat. */
+      const activeAuth = auth.store.getSnapshot()
+      const activeProjection = scope.sessions.list.getSnapshot().byId[ownerSessionId]?.projectionValues?.['physicsScenes'] as { scenes?: Record<string, unknown> } | undefined
+      if (currentSessionId() !== ownerSessionId || activeAuth.status !== 'authed'
+        || activeAuth.user?.id !== owner.id || activeAuth.user.schoolId !== owner.schoolId
+        || activeProjection?.scenes?.[sceneId] === undefined) {
+        return { ok: false, error: '账号或学习会话已切换，请返回本题所在会话后重新生成。' }
+      }
+      return submitToTutor(`请为当前学习会话中已保存的物理场景 ${JSON.stringify(sceneId)} 生成或重新生成本题代码实验。调用 physics_generate_experiment，sceneId 必须为 ${JSON.stringify(sceneId)}；从已保存场景读取本题条件，保留题目理解、解题步骤和物理验证，使用最新代码实验视图。`, ownerSessionId)
     }
 
     /* 重新练习 / 题库练习 → the golden stem goes to the tutor; on success the

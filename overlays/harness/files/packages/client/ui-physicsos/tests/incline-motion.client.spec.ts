@@ -110,6 +110,70 @@ describe('incline motion in the mechanics workspace', () => {
     expect(atTen.y).toBeCloseTo(-81.69872981077806, 9)
   })
 
+  it.each([0, 15, 30, 60, 75])('clips only the displayed trajectory to the local %i° surface', (angle) => {
+    const runtime = runtimeFor(angle, 3, 0)
+    const original = JSON.stringify(runtime.getScene())
+    const first = runtime.getSnapshot()
+    const originalTable = JSON.stringify(first.table)
+    const originalCharts = JSON.stringify(first.charts)
+    const radians = angle * Math.PI / 180
+    for (const time of [0, 4, 10]) {
+      const frame = runtime.seek(time)
+      const plane = frame.view.incline!
+      const apex = { x: plane.origin.x, y: plane.origin.y + plane.base * Math.tan(radians) }
+      const points = frame.view.trajectories.flatMap(trajectory => trajectory.points)
+      // At the accelerated run's last frame, the engine's 64 time intervals
+      // can be wider than the patch. Only real samples may become a line.
+      if (time < 10) expect(points.length, `angle=${angle}, time=${time}`).toBeGreaterThan(1)
+      for (const point of points) {
+        const along = (point.x - apex.x) * Math.cos(radians) - (point.y - apex.y) * Math.sin(radians)
+        expect(along).toBeGreaterThanOrEqual(-1e-8)
+        expect(along).toBeLessThanOrEqual(plane.base / Math.cos(radians) + 1e-8)
+      }
+      expect(frame.clock.time).toBe(time)
+      expect(JSON.stringify(frame.table)).toBe(originalTable)
+      expect(JSON.stringify(frame.charts)).toBe(originalCharts)
+      if (time === 0) expect(frame.view.trajectories.filter(trajectory => trajectory.kind === 'history').flatMap(trajectory => trajectory.points).length).toBeLessThanOrEqual(1)
+      if (time === 4) expect(new Set(frame.view.trajectories.map(trajectory => trajectory.kind))).toEqual(new Set(['history', 'predicted']))
+      if (time === 10) expect(frame.view.trajectories.every(trajectory => trajectory.kind === 'history')).toBe(true)
+    }
+    expect(JSON.stringify(runtime.getScene())).toBe(original)
+  })
+
+  it('keeps local trajectory hover times paired with the original engine samples', () => {
+    const runtime = runtimeFor(30, 0, 0.2)
+    const frame = runtime.seek(4)
+    const points = frame.view.trajectories.flatMap(trajectory => trajectory.points)
+    const times = frame.trajectoryTimes!
+    expect(times.length).toBe(points.length)
+    expect(times[0]).toBeGreaterThan(3)
+    expect(times.at(-1)).toBeGreaterThan(4)
+    for (const [index, point] of points.entries()) {
+      const time = times[index]!
+      // Original engine facts: a = 5−√3; s = ½at². No view fraction is a time.
+      expect(point.x).toBeCloseTo((5 - Math.sqrt(3)) * time * time * Math.sqrt(3) / 4, 9)
+      expect(point.y).toBeCloseTo(-(5 - Math.sqrt(3)) * time * time / 4, 9)
+      const rows = frame.sampleReadout!(index)
+      expect(rows.find(row => row.label === 't')).toBeDefined()
+      expect(parseFloat(rows.find(row => row.label === 't')!.value)).toBeCloseTo(time, 1)
+      expect(parseFloat(rows.find(row => row.label === 'x')!.value)).toBeCloseTo(point.x, 0)
+      expect(parseFloat(rows.find(row => row.label === 'y')!.value)).toBeCloseTo(point.y, 0)
+    }
+    expect(frame.view.bodies[0]!.at.x).toBeCloseTo(22.641016151377542, 9)
+    expect(frame.clock.time).toBe(4)
+  })
+
+  it('omits a sparse local trail instead of inventing samples on the patch boundaries', () => {
+    const runtime = runtimeFor(0, 1000, 0)
+    const frame = runtime.seek(4)
+    expect(frame.view.bodies[0]!.at.x).toBeCloseTo(4000, 9)
+    expect(frame.clock.time).toBe(4)
+    expect(frame.view.trajectories).toEqual([])
+    expect(frame.trajectoryTimes).toEqual([])
+    expect(frame.sampleReadout!(0)).toEqual([])
+    expect(frame.table.rows.length).toBeGreaterThan(2)
+  })
+
   it('plots signed frame acceleration instead of repeating its initial magnitude', () => {
     const scene = createMechanicsScene({ model: 'inclined_plane', inclineAngle: 0,
       gravity: { x: 0, y: -10, z: 0 }, velocity: { x: 3, y: 0, z: 0 }, frictionCoefficient: 0.4 })

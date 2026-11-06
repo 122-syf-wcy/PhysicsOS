@@ -493,6 +493,80 @@ async function presentationHost(adapter: MockAdapter, options: AgentOptions = { 
   return { ctx, parent: handle.agent }
 }
 describe('the real code child provider', () => {
+  it.each(['another scene', 'a replacement job'] as const)('rejects a metadata-delayed start after %s becomes current without spending its write budget', async (replacement) => {
+    const adapter = new MockAdapter([
+      toolCallResponse('current-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
+      ...Array.from({ length: 8 }, (_, i) => toolCallResponse(`current-part-${i}`, 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// current job' })),
+      [{ type: 'finish', reason: { kind: 'max-tokens' } }],
+      toolCallResponse('current-last-write', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// last allowed write' }),
+      toolCallResponse('current-over-budget', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// must not commit' }),
+      toolCallResponse('current-done', 'structured_output', { title: source.title, summary: source.summary }),
+    ])
+    const { ctx, parent } = await presentationHost(adapter)
+    const original = snapshot()
+    const publishJob = (scene: PhysicsSceneSnapshot, jobId: string) => parent.session.append('physics/scene', {
+      ...scene, visualization: { status: 'generating', jobId, ownerSessionId: 'parent', sceneId: scene.sceneId, sceneRevision: scene.revision },
+    })
+    publishJob(original, 'old-job')
+    const artifacts = ctx.get('questionCodeArtifacts') as unknown as { generateAsset: () => Promise<unknown>; assetManifest: () => unknown[] }
+    artifacts.generateAsset = vi.fn(async () => ({}))
+    artifacts.assetManifest = () => [{ path: './assets/generated/current.png' }]
+    const provider = new PhysicsCodeProvider(ctx)
+    await provider.initialize()
+    const metadata = await ctx.llm.resolveModelInfo('mock', 'presentation-test')
+    const delayed = Promise.withResolvers<typeof metadata>()
+    const lookup = vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementationOnce(() => delayed.promise)
+    const request = { parent, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the old question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
+    const starting = provider.start(request).then(async run => {
+      await run.dispose()
+      return { code: 'UNEXPECTED_CHILD_CREATED' }
+    }, (error: unknown) => error)
+    await vi.waitFor(() => { expect(lookup).toHaveBeenCalledTimes(1) })
+    const current = replacement === 'another scene'
+      ? { ...original, sceneId: 'current-question', scene: { ...original.scene as object, id: 'current-question' } }
+      : original
+    publishJob(current, 'current-job')
+    const activeRequest = { ...request, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the current question.' }] }
+    const active = await provider.start(activeRequest)
+    expect((await active.result).stopReason).toBe('max-tokens')
+    await active.dispose()
+    const requestsBeforeRelease = adapter.requests.length
+    delayed.resolve(metadata)
+    try {
+      expect(await starting).toMatchObject({ code: 'STALE_GENERATION' })
+      expect(adapter.requests).toHaveLength(requestsBeforeRelease)
+      const resumed = await provider.start(activeRequest)
+      try {
+        expect((await resumed.result).structured).toEqual({
+          ...source, rendererJs: source.rendererJs + '\n// current job'.repeat(8) + '\n// last allowed write', stylesheet: '',
+        })
+      } finally { await resumed.dispose() }
+      expect(artifacts.generateAsset).not.toHaveBeenCalled()
+    } finally { lookup.mockRestore() }
+  })
+
+  it('captures the generation before waiting for a cold preset', async () => {
+    const adapter = new MockAdapter([toolCallResponse('unexpected-child', 'structured_output', source)])
+    const { ctx, parent } = await presentationHost(adapter)
+    const original = snapshot()
+    parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'before-preset', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
+    const preset = await ctx.agentPresets.resolve('physics-code-only')
+    const delayed = Promise.withResolvers<typeof preset>()
+    const resolve = vi.spyOn(ctx.agentPresets, 'resolve').mockImplementationOnce(() => delayed.promise)
+    const starting = new PhysicsCodeProvider(ctx).start({
+      parent, signal: new AbortController().signal, prompt: [{ type: 'text', text: 'Render the old question.' }],
+      outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) },
+      maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
+    }).then(async run => { await run.dispose(); return { code: 'UNEXPECTED_CHILD_CREATED' } }, (error: unknown) => error)
+    await vi.waitFor(() => { expect(resolve).toHaveBeenCalledTimes(1) })
+    parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'after-preset', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
+    delayed.resolve(preset)
+    try {
+      expect(await starting).toMatchObject({ code: 'STALE_GENERATION' })
+      expect(adapter.requests).toHaveLength(0)
+    } finally { resolve.mockRestore() }
+  })
+
   it('continues committed code through the injected provider using the remaining shared write budget', async () => {
     const adapter = new MockAdapter([
       toolCallResponse('first-js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),

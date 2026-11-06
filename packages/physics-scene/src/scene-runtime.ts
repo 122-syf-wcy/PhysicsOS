@@ -951,25 +951,39 @@ type ApplyCommandResult = { ok: true; event: PhysicsEvent } | { ok: false; error
 
 const clone = <T>(value: T): T => structuredClone(value)
 
+const deeplyFrozenSnapshots = new WeakSet<object>()
+
+/** Whether this module has recursively frozen the complete JSON-like snapshot. */
+export const isDeepFrozenSnapshot = (value: object): boolean => deeplyFrozenSnapshots.has(value)
+
 /**
  * Recursively freeze a JSON-like value in place and return the same
- * reference. Already-frozen objects are skipped, so a snapshot that was
- * frozen once costs nothing on later calls.
+ * reference. Only previously deep-frozen snapshots may skip traversal:
+ * Object.freeze alone says nothing about the mutability of child objects.
  * @param value - the object graph to freeze.
  * @returns `value`, now deeply frozen.
  */
 export const deepFreeze = <T>(value: T): T => {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value
-  Object.freeze(value)
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child)
+  const visited = new Set<object>()
+  const pending: unknown[] = [value]
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (typeof current !== 'object' || current === null
+      || deeplyFrozenSnapshots.has(current) || visited.has(current)) continue
+    visited.add(current)
+    Object.freeze(current)
+    for (const child of Object.values(current)) pending.push(child)
+  }
+  // Publish the guarantee only after every reachable object has been frozen.
+  for (const frozen of visited) deeplyFrozenSnapshots.add(frozen)
   return value
 }
 
 /**
  * Memoize a pure function of a scene on the scene's identity — but only for
- * frozen scenes, i.e. the shared snapshots {@link SceneStore.peekScene} hands
- * out, which cannot change under the cache. An unfrozen scene may still be
- * edited in place by whoever owns it, so it is recomputed on every call,
+ * snapshots recursively frozen by {@link deepFreeze}, including those
+ * {@link SceneStore.peekScene} hands out. Other callers may freeze only the
+ * root and still edit nested facts, so foreign snapshots are recomputed,
  * exactly as before. Engines use this to resolve a model once per revision
  * instead of once per animation frame.
  * @param compute - the pure derivation to cache.
@@ -980,7 +994,7 @@ export const memoizeOnFrozenScene = <S extends object, T>(
 ): ((scene: S) => T) => {
   const cache = new WeakMap<S, T>()
   return (scene: S): T => {
-    if (!Object.isFrozen(scene)) return compute(scene)
+    if (!isDeepFrozenSnapshot(scene)) return compute(scene)
     if (cache.has(scene)) return cache.get(scene) as T
     const value = compute(scene)
     cache.set(scene, value)

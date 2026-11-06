@@ -53,6 +53,7 @@ import {
   hasUnsampleableRegion,
   cyclotronBenchOf,
   isCompositeFieldScene,
+  isDeepFrozenSnapshot,
   memoizeOnFrozenScene,
   sameFieldEnvironment,
   sampleFieldsAt,
@@ -1060,7 +1061,7 @@ const cachedCompositeModel = memoizeOnFrozenScene(resolveCompositeModel)
 type PhaseDecomposition = ReturnType<typeof decomposePhases>
 const phaseCache = new WeakMap<PhysicsScene, Map<number, PhaseDecomposition>>()
 const cachedPhases = (scene: PhysicsScene, model: CompositeModel, endTime: number): PhaseDecomposition => {
-  if (!Object.isFrozen(scene)) return decomposePhases(scene, model, endTime)
+  if (!isDeepFrozenSnapshot(scene)) return decomposePhases(scene, model, endTime)
   let byHorizon = phaseCache.get(scene)
   if (byHorizon === undefined) {
     byHorizon = new Map()

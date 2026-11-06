@@ -12,6 +12,7 @@ import type { MechanicsModelId, PhysicsScene } from '@physicsos/physics-scene'
 import {
   emptyVisualModel,
   type ApparatusSpriteVisual,
+  type InclineVisual,
   type ObservableVisibility,
   type PhysicsSemanticRole,
   type ScenePoint,
@@ -93,6 +94,32 @@ const canonicalVector = (value: QuantityVector | undefined): VectorValue | undef
 const pointOf = (value: QuantityVector | undefined): ScenePoint | undefined => {
   const vector = canonicalVector(value)
   return vector === undefined ? undefined : { x: vector.x, y: vector.y }
+}
+
+/** Select real observation samples in the visible surface patch, keeping times paired. */
+export const mechanicsTrajectorySamples = (
+  observations: readonly unknown[],
+  incline?: InclineVisual,
+): { points: ScenePoint[]; times: number[] } => {
+  const trajectory = findObservation(observations.filter(isMechanicsObservation), 'mechanics_trajectory')
+  const radians = (incline?.angle ?? 0) * Math.PI / 180
+  const cosine = Math.cos(radians), sine = Math.sin(radians)
+  const length = incline === undefined ? 0 : incline.base / cosine
+  const apexY = incline === undefined ? 0 : incline.origin.y + incline.base * Math.tan(radians)
+  const samples = trajectory?.points.flatMap((sample) => {
+    const at = pointOf(sample.position)
+    if (at === undefined) return []
+    if (incline !== undefined) {
+      // Project onto the contact surface's tangent. The COM path sits above
+      // that surface, so a raw x bound would clip the high-angle patch wrongly.
+      const along = (at.x - incline.origin.x) * cosine - (at.y - apexY) * sine
+      if (along < -1e-8 || along > length + 1e-8) return []
+    }
+    return [{ at, time: sample.time.value }]
+  }) ?? []
+  // No invented boundary position/time: sparse local windows may have no line.
+  if (samples.length < 2) return { points: [], times: [] }
+  return { points: samples.map(sample => sample.at), times: samples.map(sample => sample.time) }
 }
 
 const vectorMagnitude = (value: VectorValue): number =>
@@ -313,18 +340,9 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
   }
 
   const mechanicsObservations = observations.filter(isMechanicsObservation)
-  const trajectoryObservation = findObservation(mechanicsObservations, 'mechanics_trajectory')
   const keyPointObservation = findObservation(mechanicsObservations, 'projectile_key_point')
   const groundObservation = findObservation(mechanicsObservations, 'ground')
   const inclineObservation = findObservation(mechanicsObservations, 'incline')
-  const trajectoryPoints = trajectoryObservation?.points.flatMap((point) => {
-    const at = pointOf(point.position)
-    return at === undefined ? [] : [at]
-  }) ?? []
-  /* The engine stamps each trail sample with its own time; the playhead split
-     cuts against those times, not an invented fraction. */
-  const trajectoryTimes = trajectoryObservation?.points
-    .flatMap(point => (pointOf(point.position) === undefined ? [] : [point.time.value])) ?? []
   const launchPoint = pointOf(keyPointObservation?.launchPoint)
   const apexPoint = pointOf(keyPointObservation?.apexPoint)
   const impactPoint = pointOf(keyPointObservation?.impactPoint)
@@ -423,6 +441,17 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     x: inclineOrigin.x - bodySize * Math.sin(inclineRadians),
     y: inclineOrigin.y - bodySize * Math.cos(inclineRadians),
   }
+  const incline: InclineVisual | undefined = model === 'inclined_plane'
+    ? {
+      origin: inclineContactOrigin, base: inclineBase, angle: inclineAngle,
+      points: [
+        { ...inclineContactOrigin },
+        { x: inclineContactOrigin.x + inclineBase, y: inclineContactOrigin.y },
+        { x: inclineContactOrigin.x, y: inclineContactOrigin.y + inclineRise },
+      ],
+    }
+    : undefined
+  const trajectory = mechanicsTrajectorySamples(mechanicsObservations, incline)
   const majorGrid = niceStep(Math.max(bounds.extent.width, bounds.extent.height))
   const arrowLength = Math.max(Math.min(bounds.extent.width, bounds.extent.height) * 0.19, 0.6)
   const netForce = derivedVectorOf(state, 'net_force')
@@ -797,8 +826,8 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     vectors,
     trajectories: splitTrajectoryAtTime(
       'trajectory',
-      trajectoryPoints,
-      trajectoryTimes,
+      trajectory.points,
+      trajectory.times,
       state.time.value,
     ),
     keyPoints,
@@ -819,16 +848,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
           label: '地面',
         },
       }),
-    ...(model === 'inclined_plane'
-      ? { incline: {
-        origin: inclineContactOrigin, base: inclineBase, angle: inclineAngle,
-        points: [
-          { ...inclineContactOrigin },
-          { x: inclineContactOrigin.x + inclineBase, y: inclineContactOrigin.y },
-          { x: inclineContactOrigin.x, y: inclineContactOrigin.y + inclineRise },
-        ],
-      } }
-      : {}),
+    ...(incline === undefined ? {} : { incline }),
     ...(springConstraint === undefined || springAnchorParam === undefined
       ? {}
       : {

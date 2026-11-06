@@ -91,6 +91,7 @@ export {
   SceneRuntime,
   SceneStore,
   deepFreeze,
+  isDeepFrozenSnapshot,
   memoizeOnFrozenScene,
   type PhysicsEvent,
   type PhysicsEventEnvelope,

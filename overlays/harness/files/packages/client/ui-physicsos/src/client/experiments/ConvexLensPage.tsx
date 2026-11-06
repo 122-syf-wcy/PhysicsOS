@@ -17,6 +17,7 @@ import { ExperimentNotebook } from './ExperimentNotebook.tsx'
 import { OptionalLensBench } from './OptionalLensBench.tsx'
 import { lensBounds, lensParameter, lensReading } from './lens-bench.ts'
 import { useExperimentSession } from './use-experiment-session.ts'
+import { useExperimentAppearance } from './use-experiment-appearance.ts'
 import { experimentHref } from './experiment-navigation.ts'
 import css from './ExperimentPage.module.css'
 
@@ -44,7 +45,10 @@ export function ConvexLensPage({
   experimentMeta,
 }: PhysicsWorkspaceProps) {
   const { session, snapshot, commit } = useExperimentSession(runtime, onSceneChange)
-  const [release, setRelease] = useState<ExperimentPackageView | null>()
+  const [savedRelease, setRelease] = useState<ExperimentPackageView | null>()
+  const appearance = useExperimentAppearance(session, 'convex-lens')
+  const offerAppearance = appearance.offer
+  const release = appearance.pending ?? appearance.applied ?? savedRelease
   const [releaseError, setReleaseError] = useState('')
   const [releaseAttempt, setReleaseAttempt] = useState(0)
   const [contributing, setContributing] = useState(false)
@@ -62,7 +66,8 @@ export function ConvexLensPage({
           return
         }
         setRelease(selected)
-        session.setRelease(contributionReleaseIdentity(selected))
+        if (pinned === undefined) session.setRelease(contributionReleaseIdentity(selected))
+        offerAppearance(catalog.active)
       })
       .catch(() => {
         if (alive) setReleaseError('暂时无法读取实验版本，请检查网络后重试。')
@@ -70,7 +75,7 @@ export function ConvexLensPage({
     return () => {
       alive = false
     }
-  }, [session, releaseAttempt])
+  }, [session, releaseAttempt, offerAppearance])
   const [task, setTask] = useState(0)
   const [panel, setPanel] = useState<'guide' | 'report' | 'agent' | undefined>(undefined)
   const [message, setMessage] = useState('')
@@ -192,6 +197,11 @@ export function ConvexLensPage({
       {release ? (
         <ContributionAuthorBadge author={release.author} version={release.version} />
       ) : null}
+      {appearance.available || appearance.error ? <div className={css.appearanceUpdate}>
+        {appearance.available ? <button type="button" className={css.subtleButton} disabled={appearance.busy}
+          onClick={() => { void appearance.start() }}>{appearance.busy ? '正在载入新版外观…' : '使用新版实验外观'}</button> : null}
+        {appearance.error ? <span role="alert">{appearance.error}</span> : null}
+      </div> : null}
       {message ? (
         <div className={css.notice} role="status">
           {message}
@@ -305,6 +315,8 @@ export function ConvexLensPage({
                 experimentId="convex-lens"
                 entryUrl={release.entryUrl}
                 protocolVersion={release.protocolVersion ?? 1}
+                {...(release.protocolVersion === 3 ? { presentation: { mode: 'embedded' as const } } : {})}
+                onStatusChange={(status) => { appearance.onStatus(release.id, status) }}
                 session={session}
               />
             ) : (

@@ -18,7 +18,7 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { MAX_CODE_PART_CHARACTERS, QuestionCodeParts } from './question-code-parts.ts'
 import { CodeCheckpoints } from './code-checkpoints.ts'
 import { codeChildGuard, registerAssetTool, registerWriteCodeTool, type AssetService, type CodeChildJob } from './code-child-tools.ts'
-import { isTransientDiagnostic } from './generation-errors.ts'
+import { generationError, isTransientDiagnostic } from './generation-errors.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
@@ -124,13 +124,36 @@ export class PhysicsCodeProvider implements SubagentProvider {
     return { scene, generationId, owner, assets, chunked, canGenerateAsset: chunked && existing.length === 0 }
   }
 
+  /** A suspended start may only resume the scene and job it originally captured. */
+  private assertCurrent(request: ResolvedSubagentStartRequest, plan: JobPlan | undefined): void {
+    if (request.signal.aborted) {
+      const reason = request.signal.reason as unknown
+      const timedOut = typeof reason === 'object' && reason !== null && 'code' in reason && reason.code === 'GENERATION_TIMEOUT'
+      throw generationError(timedOut ? 'GENERATION_TIMEOUT' : 'GENERATION_ABORTED', 'Code child start aborted')
+    }
+    // Standalone provider callers without a generation marker retain their
+    // structured-output-only path. Never adopt a job that appeared later.
+    if (plan === undefined) return
+    const state = request.parent.ctx.get('sessionProjections')?.stateOf(request.parent.session, 'physicsScenes')
+    const current = state?.scenes[plan.scene.sceneId]
+    const pending = current?.visualization
+    if (state?.latest !== plan.scene.sceneId || current?.revision !== plan.scene.revision
+      || pending?.status !== 'generating' || pending.jobId !== plan.generationId
+      || pending.ownerSessionId !== plan.owner || pending.sceneId !== plan.scene.sceneId
+      || pending.sceneRevision !== plan.scene.revision) {
+      throw generationError('STALE_GENERATION', 'Code child generation changed before startup completed')
+    }
+  }
+
   async start(request: ResolvedSubagentStartRequest): Promise<SubagentRun> {
+    const plan = this.plan(request)
     await this.ensurePreset()
     if (!request.outputSchema || request.maxDepth !== 1 || request.parent.session.header.parentSession !== undefined) {
       throw new Error('Code generation requires a structured first-level child')
     }
+    this.assertCurrent(request, plan)
     const reasoningEffort = await this.lightEffort(request)
-    const plan = this.plan(request)
+    this.assertCurrent(request, plan)
     const chunked = plan?.chunked === true
     /* The write budget survives a resume of the same job; a fresh job starts clean. */
     const checkpoint = plan !== undefined && chunked
@@ -155,9 +178,11 @@ export class PhysicsCodeProvider implements SubagentProvider {
       if (agent.session.header.parentSession !== request.parent.id) return undefined
       const assembly = await agent.ctx.systemPrompt.assemble({ scope: agent, agent })
       if (!assembly.sections.some(section => section.name === 'deployment:persona-prefix' && section.text.includes(marker))) return undefined
+      this.assertCurrent(request, plan)
       const presets = this.ctx.get('agentPresets')
       if (presets === undefined) throw new Error('Code child requires the agent preset registry')
       await presets.mount(agent.ctx, CODE_PRESET_ID)
+      this.assertCurrent(request, plan)
       agent.ctx.on('tools/result', (exec, result) => {
         const write = staged.get(exec)
         staged.delete(exec)

@@ -165,6 +165,15 @@ const selectorScene = (speed = SELECTOR_SPEED) =>
   })
 
 describe('velocity selector', () => {
+  it('does not reuse phases when a shallow-frozen scene changes velocity', () => {
+    const scene = Object.freeze(selectorScene())
+    const before = compositeEngine.stateAtSeconds(scene, 1e-7)
+    expect(toCanonicalVector(before.objects[0]!.position!).vectorSI.y).toBeCloseTo(0, 12)
+    scene.particles[0]!.velocity.vector.x = SELECTOR_SPEED * 1.5
+    const after = compositeEngine.stateAtSeconds(scene, 1e-7)
+    expect(Math.abs(toCanonicalVector(after.objects[0]!.position!).vectorSI.y)).toBeGreaterThan(1e-6)
+  })
+
   it('passes a particle at v = E/B along a straight line', () => {
     const scene = selectorScene()
     const result = simulate(scene)

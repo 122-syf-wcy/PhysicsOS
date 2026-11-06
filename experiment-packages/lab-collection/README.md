@@ -4,14 +4,19 @@
 
 `src/scene-kit.js` 提供几何与材质，`src/renderer.js` 管理取景、灯光、标注和资源释放。领域模块分别实现真实器材，`src/main.js` 接入官方 MessagePort SDK。默认近景突出装置，正视和全程视图用于比较几何与运动；所有视角使用统一世界坐标比例。
 
+2.1.0 增加嵌入布局：认证握手之后隐藏包内重复的标题、参数与播放，保留相机工具、画布和读数；宿主只有在包确认应用该布局后才调整容器。独立预览仍提供完整控件，旧包保持原布局。旧实验记录可显式升级外观，原参数和记录保留。
+
+标签按稳定顺序尝试多个位置，重要受力优先，移位标签用引导线连接真实锚点。斜面局部视窗只画平台提供的真实轨迹采样，不补造越界运动。
+
 构建在项目约定服务器的现有 Docker 中完成：
 
 ```sh
 cd /app
-PHYSICSOS_LAB_RELEASE_DIR=/tmp/physicsos-lab-premium-20261105 \
+PHYSICSOS_LAB_VERSION=2.1.0 \
+PHYSICSOS_LAB_RELEASE_DIR=/tmp/physicsos-lab-refinement-20261107 \
   node scripts/developers/build-lab-collection.mjs
-PHYSICSOS_LAB_RELEASE_DIR=/tmp/physicsos-lab-premium-20261105 \
-PHYSICSOS_LAB_SHOTS=/tmp/physicsos-lab-premium-shots \
+PHYSICSOS_LAB_RELEASE_DIR=/tmp/physicsos-lab-refinement-20261107 \
+PHYSICSOS_LAB_SHOTS=/tmp/physicsos-lab-refinement-shots \
   node tests/acceptance/lab-collection.mjs
 ```
 

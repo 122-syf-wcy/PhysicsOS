@@ -3,7 +3,7 @@ import type { PhysicsScene, MechanicsModelId } from '@physicsos/physics-scene'
 import type { MechanicsModel } from '@physicsos/engine-mechanics'
 import type { MechanicsObservationRuntimeState } from '@physicsos/physics-observation'
 
-import { mechanicsSceneVisualAt } from './mechanics-visual-bridge.ts'
+import { mechanicsSceneVisualAt, mechanicsTrajectorySamples } from './mechanics-visual-bridge.ts'
 
 import type {
   ChartSeries,
@@ -134,6 +134,9 @@ export function buildSnapshot(input: SnapshotInput): BuiltSnapshot {
     status,
     view,
     ...panels,
+    ...(view.incline === undefined ? {} : {
+      trajectoryTimes: mechanicsTrajectorySamples(input.observations.observations, view.incline).times,
+    }),
     inspector: inspectorOf(scene, modelId, dq),
     clock,
   }

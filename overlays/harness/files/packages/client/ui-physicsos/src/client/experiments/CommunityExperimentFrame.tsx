@@ -25,6 +25,8 @@ interface Props {
   readonly onRetry?: () => void
   /** A private experiment can supply its own chrome without duplicating status. */
   readonly showStatus?: boolean
+  /** Only host workspaces own the package's surrounding controls. */
+  readonly presentation?: { readonly mode: 'embedded' }
 }
 
 /** Only a trusted wrapper relays a revocable port to its opaque uploaded child. */
@@ -37,15 +39,19 @@ export function CommunityExperimentFrame({
   onStatusChange,
   onRetry,
   showStatus = true,
+  presentation,
 }: Props) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [attempt, setAttempt] = useState(0)
   const [status, setStatus] = useState<CommunityFrameStatus>('loading')
   const statusCallback = useRef(onStatusChange)
   statusCallback.current = onStatusChange
+  const requestedEmbedded = protocolVersion === 3 && presentation?.mode === 'embedded'
+  const [embedded, setEmbedded] = useState(false)
   useEffect(() => {
     const element = frame.current
     if (element === null) return
+    setEmbedded(false)
     let disposed = false
     let connected = false
     let wrapperOrigin: string | undefined
@@ -114,6 +120,10 @@ export function CommunityExperimentFrame({
           )
             return
           connected = true
+          const applied = message.data.presentation
+          setEmbedded(requestedEmbedded && typeof applied === 'object' && applied !== null
+            && !Array.isArray(applied) && Object.keys(applied).length === 1
+            && 'mode' in applied && applied.mode === 'embedded')
           if (protocolVersion === 1) {
             clearTimeout(timeout)
             updateStatus('ready')
@@ -157,7 +167,8 @@ export function CommunityExperimentFrame({
       port.start()
       // The platform wrapper forwards this port only to its exact opaque child.
       element.contentWindow?.postMessage(
-        { type: 'experiment/connect', protocolVersion, channel: token },
+        { type: 'experiment/connect', protocolVersion, channel: token,
+          ...(requestedEmbedded ? { presentation: { mode: 'embedded' } } : {}) },
         wrapperOrigin,
         [channel.port2],
       )
@@ -196,15 +207,17 @@ export function CommunityExperimentFrame({
       port?.close()
       session.cancelPreview()
     }
-  }, [entryUrl, session, attempt, protocolVersion, experimentId])
+  }, [entryUrl, session, attempt, protocolVersion, experimentId, requestedEmbedded])
   return (
-    <div className={css.frameHost} data-community-status={status}>
+    <div className={css.frameHost} data-community-status={status} data-community-presentation={embedded ? 'embedded' : undefined}
+      {...(embedded ? { style: { minHeight: 0 } } : {})}>
       <iframe
         ref={frame}
         title={title}
         sandbox="allow-scripts allow-same-origin"
         referrerPolicy="no-referrer"
         className={css.frame}
+        {...(embedded ? { style: { minHeight: 0 } } : {})}
       />
       {showStatus && status !== 'ready' ? (
         <div className={css.frameStatus} role={status === 'failed' ? 'alert' : 'status'}>

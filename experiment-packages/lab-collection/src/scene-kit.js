@@ -78,7 +78,7 @@ export function createSceneKit(view) {
     },
     label(text, at, opts = {}) {
       if (text === undefined || text === null || String(text).length === 0) return
-      labels.push({ text: String(text), at: point(at), color: opts.color ?? palette.ink, size: opts.size ?? 11, priority: opts.priority ?? 1, tag: opts.tag })
+      labels.push({ text: String(text), at: point(at), color: opts.color ?? palette.ink, size: opts.size ?? 11, priority: opts.priority ?? 1, tag: opts.tag, from: opts.from === undefined ? undefined : point(opts.from) })
     },
   }
   return kit

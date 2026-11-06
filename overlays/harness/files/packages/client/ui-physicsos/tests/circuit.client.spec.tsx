@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -44,7 +45,7 @@ afterEach(() => {
 const sceneOf = (templateId: string) => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown template: ${templateId}`)
-  return createExperimentSceneRef(template, t(template.label))
+  return withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id)
 }
 
 const mountLab = (templateId: string) => {

@@ -26,7 +26,7 @@
     "ci:commit-message": "node scripts/ci/check-commit-message.mjs",
     "test": "pnpm run test:core && pnpm run test:web && pnpm run test:agent && pnpm run test:deploy && pnpm run test:tooling && pnpm run test:desktop",
     "test:core": "pnpm -r --filter \"./packages/**\" run test",
-    "test:web": "cd vendor/deepseek-harness && node_modules/.bin/vitest run packages/client/ui-physicsos/tests",
+    "test:web": "cd vendor/deepseek-harness && node_modules/.bin/vitest run --config packages/client/ui-physicsos/vitest.config.ts packages/client/ui-physicsos/tests",
     "test:acceptance": "node tests/acceptance/reliability-acceptance.mjs",
     "test:agent": "cd vendor/deepseek-harness && node_modules/.bin/vitest run packages/physicsos",
     "test:deploy": "node --test scripts/docker-entrypoint.test.mjs",

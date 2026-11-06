@@ -2936,3 +2936,24 @@
 ) {
   display: none;
 }
+
+
+/* Keep the phone header to one identity row and one reachable tool rail. */
+@container physics-lab (max-width: 520px) {
+  .toolbar { gap: 5px; padding: 8px; }
+  .sceneIdentity { column-gap: 5px; grid-template-columns: auto minmax(0, 1fr) auto; }
+  .crumb { grid-column: auto; margin: 0; padding: 5px 2px; font-size: 11px; }
+  .crumbTrail { display: none; }
+  .title { font-size: 14px; line-height: 22px; }
+  .toolGroup { flex-wrap: nowrap; gap: 3px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+  .toolGroup > * { flex-shrink: 0; }
+  .verifiedState { gap: 3px; padding: 4px 5px; font-size: 10px; }
+  .toolbar .tool { min-width: 32px; min-height: 34px; padding: 5px 7px; }
+  .agentDock { padding: 3px 5px; min-width: 34px; height: 34px; }
+  .agentDockMascot { width: 22px; height: 22px; }
+  .agentDockSpark { display: none; }
+  .canvas:has([data-community-presentation='embedded']) {
+    flex-basis: clamp(340px, 56svh, 480px);
+    min-height: clamp(340px, 56svh, 480px);
+  }
+}

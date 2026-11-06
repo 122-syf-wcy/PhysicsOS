@@ -75,8 +75,11 @@ export function sanitizeQuestion(raw: unknown): unknown {
        rather than trusted: the model is told to use lowercase letters, digits
        and hyphens, but a stray separator or space would otherwise decide where
        the drawing lands. An unusable ref falls back to the question number. */
-    const rawRef = str(f['ref']).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
-    f['ref'] = rawRef === '' ? `q${String(q['number'] ?? 'x')}` : rawRef
+    const refValue = str(f['ref'])
+    const rawRef = (typeof refValue === 'string' ? refValue : '')
+      .trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+    const number = q['number']
+    f['ref'] = rawRef === '' ? `q${typeof number === 'number' || typeof number === 'string' ? String(number) : 'x'}` : rawRef
     f['caption'] = str(f['caption'])
     q['figure'] = f
   }
@@ -103,7 +106,7 @@ export function sanitizeQuestion(raw: unknown): unknown {
 const EMPTY_RESPONSE_ATTEMPTS = 3
 const EMPTY_RESPONSE_BACKOFF_MS = 1_500
 
-const isRetryableEmpty = (message: string, code: string): boolean => code === 'EMPTY_RESPONSE'
+const isRetryableEmpty = (_message: string, code: string): boolean => code === 'EMPTY_RESPONSE'
 
 export async function callModel(ctx: Context, route: PaperModelRoute, system: string, prompt: string): Promise<string> {
   let lastFailure = ''

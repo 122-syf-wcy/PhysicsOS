@@ -118,6 +118,7 @@ describe('real Loader composition - personal learning sync', () => {
         username: 'sync-student',
         password: 'student-pass',
         displayName: 'Sync Student',
+        email: 'sync-student@example.com',
       })
       expect(registered.status).toBe(201)
       const firstCookie = cookieOf(registered)

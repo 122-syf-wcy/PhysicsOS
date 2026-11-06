@@ -29,7 +29,7 @@ function common(snapshot, kit) {
     if (!kit.visible(vector.observable)) continue
     const arrow = kit.arrow(front(vector.from), front(vector.to), roleColor(vector.role), { tag: vector.id })
     overlay(arrow)
-    kit.label(cleanMath(vector.symbol), front(vector.to), { color: roleColor(vector.role), priority: 3 })
+    kit.label(cleanMath(vector.symbol), front(vector.to), { color: roleColor(vector.role), priority: 3, tag: vector.id, from: front(vector.from) })
   }
   if (snapshot.domain !== 'modern') for (const particle of view.particles ?? []) {
     kit.sphere(particle.at, particle.radius, particle.sign === 'negative' ? palette.blue : palette.red, { tag: particle.id })
@@ -129,6 +129,41 @@ function fitScene() {
   document.getElementById('full-view').textContent = state.full ? '装置特写' : '查看全程'
 }
 
+// Work in screen pixels: moving a label must never move or rescale its vector.
+function placeLabels(labels, width, height) {
+  const placed = [], margin = 4, gap = 7, separation = 4
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value))
+  const key = label => `${label.tag ?? ''}\0${label.text}`
+  labels.sort((a, b) => b.priority - a.priority || (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a.x - b.x || a.y - b.y))
+  for (const label of labels) {
+    const { x, y, w, h } = label
+    if (x < 0 || x > width || y < 0 || y > height || w > width - 2 * margin || h > height - 2 * margin) continue
+    const angle = label.direction ?? -Math.PI / 2
+    let rect, preferred
+    // Nearby cardinal/diagonal alternatives first, then increasingly distant
+    // rings. Clamping each candidate recovers labels at all four boundaries.
+    for (const ring of [0, 1, 2, 3]) {
+      for (const turn of [0, 1, -1, 2, -2, 3, -3, 4]) {
+        const radians = angle + turn * Math.PI / 4, extra = ring * (h + separation)
+        const candidate = {
+          x: clamp(x + Math.cos(radians) * (w / 2 + gap + extra) - w / 2, margin, width - margin - w),
+          y: clamp(y + Math.sin(radians) * (h / 2 + gap + extra) - h / 2, margin, height - margin - h), w, h,
+        }
+        preferred ??= candidate
+        if (placed.some(other => candidate.x < other.rect.x + other.w + separation && candidate.x + w + separation > other.rect.x && candidate.y < other.rect.y + other.h + separation && candidate.y + h + separation > other.rect.y)) continue
+        rect = candidate; break
+      }
+      if (rect) break
+    }
+    if (!rect) continue
+    const end = { x: clamp(x, rect.x, rect.x + w), y: clamp(y, rect.y, rect.y + h) }
+    const moved = Math.hypot(rect.x - preferred.x, rect.y - preferred.y) > 12
+    placed.push({ ...label, rect, leader: moved || Math.hypot(end.x - x, end.y - y) > 12 ? { x1: x, y1: y, x2: end.x, y2: end.y } : undefined })
+    if (placed.length >= (width < 600 ? 18 : 30)) break
+  }
+  return placed
+}
+
 function paint() {
   if (!state?.kit) return false
   const { renderer, host, camera, scene, world, kit, span } = state
@@ -141,22 +176,38 @@ function paint() {
   camera.position.set(Math.sin(state.yaw), Math.sin(state.pitch), Math.cos(state.yaw) * Math.cos(state.pitch)).normalize().multiplyScalar(distance)
   camera.lookAt(0, 0, 0); fitCameraToBox(camera, span, width / height); world.updateMatrixWorld(true)
   renderer.render(scene, camera)
-  const occupied = [], fragment = document.createDocumentFragment()
-  for (const label of [...kit.labels].sort((a, b) => b.priority - a.priority)) {
+  const projected = [], fragment = document.createDocumentFragment()
+  for (const label of kit.labels) {
     if (!state.full && label.tag === 'ground-label') continue
     const position = label.at.clone().applyMatrix4(kit.group.matrixWorld).project(camera)
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y) || position.z < -1 || position.z > 1) continue
     const x = (position.x + 1) * width / 2, y = (1 - position.y) * height / 2
     state.measure.font = `500 ${label.size}px Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif`
-    const w = Math.min(width * 0.5, Math.ceil(state.measure.measureText(cleanMath(label.text)).width) + 20), h = label.size + 10
-    const rect = { x: x - w / 2, y: y - h - 6, w, h }
-    if (rect.x < 4 || rect.x + w > width - 4 || rect.y < 3 || rect.y + h > height - 4) continue
-    if (occupied.some(b => rect.x < b.x + b.w && rect.x + w > b.x && rect.y < b.y + b.h && rect.y + h > b.y)) continue
-    occupied.push(rect)
+    const w = Math.min(width - 8, Math.ceil(state.measure.measureText(cleanMath(label.text)).width) + 20), h = Math.ceil(label.size * 1.35) + 8
+    const from = label.from?.clone().applyMatrix4(kit.group.matrixWorld).project(camera)
+    const direction = from && Math.hypot(position.x - from.x, position.y - from.y) > 1e-8
+      ? Math.atan2((from.y - position.y) * height, (position.x - from.x) * width)
+      : undefined
+    projected.push({ ...label, x, y, w, h, direction })
+  }
+  const leaders = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  leaders.setAttribute('viewBox', `0 0 ${width} ${height}`)
+  leaders.setAttribute('aria-hidden', 'true')
+  leaders.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:hidden;pointer-events:none'
+  fragment.append(leaders)
+  for (const label of placeLabels(projected, width, height)) {
+    const { rect, w, h, leader } = label
+    if (leader) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+      for (const [name, value] of Object.entries(leader)) line.setAttribute(name, String(value))
+      line.setAttribute('stroke', label.color); line.setAttribute('stroke-opacity', '0.6'); line.setAttribute('stroke-width', '1')
+      leaders.append(line)
+    }
     const node = document.createElement('span'); node.textContent = cleanMath(label.text)
+    if (label.tag) node.dataset.labelId = label.tag
     if (label.priority === 0) node.dataset.quiet = 'true'
-    node.style.cssText = `left:${x}px;top:${rect.y}px;color:${label.color};font-size:${label.size}px;max-width:${w}px`
+    node.style.cssText = `left:${rect.x + w / 2}px;top:${rect.y}px;width:${w}px;height:${h}px;color:${label.color};font-size:${label.size}px;text-align:center`
     fragment.append(node)
-    if (occupied.length >= (width < 600 ? 18 : 30)) break
   }
   state.labels.replaceChildren(fragment)
   const canvas = renderer.domElement

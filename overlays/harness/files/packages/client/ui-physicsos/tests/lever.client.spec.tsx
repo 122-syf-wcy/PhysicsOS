@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -41,7 +42,7 @@ afterEach(() => {
 const sceneOf = (templateId: string) => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown template: ${templateId}`)
-  return createExperimentSceneRef(template, t(template.label))
+  return withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id)
 }
 
 const mountLab = (templateId: string) => {
@@ -282,7 +283,7 @@ describe('lever Lab surface', () => {
         usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
         openSurface={(id, sceneRef) => {
           if (id === 'lab' && sceneRef === undefined) surface.openExperimentPicker()
-          else surface.open(id, sceneRef)
+          else surface.open(id, sceneRef === undefined ? undefined : withOfficialRenderer(sceneRef, 'lever-balance'))
         }}
         t={t}
         useSessions={neverHook}

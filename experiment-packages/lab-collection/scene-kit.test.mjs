@@ -39,7 +39,7 @@ test('old frame geometry and materials are released', () => {
 test('every corner stays visible at allowed orbit angles and phone aspect', () => {
   assert.equal(typeof fitCameraToBox, 'function')
   const { THREE } = createSceneKit(view)
-  for (const aspect of [390 / 420, 956 / 500]) for (const [yaw, pitch] of [[0, 0], [-0.48, 0.23], [0.85, 0.65], [-0.85, -0.2]]) {
+  for (const aspect of [280 / 220, 390 / 220, 390 / 420, 956 / 500]) for (const [yaw, pitch] of [[0, 0], [-0.48, 0.23], [0.85, 0.65], [-0.85, -0.2]]) {
     const span = { x: 2.8, y: 2.82, z: 1.6 }
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200)
     camera.position.set(Math.sin(yaw), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).normalize().multiplyScalar(40)

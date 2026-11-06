@@ -24,6 +24,10 @@ vi.mock('three', async (importOriginal) => {
     },
   }
 })
+// The standalone developer kit has its own Three installation. Route that
+// module through the same boundary double so renderer and assertions share
+// real geometry constructors instead of mixing two module instances.
+vi.mock('../../../../../../developer-kit/experiment-template/node_modules/three/build/three.module.js', () => import('three'))
 afterEach(() => {
   vi.unstubAllGlobals()
   captured.scene = undefined

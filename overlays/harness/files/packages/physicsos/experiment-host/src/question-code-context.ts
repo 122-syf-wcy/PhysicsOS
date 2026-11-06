@@ -12,6 +12,10 @@ export interface QuestionCodeContext {
   renderContract: string
   allowedAssetPaths: string[]
 }
+/** Read the published style version without constructing the authoring template and ZIP. */
+export const styleVersionOf = (published?: { readonly version: string }): string =>
+  published?.version ?? 'v3-platform-default'
+
 export function questionCodeContext(
   experimentId: string,
   prompts?: Pick<DeveloperPromptService, 'current'>,
@@ -24,7 +28,7 @@ export function questionCodeContext(
     experimentId,
     developerPrompt: experimentDeveloperPrompt(experimentId),
     publishedBody: published?.body ?? '',
-    styleVersion: published?.version ?? 'v3-platform-default',
+    styleVersion: styleVersionOf(published),
     renderContract: QUESTION_CODE_RENDER_CONTRACT,
     allowedAssetPaths: [...files.keys()].filter(name => name.startsWith('dist/')).sort(),
   }

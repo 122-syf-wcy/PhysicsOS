@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
+import { withOfficialRenderer } from './official-renderer-fixture.client.ts'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createStandingWaveScene,
   createTravellingWaveScene,
   createWaveInterferenceScene,
+  type PhysicsScene,
 } from '@physicsos/physics-scene'
 
 import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorkspace.tsx'
 import { SceneChatCard } from '../src/client/SceneChatCard.tsx'
+import { PhysicsCanvas } from '../src/client/physics/PhysicsCanvas.tsx'
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { domainOfScene } from '../src/client/physics/domain-of-scene.ts'
 import { experimentSelfChecksOf } from '../src/client/physics/experiment-self-checks.ts'
@@ -39,7 +42,7 @@ afterEach(() => {
 const sceneOf = (templateId: string) => {
   const template = findExperimentTemplate(templateId)
   if (template === undefined) throw new Error(`unknown template: ${templateId}`)
-  return createExperimentSceneRef(template, t(template.label))
+  return withOfficialRenderer(createExperimentSceneRef(template, t(template.label)), template.id)
 }
 
 type WaveSnapshot = ReturnType<ReturnType<typeof createWaveWorkspaceRuntime>['getSnapshot']>
@@ -399,11 +402,12 @@ describe('wave tutor and self-checks', () => {
 
 describe('wave solved cards', () => {
   it('renders the rope question through the wave engine with the solved v and T', () => {
+    const data = solvedCardData('wave-01-speed-from-wavelength-frequency')
     const { container } = render(
       <SceneChatCard {...({
         node: {
           key: 'card:wave-rope', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
-          data: solvedCardData('wave-01-speed-from-wavelength-frequency'),
+          data,
         },
         t,
         openSceneInLab: vi.fn(),
@@ -414,17 +418,23 @@ describe('wave solved cards', () => {
     /* The solution quotes the engine's numbers: v = λf = 2 m/s, T = 0.2 s. */
     expect(container.textContent).toContain('2.0000')
     expect(container.textContent).toContain('0.2000')
-    const svgText = [...container.querySelectorAll('svg text')].map(node => node.textContent ?? '')
+    // Historical cards retain verified answers while waiting for their own
+    // private code. The bundled renderer still must draw these exact facts.
+    expect(container.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
+    const snapshot = createWaveWorkspaceRuntime(data.scene as unknown as PhysicsScene).getSnapshot()
+    const canvas = render(<PhysicsCanvas view={snapshot.view} ariaLabel={snapshot.ariaLabel} />).container
+    const svgText = [...canvas.querySelectorAll('svg text')].map(node => node.textContent ?? '')
     expect(svgText.join(' ')).toContain('v = λf = 2 m/s')
-    expect(container.querySelector('path[class*="waveRope"]')).toBeTruthy()
+    expect(canvas.querySelector('path[class*="waveRope"]')).toBeTruthy()
   })
 
   it('renders the interference question with the engine verdict on the canvas', () => {
+    const data = solvedCardData('wave-03-interference-constructive')
     const { container } = render(
       <SceneChatCard {...({
         node: {
           key: 'card:wave-interference', kind: 'physics-scene-card', anchorSeq: 1.9, location: { kind: 'session' },
-          data: solvedCardData('wave-03-interference-constructive'),
+          data,
         },
         t,
         openSceneInLab: vi.fn(),
@@ -432,8 +442,11 @@ describe('wave solved cards', () => {
       } as unknown as Parameters<typeof SceneChatCard>[0])} />,
     )
     expect(container.textContent).toContain('振动加强')
-    expect(container.querySelectorAll('circle[class*="waveSource"]')).toHaveLength(2)
-    expect(container.querySelector('circle[class*="wavePointConstructive"]')).toBeTruthy()
+    expect(container.querySelector('[data-question-code-status="historical"]')).toBeTruthy()
+    const snapshot = createWaveWorkspaceRuntime(data.scene as unknown as PhysicsScene).getSnapshot()
+    const canvas = render(<PhysicsCanvas view={snapshot.view} ariaLabel={snapshot.ariaLabel} />).container
+    expect(canvas.querySelectorAll('circle[class*="waveSource"]')).toHaveLength(2)
+    expect(canvas.querySelector('circle[class*="wavePointConstructive"]')).toBeTruthy()
   })
 })
 

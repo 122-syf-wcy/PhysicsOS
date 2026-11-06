@@ -4,7 +4,7 @@ import { mkdtemp, rm, readdir, readFile, writeFile, unlink, symlink } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createConvexLensScene } from '@physicsos/physics-scene'
 import { openQuestionCodeDomain, type QuestionCodeRecord } from '../src/question-code-domain.ts'
 import { QuestionCodeArtifactService, canonicalQuestionJson, questionSceneSha256 } from '../src/question-code-service.ts'
@@ -178,6 +178,13 @@ describe('private question code artifacts', () => {
     expect(context.styleVersion).toBe('3.7.2')
     expect(context.developerPrompt).not.toContain('physicsos-convex-lens-template-v2')
     expect(context.styleVersion).toBeTruthy()
+  })
+  it('freezes the published style version without rebuilding the authoring ZIP context', async () => {
+    const service = await setup()
+    const context = vi.spyOn(service, 'context')
+    const ref = await create(service)
+    expect(domain!.table('artifacts').get(ref.artifactId)?.styleVersion).toBe('3.7.2')
+    expect(context).not.toHaveBeenCalled()
   })
   it('freezes a fullscreen authored shell before exact child CSS without changing community templates or source strings', async () => {
     const service = await setup()

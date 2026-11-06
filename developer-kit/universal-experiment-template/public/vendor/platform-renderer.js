@@ -2397,18 +2397,20 @@ var t=u(),n=Symbol.for(`react.element`),r=Symbol.for(`react.fragment`),i=Object.
   --physics-angle: #5b7bb8;
 
   /* ---------- surfaces ---------- */
-  --physics-canvas-bg: #fbfdff;
+  /* The sheet is the experiment packages' paper, so a host-drawn bench and a
+     package bench read as the same notebook. */
+  --physics-canvas-bg: #fdfcf8;
   /* Canvas ink stays paired with the fixed light canvas, including dark hosts. */
-  --physics-canvas-text: #24364b;
-  --physics-canvas-text-muted: #52677e;
-  --physics-grid-minor: #e6eef9;
-  --physics-grid-major: #d3e0f2;
-  --physics-axis: #94a7c4;
-  --physics-body-fill: #dce7f7;
-  --physics-body-stroke: #33507f;
+  --physics-canvas-text: #26332b;
+  --physics-canvas-text-muted: #5b6a60;
+  --physics-grid-minor: #ecebe2;
+  --physics-grid-major: #dedcd0;
+  --physics-axis: #a3a697;
+  --physics-body-fill: #e3ebe1;
+  --physics-body-stroke: #3a5444;
   --physics-body-live: #2563eb;
-  --physics-surface-hatch: #b9c8de;
-  --physics-incline-fill: #eef4fc;
+  --physics-surface-hatch: #c8c4b4;
+  --physics-incline-fill: #f2efe4;
 
   /* ---------- key points ---------- */
   --physics-keypoint-launch: #2f9e5a;
@@ -2548,7 +2550,16 @@ var t=u(),n=Symbol.for(`react.element`),r=Symbol.for(`react.fragment`),i=Object.
 }
 
 :root {
-  --physicsos-focus: var(--dsw-static-blue-500, #3b82f6);
+  --physicsos-focus: #5e8a6c;
+
+  /* ---------- notebook accent ----------
+     The 76 published experiment packages are immutable and speak one visual
+     language: warm paper, green-black ink, one deep green. The host chrome
+     adopts it instead of framing them in a second, blue palette. */
+  --physics-accent: #497357;
+  --physics-accent-strong: #3c6249;
+  --physics-accent-soft: #e3ede6;
+  --physics-paper: #f5f4ed;
 
   /* ---------- surfaces ----------
      The glass material is shared by every floating panel (cards, palette,
@@ -2556,14 +2567,14 @@ var t=u(),n=Symbol.for(`react.element`),r=Symbol.for(`react.fragment`),i=Object.
      source token lives there. The canvas tokens above stay fixed-light on
      purpose: the physics inks are tuned against a white sheet, so a dark host
      keeps the sheet and darkens only the desk and the panels around it. */
-  --physics-glass-fill: rgba(255, 255, 255, 0.55);
-  --physics-glass-fill-strong: rgba(255, 255, 255, 0.7);
-  --physics-glass-border: rgba(255, 255, 255, 0.84);
-  --physics-glass-border-soft: rgba(148, 173, 199, 0.34);
-  --physics-glass-shadow: 0 16px 36px rgba(65, 93, 122, 0.1);
-  --physics-glass-shadow-raised: 0 18px 42px rgba(65, 93, 122, 0.14);
+  --physics-glass-fill: rgba(255, 254, 249, 0.62);
+  --physics-glass-fill-strong: rgba(255, 254, 249, 0.84);
+  --physics-glass-border: rgba(255, 255, 255, 0.86);
+  --physics-glass-border-soft: rgba(73, 115, 87, 0.16);
+  --physics-glass-shadow: 0 16px 36px rgba(40, 60, 50, 0.08);
+  --physics-glass-shadow-raised: 0 18px 42px rgba(40, 60, 50, 0.12);
   --physics-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --physics-glass-plate: #f7f9fc;
+  --physics-glass-plate: #f6f5ef;
 
   /* ---------- liquid glass ----------
      The floating material for the console surfaces (出卷专区 / 管理后台 / 学习记录 /
@@ -2585,27 +2596,27 @@ var t=u(),n=Symbol.for(`react.element`),r=Symbol.for(`react.fragment`),i=Object.
     inset 0 -1px 0 rgba(255, 255, 255, 0.4),
     inset 0 0 0 1px rgba(255, 255, 255, 0.26);
   --physics-glass-lift:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    0 14px 34px -10px rgba(30, 58, 95, 0.22);
+    0 1px 2px rgba(31, 42, 35, 0.05),
+    0 14px 34px -12px rgba(40, 60, 50, 0.2);
   --physics-glass-lift-raised:
-    0 2px 6px rgba(15, 23, 42, 0.06),
-    0 26px 54px -14px rgba(30, 58, 95, 0.3);
-  --physics-glass-popover: rgba(255, 255, 255, 0.94);
+    0 2px 6px rgba(31, 42, 35, 0.06),
+    0 26px 54px -16px rgba(40, 60, 50, 0.26);
+  --physics-glass-popover: rgba(255, 254, 250, 0.96);
   /* Ambient light behind the panels. Without something coloured to blur, every
      glass surface above resolves to the page's own flat fill. */
   --physics-glass-ambient:
-    radial-gradient(46% 58% at 10% 6%, rgba(37, 99, 235, 0.26), transparent 66%),
-    radial-gradient(40% 50% at 90% 4%, rgba(13, 148, 136, 0.22), transparent 68%),
-    radial-gradient(50% 62% at 82% 94%, rgba(124, 58, 237, 0.2), transparent 70%),
-    radial-gradient(40% 50% at 18% 92%, rgba(217, 119, 6, 0.16), transparent 68%),
-    radial-gradient(70% 90% at 50% 50%, rgba(255, 255, 255, 0.5), transparent 76%);
+    radial-gradient(46% 58% at 10% 6%, rgba(73, 115, 87, 0.16), transparent 66%),
+    radial-gradient(40% 50% at 90% 4%, rgba(201, 138, 43, 0.12), transparent 68%),
+    radial-gradient(50% 62% at 82% 94%, rgba(73, 115, 87, 0.12), transparent 70%),
+    radial-gradient(40% 50% at 18% 92%, rgba(201, 138, 43, 0.1), transparent 68%),
+    radial-gradient(70% 90% at 50% 50%, rgba(255, 254, 249, 0.6), transparent 76%);
 
   /* Interaction tint: a pale wash of the meaning colour over the host's base
      surface. Written as a mix rather than a fixed pale hex so a dark host gets
      a deep tint instead of a near-white block, and the ink flips with it. */
-  --physics-tint-accent: color-mix(in srgb, var(--dsw-static-blue-500) 12%, var(--dsw-alias-bg-base, #ffffff));
-  --physics-tint-accent-strong: color-mix(in srgb, var(--dsw-static-blue-500) 22%, var(--dsw-alias-bg-base, #ffffff));
-  --physics-tint-accent-ink: var(--dsw-static-blue-600);
+  --physics-tint-accent: color-mix(in srgb, var(--physics-accent) 12%, var(--dsw-alias-bg-base, #ffffff));
+  --physics-tint-accent-strong: color-mix(in srgb, var(--physics-accent) 22%, var(--dsw-alias-bg-base, #ffffff));
+  --physics-tint-accent-ink: var(--physics-accent-strong);
   --physics-tint-verified: color-mix(in srgb, var(--physics-verification-ok) 12%, var(--dsw-alias-bg-base, #ffffff));
   --physics-tint-warning: color-mix(in srgb, var(--physics-verification-warning) 14%, var(--dsw-alias-bg-base, #ffffff));
   --physics-tint-verified-edge: color-mix(in srgb, var(--physics-verification-ok) 38%, transparent);
@@ -2617,10 +2628,11 @@ var t=u(),n=Symbol.for(`react.element`),r=Symbol.for(`react.fragment`),i=Object.
      label cannot: the host's dimmed label resolves to a mid grey that is legible
      on a light desk and all but invisible on a dark one. Light values are the
      ink the product already used. */
-  --physics-ink: #34506d;
-  --physics-ink-strong: #23456b;
-  --physics-ink-muted: var(--dsw-alias-label-dimmed, #6b7280);
-  --physics-ink-link: #1d4ed8;
+  --physics-ink: #34503f;
+  --physics-ink-strong: #263f2f;
+  /* Explicit: the host's dimmed label is a near-white grey, not body text. */
+  --physics-ink-muted: #687369;
+  --physics-ink-link: #3c6249;
   --physics-ink-ok: #047857;
   --physics-ink-warn: #b45309;
   --physics-ink-mark: #be185d;
@@ -2632,6 +2644,75 @@ var t=u(),n=Symbol.for(`react.element`),r=Symbol.for(`react.fragment`),i=Object.
    host would then sit on a white desk. */
 body {
   --physics-workspace-bg: var(--dsw-alias-bg-base, #f3f6fa);
+}
+
+/* Light host: the Harness palette moves onto the notebook. Only alias tokens
+   are rebound — a static scale keeps the meaning of its name — and the dark
+   palette stays the host's. The selector outranks the host's plain body rule. */
+body:not([data-ds-dark-theme]) {
+  accent-color: var(--physics-accent);
+  --dsw-alias-bg-base: #fcfbf7;
+  --dsw-alias-bg-layer-1: #ffffff;
+  --dsw-alias-bg-layer-2: #ffffff;
+  --dsw-alias-bg-layer-3: #ffffff;
+  --dsw-alias-bg-module-platform: #f4f3ec;
+  --dsw-alias-bg-overlay: #e9e8de;
+  --dsw-alias-bg-document-preview: #eeede5;
+  --dsw-alias-bg-multi-select: #f4f3ec;
+  --dsw-alias-border-l1: rgba(40, 60, 50, 0.06);
+  --dsw-alias-border-l2: rgba(40, 60, 50, 0.12);
+  --dsw-alias-border-l2-darkmode-thin: rgba(40, 60, 50, 0.12);
+  --dsw-alias-border-l3: rgba(40, 60, 50, 0.15);
+  --dsw-alias-border-l4: rgba(40, 60, 50, 0.2);
+  --dsw-alias-brand-primary: #22302a;
+  --dsw-alias-brand-text: #1f2a23;
+  --dsw-alias-button-primary-hover: #3a473f;
+  --dsw-alias-button-primary-dimmed: #ebeae2;
+  --dsw-alias-button-info-fill: var(--physics-accent);
+  --dsw-alias-button-info-hover: #5b866a;
+  --dsw-alias-button-contrast-fill: #545d55;
+  --dsw-alias-button-floating-hover: #f1f0e9;
+  --dsw-alias-button-ghost-active-border: #8a8f84;
+  --dsw-alias-button-ghost-active-fill: #ebeae2;
+  --dsw-alias-button-ghost-active-hover: #e5e4da;
+  --dsw-alias-interactive-bg-active: rgba(40, 60, 50, 0.1);
+  --dsw-alias-interactive-bg-hover: rgba(40, 60, 50, 0.06);
+  --dsw-alias-interactive-bg-hover-accent: rgba(40, 60, 50, 0.14);
+  --dsw-alias-interactive-bg-hover-solid: #f1f0e9;
+  --dsw-alias-label-primary: #1f2a23;
+  --dsw-alias-label-primary-dimmed: #26302a;
+  --dsw-alias-label-primary-bluish: #2b4a37;
+  --dsw-alias-label-secondary: #4e5a52;
+  --dsw-alias-label-tertiary: #6b756d;
+  --dsw-alias-label-caption: #969c92;
+  --dsw-alias-label-dimmed: #d8d8cc;
+  --dsw-alias-menu-icon: #353c36;
+  --dsw-alias-link: var(--physics-accent-strong);
+  --dsw-alias-state-business-primary: var(--physics-accent);
+  --dsw-alias-state-business-tertiary: var(--physics-accent-soft);
+  --dsw-alias-markdown-citation: #ebeae2;
+  --dsw-alias-markdown-code-block: #f7f6f0;
+  --dsw-alias-markdown-code-block-banner: #f7f6f0;
+  --dsw-alias-markdown-code-segment-unselected: #f1f0e9;
+  --dsw-alias-markdown-inline-code: #f4f3ec;
+  --dsw-alias-markdown-placeholder: #f6f5ef;
+  --dsw-alias-markdown-tag: #f1f0e9;
+  --dsw-alias-tooltip-bg: #26302a;
+  --dsw-alias-toast-bg: #2c352f;
+  --dsw-specific-bubble: #edf3ee;
+  --dsw-specific-bubble-highlight: #d4e4d8;
+  --dsw-specific-login-input: #faf9f4;
+  --dsw-menu-surface-fill: rgba(252, 251, 246, 0.72);
+  --dsw-specific-selector: #f6f5ef;
+  --dsw-specific-sidebar-fill: #f4f3ec;
+  --dsw-specific-sidebar-nav-item-active: #e8e7dd;
+  --dsw-specific-sidebar-nav-item-active-accent: var(--physics-accent-soft);
+  --dsw-specific-sidebar-nav-item-hover: #eeede5;
+  --dsw-specific-tip: #f6f5ef;
+}
+
+body:not([data-ds-dark-theme]) ::selection {
+  background: rgba(73, 115, 87, 0.2);
 }
 
 /* Dark host: the sheet stays, the desk and the panels go dark. */
@@ -2666,17 +2747,36 @@ body[data-ds-dark-theme] {
     radial-gradient(40% 50% at 90% 4%, rgba(13, 148, 136, 0.22), transparent 68%),
     radial-gradient(50% 62% at 82% 94%, rgba(139, 92, 246, 0.26), transparent 70%),
     radial-gradient(40% 50% at 18% 92%, rgba(245, 158, 11, 0.16), transparent 68%);
-  --physics-tint-accent-ink: var(--dsw-static-blue-300, #93c5fd);
+  --physicsos-focus: #8fbf9f;
+  --physics-accent: #7fb08f;
+  --physics-accent-strong: #9cc8a8;
+  --physics-accent-soft: rgba(127, 176, 143, 0.16);
+  accent-color: var(--physics-accent);
+  --physics-tint-accent-ink: var(--physics-accent-strong);
 
   /* Ink flips to the light end of each hue: the same words sit on a near-black
      desk now, so a hue that read as "deep" on white reads as "invisible" here. */
   --physics-ink: #cbd6e4;
   --physics-ink-strong: #e2e8f0;
   --physics-ink-muted: var(--dsw-alias-label-secondary, #a3aab4);
-  --physics-ink-link: var(--dsw-static-blue-300, #93c5fd);
+  --physics-ink-link: var(--physics-accent-strong);
   --physics-ink-ok: var(--dsw-static-green-400, #4ed17e);
   --physics-ink-warn: var(--dsw-static-amber-400, #f7ad31);
   --physics-ink-mark: #f9a8d4;
+}
+
+/* Dark host keeps its own surfaces; only the accent moves to the notebook
+   green. The host writes its dark aliases on body[data-ds-dark-theme] as well;
+   the root qualifier outranks them whatever order the sheets load in. */
+html body[data-ds-dark-theme] {
+  --dsw-alias-button-info-fill: #4f7d60;
+  --dsw-alias-button-info-hover: #5c8d6d;
+  --dsw-alias-link: var(--physics-accent-strong);
+  --dsw-alias-state-business-primary: var(--physics-accent);
+  --dsw-alias-state-business-tertiary: var(--physics-accent-soft);
+  --dsw-specific-sidebar-nav-item-active-accent: var(--physics-accent-soft);
+  --dsw-specific-bubble: rgba(127, 176, 143, 0.14);
+  --dsw-specific-bubble-highlight: rgba(127, 176, 143, 0.26);
 }
 *:focus {
   outline: none;

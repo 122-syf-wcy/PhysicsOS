@@ -85,7 +85,7 @@ it('does not grant the trusted wrapper sandbox to raw package HTML', () => {
 })
 
 // A controllable port keeps timeout and stale-instance assertions deterministic.
-function bindV2(view: ReturnType<typeof render>, protocolVersion: 2 | 3 = 2) {
+function bindV2(view: ReturnType<typeof render>, protocolVersion: 2 | 3 = 2, appliedPresentation?: unknown) {
   const frame = view.getByTitle('社区三维实验') as HTMLIFrameElement
   const outbound: Record<string, unknown>[] = []
   let closed = false
@@ -104,7 +104,7 @@ function bindV2(view: ReturnType<typeof render>, protocolVersion: 2 | 3 = 2) {
       port2 = {}
     },
   )
-  vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {})
+  const handshake = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {})
   const message = (data: unknown): void => {
     act(() => {
       port.onmessage?.({ data })
@@ -123,8 +123,8 @@ function bindV2(view: ReturnType<typeof render>, protocolVersion: 2 | 3 = 2) {
       }),
     )
   })
-  message({ type: 'experiment/connected', protocolVersion })
-  return { outbound, message, closed: () => closed }
+  message({ type: 'experiment/connected', protocolVersion, ...(appliedPresentation === undefined ? {} : { presentation: appliedPresentation }) })
+  return { outbound, message, handshake, closed: () => closed }
 }
 function v2Frame() {
   const runtime = createOpticsWorkspaceRuntime(createConvexLensScene())
@@ -256,7 +256,7 @@ it('V2 rejects harmless extra intent fields while accepting the exact bounded in
   expect(fixture.runtime.getScene().revision).toBe(1)
 })
 
-function v3Frame() {
+function v3Frame(presentation?: { readonly mode: 'embedded' }, appliedPresentation?: unknown) {
   const template = findExperimentTemplate('incline')!
   const runtime = buildWorkspaceRuntime(template.domain, template.createScene('斜面实验').scene)!
   const session = createExperimentSession(runtime)
@@ -267,11 +267,42 @@ function v3Frame() {
       session={session}
       experimentId="incline"
       protocolVersion={3}
+      {...(presentation === undefined ? {} : { presentation })}
       onStatusChange={status}
     />,
   )
-  return { runtime, session, view, status, ...bindV2(view, 3) }
+  return { runtime, session, view, status, ...bindV2(view, 3, appliedPresentation) }
 }
+it('V3 opts into embedded presentation only on the authenticated connect message', () => {
+  const fixture = v3Frame({ mode: 'embedded' })
+  expect(fixture.handshake.mock.calls[0]?.[0]).toMatchObject({
+    type: 'experiment/connect', protocolVersion: 3, presentation: { mode: 'embedded' },
+  })
+  expect(fixture.outbound[0]).not.toHaveProperty('presentation')
+  expect(new URL((fixture.view.getByTitle('社区三维实验') as HTMLIFrameElement).src).searchParams.has('presentation')).toBe(false)
+})
+it('ordinary V3 previews keep the original handshake without a presentation override', () => {
+  const fixture = v3Frame()
+  expect(fixture.handshake.mock.calls[0]?.[0]).not.toHaveProperty('presentation')
+})
+it('keeps legacy V3 packages at their original size when they ignore embedded presentation', () => {
+  const fixture = v3Frame({ mode: 'embedded' })
+  expect(fixture.view.container.querySelector('[data-community-presentation="embedded"]')).toBeNull()
+  expect((fixture.view.getByTitle('社区三维实验') as HTMLIFrameElement).style.minHeight).toBe('')
+})
+it('uses compact sizing only after an exact requested presentation acknowledgement', () => {
+  const fixture = v3Frame({ mode: 'embedded' }, { mode: 'embedded' })
+  expect(fixture.view.container.querySelector('[data-community-presentation="embedded"]')).not.toBeNull()
+  expect((fixture.view.getByTitle('社区三维实验') as HTMLIFrameElement).style.minHeight).toBe('0px')
+})
+it.each([undefined, { mode: 'standalone' }, { mode: 'embedded', extra: true }])('ignores unsupported presentation acknowledgement %j', (applied) => {
+  const fixture = v3Frame({ mode: 'embedded' }, applied)
+  expect(fixture.view.container.querySelector('[data-community-presentation="embedded"]')).toBeNull()
+})
+it('does not compact standalone previews when a package sends an unsolicited presentation acknowledgement', () => {
+  const fixture = v3Frame(undefined, { mode: 'embedded' })
+  expect(fixture.view.container.querySelector('[data-community-presentation="embedded"]')).toBeNull()
+})
 it('V3 publishes the selected non-lens engine and requires its exact first rendered frame', () => {
   const fixture = v3Frame()
   const first = fixture.outbound[0]!

@@ -76,19 +76,24 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
     }
   }
 
-  /** Trajectory hover rows for a projectile sample. */
+  /** Trajectory hover rows for a displayed engine sample. */
   private readoutAt(
     snapshot: MechanicsRuntimeSnapshot,
     index: number,
   ): readonly { label: string; value: string }[] {
-    const trajectory = snapshot.view.trajectories.find(t => t.kind === 'history')
-    const point = trajectory?.points[index]
+    const first = snapshot.view.trajectories[0]
+    const parts = snapshot.view.trajectories.filter(trajectory => trajectory.id === first?.id)
+    const points = [
+      ...parts.filter(trajectory => trajectory.kind === 'history').flatMap(trajectory => trajectory.points),
+      ...parts.filter(trajectory => trajectory.kind === 'predicted').flatMap(trajectory => trajectory.points),
+    ]
+    const point = points[index]
     const time = snapshot.trajectoryTimes[index]
     if (point === undefined || time === undefined) return []
     /* vx is constant in a projectile; vy from the clock derivative. Read from the
        chart series so the hover matches the plotted data exactly. */
-    const vx = snapshot.charts.find(c => c.id === 'vx-t')?.points[index]?.value
-    const vy = snapshot.charts.find(c => c.id === 'vy-t')?.points[index]?.value
+    const vx = snapshot.charts.find(c => c.id === 'vx-t')?.points.find(sample => sample.t === time)?.value
+    const vy = snapshot.charts.find(c => c.id === 'vy-t')?.points.find(sample => sample.t === time)?.value
     const rows: { label: string; value: string }[] = [
       { label: 't', value: `${fmt(time)} s` },
       { label: 'x', value: `${fmt(point.x)} m` },

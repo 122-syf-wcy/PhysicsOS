@@ -9,7 +9,9 @@ import {
   SCENE_COMMAND_SCHEMA,
   SCENE_REVISION_CONFLICT,
   SceneRuntime,
+  deepFreeze,
   defaultCoordinateSystem,
+  memoizeOnFrozenScene,
   type PhysicsEvent,
   type PhysicsScene,
   type SceneCommand,
@@ -20,6 +22,32 @@ const OCCURRED_AT = '2026-08-17T02:00:01.000Z'
 const ACTOR = { type: 'user', id: 'user-1' } satisfies ActorRef
 const TRACE = { traceId: asTraceId('trace-1') } satisfies TraceContext
 const OBSERVABLE_ID = asObservableId('observable-force')
+
+describe('immutable scene caches', () => {
+  it('recomputes a shallow-frozen scene after a nested fact changes', () => {
+    const scene = Object.freeze({ mass: { value: 2 } })
+    const readMass = memoizeOnFrozenScene((value: typeof scene) => value.mass.value)
+    expect(readMass(scene)).toBe(2)
+    scene.mass.value = 3
+    expect(readMass(scene)).toBe(3)
+  })
+
+  it('deep-freezes children of an already frozen root', () => {
+    const scene = Object.freeze({ mass: { value: 2 } })
+    expect(deepFreeze(scene)).toBe(scene)
+    expect(Object.isFrozen(scene.mass)).toBe(true)
+    expect(() => { scene.mass.value = 3 }).toThrow(TypeError)
+  })
+
+  it('reuses derivations only once the whole scene is immutable', () => {
+    const scene = deepFreeze({ mass: { value: 2 } })
+    let builds = 0
+    const derive = memoizeOnFrozenScene((value: typeof scene) => ({ mass: value.mass.value, build: ++builds }))
+    const first = derive(scene)
+    expect(derive(scene)).toBe(first)
+    expect(builds).toBe(1)
+  })
+})
 
 const magneticScene = (): PhysicsScene => ({
   schemaVersion: 'physics-scene/1.0',

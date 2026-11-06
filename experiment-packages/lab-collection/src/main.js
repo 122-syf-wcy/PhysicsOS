@@ -2,7 +2,7 @@ import { connectExperiment } from './protocol.js'
 import { renderFrame, disposeRenderer } from './renderer.js'
 
 const controls = new Map(), root = document.getElementById('parameters')
-let connection, current
+let connection, current, embedded = false
 function send(intent) { connection.send({ ...intent, protocolVersion: 3 }) }
 function parameterInput(parameter) {
   let input = controls.get(parameter.id)
@@ -43,15 +43,21 @@ connection = connectExperiment(async snapshot => {
   document.getElementById('title').textContent = snapshot.title
   document.title = `${snapshot.title} · PhysicsOS`
   document.getElementById('status').textContent = '调节条件，观察变化'
-  for (const section of snapshot.inspector) {
+  for (const section of embedded ? [] : snapshot.inspector) {
     for (const parameter of section.parameters ?? []) parameterInput(parameter)
     for (const choice of section.choices ?? []) choiceInput(choice)
   }
-  document.getElementById('playback').hidden = !(snapshot.clock.total > 0)
+  document.getElementById('playback').hidden = embedded || !(snapshot.clock.total > 0)
   document.getElementById('play').textContent = snapshot.clock.running ? '暂停' : '播放'
   const seek = document.getElementById('seek'); seek.max = String(snapshot.clock.total); seek.value = String(snapshot.clock.time)
   document.getElementById('time').textContent = `${Number(snapshot.clock.time.toPrecision(3))} / ${Number(snapshot.clock.total.toPrecision(3))} s`
-})
+}, { onPresentation({ mode }) {
+  embedded = mode === 'embedded'
+  document.documentElement.dataset.presentation = embedded ? 'embedded' : 'standalone'
+  document.querySelector('header').hidden = embedded
+  document.querySelector('.settings').hidden = embedded
+  document.getElementById('playback').hidden = embedded || !(current?.clock.total > 0)
+} })
 document.getElementById('play').addEventListener('click', () => send({ type: 'playback/running', running: !current?.clock.running }))
 document.getElementById('seek').addEventListener('input', event => send({ type: 'playback/seek', time: Number(event.target.value) }))
 const failure = () => { document.getElementById('status').textContent = '三维画面暂时无法显示，请刷新或使用支持 WebGL 的浏览器。'; connection.reportError('RENDER_FAILED') }
