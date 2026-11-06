@@ -399,8 +399,13 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { physicsSurface: surface.store, auth: auth.store },
-      /* 首页 is the Conversation: the surface store maps it back to no panel. */
-      openSurface: (id: Parameters<typeof surface.open>[0]) => { surface.open(id) },
+      /* 首页 is the Conversation: the surface store maps it back to no panel.
+         物理实验室 is the section's front door, so it always lands on the
+         chooser; an open scene stays resumable from its 继续上次实验 card. */
+      openSurface: (id: Parameters<typeof surface.open>[0]) => {
+        if (id === 'lab') surface.openExperimentPicker()
+        else surface.open(id)
+      },
     }),
   }, SidebarNav))
 

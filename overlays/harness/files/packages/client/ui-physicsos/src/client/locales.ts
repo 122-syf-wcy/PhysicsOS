@@ -395,6 +395,8 @@ export const zh = {
   'lab.template.hint': '选择一个物理实验模板',
   'lab.toolbar.switch': '切换实验',
   'lab.backToChat': '返回对话',
+  'lab.backToCenter': '实验中心',
+  'lab.questionCode.trail': '本题代码实验',
   'lab.template.empty.title': '实验中心',
   'lab.template.empty.body': '从一个模板开始，PhysicsOS 会建立真实的物理场景、求解并验证。',
   'lab.template.group.kinematics': '运动学',
@@ -1432,6 +1434,8 @@ export const en = {
   'lab.template.hint': 'Pick a physics experiment template',
   'lab.toolbar.switch': 'Switch experiment',
   'lab.backToChat': 'Back to chat',
+  'lab.backToCenter': 'Experiment Centre',
+  'lab.questionCode.trail': 'Question experiment',
   'lab.template.empty.title': 'Experiment Centre',
   'lab.template.empty.body':
     'Start from a template and PhysicsOS builds, solves and verifies a real physics scene.',

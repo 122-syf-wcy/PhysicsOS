@@ -62,6 +62,32 @@ describe('return to chat', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回对话' }))
     expect(openSurface).toHaveBeenCalledWith('home')
   })
+
+  it('leads the toolbar with the way back to the experiment centre', () => {
+    const template = findExperimentTemplate('rheostat-circuit')!
+    const surface = createPhysicsSurfaceController()
+    surface.open('lab', createExperimentSceneRef(template, t(template.label)))
+    const openExperimentPicker = vi.fn()
+    const openSurface = vi.fn()
+    render(
+      <PhysicsSurface
+        useLearningRecord={neverHook}
+        useRecentExperiments={neverHook}
+        usePhysicsSurface={selector => selector(surface.store.getSnapshot())}
+        t={t}
+        openSurface={openSurface}
+        openExperimentPicker={openExperimentPicker}
+        useSessions={neverHook}
+        useWorkspaces={neverHook}
+        useAuth={neverHook}
+      />,
+    )
+    const crumb = screen.getByRole('button', { name: /^实验中心/ })
+    expect(crumb.textContent).toContain('电路')
+    fireEvent.click(crumb)
+    expect(openExperimentPicker).toHaveBeenCalledOnce()
+    expect(openSurface).not.toHaveBeenCalled()
+  })
 })
 
 describe('workspace data panel', () => {

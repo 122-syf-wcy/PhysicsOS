@@ -187,4 +187,27 @@ describe('ui-physicsos apply', () => {
     expect(document.head.querySelector('style[data-physicsos-chrome]')).toBeNull()
     expect(b.slots.entries('sidebar.brand.mark')).toHaveLength(0)
   })
+
+  it('lands the sidebar 物理实验室 entry on the chooser and keeps the opened scene resumable', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const sceneCard = b.slots.entries('conversation.chat.node')
+      .find(entry => entry.options.key === 'physics-scene-card')!
+    const template = findExperimentTemplate('projectile-oblique')
+    if (template === undefined) throw new Error('missing projectile-oblique template')
+    const sceneRef = createExperimentSceneRef(template, '斜抛运动')
+    ;(sceneCard.inject as () => { openSceneInLab: (ref: typeof sceneRef) => void })().openSceneInLab(sceneRef)
+    const nav = (b.slots.entries('sidebar.nav')[0]!.inject as () => {
+      openSurface: (id: 'home' | 'lab') => void
+      hooks: { physicsSurface: { getSnapshot: () => { surface: string; experimentPicker?: true; sceneRef?: { sceneId: string } } } }
+    })()
+    nav.openSurface('home')
+    nav.openSurface('lab')
+    const state = nav.hooks.physicsSurface.getSnapshot()
+    expect(state.surface).toBe('lab')
+    expect(state.experimentPicker).toBe(true)
+    expect(state.sceneRef?.sceneId).toBe(sceneRef.sceneId)
+    await fiber.dispose()
+  })
 })

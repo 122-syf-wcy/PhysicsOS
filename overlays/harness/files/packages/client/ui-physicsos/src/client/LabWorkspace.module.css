@@ -103,6 +103,40 @@
   overflow: hidden;
 }
 
+/* The way out to the chooser: the first thing a reader looks for. */
+.crumb {
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: -2px 0 0 -6px;
+  padding: 3px 8px 3px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--physics-ink-muted, var(--dsw-alias-label-secondary));
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 18px;
+  cursor: pointer;
+  transition:
+    color var(--physics-motion-fast) var(--physics-ease),
+    background-color var(--physics-motion-fast) var(--physics-ease);
+}
+
+.crumb:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.crumbTrail {
+  margin-left: 3px;
+  font-weight: 400;
+  opacity: 0.72;
+}
+
 .toolGroup {
   display: flex;
   flex-wrap: wrap;

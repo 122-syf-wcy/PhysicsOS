@@ -458,8 +458,28 @@
 .labCover[data-private-question-code-workspace] { display: block; padding: 20px; overflow-y: auto; overflow-x: hidden; background-color: var(--physics-glass-plate, #f4f7f5); background-image: var(--physics-glass-sheen); }
 .labContent { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 1280px; min-width: 0; margin: 0 auto; padding-bottom: 12px; }
 .labHeader { display: flex; align-items: center; gap: 20px; min-width: 0; padding: 3px 2px 8px; }
-.labHeader > .heading { flex: 1; }
+.labHeader > .heading { flex: 1; min-width: 0; }
 .labHeader > .open { display: inline-flex; align-items: center; gap: 6px; }
+.crumb {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: -6px;
+  padding: 3px 8px 3px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--physics-ink-muted, var(--dsw-alias-label-secondary));
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 18px;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.crumb:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.crumbTrail { margin-left: 3px; font-weight: 400; opacity: .72; }
 .labContent .codeStage { height: clamp(380px, 56vh, 680px); }
 .labHint { margin: 0; padding: 0 5px; color: var(--physics-ink-muted, var(--dsw-alias-label-secondary)); font-size: 12px; line-height: 1.8; }
 @media (max-width: 800px) {
@@ -469,9 +489,8 @@
   .card { padding: 12px; gap: 10px; border-radius: 22px; }
   .labCover[data-private-question-code-workspace] { padding: 12px; }
   .labContent { gap: 10px; }
-  .labHeader { flex-wrap: wrap; gap: 13px; }
-  .labHeader > .heading { flex-basis: 100%; }
-  .labHeader > .open { max-width: none; }
+  .labHeader { align-items: flex-start; gap: 10px; }
+  .labHeader > .open { min-height: 36px; padding: 7px 10px; }
   .labContent .codeStage { height: 380px; }
   .head { gap: 10px; align-items: flex-start; }
   .title { font-size: 18px; }

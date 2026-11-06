@@ -318,6 +318,22 @@ it('uses the private renderer in the full Lab with the same question session and
   expect(f.fetch.mock.calls.every(([url]) => url.startsWith('/physicsos/question-code/'))).toBe(true)
   expect(view.queryByRole('img')).toBeNull()
 })
+it('leads the private Lab with the experiment centre beside the way back to the owning chat', async () => {
+  const f = await fixture()
+  const runtime = buildWorkspaceRuntime('mechanics', withQuestionCodeVisualization(scene, f.ref), scene)
+  if (runtime === null) throw new Error('missing question runtime')
+  const onSwitchExperiment = vi.fn()
+  const onReturnToChat = vi.fn()
+  const view = render(<PhysicsWorkspace runtime={runtime} t={t} questionCodeOwner={f.questionCodeOwner}
+    questionCodeVisualization={f.ref} questionCodeScene={scene}
+    onSwitchExperiment={onSwitchExperiment} onReturnToChat={onReturnToChat} />)
+  await waitFor(() => { expect(view.container.querySelector('iframe')).not.toBeNull() })
+  fireEvent.click(view.getByRole('button', { name: /^实验中心/ }))
+  expect(onSwitchExperiment).toHaveBeenCalledOnce()
+  expect(onReturnToChat).not.toHaveBeenCalled()
+  fireEvent.click(view.getByRole('button', { name: t('lab.backToChat') }))
+  expect(onReturnToChat).toHaveBeenCalledOnce()
+})
 it('keeps a legacy private Lab on its upgrade surface and returns to the owning conversation', async () => {
   const f = await fixture()
   const { rendererKind: _legacyKind, ...legacy } = f.ref

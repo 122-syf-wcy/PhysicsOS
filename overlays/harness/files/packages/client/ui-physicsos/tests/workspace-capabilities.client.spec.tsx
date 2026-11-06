@@ -131,9 +131,8 @@ describe('a timeline-less experiment loses only the transport', () => {
     mountLab('series-circuit')
 
     /* The audit's complaint was "the same toolbar with half the buttons grey".
-       After the change the only disabled control is the deliberate 更多
-       placeholder — nothing that looks like playback. */
+       Nothing is left merely disabled — not playback, not a placeholder. */
     const disabled = [...coverOf().querySelectorAll('button:disabled')]
-    expect(disabled.map(button => button.getAttribute('aria-label'))).toEqual(['更多'])
+    expect(disabled.map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual([])
   })
 })

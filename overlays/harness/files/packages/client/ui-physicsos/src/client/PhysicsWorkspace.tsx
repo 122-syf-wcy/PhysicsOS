@@ -19,7 +19,6 @@ import {
   IconChevronLeftOutlineMedium,
   IconChevronRightOutlineMedium,
   IconDownloadOutlineMedium,
-  IconEllipsisOutlineMedium,
   IconFullscreenOutlineMedium,
   IconListPenOutlineMedium,
   IconPauseOutlineMedium,
@@ -41,7 +40,7 @@ import { AgentDrawer } from './AgentDrawer.tsx'
 import { ExperimentGuidePanel } from './ExperimentGuidePanel.tsx'
 import { ExperimentReportPanel } from './ExperimentReportPanel.tsx'
 import { WorkspaceScenePanel } from './WorkspaceScenePanel.tsx'
-import { IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
+import { IconChatBubble, IconScene, IconVariable, IconVerified } from './icons/physics-icons.tsx'
 import { Mascot } from './Mascot.tsx'
 import { useEventEffects } from './physics/event-effects.ts'
 import { useFrameSource, type FrameSource } from './physics/frame-source.ts'
@@ -526,13 +525,18 @@ export function PhysicsWorkspace({
       data-scene-revision={snapshot.sceneRevision} data-verification-status={displayedStatus}>
       <div className={codeCss.labContent}>
         <header className={codeCss.labHeader}>
-          {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
-            <IconChevronLeftOutlineMedium size={14} />{t('lab.backToChat')}
-          </button>}
           <div className={codeCss.heading}>
-            <span className={codeCss.badge}><IconScene size={14} />本题代码实验</span>
+            {onSwitchExperiment === undefined
+              ? <span className={codeCss.badge}><IconScene size={14} />{t('lab.questionCode.trail')}</span>
+              : <button type="button" className={codeCss.crumb} onClick={onSwitchExperiment}>
+                <IconChevronLeftOutlineMedium size={13} />{t('lab.backToCenter')}
+                <span className={codeCss.crumbTrail}>/ {t('lab.questionCode.trail')}</span>
+              </button>}
             <h1 className={codeCss.title}>{title}</h1>
           </div>
+          {onReturnToChat === undefined ? null : <button type="button" className={codeCss.open} onClick={onReturnToChat}>
+            <IconChatBubble size={14} />{t('lab.backToChat')}
+          </button>}
         </header>
         <QuestionCodeCanvas visualization={questionCodeVisualization} scene={questionCodeScene} session={session}
           hasVerifiedSolution={questionCodeHasVerifiedSolution === true}
@@ -582,13 +586,14 @@ export function PhysicsWorkspace({
       data-inspector-drawer-open={inspector.open ? 'true' : undefined}
     >
       <header className={css.toolbar}>
-        {onReturnToChat === undefined ? null : (
-          <button type="button" className={css.tool} onClick={onReturnToChat}>
-            <IconChevronLeftOutlineMedium size={13} />
-            {t('lab.backToChat')}
-          </button>
-        )}
         <div className={css.sceneIdentity}>
+          {onSwitchExperiment === undefined ? null : (
+            <button type="button" className={css.crumb} onClick={onSwitchExperiment}>
+              <IconChevronLeftOutlineMedium size={13} />
+              {t('lab.backToCenter')}
+              <span className={css.crumbTrail}>/ {t(`lab.template.group.${snapshot.domain}`)}</span>
+            </button>
+          )}
           {/* The scene name is the switch affordance; the chevron button carries
               the keyboard/AT path because a heading may not live inside a button. */}
           <h1
@@ -803,14 +808,12 @@ export function PhysicsWorkspace({
               {t('lab.agent')}
             </button>
           )}
-          <button
-            type="button"
-            className={clsx(css.tool, css.toolIcon)}
-            aria-label={t('lab.more')}
-            disabled
-          >
-            <IconEllipsisOutlineMedium size={14} />
-          </button>
+          {onReturnToChat === undefined ? null : (
+            <button type="button" className={css.tool} onClick={onReturnToChat}>
+              <IconChatBubble size={13} />
+              {t('lab.backToChat')}
+            </button>
+          )}
         </div>
       </header>
 
