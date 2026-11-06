@@ -212,7 +212,8 @@ export class FluidWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '浮力实验'
     const badge = branchBadgeOf(scene)
     const tank = fluidTankOf(scene)

@@ -52,6 +52,7 @@ import {
 } from '@physicsos/physics-scene'
 
 import { microWindowPhysicalDelta } from '../animation-clock.ts'
+import { memoizeOnIdentityWith } from './frame-memo.ts'
 import { electricSampleReadout, electricSceneVisualAt } from './electric-visual-bridge.ts'
 import {
   branchBadgeOf,
@@ -215,8 +216,14 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
     this.recompute()
   }
 
+  /**
+   * Re-project the current playhead. Runs on every animation frame, so it
+   * reads the store's shared frozen snapshot (no clone) and only validates and
+   * simulates when the scene revision changed: a cached simulation already
+   * proves the engine accepted this revision.
+   */
   private recompute(): void {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     try {
       /* Parallel-plate (bounded field) scenes route to the Electric Region Engine,
          which is mutually exclusive with the unbounded ElectricEngine. */
@@ -224,14 +231,17 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
         this.recomputeRegion(scene)
         return
       }
-      const support = this.engine.canHandle(scene)
-      if (!support.supported) {
-        this.failure = support.failedConditions.map(entry => entry.message).join(' ')
-        this.computed = undefined
-        return
-      }
       const key = `${String(scene.id)}:${scene.revision}`
-      const simulation = this.simulationCache?.key === key ? this.simulationCache.simulation : this.engine.simulate(
+      const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+      if (cached === undefined) {
+        const support = this.engine.canHandle(scene)
+        if (!support.supported) {
+          this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+          this.computed = undefined
+          return
+        }
+      }
+      const simulation = cached ?? this.engine.simulate(
         scene,
         createElectricSimulationRequest(
           scene,
@@ -275,14 +285,17 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
 
   /** Region-engine recompute: bounded (parallel-plate) uniform field scenes. */
   private recomputeRegion(scene: PhysicsScene): void {
-    const support = electricRegionEngine.canHandle(scene)
-    if (!support.supported) {
-      this.failure = support.failedConditions.map(entry => entry.message).join(' ')
-      this.computed = undefined
-      return
-    }
     const key = `${String(scene.id)}:${scene.revision}`
-    const simulation = this.simulationCache?.key === key ? this.simulationCache.simulation : electricRegionEngine.simulate(
+    const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+    if (cached === undefined) {
+      const support = electricRegionEngine.canHandle(scene)
+      if (!support.supported) {
+        this.failure = support.failedConditions.map(entry => entry.message).join(' ')
+        this.computed = undefined
+        return
+      }
+    }
+    const simulation = cached ?? electricRegionEngine.simulate(
       scene,
       createElectricRegionSimulationRequest(
         scene,
@@ -345,7 +358,7 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     const computed = this.computed
     const pointCharge = isPointChargeScene(scene)
     const region = isRegionScene(scene)
@@ -470,10 +483,30 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
       sceneRevision: scene.revision,
       view: this.highlighted.length === 0 ? view : { ...view, highlighted: this.highlighted },
       ariaLabel: `${title}的可验证物理画布`,
-      tree: this.treeOf(scene),
+      /* The inspector reads the current state; everything else below is a
+         function of the simulation alone and is built once per revision. */
       inspector: this.inspectorOf(scene, simulation, state),
-      charts: chartsOf(simulation, particle.id),
-      table: tableOf(simulation, particle.id),
+      ...this.staticPanels(simulation, { scene, particleId: particle.id, region }),
+      clock: { time: this.currentTime, total: endTime, running: this.running, rate: this.rate },
+      sampleReadout: index => electricSampleReadout(simulation, particle.id, index),
+      ...(badge === undefined
+        ? {}
+        : {
+          branch: {
+            originQuestionTitle: this.origin?.metadata.title,
+            parentRevision: badge.parentRevision,
+            canRestore: this.origin !== undefined,
+          },
+        }),
+    }
+  }
+
+  /** Frame-invariant panels per simulation (uniform/region scenes); see `frame-memo.ts`. */
+  private readonly staticPanels = memoizeOnIdentityWith(
+    (simulation: SimulationResult, context: { scene: PhysicsScene; particleId: string; region: boolean }) => ({
+      tree: this.treeOf(context.scene),
+      charts: chartsOf(simulation, context.particleId),
+      table: tableOf(simulation, context.particleId),
       derivation: simulation.derivedQuantities
         .filter(derived => derived.formula !== undefined)
         .map(derived => ({
@@ -487,21 +520,10 @@ export class ElectricWorkspaceRuntime implements WorkspaceRuntime {
           },
         })),
       verification: verificationOf(simulation, false),
-      events: region ? regionEventsOf(simulation, scene) : [],
-      clock: { time: this.currentTime, total: endTime, running: this.running, rate: this.rate },
+      events: context.region ? regionEventsOf(simulation, context.scene) : [],
       trajectoryTimes: simulation.states.map(sample => sample.time.value),
-      sampleReadout: index => electricSampleReadout(simulation, particle.id, index),
-      ...(badge === undefined
-        ? {}
-        : {
-          branch: {
-            originQuestionTitle: this.origin?.metadata.title,
-            parentRevision: badge.parentRevision,
-            canRestore: this.origin !== undefined,
-          },
-        }),
-    }
-  }
+    }),
+  )
 
   private treeOf(scene: PhysicsScene): readonly SceneTreeNode[] {
     if (isPointChargeScene(scene)) return pointChargeTreeOf(scene)

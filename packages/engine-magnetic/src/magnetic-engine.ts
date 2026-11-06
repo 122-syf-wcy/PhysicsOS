@@ -33,6 +33,7 @@ import {
   type VerificationResult,
 } from '@physicsos/physics-core'
 import {
+  memoizeOnFrozenScene,
   validateScene,
   trajectorySampleTimes,
   trajectoryStorageSampleCount,
@@ -352,7 +353,18 @@ export class MagneticEngine implements PhysicsEngine<PhysicsScene, PhysicsEventL
     }
   }
 
-  private resolveModel(scene: PhysicsScene): MagneticModel {
+  /**
+   * Resolve the frozen model once per scene snapshot. `stateAt` runs every
+   * animation frame, and the full scene validation inside `canHandle` is a
+   * pure function of the scene, so a frozen snapshot (what the Lab's store
+   * hands out) is validated and resolved once per revision instead of per
+   * frame. Unfrozen scenes are recomputed on every call, as before.
+   */
+  private readonly resolveModel: (scene: PhysicsScene) => MagneticModel = memoizeOnFrozenScene(
+    (scene: PhysicsScene) => this.computeModel(scene),
+  )
+
+  private computeModel(scene: PhysicsScene): MagneticModel {
     const support = this.canHandle(scene)
     if (!support.supported) throw new EngineUnsupportedError(this.engineId, support)
 

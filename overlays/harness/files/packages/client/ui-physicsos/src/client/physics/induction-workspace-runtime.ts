@@ -46,6 +46,7 @@ import {
 } from './induction-visual-bridge.ts'
 import { emptyVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
+import { memoizeOnIdentityWith } from './frame-memo.ts'
 import type {
   DataTableView,
   DerivedQuantityView,
@@ -53,6 +54,7 @@ import type {
   ObservableKey,
   QuantityParameter,
   SceneTreeNode,
+  TimelineEvent,
   VerificationCheckView,
 } from './scene-visual-model.ts'
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
@@ -222,7 +224,8 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '电磁感应实验'
     const badge = branchBadgeOf(scene)
     const bench = inductionBenchOf(scene)
@@ -277,10 +280,35 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
       sceneRevision: scene.revision,
       view: this.highlighted.length === 0 ? view : { ...view, highlighted: this.highlighted },
       ariaLabel: `${title}的可验证物理画布`,
-      tree: this.treeOf(scene, bench),
+      /* The inspector reads this frame's derived values; everything else
+         below is a function of the simulation alone, built once per revision. */
       inspector: this.inspectorOf(bench, model, frameState.derived),
-      charts: chartsOf(simulation, model),
-      table: tableOf(model, simulation),
+      ...this.staticPanels(simulation, { scene, bench, model }),
+      /* The bar sweep is the animation; a flux_change run is a steady reading. */
+      clock: {
+        time: this.currentTime,
+        total: runDurationOf(scene),
+        running: this.running,
+        rate: this.rate,
+      },
+      ...(badge === undefined
+        ? {}
+        : {
+          branch: {
+            originQuestionTitle: this.origin?.metadata.title,
+            parentRevision: badge.parentRevision,
+            canRestore: this.origin !== undefined,
+          },
+        }),
+    }
+  }
+
+  /** Frame-invariant panels per simulation; see `frame-memo.ts`. */
+  private readonly staticPanels = memoizeOnIdentityWith(
+    (simulation: SimulationResult, context: { scene: PhysicsScene; bench: InductionBench; model: ResolvedInductionModel }) => ({
+      tree: this.treeOf(context.scene, context.bench),
+      charts: chartsOf(simulation, context.model),
+      table: tableOf(context.model, simulation),
       derivation: simulation.derivedQuantities
         .filter(derived => derived.formula !== undefined && isScalarQuantity(derived.value))
         .map(derived => ({
@@ -299,26 +327,10 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
         status: (check.passed ? 'passed' : 'failed') as VerificationCheckView['status'],
         ...(check.message === undefined ? {} : { detail: check.message }),
       })),
-      events: [],
-      /* The bar sweep is the animation; a flux_change run is a steady reading. */
-      clock: {
-        time: this.currentTime,
-        total: runDurationOf(scene),
-        running: this.running,
-        rate: this.rate,
-      },
+      events: [] as readonly TimelineEvent[],
       trajectoryTimes: simulation.states.map(state => canonicalValue(state.time)),
-      ...(badge === undefined
-        ? {}
-        : {
-          branch: {
-            originQuestionTitle: this.origin?.metadata.title,
-            parentRevision: badge.parentRevision,
-            canRestore: this.origin !== undefined,
-          },
-        }),
-    }
-  }
+    }),
+  )
 
   private treeOf(scene: PhysicsScene, bench: InductionBench): readonly SceneTreeNode[] {
     const model = this.computed?.model
@@ -687,7 +699,7 @@ export class InductionWorkspaceRuntime implements WorkspaceRuntime {
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
     if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
-      const total = runDurationOf(this.sceneRuntime.getScene())
+      const total = runDurationOf(this.sceneRuntime.peekScene())
       const next = this.currentTime + wallClockSeconds * this.rate
       this.currentTime = next >= total ? total : next
       if (this.currentTime >= total) this.running = false

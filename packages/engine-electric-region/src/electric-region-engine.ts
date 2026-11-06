@@ -1,4 +1,8 @@
-import { trajectorySampleTimes, trajectoryStorageSampleCount } from '@physicsos/physics-scene'
+import {
+  memoizeOnFrozenScene,
+  trajectorySampleTimes,
+  trajectoryStorageSampleCount,
+} from '@physicsos/physics-scene'
 import {
   add,
   dot,
@@ -85,7 +89,7 @@ const failure = (condition: string, message: string) => ({ condition, message })
  * Resolve a parallel-plate scene into the numerical model the solver consumes.
  * Throws when the scene does not satisfy the engine's preconditions.
  */
-export const resolveParallelPlateModel = (scene: PhysicsScene): ParallelPlateModel => {
+const computeParallelPlateModel = (scene: PhysicsScene): ParallelPlateModel => {
   const engine = new ElectricRegionEngine()
   const support = engine.canHandle(scene)
   if (!support.supported) {
@@ -144,6 +148,15 @@ export const resolveParallelPlateModel = (scene: PhysicsScene): ParallelPlateMod
     yBottom: -plateSeparation / 2,
   }
 }
+
+/**
+ * Resolve the parallel-plate model. `stateAt` and the view bridge call this
+ * on every animation frame and its `canHandle` is a full scene validation, so
+ * a frozen scene snapshot is resolved once per revision; unfrozen scenes are
+ * recomputed on every call, as before.
+ */
+export const resolveParallelPlateModel: (scene: PhysicsScene) => ParallelPlateModel =
+  memoizeOnFrozenScene(computeParallelPlateModel)
 
 /* ----------------------------------------------------- trajectory phases -- */
 

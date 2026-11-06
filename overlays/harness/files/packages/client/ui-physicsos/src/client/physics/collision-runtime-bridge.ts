@@ -30,6 +30,7 @@ import { collisionSceneVisualAt, collisionSampleIndices } from './collision-visu
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
 import { runtimeStatusOf } from './verified-result.ts'
 import { forkExperimentalScene, requiresExperimentalFork } from './experimental-branch.ts'
+import { memoizeOnIdentityWith } from './frame-memo.ts'
 import type {
   ChartSeries,
   DataTableView,
@@ -348,26 +349,30 @@ export class CollisionRuntimeBridge {
    * @returns the collision runtime snapshot.
    */
   recompute(): CollisionRuntimeSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const modelId = detectCollisionModel(scene) ?? 'elastic_collision'
     try {
-      const support = this.engine.canHandle(scene)
-      if (!support.supported) {
-        this.snapshot = this.failedSnapshot(scene, modelId, {
-          code: 'UNSUPPORTED_MODEL',
-          message: '当前场景不满足碰撞模型的前提：需要至少两个圆形刚体、无电磁场。',
-          retryable: false,
-        })
-        return this.snapshot
-      }
-
       /* One simulation per scene revision. The solver's states are equally
          sampled (dt ≈ 8 ms — finer than a frame), so playback reads the live
          body from the nearest engine sample instead of re-integrating the
          whole run every animation frame, which is what made collision
-         playback stutter. A command bumps the revision and misses the cache. */
+         playback stutter. A command bumps the revision and misses the cache;
+         a hit also proves the engine accepted this revision, so the full
+         scene validation in `canHandle` runs once per revision, not per frame. */
       const cached = this.simulationCache
       const fresh = cached === undefined || cached.sceneRevision !== scene.revision
+      if (fresh) {
+        const support = this.engine.canHandle(scene)
+        if (!support.supported) {
+          this.snapshot = this.failedSnapshot(scene, modelId, {
+            code: 'UNSUPPORTED_MODEL',
+            message: '当前场景不满足碰撞模型的前提：需要至少两个圆形刚体、无电磁场。',
+            retryable: false,
+          })
+          return this.snapshot
+        }
+      }
       const simulation = fresh
         ? this.engine.simulate(
           scene,
@@ -438,7 +443,7 @@ export class CollisionRuntimeBridge {
     const states = simulation.states
     const first = states[0]
     if (first === undefined) {
-      return this.engine.stateAt(this.sceneRuntime.getScene(), { value: time, unit: 's', dimension: 'time' })
+      return this.engine.stateAt(this.sceneRuntime.peekScene(), { value: time, unit: 's', dimension: 'time' })
     }
     const last = states[states.length - 1] ?? first
     const dt = (last.time.value - first.time.value) / Math.max(1, states.length - 1)
@@ -471,22 +476,33 @@ export class CollisionRuntimeBridge {
       modelId,
       status,
       view,
-      tree: this.treeOf(scene),
-      inspector: this.inspectorOf(scene),
+      /* Everything below the view is a function of the simulation (hence of
+         the scene revision), not of the playhead: built once per simulation
+         and shared across frames so a 1 250-sample run is not re-tabulated
+         sixty times a second and downstream memos keep their identities. */
+      ...this.staticPanels(simulation, { scene, modelId }),
+      clock,
+    }
+  }
+
+  /** Frame-invariant panels per simulation; see `frame-memo.ts`. */
+  private readonly staticPanels = memoizeOnIdentityWith(
+    (simulation: CollisionSimulation, context: { scene: PhysicsScene; modelId: CollisionModelId }) => ({
+      tree: this.treeOf(context.scene),
+      inspector: this.inspectorOf(context.scene),
       charts: this.chartsOf(simulation),
       table: this.tableOf(simulation),
-      derivation: this.derivationOf(modelId),
+      derivation: this.derivationOf(context.modelId),
       verification: this.verificationOf(simulation),
       events: this.eventsOf(simulation),
-      clock,
       /* Parallel to the decimated trail points the view bridge emits — the
          canvas requires trajectoryTimes.length === points.length for hover,
          seek and the equal-time strobe ghosts to activate. */
       trajectoryTimes: collisionSampleIndices(simulation.states.length).map(
         index => simulation.states[index]?.time.value ?? 0,
       ),
-    }
-  }
+    }),
+  )
 
   private treeOf(scene: PhysicsScene): readonly SceneTreeNode[] {
     return [

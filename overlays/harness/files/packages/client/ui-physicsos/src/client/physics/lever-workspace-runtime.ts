@@ -198,7 +198,8 @@ export class LeverWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '杠杆实验'
     const badge = branchBadgeOf(scene)
     const bench = leverBenchOf(scene)

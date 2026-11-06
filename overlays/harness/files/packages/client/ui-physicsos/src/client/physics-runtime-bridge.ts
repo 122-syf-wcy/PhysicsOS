@@ -1100,9 +1100,14 @@ export class MagneticRuntimeBridge {
     }
   }
 
-  /** Re-project one analytical state without re-running simulation or verification. */
+  /**
+   * Re-project one analytical state without re-running simulation or
+   * verification. Reads the store's shared frozen snapshot: it runs on every
+   * animation frame, and the engine memoizes its model on that reference, so
+   * neither a clone nor a scene validation happens per frame.
+   */
   private renderCurrentFrame(): MagneticRuntimeSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    const scene = this.sceneRuntime.peekScene()
     const simulation = this.snapshot.simulation
     const trusted = this.snapshot.status !== 'failed' && simulation !== null
     if (!trusted) {

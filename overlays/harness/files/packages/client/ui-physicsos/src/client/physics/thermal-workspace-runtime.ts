@@ -219,7 +219,8 @@ export class ThermalWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   getSnapshot(): WorkspaceSnapshot {
-    const scene = this.sceneRuntime.getScene()
+    /* Shared frozen snapshot: this runs every animation frame, so no clone. */
+    const scene = this.sceneRuntime.peekScene()
     const title = scene.metadata.title ?? '加热实验'
     const badge = branchBadgeOf(scene)
     const bench = thermalBenchOf(scene)
