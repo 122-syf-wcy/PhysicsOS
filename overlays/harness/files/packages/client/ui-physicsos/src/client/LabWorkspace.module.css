@@ -1549,6 +1549,14 @@
     min-height: 28px;
   }
 
+  /* The timeline wraps onto two rows here, so a strip floating a fixed 66px
+     above the column foot would cover its controls; it takes its own row. */
+  .dataPanel,
+  .cover[data-agent-open='true'] .dataPanel {
+    position: static;
+    margin-top: 0;
+  }
+
   .chartRow {
     grid-template-columns: minmax(0, 1fr);
   }

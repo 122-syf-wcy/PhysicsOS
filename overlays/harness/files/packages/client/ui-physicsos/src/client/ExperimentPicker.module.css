@@ -360,11 +360,11 @@
 }
 
 .freeBuild:hover {
-  border-color: var(--physics-body-live);
+  border-color: var(--physics-accent);
 }
 
 .freeBuild:focus-visible {
-  outline: 2px solid var(--physics-body-live);
+  outline: 2px solid var(--physics-accent);
   outline-offset: 2px;
 }
 
@@ -376,7 +376,7 @@
   height: 38px;
   border-radius: 11px;
   background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-base));
-  color: var(--physics-body-live);
+  color: var(--physics-accent-strong);
 }
 
 .freeBuildText {
@@ -401,7 +401,7 @@
 
 .freeBuildCta {
   flex: none;
-  color: var(--physics-body-live);
+  color: var(--physics-accent-strong);
   font-size: 13px;
   font-weight: 600;
 }

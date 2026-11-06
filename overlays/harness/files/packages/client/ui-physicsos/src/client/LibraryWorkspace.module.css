@@ -426,7 +426,7 @@
 }
 
 .bookChapterRow:hover {
-  border-color: var(--physics-body-live);
+  border-color: var(--physics-accent-strong);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -447,7 +447,7 @@
 }
 
 .studioLink:hover {
-  border-color: var(--physics-body-live);
+  border-color: var(--physics-accent-strong);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -457,10 +457,10 @@
   flex-direction: column;
   gap: 2px;
   padding: 9px 12px;
-  border: 1px solid var(--physics-body-live);
+  border: 1px solid var(--physics-accent);
   border-radius: 10px;
   background: var(--physics-glass-fill);
-  color: var(--physics-body-live);
+  color: var(--physics-accent-strong);
   font-size: 12.5px;
   font-weight: 600;
   line-height: 18px;
@@ -549,7 +549,7 @@
   gap: 8px;
   padding: 6px 10px;
   border-radius: 8px;
-  color: var(--physics-body-live);
+  color: var(--physics-accent-strong);
   font-size: 12px;
   line-height: 18px;
   text-decoration: none;
@@ -574,7 +574,7 @@
   border-radius: 999px;
   font-size: 10px;
   line-height: 15px;
-  color: var(--subject, var(--physics-body-live));
+  color: var(--subject, var(--physics-accent));
   background: var(--subject-tint, var(--physics-glass-fill));
 }
 
@@ -677,7 +677,7 @@
 }
 
 .practiseButton:hover:not(:disabled) {
-  border-color: var(--physics-body-live);
+  border-color: var(--physics-accent-strong);
   background: color-mix(in srgb, var(--physics-incline-fill) 24%, var(--dsw-alias-bg-base));
 }
 

@@ -127,7 +127,7 @@ export function HeroRipple() {
         const radius = RIPPLE_SPEED * age
         context.beginPath()
         context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2)
-        context.strokeStyle = `rgba(37, 99, 235, ${0.10 * (1 - life)})`
+        context.strokeStyle = `rgba(73, 115, 87, ${0.10 * (1 - life)})`
         context.lineWidth = 1
         context.stroke()
       }
@@ -137,7 +137,7 @@ export function HeroRipple() {
         const lit = Math.min(1, Math.hypot(dot.ox, dot.oy) / MAX_PUSH)
         context.beginPath()
         context.arc(dot.x + dot.ox, dot.y + dot.oy, DOT_RADIUS + lit * 0.5, 0, Math.PI * 2)
-        context.fillStyle = `rgba(37, 99, 235, ${0.14 + lit * 0.12})`
+        context.fillStyle = `rgba(73, 115, 87, ${0.14 + lit * 0.12})`
         context.fill()
       }
     }
