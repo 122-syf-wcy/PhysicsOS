@@ -96,13 +96,13 @@ for (const id of list) {
     await page.waitForTimeout(900)
     await page.screenshot({ path: path.join(OUT, `${tag}-idle.png`) })
     await page
-      .getByRole('button', { name: '运行', exact: true })
+      .getByRole('button', { name: '播放 / 暂停', exact: true })
       .first()
       .click({ timeout: 3000 })
       .catch(() => {})
     await page.waitForTimeout(2200)
     await page
-      .getByRole('button', { name: '暂停' })
+      .getByRole('button', { name: '播放 / 暂停' })
       .first()
       .click({ timeout: 2000 })
       .catch(() => {})

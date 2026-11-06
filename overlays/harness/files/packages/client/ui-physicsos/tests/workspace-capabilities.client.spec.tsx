@@ -84,27 +84,23 @@ describe.each(CASES)('capability-driven transport · $id ($kind)', ({ id }) => {
 
     expect(coverOf().dataset['physicsosTimeline']).toBe(timeline ? 'true' : 'false')
 
-    /* Toolbar transport group: present with a timeline, absent without one —
-       never present-but-disabled. */
-    if (timeline) {
-      expect(screen.getByRole('button', { name: '运行' })).toBeTruthy()
-      expect(screen.getByRole('button', { name: '暂停' })).toBeTruthy()
-      expect(screen.getByRole('button', { name: '重置' })).toBeTruthy()
-    } else {
-      expect(screen.queryByRole('button', { name: '运行' })).toBeNull()
-      expect(screen.queryByRole('button', { name: '暂停' })).toBeNull()
-      expect(screen.queryByRole('button', { name: '重置' })).toBeNull()
-    }
+    /* Playback lives once, on the timeline row: the toolbar carries no
+       second run/pause group competing with it. */
+    expect(screen.queryByRole('button', { name: '运行' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '暂停' })).toBeNull()
 
-    /* Timeline row: the whole row goes, not just its buttons. */
+    /* Timeline row: present with a timeline, and without one the whole row
+       goes — never present-but-disabled. */
     if (timeline) {
       expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
       expect(screen.getByRole('button', { name: '后退一步' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: '重置' })).toBeTruthy()
       expect(screen.getByRole('slider', { name: '时间轴' })).toBeTruthy()
       expect(screen.getByRole('combobox', { name: '播放倍速' })).toBeTruthy()
     } else {
       expect(screen.queryByRole('button', { name: '播放 / 暂停' })).toBeNull()
       expect(screen.queryByRole('button', { name: '后退一步' })).toBeNull()
+      expect(screen.queryByRole('button', { name: '重置' })).toBeNull()
       expect(screen.queryByRole('slider', { name: '时间轴' })).toBeNull()
       expect(screen.queryByRole('combobox', { name: '播放倍速' })).toBeNull()
       /* And no leftover transport chrome carrying a dead control. */

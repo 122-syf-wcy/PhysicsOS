@@ -121,7 +121,7 @@ for (const viewport of viewports) {
     timelineRate: await page.getByRole('combobox', { name: '播放倍速' }).isVisible(),
     dataTabs: await page.getByRole('button', { name: '推导' }).isVisible(),
     agentDock: await page.getByRole('button', { name: 'AI 助教' }).isVisible(),
-    run: await page.getByRole('button', { name: '运行' }).isVisible(),
+    run: await page.getByRole('button', { name: '播放 / 暂停' }).isVisible(),
   }
 
   report.push({ viewport: viewport.name, file, required, geometry })

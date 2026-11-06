@@ -409,9 +409,9 @@ await waitForWaveLab()
   )
 
   const scrubber = page.getByRole('slider', { name: '时间轴' })
-  await page.getByRole('button', { name: '运行', exact: true }).click()
+  await page.getByRole('button', { name: '播放 / 暂停', exact: true }).click()
   await page.waitForTimeout(400)
-  await page.getByRole('button', { name: '暂停', exact: true }).click()
+  await page.getByRole('button', { name: '播放 / 暂停', exact: true }).click()
   const paused = Number(await scrubber.inputValue())
   check('playback advances the clock', paused > 0.05 && paused <= 1, `${paused} s`)
 }

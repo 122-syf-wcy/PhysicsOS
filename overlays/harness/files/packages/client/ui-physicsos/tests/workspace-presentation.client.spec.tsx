@@ -90,6 +90,14 @@ describe('return to chat', () => {
   })
 })
 
+describe('toolbar subtitle', () => {
+  it('shows a sentence for the reader, never an engine note or an English factory default', () => {
+    mountLab('magnetic-circular')
+    expect(screen.getByRole('heading', { level: 1 })).toBeTruthy()
+    expect(screen.queryByText(/Frozen uniform|Runtime/)).toBeNull()
+  })
+})
+
 describe('workspace data panel', () => {
   it('starts collapsed so the canvas owns the bench, even with charts waiting', () => {
     mountLab('rheostat-circuit')
@@ -172,14 +180,14 @@ describe('workspace focus mode', () => {
     expect(screen.queryByRole('region', { name: '场景与对象' })).toBeNull()
     expect(screen.queryByRole('complementary', { name: '检查器' })).toBeNull()
     /* Tools stay reachable on the bench: playback, report, agent dock. */
-    expect(screen.getByRole('button', { name: '运行' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '播放 / 暂停' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '报告' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'AI 助教' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '运行' }))
-    expect(screen.getByRole('button', { name: '运行' }).getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: '暂停' }))
-    expect(screen.getByRole('button', { name: '运行' }).getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: '播放 / 暂停' }))
+    expect(screen.getByRole('button', { name: '播放 / 暂停' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '播放 / 暂停' }))
+    expect(screen.getByRole('button', { name: '播放 / 暂停' }).getAttribute('aria-pressed')).toBe('false')
 
     fireEvent.click(screen.getByRole('button', { name: '报告' }))
     const report = screen.getByRole('dialog', { name: '实验报告' })
@@ -400,7 +408,7 @@ describe('playback keyboard and replay affordance', () => {
   it('yields the keys to focused controls instead of hijacking them', () => {
     mountLab('uniform-acceleration')
     const cover = document.querySelector<HTMLElement>('[data-physicsos-surface="lab"]')!
-    const run = screen.getByRole('button', { name: '运行' })
+    const run = screen.getByRole('button', { name: '播放 / 暂停' })
     run.focus()
     /* A focused button owns Space natively; the document listener must not
        toggle a second time on top of the button's own activation. */

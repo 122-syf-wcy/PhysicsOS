@@ -22,7 +22,7 @@
 
 :global(body[data-ds-dark-theme]) .root {
   --activity-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover-solid) 82%, var(--dsw-alias-bg-base));
-  --activity-accent: var(--dsw-static-blue-400);
+  --activity-accent: var(--physics-accent);
   --activity-level-1: color-mix(in srgb, var(--activity-accent) 22%, var(--dsw-alias-bg-base));
   --activity-level-2: color-mix(in srgb, var(--activity-accent) 44%, var(--dsw-alias-bg-base));
   --activity-level-3: color-mix(in srgb, var(--activity-accent) 72%, var(--dsw-alias-bg-base));

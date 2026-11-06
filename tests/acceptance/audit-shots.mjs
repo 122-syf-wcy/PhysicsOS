@@ -38,13 +38,13 @@ await page.screenshot({ path: path.join(OUT, '03-parallel-plate.png') })
 
 // run a bit then pause mid-flight
 await page
-  .getByRole('button', { name: '运行', exact: true })
+  .getByRole('button', { name: '播放 / 暂停', exact: true })
   .first()
   .click()
   .catch(() => {})
 await page.waitForTimeout(2600)
 await page
-  .getByRole('button', { name: '暂停' })
+  .getByRole('button', { name: '播放 / 暂停' })
   .first()
   .click()
   .catch(() => {})

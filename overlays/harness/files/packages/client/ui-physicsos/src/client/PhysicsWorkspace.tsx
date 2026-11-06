@@ -490,6 +490,12 @@ export function PhysicsWorkspace({
   )
 
   const observables = useMemo(() => collectObservables(snapshot), [snapshot])
+  /* Scene descriptions double as engine notes ("真实电场 Runtime", English
+     factory defaults); only a sentence written for the reader goes under the
+     title. */
+  const readerSubtitle = /[\u4e00-\u9fff]/.test(snapshot.subtitle) && !/\bRuntime\b/i.test(snapshot.subtitle)
+    ? snapshot.subtitle
+    : undefined
 
   /* The cover is absolutely positioned inside the host's scroll body, whose
      content (the home hero and recent list) is taller than the viewport. Any
@@ -613,7 +619,9 @@ export function PhysicsWorkspace({
               <IconChevronDownOutlineMedium size={13} />
             </button>
           )}
-          <span className={css.saveState} title={snapshot.subtitle}>{snapshot.subtitle}</span>
+          {readerSubtitle === undefined ? null : (
+            <span className={css.saveState} title={readerSubtitle}>{readerSubtitle}</span>
+          )}
         </div>
         <div className={css.toolGroup}>
           {snapshot.branch === undefined ? null : (
@@ -647,68 +655,8 @@ export function PhysicsWorkspace({
             <IconVerified size={13} />
             {statusLabel}
           </span>
-          {/* Transport is capability-driven: an experiment with no run window
-              renders no transport at all — not a disabled one — and reset (a
-              seek to t = 0) only appears where seek is real. */}
-          {capabilities.timeline || capabilities.seek ? (
-            <div className={css.playbackTools}>
-              {capabilities.timeline ? (
-                <>
-                  <button
-                    type="button"
-                    className={clsx(css.primary, running && css.primaryRunning)}
-                    disabled={failed}
-                    aria-pressed={running}
-                    onClick={() => {
-                      commit(runtime.setRunning(true))
-                    }}
-                  >
-                    {ended ? (
-                      <IconRefreshOutlineMedium size={13} />
-                    ) : (
-                      <IconPlayOutlineMedium size={13} />
-                    )}
-                    {ended ? t('lab.replay') : t('lab.run')}
-                  </button>
-                  <button
-                    type="button"
-                    className={css.secondary}
-                    disabled={failed}
-                    onClick={() => {
-                      commit(runtime.setRunning(false))
-                    }}
-                  >
-                    <IconPauseOutlineMedium size={13} />
-                    {t('lab.pause')}
-                  </button>
-                  <button
-                    type="button"
-                    className={css.ghost}
-                    disabled={failed}
-                    onClick={() => {
-                      commit(runtime.step(clock.total * STEP_FRACTION))
-                    }}
-                  >
-                    <IconChevronRightOutlineMedium size={13} />
-                    {t('lab.step')}
-                  </button>
-                </>
-              ) : null}
-              {capabilities.seek ? (
-                <button
-                  type="button"
-                  className={css.ghost}
-                  disabled={failed}
-                  onClick={() => {
-                    commit(runtime.seek(0))
-                  }}
-                >
-                  <IconRefreshOutlineMedium size={13} />
-                  {t('lab.reset')}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+          {/* Playback lives once, on the timeline under the bench; a second
+              run/pause group up here only competed with it. */}
           {toolbarExtra}
           {experimentMeta === undefined ? null : (
             <button
@@ -932,6 +880,7 @@ export function PhysicsWorkspace({
                   type="button"
                   className={clsx(css.transport, css.transportPrimary)}
                   aria-label={ended ? t('lab.replay') : t('lab.playPause')}
+                  aria-pressed={running}
                   disabled={failed}
                   onClick={() => {
                     commit(runtime.setRunning(!running))
@@ -964,6 +913,17 @@ export function PhysicsWorkspace({
                   }}
                 >
                   <IconChevronRightOutlineMedium size={13} />
+                </button>
+                <button
+                  type="button"
+                  className={css.transport}
+                  aria-label={t('lab.reset')}
+                  disabled={failed}
+                  onClick={() => {
+                    commit(runtime.seek(0))
+                  }}
+                >
+                  <IconRefreshOutlineMedium size={13} />
                 </button>
                 <LiveClock source={frameSource} scale={clockScale} />
                 <div className={css.trackWrap}>

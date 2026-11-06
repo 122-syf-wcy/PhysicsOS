@@ -488,7 +488,7 @@
 }
 
 .eyeOn {
-  color: var(--dsw-static-blue-500);
+  color: var(--physics-accent);
 }
 
 .checkbox {
@@ -767,8 +767,8 @@
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--dsw-static-blue-500) 0 var(--timeline-progress),
-    var(--dsw-static-blue-100) var(--timeline-progress) 100%
+    var(--physics-accent) 0 var(--timeline-progress),
+    var(--physics-accent-soft) var(--timeline-progress) 100%
   );
 }
 
@@ -779,20 +779,20 @@
   margin-top: -5px;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: var(--dsw-static-blue-600);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-static-blue-600) 36%, transparent);
+  background: var(--physics-accent-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--physics-accent-strong) 36%, transparent);
 }
 
 .track::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: var(--dsw-static-blue-100);
+  background: var(--physics-accent-soft);
 }
 
 .track::-moz-range-progress {
   height: 4px;
   border-radius: 999px;
-  background: var(--dsw-static-blue-500);
+  background: var(--physics-accent);
 }
 
 .track::-moz-range-thumb {
@@ -800,8 +800,8 @@
   height: 10px;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: var(--dsw-static-blue-600);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-static-blue-600) 36%, transparent);
+  background: var(--physics-accent-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--physics-accent-strong) 36%, transparent);
 }
 
 .track:disabled {
@@ -1749,7 +1749,7 @@
 
 .cover[data-physicsos-running='true'] .track::-webkit-slider-thumb {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--dsw-static-blue-600) 36%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--physics-accent-strong) 36%, transparent),
     0 0 0 5px rgba(66, 121, 200, 0.16);
 }
 
@@ -2563,7 +2563,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: color-mix(in srgb, var(--dsw-static-blue-600) 50%, var(--dsw-alias-label-primary));
+  color: color-mix(in srgb, var(--physics-accent-strong) 50%, var(--dsw-alias-label-primary));
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;

@@ -280,7 +280,7 @@
   border: 1px solid var(--physics-glass-border-soft);
   border-radius: 7px;
   background: var(--physics-glass-fill-strong);
-  color: var(--dsw-static-blue-600);
+  color: var(--physics-accent-strong);
   font-size: 12px;
   cursor: pointer;
 }
@@ -380,7 +380,7 @@
   height: 100%;
   width: 100%;
   border-radius: 4px;
-  background: var(--dsw-static-blue-500, #3b82f6);
+  background: var(--physics-accent);
   transform-origin: left;
   transition: transform 200ms var(--physics-ease);
 }

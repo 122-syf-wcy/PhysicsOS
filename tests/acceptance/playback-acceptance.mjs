@@ -101,7 +101,7 @@ await page.keyboard.press('Home')
 await page.waitForTimeout(200)
 
 /* ---- live run: clock actually advances under rAF ---------------------- */
-await page.getByRole('button', { name: '运行', exact: true }).click()
+await page.getByRole('button', { name: '播放 / 暂停', exact: true }).click()
 await page.waitForTimeout(1600)
 const runningNow = await page
   .locator('[data-physicsos-surface="lab"]')
@@ -127,7 +127,7 @@ check('data table marks the playhead row', highlightedRows >= 1, `count=${highli
 
 /* ---- cyclic model keeps running past the window (uniform linear) ------ */
 await openExperiment(page, 'uniform-linear')
-await page.getByRole('button', { name: '运行', exact: true }).click()
+await page.getByRole('button', { name: '播放 / 暂停', exact: true }).click()
 await page.waitForTimeout(1500)
 const cyclicRunning = await page
   .locator('[data-physicsos-surface="lab"]')

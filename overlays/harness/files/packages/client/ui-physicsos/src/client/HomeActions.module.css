@@ -109,13 +109,13 @@
   width: 26px;
   height: 26px;
   border-radius: 10px;
-  background: rgba(232, 242, 255, 0.78);
-  color: var(--dsw-static-blue-600);
+  background: color-mix(in srgb, var(--physics-accent) 12%, #ffffff);
+  color: var(--physics-accent-strong);
 }
 
 :global(body[data-ds-dark-theme]) .portalIcon {
-  background: color-mix(in srgb, var(--dsw-static-blue-500) 18%, transparent);
-  color: var(--dsw-static-blue-300, #93c5fd);
+  background: color-mix(in srgb, var(--physics-accent) 18%, transparent);
+  color: var(--physics-accent-strong);
 }
 
 :global(body[data-ds-dark-theme]) .portalImage,
@@ -142,7 +142,7 @@
 
 .portalMeta svg {
   flex: none;
-  color: var(--dsw-static-blue-600);
+  color: var(--physics-accent-strong);
 }
 
 .utilities {
@@ -224,7 +224,7 @@
   margin-top: 4px;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--dsw-static-blue-500) 16%, var(--dsw-alias-border-l2));
+  border: 1px solid color-mix(in srgb, var(--physics-accent) 16%, var(--dsw-alias-border-l2));
   border-radius: 8px;
   background: var(--physics-tint-accent);
   color: var(--dsw-alias-label-primary);

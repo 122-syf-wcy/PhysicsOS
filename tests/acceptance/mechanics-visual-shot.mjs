@@ -17,7 +17,7 @@ await page
 await page.waitForTimeout(800)
 
 await page
-  .getByRole('button', { name: '运行' })
+  .getByRole('button', { name: '播放 / 暂停' })
   .click()
   .catch(() => {})
 await page.waitForTimeout(1200)

@@ -59,7 +59,7 @@ describe('#123 renderer/React decoupling', () => {
     const lab = container.querySelector('[data-physicsos-surface="lab"]')
     expect(lab).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '运行' }))
+    fireEvent.click(screen.getByRole('button', { name: '播放 / 暂停' }))
     /* First RAF call baselines the clock; the second advances 16.67 ms. */
     act(() => { frames.get(1)?.(100) })
     act(() => { frames.get(2)?.(116.67) })
@@ -95,9 +95,10 @@ describe('#123 renderer/React decoupling', () => {
         useAuth={neverHook}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '运行' }))
-    expect(screen.getByRole('button', { name: '暂停' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '暂停' }))
-    expect(screen.getByRole('button', { name: '运行' })).toBeTruthy()
+    const playback = () => screen.getByRole('button', { name: '播放 / 暂停' })
+    fireEvent.click(playback())
+    expect(playback().getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(playback())
+    expect(playback().getAttribute('aria-pressed')).toBe('false')
   })
 })

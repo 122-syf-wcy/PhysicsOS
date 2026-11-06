@@ -33,8 +33,8 @@
   background:
     radial-gradient(
       52% 52% at 50% 50%,
-      rgba(37, 99, 235, 0.12),
-      rgba(37, 99, 235, 0.05) 46%,
+      rgba(73, 115, 87, 0.12),
+      rgba(73, 115, 87, 0.05) 46%,
       transparent 72%
     );
   filter: blur(18px);

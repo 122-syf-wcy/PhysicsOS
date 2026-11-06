@@ -325,9 +325,9 @@ stdout.write('\nCASE F2 · 播放节奏：微观运行按 8 秒展示窗推进�
     `max ${total}`,
   )
 
-  await page.getByRole('button', { name: '运行', exact: true }).click()
+  await page.getByRole('button', { name: '播放 / 暂停', exact: true }).click()
   await page.waitForTimeout(2000)
-  await page.getByRole('button', { name: '暂停', exact: true }).click()
+  await page.getByRole('button', { name: '播放 / 暂停', exact: true }).click()
   const paused = Number(await scrubber.inputValue())
   const share = paused / total
   check(

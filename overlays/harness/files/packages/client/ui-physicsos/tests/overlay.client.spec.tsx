@@ -613,9 +613,10 @@ describe('PhysicsOS overlay presentation', () => {
     expect(screen.getByRole('combobox', { name: '播放倍速' })).toBeTruthy()
     expect(screen.getByText(/^0\.00 (s|ms|µs|ns)$/)).toBeTruthy()
 
-    // Toolbar run button is the only 运行 control; the timeline one is labelled.
-    fireEvent.click(screen.getByRole('button', { name: '运行' }))
-    expect(screen.getByRole('button', { name: '暂停' })).toBeTruthy()
+    // The timeline's play button is the single playback control.
+    expect(screen.queryByRole('button', { name: '运行' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '播放 / 暂停' }))
+    expect(screen.getByRole('button', { name: '播放 / 暂停' }).getAttribute('aria-pressed')).toBe('true')
 
     // Regression: an L-shaped grid path with no explicit fill tiles into a
     // black/white checkerboard, because SVG paths default to a black fill.
