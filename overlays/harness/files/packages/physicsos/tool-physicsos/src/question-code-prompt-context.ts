@@ -1,5 +1,23 @@
 /** Select exact type declarations needed by this domain; never rewrite physics values. */
 import type { PhysicsSceneSolveSummary } from './types.ts'
+/** Browser plumbing only: no apparatus drawing or physical model is supplied. */
+export const QUESTION_CODE_ENTRY_EXAMPLE = `export async function renderFrame(snapshot){
+const host=document.getElementById('canvas'),w=host.clientWidth,h=host.clientHeight;
+if(!(w>0&&h>0))return;
+if(!board){board=document.createElement('canvas');host.replaceChildren(board)}
+const d=devicePixelRatio||1,bw=Math.round(w*d),bh=Math.round(h*d);
+if(board.width!==bw||board.height!==bh){board.width=bw;board.height=bh}
+board.style.width=w+'px';board.style.height=h+'px';
+const ctx=board.getContext('2d');ctx.setTransform(d,0,0,d,0,0);
+if(!image){image=new Image();image.crossOrigin='anonymous';image.src='REPLACE_WITH_GENERATED_PATH';decoded=image.decode()}
+await decoded;ctx.clearRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);
+const view=snapshot.view,s=Math.min((w-24)/view.extent.width,(h-24)/view.extent.height);
+const ox=(w-s*view.extent.width)/2,oy=(h-s*view.extent.height)/2;
+drawScene(ctx,view,{s,ox,oy,h,origin:view.origin});
+}
+let board,image,decoded;
+function point(p,t){return{x:t.ox+(p.x-t.origin.x)*t.s,y:t.h-t.oy-(p.y-t.origin.y)*t.s}}
+`
 /** Repeated per-answer provenance stays in the session; authors only need verified quantities. */
 export function authorSolveFacts(solve: PhysicsSceneSolveSummary | undefined): unknown {
   if (solve === undefined) return null
@@ -11,6 +29,7 @@ export function authorSolveFacts(solve: PhysicsSceneSolveSummary | undefined): u
       checks: solve.verification.checks.map(({ id, passed }) => ({ id, passed })) },
   }
 }
+/** Read-only drawing subset; string taxonomies are widened, physical shape/direction fields are retained. */
 export function focusedRenderContract(contract: string, domain: string, experimentId?: string): string {
   const marker = 'Exact field shapes (TypeScript notation describes data; do not import these types):'
   const split = contract.indexOf(marker)
@@ -24,29 +43,41 @@ export function focusedRenderContract(contract: string, domain: string, experime
     const entry = starts[i]
     if (entry?.[1]) declarations.set(entry[1], body.slice(entry.index, starts[i + 1]?.index ?? body.length).trim())
   }
-  const view = declarations.get('SceneVisualModel')
-  if (view === undefined || !declarations.has('UniversalExperimentSnapshot')) return contract
-  const common = ['domain', 'extent', 'origin', 'grid', 'axes', 'tickStep', 'tickLabelAvoid', 'bodies', 'particles', 'vectors', 'trajectories', 'keyPoints', 'angles', 'dimensions', 'labels', 'guides', 'overlay', 'visible', 'highlighted']
-  const mechanicsFields: Record<string, string[]> = {
-    incline: ['incline', 'ground', 'platform', 'motionMarks'],
-    'hooke-law': ['spring', 'platform'], 'spring-oscillator': ['spring', 'platform'],
-    'simple-pendulum': ['pendulum'], 'lever-balance': ['leverBeam', 'leverFulcrum', 'leverHangers'],
-    'mechanical-energy': ['energyRamp', 'energyBar'], 'ramp-friction': ['energyRamp', 'energyBar'],
+  if (!declarations.has('SceneVisualModel') || !declarations.has('UniversalExperimentSnapshot')) return contract
+  const shared: Record<string, string[]> = {
+    mechanics: ['bodies', 'vectors', 'trajectories', 'keyPoints', 'angles', 'dimensions', 'guides'],
+    magnetic: ['particles', 'vectors', 'trajectories', 'guides', 'dimensions'],
+    electric: ['particles', 'vectors', 'trajectories', 'guides', 'dimensions'],
+    composite: ['particles', 'vectors', 'trajectories'], circuit: [],
+    optics: ['dimensions', 'angles'], acoustics: ['guides', 'dimensions'],
+    fluid: ['vectors', 'guides', 'dimensions'], thermal: ['guides'],
+    induction: [], wave: ['trajectories', 'dimensions'], modern: ['overlay'],
   }
-  const domainFields = (domain === 'mechanics' && experimentId ? mechanicsFields[experimentId] : undefined)
-    ?? guide.split(':').slice(1).join(':').match(/[A-Za-z_$][\w$]*/g) ?? []
-  const fields = new Set([...common, ...domainFields])
-  declarations.set('SceneVisualModel', view.split('\n').filter((line) => {
-    const field = /^([A-Za-z_$][\w$]*)\??:/.exec(line)?.[1]
-    return field === undefined || fields.has(field)
-  }).join('\n'))
-  if (experimentId) {
-    const rootFields = new Set(['experimentId', 'revision', 'source', 'domain', 'title', 'ariaLabel', 'view', 'inspector', 'clock', 'trajectoryTimes'])
-    declarations.set('UniversalExperimentSnapshot', declarations.get('UniversalExperimentSnapshot')!.split('\n').filter(line => {
+  const mechanicsFields: Record<string, string[]> = {
+    incline: ['bodies', 'vectors', 'trajectories', 'angles', 'incline', 'ground', 'coordinate', 'motionMarks'],
+    'hooke-law': ['bodies', 'vectors', 'spring', 'platform', 'apparatus'],
+    'spring-oscillator': ['bodies', 'vectors', 'trajectories', 'spring', 'ground', 'platform', 'apparatus'],
+    'simple-pendulum': ['bodies', 'vectors', 'trajectories', 'angles', 'pendulum', 'apparatus'],
+    'lever-balance': ['vectors', 'dimensions', 'leverBeam', 'leverFulcrum', 'leverHangers'],
+    'mechanical-energy': ['bodies', 'vectors', 'dimensions', 'energyRamp', 'energyBar'],
+    'ramp-friction': ['bodies', 'vectors', 'dimensions', 'energyRamp', 'energyBar'],
+  }
+  const domainFields = domain === 'mechanics' && experimentId ? mechanicsFields[experimentId] : undefined
+  const fields = new Set(['domain', 'extent', 'origin', 'visible', 'highlighted', 'labels',
+    ...(domainFields ?? [...(shared[domain] ?? []), ...guide.split(':').slice(1).join(':').match(/[A-Za-z_$][\w$]*/g) ?? []])])
+  const keepFields = (name: string, allowed: Set<string>): void => {
+    declarations.set(name, declarations.get(name)!.split('\n').filter(line => {
       const field = /^([A-Za-z_$][\w$]*)\??:/.exec(line)?.[1]
-      return field === undefined || rootFields.has(field)
+      return field === undefined || allowed.has(field)
     }).join('\n'))
   }
+  keepFields('SceneVisualModel', fields)
+  keepFields('UniversalExperimentSnapshot', new Set(['source', 'domain', 'title', 'view', 'clock']))
+  // Display taxonomies need no global enum roster; every actual value remains
+  // valid. Direction/sign/nature and apparatus kind unions stay unchanged.
+  for (const [name, declaration] of declarations) declarations.set(name, declaration
+    .replace(/\b(?:PhysicsDomainId|PhysicsSemanticRole|ObservableKey)\b/g, 'string')
+    .replace(/\breadonly\s+/g, ''))
   const selected = new Set<string>()
   const include = (name: string): void => {
     if (selected.has(name)) return
@@ -56,8 +87,28 @@ export function focusedRenderContract(contract: string, domain: string, experime
     for (const word of declaration.match(/[A-Za-z_$][\w$]*/g) ?? []) if (declarations.has(word)) include(word)
   }
   include('UniversalExperimentSnapshot')
-  const heading = experimentId ? `V3 renderer: export async function renderFrame(snapshot). Draw inside #canvas and resolve only after drawing the current frame. No imports; only native Canvas2D/SVG and local helpers. All fields are read-only engine facts. Coordinates are y-up; origin is lower-left, extent is width/height. Use one uniform scale and flip y once. Vector from/to are pre-scaled DISPLAY endpoints, never infer force/speed magnitudes from arrow length. Read magnitudes from inspector.derived or view.overlay.readout. Arrays can be empty, optional fields absent, zero values valid. Respect view.visible and highlighted. clock is platform time; never advance a second physics clock. Do not fabricate missing geometry.\n${guide}\n` : contract.slice(0, split).split('\n').filter(line => !/^(mechanics|magnetic|electric|composite|circuit|optics|acoustics|fluid|thermal|induction|wave|modern):/.test(line) || line === guide).join('\n')
-  return heading + marker + '\n' + [...selected].map(name => declarations.get(name)).join('\n\n')
+  const compact = (declaration: string): string => declaration
+    .replace(/\n(?=[A-Za-z_$][\w$]*\??:)/g, ';')
+    .replace(/\s+/g, ' ').replace(/\s*([:{};,|<>])\s*/g, '$1').replace(/\{;/g, '{').trim()
+  const visibility: Record<string, string> = {
+    mechanics: 'vectors/guides按visible[observable]===true；trajectories/motionMarks按trajectory，keyPoints按keyPoints；angles/dimensions按已给几何绘制，杠杆dimensions另按arms。',
+    magnetic: 'vectors/guides按visible[observable]===true；trajectory/center/radius/fieldLines分别控制对应层。',
+    electric: 'vectors/guides按visible[observable]===true；electricField/equipotentials/trajectory控制对应层。',
+    composite: 'vectors按visible[observable]===true；regions/electricField/magneticField/trajectory控制对应层；场符号裁剪到区域。',
+    circuit: 'current控制chargeFlows，保留真实接线拓扑。',
+    optics: 'rays/image控制对应光路与像；extension虚线；refractedTo缺省时不补造。',
+    acoustics: 'wavefronts/path控制波前/声路；guides按visible[observable]===true。',
+    fluid: 'forces/displaced/pressure/pressureComparison控制对应层；vectors/guides按visible[observable]===true。',
+    thermal: 'thermometer/phase控制温度计/相态；guides按visible[observable]===true。',
+    induction: 'barMotion/inductionCurrent/flux控制运动/电流/磁通层。inductionField.origin为左下角。',
+    wave: 'waveform/nodes/superposition及vectors按对应visible[key]!==false。',
+    modern: '轨迹是示意层，不检查visible.trajectory。',
+  }
+  const notes = [visibility[domain], fields.has('trajectories') ? 'trajectories.history实线/predicted虚线，保留点序。' : '',
+    fields.has('incline') ? 'incline.origin是底边左端，底边沿+x；顶点为(origin.x,origin.y+base*tan(angle°))，坡面左高右低。' : '',
+    fields.has('boundedField') ? 'boundedField.at是中心；场符号裁剪到边界。' : ''].filter(Boolean).join('')
+  return notes + '\nV3 drawing subset (read-only; string taxonomies omit enum lists):\n'
+    + [...selected].map(name => compact(declarations.get(name)!)).join('\n')
 }
 export function publishedVisualGuidance(body: string): string {
   const sections = body.split(/(?=^## )/m)

@@ -96,6 +96,82 @@ describe('pool store', () => {
     expect(reset.cooldownUntil).toBeNull()
   })
 
+  it('counts concurrent failures before applying the cooldown threshold', async () => {
+    const store = makeStore()
+    const channel = await seedChannel(store)
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-concurrent-failures' })
+    await Promise.all(Array.from({ length: 3 }, () =>
+      store.markFailure(added.id, { kind: 'server', status: 503, message: 'unavailable' }),
+    ))
+    expect(store.key(added.id)).toMatchObject({
+      failCount: 3, failureCount: 3, status: 'cooldown', cooldownStreak: 1,
+    })
+  })
+
+  it('counts concurrent successes without losing outcomes', async () => {
+    const store = makeStore()
+    const channel = await seedChannel(store)
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-concurrent-success' })
+    await Promise.all(Array.from({ length: 3 }, () => store.markSuccess(added.id)))
+    expect(store.key(added.id)?.requestCount).toBe(3)
+  })
+
+  it('preserves a queued credential replacement when an outcome follows it', async () => {
+    const store = makeStore()
+    const channel = await seedChannel(store)
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-original-credential' })
+    await Promise.all([
+      store.updateKey(ADMIN, added.id, { key: 'sk-replaced-credential', enabled: false }),
+      store.markSuccess(added.id),
+    ])
+    const current = store.key(added.id)
+    if (current === undefined) throw new Error('key missing after outcome')
+    expect(store.openKey(current)).toBe('sk-replaced-credential')
+    expect(current.enabled).toBe(false)
+    expect(current.requestCount).toBe(1)
+  })
+
+  it('does not restore a key deleted before queued health outcomes', async () => {
+    const store = makeStore()
+    const channel = await seedChannel(store)
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-deleted-credential' })
+    await Promise.all([
+      store.deleteKey(ADMIN, added.id),
+      store.markSuccess(added.id),
+      store.markFailure(added.id, { kind: 'server', status: 503, message: 'unavailable' }),
+    ])
+    expect(store.key(added.id)).toBeUndefined()
+  })
+
+  it.each(['success', 'failure'] as const)('ignores an old credential %s after a queued replacement', async (outcome) => {
+    const store = makeStore()
+    const channel = await seedChannel(store)
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-old-inflight-credential' })
+    const original = store.key(added.id)
+    if (original === undefined) throw new Error('key missing before replacement')
+    await store.updateKey(ADMIN, added.id, { key: 'sk-new-credential' })
+    await store.markFailure(added.id, { kind: 'auth', status: 401, message: 'replacement health' })
+    const replacement = store.key(added.id)
+
+    if (outcome === 'success') await store.markSuccess(added.id, original.secret)
+    else await store.markFailure(added.id, { kind: 'auth', status: 401, message: 'old credential failed' }, original.secret)
+
+    expect(store.key(added.id)).toEqual(replacement)
+  })
+
+  it('accepts a matching credential snapshot after other queued health updates', async () => {
+    const store = makeStore()
+    const channel = await seedChannel(store)
+    const added = await store.addKey(ADMIN, channel.id, { key: 'sk-current-credential' })
+    const original = store.key(added.id)
+    if (original === undefined) throw new Error('key missing before outcome')
+    await Promise.all([
+      store.markFailure(added.id, { kind: 'server', status: 503, message: 'unavailable' }, { ...original.secret }),
+      store.markSuccess(added.id, { ...original.secret }),
+    ])
+    expect(store.key(added.id)).toMatchObject({ requestCount: 1, failureCount: 1, failCount: 0, status: 'active' })
+  })
+
   it('deleting a channel removes its keys', async () => {
     const store = makeStore()
     const channel = await seedChannel(store)

@@ -21,12 +21,15 @@ export function startExperimentNavigation({
   window: browser,
   loadCatalog,
   initialState = surface.store.getSnapshot(),
+  savedScenesReady,
 }: {
   surface: PhysicsSurfaceController
   window: Window
   loadCatalog: () => Promise<Catalog>
   /** Snapshot taken before account sync; a later selection takes precedence over the old URL. */
   initialState?: PhysicsSurfaceState
+  /** Account synchronization only gates a saved instance missing from local state. */
+  savedScenesReady?: Promise<void>
 }): () => void {
   let alive = true
   let generation = 0
@@ -71,9 +74,14 @@ export function startExperimentNavigation({
       applying = false
       const catalog = await loadCatalog()
       if (!alive || generation !== ticket) return
-      applying = true
       const id = match?.[1]
       const requested = url.searchParams.get('scene')
+      if (requested !== null && savedScenesReady !== undefined
+        && !surface.recent.getSnapshot().items.some(item => item.sceneId === requested)) {
+        await savedScenesReady.catch(() => {})
+        if (!alive || generation !== ticket) return
+      }
+      applying = true
       const saved =
         requested === null
           ? undefined

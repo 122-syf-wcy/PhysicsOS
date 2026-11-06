@@ -283,7 +283,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
       } catch (error) {
         const failure = error as PoolError
         lastFailure = { kind: 'auth', status: failure.status, message: failure.message }
-        await deps.store.markFailure(candidate.key.id, lastFailure)
+        await deps.store.markFailure(candidate.key.id, lastFailure, candidate.key.secret)
         continue
       }
       try {
@@ -311,7 +311,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
           })
           try {
             await writeStream(res, result.body, result.signal, payload.stream === true)
-            if (!cancelled()) await deps.store.markSuccess(candidate.key.id)
+            if (!cancelled()) await deps.store.markSuccess(candidate.key.id, candidate.key.secret)
           } finally {
             result.dispose()
           }
@@ -322,7 +322,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
           openAiError(res, result.failure.status, 'MODEL_POOL_UPSTREAM_REFUSED', result.failure.message)
           return
         }
-        await deps.store.markFailure(candidate.key.id, result.failure)
+        await deps.store.markFailure(candidate.key.id, result.failure, candidate.key.secret)
       } catch (error) {
         // Headers commit the attempt. A partial stream must be observably
         // truncated, never replayed against another key or ended as success.
@@ -330,7 +330,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
         if (res.headersSent) {
           const invalid = error instanceof PoolError && error.code === 'MODEL_POOL_INVALID_STREAM'
           const message = error instanceof PoolError ? error.message : 'Upstream stream interrupted'
-          await deps.store.markFailure(candidate.key.id, { kind: invalid ? 'server' : 'transport', status: 502, message })
+          await deps.store.markFailure(candidate.key.id, { kind: invalid ? 'server' : 'transport', status: 502, message }, candidate.key.secret)
           if (invalid && payload.stream === true) {
             // An error event is not a model answer or a fabricated finish marker.
             res.end(`data: ${JSON.stringify({ error: { code: error.code, type: 'physicsos_model_pool', message } })}\n\n`)
@@ -344,7 +344,7 @@ export const modelProxyHandler = (deps: ProxyDeps) => {
           message: failure.message,
         }
         if (failure.code === 'MODEL_POOL_CLIENT_ABORTED') return
-        await deps.store.markFailure(candidate.key.id, lastFailure)
+        await deps.store.markFailure(candidate.key.id, lastFailure, candidate.key.secret)
       }
     }
 

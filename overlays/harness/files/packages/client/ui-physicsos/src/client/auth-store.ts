@@ -208,13 +208,18 @@ export function createAuthController(api: AuthApi, base: Storage): AuthControlle
     boot: async () => {
       try {
         const { user } = await api.me()
-        /* A live cookie for a different account than the hint wins — the
+        /* A live cookie for a different account or with no hint wins — the
            server is authoritative, and the data namespace must rebind, so
            hand the mismatch to a fresh boot rather than writing into the
-           previous account's namespace. */
-        if (stored !== undefined && stored.id !== user.id) {
+           previous account's or anonymous namespace. */
+        if (stored?.id !== user.id || stored.schoolId !== user.schoolId) {
           writeStoredAuthUser(base, user)
           migrateAnonymousProgress(base, user.id)
+          const persisted = readStoredAuthUser(base)
+          if (persisted?.id !== user.id || persisted.schoolId !== user.schoolId) {
+            store.set({ status: 'guest' })
+            return
+          }
           window.location.reload()
           return
         }

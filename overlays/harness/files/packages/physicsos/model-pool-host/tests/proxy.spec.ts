@@ -379,6 +379,30 @@ describe('model pool proxy', () => {
     expect(store.key(survivor.id)?.requestCount).toBe(1)
   })
 
+  it.each([200, 401])('does not change replacement health when an old request returns HTTP %s', async (status) => {
+    const arrival = Promise.withResolvers<import('node:http').ServerResponse>()
+    const upstream = await startUpstream((_body, res) => { arrival.resolve(res) })
+    cleanup.push(upstream.close)
+    const store = await makeStore()
+    const channel = await store.createChannel(ADMIN, { name: 'rotated-inflight', baseURL: upstream.url })
+    const added = await store.addKey(ADMIN, channel.id, { key: 'fixture-original-credential' })
+    const base = await startPool(store)
+    const request = chat(base)
+    const response = await arrival.promise
+    await store.updateKey(ADMIN, added.id, { key: 'fixture-replacement-credential' })
+    if (status === 200) await store.markFailure(added.id, { kind: 'auth', status: 401, message: 'replacement is cooling' })
+    const replacement = store.key(added.id)
+
+    response.writeHead(status, { 'content-type': 'application/json' })
+    response.end(JSON.stringify(status === 200 ? { id: 'old-request' } : { error: { message: 'old credential refused' } }))
+    const result = await request
+    expect(result.status).toBe(status === 200 ? 200 : 503)
+    // The non-streaming body has ended; allow the handler's post-body outcome
+    // write to drain before inspecting the replacement's health snapshot.
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    expect(store.key(added.id)).toEqual(replacement)
+  })
+
   it('answers an explicit 503 when every candidate is disabled', async () => {
     const upstream = await startUpstream((_body, res) => { res.writeHead(200); res.end('{}') })
     cleanup.push(upstream.close)

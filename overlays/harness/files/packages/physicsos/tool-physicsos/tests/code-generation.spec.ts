@@ -20,6 +20,8 @@ import * as physicsTools from '../src/index.ts'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from '../src/code-provider.ts'
 import { CODE_TIMEOUT_MS, generateQuestionCode, type CodeGenerationDependencies } from '../src/code-generation.ts'
 import type { PhysicsSceneSnapshot } from '../src/types.ts'
+import { questionCodeContext } from '../../experiment-host/src/question-code-context.ts'
+import { PROMPT_SEED } from '../../experiment-host/src/prompt-seed.ts'
 
 const source = { title: '本题轨迹', summary: '独立绘制本题引擎快照', rendererJs: `export function renderFrame(snapshot) {
   const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 480;
@@ -180,7 +182,7 @@ describe('parent question code generation', () => {
     expect(text.text).not.toContain('不要绘制向量箭头')
     expect(text.text).not.toContain('最高点映射到18%')
   })
-  it('delegates the exact solved scene and publishes only metadata while retaining cause and evidence', async () => {
+  it('keeps the exact server-owned solved scene and publishes only metadata while retaining cause and evidence', async () => {
     const h = dependencies()
     const result = await generateQuestionCode(h.deps)
     expect(result.status).toBe('ready')
@@ -189,14 +191,15 @@ describe('parent question code generation', () => {
     expect(h.states[1]?.solve).toEqual(h.original.solve)
     expect(h.states[1]?.cause).toBe('solved')
     expect(JSON.stringify(h.states)).not.toContain('rendererJs')
-    expect(JSON.stringify(h.start.mock.calls)).toContain('latest V3 prompt')
+    expect(JSON.stringify(h.start.mock.calls)).not.toContain('latest V3 prompt')
     const delegated = h.start.mock.calls[0]?.[0]?.prompt[0]
-    expect(delegated?.type === 'text' ? delegated.text : undefined).toContain('"value":3')
+    expect(delegated?.type === 'text' ? delegated.text : undefined).not.toContain('"value":3')
     const prompt = delegated?.type === 'text' ? delegated.text : ''
     expect(prompt).toContain('Canvas2D')
     expect(prompt).toContain('snapshot.view.bodies[].at')
     expect(prompt).not.toContain('SDK wrapper')
     expect(prompt).not.toContain('基础 renderer：')
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }))
     expect(h.dispose).toHaveBeenCalledTimes(1)
   })
   it('gives the complete independent renderer a single shared ten-minute deadline', async () => {
@@ -215,21 +218,43 @@ describe('parent question code generation', () => {
     const request = h.start.mock.calls[0]?.[0]
     const block = request?.prompt[0]
     const prompt = block?.type === 'text' ? block.text : ''
-    expect(prompt).toContain('独立实验视觉与素材制作')
     expect(prompt).toContain('Warm Lab')
     expect(prompt).toContain('physics_generate_experiment_asset')
-    expect(prompt).toContain('起点/落点同点只标一次')
     expect(prompt).toContain('219×360')
     expect(prompt).toContain('真实题目标签：竖直上抛的运动观察')
-    expect(prompt).toContain('只参考物理、教学与包契约')
-    expect(prompt.indexOf('独立实验视觉与素材制作')).toBeLessThan(prompt.indexOf('教学：观察最高点'))
-    expect(prompt).toContain(JSON.stringify(h.original.scene))
-    expect(prompt).toContain(JSON.stringify(h.original.solve))
+    expect(prompt).not.toContain('教学：观察最高点')
+    expect(prompt).not.toContain('标题使用斜抛运动')
+    expect(prompt).not.toContain(JSON.stringify(h.original.scene))
+    expect(prompt).not.toContain(JSON.stringify(h.original.solve))
     expect(request?.agentOptions?.maxTokens).toBe(8192)
     expect(request?.toolFilter).toEqual({ allow: [] })
     expect(request?.maxDepth).toBe(1)
     expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: h.original.scene, source }))
     expect(h.start).toHaveBeenCalledTimes(1)
+  })
+  it('keeps the registered incline author task compact while retaining the exact server-owned scene and solve', async () => {
+    const h = dependencies()
+    h.original.domain = 'mechanics'
+    h.original.title = '斜面上的受力与运动'
+    h.original.scene = { ...h.original.scene as object, metadata: { privateDiagnostic: 'original-scene-only '.repeat(400) } }
+    if (h.original.solve) h.original.solve = { ...h.original.solve, steps: [{ index: 1, title: '原解答', description: 'original-solve-only '.repeat(400) }] }
+    const original = structuredClone(h.original)
+    h.deps.context = async () => questionCodeContext('incline', { current: () => ({ body: PROMPT_SEED.body, version: '1.2.3' }) } as never)
+    h.deps.instructions = '完整显示斜面、物块、重力、支持力和摩擦力箭头，中文标注。'
+    h.deps.assetManifest = () => [{ path: './assets/generated/owned.png', cssPath: './generated/owned.png', sha256: 'a'.repeat(64), width: 1536, height: 1024, kind: 'environment', model: 'image-model' }]
+    expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    const block = h.start.mock.calls[0]?.[0]?.prompt[0]
+    const prompt = block?.type === 'text' ? block.text : ''
+    expect(prompt.length).toBeLessThanOrEqual(4300)
+    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '2400', '10次', 'Warm Lab', '219×360', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
+    expect(prompt).toContain('angles.startAngle/endAngle')
+    expect(prompt).toContain('入口示例')
+    expect(prompt).toContain('drawScene(ctx,view,')
+    expect(prompt).toContain("image.src='./assets/generated/owned.png'")
+    for (const irrelevant of ['original-scene-only', 'original-solve-only', 'interface InspectorSection', 'interface DerivedQuantityView', '已发布视觉标准', '## 当前平台配置']) expect(prompt).not.toContain(irrelevant)
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ scene: original.scene }))
+    expect(h.states.at(-1)?.scene).toEqual(original.scene)
+    expect(h.states.at(-1)?.solve).toEqual(original.solve)
   })
   it.each([
     'export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.js";',

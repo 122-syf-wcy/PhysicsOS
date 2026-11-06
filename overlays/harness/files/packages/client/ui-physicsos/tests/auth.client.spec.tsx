@@ -107,10 +107,58 @@ const gateProps = (state: AuthState) => ({
 
 describe('auth controller', () => {
   it('boots authed when /me resolves a user', async () => {
+    globalThis.localStorage.setItem('physicsos.auth.user', JSON.stringify({ id: USER.id, schoolId: USER.schoolId }))
     const controller = createAuthController(stubApi(), globalThis.localStorage)
     await controller.boot()
     expect(controller.store.getSnapshot().status).toBe('authed')
     expect(controller.store.getSnapshot().user?.schoolName).toBe('贵州大学')
+  })
+
+  it('rebinds a recovered cookie session before publishing authed over anonymous storage', async () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { reload })
+    try {
+      localStorage.setItem('physicsos.recent-scenes', 'anonymous-scenes')
+      const controller = createAuthController(stubApi(), localStorage)
+      const statuses: string[] = []
+      const stop = controller.store.subscribe(() => {
+        const status = controller.store.getSnapshot().status
+        statuses.push(status)
+        if (status === 'authed') controller.userStorage.setItem('physicsos.recent-scenes', 'private-scenes')
+      })
+      await controller.boot()
+      stop()
+      expect(statuses).not.toContain('authed')
+      expect(reload).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(localStorage.getItem('physicsos.auth.user')!)).toEqual({ id: USER.id, schoolId: USER.schoolId })
+      expect(localStorage.getItem('physicsos.recent-scenes')).toBe('anonymous-scenes')
+      expect(localStorage.getItem(`physicsos.u.${USER.id}.physicsos.recent-scenes`)).toBe('anonymous-scenes')
+
+      const rebound = createAuthController(stubApi(), localStorage)
+      await rebound.boot()
+      expect(rebound.store.getSnapshot().status).toBe('authed')
+      rebound.userStorage.setItem('physicsos.recent-scenes', 'private-scenes')
+      expect(localStorage.getItem('physicsos.recent-scenes')).toBe('anonymous-scenes')
+      expect(localStorage.getItem(`physicsos.u.${USER.id}.physicsos.recent-scenes`)).toBe('private-scenes')
+      expect(reload).toHaveBeenCalledTimes(1)
+    } finally { vi.unstubAllGlobals() }
+  })
+
+  it('does not reload repeatedly or sync private data when the recovered identity cannot persist', async () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { reload })
+    try {
+      const storage = {
+        getItem: () => null,
+        setItem: () => { throw new Error('storage unavailable') },
+        removeItem: () => {},
+        clear: () => {}, key: () => null, length: 0,
+      }
+      const controller = createAuthController(stubApi(), storage)
+      await controller.boot()
+      expect(reload).not.toHaveBeenCalled()
+      expect(controller.store.getSnapshot().status).toBe('guest')
+    } finally { vi.unstubAllGlobals() }
   })
 
   it('boots guest on UNAUTHENTICATED and clears the stale hint', async () => {

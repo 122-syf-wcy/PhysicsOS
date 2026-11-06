@@ -6,7 +6,7 @@
  * credential is a four-character tail. Validation lives here too — the admin
  * routes stay a thin shape-checking layer above it.
  */
-import type { Domain } from '@deepseek-ai/dsh-storage-domain'
+import { DomainError, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import { PoolError } from './errors.ts'
 import { openSecret, sealSecret, tailOf } from './crypto.ts'
 import { cooldownMsFor } from './pool.ts'
@@ -20,6 +20,7 @@ import type {
   KeyView,
   PoolState,
   PoolStats,
+  SealedSecret,
   SettingsRecord,
 } from './types.ts'
 
@@ -550,11 +551,30 @@ export class PoolStore {
 
   /* ---- health counters ---- */
 
+  private async updateKeyHealth(
+    keyId: string,
+    update: (current: KeyRecord) => KeyRecord,
+    expectedSecret?: SealedSecret,
+  ): Promise<KeyRecord | undefined> {
+    try {
+      // Read and replace inside the domain's durability queue. A completed
+      // request must not overwrite another outcome or restore a deleted key.
+      return await this.keysTable.update(keyId, (current) => {
+        // Outcomes belong to the credential actually sent upstream, including
+        // when an administrator replaces it before this queue slot runs.
+        if (expectedSecret !== undefined && (current.secret.iv !== expectedSecret.iv
+          || current.secret.tag !== expectedSecret.tag || current.secret.data !== expectedSecret.data)) return current
+        return update(current)
+      })
+    } catch (error) {
+      if (error instanceof DomainError && error.code === 'missing-key') return undefined
+      throw error
+    }
+  }
+
   /** One successful attempt: clear the streak and count the request. */
-  async markSuccess(keyId: string): Promise<void> {
-    const current = this.keysTable.get(keyId)
-    if (current === undefined) return
-    const next: KeyRecord = {
+  async markSuccess(keyId: string, expectedSecret?: SealedSecret): Promise<void> {
+    await this.updateKeyHealth(keyId, current => ({
       ...current,
       status: 'active',
       failCount: 0,
@@ -564,8 +584,7 @@ export class PoolStore {
       lastUsedAt: this.now().toISOString(),
       requestCount: current.requestCount + 1,
       updatedAt: this.now().toISOString(),
-    }
-    await this.keysTable.put(keyId, next)
+    }), expectedSecret)
   }
 
   /**
@@ -575,26 +594,24 @@ export class PoolStore {
    * @param failure - the classified upstream outcome.
    * @returns the stored key after the update.
    */
-  async markFailure(keyId: string, failure: KeyFailure): Promise<KeyRecord | undefined> {
-    const current = this.keysTable.get(keyId)
-    if (current === undefined) return undefined
-    const settings = this.settings
-    const failCount = current.failCount + 1
-    const bench = failure.kind === 'auth' || failCount >= settings.failureThreshold
-    const streak = bench ? current.cooldownStreak + 1 : current.cooldownStreak
-    const at = this.now()
-    const next: KeyRecord = {
-      ...current,
-      failCount,
-      status: bench ? 'cooldown' : current.status,
-      cooldownStreak: streak,
-      cooldownUntil: bench ? at.getTime() + cooldownMsFor(streak, settings) : current.cooldownUntil,
-      lastError: failure.message.slice(0, 400),
-      lastUsedAt: at.toISOString(),
-      failureCount: current.failureCount + 1,
-      updatedAt: at.toISOString(),
-    }
-    await this.keysTable.put(keyId, next)
-    return next
+  async markFailure(keyId: string, failure: KeyFailure, expectedSecret?: SealedSecret): Promise<KeyRecord | undefined> {
+    return this.updateKeyHealth(keyId, (current) => {
+      const settings = this.settings
+      const failCount = current.failCount + 1
+      const bench = failure.kind === 'auth' || failCount >= settings.failureThreshold
+      const streak = bench ? current.cooldownStreak + 1 : current.cooldownStreak
+      const at = this.now()
+      return {
+        ...current,
+        failCount,
+        status: bench ? 'cooldown' : current.status,
+        cooldownStreak: streak,
+        cooldownUntil: bench ? at.getTime() + cooldownMsFor(streak, settings) : current.cooldownUntil,
+        lastError: failure.message.slice(0, 400),
+        lastUsedAt: at.toISOString(),
+        failureCount: current.failureCount + 1,
+        updatedAt: at.toISOString(),
+      }
+    }, expectedSecret)
   }
 }

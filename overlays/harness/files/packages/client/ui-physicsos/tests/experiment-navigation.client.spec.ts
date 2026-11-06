@@ -108,6 +108,44 @@ it('synchronizes an upload selection made before the navigation bridge starts', 
   expect(window.location.hash).toBe('#/contribute')
 })
 
+it('opens template routes immediately while account synchronization is pending', async () => {
+  window.history.replaceState(null, '', '/#/experiments/convex-lens')
+  const surface = createPhysicsSurfaceController()
+  const pending = Promise.withResolvers<void>()
+  stop = startExperimentNavigation({ surface, window, savedScenesReady: pending.promise, loadCatalog: async () => experimentCatalog })
+  await vi.waitFor(() => expect(surface.store.getSnapshot().surface).toBe('lab'))
+  expect(surface.store.getSnapshot().sceneRef?.scene.metadata.title).toBe('凸透镜成像规律')
+})
+
+it('waits only for a missing saved scene and restores its synchronized conditions', async () => {
+  const saved = experimentCatalog.create('convex-lens')!
+  window.history.replaceState(null, '', `/#/experiments/convex-lens?scene=${encodeURIComponent(saved.sceneId)}`)
+  const surface = createPhysicsSurfaceController()
+  const pending = Promise.withResolvers<void>()
+  stop = startExperimentNavigation({ surface, window, savedScenesReady: pending.promise, loadCatalog: async () => experimentCatalog })
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(surface.store.getSnapshot().surface).toBe('home')
+  surface.recent.set({ items: [{ ...saved, title: '已保存条件', domain: 'optics', kind: 'experiment', updatedAt: new Date().toISOString() }] })
+  pending.resolve()
+  await vi.waitFor(() => expect(surface.store.getSnapshot().sceneRef?.sceneId).toBe(saved.sceneId))
+  expect(surface.store.getSnapshot().routeNotice).toBeUndefined()
+})
+
+it('keeps navigation responsive and discards saved-route restoration after a new selection', async () => {
+  window.history.replaceState(null, '', '/#/experiments/convex-lens?scene=waiting-remote')
+  const surface = createPhysicsSurfaceController()
+  const pending = Promise.withResolvers<void>()
+  stop = startExperimentNavigation({ surface, window, savedScenesReady: pending.promise, loadCatalog: async () => experimentCatalog })
+  await Promise.resolve()
+  surface.open('contribute')
+  pending.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(surface.store.getSnapshot().surface).toBe('contribute')
+  expect(window.location.hash).toBe('#/contribute')
+})
+
 it.each([
   ['#/experiments/convex-lens', 'contribute'],
   ['#/contribute', 'lab'],

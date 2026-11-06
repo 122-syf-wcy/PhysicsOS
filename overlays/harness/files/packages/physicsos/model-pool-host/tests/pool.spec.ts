@@ -94,6 +94,35 @@ describe('weighted rotation', () => {
     expect(winners.filter(id => id === 'w2')).toHaveLength(2)
     expect(winners.filter(id => id === 'w1')).toHaveLength(1)
   })
+
+  it('uses current credentials and channel routing without resetting the weighted cursor', () => {
+    const rotation = new WeightedRotation({ random: () => 0 })
+    const originalChannel = channel('a', 10, ['old-model'])
+    const original: Candidate[] = [
+      { channel: originalChannel, key: key('heavy', 'a', { weight: 3 }) },
+      { channel: originalChannel, key: key('light', 'a') },
+    ]
+    expect(order(rotation.order(original))[0]).toBe('heavy')
+    const currentChannel = { ...originalChannel, baseURL: 'https://updated.invalid/v1', models: ['new-model'] }
+    const current = original.map(candidate => ({
+      channel: currentChannel,
+      key: { ...candidate.key, secret: { ...candidate.key.secret, data: 'rotated-ciphertext' } },
+    }))
+
+    const picks = Array.from({ length: 3 }, () => rotation.order(current))
+    expect(picks.map(pick => pick[0]?.key.id)).toEqual(['heavy', 'heavy', 'light'])
+    for (const pick of picks) {
+      expect(pick.map(candidate => candidate.channel.baseURL)).toEqual([
+        'https://updated.invalid/v1', 'https://updated.invalid/v1',
+      ])
+      expect(pick.map(candidate => upstreamModelOf(candidate.channel, 'platform-model'))).toEqual([
+        'new-model', 'new-model',
+      ])
+      expect(pick.map(candidate => candidate.key.secret.data)).toEqual([
+        'rotated-ciphertext', 'rotated-ciphertext',
+      ])
+    }
+  })
 })
 
 describe('eligibility and cooldown', () => {

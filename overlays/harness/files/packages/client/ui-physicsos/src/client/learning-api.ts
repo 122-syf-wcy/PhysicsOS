@@ -60,21 +60,29 @@ export function createLearningApi(options: LearningApiOptions = {}): LearningApi
     if (init?.body !== undefined && !headers.has('content-type')) {
       headers.set('content-type', 'application/json')
     }
-    const response = await call(`${base}${path}`, {
-      ...init,
-      headers,
-    })
-    const body = (await response.json().catch(() => ({}))) as {
-      error?: { code?: string; message?: string }
-    }
-    if (!response.ok) {
-      throw new LearningApiError(
-        response.status,
-        body.error?.code ?? `HTTP_${response.status}`,
-        body.error?.message ?? String(response.status),
-      )
-    }
-    return body as T
+    const controller = new AbortController()
+    const timeout = new LearningApiError(408, 'LEARNING_TIMEOUT', '学习记录同步超时，请稍后重试。')
+    const timer = setTimeout(() => { controller.abort(timeout) }, 15_000)
+    try {
+      const response = await call(`${base}${path}`, {
+        ...init,
+        headers,
+        signal: controller.signal,
+      })
+      const body = (await response.json().catch((error: unknown) => {
+        if (controller.signal.aborted) throw error
+        return {}
+      })) as { error?: { code?: string; message?: string } }
+      if (controller.signal.aborted) throw timeout
+      if (!response.ok) {
+        throw new LearningApiError(response.status, body.error?.code ?? `HTTP_${response.status}`,
+          body.error?.message ?? String(response.status))
+      }
+      return body as T
+    } catch (error) {
+      if (controller.signal.aborted) throw timeout
+      throw error
+    } finally { clearTimeout(timer) }
   }
 
   return {

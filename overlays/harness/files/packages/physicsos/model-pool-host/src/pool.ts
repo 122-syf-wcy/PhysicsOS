@@ -86,7 +86,7 @@ export interface WeightedRotationOptions {
 export class WeightedRotation {
   private readonly random: () => number
   private readonly cursors = new Map<number, number>()
-  private readonly wheels = new Map<number, { readonly signature: string; readonly wheel: readonly Candidate[] }>()
+  private readonly wheels = new Map<number, { readonly signature: string; readonly wheel: readonly string[] }>()
 
   /**
    * @param options - optional deterministic test seam for the initial offset.
@@ -116,7 +116,7 @@ export class WeightedRotation {
   }
 
   /** Expand a tier into its weighted wheel, rebuilt only when weights change. */
-  private wheelFor(priority: number, tier: readonly Candidate[]): readonly Candidate[] {
+  private wheelFor(priority: number, tier: readonly Candidate[]): readonly string[] {
     /* Creation order, then id: the operator sees the same order the console
        lists keys in, and a rebuilt wheel cannot reshuffle on its own. */
     const sorted = [...tier].sort((left, right) =>
@@ -129,7 +129,7 @@ export class WeightedRotation {
     const cached = this.wheels.get(priority)
     if (cached !== undefined && cached.signature === signature) return cached.wheel
     const wheel = sorted.flatMap(candidate =>
-      Array.from({ length: Math.max(1, candidate.key.weight) }, () => candidate),
+      Array.from({ length: Math.max(1, candidate.key.weight) }, () => candidate.key.id),
     )
     this.wheels.set(priority, { signature, wheel })
     return wheel
@@ -138,6 +138,9 @@ export class WeightedRotation {
   private rotate(priority: number, tier: readonly Candidate[]): Candidate[] {
     const wheel = this.wheelFor(priority, tier)
     if (wheel.length === 0) return []
+    // Cache placement only: credentials, aliases and endpoints can change while
+    // key IDs and weights remain stable, so resolve records from this request.
+    const current = new Map(tier.map(candidate => [candidate.key.id, candidate]))
     const cursor = this.cursors.get(priority)
     const initial = this.randomOffset(wheel.length)
     const start = (cursor ?? initial) % wheel.length
@@ -145,7 +148,8 @@ export class WeightedRotation {
     const picked: Candidate[] = []
     const seen = new Set<string>()
     for (let offset = 0; offset < wheel.length; offset += 1) {
-      const candidate = wheel[(start + offset) % wheel.length]
+      const id = wheel[(start + offset) % wheel.length]
+      const candidate = id === undefined ? undefined : current.get(id)
       if (candidate === undefined || seen.has(candidate.key.id)) continue
       seen.add(candidate.key.id)
       picked.push(candidate)

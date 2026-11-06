@@ -136,13 +136,13 @@ export function apply(ctx: Context, config: Config = {}): () => Promise<void> {
         timeoutMs: normalized.testTimeoutMs,
         signal,
       })
-      if (result.ok) await store.markSuccess(keyId)
+      if (result.ok) await store.markSuccess(keyId, record.secret)
       else if (!signal.aborted && classifyStatus(result.status) !== 'client') {
         await store.markFailure(keyId, {
           kind: classifyStatus(result.status),
           status: result.status,
           message: result.message,
-        })
+        }, record.secret)
       }
       return result
     }

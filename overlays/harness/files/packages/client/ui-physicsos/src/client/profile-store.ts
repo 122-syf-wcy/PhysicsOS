@@ -100,30 +100,47 @@ export function createPhysicsProfileController(
   })
   let host = api
   let sessionOf = currentSession ?? (() => undefined)
-  let pending: PhysicsProfileId | undefined = store.getSnapshot().current
+  let pending: { id: PhysicsProfileId } | undefined = { id: store.getSnapshot().current }
+  let active: Promise<void> | undefined
 
-  const apply = async (): Promise<void> => {
-    const id = pending
-    const session = sessionOf()
-    if (host === undefined || id === undefined || session === undefined || !session.blank) return
-    const runtime = runtimePresetOf(id)
-    if (session.agentPreset === runtime) {
-      pending = undefined
-      return
-    }
-    store.set({ ...store.getSnapshot(), busy: true, error: null })
-    try {
-      const response = await host.agentPresets.select({ sessionId: session.id, agentPreset: runtime })
-      pending = undefined
-      if (!response.result.ok) {
-        store.set({ ...store.getSnapshot(), busy: false, error: response.result.error.message })
-        return
+  const apply = (): Promise<void> => {
+    if (active !== undefined) return active
+    let waiting: typeof pending
+    // The session list can tick again before a preset write returns. Serialize
+    // those notifications and keep newer choices separate from an old reply.
+    active = Promise.resolve().then(async () => {
+      while (pending !== undefined) {
+        const choice = pending
+        const api = host
+        const session = sessionOf()
+        if (api === undefined || session === undefined || !session.blank) {
+          waiting = choice
+          break
+        }
+        const runtime = runtimePresetOf(choice.id)
+        if (session.agentPreset === runtime) {
+          pending = undefined
+          continue
+        }
+        store.set({ ...store.getSnapshot(), busy: true, error: null })
+        let error: string | null = null
+        try {
+          const response = await api.agentPresets.select({ sessionId: session.id, agentPreset: runtime })
+          if (!response.result.ok) error = response.result.error.message
+        } catch (reason) {
+          error = messageOf(reason)
+        }
+        if (pending === choice && host === api && sessionOf()?.id === session.id) {
+          pending = undefined
+          store.set({ ...store.getSnapshot(), error })
+        }
       }
-      store.set({ ...store.getSnapshot(), busy: false })
-    } catch (error) {
-      pending = undefined
-      store.set({ ...store.getSnapshot(), busy: false, error: messageOf(error) })
-    }
+    }).finally(() => {
+      active = undefined
+      if (pending !== undefined && pending !== waiting) return apply()
+      if (store.getSnapshot().busy) store.set({ ...store.getSnapshot(), busy: false })
+    })
+    return active
   }
 
   return {
@@ -136,7 +153,7 @@ export function createPhysicsProfileController(
     },
     select: async (id) => {
       const persisted = persistProfile(id, storage)
-      pending = id
+      pending = { id }
       /* The chip still moves on a write failure — the choice is live for the
          session; `error` records only that persistence did not stick. */
       store.set({ ...store.getSnapshot(), current: id, error: persisted })

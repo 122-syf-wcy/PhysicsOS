@@ -9,6 +9,7 @@ import { host } from './support.ts'
 import { QuestionCodeAssets } from '../src/question-code-assets.ts'
 import { crc32, deflateSync } from 'node:zlib'
 import { contributor } from './fixtures.ts'
+import { QUESTION_CODE_ENTRY_EXAMPLE } from '../../tool-physicsos/src/question-code-prompt-context.ts'
 
 const disposals: (() => Promise<void>)[] = []
 afterEach(async () => { for (const dispose of disposals.splice(0).reverse()) await dispose() })
@@ -84,4 +85,10 @@ it('does not treat a constant helper iterable as engine geometry', async () => {
   const source = fixture('for (const item of points(snapshot.view)) ctx.drawImage(image, item.at.x, item.at.y, 24, 24);')
     + '\nfunction points(view) { return [{ at: { x: 0, y: 0 } }] }'
   await expect(create(source)).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
+})
+it('rejects the prompt plumbing example alone and accepts only its reachable authored engine drawing helper', async () => {
+  const entry = QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', './assets/parts3d/mechanics/ball.png')
+  await expect(create(entry)).rejects.toMatchObject({ code: 'INVALID_SOURCE' })
+  await expect(create(entry + '\nfunction drawScene(ctx,view,t) { for (const object of view.opticalObjects || []) { const p=point(object.at,t); ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill(); } }'))
+    .resolves.toMatchObject({ rendererKind: 'independent' })
 })
