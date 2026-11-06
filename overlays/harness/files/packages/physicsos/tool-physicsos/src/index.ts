@@ -13,11 +13,11 @@
  * @module @deepseek-ai/dsh-tool-physicsos
  */
 
-import { isDeepStrictEqual } from 'node:util'
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from './code-provider.ts'
 import { generateQuestionCode, type CodeStyleContext } from './code-generation.ts'
 import { codeStyleFor } from './code-style-selection.ts'
 import { registerRegenerateRoute } from './regenerate-route.ts'
+import { sameTurnVisualization, solveSummaryOf, solveTraceOf } from './solve-publication.ts'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type { CodeExperimentRef, CodeVisualizationSource, CodeVisualizationState } from '@physicsos/agent-tools'
 import type { Context } from '@deepseek-ai/cordis'
@@ -475,82 +475,21 @@ export function apply(ctx: Context, config: Config): void {
       const solved = guarded(() => runtime.solveQuestion(args.text, args.questionId))
       const durationMs = Date.now() - startedAt
       if (solved.scene !== undefined) {
-        const previous = solved.reusedScene === true ? persistedScene(exec, solved.scene.sceneId) : undefined
-        const sameTurnVisualization = exec.agent !== undefined && previous !== undefined
-          && previous.turn === currentTurnOf(exec) && previous.sceneId === solved.scene.sceneId
-          && previous.revision === solved.scene.revision
-          && previous.visualization?.ownerSessionId === String(exec.agent.id)
-          && previous.visualization.sceneId === solved.scene.sceneId
-          && previous.visualization.sceneRevision === solved.scene.revision
-          && isDeepStrictEqual(
-            JSON.parse(JSON.stringify(previous.scene)) as unknown,
-            JSON.parse(JSON.stringify(runtime.sceneSnapshot(solved.scene.sceneId))) as unknown,
-          )
         // A cached engine result must not clear this turn's completed/failed code job.
         // Compare every serialized scene fact; new turns and revisions still publish normally.
-        if (!sameTurnVisualization) {
+        const previous = solved.reusedScene === true ? persistedScene(exec, solved.scene.sceneId) : undefined
+        const unchanged = exec.agent !== undefined && sameTurnVisualization(
+          previous, solved.scene, runtime.sceneSnapshot(solved.scene.sceneId), currentTurnOf(exec), String(exec.agent.id),
+        )
+        if (!unchanged) {
           publish(exec, runtime, solved.scene, 'solved', {
             ...(solved.model === undefined ? {} : { model: solved.model }),
-            solve: {
-              knowns: solved.knowns,
-              targets: solved.targets,
-              /* Each answer carries the simulation's provenance — engine
-                 id/version, scene revision, verifier and checks — so the client
-                 names the engine behind the number instead of the scene domain.
-                 An answer with no engine behind it forwards the honest null. */
-              answers: solved.answers.map(answer => ({
-                key: answer.key,
-                label: answer.label,
-                symbol: answer.symbol,
-                value: answer.value,
-                unit: answer.unit,
-                provenance: answer.provenance,
-              })),
-              steps: solved.steps,
-              ...(solved.verification === undefined ? {} : {
-                verification: {
-                  status: solved.verification.status,
-                  checks: solved.verification.checks,
-                },
-              }),
-              issues: solved.issues,
-              ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
-            },
+            solve: solveSummaryOf(solved),
           })
         }
       }
-      /* Every attempt — solved or rejected — leaves a trace: the scene mirror
-         only carries READY solves, so without this a rejected attempt (parse
-         failure, verification failure) would vanish from the session log the
-         moment the model re-asks. */
-      if (exec.agent !== undefined) {
-        const failedChecks = (solved.verification?.checks ?? [])
-          .filter(check => !check.passed)
-          .map(check => ({ id: check.id, ...(check.message === undefined ? {} : { message: check.message }) }))
-        const verificationSummary = solved.verification === undefined ? undefined : {
-          status: solved.verification.status,
-          passed: solved.verification.checks.length - failedChecks.length,
-          total: solved.verification.checks.length,
-          failed: failedChecks,
-        }
-        const trace: PhysicsSolveTrace = {
-          ...(currentTurnOf(exec) === undefined ? {} : { turn: currentTurnOf(exec) }),
-          status: solved.status,
-          workflowState: solved.workflowState,
-          ...(solved.domain === undefined ? {} : { domain: solved.domain }),
-          ...(solved.model === undefined ? {} : { model: solved.model }),
-          ...(solved.goldenQuestionId === undefined ? {} : { goldenQuestionId: solved.goldenQuestionId }),
-          ...(solved.attempt === undefined ? {} : { attempt: solved.attempt }),
-          ...(solved.scene === undefined ? {} : { sceneId: solved.scene.sceneId }),
-          ...(solved.reusedScene === true ? { reusedScene: true } : {}),
-          ...(verificationSummary === undefined ? {} : { verification: verificationSummary }),
-          answers: solved.answers.map(answer => ({ key: answer.key, value: answer.value, unit: answer.unit })),
-          issues: solved.issues.map(issue => ({ code: issue.code, severity: issue.severity })),
-          retryGuidance: (solved.retryGuidance ?? []).map(hint => ({ code: hint.code })),
-          durationMs,
-        }
-        exec.agent.session.append('physics/solve-trace', trace)
-      }
+      /* Every attempt — solved or rejected — leaves a trace (see solve-publication.ts). */
+      exec.agent?.session.append('physics/solve-trace', solveTraceOf(solved, currentTurnOf(exec), durationMs))
       if (solved.status === 'solved' && solved.scene !== undefined && solved.verification?.status === 'passed' && exec.agent?.ctx !== undefined) {
         const visualization = await generate(exec, solved.scene.sceneId)
         return { ...solved, visualization: {
