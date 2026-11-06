@@ -24,3 +24,24 @@ export interface CodeVisualizationSource {
   readonly rendererJs: string
   readonly stylesheet: string
 }
+
+/**
+ * Canonical JSON for question identity: object keys sorted, `undefined`
+ * members dropped, array order and every scalar preserved. The host freezes
+ * a scene's digest from this text, the generation pipeline checks the scene
+ * has not drifted against it, and the browser recomputes it before trusting
+ * an artifact — one definition keeps those three agreeing byte for byte.
+ * @param value - any JSON-compatible value.
+ * @returns the canonical text.
+ */
+export function canonicalJson(value: unknown): string {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- JSON.stringify(undefined) returns undefined at runtime.
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']'
+  const record = value as Record<string, unknown>
+  return '{' + Object.keys(record)
+    .filter(key => record[key] !== undefined)
+    .sort()
+    .map(key => JSON.stringify(key) + ':' + canonicalJson(record[key]))
+    .join(',') + '}'
+}

@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { validateScene, type PhysicsScene } from '@physicsos/physics-scene'
 import { pickEngine, domainOfEngine } from '@physicsos/physics-runtime'
-import type { CodeExperimentRef, CodeVisualizationSource } from '@physicsos/agent-tools'
+import { canonicalJson, type CodeExperimentRef, type CodeVisualizationSource } from '@physicsos/agent-tools'
 import { z } from 'zod'
 import { init, parse } from 'es-module-lexer'
 import { ExperimentError, type PhysicsosIdentity, type IdentityActor } from './identity.ts'
@@ -68,26 +68,12 @@ export interface QuestionCodeOptions {
 }
 const executeFile = promisify(execFile)
 const hash = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex')
-/** Stable across object key ordering, while preserving every question field and array order. */
-export function canonicalQuestionJson(value: unknown): string {
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- JSON.stringify(undefined) returns undefined at runtime.
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
-  if (Array.isArray(value)) return '[' + value.map(canonicalQuestionJson).join(',') + ']'
-  return (
-    '{' +
-    Object.keys(value)
-      .filter(key => (value as Record<string, unknown>)[key] !== undefined)
-      .sort()
-      .map(
-        key =>
-          JSON.stringify(key) +
-          ':' +
-          canonicalQuestionJson((value as Record<string, unknown>)[key]),
-      )
-      .join(',') +
-    '}'
-  )
-}
+/**
+ * Stable across object key ordering, while preserving every question field
+ * and array order. One definition, shared with the generation pipeline via
+ * `@physicsos/agent-tools`, so host and generator digest the same bytes.
+ */
+export const canonicalQuestionJson: (value: unknown) => string = canonicalJson
 export const questionSceneSha256 = (scene: PhysicsScene): string =>
   hash(canonicalQuestionJson(scene))
 const sourceSchema = z

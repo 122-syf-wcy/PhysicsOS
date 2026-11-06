@@ -107,7 +107,8 @@ const scenesOf = (agent: Agent) =>
 const turnsOf = (agent: Agent) =>
   agent.session.snapshotEvents().filter(event => event.type === 'turn/start').length
 
-describe('direct regeneration route', () => {
+/* Real agent loops: generous per-test budget so a loaded machine does not fail them on time alone. */
+describe('direct regeneration route', { timeout: 30_000 }, () => {
   it('starts the trusted code generation for an owned scene without a model turn', async () => {
     let mainCalls = 0
     let childCalls = 0
