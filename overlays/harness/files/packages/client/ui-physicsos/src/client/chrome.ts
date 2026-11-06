@@ -423,6 +423,20 @@ body[data-ds-dark-theme] {
   --physics-ink-warn: var(--dsw-static-amber-400, #f7ad31);
   --physics-ink-mark: #f9a8d4;
 }
+
+/* Dark host keeps its own surfaces; only the accent moves to the notebook
+   green. The host writes its dark aliases on body[data-ds-dark-theme] as well;
+   the root qualifier outranks them whatever order the sheets load in. */
+html body[data-ds-dark-theme] {
+  --dsw-alias-button-info-fill: #4f7d60;
+  --dsw-alias-button-info-hover: #5c8d6d;
+  --dsw-alias-link: var(--physics-accent-strong);
+  --dsw-alias-state-business-primary: var(--physics-accent);
+  --dsw-alias-state-business-tertiary: var(--physics-accent-soft);
+  --dsw-specific-sidebar-nav-item-active-accent: var(--physics-accent-soft);
+  --dsw-specific-bubble: rgba(127, 176, 143, 0.14);
+  --dsw-specific-bubble-highlight: rgba(127, 176, 143, 0.26);
+}
 *:focus {
   outline: none;
 }
