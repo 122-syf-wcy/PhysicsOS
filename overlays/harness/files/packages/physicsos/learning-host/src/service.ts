@@ -18,7 +18,22 @@ import {
 const DEFAULT_PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 100
 const MAX_SCENE_BYTES = 256 * 1024
+/** Rows one batch upload may carry; the client chunks its outbox to this size. */
+export const MAX_ATTEMPT_BATCH = 50
 const ID_RE = /^[A-Za-z0-9._-]{1,128}$/
+
+/**
+ * Outcome of one row in a batch upload. `saved` covers both a fresh write and
+ * an idempotent repeat; `invalid`/`conflict`/`forbidden` are definitive
+ * refusals the client must not retry (the row can never be accepted as sent).
+ */
+export type AttemptBatchResult =
+  | { readonly id: string; readonly status: 'saved'; readonly item: PersonalAttemptRecord }
+  | {
+    readonly id: string
+    readonly status: 'invalid' | 'conflict' | 'forbidden'
+    readonly error: { readonly code: string; readonly message: string }
+  }
 
 export interface Page<T> {
   readonly items: T[]
@@ -199,6 +214,40 @@ export class LearningService {
     }
     await this.attempts.put(key, record)
     return record
+  }
+
+  /**
+   * Save up to {@link MAX_ATTEMPT_BATCH} attempts in one call. Each row is
+   * judged by exactly the {@link saveAttempt} rules, but a refused row does
+   * not fail its neighbours: the caller gets one outcome per input row, in
+   * input order, and only the batch envelope itself can raise.
+   * @param actor - the server-resolved owner of every row.
+   * @param body - `{ items: StudentAttempt[] }` from the wire.
+   * @returns one {@link AttemptBatchResult} per input row.
+   */
+  async saveAttempts(actor: IdentityActor, body: unknown): Promise<AttemptBatchResult[]> {
+    const items: unknown = typeof body === 'object' && body !== null && 'items' in body ? body.items : undefined
+    if (!Array.isArray(items)) {
+      throw new LearningError(400, 'BAD_REQUEST', '批量上传需要 items 数组')
+    }
+    const rows: readonly unknown[] = items
+    if (rows.length === 0 || rows.length > MAX_ATTEMPT_BATCH) {
+      throw new LearningError(400, 'BAD_REQUEST', `items 数量须在 1 到 ${MAX_ATTEMPT_BATCH} 之间`)
+    }
+    const results: AttemptBatchResult[] = []
+    for (const [index, item] of rows.entries()) {
+      const rawId: unknown = typeof item === 'object' && item !== null && 'id' in item ? item.id : undefined
+      const id = typeof rawId === 'string' ? rawId : `#${String(index)}`
+      try {
+        const saved = await this.saveAttempt(actor, typeof rawId === 'string' ? rawId : '', item)
+        results.push({ id, status: 'saved', item: saved })
+      } catch (error) {
+        if (!(error instanceof LearningError)) throw error
+        const status = error.status === 409 ? 'conflict' : error.status === 404 ? 'forbidden' : 'invalid'
+        results.push({ id, status, error: { code: error.code, message: error.message } })
+      }
+    }
+    return results
   }
 
   listAttempts(actor: IdentityActor, query: ListQuery = {}): Page<PersonalAttemptRecord> {

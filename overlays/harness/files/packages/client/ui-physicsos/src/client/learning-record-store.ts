@@ -12,7 +12,7 @@
 
 import { createSnapshotStore, type SnapshotStore } from './runtime-compat.ts'
 import type { MistakeType } from '@physicsos/question-core'
-import type { LearningApi } from './learning-api.ts'
+import { ATTEMPT_BATCH_SIZE, type LearningApi } from './learning-api.ts'
 
 /** One recorded self-check answer — local-only history, never leaves the browser. */
 export interface StudentAttempt {
@@ -50,7 +50,8 @@ const ATTEMPT_LIMIT = 200
 const OUTBOX_KEY = 'physicsos.learning-record.outbox'
 
 type RecordStorage = Pick<Storage, 'getItem' | 'setItem'>
-type LearningRecordSync = Pick<LearningApi, 'listAttempts' | 'putAttempt'>
+/** `putAttempts` is optional so an older host (or a minimal fake) falls back to one PUT per row. */
+type LearningRecordSync = Pick<LearningApi, 'listAttempts' | 'putAttempt'> & Partial<Pick<LearningApi, 'putAttempts'>>
 
 const readStored = (storage: RecordStorage | undefined): StudentAttempt[] => {
   try {
@@ -147,6 +148,43 @@ export function createLearningRecordController(
       .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id))
       .slice(0, ATTEMPT_LIMIT)
   }
+  /**
+   * Flush the outbox in batches. Rows already travelling through a single-row
+   * `upload()` are left to that request; every other pending row rides a
+   * batch of at most {@link ATTEMPT_BATCH_SIZE}, so a 200-row outbox costs
+   * four round trips instead of two hundred, and the outbox is persisted once
+   * per batch instead of once per acknowledgement. A definitive host refusal
+   * (`invalid` / `conflict` / `forbidden`) drops the row from the outbox — it
+   * can never be accepted as sent and would otherwise fail every future sync —
+   * while a transport failure keeps the whole batch pending for the retry loop.
+   */
+  const uploadBatches = async (
+    rows: readonly StudentAttempt[],
+    putAttempts: NonNullable<LearningRecordSync['putAttempts']>,
+  ): Promise<unknown[]> => {
+    const failures: unknown[] = []
+    const fresh = rows.filter(row => !uploading.has(row.id))
+    for (let offset = 0; offset < fresh.length; offset += ATTEMPT_BATCH_SIZE) {
+      const batch = fresh.slice(offset, offset + ATTEMPT_BATCH_SIZE)
+      const job = putAttempts(batch).then(({ results }) => {
+        for (const result of results) pending.delete(result.id)
+        persistPending()
+      })
+      const tracked = job.finally(() => {
+        for (const row of batch) if (uploading.get(row.id) === tracked) uploading.delete(row.id)
+      })
+      for (const row of batch) uploading.set(row.id, tracked)
+      try { await tracked } catch (error) { failures.push(error) }
+    }
+    // Rows that were mid-flight on a single-row upload settle on their own promise.
+    for (const row of rows) {
+      const inflight = uploading.get(row.id)
+      if (inflight !== undefined) {
+        try { await inflight } catch (error) { failures.push(error) }
+      }
+    }
+    return failures
+  }
   let activeSync: Promise<void> | undefined
   const sync = (): Promise<void> => {
     if (remote === undefined) return Promise.resolve()
@@ -154,8 +192,13 @@ export function createLearningRecordController(
       const failures: unknown[] = []
       // Bound each reconciliation; a permanently rejected row cannot starve
       // later rows, and edits created during this pass have their own upload.
-      for (const attempt of [...pending.values()].slice(0, ATTEMPT_LIMIT)) {
-        try { await upload(attempt) } catch (error) { failures.push(error) }
+      const rows = [...pending.values()].slice(0, ATTEMPT_LIMIT)
+      if (remote.putAttempts !== undefined) {
+        failures.push(...await uploadBatches(rows, remote.putAttempts))
+      } else {
+        for (const attempt of rows) {
+          try { await upload(attempt) } catch (error) { failures.push(error) }
+        }
       }
       const remoteAttempts: StudentAttempt[] = []
       const seenCursors = new Set<string>()

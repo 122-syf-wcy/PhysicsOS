@@ -11,9 +11,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { LearningError, requireActor, type PhysicsosIdentity } from './identity.ts'
-import type { LearningService, ListQuery } from './service.ts'
+import { MAX_ATTEMPT_BATCH, type LearningService, type ListQuery } from './service.ts'
 
 const ATTEMPT_BODY_LIMIT = 32 * 1024
+/* One batch carries at most MAX_ATTEMPT_BATCH rows; a real row is ~1 KB, so
+   this bounds a hostile body long before per-row validation sees it. */
+const ATTEMPT_BATCH_BODY_LIMIT = Math.min(ATTEMPT_BODY_LIMIT * MAX_ATTEMPT_BATCH, 512 * 1024)
 const SCENE_BODY_LIMIT = 512 * 1024
 
 export interface RouteDeps {
@@ -21,13 +24,25 @@ export interface RouteDeps {
   readonly identity: () => PhysicsosIdentity | undefined
 }
 
-const send = (res: ServerResponse, status: number, body: unknown): void => {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+const send = (
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): void => {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers })
   res.end(JSON.stringify(body))
 }
 
-const sendError = (res: ServerResponse, error: unknown): void => {
+const sendError = (req: IncomingMessage, res: ServerResponse, error: unknown): void => {
   if (error instanceof LearningError) {
+    if (error.status === 413) {
+      /* The body was abandoned mid-stream, so this keep-alive connection can
+         no longer be framed for the next request: answer, then close it. */
+      send(res, 413, { error: { code: error.code, message: error.message } }, { connection: 'close' })
+      res.once('finish', () => { req.destroy() })
+      return
+    }
     send(res, error.status, { error: { code: error.code, message: error.message } })
     return
   }
@@ -111,6 +126,18 @@ export function learningRoutes(
         send(res, 200, deps.service.listAttempts(actor, listQueryOf(url)))
         return
       }
+      /* Batch upload: one round trip, one identity/CSRF check and one JSON
+         parse for a whole outbox chunk, with per-row outcomes in the body. */
+      if (method === 'POST' && path === '/attempts/batch') {
+        checkJsonMutation(req)
+        send(res, 200, {
+          results: await deps.service.saveAttempts(
+            actor,
+            await readJson(req, ATTEMPT_BATCH_BODY_LIMIT),
+          ),
+        })
+        return
+      }
       if (method === 'PUT' && segments[0] === 'attempts' && segments.length === 2) {
         checkJsonMutation(req)
         send(res, 200, {
@@ -147,7 +174,7 @@ export function learningRoutes(
 
       send(res, 404, { error: { code: 'NOT_FOUND', message: 'not found' } })
     } catch (error) {
-      sendError(res, error)
+      sendError(req, res, error)
     }
   }
 }

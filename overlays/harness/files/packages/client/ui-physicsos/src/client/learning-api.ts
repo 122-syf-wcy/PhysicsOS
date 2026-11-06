@@ -20,9 +20,27 @@ export interface ListLearningQuery {
   readonly limit?: number
 }
 
+/**
+ * One row's outcome inside a batch upload. `saved` is a fresh write or an
+ * idempotent repeat; the other three are definitive host refusals — the row
+ * as sent will never be accepted, so the client must stop retrying it.
+ */
+export type AttemptBatchResult =
+  | { readonly id: string; readonly status: 'saved'; readonly item: StudentAttempt }
+  | {
+    readonly id: string
+    readonly status: 'invalid' | 'conflict' | 'forbidden'
+    readonly error: { readonly code: string; readonly message: string }
+  }
+
+/** Rows per batch request; mirrors the host's `MAX_ATTEMPT_BATCH`. */
+export const ATTEMPT_BATCH_SIZE = 50
+
 export interface LearningApi {
   listAttempts: (query?: ListLearningQuery) => Promise<LearningPage<StudentAttempt>>
   putAttempt: (attempt: StudentAttempt) => Promise<{ item: StudentAttempt }>
+  /** Upload up to {@link ATTEMPT_BATCH_SIZE} attempts in one round trip. */
+  putAttempts: (attempts: readonly StudentAttempt[]) => Promise<{ results: AttemptBatchResult[] }>
   listScenes: (query?: ListLearningQuery) => Promise<LearningPage<RecentExperimentEntry>>
   putScene: (entry: RecentExperimentEntry) => Promise<{ item: RecentExperimentEntry }>
   deleteScene: (sceneId: string) => Promise<{ ok: boolean }>
@@ -91,6 +109,11 @@ export function createLearningApi(options: LearningApiOptions = {}): LearningApi
       request(`/attempts/${encodeURIComponent(attempt.id)}`, {
         method: 'PUT',
         body: JSON.stringify(attempt),
+      }),
+    putAttempts: attempts =>
+      request('/attempts/batch', {
+        method: 'POST',
+        body: JSON.stringify({ items: attempts }),
       }),
     listScenes: query => request(`/scenes${queryString(query)}`),
     putScene: entry =>

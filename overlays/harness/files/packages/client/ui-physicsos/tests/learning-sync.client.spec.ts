@@ -65,12 +65,16 @@ const memoryStorage = (initial: Record<string, string> = {}) => {
 const api = (): LearningApi & {
   attempts: Map<string, StudentAttempt>
   scenes: Map<string, RecentExperimentEntry>
+  /** Ids the fake host refuses definitively (`invalid`) inside a batch. */
+  refused: Set<string>
 } => {
   const attempts = new Map<string, StudentAttempt>()
   const scenes = new Map<string, RecentExperimentEntry>()
-  return {
+  const refused = new Set<string>()
+  const remote: ReturnType<typeof api> = {
     attempts,
     scenes,
+    refused,
     listAttempts: async ({ cursor } = {}) => {
       const items = [...attempts.values()].sort(
         (a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id),
@@ -83,6 +87,20 @@ const api = (): LearningApi & {
       attempts.set(item.id, item)
       return { item }
     },
+    /* Per-row outcomes ride the body; a thrown error from the single-row path
+       stands for a transport failure and therefore fails the whole batch. */
+    putAttempts: async (items) => {
+      const results: Awaited<ReturnType<LearningApi['putAttempts']>>['results'] = []
+      for (const item of items) {
+        if (refused.has(item.id)) {
+          results.push({ id: item.id, status: 'invalid', error: { code: 'BAD_REQUEST', message: 'refused' } })
+          continue
+        }
+        const saved = await remote.putAttempt(item)
+        results.push({ id: item.id, status: 'saved', item: saved.item })
+      }
+      return { results }
+    },
     listScenes: async () => ({ items: [...scenes.values()] }),
     putScene: async (item) => {
       scenes.set(item.sceneId, item)
@@ -93,6 +111,7 @@ const api = (): LearningApi & {
       return { ok: true }
     },
   }
+  return remote
 }
 
 describe('client personal learning sync', () => {
@@ -225,24 +244,77 @@ describe('client personal learning sync', () => {
 it('acknowledges uploaded attempts durably and never reuploads unchanged history', async () => {
   const { storage } = memoryStorage({ 'physicsos.learning-record': JSON.stringify([localAttempt('old', '2026-09-26T08:00:00.000Z')]) })
   const remote = api()
+  const batch = vi.spyOn(remote, 'putAttempts')
   const put = vi.spyOn(remote, 'putAttempt')
   const first = createLearningRecordController(storage, remote)
   await first.sync()
   await first.sync()
   const reloaded = createLearningRecordController(storage, remote)
   await reloaded.sync()
+  expect(batch).toHaveBeenCalledTimes(1)
+  // The batch path delegates to the host once per row; nothing is re-sent later.
   expect(put).toHaveBeenCalledTimes(1)
 })
 
-it('a rejected row does not stop other pending rows from uploading', async () => {
+it('a definitively refused row is dropped from the outbox and does not stop other rows', async () => {
   const rows = [localAttempt('bad', '2026-09-26T09:00:00.000Z'), localAttempt('good', '2026-09-26T08:00:00.000Z')]
-  const { storage } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
+  const { storage, values } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
   const remote = api()
-  const put = remote.putAttempt
-  remote.putAttempt = async (item) => { if (item.id === 'bad') throw new Error('bad row'); return put(item) }
+  remote.refused.add('bad')
+  const batch = vi.spyOn(remote, 'putAttempts')
   const controller = createLearningRecordController(storage, remote)
-  await expect(controller.sync()).rejects.toThrow()
+  await controller.sync()
   expect(remote.attempts.has('good')).toBe(true)
+  expect(remote.attempts.has('bad')).toBe(false)
+  // The local history still shows the row; only the outbox forgets it.
+  expect(controller.store.getSnapshot().attempts.map(item => item.id)).toEqual(['bad', 'good'])
+  expect(JSON.parse(values.get('physicsos.learning-record.outbox')!)).toEqual([])
+  await controller.sync()
+  expect(batch).toHaveBeenCalledTimes(1)
+})
+
+it('uploads a large outbox in batches instead of one request per row', async () => {
+  const rows = Array.from({ length: 120 }, (_, index) =>
+    localAttempt(`row-${String(index).padStart(3, '0')}`, `2026-09-26T08:${String(index % 60).padStart(2, '0')}:${String(Math.floor(index / 60)).padStart(2, '0')}.000Z`))
+  const { storage, values } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
+  const remote = api()
+  const batch = vi.spyOn(remote, 'putAttempts')
+  const setItem = vi.spyOn(storage, 'setItem')
+  const controller = createLearningRecordController(storage, remote)
+  setItem.mockClear()
+  await controller.sync()
+  expect(batch.mock.calls.map(([items]) => items.length)).toEqual([50, 50, 20])
+  expect(remote.attempts.size).toBe(120)
+  expect(JSON.parse(values.get('physicsos.learning-record.outbox')!)).toEqual([])
+  // One outbox write per batch, not one per acknowledged row.
+  expect(setItem.mock.calls.filter(([key]) => key === 'physicsos.learning-record.outbox')).toHaveLength(3)
+})
+
+it('a batch transport failure keeps every row pending for the next sync', async () => {
+  const rows = [localAttempt('one', '2026-09-26T09:00:00.000Z'), localAttempt('two', '2026-09-26T08:00:00.000Z')]
+  const { storage, values } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
+  const remote = api()
+  const batch = vi.spyOn(remote, 'putAttempts').mockRejectedValueOnce(new Error('offline'))
+  const controller = createLearningRecordController(storage, remote)
+  await expect(controller.sync()).rejects.toThrow('offline')
+  expect(remote.attempts.size).toBe(0)
+  expect((JSON.parse(values.get('physicsos.learning-record.outbox')!) as { id: string }[]).map(row => row.id).sort()).toEqual(['one', 'two'])
+  await controller.sync()
+  expect(batch).toHaveBeenCalledTimes(2)
+  expect([...remote.attempts.keys()].sort()).toEqual(['one', 'two'])
+  expect(JSON.parse(values.get('physicsos.learning-record.outbox')!)).toEqual([])
+})
+
+it('falls back to one PUT per row when the host offers no batch upload', async () => {
+  const rows = [localAttempt('one', '2026-09-26T09:00:00.000Z'), localAttempt('two', '2026-09-26T08:00:00.000Z')]
+  const { storage } = memoryStorage({ 'physicsos.learning-record': JSON.stringify(rows) })
+  const uploaded: string[] = []
+  const controller = createLearningRecordController(storage, {
+    listAttempts: async () => ({ items: [] }),
+    putAttempt: async (item) => { uploaded.push(item.id); return { item } },
+  })
+  await controller.sync()
+  expect(uploaded.sort()).toEqual(['one', 'two'])
 })
 
 it('persists edited scenes and revisions through picker, resume and reload', () => {

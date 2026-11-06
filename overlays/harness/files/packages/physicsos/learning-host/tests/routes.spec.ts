@@ -129,7 +129,7 @@ beforeEach(() => {
 })
 
 const call = (
-  method: 'GET' | 'PUT' | 'DELETE',
+  method: 'GET' | 'PUT' | 'POST' | 'DELETE',
   path: string,
   token?: string,
   body?: unknown,
@@ -239,6 +239,53 @@ describe('learning host routes', () => {
     expect(
       (await call('GET', '/physicsos/learning/attempts?cursor=not-a-cursor', 'student-a')).status,
     ).toBe(400)
+  })
+
+  it('uploads a batch of attempts in one request with per-row outcomes', async () => {
+    await call('PUT', '/physicsos/learning/attempts/b1', 'student-b', attempt('b1', '2026-09-26T07:00:00.000Z'))
+    const response = await call('POST', '/physicsos/learning/attempts/batch', 'student-a', {
+      items: [
+        attempt('a1', '2026-09-26T08:00:00.000Z', { userKey: 'GZNU:forged', schoolId: 'GZNU' }),
+        attempt('a1', '2026-09-26T08:00:00.000Z'),
+        attempt('a1', '2026-09-26T09:00:00.000Z'),
+        { id: 'broken', questionId: 'q' },
+        attempt('b1', '2026-09-26T07:00:00.000Z'),
+        attempt('a2', '2026-09-26T10:00:00.000Z'),
+        { nope: true },
+      ],
+    })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      results: { id: string; status: string; item?: Record<string, unknown>; error?: { code: string } }[]
+    }
+    expect(body.results.map(result => [result.id, result.status, result.error?.code])).toEqual([
+      ['a1', 'saved', undefined],
+      ['a1', 'saved', undefined],
+      ['a1', 'conflict', 'ID_CONFLICT'],
+      ['broken', 'invalid', 'BAD_REQUEST'],
+      ['b1', 'saved', undefined],
+      ['a2', 'saved', undefined],
+      ['#6', 'invalid', 'BAD_REQUEST'],
+    ])
+    expect(body.results[0]?.item).toMatchObject({ userKey: 'GZU:student-a', schoolId: 'GZU' })
+    /* student-a's b1 is a separate row under their own key, never student-b's. */
+    expect(tables.get('attempts')?.size).toBe(4)
+    const studentA = (await (await call('GET', '/physicsos/learning/attempts', 'student-a')).json()) as {
+      items: { id: string }[]
+    }
+    expect(studentA.items.map(item => item.id)).toEqual(['a2', 'a1', 'b1'])
+
+    expect((await call('POST', '/physicsos/learning/attempts/batch', undefined, { items: [] })).status).toBe(401)
+    expect((await call('POST', '/physicsos/learning/attempts/batch', 'student-a', { items: [] })).status).toBe(400)
+    expect((await call('POST', '/physicsos/learning/attempts/batch', 'student-a', { rows: [] })).status).toBe(400)
+    const tooMany = { items: Array.from({ length: 51 }, (_, index) => attempt(`m${String(index)}`, '2026-09-26T10:00:00.000Z')) }
+    expect((await call('POST', '/physicsos/learning/attempts/batch', 'student-a', tooMany)).status).toBe(400)
+    const oversized = await fetch(`${base}/physicsos/learning/attempts/batch`, {
+      method: 'POST',
+      headers: { cookie: 'physicsos_session=student-a', 'content-type': 'application/json' },
+      body: JSON.stringify({ items: [attempt('huge', '2026-09-26T10:00:00.000Z', { prompt: 'x'.repeat(600 * 1024) })] }),
+    })
+    expect(oversized.status).toBe(413)
   })
 
   it('round-trips origin facts and free-build mode with saved scenes', async () => {
