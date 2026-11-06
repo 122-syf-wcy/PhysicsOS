@@ -1,5 +1,5 @@
 /** Bounded byte-preserving source assembly. Never executes or supplies renderer code. */
-export const MAX_CODE_PART_CHARACTERS = 6000
+export const MAX_CODE_PART_CHARACTERS = 24000
 export class QuestionCodeParts {
   private writes = 0
   private readonly parts = { rendererJs: '', stylesheet: '' }

@@ -246,7 +246,7 @@ describe('parent question code generation', () => {
     const block = h.start.mock.calls[0]?.[0]?.prompt[0]
     const prompt = block?.type === 'text' ? block.text : ''
     expect(prompt.length).toBeLessThanOrEqual(5000)
-    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '6000', '2–3', '10次', 'Warm Lab', '219×360', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
+    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '24000', '完整JS一次', '10次', 'Warm Lab', '219×360', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
     expect(prompt).toContain('angles.startAngle/endAngle')
     expect(prompt).toContain('入口示例')
     expect(prompt).toContain('drawScene(ctx,view,')
@@ -593,7 +593,7 @@ describe('the real code child provider', () => {
   })
   it('offers only code submission when the same generation already owns an image', async () => {
     const adapter = new MockAdapter([
-      toolCallResponse('too-long', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: 'x'.repeat(6001) }),
+      toolCallResponse('too-long', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: 'x'.repeat(24001) }),
       toolCallResponse('js', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'replace', content: source.rendererJs }),
       toolCallResponse('append', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// authored ending' }),
       toolCallResponse('rejected', 'physics_write_experiment_code', { file: 'rendererJs', mode: 'append', content: '\n// rejected-part' }),

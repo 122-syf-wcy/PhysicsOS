@@ -112,8 +112,8 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
   }) : []
   return [
     `真实题目标签：${deps.snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '只展示当前引擎快照已有结论。' : '仅当前场景/局部阶段演示，不能声称整题已解。'}`,
-    `立即分段写代码，不先规划整个程序。physics_write_experiment_code：每段<=${MAX_CODE_PART_CHARACTERS}字符，优先2–3次写完（JS2段+CSS1段），同一任务共10次；JS合计<=24000、CSS<=6000字符。先replace入口，后append；完成后structured_output只含title/summary。`,
-    '首段使用下面Canvas2D入口示例并填入素材工具返回的真实path（占位符不能提交）；随后append普通命名drawScene与辅助函数，必须实际绘制本题snapshot.view几何。入口示例只含浏览器连接代码，不是已完成画面。219×360手机完整可见，当前帧画完再返回。无import/reexport、旧renderer、对象/类方法分派、fetch/外网/存储/parent/top/eval/脚本注入。',
+    `立即提交代码，不先规划整个程序。physics_write_experiment_code：优先完整JS一次replace、CSS一次replace，再structured_output提交title/summary。JS每次及合计<=${MAX_CODE_PART_CHARACTERS}字符，CSS合计<=6000字符；需要时可append分段，同一任务共10次。`,
+    '用下面Canvas2D入口示例并填入素材工具返回的真实path（占位符不能提交），连同普通命名drawScene与辅助函数组成完整JS提交，必须实际绘制本题snapshot.view几何。入口示例只含浏览器连接代码，不是已完成画面。219×360手机完整可见，当前帧画完再返回。无import/reexport、旧renderer、对象/类方法分派、fetch/外网/存储/parent/top/eval/脚本注入。',
     QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
     '只投影snapshot.view引擎几何，等比且y只翻转一次；直接使用引擎origin/extent，不重新拟合当前位置改变比例。斜面为无限平面的局部跟随视窗，origin可随位置平移。不解题/积分/自建时钟。向量from/to已是显示端点，直接投影，不能按箭头长度标物理量；表格/读数/控件由外层提供。空数组/缺省字段/零值合法，不补造物体或最高点。',
     'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。向量开关只来自view.visible[vector.observable]；不能读取vector.visible或猜observable名称，具体显示条件按下方领域契约。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
