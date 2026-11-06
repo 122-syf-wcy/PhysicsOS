@@ -14,7 +14,11 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
     headers: { 'content-type': 'application/json' },
     ...init,
   })
-  const body = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } }
+  const body = await response.json().catch((error: unknown) => {
+    // A cancelled poll must surface as cancelled, not as an empty successful body.
+    if (init?.signal?.aborted === true) throw error
+    return {}
+  }) as { error?: { code?: string; message?: string } }
   if (!response.ok) {
     const error = new Error(body.error?.message ?? `${response.status}`) as PaperApiError
     Object.defineProperty(error, 'code', { value: body.error?.code ?? `HTTP_${response.status}` })
@@ -248,7 +252,7 @@ export interface PaperApi {
   verifyBlueprint: (id: string) => Promise<BlueprintRow>
   listJobs: () => Promise<PaperJobWire[]>
   createJob: (blueprintId: string, requestBody: PaperJobWire['request']) => Promise<PaperJobWire>
-  getJob: (id: string) => Promise<PaperJobWire>
+  getJob: (id: string, init?: { signal?: AbortSignal }) => Promise<PaperJobWire>
   confirmSpec: (id: string, specTable: readonly SpecRowWire[]) => Promise<PaperJobWire>
   runDraft: (id: string) => Promise<{ status: string }>
   runChecks: (id: string) => Promise<{ status: string }>
@@ -325,7 +329,7 @@ export function createPaperApi(): PaperApi {
     verifyBlueprint: id => post(`/blueprints/${id}/verify`, {}),
     listJobs: () => request('/jobs'),
     createJob: (blueprintId, requestBody) => post('/jobs', { blueprintId, request: requestBody }),
-    getJob: id => request(`/jobs/${id}`),
+    getJob: (id, init) => request(`/jobs/${id}`, { cache: 'no-store', ...init }),
     confirmSpec: (id, specTable) => put(`/jobs/${id}/spec`, { specTable }),
     runDraft: id => post(`/jobs/${id}/draft`, {}),
     runChecks: id => post(`/jobs/${id}/check`, {}),

@@ -107,6 +107,9 @@ function FigureBlock({ job, api, figureRef, caption }: {
 const KINDS = ['unit', 'weekly', 'monthly', 'midterm', 'final', 'mock'] as const
 
 const err = (e: unknown): string => e instanceof Error ? e.message : String(e)
+const POLL_MS = 3000
+const POLL_MAX_MS = 30_000
+const POLL_BUDGET_MS = 45 * 60_000
 
 /**
  * The nearest ancestor that is a real laid-out box.
@@ -224,6 +227,8 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
   const [exports_, setExports] = useState<ExportBundleRow[]>([])
   const [bankItems, setBankItems] = useState<BankItemRow[]>([])
   const [activeJob, setActiveJob] = useState<PaperJobWire | undefined>()
+  const selectedId = useRef<string | undefined>(undefined)
+  const [detailPolling, setDetailPolling] = useState<string>()
   const [reviewer, setReviewer] = useState('教研组')
   const [notice, setNotice] = useState<string>()
 
@@ -240,17 +245,53 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
 
   useEffect(() => { void refresh() }, [refresh])
 
-  const openJob = useCallback(async (id: string) => {
-    try { setActiveJob(await api.getJob(id)) } catch (e) { setNotice(err(e)) }
-  }, [api])
+  /* Every job write passes this gate: a response for another paper, or one older
+     than the paper on screen, is dropped. paper-host stamps updatedAt on every
+     job write and commits writes in order, so a smaller stamp is older. */
+  const applyJob = useCallback((next: PaperJobWire) => {
+    if (next.id !== selectedId.current) return
+    setActiveJob(prev => (prev?.id === next.id && next.updatedAt < prev.updatedAt ? prev : next))
+  }, [])
 
-  /* Poll while a job is in an async stage. */
+  const openAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => { openAbort.current?.abort() }, [])
+  const openJob = useCallback(async (id: string) => {
+    selectedId.current = id
+    openAbort.current?.abort()
+    const controller = new AbortController()
+    openAbort.current = controller
+    try { applyJob(await api.getJob(id, { signal: controller.signal })) } catch (e) {
+      if (!controller.signal.aborted) setNotice(err(e))
+    }
+  }, [api, applyJob])
+
+  /* Fallback poll while a job is in an async stage: one request at a time,
+     cancelled on a paper switch or unmount, backing off after errors and
+     bounded in time. It steps aside while the detail view polls that job. */
+  const activeId = activeJob?.id
+  const pollStage = activeJob?.status === 'drafting' || activeJob?.status === 'checking'
   useEffect(() => {
-    if (activeJob === undefined) return
-    if (activeJob.status !== 'drafting' && activeJob.status !== 'checking') return
-    const timer = setInterval(() => { void openJob(activeJob.id) }, 3000)
-    return () => { clearInterval(timer) }
-  }, [activeJob, openJob])
+    if (activeId === undefined || !pollStage || detailPolling === activeId) return
+    const controller = new AbortController()
+    const startedAt = Date.now()
+    let delay = POLL_MS
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const tick = async (): Promise<void> => {
+      try {
+        const next = await api.getJob(activeId, { signal: controller.signal })
+        if (controller.signal.aborted) return
+        applyJob(next)
+        delay = POLL_MS
+      } catch (e) {
+        if (controller.signal.aborted) return
+        setNotice(err(e))
+        delay = Math.min(delay * 2, POLL_MAX_MS)
+      }
+      if (Date.now() - startedAt < POLL_BUDGET_MS) timer = setTimeout(() => { void tick() }, delay)
+    }
+    timer = setTimeout(() => { void tick() }, delay)
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [activeId, pollStage, detailPolling, api, applyJob])
 
   const run = useCallback(async (action: () => Promise<unknown>) => {
     try { await action(); await refresh() } catch (e) { setNotice(err(e)) }
@@ -374,7 +415,7 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
         <NewPaperPanel
           blueprints={verifiedBlueprints}
           api={api}
-          onCreated={(job) => { setActiveJob(job); setTab('jobs'); void refresh() }}
+          onCreated={(job) => { selectedId.current = job.id; applyJob(job); setTab('jobs'); void refresh() }}
           onError={setNotice}
           onReview={() => { setTab('jobs') }}
         />
@@ -383,7 +424,8 @@ function PaperStudio({ api, t, openSurface }: PaperWorkspaceProps) {
         <JobsPanel
           jobs={draftJobs} activeJob={activeJob} reviewer={reviewer}
           api={api} openJob={openJob} run={run}
-          onJobUpdate={setActiveJob}
+          onJobUpdate={applyJob}
+          onPolling={setDetailPolling}
           notify={setNotice}
         />
       )}
@@ -619,7 +661,7 @@ function MixBar({ mix }: { readonly mix: DifficultyMix }) {
 
 /* --------------------------------------------------------- 草稿与审核 -- */
 
-function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, notify }: {
+function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, onPolling, notify }: {
   jobs: PaperJobWire[]
   activeJob: PaperJobWire | undefined
   reviewer: string
@@ -627,6 +669,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
   openJob: (id: string) => Promise<void>
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  onPolling: (jobId: string | undefined) => void
   notify: (message: string | undefined) => void
 }) {
   /* The list folds away so long stems get the full width — the split is the
@@ -675,7 +718,7 @@ function JobsPanel({ jobs, activeJob, reviewer, api, openJob, run, onJobUpdate, 
           {activeJob === undefined
             ? <Empty text="从左侧选择一个试卷任务" />
             : <JobDetail job={activeJob} reviewer={reviewer} api={api}
-              run={run} onJobUpdate={onJobUpdate} notify={notify} />}
+              run={run} onJobUpdate={onJobUpdate} onPolling={onPolling} notify={notify} />}
         </div>
       </div>
     </section>
@@ -795,15 +838,18 @@ function AiWorker({ job, runnerActive, since }: {
   )
 }
 
-function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
+type VersionWait = { jobId: string; no: number; version: number; since: number }
+
+function JobDetail({ job, reviewer, api, run, onJobUpdate, onPolling, notify }: {
   job: PaperJobWire
   reviewer: string
   api: PaperApi
   run: (action: () => Promise<unknown>) => Promise<void>
   onJobUpdate: (job: PaperJobWire) => void
+  onPolling: (jobId: string | undefined) => void
   notify: (message: string | undefined) => void
 }) {
-  const reload = () => run(async () => { onJobUpdate(await api.getJob(job.id)) })
+  const reload = (id = job.id) => run(async () => { onJobUpdate(await api.getJob(id)) })
   /* ---- AI 流水线编排（客户端状态机）----
      服务端约定：POST /draft 与 /check 都立即 202，真正的工作在后台推进
      （drafting → drafting 结束时置 checking；check 从 checking 走到 review）。
@@ -811,23 +857,29 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
      failed。正确顺序是：draft → 轮询到 checking → 才发 check → 轮询到终态。
      runner 由本组件持有：activeJob 的刷新、轮询与可视化都由它驱动，页面中途
      刷新时退回旧的 3s 状态轮询兜底。 */
-  const [runnerActive, setRunnerActive] = useState(false)
+  /* The runner outlives a paper switch (only it fires /check after drafting),
+     so its busy state belongs to the paper it drives, not to whichever paper
+     is on screen; its writes still pass the studio's selected-paper gate. */
+  const [runnerJobId, setRunnerJobId] = useState<string>()
+  const runnerActive = runnerJobId === job.id
   const [runnerSince, setRunnerSince] = useState(0)
-  const runnerRef = useRef<{ jobId: string; cancelled: boolean } | null>(null)
+  const runnerRef = useRef<{ jobId: string; cancelled: boolean; controller: AbortController } | null>(null)
   useEffect(() => () => {
-    if (runnerRef.current !== null) runnerRef.current.cancelled = true
+    const handle = runnerRef.current
+    if (handle !== null) { handle.cancelled = true; handle.controller.abort() }
   }, [])
   const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms) })
 
   const driveAi = () => {
     if (runnerRef.current !== null) return
-    const handle = { jobId: job.id, cancelled: false }
+    const handle = { jobId: job.id, cancelled: false, controller: new AbortController() }
+    const { signal } = handle.controller
     runnerRef.current = handle
-    setRunnerActive(true)
+    setRunnerJobId(handle.jobId)
     setRunnerSince(Date.now())
     void (async () => {
       try {
-        let latest = await api.getJob(handle.jobId)
+        let latest = await api.getJob(handle.jobId, { signal })
         /* 细目表自动确认：确认步不再需要教师操作（spec/failed 都从这里重试）。 */
         if (latest.status === 'spec' || latest.status === 'failed') {
           latest = await api.confirmSpec(latest.id, latest.specTable)
@@ -838,7 +890,8 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
         const deadline = Date.now() + 45 * 60_000
         while (!handle.cancelled && Date.now() < deadline) {
           await sleep(2500)
-          latest = await api.getJob(handle.jobId)
+          if (handle.cancelled) break
+          latest = await api.getJob(handle.jobId, { signal })
           onJobUpdate(latest)
           if (latest.status === 'checking' && !checkFired) {
             /* 起草驱动完成（进入 checking）——现在才是发检查的正确时机。 */
@@ -850,11 +903,13 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
             || latest.status === 'exported' || latest.status === 'failed') break
         }
       } catch (e) {
-        notify(err(e))
+        if (!handle.cancelled) notify(err(e))
       } finally {
         runnerRef.current = null
-        setRunnerActive(false)
-        void reload()
+        if (!handle.cancelled) {
+          setRunnerJobId(undefined)
+          void reload(handle.jobId)
+        }
       }
     })()
   }
@@ -862,26 +917,31 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
   /* 导出同样长跑（每张题图 ~70 s）——同 runner 模式驱动可视化与轮询。 */
   const driveExport = () => {
     if (runnerRef.current !== null) return
-    const handle = { jobId: job.id, cancelled: false }
+    const handle = { jobId: job.id, cancelled: false, controller: new AbortController() }
+    const { signal } = handle.controller
     runnerRef.current = handle
-    setRunnerActive(true)
+    setRunnerJobId(handle.jobId)
     setRunnerSince(Date.now())
     void (async () => {
       try {
+        /* POST /export is synchronous server work; cancelling its fetch would not stop it. */
         await api.runExport(handle.jobId)
         const deadline = Date.now() + 45 * 60_000
         while (!handle.cancelled && Date.now() < deadline) {
           await sleep(2500)
-          const latest = await api.getJob(handle.jobId)
+          if (handle.cancelled) break
+          const latest = await api.getJob(handle.jobId, { signal })
           onJobUpdate(latest)
           if (latest.status === 'exported') break
         }
       } catch (e) {
-        notify(err(e))
+        if (!handle.cancelled) notify(err(e))
       } finally {
         runnerRef.current = null
-        setRunnerActive(false)
-        void reload()
+        if (!handle.cancelled) {
+          setRunnerJobId(undefined)
+          void reload(handle.jobId)
+        }
       }
     })()
   }
@@ -889,31 +949,34 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
      question in place; the new version lands as status 'draft' again. */
   const [repairTarget, setRepairTarget] = useState<number | null>(null)
   const [repairText, setRepairText] = useState('')
-  const [repairPending, setRepairPending] = useState<{ no: number; version: number; since: number } | null>(null)
+  /* 退回修订与题库换题都等新版本落库：两者共用一条单飞轮询，按试卷归属，
+     切换试卷或卸载时取消。 */
+  const [repairPending, setRepairPending] = useState<VersionWait | null>(null)
+  const [replacePending, setReplacePending] = useState<VersionWait | null>(null)
+  const repairWait = repairPending?.jobId === job.id ? repairPending : null
+  const replaceWait = replacePending?.jobId === job.id ? replacePending : null
   useEffect(() => {
-    if (repairPending === null) return
-    const timer = setInterval(() => {
-      void api.getJob(job.id).then((latest) => {
-        onJobUpdate(latest)
-        const landed = (latest.versions.at(-1)?.version ?? 0) > repairPending.version
-        if (landed || Date.now() - repairPending.since > 180_000) setRepairPending(null)
-      }).catch(() => {})
-    }, 3000)
-    return () => { clearInterval(timer) }
-  }, [repairPending, api, job.id, onJobUpdate])
-  /* 题库换题：同退回修订的轮询——等新版本落库。 */
-  const [replacePending, setReplacePending] = useState<{ no: number; version: number; since: number } | null>(null)
-  useEffect(() => {
-    if (replacePending === null) return
-    const timer = setInterval(() => {
-      void api.getJob(job.id).then((latest) => {
-        onJobUpdate(latest)
-        const landed = (latest.versions.at(-1)?.version ?? 0) > replacePending.version
-        if (landed || Date.now() - replacePending.since > 180_000) setReplacePending(null)
-      }).catch(() => {})
-    }, 3000)
-    return () => { clearInterval(timer) }
-  }, [replacePending, api, job.id, onJobUpdate])
+    if (repairWait === null && replaceWait === null) return
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const landed = (wait: VersionWait | null, version: number): boolean =>
+      wait !== null && (version > wait.version || Date.now() - wait.since > 180_000)
+    const tick = async (): Promise<void> => {
+      const latest = await api.getJob(job.id, { signal: controller.signal }).catch(() => undefined)
+      if (controller.signal.aborted) return
+      if (latest !== undefined) onJobUpdate(latest)
+      const version = latest?.versions.at(-1)?.version ?? -1
+      if (landed(repairWait, version)) setRepairPending(null)
+      if (landed(replaceWait, version)) setReplacePending(null)
+      timer = setTimeout(() => { void tick() }, POLL_MS)
+    }
+    timer = setTimeout(() => { void tick() }, POLL_MS)
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [repairWait, replaceWait, api, job.id, onJobUpdate])
+  /* Tell the studio this paper already has a poller, so its fallback steps aside. */
+  const pollingId = runnerActive || repairWait !== null || replaceWait !== null ? job.id : undefined
+  useEffect(() => { onPolling(pollingId) }, [pollingId, onPolling])
+  useEffect(() => () => { onPolling(undefined) }, [onPolling])
   /* Live assembly preview: how the bank would serve this spec table now —
      shown on the confirm table and reused for the swap button. */
   const [bankPlan, setBankPlan] = useState<readonly BankPlanRow[] | null>(null)
@@ -1082,19 +1145,19 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
                     通过
                   </button>
                   <button type="button"
-                    disabled={repairPending !== null}
+                    disabled={repairWait !== null}
                     onClick={() => { setRepairTarget(q.number); setRepairText('') }}>
-                    {repairPending?.no === q.number ? 'AI 修订中…' : '退回修改'}
+                    {repairWait?.no === q.number ? 'AI 修订中…' : '退回修改'}
                   </button>
                   {job.status === 'review' && (planByNo.get(q.number)?.candidates ?? 0) > 0 && (
                     <button type="button"
-                      disabled={replacePending !== null}
+                      disabled={replaceWait !== null}
                       title="从题库换一道同考点候选题（原题或改编）"
                       onClick={() => {
-                        setReplacePending({ no: q.number, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
+                        setReplacePending({ jobId: job.id, no: q.number, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
                         void run(async () => { await api.replaceQuestion(job.id, q.number, reviewer) })
                       }}>
-                      {replacePending?.no === q.number ? '换题中…' : '换一道候选题'}
+                      {replaceWait?.no === q.number ? '换题中…' : '换一道候选题'}
                     </button>
                   )}
                 </div>
@@ -1149,7 +1212,7 @@ function JobDetail({ job, reviewer, api, run, onJobUpdate, notify }: {
                   const no = repairTarget
                   const suggestion = repairText.trim()
                   setRepairTarget(null)
-                  setRepairPending({ no, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
+                  setRepairPending({ jobId: job.id, no, version: job.versions.at(-1)?.version ?? 0, since: Date.now() })
                   void run(async () => { await api.repairQuestion(job.id, no, suggestion, reviewer) })
                 }}>
                 提交修订

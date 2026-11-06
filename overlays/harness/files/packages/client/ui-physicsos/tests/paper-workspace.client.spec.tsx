@@ -184,11 +184,11 @@ describe('PaperWorkspace', () => {
         return Promise.resolve({ status: 'checking' })
       })
       const getJob = vi.fn().mockImplementation(() => {
-        /* Status schedule shared by every caller (openJob, the runner's own
-           first fetch, the runner poll and the 3s backup poll): spec ×2 →
-           drafting ×2 → checking ×3 → review. The wide checking band keeps
-           the runChecks transition deterministic regardless of which poll
-           consumes which slot. */
+        /* Status schedule shared by openJob and the runner (its first fetch
+           and its polls; the studio's fallback poll steps aside while the
+           runner drives the paper): spec ×2 → drafting ×2 → checking ×3 →
+           review. The wide checking band keeps the runChecks transition
+           deterministic regardless of which poll consumes which slot. */
         const schedule = ['spec', 'spec', 'drafting', 'drafting', 'checking', 'checking', 'checking', 'review']
         const calls = getJob.mock.calls.length
         const status = schedule[calls - 1] ?? 'review'
@@ -359,5 +359,122 @@ describe('PaperWorkspace back control', () => {
     expect(screen.queryByRole('button', { name: '返回首页' })).toBeNull()
     /* The rest of the header is untouched — the title still anchors the page. */
     expect(screen.getByRole('heading', { name: /出卷工作台/ })).toBeTruthy()
+  })
+})
+
+describe('PaperWorkspace polling', () => {
+  afterEach(() => { cleanup(); vi.useRealTimers() })
+
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((done) => { resolve = done })
+    return { promise, resolve }
+  }
+  const titled = (title: string): NonNullable<PaperJobWire['document']> => ({
+    id: `doc-${title}`, title, sections: [],
+    header: { examName: title, grade: '九年级', subjectLine: '物理', totalScore: 90, minutes: 90, candidateFields: [] },
+  } as unknown as NonNullable<PaperJobWire['document']>)
+  const openStudio = async (api: PaperApi) => {
+    const view = render(<PaperWorkspace api={api} useAuth={useAuthAs('TEACHER')} useSessions={neverHook} useWorkspaces={neverHook} t={t} />)
+    await vi.advanceTimersByTimeAsync(0)
+    fireEvent.click(screen.getByRole('button', { name: /草稿与审核/ }))
+    await vi.advanceTimersByTimeAsync(0)
+    return view
+  }
+
+  it('never starts a status poll while the previous one is still in flight', async () => {
+    vi.useFakeTimers()
+    const drafting = job({ status: 'drafting', document: titled('试卷A') })
+    const held = deferred<PaperJobWire>()
+    const api = stubApi([drafting])
+    api.getJob = vi.fn().mockResolvedValueOnce(drafting).mockReturnValueOnce(held.promise).mockResolvedValue(drafting)
+    await openStudio(api)
+    fireEvent.click(screen.getByRole('button', { name: /试卷A/ }))
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(api.getJob).toHaveBeenCalledTimes(2)
+    held.resolve(drafting)
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(api.getJob).toHaveBeenCalledTimes(3)
+  })
+
+  it('drops a late poll for the previously selected paper after switching papers', async () => {
+    vi.useFakeTimers()
+    const a = job({ id: 'paper-a', status: 'drafting', document: titled('试卷A') })
+    const b = job({ id: 'paper-b', status: 'review', document: titled('试卷B') })
+    const late = deferred<PaperJobWire>()
+    let aCalls = 0
+    const getJob = vi.fn((id: string, _init?: { signal?: AbortSignal }) => {
+      if (id === 'paper-b') return Promise.resolve(b)
+      aCalls += 1
+      return aCalls === 1 ? Promise.resolve(a) : late.promise
+    })
+    const api = stubApi([a, b])
+    api.getJob = getJob
+    await openStudio(api)
+    fireEvent.click(screen.getByRole('button', { name: /试卷A/ }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    fireEvent.click(screen.getByRole('button', { name: /试卷B/ }))
+    await vi.advanceTimersByTimeAsync(0)
+    late.resolve({ ...a, updatedAt: '2026-09-18T00:00:00Z' })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(screen.getByRole('heading', { name: /试卷B/ })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /试卷A/ })).toBeNull()
+    expect(aCalls).toBe(2)
+    expect(getJob.mock.calls[1]?.[1]?.signal?.aborted).toBe(true)
+  })
+
+  it('ignores a poll response older than the paper already on screen', async () => {
+    vi.useFakeTimers()
+    const item = (number: number, status: string) => ({ number, subject: 'physics', kind: 'choice-single', score: 3,
+      stem: `s${String(number)}`, knowledge: ['内能'], ability: '识记', difficulty: 'basic', status })
+    const at = (updatedAt: string, second: string) => job({ updatedAt,
+      document: { ...titled('试卷A'), sections: [{ title: '选择题', items: [item(1, 'pending'), item(2, second)] as never }] } as never })
+    const shown = at('2026-10-05T00:00:00.000Z', 'pending')
+    const approved = at('2026-10-05T00:00:05.000Z', 'approved')
+    const held = deferred<PaperJobWire>()
+    const api = stubApi([shown])
+    api.repairQuestion = vi.fn().mockResolvedValue({ status: 'repairing' })
+    api.reviewQuestion = vi.fn().mockResolvedValue(approved)
+    api.getJob = vi.fn().mockResolvedValueOnce(shown).mockReturnValueOnce(held.promise).mockResolvedValue(approved)
+    await openStudio(api)
+    fireEvent.click(screen.getByRole('button', { name: /试卷A/ }))
+    await vi.advanceTimersByTimeAsync(0)
+    fireEvent.click(screen.getAllByRole('button', { name: '退回修改' })[0]!)
+    fireEvent.change(screen.getByPlaceholderText(/例如：数据改为/), { target: { value: '改数据' } })
+    fireEvent.click(screen.getByRole('button', { name: '提交修订' }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    fireEvent.click(screen.getAllByRole('button', { name: '通过' })[1]!)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(screen.getAllByText('✓ 已通过')).toHaveLength(1)
+    held.resolve({ ...shown, updatedAt: '2026-10-05T00:00:03.000Z' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(screen.getAllByText('✓ 已通过')).toHaveLength(1)
+  })
+
+  it('keeps the selected paper while the AI runner drives another, and stops fetching after unmount', async () => {
+    vi.useFakeTimers()
+    const row = { questionNo: 1, sectionTitle: '选择题', kind: 'choice-single', score: 3, knowledge: ['内能'], ability: '识记', difficulty: 'basic' }
+    const a = job({ id: 'paper-a', status: 'spec', specTable: [row] as never, document: titled('试卷A') })
+    const b = job({ id: 'paper-b', status: 'review', document: titled('试卷B') })
+    const api = stubApi([a, b])
+    api.bankPlan = vi.fn().mockResolvedValue([])
+    api.confirmSpec = vi.fn().mockResolvedValue(a)
+    api.runDraft = vi.fn().mockResolvedValue({ status: 'drafting' })
+    api.getJob = vi.fn((id: string) => Promise.resolve(id === 'paper-b' ? b
+      : { ...a, status: vi.mocked(api.runDraft).mock.calls.length > 0 ? 'drafting' : 'spec' }))
+    const view = await openStudio(api)
+    fireEvent.click(screen.getByRole('button', { name: /试卷A/ }))
+    await vi.advanceTimersByTimeAsync(0)
+    fireEvent.click(screen.getByRole('button', { name: /AI 起草 \+ 自动检查/ }))
+    for (let i = 0; i < 20 && vi.mocked(api.runDraft).mock.calls.length === 0; i += 1) await vi.advanceTimersByTimeAsync(0)
+    fireEvent.click(screen.getByRole('button', { name: /试卷B/ }))
+    await vi.advanceTimersByTimeAsync(2_500)
+    expect(screen.getByRole('heading', { name: /试卷B/ })).toBeTruthy()
+    const jobCalls = vi.mocked(api.getJob).mock.calls.length
+    const listCalls = vi.mocked(api.listSources).mock.calls.length
+    view.unmount()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(vi.mocked(api.getJob).mock.calls.length).toBe(jobCalls)
+    expect(vi.mocked(api.listSources).mock.calls.length).toBe(listCalls)
   })
 })
