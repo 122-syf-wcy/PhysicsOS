@@ -114,7 +114,7 @@ function promptFor(style: CodeStyleContext, deps: CodeGenerationDependencies, re
     '首段使用下面Canvas2D入口示例并填入素材工具返回的真实path（占位符不能提交）；随后append普通命名drawScene与辅助函数，必须实际绘制本题snapshot.view几何。入口示例只含浏览器连接代码，不是已完成画面。219×360手机完整可见，当前帧画完再返回。无import/reexport、旧renderer、对象/类方法分派、fetch/外网/存储/parent/top/eval/脚本注入。',
     QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
     '只投影snapshot.view引擎几何，等比且y只翻转一次，固定视窗不跟随当前物体缩放。不解题/积分/自建时钟。向量from/to已是显示端点，直接投影，不能按箭头长度标物理量；表格/读数/控件由外层提供。空数组/缺省字段/零值合法，不补造物体或最高点。',
-    'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。按view.visible控制对应可见层。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
+    'Warm Lab暖白、自然木与金属，装置占主体，保留受力/场方向/光路及中文标签，标签避让。向量与guides必须用view.visible[vector.observable]===true筛选；不能读取vector.visible或猜observable名称，其余层按契约的visible键。body.rotation、incline.angle、coordinate.rotation、angles.startAngle/endAngle及电路rotation为度；leverBeam.tilt与currentRotor.angle为弧度。场景单位不统一换SI；body.size是球半径/方块半边长。',
     '没有素材先physics_generate_experiment_asset生成一张环境/材质，无文字/公式/箭头/轨迹/动态物体；已有素材复用。示例中的.src必须是真实path的单/双引号字面值，CSS用url(真实cssPath)；不能用不透明底色遮住图片。',
     questionComposition(deps.snapshot.domain, style.experimentId),
     focusedRenderContract(style.renderContract, deps.snapshot.domain, style.experimentId),
