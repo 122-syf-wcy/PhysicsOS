@@ -16,6 +16,13 @@ PhysicsOS 反馈与公告 host plugin. One prefix (`/physicsos/notice`), two dir
 | `/website-feedback/:id/reply` | — | `SUPER_ADMIN` |
 | `/website-feedback/:id/images/:imageId` | `SUPER_ADMIN`, through the owning feedback record | — |
 
+Website management writes (`PUT /website`, `POST /website-feedback/:id/reply`)
+require a `SUPER_ADMIN` cookie login session. Any `Authorization` header on a
+management mutation is rejected with 403 `TOKEN_SCOPE_REQUIRED`, including when
+a valid session cookie is also present: the identity seam exposes actor role but
+not API-token scope. `SUPER_ADMIN` token reads and public feedback intake retain
+their existing behavior.
+
 Identity comes from the session through the `physicsosIdentity` service that `auth-host` publishes. This host is declared BEFORE `auth-host` in the shipped patch, so the service is resolved per request rather than at load time — the failure mode is covered by `tests/composition.spec.ts`, which boots the real chain and asserts the gate answers on a live session.
 
 Reading feedback is row-filtered rather than door-filtered: a student calling the list endpoint is a legitimate screen ("what have I sent?"), so answering 403 would break it to enforce a rule about WHICH rows are visible.

@@ -108,6 +108,12 @@ export async function handleWebsiteRoute(
     return true
   }
 
+  // actorOf exposes the account role but omits API-token scope. Management
+  // mutations therefore require the browser's cookie session, even when an
+  // Authorization header accompanies an otherwise valid session cookie.
+  if (method !== 'GET' && method !== 'HEAD' && req.headers.authorization !== undefined) {
+    throw new NoticeError(403, 'TOKEN_SCOPE_REQUIRED', '官网管理写入需要 Cookie 登录会话，不接受 Authorization 令牌')
+  }
   const identity = deps.identity()
   const { actor, writes } = guard(identity, req, 'SUPER_ADMIN')
   requireWebsiteAdmin(actor)

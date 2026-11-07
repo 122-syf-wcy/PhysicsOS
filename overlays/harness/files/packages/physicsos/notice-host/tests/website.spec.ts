@@ -30,7 +30,10 @@ const audit: { action: string; detail?: Record<string, unknown> }[] = []
 
 const identity: PhysicsosIdentity = {
   actorOf(req) {
-    const role = req.headers.cookie?.replace('role=', '') as IdentityRole | undefined
+    // The real identity seam resolves a token's actor but does not expose token scope.
+    const tokenRole = ['Bearer website-read-only', 'Bearer website-read-write'].includes(req.headers.authorization ?? '')
+      ? 'SUPER_ADMIN' : undefined
+    const role = tokenRole ?? req.headers.cookie?.replace('role=', '') as IdentityRole | undefined
     if (role === undefined || !['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'].includes(role)) return null
     return { role, userKey: `school:${role}`, schoolId: 'school', username: role } satisfies IdentityActor
   },
@@ -116,6 +119,49 @@ describe('website content and private feedback over real storage and attachments
     expect(published).not.toHaveProperty('updatedBy')
     expect(published.contributors).toEqual([contributor])
     expect((await (await call('/website', 'SUPER_ADMIN')).json()).content).toEqual(content)
+  })
+
+  it('allows SUPER_ADMIN token reads but requires a cookie session to update website content', async () => {
+    const draft = { expectedVersion: 0, testimonials: [testimonial('cookie-saved')], contributors: [] }
+    for (const authorization of ['Bearer website-read-only', 'Bearer website-read-write']) {
+      expect((await call('/website', undefined, 'GET', undefined, { authorization })).status).toBe(200)
+      const rejected = await call('/website', undefined, 'PUT', draft, { authorization })
+      expect(rejected.status).toBe(403)
+      expect((await rejected.json()).error.code).toBe('TOKEN_SCOPE_REQUIRED')
+    }
+    expect((await (await call('/website', 'SUPER_ADMIN')).json()).content.version).toBe(0)
+    expect((await save(draft)).status).toBe(200)
+    expect((await (await call('/website', 'SUPER_ADMIN')).json()).content.version).toBe(1)
+  })
+
+  it('preserves public submissions and SUPER_ADMIN token reads while refusing token replies', async () => {
+    const submitted = await submit(report, { authorization: 'Bearer website-read-only' })
+    expect(submitted.status).toBe(201)
+    const receipt = await submitted.json()
+    const answer = { reply: '登录会话中的管理员回复', status: 'answered' }
+    for (const authorization of ['Bearer website-read-only', 'Bearer website-read-write']) {
+      expect((await call('/website-feedback', undefined, 'GET', undefined, { authorization })).status).toBe(200)
+      const rejected = await call(`/website-feedback/${receipt.id}/reply`, undefined, 'POST', answer, { authorization })
+      expect(rejected.status).toBe(403)
+      expect((await rejected.json()).error.code).toBe('TOKEN_SCOPE_REQUIRED')
+    }
+    const before = await (await call('/website-feedback', 'SUPER_ADMIN')).json()
+    expect(before.feedback[0].status).toBe('open')
+    expect(before.feedback[0]).not.toHaveProperty('reply')
+    const saved = await call(`/website-feedback/${receipt.id}/reply`, 'SUPER_ADMIN', 'POST', answer)
+    expect(saved.status).toBe(200)
+    expect((await saved.json()).feedback.reply).toBe(answer.reply)
+  })
+
+  it('rejects any Authorization header on management writes even alongside a valid cookie', async () => {
+    for (const authorization of ['Bearer website-read-only', 'Basic invalid', '']) {
+      const rejected = await call('/website', 'SUPER_ADMIN', 'PUT', {
+        expectedVersion: 0, testimonials: [], contributors: [],
+      }, { authorization })
+      expect(rejected.status).toBe(403)
+      expect((await rejected.json()).error.code).toBe('TOKEN_SCOPE_REQUIRED')
+    }
+    expect((await (await call('/website', 'SUPER_ADMIN')).json()).content.version).toBe(0)
   })
 
   it('rejects concurrent stale saves without silently losing either accepted version', async () => {
