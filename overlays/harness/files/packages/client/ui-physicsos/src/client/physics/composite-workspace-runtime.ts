@@ -41,7 +41,11 @@ import {
 } from '@physicsos/physics-scene'
 
 import { microWindowPhysicalDelta } from '../animation-clock.ts'
-import { compositeSceneVisualAt, compositeSampleReadout } from './composite-visual-bridge.ts'
+import {
+  compositeSampleReadout,
+  createCompositeVisualProjector,
+  type CompositeVisualProjector,
+} from './composite-visual-bridge.ts'
 import { memoizeOnIdentityWith } from './frame-memo.ts'
 import {
   branchBadgeOf,
@@ -179,6 +183,7 @@ const fieldDirectionOf = (scene: PhysicsScene): ElectricFieldDirection => {
 
 interface Computed {
   readonly simulation: SimulationResult
+  readonly projectVisual: CompositeVisualProjector
   readonly state: SimulationState
   readonly startTime: number
   readonly endTime: number
@@ -217,7 +222,11 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
   private failure: string | undefined
   private computed: Computed | undefined
   /** The full run for the current revision; a composite simulate is the costliest call in the Lab. */
-  private simulationCache: { key: string; simulation: SimulationResult } | undefined
+  private simulationCache: {
+    key: string
+    simulation: SimulationResult
+    projectVisual: CompositeVisualProjector
+  } | undefined
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -238,7 +247,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
     const scene = this.sceneRuntime.peekScene()
     try {
       const key = `${String(scene.id)}:${scene.revision}`
-      const cached = this.simulationCache?.key === key ? this.simulationCache.simulation : undefined
+      const cached = this.simulationCache?.key === key ? this.simulationCache : undefined
       if (cached === undefined) {
         const support = this.engine.canHandle(scene)
         if (!support.supported) {
@@ -247,7 +256,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
           return
         }
       }
-      const simulation = cached ?? this.engine.simulate(
+      const simulation = cached?.simulation ?? this.engine.simulate(
         scene,
         createCompositeSimulationRequest(
           scene,
@@ -255,12 +264,13 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
           `composite-lab-trace-${String(scene.id)}-${scene.revision}`,
         ),
       )
-      this.simulationCache = { key, simulation }
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
+      const projectVisual = cached?.projectVisual ?? createCompositeVisualProjector(scene, simulation)
+      this.simulationCache = { key, simulation, projectVisual }
       const startTime = simulation.states[0]?.time.value ?? 0
       const endTime = simulation.states.at(-1)?.time.value ?? 0
       if (this.currentTime > endTime) this.currentTime = endTime
@@ -284,7 +294,7 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
         Math.min(endTime, Math.max(startTime, this.currentTime)),
       )
       this.failure = undefined
-      this.computed = { simulation, state, startTime, endTime }
+      this.computed = { simulation, projectVisual, state, startTime, endTime }
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '复合场 Runtime 无法启动。'
       this.computed = undefined
@@ -359,15 +369,13 @@ export class CompositeWorkspaceRuntime implements WorkspaceRuntime {
       }
     }
 
-    const { simulation, state, endTime } = this.computed
+    const { simulation, projectVisual, state, endTime } = this.computed
     const cyclotron = cyclotronBenchOf(scene)
     const observations =
       cyclotron === undefined
         ? observeCompositeScene({ scene, simulation, state })
         : { sceneRevision: scene.revision, observations: [] }
-    const view = compositeSceneVisualAt({
-      scene,
-      simulation,
+    const view = projectVisual({
       observations: observations.observations,
       state,
     })

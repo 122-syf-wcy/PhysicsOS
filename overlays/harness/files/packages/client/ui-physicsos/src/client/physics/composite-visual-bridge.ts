@@ -25,6 +25,7 @@ import type {
 } from '@physicsos/physics-observation'
 import {
   cyclotronBenchOf,
+  deepFreeze,
   isCompositeFieldScene,
   type PhysicsScene,
   type Region,
@@ -245,6 +246,45 @@ const compositeRegionsOf = (scene: PhysicsScene): readonly CompositeRegionVisual
     return visual
   })
 
+interface CompositeVisualGeometry {
+  readonly regions: readonly CompositeRegionVisual[]
+  readonly trajectoryPoints: readonly ScenePoint[]
+  readonly trajectoryTimes: readonly number[]
+  readonly frameCorners: readonly ScenePoint[]
+}
+
+/** Copy simulation geometry without retaining mutable positions from its states. */
+const compositeGeometryOf = (
+  scene: PhysicsScene,
+  simulation: SimulationResult,
+): CompositeVisualGeometry => {
+  const regions = compositeRegionsOf(scene)
+  const particleId = scene.particles[0]?.id
+  const trajectoryPoints: ScenePoint[] = []
+  const trajectoryTimes: number[] = []
+  for (const sample of simulation.states) {
+    const object = sample.objects.find(candidate => candidate.id === particleId)
+    if (object?.position === undefined) continue
+    trajectoryPoints.push(pointOf(toCanonicalVector(object.position).vectorSI))
+    trajectoryTimes.push(sample.time.value)
+  }
+
+  // Finite apparatus frames follow the current particle; global fields frame
+  // the whole path. Two corners preserve those exact static bounds without
+  // scanning the full trajectory again on each global-field frame.
+  const framePoints = regions.length === 0
+    ? trajectoryPoints
+    : regions.flatMap(region => [
+      { x: region.at.x - region.width / 2, y: region.at.y + region.height / 2 },
+      { x: region.at.x + region.width / 2, y: region.at.y - region.height / 2 },
+    ])
+  const frameCorners = framePoints.length === 0 ? [] : [
+    { x: Math.min(...framePoints.map(point => point.x)), y: Math.min(...framePoints.map(point => point.y)) },
+    { x: Math.max(...framePoints.map(point => point.x)), y: Math.max(...framePoints.map(point => point.y)) },
+  ]
+  return { regions, trajectoryPoints, trajectoryTimes, frameCorners }
+}
+
 /**
  * Frame the composite scene at its own scale.
  *
@@ -300,7 +340,10 @@ const niceStep = (target: number): number => {
  * @returns the scene visual model.
  * @param input - the caller-supplied fields.
  */
-export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisualModel => {
+const projectCompositeSceneVisual = (
+  input: CompositeVisualInput,
+  prepared?: CompositeVisualGeometry,
+): SceneVisualModel => {
   const { scene, simulation, observations, state } = input
   const particle = scene.particles[0]
   const object =
@@ -310,39 +353,14 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
   if (particle === undefined || object?.position === undefined) return emptyVisualModel('composite')
 
   const position = pointOf(toCanonicalVector(object.position).vectorSI)
-  const regions = compositeRegionsOf(scene)
-
-  /* Trajectory from the simulation state stream — every sampled position, in
-     order, with its engine time kept PARALLEL (same filter both sides) so the
-     canvas can split travelled/future at the playhead and hover/seek keep
-     indexing against trajectoryTimes. The observation carries it too, but the
-     simulation stream is the source of truth. */
-  const trajectorySamples = simulation.states.reduce<{ points: ScenePoint[]; times: number[] }>(
-    (acc, sample) => {
-      const sampleObject = sample.objects.find(candidate => candidate.id === particle.id)
-      if (sampleObject?.position !== undefined) {
-        acc.points.push(pointOf(toCanonicalVector(sampleObject.position).vectorSI))
-        acc.times.push(sample.time.value)
-      }
-      return acc
-    },
-    { points: [], times: [] },
-  )
-  const trajectoryPoints: ScenePoint[] = trajectorySamples.points
+  const { regions, trajectoryPoints, trajectoryTimes, frameCorners } =
+    prepared ?? compositeGeometryOf(scene, simulation)
 
   /* Keep finite apparatus regions readable instead of fitting distant future
      motion. Include the current particle even after it leaves the fields;
      the complete trajectory remains available below. Global fields have no
      apparatus bounds, so they retain their trajectory-based observation window. */
-  const framePoints: ScenePoint[] = [
-    ...regions.flatMap(region => [
-      { x: region.at.x - region.width / 2, y: region.at.y + region.height / 2 },
-      { x: region.at.x + region.width / 2, y: region.at.y - region.height / 2 },
-    ]),
-    ...(regions.length === 0 ? trajectoryPoints : []),
-    position,
-  ]
-  const frame = compositeFrame(framePoints, position)
+  const frame = compositeFrame([...frameCorners, position], position)
   const base = frame.vectorBase
 
   const electricForce = observationOf(observations, 'composite_electric_force')
@@ -518,7 +536,7 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
     trajectories: splitTrajectoryAtTime(
       'composite-trajectory',
       trajectoryPoints,
-      trajectorySamples.times,
+      trajectoryTimes,
       state.time.value,
     ),
     compositeRegions: regions,
@@ -530,6 +548,27 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
     },
     visible: visibilityOf(scene),
   })
+}
+
+/** Project caller-owned inputs afresh, including shallow-frozen mutable graphs. */
+export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisualModel =>
+  projectCompositeSceneVisual(input)
+
+export type CompositeVisualProjector = (
+  input: Pick<CompositeVisualInput, 'observations' | 'state'>,
+) => SceneVisualModel
+
+/**
+ * Prepare one runtime-owned scene revision. Only copied geometry is frozen;
+ * caller scenes and simulation output are never frozen or put in a global
+ * identity cache. The runtime replaces this projector with its simulation.
+ */
+export const createCompositeVisualProjector = (
+  scene: PhysicsScene,
+  simulation: SimulationResult,
+): CompositeVisualProjector => {
+  const geometry = deepFreeze(compositeGeometryOf(scene, simulation))
+  return input => projectCompositeSceneVisual({ scene, simulation, ...input }, geometry)
 }
 
 const visibilityOf = (scene: PhysicsScene): SceneVisualModel['visible'] => {

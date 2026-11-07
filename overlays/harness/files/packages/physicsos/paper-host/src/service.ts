@@ -516,9 +516,21 @@ export class PaperService {
         .slice(0, policy.freshnessPapers)
         .map(job => job.id),
     )
+    // The planner only asks whether an item appeared in this scoped recent
+    // set. Index that part of the ledger once instead of scanning it for
+    // every candidate in both reuse modes of every question.
+    const recentUsageByItem = new Map<string, BankUsage[]>()
+    if (specTable.length > 0 && recentPaperIds.size > 0) {
+      for (const [, usage] of this.domain.table('bank_usage').entries()) {
+        if (!recentPaperIds.has(usage.paperId)) continue
+        const existing = recentUsageByItem.get(usage.itemId)
+        if (existing === undefined) recentUsageByItem.set(usage.itemId, [usage])
+        else existing.push(usage)
+      }
+    }
     return planPaper(specTable, request, this.listBankItems({ status: 'verified' }, schoolId), {
       recentPaperIds,
-      usageOf: itemId => this.bankUsageFor(itemId, schoolId),
+      usageOf: itemId => recentUsageByItem.get(itemId) ?? [],
       sourceOf: (id) => {
         const source = this.domain.table('source_papers').get(id)
         return source !== undefined && recordInSchoolScope(source.schoolId, schoolId) ? source : undefined

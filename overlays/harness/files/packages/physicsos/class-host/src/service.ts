@@ -418,15 +418,29 @@ export class ClassService {
       .filter(row => row.classId === classId && row.schoolId === classroom.schoolId)
       .sort((a, b) => a.userKey.localeCompare(b.userKey))
     const assignments = this.listAssignments(actor, classId, MAX_CLASS_ASSIGNMENTS)
-    const submissionRows = [...this.submissions.entries()]
-      .map(([, row]) => row)
-      .filter(row => row.classId === classId && row.schoolId === classroom.schoolId)
+    const emptyCounts = () => ({ submitted: 0, reviewed: 0, accepted: 0, returned: 0 })
+    const totals = emptyCounts()
+    const byStudent = new Map<string, typeof totals>()
+    const byAssignment = new Map<string, typeof totals>()
+    const countsFor = (groups: Map<string, typeof totals>, key: string): typeof totals => {
+      let counts = groups.get(key)
+      if (counts === undefined) { counts = emptyCounts(); groups.set(key, counts) }
+      return counts
+    }
+    const addSubmission = (counts: typeof totals, review: SubmissionRecord['review']): void => {
+      counts.submitted++
+      if (review !== undefined) counts.reviewed++
+      if (review?.status === 'accepted') counts.accepted++
+      if (review?.status === 'returned') counts.returned++
+    }
+    for (const [, row] of this.submissions.entries()) {
+      if (row.classId !== classId || row.schoolId !== classroom.schoolId) continue
+      addSubmission(totals, row.review)
+      addSubmission(countsFor(byStudent, row.studentKey), row.review)
+      addSubmission(countsFor(byAssignment, row.assignmentId), row.review)
+    }
     const percent = (part: number, total: number): number =>
       total === 0 ? 0 : Math.round((part / total) * 100)
-    const submitted = submissionRows.length
-    const reviewed = submissionRows.filter(row => row.review !== undefined).length
-    const accepted = submissionRows.filter(row => row.review?.status === 'accepted').length
-    const returned = submissionRows.filter(row => row.review?.status === 'returned').length
     const possibleSubmissions = members.length * assignments.length
 
     return {
@@ -435,37 +449,29 @@ export class ClassService {
         students: members.length,
         assignments: assignments.length,
         possibleSubmissions,
-        submitted,
-        reviewed,
-        accepted,
-        returned,
-        outstanding: possibleSubmissions - submitted,
-        completionRate: percent(submitted, possibleSubmissions),
+        ...totals,
+        outstanding: possibleSubmissions - totals.submitted,
+        completionRate: percent(totals.submitted, possibleSubmissions),
       },
       students: members.map((member) => {
-        const mine = submissionRows.filter(row => row.studentKey === member.userKey)
-        const studentReviewed = mine.filter(row => row.review !== undefined).length
-        const studentSubmitted = mine.length
+        const counts = byStudent.get(member.userKey) ?? emptyCounts()
         return {
           userKey: member.userKey,
-          submitted: studentSubmitted,
-          reviewed: studentReviewed,
-          accepted: mine.filter(row => row.review?.status === 'accepted').length,
-          returned: mine.filter(row => row.review?.status === 'returned').length,
-          outstanding: assignments.length - studentSubmitted,
-          completionRate: percent(studentSubmitted, assignments.length),
+          ...counts,
+          outstanding: assignments.length - counts.submitted,
+          completionRate: percent(counts.submitted, assignments.length),
         }
       }),
       assignments: assignments.map((assignment) => {
-        const rows = submissionRows.filter(row => row.assignmentId === assignment.id)
+        const counts = byAssignment.get(assignment.id) ?? emptyCounts()
         return {
           id: assignment.id,
           title: assignment.title,
           dueAt: assignment.dueAt,
-          submitted: rows.length,
-          reviewed: rows.filter(row => row.review !== undefined).length,
-          outstanding: members.length - rows.length,
-          completionRate: percent(rows.length, members.length),
+          submitted: counts.submitted,
+          reviewed: counts.reviewed,
+          outstanding: members.length - counts.submitted,
+          completionRate: percent(counts.submitted, members.length),
         }
       }),
     }
