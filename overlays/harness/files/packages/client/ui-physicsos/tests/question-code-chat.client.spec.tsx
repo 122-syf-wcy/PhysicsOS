@@ -9,11 +9,13 @@ import { PhysicsSurface, type PhysicsSurfaceProps } from '../src/client/LabWorks
 import { createPhysicsSurfaceController } from '../src/client/surface-store.ts'
 import { buildWorkspaceRuntime } from '../src/client/physics/build-workspace-runtime.ts'
 import { SceneCardBody } from '../src/client/SceneChatCard.tsx'
+import { SceneTurnCard } from '../src/client/SceneTurnCard.tsx'
 import { questionCodeSceneSha256, withQuestionCodeVisualization } from '../src/client/experiments/question-code-api.ts'
 import { createQuestionCodeOwnerStore } from '../src/client/experiments/question-code-context.ts'
 import { isUniversalSnapshot, type UniversalExperimentSnapshot } from '../src/client/experiments/universal-contract.ts'
 import { zh } from '../src/client/locales.ts'
 import { solvedCardData } from './solved-card-fixture.client.ts'
+import { sceneTurnData } from './scene-turn-data-fixture.client.ts'
 
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
@@ -86,13 +88,16 @@ it.each([false, true])('retains verified solution scope %s when the chat experim
   const frozen = JSON.stringify(scene)
   const surface = createPhysicsSurfaceController()
   const card = render(<SceneCardBody data={data} questionCodeOwner={f.questionCodeOwner}
-    openSceneInLab={ref => surface.open('lab', ref)} t={t} />)
+    openSceneInLab={(ref) => { surface.open('lab', ref) }} t={t} />)
   await waitFor(() => { expect(card.container.querySelector('iframe')).not.toBeNull() })
   fireEvent.click(card.getByRole('button', { name: '在实验室中探索' }))
   card.unmount()
   const unavailable = (() => { throw new Error('unrelated page hook was read') }) as never
-  const props = { usePhysicsSurface: (selector: (value: ReturnType<typeof surface.store.getSnapshot>) => unknown) => selector(surface.store.getSnapshot()),
-    useLearningRecord: unavailable, useRecentExperiments: unavailable, useSessions: unavailable, useWorkspaces: unavailable, useAuth: unavailable,
+  const props = {
+    usePhysicsSurface: (selector: (value: ReturnType<typeof surface.store.getSnapshot>) => unknown) =>
+      selector(surface.store.getSnapshot()),
+    useLearningRecord: unavailable, useRecentExperiments: unavailable, useSessions: unavailable,
+    useWorkspaces: unavailable, useAuth: unavailable,
     questionCodeOwner: f.questionCodeOwner, t } as unknown as PhysicsSurfaceProps
   const lab = render(<PhysicsSurface {...props} />)
   expect(lab.container.querySelector('[data-private-question-code-workspace]')).not.toBeNull()
@@ -115,6 +120,34 @@ function connect(view: ReturnType<typeof render>) {
   message({ type: 'experiment/connected', protocolVersion: 3 })
   return { outbound, message, close }
 }
+it.each(['failed', 'ready'] as const)('renders a late %s generation from the same closed turn data source', async (status) => {
+  const f = await fixture()
+  const store = sceneTurnData({ ...f.data, visualization: { status: 'generating', jobId: 'direct-job',
+    ownerSessionId: f.ref.ownerSessionId, sceneId: scene.id, sceneRevision: scene.revision, deadlineAt: Date.now() + 600_000 } })
+  const turn = store.turn
+  const view = render(<SceneTurnCard turn={turn} seq={1} openFile={vi.fn()} t={t}
+    questionCodeOwner={f.questionCodeOwner} openSceneInLab={f.openSceneInLab} />)
+  await waitFor(() => { expect(view.container.querySelector('[data-question-code-status="generating"]')).not.toBeNull() })
+  // Only the Harness key changes and notifies; no props rerender or new Turn.
+  act(() => { store.publish({ ...f.data, visualization: status === 'ready' ? f.ref : {
+    status: 'failed', jobId: 'direct-job', ownerSessionId: f.ref.ownerSessionId,
+    sceneId: scene.id, sceneRevision: scene.revision, code: 'INVALID_SOURCE', message: '本题实验代码未通过校验。',
+  } }) })
+  expect(store.turn).toBe(turn)
+  expect(view.container.querySelector('[data-question-code-status="generating"]')).toBeNull()
+  if (status === 'failed') {
+    expect(view.container.querySelector('[data-question-code-status="failed"]')).not.toBeNull()
+    expect(view.getByText('本题实验代码未通过校验。')).toBeTruthy()
+    expect(f.fetch).not.toHaveBeenCalled()
+    return
+  }
+  await waitFor(() => { expect(view.container.querySelector('iframe')).not.toBeNull() })
+  const { outbound, message } = connect(view)
+  const frame = outbound[0]!
+  message({ type: 'experiment/rendered', protocolVersion: 3, frameId: frame.frameId, revision: scene.revision })
+  expect(view.container.querySelector('[data-question-code-status="ready"]')).not.toBeNull()
+  expect(view.getByText('本题实验代码')).toBeTruthy()
+})
 function parameterValue(snapshot: UniversalExperimentSnapshot, id: string): unknown {
   return snapshot.inspector.flatMap(section => section !== null && typeof section === 'object'
     && 'parameters' in section && Array.isArray(section.parameters) ? section.parameters as readonly unknown[] : [])

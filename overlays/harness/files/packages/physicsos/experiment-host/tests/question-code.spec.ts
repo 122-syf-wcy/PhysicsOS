@@ -252,6 +252,14 @@ describe('private question code artifacts', () => {
     ['detached inline SVG', () => 'export function renderFrame(snapshot) { const detached = document.createElement("div"); detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
     ['inline SVG mounted only by an uncalled helper', () => 'const detached = document.createElement("div"); function unusedMount() { document.getElementById("canvas").append(detached) } export function renderFrame(snapshot) { detached.innerHTML = `<svg><circle cx="${snapshot.view.opticalObjects[0].at.x}" cy="0" r="3" /></svg>`; }'],
     ['guarded constant view decoy', () => ownCanvas.replace('snapshot.view', 'snapshot && { opticalObjects: [{ at: { x: 10, y: 20 } }] }')],
+    ['grouped guarded constant view decoy', () => ownCanvas.replace('snapshot.view', '(snapshot && { opticalObjects: [{ at: { x: 10, y: 20 } }] })')],
+    ['grouped view guard beside constant geometry', () => ownCanvas.replace('snapshot.view', '(snapshot && snapshot.view) || null').replace('item.at.x, item.at.y', '10, 20')],
+    ['grouped guard with a nonempty geometry fallback', () => ownCanvas.replace('snapshot.view', '(snapshot && snapshot.view) || { opticalObjects: [{ at: { x: 10, y: 20 } }] }')],
+    ['grouped guard with masked string body data', () => ownCanvas.replace('snapshot.view', "(snapshot && snapshot.view) || { bodies: ['10'] }")],
+    ['grouped guard with masked string label data', () => ownCanvas.replace('snapshot.view', "(snapshot && snapshot.view) || { labels: ['text'] }")],
+    ['grouped guard with masked template body data', () => ownCanvas.replace('snapshot.view', '(snapshot && snapshot.view) || { bodies: [`shape`] }')],
+    ['grouped guard with masked dynamic template data', () => ownCanvas.replace('snapshot.view', '(snapshot && snapshot.view) || { labels: [`${snapshot.title}`] }')],
+    ['grouped guard with a dynamic fallback', () => ownCanvas.replace('snapshot.view', '(snapshot && snapshot.view) || fallback()') + '\nfunction fallback() { return { opticalObjects: [{ at: { x: 10, y: 20 } }] } }'],
     ['nested inspector-only coordinates', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const root = document.getElementById("canvas"); const canvas = document.createElement("canvas"); root.replaceChildren(canvas); const ctx = canvas.getContext("2d"); const inspector = snapshot.inspector || []; inspector.forEach((sec) => (sec.derived || []).forEach((d) => { ctx.beginPath(); ctx.arc(d.value, 20, 3, 0, 6.28); ctx.fill(); })); }'],
     ['nested constant callbacks with unused view', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const root = document.getElementById("canvas"); const canvas = document.createElement("canvas"); root.replaceChildren(canvas); const ctx = canvas.getContext("2d"); const sections = [{ derived: [{ value: 10 }] }]; sections.forEach((sec) => (sec.derived || []).forEach((d) => { ctx.beginPath(); ctx.arc(d.value, 20, 3, 0, 6.28); ctx.fill(); })); }'],
     ['unused nested primitive callbacks beside constant drawing', () => 'export function renderFrame(snapshot) { const view = snapshot.view; const root = document.getElementById("canvas"); const canvas = document.createElement("canvas"); root.replaceChildren(canvas); const ctx = canvas.getContext("2d"); (view.opticalObjects || []).forEach((object) => (object.parts || []).forEach((part) => {})); ctx.beginPath(); ctx.arc(10, 20, 3, 0, 6.28); ctx.fill(); }'],
@@ -271,6 +279,19 @@ describe('private question code artifacts', () => {
     const service = await setup()
     const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '条件读取透镜快照', summary: '', rendererJs: ownCanvas.replace('snapshot.view', 'snapshot && snapshot.view'), stylesheet: '' } })
     expect(ref.rendererKind).toBe('independent')
+  })
+  it.each([
+    '(snapshot && snapshot.view)',
+    '((snapshot && snapshot.view))',
+    '(snapshot && snapshot.view) || null',
+    '((snapshot && snapshot.view) || null)',
+    '(snapshot && snapshot.view) || {}',
+    '(snapshot && snapshot.view) || {extent:{width:1,height:1},origin:{x:0,y:0},bodies:[],vectors:[],trajectories:[],angles:[],labels:[]}',
+  ])('accepts a grouped engine-view guard with an empty fallback: %s', async (expression) => {
+    const service = await setup(), rendererJs = ownCanvas.replace('snapshot.view', expression)
+    const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '防空读取引擎视图', summary: '', rendererJs, stylesheet: '' } })
+    expect(ref.rendererKind).toBe('independent')
+    expect((await service.source(contributor, ref.artifactId, ref.sha256)).source.rendererJs).toBe(rendererJs)
   })
   it('accepts actual nested derived and parameter collectors without borrowing the outer callback receiver', async () => {
     const service = await setup()
@@ -557,14 +578,14 @@ function extra(view){return vis(view,'${field}')}`
   expect(error).toMatchObject({ code: 'INVALID_SOURCE', sourceValidationReason: 'invalid_visibility_key' })
 })
 it.each([
-  "view.visible.vectors", "view.visible?.['trajectories']", "view.visible[\"motionMarks\"]",
+  'view.visible.vectors', "view.visible?.['trajectories']", 'view.visible["motionMarks"]',
 ])('rejects a direct known array-name visibility lookup: %s', async (lookup) => {
   const service = await setup()
   const rendererJs = ownCanvas.replace('  const canvas =', `  if(${lookup}) view.title;\n  const canvas =`)
   await expect(service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source: { title: '错误图层开关', summary: '', rendererJs, stylesheet: '' } })).rejects.toMatchObject({ code: 'INVALID_SOURCE', sourceValidationReason: 'invalid_visibility_key' })
 })
 it.each([
-  "view.visible[vector.observable]===true", "view.visible[vector.observable]!==false",
+  'view.visible[vector.observable]===true', 'view.visible[vector.observable]!==false',
   "vis(view,'trajectory')", "vis(view,'forces')", "vis({visible:{vectors:true}},'vectors')",
 ])('accepts contract visibility keys and unrelated objects: %s', async (lookup) => {
   const service = await setup()

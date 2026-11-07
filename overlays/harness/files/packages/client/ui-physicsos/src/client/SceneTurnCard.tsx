@@ -9,7 +9,7 @@
  * was solved in.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 /* Type-only: pulls the Chat target's SlotMap entry and the turn-tail seat's
    owner props (`turn`, `seq`, `openFile`). */
@@ -27,7 +27,8 @@ export type SceneTurnCardProps =
 export function SceneTurnCard({
   turn, t, openSceneInLab, recordAttempt, regenerateQuestionCode, questionCodeOwner, endTurnHygiene,
 }: SceneTurnCardProps): React.ReactNode {
-  const data = turn.data.get(PHYSICS_SCENE_TURN_KEY)
+  const source = turn.data.source(PHYSICS_SCENE_TURN_KEY)
+  const data = useSyncExternalStore(source.subscribe, source.getSnapshot)
   /* The turn closed — this seat only exists once `turn/end` is in the log. That
      is a fallback trigger for the Lab hygiene: the primary one is the
      Conversation binding's `openTurn`, which also fires while the Lab has

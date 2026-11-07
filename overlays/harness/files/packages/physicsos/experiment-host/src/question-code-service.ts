@@ -170,6 +170,54 @@ function drawingArguments(code: string, original = code): string[] {
   if (original.slice(start).trim()) parts.push(original.slice(start).trim())
   return parts
 }
+/** Remove only balanced groups which enclose the entire value expression. */
+function drawingUngroup(expression: string): string {
+  let value = expression.trim()
+  for (let depth = 0; depth < 64 && value[0] === '('; depth++) {
+    if (drawingBlockEnd(value, 0) !== value.length) break
+    value = value.slice(1, -1).trim()
+  }
+  return value
+}
+/** These fallback values contain no apparatus or coordinates that could serve
+ * as drawing provenance. Parse data only; never evaluate authored JavaScript. */
+function drawingEmptyViewFallback(expression: string): boolean {
+  const text = drawingUngroup(expression)
+  if (text === 'null') return true
+  if (!text.startsWith('{') || !text.endsWith('}')) return false
+  // Masked strings/templates/comments become spaces. Only adjacent [] proves
+  // that an array was empty in the authored source, rather than merely masked.
+  if (/\[(?!\])/.test(text)) return false
+  let parsed: unknown
+  try { parsed = JSON.parse(text.replace(/\b([A-Za-z_$][\w$]*)\s*:/g, '"$1":')) } catch { return false }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false
+  const arrays = new Set(['bodies', 'particles', 'vectors', 'trajectories', 'keyPoints', 'angles', 'dimensions', 'labels', 'guides', 'motionMarks'])
+  return Object.entries(parsed).every(([key, value]) => {
+    if (key !== 'extent' && key !== 'origin') return arrays.has(key) && Array.isArray(value) && value.length === 0
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+    const record = value as Record<string, unknown>, names = key === 'extent' ? ['width', 'height'] : ['x', 'y']
+    return Object.keys(record).length === 2 && names.every(name => typeof record[name] === 'number' && Number.isFinite(record[name]))
+  })
+}
+/** A same-object null guard contributes only its .view value, including the
+ * observed grouped form with null or an empty static view as its fallback. */
+function drawingViewGuard(expression: string): string | undefined {
+  const value = drawingUngroup(expression)
+  const guard = /^\s*([A-Za-z_$][\w$]*)\s*&&\s*\1\s*\.\s*view\s*$/
+  const direct = guard.exec(value)
+  if (direct?.[1] !== undefined) return direct[1]
+  let depth = 0
+  for (let index = 0; index < value.length - 1; index++) {
+    const char = value[index]
+    if (char === '(' || char === '[' || char === '{') depth++
+    else if (char === ')' || char === ']' || char === '}') depth--
+    else if (depth === 0 && char === '|' && value[index + 1] === '|') {
+      const left = guard.exec(drawingUngroup(value.slice(0, index)))
+      return left?.[1] !== undefined && drawingEmptyViewFallback(value.slice(index + 2)) ? left[1] : undefined
+    }
+  }
+  return undefined
+}
 function drawingCalls(code: string): DrawingCall[] {
   const calls: DrawingCall[] = []
   for (const match of code.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
@@ -317,7 +365,8 @@ function validateIndependentDrawing(source: string): void {
     }
     fn.calls.sort((left, right) => left.start - right.start)
   }
-  const reachable = new Set<DrawingFunction>(), incoming = new Map<string, { caller: DrawingFunction; arguments: string[]; rawArguments: string[] }[]>()
+  const reachable = new Set<DrawingFunction>()
+  const incoming = new Map<string, { caller: DrawingFunction; arguments: string[]; rawArguments: string[] }[]>()
   const visit = (fn: DrawingFunction): void => {
     if (reachable.has(fn)) return
     reachable.add(fn)
@@ -327,7 +376,9 @@ function validateIndependentDrawing(source: string): void {
       if (!callee || fn.code[call.start - 1] === '.') continue
       const calls = incoming.get(callee.name) ?? []
       const open = fn.code.indexOf('(', call.start)
-      const rawArguments = drawingArguments(fn.code.slice(open + 1, call.end - 1), source.slice(fn.bodyStart + open + 1, fn.bodyStart + call.end - 1))
+      const rawArguments = drawingArguments(
+        fn.code.slice(open + 1, call.end - 1), source.slice(fn.bodyStart + open + 1, fn.bodyStart + call.end - 1),
+      )
       calls.push({ caller: fn, arguments: call.arguments, rawArguments }); incoming.set(callee.name, calls)
       visit(callee)
     }
@@ -391,8 +442,8 @@ function validateIndependentDrawing(source: string): void {
   const classify = (expression: string, fn: DrawingFunction, seen: Set<string> = new Set()): number => {
     if (seen.size > 64) return 0
     // In a same-object guard, only the RHS is the value; the frame operand controls access to its view.
-    const guardedView = expression.match(/^\s*([A-Za-z_$][\w$]*)\s*&&\s*\1\s*\.\s*view\s*$/)
-    if (guardedView?.[1] !== undefined) return classify(`${guardedView[1]}.view`, fn, seen)
+    const guardedView = drawingViewGuard(expression)
+    if (guardedView !== undefined) return classify(`${guardedView}.view`, fn, seen)
     let value = 0
     const text = expression.split('')
     // A local helper's result must itself depend on data; merely passing data to a constant helper is insufficient.
@@ -445,7 +496,9 @@ function validateIndependentDrawing(source: string): void {
     return literal !== null && invalidKeys.has(literal[2] ?? '')
   }
   for (const fn of reachable) {
-    for (const match of fn.code.matchAll(/\b([A-Za-z_$][\w$]*(?:\s*\??\.\s*[A-Za-z_$][\w$]*)*)\s*\??\.\s*visible\s*(?:\?\.)?\s*(?:\[([^\]]+)\]|\.\s*([A-Za-z_$][\w$]*))/g)) {
+    for (const match of fn.code.matchAll(
+      /\b([A-Za-z_$][\w$]*(?:\s*\??\.\s*[A-Za-z_$][\w$]*)*)\s*\??\.\s*visible\s*(?:\?\.)?\s*(?:\[([^\]]+)\]|\.\s*([A-Za-z_$][\w$]*))/g,
+    )) {
       const receiver = match[1] ?? '', raw = source.slice(fn.bodyStart + match.index, fn.bodyStart + match.index + match[0].length)
       const bracket = raw.indexOf('[')
       const key = bracket >= 0 ? raw.slice(bracket + 1, raw.lastIndexOf(']')).trim() : `'${match[3] ?? ''}'`
