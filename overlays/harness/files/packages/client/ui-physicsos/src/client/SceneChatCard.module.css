@@ -487,6 +487,12 @@
 }
 @media (max-width: 520px) {
   .card { padding: 12px; gap: 10px; border-radius: 22px; }
+  /* Use the chat gutter for the final experiment without widening other cards. */
+  :global([data-slot='conversation.chat.turnTail']) > .card {
+    width: calc(100% + 48px);
+    margin-inline: -24px;
+    padding: 8px;
+  }
   .labCover[data-private-question-code-workspace] { padding: 12px; }
   .labContent { gap: 10px; }
   .labHeader { align-items: flex-start; gap: 10px; }

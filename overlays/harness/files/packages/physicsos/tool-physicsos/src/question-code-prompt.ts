@@ -71,21 +71,25 @@ export function questionCodePrompt(
   const hasVerifiedSolution = snapshot.solve?.verification?.status === 'passed'
   const images = imagesOf(assets)
   return [
-    `真实题目标签：${snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '只展示当前引擎快照已有结论。' : '仅当前场景/局部阶段演示，不能声称整题已解。'}`,
-    `physics_write_experiment_code：完整JS一次replace、CSS一次replace，再structured_output提交title/summary。JS合计<=${MAX_CODE_PART_CHARACTERS}字符，CSS<=6000字符；可append，共10次。`,
-    'Canvas2D入口示例：填真实path并用drawScene绘制snapshot.view。适配219×360。仅普通函数；无import/reexport、旧renderer、动态分派、fetch/外网/存储/parent/top/eval。',
+    `真实题目标签：${snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '仅展示引擎已有结论。' : '仅当前/局部场景演示，不称整题已解。'}`,
+    `physics_write_experiment_code：完整JS一次replace、CSS一次replace，再structured_output提交title/summary；JS<=${MAX_CODE_PART_CHARACTERS}、CSS<=6000字符，可append，共10次。`,
+    'Canvas2D入口示例：drawScene画snapshot.view，适配219×360。仅普通函数；禁import/reexport、旧renderer、动态分派、fetch/外网/存储/parent/top/eval。',
     QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
-    'snapshot.view只读；用origin/extent等比投影、y仅翻转一次，不拟合当前位置。斜面为局部跟随视窗。禁止解题/积分/自建时钟；from/to是显示端点，不是物理数值。空值合法，不补造物体。',
-    'Warm Lab暖白、木与金属，装置占主体。保留受力/场/光路方向和中文标签。开关按view.visible[vector.observable]。body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle/电路rotation为度，leverBeam.tilt/currentRotor.angle为弧度。body.size是半径/半边长，单位不变。',
-    '逐帧用putLabel显示vector.symbol而非label。只投影一次：putLabel(ctx,vector.symbol,point(vector.to,t),used,w,h)，used每帧置[]；p是屏幕坐标，勿再point。颜色按vector.role非observable；字>=11px。禁drawPanel/自建读数；不得写死质量/角度/N/f/a或由箭头长度求值。数值由外层引擎显示。',
+    '只读snapshot.view；origin/extent等比投影，y翻转一次，不拟合当前位置。斜面视窗局部跟随。禁解题/积分/自建时钟；from/to仅显示端点。缺省/零值合法，不造物体。',
+    'Warm Lab暖白木/金属，装置为主体，保留受力/场/光路方向和中文。body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle/电路rotation为度，leverBeam.tilt/currentRotor.angle为弧度。body.size是半径/半边长，单位不变。',
+    'drawScene只画几何/全部箭头，禁putLabel/fillText/strokeText。labels.push({text:vector.symbol,p:point(vector.to,t)})收集文字；body.label/view.labels[].text同队列，入口最后标注。p是屏幕坐标勿再投影。物块r=Math.max(8,body.size*t.s)，按rotation旋转；used含旋转包围区勿清空。颜色按vector.role；字>=11px。禁drawPanel/读数/写死物理数值，宿主显示读数。',
     QUESTION_CODE_LABEL_EXAMPLE,
-    '缺素材用physics_generate_experiment_asset生成环境/材质，禁文字/动态事实；已有素材复用。.src须是真实path字符串，CSS用真实cssPath；勿遮住图片。',
-    questionComposition(snapshot.domain, style.experimentId).split('\n').slice(1).join('\n'),
+    '仅缺素材时physics_generate_experiment_asset生成环境/材质，禁文字/动态事实。已有素材复用；.src用真实path字面量，CSS用cssPath；勿遮图。',
+    // The focused incline contract already carries the exact surface, origin,
+    // visibility and trajectory rules; the generic mechanics prose repeats them.
+    snapshot.domain === 'mechanics' && style.experimentId === 'incline' ? ''
+      : questionComposition(snapshot.domain, style.experimentId).split('\n').slice(1).join('\n'),
     VECTOR_DOMAINS.has(snapshot.domain)
-      ? 'for(const vector of view.vectors) if(view.visible[vector.observable]===true) 绘制箭头和symbol。轨迹用visible.trajectory；没有visible.vectors/trajectories/angles。'
+      ? 'vectors仅在view.visible[vector.observable]===true时画箭头并入队symbol；轨迹与motionMarks用visible.trajectory，没有visible.vectors/trajectories/angles。'
       : '',
     focusedRenderContract(style.renderContract, snapshot.domain, style.experimentId),
-    images.length ? `本任务素材（直接复用，不再生图）：${JSON.stringify(images)}` : '',
+    images[0]?.cssPath ? `首图CSS:${images[0].cssPath}` : '',
+    images.length > 1 ? `其他素材（复用）:${JSON.stringify(images.slice(1))}` : '',
     instructions ? `展示要求（不得改物理条件）：${instructions.slice(0, 4000)}` : '',
     repair === undefined ? '' : resume
       ? `${tokenLimit ? '本轮输出达到上限' : '上游中断'}（${repair.code}），同一任务仅续写一次。${repair.source ? '已保留代码，直接append补完；需替换才replace。' : '没有源码，从replace入口开始。'}不能重复生图。立即写代码，不重新规划。`

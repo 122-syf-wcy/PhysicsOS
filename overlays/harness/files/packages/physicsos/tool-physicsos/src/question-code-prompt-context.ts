@@ -1,6 +1,7 @@
 /** Select exact type declarations needed by this domain; never rewrite physics values. */
 import type { PhysicsSceneSolveSummary } from './types.ts'
-/** Browser plumbing only: no apparatus drawing or physical model is supplied. */
+/** Browser/label orchestration only; drawScene still authors the apparatus.
+ * A square's half-diagonal bounds every rotation, with a two-pixel stroke margin. */
 export const QUESTION_CODE_ENTRY_EXAMPLE = `export async function renderFrame(snapshot){
 const host=document.getElementById('canvas'),w=host.clientWidth,h=host.clientHeight;
 if(!(w>0&&h>0))return;
@@ -13,14 +14,20 @@ if(!image){image=new Image();image.crossOrigin='anonymous';image.src='REPLACE_WI
 await decoded;ctx.clearRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);
 const view=snapshot.view,s=Math.min((w-24)/view.extent.width,(h-24)/view.extent.height);
 const ox=(w-s*view.extent.width)/2,oy=(h-s*view.extent.height)/2;
-drawScene(ctx,view,{s,ox,oy,h,origin:view.origin});
+const t={s,ox,oy,h,origin:view.origin},labels=[],used=[];
+for(const b of view.bodies||[]){
+const p=point(b.at,t),e=Math.max(8,b.size*s)*Math.SQRT2+2;
+used.push({x:p.x-e,y:p.y-e,a:2*e,b:2*e})}
+drawScene(ctx,view,t,labels);
+ctx.fillStyle='#343a36';
+for(const q of labels)putLabel(ctx,q.text,q.p,used,w,h);
 }
 let board,image,decoded;
 function point(p,t){return{x:t.ox+(p.x-t.origin.x)*t.s,y:t.h-t.oy-(p.y-t.origin.y)*t.s}}
 `
 /** Screen-pixel label placement only; no physical geometry or solver is supplied. */
 export const QUESTION_CODE_LABEL_EXAMPLE = `function putLabel(ctx,text,p,used,w,h){
-if(!Number.isFinite(p.x)||!Number.isFinite(p.y))throw Error('Invalid label coordinates');
+if(!Number.isFinite(p.x)||!Number.isFinite(p.y))throw Error('Nonfinite label');
 ctx.font='12px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
 const a=ctx.measureText(text).width+8,b=20;
 for(let r=0;r<8;r++)for(const[d,e]of[[1,-1],[-1,-1],[1,1],[-1,1],[0,-1],[0,1]]){
@@ -120,7 +127,7 @@ export function focusedRenderContract(contract: string, domain: string, experime
   const notes = [visibility[domain], fields.has('trajectories') ? 'trajectories.history实线/predicted虚线，保留点序。' : '',
     fields.has('incline') ? '存在incline.points时直接按incline.points顺序画多边形，不根据angle/base自行算顶点；点来自引擎，保留物体与坡面接触关系，缺失时不补造斜面。' : '',
     fields.has('boundedField') ? 'boundedField.at是中心；场符号裁剪到边界。' : ''].filter(Boolean).join('')
-  return notes + '\nV3 drawing subset (read-only; string taxonomies omit enum lists):\n'
+  return notes + '\nV3只读绘图字段:\n'
     + [...selected].map(name => compact(declarations.get(name) ?? '')).join('\n')
 }
 export function publishedVisualGuidance(body: string): string {
