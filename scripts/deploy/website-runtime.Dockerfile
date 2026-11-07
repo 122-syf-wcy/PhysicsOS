@@ -7,6 +7,9 @@ FROM ${BASE_IMAGE}
 ARG SOURCE_REVISION
 ARG BASE_IMAGE
 COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/client/ui-physicsos /app/vendor/deepseek-harness/packages/client/ui-physicsos
+COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/client/ui-settings-account /app/vendor/deepseek-harness/packages/client/ui-settings-account
+COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/physicsos/class-host /app/vendor/deepseek-harness/packages/physicsos/class-host
+COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/physicsos/paper-host /app/vendor/deepseek-harness/packages/physicsos/paper-host
 COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/physicsos/notice-host /app/vendor/deepseek-harness/packages/physicsos/notice-host
 COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/physicsos/auth-host /app/vendor/deepseek-harness/packages/physicsos/auth-host
 COPY --from=website_outputs --chown=999:999 /app/vendor/deepseek-harness/packages/host/frontend-static /app/vendor/deepseek-harness/packages/host/frontend-static
