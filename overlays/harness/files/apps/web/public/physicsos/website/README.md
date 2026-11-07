@@ -6,6 +6,7 @@
 
 - 官网资源路径：`/physicsos/website/index.html`。所有静态资源使用 `/physicsos/website/` 绝对路径，支持服务器将根入口映射到本页。
 - 产品与管理员入口：`/app`。管理员登录后在现有后台的「内容 / 官网管理」管理发布内容和反馈。
+- 根入口保留旧实验、贡献和密码重置 hash 链接，页面加载前跳转至 `/app` 并保留原查询串与 hash；官网自身锚点和其他 hash 不跳转。
 - 展示配置：`GET /physicsos/notice/public/website`，只读服务端公开配置；初始数组为空。初次加载、无已发布内容和加载失败分别显示清楚的状态，失败可以重试；页面重新获得焦点时刷新公开内容。
 - 提交反馈：`POST /physicsos/notice/public/website-feedback`，携带分类、正文、可选联系方式、当前路径和真实图片 base64。服务器返回有效 `id` 与 `createdAt` 后才显示成功回执；失败保留表单及选中的图片。
 - 截图支持 PNG、JPEG、WebP、GIF，最多 3 张，单张不超过 5 MiB；浏览器先检查类型、大小及是否可解码，服务端仍是最终校验与持久化边界。
@@ -25,7 +26,7 @@
 独立接口/编码测试（Node 20+，无额外依赖）：
 
 ```sh
-node --test scripts/website/public-content.spec.mjs
+node --test scripts/website/*.spec.mjs
 ```
 
 候选页面浏览器验收需要覆盖：

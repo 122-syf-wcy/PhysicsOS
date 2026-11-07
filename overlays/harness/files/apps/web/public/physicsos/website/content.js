@@ -31,7 +31,7 @@ export function normalizeContent(value) {
     const ids = new Set();
     output[section] = entries.filter(item => item?.enabled !== false).map(item => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('公开内容格式暂时无法读取。');
-      const id = textField(item, 'id', 80);
+      const id = textField(item, 'id', 100);
       if (!/^[a-zA-Z0-9_-]+$/.test(id) || ids.has(id)) throw new Error('公开内容标识无效。');
       ids.add(id);
       const color = textField(item, 'color', 7);

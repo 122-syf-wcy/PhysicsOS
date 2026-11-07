@@ -38,6 +38,15 @@ test('optional display fields and a project without a link remain publishable', 
   assert.equal(result.contributors[0].description, '');
 });
 
+test('public content accepts the server ID boundary of 100 characters and rejects 101', () => {
+  const valid = 'a'.repeat(100);
+  const result = normalizeContent({ testimonials: [testimonial(valid)], contributors: [contributor(valid)] });
+  assert.equal(result.testimonials[0].id, valid);
+  assert.equal(result.contributors[0].id, valid);
+  assert.throws(() => normalizeContent({ testimonials: [testimonial('a'.repeat(101))], contributors: [] }));
+  assert.throws(() => normalizeContent({ testimonials: [], contributors: [contributor('a'.repeat(101))] }));
+});
+
 test('malformed or unsafe public content is rejected instead of becoming an executable link', () => {
   for (const url of ['javascript:alert(1)', 'data:text/html,hello', 'https://user:pass@example.com/', '/relative']) {
     assert.throws(() => normalizeContent({ testimonials: [], contributors: [contributor('one', { url })] }));
