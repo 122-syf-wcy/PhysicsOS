@@ -15,6 +15,85 @@ const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).dig
 const sameBinding = (a: AssetBinding, b: AssetBinding): boolean =>
   a.ownerKey === b.ownerKey && a.ownerSessionId === b.ownerSessionId
   && a.generationId === b.generationId && a.sceneSha256 === b.sceneSha256
+interface AssetToken { value: string; kind: 'word' | 'string' | 'number' | 'punctuation'; depth: number; division: boolean; end: number }
+/** Small conservative lexical subset, not a JavaScript evaluator. Regex,
+ * templates and ambiguous slash contexts disable constant resolution entirely;
+ * the existing direct-literal/CSS checks remain available in those programs. */
+function assetTokens(source: string): AssetToken[] | undefined {
+  const tokens: AssetToken[] = [], groups: { close: string; division: boolean }[] = []
+  const controls = new Set(['if', 'for', 'while', 'switch', 'catch', 'with'])
+  const nonValues = new Set(['return', 'throw', 'case', 'delete', 'void', 'typeof', 'new', 'in', 'of', 'yield', 'await', 'else', 'do', 'instanceof'])
+  for (let index = 0; index < source.length;) {
+    const char = source[index] ?? '', next = source[index + 1], previous = tokens.at(-1)
+    if (/\s/.test(char)) { index++; continue }
+    if (char === '/' && next === '/') {
+      index += 2
+      while (index < source.length && !/[\r\n\u2028\u2029]/.test(source[index] ?? '')) index++
+      continue
+    }
+    if (char === '/' && next === '*') { const end = source.indexOf('*/', index + 2); if (end < 0) return; index = end + 2; continue }
+    if (char === '`' || char === '\\' || char.charCodeAt(0) > 127) return
+    const start = index, depth = groups.length
+    let kind: AssetToken['kind'] = 'punctuation', division = false
+    if (char === '"' || char === "'") {
+      index++
+      while (index < source.length && source[index] !== char) {
+        if (source[index] === '\\') index += 2
+        else { if (source[index] === '\n' || source[index] === '\r') return; index++ }
+      }
+      if (source[index] !== char) return
+      index++; kind = 'string'; division = true
+    } else if (/[A-Za-z_$]/.test(char)) {
+      while (index < source.length && /[\w$]/.test(source[index] ?? '')) index++
+      const word = source.slice(start, index)
+      if (word === 'with') return
+      kind = 'word'; division = !nonValues.has(word)
+    } else if (/[0-9]/.test(char)) {
+      while (index < source.length && /[\w.]/.test(source[index] ?? '')) index++
+      kind = 'number'; division = true
+    } else {
+      // After a line terminator even a name/string may end a declaration via
+      // ASI: the following slash can start a regex, not continue a division.
+      // Without a grammar proof, retain only same-line division evidence.
+      if (char === '/' && (!previous?.division || /[\r\n\u2028\u2029]/.test(source.slice(previous.end, index)))) return
+      if (char === '(' || char === '[' || char === '{') {
+        groups.push({ close: char === '(' ? ')' : char === '[' ? ']' : '}', division: char === '[' || (char === '(' && !controls.has(previous?.value ?? '')) })
+      } else if (char === ')' || char === ']' || char === '}') {
+        const group = groups.pop()
+        if (group?.close !== char) return
+        division = group.division
+      }
+      index++
+    }
+    tokens.push({ value: source.slice(start, index), kind, depth, division, end: index })
+  }
+  return groups.length ? undefined : tokens
+}
+/** Only a unique module-level `const NAME = 'path';` whose other mentions are
+ * direct .src/setAttribute sinks is proven. Any shadow, reassignment or other
+ * use invalidates that name globally rather than guessing its lexical binding. */
+function constantImageReferences(source: string): string[] {
+  const tokens = assetTokens(source)
+  if (tokens === undefined) return []
+  const mentions = new Map<string, number[]>()
+  tokens.forEach((token, index) => { if (token.kind === 'word') { const entries = mentions.get(token.value) ?? []; entries.push(index); mentions.set(token.value, entries) } })
+  const value = (index: number): string | undefined => tokens[index]?.value
+  const references: string[] = []
+  for (let index = 0; index < tokens.length; index++) {
+    const declaration = tokens[index], name = tokens[index + 1], literal = tokens[index + 3]
+    if (declaration?.value !== 'const' || declaration.depth !== 0 || name?.kind !== 'word' || value(index + 2) !== '=' || literal?.kind !== 'string' || literal.value.includes('\\') || value(index + 4) !== ';') continue
+    const uses = (mentions.get(name.value) ?? []).filter(at => at !== index + 1)
+    const direct = (at: number): boolean => {
+      const assignment = value(at - 3) === '.' && value(at - 2) === 'src' && value(at - 1) === '=' &&
+        (value(at + 1) === undefined || [';', ',', ')', ']', '}'].includes(value(at + 1) ?? ''))
+      const attribute = value(at - 5) === '.' && value(at - 4) === 'setAttribute' && value(at - 3) === '(' &&
+        ["'src'", '"src"'].includes(value(at - 2) ?? '') && value(at - 1) === ',' && value(at + 1) === ')'
+      return assignment || attribute
+    }
+    if (uses.length && uses.every(direct)) references.push(literal.value.slice(1, -1))
+  }
+  return references
+}
 async function bounded(response: Response, maximum: number, signal: AbortSignal): Promise<Buffer> {
   if (Number(response.headers.get('content-length')) > maximum || !response.body) {
     await response.body?.cancel().catch(() => undefined)
@@ -96,7 +175,7 @@ export class QuestionCodeAssets {
   files(binding: AssetBinding, source: string, stylesheet = ''): Map<string, Buffer> {
     const available = this.job(binding)?.assets ?? []
     const masked = source.replace(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, value => ' '.repeat(value.length))
-    const references = new Set(cssReferences(stylesheet.replace(/\/\*[\s\S]*?\*\//g, '')))
+    const references = new Set([...cssReferences(stylesheet.replace(/\/\*[\s\S]*?\*\//g, '')), ...constantImageReferences(source)])
     for (const match of source.matchAll(/\.src\s*=\s*(["'])([^"']+)\1/g)) {
       if (masked.slice(match.index, match.index + 4) === '.src') references.add(match[2] ?? '')
     }
