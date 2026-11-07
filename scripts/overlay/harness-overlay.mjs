@@ -17,6 +17,13 @@ const patchFile = path.join(overlayRoot, 'upstream-changes.patch')
 const OVERLAY_PATHS = [
   'packages/client/ui-physicsos',
   'packages/client/ui-settings-models/src/client/protocol.ts',
+  'packages/client/ui-settings-account/src/client/index.ts',
+  'packages/client/ui-settings-account/src/client/desktop-account.ts',
+  'packages/client/ui-settings-account/tsdown.config.ts',
+  'packages/client/ui-settings-account/package.json',
+  'packages/client/ui-settings-account/tests/web-loading-artifact.host.spec.ts',
+  'packages/client/ui-settings-account/tests/apply.client.spec.ts',
+  'packages/client/ui-settings-account/tests/initialization.client.spec.ts',
   /* PhysicsOS-authored additions to upstream-owned trees. These are brand-new
      files upstream never had, so they belong here (copied by `apply`) and NOT
      in upstream-changes.patch: a create-hunk cannot be re-applied once the file
