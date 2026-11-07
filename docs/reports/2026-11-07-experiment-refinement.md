@@ -58,3 +58,11 @@
 - 局部显示不足两个原始采样点时不补造边界采样或轨迹，hover 同时为空。
 - 外观升级仅改变当前个人记录的展示版本；历史观察条目和全站发布指针不会被该按钮修改。
 - 历史会话的宽泛“通过”说明未当作本轮证据，尤其旧 runtime 测试容器的缺依赖与被吞掉的退出码。
+
+## 正式发布结果（北京时间 2026-11-08）
+
+- 用户明确授权后，`main` 推送并在 `/opt/physicsos` 快进至 `72d489b`；实际运行镜像为 `sha256:49e1960a9b7db9da0ff9ac63fa86eff4aafd0d201b82741c311511eb69b0d6ee`，冻结源码 `63b17e1`。
+- 76 个 `2.1.0` 新包全部发布，当前发布指针与磁盘 ZIP SHA256 逐项匹配。切换前的 76 个旧指针已保存，原版本归档保持不变。
+- 正式入口 `https://physics.dongsiwei.com` 的 13 个代表实验通过桌面、手机及真实 WebGL 验证，覆盖 12 个领域，加载错误、资源失败及外联均为零；健康接口的 Postgres、Redis 正常。
+- 成对恢复点位于 `/opt/physicsos/backups/releases/20261107-experiment-refinement` 与 `/opt/physicsos/backups/postgres/20261107-experiment-refinement`，校验和均通过；回滚镜像 `physicsos-app:rollback-experiment-refinement-20261107` 仍精确指向切换前 `adabac` 镜像。
+- 发布记录明确 `passed=false / releaseReady=true`，采用用户授权的图片服务外部依赖例外；新生成、其持久化及新产物视觉验证保持 `false`，没有以历史恢复或静态检查替代。已知图片接口 504 仍需上游修复。
