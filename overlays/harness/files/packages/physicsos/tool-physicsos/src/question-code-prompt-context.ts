@@ -111,7 +111,7 @@ export function focusedRenderContract(contract: string, domain: string, experime
     .replace(/\n(?=[A-Za-z_$][\w$]*\??:)/g, ';')
     .replace(/\s+/g, ' ').replace(/\s*([:{};,|<>])\s*/g, '$1').replace(/\{;/g, '{').trim()
   const visibility: Record<string, string> = {
-    mechanics: 'vectors/guides必须按view.visible[vector.observable]===true；不能读取vector.visible；trajectories/motionMarks按trajectory，keyPoints按keyPoints；angles/dimensions按已给几何绘制，杠杆dimensions另按arms。',
+    mechanics: 'vectors/guides必须按view.visible[vector.observable]===true；不能读取vector.visible；轨迹与motionMarks用visible.trajectory，keyPoints按keyPoints；angles/dimensions按已给几何绘制，杠杆dimensions另按arms。',
     magnetic: 'vectors/guides按visible[observable]===true；trajectory/center/radius/fieldLines分别控制对应层。',
     electric: 'vectors/guides按visible[observable]===true；electricField/equipotentials/trajectory控制对应层。',
     composite: 'vectors按visible[observable]===true；regions/electricField/magneticField/trajectory控制对应层；场符号裁剪到区域。',

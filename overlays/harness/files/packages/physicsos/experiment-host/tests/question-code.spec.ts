@@ -192,7 +192,7 @@ describe('private question code artifacts', () => {
     const source = {
       title: '  本题独立画面  ', summary: '精确保留子代理源码',
       rendererJs: ownCanvas + '\n// Question-specific labels.\n',
-      stylesheet: '/* supplementary only */\nh1 { color: #175; }\n',
+      stylesheet: 'h1 { color: #175; }\n#canvas { width:219px!important; height:360px!important; margin:auto; background:#fed; }\n',
     }
     const ref = await service.create({ ownerSessionId: 'parent-session', childSessionId: 'child-session', scene: scene(), experimentId: 'convex-lens', source })
     expect((await service.source(contributor, ref.artifactId, ref.sha256)).source).toEqual(source)
@@ -203,6 +203,15 @@ describe('private question code artifacts', () => {
     const entry = await service.asset(raw)
     const html = entry!.bytes.toString('utf8')
     expect(html).toContain('id="canvas"')
+    const viewportStyle = /<div\b[^>]*id="canvas"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? ''
+    const viewport = new Map(viewportStyle.split(';').map((declaration) => {
+      const [property, value] = declaration.split(':', 2)
+      return [property, value] as const
+    }))
+    for (const [property, value] of Object.entries({ position: 'fixed', inset: '0', width: '100%', height: '100%',
+      'min-width': '0', 'min-height': '0', 'max-width': 'none', 'max-height': 'none', margin: '0', padding: '0', 'box-sizing': 'border-box' })) {
+      expect(viewport.get(property)).toBe(value + '!important')
+    }
     expect(html).toContain('id="parameters" hidden')
     expect(html).toContain('id="title"')
     expect(html).toContain('id="status"')

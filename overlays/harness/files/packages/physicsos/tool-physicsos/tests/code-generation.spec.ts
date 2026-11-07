@@ -112,8 +112,8 @@ describe('parent question code generation', () => {
       const h = dependencies()
       h.deps.timeoutMs = 40
       h.deps.assetManifest = () => [{ path: './assets/generated/owned.png' }]
-      h.start.mockImplementationOnce(async () => ({ id: 'limited', result: new Promise(resolve => {
-        setTimeout(() => resolve({ stopReason: 'max-tokens', output: [] }), 25)
+      h.start.mockImplementationOnce(async () => ({ id: 'limited', result: new Promise((resolve) => {
+        setTimeout(() => { resolve({ stopReason: 'max-tokens', output: [] }) }, 25)
       }), dispose: h.dispose }))
       h.start.mockImplementationOnce(async () => ({ id: 'continuing', result: new Promise(() => {}), dispose: h.dispose }))
       const work = generateQuestionCode(h.deps)
@@ -220,7 +220,8 @@ describe('parent question code generation', () => {
     const prompt = block?.type === 'text' ? block.text : ''
     expect(prompt).toContain('Warm Lab')
     expect(prompt).toContain('physics_generate_experiment_asset')
-    expect(prompt).toContain('219×360')
+    expect(prompt).toContain('clientWidth/clientHeight')
+    expect(prompt).not.toContain('219×360')
     expect(prompt).toContain('真实题目标签：竖直上抛的运动观察')
     expect(prompt).not.toContain('教学：观察最高点')
     expect(prompt).not.toContain('标题使用斜抛运动')
@@ -246,7 +247,8 @@ describe('parent question code generation', () => {
     const block = h.start.mock.calls[0]?.[0]?.prompt[0]
     const prompt = block?.type === 'text' ? block.text : ''
     expect(prompt.length).toBeLessThanOrEqual(5000)
-    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '24000', '完整JS一次', '10次', 'Warm Lab', '219×360', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
+    for (const essential of ['renderFrame(snapshot)', 'physics_write_experiment_code', '24000', '完整JS一次', '10次', 'Warm Lab', 'clientWidth/clientHeight', 'snapshot.view', 'crossOrigin', '.src', './assets/generated/owned.png', '摩擦力箭头', 'VectorVisual', 'InclineVisual']) expect(prompt).toContain(essential)
+    expect(prompt).toContain('ctx.arc(cx,cy,r,-s*k,-e*k,e>=s)')
     expect(prompt).toContain('angles.startAngle/endAngle')
     expect(prompt).toContain('入口示例')
     expect(prompt).toContain('drawScene(ctx,view,')
@@ -517,7 +519,7 @@ describe('the real code child provider', () => {
     const delayed = Promise.withResolvers<typeof metadata>()
     const lookup = vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementationOnce(() => delayed.promise)
     const request = { parent, signal: new AbortController().signal, prompt: [{ type: 'text' as const, text: 'Render the old question.' }], outputSchema: { type: 'object' as const, properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) }, maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }) }
-    const starting = provider.start(request).then(async run => {
+    const starting = provider.start(request).then(async (run) => {
       await run.dispose()
       return { code: 'UNEXPECTED_CHILD_CREATED' }
     }, (error: unknown) => error)
@@ -557,7 +559,7 @@ describe('the real code child provider', () => {
       parent, signal: new AbortController().signal, prompt: [{ type: 'text', text: 'Render the old question.' }],
       outputSchema: { type: 'object', properties: Object.fromEntries(Object.keys(source).map(key => [key, { type: 'string' }])), required: Object.keys(source) },
       maxDepth: 1, descriptor: snapshotSubagentDescriptor({ mode: 'one-shot', provider: CODE_PROVIDER_NAME }),
-    }).then(async run => { await run.dispose(); return { code: 'UNEXPECTED_CHILD_CREATED' } }, (error: unknown) => error)
+    }).then(async (run) => { await run.dispose(); return { code: 'UNEXPECTED_CHILD_CREATED' } }, (error: unknown) => error)
     await vi.waitFor(() => { expect(resolve).toHaveBeenCalledTimes(1) })
     parent.session.append('physics/scene', { ...original, visualization: { status: 'generating', jobId: 'after-preset', ownerSessionId: 'parent', sceneId: original.sceneId, sceneRevision: original.revision } })
     delayed.resolve(preset)
@@ -583,8 +585,8 @@ describe('the real code child provider', () => {
     artifacts.assetManifest = () => []
     const results: unknown[] = []
     ctx.on('tools/result', (exec, result) => { if (exec.name === 'physics_write_experiment_code') results.push(result) }, { global: true })
-    const publish = h.deps.publish
-    h.deps.publish = value => { publish(value); parent.session.append('physics/scene', value) }
+    const publish = h.deps.publish.bind(h.deps)
+    h.deps.publish = (value) => { publish(value); parent.session.append('physics/scene', value) }
     const starts = vi.fn((request: Parameters<CodeGenerationDependencies['start']>[0]) => ctx.subagents.start(CODE_PROVIDER_NAME, { ...request, parent }))
     h.deps.start = starts
     expect((await generateQuestionCode(h.deps)).status).toBe('ready')

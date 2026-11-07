@@ -111,9 +111,12 @@ const invalidSource = (reason?: SourceValidationReason): ExperimentError => {
 /** Private code has its own viewport baseline, independent of community template chrome. */
 const independentStylesheet = `:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#2e3d38;background:#fafaf7;color-scheme:light}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{position:relative}#canvas{position:relative;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}#canvas>canvas,#canvas>svg{display:block;width:100%;height:100%}[hidden]{display:none!important}`
+// #canvas is the reserved viewport. Author CSS may decorate it, but must not
+// shrink the coordinate surface which renderFrame measures with clientWidth.
+const independentViewportStyle = 'position:fixed!important;inset:0!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;box-sizing:border-box!important'
 const independentHtml = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PhysicsOS experiment</title><link rel="stylesheet" href="./assets/platform-base.css"><link rel="stylesheet" href="./assets/experiment.css"></head>
-<body><div hidden><h1 id="title">正在连接实验…</h1><p id="status" role="status">等待实验快照</p></div><div id="canvas" aria-live="off"></div><div id="parameters" hidden aria-label="实验参数"></div><script type="module" src="./runtime/main.js"></script></body></html>`
+<body><div hidden><h1 id="title">正在连接实验…</h1><p id="status" role="status">等待实验快照</p></div><div id="canvas" aria-live="off" style="${independentViewportStyle}"></div><div id="parameters" hidden aria-label="实验参数"></div><script type="module" src="./runtime/main.js"></script></body></html>`
 interface DrawingFunction {
   name: string
   start: number
