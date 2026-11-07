@@ -78,7 +78,7 @@ index f8bafcb699..02fe6e60fa 100644
      // The activated tree ran bodies lowered against the contract this
      // checkout's packer emits; a dist built before a contract change would
 diff --git a/apps/web/tests/pwa-manifest.e2e.ts b/apps/web/tests/pwa-manifest.e2e.ts
-index 2cfc21e2c9..16c7dc460c 100644
+index 2cfc21e2c913917015a6e4cee10c37062d57d634..fdd1884d1865af30ded63bed5bd13802f8424d80 100644
 --- a/apps/web/tests/pwa-manifest.e2e.ts
 +++ b/apps/web/tests/pwa-manifest.e2e.ts
 @@ -14,28 +14,39 @@ it('ships install metadata with the built web application', async () => {
@@ -87,10 +87,12 @@ index 2cfc21e2c9..16c7dc460c 100644
    expect(manifest).toEqual({
 -    name: 'DeepSeek Harness',
 -    short_name: 'DSH',
+-    start_url: './',
+-    scope: './',
 +    name: 'PhysicsOS',
 +    short_name: 'PhysicsOS',
-     start_url: './',
-     scope: './',
++    start_url: '/app',
++    scope: '/',
      display: 'fullscreen',
 -    icons: [{
 -      src: 'favicon.svg',
