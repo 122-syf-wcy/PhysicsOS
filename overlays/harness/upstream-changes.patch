@@ -27,17 +27,19 @@ index f5c2ffac06..0cab6def8a 100644
    <body>
      <div id="root"></div>
 diff --git a/apps/web/public/manifest.webmanifest b/apps/web/public/manifest.webmanifest
-index 6592d6a700..c7bb323a22 100644
+index 6592d6a7000ec65d67e408ffc5402f23cb3939ea..c15932a7c14e0f553693ab2db3aeb71d9604d8fa 100644
 --- a/apps/web/public/manifest.webmanifest
 +++ b/apps/web/public/manifest.webmanifest
 @@ -1,14 +1,26 @@
  {
 -  "name": "DeepSeek Harness",
 -  "short_name": "DSH",
+-  "start_url": "./",
+-  "scope": "./",
 +  "name": "PhysicsOS",
 +  "short_name": "PhysicsOS",
-   "start_url": "./",
-   "scope": "./",
++  "start_url": "/app",
++  "scope": "/",
    "display": "fullscreen",
    "icons": [
      {
@@ -17757,4 +17759,225 @@ index 0000000000..27f5ebbd14
 +  visit(catalog)
 +  expect([...expected.keys()].sort()).toEqual([...names].sort())
 +  expect(actual).toEqual(expected)
++})
+diff --git a/packages/bundle/web-app/src/index.ts b/packages/bundle/web-app/src/index.ts
+index 76c212e4e6d885d9384da033d4c855e428348095..39585c2428c3ad3fd0b2861478595aa3ae13b72f 100644
+--- a/packages/bundle/web-app/src/index.ts
++++ b/packages/bundle/web-app/src/index.ts
+@@ -12,6 +12,7 @@
+  */
+
+ import { spawn, type ChildProcess } from 'node:child_process'
++import { existsSync } from 'node:fs'
+ import { createRequire } from 'node:module'
+ import { dirname, join } from 'node:path'
+ import { networkInterfaces } from 'node:os'
+@@ -229,7 +230,12 @@ export function apply(ctx: Context, config: Config): void {
+   const handoffBrowser = config.openBrowser && !launchedThroughSsh(launchEnvironmentOf(ctx))
+   // Release dependent rows only after bind-dependent trust has been sampled once.
+   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
+-  ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
++  const distIndex = internals.resolveDistIndex()
++  const landingPath = 'physicsos/website/index.html'
++  ctx.plugin(FrontendStatic, {
++    distIndex,
++    ...(existsSync(join(dirname(distIndex), landingPath)) ? { publicLanding: `/${landingPath}` } : {}),
++  })
+   if (config.surfaceContext) {
+     ctx.inject(['systemPrompt'], (promptCtx) => {
+       addHarnessSourceSection(promptCtx, SOURCE_ROOT)
+diff --git a/packages/host/frontend-static/src/index.ts b/packages/host/frontend-static/src/index.ts
+index e497efd228ab12336bf0aaa603e802235d380894..68559e6767cf9d1b8c661b8653507a6b87fcd639 100644
+--- a/packages/host/frontend-static/src/index.ts
++++ b/packages/host/frontend-static/src/index.ts
+@@ -30,10 +30,13 @@ export const inject = ['webServer', 'connection']
+ export interface Config {
+   /** Absolute path of index.html inside the dist root. */
+   distIndex: string
++  /** Optional dist-relative public page pathname; the application remains at /app. */
++  publicLanding?: string
+ }
+
+ export const Config: z<Config> = z.object({
+   distIndex: z.string().required(),
++  publicLanding: z.string(),
+ })
+
+ const HTML_MIME = 'text/html; charset=utf-8'
+@@ -43,6 +46,11 @@ const MIME: Record<string, string> = {
+   '.js': 'text/javascript; charset=utf-8',
+   '.css': 'text/css; charset=utf-8',
+   '.svg': 'image/svg+xml',
++  '.png': 'image/png',
++  '.jpg': 'image/jpeg',
++  '.jpeg': 'image/jpeg',
++  '.webp': 'image/webp',
++  '.gif': 'image/gif',
+   '.json': 'application/json',
+   '.map': 'application/json',
+   '.webmanifest': 'application/manifest+json',
+@@ -101,7 +109,10 @@ export async function serveStatic(
+     res.end()
+     return
+   }
+-  res.writeHead(200, { 'content-type': type })
++  res.writeHead(200, {
++    'content-type': type,
++    ...(type === HTML_MIME ? { 'cache-control': 'no-store' } : {}),
++  })
+   res.end(body)
+ }
+
+@@ -113,10 +124,11 @@ export async function serveStatic(
+ export function apply(ctx: Context, config: Config): void {
+   const distIndex = config.distIndex
+   const distRoot = dirname(distIndex)
++  const publicLanding = config.publicLanding
+   // Insert after all index transforms so the base precedes every resource reference.
+   const renderIndex = async (): Promise<string> => {
+     const body = ctx.webServer.renderIndex(await readFile(distIndex, 'utf8'))
+-    return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="./">`)
++    return body.replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="${publicLanding === undefined ? './' : '/'}">`)
+   }
+   ctx.effect(() => ctx.webServer.registerFallback(async (req, res) => {
+     // Non-GET/HEAD without a matching named route is 405 (fallback-only
+@@ -127,9 +139,29 @@ export function apply(ctx: Context, config: Config): void {
+       return
+     }
+     /* v8 ignore next -- node:http always sets url on server requests */
+-    const rawPath = new URL(req.url ?? '/', 'http://x').pathname
++    const url = new URL(req.url ?? '/', 'http://x')
++    const rawPath = url.pathname
++    let pathname = decodeURIComponent(rawPath)
++    if (publicLanding !== undefined) {
++      if (rawPath === '/' && !url.searchParams.has('token')) {
++        if (url.searchParams.has('reset_token')) {
++          res.writeHead(302, {
++            location: `/app${url.search}`,
++            'cache-control': 'no-store',
++            'referrer-policy': 'no-referrer',
++          })
++          res.end()
++          return
++        }
++        pathname = publicLanding
++      } else if (rawPath === '/app' || rawPath === '/app/') {
++        pathname = '/'
++      } else if (rawPath === '/physicsos/website/') {
++        pathname = publicLanding
++      }
++    }
+     await serveStatic(
+-      decodeURIComponent(rawPath),
++      pathname,
+       res,
+       distRoot,
+       distIndex,
+diff --git a/packages/host/frontend-static/tests/frontend-static.spec.ts b/packages/host/frontend-static/tests/frontend-static.spec.ts
+index 88008b7d65a300eccc7e2e7c6b4abf5f9540814e..eb8cf8d7a7d87c8ef909b63e7d110e44780ee994 100644
+--- a/packages/host/frontend-static/tests/frontend-static.spec.ts
++++ b/packages/host/frontend-static/tests/frontend-static.spec.ts
+@@ -30,7 +30,7 @@ afterEach(async () => {
+ })
+
+ /** Write a dist fixture and the authenticated Web rows, then boot them through the real Loader. */
+-async function loadComposition(): Promise<Context> {
++async function loadComposition(publicLanding?: string): Promise<Context> {
+   root = await mkdtemp(join(tmpdir(), 'dsh-frontend-static-'))
+   const dist = join(root, 'dist')
+   await mkdir(dist)
+@@ -40,6 +40,11 @@ async function loadComposition(): Promise<Context> {
+   await writeFile(join(dist, 'blob.bin'), 'BLOB')
+   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
+   await mkdir(join(dist, 'empty'))
++  await mkdir(join(dist, 'physicsos', 'website'), { recursive: true })
++  await writeFile(join(dist, 'physicsos', 'website', 'index.html'), '<head></head><body>official site</body>')
++  for (const extension of ['png', 'jpg', 'jpeg', 'webp', 'gif']) {
++    await writeFile(join(dist, `picture.${extension}`), 'IMAGE')
++  }
+   const configPath = join(root, 'cordis.yml')
+   await writeFile(configPath, [
+     "- name: '@deepseek-ai/dsh-credentials-local'",
+@@ -55,6 +60,7 @@ async function loadComposition(): Promise<Context> {
+     "  name: '@deepseek-ai/dsh-host-frontend-static'",
+     '  config:',
+     `    distIndex: '${distIndex}'`,
++    ...(publicLanding === undefined ? [] : [`    publicLanding: '${publicLanding}'`]),
+     '',
+   ].join('\n'))
+
+@@ -217,3 +223,74 @@ describe('real Loader composition', () => {
+     expect(() => server.registerFallback(() => {})).not.toThrow()
+   })
+ })
++
++
++describe('public landing with retained application', () => {
++  it('serves the public site while keeping application aliases authenticated and injected', { timeout: 60_000 }, async () => {
++    const loaded = await loadComposition('/physicsos/website/index.html')
++    const port = loaded.webServer.port
++    const base = `http://127.0.0.1:${String(port)}`
++    const home = await fetch(base)
++    expect(home.status).toBe(200)
++    expect(home.headers.get('cache-control')).toBe('no-store')
++    expect(await home.text()).toBe('<head></head><body>official site</body>')
++    expect(await request(port, '/?campaign=test')).toMatchObject({ status: 200, body: '<head></head><body>official site</body>' })
++    expect(await request(port, '/', { method: 'HEAD' })).toMatchObject({ status: 200, body: '' })
++    for (const path of ['/physicsos/website/', '/physicsos/website/index.html']) {
++      const page = await fetch(base + path)
++      expect(page.status).toBe(200)
++      expect(page.headers.get('cache-control')).toBe('no-store')
++      expect(await page.text()).toContain('official site')
++    }
++    for (const path of ['/app', '/app/', '/index.html']) {
++      expect((await request(port, path)).status).toBe(401)
++    }
++    const exchange = await fetch(loaded.connection.authenticatedUrl(base), { redirect: 'manual' })
++    expect(exchange.status).toBe(303)
++    expect(exchange.headers.get('location')).toBe('./')
++    const cookie = exchange.headers.get('set-cookie')?.split(';', 1)[0]
++    if (cookie === undefined) throw new Error('launch exchange did not set a cookie')
++    const offTap = loaded.webServer.tapIndex(html => html.replace('<head>', '<head><script>window.__APP__=1</script>'))
++    const offRows = loaded.on('webserver/index-inject', rows => {
++      rows.push({ kind: 'script-preload', src: 'plugins/boot.js' })
++    })
++    for (const path of ['/app', '/app/', '/app?view=test', '/index.html']) {
++      const page = await request(port, path, { headers: { cookie } })
++      expect(page.status).toBe(200)
++      expect(page.body).toContain('shell')
++      expect(page.body).toContain('__APP__')
++      expect(page.body).toContain('href="plugins/boot.js"')
++      expect(page.body.match(/<base\b/g)).toHaveLength(1)
++      expect(page.body).toContain('<base href="/">')
++      expect(page.body.indexOf('<base href="/">')).toBeLessThan(page.body.indexOf('plugins/boot.js'))
++    }
++    offRows()
++    offTap()
++    const disposeApi = loaded.webServer.register({ kind: 'exact', path: '/physicsos/probe', handler: (_req, res) => { res.writeHead(200); res.end('API') } })
++    expect(await request(port, '/physicsos/probe')).toMatchObject({ status: 200, body: 'API' })
++    disposeApi()
++    for (const [extension, type] of [['png', 'image/png'], ['jpg', 'image/jpeg'], ['jpeg', 'image/jpeg'], ['webp', 'image/webp'], ['gif', 'image/gif']]) {
++      expect(await request(port, `/picture.${extension}`)).toMatchObject({ status: 200, type, body: 'IMAGE' })
++    }
++    expect((await request(port, '/..%2f..%2fetc%2fpasswd')).status).toBe(403)
++    expect((await request(port, '/app/no-such-page')).status).toBe(404)
++    expect((await request(port, '/', { method: 'POST' })).status).toBe(405)
++  })
++
++  it('redirects legacy reset links to the application without caching the token', { timeout: 60_000 }, async () => {
++    const loaded = await loadComposition('/physicsos/website/index.html')
++    const base = `http://127.0.0.1:${String(loaded.webServer.port)}`
++    const response = await fetch(base + '/?reset_token=fixture%2Btoken&source=mail', { redirect: 'manual' })
++    expect(response.status).toBe(302)
++    expect(response.headers.get('location')).toBe('/app?reset_token=fixture%2Btoken&source=mail')
++    expect(response.headers.get('cache-control')).toBe('no-store')
++    expect(response.headers.get('referrer-policy')).toBe('no-referrer')
++    const token = await fetch(base + '/?token=invalid', { redirect: 'manual' })
++    expect(token.status).toBe(401)
++  })
++
++  it('rejects a landing target outside the built frontend', { timeout: 60_000 }, async () => {
++    const loaded = await loadComposition('/../../outside.html')
++    expect((await request(loaded.webServer.port, '/')).status).toBe(403)
++  })
 +})
