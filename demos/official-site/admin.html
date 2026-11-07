@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7faf7" />
+    <title>内容配置预览 · PhysicsOS</title>
+    <link rel="icon" href="./assets/logo.png" />
+    <link rel="stylesheet" href="./admin.css" />
+    <script type="module" src="./admin.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="PhysicsOS 返回首页">
+        <img src="./assets/logo.png" alt="" width="32" height="32" />
+        <span>Physics<span class="brand-os">OS</span></span>
+        <span class="brand-divider"></span>
+        <span class="brand-section">内容工作台</span>
+      </a>
+      <a class="home-link" href="./index.html"><span aria-hidden="true">↗</span> 查看首页</a>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow"><span></span> WEBSITE CONTENT STUDIO</p>
+        <h1 id="page-title">让更多声音，<span>被看见。</span></h1>
+        <p class="intro-copy">整理使用者的反馈，也记录每一份共同创造。</p>
+        <p class="preview-notice"><span aria-hidden="true">◌</span> 本地设计预览 · 配置仅保存在当前浏览器</p>
+        <div class="intro-orbit" aria-hidden="true"><span>+</span><i></i><b></b><small>made together</small></div>
+      </section>
+
+      <div class="section-toolbar">
+        <div class="tab-list" role="tablist" aria-label="内容类型">
+          <button class="tab is-active" id="testimonials-tab" type="button" role="tab" aria-selected="true" aria-controls="editor-panel" data-section="testimonials">示例反馈 <span id="testimonials-count">3</span></button>
+          <button class="tab" id="contributors-tab" type="button" role="tab" aria-selected="false" aria-controls="editor-panel" tabindex="-1" data-section="contributors">贡献者与项目 <span id="contributors-count">3</span></button>
+        </div>
+        <span class="section-limit">每个板块可配置 1–12 张卡片</span>
+      </div>
+
+      <form id="content-form" novalidate>
+        <div class="workspace">
+          <section class="editor-panel" id="editor-panel" role="tabpanel" aria-labelledby="testimonials-tab">
+            <div class="panel-heading"><div><h2 id="section-title">反馈卡片</h2><p id="section-description">一段真实的感受，让物理探索更有温度。</p></div><span class="small-label">EDIT CONTENT</span></div>
+            <div id="editors" class="editors"></div>
+            <button id="add-card" class="add-card" type="button"><span aria-hidden="true">＋</span><span id="add-label">添加一条反馈</span><small id="remaining-count">还可添加 9 条</small></button>
+          </section>
+
+          <aside class="preview-panel" aria-label="卡片即时预览">
+            <div class="preview-heading"><span class="preview-dot"></span><h2>即时预览</h2><span>LIVE</span></div>
+            <p class="preview-help">看看这些内容在卡片里的样子。</p>
+            <div id="card-preview" class="card-preview"></div>
+            <div class="preview-footnote"><span aria-hidden="true">↳</span><p>这里展示第一张卡片。保存后，回到首页查看完整效果。</p></div>
+            <div class="editor-note"><span class="note-icon" aria-hidden="true">✳</span><h3>每一份贡献，都值得被记录。</h3><p id="example-note">当前文字为设计占位示例，不代表真实用户评价。对外使用时，请替换为已获授权的真实反馈。</p></div>
+          </aside>
+        </div>
+
+        <div class="save-bar">
+          <div class="save-status"><span id="save-dot" class="save-dot"></span><div><strong id="save-label">内容已就绪</strong><p id="save-hint">编辑后的内容仅对当前浏览器可见</p></div></div>
+          <div class="save-actions"><button id="reset-content" class="text-button" type="button">恢复示例</button><button class="button button-secondary" type="submit" name="save-action" value="save">保存配置</button><button class="button button-primary" type="submit" name="save-action" value="return">保存并查看首页 <span aria-hidden="true">↗</span></button></div>
+        </div>
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+      </form>
+    </main>
+
+    <footer><span>PhysicsOS · 让物理学习自然发生</span><span>DESIGNED FOR CURIOSITY</span></footer>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden><span aria-hidden="true">✓</span><span id="toast-message"></span></div>
+    <noscript><p class="noscript">内容配置需要启用 JavaScript。你仍可通过顶部链接返回首页。</p></noscript>
+  </body>
+</html>
