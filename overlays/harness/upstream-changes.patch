@@ -27,10 +27,10 @@ index f5c2ffac06..0cab6def8a 100644
    <body>
      <div id="root"></div>
 diff --git a/apps/web/public/manifest.webmanifest b/apps/web/public/manifest.webmanifest
-index 6592d6a7000ec65d67e408ffc5402f23cb3939ea..c15932a7c14e0f553693ab2db3aeb71d9604d8fa 100644
+index 6592d6a7000ec65d67e408ffc5402f23cb3939ea..c960c37fc6ddc1d8ed1ec7845e783880a3757754 100644
 --- a/apps/web/public/manifest.webmanifest
 +++ b/apps/web/public/manifest.webmanifest
-@@ -1,14 +1,26 @@
+@@ -1,14 +1,27 @@
  {
 -  "name": "DeepSeek Harness",
 -  "short_name": "DSH",
@@ -38,6 +38,7 @@ index 6592d6a7000ec65d67e408ffc5402f23cb3939ea..c15932a7c14e0f553693ab2db3aeb71d
 -  "scope": "./",
 +  "name": "PhysicsOS",
 +  "short_name": "PhysicsOS",
++  "id": "/",
 +  "start_url": "/app",
 +  "scope": "/",
    "display": "fullscreen",
@@ -78,12 +79,18 @@ index f8bafcb699..02fe6e60fa 100644
      // The activated tree ran bodies lowered against the contract this
      // checkout's packer emits; a dist built before a contract change would
 diff --git a/apps/web/tests/pwa-manifest.e2e.ts b/apps/web/tests/pwa-manifest.e2e.ts
-index 2cfc21e2c913917015a6e4cee10c37062d57d634..fdd1884d1865af30ded63bed5bd13802f8424d80 100644
+index 2cfc21e2c913917015a6e4cee10c37062d57d634..0c9632e4c69e697ca1665a5b09b157454e756156 100644
 --- a/apps/web/tests/pwa-manifest.e2e.ts
 +++ b/apps/web/tests/pwa-manifest.e2e.ts
-@@ -14,28 +14,39 @@ it('ships install metadata with the built web application', async () => {
-   // so only an absent `id`, which defaults to the resolved `start_url`, gives
-   // each mount its own identity. `public-mount.e2e.ts` reads the resolved form.
+@@ -10,32 +10,47 @@ it('ships install metadata with the built web application', async () => {
+   expect(index).toContain('<link rel="manifest" href="./manifest.webmanifest" />')
+
+   const manifest: unknown = JSON.parse(await readFile(join(DIST_ROOT, 'manifest.webmanifest'), 'utf8'))
+-  // No `id`: a browser resolves an explicit `id` against the start URL's origin,
+-  // so only an absent `id`, which defaults to the resolved `start_url`, gives
+-  // each mount its own identity. `public-mount.e2e.ts` reads the resolved form.
++  // Keep the historical root identity when the installed app starts at /app.
++  // Without an explicit id, moving start_url would create a different PWA.
    expect(manifest).toEqual({
 -    name: 'DeepSeek Harness',
 -    short_name: 'DSH',
@@ -91,6 +98,7 @@ index 2cfc21e2c913917015a6e4cee10c37062d57d634..fdd1884d1865af30ded63bed5bd13802
 -    scope: './',
 +    name: 'PhysicsOS',
 +    short_name: 'PhysicsOS',
++    id: '/',
 +    start_url: '/app',
 +    scope: '/',
      display: 'fullscreen',
@@ -134,8 +142,12 @@ index 2cfc21e2c913917015a6e4cee10c37062d57d634..fdd1884d1865af30ded63bed5bd13802
 -  expect(light).toContain('fill="#000"')
 -  expect(dark).toContain('fill="#fff"')
 -  expect(dark.replace('fill="#fff"', 'fill="#000"')).toBe(light)
-+  expect(index).toContain(
-+    '<link rel="icon" type="image/png" sizes="32x32" href="/physicsos/brand/physicsos-mark-32.png" />',
++  const icon = index.match(/<link\b[^>]*\brel="icon"[^>]*>/)?.[0] ?? ''
++  expect(icon).toContain('type="image/png"')
++  expect(icon).toContain('sizes="32x32"')
++  const href = icon.match(/\bhref="([^"]+)"/)?.[1] ?? ''
++  expect(new URL(href, 'https://physics.example/').href).toBe(
++    'https://physics.example/physicsos/brand/physicsos-mark-32.png',
 +  )
 +  const mark = await readFile(join(DIST_ROOT, 'physicsos/brand/physicsos-mark-32.png'))
 +  expect(mark.byteLength).toBeGreaterThan(0)
