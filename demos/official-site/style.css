@@ -43,3 +43,6 @@ dialog{color:var(--ink);background:linear-gradient(140deg,#fcfefaf5,#f3f8eee8);b
 @media(max-width:600px){.hero-art .mascot{width:360px;max-width:105%;top:6px}.cta img{width:235px;height:235px;top:auto;bottom:-14px;right:0}}
 
 @media(min-width:601px) and (max-width:1100px){.hero-art .orbit-one{width:92%;left:1%}.hero-art .orbit-two{width:70%;left:14%}}
+
+/* Keep the last footer row clear of the fixed feedback and motion controls. */
+.footer{padding-bottom:calc(92px + env(safe-area-inset-bottom, 0px))}

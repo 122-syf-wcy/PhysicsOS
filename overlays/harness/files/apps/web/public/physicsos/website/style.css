@@ -64,3 +64,6 @@ dialog{color:var(--ink);background:linear-gradient(140deg,#fcfefaf5,#f3f8eee8);b
 .noscript-note{padding:18px;border:1px solid #dce6d2;border-radius:16px;font-size:13px;line-height:1.8}.noscript-note a{text-decoration:underline}
 @keyframes content-breathe{0%,100%{opacity:.55}50%{opacity:1}}
 @media(max-width:600px){.content-state,.community .content-state{min-height:210px;padding:28px 22px}.content-state h3{font-size:15px}.content-state p{font-size:12px}.feedback-categories label{flex:1 1 43%}.content-label{max-width:220px}.voices-bottom>span{font-size:9px}.facts strong{font-size:25px}}
+
+/* Keep the last footer row clear of the fixed feedback and motion controls. */
+.footer{padding-bottom:calc(92px + env(safe-area-inset-bottom, 0px))}
