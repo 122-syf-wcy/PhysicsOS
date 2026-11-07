@@ -15,6 +15,7 @@
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
+import { websiteContent, websiteFeedback, type WebsiteContentRecord, type WebsiteFeedbackRecord } from './website-schema.ts'
 
 const feedbackKind = z.enum(['bug', 'content', 'idea', 'other'])
 const feedbackStatus = z.enum(['open', 'answered', 'closed'])
@@ -94,6 +95,8 @@ export const noticeDomain = defineDomain({
     announcements: domainTable<string, AnnouncementRecord>(announcement),
     platform_notice: domainTable<string, PlatformNoticeRecord>(platformNotice),
     platform_notice_acks: domainTable<string, PlatformNoticeAckRecord>(platformNoticeAck),
+    website_content: domainTable<string, WebsiteContentRecord>(websiteContent),
+    website_feedback: domainTable<string, WebsiteFeedbackRecord>(websiteFeedback),
   },
 })
 

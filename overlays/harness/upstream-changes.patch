@@ -12376,7 +12376,7 @@ index c98289bc3e..6f9fff22f6 100644
  - id: tools
    config:
      # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh
-@@ -47,6 +58,94 @@
+@@ -47,6 +58,96 @@
      - id: subagent-model-selection-settings
        name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -12447,6 +12447,8 @@ index c98289bc3e..6f9fff22f6 100644
 +
 +    - id: notice-host
 +      name: '@deepseek-ai/dsh-notice-host'
++      config:
++        trustedProxies: !!js "process.env.PHYSICOS_TRUSTED_PROXIES ? process.env.PHYSICOS_TRUSTED_PROXIES.split(',').map(value => value.trim()).filter(Boolean) : []"
 +
 +    - id: update-host
 +      name: '@deepseek-ai/dsh-update-host'
@@ -14847,7 +14849,7 @@ index 36dc0506d3..3ffb00d818 100644
        '@modelcontextprotocol/server':
          specifier: 2.0.0
          version: 2.0.0
-@@ -9860,6 +10079,439 @@ importers:
+@@ -9860,6 +10079,442 @@ importers:
          specifier: workspace:*
          version: link:../../core/tools
 
@@ -15045,6 +15047,9 @@ index 36dc0506d3..3ffb00d818 100644
 +
 +  packages/physicsos/notice-host:
 +    dependencies:
++      '@deepseek-ai/dsh-attachment':
++        specifier: workspace:^
++        version: link:../../attachment/attachment
 +      '@deepseek-ai/dsh-host-webserver':
 +        specifier: workspace:^
 +        version: link:../../host/webserver
