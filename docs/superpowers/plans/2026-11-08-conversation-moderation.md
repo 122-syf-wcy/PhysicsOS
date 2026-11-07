@@ -43,12 +43,13 @@
 
 ### Task 2: Automatic capture/worker and effective account revocation
 
-**Files:** Create auth-host/src/moderation/runtime.ts and tests; modify auth-host/src/index.ts, service.ts, api-policy.ts, connection src/api-policy.ts overlay, and the necessary upstream connection/gateway/Peer files in upstream-changes.patch. Keep transport changes scoped to live credential and resource admission. Do not change frontend.
+**Files:** Create auth-host/src/moderation/runtime.ts and tests; modify auth-host/src/index.ts, service.ts, api-policy.ts, connection src/api-policy.ts overlay, physics-student/agent.cordis.yml persona, and the necessary upstream connection/gateway/Peer files in upstream-changes.patch. Keep transport changes scoped to live credential and resource admission. Do not change frontend.
 
 **Interfaces:** Consume Task 1 ModerationService/createModerationReviewer/routes. Configure optional auth moderation route with enabled default true and deployed provider/model (existing deepseek-official/deepseek-v4.1-flash unless actual deployed roster proves otherwise). Use session/event and agent/inbox/spliced with trusted source.kind user, precise server ownership and message ID dedup. sessionQuery provides bounded history scanner. Inject through Cordis lifetime so startup ordering and disposal are safe.
 
 - [ ] Write failing real-context tests for human versus synthetic/inherited captures, inbox dedup, unknown ownership, bounded historical scan, worker restart/dispose and no recursion. Test actual gateway ownership, live revocation, uplink/downlink, quiet stream closure; test root and trusted child cancellation with keepInbox:false and persistent API token revocation.
 - [ ] Run RED in server builder; implement runtime adapters and serialized >=15s worker with cancellation, scanner max20 inputs. Avoid blocking session/event on AI. Expose route within existing admin route (no prefix ambiguity) and preserve all original endpoints.
+- [ ] Strengthen the fixed physics-student persona with illicit-assistance refusal, untrusted role/instruction treatment and safe education/help exceptions, preserving existing physics rules/tools. Validate benign and harmful/injection examples with real candidate model in Task 3, without literal-copy-only tests.
 - [ ] Add onUserDisabled owner-key callback to AuthServiceDeps, revoke all API tokens on disable, cancel all owned roots and proven descendants. Extend HostPeerAdmission/Peer with live credential guard/disposer, thread it through real connection and gateway (scopeEvents is not currently called by real carrier). Enforce ownsSession/ownsWorkspace on each user stream open, recheck credential and resource admission at actual input/output and shut down on revocation. Preserve unhosted operator carrier behavior.
 - [ ] Run auth/connection/gateway/affected session-controller suites and strict typecheck; capture upstream patch without other uncommitted work. Commit and report test evidence.
 
