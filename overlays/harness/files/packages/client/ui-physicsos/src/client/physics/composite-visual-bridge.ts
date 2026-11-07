@@ -330,13 +330,16 @@ export const compositeSceneVisualAt = (input: CompositeVisualInput): SceneVisual
   )
   const trajectoryPoints: ScenePoint[] = trajectorySamples.points
 
-  /* Frame: cover every region rectangle + the trajectory + the particle start. */
+  /* Keep finite apparatus regions readable instead of fitting distant future
+     motion. Include the current particle even after it leaves the fields;
+     the complete trajectory remains available below. Global fields have no
+     apparatus bounds, so they retain their trajectory-based observation window. */
   const framePoints: ScenePoint[] = [
     ...regions.flatMap(region => [
       { x: region.at.x - region.width / 2, y: region.at.y + region.height / 2 },
       { x: region.at.x + region.width / 2, y: region.at.y - region.height / 2 },
     ]),
-    ...trajectoryPoints,
+    ...(regions.length === 0 ? trajectoryPoints : []),
     position,
   ]
   const frame = compositeFrame(framePoints, position)
