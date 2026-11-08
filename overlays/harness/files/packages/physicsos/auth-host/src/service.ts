@@ -2370,14 +2370,23 @@ export class AuthService {
     }
     await this.users.put(target.userKey, updated)
     if (input.data.status === 'disabled') {
-      await this.revokeUserSessions(target.record)
-      for (const [key, token] of this.apiTokens.entries()) {
-        if (token.userKey === target.userKey && token.revokedAt === undefined) {
-          await this.apiTokens.put(key, { ...token, revokedAt: this.now().toISOString() })
-        }
-      }
-      await this.supersedeOpenResetRequests(target.userKey)
-      await this.deps.onUserDisabled?.(target.userKey)
+      // The durable disable is already effective. Each cleanup must be attempted
+      // independently: a storage failure must not leave a live provider or inbox running.
+      const cleanups = await Promise.allSettled([
+        Promise.resolve().then(() => this.revokeUserSessions(target.record)),
+        Promise.resolve().then(async () => {
+          for (const [key, token] of this.apiTokens.entries()) {
+            if (token.userKey === target.userKey && token.revokedAt === undefined) {
+              await this.apiTokens.put(key, { ...token, revokedAt: this.now().toISOString() })
+            }
+          }
+        }),
+        Promise.resolve().then(() => this.supersedeOpenResetRequests(target.userKey)),
+        Promise.resolve().then(() => this.deps.onUserDisabled?.(target.userKey)),
+      ])
+      const failures = cleanups.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
+      if (failures.length === 1) throw failures[0]
+      if (failures.length > 1) throw new AggregateError(failures, 'Account disabled; cleanup incomplete')
     }
     await this.audit(actor, 'user.status', target.userKey, schoolId, { status: input.data.status })
     return this.toAdminRow(updated, this.schools.get(schoolId))

@@ -113,6 +113,7 @@ export class ModerationRuntime {
   private worker: Promise<void> = Promise.resolve()
   private running = false
   private history: Promise<void> = Promise.resolve()
+  private cursorWrites: Promise<void> = Promise.resolve()
   private lastCursor = ''
   private readonly timer: ReturnType<typeof setInterval>
   private closed = false
@@ -131,12 +132,12 @@ export class ModerationRuntime {
       this.enqueue(async () => {
         const ownerKey = this.auth.sessionOwnerKey(session.id)
         if (ownerKey === undefined) return
-        const cursors = this.domain.table('moderation_cursors'), id = `claim:${session.id}`
-        const previous = cursors.get(id)
+        const id = `claim:${session.id}`
         // Retain a durable replay boundary before writing cases. A transient
         // case write failure must not turn a committed user event into a lost job.
-        await cursors.put(id, { id, kind: 'claim', sessionId: session.id, ownerKey,
-          seq: previous?.ownerKey === ownerKey ? Math.min(previous.seq, event.seq) : event.seq, index: 0, done: false })
+        await this.mutateClaimCursor(id, previous => ({ id, kind: 'claim', sessionId: session.id, ownerKey,
+          generation: (previous?.generation ?? 0) + 1,
+          seq: previous?.ownerKey === ownerKey ? Math.min(previous.seq, event.seq) : event.seq, index: 0, done: false }))
         for (const input of inputs) await this.service.capture(input)
       })
     }))
@@ -147,12 +148,10 @@ export class ModerationRuntime {
         || auth.sessionOwnerKey(row.resourceId) !== row.ownerKey) return
       this.enqueue(async () => {
         if (auth.sessionOwnerKey(row.resourceId) !== row.ownerKey) return
-        const table = domain.table('moderation_cursors')
         const id = `claim:${row.resourceId}`
-        const old = table.get(id)
-        await table.put(id, old?.ownerKey === row.ownerKey ? { ...old, done: false } : {
-          id, sessionId: row.resourceId, ownerKey: row.ownerKey, kind: 'claim', seq: 0, index: 0, done: false,
-        })
+        await this.mutateClaimCursor(id, old => old?.ownerKey === row.ownerKey
+          ? { ...old, generation: (old.generation ?? 0) + 1, done: false }
+          : { id, sessionId: row.resourceId, ownerKey: row.ownerKey, kind: 'claim', generation: (old?.generation ?? 0) + 1, seq: 0, index: 0, done: false })
         await this.supplement()
       })
     }))
@@ -178,6 +177,23 @@ export class ModerationRuntime {
   private valid(cursor: ModerationCursor): boolean {
     return !this.closed && this.auth.sessionOwnerKey(cursor.sessionId) === cursor.ownerKey
       && this.domain.table('users').get(cursor.ownerKey)?.status === 'active'
+  }
+  /** Serialize the read/compare/write of every claim cursor, without blocking live intake on history IO. */
+  private mutateClaimCursor(id: string, update: (current: ModerationCursor | undefined) => ModerationCursor | undefined): Promise<boolean> {
+    const next = this.cursorWrites.then(async () => {
+      const table = this.domain.table('moderation_cursors')
+      const value = update(table.get(id))
+      if (!value) return false
+      await table.put(id, value)
+      return true
+    })
+    this.cursorWrites = next.then(() => undefined, () => undefined)
+    return next
+  }
+  private saveProgress(observed: ModerationCursor, progress: ModerationCursor): Promise<boolean> {
+    return this.mutateClaimCursor(observed.id, current =>
+      current?.ownerKey === observed.ownerKey && (current.generation ?? 0) === (observed.generation ?? 0)
+        ? progress : undefined)
   }
   private withHistory<T>(work: () => Promise<T>): Promise<T> {
     const next = this.history.then(work)
@@ -206,13 +222,13 @@ export class ModerationRuntime {
         const id = await this.service.capture(messages[index]!)
         if (id === undefined) return
         progress = { ...cursor, seq: event.seq, index: index + 1 }
-        await table.put(cursor.id, progress)
+        if (!await this.saveProgress(cursor, progress)) return
         if (++captured >= 20) return
       }
       progress = { ...cursor, seq: event.seq + 1, index: 0 }
-      if (++visited >= 5_000) { await table.put(cursor.id, progress); return }
+      if (++visited >= 5_000) { await this.saveProgress(cursor, progress); return }
     }
-    if (this.valid(cursor)) await table.put(cursor.id, { ...progress, done: true })
+    if (this.valid(cursor)) await this.saveProgress(cursor, { ...progress, done: true })
   }
   private scan(limit: number): Promise<CapturedMessage[]> { return this.withHistory(() => this.collectScan(limit)) }
   private async collectScan(limit: number): Promise<CapturedMessage[]> {
@@ -261,6 +277,6 @@ export class ModerationRuntime {
     clearInterval(this.timer)
     for (const release of this.releases) release()
     this.lifetime.abort(new ModerationModelError('REVIEW_ABORTED'))
-    await Promise.all([this.queue, this.worker, this.history])
+    await Promise.all([this.queue, this.worker, this.history, this.cursorWrites])
   }
 }

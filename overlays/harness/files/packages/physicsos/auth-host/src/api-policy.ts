@@ -20,6 +20,11 @@
 
 import type { IncomingMessage } from 'node:http'
 
+/** A live-boundary refusal is an ordinary response, not an internal handler failure. */
+class ApiPolicyBoundaryError extends Error {
+  constructor(readonly response: Response) { super('API admission withdrawn') }
+}
+
 interface LegacyRpcRequest<T = unknown> {
   readonly rpcId: string
   readonly payload: T
@@ -831,6 +836,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     request: Request,
     method: string,
     body: ClientEnvelope,
+    guard: () => void,
   ): Promise<{ request: Request; response?: Response }> => {
     const wirePayload = isRecord(body.payload) ? { ...body.payload } : {}
     const payload = { ...policyPayloadOf(wirePayload) }
@@ -849,8 +855,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           ),
         }
       }
+      guard()
       const workspace = await deps.ensureWorkspace(actor, requestedTitle)
+      guard()
       await deps.store.claim(actor, 'workspace', workspace.id)
+      guard()
       return {
         request,
         response: rpcValue(rpcId, {
@@ -861,8 +870,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     }
 
     if (method === 'session.create' && !admin(actor)) {
+      guard()
       const workspace = await deps.ensureWorkspace(actor)
+      guard()
       await deps.store.claim(actor, 'workspace', workspace.id)
+      guard()
       delete payload['cwd']
       delete payload['sessionId']
       payload['workspaceId'] = workspace.id
@@ -901,8 +913,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     method: string,
     body: ClientEnvelope,
     response: Response,
+    guard: () => void,
   ): Promise<Response> => {
+    guard()
     const parsed = await bodyOf(response)
+    guard()
     if (parsed === undefined) return response
     const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
     const value = valueOf(parsed)
@@ -946,8 +961,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
          created through the product virtual path are already in the registry
          and remain visible only to their owner. The platform operator sees
          the full registry for troubleshooting. */
+      guard()
       const workspace = await deps.ensureWorkspace(actor)
+      guard()
       await deps.store.claim(actor, 'workspace', workspace.id)
+      guard()
       const items = Array.isArray(value['items']) ? value['items'] : []
       const visible = admin(actor)
         ? items.filter(item => isRecord(item))
@@ -979,8 +997,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
          none). Surfacing either to a hosted account seeds the client model
          with a row it cannot own; the account's ensured Workspace is the only
          default this product has. */
+      guard()
       const workspace = await deps.ensureWorkspace(actor)
+      guard()
       await deps.store.claim(actor, 'workspace', workspace.id)
+      guard()
       value['workspace'] = privateWorkspaceView(workspace)
       changed = true
     }
@@ -992,8 +1013,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     }
 
     if (method === 'host.describe' && !admin(actor)) {
+      guard()
       const workspace = await deps.ensureWorkspace(actor)
+      guard()
       await deps.store.claim(actor, 'workspace', workspace.id)
+      guard()
       value['cwd'] = workspace.path
       value['attachedSessions'] = deps.store.ownedIds(actor, 'session').size
       changed = true
@@ -1020,25 +1044,27 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         )
       }
       const sessionId = typeof value['sessionId'] === 'string' ? value['sessionId'] : undefined
-      if (sessionId !== undefined) await deps.store.claim(actor, 'session', sessionId)
+      if (sessionId !== undefined) { guard(); await deps.store.claim(actor, 'session', sessionId); guard() }
     }
     if (method === 'workspace.create') {
       const workspace = isRecord(value['workspace']) ? value['workspace'] : undefined
       const workspaceId = workspace !== undefined && typeof workspace['workspaceId'] === 'string'
         ? workspace['workspaceId']
         : undefined
-      if (workspaceId !== undefined) await deps.store.claim(actor, 'workspace', workspaceId)
+      if (workspaceId !== undefined) { guard(); await deps.store.claim(actor, 'workspace', workspaceId); guard() }
     }
     if (method === 'workspace.delete') {
       const workspaceId = workspaceIdOf(payload)
-      if (workspaceId !== undefined) await deps.store.release(actor, 'workspace', workspaceId)
+      if (workspaceId !== undefined) { guard(); await deps.store.release(actor, 'workspace', workspaceId); guard() }
     }
     if (method === 'subagent.list' && Array.isArray(value['entries'])) {
       const parentSessionId = typeof payload['parentSessionId'] === 'string' ? payload['parentSessionId'] : undefined
       if (parentSessionId !== undefined) {
         for (const entry of value['entries']) {
           if (isRecord(entry) && typeof entry['id'] === 'string') {
+            guard()
             await deps.store.claim(actor, 'session', entry['id'])
+            guard()
           }
         }
       }
@@ -1084,6 +1110,33 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         },
         mapDownlink: (endpoint: string, value: unknown): { value: unknown } | undefined => {
           if (!active()) return undefined
+          if (endpoint === '$events') {
+            if (!isRecord(value)) return undefined
+            if (admin(actor) || value['type'] === 'ready' || value['type'] === 'cancel') return { value }
+            const sessionId = value['type'] === 'emit' && Array.isArray(value['args']) ? remoteSessionId(value['args'])
+              : value['type'] === 'waterfall' && typeof value['agentId'] === 'string' ? value['agentId'] : undefined
+            return sessionId !== undefined && ownsSession(actor, sessionId) ? { value } : undefined
+          }
+          if (endpoint === 'workspace/follow') {
+            if (!isRecord(value)) return undefined
+            const ownsWorkspace = (id: unknown): boolean => typeof id === 'string' && workspaceAdmission.ownsWorkspace(id)
+            const ownsFrameSession = (id: unknown): boolean => typeof id === 'string' && workspaceAdmission.ownsSession(id)
+            if (value['type'] === 'baseline' && isRecord(value['value'])) {
+              const baseline = value['value']
+              return { value: { type: 'baseline', value: {
+                items: Array.isArray(baseline['items']) ? baseline['items'].filter(item => isRecord(item) && ownsWorkspace(item['workspaceId'])) : [],
+                archivedSessionIds: Array.isArray(baseline['archivedSessionIds']) ? baseline['archivedSessionIds'].filter(ownsFrameSession) : [],
+                pinnedSessionIds: Array.isArray(baseline['pinnedSessionIds']) ? baseline['pinnedSessionIds'].filter(ownsFrameSession) : [],
+              } } }
+            }
+            if (value['type'] === 'upsert') return isRecord(value['workspace']) && ownsWorkspace(value['workspace']['workspaceId']) ? { value } : undefined
+            if (value['type'] === 'remove') return ownsWorkspace(value['workspaceId']) ? { value } : undefined
+            const field = value['type'] === 'order' ? 'workspaceIds' : value['type'] === 'archived' ? 'archivedSessionIds'
+              : value['type'] === 'pinned' ? 'pinnedSessionIds' : undefined
+            if (!field || !Array.isArray(value[field])) return undefined
+            const ids = value[field].filter(field === 'workspaceIds' ? ownsWorkspace : ownsFrameSession)
+            return ids.length ? { value: { type: value['type'], [field]: ids } } : undefined
+          }
           if (endpoint !== 'session/control') return { value }
           if (!isRecord(value)) return undefined
           if (value['type'] === 'projection') return typeof value['sessionId'] === 'string' && ownsSession(actor, value['sessionId']) ? { value } : undefined
@@ -1108,6 +1161,14 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
         return Response.json({ error: 'unauthenticated' }, { status: 401 })
       }
 
+      const credentialRejection = (): Response | undefined => sameCredential(actor, deps.actorFromCookie(cookie, authorization))
+        ? undefined : Response.json({ error: 'unauthenticated' }, { status: 401 })
+      const dispatch = async (forwarded: Request, check: () => Response | undefined = credentialRejection): Promise<Response> => {
+        const denied = check()
+        if (denied) return denied
+        const response = await next(forwarded)
+        return check() ?? response
+      }
       const url = new URL(request.url)
       const endpoint = url.pathname.startsWith('/api/') ? url.pathname.slice('/api/'.length) : ''
       const method = endpoint.split('/').join('.')
@@ -1123,9 +1184,8 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
       if (method === 'session.export') {
         const sessionId = url.searchParams.get('sessionId') ?? ''
-        return admin(actor) || deps.store.owns(actor, 'session', sessionId)
-          ? next(request)
-          : denyNotFound('session-export', 'session', sessionId)
+        return dispatch(request, () => credentialRejection() ?? (admin(actor) || deps.store.owns(actor, 'session', sessionId)
+          ? undefined : denyNotFound('session-export', 'session', sessionId)))
       }
 
       if (method === 'respond') {
@@ -1142,7 +1202,7 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           return dependencyUnavailable('一次性响应校验服务暂时不可用，请稍后再试')
         }
         return pending === 'accepted'
-          ? next(request)
+          ? dispatch(request)
           : new Response('forbidden', { status: 403 })
       }
 
@@ -1152,12 +1212,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           const raw: unknown = await request.clone().json()
           if (isEnvelope(raw)) body = raw
         } catch {
-          return next(request)
+          return dispatch(request)
         }
       }
-      if (body === undefined) return next(request)
+      if (body === undefined) return dispatch(request)
       const rpcId = rpcIdOf(body)
       const payload = policyPayloadOf(isRecord(body.payload) ? body.payload : {})
+      const guard = (afterDispatch = false): void => {
+        const credentialDenied = credentialRejection()
+        if (credentialDenied) throw new ApiPolicyBoundaryError(credentialDenied)
+        // Successful deletion deliberately retires its own ownership. All other
+        // addressed operations retain resource admission through their response.
+        const denied = afterDispatch && method === 'workspace.delete' ? undefined : authorizeMethod(actor, method, payload, rpcId)
+        if (denied) throw new ApiPolicyBoundaryError(denied)
+      }
       try {
         if (actor.credential?.kind === 'api-token'
           && actor.credential.scope === 'read'
@@ -1171,21 +1239,20 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
           )
         }
 
-        const denied = authorizeMethod(actor, method, payload, rpcId)
-        if (denied !== undefined) return denied
-
+        guard()
         const budgetDenied = await chargeModelBudget(actor, method, rpcId)
         if (budgetDenied !== undefined) return budgetDenied
-
-        const rewritten = await rewriteRequest(actor, request, method, body)
+        guard()
+        const rewritten = await rewriteRequest(actor, request, method, body, () => guard())
+        guard()
         if (rewritten.response !== undefined) return rewritten.response
-        if (!sameCredential(actor, deps.actorFromCookie(cookie, authorization))) return Response.json({ error: 'unauthenticated' }, { status: 401 })
-        const lateDenied = authorizeMethod(actor, method, payload, rpcId)
-        if (lateDenied) return lateDenied
         const response = await next(rewritten.request)
-        if (!sameCredential(actor, deps.actorFromCookie(cookie, authorization))) return Response.json({ error: 'unauthenticated' }, { status: 401 })
-        return await rewriteResponse(actor, method, body, response)
+        guard(true)
+        const prepared = await rewriteResponse(actor, method, body, response, () => guard(true))
+        guard(true)
+        return prepared
       } catch (error) {
+        if (error instanceof ApiPolicyBoundaryError) return error.response
         /* This front door answers an envelope. A throw anywhere below would
            otherwise leave the web server's last-resort guard writing a bare
            400 — no rpcId, no code, no reason — which every caller reads as a

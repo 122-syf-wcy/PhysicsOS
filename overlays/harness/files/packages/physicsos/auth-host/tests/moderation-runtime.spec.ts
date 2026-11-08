@@ -44,7 +44,7 @@ async function harness(review = async (_input: any, _signal: AbortSignal): Promi
  const runtime = new ModerationRuntime(ctx, domain, auth, review)
  cleanups.push(async () => { await runtime.dispose(); runs.dispose(); await domain.close(); await backend.close(); await ctx.fiber.dispose() })
  const claim = (id: string) => auth.claimApiResource({ ...admin, userKey: 's:student', username: 'student', role: 'STUDENT' }, 'session', id)
- return { ctx, domain, auth, runtime, claim, service: runtime.service }
+ return { ctx, domain, auth, runtime, claim, runs, service: runtime.service }
 }
 const human = (text: string) => createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
 describe('moderation runtime with real Session and domain events', () => {
@@ -175,6 +175,67 @@ describe('moderation runtime with real Session and domain events', () => {
   session.append('user/message', human('safe lesson'), { surfaceOp: 'append' }); await h.runtime.flush()
   await vi.waitFor(() => expect(h.service.list(admin, {}).cases[0]?.status).toBe('allowed'), { timeout: 3_000 })
   expect(h.domain.table('moderation_cursors').get('claim:absent-history')).toMatchObject({ done: false, seq: 0 })
+ })
+
+ it('review fix: preserves failed live intake when an older immutable history cut completes, including restart', async () => {
+  const h = await harness()
+  const session = h.ctx.sessions.create(SessionId('cursor-race')); await h.claim(session.id); await h.runtime.flush()
+  const cursorTable = h.domain.table('moderation_cursors')
+  const cursor = cursorTable.get('claim:cursor-race')!
+  await cursorTable.put(cursor.id, { ...cursor, done: false })
+  const observe = h.ctx.sessionQuery.observeSession.bind(h.ctx.sessionQuery)
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  let pause = true
+  h.ctx.sessionQuery.observeSession = async (...args) => {
+    const cut = await observe(...args)
+    if (pause) { pause = false; entered.resolve(); await release.promise }
+    return cut
+  }
+  const cases = h.domain.table('moderation_cases'), put = cases.put.bind(cases)
+  const warning = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    await entered.promise
+    cases.put = async () => { throw new Error('review fixture case write failed') }
+    session.append('user/message', human('input beyond immutable cut'), { surfaceOp: 'append' })
+    await h.runtime.flush()
+    expect(h.service.list(admin, {}).total).toBe(0)
+    release.resolve(); await (h.runtime as any).history
+    expect(cursorTable.get(cursor.id)?.done).toBe(false)
+    expect(warning).toHaveBeenCalledWith('moderation: capture deferred; authoritative history retained')
+    cases.put = put
+    await h.runtime.dispose(); h.runs.dispose(); await h.domain.close()
+    const restored = await openAuthDomain(h.ctx)
+    expect(restored.table('moderation_cursors').get(cursor.id)?.done).toBe(false)
+    const restarted = new ModerationRuntime(h.ctx, restored, new AuthService(restored, DEFAULT_AUTH_CONFIG), async () => allow)
+    cleanups.push(async () => { await restarted.dispose(); await restored.close() })
+    await vi.waitFor(() => expect(restarted.service.list(admin, {}).cases[0]?.text).toBe('input beyond immutable cut'), { timeout: 3_000 })
+  } finally { release.resolve(); cases.put = put; warning.mockRestore() }
+ })
+ it.each(['sessions', 'api_tokens', 'reset_requests'] as const)('review fix: cancels a real active Agent even when disabled-account %s cleanup fails', { timeout: 15_000 }, async tableName => {
+  const h = await harness()
+  await h.ctx.plugin(LlmRuntime); await h.ctx.plugin(SessionProjectionRegistry)
+  await h.ctx.plugin(SystemPrompt); await h.ctx.plugin(ToolRuntime)
+  await h.ctx.plugin(AgentRegistry); await h.ctx.plugin(AgentLoop, { agents: [] })
+  const adapter = new MockAdapter(['hang'])
+  h.ctx.llm.registerAdapter(['mock'], adapter)
+  const root = await h.ctx.agents.create({ sessionId: SessionId('cleanup-failure'), agentOptions: { provider: 'mock', model: 'mock' } })
+  await h.claim(root.agent.id)
+  await h.auth.login({ schoolId: 's', username: 'student', password: 'bootstrap-pass' }, '127.0.0.1')
+  await h.auth.createApiToken({ ...admin, username: 'student', userKey: 's:student', role: 'STUDENT' }, { name: 'cleanup', scope: 'write' })
+  await h.auth.requestPasswordReset({ username: 'student' }, '127.0.0.1')
+  root.agent.followup(human('active provider request'))
+  await vi.waitFor(() => expect(adapter.requests).toHaveLength(1))
+  root.agent.inbox.append('next-turn', human('queued turn')); root.agent.inbox.append('next-step', human('queued steer'))
+  const table = h.domain.table(tableName), put = table.put.bind(table)
+  table.put = async () => { throw new Error('review fixture durable cleanup failed') }
+  const disabled = vi.spyOn(h.runs, 'disable')
+  try {
+    await expect(h.auth.setUserStatus(admin, 's', 'student', { status: 'disabled' })).rejects.toThrow('review fixture durable cleanup failed')
+    expect(h.domain.table('users').get('s:student')?.status).toBe('disabled')
+    expect(disabled).toHaveBeenCalledOnce()
+    expect(adapter.requests[0]!.signal?.aborted).toBe(true)
+    expect(root.agent.inbox.nextTurn).toHaveLength(0); expect(root.agent.inbox.nextStep).toHaveLength(0)
+  } finally { table.put = put as never; root.agent.cancel({ kind: 'hook', reason: 'test-cleanup' }, { keepInbox: false }); await root.agent.whenIdle() }
  })
 
 })

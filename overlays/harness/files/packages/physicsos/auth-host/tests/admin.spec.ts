@@ -8,7 +8,8 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { AuthService } from '../src/service.ts'
+import { AuthService, DEFAULT_AUTH_CONFIG } from '../src/service.ts'
+import { memoryDomain, school, user } from './security-fixture.ts'
 import { adminRoutes, authRoutes } from '../src/routes.ts'
 import { hashPassword } from '../src/passwords.ts'
 import { userKey } from '../src/domain.ts'
@@ -399,5 +400,24 @@ describe('anonymous form rate limit', () => {
     expect((await post(auth, '/login', {
       schoolId: 'GZU', username: 'teacher1', password: 'bootstrap-pass',
     })).status).toBe(200)
+  })
+})
+
+
+describe('disable cleanup failures', () => {
+  it('review fix: preserves both durable and live cleanup failures after persisted disable', async () => {
+    const domain = memoryDomain()
+    await domain.table('schools').put('s', school('s', 'School'))
+    await domain.table('users').put('s:root', user('s', 'root', 'SUPER_ADMIN'))
+    await domain.table('users').put('s:student', user('s', 'student', 'STUDENT'))
+    const storageFailure = new Error('review durable cleanup failure'), liveFailure = new Error('review live cleanup failure')
+    let attempts = 0
+    const service = new AuthService(domain, DEFAULT_AUTH_CONFIG, { onUserDisabled: async () => { attempts += 1; throw liveFailure } })
+    await service.login({ schoolId: 's', username: 'student', password: 'bootstrap-pass' }, '127.0.0.1')
+    domain.table('sessions').put = async () => { throw storageFailure }
+    await expect(service.setUserStatus({ userKey: 's:root', schoolId: 's', username: 'root', role: 'SUPER_ADMIN' }, 's', 'student', { status: 'disabled' }))
+      .rejects.toMatchObject({ errors: [storageFailure, liveFailure] })
+    expect(attempts).toBe(1)
+    expect(domain.table('users').get('s:student')?.status).toBe('disabled')
   })
 })

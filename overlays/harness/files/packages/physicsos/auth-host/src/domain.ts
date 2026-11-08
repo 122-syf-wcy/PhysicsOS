@@ -658,12 +658,14 @@ export interface ModerationCursor {
   sessionId: string
   ownerKey: string
   kind: 'claim' | 'scan'
+  generation?: number | undefined
   seq: number
   index: number
   done: boolean
 }
 const moderationCursor = z.object({
   id: z.string(), sessionId: z.string(), ownerKey: z.string(), kind: z.enum(['claim', 'scan']),
+  generation: z.number().int().min(0).optional(),
   seq: z.number().int().min(0), index: z.number().int().min(0), done: z.boolean(),
 })
 

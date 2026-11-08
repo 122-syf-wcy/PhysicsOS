@@ -17781,7 +17781,7 @@ index 0000000000..27f5ebbd14
 +  expect(actual).toEqual(expected)
 +})
 diff --git a/packages/api/gateway/src/stream-server.ts b/packages/api/gateway/src/stream-server.ts
-index 9454f03f2d..72882e0600 100644
+index 9454f03f2d..8f1c6823d2 100644
 --- a/packages/api/gateway/src/stream-server.ts
 +++ b/packages/api/gateway/src/stream-server.ts
 @@ -77,7 +77,7 @@ export class RemoteStreamMuxServer {
@@ -17865,7 +17865,7 @@ index 9454f03f2d..72882e0600 100644
        inbox,
        stop: (reason) => {
          abort.abort(reason)
-@@ -230,9 +245,24 @@ class RemoteStreamMuxConnection {
+@@ -230,9 +245,26 @@ class RemoteStreamMuxConnection {
    ): Promise<void> {
      let outcome: { readonly failed: false } | { readonly failed: true; readonly error: unknown }
      try {
@@ -17887,19 +17887,26 @@ index 9454f03f2d..72882e0600 100644
        for await (const value of source) {
 -        await this.send({ type: 'item', streamId, value })
 +        if (!active.admitted()) throw new Error('Remote stream admission withdrawn')
-+        const mapped = this.peer.streamAdmission ? this.peer.streamAdmission.mapDownlink(endpoint, value) : { value }
-+        if (mapped) await this.send({ type: 'item', streamId, value: mapped.value }, active.admitted)
++        await this.send({ type: 'item', streamId, value }, active.admitted, () => {
++          const mapped = this.peer.streamAdmission ? this.peer.streamAdmission.mapDownlink(endpoint, value) : { value }
++          return mapped ? { type: 'item', streamId, value: mapped.value } : undefined
++        })
        }
        outcome = { failed: false }
      } catch (error) {
-@@ -271,7 +301,22 @@ class RemoteStreamMuxConnection {
+@@ -271,18 +303,42 @@ class RemoteStreamMuxConnection {
      }
    }
 
 -  private send(message: RemoteStreamServerMessage): Promise<void> {
+-    let text: string
 +  private checkActive(): boolean {
 +    if (this.invalidated) return false
-+    try {
+     try {
+-      text = JSON.stringify(message)
+-    } catch (cause) {
+-      return Promise.reject(new Error('api gateway: Remote stream item is not JSON serializable', { cause }))
+-    }
 +      if (this.peer.authLifetime && !this.peer.authLifetime.isActive()) { this.invalidate(); return false }
 +    } catch { this.invalidate(); return false }
 +    return true
@@ -17912,19 +17919,31 @@ index 9454f03f2d..72882e0600 100644
 +    this.socket.terminate()
 +  }
 +
-+  private send(message: RemoteStreamServerMessage, admitted?: () => boolean): Promise<void> {
-     let text: string
-     try {
-       text = JSON.stringify(message)
-@@ -279,7 +324,7 @@ class RemoteStreamMuxConnection {
-       return Promise.reject(new Error('api gateway: Remote stream item is not JSON serializable', { cause }))
-     }
++  private send(
++    message: RemoteStreamServerMessage,
++    admitted?: () => boolean,
++    prepare?: () => RemoteStreamServerMessage | undefined,
++  ): Promise<void> {
      const delivery = this.writes.then(() => new Promise<void>((resolve, reject) => {
 -      if (this.socket.readyState !== WebSocket.OPEN) {
 +      if (!this.checkActive() || (admitted && !admitted()) || this.socket.readyState !== WebSocket.OPEN) {
          reject(new Error('api gateway: Remote stream socket is closed'))
          return
        }
++      let text: string
++      try {
++        // Other logical streams may have held this queue since the source yielded.
++        // Recompute frame ownership immediately before serialization and send.
++        const current = prepare ? prepare() : message
++        if (current === undefined) { resolve(); return }
++        text = JSON.stringify(current)
++      } catch (cause) {
++        reject(new Error('api gateway: Remote stream item is not JSON serializable', { cause }))
++        return
++      }
+       this.socket.send(text, (error) => {
+         if (error) reject(error)
+         else resolve()
 diff --git a/packages/api/gateway/tests/gateway-stream.host.spec.ts b/packages/api/gateway/tests/gateway-stream.host.spec.ts
 index 87aaaa9f75..d30759c84d 100644
 --- a/packages/api/gateway/tests/gateway-stream.host.spec.ts
@@ -18060,13 +18079,60 @@ index 87aaaa9f75..d30759c84d 100644
    const actual = await importOriginal<typeof import('node:crypto')>()
    return { ...actual, randomUUID: vi.fn(actual.randomUUID) }
 diff --git a/packages/api/gateway/tests/stream-server.host.spec.ts b/packages/api/gateway/tests/stream-server.host.spec.ts
-index 469aa25b0c..435d3a9b6e 100644
+index 469aa25b0c..a48ff20eb5 100644
 --- a/packages/api/gateway/tests/stream-server.host.spec.ts
 +++ b/packages/api/gateway/tests/stream-server.host.spec.ts
-@@ -27,6 +27,59 @@ afterEach(async () => {
+@@ -4,6 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
+ import { remoteErrorOf, type PeerId, type PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+ import { afterEach, describe, expect, it, vi } from 'vitest'
+ import WebSocket from 'ws'
++import { createApiPolicy } from '../../../physicsos/auth-host/src/api-policy.ts'
+ import {
+   RemoteStreamMuxServer,
+   type RemoteStreamFailureMapper,
+@@ -27,6 +28,98 @@ afterEach(async () => {
  })
 
  describe('Remote stream mux server carrier lifecycle', () => {
++  it.each([
++    ['session/control', { type: 'projection', sessionId: 'owned', value: 'review-private' }],
++    ['session/control', { type: 'baseline', value: { projections: { owned: { inbox: 'review-private' } } } }],
++    ['workspace/follow', { type: 'upsert', workspace: { workspaceId: 'owned', title: 'review-private' } }],
++    ['workspace/follow', { type: 'baseline', value: { items: [{ workspaceId: 'owned', title: 'review-private' }], archivedSessionIds: [], pinnedSessionIds: [] } }],
++    ['$events', { type: 'emit', event: 'agent/status', args: [{ sessionId: 'owned', status: 'review-private' }] }],
++    ['$events', { type: 'waterfall', event: 'question', eventId: 'event', agentId: 'owned', request: { text: 'review-private' } }],
++  ])('review fix: rechecks queued %s frame ownership at the actual socket write', async (endpoint, frame) => {
++    const peer = await fixturePeer(), owned = new Set(['owned'])
++    const actor = { userKey: 's:user', schoolId: 's', username: 'user', role: 'STUDENT' as const }
++    const policy = createApiPolicy({ actorFromCookie: () => actor, actorFromRequest: () => actor,
++      store: { owns: (_actor, _kind, id) => owned.has(id), ownedIds: () => owned, claim: async () => {}, release: async () => {} },
++      ensureWorkspace: async () => { throw new Error('unused') } })
++    const admission = policy.admitUpgrade({ headers: {} })!
++    let opens = 0
++    const yielded = Promise.withResolvers<void>()
++    const entry = await startMux(async () => (async function* () {
++      if (++opens === 1) yield { type: 'baseline', value: { projections: {} } }
++      else { yielded.resolve(); yield frame }
++    })(), 2_000, 262_144, { ...peer, ...admission })
++    const client = await connect(entry.url), frames = collectFrames(client), socket = acceptedSocket(entry.mux)
++    const original = socket.send.bind(socket)
++    let unblock: ((error?: Error) => void) | undefined
++    const send = vi.spyOn(socket, 'send').mockImplementation(((data: any, callback: (error?: Error) => void) => {
++      if (!unblock) { unblock = callback; original(data, () => {}) }
++      else original(data, callback)
++    }) as any)
++    try {
++      client.send(openFrame('blocker', 'session/control'))
++      await vi.waitFor(() => expect(unblock).toBeDefined())
++      client.send(openFrame('protected', endpoint as string))
++      await yielded.promise
++      await new Promise<void>(resolve => setImmediate(resolve))
++      owned.clear(); unblock!()
++      await vi.waitFor(() => expect(frames.some(value => value.streamId === 'protected' && value.type === 'end')).toBe(true))
++      expect(JSON.stringify(frames)).not.toContain('review-private')
++    } finally { unblock?.(); send.mockRestore(); client.close(); await once(client, 'close') }
++  })
++
 +  it('invalidates a quiet authenticated socket and cancels all streams without disposing the shared peer', async () => {
 +    const peer = await fixturePeer()
 +    let active = true

@@ -160,6 +160,45 @@ describe('PhysicsOS shared /api policy', () => {
     // The real history controller performs the remaining parent/projection validation.
     expect(next).toHaveBeenCalledOnce()
   })
+  it('review fix: refuses a revoked credential after delayed response JSON and does not claim its session', async () => {
+    let active = true
+    const store = makeStore()
+    const policy = createApiPolicy({ actorFromCookie: () => active ? admin : null, actorFromRequest: () => active ? admin : null, store,
+      ensureWorkspace: async () => workspace })
+    const read = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+    const response = rpc({ sessionId: 'late-created' })
+    vi.spyOn(response, 'clone').mockReturnValue({ json: async () => { read.resolve(); await release.promise; return { result: { ok: true, value: { sessionId: 'late-created' } } } } } as Response)
+    const result = policy.wrapFetch(async () => response)(request('session.create', {}, 'admin'))
+    await read.promise; active = false; release.resolve()
+    expect((await result).status).toBe(401)
+    expect(store.claims).toEqual([])
+  })
+  it.each(['workspace.list', 'workspace.initializeDefault', 'host.describe'])('review fix: checks credentials after response-side ensureWorkspace for %s', async method => {
+    let active = true
+    const store = makeStore(), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+    const policy = createApiPolicy({ actorFromCookie: () => active ? student : null, actorFromRequest: () => active ? student : null, store,
+      ensureWorkspace: async () => { entered.resolve(); await release.promise; return workspace } })
+    const result = policy.wrapFetch(async () => rpc({ items: [] }))(request(method))
+    await entered.promise; active = false; release.resolve()
+    expect((await result).status).toBe(401)
+    expect(store.claims).toEqual([])
+  })
+  it('review fix: rechecks ownership after an addressed history handler returns', async () => {
+    const store = makeStore({ session: ['owned'] }), entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+    const { policy } = makePolicy({ store })
+    const result = policy.wrapFetch(async () => { entered.resolve(); await release.promise; return rpc({ events: ['private'] }) })(
+      request('session.page', { args: { request: { address: { kind: 'session', sessionId: 'owned' } } } }))
+    await entered.promise; await store.release(student, 'session', 'owned'); release.resolve()
+    const body = await (await result).json()
+    expect(body.result.ok).toBe(false)
+    expect(JSON.stringify(body)).not.toContain('private')
+  })
+  it('review fix: keeps a successful intentional resource deletion successful', async () => {
+    const store = makeStore({ workspace: ['owned'] })
+    const { policy } = makePolicy({ store })
+    const result = await policy.wrapFetch(async () => { await store.release(student, 'workspace', 'owned'); return rpc({ deleted: true }) })(request('workspace.delete', { workspaceId: 'owned' }))
+    expect(await rpcValueOf(result)).toEqual({ deleted: true })
+  })
   it('refuses an anonymous request before dispatch', async () => {
     const next = vi.fn(async () => rpc({}))
     const { policy } = makePolicy({ actor: null })
