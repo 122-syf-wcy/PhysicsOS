@@ -26,6 +26,16 @@ workspaces. A non-admin account owns every session it creates and exactly one
 host-created private workspace under `workspaceRoot`; legacy/unowned resources
 remain visible only to a `SUPER_ADMIN`.
 
+## Conversation moderation
+
+`ModerationService` in `src/moderation/service.ts` records trusted human-message text against exact `api_resources` ownership. `moderation_cases` and `moderation_settings` are separate tables in domain version0; stable session/message hashes deduplicate capture, and interrupted `reviewing` jobs are recovered. Cases retain up to12,000 text characters and4,000 context characters with explicit truncation flags. The10,000-case capacity preserves existing evidence and exposes `CAPTURE_CAPACITY`, `captureFailures` and `lastCaptureFailure` rather than evicting records. Case DTOs derive `accountStatus` from the live account; optional session titles remain admin-only.
+
+`createModerationReviewer(llm, route)` uses the existing deployment provider/model with a fixed education-aware policy, JSON data and no tools. Each call is bounded to4,096 output tokens,8,000 output characters and45seconds, including an abort plus timeout race for non-cooperative adapters. Calls run serially with a15second gap. Strict output fields and literal-substring evidence are required. Only untruncated, severity-none allow results with confidence>=0.8 are cleared automatically; other results and failures require human review. Provider diagnostics are replaced by safe machine codes; raw evidence is confined to moderation records.
+
+`moderationRoutes(service, auth)` is mounted under `/physicsos/admin/moderation`: `GET cases`, `GET cases/:id`, `POST cases/:id/decision`, `POST cases/:id/retry`, `GET settings`, `POST settings`, and `POST scan`. Every request requires a live `SUPER_ADMIN` Cookie session; Bearer tokens cannot authorize it. Writes reuse the existing JSON/CSRF gate and responses are private/no-store. Lists return `{cases,total,page,limit}` with limit<=50; other routes return the corresponding DTO directly. Historical scanning requires a trusted `scan(limit)` dependency and is capped at20 messages; its absence returns `SCAN_UNAVAILABLE`.
+
+Decisions require the current version and a nonempty reason. A ban calls `AuthService.setUserStatus` before recording the decision, preventing self/SUPER_ADMIN suspension and invalidating account credential resolution. Repeating an interrupted ban reconciles the already-disabled account. Per-case serialization and version comparisons prevent late model output from replacing human decisions. Moderation audit details contain only structured case/action/category data. The single-writer storage domain remains the deployment assumption; API-token revocation and live-agent/stream termination belong to the admission/runtime integration.
+
 ## Shared `/api` policy
 
 The generic Harness API is a first-class authenticated surface when this host is mounted:

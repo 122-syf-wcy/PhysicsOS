@@ -41,6 +41,7 @@
   },
   "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
+    "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",

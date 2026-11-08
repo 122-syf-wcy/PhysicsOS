@@ -108,6 +108,8 @@ interface MergePlan {
 interface MergeTableAdapter {
   readonly name: string
   readonly table: MergeTable
+  /** Evidence tables distinguish structured references from literal quoted text. */
+  readonly references?: (key: string, row: MergeRecord, source: string) => boolean
   readonly plan: (
     key: string,
     row: MergeRecord,
@@ -244,6 +246,7 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
   const devices = asMergeTable(auth.table('devices'))
   const revocations = asMergeTable(auth.table('device_revocations'))
   const apiResources = asMergeTable(auth.table('api_resources'))
+  const moderationCases = asMergeTable(auth.table('moderation_cases'))
   const schoolRequests = asMergeTable(auth.table('school_requests'))
   const pendingRegistrations = asMergeTable(auth.table('pending_registrations'))
 
@@ -511,6 +514,38 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
     contextual('auth.pending_registrations', pendingRegistrations, () => undefined),
   )
 
+  // Text/context/reason/evidence are historical quotations, not tenant references.
+  // Rewriting or rejecting them based on their content would lose moderation evidence.
+  const moderationReferences = (_key: string, row: MergeRecord, source: string): boolean =>
+    row.schoolId === source || containsSourceToken(row.ownerKey, source)
+      || (isRecord(row.decision) && containsSourceToken(row.decision.actorKey, source))
+  adapters.push({
+    name: 'auth.moderation_cases', table: moderationCases, references: moderationReferences,
+    plan: (key, row, source, target) => {
+      const name = 'auth.moderation_cases'
+      if (!moderationReferences(key, row, source)) return undefined
+      const ownerMoves = row.schoolId === source || containsSourceToken(row.ownerKey, source)
+      if (ownerMoves) assertSchoolId(row, source, name)
+      const decision = isRecord(row.decision) ? row.decision : undefined
+      if (typeof row.version !== 'number' || !Number.isInteger(row.version) || row.version < 1) {
+        fail('MERGE_PREFIX_MISMATCH', `${name}: invalid case version`)
+      }
+      const next: MergeRecord = {
+        ...row,
+        ...(ownerMoves ? {
+          schoolId: target, ownerKey: rewriteUserKeyField(row, 'ownerKey', source, target, name),
+        } : {}),
+        ...(decision ? { decision: {
+          ...decision, actorKey: rewriteOptionalUserKeyField(decision, 'actorKey', source, target, name),
+        } } : {}),
+        version: (row.version as number) + 1,
+        status: row.status === 'reviewing' ? 'pending' : row.status,
+      }
+      if (moderationReferences(key, next, source)) fail('MERGE_UNHANDLED_REFERENCE', `${name}: structured source reference remains`)
+      return { table: name, fromKey: key, toKey: key, before: row, after: next }
+    },
+  })
+
   adapters.push(
     withSchool('class.classes', classes, (key, row, source, target) => ({
       key,
@@ -698,7 +733,7 @@ const buildPlan = (
     for (const [key, row] of adapter.table.entries()) {
       const operation = adapter.plan(key, row, sourceSchoolId, targetSchoolId)
       if (operation === undefined) {
-        if (containsSourceToken({ key, row }, sourceSchoolId)) {
+        if (adapter.references?.(key, row, sourceSchoolId) ?? containsSourceToken({ key, row }, sourceSchoolId)) {
           if (adapter.name === 'auth.school_requests') {
             fail(
               'MERGE_UNHANDLED_REFERENCE',

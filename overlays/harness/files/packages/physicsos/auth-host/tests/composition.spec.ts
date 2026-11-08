@@ -227,12 +227,14 @@ describe('real Loader composition', () => {
     })
     expect(registered.status).toBe(201)
     const cookie = registered.headers.get('set-cookie')!.split(';')[0]!
+    const me = await fetch(`${base}/physicsos/auth/me`, { headers: { cookie } })
+    expect(me.status, await me.clone().text()).toBe(200)
 
     const created = await post('/api/session.create', rpc('create', 'session.create', {
       agentPreset: 'standard',
       cwd: '/etc',
     }), cookie)
-    expect(created.status).toBe(200)
+    expect(created.status, await created.clone().text()).toBe(200)
     expect(await created.json()).toMatchObject({
       result: { ok: true, value: { sessionId: 'owned-session', agentPreset: 'physics-student' } },
     })

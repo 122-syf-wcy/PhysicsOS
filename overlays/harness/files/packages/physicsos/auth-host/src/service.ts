@@ -53,6 +53,8 @@ export type AuthErrorCode =
   | 'REGISTRATION_CLOSED' | 'INVITE_REQUIRED' | 'INVALID_INVITE_CODE'
   | 'TWO_FACTOR_REQUIRED' | 'INVALID_TWO_FACTOR_CHALLENGE' | 'INVALID_TWO_FACTOR_CODE'
   | 'TWO_FACTOR_ALREADY_ENABLED' | 'TOKEN_SCOPE_REQUIRED'
+  | 'VERSION_CONFLICT' | 'CAPTURE_CAPACITY' | 'DECISION_FINAL'
+  | 'OWNER_CHANGED' | 'RETRY_UNAVAILABLE' | 'SCAN_UNAVAILABLE'
 
 /** The only failure shape the wire exposes — `{error:{code,message,...details}}`. */
 export class AuthError extends Error {

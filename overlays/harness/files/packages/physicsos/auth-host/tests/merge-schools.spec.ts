@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenedMergeFixture } from './merge-schools.fixture.ts'
 import {
   OPERATOR_KEY,
@@ -11,6 +11,9 @@ import { SchoolMergeError, mergeSchoolTenants } from '../src/merge-schools.ts'
 import { classMergeDomain, learningMergeDomain } from '../src/merge-schools-domain.ts'
 import { classDomain } from '../../class-host/src/domain.ts'
 import { learningDomain } from '../../learning-host/src/domain.ts'
+import { AuthService, DEFAULT_AUTH_CONFIG } from '../src/service.ts'
+import { ModerationService } from '../src/moderation/service.ts'
+import type { ModerationReview } from '../src/moderation/types.ts'
 
 let fixture: OpenedMergeFixture | undefined
 
@@ -82,6 +85,63 @@ const options = (apply = false) => ({
 })
 
 describe('school tenant merge', () => {
+  it('remaps moderation ownership and decision actors while preserving literal evidence and global settings', async () => {
+    fixture = await openMergeFixture()
+    await seedMergeData(fixture.stores)
+    const cases = fixture.stores.auth.table('moderation_cases')
+    const evidence = `${SOURCE_SCHOOL_ID}:quoted text must stay verbatim`
+    const row = {
+      id: 'moderation-1', sessionId: 'session-1', messageId: 'message-1',
+      ownerKey: `${SOURCE_SCHOOL_ID}:alice`, schoolId: SOURCE_SCHOOL_ID, username: 'alice', userId: 'user_alice',
+      text: evidence, context: SOURCE_SCHOOL_ID, textTruncated: false, contextTruncated: false,
+      status: 'dismissed' as const, version: 7, createdAt: '2026-09-26', updatedAt: '2026-09-26',
+      decision: { decision: 'dismiss' as const, reason: SOURCE_SCHOOL_ID, actorKey: `${SOURCE_SCHOOL_ID}:teacher`, decidedAt: '2026-09-26' },
+      review: { risk: 'review' as const, category: 'other' as const, severity: 'low' as const, confidence: 0.5, reason: SOURCE_SCHOOL_ID, evidence: [evidence] },
+    }
+    await cases.put(row.id, row)
+    await cases.put('moderation-unrelated', { ...row, id: 'moderation-unrelated', ownerKey: `${TARGET_SCHOOL_ID}:alice`, schoolId: TARGET_SCHOOL_ID, decision: { ...row.decision, actorKey: OPERATOR_KEY } })
+    const settings = { version: 3, enabled: false, captureFailures: 2, updatedAt: '2026-09-26' }
+    await fixture.stores.auth.table('moderation_settings').put('default', settings)
+    await mergeSchoolTenants(fixture.stores, options(true))
+    expect(cases.get(row.id)).toMatchObject({
+      id: row.id, userId: 'user_alice', ownerKey: `${TARGET_SCHOOL_ID}:alice`, schoolId: TARGET_SCHOOL_ID, version: 8,
+      text: evidence, context: SOURCE_SCHOOL_ID, review: row.review,
+      decision: { ...row.decision, actorKey: `${TARGET_SCHOOL_ID}:teacher` },
+    })
+    expect(cases.get('moderation-unrelated')!.version).toBe(7)
+    expect(fixture.stores.auth.table('moderation_settings').get('default')).toEqual(settings)
+    expect((await mergeSchoolTenants(fixture.stores, options(true))).status).toBe('already-merged')
+  })
+
+  it('returns remapped in-flight moderation jobs to pending and ignores their late completion', async () => {
+    fixture = await openMergeFixture()
+    await seedMergeData(fixture.stores)
+    let finish!: (result: ModerationReview) => void
+    let first = true
+    let clock = Date.now()
+    const safe: ModerationReview = { risk: 'allow', category: 'none', severity: 'none', confidence: 0.99, reason: 'education', evidence: [] }
+    const auth = new AuthService(fixture.stores.auth, DEFAULT_AUTH_CONFIG)
+    const service = new ModerationService(fixture.stores.auth, auth, { now: () => new Date(clock), review: async () => {
+      if (!first) return safe
+      first = false
+      return new Promise<ModerationReview>(resolve => { finish = resolve })
+    } })
+    const actor = { userKey: OPERATOR_KEY, schoolId: 'PHYSICSOS-OPEN', username: 'ops-admin', role: 'SUPER_ADMIN' as const }
+    const id = (await service.capture({ sessionId: 'session-1', messageId: 'late', text: 'safe education' }))!
+    const model = service.processNext()
+    await vi.waitFor(() => expect(service.detail(actor, id).status).toBe('reviewing'))
+    const version = service.detail(actor, id).version
+    try {
+      await mergeSchoolTenants(fixture.stores, options(true))
+      expect(service.detail(actor, id)).toMatchObject({ ownerKey: `${TARGET_SCHOOL_ID}:alice`, status: 'pending', version: version + 1 })
+    } finally { finish(safe); await model }
+    expect(service.detail(actor, id).status).toBe('pending')
+    await expect(service.decide(actor, id, { version, decision: 'dismiss', reason: 'stale' })).rejects.toMatchObject({ status: 409 })
+    clock += 15_001
+    expect(await service.processNext()).toBe(true)
+    expect(service.detail(actor, id).status).toBe('allowed')
+  })
+
   it('covers the real class and learning domain table sets', () => {
     expect(Object.keys(classMergeDomain.tables)).toEqual(Object.keys(classDomain.tables))
     expect(Object.keys(learningMergeDomain.tables)).toEqual(Object.keys(learningDomain.tables))

@@ -76,6 +76,8 @@ const KNOWN_TABLES: Readonly<Record<
     'devices',
     'device_revocations',
     'api_resources',
+    'moderation_cases',
+    'moderation_settings',
   ]),
   physicsos_class: new Set(['classes', 'memberships', 'assignments', 'submissions']),
   physicsos_learning: new Set(['attempts', 'saved_scenes']),

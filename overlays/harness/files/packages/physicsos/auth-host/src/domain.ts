@@ -10,6 +10,8 @@
 import { z } from 'zod'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
+import { moderationCaseSchema, moderationSettingsSchema } from './moderation/model.ts'
+import type { ModerationCaseRecord, ModerationSettings } from './moderation/types.ts'
 
 const role = z.enum(['STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'])
 
@@ -675,6 +677,8 @@ export const authDomain = defineDomain({
     devices: domainTable<string, DeviceRecord>(device),
     device_revocations: domainTable<string, DeviceRevocation>(deviceRevocation),
     api_resources: domainTable<string, ApiResourceOwner>(apiResourceOwner),
+    moderation_cases: domainTable<string, ModerationCaseRecord>(moderationCaseSchema),
+    moderation_settings: domainTable<string, ModerationSettings>(moderationSettingsSchema),
   },
 })
 

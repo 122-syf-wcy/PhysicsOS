@@ -73,7 +73,7 @@ const segment = (parts: readonly string[], index: number): string => {
 }
 
 /** Reads a capped JSON body; over-limit and non-JSON fail as BAD_REQUEST. */
-const readJson = async (req: IncomingMessage): Promise<unknown> => {
+export const readJson = async (req: IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
@@ -94,7 +94,7 @@ const readJson = async (req: IncomingMessage): Promise<unknown> => {
  * form cannot send `content-type: application/json`, and any Origin header
  * that does appear must match the request's own host.
  */
-const checkCsrf = (req: IncomingMessage, trustedProxies: readonly string[]): void => {
+export const checkCsrf = (req: IncomingMessage, trustedProxies: readonly string[]): void => {
   const type = req.headers['content-type']
   if (typeof type !== 'string'
     || type.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
