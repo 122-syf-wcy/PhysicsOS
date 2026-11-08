@@ -124,6 +124,9 @@ export class ModerationService {
     if (this.work.processing || !this.readSettings().enabled
       || (this.work.lastCompleted !== undefined && this.now().getTime() - this.work.lastCompleted < 15_000)) return false
     this.work.processing = true
+    // Disable must see the cancellation boundary before any durable claim await.
+    const controller = new AbortController()
+    this.work.active = controller
     let didRun = false
     try {
       const selected = [...this.cases.entries()].map(([, row]) => row)
@@ -139,8 +142,6 @@ export class ModerationService {
       })
       if (!claimed) return false
       didRun = true
-      const controller = new AbortController()
-      this.work.active = controller
       let review: ModerationCaseRecord['review']
       let error: string | undefined
       try {

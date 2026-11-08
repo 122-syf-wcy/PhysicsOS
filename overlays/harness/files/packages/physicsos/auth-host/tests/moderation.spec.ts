@@ -97,6 +97,30 @@ describe('moderation capture and persistence', () => {
     expect(service.detail(admin, id).status).toBe('pending')
     await expect(service.setEnabled(admin, { version: settings.version, enabled: true })).rejects.toMatchObject({ status: 409 })
   })
+  it('does not invoke a reviewer when disable completes during the durable claim', async () => {
+    let reviewerCalls = 0
+    const { service, domain } = await harness(async () => { reviewerCalls += 1; return allow })
+    const id = await capture(service)
+    const cases = domain.table('moderation_cases')
+    const put = cases.put.bind(cases)
+    let entered!: () => void
+    let release!: () => void
+    const claiming = new Promise<void>(resolve => { entered = resolve })
+    const paused = new Promise<void>(resolve => { release = resolve })
+    cases.put = async (key, row) => {
+      if (row.status === 'reviewing') { entered(); await paused }
+      return put(key, row)
+    }
+    const processing = service.processNext()
+    await claiming
+    try {
+      await service.setEnabled(admin, { version: service.settings(admin).version, enabled: false })
+      expect(service.settings(admin).enabled).toBe(false)
+    } finally { release() }
+    expect(await processing).toBe(true)
+    expect(reviewerCalls).toBe(0)
+    expect(service.detail(admin, id)).toMatchObject({ status: 'error', error: 'REVIEW_DISABLED' })
+  })
   it('flags text-only or context-only truncation and allows exact caps at the0.8 confidence boundary', async () => {
     const { service, tick } = await harness(async () => ({ ...allow, confidence: 0.8 }))
     const contextOnly = await capture(service, 'context-only', 'education', '理'.repeat(4_001))
