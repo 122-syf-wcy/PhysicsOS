@@ -106,7 +106,7 @@ const bootstrapAdmin = z.object({
 
 export const Config: z<Config> = z.object({
   moderationEnabled: z.boolean().default(true),
-  moderationProvider: z.string().default('deepseek-official'),
+  moderationProvider: z.string().default('physicsos-pool'),
   moderationModel: z.string().default('deepseek-v4.1-flash'),
   sessionTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.sessionTtlMs),
   rememberTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.rememberTtlMs),
@@ -190,7 +190,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const moderation = await ModerationRuntime.create(ctx, domain, service, (input, signal) => {
       const llm = ctx.get('llm')
       if (!llm) throw new ModerationModelError('REVIEW_FAILED')
-      return createModerationReviewer(llm, { provider: config.moderationProvider ?? 'deepseek-official', model: config.moderationModel ?? 'deepseek-v4.1-flash' })(input, signal)
+      return createModerationReviewer(llm, { provider: config.moderationProvider ?? 'physicsos-pool', model: config.moderationModel ?? 'deepseek-v4.1-flash' })(input, signal)
     }, () => ctx.get('llm') !== undefined)
     yield () => moderation.dispose()
 

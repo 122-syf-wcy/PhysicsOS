@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import Storage from '@deepseek-ai/dsh-storage'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
@@ -51,6 +51,12 @@ async function capture(service: ModerationService, messageId = 'm', text = input
 class ScriptAdapter extends LlmAdapter {
   requests: GenerateOptions[] = []
   constructor(private script: StreamChunk[] | ((options: GenerateOptions) => AsyncIterable<StreamChunk>)) { super() }
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: model, reasoning: {
+      efforts: [{ id: ReasoningEffortId('none'), name: 'None' }, { id: ReasoningEffortId('high'), name: 'High' }],
+      defaultEffort: ReasoningEffortId('high'),
+    } })
+  }
   override async * stream(options: GenerateOptions) {
     this.requests.push(options)
     if (Array.isArray(this.script)) yield * this.script
@@ -237,11 +243,11 @@ describe('moderation capture and persistence', () => {
 })
 
 describe('strict no-tools reviewer through real LLM runtime', () => {
-  it('allows benign education and sends identity-free JSON data to a fixed no-tools route', async () => {
+  it('allows benign education with no reasoning despite the provider high default and sends identity-free JSON to a fixed no-tools route', async () => {
     const { review, adapter } = await classifier(script())
     expect(await review(input, new AbortController().signal)).toEqual(allow)
     const options = adapter.requests[0]!
-    expect(options).toMatchObject({ provider: 'review-route', model: 'fixed-model', maxTokens: 4096 })
+    expect(options).toMatchObject({ provider: 'review-route', model: 'fixed-model', reasoningEffort: 'none', maxTokens: 4096 })
     expect(options.tools ?? []).toEqual([])
     expect(options.system).toContain('教育')
     const content = options.messages[0]!.content[0]!
