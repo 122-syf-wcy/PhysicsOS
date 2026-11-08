@@ -657,14 +657,17 @@ export interface ModerationCursor {
   id: string
   sessionId: string
   ownerKey: string
-  kind: 'claim' | 'scan'
+  kind: 'claim' | 'scan' | 'activation'
+  /** Inclusive server epoch milliseconds for automatic intake of pre-existing ownership. */
+  since?: number | undefined
   generation?: number | undefined
   seq: number
   index: number
   done: boolean
 }
 const moderationCursor = z.object({
-  id: z.string(), sessionId: z.string(), ownerKey: z.string(), kind: z.enum(['claim', 'scan']),
+  id: z.string(), sessionId: z.string(), ownerKey: z.string(), kind: z.enum(['claim', 'scan', 'activation']),
+  since: z.number().int().min(0).optional(),
   generation: z.number().int().min(0).optional(),
   seq: z.number().int().min(0), index: z.number().int().min(0), done: z.boolean(),
 })

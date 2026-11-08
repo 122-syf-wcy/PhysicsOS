@@ -388,6 +388,45 @@ describe('versioned manual moderation', () => {
 })
 
 describe('moderation Cookie routes', () => {
+  it.each([
+    { credential: 'read-token', action: 'read' },
+    { credential: 'invalid-bearer', action: 'read' },
+    { credential: 'read-token', action: 'settings' },
+    { credential: 'invalid-bearer', action: 'settings' },
+    { credential: 'read-token', action: 'ban' },
+    { credential: 'invalid-bearer', action: 'ban' },
+  ] as const)('final credential fix: rejects a SUPER_ADMIN Cookie with $credential for $action', async ({ credential, action }) => {
+    const { service, auth, domain } = await harness()
+    const handler = moderationRoutes(service, auth)
+    const server = createServer((req, res) => { void handler(req, res) })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    cleanups.push(() => new Promise<void>(resolve => server.close(() => resolve())))
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/physicsos/admin/moderation`
+    const login = await auth.login({ schoolId: 's', username: 'root', password: 'bootstrap-pass' }, '127.0.0.1')
+    if ('twoFactorRequired' in login) throw new Error('unexpected challenge')
+    const cookie = `physicsos_session=${login.token}`
+    const token = await auth.createApiToken(admin, { name: 'read-only-super-admin', scope: 'read' })
+    const authorization = credential === 'read-token' ? `Bearer ${token.secret}` : 'Bearer invalid-token'
+    const beforeSettings = service.settings(admin)
+    const id = await capture(service)
+    const beforeCase = service.detail(admin, id)
+    const path = action === 'ban' ? `/cases/${id}/decision` : '/settings'
+    const options = action === 'read' ? { method: 'GET' } : {
+      method: 'POST',
+      body: JSON.stringify(action === 'ban'
+        ? { version: beforeCase.version, decision: 'ban', reason: 'must require Cookie-only authentication' }
+        : { version: beforeSettings.version, enabled: false }),
+    }
+    const response = await fetch(base + path, { ...options, headers: { cookie, authorization, 'content-type': 'application/json' } })
+    expect(response.status).toBe(401)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect((await response.json()).error.code).toBe('UNAUTHENTICATED')
+    expect(service.settings(admin)).toEqual(beforeSettings)
+    expect(service.detail(admin, id)).toEqual(beforeCase)
+    expect(domain.table('users').get('s:student')?.status).toBe('active')
+    const cookieOnly = await fetch(base + path, { ...options, headers: { cookie, 'content-type': 'application/json' } })
+    expect(cookieOnly.status).toBe(200)
+  })
   it('requires SUPER_ADMIN cookies, JSON same-origin writes and private/no-store even for errors', async () => {
     const { service, auth } = await harness()
     const handler = moderationRoutes(service, auth)

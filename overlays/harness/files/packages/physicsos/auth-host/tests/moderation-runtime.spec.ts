@@ -24,7 +24,7 @@ const admin = { userKey: 's:root', schoolId: 's', username: 'root', role: 'SUPER
 const allow = { risk: 'allow', category: 'none', severity: 'none', confidence: 1, reason: 'education', evidence: [] } as const
 const cleanups: (() => Promise<unknown>)[] = []
 afterEach(async () => { for (const fn of cleanups.splice(0).reverse()) await fn(); vi.useRealTimers() })
-async function harness(review = async (_input: any, _signal: AbortSignal): Promise<any> => allow) {
+async function harness(review = async (_input: any, _signal: AbortSignal): Promise<any> => allow, beforeRuntime?: (ctx: Context, auth: AuthService) => Promise<void>) {
  const ctx = new Context()
  await ctx.plugin(Storage); await ctx.plugin(SessionStore)
  const root = await mkdtemp(join(tmpdir(), 'moderation-runtime-'))
@@ -41,7 +41,8 @@ async function harness(review = async (_input: any, _signal: AbortSignal): Promi
  let runs: AccountRuns
  const auth = new AuthService(domain, DEFAULT_AUTH_CONFIG, { onUserDisabled: owner => runs.disable(owner) })
  runs = new AccountRuns(ctx, domain, auth)
- const runtime = new ModerationRuntime(ctx, domain, auth, review)
+ await beforeRuntime?.(ctx, auth)
+ const runtime = await ModerationRuntime.create(ctx, domain, auth, review)
  cleanups.push(async () => { await runtime.dispose(); runs.dispose(); await domain.close(); await backend.close(); await ctx.fiber.dispose() })
  const claim = (id: string) => auth.claimApiResource({ ...admin, userKey: 's:student', username: 'student', role: 'STUDENT' }, 'session', id)
  return { ctx, domain, auth, runtime, claim, runs, service: runtime.service }
@@ -76,7 +77,7 @@ describe('moderation runtime with real Session and domain events', () => {
   const history = h.ctx.sessions.create(SessionId('history2'))
   await h.runtime.dispose()
   for (let n = 0; n < 25; n++) history.append('user/message', human('physics ' + n), { surfaceOp: 'append' })
-  const active = new ModerationRuntime(h.ctx, h.domain, h.auth, async () => allow)
+  const active = await ModerationRuntime.create(h.ctx, h.domain, h.auth, async () => allow)
   cleanups.push(() => active.dispose())
   expect(await active.service.scan(admin)).toEqual({ scanned: 20, captured: 20 })
   expect(await active.service.scan(admin)).toEqual({ scanned: 5, captured: 5 })
@@ -113,7 +114,7 @@ describe('moderation runtime with real Session and domain events', () => {
   const rows = h.service.list(admin, {}).cases
   expect(rows.filter(c => c.status === 'pending')).toHaveLength(2)
   expect(rows.filter(c => c.status === 'error')).toHaveLength(1)
-  const runtime = new ModerationRuntime(h.ctx, h.domain, h.auth, async () => allow)
+  const runtime = await ModerationRuntime.create(h.ctx, h.domain, h.auth, async () => allow)
   cleanups.push(() => runtime.dispose())
   session.append('user/message', human('after restart'), { surfaceOp: 'append' })
   await runtime.flush()
@@ -168,6 +169,143 @@ describe('moderation runtime with real Session and domain events', () => {
   await vi.waitFor(() => expect(h.service.list(admin, {}).total).toBe(1), { timeout: 3_000 })
  })
 
+ it.each([
+  { initial: 'completed', restart: false },
+  { initial: 'absent', restart: false },
+  { initial: 'completed', restart: true },
+  { initial: 'absent', restart: true },
+ ] as const)('final replay fix: recovers a failed $initial cursor write automatically (reopen=$restart)', async ({ initial, restart }) => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  const h = await harness()
+  const session = h.ctx.sessions.create(SessionId('cursor-write-failure'))
+  const cursorId = 'claim:cursor-write-failure'
+  if (initial === 'completed') {
+   await h.claim(session.id); await h.runtime.flush()
+   expect(h.domain.table('moderation_cursors').get(cursorId)?.done).toBe(true)
+  }
+  const cursors = h.domain.table('moderation_cursors'), put = cursors.put.bind(cursors)
+  let fail = true
+  cursors.put = async (id, value) => {
+   if (id === cursorId && fail) { fail = false; throw new Error('fixture cursor storage unavailable') }
+   return put(id, value)
+  }
+  // In the absent case, the user input commits before its durable ownership
+  // publication. Only that publication attempts (and fails) the first cursor.
+  session.append('user/message', human('committed during cursor outage'), { surfaceOp: 'append' })
+  if (initial === 'absent') await h.claim(session.id)
+  await h.runtime.flush()
+  expect(h.auth.sessionOwnerKey(session.id)).toBe('s:student')
+  expect(h.service.list(admin, {}).total).toBe(0)
+  if (initial === 'completed') expect(cursors.get(cursorId)?.done).toBe(true)
+  else expect(cursors.get(cursorId)).toBeUndefined()
+  let active = h.runtime
+  if (restart) {
+   await h.runtime.dispose(); h.runs.dispose(); await h.domain.close()
+   const restored = await openAuthDomain(h.ctx)
+   if (initial === 'completed') expect(restored.table('moderation_cursors').get(cursorId)?.done).toBe(true)
+   else expect(restored.table('moderation_cursors').get(cursorId)).toBeUndefined()
+   active = await ModerationRuntime.create(h.ctx, restored, new AuthService(restored, DEFAULT_AUTH_CONFIG), async () => allow)
+   cleanups.push(async () => { await active.dispose(); await restored.close() })
+  }
+  // No further human event, ownership publication or manual scan. The real
+  // timer worker must rediscover committed history after storage is available.
+  await vi.advanceTimersByTimeAsync(1_000)
+  await (active as any).worker
+  expect(active.service.list(admin, {}).cases.map(row => row.text)).toEqual(['committed during cursor outage'])
+ })
+
+ it('final replay fix: keeps pre-activation history manual while recovering first-cursor failure across reopen', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+  vi.setSystemTime(10_000)
+  const h = await harness(undefined, async (ctx, auth) => {
+   const session = ctx.sessions.create(SessionId('pre-existing-owner'))
+   await auth.claimApiResource({ ...admin, userKey: 's:student', username: 'student', role: 'STUDENT' }, 'session', session.id)
+   session.append('user/message', human('old history needs manual scan'), { surfaceOp: 'append' })
+   vi.setSystemTime(20_000)
+  })
+  const cursors = h.domain.table('moderation_cursors'), put = cursors.put.bind(cursors)
+  cursors.put = async (id, value) => {
+   if (id === 'claim:pre-existing-owner') throw new Error('fixture first-cursor outage')
+   return put(id, value)
+  }
+  vi.setSystemTime(21_000)
+  h.ctx.sessions.get(SessionId('pre-existing-owner'))!.append('user/message', human('new input survives restart'), { surfaceOp: 'append' })
+  await h.runtime.flush()
+  expect(h.service.list(admin, {}).total).toBe(0)
+  expect(cursors.get('claim:pre-existing-owner')).toBeUndefined()
+  await h.runtime.dispose(); h.runs.dispose(); await h.domain.close()
+  vi.setSystemTime(30_000)
+  const restored = await openAuthDomain(h.ctx)
+  const active = await ModerationRuntime.create(h.ctx, restored, new AuthService(restored, DEFAULT_AUTH_CONFIG), async () => allow)
+  cleanups.push(async () => { await active.dispose(); await restored.close() })
+  await vi.advanceTimersByTimeAsync(1_000); await (active as any).worker
+  expect(active.service.list(admin, {}).cases.map(row => row.text)).toEqual(['new input survives restart'])
+  expect(await active.service.scan(admin)).toEqual({ scanned: 1, captured: 1 })
+  expect(active.service.list(admin, {}).total).toBe(2)
+ })
+
+ it('final replay fix: reconciles one owned session and at most twenty inputs per automatic pass', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  const h = await harness()
+  const cursors = h.domain.table('moderation_cursors'), put = cursors.put.bind(cursors)
+  cursors.put = async () => { throw new Error('fixture claim-cursor outage') }
+  for (const id of ['a-reconcile', 'b-reconcile']) {
+   const session = h.ctx.sessions.create(SessionId(id))
+   for (let n = 0; n < 25; n++) session.append('user/message', human(id + ' input ' + n), { surfaceOp: 'append' })
+   await h.claim(id); await h.runtime.flush()
+  }
+  cursors.put = put
+  expect(h.service.list(admin, {}).total).toBe(0)
+  for (const total of [20, 40, 45, 50]) {
+   await vi.advanceTimersByTimeAsync(1_000); await (h.runtime as any).worker
+   expect(h.service.list(admin, {}).total).toBe(total)
+  }
+ })
+
+ it('final replay fix: preserves the historical cutoff during live intake after a five-thousand-event pass', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+  vi.setSystemTime(10_000)
+  const h = await harness(undefined, async (ctx, auth) => {
+   const session = ctx.sessions.create(SessionId('long-pre-existing-history'))
+   await auth.claimApiResource({ ...admin, userKey: 's:student', username: 'student', role: 'STUDENT' }, 'session', session.id)
+   for (let n = 0; n < 5_001; n++) session.append('user/message', human('old manual evidence ' + n), { surfaceOp: 'append' })
+   vi.setSystemTime(20_000)
+  })
+  await vi.advanceTimersByTimeAsync(1_000); await (h.runtime as any).worker
+  expect(h.service.list(admin, {}).total).toBe(0)
+  expect(h.domain.table('moderation_cursors').get('claim:long-pre-existing-history')).toMatchObject({ seq: 5_000, done: false })
+  const cases = h.domain.table('moderation_cases'), put = cases.put.bind(cases)
+  let fail = true
+  cases.put = async (id, value) => {
+   if (fail) { fail = false; throw new Error('fixture live case failure') }
+   return put(id, value)
+  }
+  h.ctx.sessions.get(SessionId('long-pre-existing-history'))!.append('user/message', human('new evidence after bounded history pass'), { surfaceOp: 'append' })
+  await h.runtime.flush()
+  expect(h.service.list(admin, {}).total).toBe(0)
+  await vi.advanceTimersByTimeAsync(1_000); await (h.runtime as any).worker
+  expect(h.service.list(admin, {}).cases.map(row => row.text)).toEqual(['new evidence after bounded history pass'])
+ })
+
+ it('final replay fix: rejects startup when its activation watermark cannot persist', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  const h = await harness()
+  const session = h.ctx.sessions.create(SessionId('activation-failure'))
+  await h.claim(session.id); await h.runtime.flush(); await h.runtime.dispose()
+  const cursors = h.domain.table('moderation_cursors'), put = cursors.put.bind(cursors)
+  await cursors.delete('activation')
+  cursors.put = async (id, value) => {
+   if (id === 'activation') throw new Error('fixture activation unavailable')
+   return put(id, value)
+  }
+  await expect(ModerationRuntime.create(h.ctx, h.domain, h.auth, async () => allow)).rejects.toThrow('fixture activation unavailable')
+  session.append('user/message', human('no unpublished runtime listener'), { surfaceOp: 'append' })
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(h.service.list(admin, {}).total).toBe(0)
+  expect(cursors.get('activation')).toBeUndefined()
+  cursors.put = put
+ })
+
  it('keeps corrupt history retryable without starving already captured review work', async () => {
   const h = await harness()
   await h.claim('absent-history'); await h.runtime.flush()
@@ -206,7 +344,7 @@ describe('moderation runtime with real Session and domain events', () => {
     await h.runtime.dispose(); h.runs.dispose(); await h.domain.close()
     const restored = await openAuthDomain(h.ctx)
     expect(restored.table('moderation_cursors').get(cursor.id)?.done).toBe(false)
-    const restarted = new ModerationRuntime(h.ctx, restored, new AuthService(restored, DEFAULT_AUTH_CONFIG), async () => allow)
+    const restarted = await ModerationRuntime.create(h.ctx, restored, new AuthService(restored, DEFAULT_AUTH_CONFIG), async () => allow)
     cleanups.push(async () => { await restarted.dispose(); await restored.close() })
     await vi.waitFor(() => expect(restarted.service.list(admin, {}).cases[0]?.text).toBe('input beyond immutable cut'), { timeout: 3_000 })
   } finally { release.resolve(); cases.put = put; warning.mockRestore() }

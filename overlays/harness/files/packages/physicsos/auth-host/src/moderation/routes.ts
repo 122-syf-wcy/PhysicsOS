@@ -13,6 +13,7 @@ export function moderationRoutes(service: ModerationService, auth: AuthService) 
       res.end(JSON.stringify(body))
     }
     try {
+      if (req.headers.authorization !== undefined) throw new AuthError(401, 'UNAUTHENTICATED', '审核接口仅接受 Cookie 会话')
       const resolved = auth.resolveCredential(req.headers.cookie, undefined)
       if (!resolved || resolved.credential.kind !== 'session') throw new AuthError(401, 'UNAUTHENTICATED', '未登录或会话已失效')
       const actor = resolved.actor

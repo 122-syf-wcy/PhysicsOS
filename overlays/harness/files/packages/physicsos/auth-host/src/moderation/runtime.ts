@@ -5,7 +5,7 @@ import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-query'
-import type { AuthDomain, ModerationCursor } from '../domain.ts'
+import type { ApiResourceOwner, AuthDomain, ModerationCursor } from '../domain.ts'
 import { AuthError, type AuthService } from '../service.ts'
 import type { CapturedMessage, ModerationReviewer } from './types.ts'
 import { ModerationService, moderationCaptureId } from './service.ts'
@@ -117,8 +117,29 @@ export class ModerationRuntime {
   private lastCursor = ''
   private readonly timer: ReturnType<typeof setInterval>
   private closed = false
-  constructor(private readonly ctx: Context, private readonly domain: AuthDomain, private readonly auth: AuthService, review: ModerationReviewer,
-    private readonly ready: () => boolean = () => true) {
+  /**
+   * Persist the first activation before exposing listeners or account admission.
+   * @param ctx - owning plugin context with optional trusted history reads.
+   * @param domain - opened single-writer auth domain.
+   * @param auth - exact durable ownership and account authority.
+   * @param review - fixed deployment classifier.
+   * @param ready - whether the optional classifier is currently available.
+   * @returns the runtime; a failed activation write rejects startup.
+   */
+  static async create(ctx: Context, domain: AuthDomain, auth: AuthService, review: ModerationReviewer,
+    ready: () => boolean = () => true): Promise<ModerationRuntime> {
+    const since = Date.now()
+    const cursors = domain.table('moderation_cursors')
+    let activation = cursors.get('activation')
+    if (!activation) {
+      activation = { id: 'activation', kind: 'activation', sessionId: '', ownerKey: '', since, seq: 0, index: 0, done: true }
+      await cursors.put(activation.id, activation)
+    }
+    if (activation.kind !== 'activation' || activation.since === undefined) throw new Error('moderation: invalid activation watermark')
+    return new ModerationRuntime(ctx, domain, auth, review, ready, activation.since)
+  }
+  private constructor(private readonly ctx: Context, private readonly domain: AuthDomain, private readonly auth: AuthService, review: ModerationReviewer,
+    private readonly ready: () => boolean, private readonly since: number) {
     this.service = new ModerationService(domain, auth, {
       review: (input, signal) => review(input, AbortSignal.any([signal, this.lifetime.signal])),
       scan: limit => this.scan(limit),
@@ -137,6 +158,7 @@ export class ModerationRuntime {
         // case write failure must not turn a committed user event into a lost job.
         await this.mutateClaimCursor(id, previous => ({ id, kind: 'claim', sessionId: session.id, ownerKey,
           generation: (previous?.generation ?? 0) + 1,
+          ...(previous?.ownerKey === ownerKey && previous.since !== undefined ? { since: previous.since } : {}),
           seq: previous?.ownerKey === ownerKey ? Math.min(previous.seq, event.seq) : event.seq, index: 0, done: false }))
         for (const input of inputs) await this.service.capture(input)
       })
@@ -205,17 +227,45 @@ export class ModerationRuntime {
     const query = this.ctx.get('sessionQuery')
     if (!query || this.closed) return
     const table = this.domain.table('moderation_cursors')
-    const pending = [...table.entries()].map(([, value]) => value)
-      .filter(value => value.kind === 'claim' && !value.done && this.valid(value)).sort((a, b) => a.id.localeCompare(b.id))
-    const cursor = pending.find(value => value.id > this.lastCursor) ?? pending[0]
-    if (!cursor) return
-    this.lastCursor = cursor.id
+    // Cursor writes can fail before any retry row exists. Rotate authoritative
+    // owners from the domain metadata, opening only one log per pass.
+    let first: ApiResourceOwner | undefined, next: ApiResourceOwner | undefined
+    for (const [key, owner] of this.domain.table('api_resources').entries()) {
+      if (owner.kind !== 'session' || key !== owner.id || owner.id !== `session:${owner.resourceId}`
+        || this.auth.sessionOwnerKey(owner.resourceId) !== owner.ownerKey
+        || this.domain.table('users').get(owner.ownerKey)?.status !== 'active') continue
+      if (!first || owner.id < first.id) first = owner
+      if (owner.id > this.lastCursor && (!next || owner.id < next.id)) next = owner
+    }
+    const owner = next ?? first
+    if (!owner) return
+    this.lastCursor = owner.id
+    const id = `claim:${owner.resourceId}`
+    let cursor = table.get(id)
+    if (!cursor || cursor.ownerKey !== owner.ownerKey) {
+      await this.mutateClaimCursor(id, current => current?.ownerKey === owner.ownerKey ? undefined : {
+        id, kind: 'claim', sessionId: owner.resourceId, ownerKey: owner.ownerKey,
+        generation: (current?.generation ?? 0) + 1, seq: 0, index: 0, done: false,
+        // A new claim keeps late-owner supplementation. Older owned sessions
+        // admit only post-activation events unless an administrator scans them.
+        ...(Date.parse(owner.createdAt) >= this.since ? {} : { since: this.since }),
+      })
+      cursor = table.get(id)
+    }
+    if (!cursor || !this.valid(cursor)) return
     using observation = await query.observeSession(SessionId(cursor.sessionId), { projectionMode: 'none', signal: this.lifetime.signal })
+    if (!this.valid(cursor)) return
+    if (cursor.done) {
+      if (cursor.seq > observation.cursor) return
+      const reopened = { ...cursor, generation: (cursor.generation ?? 0) + 1, done: false }
+      if (!await this.saveProgress(cursor, reopened)) return
+      cursor = reopened
+    }
     let progress = { ...cursor }, captured = 0, visited = 0
     for (const event of observation.events) {
       if (event.seq < Math.max(cursor.seq, observation.inheritedEventCount)) continue
       if (!this.valid(cursor) || this.lifetime.signal.aborted) return
-      const messages = humanInputs(cursor.sessionId, event)
+      const messages = cursor.since !== undefined && event.time < cursor.since ? [] : humanInputs(cursor.sessionId, event)
       const start = event.seq === cursor.seq ? cursor.index : 0
       for (let index = start; index < messages.length; index++) {
         if (!this.valid(cursor)) return

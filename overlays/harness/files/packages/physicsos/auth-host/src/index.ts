@@ -187,7 +187,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (!domain.table('moderation_settings').get('default') && config.moderationEnabled === false) {
       await domain.table('moderation_settings').put('default', { version: 1, enabled: false, updatedAt: new Date().toISOString(), captureFailures: 0 })
     }
-    const moderation = new ModerationRuntime(ctx, domain, service, (input, signal) => {
+    const moderation = await ModerationRuntime.create(ctx, domain, service, (input, signal) => {
       const llm = ctx.get('llm')
       if (!llm) throw new ModerationModelError('REVIEW_FAILED')
       return createModerationReviewer(llm, { provider: config.moderationProvider ?? 'deepseek-official', model: config.moderationModel ?? 'deepseek-v4.1-flash' })(input, signal)
