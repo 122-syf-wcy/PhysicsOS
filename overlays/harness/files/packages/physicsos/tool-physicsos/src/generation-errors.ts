@@ -28,6 +28,7 @@ export type GenerationCode =
   | 'UNSAFE_RESOURCES'
   | 'IMAGE_REQUIRED'
   | 'IMAGE_UNUSED'
+  | 'IMAGE_BINDING_INVALID'
   | 'ARTIFACTS_UNAVAILABLE'
   | 'CHILD_UNAVAILABLE'
   | (string & {})
@@ -71,7 +72,7 @@ export const codeOf = (error: unknown): GenerationCode =>
 /** Host validation outcomes that earn the single repair attempt. */
 const RETRYABLE_CODES: ReadonlySet<string> = new Set([
   'INVALID_SOURCE', 'INVALID_CODE_SOURCE', 'INVALID_PACKAGE', 'INVALID_METADATA', 'UNSAFE_RESOURCES',
-  'IMAGE_REQUIRED', 'IMAGE_UNUSED', 'MISSING_STRUCTURED_OUTPUT', 'UPSTREAM_STREAM_ERROR', 'EMPTY_RESPONSE',
+  'IMAGE_REQUIRED', 'IMAGE_UNUSED', 'IMAGE_BINDING_INVALID', 'MISSING_STRUCTURED_OUTPUT', 'UPSTREAM_STREAM_ERROR', 'EMPTY_RESPONSE',
 ])
 
 /** Child diagnostics that mean the upstream channel broke, not the author. */
@@ -120,13 +121,13 @@ export const trustedSourceValidationReason = (error: unknown): TrustedSourceVali
 /** What the student reads on the card for a terminal failure code. */
 export const failureMessageFor = (code: GenerationCode): string => {
   switch (code) {
-    case 'GENERATION_TIMEOUT': return '题目实验生成超时，可重新生成。'
-    case 'GENERATION_ABORTED': return '题目实验生成已停止，可重新生成。'
+    case 'GENERATION_TIMEOUT': return '实验画面准备得有点久，当前条件已保留，可以再试一次。'
+    case 'GENERATION_ABORTED': return '这次画面准备已停止，当前条件已保留，可以重新生成。'
     case 'STALE_GENERATION': return '题目场景已更新，本次生成已丢弃。'
-    case 'MAX_TOKENS': return '模型输出达到上限，题目实验代码仍未完成，可重新生成。'
+    case 'MAX_TOKENS': return '这次画面还没完成，原题和当前条件已保留，可以重新生成。'
     case 'UPSTREAM_STREAM_ERROR':
-    case 'EMPTY_RESPONSE': return '模型通道在生成中途断开，已自动续写一次但仍未完成。请稍后重试。'
-    default: return '题目实验代码生成未完成，可重新生成。'
+    case 'EMPTY_RESPONSE': return '这次画面暂时没准备好，当前条件已保留，可以稍后重试。'
+    default: return '这次实验画面还没完成，当前条件已保留，可以重新生成。'
   }
 }
 

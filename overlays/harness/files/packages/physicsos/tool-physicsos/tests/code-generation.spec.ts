@@ -344,10 +344,35 @@ export { renderPlatformFrame as renderFrame } from "../vendor/platform-renderer.
     expect(h.states.map(s => s.visualization?.status)).toEqual(['generating'])
     expect(h.dispose).toHaveBeenCalledTimes(1)
   })
+  describe('generation lifecycle ownership', () => {
+    it('does not publish into a generating marker whose owner changed', async () => {
+      const h = dependencies()
+      h.start.mockImplementation(async () => {
+        const current = h.deps.current()!
+        const visualization = current.visualization!
+        h.setLatest({ ...current, visualization: { ...visualization, ownerSessionId: 'other-parent' } })
+        return { id: 'child', result: Promise.resolve({ stopReason: 'completed', structured: source, output: [] }), dispose: h.dispose }
+      })
+      const result = await generateQuestionCode(h.deps)
+      expect(result.status === 'failed' && result.code).toBe('STALE_GENERATION')
+      expect(h.create).not.toHaveBeenCalled()
+      expect(h.deps.current()?.visualization?.ownerSessionId).toBe('other-parent')
+      expect(h.states.map(state => state.visualization?.status)).toEqual(['generating'])
+      expect(h.dispose).toHaveBeenCalledTimes(1)
+    })
+  })
   it('bounds validation repair to one fresh run and disposes both child runs', async () => {
     const h = dependencies()
     h.create.mockRejectedValueOnce(Object.assign(new Error('source invalid'), { code: 'INVALID_CODE_SOURCE' }))
     expect((await generateQuestionCode(h.deps)).status).toBe('ready')
+    expect(h.start).toHaveBeenCalledTimes(2)
+    expect(h.dispose).toHaveBeenCalledTimes(2)
+  })
+  it.each([1, 2])('repairs an image binding refusal once, including %s rejected sources', async rejected => {
+    const h = dependencies()
+    for (let index = 0; index < rejected; index++) h.create.mockRejectedValueOnce(Object.assign(new Error('unsafe image source'), { code: 'IMAGE_BINDING_INVALID' }))
+    const result = await generateQuestionCode(h.deps)
+    expect(result.status).toBe(rejected === 1 ? 'ready' : 'failed')
     expect(h.start).toHaveBeenCalledTimes(2)
     expect(h.dispose).toHaveBeenCalledTimes(2)
   })
@@ -902,6 +927,7 @@ describe('the real code child provider', () => {
 
   it.each([
     { advertised: ['high', 'off', 'low'], expected: 'off', parentCap: 32768, childCap: 8192 },
+    { advertised: ['high', 'none', 'low'], expected: 'none', parentCap: 32768, childCap: 8192 },
     { advertised: ['high', 'medium'], expected: 'high', parentCap: 32768, childCap: 8192 },
     { advertised: ['high', 'low'], expected: 'low', parentCap: 4096, childCap: 4096 },
   ])('uses advertised $expected effort and cap $childCap without changing the main route', async ({ advertised, expected, parentCap, childCap }) => {

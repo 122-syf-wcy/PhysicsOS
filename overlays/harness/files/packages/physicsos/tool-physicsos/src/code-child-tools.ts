@@ -25,6 +25,9 @@ export interface AssetService {
     signal: AbortSignal
   }): Promise<{ path: string; cssPath: string; sha256: string; width: number; height: number; kind: string; model: string }>
   assetManifest?(input: { ownerSessionId: string; generationId: string; scene: unknown }): unknown[]
+  assetFallback?(input: { ownerSessionId: string; generationId: string; scene: unknown }): {
+    status: 'unavailable'; mode: 'native'; code: 'IMAGE_TIMEOUT' | 'IMAGE_RATE_LIMIT' | 'IMAGE_SERVICE_UNAVAILABLE'
+  } | undefined
 }
 
 /** The job one child run serves: parent, scene, job id and the shared write budget. */
@@ -94,7 +97,7 @@ export function registerAssetTool(child: Context, job: CodeChildJob, assets: Ass
   child.tools.register(defineTool({
     name: 'physics_generate_experiment_asset',
     timeoutMs: 185_000,
-    description: '调用平台已配置的gpt-image-2.5-sunburst为本题制作Warm Lab环境/材质图片。每题最多2次，通常1张环境已足够。不要生成文字、公式、轨迹或测量结果。返回本包图片path和CSS路径；随后必须实际使用图片绘制实验。',
+    description: '调用平台已配置的gpt-image-2.5-sunburst为本题制作Warm Lab环境/材质图片。每题最多2次，通常1张环境已足够。不要生成文字、公式、轨迹或测量结果。成功返回本包图片path和CSS路径并须实际使用；仅平台确认瞬态故障时返回mode:native，立即用原生Canvas/SVG绘图，不重试生图或伪造图片路径。',
     parameters: {
       prompt: { type: 'string', required: true, description: '具体美术构图、材质、灯光、留白位置；不超过5000字。图片不可含物理读数或运动结果。' },
       kind: { type: 'string', required: true, enum: ['environment', 'material'], description: 'environment为实验环境/场景背景，material为器材表面材质。' },
@@ -109,6 +112,12 @@ export function registerAssetTool(child: Context, job: CodeChildJob, assets: Ass
           prompt: args.prompt, kind: args.kind, signal: AbortSignal.any([job.signal, exec.signal]),
         })
       } catch (error) {
+        if (job.signal.aborted || exec.signal.aborted) throw new HarnessError('素材生成已取消。', 'IMAGE_ABORTED')
+        if (!jobIsCurrent(job)) throw new HarnessError('题目生成任务已更新。', 'STALE_GENERATION')
+        let fallback: ReturnType<NonNullable<AssetService['assetFallback']>>
+        try { fallback = assets.assetFallback?.({ ownerSessionId: owner, generationId: job.generationId, scene: job.scene.scene }) }
+        catch { fallback = undefined }
+        if (fallback !== undefined) return { ...fallback, instructions: '平台已记录本任务图片通道瞬态故障。不要再次生图；删除Image/decode/图片路径，立即用原生Canvas/SVG完成只读snapshot.view的完整画面，再提交代码与title/summary。' }
         const code = error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^IMAGE_[A-Z_]+$/.test(error.code)
           ? error.code
           : 'IMAGE_GENERATION_FAILED'

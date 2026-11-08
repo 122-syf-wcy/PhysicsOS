@@ -14,7 +14,7 @@
  */
 
 import { PhysicsCodeProvider, CODE_PROVIDER_NAME } from './code-provider.ts'
-import { generateQuestionCode, type CodeStyleContext } from './code-generation.ts'
+import { generateQuestionCode, isQuestionCodeGenerationActive, type CodeStyleContext } from './code-generation.ts'
 import { codeStyleFor } from './code-style-selection.ts'
 import { registerRegenerateRoute } from './regenerate-route.ts'
 import { sameTurnVisualization, solveSummaryOf, solveTraceOf } from './solve-publication.ts'
@@ -369,10 +369,9 @@ export function apply(ctx: Context, config: Config): void {
     const existing = snapshot.visualization
     const reusable = existing !== undefined && existing.ownerSessionId === ownerSessionId
       && existing.sceneId === sceneId && existing.sceneRevision === snapshot.revision
-    /* A job past its deadline is an interrupted one (the process restarted
-       mid-run), not a live one: a forced regeneration may replace it. */
+    /* A durable marker without matching work in this process is an interrupted job. */
     const live = reusable && existing.status === 'generating'
-      && (existing.deadlineAt === undefined || existing.deadlineAt > Date.now())
+      && isQuestionCodeGenerationActive(ownerSessionId, snapshot)
     if (reusable && (force ? live : snapshot.turn === turn)) return existing
     type Artifacts = {
       context(id: string): Promise<CodeStyleContext>
@@ -392,6 +391,17 @@ export function apply(ctx: Context, config: Config): void {
       ownerSessionId, snapshot, signal: exec.signal, experimentId: selected, instructions,
       current: () => persistedScene(exec, sceneId),
       isCurrent: () => currentTurnOf(exec) === turn && (ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')?.latest ?? sceneId) === sceneId,
+      canPublishFailure: () => {
+        const projected = ctx.get('sessionProjections')?.stateOf(parent.session, 'physicsScenes')
+        if (projected !== undefined) return projected.latest === sceneId
+        // oxlint-disable-next-line typescript/no-deprecated -- Same own-session fallback as persistedScene.
+        const events = parent.session.snapshotEvents()
+        for (let index = events.length - 1; index >= 0; index--) {
+          const event = events[index]
+          if (event?.type === 'physics/scene' && parent.session.isOwnSeq(event.seq)) return event.data.sceneId === sceneId
+        }
+        return false
+      },
       publish: (value) => {
         parent.session.append('physics/scene', { ...value, ...(turn === undefined ? {} : { turn }) })
       },

@@ -64,6 +64,22 @@ it('keeps a current generation waiting and exposes recovery when its durable dea
   expect(view.getByRole('button', { name: '重新生成本题实验' })).toBeTruthy()
   expect(regenerateQuestionCode).not.toHaveBeenCalled()
 })
+it('lets the user check and recover a generation before a restored future deadline', async () => {
+  const solved = solvedCardData('mech-01-uniform-acceleration')
+  const questionCodeOwner = createQuestionCodeOwnerStore(); questionCodeOwner.set('owner-chat')
+  const regenerateQuestionCode = vi.fn(async () => ({ ok: true as const }))
+  const data = { ...solved, visualization: { status: 'generating' as const, jobId: 'restored-job',
+    ownerSessionId: 'owner-chat', sceneId: solved.sceneId, sceneRevision: solved.revision,
+    deadlineAt: Date.now() + 600_000 } }
+  const view = render(<SceneCardBody data={data} questionCodeOwner={questionCodeOwner} openSceneInLab={vi.fn()}
+    t={t} regenerateQuestionCode={regenerateQuestionCode} />)
+  expect(view.container.querySelector('[data-question-code-status="generating"]')).not.toBeNull()
+  expect(regenerateQuestionCode).not.toHaveBeenCalled()
+  const check = view.queryByText('检查并恢复生成', { selector: 'button' })
+  expect(check).not.toBeNull()
+  fireEvent.click(check!)
+  await waitFor(() => { expect(regenerateQuestionCode).toHaveBeenCalledWith(solved.sceneId) })
+})
 const authoredScene = createMechanicsScene({ sceneId: 'exact-question', revision: 0, model: 'projectile_motion',
   title: '20 米高处水平抛出', position: { x: 0, y: 20, z: 0 }, velocity: { x: 20, y: 0, z: 0 } })
 const scene = { ...authoredScene, metadata: { ...authoredScene.metadata, sourceQuestionId: 'exact-question' } }

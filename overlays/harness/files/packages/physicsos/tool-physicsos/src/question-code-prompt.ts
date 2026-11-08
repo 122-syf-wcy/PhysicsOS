@@ -67,17 +67,24 @@ export function questionCodePrompt(
   const resume = repair !== undefined && isResumeCode(repair.code)
   const hasVerifiedSolution = snapshot.solve?.verification?.status === 'passed'
   const images = imagesOf(assets)
+  const entryExample = images.length ? QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]!.path)
+    : QUESTION_CODE_ENTRY_EXAMPLE.replace(
+      "if(!image){image=new Image();image.crossOrigin='anonymous';image.src='REPLACE_WITH_GENERATED_PATH';decoded=image.decode()}\nawait decoded;ctx.clearRect(0,0,w,h);ctx.drawImage(image,0,0,w,h);",
+      "ctx.clearRect(0,0,w,h);ctx.fillStyle='#fafaf7';ctx.fillRect(0,0,w,h);",
+    ).replace('let board,image,decoded;', 'let board;')
   return [
     `真实题目标签：${snapshot.title.slice(0, 240)}。hasVerifiedSolution=${String(hasVerifiedSolution)}；${hasVerifiedSolution ? '仅展示引擎已有结论。' : '仅当前/局部场景演示，不称整题已解。'}`,
     `physics_write_experiment_code：完整JS一次replace、CSS一次replace，再structured_output提交title/summary；JS<=${MAX_CODE_PART_CHARACTERS}、CSS<=6000字符，可append，共10次。`,
     'Canvas2D入口示例：#canvas铺满宿主，依clientWidth/clientHeight绘图，禁定宽高。仅普通函数；禁import/reexport、旧renderer、动态分派、fetch/外网/存储/parent/top/eval。',
-    QUESTION_CODE_ENTRY_EXAMPLE.replace('REPLACE_WITH_GENERATED_PATH', images[0]?.path ?? 'REPLACE_WITH_GENERATED_PATH'),
+    entryExample.replace(/\n/g, ''),
     '只读snapshot.view；origin/extent等比投影，y翻转一次，不拟合当前位置。斜面视窗局部跟随。禁解题/积分/自建时钟；from/to仅显示端点。缺省/零值合法，不造物体。',
     'Warm Lab暖白木/金属，装置为主体，保留受力/场/光路方向和中文。body.rotation/incline.angle/coordinate.rotation/angles.startAngle/endAngle/电路rotation为度，leverBeam.tilt/currentRotor.angle为弧度。body.size是半径/半边长，单位不变。',
     '角度弧令s=a.startAngle,e=a.endAngle,k=Math.PI/180；ctx.arc(cx,cy,r,-s*k,-e*k,e>=s)，保留有向跨度。开关用visible[observable]，禁用数组名作键。',
     'drawScene只画几何/全部箭头，禁putLabel/fillText/strokeText。labels.push({text:vector.symbol,p:point(vector.to,t)})收集文字；body.label/view.labels[].text同队列，入口最后标注。p是屏幕坐标勿再投影。物块r=Math.max(8,body.size*t.s)，按rotation旋转；used含旋转包围区勿清空。颜色按vector.role；字>=11px。禁drawPanel/读数/写死物理数值，宿主显示读数。',
-    QUESTION_CODE_LABEL_EXAMPLE,
-    '仅缺素材时physics_generate_experiment_asset生成环境/材质，禁文字/动态事实；.src用真实path字面量，CSS用cssPath；勿遮图。',
+    QUESTION_CODE_LABEL_EXAMPLE.replace(/\n/g, ''),
+    '缺素材且有工具时physics_generate_experiment_asset生成环境/材质，禁文字/动态事实。成功用真实path、CSS cssPath。仅可信mode:native可无图且不重试，不能自称故障。',
+    images.length ? '' : 'mode:native用字面DOM tag/attr；computed仅纯数据/真实Frame JSON链，DOM用点号字面操作，禁借用call/apply/bind、HTML/URI。未知访问改map/push或明确数据const；SVG色用本地色表，模板仅纯读取/算术。',
+    repair?.code === 'IMAGE_BINDING_INVALID' ? '图片绑定拒绝：删除图片/HTML/URI与未知computed sink；native用字面DOM tag/attr和map/push几何处理，已有图片仅复用真实path。replace错误文件再提交。' : '',
     // The focused incline contract already carries the exact surface, origin,
     // visibility and trajectory rules; the generic mechanics prose repeats them.
     snapshot.domain === 'mechanics' && style.experimentId === 'incline' ? ''

@@ -110,14 +110,14 @@ export function QuestionCodeCanvas({ visualization, scene, session, regenerateQu
             : hasVerifiedSolution === false ? '已保存的场景条件已保留。' : '本题的条件、解题步骤和物理验证已保留。'}</p>
       {error && bound && independent ? <button type="button" onClick={() => { setAttempt(value => value + 1) }}>重新载入本题实验</button> : null}
     </div>}
-    {ready || (regenerateQuestionCode !== undefined && status !== 'generating' && status !== 'owner-mismatch') ? <div className={css.codeActions}>
+    {ready || (regenerateQuestionCode !== undefined && status !== 'owner-mismatch') ? <div className={css.codeActions}>
       {ready ? <details className={css.source}><summary><span aria-hidden="true">{'</>'}</span>本题实验代码</summary>
         <div className={css.sourceBody}><p>{loaded.source.summary}</p><pre><code>{loaded.source.rendererJs}</code></pre>
           {loaded.source.stylesheet ? <details><summary>样式</summary><pre><code>{loaded.source.stylesheet}</code></pre></details> : null}
         </div>
       </details> : null}
-      {regenerateQuestionCode !== undefined && status !== 'generating' && status !== 'owner-mismatch' ? <button type="button" disabled={regenerating} onClick={regenerate}>
-        {regenerating ? '正在提交…' : status === 'upgrade-required' ? '升级为独立实验' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}
+      {regenerateQuestionCode !== undefined && status !== 'owner-mismatch' ? <button type="button" disabled={regenerating} onClick={regenerate}>
+        {regenerating ? '正在提交…' : status === 'generating' ? '检查并恢复生成' : status === 'upgrade-required' ? '升级为独立实验' : visualization === undefined ? '生成本题实验' : '重新生成本题实验'}
       </button> : null}
     </div> : null}
   </div>

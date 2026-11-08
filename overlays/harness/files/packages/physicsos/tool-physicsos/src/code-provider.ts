@@ -22,7 +22,7 @@ import { generationError, isTransientDiagnostic } from './generation-errors.ts'
 
 export const CODE_PROVIDER_NAME = 'physics-question-code'
 export const CODE_PRESET_ID = 'physics-code-only'
-export const CODE_PERSONA = `你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。立即用physics_write_experiment_code优先完整JS一次提交（最多${MAX_CODE_PART_CHARACTERS}字符）、CSS一次提交（最多6000字符）；最后structured_output只提交title/summary。`
+export const CODE_PERSONA = `你是PhysicsOS专用实验绘图作者，只绘制只读snapshot引擎事实，不解题或改条件。没有素材且提供素材工具时先生成一张环境/材质；已有素材直接复用。仅平台工具返回mode:native或可信任务提示时，删除Image/decode/图片路径，直接用原生Canvas/SVG完成画面，不重试生图。立即用physics_write_experiment_code优先完整JS一次提交（最多${MAX_CODE_PART_CHARACTERS}字符）、CSS一次提交（最多6000字符）；最后structured_output只提交title/summary。`
 
 /** Output cap per child request; never above the parent's own. */
 const CHILD_MAX_TOKENS = 8192
@@ -46,6 +46,7 @@ interface JobPlan {
   readonly chunked: boolean
   /** The child may generate one image (service present, none yet). */
   readonly canGenerateAsset: boolean
+  readonly nativeFallback: boolean
 }
 
 export class PhysicsCodeProvider implements SubagentProvider {
@@ -121,7 +122,8 @@ export class PhysicsCodeProvider implements SubagentProvider {
     const assets = (this.ctx.get as (name: string) => unknown)('questionCodeArtifacts') as AssetService | undefined
     const chunked = typeof assets?.generateAsset === 'function'
     const existing = chunked ? assets.assetManifest?.({ ownerSessionId: owner, generationId, scene: scene.scene }) ?? [] : []
-    return { scene, generationId, owner, assets, chunked, canGenerateAsset: chunked && existing.length === 0 }
+    const nativeFallback = chunked && existing.length === 0 && assets.assetFallback?.({ ownerSessionId: owner, generationId, scene: scene.scene }) !== undefined
+    return { scene, generationId, owner, assets, chunked, nativeFallback, canGenerateAsset: chunked && existing.length === 0 && !nativeFallback }
   }
 
   /** A suspended start may only resume the scene and job it originally captured. */
@@ -170,7 +172,7 @@ export class PhysicsCodeProvider implements SubagentProvider {
     ]
     const staged = new WeakMap<object, { commit(): void; discard(): void }>()
     const marker = `PhysicsOS internal code run ${randomUUID()}`
-    const persona = `${CODE_PERSONA}\n${marker}`
+    const persona = `${CODE_PERSONA}${plan?.nativeFallback ? '\n平台已确认本任务图片通道瞬态故障：本轮只写原生Canvas/SVG，不生成或引用图片；完整物理、资源和独立绘制校验仍执行。' : ''}\n${marker}`
     const flags = { isolated: false }
     // Creation is serial and awaited before inbox release. A unique scoped persona
     // marker identifies this exact start, even when the same parent starts concurrently.

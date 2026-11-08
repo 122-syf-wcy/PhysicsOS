@@ -183,6 +183,114 @@ describe('direct regeneration route', { timeout: 30_000 }, () => {
     expect((await post(handler, { sessionId: 'parent', sceneId: 'x' }, { 'x-test-account': 'school:student' }, 'GET')).status).toBe(404)
   })
 
+  describe('generation lifecycle recovery', () => {
+    async function solvedHost() {
+      let mainCalls = 0
+      const respond = (options: GenerateOptions) => {
+        if (options.tools?.some(tool => tool.name === 'structured_output')) return toolCallResponse('code', 'structured_output', source)
+        mainCalls++
+        return mainCalls === 1 ? toolCallResponse('solve', 'physics_solve_question', { text: QUESTION }) : textResponse('继续讨论，题目条件没有改变。')
+      }
+      const result = await host(new MockAdapter(Array.from({ length: 12 }, () => respond)))
+      result.parent.followup(createUserMessage({ content: [{ type: 'text', text: QUESTION }], source: { kind: 'user' } }))
+      await result.parent.whenIdle()
+      const original = scenesOf(result.parent).at(-1)!
+      expect(original.visualization?.status).toBe('ready')
+      return { ...result, original }
+    }
+
+    it.each([
+      { label: 'a missing deadline', withDeadline: false },
+      { label: 'a future deadline but no process job', withDeadline: true },
+    ])('restarts an orphan generation with $label', async ({ withDeadline }) => {
+      const { ctx, parent, handler, original, created } = await solvedHost()
+      const orphan = { status: 'generating' as const, ownerSessionId: 'parent', sceneId: original.sceneId,
+        sceneRevision: original.revision, jobId: 'orphan-job', ...(withDeadline ? { deadlineAt: Date.now() + 600_000 } : {}) }
+      parent.session.append('physics/scene', { ...original, visualization: orphan })
+      let release!: () => void
+      const held = new Promise<void>(resolve => { release = resolve })
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as { create: (input: unknown) => Promise<unknown> }
+      const create = artifacts.create
+      artifacts.create = async input => { await held; return create(input) }
+      try {
+        const accepted = await post(handler, { sessionId: 'parent', sceneId: original.sceneId }, { 'x-test-account': 'school:student' })
+        expect(accepted.status).toBe(202)
+        expect(accepted.body?.state?.jobId).not.toBe('orphan-job')
+      } finally { release() }
+      await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('ready') }, { timeout: 10_000 })
+      const latest = scenesOf(parent).at(-1)!
+      expect(created).toHaveLength(2)
+      expect(latest.scene).toEqual(original.scene)
+      expect(latest.solve).toEqual(original.solve)
+      expect(latest.revision).toBe(original.revision)
+    })
+
+    it('settles its own generating marker after the parent starts a newer turn', async () => {
+      const { ctx, parent, handler, original } = await solvedHost()
+      let release!: () => void
+      let entered!: () => void
+      const held = new Promise<void>(resolve => { release = resolve })
+      const creating = new Promise<void>(resolve => { entered = resolve })
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as { create: (input: unknown) => Promise<unknown> }
+      const create = artifacts.create
+      artifacts.create = async input => { entered(); await held; return create(input) }
+      const accepted = await post(handler, { sessionId: 'parent', sceneId: original.sceneId }, { 'x-test-account': 'school:student' })
+      try {
+        expect(accepted.status).toBe(202)
+        await creating
+        parent.followup(createUserMessage({ content: [{ type: 'text', text: '只解释已有结果，不改变题目条件。' }], source: { kind: 'user' } }))
+        await parent.whenIdle()
+        expect(turnsOf(parent)).toBe(2)
+        release()
+        await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('failed') }, { timeout: 2_000 })
+        const latest = scenesOf(parent).at(-1)!
+        expect(latest.visualization).toMatchObject({ status: 'failed', code: 'STALE_GENERATION', jobId: accepted.body?.state?.jobId, ownerSessionId: 'parent' })
+        expect(latest.scene).toEqual(original.scene)
+        expect(latest.solve).toEqual(original.solve)
+      } finally { release() }
+    })
+
+    it('keeps the newer job live when a superseded job finishes', async () => {
+      const { ctx, parent, handler, original } = await solvedHost()
+      let releaseOld!: () => void
+      let releaseNew!: () => void
+      let enteredOld!: () => void
+      let enteredNew!: () => void
+      const oldHeld = new Promise<void>(resolve => { releaseOld = resolve })
+      const newHeld = new Promise<void>(resolve => { releaseNew = resolve })
+      const oldCreating = new Promise<void>(resolve => { enteredOld = resolve })
+      const newCreating = new Promise<void>(resolve => { enteredNew = resolve })
+      const artifacts = ctx.get('questionCodeArtifacts') as unknown as { create: (input: unknown, signal?: AbortSignal) => Promise<unknown> }
+      const create = artifacts.create
+      let calls = 0
+      let oldSignal: AbortSignal | undefined
+      artifacts.create = async (input, signal) => {
+        calls++
+        if (calls === 1) { oldSignal = signal; enteredOld(); await oldHeld }
+        else { enteredNew(); await newHeld }
+        return create(input, signal)
+      }
+      try {
+        const first = await post(handler, { sessionId: 'parent', sceneId: original.sceneId }, { 'x-test-account': 'school:student' })
+        await oldCreating
+        const old = scenesOf(parent).at(-1)!
+        if (old.visualization?.status !== 'generating') throw new Error('Old generation did not start')
+        parent.session.append('physics/scene', { ...old, visualization: { ...old.visualization, deadlineAt: Date.now() - 1 } })
+        const second = await post(handler, { sessionId: 'parent', sceneId: original.sceneId }, { 'x-test-account': 'school:student' })
+        expect(second.body?.state?.jobId).not.toBe(first.body?.state?.jobId)
+        await newCreating
+        releaseOld()
+        await vi.waitFor(() => { expect(oldSignal?.aborted).toBe(true) })
+        const repeated = await post(handler, { sessionId: 'parent', sceneId: original.sceneId }, { 'x-test-account': 'school:student' })
+        expect(repeated.body?.state?.jobId).toBe(second.body?.state?.jobId)
+        expect(scenesOf(parent).at(-1)?.visualization).toMatchObject({ status: 'generating', jobId: second.body?.state?.jobId })
+        releaseNew()
+        await vi.waitFor(() => { expect(scenesOf(parent).at(-1)?.visualization?.status).toBe('ready') }, { timeout: 10_000 })
+        expect(scenesOf(parent).at(-1)?.scene).toEqual(original.scene)
+      } finally { releaseOld(); releaseNew() }
+    })
+  })
+
   it('returns the live job instead of starting a second one while a generation is still running', async () => {
     let release: (() => void) | undefined
     let childCalls = 0

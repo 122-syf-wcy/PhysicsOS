@@ -38,6 +38,12 @@
       "path": "../../session/session-projection"
     },
     {
+      "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../../subagent/subagent-in-process-driver"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]

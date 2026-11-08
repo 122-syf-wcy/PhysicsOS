@@ -65,7 +65,7 @@ export function RecentSpaces({
   }, [sessions, archivedSessionIds])
   if (!wide) return <div className={css.rail} aria-hidden="true" />
   return (
-    <section className={css.root} aria-label={t('recent.title')}>
+    <section className={css.root} aria-label={t('recent.title')} tabIndex={0}>
       <h2 className={css.title}>{t('recent.title')}</h2>
       {items.length === 0 ? (
         <p className={css.empty}>{t('recent.sidebarEmpty')}</p>

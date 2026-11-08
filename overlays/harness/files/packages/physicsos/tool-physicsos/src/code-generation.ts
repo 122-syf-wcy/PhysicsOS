@@ -60,10 +60,33 @@ export interface CodeGenerationDependencies {
   assetManifest?(generationId: string): unknown
   current(): PhysicsSceneSnapshot | undefined
   isCurrent?(): boolean
+  /** Scene-only failure settlement fence; existing callers fall back to isCurrent. */
+  canPublishFailure?(): boolean
   publish(snapshot: PhysicsSceneSnapshot): void
 }
 
 const sceneHash = (value: unknown): string => createHash('sha256').update(canonicalJson(value)).digest('hex')
+
+interface ActiveCodeJob {
+  ownerSessionId: string
+  sceneId: string
+  sceneRevision: number
+  sceneSha256: string
+  signal: AbortSignal
+}
+/** Durable generating markers are not proof that their process-owned work still exists. */
+const activeCodeJobs = new Map<string, ActiveCodeJob>()
+
+export function isQuestionCodeGenerationActive(ownerSessionId: string, snapshot: PhysicsSceneSnapshot): boolean {
+  const marker = snapshot.visualization
+  if (marker?.status !== 'generating' || marker.ownerSessionId !== ownerSessionId
+    || marker.sceneId !== snapshot.sceneId || marker.sceneRevision !== snapshot.revision
+    || marker.deadlineAt === undefined || marker.deadlineAt <= Date.now()) return false
+  const active = activeCodeJobs.get(marker.jobId)
+  return active !== undefined && !active.signal.aborted && active.ownerSessionId === ownerSessionId
+    && active.sceneId === snapshot.sceneId && active.sceneRevision === snapshot.revision
+    && active.sceneSha256 === sceneHash(snapshot.scene)
+}
 
 /** Static quality boundary: metadata/CSS changes cannot turn a bare SDK reexport into question code. */
 const MODULE_TRIVIA = String.raw`(?:\s|//[^\n]*(?:\n|$)|/\*[\s\S]*?\*/)*`
@@ -144,16 +167,21 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
   const clock = new GenerationClock(deps.signal, deps.timeoutMs ?? CODE_TIMEOUT_MS)
   const deadlineAt = Date.now() + (deps.timeoutMs ?? CODE_TIMEOUT_MS)
   const identity = { ownerSessionId: deps.ownerSessionId, sceneId: original.sceneId, sceneRevision: original.revision }
-  /* Still the same scene revision, same facts, and still this job's own `generating` marker. */
-  const isCurrent = (): boolean => {
+  /* Own only the exact owner, scene facts/revision and job marker, even after a turn changes. */
+  const ownedSnapshot = (): PhysicsSceneSnapshot | undefined => {
     const current = deps.current()
-    return deps.isCurrent?.() !== false && current?.sceneId === original.sceneId && current.revision === original.revision
-      && sceneHash(current.scene) === expectedHash && current.visualization?.status === 'generating' && current.visualization.jobId === jobId
+    const marker = current?.visualization
+    return current?.sceneId === original.sceneId && current.revision === original.revision
+      && sceneHash(current.scene) === expectedHash && marker?.status === 'generating' && marker.jobId === jobId
+      && marker.ownerSessionId === deps.ownerSessionId && marker.sceneId === original.sceneId && marker.sceneRevision === original.revision
+      ? current : undefined
   }
+  const isCurrent = (): boolean => deps.isCurrent?.() !== false && ownedSnapshot() !== undefined
   const publish = (visualization: CodeVisualizationState): void => { deps.publish({ ...original, visualization }) }
-  publish({ status: 'generating', jobId, deadlineAt, ...identity })
+  activeCodeJobs.set(jobId, { ...identity, sceneSha256: expectedHash, signal: clock.signal })
 
   try {
+    publish({ status: 'generating', jobId, deadlineAt, ...identity })
     const style = await clock.wait(deps.context(deps.experimentId))
     let repair: CodeRepair | undefined
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -168,9 +196,13 @@ export async function generateQuestionCode(deps: CodeGenerationDependencies): Pr
   } catch (error) {
     const code = codeOf(error)
     const failed: CodeVisualizationState = { status: 'failed', jobId, ...identity, code, message: failureMessageFor(code) }
-    if (isCurrent()) publish(failed)
+    const current = ownedSnapshot()
+    if (current !== undefined && (deps.canPublishFailure?.() ?? deps.isCurrent?.() ?? true)) {
+      deps.publish({ ...current, visualization: failed })
+    }
     return failed
   } finally {
+    activeCodeJobs.delete(jobId)
     clock.dispose()
   }
 }

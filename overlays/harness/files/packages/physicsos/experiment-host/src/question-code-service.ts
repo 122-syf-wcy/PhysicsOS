@@ -22,7 +22,7 @@ import {
 } from './question-code-domain.ts'
 import { questionCodeContext, styleVersionOf, type QuestionCodeContext } from './question-code-context.ts'
 import type { DeveloperPromptService } from './prompt-service.ts'
-import { QuestionCodeAssets, type QuestionAssetDescriptor } from './question-code-assets.ts'
+import { QuestionCodeAssets, type QuestionAssetDescriptor, type QuestionAssetFallback } from './question-code-assets.ts'
 import { CANVAS_TEXT_SHIM } from './question-code-canvas-text.ts'
 export interface QuestionAssetRequest { ownerSessionId: string; generationId: string; scene: unknown; prompt: string; kind: 'environment' | 'material'; signal: AbortSignal }
 export type QuestionAssetScope = Pick<QuestionAssetRequest, 'ownerSessionId' | 'generationId' | 'scene'>
@@ -45,6 +45,7 @@ export interface QuestionCodeArtifacts {
   describe(ownerSessionId: string, artifactId: string, expectedSha256: string): CodeExperimentRef
   generateAsset(input: QuestionAssetRequest): Promise<QuestionAssetDescriptor>
   assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[]
+  assetFallback?(input: QuestionAssetScope): QuestionAssetFallback | undefined
 }
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -767,6 +768,7 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
     return this.imageAssets.generate({ ...this.assetBinding(input), prompt: input.prompt, kind: input.kind, signal: input.signal })
   }
   assetManifest(input: QuestionAssetScope): QuestionAssetDescriptor[] { return this.imageAssets.manifest(this.assetBinding(input)) }
+  assetFallback(input: QuestionAssetScope): QuestionAssetFallback | undefined { return this.imageAssets.nativeFallback(this.assetBinding(input)) }
   async create(input: CreateQuestionCodeInput, signal?: AbortSignal): Promise<CodeExperimentRef> {
     const operation = this.build(input, signal)
     this.inflight.add(operation)
@@ -806,14 +808,22 @@ export class QuestionCodeArtifactService implements QuestionCodeArtifacts {
       throw new ExperimentError(413, 'SOURCE_TOO_LARGE', '生成代码不能超过 128 KiB。')
     const styleVersion = styleVersionOf(this.options.prompts?.current()),
       files = experimentTemplateFiles(input.experimentId)
+    let syntaxChecked = false
     if (input.generationId !== undefined) {
       const binding = this.assetBinding({ ownerSessionId: input.ownerSessionId, generationId: input.generationId, scene })
-      if (!this.imageAssets.manifest(binding).length) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
+      const hasImages = this.imageAssets.manifest(binding).length > 0
+      if (!hasImages && !this.imageAssets.nativeFallback(binding)) throw new ExperimentError(400, 'IMAGE_REQUIRED', '请先生成本题实验素材。')
+      if (!hasImages) {
+        try { await this.checkSyntax(source.rendererJs); syntaxChecked = true }
+        catch (error) { throw invalidSource(error instanceof DrawingValidationError ? error.reason : undefined) }
+      }
       const generated = this.imageAssets.files(binding, source.rendererJs, source.stylesheet)
       for (const [name, bytes] of generated) files.set(name, bytes)
-      const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
-      if (!Array.isArray(licenses)) throw invalidSource()
-      files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://image.haqiuhaqiu.xyz', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
+      if (generated.size) {
+        const licenses: unknown = JSON.parse(files.get('ASSET-LICENSES.json')?.toString('utf8') ?? '[]')
+        if (!Array.isArray(licenses)) throw invalidSource()
+        files.set('ASSET-LICENSES.json', Buffer.from(JSON.stringify([...(licenses as unknown[]), { path: 'dist/assets/generated/*', name: 'Question-specific generated appearance assets', source: 'https://image.haqiuhaqiu.xyz', license: 'LicenseRef-Generated-Provider-Terms', notice: 'dist/assets/generated/provenance.json' }], null, 2)))
+      }
     } else if (/assets\/generated\//.test(source.rendererJs + source.stylesheet)) throw invalidSource()
     files.set('public/assets/platform-base.css', Buffer.from(independentStylesheet))
     files.set('dist/assets/platform-base.css', Buffer.from(independentStylesheet))
@@ -836,7 +846,7 @@ document.addEventListener('physicsos-experiment-intent', event => {
     files.set('dist/assets/experiment.css', Buffer.from(source.stylesheet))
     try {
       // The resource and drawing checks below lex the renderer, so Node's own syntax verdict comes first.
-      await this.checkSyntax(source.rendererJs)
+      if (!syntaxChecked) await this.checkSyntax(source.rendererJs)
       const manifestBytes = files.get('experiment.json')
       if (manifestBytes === undefined) throw invalidSource()
       const manifest = manifestV3Schema.parse(JSON.parse(manifestBytes.toString('utf8')))
