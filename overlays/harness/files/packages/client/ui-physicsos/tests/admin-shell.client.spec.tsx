@@ -151,6 +151,18 @@ describe('administrator shell', () => {
     ].every(primitive => typeof primitive === 'function')).toBe(true)
   })
 
+  it('offers conversation moderation only to platform administrators in the people group', () => {
+    const first = render(<AdminWorkspace api={api} useAuth={authedAs('SCHOOL_ADMIN')} t={t} />)
+    expect(screen.queryByRole('tab', { name: '对话审核' })).toBeNull()
+    first.unmount()
+    const student = render(<AdminWorkspace api={api} useAuth={authedAs('STUDENT')} t={t} />)
+    expect(screen.queryByRole('tab', { name: '对话审核' })).toBeNull()
+    student.unmount()
+    render(<AdminWorkspace api={api} useAuth={authedAs('SUPER_ADMIN')} t={t} />)
+    const tab = screen.getByRole('tab', { name: '对话审核' })
+    expect(tab.parentElement?.textContent).toContain('账号与学校')
+  })
+
   it('offers developer prompt management only to platform administrators', () => {
     const first = render(
       <AdminWorkspace api={api} useAuth={authedAs('SCHOOL_ADMIN')} t={t} />,
