@@ -18,5 +18,5 @@ export function passwordResetTokenHash(token: string): string {
 
 /** Same-origin path the AuthGate opens when a reset link is followed. */
 export function passwordResetPath(token: string): string {
-  return `/app?reset_token=${encodeURIComponent(token)}`
+  return `/?reset_token=${encodeURIComponent(token)}`
 }

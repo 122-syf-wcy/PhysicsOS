@@ -51,6 +51,7 @@ describe('official website administration', () => {
     expect(tab.parentElement?.textContent).toContain('内容')
     fireEvent.click(tab)
     await screen.findByText('当前版本 3')
+    expect((screen.getByRole('link', { name: '打开官网 ↗' }) as HTMLAnchorElement).href).toBe('https://physicsos.dongsiwei.com/')
     expect(getContent).toHaveBeenCalledTimes(1)
     expect(document.querySelectorAll('[data-admin-page-header]')).toHaveLength(1)
     expect(document.querySelectorAll('[role="tablist"]')).toHaveLength(1)

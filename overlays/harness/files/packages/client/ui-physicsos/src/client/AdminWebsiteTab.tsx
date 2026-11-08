@@ -182,7 +182,7 @@ export function AdminWebsiteTab({ api, t }: { api: WebsiteApi; t: Translate }): 
     <AdminCard>
       <AdminCardHead>
         <div><AdminCardTitle as="h2">{t('admin.tab.website')}</AdminCardTitle><AdminCardMeta>{t('admin.website.hint')}</AdminCardMeta></div>
-        <a className={shared.ghost} href="/" target="_blank" rel="noopener noreferrer">{t('admin.website.openSite')} ↗</a>
+        <a className={shared.ghost} href="https://physicsos.dongsiwei.com/" target="_blank" rel="noopener noreferrer">{t('admin.website.openSite')} ↗</a>
       </AdminCardHead>
       {saved !== undefined && <div className={css.version}>
         <span>{t('admin.website.version').replace('{version}', String(saved.version))}</span>

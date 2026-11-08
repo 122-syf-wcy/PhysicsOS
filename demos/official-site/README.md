@@ -1,5 +1,7 @@
 # PhysicsOS 官网 · 本地设计预览
 
+正式入口（2026-11-08 更新）：官网 `https://physicsos.dongsiwei.com/`，系统 `https://physics.dongsiwei.com/`。真实管理功能在系统现有后台中；域名切换与恢复点见 `docs/reports/2026-11-08-website-domain-split.md`。
+
 2026-11-07 第一版可点击设计样稿。薄荷绿 / 奶白 / 冰蓝，玻璃球与半透明卡片，采用新生成的薄荷色液态玻璃星球 IP。仅新增此目录，不连接生产数据，不部署服务器。
 
 ## 查看

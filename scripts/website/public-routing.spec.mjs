@@ -20,15 +20,15 @@ function redirects(pathname, hash, search = '') {
   return targets;
 }
 
-test('legacy root experiment links enter the app with their query and hash intact', () => {
+test('legacy root experiment links enter the system domain with their query and hash intact', () => {
   for (const hash of ['#/experiments', '#/experiments/', '#/experiments/optics/convex-lens', '#/experiments?domain=optics']) {
-    assert.deepEqual(redirects('/', hash, '?source=shared'), [`/app?source=shared${hash}`]);
+    assert.deepEqual(redirects('/', hash, '?source=shared'), [`https://physics.dongsiwei.com/?source=shared${hash}`]);
   }
 });
 
-test('legacy contribution and password-reset hashes enter the app', () => {
+test('legacy contribution and password-reset hashes enter the system root', () => {
   for (const hash of ['#/contribute', '#/contribute?tab=uploads', '#reset_token=example']) {
-    assert.deepEqual(redirects('/', hash), [`/app${hash}`]);
+    assert.deepEqual(redirects('/', hash), [`https://physics.dongsiwei.com/${hash}`]);
   }
 });
 
@@ -44,4 +44,21 @@ test('the compatibility redirect runs only at the root pathname', () => {
     assert.deepEqual(redirects(pathname, '#/experiments'), []);
     assert.deepEqual(redirects(pathname, '#reset_token=example'), []);
   }
+});
+
+const links = [...page.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+  .map(([, href, content]) => ({ href, label: content.replace(/<[^>]+>/g, '').trim() }));
+
+test('all product and administrator links navigate from the website to the system root', () => {
+  for (const label of ['开始探索', '进入 PhysicsOS', '进入我的物理世界', '去完整实验室看看', '开启我的探索', '管理员后台']) {
+    const link = links.find(item => item.label === label);
+    assert.ok(link, `missing ${label} link`);
+    assert.equal(new URL(link.href, 'https://physicsos.dongsiwei.com/').href, 'https://physics.dongsiwei.com/', label);
+  }
+});
+
+test('developer documentation remains on the system domain', () => {
+  const link = links.find(item => item.label === '开发文档 ↗');
+  assert.ok(link, 'missing developer documentation link');
+  assert.equal(new URL(link.href, 'https://physicsos.dongsiwei.com/').href, 'https://physics.dongsiwei.com/physicsos/developers/index.html');
 });

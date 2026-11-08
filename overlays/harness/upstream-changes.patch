@@ -39,7 +39,7 @@ index 6592d6a7000ec65d67e408ffc5402f23cb3939ea..c960c37fc6ddc1d8ed1ec7845e783880
 +  "name": "PhysicsOS",
 +  "short_name": "PhysicsOS",
 +  "id": "/",
-+  "start_url": "/app",
++  "start_url": "/",
 +  "scope": "/",
    "display": "fullscreen",
    "icons": [
@@ -89,8 +89,8 @@ index 2cfc21e2c913917015a6e4cee10c37062d57d634..0c9632e4c69e697ca1665a5b09b15745
 -  // No `id`: a browser resolves an explicit `id` against the start URL's origin,
 -  // so only an absent `id`, which defaults to the resolved `start_url`, gives
 -  // each mount its own identity. `public-mount.e2e.ts` reads the resolved form.
-+  // Keep the historical root identity when the installed app starts at /app.
-+  // Without an explicit id, moving start_url would create a different PWA.
++  // Keep the historical root identity when the website uses a separate host.
++  // The installed application continues to launch at the system root.
    expect(manifest).toEqual({
 -    name: 'DeepSeek Harness',
 -    short_name: 'DSH',
@@ -99,7 +99,7 @@ index 2cfc21e2c913917015a6e4cee10c37062d57d634..0c9632e4c69e697ca1665a5b09b15745
 +    name: 'PhysicsOS',
 +    short_name: 'PhysicsOS',
 +    id: '/',
-+    start_url: '/app',
++    start_url: '/',
 +    scope: '/',
      display: 'fullscreen',
 -    icons: [{
@@ -18211,28 +18211,15 @@ index 469aa25b0c..a48ff20eb5 100644
      const entry = await startMux(async (_endpoint, _payload, _uplink, _peer, control) => waitForAbort(control.signal), 20)
      const client = await connect(entry.url)
 diff --git a/packages/bundle/web-app/src/index.ts b/packages/bundle/web-app/src/index.ts
-index 76c212e4e6d885d9384da033d4c855e428348095..39585c2428c3ad3fd0b2861478595aa3ae13b72f 100644
 --- a/packages/bundle/web-app/src/index.ts
 +++ b/packages/bundle/web-app/src/index.ts
-@@ -12,6 +12,7 @@
-  */
-
- import { spawn, type ChildProcess } from 'node:child_process'
-+import { existsSync } from 'node:fs'
- import { createRequire } from 'node:module'
- import { dirname, join } from 'node:path'
- import { networkInterfaces } from 'node:os'
-@@ -229,7 +230,12 @@ export function apply(ctx: Context, config: Config): void {
+@@ -229,7 +229,9 @@ export function apply(ctx: Context, config: Config): void {
    const handoffBrowser = config.openBrowser && !launchedThroughSsh(launchEnvironmentOf(ctx))
    // Release dependent rows only after bind-dependent trust has been sampled once.
    ctx.provide(WEB_RUNTIME_SERVICE, runtime)
--  ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
-+  const distIndex = internals.resolveDistIndex()
-+  const landingPath = 'physicsos/website/index.html'
-+  ctx.plugin(FrontendStatic, {
-+    distIndex,
-+    ...(existsSync(join(dirname(distIndex), landingPath)) ? { publicLanding: `/${landingPath}` } : {}),
-+  })
++  // Keep the system at root even when website assets are present. This managed
++  // hunk also resets the legacy automatic landing change on overlay reapply.
+   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
    if (config.surfaceContext) {
      ctx.inject(['systemPrompt'], (promptCtx) => {
        addHarnessSourceSection(promptCtx, SOURCE_ROOT)

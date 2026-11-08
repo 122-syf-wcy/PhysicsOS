@@ -108,7 +108,7 @@ describe('password reset lifecycle', () => {
 
     const issued = await service.issuePasswordReset(admin, queued[0]!.id)
     expect(issued.token.length).toBeGreaterThan(40)
-    expect(new URL(issued.resetPath, 'https://physics.example').pathname).toBe('/app')
+    expect(new URL(issued.resetPath, 'https://physics.example').pathname).toBe('/')
     expect(new URL(issued.resetPath, 'https://physics.example').searchParams.get('reset_token')).toBe(issued.token)
     const tokens = [...domain.table('password_reset_tokens').entries()]
     expect(tokens).toHaveLength(1)

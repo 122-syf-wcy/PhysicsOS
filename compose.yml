@@ -33,6 +33,8 @@ services:
       - --no-open
       - --trusted-host
       - ${PHYSICOS_TRUSTED_HOSTS:-physics.dongsiwei.com}
+      - --trusted-host
+      - ${PHYSICOS_WEBSITE_HOST:-physicsos.dongsiwei.com}
     build:
       context: .
       dockerfile: Dockerfile
