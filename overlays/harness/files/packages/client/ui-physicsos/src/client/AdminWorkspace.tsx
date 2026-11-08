@@ -22,6 +22,8 @@ import { AdminNoticeTab } from './AdminNoticeTab.tsx'
 import { AdminPlatformNoticeTab } from './AdminPlatformNoticeTab.tsx'
 import { AdminPluginTab } from './AdminPluginTab.tsx'
 import { AdminPromptTab } from './AdminPromptTab.tsx'
+import { AdminModerationTab } from './AdminModerationTab.tsx'
+import { createModerationApi, type ModerationApi } from './moderation-api.ts'
 import { createDeveloperPromptApi, type DeveloperPromptApi } from './developer-prompt-api.ts'
 import { PasswordResetQueue } from './AuthGate.tsx'
 import { isAdminRole, type AuthState } from './auth-store.ts'
@@ -55,6 +57,7 @@ type Tab =
   | 'notice'
   | 'platformNotice'
   | 'developerPrompts'
+  | 'moderation'
   | 'modelPool'
   | 'plugins'
   | 'ops'
@@ -88,6 +91,8 @@ export interface AdminWorkspaceProps {
   pluginApi?: PluginCenterApi
   /** Platform-wide developer instructions; the server requires SUPER_ADMIN. */
   promptApi?: DeveloperPromptApi
+  /** Conversation evidence and human decisions; live SUPER_ADMIN Cookie only. */
+  moderationApi?: ModerationApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
   t: (key: PhysicsosKey) => string
@@ -100,10 +105,11 @@ const fmtTime = (iso: string): string => {
 
 const defaultPluginApi = createPluginCenterApi()
 const defaultPromptApi = createDeveloperPromptApi()
+const defaultModerationApi = createModerationApi()
 
 export function AdminWorkspace({
   api, paperApi, noticeApi, modelPoolApi,
-  pluginApi = defaultPluginApi, promptApi = defaultPromptApi, useAuth, t,
+  pluginApi = defaultPluginApi, promptApi = defaultPromptApi, moderationApi = defaultModerationApi, useAuth, t,
 }: AdminWorkspaceProps) {
   const role = useAuth(state => state.user?.role)
   /* The judging account, attributed on every review — the same identity the
@@ -131,6 +137,7 @@ export function AdminWorkspace({
        School admins see their own tenant; SUPER_ADMIN sees every school. */
     { id: 'resets' as const, label: t('admin.tab.resets'), group: 'people' as const },
     { id: 'devices' as const, label: t('admin.tab.devices'), group: 'people' as const },
+    ...(isSuper ? [{ id: 'moderation' as const, label: t('admin.tab.moderation'), group: 'people' as const }] : []),
     ...(paperApi === undefined ? [] : [{ id: 'content' as const, label: t('admin.tab.content'), group: 'content' as const }]),
     ...(isSuper
       ? [{ id: 'experimentReview' as const, label: t('admin.tab.experimentReview'), group: 'content' as const }]
@@ -195,6 +202,7 @@ export function AdminWorkspace({
         )}
         {active === 'plugins' && isSuper && <AdminPluginTab api={pluginApi} t={t} />}
         {active === 'developerPrompts' && isSuper && <AdminPromptTab api={promptApi} />}
+        {active === 'moderation' && isSuper && <AdminModerationTab api={moderationApi} />}
         {active === 'ops' && <AdminOpsTab api={api} isSuper={isSuper} t={t} />}
         {active === 'devices' && <AdminDeviceTab api={api} isSuper={isSuper} t={t} />}
         {active === 'audit' && <AuditTab api={api} t={t} />}
