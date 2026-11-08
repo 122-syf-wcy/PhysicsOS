@@ -1,0 +1,8 @@
+Use case: stylized-concept
+Asset type: official PhysicsOS website brand mascot hero artwork
+Primary request: A premium beautifully rendered friendly translucent mint-green little physics explorer mascot, a round glass bubble with a small soft pear-shaped body, two dark oval eyes, a tiny warm smile and tiny translucent flipper-like arms, one arm waving. An elegant tilted clear glass orbital ring wraps around its head, like a little Saturn atom. Three tiny floating ice-blue and lime spheres orbit it. Youthful collectible designer toy, minimal, adorable but sophisticated, not childish. No robot armor, no helmet, no clothing.
+Scene/backdrop: seamless very pale mint-white studio background (#f1f8f4), single small soft ground shadow, no horizon line.
+Style/medium: exceptional photoreal 3D product rendering, liquid glass, clear frosted edges, internal refraction, delicate caustic light, luminous spring green core. Soft studio daylight, gentle rim light. Clean airy composition.
+Composition/framing: full character centered, occupies 75 percent of square canvas, generous clean margins, 3/4 front view. Minimal surrounding elements. Crisp, sculptural, organic rounded forms.
+Color palette: pale mint, translucent leaf green, icy cyan, soft pearl highlights; eyes near-black.
+Constraints: no text, no letters, no logos, no watermark, no UI, no checkerboard, no gradients to dark colors.

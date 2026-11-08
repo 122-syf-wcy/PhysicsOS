@@ -11,6 +11,7 @@ import crypto from 'node:crypto'
 
 import { NoticeError, auditWrites, guard, type PhysicsosIdentity } from './identity.ts'
 import type { NoticeService } from './service.ts'
+import { handleWebsiteRoute, type WebsiteRouteDeps } from './website-routes.ts'
 
 type Body = Record<string, unknown>
 const BODY_LIMIT = 64 * 1024
@@ -20,6 +21,7 @@ export interface RouteDeps {
   readonly service: NoticeService
   /** Resolved per request: this host loads BEFORE auth-host declares it. */
   readonly identity: () => PhysicsosIdentity | undefined
+  readonly website?: WebsiteRouteDeps
 }
 
 /**
@@ -109,6 +111,7 @@ export function noticeRoutes(deps: RouteDeps): (req: IncomingMessage, res: Serve
       const path = url.pathname.replace(/^\/physicsos\/notice/, '') || '/'
       const method = req.method ?? 'GET'
       const seg = path.split('/').filter(Boolean)
+      if (deps.website !== undefined && await handleWebsiteRoute(deps.website, req, res, url, path)) return
 
       /* Per-surface floors. Reading anything needs a session; writing 反馈 is
          open to any account; publishing a notice needs a school admin. The

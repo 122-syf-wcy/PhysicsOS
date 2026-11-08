@@ -19,6 +19,8 @@ import { AdminExperimentTab } from './AdminExperimentTab.tsx'
 import { AdminModelPoolTab } from './AdminModelPoolTab.tsx'
 import { AdminOpsTab } from './AdminOpsTab.tsx'
 import { AdminNoticeTab } from './AdminNoticeTab.tsx'
+import { AdminWebsiteTab } from './AdminWebsiteTab.tsx'
+import { createWebsiteApi, type WebsiteApi } from './website-api.ts'
 import { AdminPlatformNoticeTab } from './AdminPlatformNoticeTab.tsx'
 import { AdminPluginTab } from './AdminPluginTab.tsx'
 import { AdminPromptTab } from './AdminPromptTab.tsx'
@@ -56,6 +58,7 @@ type Tab =
   | 'experimentReview'
   | 'notice'
   | 'platformNotice'
+  | 'website'
   | 'developerPrompts'
   | 'moderation'
   | 'modelPool'
@@ -93,6 +96,8 @@ export interface AdminWorkspaceProps {
   promptApi?: DeveloperPromptApi
   /** Conversation evidence and human decisions; live SUPER_ADMIN Cookie only. */
   moderationApi?: ModerationApi
+  /** Platform-wide official website configuration and private feedback inbox. */
+  websiteApi?: WebsiteApi
   /** Bound auth store — the role comes from the session, never the wire. */
   useAuth: <T>(selector: (state: AuthState) => T) => T
   t: (key: PhysicsosKey) => string
@@ -106,10 +111,12 @@ const fmtTime = (iso: string): string => {
 const defaultPluginApi = createPluginCenterApi()
 const defaultPromptApi = createDeveloperPromptApi()
 const defaultModerationApi = createModerationApi()
+const defaultWebsiteApi = createWebsiteApi()
 
 export function AdminWorkspace({
   api, paperApi, noticeApi, modelPoolApi,
-  pluginApi = defaultPluginApi, promptApi = defaultPromptApi, moderationApi = defaultModerationApi, useAuth, t,
+  pluginApi = defaultPluginApi, promptApi = defaultPromptApi,
+  moderationApi = defaultModerationApi, websiteApi = defaultWebsiteApi, useAuth, t,
 }: AdminWorkspaceProps) {
   const role = useAuth(state => state.user?.role)
   /* The judging account, attributed on every review — the same identity the
@@ -146,6 +153,9 @@ export function AdminWorkspace({
     ...(noticeApi === undefined || !isSuper
       ? []
       : [{ id: 'platformNotice' as const, label: t('admin.tab.platformNotice'), group: 'content' as const }]),
+    ...(isSuper
+      ? [{ id: 'website' as const, label: t('admin.tab.website'), group: 'content' as const }]
+      : []),
     ...(modelPoolApi === undefined || !isSuper
       ? []
       : [{ id: 'modelPool' as const, label: t('admin.tab.modelPool'), group: 'system' as const }]),
@@ -200,6 +210,7 @@ export function AdminWorkspace({
         {active === 'modelPool' && modelPoolApi !== undefined && isSuper && (
           <AdminModelPoolTab api={modelPoolApi} t={t} />
         )}
+        {active === 'website' && isSuper && <AdminWebsiteTab api={websiteApi} t={t} />}
         {active === 'plugins' && isSuper && <AdminPluginTab api={pluginApi} t={t} />}
         {active === 'developerPrompts' && isSuper && <AdminPromptTab api={promptApi} />}
         {active === 'moderation' && isSuper && <AdminModerationTab api={moderationApi} />}

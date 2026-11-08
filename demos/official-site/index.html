@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f8f3">
+  <meta name="description" content="PhysicsOS，让好奇心有处发生。面向初高中、开放公益的物理实验与学习平台。">
+  <title>PhysicsOS · 让好奇心，有处发生</title>
+  <link rel="icon" href="./assets/logo.png">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./motion.css">
+  <script type="module" src="./app.js"></script>
+  <script type="module" src="./motion.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳转到正文</a>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-up-right" viewBox="0 0 24 24"><path d="M6 18 18 6M6 6h12v12"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 0 1 19 0Z"/><path d="M7 9h9M7 13h6"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6m-5 0v7L4 20h16l-6-10V3M7 15h10"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1-4-2-6-2m12 5v-4a3.5 3.5 0 0 0-1-2.7c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.3 4.5 5 5 0 0 0 19.2 1S18 .6 15 2.5a13 13 0 0 0-6 0C6 .6 4.8 1 4.8 1a5 5 0 0 0-.1 3.5A5.4 5.4 0 0 0 3.2 8.3c0 5.4 3.5 6.6 6.8 7A3.5 3.5 0 0 0 9 18v4"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.5 4.6a5.5 5.5 0 0 0-7.8 0L12 5.3l-.7-.7a5.5 5.5 0 0 0-7.8 7.8L12 21l8.5-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  </defs></svg>
+
+  <header class="header wrap">
+    <a class="brand" href="#" aria-label="PhysicsOS 首页"><img src="./assets/logo.png" alt="" width="34" height="34">Physics<span>OS</span><span class="brand-dot"></span></a>
+    <nav id="main-nav" aria-label="主导航">
+      <a href="#explore">发现 PhysicsOS</a><a href="#voices">听见你们</a><a href="#community">一起共建 <span>↗</span></a>
+    </nav>
+    <div class="nav-actions"><a class="github-link" href="https://github.com/122-syf-wcy/PhysicsOS" target="_blank" rel="noopener noreferrer" aria-label="GitHub 开源仓库"><svg class="icon"><use href="#i-github"/></svg></a><a class="button button-dark button-small" href="https://physics.dongsiwei.com" target="_blank" rel="noopener noreferrer">开始探索<svg class="icon"><use href="#i-up-right"/></svg></a><button id="menu-toggle" class="icon-button menu-toggle" aria-label="打开导航" aria-expanded="false" aria-controls="main-nav"><svg class="icon"><use href="#i-menu"/></svg></button></div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <div class="eyebrow-pill"><span class="live-dot"></span> 开源 · 公益 · 为每一份好奇心 <span class="pill-arrow">↗</span></div>
+        <h1 id="hero-title"><span class="hero-title-line"><span class="title-ink">让好奇心，</span></span><span class="hero-title-line"><span class="hero-green title-ink">有处发生<span class="period">。</span><svg viewBox="0 0 360 18" aria-hidden="true"><path d="M5 12Q165-3 350 8M18 16Q190 3 329 12"/></svg></span></span></h1>
+        <p class="hero-description">物理不止在课本里，也在你的每一次「为什么」里。<br>和 PhysicsOS 一起，把抽象的公式，变成看得见的世界。</p>
+        <div class="hero-actions"><a class="button button-primary" href="https://physics.dongsiwei.com" target="_blank" rel="noopener noreferrer">进入我的物理世界<svg class="icon"><use href="#i-arrow"/></svg></a><a class="button button-glass" href="#explore"><span class="play-circle"><svg class="icon"><use href="#i-play"/></svg></span>先逛一逛</a></div>
+        <div class="hero-note"><div class="mini-orbits" aria-hidden="true"><span>F</span><span>λ</span><span>∞</span></div><p>给学生、老师，和永远保持好奇的你。<br><strong>公益开放，让探索少一点门槛。</strong></p></div>
+      </div>
+      <div class="hero-art" aria-label="PhysicsOS 液态玻璃星球小伙伴">
+        <div class="art-glow"></div><canvas class="hero-orbit-field" aria-hidden="true"></canvas><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+        <span class="art-spark spark-one">✳</span><span class="art-spark spark-two">✧</span><span class="art-dot dot-one"></span>
+        <div class="floating-tag tag-top"><span class="tiny-spark">✧</span> Hi，我是你的好奇心搭子！</div>
+        <img class="mascot" src="./assets/mascot-glass.webp" alt="薄荷绿色的液态玻璃星球小伙伴，戴着透明星环，微笑着挥手" width="640" height="640" fetchpriority="high">
+        <div class="floating-tag tag-formula"><span>F</span> = <i>ma</i><span class="formula-caption">灵感，总有迹可循</span></div>
+        <div class="floating-card"><div class="floating-card-icon"><svg class="icon"><use href="#i-flask"/></svg></div><div><strong>一个想法，一场实验。</strong><span>让「如果……」真的发生</span></div><span class="card-check"><svg class="icon"><use href="#i-check"/></svg></span></div>
+        <div class="art-caption"><span class="live-dot"></span> STAY CURIOUS. KEEP EXPLORING.</div>
+      </div>
+      <a class="hero-scroll-cue" href="#explore"><span class="scroll-line" aria-hidden="true"></span> SCROLL TO DISCOVER</a>
+    </section>
+
+    <div class="facts wrap" aria-label="平台特点"><div><strong>12<span>个领域</span></strong><p>从一束光，到整个物理世界</p></div><div><strong>AI <span>× 物理引擎</span></strong><p>有解释，也有可验证的过程</p></div><div><strong>100%<span>开源</span></strong><p>把知识与创造，分享给更多人</p></div><div><strong>∞<span>种好奇</span></strong><p>你的下一个问题，就是起点</p></div></div>
+
+    <section id="explore" class="explore section wrap">
+      <div class="section-heading"><div><p class="eyebrow"><span></span> A LITTLE WONDER, EVERY DAY</p><h2>少一点抽象。<br>多一点<span class="green">「原来如此」。</span></h2></div><p>从一个问题出发，把答案亲手试出来。<br>你的随身实验室，现在开门。</p></div>
+      <div class="experience-shell">
+        <div class="experience-bar"><span class="experience-label"><svg class="icon"><use href="#i-flask"/></svg> 一点就懂的物理时刻</span><div class="experiment-tabs" role="tablist" aria-label="实验体验"><button role="tab" id="tab-wave" data-experiment="wave" aria-selected="true" aria-controls="experiment-panel">波的旅行</button><button role="tab" id="tab-orbit" data-experiment="orbit" aria-selected="false" aria-controls="experiment-panel" tabindex="-1">磁场漫游</button><button role="tab" id="tab-projectile" data-experiment="projectile" aria-selected="false" aria-controls="experiment-panel" tabindex="-1">抛物线时刻</button></div><span class="demo-label">互动小样</span></div>
+        <div class="experiment-content" id="experiment-panel" role="tabpanel" aria-labelledby="tab-wave"><div class="experiment-stage"><canvas id="experiment-canvas" aria-label="可通过右侧参数调节的物理概念动画"></canvas><div class="stage-top"><span><i></i> LIVE EXPLORATION</span><span id="stage-formula">v = λf</span></div><div class="stage-bottom"><span id="stage-caption">波向前走，质点留在原地。</span><button id="pause-experiment" class="icon-button" aria-label="暂停动画"><span class="pause-symbol">Ⅱ</span></button></div></div><div class="experiment-info"><span class="number-label">01 / 让公式动起来</span><h3 id="experiment-title">原来，波是这样<br>「走」过去的。</h3><p id="experiment-description">试着改变频率，观察波形的变化。看见每个质点的运动，理解波如何传递能量。</p><label class="range-label" for="experiment-range"><span id="range-label-text">波源频率</span><output id="range-value">1.5 Hz</output></label><input id="experiment-range" type="range" min="5" max="30" value="15"><div class="range-endpoints"><span>慢一点</span><span>快一点</span></div><div class="engine-note"><svg class="icon"><use href="#i-spark"/></svg><span>拖动滑块，发现一点不一样</span></div><a href="https://physics.dongsiwei.com" target="_blank" rel="noopener noreferrer" class="text-link">去完整实验室看看<svg class="icon"><use href="#i-arrow"/></svg></a></div></div>
+      </div>
+      <div class="feature-grid"><article class="feature-card"><span class="feature-icon mint"><svg class="icon"><use href="#i-message"/></svg></span><div><h3>一个问题，接住你的好奇</h3><p>和 AI 助教聊一聊，让问题连上物理引擎。解题，也理解答案从哪里来。</p><span>AI 讲题 · 引擎验证</span></div></article><article class="feature-card"><span class="feature-icon blue"><svg class="icon"><use href="#i-flask"/></svg></span><div><h3>从题目，走进实验里</h3><p>把同一个物理场景带进实验室。改个条件、再试一次，规律就藏在变化里。</p><span>试题空间 · 交互实验</span></div></article><article class="feature-card"><span class="feature-icon peach"><svg class="icon"><use href="#i-heart"/></svg></span><div><h3>每一点进步，都有回响</h3><p>留下你的实验与学习记录，换个设备继续探索，让每一次发现都有迹可循。</p><span>学习记录 · 跨设备同步</span></div></article></div>
+    </section>
+
+    <section id="voices" class="voices section">
+      <div class="wrap"><div class="section-heading"><div><p class="eyebrow"><span></span> MADE BETTER, WITH YOU</p><h2>你们的声音，<span class="green">让这里更好。</span></h2><p class="section-subtext">一个小建议，也可能成为下一次更新的开始。</p></div><button class="button button-glass feedback-trigger"><svg class="icon"><use href="#i-message"/></svg>我也有个想法<svg class="icon"><use href="#i-up-right"/></svg></button></div><div class="voices-meta"><span class="sample-label">示例反馈 · 等待真实故事加入</span><div class="carousel-controls"><button id="voices-prev" class="icon-button" aria-label="上一组反馈">←</button><button id="voices-pause" class="icon-button" aria-label="暂停反馈轮播">Ⅱ</button><button id="voices-next" class="icon-button" aria-label="下一组反馈">→</button></div></div><div class="testimonial-window" aria-label="用户反馈轮播"><div id="testimonials" class="testimonial-track"></div></div><div class="voices-bottom"><div id="carousel-dots" class="carousel-dots" aria-label="反馈分页"></div><span>认真听见，慢慢变好。<svg class="icon"><use href="#i-heart"/></svg></span></div></div>
+    </section>
+
+    <section id="community" class="community section wrap"><div class="section-heading"><div><p class="eyebrow"><span></span> OPEN SOURCE, OPEN POSSIBILITIES</p><h2>一个人的灵感，<br><span class="green">一群人的物理宇宙。</span></h2></div><div><p>代码、实验、设计，或一条有用的建议。<br>每一份热爱，都值得被看见。</p><a class="text-link" href="https://github.com/122-syf-wcy/PhysicsOS/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">看看如何参与<svg class="icon"><use href="#i-up-right"/></svg></a></div></div><div class="community-topline"><span>共创者与他们的小小宇宙</span><span class="sample-label">展示样例 · 可在内容配置中编辑</span></div><div id="contributors" class="contributors-grid"></div><div class="open-source-note"><div><svg class="icon"><use href="#i-github"/></svg><span>PhysicsOS 以 Apache-2.0 协议开放。<strong>欢迎一起把它变得更好。</strong></span></div><a href="https://github.com/122-syf-wcy/PhysicsOS" target="_blank" rel="noopener noreferrer">在 GitHub 相遇<svg class="icon"><use href="#i-star"/></svg></a></div></section>
+
+    <section class="cta wrap"><div class="cta-orbit" aria-hidden="true"></div><span class="cta-spark" aria-hidden="true">✳</span><div><p class="eyebrow">THE NEXT DISCOVERY IS YOURS</p><h2>世界有很多「为什么」。<br>我们一起，<span>试试看。</span></h2><p>不必等到实验课。现在，就让好奇心出发。</p><a class="button button-dark" href="https://physics.dongsiwei.com" target="_blank" rel="noopener noreferrer">开启我的探索<svg class="icon"><use href="#i-up-right"/></svg></a></div><img src="./assets/mascot-glass.webp" width="330" height="330" alt="" loading="lazy"></section>
+  </main>
+
+  <footer class="footer wrap"><div class="footer-top"><a class="brand" href="#"><img src="./assets/logo.png" width="28" height="28" alt="">Physics<span>OS</span></a><p>献给每一个，想知道为什么的人。</p><div><a href="https://physics.dongsiwei.com/physicsos/developers/index.html" target="_blank" rel="noopener noreferrer">开发文档 ↗</a><button class="plain-button feedback-trigger">建议与反馈</button><a href="./admin.html">内容配置</a></div></div><div class="footer-bottom"><span>© 2026 PhysicsOS · 开源公益，为好奇心而造。</span><span><span class="live-dot"></span> 官网设计预览 <span class="footer-divider">/</span> Made with curiosity & a little physics.</span></div></footer>
+  <button id="motion-toggle" class="motion-toggle" type="button" aria-label="暂停页面动效" aria-pressed="true"><span class="motion-toggle-mark" aria-hidden="true"></span><span class="motion-toggle-label">动效开启</span></button>
+  <button class="floating-feedback feedback-trigger" aria-label="提出建议"><svg class="icon"><use href="#i-message"/></svg><span>聊个想法</span></button>
+
+  <dialog id="feedback-dialog" aria-labelledby="feedback-title"><button class="dialog-close icon-button" aria-label="关闭建议弹窗"><svg class="icon"><use href="#i-close"/></svg></button><div id="feedback-form-view"><span class="modal-icon"><svg class="icon"><use href="#i-message"/></svg></span><p class="eyebrow">A LITTLE IDEA GOES A LONG WAY</p><h2 id="feedback-title">你的想法，我们想听。</h2><p class="modal-description">灵光一现、使用困惑，或者一处小小的遗憾，都可以。</p><form id="feedback-form"><fieldset class="feedback-categories"><legend>这次想聊聊</legend><label><input type="radio" name="kind" value="idea" checked><span>💡 功能建议</span></label><label><input type="radio" name="kind" value="bug"><span>🔎 遇到问题</span></label><label><input type="radio" name="kind" value="other"><span>💬 其他想法</span></label></fieldset><label class="field-label" for="feedback-body">说说你的想法 <span>*</span></label><textarea id="feedback-body" name="body" rows="4" minlength="5" maxlength="2000" placeholder="如果 PhysicsOS 能……就更好了！" required></textarea><div class="textarea-meta"><span>至少 5 个字，也欢迎详细一点。</span><output id="feedback-count">0 / 2000</output></div><label id="upload-area" class="upload-area" for="feedback-images"><svg class="icon"><use href="#i-upload"/></svg><span><strong>添加截图，表达更清楚</strong><small>点击或拖入图片 · PNG / JPG / WebP / GIF · 最多 3 张，每张 5 MB</small></span><span class="upload-plus">＋</span><input id="feedback-images" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple></label><div id="image-previews" class="image-previews"></div><label class="field-label contact-label" for="feedback-contact">如何联系你 <span class="optional">选填</span></label><input id="feedback-contact" name="contact" type="text" maxlength="100" placeholder="邮箱、QQ，或你方便的联系方式"><p id="feedback-error" class="form-error" role="alert"></p><div class="modal-actions"><span><span class="live-dot"></span> 设计预览，仅保存于本机</span><button class="button button-primary" type="submit">保存这份想法<svg class="icon"><use href="#i-arrow"/></svg></button></div></form></div><div id="feedback-success" hidden><span class="success-icon"><svg class="icon"><use href="#i-check"/></svg></span><p class="eyebrow">A NEW POSSIBILITY</p><h2>好想法，已经记下。</h2><p>这份反馈和截图已保存在当前浏览器。<br>这是本地交互演示，尚未发送到平台。</p><button class="button button-primary dialog-done">继续探索<svg class="icon"><use href="#i-arrow"/></svg></button></div></dialog>
+</body>
+</html>

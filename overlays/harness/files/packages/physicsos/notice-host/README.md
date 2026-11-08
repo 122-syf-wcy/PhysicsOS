@@ -9,6 +9,19 @@ PhysicsOS 反馈与公告 host plugin. One prefix (`/physicsos/notice`), two dir
 | `/announcements` | every signed-in account, tenant + platform scope | school admin and above |
 | `/platform-notice` | every signed-in account, together with that account's acknowledgement | platform `SUPER_ADMIN` only |
 | `/platform-notice/ack` | — | any signed-in account, current version only |
+| `/public/website` | anyone; enabled public fields only | — |
+| `/public/website-feedback` | — | anonymous JSON intake with origin checks and shared limits |
+| `/website` | `SUPER_ADMIN` | `SUPER_ADMIN`, optimistic `expectedVersion` saves |
+| `/website-feedback` | `SUPER_ADMIN`, status/offset/limit inbox | — |
+| `/website-feedback/:id/reply` | — | `SUPER_ADMIN` |
+| `/website-feedback/:id/images/:imageId` | `SUPER_ADMIN`, through the owning feedback record | — |
+
+Website management writes (`PUT /website`, `POST /website-feedback/:id/reply`)
+require a `SUPER_ADMIN` cookie login session. Any `Authorization` header on a
+management mutation is rejected with 403 `TOKEN_SCOPE_REQUIRED`, including when
+a valid session cookie is also present: the identity seam exposes actor role but
+not API-token scope. `SUPER_ADMIN` token reads and public feedback intake retain
+their existing behavior.
 
 Identity comes from the session through the `physicsosIdentity` service that `auth-host` publishes. This host is declared BEFORE `auth-host` in the shipped patch, so the service is resolved per request rather than at load time — the failure mode is covered by `tests/composition.spec.ts`, which boots the real chain and asserts the gate answers on a live session.
 
@@ -16,7 +29,23 @@ Reading feedback is row-filtered rather than door-filtered: a student calling th
 
 ## Configuration
 
-No config keys. The plugin injects `webServer` and `storageDomain`, and opens the `physicsos_notice` domain.
+The plugin injects `webServer` and `storageDomain`, and opens the `physicsos_notice` domain.
+`trustedProxies` is an array of exact IP literals (default `[]`), wired to the same
+`PHYSICOS_TRUSTED_PROXIES` setting as auth-host. Only those direct peers may supply
+forwarded client addresses and scheme. The shared `physicsosRateLimiter` service
+and screenshot `attachments` service are resolved lazily. Missing or failing
+limiting refuses anonymous intake with 503. Limits are three attempts per client
+per ten minutes, plus sixty attempts globally per hour, in website-only namespaces.
+
+Website content and anonymous feedback use independent `website_content` and
+`website_feedback` tables at domain version 0. No fabricated content is seeded.
+Each content list has at most twelve items; name and quote/project are required,
+while role, topic, description and project URL may be empty. Nonempty URLs and
+avatars must be complete HTTP(S) addresses without credentials. Avatar storage is
+URL configuration only. Feedback screenshots use real attachment batch validation,
+normalization and durable storage, at most three files of 5 MiB each. Only the
+anonymous screenshot route permits 22 MiB JSON; other routes remain at 64 KiB.
+Feedback contact, body, context, image names and bytes never enter the audit ledger.
 
 ## Data
 
