@@ -53,7 +53,7 @@ class ScriptAdapter extends LlmAdapter {
   constructor(private script: StreamChunk[] | ((options: GenerateOptions) => AsyncIterable<StreamChunk>)) { super() }
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model, reasoning: {
-      efforts: [{ id: ReasoningEffortId('none'), name: 'None' }, { id: ReasoningEffortId('high'), name: 'High' }],
+      efforts: [{ id: ReasoningEffortId('off'), name: 'Off' }, { id: ReasoningEffortId('high'), name: 'High' }],
       defaultEffort: ReasoningEffortId('high'),
     } })
   }
@@ -243,11 +243,32 @@ describe('moderation capture and persistence', () => {
 })
 
 describe('strict no-tools reviewer through real LLM runtime', () => {
+  it('completes using the advertised off capability when none is only a wire spelling', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    cleanups.push(() => ctx.fiber.dispose())
+    const adapter = new class extends ScriptAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model, reasoning: {
+          efforts: [{ id: ReasoningEffortId('off'), name: 'Off' }, { id: ReasoningEffortId('high'), name: 'High' }],
+          defaultEffort: ReasoningEffortId('high'),
+        } })
+      }
+    }(script())
+    ctx.llm.registerAdapter(['review-route'], adapter)
+    const route = { provider: 'review-route', model: 'fixed-model' }
+    await expect(ctx.llm.resolveCallConfig({ ...route, reasoningEffort: ReasoningEffortId('none') }))
+      .rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
+    await expect(ctx.llm.resolveCallConfig({ ...route, reasoningEffort: ReasoningEffortId('off') }))
+      .resolves.toMatchObject({ ...route, reasoningEffort: 'off' })
+    const review = createModerationReviewer(ctx.llm, route)
+    expect(await review(input, new AbortController().signal)).toEqual(allow)
+  })
   it('allows benign education with no reasoning despite the provider high default and sends identity-free JSON to a fixed no-tools route', async () => {
     const { review, adapter } = await classifier(script())
     expect(await review(input, new AbortController().signal)).toEqual(allow)
     const options = adapter.requests[0]!
-    expect(options).toMatchObject({ provider: 'review-route', model: 'fixed-model', reasoningEffort: 'none', maxTokens: 4096 })
+    expect(options).toMatchObject({ provider: 'review-route', model: 'fixed-model', reasoningEffort: 'off', maxTokens: 4096 })
     expect(options.tools ?? []).toEqual([])
     expect(options.system).toContain('教育')
     const content = options.messages[0]!.content[0]!

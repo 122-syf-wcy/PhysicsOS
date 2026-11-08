@@ -109,7 +109,7 @@ export function createModerationReviewer(
     let outputCharacters = 0
     let finishes = 0
     for await (const chunk of llm.stream({
-      provider, model, reasoningEffort: ReasoningEffortId('none'), system: MODEL_POLICY, tools: [], maxTokens: 4_096, signal: innerSignal,
+      provider, model, reasoningEffort: ReasoningEffortId('off'), system: MODEL_POLICY, tools: [], maxTokens: 4_096, signal: innerSignal,
       messages: [createUserMessage({
         content: [{ type: 'text', text: JSON.stringify(parsed.data) }], source: { kind: 'physicsos-moderation' },
       })],
