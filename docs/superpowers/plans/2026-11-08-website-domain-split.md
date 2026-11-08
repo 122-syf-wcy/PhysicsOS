@@ -1,6 +1,6 @@
 # Website Domain Split Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Restore the system at https://physics.dongsiwei.com/ and publish the website at https://physicsos.dongsiwei.com/.
 
@@ -28,22 +28,24 @@
 
 **Files:** overlays/harness/upstream-changes.patch; overlays/harness/files/apps/web/public/physicsos/website/{index.html,legacy-routing.js}; overlays/harness/files/packages/physicsos/auth-host/src/reset.ts; scripts/website/*.spec.mjs; related password-reset tests.
 
-- [ ] Verify current routing tests in server container, then adjust meaningful root/cross-host/reset expectations and observe failures.
-- [ ] Remove automatic publicLanding configuration in web-app; restore PWA start_url /; reset path /?reset_token=; replace website product/developer links with system absolute root URLs; retain hash/query on legacy handoff.
-- [ ] Run website, reset and relevant routing tests; inspect overlay patch applicability. Compile changed runtime modules in an isolated current-image server container.
+- [x] Verify current routing tests in server container, then adjust meaningful root/cross-host/reset expectations and observe failures.
+- [x] Remove automatic publicLanding configuration in web-app; restore PWA start_url /; reset path /?reset_token=; replace website product/developer links with system absolute root URLs; retain hash/query on legacy handoff.
+- [x] Run website, reset and relevant routing tests; inspect overlay patch applicability. Compile changed runtime modules in an isolated current-image server container.
 
 ### Task 2: Domain vhost and candidate
 
 **Files:** scripts/deploy/website-domain-nginx.conf; scripts/deploy/website-domain-runtime.Dockerfile; server-only operational scripts and private manifests.
 
-- [ ] Add website vhost with root/static/public content/public feedback allowlist, 32 MiB body allowance and public credential stripping; system /app compatibility redirects to root with query retained.
-- [ ] Build minimal layer over exact production image; preserve every unchanged production file; create isolated candidate from existing website candidate infrastructure without sharing production writable state.
-- [ ] Verify actual system root, website entry, links, public config, feedback/image handling, reset/PWA and unauthorized admin rejection using candidate browser and server tests; review changes independently.
+- [x] Add website vhost with root/static/public content/public feedback allowlist, 32 MiB body allowance and public credential stripping; system /app compatibility redirects to root with query retained.
+- [x] Build minimal layer over exact production image; preserve every unchanged production file; create isolated candidate from existing website candidate infrastructure without sharing production writable state.
+- [x] Verify actual system root, website entry, links, public config, feedback/image handling, reset/PWA and unauthorized admin rejection using candidate browser and server tests; review changes independently.
 
 ### Task 3: Publish and verify
 
 **Files:** docs/reports/2026-11-08-website-domain-split.md; server recovery directory.
 
-- [ ] Recheck current main, server revision and running image under release lock; back up config, database and application data and retain exact rollback tag.
-- [ ] Push checked changes, fast-forward server checkout, switch exact candidate image and Nginx; restore system immediately. Once DNS resolves, obtain website certificate and enable HTTPS vhost.
-- [ ] Verify system root/login/hash, both HTTPS hosts, website CTA/public API and private rejection, healthy dependencies and unchanged existing data; record exact image, revision and recovery paths.
+- [x] Recheck current main, server revision and running image under release lock; back up config, database and application data and retain exact rollback tag.
+- [x] Push checked changes, fast-forward server checkout, switch exact candidate image and Nginx; restore system immediately. Once DNS resolves, obtain website certificate and enable HTTPS vhost.
+- [x] Verify system root/login/hash, both HTTPS hosts, website CTA/public API and private rejection, healthy dependencies and unchanged existing data; record exact image, revision and recovery paths.
+
+最终结果：源码 8563e9d，实际镜像 cb6e2498，2026-11-08 成功切换。37 项相关测试、候选截图/配置重启保留、正式双域名与历史链接检查通过。后台独立 optional-admin bundle 随域名链接一并更新。详见 docs/reports/2026-11-08-website-domain-split.md。
