@@ -31,7 +31,7 @@
 
 ### Task 1: Durable review service, strict classifier and admin routes
 
-**Files:** Create auth-host/src/moderation/{types,model,service,routes}.ts and corresponding tests; modify auth-host/src/domain.ts and necessary auth-host package/tsconfig references. Use separate moderation tables at existing domain version 0. Do not change index listener, transport patch or frontend in this task.
+**Files:** Create auth-host/src/moderation/{types,model,service,routes}.ts and corresponding tests; modify auth-host/src/domain.ts, required AuthErrorCode/helper exports, merge-schools domain/CLI whitelist and tests, and necessary auth-host package/tsconfig references. Use separate moderation tables at existing domain version 0. Do not change index listener, transport patch or frontend in this task.
 
 **Interfaces:** Export ModerationService(domain: AuthDomain, auth: AuthService, deps: ModerationDeps); capture(input: CapturedMessage): Promise<string|undefined>; processNext(): Promise<boolean>; list(actor, query): paginated cases; detail(actor,id); decide(actor,id,{version,decision:'dismiss'|'ban',reason}); retry(actor,id,{version}); settings(actor); setEnabled(actor,{version,enabled}). Export moderationRoutes(service, auth) prefix handler. Export createModerationReviewer(llm, route) as a no-tools classifier. Exact DTOs are declared in moderation/types.ts and used verbatim by Tasks 2/3. Historical scanner is an optional trusted dependency scan(limit) returning CapturedMessage[]; default absent must return actionable unavailable error.
 
@@ -39,6 +39,7 @@
 - [ ] Run these tests in the dedicated server builder before implementation and preserve RED evidence.
 - [ ] Implement bounded persistent cases/settings; exact server owner lookup determines account. AI returns only {risk:'allow'|'review',category,severity,confidence,reason,evidence:string[]}; evidence must be literal substrings of supplied text/context. Allow only high-confidence (>=0.8) allow with severity none and untruncated input. Else flagged/error for human review. Manual decisions serialize per case and require version plus reason; preserve human decisions against late model writes. Ban AuthService first, then persist decision; retries reconcile already-disabled account without masking failures. Generic audit stores only case ID/action/category, no raw text/model output.
 - [ ] Add Cookie-only SUPER_ADMIN prefix routes at /physicsos/admin/moderation: GET cases, GET cases/:id, POST cases/:id/decision, POST cases/:id/retry, GET settings, POST settings, POST scan. Reuse existing auth route request conventions and CSRF. Bind scanner limit 20 and pagination limit 50 server-side. JSON errors/private no-store.
+- [ ] Preserve strict school-merge table whitelist and migrate moderation owner/school/decision actor references without changing immutable evidence/ID/userId; increment version and reset reviewing jobs to pending on migration. Keep global settings unchanged. Test migration and protection against late results; report visible durable capture-failure counters when retained capacity is reached.
 - [ ] Run focused moderation and existing auth-host suite; preserve full commands/results, commit authored overlay changes (not vendor gitlink), and report DTO/interface paths to controller.
 
 ### Task 2: Automatic capture/worker and effective account revocation
@@ -51,16 +52,25 @@
 - [ ] Run RED in server builder; implement runtime adapters and serialized >=15s worker with cancellation, scanner max20 inputs. Avoid blocking session/event on AI. Expose route within existing admin route (no prefix ambiguity) and preserve all original endpoints.
 - [ ] Strengthen the fixed physics-student persona with illicit-assistance refusal, untrusted role/instruction treatment and safe education/help exceptions, preserving existing physics rules/tools. Validate benign and harmful/injection examples with real candidate model in Task 3, without literal-copy-only tests.
 - [ ] Add onUserDisabled owner-key callback to AuthServiceDeps, revoke all API tokens on disable, cancel all owned roots and proven descendants. Extend HostPeerAdmission/Peer with live credential guard/disposer, thread it through real connection and gateway (scopeEvents is not currently called by real carrier). Enforce ownsSession/ownsWorkspace on each user stream open, recheck credential and resource admission at actual input/output and shut down on revocation. Preserve unhosted operator carrier behavior.
+- [ ] At persisted session ownership claim, safely supplement any earlier human events from authoritative live/query history, excluding fork inherited prefixes and deduplicating message IDs. Correct the deferred scan count issue by using an internal created marker under capture's intake lock, keeping public DTOs unchanged. Update declared workspace importers in pnpm-lock.yaml and preserve exact existing-workspace links for runtime dependencies.
 - [ ] Run auth/connection/gateway/affected session-controller suites and strict typecheck; capture upstream patch without other uncommitted work. Commit and report test evidence.
 
-### Task 3: Administrator review page and verified deployment
+### Task 3: Administrator review page
 
-**Files:** Create ui-physicsos/src/client/moderation-api.ts, AdminModerationTab.tsx and CSS/tests; modify AdminWorkspace.tsx/locales.ts. Prefer a default same-origin optional moderationApi prop, matching promptApi convention, without changing unrelated prop chains. Create release report and necessary tooling/verification artifacts.
+**Files:** Create ui-physicsos/src/client/moderation-api.ts, AdminModerationTab.tsx and CSS/tests; modify AdminWorkspace.tsx/locales.ts. Prefer a default same-origin optional moderationApi prop, matching promptApi convention, without changing unrelated prop chains. Source authoring may run in an isolated worktree in parallel with Task 2 because DTOs are stable and edited files are disjoint. Server test/build compute is serialized for the 4GB host.
 
 **Interfaces:** Use Task 1 route/DTO contract. Add SUPER_ADMIN-only 「对话审核」 in people group. Support paginated/filterable live cases, status and queue health/auto toggle, detail text/context/AI evidence, review reason, dismiss/ban with explicit in-page confirmation, retries and bounded history scan. Show actual account disabled status; refresh after conflict/decision; retain useful error context. Poll at 10s while page visible; cancel on unmount and never overwrite selected newer details with stale responses.
 
 - [ ] Write failing tests for role visibility, API Cookie/error/no-store behavior, escaped hostile text, version conflict, human reason/confirmation, retry, history scan and state refresh.
 - [ ] Run RED on server; implement page using existing AdminPrimitives/styles and Chinese copy; bind versions/targets from backend, no account target editing or model command execution.
+- [ ] Run relevant UI regressions, typechecks/lint and bundles in a dedicated server container. Commit frontend-only source/tests and obtain independent scoped review. Integrate both Task 2/3 commits before combined validation.
+
+### Task 4: Combined verification, isolated candidate and deployment
+
+**Files:** Release report, source/runtime manifests and reviewed server-only build/candidate/deploy helpers. No further feature changes without tests/review.
+
+**Interfaces:** Consume reviewed Task 1-3 commits, actual server source/image and paired recovery points. All feature branches must be integrated and exact source frozen before final build/candidate validation.
+
 - [ ] Run UI/host/upstream relevant regressions and appropriate root test suites, strict typechecks/lint and bundles in server container. Obtain independent whole-branch review and fix important findings.
 - [ ] Freeze source; recheck remote/main/server/image, merge any later changes and reverify touched packages. Build image from actual production base with verified source/runtime manifests; isolated candidate DB/Redis/data.
 - [ ] Use real existing model route for benign, harmful and injection examples; inspect actual browser UI, cookie/token/role/cross-account boundaries, manual ban plus active stream cancellation and restart persistence. Keep test accounts in candidate only.
