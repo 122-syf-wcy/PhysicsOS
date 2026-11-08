@@ -652,6 +652,21 @@ export const GLOBAL_DEVICE_SCOPE = GLOBAL_SCOPE
 export const userKey = (schoolId: string, username: string): string =>
   `${schoolId}:${username.toLowerCase()}`
 
+/** Derived trusted-history progress; never stores message text. */
+export interface ModerationCursor {
+  id: string
+  sessionId: string
+  ownerKey: string
+  kind: 'claim' | 'scan'
+  seq: number
+  index: number
+  done: boolean
+}
+const moderationCursor = z.object({
+  id: z.string(), sessionId: z.string(), ownerKey: z.string(), kind: z.enum(['claim', 'scan']),
+  seq: z.number().int().min(0), index: z.number().int().min(0), done: z.boolean(),
+})
+
 /**
  * The auth durable unit. `users`/`sessions` keys are lookup paths (school +
  * username, token hash) — the row `id` stays the opaque cross-reference.
@@ -677,6 +692,7 @@ export const authDomain = defineDomain({
     devices: domainTable<string, DeviceRecord>(device),
     device_revocations: domainTable<string, DeviceRevocation>(deviceRevocation),
     api_resources: domainTable<string, ApiResourceOwner>(apiResourceOwner),
+    moderation_cursors: domainTable<string, ModerationCursor>(moderationCursor),
     moderation_cases: domainTable<string, ModerationCaseRecord>(moderationCaseSchema),
     moderation_settings: domainTable<string, ModerationSettings>(moderationSettingsSchema),
   },

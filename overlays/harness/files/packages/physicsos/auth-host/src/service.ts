@@ -255,6 +255,8 @@ export interface ApiTokenRow {
 
 /** Optional runtime seams; absent values use safe process-local defaults. */
 export interface AuthServiceDeps {
+  /** Stop this exact account's live carriers and owned agents after durable disable. */
+  onUserDisabled?: (ownerKey: string) => void | Promise<void>
   /** Atomic shared limiter. Defaults to {@link InMemoryLimiterBackend}. */
   limiter?: LimiterBackend
   /** Password-reset delivery. Defaults to the admin queue (no direct send). */
@@ -395,7 +397,7 @@ export class AuthService {
   constructor(
     private readonly domain: AuthDomain,
     readonly config: AuthServiceConfig = DEFAULT_AUTH_CONFIG,
-    deps: AuthServiceDeps = {},
+    private readonly deps: AuthServiceDeps = {},
   ) {
     this.notifier = deps.notifier
     const maxBuckets = config.attemptBucketLimit ?? DEFAULT_AUTH_CONFIG.attemptBucketLimit
@@ -2369,7 +2371,13 @@ export class AuthService {
     await this.users.put(target.userKey, updated)
     if (input.data.status === 'disabled') {
       await this.revokeUserSessions(target.record)
+      for (const [key, token] of this.apiTokens.entries()) {
+        if (token.userKey === target.userKey && token.revokedAt === undefined) {
+          await this.apiTokens.put(key, { ...token, revokedAt: this.now().toISOString() })
+        }
+      }
       await this.supersedeOpenResetRequests(target.userKey)
+      await this.deps.onUserDisabled?.(target.userKey)
     }
     await this.audit(actor, 'user.status', target.userKey, schoolId, { status: input.data.status })
     return this.toAdminRow(updated, this.schools.get(schoolId))

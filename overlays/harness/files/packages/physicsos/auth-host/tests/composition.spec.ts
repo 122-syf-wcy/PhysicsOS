@@ -421,6 +421,11 @@ describe('real Loader composition', () => {
     const cookie = login.headers.get('set-cookie')!.split(';')[0]!
 
     /* Anonymous application lands in the queue. */
+    const moderation = await fetch(`${base}/physicsos/admin/moderation/settings`, { headers: { cookie } })
+    expect(moderation.status).toBe(200)
+    expect(moderation.headers.get('cache-control')).toBe('private, no-store')
+    expect(await moderation.json()).toMatchObject({ enabled: true })
+
     const apply = await jsonPost('/physicsos/auth/school-requests', {
       schoolName: '实验中学', contact: 'admin@example.com',
     })

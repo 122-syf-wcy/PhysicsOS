@@ -37,6 +37,17 @@ export interface HostWorkspaceAdmission {
 
 /** Per-connection admission a deployment may return from `admitUpgrade`. */
 export interface HostPeerAdmission {
+  /** Original credential liveness; registrations own no shared operator Context. */
+  readonly authLifetime?: {
+    isActive(): boolean
+    registerInvalidation(close: () => void): () => void
+  }
+  /** Resource admission at each stream boundary, plus scoped host-wide projections. */
+  readonly streamAdmission?: {
+    allows(endpoint: string, payload: unknown): boolean
+    mapDownlink(endpoint: string, value: unknown): { value: unknown } | undefined
+  }
+
   readonly remoteEventAdmission?: RemoteEventAdmission
   readonly workspaceAdmission?: HostWorkspaceAdmission
 }

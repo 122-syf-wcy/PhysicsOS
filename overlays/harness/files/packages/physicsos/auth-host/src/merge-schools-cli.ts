@@ -78,6 +78,7 @@ const KNOWN_TABLES: Readonly<Record<
     'api_resources',
     'moderation_cases',
     'moderation_settings',
+    'moderation_cursors',
   ]),
   physicsos_class: new Set(['classes', 'memberships', 'assignments', 'submissions']),
   physicsos_learning: new Set(['attempts', 'saved_scenes']),

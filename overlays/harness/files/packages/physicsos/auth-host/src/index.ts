@@ -28,6 +28,9 @@ import { seedBootstrapAdmins, type BootstrapAdmin } from './bootstrap.ts'
 import { seedSchools } from './schools.ts'
 import { createAccountNotifier } from './mail.ts'
 import { adminRoutes, authRoutes } from './routes.ts'
+import { AccountConnections, AccountRuns, ModerationRuntime } from './moderation/runtime.ts'
+import { createModerationReviewer, ModerationModelError } from './moderation/model.ts'
+import { moderationRoutes } from './moderation/routes.ts'
 import { IDENTITY_SERVICE, createIdentityService } from './identity.ts'
 import {
   DEFAULT_WORKSPACE_TITLE,
@@ -65,6 +68,10 @@ interface WorkspaceRegistrySeam {
 
 /** Plugin config: session lifetimes and attempt budgets are deployment knobs. */
 export interface Config extends Partial<AuthServiceConfig> {
+  /** Deployment-only classifier route; no user/API controls. */
+  moderationEnabled?: boolean
+  moderationProvider?: string
+  moderationModel?: string
   /**
    * Initial admin accounts seeded at boot — the ONLY way a SUPER_ADMIN comes
    * into existence (the wire can never mint one). Typically one entry under
@@ -98,6 +105,9 @@ const bootstrapAdmin = z.object({
 })
 
 export const Config: z<Config> = z.object({
+  moderationEnabled: z.boolean().default(true),
+  moderationProvider: z.string().default('deepseek-official'),
+  moderationModel: z.string().default('deepseek-v4.1-flash'),
   sessionTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.sessionTtlMs),
   rememberTtlMs: z.number().default(DEFAULT_AUTH_CONFIG.rememberTtlMs),
   accountAttemptLimit: z.number().default(DEFAULT_AUTH_CONFIG.accountAttemptLimit),
@@ -140,6 +150,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   await ctx.effect(async function* () {
     const domain = await openAuthDomain(ctx)
+    yield () => domain.close()
     const limiter = asLimiterBackend(ctx.get(LIMITER_SERVICE))
     const apiPolicyLimiter: ApiPolicyLimiterBackend | undefined = limiter === undefined
       ? undefined
@@ -160,12 +171,28 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     } else {
       ctx.logger.info(`auth-host: approval notices via ${notifier.kind}`)
     }
+    const connections = new AccountConnections()
+    yield () => connections.dispose()
+    let runs: AccountRuns | undefined
     const service = new AuthService(domain, config as AuthServiceConfig, {
       ...(limiter === undefined ? {} : { limiter }),
       ...(resetDelivery === undefined ? {} : { resetDelivery }),
       ...(onceLedger === undefined ? {} : { onceLedger }),
       ...(notifier === undefined ? {} : { notifier }),
+      onUserDisabled: async owner => { connections.invalidate(owner); await runs?.disable(owner) },
     })
+
+    runs = new AccountRuns(ctx, domain, service)
+    yield () => runs?.dispose()
+    if (!domain.table('moderation_settings').get('default') && config.moderationEnabled === false) {
+      await domain.table('moderation_settings').put('default', { version: 1, enabled: false, updatedAt: new Date().toISOString(), captureFailures: 0 })
+    }
+    const moderation = new ModerationRuntime(ctx, domain, service, (input, signal) => {
+      const llm = ctx.get('llm')
+      if (!llm) throw new ModerationModelError('REVIEW_FAILED')
+      return createModerationReviewer(llm, { provider: config.moderationProvider ?? 'deepseek-official', model: config.moderationModel ?? 'deepseek-v4.1-flash' })(input, signal)
+    }, () => ctx.get('llm') !== undefined)
+    yield () => moderation.dispose()
 
     const seeded = await seedSchools(
       id => domain.table('schools').get(id),
@@ -267,7 +294,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     ctx.provide(API_POLICY_SERVICE, createApiPolicy({
       actorFromCookie,
       actorFromRequest,
+      connectionLifetime: (owner, active) => connections.lifetime(owner, active),
       store: {
+        ownerKey: (kind, id) => kind === 'session' ? service.sessionOwnerKey(id) : undefined,
         owns: (actor, kind, id) => service.ownsApiResource(actor, kind, id),
         ownedIds: (actor, kind) => service.ownedApiResources(actor, kind),
         claim: (actor, kind, id) => service.claimApiResource(actor, kind, id),
@@ -292,11 +321,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       path: '/physicsos/auth',
       handler: authRoutes(service),
     })
+    const existingAdmin = adminRoutes(service)
+    const moderate = moderationRoutes(moderation.service, service)
     yield ctx.webServer.register({
       kind: 'prefix',
       path: '/physicsos/admin',
-      handler: adminRoutes(service),
+      handler: (req, res) => new URL(req.url ?? '/', 'http://x').pathname.startsWith('/physicsos/admin/moderation/')
+        ? moderate(req, res) : existingAdmin(req, res),
     })
-    yield () => domain.close()
   }, 'auth-host')
 }

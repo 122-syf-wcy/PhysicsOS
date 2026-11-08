@@ -36,6 +36,11 @@ const safeModelCodes = new Set([
   'REVIEW_INVALID_INPUT', 'REVIEW_FAILED', 'REVIEW_TOOL_OUTPUT', 'REVIEW_OUTPUT_LIMIT', 'REVIEW_EMPTY',
 ])
 
+/** Stable immutable evidence identity; hash before truncating either evidence field. */
+export function moderationCaptureId(input: { sessionId: string; messageId: string; text: string; context?: string | undefined }): string {
+  return `mc_${createHash('sha256').update(JSON.stringify([input.sessionId, input.messageId, input.text, input.context ?? ''])).digest('hex')}`
+}
+
 /** One durable capture/review queue in the existing single-writer auth domain. */
 export class ModerationService {
   private readonly work: DomainWork
@@ -88,15 +93,19 @@ export class ModerationService {
 
   /** Owner lookup and session/message key are server authoritative, never model or client targets. */
   async capture(input: CapturedMessage): Promise<string | undefined> {
+    return (await this.captureResult(input)).id
+  }
+
+  private async captureResult(input: CapturedMessage): Promise<{ id?: string; created: boolean }> {
     const data = this.parse(captureSchema, input)
     return this.serial('intake-settings', async () => {
       const owner = this.domain.table('api_resources').get(`session:${data.sessionId}`)
-      if (!owner || owner.kind !== 'session' || owner.resourceId !== data.sessionId) return undefined
+      if (!owner || owner.kind !== 'session' || owner.id !== `session:${data.sessionId}` || owner.resourceId !== data.sessionId) return { created: false }
       const user = this.domain.table('users').get(owner.ownerKey)
-      if (!user || user.schoolId !== owner.schoolId || userKey(user.schoolId, user.username) !== owner.ownerKey) return undefined
-      const id = `mc_${createHash('sha256').update(JSON.stringify([data.sessionId, data.messageId])).digest('hex')}`
+      if (!user || user.schoolId !== owner.schoolId || userKey(user.schoolId, user.username) !== owner.ownerKey) return { created: false }
+      const id = moderationCaptureId(data)
       const existing = this.cases.get(id)
-      if (existing) return existing.id
+      if (existing) return { id: existing.id, created: false }
       if (Array.from(this.cases.entries()).length >= 10_000) {
         const settings = this.readSettings()
         await this.domain.table('moderation_settings').put('default', {
@@ -115,13 +124,13 @@ export class ModerationService {
         textTruncated: data.text.length > 12_000, contextTruncated: context.length > 4_000,
         status: 'pending', version: 1, createdAt: now, updatedAt: now,
       })
-      return id
+      return { id, created: true }
     })
   }
 
   /** Drain one pending/recovered job, serially and with a45-second bounded classifier call. */
-  async processNext(): Promise<boolean> {
-    if (this.work.processing || !this.readSettings().enabled
+  async processNext(signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted || this.work.processing || !this.readSettings().enabled
       || (this.work.lastCompleted !== undefined && this.now().getTime() - this.work.lastCompleted < 15_000)) return false
     this.work.processing = true
     // Disable must see the cancellation boundary before any durable claim await.
@@ -147,7 +156,7 @@ export class ModerationService {
       try {
         review = await reviewWithDeadline(this.deps.review, {
           text: claimed.text, context: claimed.context, textTruncated: claimed.textTruncated, contextTruncated: claimed.contextTruncated,
-        }, controller.signal)
+        }, signal ? AbortSignal.any([controller.signal, signal]) : controller.signal)
       } catch (failure) {
         error = failure instanceof ModerationModelError && safeModelCodes.has(failure.code) ? failure.code : 'REVIEW_FAILED'
       }
@@ -245,9 +254,7 @@ export class ModerationService {
     const messages = (await this.deps.scan(20)).slice(0, 20)
     let captured = 0
     for (const message of messages) {
-      const before = Array.from(this.cases.entries()).length
-      await this.capture(message)
-      if (Array.from(this.cases.entries()).length > before) captured += 1
+      if ((await this.captureResult(message)).created) captured += 1
     }
     await this.auth.auditAs(actor, 'moderation.scan', 'default', { action: 'scan', category: 'none' })
     return { scanned: messages.length, captured }

@@ -125,6 +125,41 @@ const makePolicy = (options: {
 }
 
 describe('PhysicsOS shared /api policy', () => {
+  it('rechecks an original credential after asynchronous request preparation', async () => {
+    let active = true
+    let release!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    const pending = new Promise<void>(resolve => { release = resolve })
+    const policy = createApiPolicy({ actorFromCookie: () => active ? student : null,
+      actorFromRequest: () => active ? student : null, store: makeStore(),
+      ensureWorkspace: async () => { entered(); await pending; return workspace } })
+    const next = vi.fn(async () => rpc({ sessionId: 'new' }))
+    const response = policy.wrapFetch(next)(request('session.create', {}))
+    await started; active = false; release()
+    expect((await response).status).toBe(401)
+    expect(next).not.toHaveBeenCalled()
+  })
+  it('requires owned durable parent and rejects a conflicting child owner for history addresses', async () => {
+    const store = makeStore({ session: ['parent'] })
+    store.ownerKey = (_kind, id) => id === 'foreign-child' ? 'school:other' : undefined
+    const { policy } = makePolicy({ store })
+    const next = vi.fn(async () => rpc({ events: [] }))
+    for (const address of [
+      { kind: 'session', sessionId: 'foreign' },
+      { kind: 'subagent', parentSessionId: 'foreign', childSessionId: 'child', mode: 'continuable' },
+      { kind: 'subagent', parentSessionId: 'parent', childSessionId: 'foreign-child', mode: 'continuable' },
+    ]) {
+      const response = await policy.wrapFetch(next)(request('session.page', { args: { request: { address } } }))
+      expect((await response.json()).result.ok).toBe(false)
+    }
+    expect(next).not.toHaveBeenCalled()
+    await policy.wrapFetch(next)(request('session.page', { args: { request: { address: {
+      kind: 'subagent', parentSessionId: 'parent', childSessionId: 'unclaimed-child', mode: 'continuable',
+    } } } }))
+    // The real history controller performs the remaining parent/projection validation.
+    expect(next).toHaveBeenCalledOnce()
+  })
   it('refuses an anonymous request before dispatch', async () => {
     const next = vi.fn(async () => rpc({}))
     const { policy } = makePolicy({ actor: null })

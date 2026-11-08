@@ -271,3 +271,11 @@ None; this package neither assembles nor sends a provider request.
 - Reset tokens are durable in the auth domain, but cross-process compare-and-set depends on the deployment's shared storage limits; ownership migration remains an explicit manifest-driven operation.
 - Server-side ownership of PhysicsOS scenes/questions/learning records is not wired; V1 scopes those client-side, and per-resource `userId`/`schoolId` columns remain deferred.
 - Roles beyond `STUDENT` have no enrolment or permission surface yet.
+
+### Automatic moderation runtime
+
+`moderationEnabled` defaults to true for a previously unconfigured database. Durable admin settings take precedence thereafter. `moderationProvider`/`moderationModel` are deployment-only options, defaulting to `deepseek-official` / `deepseek-v4.1-flash`; user prompts and routes cannot select them. The optional LLM service is resolved at each worker invocation, and absent service leaves pending work queued.
+
+Trusted `session/event` human messages and inbox splices feed immutable text evidence. Session/message/full-text/context hashes deduplicate replay while retaining earlier decisions when queue text is edited. Persisted ownership claims enqueue `moderation_cursors`; one bounded worker resumes uncompleted capture after restart and excludes inherited fork prefixes. Admin history scans select at most 20 uncaptured inputs from exact owned sessions, persisting replay-safe progress and leaving failed reads retryable. Classifier calls stay serialized with at least 15 seconds between completions and abort on plugin disposal.
+
+Account disable permanently revokes API tokens and login sessions, invalidates every registered account socket, cancels exact owned root Agents and registry-proven descendants, and clears both inboxes. Creation, live inbox insertion and model-request boundaries reject late work. Stream admission checks original credential liveness, resource ownership and scoped control frames on every open/input/output; quiet credential expiry is checked once per second. Shared operator Contexts are never disposed for one account.

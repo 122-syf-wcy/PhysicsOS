@@ -247,6 +247,7 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
   const revocations = asMergeTable(auth.table('device_revocations'))
   const apiResources = asMergeTable(auth.table('api_resources'))
   const moderationCases = asMergeTable(auth.table('moderation_cases'))
+  const moderationCursors = asMergeTable(auth.table('moderation_cursors'))
   const schoolRequests = asMergeTable(auth.table('school_requests'))
   const pendingRegistrations = asMergeTable(auth.table('pending_registrations'))
 
@@ -513,6 +514,17 @@ const mergeTableAdapters = (stores: SchoolMergeStores): MergeTableAdapter[] => {
     // re-register) to the operator, exactly like a school application.
     contextual('auth.pending_registrations', pendingRegistrations, () => undefined),
   )
+
+  // Derived cursor progress is reset after tenant ownership migrates.
+  adapters.push({
+    name: 'auth.moderation_cursors', table: moderationCursors,
+    references: (_key, row, source) => containsSourceToken(row.ownerKey, source),
+    plan: (key, row, source, target) => {
+      if (!containsSourceToken(row.ownerKey, source)) return undefined
+      return { table: 'auth.moderation_cursors', fromKey: key, toKey: key, before: row,
+        after: { ...row, ownerKey: rewriteUserKeyField(row, 'ownerKey', source, target, 'auth.moderation_cursors'), seq: 0, index: 0, done: false } }
+    },
+  })
 
   // Text/context/reason/evidence are historical quotations, not tenant references.
   // Rewriting or rejecting them based on their content would lose moderation evidence.

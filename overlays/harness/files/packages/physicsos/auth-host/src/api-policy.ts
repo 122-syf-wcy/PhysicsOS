@@ -96,6 +96,7 @@ export type ApiResourceKind = 'session' | 'workspace'
 
 /** Ownership operations supplied by `AuthService`. */
 export interface ApiPolicyStore {
+  ownerKey?(kind: ApiResourceKind, id: string): string | undefined
   owns(actor: ApiPolicyActor, kind: ApiResourceKind, id: string): boolean
   ownedIds(actor: ApiPolicyActor, kind: ApiResourceKind): ReadonlySet<string>
   claim(actor: ApiPolicyActor, kind: ApiResourceKind, id: string): Promise<void>
@@ -166,12 +167,24 @@ export interface ApiPolicyWorkspaceAdmission {
  * stock behaviour, not a denial.
  */
 export interface ApiPolicyPeerAdmission {
+  /** Original credential liveness; registrations own no shared operator Context. */
+  readonly authLifetime?: {
+    isActive(): boolean
+    registerInvalidation(close: () => void): () => void
+  }
+  /** Resource admission at each stream boundary, plus scoped host-wide projections. */
+  readonly streamAdmission?: {
+    allows(endpoint: string, payload: unknown): boolean
+    mapDownlink(endpoint: string, value: unknown): { value: unknown } | undefined
+  }
+
   remoteEventAdmission?(event: string, args: readonly unknown[]): boolean
   workspaceAdmission?: ApiPolicyWorkspaceAdmission
 }
 
 /** Host seams the pure policy needs. */
 export interface ApiPolicyDeps {
+  connectionLifetime?(owner: string, active: () => boolean): NonNullable<ApiPolicyPeerAdmission['authLifetime']>
   actorFromCookie(cookie: string | undefined, authorization?: string): ApiPolicyActor | null
   actorFromRequest(req: IncomingMessage): ApiPolicyActor | null
   readonly store: ApiPolicyStore
@@ -575,6 +588,19 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
   const admin = (actor: ApiPolicyActor): boolean => actor.role === 'SUPER_ADMIN'
   const ownsSession = (actor: ApiPolicyActor, id: string): boolean =>
     deps.store.owns(actor, 'session', id)
+  const sameCredential = (first: ApiPolicyActor, current: ApiPolicyActor | null): boolean =>
+    current !== null && current.userKey === first.userKey && current.role === first.role
+      && JSON.stringify(current.credential) === JSON.stringify(first.credential)
+  const ownsAddress = (actor: ApiPolicyActor, payload: Record<string, unknown>): boolean => {
+    const address = payload['address']
+    if (!isRecord(address)) return false
+    if (address['kind'] === 'session') return typeof address['sessionId'] === 'string' && ownsSession(actor, address['sessionId'])
+    if (address['kind'] !== 'subagent' || typeof address['parentSessionId'] !== 'string' || typeof address['childSessionId'] !== 'string') return false
+    if (!ownsSession(actor, address['parentSessionId'])) return false
+    const childOwner = deps.store.ownerKey?.('session', address['childSessionId'])
+    // The real history controller still validates durable, non-inherited parent/child provenance.
+    return childOwner === undefined || childOwner === actor.userKey
+  }
   const remoteSessionId = (args: readonly unknown[]): string | undefined => {
     const first = args[0]
     if (typeof first === 'string') return first
@@ -739,6 +765,9 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
        every non-administrator — which is why the model picker never opened for
        a student. A call that names no session has nothing of anyone else's to
        reach; one that names a session is still checked against the actor. */
+    if ((method === 'session.page' || method === 'session.follow') && !ownsAddress(actor, payload)) {
+      return denyNotFound(rpcId, 'session', '')
+    }
     const sessionScoped = method.startsWith('session.') || method.startsWith('goal.') || method === 'skill.list'
     const sessionId = sessionIdOf(payload)
     const addressesSession = sessionScoped && sessionId !== undefined && sessionId !== ''
@@ -1033,33 +1062,42 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
     admitUpgrade: (req) => {
       const actor = deps.actorFromRequest(req as IncomingMessage)
       if (actor === null) return null
-      /* Every connection — the operator's included — sees the Workspaces its
-         account owns in the product's picker. Registry-wide troubleshooting is
-         an admin-console concern; streaming the whole registry to the operator
-         is how a picker full of indistinguishable 「我的工作区」 rows appeared. */
-      /* Every connection — the operator's included — sees the Workspaces its
-         account owns in the product's picker. Registry-wide troubleshooting is
-         an admin-console concern; streaming the whole registry to the operator
-         is how a picker full of indistinguishable 「我的工作区」 rows appeared. */
+      const cookie = req.headers.cookie
+      const authorization = req.headers.authorization
+      const active = (): boolean => sameCredential(actor, deps.actorFromCookie(cookie, authorization))
+      const authLifetime = deps.connectionLifetime?.(actor.userKey, active) ?? {
+        isActive: active, registerInvalidation: (close: () => void) => { if (!active()) close(); return () => {} },
+      }
       const workspaceAdmission = {
-        ownsWorkspace: (id: string): boolean => deps.store.owns(actor, 'workspace', id),
-        ownsSession: (id: string): boolean => ownsSession(actor, id),
+        ownsWorkspace: (id: string): boolean => active() && deps.store.owns(actor, 'workspace', id),
+        ownsSession: (id: string): boolean => active() && ownsSession(actor, id),
       }
-      if (admin(actor)) {
-        /* Remote events stay unscoped for the operator so approvals and
-           account-wide questions keep flowing. */
-        return { workspaceAdmission }
-      }
-      /* Only session-scoped events cross to ordinary accounts. Dropping
-         account-independent catalog and settings chatter is deliberate: the
-         old transport scoped every frame, and a global fallback would expose
-         another learner's activity. */
-      return {
-        workspaceAdmission,
-        remoteEventAdmission: (_event: string, args: readonly unknown[]) => {
-          const sessionId = remoteSessionId(args)
-          return sessionId !== undefined && ownsSession(actor, sessionId)
+      const streamAdmission = {
+        allows: (endpoint: string, wire: unknown): boolean => {
+          if (!active()) return false
+          const payload = policyPayloadOf(isRecord(wire) ? wire : {})
+          if (endpoint === 'session/follow') return ownsAddress(actor, payload)
+          if (['session/control', 'workspace/follow', '$events'].includes(endpoint)) return true
+          // No unknown user stream gets a host-wide default. Operators retain other tools.
+          if (!admin(actor)) return false
+          return actor.credential?.kind !== 'api-token' || actor.credential.scope !== 'read'
         },
+        mapDownlink: (endpoint: string, value: unknown): { value: unknown } | undefined => {
+          if (!active()) return undefined
+          if (endpoint !== 'session/control') return { value }
+          if (!isRecord(value)) return undefined
+          if (value['type'] === 'projection') return typeof value['sessionId'] === 'string' && ownsSession(actor, value['sessionId']) ? { value } : undefined
+          if (value['type'] !== 'baseline' || !isRecord(value['value']) || !isRecord(value['value']['projections'])) return undefined
+          const projections = Object.fromEntries(Object.entries(value['value']['projections']).filter(([id]) => ownsSession(actor, id)))
+          return { value: { ...value, value: { ...value['value'], projections } } }
+        },
+      }
+      return {
+        authLifetime, workspaceAdmission, streamAdmission,
+        ...admin(actor) ? {} : { remoteEventAdmission: (_event: string, args: readonly unknown[]) => {
+          const sessionId = remoteSessionId(args)
+          return active() && sessionId !== undefined && ownsSession(actor, sessionId)
+        } },
       }
     },
     wrapFetch: next => async (request) => {
@@ -1141,7 +1179,11 @@ export function createApiPolicy(deps: ApiPolicyDeps): {
 
         const rewritten = await rewriteRequest(actor, request, method, body)
         if (rewritten.response !== undefined) return rewritten.response
+        if (!sameCredential(actor, deps.actorFromCookie(cookie, authorization))) return Response.json({ error: 'unauthenticated' }, { status: 401 })
+        const lateDenied = authorizeMethod(actor, method, payload, rpcId)
+        if (lateDenied) return lateDenied
         const response = await next(rewritten.request)
+        if (!sameCredential(actor, deps.actorFromCookie(cookie, authorization))) return Response.json({ error: 'unauthenticated' }, { status: 401 })
         return await rewriteResponse(actor, method, body, response)
       } catch (error) {
         /* This front door answers an envelope. A throw anywhere below would
