@@ -744,6 +744,12 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   step(delta: number): WorkspaceSnapshot {
+    if (this.computed?.model.subModel === 'wave_interference') {
+      const next = this.currentTime + delta
+      if (Number.isFinite(delta) && Number.isFinite(next)) this.currentTime = Math.max(0, next)
+      this.running = false
+      return this.getSnapshot()
+    }
     return this.seek(this.displayTime + delta)
   }
 
