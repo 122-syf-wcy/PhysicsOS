@@ -247,14 +247,7 @@ describe('strict no-tools reviewer through real LLM runtime', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     cleanups.push(() => ctx.fiber.dispose())
-    const adapter = new class extends ScriptAdapter {
-      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-        return Promise.resolve({ provider, id: model, name: model, reasoning: {
-          efforts: [{ id: ReasoningEffortId('off'), name: 'Off' }, { id: ReasoningEffortId('high'), name: 'High' }],
-          defaultEffort: ReasoningEffortId('high'),
-        } })
-      }
-    }(script())
+    const adapter = new ScriptAdapter(script())
     ctx.llm.registerAdapter(['review-route'], adapter)
     const route = { provider: 'review-route', model: 'fixed-model' }
     await expect(ctx.llm.resolveCallConfig({ ...route, reasoningEffort: ReasoningEffortId('none') }))
