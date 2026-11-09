@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "checks": [
+    "Created apparatus bench directly on free canvas",
+    "Clearing a source rating restores its value without changing physical facts",
+    "Added rated resistor, rotated it, removed it and restored it with undo",
+    "Reload restored assembled apparatus and rated parameters",
+    "Moved an apparatus body directly on its bench",
+    "Connected a parallel resistor: total current rose to 0.225 A; cutting a lead restored 0.15 A",
+    "Twelve apparatus are arranged in bounded rows",
+    "Mobile live readings sit below the full diagram without covering ports",
+    "A touch outside the tiny pole starts wiring; Escape cancels it while keeping the editor open",
+    "Mobile toolbar opens a usable focused apparatus editor at 390 px"
+  ],
+  "errors": {
+    "console": 0,
+    "page": 0,
+    "failedRequests": 0
+  },
+  "base": "http://127.0.0.1:13089"
+}

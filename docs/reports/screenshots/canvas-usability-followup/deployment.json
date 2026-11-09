@@ -1,0 +1,10 @@
+{
+  "oldImage": "sha256:39f7a9c7975d66810a7a4587f571d3039b95b9d5de79823ce0261f84cd042317",
+  "newImage": "sha256:c16521805052079f4dd8c5074692c9de589ae53a79ed86dcaf166f3c46ba84f3",
+  "revision": "6c1cbaf5881d42bee65478e5ca1deaf779c574d1",
+  "backup": "/opt/physicsos/backups/releases/20261109T204934.141653Z-apparatus-followup-20261110",
+  "appVolume": "physicsos_app_data",
+  "redisVolume": "physicsos_redis_data",
+  "rollbackTag": "physicsos:apparatus-followup-base-39f7a9c7975d-20261110",
+  "healthy": true
+}
