@@ -18839,3 +18839,285 @@ index 652e9f6b393..55d17fe9910 100644
      </div>
      <div
        class="footArea"
+diff --git a/packages/util/atomic-write/src/index.ts b/packages/util/atomic-write/src/index.ts
+index c567a2b..7ac0cbb 100644
+--- a/packages/util/atomic-write/src/index.ts
++++ b/packages/util/atomic-write/src/index.ts
+@@ -12,7 +12,7 @@
+  */
+ 
+ import { createHash, randomBytes } from 'node:crypto'
+-import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
++import { lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises'
+ import { dirname } from 'node:path'
+ 
+ const WINDOWS_TRANSIENT_RENAME_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EBUSY', 'EPERM'])
+@@ -136,6 +136,21 @@ async function readLockRecord(lockPath: string): Promise<string | undefined> {
+   }
+ }
+ 
++/** Remove only the path that still names the exclusively opened inode. */
++async function removeOwnedLock(lockPath: string, lock: Awaited<ReturnType<typeof open>>): Promise<void> {
++  // The open handle keeps the original inode alive even after path replacement.
++  const owned = await lock.stat({ bigint: true })
++  let current
++  try {
++    current = await lstat(lockPath, { bigint: true })
++  } catch (error) {
++    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
++  }
++  if (current?.dev === owned.dev && current.ino === owned.ino) {
++    await rm(lockPath, { force: true })
++  }
++}
++
+ /**
+  * Remove the lock when its recorded holder exited. Contenders that read the
+  * same record serialize on a claim file named after it. Under the claim, the
+@@ -150,8 +165,9 @@ async function takeOverExitedLock(lockPath: string): Promise<boolean> {
+   const record = await readLockRecord(lockPath)
+   if (record === undefined || !holderExited(record)) return false
+   const claim = `${lockPath}.takeover-${createHash('sha256').update(record).digest('hex').slice(0, 16)}`
++  let claimLock: Awaited<ReturnType<typeof open>>
+   try {
+-    await writeFile(claim, `${process.pid}\n`, { mode: 0o600, flag: 'wx' })
++    claimLock = await open(claim, 'wx', 0o600)
+   } catch (error) {
+     // Another contender owns the claim for this record, or Windows still deletes the claim it released.
+     const code = (error as NodeJS.ErrnoException).code
+@@ -159,6 +175,7 @@ async function takeOverExitedLock(lockPath: string): Promise<boolean> {
+     throw error
+   }
+   try {
++    await claimLock.writeFile(`${process.pid}\n`)
+     if (await readLockRecord(lockPath) !== record || !holderExited(record)) return false
+     try {
+       await rm(lockPath, { force: true })
+@@ -169,10 +186,14 @@ async function takeOverExitedLock(lockPath: string): Promise<boolean> {
+     }
+     return true
+   } finally {
+-    await rm(claim, { force: true }).catch((error: unknown) => {
+-      // A claim left behind names a record that is no longer the lock, so it blocks no later takeover.
+-      void error
+-    })
++    try {
++      await removeOwnedLock(claim, claimLock).catch((error: unknown) => {
++        // Preserve the acquisition or takeover outcome when cleanup is refused.
++        void error
++      })
++    } finally {
++      await claimLock.close()
++    }
+   }
+ }
+ 
+@@ -241,9 +262,10 @@ export async function withFileLock<T>(
+   const deadline = Date.now() + (options?.waitMs ?? DEFAULT_LOCK_WAIT_MS)
+   let delay = LOCK_RETRY_INITIAL_MS
+   let retriedUnconfirmedPermissionError = false
++  let lock: Awaited<ReturnType<typeof open>>
+   for (;;) {
+     try {
+-      await writeFile(lockPath, `${process.pid}\n`, { mode: 0o600, flag: 'wx' })
++      lock = await open(lockPath, 'wx', 0o600)
+       break
+     } catch (error) {
+       if (!await isLockContention(error, lockPath)) {
+@@ -261,8 +283,15 @@ export async function withFileLock<T>(
+     delay = Math.min(delay * 2, LOCK_RETRY_MAX_MS)
+   }
+   try {
++    // Exclusive open proves ownership before the PID write can fail (e.g.
++    // ENOSPC after creating an empty file). Only open failures are contention.
++    await lock.writeFile(`${process.pid}\n`)
+     return await operation()
+   } finally {
+-    await rm(lockPath, { force: true })
++    try {
++      await removeOwnedLock(lockPath, lock)
++    } finally {
++      await lock.close()
++    }
+   }
+ }
+diff --git a/packages/util/atomic-write/tests/atomic-write.spec.ts b/packages/util/atomic-write/tests/atomic-write.spec.ts
+index 0f97822..ab19295 100644
+--- a/packages/util/atomic-write/tests/atomic-write.spec.ts
++++ b/packages/util/atomic-write/tests/atomic-write.spec.ts
+@@ -10,9 +10,12 @@ import { withFileLock, writeFileAtomic } from '../src/index.ts'
+ const state = vi.hoisted(() => ({
+   afterClaim: undefined as ((claim: string) => Promise<void>) | undefined,
+   claimFailure: undefined as string | undefined,
++  claimWriteFailure: undefined as string | undefined,
+   claimRemovalFails: false,
+   lockRemovalFails: false,
+   lockPermissionFailures: 0,
++  lockWriteFailure: undefined as string | undefined,
++  afterLockWriteFailure: undefined as ((lockPath: string) => Promise<void>) | undefined,
+   releaseLockBeforeProbe: false,
+   renameAttempts: 0,
+   renameFailures: [] as string[],
+@@ -20,8 +23,45 @@ const state = vi.hoisted(() => ({
+ 
+ vi.mock('node:fs/promises', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('node:fs/promises')>()
++  const failLockOpen = async (lockPath: string): Promise<void> => {
++    if (lockPath.includes('.lock.takeover-') && state.claimFailure !== undefined) {
++      throw Object.assign(new Error(`${state.claimFailure}: injected claim failure`), { code: state.claimFailure })
++    }
++    if (state.lockPermissionFailures <= 0 || !lockPath.endsWith('.lock')) return
++    state.lockPermissionFailures -= 1
++    if (state.releaseLockBeforeProbe) await actual.rm(lockPath)
++    throw Object.assign(new Error('EPERM: injected exclusive-create failure'), { code: 'EPERM' })
++  }
++  const failLockWrite = async (lockPath: string): Promise<void> => {
++    const code = state.lockWriteFailure
++    if (code === undefined) return
++    await state.afterLockWriteFailure?.(lockPath)
++    throw Object.assign(new Error(`${code}: injected PID-record write failure`), { code })
++  }
+   return {
+     ...actual,
++    open: (async (...args: Parameters<typeof actual.open>) => {
++      const lockPath = String(args[0])
++      await failLockOpen(lockPath)
++      const handle = await actual.open(...args)
++      if (lockPath.endsWith('.lock') || lockPath.includes('.lock.takeover-')) {
++        const write = handle.writeFile.bind(handle)
++        handle.writeFile = async (...writeArgs: Parameters<typeof handle.writeFile>) => {
++          if (lockPath.includes('.lock.takeover-')) {
++            if (state.claimWriteFailure !== undefined) {
++              const code = state.claimWriteFailure
++              throw Object.assign(new Error(`${code}: injected claim-record write failure`), { code })
++            }
++            await write(...writeArgs)
++            await state.afterClaim?.(lockPath)
++            return
++          }
++          await failLockWrite(lockPath)
++          return write(...writeArgs)
++        }
++      }
++      return handle
++    }) as typeof actual.open,
+     rename: (async (...args: Parameters<typeof actual.rename>) => {
+       state.renameAttempts += 1
+       const code = state.renameFailures.shift()
+@@ -45,14 +85,23 @@ vi.mock('node:fs/promises', async (importOriginal) => {
+         if (state.claimFailure !== undefined) {
+           throw Object.assign(new Error(`${state.claimFailure}: injected claim failure`), { code: state.claimFailure })
+         }
++        if (state.claimWriteFailure !== undefined) {
++          await (actual.writeFile as (path: unknown, ...args: never[]) => Promise<void>)(path, '' as never, ...rest.slice(1))
++          const code = state.claimWriteFailure
++          throw Object.assign(new Error(`${code}: injected claim-record write failure`), { code })
++        }
+         await (actual.writeFile as (path: unknown, ...args: never[]) => Promise<void>)(path, ...rest)
+         await state.afterClaim?.(String(path))
+         return
+       }
+-      if (state.lockPermissionFailures > 0 && String(path).endsWith('.lock')) {
+-        state.lockPermissionFailures -= 1
+-        if (state.releaseLockBeforeProbe) await actual.rm(String(path))
+-        throw Object.assign(new Error('EPERM: injected exclusive-create failure'), { code: 'EPERM' })
++      if (String(path).endsWith('.lock')) {
++        await failLockOpen(String(path))
++        if (state.lockWriteFailure !== undefined) {
++          // Preserve writeFile(wx)'s real exclusive-create side effect before
++          // injecting the write failure that a full filesystem can cause.
++          await (actual.writeFile as (path: unknown, ...args: never[]) => Promise<void>)(path, '' as never, ...rest.slice(1))
++          await failLockWrite(String(path))
++        }
+       }
+       return (actual.writeFile as (path: unknown, ...args: never[]) => Promise<void>)(path, ...rest)
+     }) as typeof actual.writeFile,
+@@ -66,9 +115,12 @@ afterEach(async () => {
+   vi.restoreAllMocks()
+   state.afterClaim = undefined
+   state.claimFailure = undefined
++  state.claimWriteFailure = undefined
+   state.claimRemovalFails = false
+   state.lockRemovalFails = false
+   state.lockPermissionFailures = 0
++  state.lockWriteFailure = undefined
++  state.afterLockWriteFailure = undefined
+   state.releaseLockBeforeProbe = false
+   state.renameAttempts = 0
+   state.renameFailures.length = 0
+@@ -213,6 +265,75 @@ describe('writeFileAtomic', () => {
+ })
+ 
+ describe('withFileLock', () => {
++  it.each(['ENOSPC', 'EPERM'])('removes only its newly created lock when the PID-record write fails with %s', async (code) => {
++    const dir = await scratch()
++    const target = join(dir, 'document')
++    let called = false
++    state.lockWriteFailure = code
++
++    await expect(withFileLock(target, async () => { called = true }, { waitMs: 0 })).rejects.toMatchObject({ code })
++
++    expect(called).toBe(false)
++    expect(await readdir(dir)).toEqual([])
++    state.lockWriteFailure = undefined
++    await expect(withFileLock(target, async () => readFile(`${target}.lock`, 'utf8'))).resolves.toBe(`${process.pid}\n`)
++    expect(await readdir(dir)).toEqual([])
++  })
++
++  it('removes its newly created takeover claim when its PID-record write fails', async () => {
++    probeExited()
++    const dir = await scratch()
++    const target = join(dir, 'document')
++    const lockPath = `${target}.lock`
++    await writeFile(lockPath, `${EXITED_PID}\n`)
++    state.claimWriteFailure = 'ENOSPC'
++    let called = false
++
++    await expect(withFileLock(target, async () => { called = true })).rejects.toMatchObject({ code: 'ENOSPC' })
++
++    expect(called).toBe(false)
++    expect(await readdir(dir)).toEqual(['document.lock'])
++    expect(await readFile(lockPath, 'utf8')).toBe(`${EXITED_PID}\n`)
++    state.claimWriteFailure = undefined
++    await expect(withFileLock(target, async () => 'recovered', { waitMs: 0 })).resolves.toBe('recovered')
++    expect(await readdir(dir)).toEqual([])
++  })
++
++  it('preserves a replacement lock when its PID-record write fails', async () => {
++    const dir = await scratch()
++    const target = join(dir, 'document')
++    const lockPath = `${target}.lock`
++    state.lockWriteFailure = 'ENOSPC'
++    state.afterLockWriteFailure = async () => {
++      // Rename a separate inode over the still-open failed acquisition.
++      const replacement = join(dir, 'replacement')
++      await writeFile(replacement, 'foreign\n')
++      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises').then(fs => fs.rename(replacement, lockPath))
++    }
++    let called = false
++
++    await expect(withFileLock(target, async () => { called = true })).rejects.toMatchObject({ code: 'ENOSPC' })
++
++    expect(called).toBe(false)
++    expect(await readFile(lockPath, 'utf8')).toBe('foreign\n')
++  })
++
++  it('preserves a replacement lock when the original holder releases', async () => {
++    const dir = await scratch()
++    const target = join(dir, 'document')
++    const lockPath = `${target}.lock`
++
++    await expect(withFileLock(target, async () => {
++      expect(await readFile(lockPath, 'utf8')).toBe(`${process.pid}\n`)
++      const replacement = join(dir, 'replacement')
++      await writeFile(replacement, 'foreign\n')
++      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises').then(fs => fs.rename(replacement, lockPath))
++      return 'done'
++    })).resolves.toBe('done')
++
++    expect(await readFile(lockPath, 'utf8')).toBe('foreign\n')
++  })
++
+   it('retries EPERM only when the lock path currently exists', async () => {
+     const dir = await scratch()
+     const target = join(dir, 'document')
