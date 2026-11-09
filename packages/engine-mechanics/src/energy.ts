@@ -104,3 +104,21 @@ export const energyLedgerOf = (model: ResolvedEnergyModel): EnergyLedger => {
     energyAccounted: kineticAtBottom + frictionWork,
   }
 }
+
+/** Constant-force descent from rest, ending when the cart reaches the ramp foot. */
+export const energyMotionAt = (model: ResolvedEnergyModel, timeSeconds: number) => {
+  const ledger = energyLedgerOf(model)
+  const acceleration = model.gravity * (Math.sin(model.inclineAngle) - model.frictionCoefficient * Math.cos(model.inclineAngle))
+  const duration = acceleration > 1e-12 ? Math.sqrt(2 * ledger.rampLength / acceleration) : 0
+  const time = Math.min(duration, Math.max(0, timeSeconds))
+  const distance = Math.min(ledger.rampLength, Math.max(0, 0.5 * acceleration * time * time))
+  const height = Math.max(0, model.releaseHeight - distance * Math.sin(model.inclineAngle))
+  const speed = Math.max(0, acceleration * time)
+  return { duration, distance, height, speed, acceleration,
+    position: { x: (ledger.rampLength - distance) * Math.cos(model.inclineAngle), y: height, z: 0 },
+    velocity: { x: -speed * Math.cos(model.inclineAngle), y: -speed * Math.sin(model.inclineAngle), z: 0 },
+    potential: gravitationalPotentialEnergy(model.mass, model.gravity, height),
+    kinetic: kineticEnergy(model.mass, speed),
+    thermal: frictionWorkOnRamp(model.frictionCoefficient, model.mass, model.gravity, model.inclineAngle, distance),
+  }
+}

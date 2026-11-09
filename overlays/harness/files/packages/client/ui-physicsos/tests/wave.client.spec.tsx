@@ -158,15 +158,15 @@ describe('wave workspace runtime · travelling rope', () => {
     expect(derivedValue(rejected, '振幅 A')).toBe('5')
   })
 
-  it('runs the clock to the end of the declared window and stops', () => {
+  it('continues a periodic wave across the declared window', () => {
     const runtime = createWaveWorkspaceRuntime(createTravellingWaveScene())
     runtime.setRunning(true)
     const mid = runtime.advance(0.3)
     expect(mid.clock.running).toBe(true)
     expect(mid.clock.total).toBe(1)
     const end = runtime.advance(10)
-    expect(end.clock.running).toBe(false)
-    expect(end.clock.time).toBe(end.clock.total)
+    expect(end.clock.running).toBe(true)
+    expect(end.clock.time).toBeCloseTo(0.3, 9)
   })
 
   it('toggles the waveform observable through a real scene command', () => {

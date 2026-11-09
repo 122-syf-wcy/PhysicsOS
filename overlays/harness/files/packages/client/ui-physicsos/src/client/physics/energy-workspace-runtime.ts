@@ -8,16 +8,15 @@
  * 释放高度 / 斜面倾角 / 摩擦系数) go through real scene commands, so a change is
  * an auditable revision bump rather than local component state.
  *
- * There is NO timeline here, and the clock says so: `total: 0`. The cart really
- * does move, but the ledger is a function of WHERE it is rather than of when, so
- * the rig reports the accounting at the two ends of the trip instead of
- * integrating a trajectory the engines beside it would each have to repeat.
+ * The engine supplies the constant-force descent and energy conversion at each
+ * physical time; playback ends at the ramp foot and preserves the final ledger.
  */
 
 import {
   EnergyEngine,
   createEnergySimulationRequest,
   energyLedgerOf,
+  energyMotionAt,
   resolveEnergyModel,
   type ResolvedEnergyModel,
 } from '@physicsos/engine-mechanics'
@@ -110,6 +109,9 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
   private highlighted: readonly string[] = []
   private failure: string | undefined
   private computed: Computed | undefined
+  private time = 0
+  private running = false
+  private rate = 1
   /** The scene as the source stated it, kept so an experimental branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
 
@@ -171,6 +173,10 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
       this.failure = result.error.message
       return
     }
+    if (type !== 'SetObservableEnabled') {
+      this.time = 0
+      this.running = false
+    }
     this.recompute()
   }
 
@@ -210,7 +216,7 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
     }
 
     const { simulation, model } = this.computed
-    const view = energySceneVisual({ scene, model })
+    const view = energySceneVisual({ scene, model, time: this.time })
     const status = runtimeStatusOf(simulation.verification)
 
     return {
@@ -223,8 +229,16 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
       ariaLabel: `${title}的可验证物理画布`,
       tree: this.treeOf(scene),
       inspector: this.inspectorOf(model),
-      /* No chart: the ledger is an accounting, not a curve against time. */
-      charts: [],
+      charts: [
+        { id: 'Ep-t', title: '重力势能 Ep(t)', key: 'current_potential_energy', role: 'trajectory' as const },
+        { id: 'Ek-t', title: '动能 Ek(t)', key: 'current_kinetic_energy', role: 'velocity' as const },
+        { id: 'Q-t', title: '转化的内能 Q(t)', key: 'current_thermal_energy', role: 'force' as const },
+      ].map(({ id, title: chartTitle, key, role }) => ({ id, title: chartTitle, xLabel: 't / s', yLabel: 'E / J', role,
+        points: simulation.states.map(state => {
+          const value = state.derived.find(entry => entry.key === key)?.value
+          return { t: state.time.value, value: value !== undefined && isScalarQuantity(value) ? value.value : 0 }
+        }),
+      })),
       table: tableOf(model),
       derivation: simulation.derivedQuantities
         .filter(derived => isScalarQuantity(derived.value))
@@ -245,8 +259,8 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
         ...(check.message === undefined ? {} : { detail: check.message }),
       })),
       events: [],
-      clock: { time: 0, total: 0, running: false, rate: 1 },
-      trajectoryTimes: [],
+      clock: { time: this.time, total: energyMotionAt(model, 0).duration, running: this.running, rate: this.rate },
+      trajectoryTimes: simulation.states.map(state => state.time.value),
       ...(badge === undefined
         ? {}
         : {
@@ -342,31 +356,34 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
     return this.getSnapshot()
   }
 
-  /* The ledger is a function of the geometry, not of the clock: there is nothing
-     to start, stop or scrub. Each method returns the frame the shell already
-     has, and the shell's own transport is disabled by `clock.total <= 0`. */
   setRunning(running: boolean): WorkspaceSnapshot {
-    void running
+    const total = this.getSnapshot().clock.total
+    if (running && total > 0 && this.time >= total) this.time = 0
+    this.running = running && total > 0
     return this.getSnapshot()
   }
 
   setRate(rate: number): WorkspaceSnapshot {
-    void rate
+    if (Number.isFinite(rate) && rate > 0) this.rate = rate
     return this.getSnapshot()
   }
 
   seek(time: number): WorkspaceSnapshot {
-    void time
+    if (Number.isFinite(time)) this.time = Math.max(0, Math.min(this.getSnapshot().clock.total, time))
+    this.running = false
     return this.getSnapshot()
   }
 
   step(delta: number): WorkspaceSnapshot {
-    void delta
-    return this.getSnapshot()
+    return this.seek(this.time + delta)
   }
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
-    void wallClockSeconds
+    if (this.running && Number.isFinite(wallClockSeconds) && wallClockSeconds > 0) {
+      const total = this.getSnapshot().clock.total
+      this.time = Math.min(total, this.time + wallClockSeconds * this.rate)
+      if (this.time >= total) this.running = false
+    }
     return this.getSnapshot()
   }
 
@@ -380,6 +397,8 @@ export class EnergyWorkspaceRuntime implements WorkspaceRuntime {
     if (this.origin === undefined) return this.getSnapshot()
     this.sceneRuntime = new SceneRuntime(this.origin)
     this.highlighted = []
+    this.time = 0
+    this.running = false
     this.recompute()
     return this.getSnapshot()
   }

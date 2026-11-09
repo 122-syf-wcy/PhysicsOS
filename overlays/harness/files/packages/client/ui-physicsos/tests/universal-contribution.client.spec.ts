@@ -91,6 +91,19 @@ describe('universal scientific state gate', () => {
 })
 
 describe('universal bounded actions', () => {
+  it('accepts the shared slow motion rates without starting playback and rejects other rates', () => {
+    const { session } = fixture('rheostat-circuit')
+    const apply = universal.applyUniversalContributionIntent!
+    for (const rate of [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2]) {
+      expect(apply(session, { type: 'playback/rate', protocolVersion: 3, rate })).toBe(true)
+      expect(session.getSnapshot().clock.rate).toBe(rate)
+      expect(session.getSnapshot().clock.running).toBe(false)
+    }
+    for (const rate of [0, -1, 0.02, 1000, NaN, Infinity, '0.01']) {
+      expect(apply(session, { type: 'playback/rate', protocolVersion: 3, rate })).toBe(false)
+      expect(session.getSnapshot().clock.rate).toBe(2)
+    }
+  })
   it('previews canonical parameters without persistence, cancels and commits one revision', () => {
     expect(universal.applyUniversalContributionIntent).toBeTypeOf('function')
     const { runtime } = fixture('convex-lens')

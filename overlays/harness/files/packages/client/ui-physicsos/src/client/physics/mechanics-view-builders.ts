@@ -266,6 +266,19 @@ export function inspectorOf(
   const gravity = scene.fields.find(f => f.type === 'uniform_gravity')
   const g = gravity?.type === 'uniform_gravity' ? Math.abs(gravity.acceleration.vector.y) : 9.8
 
+  if (modelId === 'circular_orbit') {
+    const orbit = scene.observableDefinitions.find(entry => entry.parameters?.['kind'] === 'orbit')
+    const radius = Number(orbit?.parameters?.['radius'] ?? 1)
+    const gm = Number(orbit?.parameters?.['gravitationalParameter'] ?? 1)
+    return [{ id: 'initial', title: '圆轨道：保持中心天体，调速联动半径', parameters: [
+      { id: 'mass', label: '卫星质量', symbol: 'm', unit: 'kg', value: mass, min: 0.1, step: 1 },
+      { id: 'speed', label: '轨道速度（r = GM/v²）', symbol: 'v', unit: 'm/s', value: Math.sqrt(gm / radius), min: 0.1, step: Math.max(0.1, Math.sqrt(gm / radius) / 50) },
+    ], derived: [
+      derivedRow('orbit-radius', '联动轨道半径', 'r', radius, 'm'),
+      derivedRow('orbit-period', '物理周期', 'T', 2 * Math.PI * radius / Math.sqrt(gm / radius), 's'),
+    ] }]
+  }
+
   if (modelId === 'projectile_motion') {
     const speed = Math.hypot(velocity.x, velocity.y)
     const angle = (Math.atan2(velocity.y, velocity.x) * 180) / Math.PI
@@ -383,8 +396,17 @@ export function inspectorOf(
     { id: 'speed', label: '初速度', symbol: 'v_0', unit: 'm/s', value: Math.hypot(velocity.x, velocity.y), min: 0, step: 1, highlights: 'velocity' },
   ]
   if (modelId === 'newton_second_law') {
-    const force = scene.forces.find(f => f.type === 'custom')
-    initial.push({
+    const forces = scene.forces.filter(f => f.type === 'custom')
+    const force = forces[0]
+    if (forces.length > 1) {
+      for (const [index, entry] of forces.entries()) {
+        const vector = entry.vector?.vector ?? { x: 0, y: 0 }
+        initial.push(
+          { id: `force-magnitude:${entry.id}`, label: `分力 F${index + 1} 大小`, symbol: `F_${index + 1}`, unit: 'N', value: Math.hypot(vector.x, vector.y), min: 0, step: 0.5, highlights: entry.id },
+          { id: `force-angle:${entry.id}`, label: `分力 F${index + 1} 方向`, symbol: `\\theta_${index + 1}`, unit: '°', value: Math.atan2(vector.y, vector.x) * 180 / Math.PI, min: -180, max: 180, step: 5, highlights: entry.id },
+        )
+      }
+    } else initial.push({
       id: 'force',
       label: '合外力',
       symbol: 'F',
@@ -403,7 +425,12 @@ export function inspectorOf(
     ? mass * (g + verticalAcceleration)
     : undefined
   return [
-    { id: 'initial', title: '基本参数', parameters: initial },
+    { id: 'initial', title: '基本参数', parameters: initial,
+      ...(modelId === 'newton_second_law' && scene.forces.filter(force => force.type === 'custom').length > 1 ? {
+        choices: [{ id: 'force-balance', label: '受力与运动对比', value: Math.abs(vector(dq ?? [], 'net_force')?.x ?? 0) + Math.abs(vector(dq ?? [], 'net_force')?.y ?? 0) < 1e-8 ? 'balanced' : 'unbalanced',
+          options: [{ value: 'balanced', label: '平衡：合力为零' }, { value: 'unbalanced', label: '不平衡：产生加速度' }] }],
+      } : {}),
+    },
     { id: 'derived', title: '派生量', derived: linearDerived(modelId, dq, apparentWeight) },
   ]
 }

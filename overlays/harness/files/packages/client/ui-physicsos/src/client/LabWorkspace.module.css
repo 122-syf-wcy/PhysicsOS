@@ -832,7 +832,7 @@
 }
 
 .dataPanelOpen {
-  height: clamp(180px, 27svh, 240px);
+  height: clamp(260px, 30svh, 280px);
 }
 
 .dataHead {
@@ -901,6 +901,8 @@
 
 .chartCard {
   min-width: 0;
+  width: 100%;
+  max-width: 360px;
   padding: 10px;
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 10px;
@@ -1397,23 +1399,8 @@
     margin-left: -2px;
   }
 
-  /* The chart strip floats over the canvas instead of consuming a row: at
-     this width a fixed strip would cost the stage a third of its height, so
-     it docks above the timeline (54px + gap, anchored to .body) and
-     collapses to a 40px handle. */
-  .dataPanel {
-    position: absolute;
-    right: 10px;
-    bottom: 66px;
-    left: 10px;
-    z-index: 6;
-    margin-top: 0;
-    box-shadow: var(--physics-glass-shadow);
-  }
-
   /* Drawer widths dock the agent under the stage instead of over it: the
-     canvas keeps its full width while the thread scrolls in the bottom row.
-     The floating chart strip lifts above the docked drawer. */
+     canvas and chart keep separate rows while the thread scrolls below. */
   .cover[data-agent-open='true'] .body {
     grid-template-rows: minmax(0, 1fr) min(320px, 42%);
   }
@@ -1427,12 +1414,8 @@
     box-shadow: none;
   }
 
-  .cover[data-agent-open='true'] .dataPanel {
-    bottom: calc(min(320px, 42%) + 66px);
-  }
-
   .dataPanelOpen {
-    height: clamp(110px, 18svh, 150px);
+    height: clamp(260px, 30svh, 280px);
   }
 
   .dataBody {
@@ -1549,8 +1532,8 @@
     min-height: 28px;
   }
 
-  /* The timeline wraps onto two rows here, so a strip floating a fixed 66px
-     above the column foot would cover its controls; it takes its own row. */
+  /* Preserve the canvas, wrapped transport and scrollable graph as separate
+     rows even when the phone needs to scroll the stage. */
   .dataPanel,
   .cover[data-agent-open='true'] .dataPanel {
     position: static;
@@ -2953,7 +2936,7 @@
   .agentDockMascot { width: 22px; height: 22px; }
   .agentDockSpark { display: none; }
   .canvas:has([data-community-presentation='embedded']) {
-    flex-basis: clamp(340px, 56svh, 480px);
-    min-height: clamp(340px, 56svh, 480px);
+    flex-basis: clamp(240px, 40svh, 340px);
+    min-height: clamp(240px, 40svh, 340px);
   }
 }

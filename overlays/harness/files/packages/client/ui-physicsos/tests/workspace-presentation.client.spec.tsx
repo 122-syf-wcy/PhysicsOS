@@ -100,15 +100,15 @@ describe('toolbar subtitle', () => {
 })
 
 describe('workspace data panel', () => {
-  it('starts collapsed so the canvas owns the bench, even with charts waiting', () => {
+  it('shows available charts alongside the experiment and lets the student collapse them', () => {
     mountLab('rheostat-circuit')
-    /* The rheostat sweep produces I-t / U-t / P-t series, but the strip stays
-       a handle until asked — expanding lands on the charts tab directly. */
-    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '展开' }))
-    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '收起' })).not.toBeNull()
     expect(screen.getByText('I - t')).toBeTruthy()
     expect(screen.getByText('U - t')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '收起' }))
+    expect(screen.queryByText('I - t')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '展开' }))
+    expect(screen.getByText('I - t')).toBeTruthy()
   })
 
   it('stays collapsed for a static scene but still expands manually', () => {
@@ -231,10 +231,7 @@ describe('workspace focus mode', () => {
     const chartTemplate = findExperimentTemplate('rheostat-circuit')!
     surface.open('lab', createExperimentSceneRef(chartTemplate, t(chartTemplate.label)))
     refresh()
-    /* A chart-capable scene still starts collapsed — the strip expands onto
-       the charts tab directly. */
-    fireEvent.click(screen.getByRole('button', { name: '展开' }))
-    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '收起' })).not.toBeNull()
     expect(screen.getByText('I - t')).toBeTruthy()
   })
 
@@ -256,6 +253,19 @@ describe('workspace focus mode', () => {
       screen.getByRole('button', { name: '图层' }).getAttribute('aria-expanded'),
     ).toBe('false')
   })
+})
+
+it('offers slow motion down to 0.01x while leaving the experiment paused', () => {
+  mountLab('rheostat-circuit')
+  const rates = screen.getByRole('combobox', { name: '播放倍速' })
+  for (const rate of [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2]) {
+    fireEvent.click(rates)
+    const option = screen.queryByRole('option', { name: `${rate}x` })
+    expect(option).not.toBeNull()
+    fireEvent.click(option!)
+    expect(rates.textContent).toContain(`${rate}x`)
+    expect(screen.getByRole('button', { name: '播放 / 暂停' }).getAttribute('aria-pressed')).toBe('false')
+  }
 })
 
 describe.each([

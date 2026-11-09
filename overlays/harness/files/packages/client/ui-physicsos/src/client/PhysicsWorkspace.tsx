@@ -28,7 +28,7 @@ import {
   IconSparkleMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 
-import { STEP_FRACTION } from './animation-clock.ts'
+import { PLAYBACK_RATES, STEP_FRACTION } from './animation-clock.ts'
 import { formatTimeIn, timeScaleOf } from './physics/time-format.ts'
 import {
   ResponsiveInspector,
@@ -110,8 +110,6 @@ const failureMessage = (
   return error.message
 }
 
-const PLAYBACK_RATES = [0.25, 0.5, 1, 2] as const
-
 export interface PhysicsWorkspaceProps {
   /** Exact template identity; approved packages replace only this experiment's canvas. */
   readonly experimentId?: string
@@ -182,10 +180,9 @@ export function PhysicsWorkspace({
 }: PhysicsWorkspaceProps) {
   const { session, snapshot, commit, frameSource } = useExperimentSession(runtime, onSceneChange)
   const [selected, setSelected] = useState('scene')
-  /* The canvas owns the bench: the data strip stays a handle until asked.
-     The tab still defaults to charts when they exist, so expanding lands
-     directly on the curves. */
-  const [dataOpen, setDataOpen] = useState(false)
+  /* Time-varying experiments show their graph beside the apparatus from the
+     first frame. Static scenes keep the optional analysis panel folded. */
+  const [dataOpen, setDataOpen] = useState(() => snapshot.charts.length > 0)
   const [dataTab, setDataTab] = useState<DataTab>(() =>
     snapshot.charts.length > 0 ? 'charts' : 'data',
   )

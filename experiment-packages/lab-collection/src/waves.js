@@ -29,6 +29,7 @@ function profileRig(snapshot, kit) {
   const v = snapshot.view, profile = v.waveProfile;
   if (!profile || !point(profile.equilibrium?.from) || !point(profile.equilibrium?.to)) return;
   const { unit: u, palette: c } = kit, { from, to } = profile.equilibrium;
+  const formation = (v.trajectories ?? []).filter(path => path.id === 'wave-formation-left' || path.id === 'wave-formation-right');
   const longitudinal = snapshot.experimentId === 'wave-longitudinal' || (v.axes?.y ?? '').includes('ξ');
   if (kit.visible('guides')) kit.line([from, to], c.muted, { dashed: true, opacity: 0.6, tag: `${profile.id}-equilibrium` });
   if (longitudinal) {
@@ -52,24 +53,27 @@ function profileRig(snapshot, kit) {
     kit.box(at(p, dx, 0, -u * 0.1), u * 0.26, u * 0.78, u * 0.45, c.green, { tag: `${profile.id}-clamp-${i}` });
     kit.box(at(p, dx, -u * 0.45, -u * 0.1), u * 0.53, u * 0.12, u * 0.6, c.metal);
     kit.sphere(at(p, dx, 0, u * 0.16), u * 0.075, c.metal);
-    if (!i && profile.kind === 'rope') {
-      const first = profile.points?.[0];
+    if ((!i && profile.kind === 'rope') || formation.length) {
+      const first = profile.points?.[i ? profile.points.length - 1 : 0];
       if (point(first)) {
         // The actuator extends from its fixed housing to the live endpoint.
         // The rope sample never moves to fit the decorative driver housing.
         const housingPin = at(p, dx, 0, u * 0.16);
-        const sliderPin = at(first, -u * 0.13, 0, u * 0.16);
+        const sliderPin = at(first, (i ? 1 : -1) * u * 0.13, 0, u * 0.16);
         kit.cylinder(housingPin, sliderPin, u * 0.025, c.metal, { tag: `${profile.id}-actuator` });
         kit.cylinder(sliderPin, first, u * 0.032, c.metal, { tag: `${profile.id}-driver-pin` });
       }
-      kit.label('振源', at(p, -u * 0.15, u * 0.68), { tag: 'wave-driver-label' });
+      if (!formation.length) kit.label('振源', at(p, -u * 0.15, u * 0.68), { tag: 'wave-driver-label' });
     }
   }
   if (kit.visible('waveform')) {
+    for (const path of formation) if (validPoints(path.points)) {
+      kit.line(path.points.map(p => ({ ...p, z: u * 0.08 })), path.id.endsWith('left') ? c.blue : c.orange, { opacity: 0.85, tag: path.id });
+    }
     if (validPoints(profile.points)) {
       // Straight segment cylinders keep every sampled corner and endpoint;
       // a smoothed spline would change measured displacement between samples.
-      for (let i = 1; i < profile.points.length; i++) kit.cylinder(profile.points[i - 1], profile.points[i], u * 0.035, c.blue, { tag: `${profile.id}-segment-${i}` });
+      for (let i = 1; i < profile.points.length; i++) kit.cylinder(profile.points[i - 1], profile.points[i], u * 0.035, formation.length ? c.green : c.blue, { tag: `${profile.id}-segment-${i}` });
       profile.points.forEach((p, i) => { if (i % 4 === 0) kit.sphere(p, u * 0.068, c.green, { tag: `${profile.id}-bead-${i}` }); });
     }
     const e = v.waveEnvelope;
@@ -145,10 +149,32 @@ function extendedWaves(snapshot, kit) {
       if (panelHeight) for (const sign of [-1, 1]) kit.box(at(slit.at, 0, sign * (width / 2 + panelHeight / 2), -u * 0.09),
         u * 0.13, panelHeight, u * 0.75, c.ink, { tag: `diffraction-slit-${sign}` });
     }
-    kit.box(at(screen.at, 0, 0, -u * 0.16), u * 0.12, halfHeight * 2, u * 0.9, '#d9e2db', { opacity: 0.75, tag: 'diffraction-screen' });
+    const screenDepth = u * 2.6;
+    // The observation screen is a YZ plane at the supplied x, facing the slit.
+    kit.box(at(screen.at, u * 0.06, 0), u * 0.12, halfHeight * 2, screenDepth, '#17251e', { tag: 'diffraction-screen' });
+    const curve = paths.find(path => path.id === 'wave-diffraction-intensity');
+    const scale = (v.dimensions ?? []).find(d => d.id === 'wave-intensity-scale');
+    if (kit.visible('waveform') && validPoints(curve?.points) && scale) {
+      const fullScale = scale.to.x - scale.from.x;
+      if (fullScale > 0) for (let i = 1; i < curve.points.length; i++) {
+        const p = curve.points[i], previous = curve.points[i - 1];
+        const intensity = Math.max(0, Math.min(1, ((p.x + previous.x) / 2 - screen.at.x) / fullScale));
+        if (intensity <= 0) continue;
+        // Display gamma reveals weak side lobes; the adjacent curve retains I/I0.
+        const brightness = Math.sqrt(intensity);
+        const band = new kit.THREE.Mesh(
+          new kit.THREE.PlaneGeometry(screenDepth * 0.96, p.y - previous.y),
+          new kit.THREE.MeshBasicMaterial({ color: new kit.THREE.Color('#8eecad').multiplyScalar(brightness), side: kit.THREE.DoubleSide }),
+        );
+        band.rotation.y = -Math.PI / 2;
+        band.position.set(screen.at.x - u * 0.001, (p.y + previous.y) / 2, 0);
+        band.name = `diffraction-band-${i}`;
+        kit.group.add(band);
+      }
+    }
     const band = (v.dimensions ?? []).find(d => d.id === 'wave-central-width');
     if (band && point(band.from) && point(band.to) && kit.visible('waveform')) {
-      kit.cylinder(band.from, band.to, u * 0.065, c.orange, { tag: 'diffraction-central-maximum-span' });
+      kit.line([at(band.from, u * 0.3), at(band.to, u * 0.3)], c.orange, { dashed: true, tag: 'diffraction-central-maximum-span' });
     }
     const minimum = paths.find(p => p.id === 'wave-first-minimum')?.points?.at(-1);
     if (point(minimum) && kit.visible('waveform')) kit.sphere(minimum, u * 0.07, c.blue, { tag: 'diffraction-first-minimum' });

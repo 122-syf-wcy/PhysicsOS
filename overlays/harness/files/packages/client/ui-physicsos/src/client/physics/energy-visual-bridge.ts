@@ -16,7 +16,7 @@
  * bar, which is the one fault a student would spot before reading a number.
  */
 
-import { energyLedgerOf, type ResolvedEnergyModel } from '@physicsos/engine-mechanics'
+import { energyLedgerOf, energyMotionAt, type ResolvedEnergyModel } from '@physicsos/engine-mechanics'
 import type { ObservableDefinition, PhysicsScene } from '@physicsos/physics-scene'
 
 import { fmtFluidValue } from './fluid-visual-bridge.ts'
@@ -62,6 +62,7 @@ const BAR_OFFSET = 10
 export interface EnergyVisualInput {
   readonly scene: PhysicsScene
   readonly model: ResolvedEnergyModel
+  readonly time?: number
 }
 
 /**
@@ -109,6 +110,7 @@ export const energySceneVisual = (input: EnergyVisualInput): SceneVisualModel =>
   } = input
 
   const ledger = energyLedgerOf(model)
+  const motion = energyMotionAt(model, input.time ?? energyMotionAt(model, 0).duration)
   const visible = visibilityOf(scene)
 
   const height = cm(ledger.releaseHeight)
@@ -129,21 +131,22 @@ export const energySceneVisual = (input: EnergyVisualInput): SceneVisualModel =>
     cartHalfHeight: CART_HALF_HEIGHT,
     heightText: `h = ${fmtFluidValue(height, 4)} cm`,
     rampText: `L = ${fmtFluidValue(rampLength, 4)} cm`,
-    potentialText: `Ep = ${joulesText(ledger.potentialAtRelease)}`,
-    kineticText: `Ek = ${joulesText(ledger.kineticAtBottom)}`,
-    thermalText: `Q = ${joulesText(ledger.frictionWork)}`,
-    speedText: `v = ${fmtFluidValue(ledger.speedAtBottom, 4)} m/s`,
+    potentialText: `Ep = ${joulesText(motion.potential)}`,
+    kineticText: `Ek = ${joulesText(motion.kinetic)}`,
+    thermalText: `Q = ${joulesText(motion.thermal)}`,
+    speedText: `v = ${fmtFluidValue(motion.speed, 4)} m/s`,
     label: '斜面与小车',
   }
 
   const segments: EnergySegmentVisual[] = [
+    { id: 'potential', role: 'potential', text: ramp.potentialText, fraction: share(motion.potential) },
     {
       id: 'kinetic',
       role: 'kinetic',
       text: ramp.kineticText,
-      fraction: share(ledger.kineticAtBottom),
+      fraction: share(motion.kinetic),
     },
-    { id: 'thermal', role: 'thermal', text: ramp.thermalText, fraction: share(ledger.frictionWork) },
+    { id: 'thermal', role: 'thermal', text: ramp.thermalText, fraction: share(motion.thermal) },
   ]
 
   const bar: EnergyBarVisual = {
@@ -190,6 +193,7 @@ export const energySceneVisual = (input: EnergyVisualInput): SceneVisualModel =>
     energyBar: bar,
     dimensions,
     vectors,
+    bodies: [{ id: 'energy-cart', kind: 'cart', at: { x: foot.x + cm(motion.position.x), y: cm(motion.position.y) }, size: CART_HALF_HEIGHT, live: true }],
     overlay: {
       readout: [
         '机械能 Ek = ½mv² · Ep = mgh',
@@ -197,7 +201,8 @@ export const energySceneVisual = (input: EnergyVisualInput): SceneVisualModel =>
         `出发：Ep = mgh = ${joulesText(ledger.potentialAtRelease)}，Ek = 0`,
         `到底端：Ek = ${joulesText(ledger.kineticAtBottom)}，v = ${fmtFluidValue(ledger.speedAtBottom, 4)} m/s`,
         `摩擦生的热 Q = μmg·cosθ·L = ${joulesText(ledger.frictionWork)}${ledger.frictionCoefficient === 0 ? '（光滑斜面，一分不少地变成动能）' : ''}`,
-        `账本：Ek + Q = ${joulesText(ledger.energyAccounted)} = Ep —— 机械能守恒`,
+        `当前：Ep + Ek + Q = ${joulesText(motion.potential + motion.kinetic + motion.thermal)} —— 总能量守恒`,
+        `机械能 Ep + Ek = ${joulesText(motion.potential + motion.kinetic)}；转为内能 Q = ${joulesText(motion.thermal)}`,
       ],
       scale: { label: '10 cm', length: 10 },
     },

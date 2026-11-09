@@ -19,6 +19,7 @@ import {
   type SceneCommandType,
 } from '@physicsos/physics-scene'
 import { observeMechanicsScene } from '@physicsos/physics-observation'
+import { toCanonicalVector } from '@physicsos/physics-core'
 import { verifyMechanicsSimulation } from '@physicsos/physics-verifier'
 
 import { emptyVisualModel, type SceneVisualModel } from './scene-visual-model.ts'
@@ -100,6 +101,7 @@ const CYCLIC_MODELS: ReadonlySet<MechanicsModelId> = new Set([
   /* Oscillators never stop: the period IS the demo, so the playhead wraps. */
   'spring_oscillator',
   'simple_pendulum',
+  'circular_orbit',
 ])
 
 const runtimeErrorOf = (error: unknown, model: MechanicsModelId): RuntimeErrorView => {
@@ -182,12 +184,19 @@ export class MechanicsRuntimeBridge {
   private launchDirection = { x: 1, y: 0, z: 0 }
   /** Simulation of the current scene revision, reused across clock frames. */
   private simulationCache: MechanicsSimulationCache | undefined
+  /** Fixed teaching scale: the initial orbit takes 20 screen seconds at 1×. */
+  private orbitTimeScale = 1
+  private readonly forceDirections = new Map<string, number>()
 
   constructor(input: MechanicsSceneInput | PhysicsScene) {
     this.sceneRuntime = new SceneRuntime(
       isPhysicsScene(input) ? input : createMechanicsScene(input),
     )
     this.recompute()
+    if (this.snapshot.modelId === 'circular_orbit' && this.snapshot.clock.total > 0) {
+      this.orbitTimeScale = this.snapshot.clock.total / 20
+      this.recompute()
+    }
   }
 
   /**
@@ -215,6 +224,20 @@ export class MechanicsRuntimeBridge {
    */
   editParameter(id: string, value: number): MechanicsRuntimeSnapshot {
     if (!Number.isFinite(value)) return this.snapshot
+    if (id.startsWith('force-magnitude:') || id.startsWith('force-angle:')) {
+      const forceId = id.slice(id.indexOf(':') + 1)
+      const force = this.sceneRuntime.getScene().forces.find(entry => entry.id === forceId && entry.type === 'custom')
+      if (force?.vector === undefined) return this.snapshot
+      const current = force.vector.vector
+      const magnitude = Math.hypot(current.x, current.y)
+      const angle = id.startsWith('force-angle:') ? value * Math.PI / 180
+        : magnitude > 0 ? Math.atan2(current.y, current.x) : this.forceDirections.get(forceId) ?? 0
+      const length = id.startsWith('force-magnitude:') ? value : magnitude
+      if (length < 0) return this.snapshot
+      this.forceDirections.set(forceId, angle)
+      return this.command('SetAppliedForce', { forceId, targetId: force.targetId,
+        vector: { vector: { x: length * Math.cos(angle), y: length * Math.sin(angle), z: 0 }, unit: 'N', dimension: 'force' } }).snapshot
+    }
     switch (id) {
       case 'mass':
       case 'gravity':
@@ -241,6 +264,12 @@ export class MechanicsRuntimeBridge {
           ? this.setInclineAngle(value).snapshot
           : this.setLaunchAngle(value).snapshot
       case 'speed':
+        if (this.modelId() === 'circular_orbit') {
+          const orbit = this.sceneRuntime.getScene().observableDefinitions.find(entry => entry.parameters?.['kind'] === 'orbit')
+          if (orbit === undefined || value <= 0) return this.snapshot
+          const radius = Number(orbit.parameters?.['gravitationalParameter']) / (value * value)
+          return this.command('SetOrbitRadius', { observableId: orbit.id, radius }).snapshot
+        }
         return this.setInitialSpeed(value, 'x').snapshot
       case 'friction':
         return this.setFriction(value).snapshot
@@ -266,6 +295,24 @@ export class MechanicsRuntimeBridge {
   setHighlight(ids: readonly string[]): MechanicsRuntimeSnapshot {
     this.highlighted = ids
     return this.recompute()
+  }
+
+  setForceBalance(value: string): MechanicsRuntimeSnapshot {
+    if ((value !== 'balanced' && value !== 'unbalanced') || this.snapshot.status === 'failed') return this.snapshot
+    const scene = this.sceneRuntime.getScene()
+    const model = resolveMechanicsModel(scene)
+    if (model.modelId !== 'newton_second_law') return this.snapshot
+    const forces = scene.forces.filter(entry => entry.type === 'custom' && entry.targetId === model.bodyId)
+    const last = forces.at(-1)
+    if (forces.length < 2 || last === undefined) return this.snapshot
+    const adjustable = last.vector === undefined ? { x: 0, y: 0, z: 0 } : toCanonicalVector(last.vector).vectorSI
+    // Include every force the solver accepted, including unbalanced gravity.
+    const sum = { x: model.netForce.x - adjustable.x, y: model.netForce.y - adjustable.y, z: model.netForce.z - adjustable.z }
+    const factor = value === 'balanced' ? -1 : -0.5
+    const vector = { x: sum.x * factor, y: sum.y * factor, z: sum.z * factor }
+    if (value === 'unbalanced' && Math.hypot(sum.x, sum.y, sum.z) < 1e-9) vector.x = 1
+    return this.command('SetAppliedForce', { forceId: last.id, targetId: last.targetId,
+      vector: { vector, unit: 'N', dimension: 'force' } }).snapshot
   }
 
   private modelId(): MechanicsModelId {
@@ -649,8 +696,9 @@ export class MechanicsRuntimeBridge {
    */
   advance(wallClockSeconds: number): MechanicsRuntimeSnapshot {
     const total = this.snapshot.clock.total
-    if (this.running && Number.isFinite(wallClockSeconds) && total > 0) {
-      const next = this.currentTime + wallClockSeconds * this.playbackRate
+    if (this.running && Number.isFinite(wallClockSeconds) && wallClockSeconds > 0 && total > 0) {
+      const timeScale = this.snapshot.modelId === 'circular_orbit' ? this.orbitTimeScale : 1
+      const next = this.currentTime + wallClockSeconds * this.playbackRate * timeScale
       if (next >= total) {
         /* Nominal-window demos (linear / incline / newton) loop: nothing physical
            ends at the clock edge, so the bench keeps breathing. A projectile
@@ -795,6 +843,8 @@ export class MechanicsRuntimeBridge {
           : built.inspector,
         view: {
           ...built.view,
+          ...(modelId === 'circular_orbit' ? { overlay: { ...built.view.overlay, readout: [...built.view.overlay.readout,
+            `教学播放：屏幕 1 s 对应 ${this.orbitTimeScale.toFixed(2)} s 物理时间；调速保持 GM 不变并联动轨道半径。`] } } : {}),
           visible: {
             ...built.view.visible,
             netForce: this.netForceVisible && built.view.vectors.some(vector => vector.observable === 'netForce'),

@@ -16,7 +16,6 @@ import { ENGINE_CAPABILITIES, pickEngine, questionEngine } from '../src/index.ts
 
 const staticEngines = new Set([
   'engine-current-magnetic',
-  'engine-energy',
   'engine-optics',
   'engine-light',
   'engine-noise-level',

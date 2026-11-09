@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 
 const MAX_FRAME_DELTA_SECONDS = 0.1
 
+/** Shared by both player surfaces and the contributed experiment protocol.
+ * 0.01x stretches a 40 Hz wave cycle to 2.5 seconds for close observation. */
+export const PLAYBACK_RATES: readonly number[] = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2]
+
 /** One magnetic orbit at 1x is presented over this many wall-clock seconds. */
 export const MAGNETIC_CYCLE_WALL_SECONDS = 5
 

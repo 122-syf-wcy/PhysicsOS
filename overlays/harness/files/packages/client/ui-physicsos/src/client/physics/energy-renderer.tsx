@@ -15,9 +15,6 @@ import { Dimension, MathLabel } from './primitives.tsx'
 import css from './renderers.module.css'
 
 /** Which ink a ledger segment takes. One class per role, never a literal hex. */
-/** How far the cart is held off the peak, on top of its own half-length (cm). */
-const INK_MARGIN = 3.5
-
 const SEGMENT_CLASS = {
   potential: css.energySegmentPotential,
   kinetic: css.energySegmentKinetic,
@@ -34,19 +31,20 @@ export function EnergyRenderer({ view, projection }: RendererProps) {
   const peakX = projection.px(ramp.peak)
   const peakY = projection.py(ramp.peak)
 
-  /* The cart sits ON the slope at the release point, tilted with it: the angle
-     comes from the two corners the engine placed, not from a stored rotation. */
+  /* The point-mass position is unchanged. Fit the finite icon's contact edge
+     inside the ramp and lift its centre by half its height along the normal. */
   const slope = Math.atan2(ramp.peak.y - ramp.base.y, ramp.peak.x - ramp.base.x)
-  const cartLength = ramp.cartLength * projection.scale
-  const cartHalf = ramp.cartHalfHeight * projection.scale
-  /* Set back from the peak by half its own length AND a margin, so the tilted
-     box stays on the slope: centred on the peak the cart's top corner hangs
-     past the end of the ramp, which is a body drawn where the ramp is not. */
-  const cartSetback = cartLength * 0.5 + INK_MARGIN * projection.scale
-  const cartCentre = {
-    x: peakX - Math.cos(slope) * cartSetback,
-    y: peakY + Math.sin(slope) * cartSetback,
-  }
+  const length = Math.hypot(ramp.peak.x - ramp.base.x, ramp.peak.y - ramp.base.y)
+  const tx = Math.cos(slope), ty = Math.sin(slope)
+  const drawnLength = Math.min(ramp.cartLength, length)
+  const drawnHalf = ramp.cartHalfHeight * drawnLength / ramp.cartLength
+  const cartLength = drawnLength * projection.scale
+  const cartHalf = drawnHalf * projection.scale
+  const position = view.bodies.find(body => body.id === 'energy-cart')?.at ?? ramp.peak
+  const along = Math.min(length - drawnLength / 2, Math.max(drawnLength / 2,
+    (position.x - ramp.base.x) * tx + (position.y - ramp.base.y) * ty))
+  const centre = { x: ramp.base.x + tx * along - ty * drawnHalf, y: ramp.base.y + ty * along + tx * drawnHalf }
+  const cartCentre = { x: projection.px(centre), y: projection.py(centre) }
   const tilt = (-slope * 180) / Math.PI
 
   return (

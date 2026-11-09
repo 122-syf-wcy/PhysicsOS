@@ -1,6 +1,7 @@
 import type { WorkspaceSnapshot } from '../physics/workspace-runtime.ts'
 import type { ExperimentSession } from './experiment-session.ts'
 import { lensParameter } from './lens-bench.ts'
+import { PLAYBACK_RATES } from '../animation-clock.ts'
 
 import type { ExperimentSnapshot } from './contract-wire.ts'
 import {
@@ -108,7 +109,7 @@ export function applyUniversalContributionIntent(session: ExperimentSession, val
       session.commit(runtime.setRunning(value.running))
       return true
     case 'playback/rate':
-      if (frame.clock.total <= 0 || ![0.25, 0.5, 1, 2].includes(value.rate)) return false
+      if (frame.clock.total <= 0 || !PLAYBACK_RATES.includes(value.rate)) return false
       session.commit(runtime.setRate(value.rate))
       return true
     case 'playback/seek':

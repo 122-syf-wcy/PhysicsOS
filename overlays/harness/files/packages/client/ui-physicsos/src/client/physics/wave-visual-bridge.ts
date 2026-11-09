@@ -141,7 +141,7 @@ const scalarValueOf = (state: SimulationState, id: string, key: string): number 
 const indexedPointsOf = (
   state: SimulationState,
   benchId: string,
-  kind: 'profile' | 'node' | 'antinode',
+  kind: 'profile' | 'node' | 'antinode' | 'formation-left' | 'formation-right' | 'formation-sum',
   gain: number,
 ): ScenePoint[] => {
   const prefix = `${benchId}.${kind}.`
@@ -197,6 +197,7 @@ export interface WaveVisualInput {
   /** Engine state at t = 0, for the standing-wave envelope. */
   readonly envelopeState?: SimulationState
   readonly time: number
+  readonly standingMode?: 'formation' | 'steady'
 }
 
 /**
@@ -422,47 +423,54 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
   }
 
   if (model.subModel === 'wave_diffraction') {
-    const slit = positionOf(state, `${model.benchId}.slit`) ?? { x: 0, y: 0 }
-    const minimum = positionOf(state, `${model.benchId}.minimum.${model.diffractionOrder ?? 1}`)
+    const minimum = positionOf(state, `${model.benchId}.minimum.1`)
     const screenDistanceCm = cmOf(model.screenDistance ?? 0)
-    const centralWidthCm = cmOf(model.centralMaximumWidth ?? 0)
-    const points: ScenePoint[] = [
-      { x: cmOf(slit.x), y: cmOf(slit.y) },
-      ...(minimum === undefined ? [] : [{ x: cmOf(minimum.x), y: cmOf(minimum.y) }]),
-    ]
+    const sourceDistanceCm = cmOf(Math.max(2 * model.wavelength, (model.slitWidth ?? 0) * 0.75))
+    const intensityScale = screenDistanceCm * 0.3
+    const intensity = state.objects.filter(object => object.id.startsWith(`${model.benchId}.intensity.`))
+    const screenPoints = intensity.flatMap(object => object.position === undefined ? [] : [{
+      x: screenDistanceCm + intensityScale * (scalarValueOf(state, object.id, 'intensity_ratio') ?? 0) * (scalarValueOf(state, object.id, 'illumination') ?? 0),
+      y: cmOf(object.position.vector.y),
+    }])
+    const halfHeight = Math.max(50, ...screenPoints.map(point => Math.abs(point.y)))
+    const groups = new Map<string, ScenePoint[]>()
+    for (const object of state.objects) {
+      if ((!object.id.includes('.diffraction-front.') && !object.id.includes('.diffraction-incident.')) || object.position === undefined) continue
+      const key = object.id.slice(0, object.id.lastIndexOf('.'))
+      const points = groups.get(key) ?? []
+      points.push({ x: cmOf(object.position.vector.x), y: cmOf(object.position.vector.y) })
+      groups.set(key, points)
+    }
+    const exactHalfWidthCm = minimum === undefined ? undefined : cmOf(Math.abs(minimum.y))
+    // An angle at 90 degrees has no finite intersection with a planar screen.
+    const visibleMinimum = exactHalfWidthCm !== undefined && exactHalfWidthCm <= halfHeight
     return emptyVisualModel('wave', {
-      extent: {
-        width: Math.max(screenDistanceCm * 1.3, 120),
-        height: Math.max(centralWidthCm * 2.5, 100),
-      },
-      origin: { x: -screenDistanceCm * 0.1, y: -Math.max(centralWidthCm * 1.25, 50) },
-      grid: { minor: 20, major: 100 },
-      axes: { x: 'x / cm', y: 'y / cm' },
-      tickStep: 100,
-      trajectories:
-        points.length < 2 ? [] : [{ id: 'wave-first-minimum', kind: 'predicted', points }],
+      extent: { width: sourceDistanceCm + screenDistanceCm * 1.55, height: halfHeight * 2.25 },
+      origin: { x: -sourceDistanceCm * 1.1, y: -halfHeight * 1.125 },
+      grid: { minor: 20, major: 100 }, axes: { x: 'x / cm', y: 'y / cm' }, tickStep: 100,
+      trajectories: [
+        ...[...groups].map(([id, points]) => ({ id: `wave-${id}`, kind: 'history' as const, points })),
+        ...(visibleMinimum ? [{ id: 'wave-first-minimum', kind: 'predicted' as const, points: [{ x: 0, y: 0 }, { x: screenDistanceCm, y: exactHalfWidthCm! }] }] : []),
+        { id: 'wave-diffraction-intensity', kind: 'history', points: screenPoints },
+      ],
       labels: [
         { id: 'wave-slit-label', at: { x: 0, y: 0 }, text: '单缝', anchor: 'end' },
         { id: 'wave-screen-label', at: { x: screenDistanceCm, y: 0 }, text: '屏', anchor: 'start' },
+        { id: 'wave-intensity-label', at: { x: screenDistanceCm + intensityScale / 2, y: halfHeight }, text: '屏上强度 I/I₀', anchor: 'middle' },
       ],
       dimensions: [
-        {
-          id: 'wave-central-width',
-          from: { x: screenDistanceCm, y: -centralWidthCm / 2 },
-          to: { x: screenDistanceCm, y: centralWidthCm / 2 },
-          label: `w₀ = ${fmtWaveValue(model.centralMaximumWidth ?? 0)} m`,
-          side: 'right',
-        },
+        ...(visibleMinimum ? [{ id: 'wave-central-width', from: { x: screenDistanceCm, y: -exactHalfWidthCm! }, to: { x: screenDistanceCm, y: exactHalfWidthCm! },
+          label: `中央宽度 ${fmtWaveValue(exactHalfWidthCm! / 50)} m`, side: 'right' as const }] : []),
+        { id: 'wave-intensity-scale', from: { x: screenDistanceCm, y: -halfHeight }, to: { x: screenDistanceCm + intensityScale, y: -halfHeight }, label: 'I/I₀ = 1', side: 'right' },
       ],
       overlay: {
-        readout: [
-          '单缝衍射',
+        readout: ['单缝衍射',
           `a = ${fmtWaveValue(model.slitWidth ?? 0)} m · λ = ${fmtWaveValue(model.wavelength)} m · L = ${fmtWaveValue(model.screenDistance ?? 0)} m`,
-          `中央明纹宽度 w₀ = 2Lλ/a = ${fmtWaveValue(model.centralMaximumWidth ?? 0)} m`,
-        ],
-        scale: { label: '50 cm', length: 50 },
-      },
-      visible,
+          `近轴近似：w₀ ≈ 2Lλ/a = ${fmtWaveValue(model.centralMaximumWidth ?? 0)} m`,
+          visibleMinimum ? '中央宽度标线连接精确的一级暗纹；曲线为屏上归一化强度。' : '当前视野内无一级暗纹，不绘制中央宽度边界。',
+          '传播波前示意，条纹采用远场模型；屏的亮度已增强，曲线仍为真实 I/I₀。',
+        ], scale: { label: '50 cm', length: 50 },
+      }, visible,
     })
   }
 
@@ -602,6 +610,35 @@ export const waveSceneVisual = (input: WaveVisualInput): SceneVisualModel => {
   }
 
   /* standing_wave */
+  if (input.standingMode === 'formation') {
+    const length = model.stringLength ?? 1, stringCm = cmOf(length)
+    const travelled = speed * time
+    const formed = travelled >= length
+    const stage = formed ? '稳定驻波：驱动结束，两端固定' : travelled * 2 < length ? '两端起振，波向中间传播' : '两列波相遇，逐点叠加'
+    const points = indexedPointsOf(state, model.benchId, 'formation-sum', gain)
+    const left = indexedPointsOf(state, model.benchId, 'formation-left', gain)
+    const right = indexedPointsOf(state, model.benchId, 'formation-right', gain)
+    const amplitude = amplitudeCm * gain
+    return emptyVisualModel('wave', {
+      extent: { width: stringCm * 1.18, height: amplitude * 4.5 }, origin: { x: -stringCm * 0.09, y: -amplitude * 2.25 },
+      grid: { minor: stringCm / 20, major: stringCm / 5 }, axes: { x: 'x / cm', y: `y / cm（×${gain}）` }, tickStep: stringCm / 5,
+      waveProfile: { id: model.benchId, kind: 'string', points, equilibrium: { from: { x: 0, y: 0 }, to: { x: stringCm, y: 0 } } },
+      trajectories: [
+        { id: 'wave-formation-left', kind: 'predicted', points: left },
+        { id: 'wave-formation-right', kind: 'predicted', points: right },
+      ],
+      labels: [
+        { id: 'wave-formation-stage', at: { x: stringCm / 2, y: amplitude * 1.8 }, text: stage, anchor: 'middle' },
+        { id: 'wave-formation-left-source', at: { x: 0, y: -amplitude * 1.6 }, text: formed ? '固定端' : '左驱动端', anchor: 'middle' },
+        { id: 'wave-formation-right-source', at: { x: stringCm, y: -amplitude * 1.6 }, text: formed ? '固定端' : '右驱动端', anchor: 'middle' },
+      ],
+      ...(formed ? { waveNodes: indexedPointsOf(state, model.benchId, 'node', gain).map((at, index) => ({ id: `${model.benchId}.node.${index}`, kind: 'node' as const, at })) } : {}),
+      dimensions: [{ id: 'wave-string-length', from: { x: 0, y: -amplitude * 2 }, to: { x: stringCm, y: -amplitude * 2 }, label: `L = ${fmtWaveValue(length)} m`, side: 'right' }],
+      overlay: { readout: ['驻波形成', '蓝色：左侧来波 · 橙色：右侧来波 · 绿色：合位移',
+        `两端相位配合驱动 ${fmtWaveValue(length / speed)} s 后固定；每列行波振幅为 A/2。`,
+        `${stage} · ${timeText} · 纵向放大 ×${gain}`, '形成后与稳定模式使用同一驻波解。'], scale: { label: '10 cm', length: 10 } }, visible,
+    })
+  }
   const stringCm = cmOf(model.stringLength ?? 1)
   const displayedAmplitude = amplitudeCm * gain
   const points = profilePointsOf(state, model.benchId, gain)

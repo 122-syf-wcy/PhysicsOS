@@ -40,6 +40,7 @@ const FACT_COMMANDS: ReadonlySet<SceneCommandType> = new Set<SceneCommandType>([
   'SetInclineAngle',
   'SetFrictionCoefficient',
   'SetAppliedForce',
+  'SetOrbitRadius',
   'SetGroundLevel',
   /* Circuit facts: netlist values and apparatus states alike change what is
      physically true of the circuit a question stated. */

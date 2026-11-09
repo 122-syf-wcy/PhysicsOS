@@ -488,7 +488,7 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
       style.observable,
       position,
       observation.vector,
-      arrowLength * (0.45 + 0.55 * share),
+      arrowLength * (appliedTotal > 1 ? share : 0.45 + 0.55 * share),
       symbol,
     )
     if (vector === undefined) return []
@@ -536,7 +536,8 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     ),
     ...(netForceIsRedundant
       ? []
-      : [displayVector('net-force', 'net-force', 'netForce', position, netForce, arrowLength, 'F_net')]),
+      : [displayVector('net-force', 'net-force', 'netForce', position, netForce,
+        appliedTotal > 1 && largestForce > 0 && netForceValue !== undefined ? arrowLength * vectorMagnitude(netForceValue) / largestForce : arrowLength, 'F_net')]),
   ]
     .filter((vector): vector is VectorVisual => vector !== undefined)
     .concat(forceVectors, componentVectors)
@@ -834,7 +835,17 @@ export const mechanicsSceneVisualAt = (input: MechanicsVisualInput): SceneVisual
     angles,
     dimensions,
     labels: [],
-    guides: [],
+    guides: (() => {
+      const applied = scene.forces.filter(force => force.type === 'custom')
+      if (applied.length !== 2) return []
+      const arrows = forceVectors.filter(vector => vector.role === 'force')
+      const first = arrows[0]
+      const second = arrows[1]
+      if (first === undefined || second === undefined) return []
+      const corner = { x: first.to.x + second.to.x - position.x, y: first.to.y + second.to.y - position.y }
+      return [{ id: 'force-parallelogram-1', observable: 'forces' as const, from: first.to, to: corner },
+        { id: 'force-parallelogram-2', observable: 'forces' as const, from: second.to, to: corner }]
+    })(),
     motionMarks,
     ...(groundObservation === undefined
       ? trackGround === undefined

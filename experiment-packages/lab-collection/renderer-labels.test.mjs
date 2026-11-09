@@ -8,6 +8,37 @@ import test from 'node:test'
 const source = (await readFile(new URL('./src/renderer.js', import.meta.url), 'utf8'))
   .replace(/^import .*\n/gm, '').replace(/^export /gm, '').replace(/import\.meta\.url/g, JSON.stringify(import.meta.url))
 const chain = () => ({ set() { return this }, normalize() { return this }, multiplyScalar() { return this } })
+
+test('common trajectories preserve the diffraction curve without painting over the two colored incident waves', () => {
+  const common = runInNewContext(`${source}\ncommon`, {
+    drawMechanics() {}, drawOptics() {}, drawWaves() {}, drawMatter() {}, drawCircuits() {}, drawFields() {}, roleColor: () => '#315e52',
+  })
+  const rendered = []
+  common({ domain: 'wave', view: { trajectories: [
+    'wave-formation-left', 'wave-formation-right', 'wave-formation-leftover', 'wave-diffraction-intensity', 'wave-result',
+  ].map(id => ({ id, points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })) } }, {
+    unit: 1, visible: () => true, line(_points, _color, options) { rendered.push(options.tag) },
+  })
+  assert.deepEqual(rendered, ['wave-formation-leftover', 'wave-diffraction-intensity', 'wave-result'])
+})
+
+test('comparison paths and their angle labels use three matching distinguishable colors', () => {
+  const common = runInNewContext(`${source}\ncommon`, {
+    drawMechanics() {}, drawOptics() {}, drawWaves() {}, drawMatter() {}, drawCircuits() {}, drawFields() {}, roleColor: () => '#315e52',
+  })
+  const lines = [], labels = []
+  common({ domain: 'mechanics', view: {
+    trajectories: [30, 45, 60].map(angle => ({ id: `comparison-${angle}`, points: [{ x: 0, y: 0 }, { x: angle, y: 1 }] })),
+    labels: [30, 45, 60].map(angle => ({ id: `comparison-label-${angle}`, text: `${angle}°`, at: { x: angle, y: 1 } })),
+  } }, {
+    unit: 1, visible: () => true,
+    line(_points, color, options) { lines.push({ id: options.tag, color }) },
+    label(text, _at, options) { labels.push({ text, color: options.color }) },
+  })
+  assert.equal(new Set(lines.map(line => line.color)).size, 3)
+  assert.deepEqual(labels.map(label => label.color), lines.map(line => line.color))
+})
+
 function paintLabels(labels, width = 390, height = 220) {
   const element = tag => ({ tag, style: {}, dataset: {}, children: [], append(...nodes) { this.children.push(...nodes) }, setAttribute(name, value) { this[name] = value } })
   const layer = { replaceChildren(fragment) { this.children = fragment.children } }

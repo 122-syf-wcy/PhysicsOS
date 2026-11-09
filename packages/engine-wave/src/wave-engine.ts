@@ -26,6 +26,7 @@ import {
 } from '@physicsos/physics-scene'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
 import { asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
+import { diffractionDisplayObjects, standingFormationObjects } from './wave-demonstration.ts'
 
 import {
   antinodePositionsOf,
@@ -481,7 +482,7 @@ const derivedOf = (model: ResolvedWaveModel): DerivedQuantity[] => {
         key: 'central_maximum_width',
         targetId: model.benchId,
         value: metres(model.centralMaximumWidth ?? 0),
-        formula: { expression: 'w₀ = 2Lλ/a' },
+        formula: { expression: 'w₀ ≈ 2Lλ/a（近轴近似）' },
         assumptions,
       },
     )
@@ -551,7 +552,7 @@ const profileObjects = (
   })
 }
 
-const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState => {
+const stateOf = (model: ResolvedWaveModel, timeSeconds: number, displayGeometry = false): SimulationState => {
   const benchValues: Record<string, Quantity> = {
     wave_speed: metresPerSecond(model.waveSpeed),
     period: seconds(1 / model.frequency),
@@ -614,6 +615,7 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
     const stringLength = model.stringLength ?? 0
     objects.push(
       ...profileObjects(model, stringLength, (x) => standingDisplacement(model, x, timeSeconds)),
+      ...(displayGeometry ? standingFormationObjects(model, timeSeconds, profileSampleCountOf(model)) : []),
     )
     nodePositionsOf(model).forEach((x, index) => {
       objects.push({
@@ -727,8 +729,16 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
 
   if (model.subModel === 'wave_diffraction') {
     const order = model.diffractionOrder ?? 1
-    const minimumAngle = diffractionMinimumAngle(model, order)
     const screenDistance = model.screenDistance ?? 0
+    const minima = [...new Set([1, order])].flatMap(index => {
+      if (index * model.wavelength >= (model.slitWidth ?? 0)) return []
+      const angle = diffractionMinimumAngle(model, index)
+      return [{
+        id: waveMinimumId(model.benchId, index),
+        position: quantityVector({ x: screenDistance, y: screenDistance * Math.tan(angle), z: 0 }, 'm', 'length'),
+        values: { angle: radians(angle), intensity_ratio: dimensionless(0) },
+      }]
+    })
     objects.push(
       {
         id: waveSlitId(model.benchId),
@@ -739,18 +749,8 @@ const stateOf = (model: ResolvedWaveModel, timeSeconds: number): SimulationState
         id: waveScreenId(model.benchId),
         position: quantityVector({ x: screenDistance, y: 0, z: 0 }, 'm', 'length'),
       },
-      {
-        id: waveMinimumId(model.benchId, order),
-        position: quantityVector(
-          { x: screenDistance, y: screenDistance * Math.tan(minimumAngle), z: 0 },
-          'm',
-          'length',
-        ),
-        values: {
-          angle: radians(minimumAngle),
-          intensity_ratio: dimensionless(0),
-        },
-      },
+      ...minima,
+      ...(displayGeometry ? diffractionDisplayObjects(model, timeSeconds) : []),
     )
   }
 
@@ -1107,16 +1107,16 @@ const buildVerification = (
     } catch {
       minimumAngle = undefined
     }
-    const minimumCondition =
-      minimumAngle !== undefined &&
-      relativeClose(
+    const minimumCondition = minimumAngle === undefined
+      ? order * model.wavelength > (model.slitWidth ?? 0)
+      : relativeClose(
         (model.slitWidth ?? 0) * Math.sin(minimumAngle),
         order * model.wavelength,
         order * model.wavelength,
       )
     checks.push(
       check('diffraction_minimum_condition', 'constraint', minimumCondition, {
-        message: '单缝衍射暗纹满足 a·sinθ = mλ。',
+        message: minimumAngle === undefined ? '该级暗纹无实角，屏上不标虚假的暗纹。' : '单缝衍射暗纹满足 a·sinθ = mλ。',
         targetId: model.benchId,
         details: { order, angle: minimumAngle, slitWidth: model.slitWidth },
       }),
@@ -1132,7 +1132,7 @@ const buildVerification = (
           width,
         ),
         {
-          message: '中央明纹宽度 w₀ = 2Lλ/a。',
+          message: '中央明纹宽度的近轴近似 w₀ ≈ 2Lλ/a。',
           targetId: model.benchId,
           details: { width, screenDistance: model.screenDistance, wavelength: model.wavelength },
         },
@@ -1345,7 +1345,9 @@ export class WaveEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLike>
         'Simulation time must be finite and non-negative.',
       )
     }
-    return stateOf(resolveWaveModel(scene), timeSeconds)
+    // Display-only samples belong to the live frame, not every exported
+    // simulation-history row or the agent's numerical result payload.
+    return stateOf(resolveWaveModel(scene), timeSeconds, true)
   }
 
   simulate(scene: PhysicsScene, request: SimulationRequest): SimulationResult<PhysicsEventLike> {

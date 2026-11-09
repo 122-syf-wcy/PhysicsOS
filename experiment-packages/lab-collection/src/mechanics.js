@@ -246,6 +246,7 @@ function bodies(view, kit, id, snapshot) {
   const c = kit.palette;
   for (const [index, body] of (view.bodies ?? []).entries()) {
     if (!point(body.at) || !positive(body.size)) continue;
+    if (view.energyRamp && body.id === 'energy-cart') continue;
     const color = index % 2 ? c.blue : c.green;
     if (id === 'force-composition' && index === 0) forceTable(body, view, kit);
     if (id === 'circular-orbit' && body.kind === 'block') satellite(body, kit);
@@ -569,13 +570,18 @@ function energy(view, kit, id) {
         }
       }
       if (positive(r.cartLength) && positive(r.cartHalfHeight)) {
-        // The visual contract places this cart at release. Only its silhouette
-        // is set back on the slope by half its length so it fits the apparatus.
-        const center = at(r.peak, -tx * r.cartLength / 2 + nx * r.cartHalfHeight, -ty * r.cartLength / 2 + ny * r.cartHalfHeight);
+        // Keep the engine point untouched; the finite icon's contact edge must
+        // fit on the ramp at both endpoints, with its centre above the surface.
+        const position = (view.bodies ?? []).find(body => body.id === 'energy-cart')?.at ?? r.peak;
+        const cartLength = Math.min(r.cartLength, length);
+        const cartHalf = r.cartHalfHeight * cartLength / r.cartLength;
+        const along = Math.min(length - cartLength / 2, Math.max(cartLength / 2,
+          (position.x - r.base.x) * tx + (position.y - r.base.y) * ty));
+        const center = at(r.base, tx * along + nx * cartHalf, ty * along + ny * cartHalf);
         const p = local(center, rotation);
-        kit.box(center, r.cartLength, r.cartHalfHeight * 2, u * 0.68, c.green, { rotation, tag: `${r.id}-cart` });
-        kit.box(p(0, r.cartHalfHeight * 0.55, u * 0.35), r.cartLength * 0.65, r.cartHalfHeight * 0.28, u * 0.025, '#dce8e2', { rotation });
-        for (const x of [-0.32, 0.32]) kit.cylinder(p(x * r.cartLength, -r.cartHalfHeight * 0.68, -u * 0.4), p(x * r.cartLength, -r.cartHalfHeight * 0.68, u * 0.4), r.cartHalfHeight * 0.3, c.ink);
+        kit.box(center, cartLength, cartHalf * 2, u * 0.68, c.green, { rotation, tag: `${r.id}-cart` });
+        kit.box(p(0, cartHalf * 0.55, u * 0.35), cartLength * 0.65, cartHalf * 0.28, u * 0.025, '#dce8e2', { rotation });
+        for (const x of [-0.32, 0.32]) kit.cylinder(p(x * cartLength, -cartHalf * 0.68, -u * 0.4), p(x * cartLength, -cartHalf * 0.68, u * 0.4), cartHalf * 0.3, c.ink);
       }
     }
     if (kit.visible('energy')) {

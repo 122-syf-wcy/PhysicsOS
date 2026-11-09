@@ -79,6 +79,7 @@ export type SceneCommandType =
   | 'SetSpringConstant'
   | 'SetPendulumLength'
   | 'SetAppliedForce'
+  | 'SetOrbitRadius'
   | 'SetGroundLevel'
   | 'SetComponentResistance'
   | 'SetSourceVoltage'
@@ -239,6 +240,10 @@ export interface SceneCommandPayloadMap {
     forceId: string
     targetId: string
     vector: QuantityVector<'force'>
+  }
+  SetOrbitRadius: {
+    observableId: ObservableId
+    radius: number
   }
   SetGroundLevel: {
     observableId: ObservableId
@@ -709,6 +714,7 @@ export type PhysicsEventType =
   | 'SpringConstantChanged'
   | 'PendulumLengthChanged'
   | 'AppliedForceChanged'
+  | 'OrbitRadiusChanged'
   | 'GroundLevelChanged'
   | 'ComponentResistanceChanged'
   | 'SourceVoltageChanged'
@@ -814,6 +820,7 @@ export interface PhysicsEventPayloadMap {
   SpringConstantChanged: SceneCommandPayloadMap['SetSpringConstant']
   PendulumLengthChanged: SceneCommandPayloadMap['SetPendulumLength']
   AppliedForceChanged: SceneCommandPayloadMap['SetAppliedForce']
+  OrbitRadiusChanged: SceneCommandPayloadMap['SetOrbitRadius']
   GroundLevelChanged: SceneCommandPayloadMap['SetGroundLevel']
   ComponentResistanceChanged: SceneCommandPayloadMap['SetComponentResistance']
   SourceVoltageChanged: SceneCommandPayloadMap['SetSourceVoltage']
@@ -2138,6 +2145,21 @@ const applyCommand = (
           payload: { constraintId: command.payload.constraintId, length },
         },
       }
+    }
+
+    case 'SetOrbitRadius': {
+      const { radius, observableId } = command.payload
+      const orbit = scene.observableDefinitions.find(entry => entry.id === observableId && entry.parameters?.['kind'] === 'orbit')
+      const body = scene.bodies[0]
+      const gm = Number(orbit?.parameters?.['gravitationalParameter'])
+      if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(gm) || gm <= 0) {
+        return { ok: false, error: invalidCommand('INVALID_ORBIT_RADIUS', 'Circular orbit radius and GM must be positive and finite.', { radius }) }
+      }
+      if (orbit === undefined || body === undefined) return { ok: false, error: notFound('observable', String(observableId)) }
+      orbit.parameters = { ...orbit.parameters, radius }
+      body.position = quantityVector({ x: radius, y: 0, z: 0 }, 'm', 'length')
+      body.velocity = quantityVector({ x: 0, y: Math.sqrt(gm / radius), z: 0 }, 'm/s', 'velocity')
+      return { ok: true, event: { ...eventMetadata, type: 'OrbitRadiusChanged', payload: { observableId, radius } } }
     }
 
     case 'SetAppliedForce': {

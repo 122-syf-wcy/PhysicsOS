@@ -15,6 +15,35 @@ afterEach(() => {
 })
 
 describe('animation clock', () => {
+  it('keeps advancing across render updates and resumes without consuming the paused interval', () => {
+    const frames = new Map<number, FrameRequestCallback>()
+    let nextId = 0
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      frames.set(++nextId, callback)
+      return nextId
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => { frames.delete(id) })
+    let elapsed = 0
+    const { rerender, unmount } = renderHook(({ running }) => {
+      useAnimationClock(running, delta => { elapsed += delta })
+    }, { initialProps: { running: false } })
+    expect(frames.size).toBe(0)
+    rerender({ running: true })
+    act(() => { frames.get(1)?.(100) })
+    rerender({ running: true })
+    act(() => { frames.get(2)?.(120) })
+    rerender({ running: true })
+    act(() => { frames.get(3)?.(140) })
+    expect(elapsed).toBeCloseTo(0.04)
+    rerender({ running: false })
+    expect(frames.has(4)).toBe(false)
+    rerender({ running: true })
+    act(() => { frames.get(5)?.(5100) })
+    expect(elapsed).toBeCloseTo(0.04)
+    act(() => { frames.get(6)?.(5120) })
+    expect(elapsed).toBeCloseTo(0.06)
+    unmount()
+  })
   it('presents one microscopic magnetic period over a stable wall-clock cycle', () => {
     const period = 1.31e-7
 

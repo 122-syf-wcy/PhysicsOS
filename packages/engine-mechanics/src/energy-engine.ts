@@ -1,4 +1,4 @@
-import { simulationTimeRange, eventsInSimulationRange } from '@physicsos/physics-core'
+import { simulationTimeRange, eventsInSimulationRange, quantityVector } from '@physicsos/physics-core'
 import {
   check,
   invalidModelCondition,
@@ -17,13 +17,14 @@ import {
   type VerificationResult,
 } from '@physicsos/physics-core'
 import { canonicalValue, quantity, type Quantity } from '@physicsos/physics-units'
-import { energyBenchesOf, validateScene, type PhysicsScene } from '@physicsos/physics-scene'
+import { energyBenchesOf, validateScene, trajectorySampleTimes, trajectoryStorageSampleCount, type PhysicsScene } from '@physicsos/physics-scene'
 import { asPhysicsEventId, asSimulationId, asTraceId, PhysicsOSError } from '@physicsos/shared'
 
 import { resolveEnergyModel, type ResolvedEnergyModel } from './energy-model.ts'
 import {
   ENERGY_RELATIVE_TOLERANCE,
   energyLedgerOf,
+  energyMotionAt,
   frictionWorkOnRamp,
   kineticEnergy,
   rampLengthOf,
@@ -38,7 +39,7 @@ const ENERGY_ASSUMPTIONS = [
   'the cart is a point mass: no rotational energy in its wheels',
   'kinetic friction is constant along the ramp and does no work on the way up a frictionless track',
   'the ramp is rigid, so no energy is stored in it',
-  'the ledger is taken between the release point and the bottom, at rest at both ends',
+  'the cart is released from rest and the timed experiment ends at the ramp foot',
 ] as const
 
 const failure = (condition: string, message: string) => ({ condition, message })
@@ -126,19 +127,22 @@ const derivedOf = (model: ResolvedEnergyModel): DerivedQuantity[] => {
   ]
 }
 
-/**
- * The cart really does move, but the ledger does not need the clock: where the
- * cart is is a position on the ramp, and the energies follow from the height.
- * `time` is accepted so the engine satisfies the same interface as the timed
- * benches, and it does not change a single value.
- */
+/** The endpoint ledger remains available beside each instantaneous motion state. */
 const stateOf = (model: ResolvedEnergyModel, timeSeconds: number): SimulationState => {
+  const motion = energyMotionAt(model, timeSeconds)
+  const derived: DerivedQuantity[] = [...derivedOf(model),
+    ...([['current_potential_energy', motion.potential], ['current_kinetic_energy', motion.kinetic], ['current_thermal_energy', motion.thermal]] as const)
+      .map(([key, value]) => ({ key, targetId: model.benchId, value: joules(value), assumptions: [...ENERGY_ASSUMPTIONS] })),
+  ]
   const values: Record<string, Quantity | QuantityVector> = {}
-  for (const entry of derivedOf(model)) values[entry.key] = entry.value
+  for (const entry of derived) values[entry.key] = entry.value
   return {
     time: quantity(timeSeconds, 's', 'time'),
-    objects: [{ id: model.benchId, values }],
-    derived: derivedOf(model),
+    objects: [{ id: model.benchId, values,
+      position: quantityVector(motion.position, 'm', 'length'),
+      velocity: quantityVector(motion.velocity, 'm/s', 'velocity'),
+    }],
+    derived,
   }
 }
 
@@ -401,16 +405,15 @@ export class EnergyEngine implements PhysicsEngine<PhysicsScene, PhysicsEventLik
     const startedAt = new Date().toISOString()
     const model = resolveEnergyModel(scene)
 
-    const range = simulationTimeRange(request.options)
+    const range = simulationTimeRange(request.options, energyMotionAt(model, 0).duration)
+    const times = trajectorySampleTimes(range.startTime, range.endTime, trajectoryStorageSampleCount(request.options, 65))
 
     return {
       schemaVersion: 'simulation-result/1.0',
       simulationId: request.simulationId,
       sceneId: scene.id,
       sceneRevision: scene.revision,
-      /* One state: the ledger is a function of the geometry, so a run of states
-         would be the same numbers repeated at different clocks. */
-      states: [stateOf(model, range.startTime)],
+      states: times.map(time => stateOf(model, time)),
       events: eventsInSimulationRange(
         [
           {

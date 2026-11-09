@@ -100,7 +100,7 @@ const DERIVED_LABELS: Record<string, string> = {
   total_internal_reflection: '全反射',
   slit_width: '缝宽',
   screen_distance: '缝到屏距离',
-  central_maximum_width: '中央明纹宽度',
+  central_maximum_width: '中央宽度（近轴近似）',
   diffraction_angle: '衍射角',
   source_frequency: '波源频率',
   observed_frequency: '观察频率',
@@ -136,7 +136,7 @@ const VERIFICATION_LABELS: Record<string, string> = {
   frequency_unchanged_at_boundary: '跨界面频率不变',
   snells_law_wave_speed: 'sinθ/v 跨界面守恒',
   diffraction_minimum_condition: '暗纹 a·sinθ = mλ',
-  central_maximum_width: '中央明纹宽度 w₀ = 2Lλ/a',
+  central_maximum_width: '近轴近似 w₀ ≈ 2Lλ/a',
   diffraction_intensity_bounds: '衍射强度位于 0~1',
   doppler_frequency_relation: '多普勒频率关系',
   doppler_observed_wavelength: '运动波源波长 λ′ = (v−vₛ)/f',
@@ -173,6 +173,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   private currentTime = 0
   private running = false
   private rate = 1
+  private standingMode: 'formation' | 'steady' = 'steady'
   private commandSequence = 0
   private highlighted: readonly string[] = []
   private failure: string | undefined
@@ -195,25 +196,26 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         this.computed = undefined
         return
       }
-      const simulation = this.engine.simulate(
-        scene,
-        createWaveSimulationRequest(
-          scene,
-          `wave-lab-${String(scene.id)}-${scene.revision}`,
-          `wave-lab-trace-${String(scene.id)}-${scene.revision}`,
-        ),
+      const model = resolveWaveModel(scene)
+      const requestedWindow = scene.timeline.endTime === undefined
+        ? 1 : Math.max(0.1, canonicalValue(scene.timeline.endTime))
+      const periodic = ['travelling_wave', 'wave_interference', 'standing_wave', 'longitudinal_wave'].includes(model.subModel)
+      // A continuous oscillation wraps only at the same phase. Formation mode
+      // has its own finite demonstration window and deliberately restarts flat.
+      const runSeconds = periodic
+        ? Math.max(1, Math.ceil(requestedWindow * model.frequency - 1e-9)) / model.frequency
+        : requestedWindow
+      const request = createWaveSimulationRequest(
+        scene, `wave-lab-${String(scene.id)}-${scene.revision}`, `wave-lab-trace-${String(scene.id)}-${scene.revision}`,
       )
+      const simulation = this.engine.simulate(scene, {
+        ...request, options: { ...request.options, endTime: quantity(runSeconds, 's', 'time') },
+      })
       if (simulation.verification.status === 'failed') {
         this.failure = simulation.verification.errors.map(entry => entry.message).join(' ')
         this.computed = undefined
         return
       }
-      const model = resolveWaveModel(scene)
-      const runSeconds =
-        scene.timeline.endTime === undefined
-          ? 1
-          : Math.max(0.1, canonicalValue(scene.timeline.endTime))
-      this.currentTime = Math.min(this.currentTime, runSeconds)
       this.failure = undefined
       this.computed = {
         simulation,
@@ -221,6 +223,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         initialState: this.engine.stateAt(scene, quantity(0, 's', 'time')),
         runSeconds,
       }
+      this.currentTime = Math.min(this.currentTime, this.runSeconds)
     } catch (error: unknown) {
       this.failure = error instanceof Error ? error.message : '波动 Runtime 无法启动。'
       this.computed = undefined
@@ -256,6 +259,16 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   private get runSeconds(): number {
+    const model = this.computed?.model
+    if (model?.subModel === 'standing_wave' && this.standingMode === 'formation') {
+      return (model.stringLength ?? 0) / model.waveSpeed + 4 / model.frequency
+    }
+    if (model?.subModel === 'wave_diffraction') {
+      const distance = model.screenDistance ?? 0, slit = model.slitWidth ?? 0
+      const sourceDistance = Math.max(2 * model.wavelength, slit * 0.75)
+      const halfHeight = Math.min(distance * 3, Math.max(slit, (model.centralMaximumWidth ?? distance) * 1.2))
+      return (sourceDistance + Math.hypot(distance, halfHeight)) / model.waveSpeed + 4 / model.frequency
+    }
     return this.computed?.runSeconds ?? 1
   }
 
@@ -305,6 +318,7 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       state,
       envelopeState: initialState,
       time: this.currentTime,
+      standingMode: this.standingMode,
     })
 
     const status = runtimeStatusOf(simulation.verification)
@@ -320,6 +334,10 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
       /* Tree, inspector and the panels below are functions of the scene and
          its simulation alone: built once per revision, shared across frames. */
       ...this.staticPanels(simulation, { scene, bench, model }),
+      ...(model.subModel !== 'standing_wave' ? {} : {
+        inspector: this.inspectorOf(bench, model),
+        ...(this.standingMode === 'formation' ? { charts: this.formationCharts(simulation, { scene, model }) } : {}),
+      }),
       clock: {
         time: this.currentTime,
         total: this.runSeconds,
@@ -337,6 +355,21 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
         }),
     }
   }
+
+  private readonly formationCharts = memoizeOnIdentityWith(
+    (_simulation: SimulationResult, { scene, model }: { scene: PhysicsScene; model: ResolvedWaveModel }): readonly ChartSeries[] => {
+      const duration = (model.stringLength ?? 0) / model.waveSpeed + 4 / model.frequency
+      const firstAntinode = (model.stringLength ?? 0) / (2 * (model.harmonic ?? 1))
+      return [{ id: 'wave-formation-displacement', title: '形成过程：第一波腹附近质点位移', xLabel: 't / s', yLabel: 'y / cm', role: 'trajectory',
+        points: Array.from({ length: 193 }, (_, index) => {
+          const t = duration * index / 192
+          const samples = this.engine.stateAt(scene, quantity(t, 's', 'time')).objects.filter(object => object.id.includes('.formation-sum.'))
+          const nearest = samples.reduce((best, next) => Math.abs((next.position?.vector.x ?? 0) - firstAntinode) < Math.abs((best.position?.vector.x ?? 0) - firstAntinode) ? next : best)
+          return { t, value: (nearest.position?.vector.y ?? 0) * 100 }
+        }),
+      }]
+    },
+  )
 
   /** Frame-invariant panels per simulation; see `frame-memo.ts`. */
   private readonly staticPanels = memoizeOnIdentityWith(
@@ -583,7 +616,11 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
                 : bench.type === 'diffraction'
                   ? '单缝衍射'
                   : '多普勒效应'
-    sections.push({ id: 'bench', title: sectionTitle, parameters })
+    sections.push({ id: 'bench', title: sectionTitle, parameters,
+      ...(bench.type !== 'standing' ? {} : { choices: [{ id: 'standing-mode', label: '演示阶段', value: this.standingMode,
+        options: [{ value: 'formation', label: '两端起振 → 驻波形成' }, { value: 'steady', label: '稳定驻波（两端固定）' }],
+      }] }),
+    })
 
     if (this.computed !== undefined && model !== undefined) {
       const derived: DerivedQuantityView[] = this.computed.simulation.derivedQuantities
@@ -654,7 +691,12 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
     return this.getSnapshot()
   }
 
-  setChoice(): WorkspaceSnapshot {
+  setChoice(id: string, value: string): WorkspaceSnapshot {
+    if (id === 'standing-mode' && this.computed?.model.subModel === 'standing_wave' && (value === 'formation' || value === 'steady')) {
+      this.standingMode = value
+      this.currentTime = 0
+      this.running = false
+    }
     return this.getSnapshot()
   }
 
@@ -692,10 +734,14 @@ export class WaveWorkspaceRuntime implements WorkspaceRuntime {
   }
 
   advance(wallClockSeconds: number): WorkspaceSnapshot {
-    if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds)) {
+    if (this.running && this.computed !== undefined && Number.isFinite(wallClockSeconds) && wallClockSeconds > 0) {
       const next = this.currentTime + wallClockSeconds * this.rate
-      this.currentTime = next >= this.runSeconds ? this.runSeconds : next
-      if (this.currentTime >= this.runSeconds) this.running = false
+      if (Number.isFinite(next)) {
+        if (this.computed.model.subModel === 'wave_doppler' || this.computed.model.subModel === 'reflection_refraction') {
+          this.currentTime = Math.min(next, this.runSeconds)
+          if (this.currentTime >= this.runSeconds) this.running = false
+        } else this.currentTime = next % this.runSeconds
+      }
     }
     return this.getSnapshot()
   }

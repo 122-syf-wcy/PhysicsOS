@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PhysicsScene } from '@physicsos/physics-scene'
 import type { CodeVisualizationState, PhysicsSceneSolveSummary } from '@deepseek-ai/dsh-tool-physicsos/types'
 
-import { STEP_FRACTION } from './animation-clock.ts'
+import { PLAYBACK_RATES, STEP_FRACTION } from './animation-clock.ts'
 import { buildWorkspaceRuntime } from './physics/build-workspace-runtime.ts'
 import { domainOfScene } from './physics/domain-of-scene.ts'
 import { useFrameSource, type FrameSource } from './physics/frame-source.ts'
@@ -291,7 +291,7 @@ function CardStage({
         </div>
         <span className={css.clockEnd}>{formatTimeIn(clock.total, clockScale)}</span>
         <GlassSelect className={css.rate} ariaLabel={t('lab.rate')} value={String(clock.rate)} disabled={failed || clock.total <= 0}
-          options={[0.25, 0.5, 1, 2].map(rate => ({ value: String(rate), label: `${rate}×` }))}
+          options={PLAYBACK_RATES.map(rate => ({ value: String(rate), label: `${rate}×` }))}
           onChange={(value) => { commit(runtime.setRate(Number(value))) }} />
       </div>
       <QuestionCodeControls session={session} snapshot={snapshot} />

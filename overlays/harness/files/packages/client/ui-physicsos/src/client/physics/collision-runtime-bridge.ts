@@ -584,14 +584,14 @@ export class CollisionRuntimeBridge {
   private chartsOf(simulation: CollisionSimulation): readonly ChartSeries[] {
     const momentumSeries: ChartSeries = {
       id: 'p-t',
-      title: '总动量 P(t)',
+      title: '总水平动量 Pₓ(t)',
       xLabel: 't / s',
-      yLabel: 'P / (kg·m/s)',
+      yLabel: 'Pₓ / (kg·m/s)',
       role: 'net-force',
       points: simulation.states.flatMap((s) => {
         try {
           const p = toCanonicalVector(derivedVector(s.derived, 'total_momentum')).vectorSI
-          return [{ t: s.time.value, value: Math.hypot(p.x, p.y) }]
+          return [{ t: s.time.value, value: p.x }]
         } catch {
           return []
         }
@@ -611,7 +611,16 @@ export class CollisionRuntimeBridge {
         }
       }),
     }
-    return [momentumSeries, energySeries]
+    const bodies = this.sceneRuntime.getScene().bodies
+    const individual = bodies.map((body, index): ChartSeries => ({
+      id: `p${index + 1}-t`, title: `球 ${index + 1} 水平动量 p${index + 1}ₓ(t)`,
+      xLabel: 't / s', yLabel: 'pₓ / (kg·m/s)', role: index === 0 ? 'velocity' : 'force',
+      points: simulation.states.flatMap(state => {
+        const velocity = state.objects.find(object => object.id === body.id)?.velocity
+        return velocity === undefined ? [] : [{ t: state.time.value, value: canonicalValue(body.mass) * toCanonicalVector(velocity).vectorSI.x }]
+      }),
+    }))
+    return [...individual, momentumSeries, energySeries]
   }
 
   private tableOf(simulation: CollisionSimulation): DataTableView {

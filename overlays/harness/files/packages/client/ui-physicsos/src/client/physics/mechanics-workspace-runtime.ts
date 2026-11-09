@@ -13,6 +13,8 @@ import type { PhysicsScene, MechanicsSceneInput } from '@physicsos/physics-scene
 import type { WorkspaceRuntime, WorkspaceSnapshot } from './workspace-runtime.ts'
 import type { ObservableKey } from './scene-visual-model.ts'
 import { formatSignificant } from './number-format.ts'
+import { MechanicsEngine, createMechanicsSimulationRequest } from '@physicsos/engine-mechanics'
+import type { LabelVisual, TrajectoryVisual, SceneVisualModel } from './scene-visual-model.ts'
 
 const MODEL_SUBTITLE: Record<string, string> = {
   uniform_linear_motion: '运动学 · 匀速直线运动',
@@ -35,6 +37,8 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
   private readonly bridge: MechanicsRuntimeBridge
   /** The scene as the source stated it, kept so a branch can be discarded. */
   private readonly origin: PhysicsScene | undefined
+  private comparison = false
+  private comparisonCache: { scene: PhysicsScene; paths: TrajectoryVisual[]; labels: LabelVisual[] } | undefined
 
   constructor(input: MechanicsSceneInput | PhysicsScene) {
     this.bridge = new MechanicsRuntimeBridge(input)
@@ -51,10 +55,15 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
       subtitle: MODEL_SUBTITLE[snapshot.modelId] ?? '力学工作台',
       status: snapshot.status,
       sceneRevision: snapshot.sceneRevision,
-      view: snapshot.view,
+      view: this.comparisonView(snapshot),
       ariaLabel: `${title}的可验证物理画布`,
       tree: snapshot.tree,
-      inspector: snapshot.inspector,
+      inspector: snapshot.modelId === 'projectile_motion' ? [...snapshot.inspector, {
+        id: 'projectile-comparison', title: '同初速度、同重力对比', choices: [{
+          id: 'projectile-comparison', label: '抛射角轨迹', value: this.comparison ? 'angles' : 'single',
+          options: [{ value: 'single', label: '当前角度' }, { value: 'angles', label: '同时比较 30° / 45° / 60°' }],
+        }],
+      }] : snapshot.inspector,
       charts: snapshot.charts,
       table: snapshot.table,
       derivation: snapshot.derivation,
@@ -73,6 +82,43 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
           },
         }),
       ...(snapshot.error === undefined ? {} : { error: snapshot.error }),
+    }
+  }
+
+  private comparisonView(snapshot: MechanicsRuntimeSnapshot): SceneVisualModel {
+    const view = snapshot.view
+    if (!this.comparison || snapshot.modelId !== 'projectile_motion' || snapshot.status === 'failed') return view
+    if (this.comparisonCache?.scene !== snapshot.scene) {
+      const engine = new MechanicsEngine()
+      const body = snapshot.scene.bodies[0]!
+      const speed = Math.hypot(body.velocity.vector.x, body.velocity.vector.y)
+      const paths: TrajectoryVisual[] = []
+      const labels: LabelVisual[] = []
+      for (const angle of [30, 45, 60]) {
+        const radians = angle * Math.PI / 180
+        const scene: PhysicsScene = { ...snapshot.scene, bodies: snapshot.scene.bodies.map((entry, index) => index === 0 ? {
+          ...entry, velocity: { ...entry.velocity, vector: { x: speed * Math.cos(radians), y: speed * Math.sin(radians), z: 0 } },
+        } : entry) }
+        const result = engine.simulate(scene, createMechanicsSimulationRequest(scene, `comparison-${angle}`, `comparison-${angle}-${scene.revision}`))
+        if (result.verification.status === 'failed') continue
+        const points = result.states.flatMap(state => {
+          const position = state.objects.find(entry => entry.id === body.id)?.position?.vector
+          return position === undefined ? [] : [{ x: position.x, y: position.y }]
+        })
+        paths.push({ id: `comparison-${angle}`, kind: 'history', points })
+        const apex = points.reduce((highest, point) => point.y > highest.y ? point : highest, points[0] ?? { x: 0, y: 0 })
+        labels.push({ id: `comparison-label-${angle}`, at: apex, text: `${angle}°`, role: 'trajectory' })
+      }
+      this.comparisonCache = { scene: snapshot.scene, paths, labels }
+    }
+    const points = this.comparisonCache.paths.flatMap(path => path.points)
+    const left = Math.min(view.origin.x, ...points.map(point => point.x))
+    const bottom = Math.min(view.origin.y, ...points.map(point => point.y))
+    const right = Math.max(view.origin.x + view.extent.width, ...points.map(point => point.x))
+    const top = Math.max(view.origin.y + view.extent.height, ...points.map(point => point.y))
+    return { ...view, origin: { x: left, y: bottom }, extent: { width: right - left, height: top - bottom },
+      trajectories: [...view.trajectories, ...this.comparisonCache.paths],
+      labels: view.visible.trajectory === false ? view.labels : [...view.labels, ...this.comparisonCache.labels],
     }
   }
 
@@ -119,8 +165,9 @@ export class MechanicsWorkspaceRuntime implements WorkspaceRuntime {
     return this.toWorkspace(this.bridge.editParameter(id, value))
   }
 
-  setChoice(): WorkspaceSnapshot {
-    /* Mechanics has no enumerated choices yet; ignore and return current frame. */
+  setChoice(id: string, value: string): WorkspaceSnapshot {
+    if (id === 'projectile-comparison' && (value === 'single' || value === 'angles')) this.comparison = value === 'angles'
+    if (id === 'force-balance') this.bridge.setForceBalance(value)
     return this.toWorkspace(this.bridge.getSnapshot())
   }
 

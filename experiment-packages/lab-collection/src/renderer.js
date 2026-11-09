@@ -9,6 +9,8 @@ import { drawFields } from './fields.js'
 let state
 const drawDomain = { mechanics: drawMechanics, optics: drawOptics, wave: drawWaves, acoustics: drawWaves, fluid: drawMatter, thermal: drawMatter, modern: drawMatter, circuit: drawCircuits, electric: drawFields, magnetic: drawFields, composite: drawFields, induction: drawFields }
 const cleanMath = value => String(value).replace(/\\(?:mathrm|text)\{([^}]+)\}/g, '$1').replace(/\\theta/g, 'θ').replace(/\\mu/g, 'μ').replace(/\\Delta/g, 'Δ').replace(/\\cdot/g, '·').replace(/\\(?:sin|cos)/g, x => x.slice(1)).replace(/[{}]/g, '').replace(/_/g, '')
+const comparisonColors = new Map([['comparison-30', '#477d9e'], ['comparison-45', '#b76a28'], ['comparison-60', '#8653a0']])
+const comparisonLabelColors = new Map([...comparisonColors].map(([id, color]) => [id.replace('comparison-', 'comparison-label-'), color]))
 
 function common(snapshot, kit) {
   const view = snapshot.view, u = kit.unit
@@ -20,10 +22,12 @@ function common(snapshot, kit) {
     return object
   }
   for (const trajectory of view.trajectories ?? []) {
+    // The wave renderer owns these two incoming fronts and their distinct colors.
+    if (trajectory.id === 'wave-formation-left' || trajectory.id === 'wave-formation-right') continue
     const observable = ['optics'].includes(snapshot.domain) ? 'rays' : snapshot.domain === 'wave' ? 'waveform' : 'trajectory'
     if (!kit.visible(observable)) continue
     if (snapshot.domain === 'modern' && !kit.visible(trajectory.id.includes('photon') ? 'photonEnergy' : 'photocurrent')) continue
-    overlay(kit.line(trajectory.points.map(front), roleColor('trajectory'), { dashed: trajectory.kind === 'predicted', opacity: trajectory.kind === 'predicted' ? 0.5 : 0.85, tag: trajectory.id }))
+    overlay(kit.line(trajectory.points.map(front), comparisonColors.get(trajectory.id) ?? roleColor('trajectory'), { dashed: trajectory.kind === 'predicted', opacity: trajectory.kind === 'predicted' ? 0.5 : 0.85, tag: trajectory.id }))
   }
   for (const vector of view.vectors ?? []) {
     if (!kit.visible(vector.observable)) continue
@@ -53,7 +57,9 @@ function common(snapshot, kit) {
     kit.circle(front(angle.at), angle.radius, palette.muted, { start: angle.startAngle * Math.PI / 180, end: angle.endAngle * Math.PI / 180 })
     kit.label(cleanMath(angle.value ?? angle.symbol), front({ x: angle.at.x, y: angle.at.y + angle.radius }), { color: palette.muted })
   }
-  for (const label of view.labels ?? []) kit.label(cleanMath(label.text), front(label.at), { color: roleColor(label.role) })
+  for (const label of view.labels ?? []) kit.label(cleanMath(label.text), front(label.at), {
+    color: comparisonLabelColors.get(label.id) ?? roleColor(label.role), tag: label.id,
+  })
   if (kit.visible('keyPoints')) for (const key of view.keyPoints ?? []) {
     kit.sphere(front(key.at), u * 0.035, palette.orange)
     kit.label(key.label, front(key.at), { priority: 2 })
@@ -108,13 +114,26 @@ function initialize(kit) {
   const observer = new ResizeObserver(() => paint()); observer.observe(host); state.observer = observer
   let drag
   const canvas = renderer.domElement
-  canvas.addEventListener('pointerdown', event => { drag = { x: event.clientX, y: event.clientY, yaw: state.yaw, pitch: state.pitch }; canvas.setPointerCapture(event.pointerId) })
+  canvas.addEventListener('pointerdown', event => {
+    if (drag || event.button !== 0 || event.isPrimary === false) return
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, yaw: state.yaw, pitch: state.pitch }
+    canvas.setPointerCapture(event.pointerId)
+  })
   canvas.addEventListener('pointermove', event => {
-    if (!drag) return
-    state.yaw = Math.max(-0.85, Math.min(0.85, drag.yaw + (event.clientX - drag.x) * 0.003))
+    if (!drag || event.pointerId !== drag.id) return
+    // Orbit the camera opposite horizontal hand motion so the near side of the
+    // apparatus follows the pointer, as if the student were holding the object.
+    state.yaw = Math.max(-0.85, Math.min(0.85, drag.yaw - (event.clientX - drag.x) * 0.003))
     state.pitch = Math.max(-0.2, Math.min(0.65, drag.pitch + (event.clientY - drag.y) * 0.003)); paint()
   })
-  canvas.addEventListener('pointerup', () => { drag = undefined }); canvas.addEventListener('pointercancel', () => { drag = undefined })
+  const endDrag = event => {
+    if (!drag || event.pointerId !== drag.id) return
+    drag = undefined
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+  }
+  canvas.addEventListener('pointerup', endDrag)
+  canvas.addEventListener('pointercancel', endDrag)
+  canvas.addEventListener('lostpointercapture', endDrag)
   document.getElementById('reset-view').addEventListener('click', () => { state.yaw = -0.48; state.pitch = 0.23; state.full = false; fitScene(); paint() })
   document.getElementById('front-view').addEventListener('click', () => { state.yaw = 0; state.pitch = 0; paint() })
   document.getElementById('full-view').addEventListener('click', () => { state.full = !state.full; fitScene(); paint() })
@@ -238,6 +257,7 @@ export function renderFrame(snapshot) {
     if (retired) state.world.remove(retired.group)
     state.kit = kit; state.world.add(kit.group)
     const view = snapshot.view, u = kit.unit
+    const hasAngleComparison = (view.trajectories ?? []).some(trajectory => comparisonColors.has(trajectory.id))
     // Camera follows the declared observation window. Distant predicted points
     // are clipped just as on the host; they must not shrink the live apparatus.
     const bounds = new kit.THREE.Box3(new kit.THREE.Vector3(view.origin.x, view.origin.y, -u), new kit.THREE.Vector3(view.origin.x + view.extent.width, view.origin.y + view.extent.height, u))
@@ -248,7 +268,9 @@ export function renderFrame(snapshot) {
     if (!apparatusBounds.isEmpty()) bounds.union(apparatusBounds)
     state.overviewBounds = bounds; state.focusBounds = bounds.clone()
     if (view.inductionBar) state.focusBounds = observationBounds
-    if (snapshot.domain === 'mechanics' && view.bodies?.length && !view.energyRamp && !view.leverBeam && !view.pendulum && !view.spring) {
+    // An angle comparison is a whole-flight observation; the platform expands
+    // its viewport for all three paths. Following only the live ball crops it.
+    if (snapshot.domain === 'mechanics' && !hasAngleComparison && view.bodies?.length && !view.energyRamp && !view.leverBeam && !view.pendulum && !view.spring) {
       const focus = new kit.THREE.Box3()
       for (const body of view.bodies) {
         focus.expandByPoint(new kit.THREE.Vector3(body.at.x - body.size * 2, body.at.y - body.size * 2.3, -depth / 2))

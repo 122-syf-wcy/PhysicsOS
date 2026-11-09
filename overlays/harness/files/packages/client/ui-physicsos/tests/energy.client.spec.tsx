@@ -84,12 +84,13 @@ describe('mechanical energy on a smooth ramp', () => {
     expect(snapshot.verification.every(check => check.status === 'passed')).toBe(true)
   })
 
-  it('draws the ramp, the cart on it, and a bar that is all kinetic', () => {
-    const view = createEnergyWorkspaceRuntime(createMechanicalEnergyScene()).getSnapshot().view
+  it('draws the ramp and converts its initially potential bar to kinetic at the foot', () => {
+    const runtime = createEnergyWorkspaceRuntime(createMechanicalEnergyScene())
+    const view = runtime.getSnapshot().view
     expect(view.energyRamp?.heightText).toBe('h = 90 cm')
     expect(view.energyRamp?.rampText).toBe('L = 127.3 cm')
     expect(view.energyRamp?.potentialText).toBe('Ep = 17.64 J')
-    expect(view.energyRamp?.speedText).toBe('v = 4.2 m/s')
+    expect(view.energyRamp?.speedText).toBe('v = 0 m/s')
 
     /* The cart starts at the top: the ramp rises to the right, so the peak is
        above and to the right of the foot. */
@@ -98,25 +99,24 @@ describe('mechanical energy on a smooth ramp', () => {
 
     /* With no friction the whole bar is the kinetic segment — the ledger is
        entirely motion by the time the cart reaches the bottom. */
-    const segments = view.energyBar?.segments ?? []
-    expect(segments.map(segment => segment.role)).toEqual(['kinetic', 'thermal'])
-    expect(segments[0]?.fraction).toBeCloseTo(1, 12)
-    expect(segments[1]?.fraction).toBeCloseTo(0, 12)
+    expect(view.energyBar?.segments.find(segment => segment.role === 'potential')?.fraction).toBeCloseTo(1, 12)
+    const final = runtime.seek(runtime.getSnapshot().clock.total)
+    const segments = final.view.energyBar?.segments ?? []
+    expect(segments.find(segment => segment.role === 'potential')?.fraction).toBeCloseTo(0, 12)
+    expect(segments.find(segment => segment.role === 'kinetic')?.fraction).toBeCloseTo(1, 12)
+    expect(segments.find(segment => segment.role === 'thermal')?.fraction).toBeCloseTo(0, 12)
+    expect(final.view.energyRamp?.speedText).toBe('v = 4.2 m/s')
   })
 
-  it('has no timeline, because the ledger is a function of the geometry', () => {
+  it('starts paused with the physical descent duration and energy curves', () => {
     const snapshot = createEnergyWorkspaceRuntime(createMechanicalEnergyScene()).getSnapshot()
-    expect(snapshot.clock).toEqual({ time: 0, total: 0, running: false, rate: 1 })
+    expect(snapshot.clock).toMatchObject({ time: 0, running: false, rate: 1 })
+    expect(snapshot.clock.total).toBeCloseTo(0.6060915267, 9)
     expect(snapshot.events).toEqual([])
-    expect(snapshot.charts).toEqual([])
-    expect(runtime_seekKeepsTheLedger(snapshot))
+    expect(snapshot.charts.map(chart => chart.id)).toEqual(['Ep-t', 'Ek-t', 'Q-t'])
+    expect(snapshot.trajectoryTimes.at(-1)).toBeCloseTo(snapshot.clock.total, 9)
   })
 })
-
-/** Scrubbing does not move a number: there is no clock to scrub. */
-const runtime_seekKeepsTheLedger = (
-  snapshot: ReturnType<ReturnType<typeof createEnergyWorkspaceRuntime>['getSnapshot']>,
-): boolean => snapshot.trajectoryTimes.length === 0
 
 describe('mechanical energy on a rough ramp', () => {
   it('splits the bar 80/20 once friction has taken its share', () => {
@@ -130,10 +130,10 @@ describe('mechanical energy on a rough ramp', () => {
     expect(snapshot.table.rows[0]?.values[4]).toBe('17.64')
     expect(snapshot.table.rows[1]?.values[4]).toBe('17.64')
 
-    const view = runtime.getSnapshot().view
+    const view = runtime.seek(snapshot.clock.total).view
     const segments = view.energyBar?.segments ?? []
-    expect(segments[0]?.fraction).toBeCloseTo(0.8, 12)
-    expect(segments[1]?.fraction).toBeCloseTo(0.2, 12)
+    expect(segments.find(segment => segment.role === 'kinetic')?.fraction).toBeCloseTo(0.8, 12)
+    expect(segments.find(segment => segment.role === 'thermal')?.fraction).toBeCloseTo(0.2, 12)
     /* The segments fill the bar exactly: a conservation rig draws a full bar. */
     const total = segments.reduce((sum, segment) => sum + segment.fraction, 0)
     expect(total).toBeCloseTo(1, 12)
@@ -192,7 +192,7 @@ describe('energy Lab surface', () => {
     expect(svgText).toContain('Ep = 17.64 J')
     /* The bottom reading is one label carrying both numbers, so it is asserted
        as the string the canvas actually draws. */
-    expect(svgText).toContain('Ek = 17.64 J · v = 4.2 m/s')
+    expect(svgText).toContain('Ek = 0 J · v = 0 m/s')
     expect(svgText).toContain('E = 17.64 J')
   })
 

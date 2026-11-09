@@ -9,6 +9,7 @@ export { resolveEnergyModel, type ResolvedEnergyModel } from './energy-model.ts'
 export {
   ENERGY_RELATIVE_TOLERANCE,
   energyLedgerOf,
+  energyMotionAt,
   frictionWorkOnRamp,
   gravitationalPotentialEnergy,
   kineticEnergy,
