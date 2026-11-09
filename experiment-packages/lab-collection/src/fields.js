@@ -123,22 +123,56 @@ function streamlineArrow(kit, streamline) {
   let closest = -1, distance = Infinity;
   for (let i = 1; i < points.length; i += 1) {
     if (!validPoint(points[i - 1]) || !validPoint(points[i])) continue;
-    const d = Math.hypot(points[i].x - tip.x, points[i].y - tip.y);
+    const d = Math.hypot(points[i].x - tip.x, points[i].y - tip.y, (points[i].z || 0) - (tip.z || 0));
     if (d < distance) { distance = d; closest = i; }
   }
   if (closest < 1) return;
-  const before = points[closest - 1];
-  const length = Math.hypot(tip.x - before.x, tip.y - before.y);
-  if (!length) return;
-  const t = Math.min(1, kit.unit * 0.2 / length);
-  annotation(kit.arrow(mix(tip, before, t), tip, kit.palette.green, { tag: `${streamline.id}:arrow` }));
+  // Integrator samples can be much closer than a readable arrow. Walk back
+  // along the supplied ordered path, retaining its physical field direction.
+  let end = tip, remaining = kit.unit * 0.55, start = tip;
+  for (let i = closest - 1; i >= 0 && remaining > 0; i -= 1) {
+    const before = points[i];
+    if (!validPoint(before)) break;
+    const length = Math.hypot(end.x - before.x, end.y - before.y, (end.z || 0) - (before.z || 0));
+    if (!length) continue;
+    start = mix(end, before, Math.min(1, remaining / length));
+    remaining -= length; end = before;
+  }
+  const arrow = kit.arrow(start, tip, kit.palette.green, { tag: `${streamline.id}:arrow` });
+  const length = Math.hypot(tip.x - start.x, tip.y - start.y, (tip.z || 0) - (start.z || 0));
+  // These are direction markers, not magnitude-scaled field vectors. Give the
+  // head enough screen area on phones while keeping it inside the real segment.
+  arrow?.setLength(length, Math.min(kit.unit * 0.35, length * 0.65), Math.min(kit.unit * 0.25, length * 0.4));
+  annotation(arrow);
 }
 
-function drawElectric(view, kit) {
+function spatialStreamlines(view) {
+  const source = view.pointChargeSources?.[0];
+  if (view.pointChargeSources?.length !== 1 || !validPoint(source?.at)) return [];
+  const result = [];
+  // A single point charge is spherically symmetric. Rotate its platform field
+  // samples around the x axis; no field formula or new physical state is needed.
+  // Never apply this symmetry to a multiple-charge configuration.
+  for (const angle of [Math.PI / 3, Math.PI * 2 / 3]) {
+    const rotate = p => ({ x: p.x, y: source.at.y + (p.y - source.at.y) * Math.cos(angle), z: (p.y - source.at.y) * Math.sin(angle) });
+    for (const line of view.fieldStreamlines || []) {
+      if (!line.points?.every(validPoint) || !validPoint(line.arrowAt)) continue;
+      if (line.points.every(p => Math.abs(p.y - source.at.y) < 1e-8)) continue;
+      result.push({ ...line, id: `${line.id}:spatial-${angle}`, points: line.points.map(rotate), arrowAt: rotate(line.arrowAt) });
+    }
+  }
+  return result;
+}
+
+function drawElectric(view, kit, spatial) {
   const { palette: p, unit: u } = kit;
   if (kit.visible('electricField')) for (const streamline of view.fieldStreamlines || []) {
-    annotation(kit.line(streamline.points || [], '#8baea3', { opacity: 0.7, tag: streamline.id }));
+    annotation(kit.line(streamline.points || [], '#527f71', { opacity: 0.85, tag: streamline.id }));
     streamlineArrow(kit, streamline);
+  }
+  if (spatial && kit.visible('electricField')) for (const line of spatialStreamlines(view)) {
+    kit.line(line.points, '#527f94', { opacity: 0.65, tag: line.id });
+    streamlineArrow(kit, line);
   }
   if (kit.visible('equipotentials')) for (const contour of view.equipotentials || []) {
     // The runtime already samples contours; retain their vertices and closure.
@@ -151,6 +185,11 @@ function drawElectric(view, kit) {
     const color = source.sign === 'negative' ? p.blue : p.red;
     kit.sphere(source.at, source.radius, color, { tag: source.id });
     kit.label(source.sign === 'negative' ? '−' : '+', offset(source.at, 0, -source.radius - u * 0.15), { color, size: 13, priority: 5, tag: `${source.id}:polarity` });
+  }
+  if (spatial && kit.visible('electricField') && view.pointChargeSources?.length === 1) {
+    const source = view.pointChargeSources[0];
+    kit.label(source.sign === 'negative' ? '负电荷：电场线向内' : '正电荷：电场线向外',
+      offset(source.at, 0, u * 3.1), { color: p.green, priority: 4, tag: 'spatial-field-direction' });
   }
   if (validPoint(view.probe?.at)) {
     kit.sphere(view.probe.at, u * 0.065, p.ink, { tag: view.probe.id });
@@ -419,7 +458,7 @@ function drawInduction(view, kit) {
 export function drawFields(snapshot, kit) {
   const view = snapshot.view;
   if (!view) return;
-  drawElectric(view, kit);
+  drawElectric(view, kit, snapshot.experimentId === 'point-charge');
   if (view.field) magneticGrid(kit, sceneRect(view), view.field, 'uniform-magnetic-field');
   drawComposite(view, kit);
   drawStraightWire(view, kit);
